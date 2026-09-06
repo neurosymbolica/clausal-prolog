@@ -98,7 +98,7 @@ def bindings_report(tmp_path_factory):
 def test_failing_goal_named_under_pytest(bindings_report):
     assert "goal 2 of 2 failed" in bindings_report
     # the source text of the failing conjunct, not a Python repr
-    assert "prc('gamma', NUM)" in bindings_report
+    assert "prc(gamma, NUM)" in bindings_report
 
 
 def test_bindings_reported_under_pytest(bindings_report):
@@ -107,7 +107,7 @@ def test_bindings_reported_under_pytest(bindings_report):
 
 def test_nearest_solution_reported_under_pytest(bindings_report):
     assert "did not unify" in bindings_report
-    assert "prc('alpha', 10)" in bindings_report
+    assert "prc(alpha, 10)" in bindings_report
 
 
 def test_bare_headline_is_kept(bindings_report):

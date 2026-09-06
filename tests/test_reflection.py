@@ -65,10 +65,19 @@ class TestFacts:
         heads = [c.head.args for c in clauses_of(items)]
         assert heads == [[1, 2], [2, 3]]
 
-    def test_string_and_float_literals_stay_raw(self):
+    def test_quoted_atom_reifies_as_atom_and_a_float_stays_raw(self):
+        # THE FLIP: ``'widget'`` is an ATOM in every mode, and the reified
+        # vocabulary spells an atom ``Atom(name)`` -- the SAME term the bare
+        # name ``widget`` reifies to (see the next test).  A number stays raw.
         items = reify_source("Item('widget', 2.5),\n")
         (clause,) = clauses_of(items)
-        assert clause.head.args == [mint("widget"), 2.5]
+        assert clause.head.args == [Atom("widget"), 2.5]
+
+    def test_string_literal_stays_raw(self):
+        # A STRING (chars mode) reifies as the plain ``str`` it is.
+        items = reify_source('-double_quotes(chars)\nItem("widget", 2.5),\n')
+        (clause,) = clauses_of(items)
+        assert clause.head.args == ["widget", 2.5]
 
     def test_atom_argument_reifies_as_atom(self):
         items = reify_source("Status(ok, 1),\n")

@@ -103,7 +103,7 @@ class TestAtomsAreGlobal:
             t.visit(tree)
         _process_declarations(t._module_items, module_dict)
         assert module_dict["t3_owned_atom"] == mint("t3_owned_atom")
-        assert isinstance(module_dict["t3_owned_atom"], str)
+        assert module_dict["t3_owned_atom"] == mint("t3_owned_atom")
 
     def test_two_modules_declaring_the_same_atom_get_the_same_object(self):
         """Two independently-run ``_process_declarations`` passes for

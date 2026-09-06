@@ -37,6 +37,7 @@ from clausal.pythonic_ast.nodes import (
     TupleLiteral,
     Unify,
 )
+from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
 from clausal.logic.variables import Var, is_var, deref
 from clausal.logic.predicate import is_term_instance, term_field_names
 
@@ -232,14 +233,28 @@ def _is_logic_var_name(name: str) -> bool:
 
 
 def _extract_static_pattern(goal: Call) -> str | None:
-    """Return the pattern string if the first arg is a string literal, else None."""
+    """Return the pattern text if the first arg is a text literal, else None.
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings §7): a ``r"\\d+"`` literal in
+    a ``.clausal`` file compiles to the ATOM ``("\\d+",)`` under the default
+    ``-double_quotes(atom)`` and to the ``str`` under
+    ``-double_quotes(chars)`` -- both are static patterns, and missing the
+    atom shape silently demoted EVERY literal pattern to the dynamic
+    runtime-autobind path (no pre-compilation, and the compile-time
+    auto-binding of named groups stopped happening).
+    """
     if not goal.args:
         return None
     first = goal.args[0]
     if isinstance(first, str):
         return first
-    if hasattr(first, "value") and isinstance(first.value, str):
-        return first.value
+    if _term_is_atom(first):
+        return _atom_spelling(first)
+    value = getattr(first, "value", None)
+    if isinstance(value, str):
+        return value
+    if _term_is_atom(value):
+        return _atom_spelling(value)
     return None
 
 
@@ -362,12 +377,16 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
     top-level argument variables (pattern, subject) are excluded so a group can
     never clobber them.
 
-    The target variable is passed through the thunk's ``var_objects`` — NOT
-    captured in a closure default — so each activation sees its own renamed
-    Var. A closure default would pin the clause-TEMPLATE Var: in the no-group
-    case the Unify would then alias every activation through that one shared
-    variable, so two differently-instantiated calls in a single derivation
-    would wrongly conflict (F007 regression).
+    The no-op answer is a FRESH ``Var`` built inside the thunk, so it is
+    per-activation by construction. A closure default over the clause-TEMPLATE
+    Var would alias every activation through that one shared variable, so two
+    differently-instantiated calls in a single derivation would wrongly
+    conflict (F007 regression). Passing the target variable through the
+    thunk's ``var_objects`` fixed that, but it cannot survive THE FLIP: thunk
+    arguments cross through ``to_python`` (spec §9.1), so a target already
+    bound to the ATOM ``("one",)`` came back as the STRING ``"one"`` and the
+    "harmless no-op" Unify then FAILED against its own variable. A fresh Var
+    never crosses the boundary at all.
     """
     from clausal.terms import PyThunk
 
@@ -380,7 +399,7 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
 
     arg_vars = {id(deref(a)) for a in goal.args if is_var(deref(a))}
 
-    def _bind_if_present(g, v, _field):
+    def _bind_if_present(g, _field):
         if isinstance(g, dict):
             for key, val in g.items():
                 # Same naming gate as static expansion: only ALLCAPS /
@@ -393,18 +412,17 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
                         and key.lstrip("_").lower() == _field \
                         and val is not None:
                     return val
-        return v
+        # No group of that name: a FRESH variable, so the Unify succeeds and
+        # binds nothing, whatever the target already holds.
+        return Var()
 
     chain = match_goal
     for field_name, target_var in ctx._clause_vars.items():
         if id(deref(target_var)) in arg_vars:
             continue
-        # ``v`` arrives dereferenced per activation: the activation's own Var
-        # when unbound (deref returns self), or its bound value — either way
-        # the no-group Unify is a per-activation no-op.
         thunk = PyThunk(
-            lambda g, v, _f=field_name: _bind_if_present(g, v, _f),
-            (groups_var, target_var),
+            lambda g, _f=field_name: _bind_if_present(g, _f),
+            (groups_var,),
         )
         chain = And(left=chain, right=Unify(left=target_var, right=thunk))
 
@@ -514,6 +532,15 @@ def _pattern_term(term: Any, ctx: _ExpansionContext) -> Any:
     term = deref(term)
     if is_var(term):
         return term  # capture variable — stays a clause variable
+    if _term_is_atom(term):
+        # THE FLIP (spec §5.1): a QUOTED atom literal (``'k'``, or ``"k"`` in
+        # the default mode) is the arity-0 CELL by the time the pattern is
+        # expanded, and the reified vocabulary spells an atom ``Atom(name)``
+        # -- the same node a BARE name maps to just below.  Without this the
+        # two spellings of one atom produced two different patterns, and a
+        # quoted one matched nothing.
+        return Call(func=LoadName(name="Atom"),
+                    args=[_atom_spelling(term)], kwargs=[])
     if isinstance(term, Call):
         name = _functor_name(term.func)
         if name is None:

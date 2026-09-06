@@ -20,6 +20,6 @@ Test("translate produces string") <- (
 
 Test("translate produces nonempty") <- (
     translate(th, Greeting(hello, "world"), STRING),
-    atom_length(STRING, LENGTH),
+    length(STRING, LENGTH),
     LENGTH > 0
 )  # nv

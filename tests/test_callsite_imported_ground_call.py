@@ -90,7 +90,7 @@ class TestImportedTabledCallSite:
     def test_direct_call_dedups(self, tabled_use_mod):
         """Control: the wrapped dispatch dedups the two "a"-clause answers."""
         # nv
-        assert len(list(call("TCat", 1, "a", module=tabled_use_mod))) == 1
+        assert len(list(call("TCat", 1, mint("a"), module=tabled_use_mod))) == 1
 
     def test_ground_call_site_respects_tabling(self, tabled_use_mod):
         """The compiled ground call site must see the same deduped answers."""
@@ -118,7 +118,7 @@ class TestImportedGroundCallSiteMultiSolution:
         from clausal.logic.variables import Var, deref
         r = Var()
         results = sorted(
-            str(deref(r)) for _ in call("Multi", r, module=use_mod)
+            deref(r) for _ in call("Multi", r, module=use_mod)
         )
         assert results == [mint("one"), mint("two")]
 
@@ -165,7 +165,7 @@ class TestImportedJointGroundCallSite:
         from clausal.logic.variables import Var, deref
         r = Var()
         results = sorted(
-            str(deref(r)) for _ in call("JTwo", r, module=joint_use_mod)
+            deref(r) for _ in call("JTwo", r, module=joint_use_mod)
         )
         assert results == [mint("one"), mint("two")]
 
@@ -187,12 +187,12 @@ class TestImportedCallSiteExceptions:
         # nv
         from clausal.logic.variables import Var, deref
         r = Var()
-        results = [str(deref(r)) for _ in call("CatchIt", r, module=throw_use_mod)]
+        results = [deref(r) for _ in call("CatchIt", r, module=throw_use_mod)]
         assert results == [mint("caught")]
 
     def test_non_throwing_bucket_unaffected(self, throw_use_mod):
         # nv
         from clausal.logic.variables import Var, deref
         r = Var()
-        results = [str(deref(r)) for _ in call("PassThru", r, module=throw_use_mod)]
+        results = [deref(r) for _ in call("PassThru", r, module=throw_use_mod)]
         assert results == [mint("ok")]

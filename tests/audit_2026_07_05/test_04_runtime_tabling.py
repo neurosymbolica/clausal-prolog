@@ -489,9 +489,10 @@ class TestTablingGuards:
     def test_asym_win_ground_docs_order(self, load):
         # docs/wfs.md truth table holds when 'a' is queried first
         m = load("winasym_guard", WIN_ASYM_SRC)
-        assert sum(1 for _ in call("win", "a", module=m)) == 1
-        assert sum(1 for _ in call("win", "b", module=m)) == 0
-        assert sum(1 for _ in call("win", "c", module=m)) == 0
+        # THE FLIP: the fixture's ``move("a", "b")`` node names are ATOMS.
+        assert sum(1 for _ in call("win", mint("a"), module=m)) == 1
+        assert sum(1 for _ in call("win", mint("b"), module=m)) == 0
+        assert sum(1 for _ in call("win", mint("c"), module=m)) == 0
 
 
 class TestF008DerefWalkTemplateFreeze:

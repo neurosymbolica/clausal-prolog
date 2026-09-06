@@ -54,8 +54,11 @@ class TestEmitTerm:
         assert emit_clausal_term(PNumber(3.14)) == "3.14"
 
     def test_string(self):
-        # nv
-        assert emit_clausal_term(PString("hello")) == "'hello'"
+        # nv — THE FLIP (spec §7): a Prolog ``PString`` emits a DOUBLE-quoted
+        # clausal literal, which means a string under the
+        # ``-double_quotes(chars)`` header the module emitter writes.  (A
+        # quoted ``PAtom`` is what still emits ``'...'``.)
+        assert emit_clausal_term(PString("hello")) == '"hello"'
 
     def test_empty_list(self):
         # nv
@@ -129,7 +132,7 @@ class TestEmitItem:
             PAtom("greeting"),
             PList((PString("hello"), PString("world")), None),
         ))
-        assert result == "Greeting() >> (['hello', 'world'])"
+        assert result == 'Greeting() >> (["hello", "world"])'
 
     def test_directive_module(self):
         # nv

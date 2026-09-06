@@ -29,11 +29,13 @@ from clausal.modules.py import (
     _import_stdlib,
     note_mismatch,
     simple_to_trampoline,
+    to_text,
 )
 _re = _import_stdlib("re")
 
 from typing import Any
 
+from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.runtime._seg_helpers import maybe_promote_to_str
@@ -66,6 +68,12 @@ def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
     s = deref(string)
     if is_var(s):
         return _NO_SUBJECT
+    # THE FLIP (spec §9.4): an ATOM is text here too -- ``match(P, hello)``
+    # and ``match(P, "hello")`` under ``-double_quotes(chars)`` hand over the
+    # same ``str``.  Before the tuple arm, which would otherwise see the
+    # arity-0 cell as a 1-element sequence.
+    if _term_is_atom(s):
+        return _atom_spelling(s)
     walk = getattr(s, "__walk__", None)
     if callable(walk):
         s = walk()
@@ -84,10 +92,17 @@ def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
 
 
 def _compile_pattern(pat: Any) -> "_re.Pattern":
-    """Compile a pattern, accepting both strings and pre-compiled patterns."""
+    """Compile a pattern, accepting a pre-compiled pattern, a string or an ATOM.
+
+    THE FLIP (spec §9.4): ``r"\\d+"`` in a ``.clausal`` file is an atom under
+    the default ``-double_quotes(atom)``, so the text funnel ``to_text`` is
+    what turns it back into the ``str`` ``re`` wants -- never ``str()``,
+    which would compile the tuple repr.
+    """
     if isinstance(pat, _re.Pattern):
         return pat
-    return _re.compile(pat)
+    text = to_text(pat)
+    return _re.compile(pat if text is None else text)
 
 
 def _groups_dict(m: "_re.Match") -> dict | tuple:

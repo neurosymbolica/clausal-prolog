@@ -451,20 +451,16 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     exists so callers who already know they hold a term shape (the common
     case in the compiler/inspection funnels) don't pay for two walks.
 
-    P3-1 Task 1 (R2, str-as-atom acceptance): a plain ``str`` is now an
-    atom VALUE here — ``functor_arity("red") == ("red", 0)``. This USED
-    to deliberately diverge from ``_functor_name``/``_arity`` (which gave
-    a non-empty str the ISO cons-cell reading: functor ``"."``, arity 2)
-    — Task 5 (§1b) retired that cons-cell reading, so ``_functor_name``/
-    ``_arity`` now agree with ``functor_arity`` for every NON-EMPTY str:
-    a str is atomic (its own functor value, arity 0). One residual,
-    pre-existing (Task 1) divergence remains for the EMPTY str: this
-    function's ``is_atom_value`` branch answers ``("", 0)`` (the empty
-    str is its own functor value, same as any other atom), whereas
-    ``_functor_name``/``_arity`` special-case it to the ISO nil-atom
-    spelling ``("[]", 0)`` (shared with the empty-LIST case, which this
-    function's declared domain excludes) — see
-    ``tests/test_funnel_accessors.py::TestFunctorArity::test_str_is_atom_value``.
+    THE FLIP (2026-09-06-atoms-as-cells-strings, spec §5.1): an atom is the
+    arity-0 cell, so ``functor_arity(mint("red")) == ("red", 0)`` — slot 0
+    and arity 0, the same answer ``_functor_name``/``_arity`` give it. A
+    plain ``str`` is a STRING, i.e. the LIST of its char atoms, and lists
+    are outside this function's declared domain: ``functor_arity("red")``
+    is ``None``, exactly as ``functor_arity([("r",), ("e",), ("d",)])`` is.
+    (``_functor_name``/``_arity`` DO resolve a list, and answer a non-empty
+    string the ISO cons-cell reading ``"."``/2 and ``""`` the nil atom
+    ``"[]"``/0 — that is the composed pair's wider domain, not a
+    disagreement.)  This INVERTS the P3-1 Task 1 str-as-atom-value reading.
     See ``is_atom_value`` in ``clausal/logic/predicate.py``.
 
     The functor slot is ``str`` for a ``Compound``/term instance, but for a

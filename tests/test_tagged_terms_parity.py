@@ -337,7 +337,9 @@ def _time_struct_tabling(fixture_path, n=_TIMING_N, reps=_TIMING_REPS):
         for _t in call("Nats", n, L, module=lm):
             node = deref(L)
             length = 0
-            while node is not nil:
+            # Equality, never identity (spec §5.2): the atom in the built
+            # chain need not be the same tuple object as ``mod.nil``.
+            while node != nil:
                 if is_cell(node):
                     node = deref(cell_args(node)[1])
                 else:

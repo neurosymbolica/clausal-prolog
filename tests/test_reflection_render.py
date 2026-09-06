@@ -854,13 +854,35 @@ class TestCorruptionGuards:
         with pytest.raises(RenderError):
             render_source(FormatString("f'{", [], None))
 
-    def test_non_identifier_atom_raises_render_error(self):
-        # I2/M1: a mutated Atom/Goal name that is not a valid identifier (or is
-        # the reserved sentinel) must raise RenderError, not emit malformed text.
-        with pytest.raises(RenderError):
-            render_source(Goal("Weird", [Atom("has space")], []))
+    def test_non_identifier_atom_renders_single_quoted(self):
+        """THE FLIP (spec §6.7) INVERTS the I2/M1 refusal for an ATOM: an
+        atom whose spelling is not an identifier renders ``'…'`` -- a
+        single-quoted literal is an atom in EVERY ``-double_quotes`` mode, so
+        the output re-reads as the atom it rendered.  A non-identifier GOAL
+        (predicate) name still refuses: there is no quoted call syntax.
+        """
+        assert render_source(Atom("has space")) == "'has space'"
+        assert (render_source(Goal("Weird", [Atom("has space")], []))
+                == "Weird('has space')")
+        # ...and it round-trips as an atom, not as a string.
+        clause = only_clause("W('has space'),\n")
+        assert render_source(clause) == "W('has space'),"
+        assert strip_positions(only_clause(render_source(clause) + "\n")) \
+            == strip_positions(clause)
+        # The reserved lambda sentinel is still refused -- it is not a term.
         with pytest.raises(RenderError):
             render_source(Atom("__clausal_lambda_arrow__"))
+        # A non-identifier PREDICATE name has no renderable surface.
+        with pytest.raises(RenderError):
+            render_source(Goal("has space", [], []))
+
+    def test_string_renders_double_quoted(self):
+        """A STRING must come back DOUBLE-quoted (spec §6.7/§7) -- single
+        quotes would re-read as an atom in every mode -- and a ``bytes``
+        literal keeps its own quoting untouched.
+        """
+        assert render_source(Goal("W", ["has space"], [])) == 'W("has space")'
+        assert render_source(Goal("W", [b"ab"], [])) == "W(b'ab')"
 
 
 class TestRawCellRendering:

@@ -171,8 +171,9 @@ class TestDisplayLocale:
         # nv
         t = Compound("append", ("nil", "hello", []))
         s = term_str(t, TermStyle(locale="th"))
-        # "nil" is a Python string value here, rendered with quotes — not an atom
-        assert "'nil'" in s
+        # "nil" is a Python STRING value here, rendered DOUBLE-quoted (spec
+        # §6.7) -- not an atom, which would render bare (or translated).
+        assert '"nil"' in s
 
     def test_zero_arity_atom_with_locale(self):
         """Zero-arity PredicateMeta atoms get their name translated in display."""
@@ -304,6 +305,8 @@ class TestDirectiveIntegration:
     def test_fixture(self, name):
         # nv
         from clausal.logic.solve import call
-        for _ in call("Test", name, module=self.mod):
+        # THE FLIP: a Test/1 description written ``"..."`` in the fixture is
+        # an ATOM under the default ``-double_quotes(atom)``.
+        for _ in call("Test", mint(name), module=self.mod):
             return
         pytest.fail(f"Test predicate '{name}' failed")

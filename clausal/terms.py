@@ -2797,7 +2797,11 @@ def _seg_canonical(seg) -> str:
             # in the one element position it occupies.
             rendered.append(_canonical_var(deref(s.var)))
         elif isinstance(s, str):
-            rendered.extend(term_canonical(c) for c in s)  # SegString text
+            # SegString text.  THE FLIP (spec §6.2): the ELEMENTS of a string
+            # are its CHAR ATOMS -- iterating the ``str`` directly yields
+            # 1-char ``str`` values, each of which is a one-element STRING and
+            # would print as its own ``'.'(c,[])`` chain.
+            rendered.extend(_quoted_atom_spelling(c) for c in s)
         else:
             rendered.extend(term_canonical(e) for e in s.elements)  # ConcreteSeg
     out = tail

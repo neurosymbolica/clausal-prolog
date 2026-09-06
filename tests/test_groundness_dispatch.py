@@ -51,13 +51,13 @@ def _make_fact_db(functor, facts):
 class TestExtractArgKey:
     def test_position_zero(self):
         # nv
-        c = Clause(head=Compound("f", (42, "hello")), body=[True])
+        c = Clause(head=Compound("f", (42, mint("hello"))), body=[True])
         assert _extract_arg_key(c, 0, 2) == 42
 
     def test_position_one(self):
         # nv
-        c = Clause(head=Compound("f", (42, "hello")), body=[True])
-        assert _extract_arg_key(c, 1, 2) == "hello"
+        c = Clause(head=Compound("f", (42, mint("hello"))), body=[True])
+        assert _extract_arg_key(c, 1, 2) == ("hello", 0)
 
     def test_var_at_position(self):
         # nv
@@ -71,10 +71,10 @@ class TestExtractArgKey:
         v0, v1 = Var(), Var()
         c = Clause(
             head=Compound("f", (v0, v1)),
-            body=[Unify(left=v0, right=1), Unify(left=v1, right="abc")],
+            body=[Unify(left=v0, right=1), Unify(left=v1, right=mint("abc"))],
         )
         assert _extract_arg_key(c, 0, 2) == 1
-        assert _extract_arg_key(c, 1, 2) == "abc"
+        assert _extract_arg_key(c, 1, 2) == ("abc", 0)
 
     def test_out_of_range(self):
         # nv
@@ -91,9 +91,9 @@ class TestExtractArgKey:
         head = color(name=v1, code=v2)
         c = Clause(
             head=head,
-            body=[Unify(left=v1, right="red"), Unify(left=v2, right=255)],
+            body=[Unify(left=v1, right=mint("red")), Unify(left=v2, right=255)],
         )
-        assert _extract_arg_key(c, 0, 2) == "red"
+        assert _extract_arg_key(c, 0, 2) == ("red", 0)
         assert _extract_arg_key(c, 1, 2) == 255
 
 
@@ -105,7 +105,7 @@ class TestBuildArgIndex:
         """Position 0 index matches _build_first_arg_index behavior."""
         # nv
         clauses = [
-            Clause(head=Compound("f", (i, "x")), body=[True])
+            Clause(head=Compound("f", (i, mint("x"))), body=[True])
             for i in range(5)
         ]
         idx = _build_arg_index(clauses, 2, 0)
@@ -116,14 +116,15 @@ class TestBuildArgIndex:
         """Second argument has indexable values."""
         # nv
         clauses = [
-            Clause(head=Compound("f", (Var(), "a")), body=[True]),
-            Clause(head=Compound("f", (Var(), "b")), body=[True]),
-            Clause(head=Compound("f", (Var(), "c")), body=[True]),
-            Clause(head=Compound("f", (Var(), "d")), body=[True]),
+            Clause(head=Compound("f", (Var(), mint("a"))), body=[True]),
+            Clause(head=Compound("f", (Var(), mint("b"))), body=[True]),
+            Clause(head=Compound("f", (Var(), mint("c"))), body=[True]),
+            Clause(head=Compound("f", (Var(), mint("d"))), body=[True]),
         ]
         idx = _build_arg_index(clauses, 2, 1)
         assert idx is not None
-        assert set(idx["buckets"].keys()) == {"a", "b", "c", "d"}
+        assert set(idx["buckets"].keys()) == {
+            ("a", 0), ("b", 0), ("c", 0), ("d", 0)}
 
     def test_no_index_all_vars(self):
         # nv
@@ -137,10 +138,10 @@ class TestBuildArgIndex:
     def test_n_distinct(self):
         # nv
         clauses = [
-            Clause(head=Compound("f", (1, "a")), body=[True]),
-            Clause(head=Compound("f", (1, "b")), body=[True]),
-            Clause(head=Compound("f", (2, "c")), body=[True]),
-            Clause(head=Compound("f", (3, "d")), body=[True]),
+            Clause(head=Compound("f", (1, mint("a"))), body=[True]),
+            Clause(head=Compound("f", (1, mint("b"))), body=[True]),
+            Clause(head=Compound("f", (2, mint("c"))), body=[True]),
+            Clause(head=Compound("f", (3, mint("d"))), body=[True]),
         ]
         idx = _build_arg_index(clauses, 2, 0)
         assert idx is not None
@@ -154,7 +155,7 @@ class TestAnalyzeIndexPositions:
     def test_both_positions_indexable(self):
         """Both arg positions have indexable values."""
         # nv
-        facts = [(1, "a"), (2, "b"), (3, "c"), (4, "d")]
+        facts = [(1, mint("a")), (2, mint("b")), (3, mint("c")), (4, mint("d"))]
         db = _make_fact_db("f", facts)
         clauses = db.clauses_for("f", 2)
         positions = _analyze_index_positions(clauses, 2)
@@ -168,7 +169,7 @@ class TestAnalyzeIndexPositions:
         # nv
         clauses = [
             Clause(head=Compound("f", (Var(), val)), body=[True])
-            for val in ["a", "b", "c", "d"]
+            for val in [mint("a"), mint("b"), mint("c"), mint("d")]
         ]
         positions = _analyze_index_positions(clauses, 2)
         assert len(positions) == 1
@@ -179,10 +180,10 @@ class TestAnalyzeIndexPositions:
         # Position 0: 2 distinct values; Position 1: 4 distinct values
         # nv
         clauses = [
-            Clause(head=Compound("f", (1, "a")), body=[True]),
-            Clause(head=Compound("f", (1, "b")), body=[True]),
-            Clause(head=Compound("f", (2, "c")), body=[True]),
-            Clause(head=Compound("f", (2, "d")), body=[True]),
+            Clause(head=Compound("f", (1, mint("a"))), body=[True]),
+            Clause(head=Compound("f", (1, mint("b"))), body=[True]),
+            Clause(head=Compound("f", (2, mint("c"))), body=[True]),
+            Clause(head=Compound("f", (2, mint("d"))), body=[True]),
         ]
         positions = _analyze_index_positions(clauses, 2)
         assert len(positions) == 2
@@ -198,7 +199,7 @@ class TestAnalyzeIndexPositions:
     def test_three_arg_predicate(self):
         """Three-argument predicate: all positions indexable."""
         # nv
-        facts = [(1, "a", True), (2, "b", False), (3, "c", True), (4, "d", False)]
+        facts = [(1, mint("a"), True), (2, mint("b"), False), (3, mint("c"), True), (4, mint("d"), False)]
         db = _make_fact_db("f", facts)
         clauses = db.clauses_for("f", 3)
         positions = _analyze_index_positions(clauses, 3)
@@ -213,8 +214,8 @@ class TestSecondArgLookup:
         """when first arg is Var but second is ground, use second-arg index."""
         # nv
         facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
+            (mint("red"), mint("warm")), (mint("blue"), mint("cool")), (mint("green"), mint("cool")),
+            (mint("yellow"), mint("warm")), (mint("white"), mint("neutral")),
         ]
         db = _make_fact_db("color", facts)
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
@@ -222,30 +223,30 @@ class TestSecondArgLookup:
         # Query with ground second arg, var first arg
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, [v, "warm"], trail)
-        assert sorted(r[0] for r in results) == ["red", "yellow"]
+        results = _trampoline_solutions(fn, [v, mint("warm")], trail)
+        assert sorted(r[0] for r in results) == [mint("red"), mint("yellow")]
 
     def test_lookup_by_first_arg_still_works(self):
         """First-arg lookup still works as before."""
         # nv
         facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
+            (mint("red"), mint("warm")), (mint("blue"), mint("cool")), (mint("green"), mint("cool")),
+            (mint("yellow"), mint("warm")), (mint("white"), mint("neutral")),
         ]
         db = _make_fact_db("color", facts)
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
 
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, ["blue", v], trail)
-        assert results == [("blue", "cool")]
+        results = _trampoline_solutions(fn, [mint("blue"), v], trail)
+        assert results == [(mint("blue"), mint("cool"))]
 
     def test_all_vars_enumerate(self):
         """when no arg is ground, fallback to full scan."""
         # nv
         facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
+            (mint("red"), mint("warm")), (mint("blue"), mint("cool")), (mint("green"), mint("cool")),
+            (mint("yellow"), mint("warm")), (mint("white"), mint("neutral")),
         ]
         db = _make_fact_db("color", facts)
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
@@ -259,56 +260,56 @@ class TestSecondArgLookup:
         """Both args ground — uses most selective index."""
         # nv
         facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
+            (mint("red"), mint("warm")), (mint("blue"), mint("cool")), (mint("green"), mint("cool")),
+            (mint("yellow"), mint("warm")), (mint("white"), mint("neutral")),
         ]
         db = _make_fact_db("color", facts)
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
 
         trail = Trail()
-        results = _trampoline_solutions(fn, ["red", "warm"], trail)
-        assert results == [("red", "warm")]
+        results = _trampoline_solutions(fn, [mint("red"), mint("warm")], trail)
+        assert results == [(mint("red"), mint("warm"))]
 
         trail = Trail()
-        results = _trampoline_solutions(fn, ["red", "cool"], trail)
+        results = _trampoline_solutions(fn, [mint("red"), mint("cool")], trail)
         assert results == []
 
     def test_no_match_second_arg(self):
         """Ground second arg with no matching value yields nothing."""
         # nv
         facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("white", "neutral"),
+            (mint("red"), mint("warm")), (mint("blue"), mint("cool")), (mint("green"), mint("cool")),
+            (mint("yellow"), mint("warm")), (mint("white"), mint("neutral")),
         ]
         db = _make_fact_db("color", facts)
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
 
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, [v, "freezing"], trail)
+        results = _trampoline_solutions(fn, [v, mint("freezing")], trail)
         assert results == []
 
     def test_three_arg_middle_ground(self):
         """Three-arg predicate: query by middle arg only."""
         # nv
         facts = [
-            (1, "a", 100), (2, "b", 200), (3, "a", 300),
-            (4, "c", 400), (5, "b", 500),
+            (1, mint("a"), 100), (2, mint("b"), 200), (3, mint("a"), 300),
+            (4, mint("c"), 400), (5, mint("b"), 500),
         ]
         db = _make_fact_db("t", facts)
         fn = compile_predicate("t", 3, db.clauses_for("t", 3), db)
 
         trail = Trail()
         v1, v2 = Var(), Var()
-        results = _trampoline_solutions(fn, [v1, "a", v2], trail)
+        results = _trampoline_solutions(fn, [v1, mint("a"), v2], trail)
         assert sorted(r[0] for r in results) == [1, 3]
 
     def test_three_arg_last_ground(self):
         """Three-arg predicate: query by last arg only."""
         # nv
         facts = [
-            (1, "a", 100), (2, "b", 200), (3, "a", 100),
-            (4, "c", 400), (5, "b", 100),
+            (1, mint("a"), 100), (2, mint("b"), 200), (3, mint("a"), 100),
+            (4, mint("c"), 400), (5, mint("b"), 100),
         ]
         db = _make_fact_db("t", facts)
         fn = compile_predicate("t", 3, db.clauses_for("t", 3), db)
@@ -328,8 +329,8 @@ class TestDifferentModes:
     def test_color_all_modes(self):
         # nv
         facts = [
-            ("red", "warm"), ("blue", "cool"), ("green", "cool"),
-            ("yellow", "warm"), ("orange", "warm"),
+            (mint("red"), mint("warm")), (mint("blue"), mint("cool")), (mint("green"), mint("cool")),
+            (mint("yellow"), mint("warm")), (mint("orange"), mint("warm")),
         ]
         db = _make_fact_db("color", facts)
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
@@ -337,19 +338,19 @@ class TestDifferentModes:
         # Mode 1: first arg ground
         trail = Trail()
         v = Var()
-        r1 = _trampoline_solutions(fn, ["red", v], trail)
-        assert r1 == [("red", "warm")]
+        r1 = _trampoline_solutions(fn, [mint("red"), v], trail)
+        assert r1 == [(mint("red"), mint("warm"))]
 
         # Mode 2: second arg ground
         trail = Trail()
         v = Var()
-        r2 = _trampoline_solutions(fn, [v, "cool"], trail)
-        assert sorted(r[0] for r in r2) == ["blue", "green"]
+        r2 = _trampoline_solutions(fn, [v, mint("cool")], trail)
+        assert sorted(r[0] for r in r2) == [mint("blue"), mint("green")]
 
         # Mode 3: both ground
         trail = Trail()
-        r3 = _trampoline_solutions(fn, ["blue", "cool"], trail)
-        assert r3 == [("blue", "cool")]
+        r3 = _trampoline_solutions(fn, [mint("blue"), mint("cool")], trail)
+        assert r3 == [(mint("blue"), mint("cool"))]
 
         # Mode 4: neither ground
         trail = Trail()
@@ -368,32 +369,32 @@ class TestMixedClauses:
         db = Database()
         # Position 0: specific keys 1, 2, 3 plus 2 catch-all (Var) clauses
         # Position 1: all specific ("a" through "e") — no defaults
-        db.assertz(_normalize_fact_clause(Compound("f", (1, "a"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), "b"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (2, "c"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (3, "d"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), "e"))))
+        db.assertz(_normalize_fact_clause(Compound("f", (1, mint("a")))))
+        db.assertz(_normalize_fact_clause(Compound("f", (Var(), mint("b")))))
+        db.assertz(_normalize_fact_clause(Compound("f", (2, mint("c")))))
+        db.assertz(_normalize_fact_clause(Compound("f", (3, mint("d")))))
+        db.assertz(_normalize_fact_clause(Compound("f", (Var(), mint("e")))))
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
 
         # Query by first arg 1: should get (1, a) + catch-alls (_, b), (_, e)
         trail = Trail()
         v = Var()
         results = _trampoline_solutions(fn, [1, v], trail)
-        assert [r[1] for r in results] == ["a", "b", "e"]
+        assert [r[1] for r in results] == [mint("a"), mint("b"), mint("e")]
 
         # Query by second arg "d": position 1 has no defaults → only (3, d)
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, [v, "d"], trail)
-        assert [r[1] for r in results] == ["d"]
+        results = _trampoline_solutions(fn, [v, mint("d")], trail)
+        assert [r[1] for r in results] == [mint("d")]
 
     def test_true_catch_all_clauses(self):
         """Clauses with Var at ALL positions are defaults for every index."""
         # nv
         db = Database()
-        db.assertz(_normalize_fact_clause(Compound("f", (1, "a"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (2, "b"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (3, "c"))))
+        db.assertz(_normalize_fact_clause(Compound("f", (1, mint("a")))))
+        db.assertz(_normalize_fact_clause(Compound("f", (2, mint("b")))))
+        db.assertz(_normalize_fact_clause(Compound("f", (3, mint("c")))))
         # This clause has Var at position 0 AND Var at position 1 (no Unify)
         db.assertz(Clause(head=Compound("f", (Var(), Var())), body=[True]))
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
@@ -407,7 +408,7 @@ class TestMixedClauses:
         # Query by second arg: gets specific + catch-all
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, [v, "b"], trail)
+        results = _trampoline_solutions(fn, [v, mint("b")], trail)
         assert len(results) == 2  # (2, "b") + catch-all
 
 
@@ -419,24 +420,24 @@ class TestDynamicReindexGroundness:
         # nv
         db = Database()
         db.mark_dynamic("color", 2)
-        for args in [("red", "warm"), ("green", "cool"),
-                     ("blue", "cool"), ("white", "neutral")]:
+        for args in [(mint("red"), mint("warm")), (mint("green"), mint("cool")),
+                     (mint("blue"), mint("cool")), (mint("white"), mint("neutral"))]:
             db.assertz(_normalize_fact_clause(Compound("color", args)))
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
 
         # Initial second-arg lookup
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, [v, "cool"], trail)
-        assert sorted(r[0] for r in results) == ["blue", "green"]
+        results = _trampoline_solutions(fn, [v, mint("cool")], trail)
+        assert sorted(r[0] for r in results) == [mint("blue"), mint("green")]
 
         # Add new fact and trigger recompile
-        db.assertz(_normalize_fact_clause(Compound("color", ("purple", "cool"))))
+        db.assertz(_normalize_fact_clause(Compound("color", (mint("purple"), mint("cool")))))
         new_fn = db.get_dispatch("color", 2)
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(new_fn, [v, "cool"], trail)
-        assert sorted(r[0] for r in results) == ["blue", "green", "purple"]
+        results = _trampoline_solutions(new_fn, [v, mint("cool")], trail)
+        assert sorted(r[0] for r in results) == [mint("blue"), mint("green"), mint("purple")]
 
 
 # ── Backward compatibility with V2-1 ────────────────────────────────────────
@@ -465,12 +466,12 @@ class TestBackwardCompat:
     def test_below_threshold_no_dispatch(self):
         """Too few clauses → no groundness dispatch, still correct."""
         # nv
-        db = _make_fact_db("small", [(1, "a"), (2, "b")])
+        db = _make_fact_db("small", [(1, mint("a")), (2, mint("b"))])
         fn = compile_predicate("small", 2, db.clauses_for("small", 2), db)
         trail = Trail()
         v = Var()
         results = _trampoline_solutions(fn, [1, v], trail)
-        assert results == [(1, "a")]
+        assert results == [(1, mint("a"))]
 
 
 # ── PredicateMeta integration ───────────────────────────────────────────────
@@ -483,9 +484,9 @@ class TestPredicateMetaGroundness:
             _fields = ("name", "color")
 
         db = Database()
-        for name, color in [("apple", "red"), ("banana", "yellow"),
-                            ("cherry", "red"), ("grape", "purple"),
-                            ("strawberry", "red")]:
+        for name, color in [(mint("apple"), mint("red")), (mint("banana"), mint("yellow")),
+                            (mint("cherry"), mint("red")), (mint("grape"), mint("purple")),
+                            (mint("strawberry"), mint("red"))]:
             v1, v2 = Var(), Var()
             head = fruit(name=v1, color=v2)
             db.assertz(Clause(
@@ -501,11 +502,11 @@ class TestPredicateMetaGroundness:
         # Lookup by color (second field)
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, [v, "red"], trail)
-        assert sorted(r[0] for r in results) == ["apple", "cherry", "strawberry"]
+        results = _trampoline_solutions(fn, [v, mint("red")], trail)
+        assert sorted(r[0] for r in results) == [mint("apple"), mint("cherry"), mint("strawberry")]
 
         # Lookup by name (first field)
         trail = Trail()
         v = Var()
-        results = _trampoline_solutions(fn, ["banana", v], trail)
-        assert results == [("banana", "yellow")]
+        results = _trampoline_solutions(fn, [mint("banana"), v], trail)
+        assert results == [(mint("banana"), mint("yellow"))]

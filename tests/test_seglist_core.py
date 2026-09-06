@@ -257,7 +257,8 @@ class TestUnify:
     def test_unify_against_string_treats_as_char_list(self):
         """Strings are treated as char lists for SegList unification."""
         # nv
-        sl = SegList([ConcreteSeg(["h", "i"])])
+        # THE FLIP (spec §6.2): a char is the ATOM ("h",).
+        sl = SegList([ConcreteSeg([char_atom("h"), char_atom("i")])])
         assert sl.__unify__("hi", Trail()) is True
         assert sl.__unify__("ho", Trail()) is False
 
@@ -499,7 +500,7 @@ class TestEquality:
     def test_seglist_eq_str_when_charlist(self):
         # nv — Symmetric with SegString under the strings-as-lists contract
         # (F019 fix): a ground SegList of 1-char strings equals the matching str.
-        sl = SegList([ConcreteSeg(["a", "b", "c"])])
+        sl = SegList([ConcreteSeg([char_atom(c) for c in "abc"])])
         assert sl == "abc"
 
     def test_unhashable_unconditionally(self):

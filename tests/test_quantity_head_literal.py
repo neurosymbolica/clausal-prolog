@@ -105,4 +105,5 @@ class TestQuantityClauseInIndexedPredicate:
     def test_output_mode_enumerates_mixed_clauses(self, mod):
         K, N = Var(), Var()
         names = _atom_names(_collect("Mix", [N], K, N, module=mod))
-        assert names == [(mint("one_"),), (mint("two_"),), ("three_",), (mint("qty_"),)]
+        assert names == [(mint("one_"),), (mint("two_"),), (mint("three_"),),
+                         (mint("qty_"),)]

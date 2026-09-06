@@ -52,7 +52,7 @@ def test_the_note_does_not_disturb_the_error_term():
     exc = LogicException(type_error("number", culprit, "sum_list/2"))
     assert exc.term == Compound(
         "error",
-        (Compound("type_error", ("number", culprit)), "sum_list/2"),
+        (Compound("type_error", (mint("number"), culprit)), "sum_list/2"),
     )
 
 

@@ -267,7 +267,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # in the file (mechanical line-count shifts, not semantic changes -- see
     # task-4-report.md/task-6-report.md and
     # .superpowers/sdd/p32-cell-default-flip/task-2-report.md).
-    AllowEntry("clausal/testing.py", (2241, 2355),
+    AllowEntry("clausal/testing.py", (2188, 2300),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -346,7 +346,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    by Task 7 fix round 1 (SegList's ``_walk_raw`` split out of
     #    ``__walk__``) -- a further uniform +26 shift, still no new site; see
     #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-7-report.md).
-    AllowEntry("clausal/terms.py", (2505, 2622),
+    AllowEntry("clausal/terms.py", (2482, 2654),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),
@@ -587,7 +587,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2286
+        v.pattern == "functor_fallback" and v.line == 2233
         for v in testing_violations
     ), testing_violations
 

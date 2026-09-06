@@ -17,6 +17,7 @@ from clausal.modules.py import (
     note_mismatch,
     note_rejected_call,
     simple_to_trampoline,
+    to_text,
     value_is_ground,
 )
 _urllib_request = _import_stdlib("urllib.request")
@@ -41,7 +42,10 @@ def _dict_term_to_headers(dt):
     """Convert a DictTerm to a dict of string headers."""
     if not isinstance(dt, DictTerm):
         return {}
-    return {str(k): str(deref(v)) for k, v in dt.data.items()}
+    # Spec §9.4: a header name or value is a string OR an atom, and both
+    # cross as the same ``str`` -- never ``str()``, which would send the
+    # arity-0 cell's tuple repr over the wire.
+    return {_hdr_text(k): _hdr_text(deref(v)) for k, v in dt.data.items()}
 
 
 def _do_request(url, method="GET", headers=None, data=None, timeout=30):
@@ -70,6 +74,23 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30):
     except (OSError, _urllib_error.URLError, ValueError):
         # ValueError: urlopen on a malformed URL ("unknown url type") — F018
         return None
+
+
+
+def _hdr_text(val) -> str:
+    """The ``str`` an HTTP header name, header value or method denotes.
+
+    Text is a string or an ATOM, and both convert to the same ``str``
+    (spec §9.4).
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings): ``str()`` on the arity-0
+    cell ``("bar",)`` is the Python tuple repr ``"('bar',)"``, so every text
+    coercion in a wrapper routes through ``to_text`` instead.  A term that is
+    not text keeps the old ``str`` fallback -- this position never promised a
+    type contract.
+    """
+    text = to_text(val)
+    return text if text is not None else str(val)
 
 
 # ── Predicate implementations ────────────────────────────────────────────
@@ -187,7 +208,7 @@ def _request_3(options, status_out, body_out, trail, k):
         t = deref(timeout_raw)
         if isinstance(t, (int, float)):
             timeout = t
-    result = _do_request(url, method=str(method), headers=hdrs, data=data, timeout=timeout)
+    result = _do_request(url, method=_hdr_text(method), headers=hdrs, data=data, timeout=timeout)
     if result is None:
         return
     status, body_str = result

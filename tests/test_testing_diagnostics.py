@@ -101,7 +101,7 @@ def test_first_goal_failure_reported(capsys, tmp_path):
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "goal 1 of 2 failed" in out
-    assert "chain_subject('absent')" in out
+    assert "chain_subject(absent)" in out
     # must NOT blame the second (satisfiable) goal
     assert "goal 2 of 2 failed" not in out
 
@@ -154,7 +154,7 @@ def test_unsatisfiable_goal_says_so(capsys, tmp_path):
     out = capsys.readouterr().out
     # chain_subject/1 IS satisfiable, just not with "absent"
     assert "did not unify" in out
-    assert "chain_subject('simple')" in out
+    assert "chain_subject(simple)" in out
 
 
 def test_predicate_with_no_solutions_at_all(capsys, tmp_path):
@@ -189,7 +189,7 @@ def test_long_goal_is_wrapped_at_argument_boundaries(capsys, tmp_path):
     """)
     main([str(p)])
     out = capsys.readouterr().out
-    assert "      bo_chain_assess('parallel_below_threshold'," in out
+    assert "      bo_chain_assess(parallel_below_threshold," in out
     # continuation aligned under the open paren
     assert "\n" + " " * len("      bo_chain_assess(") + "bo_verdict(" in out
 

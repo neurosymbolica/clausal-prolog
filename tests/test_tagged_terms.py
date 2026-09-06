@@ -325,16 +325,15 @@ class TestCellEmission:
         assert "('point', _v2, _v3)" in src
         assert "point(_v" not in src
 
-    def test_atoms_lower_to_str_constants_not_to_cells(self):
-        """P3-1 atom pivot (§1b): a 0-arity reference is a Constant str, not a
-        class -- cells are how COMPOUND (arity >= 1) data compiles; an atom
-        was already a str before the flip and still is. Inverts the pre-pivot
-        pin
-        that atoms "stay class atoms" (phase3-decomposition-and-p31-atom-pivot
-        Task 7 work item 1)."""
+    def test_atoms_lower_to_arity_0_cell_constants_not_to_classes(self):
+        """THE FLIP (spec §5.1): a 0-arity reference is the arity-0 CELL
+        constant ``('nil',)``, not a class and no longer a bare ``str`` --
+        a ``str`` is a STRING now.  Inverts both the pre-pivot pin that atoms
+        "stay class atoms" and the P3-1 pin that they lower to a ``str``."""
         src = capture_predicate_codegen(_TAGGED, ["kind"])
-        assert "$unify(_v13, 'nil', trail)" in src
+        assert "$unify(_v13, ('nil',), trail)" in src
         assert "$unify(_v13, nil, trail)" not in src
+        assert "$unify(_v13, 'nil', trail)" not in src
 
     def test_keyword_construction_places_by_field_name(self):
         """P3-2 Task 1: signature placement, not a class fallback.
@@ -728,12 +727,16 @@ class TestCellHeadDispatch:
     @pytest.mark.parametrize(
         "shape, expected",
         [
-            (lambda m: (mint("point"), 1, 2), [mint("pt")]),
+            (lambda m: ("point", 1, 2), [mint("pt")]),
             (lambda m: ("circle", 0, 5), [mint("circ")]),
             (lambda m: ("seg", 1, 2, 3), [mint("seg3")]),
             (lambda m: m.nil, [mint("empty")]),
             (lambda m: 42, [mint("num")]),
-            (lambda m: "s", ["str"]),
+            # THE FLIP: the fixture's ``kind("s", "str")`` head literal is the
+            # ATOM ``("s",)`` under the default ``-double_quotes(atom)``, so
+            # the caller passes the atom; a Python ``str`` is a STRING and
+            # selects no clause.
+            (lambda m: mint("s"), [mint("str")]),
         ],
     )
     def test_functor_and_arity_discrimination(self, shape, expected):
@@ -742,7 +745,7 @@ class TestCellHeadDispatch:
 
     def test_wrong_arity_cell_matches_no_clause(self):
         """``point/3`` is not ``point/2``: arity is part of the discriminator."""
-        assert self._kind_of(_TAGGED, lambda m: (mint("point"), 1, 2, 3)) == []
+        assert self._kind_of(_TAGGED, lambda m: ("point", 1, 2, 3)) == []
 
     def test_unknown_functor_cell_matches_no_clause(self):
         assert self._kind_of(_TAGGED, lambda m: ("square", 1, 2)) == []
@@ -762,7 +765,7 @@ class TestCellHeadDispatch:
         with pytest.raises(TypeError):
             mod.point(1, 2)
         # ... and the cell of that shape selects its clause.
-        assert self._kind_of(_TAGGED, lambda m: (mint("point"), 1, 2)) == [mint("pt")]
+        assert self._kind_of(_TAGGED, lambda m: ("point", 1, 2)) == [mint("pt")]
 
 
 # ── Head patterns ────────────────────────────────────────────────────────────
@@ -1437,9 +1440,9 @@ class TestCellHeadReachability:
         lm = _logic_module(mod)
         for shape, expected in [
             (("point", 1, 2), [mint("pt")]),
-            (("circle", 1, 2), ["circ"]),
-            (("seg", 1, 2, 3), ["seg3"]),
-            (42, ["num"]),
+            (("circle", 1, 2), [mint("circ")]),
+            (("seg", 1, 2, 3), [mint("seg3")]),
+            (42, [mint("num")]),
             (("square", 1, 2), []),
         ]:
             K = Var()
@@ -1454,8 +1457,9 @@ class TestCellHeadReachability:
         S, K = Var(), Var()
         got = [(normalize_term(deref(S)), deref(K))
                for _t in call("kind", S, K, module=lm)]
-        assert [k for _s, k in got] == [mint("pt"), "circ", "seg3", "empty",
-                                        "num", mint("str")]
+        assert [k for _s, k in got] == [mint("pt"), mint("circ"), mint("seg3"),
+                                        mint("empty"), mint("num"),
+                                        mint("str")]
         assert got[0][0] == ("point", ("$var",), ("$var",))
 
     def test_a_reference_carrying_a_nested_thunk_is_not_lifted(self):
@@ -1478,9 +1482,16 @@ class TestCellHeadReachability:
         bucket = fns["kind__p0_b0__2"]
         # The bucket also holds the var-headed catch-all, which matches
         # anything -- so "fallback" trails every answer here.
-        assert _drive_bucket(bucket, (mint("pt"), 3, "x1"), Var()) == [mint("fs"), mint("fallback")]
-        assert _drive_bucket(bucket, (mint("pt"), 1, 9), Var()) == ["a", mint("fallback")]
-        assert _drive_bucket(bucket, ("wrap", "s"), Var()) == [mint("fallback")]
+        # ``f"x{1}"`` is a thunk and evaluates to the STRING "x1"; every
+        # other literal in the fixture is an atom.
+        assert _drive_bucket(bucket, ("pt", 3, "x1"), Var()) \
+            == [mint("fs"), mint("fallback")]
+        assert _drive_bucket(bucket, ("pt", 1, 9), Var()) \
+            == [mint("a"), mint("fallback")]
+        # ``wrap`` is not in this (first-argument) bucket at all, so only
+        # the var-headed catch-all answers.
+        assert _drive_bucket(bucket, ("wrap", mint("s")), Var()) \
+            == [mint("fallback")]
         # The two thunk-free clauses ARE lifted; the thunk one keeps its
         # body Unify, which is where the thunk gets evaluated.
         src = capture_predicate_codegen("_tt_nested_thunk", ["kind"])
@@ -1507,8 +1518,8 @@ class TestCellHeadReachability:
         lm = importer.__dict__["$module"]
         R = Var()
         assert [deref(R) for _t in
-                call("CheckIndexed", ("Wrap", "direct"), R, module=lm)] \
-            == [mint("first"), "second", mint("fallback")]
+                call("CheckIndexed", ("Wrap", mint("direct")), R, module=lm)] \
+            == [mint("first"), mint("second"), mint("fallback")]
         R2 = Var()
         assert [deref(R2) for _t in
                 call("CheckIndexed", 42, R2, module=lm)] == [mint("fallback")]
@@ -2078,11 +2089,11 @@ class TestGateSymmetry:
         tagged = _fixture(_TAGGED)
         assert tagged.point == mint("point")                    # the premise ...
         assert isinstance(tagged.kind, PredicateMeta)     # ... both halves
-        term = self._source_compound_for(mint("point"), 2)
+        term = self._source_compound_for("point", 2)
         with lowering_scope(tagged.__dict__):
             pattern = head_to_match_pattern(
                 term, {}, [], [], None,
-                globals_={"__name__": tagged.__name__, mint("point"): tagged.kind},
+                globals_={"__name__": tagged.__name__, "point": tagged.kind},
             )
         assert _unparse_pattern(pattern).startswith("case point(")
 
@@ -2113,15 +2124,15 @@ class TestGateSymmetry:
         empty: dict = {"__name__": "_tt_empty"}
         assert lowering_globals() is None
         with lowering_scope(tagged.__dict__):
-            assert cell_signature_for_name(mint("point")) == (mint("point"), ("X", "Y"))
+            assert cell_signature_for_name("point") == ("point", ("X", "Y"))
             with lowering_scope(empty):
                 # Inner namespace knows no ``point``: resolves nothing,
                 # rather than inheriting the outer scope's answer.
                 assert lowering_globals() is empty
-                assert cell_signature_for_name(mint("point")) is None
+                assert cell_signature_for_name("point") is None
                 with lowering_scope(None):
-                    assert cell_signature_for_name(mint("point")) is None
-            assert cell_signature_for_name(mint("point")) == (mint("point"), ("X", "Y"))
+                    assert cell_signature_for_name("point") is None
+            assert cell_signature_for_name("point") == ("point", ("X", "Y"))
         assert lowering_globals() is None
 
 

@@ -26,9 +26,14 @@ def _translate__3(lang, term, translated_string, trail, k):
     if is_var(lang_val):
         return  # language must be ground
 
-    # Accept both atom classes (PredicateMeta with __name__) and plain strings.
+    # THE FLIP (spec §6.4): *Lang* is an ATOM read by SPELLING.  A plain
+    # ``str`` (a string) and a legacy atom CLASS are still accepted; anything
+    # else falls back to ``str()``, which is only reached for a shape that
+    # names no locale anyway.
+    from clausal.logic.atoms import is_atom as _term_is_atom, spelling
     lang_str = (
-        lang_val if isinstance(lang_val, str)
+        spelling(lang_val) if _term_is_atom(lang_val)
+        else lang_val if isinstance(lang_val, str)
         else lang_val.__name__ if hasattr(lang_val, "__name__")
         else str(lang_val)
     )

@@ -20,6 +20,7 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     simple_to_trampoline,
+    to_text,
 )
 _os = _import_stdlib("os")
 _shutil = _import_stdlib("shutil")
@@ -34,14 +35,24 @@ from clausal.logic.variables import Var, deref, is_var, unify
 
 
 def _require_ground_str(val, pred, arg):
-    """Deref and validate a ground string argument. Returns str or None.
+    """Deref and validate a ground TEXT argument. Returns str or None.
+
+    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and
+    both convert to the same ``str`` -- so a path written ``'/tmp/x'`` in a
+    ``.clausal`` file works exactly as ``"/tmp/x"`` does under
+    ``-double_quotes(chars)``.  Routed through ``to_text``, never ``str()``
+    (which would hand the library an atom's tuple repr).
 
     *pred* is the registered predicate name/arity (e.g. ``"file_exists/1"``)
     and *arg* the 1-based argument position, used to record a type-mismatch
-    note when the value is bound but not a str.
+    note when the value is bound but not text.
     """
     val = deref(val)
-    return val if expect_type(val, str, pred, arg=arg) else None
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=arg)   # records the note; always False here
+    return None
 
 
 # ── Existence predicates ────────────────────────────────────────────────

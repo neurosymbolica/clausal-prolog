@@ -116,8 +116,8 @@ class TestBareImportedAtomHeadArg:
         # EXACTLY that clause (pre-fix: reached NONE -- zero solutions).
         assert _level_of(mod, 1) == [mint("aa")]
         assert _level_of(mod, 2) == [mint("bb")]
-        assert _level_of(mod, 3) == ["cc"]
-        assert _level_of(mod, 4) == ["dd"]
+        assert _level_of(mod, 3) == [mint("cc")]
+        assert _level_of(mod, 4) == [mint("dd")]
 
     def test_ground_call_with_the_atom_supplied_by_the_caller(self):
         """Symmetric direction: caller supplies the atom value (as the
@@ -125,10 +125,10 @@ class TestBareImportedAtomHeadArg:
         the shape the corpus escalation hit (``cdd_level(P, 'standard')``)."""
         mod = _load_bare_importer()
         assert _level_solutions(mod, 1, mint("aa")) == [mint("aa")]
-        assert _level_solutions(mod, 4, "dd") == ["dd"]
+        assert _level_solutions(mod, 4, mint("dd")) == [mint("dd")]
         # A mismatched pairing must still correctly fail (not spuriously
         # succeed via some other clause's bucket).
-        assert _level_solutions(mod, 1, "dd") == []
+        assert _level_solutions(mod, 1, mint("dd")) == []
 
 
 class TestDottedQualifiedAtomHeadArg:
@@ -147,14 +147,14 @@ class TestDottedQualifiedAtomHeadArg:
         mod = _load_dotted_importer()
         assert _level_of(mod, 1) == [mint("aa")]
         assert _level_of(mod, 2) == [mint("bb")]
-        assert _level_of(mod, 3) == ["cc"]
-        assert _level_of(mod, 4) == ["dd"]
+        assert _level_of(mod, 3) == [mint("cc")]
+        assert _level_of(mod, 4) == [mint("dd")]
 
     def test_ground_call_with_the_atom_supplied_by_the_caller(self):
         mod = _load_dotted_importer()
         assert _level_solutions(mod, 1, mint("aa")) == [mint("aa")]
-        assert _level_solutions(mod, 4, "dd") == ["dd"]
-        assert _level_solutions(mod, 1, "dd") == []
+        assert _level_solutions(mod, 4, mint("dd")) == [mint("dd")]
+        assert _level_solutions(mod, 1, mint("dd")) == []
 
 
 def _load_pkg_reexport_importer() -> object:
@@ -193,14 +193,14 @@ class TestPackageReexportedAtomHeadArg:
         mod = _load_pkg_reexport_importer()
         assert _level_of(mod, 1) == [mint("aa")]
         assert _level_of(mod, 2) == [mint("bb")]
-        assert _level_of(mod, 3) == ["cc"]
-        assert _level_of(mod, 4) == ["dd"]
+        assert _level_of(mod, 3) == [mint("cc")]
+        assert _level_of(mod, 4) == [mint("dd")]
 
     def test_ground_call_with_the_atom_supplied_by_the_caller(self):
         mod = _load_pkg_reexport_importer()
         assert _level_solutions(mod, 1, mint("aa")) == [mint("aa")]
-        assert _level_solutions(mod, 4, "dd") == ["dd"]
-        assert _level_solutions(mod, 1, "dd") == []
+        assert _level_solutions(mod, 4, mint("dd")) == [mint("dd")]
+        assert _level_solutions(mod, 1, mint("dd")) == []
 
     def test_the_two_hop_reference_is_genuinely_indexed(self):
         """Not just correct -- actually reaches a real per-atom bucket
@@ -237,5 +237,7 @@ class TestPackageReexportedAtomHeadArg:
         assert seen.get("result") is not None, (
             "expected a real index at position 1 -- got None (unindexed fallback)"
         )
-        assert sorted(seen["result"]["buckets"].keys()) == [mint("aa"), mint("bb"), "cc", "dd"]
+        # spec §6.9: an ATOM's index key is ``(spelling, 0)``.
+        assert sorted(seen["result"]["buckets"].keys()) == [
+            ("aa", 0), ("bb", 0), ("cc", 0), ("dd", 0)]
         assert seen["result"]["n_distinct"] == 4

@@ -28,6 +28,7 @@ from clausal.modules.py import (
     note_mismatch,
     note_rejected_call,
     simple_to_trampoline,
+    to_text,
 )
 _csv = _import_stdlib("csv")
 
@@ -47,7 +48,10 @@ def _deref_row(row):
         v = deref(item)
         if is_var(v):
             raise TypeError("Cannot serialize unbound variable to CSV")
-        result.append(str(v))
+        # Spec §9.4: text is a string or an ATOM; ``str()`` on the arity-0
+        # cell would write its Python tuple repr into the file.
+        text = to_text(v)
+        result.append(text if text is not None else str(v))
     return result
 
 

@@ -875,13 +875,13 @@ def test_predicate_functor_names_says_data_and_the_database_agrees(
     module, db, names = _load_pfn_module(
         tmp_path, monkeypatch, "pfn_sync_data", _PFN_SOURCE
     )
-    assert mint("pfn_point") not in names
-    assert db.row(mint("pfn_point"), 2) is None
-    assert not [k for k in db._clauses if k[0] == mint("pfn_point")]
-    # ... and the binding shape that answer produced is the interned spelling,
-    # which is what makes ``pfn_point(0, 0)`` compile to a cell.
-    assert getattr(module, mint("pfn_point")) == mint("pfn_point")
-    assert not isinstance(getattr(module, mint("pfn_point")), PredicateMeta)
+    assert "pfn_point" not in names
+    assert db.row("pfn_point", 2) is None
+    assert not [k for k in db._clauses if k[0] == "pfn_point"]
+    # ... and the binding shape that answer produced is the ATOM, which is
+    # what makes ``pfn_point(0, 0)`` compile to a cell.
+    assert getattr(module, "pfn_point") == mint("pfn_point")
+    assert not isinstance(getattr(module, "pfn_point"), PredicateMeta)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

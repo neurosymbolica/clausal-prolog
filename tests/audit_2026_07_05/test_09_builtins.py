@@ -337,16 +337,20 @@ def test_F008_retract_binds_pattern(fix):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_F009_sequence_var_terminal(fix):
+    # THE FLIP (spec §6.2): the elements of the string "a" are its CHAR
+    # ATOMS, so a Var terminal binds ("a",), not the 1-char str it used to.
     _, m = fix
     X, S = Var(), Var()
     assert _first(m, "sequence", [X], "a", S)
-    assert deref(X) == "a" and deref(S) == ""
+    assert deref(X) == char_atom("a") and deref(S) == ""
 
 
 def test_F009_regression_sequence_ground_modes(fix):
+    # THE FLIP: a terminal LIST holds char atoms; ["a"] is a list of one
+    # one-character STRING, which is a different term.
     _, m = fix
     S = Var()
-    assert _first(m, "sequence", ["a"], "ab", S) and deref(S) == "b"
+    assert _first(m, "sequence", [char_atom("a")], "ab", S) and deref(S) == "b"
     S0 = Var()
     assert _first(m, "sequence", "a", S0, "b") and deref(S0) == "ab"
 

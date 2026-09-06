@@ -181,7 +181,8 @@ class TestHttpJson:
         assert len(sols) == 1
         result = deref(term)
         assert isinstance(result, DictTerm)
-        assert result.data["key"] == "value"
+        # spec §9.2: JSON object keys parse as ATOMS; string values stay strings.
+        assert result.data[mint("key")] == "value"
 
     @patch("clausal.modules.py.http._urlopen")
     def test_json_get_parses_list(self, mock_urlopen):
@@ -202,7 +203,7 @@ class TestHttpJson:
         assert len(sols) == 1
         r = deref(result)
         assert isinstance(r, DictTerm)
-        assert r.data["status"] == "ok"
+        assert r.data[mint("status")] == "ok"
 
     @patch("clausal.modules.py.http._urlopen")
     def test_invalid_json_fails(self, mock_urlopen):

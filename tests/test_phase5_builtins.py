@@ -663,37 +663,37 @@ class TestGroupPairsByKey:
 class TestMustBe:
     def test_integer_succeeds(self):
         # nv
-        goal = Call(func=LoadName(name="must_be"), args=["integer", 42], kwargs=[])
+        goal = Call(func=LoadName(name="must_be"), args=[mint("integer"), 42], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_integer_string_throws(self):
         # nv
         from clausal.logic.exceptions import LogicException
-        goal = Call(func=LoadName(name="must_be"), args=["integer", "hello"], kwargs=[])
+        goal = Call(func=LoadName(name="must_be"), args=[mint("integer"), "hello"], kwargs=[])
         with pytest.raises(LogicException):
             solutions(goal)
 
     def test_unbound_throws_instantiation(self):
         # nv
         from clausal.logic.exceptions import LogicException
-        goal = Call(func=LoadName(name="must_be"), args=["integer", Var()], kwargs=[])
+        goal = Call(func=LoadName(name="must_be"), args=[mint("integer"), Var()], kwargs=[])
         with pytest.raises(LogicException):
             solutions(goal)
 
     def test_list_succeeds(self):
         # nv
-        goal = Call(func=LoadName(name="must_be"), args=["list", [1, 2]], kwargs=[])
+        goal = Call(func=LoadName(name="must_be"), args=[mint("list"), [1, 2]], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_number_float_succeeds(self):
         # nv
-        goal = Call(func=LoadName(name="must_be"), args=["number", 3.14], kwargs=[])
+        goal = Call(func=LoadName(name="must_be"), args=[mint("number"), 3.14], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_atom_int_throws(self):
         # nv
         from clausal.logic.exceptions import LogicException
-        goal = Call(func=LoadName(name="must_be"), args=["atom", 42], kwargs=[])
+        goal = Call(func=LoadName(name="must_be"), args=[mint("atom"), 42], kwargs=[])
         with pytest.raises(LogicException):
             solutions(goal)
 
@@ -701,25 +701,25 @@ class TestMustBe:
 class TestCanBe:
     def test_integer_succeeds(self):
         # nv
-        goal = Call(func=LoadName(name="can_be"), args=["integer", 42], kwargs=[])
+        goal = Call(func=LoadName(name="can_be"), args=[mint("integer"), 42], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_unbound_succeeds(self):
         # nv
-        goal = Call(func=LoadName(name="can_be"), args=["integer", Var()], kwargs=[])
+        goal = Call(func=LoadName(name="can_be"), args=[mint("integer"), Var()], kwargs=[])
         assert len(solutions(goal)) == 1
 
     def test_wrong_type_throws(self):
         # nv
         from clausal.logic.exceptions import LogicException
-        goal = Call(func=LoadName(name="can_be"), args=["integer", "hello"], kwargs=[])
+        goal = Call(func=LoadName(name="can_be"), args=[mint("integer"), "hello"], kwargs=[])
         with pytest.raises(LogicException):
             solutions(goal)
 
     def test_dict_succeeds(self):
         # nv
         from clausal.terms import DictTerm
-        goal = Call(func=LoadName(name="can_be"), args=["dict", DictTerm({"a": 1})], kwargs=[])
+        goal = Call(func=LoadName(name="can_be"), args=[mint("dict"), DictTerm({"a": 1})], kwargs=[])
         assert len(solutions(goal)) == 1
 
 
@@ -752,7 +752,7 @@ class TestStatistics:
     def test_cpu_time(self):
         # nv
         v = Var()
-        goal = Call(func=LoadName(name="statistics"), args=["cpu_time", v], kwargs=[])
+        goal = Call(func=LoadName(name="statistics"), args=[mint("cpu_time"), v], kwargs=[])
         result = sol_var(goal, v)
         assert len(result) == 1
         assert isinstance(result[0], float)
@@ -761,7 +761,7 @@ class TestStatistics:
     def test_wall_time(self):
         # nv
         v = Var()
-        goal = Call(func=LoadName(name="statistics"), args=["wall_time", v], kwargs=[])
+        goal = Call(func=LoadName(name="statistics"), args=[mint("wall_time"), v], kwargs=[])
         result = sol_var(goal, v)
         assert len(result) == 1
         assert isinstance(result[0], float)
@@ -986,6 +986,7 @@ from clausal.logic.clpfd import (
     SumConstraint, ScalarProductConstraint, ElementConstraint, CircuitConstraint,
 )
 from clausal.logic.variables import get_attr
+from clausal.logic.atoms import char_atom, is_atom, mint, spelling
 
 
 def fresh_trail():

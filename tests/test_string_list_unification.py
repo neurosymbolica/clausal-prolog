@@ -17,36 +17,46 @@ from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, unify, deref, is_var
 
 
-class TestStringUnifiesWithCharList:
-    """RETIRED (P3-1 §1b): str vs char-list element-wise unification.
+def _chars(text):
+    """The char-ATOM list a string denotes (spec §6.2)."""
+    return [char_atom(c) for c in text]
 
-    (Formerly "Core: str = [char, char, ...] element-wise unification" —
-    every case here now fails.)
+
+class TestStringUnifiesWithCharList:
+    """THE FLIP (spec §6.2): a string IS the list of its CHAR ATOMS, so the
+    str~list arm is reinstated -- INVERTING the P3-1 §1b retirement this
+    class pinned.  A list of 1-char ``str`` values is a list of one-element
+    STRINGS, a different term, and still fails.
     """
 
     def test_basic(self):
         # nv
-        assert not unify("abc", ["a", "b", "c"], Trail())
+        assert unify("abc", _chars("abc"), Trail())
 
     def test_symmetric(self):
         # nv
-        assert not unify(["a", "b", "c"], "abc", Trail())
+        assert unify(_chars("abc"), "abc", Trail())
 
     def test_empty(self):
-        # nv — empty str vs empty list: no cross-type exception either.
-        assert not unify("", [], Trail())
+        # nv — empty str IS the empty list.
+        assert unify("", [], Trail())
 
     def test_single_char(self):
         # nv
-        assert not unify("a", ["a"], Trail())
+        assert unify("a", [char_atom("a")], Trail())
 
     def test_unicode(self):
         # nv
-        assert not unify("日本語", ["日", "本", "語"], Trail())
+        assert unify("日本語", _chars("日本語"), Trail())
 
     def test_emoji(self):
         # nv
-        assert not unify("👋🌍", ["👋", "🌍"], Trail())
+        assert unify("👋🌍", _chars("👋🌍"), Trail())
+
+    def test_one_char_str_elements_are_strings_not_chars(self):
+        # nv — the inverted half: ["a","b","c"] is three one-element
+        # STRINGS, which is not the char list of "abc".
+        assert not unify("abc", ["a", "b", "c"], Trail())
 
 
 class TestStringListMismatch:
@@ -83,21 +93,18 @@ class TestStringListMismatch:
 
 
 class TestStringListVarBinding:
-    """RETIRED (P3-1 §1b): a Var inside a char-list target no longer binds
-    against a str's char — the whole unify fails before any element is
-    visited (str is not list-shaped any more), so no partial bindings
-    leak either.
-
-    (Formerly "Variables in the list get bound to single-character
-    strings".)
+    """THE FLIP (spec §6.2): a Var inside a char-list target binds to the
+    string's CHAR ATOM again -- INVERTING the P3-1 §1b retirement.  A
+    1-char ``str`` element is a STRING and still fails, without leaking a
+    partial binding.
     """
 
     def test_all_vars(self):
         # nv
         trail = Trail()
         X, Y, Z = Var(), Var(), Var()
-        assert not unify("abc", [X, Y, Z], trail)
-        assert is_var(deref(X)) and is_var(deref(Y)) and is_var(deref(Z))
+        assert unify("abc", [X, Y, Z], trail)
+        assert (deref(X), deref(Y), deref(Z)) == tuple(_chars("abc"))
 
     def test_partial_vars(self):
         # nv
@@ -334,7 +341,7 @@ class TestSegListStringUnification:
         # nv
         trail = Trail()
         P, S = Var(), Var()
-        sl = SegList([VarSeg(P), ConcreteSeg([","]), VarSeg(S)])
+        sl = SegList([VarSeg(P), ConcreteSeg([char_atom(",")]), VarSeg(S)])
         assert unify(sl, "a,b", trail)
         assert deref(P) == "a"
         assert deref(S) == "b"
@@ -345,7 +352,7 @@ class TestSegListStringUnification:
         from clausal.terms import _seglist_unify_gen
         trail = Trail()
         A, B = Var(), Var()
-        sl = SegList([VarSeg(A), ConcreteSeg(["l"]), VarSeg(B)])
+        sl = SegList([VarSeg(A), ConcreteSeg([char_atom("l")]), VarSeg(B)])
         walked = sl.__walk__()
         # Pass string directly — VarSegs bind to substrings
         solutions = []
@@ -367,13 +374,13 @@ class TestSegListStringUnification:
     def test_full_concrete_match(self):
         """['h', 'i'] matches 'hi'."""
         # nv
-        sl = SegList([ConcreteSeg([mint("h"), "i"])])
+        sl = SegList([ConcreteSeg([char_atom("h"), char_atom("i")])])
         assert unify(sl, "hi", Trail())
 
     def test_full_concrete_mismatch(self):
         """['h', 'i'] does NOT match 'ho'."""
         # nv
-        sl = SegList([ConcreteSeg([mint("h"), "i"])])
+        sl = SegList([ConcreteSeg([char_atom("h"), char_atom("i")])])
         assert not unify(sl, "ho", Trail())
 
     def test_concrete_length_mismatch(self):
@@ -449,28 +456,29 @@ class TestBodyMultiStarUnifyString:
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
-        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
         results = []
         for _ in _body_multi_star_unify("a,b", segments, trail):
-            results.append((list(deref(A)), list(deref(B))))
+            results.append((deref(A), deref(B)))
         assert len(results) == 1
-        assert results[0] == (["a"], ["b"])
+        # The star slices stay ``str`` slices (R-S2).
+        assert results[0] == ("a", "b")
 
     def test_multiple_commas(self):
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
-        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
         results = []
         for _ in _body_multi_star_unify("a,b,c", segments, trail):
-            results.append((list(deref(A)), list(deref(B))))
+            results.append((deref(A), deref(B)))
         assert len(results) == 2
 
     def test_no_match(self):
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
-        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
         results = list(_body_multi_star_unify("abc", segments, trail))
         assert results == []  # No comma in string
 

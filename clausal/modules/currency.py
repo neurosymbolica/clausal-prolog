@@ -94,6 +94,21 @@ currency_end = ModulePredicate("currency_end")
 currency_end._register(2, _simple_to_trampoline(_accessor("end")))
 
 
+
+
+def _mode_text(val) -> str:
+    """The ``str`` a rounding-MODE / display-STYLE argument denotes.
+
+    THE FLIP (spec §9.4): ``half_up`` written in a ``.clausal`` file is the
+    ATOM ``("half_up",)``, and ``str()`` on it is the Python tuple repr --
+    which is what the rounding table was being asked to look up.  Text is a
+    string or an atom; both convert to the same ``str``.
+    """
+    from clausal.modules.py import to_text
+    text = to_text(val)
+    return text if text is not None else str(val)
+
+
 # ── rounding & display ────────────────────────────────────────────────────────
 
 def _money_round_impl(amount, mode, out, trail):
@@ -101,7 +116,7 @@ def _money_round_impl(amount, mode, out, trail):
     c = _currency_of(a)
     if c is None or is_var(m):
         return
-    q = Quantity(_quantize(a, c, str(m)), dict(a.dims))   # UNCHECKED raw dict
+    q = Quantity(_quantize(a, c, _mode_text(m)), dict(a.dims))   # UNCHECKED raw dict
     if unify(deref(out), q, trail):
         yield None
 
@@ -115,7 +130,7 @@ def _money_str_impl(amount, mode, out, trail):
     c = _currency_of(a)
     if c is None or is_var(m):
         return
-    if unify(deref(out), _format_value(a, c, str(m), "code"), trail):
+    if unify(deref(out), _format_value(a, c, _mode_text(m), "code"), trail):
         yield None
 
 
@@ -124,7 +139,7 @@ def _money_format_impl(amount, style, mode, out, trail):
     c = _currency_of(a)
     if c is None or is_var(sty) or is_var(m):
         return
-    if unify(deref(out), _format_value(a, c, str(m), str(sty)), trail):
+    if unify(deref(out), _format_value(a, c, _mode_text(m), _mode_text(sty)), trail):
         yield None
 
 

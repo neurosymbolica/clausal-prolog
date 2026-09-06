@@ -8,7 +8,7 @@ Tests for:
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import char_atom, is_atom, mint
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -412,26 +412,26 @@ class TestGenSym:
         """gensym("x", A) → "x_1"."""
         # nv
         a = Var()
-        vals = sol_var(goal("gensym", "x", a), a)
-        assert vals == ["x_1"]
+        vals = sol_var(goal("gensym", mint("x"), a), a)
+        assert vals == [mint("x_1")]
 
     def test_sequential(self):
         """Two calls increment: "x_1", "x_2"."""
         # nv
         a1, a2 = Var(), Var()
-        vals1 = sol_var(goal("gensym", "x", a1), a1)
-        vals2 = sol_var(goal("gensym", "x", a2), a2)
-        assert vals1 == ["x_1"]
-        assert vals2 == ["x_2"]
+        vals1 = sol_var(goal("gensym", mint("x"), a1), a1)
+        vals2 = sol_var(goal("gensym", mint("x"), a2), a2)
+        assert vals1 == [mint("x_1")]
+        assert vals2 == [mint("x_2")]
 
     def test_different_prefixes(self):
         """Different prefixes have independent counters."""
         # nv
         a = Var()
         b = Var()
-        sol_var(goal("gensym", "x", a), a)
-        vals = sol_var(goal("gensym", "y", b), b)
-        assert vals == ["y_1"]
+        sol_var(goal("gensym", mint("x"), a), a)
+        vals = sol_var(goal("gensym", mint("y"), b), b)
+        assert vals == [mint("y_1")]
 
     def test_unbound_prefix_fails(self):
         """gensym(X, A) with unbound X → no solutions."""
@@ -451,22 +451,22 @@ class TestGenSym:
         """Counter does NOT reset on backtracking — impure."""
         # nv
         a1 = Var()
-        sol_var(goal("gensym", "z", a1), a1)
+        sol_var(goal("gensym", mint("z"), a1), a1)
         # Counter is now at 1; next call should give z_2
         a2 = Var()
-        vals = sol_var(goal("gensym", "z", a2), a2)
-        assert vals == ["z_2"]
+        vals = sol_var(goal("gensym", mint("z"), a2), a2)
+        assert vals == [mint("z_2")]
 
     def test_atom_already_bound_unification(self):
         """gensym("x", "x_1") succeeds if counter is at 1."""
         # nv
-        sols = solutions(goal("gensym", "x", "x_1"))
+        sols = solutions(goal("gensym", mint("x"), mint("x_1")))
         assert len(sols) == 1
 
     def test_atom_already_bound_mismatch(self):
         """gensym("x", "x_99") fails when counter is at 1."""
         # nv
-        sols = solutions(goal("gensym", "x", "x_99"))
+        sols = solutions(goal("gensym", mint("x"), mint("x_99")))
         assert len(sols) == 0
 
     def test_thread_safety(self):
@@ -480,7 +480,7 @@ class TestGenSym:
             a = Var()
             mod = fresh_module()
             trail = Trail()
-            for _ in solve(goal("gensym", "t", a), mod, trail):
+            for _ in solve(goal("gensym", mint("t"), a), mod, trail):
                 with lock:
                     results.append(deref(a))
 
@@ -740,24 +740,26 @@ class TestGlobalAtom:
         name = "_test_global_atom_mint_xyz"
         assert name not in predicate_builtins  # sanity: fresh
         atom = Var()
-        results = _global_atom_call(name, atom)
+        results = _global_atom_call(mint(name), atom)
         assert len(results) == 1
         _, val = results[0]
-        assert val == name
-        assert isinstance(val, str)
+        # THE FLIP (spec §5.1): the installed atom is the arity-0 CELL, and
+        # the pool stays keyed by the SPELLING.
+        assert val == mint(name)
         # Side-effect: it is now in the global dict.
-        assert predicate_builtins.get(name) is val
+        assert predicate_builtins.get(name) == val
 
     def test_idempotent_mint(self):
-        """(+name, -atom) twice yields the same class object (identity)."""
+        """(+name, -atom) twice yields the same atom (EQUAL, spec §5.2)."""
         # nv
         name = "_test_global_atom_idempotent_xyz"
         a1 = Var()
-        r1 = _global_atom_call(name, a1)
+        r1 = _global_atom_call(mint(name), a1)
         a2 = Var()
-        r2 = _global_atom_call(name, a2)
+        r2 = _global_atom_call(mint(name), a2)
         assert len(r1) == 1 and len(r2) == 1
-        assert r1[0][1] is r2[0][1]
+        # Equality, never identity (spec §2/§5.2).
+        assert r1[0][1] == r2[0][1]
 
     def test_existing_pre_seeded_returned(self):
         """(+name, -atom) for an entry the pool already carries (e.g. minted
@@ -789,14 +791,14 @@ class TestGlobalAtom:
         # nv
         from clausal.import_hook import predicate_builtins
         name = "_test_global_atom_preseeded_xyz"
-        marker = f"__preseeded_marker_for_{name}__"
+        marker = mint(f"__preseeded_marker_for_{name}__")
         predicate_builtins[name] = marker
         try:
             out = Var()
-            results = _global_atom_call(name, out)
+            results = _global_atom_call(mint(name), out)
             assert len(results) == 1
-            assert results[0][1] is marker
-            assert results[0][1] != name
+            assert results[0][1] == marker
+            assert results[0][1] != mint(name)
         finally:
             # F4/M9 (P3-2 whole-branch final review): ``predicate_builtins``
             # is process-global — without this the marker leaks into every
@@ -810,10 +812,10 @@ class TestGlobalAtom:
         from clausal.import_hook import predicate_builtins
         name = "_test_global_atom_guard_match_xyz"
         # Mint first.
-        _global_atom_call(name, Var())
+        _global_atom_call(mint(name), Var())
         cls = predicate_builtins[name]
-        # Guard mode with the right class should succeed exactly once.
-        results = _global_atom_call(name, cls)
+        # Guard mode with the right atom should succeed exactly once.
+        results = _global_atom_call(mint(name), cls)
         assert len(results) == 1
 
     def test_guard_fails_when_atom_mismatches(self):
@@ -822,10 +824,10 @@ class TestGlobalAtom:
         from clausal.logic.predicate import make_predicate
         name = "_test_global_atom_guard_mismatch_xyz"
         # Mint the global atom for 'name'.
-        _global_atom_call(name, Var())
+        _global_atom_call(mint(name), Var())
         # Create a separate (non-global) PredicateMeta with the same name.
         impostor = make_predicate(name, [])
-        results = _global_atom_call(name, impostor)
+        results = _global_atom_call(mint(name), impostor)
         assert results == []
 
     def test_reverse_lookup_returns_name(self):
@@ -833,13 +835,14 @@ class TestGlobalAtom:
         # nv
         from clausal.import_hook import predicate_builtins
         name = "_test_global_atom_reverse_xyz"
-        _global_atom_call(name, Var())
+        _global_atom_call(mint(name), Var())
         cls = predicate_builtins[name]
         # Reverse-lookup with bound atom.
         n_out = Var()
         results = _global_atom_call(n_out, cls)
         assert len(results) == 1
-        assert results[0][0] == name
+        # The NAME position answers an ATOM (spec §6.4).
+        assert results[0][0] == mint(name)
 
     def test_reverse_lookup_fails_for_non_global_class(self):
         """(-name, +atom) — fails if atom is not the global class registered for its name."""
@@ -854,31 +857,31 @@ class TestGlobalAtom:
     def test_enumerate_yields_minted_atoms(self):
         """(-name, -atom) — enumerates global atoms; minted one appears.
 
-        P3-1 atom pivot (§1b/R2): a registered atom is the interned str
-        (self-mapped: key == value), not a PredicateMeta -- see Task 7 work
-        item 4. A legacy 0-arity PredicateMeta (``make_predicate(n, [])``'s
-        shape) is still accepted by the reader if anything installs one
-        manually, so the enumerate assertion below allows either shape.
+        THE FLIP (spec §5.1, §6.4): a registered atom is the arity-0 CELL
+        whose slot 0 is the pool KEY, and the enumerated Name is that atom.
+        A legacy 0-arity PredicateMeta (``make_predicate(n, [])``'s shape) is
+        still accepted by the reader if anything installs one manually, so
+        the enumerate assertion below allows either shape.
         """
         # nv
         from clausal.import_hook import predicate_builtins
         from clausal.logic.predicate import PredicateMeta
         name = "_test_global_atom_enumerate_xyz"
         # Mint to ensure presence.
-        _global_atom_call(name, Var())
+        _global_atom_call(mint(name), Var())
         val = predicate_builtins[name]
-        assert val == name and isinstance(val, str)
+        assert val == mint(name)
         # Enumerate.
         n_out = Var()
         a_out = Var()
         results = _global_atom_call(n_out, a_out)
         # Our minted entry must appear.
-        assert (name, val) in results
-        # Every yielded pair is (str, str-that-equals-its-name) or, for
-        # backward compatibility, (str, 0-arity PredicateMeta).
+        assert (mint(name), val) in results
+        # Every yielded pair is (atom, atom-of-the-same-spelling) or, for
+        # backward compatibility, (atom, 0-arity PredicateMeta).
         for n, v in results:
-            assert isinstance(n, str)
-            if isinstance(v, str):
+            assert is_atom(n)
+            if is_atom(v):
                 assert v == n
             else:
                 assert isinstance(v, PredicateMeta)
@@ -891,11 +894,11 @@ class TestGlobalAtom:
         name = "_test_global_atom_round_trip_xyz"
         # Mint.
         x = Var()
-        mint_results = _global_atom_call(name, x)
+        mint_results = _global_atom_call(mint(name), x)
         assert len(mint_results) == 1
         cls = predicate_builtins[name]
         # Reverse lookup.
         n_out = Var()
         rev_results = _global_atom_call(n_out, cls)
         assert len(rev_results) == 1
-        assert rev_results[0][0] == name
+        assert rev_results[0][0] == mint(name)

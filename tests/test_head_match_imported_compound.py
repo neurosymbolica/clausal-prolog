@@ -66,7 +66,7 @@ def test_rule_with_imported_compound_head_skips_non_matching_term():
     mod = _load_importer()
     results = _results(mod, "Check", "not_a_wrap")
     # Expected: only the catch-all fires.
-    assert results == ["fallback"], (
+    assert results == [mint("fallback")], (
         f"Rule head compiled to wildcard — fired for non-Wrap input. "
         f"Got {results!r}, expected ['fallback']."
     )
@@ -76,7 +76,7 @@ def test_fact_with_imported_compound_head_skips_non_matching_term():
     """Parity baseline: fact form already routes correctly today."""
     mod = _load_importer()
     results = _results(mod, "CheckFact", "not_a_wrap")
-    assert results == ["fallback"], (
+    assert results == [mint("fallback")], (
         f"Fact-form head misrouted. Got {results!r}, expected ['fallback']."
     )
 
@@ -88,7 +88,7 @@ def test_rule_with_imported_compound_head_fires_on_matching_term():
     results = _results(mod, "Check", wrap_term)
     # Both clauses match a Wrap term: the rule yields "matched", the
     # catch-all yields "fallback".
-    assert results == ["matched", "fallback"], (
+    assert results == [mint("matched"), mint("fallback")], (
         f"Expected rule + catchall to both fire on Wrap input. Got {results!r}."
     )
 
@@ -98,7 +98,7 @@ def test_rule_with_imported_compound_head_binds_inner_var():
     mod = _load_importer()
     wrap_term = ("Wrap", "payload")
     results = _results(mod, "CheckMixed", wrap_term)
-    assert results == ["payload", "fallback"], (
+    assert results == ["payload", mint("fallback")], (
         f"Expected SUB to be bound to 'payload'. Got {results!r}."
     )
 
@@ -141,7 +141,7 @@ def test_nested_imported_compound_head_destructures():
     item_term = ("Item", "req-42", ("Met", direct), "some-detail")
     results = _results(mod, "CheckNested", item_term)
     # Rule binds RESULT to REQ_ID ("req-42") and yields; catchall yields "fallback".
-    assert results == ["req-42", "fallback"], (
+    assert results == ["req-42", mint("fallback")], (
         f"Nested imported-compound head failed to destructure. Got {results!r}."
     )
 
@@ -150,7 +150,7 @@ def test_nested_imported_compound_head_rejects_outer_class_mismatch():
     """A Wrap term must NOT match a head expecting Item — different classes."""
     mod = _load_importer()
     results = _results(mod, "CheckNested", ("Wrap", "x"))
-    assert results == ["fallback"], (
+    assert results == [mint("fallback")], (
         f"Nested head matched a Wrap term when expecting Item. Got {results!r}."
     )
 
@@ -160,7 +160,7 @@ def test_nested_imported_compound_head_rejects_inner_class_mismatch():
     mod = _load_importer()
     # Item present but second arg is a plain string, not Met(_):
     results = _results(mod, "CheckNested", ("Item", "r", "not-a-met", "d"))
-    assert results == ["fallback"], (
+    assert results == [mint("fallback")], (
         f"Nested head matched on inner-class mismatch. Got {results!r}."
     )
 
@@ -173,7 +173,7 @@ def test_indexed_wrap_rule_fires_under_first_arg_index():
     the Wrap-keyed clauses when the caller passes a Wrap term."""
     mod = _load_importer()
     results = _results(mod, "CheckIndexed", ("Wrap", "x"))
-    assert results == ["first", "second", "fallback"], (
+    assert results == [mint("first"), mint("second"), mint("fallback")], (
         f"Indexer bucketing dropped Wrap-keyed rule clauses. Got {results!r}."
     )
 
@@ -185,7 +185,7 @@ def test_indexed_item_rule_fires_under_first_arg_index():
     results = _results(mod, "CheckIndexed", item_with_met)
     # Both Item-keyed rule clauses match (the second one further
     # destructures Met(_) which the input satisfies).
-    assert results == ["item", "item-met", "fallback"], (
+    assert results == [mint("item"), mint("item-met"), mint("fallback")], (
         f"Indexer bucketing dropped Item-keyed rule clauses. "
         f"Got {results!r}."
     )
@@ -194,7 +194,7 @@ def test_indexed_item_rule_fires_under_first_arg_index():
 def test_indexed_non_matching_term_only_hits_fallback():
     mod = _load_importer()
     results = _results(mod, "CheckIndexed", "not_a_known_shape")
-    assert results == ["fallback"], (
+    assert results == [mint("fallback")], (
         f"Non-matching input fired an indexed rule clause. Got {results!r}."
     )
 
@@ -256,7 +256,7 @@ def test_rule_structural_head_binds_unbound_caller():
     """Check(Wrap(SUB), RESULT) <- RESULT is "matched":
     Check(X, "matched") with X unbound must bind X = Wrap(_)."""
     mod = _load_importer()
-    got = _bind_first(mod, "Check", "matched")
+    got = _bind_first(mod, "Check", mint("matched"))
     assert len(got) == 1
     # R6: the constructed answer is a cell -- slot 0 IS the functor.
     assert got[0][0] == "Wrap"
@@ -265,8 +265,8 @@ def test_rule_structural_head_binds_unbound_caller():
 def test_rule_matches_fact_in_output_mode():
     """Rule (Check) and fact (CheckFact) must agree in output mode."""
     mod = _load_importer()
-    rule_got = _bind_first(mod, "Check", "matched")
-    fact_got = _bind_first(mod, "CheckFact", "matched")
+    rule_got = _bind_first(mod, "Check", mint("matched"))
+    fact_got = _bind_first(mod, "CheckFact", mint("matched"))
     assert len(rule_got) == len(fact_got) == 1
     assert rule_got[0][0] == fact_got[0][0] == "Wrap"   # R6: cells
 
@@ -281,14 +281,14 @@ def test_indexed_imported_compound_at_second_position_enumerates_all_rows():
     emitted ``MatchClass(Call)`` and the Wrap/Item buckets returned nothing."""
     mod = _load_importer()
     wrap_rows = _bind_first(mod, "Tagged", ("Wrap", Var()))
-    assert sorted(wrap_rows) == ["r1", "r3"], (
+    assert sorted(wrap_rows) == [mint("r1"), mint("r3")], (
         f"arg1-indexed Wrap bucket dropped rows. Got {wrap_rows!r}, "
-        f"expected ['r1', 'r3']."
+        f"expected [('r1',), ('r3',)]."
     )
     item_rows = _bind_first(mod, "Tagged", ("Item", Var(), Var(), Var()))
-    assert sorted(item_rows) == ["r2", "r4"], (
+    assert sorted(item_rows) == [mint("r2"), mint("r4")], (
         f"arg1-indexed Item bucket dropped rows. Got {item_rows!r}, "
-        f"expected ['r2', 'r4']."
+        f"expected [('r2',), ('r4',)]."
     )
 
 
@@ -297,7 +297,8 @@ def test_indexed_imported_compound_at_second_position_fully_unbound_arg():
     every row must enumerate regardless of the indexing bug."""
     mod = _load_importer()
     all_rows = _bind_first(mod, "Tagged", Var())
-    assert sorted(all_rows) == ["r1", "r2", "r3", "r4"], (
+    assert sorted(all_rows) == [mint("r1"), mint("r2"), mint("r3"),
+                                mint("r4")], (
         f"Fully-unbound arg1 dropped rows. Got {all_rows!r}."
     )
 

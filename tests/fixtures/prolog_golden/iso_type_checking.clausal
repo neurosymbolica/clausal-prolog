@@ -1,135 +1,136 @@
+-double_quotes(chars)
 -private([abc, hello])
 
 -module(iso_type_checking, [Test/1])
 
 IsBoundNumber(X) <- (nonvar(X), number(X))
 
-Test('var: unbound var succeeds') <- (var(_x_unused))
+Test("var: unbound var succeeds") <- (var(_x_unused))
 
-Test('var: integer fails') <- (not var(42))
+Test("var: integer fails") <- (not var(42))
 
-Test('var: atom fails') <- (not var(hello))
+Test("var: atom fails") <- (not var(hello))
 
-Test('var: bound var fails') <- (X is 1, not var(X))
+Test("var: bound var fails") <- (X is 1, not var(X))
 
-Test('nonvar: integer succeeds') <- (nonvar(42))
+Test("nonvar: integer succeeds") <- (nonvar(42))
 
-Test('nonvar: atom succeeds') <- (nonvar(hello))
+Test("nonvar: atom succeeds") <- (nonvar(hello))
 
-Test('nonvar: unbound var fails') <- (not nonvar(_x_unused))
+Test("nonvar: unbound var fails") <- (not nonvar(_x_unused))
 
-Test('nonvar: bound var succeeds') <- (X is 1, nonvar(X))
+Test("nonvar: bound var succeeds") <- (X is 1, nonvar(X))
 
-Test('nonvar: list succeeds') <- (nonvar([1, 2]))
+Test("nonvar: list succeeds") <- (nonvar([1, 2]))
 
-Test('atom: declared atom succeeds') <- (atom(hello))
+Test("atom: declared atom succeeds") <- (atom(hello))
 
-Test('atom: declared atom Abc') <- (atom(abc))
+Test("atom: declared atom Abc") <- (atom(abc))
 
-Test('atom: string succeeds') <- (atom('hello'))
+Test("atom: string fails") <- (not atom("hello"))
 
-Test('atom: char list fails') <- (not atom(['h', 'e', 'l', 'l', 'o']))
+Test("atom: char list fails") <- (not atom(["h", "e", "l", "l", "o"]))
 
-Test('atom: integer fails') <- (not atom(1))
+Test("atom: integer fails") <- (not atom(1))
 
-Test('atom: unbound var fails') <- (not atom(_x_unused))
+Test("atom: unbound var fails") <- (not atom(_x_unused))
 
-Test('str: plain string succeeds') <- (atom('hello'))
+Test("str: plain string succeeds") <- (atom("hello"))
 
-Test('str: empty string succeeds') <- (atom(''))
+Test("str: empty string succeeds") <- (atom(""))
 
-Test('str: declared atom now succeeds') <- (atom(hello))
+Test("str: declared atom fails") <- (not atom(hello))
 
-Test('str: integer fails') <- (not atom(1))
+Test("str: integer fails") <- (not atom(1))
 
-Test('str: unbound var fails') <- (not atom(_x_unused))
+Test("str: unbound var fails") <- (not atom(_x_unused))
 
-Test('str: list fails') <- (not atom([]))
+Test("str: list fails") <- (not atom([]))
 
-Test('integer: positive') <- (integer(1))
+Test("integer: positive") <- (integer(1))
 
-Test('integer: zero') <- (integer(0))
+Test("integer: zero") <- (integer(0))
 
-Test('integer: large') <- (integer(100000000000000000000))
+Test("integer: large") <- (integer(100000000000000000000))
 
-Test('integer: string fails') <- (not integer('1'))
+Test("integer: string fails") <- (not integer("1"))
 
-Test('integer: var fails') <- (not integer(_x_unused))
+Test("integer: var fails") <- (not integer(_x_unused))
 
-Test('number: integer') <- (number(42))
+Test("number: integer") <- (number(42))
 
-Test('number: float') <- (number(3.14))
+Test("number: float") <- (number(3.14))
 
-Test('number: string fails') <- (not number('42'))
+Test("number: string fails") <- (not number("42"))
 
-Test('number: var fails') <- (not number(_x_unused))
+Test("number: var fails") <- (not number(_x_unused))
 
-Test('callable: declared atom now fails') <- (not callable_(hello))
+Test("callable: declared atom succeeds") <- (callable_(hello))
 
-Test('callable: registered predicate name') <- (callable_('is_bound_number'))
+Test("callable: registered predicate name as a string fails") <- (not callable_("is_bound_number"))
 
-Test('callable: arbitrary string fails') <- (not callable_('hello'))
+Test("callable: arbitrary string fails") <- (not callable_("hello"))
 
-Test('callable: int fails') <- (not callable_(42))
+Test("callable: int fails") <- (not callable_(42))
 
-Test('callable: var fails') <- (not callable_(_x_unused))
+Test("callable: var fails") <- (not callable_(_x_unused))
 
-Test('is_list: list') <- (is_list([1, 2, 3]))
+Test("is_list: list") <- (is_list([1, 2, 3]))
 
-Test('is_list: empty') <- (is_list([]))
+Test("is_list: empty") <- (is_list([]))
 
-Test('is_list: nested') <- (is_list([[1], [2]]))
+Test("is_list: nested") <- (is_list([[1], [2]]))
 
-Test('is_list: declared atom now a string list') <- (is_list(hello))
+Test("is_list: declared atom fails") <- (not is_list(hello))
 
-Test('is_list: int fails') <- (not is_list(42))
+Test("is_list: int fails") <- (not is_list(42))
 
-Test('is_list: var fails') <- (not is_list(_x_unused))
+Test("is_list: var fails") <- (not is_list(_x_unused))
 
-Test('ground: integer') <- (ground(42))
+Test("ground: integer") <- (ground(42))
 
-Test('ground: declared atom') <- (ground(abc))
+Test("ground: declared atom") <- (ground(abc))
 
-Test('ground: ground list') <- (ground([1, 2, 3]))
+Test("ground: ground list") <- (ground([1, 2, 3]))
 
-Test('ground: empty list') <- (ground([]))
+Test("ground: empty list") <- (ground([]))
 
-Test('ground: var fails') <- (not ground(_x_unused))
+Test("ground: var fails") <- (not ground(_x_unused))
 
-Test('is_bound_number: integer') <- (IsBoundNumber(42))
+Test("is_bound_number: integer") <- (IsBoundNumber(42))
 
-Test('is_bound_number: float') <- (IsBoundNumber(3.14))
+Test("is_bound_number: float") <- (IsBoundNumber(3.14))
 
-Test('is_bound_number: string fails') <- (not IsBoundNumber('42'))
+Test("is_bound_number: string fails") <- (not IsBoundNumber("42"))
 
-Test('is_bound_number: unbound fails') <- (not IsBoundNumber(_x_unused))
+Test("is_bound_number: unbound fails") <- (not IsBoundNumber(_x_unused))
 
-Test('is_str: float fails') <- (not atom(1.0))
+Test("is_str: float fails") <- (not atom(1.0))
 
-Test('integer: float fails') <- (not integer(1.0))
+Test("integer: float fails") <- (not integer(1.0))
 
-Test('integer: hex literal 0x1') <- (integer(1))
+Test("integer: hex literal 0x1") <- (integer(1))
 
-Test('integer: octal literal 0o1') <- (integer(1))
+Test("integer: octal literal 0o1") <- (integer(1))
 
-Test('integer: binary literal 0b1') <- (integer(1))
+Test("integer: binary literal 0b1") <- (integer(1))
 
-Test('float_: 1.0 succeeds') <- (float_(1.0))
+Test("float_: 1.0 succeeds") <- (float_(1.0))
 
-Test('float_: 0.0 succeeds') <- (float_(0.0))
+Test("float_: 0.0 succeeds") <- (float_(0.0))
 
-Test('float_: scientific 1e9') <- (float_(1000000000.0))
+Test("float_: scientific 1e9") <- (float_(1000000000.0))
 
-Test('float_: int fails') <- (not float_(1))
+Test("float_: int fails") <- (not float_(1))
 
-Test('float_: string fails') <- (not float_('1.0'))
+Test("float_: string fails") <- (not float_("1.0"))
 
-Test('float_: var fails') <- (not float_(_x_unused))
+Test("float_: var fails") <- (not float_(_x_unused))
 
-Test('number: large int (via eval)') <- (X == 10 ** 100, number(X))
+Test("number: large int (via eval)") <- (X == 10 ** 100, number(X))
 
-Test('is_list: list of mixed types') <- (is_list([1, 'a', [2]]))
+Test("is_list: list of mixed types") <- (is_list([1, "a", [2]]))
 
-Test('ground: nested ground') <- (ground([[1, 2], [3, 4]]))
+Test("ground: nested ground") <- (ground([[1, 2], [3, 4]]))
 
-Test('ground: list containing var fails') <- (not ground([1, _x_unused, 3]))
+Test("ground: list containing var fails") <- (not ground([1, _x_unused, 3]))

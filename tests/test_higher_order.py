@@ -293,7 +293,7 @@ class TestAliases:
     def test_unpack(self):
         # nv
         r = Var()
-        goal = _make_goal_call("unpack", [Compound(mint("foo"), (1, 2)), r])
+        goal = _make_goal_call("unpack", [Compound("foo", (1, 2)), r])
         results = sol_var(goal, r)
         assert len(results) == 1
         assert results[0] == [mint("foo"), 1, 2]

@@ -517,7 +517,7 @@ class TestForeignSingleArgumentImplementor:
         )
         trail = Trail()
         out = Var()
-        sg = StepGenerator(fn, None, None, None, "a", out, trail)
+        sg = StepGenerator(fn, None, None, None, mint("a"), out, trail)
         gen, value = sg.send(None)
         while gen is not None:
             gen, value = gen.send(value)
@@ -932,7 +932,7 @@ class TestZeroArityFactAtomHead:
             list(call("arcm_pure_use", Var(), module=mod.__dict__["$module"]))
         term = exc_info.value.term
         indicator = term.args[0].args[1]
-        assert str(term.args[0].args[0]) == "procedure"
+        assert term.args[0].args[0] == mint("procedure")
         assert indicator.functor == "/"
         assert indicator.args == ("arcm_pure_tag", 1)
         assert "not callable at arity 1" in term.args[1]

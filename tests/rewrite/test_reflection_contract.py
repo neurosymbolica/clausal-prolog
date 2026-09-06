@@ -61,6 +61,7 @@ def test_unify_goal_reifies_as_matchable_operator_node():
 def test_clausal_pattern_matches_unify_goal_and_extracts_sides(tmp_path):
     """The core move of a fold rule: destructure ``V is TERM`` in Clausal."""
     module = _rules_module(tmp_path, "_spike_unify_sides", """\
+        -double_quotes(chars)
         -import_from(reflection, [Clause, Goal, Variable, Atom])
 
         UnifySides((A is B), A, B),
@@ -78,6 +79,7 @@ def test_clausal_pattern_matches_unify_goal_and_extracts_sides(tmp_path):
 
 def test_reified_subterm_walks_goal_lists_and_finds_variables(tmp_path):
     module = _rules_module(tmp_path, "_spike_occurs", """\
+        -double_quotes(chars)
         -import_from(reflection, [reified_subterm, Variable])
 
         OccursIn(X, V) <- reified_subterm(X, V)
@@ -109,6 +111,7 @@ def test_occurs_check_sees_into_a_freshly_built_term(tmp_path):
     todo/reflection-gaps-found-by-the-rewriter.md, gap 1.
     """
     module = _rules_module(tmp_path, "_spike_rebuilt", """\
+        -double_quotes(chars)
         -import_from(reflection, [reified_subterm, Goal, Variable])
 
         Rebuild(Goal(NAME, ARGS, KW), Goal(NAME, ARGS, KW)),

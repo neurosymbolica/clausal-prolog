@@ -60,13 +60,12 @@ def test_bare_atoms_share_identity_across_modules():
         "global_atoms_b.clausal",
         "tests.fixtures.global_atoms_b",
     )
-    # P3-1 Task 2 (§1b/R2): a bare atom lowers to an interned str, not a
-    # minted class — the shared-identity claim below is unaffected (both
-    # modules bind the SAME str object via the process-wide
-    # ``predicate_builtins`` pool).
-    assert isinstance(mod_a.phase2red, str)
-    assert mod_a.phase2red is mod_b.phase2red
-    assert mod_a.phase2red is predicate_builtins["phase2red"]
+    # THE FLIP (spec §5.1/§5.2): a bare atom lowers to the arity-0 CELL, and
+    # sharing is stated as EQUALITY -- identity is an optimisation the spec
+    # forbids observing.
+    assert mod_a.phase2red == mint("phase2red")
+    assert mod_a.phase2red == mod_b.phase2red
+    assert mod_a.phase2red == predicate_builtins["phase2red"]
 
 
 # ── Case 2: -private shadows the global ─────────────────────────────────────
@@ -89,10 +88,10 @@ def test_private_shadows_global():
         "global_atoms_priv_b.clausal",
         "tests.fixtures.global_atoms_priv_b",
     )
-    assert isinstance(mod_a.phase2priv_orange, str)
-    assert isinstance(mod_b.phase2priv_orange, str)
-    assert mod_a.phase2priv_orange is mod_b.phase2priv_orange
-    assert mod_b.phase2priv_orange is predicate_builtins["phase2priv_orange"]
+    assert mod_a.phase2priv_orange == mint("phase2priv_orange")
+    assert mod_b.phase2priv_orange == mint("phase2priv_orange")
+    assert mod_a.phase2priv_orange == mod_b.phase2priv_orange
+    assert mod_b.phase2priv_orange == predicate_builtins["phase2priv_orange"]
 
 
 # ── Case 3: import wins over global ─────────────────────────────────────────
@@ -110,9 +109,9 @@ def test_import_wins_over_global():
         "global_atoms_importer.clausal",
         "tests.fixtures.global_atoms_importer",
     )
-    # P3-1 Task 2 (§1b/R2): the declared atom is now a str, not a class.
-    assert isinstance(mod_owner.phase2import_yellow, str)
-    assert mod_importer.phase2import_yellow is mod_owner.phase2import_yellow
+    # THE FLIP: the declared atom is the arity-0 cell.
+    assert mod_owner.phase2import_yellow == mint("phase2import_yellow")
+    assert mod_importer.phase2import_yellow == mod_owner.phase2import_yellow
 
 
 # ── Case 4: module-decl atom does NOT become global ─────────────────────────
@@ -133,10 +132,10 @@ def test_module_decl_atom_is_not_global():
         "global_atoms_decl_only_b.clausal",
         "tests.fixtures.global_atoms_decl_only_b",
     )
-    assert isinstance(mod_a.phase2declonly_green, str)
-    assert isinstance(mod_b.phase2declonly_green, str)
-    assert mod_a.phase2declonly_green is mod_b.phase2declonly_green
-    assert mod_b.phase2declonly_green is predicate_builtins["phase2declonly_green"]
+    assert mod_a.phase2declonly_green == mint("phase2declonly_green")
+    assert mod_b.phase2declonly_green == mint("phase2declonly_green")
+    assert mod_a.phase2declonly_green == mod_b.phase2declonly_green
+    assert mod_b.phase2declonly_green == predicate_builtins["phase2declonly_green"]
 
 
 # ── Phase 3: -strict_atoms directive ────────────────────────────────────────
@@ -236,8 +235,8 @@ def test_strict_atoms_private_atom_compiles():
         "strict_atoms_private.clausal",
         "tests.fixtures.strict_atoms_private",
     )
-    assert isinstance(mod.phase3strict_private_orange, str)
-    assert mod.phase3strict_private_orange is predicate_builtins.get(
+    assert mod.phase3strict_private_orange == mint("phase3strict_private_orange")
+    assert mod.phase3strict_private_orange == predicate_builtins.get(
         "phase3strict_private_orange"
     )
 
@@ -249,8 +248,8 @@ def test_strict_atoms_module_decl_atom_compiles():
         "strict_atoms_module_decl.clausal",
         "tests.fixtures.strict_atoms_module_decl",
     )
-    # P3-1 Task 2 (§1b/R2): a declared atom is now a str, not a class.
-    assert isinstance(mod.phase3strict_module_green, str)
+    # THE FLIP: a declared atom is the arity-0 cell.
+    assert mod.phase3strict_module_green == mint("phase3strict_module_green")
 
 
 def test_strict_atoms_imported_atom_compiles():
@@ -265,13 +264,13 @@ def test_strict_atoms_imported_atom_compiles():
         "strict_atoms_import.clausal",
         "tests.fixtures.strict_atoms_import",
     )
-    # P3-1 Task 2 (§1b/R2): a declared atom is now a str, not a class.
-    assert isinstance(mod_owner.phase3strict_import_yellow, str)
-    # The importer's bare reference resolves to the same object as the
+    # THE FLIP: a declared atom is the arity-0 cell.
+    assert mod_owner.phase3strict_import_yellow == mint("phase3strict_import_yellow")
+    # The importer's bare reference resolves to the same atom as the
     # owner's declaration.
     assert (
         mod_importer.phase3strict_import_yellow
-        is mod_owner.phase3strict_import_yellow
+        == mod_owner.phase3strict_import_yellow
     )
 
 
@@ -361,11 +360,11 @@ def test_private_names_are_importable_and_share_identity():
         )
 
     # The private *atom* crossed the boundary, and it is the same object.
-    assert isinstance(owner.privimp_tag, str)
-    assert consumer.privimp_tag is owner.privimp_tag
+    assert owner.privimp_tag == mint("privimp_tag")
+    assert consumer.privimp_tag == owner.privimp_tag
     # ...and it is ALSO the process-wide global atom of the same spelling
     # (§1b/R2 — there is no more module-local atom identity to distinguish).
-    assert owner.privimp_tag is predicate_builtins.get("privimp_tag")
+    assert owner.privimp_tag == predicate_builtins.get("privimp_tag")
 
     # The private *predicate* crossed the boundary too.
     assert consumer.PrivImpHelper is owner.PrivImpHelper
@@ -458,12 +457,15 @@ class TestStrAtomAcceptance:
         mod = _atoms_mod("tsaa_atomic_str")
         assert _succeeds("atomic", mint("red"), mod=mod)
 
-    def test_string_still_true_for_plain_str(self):
-        # R2: atom/1 and string/1 end up co-extensional for strings; both
-        # must be true for the same str.
+    def test_atom_and_string_are_disjoint_after_the_flip(self):
+        # THE FLIP (spec §6.3) INVERTS the P3-1 pin that atom/1 and string/1
+        # were co-extensional for a ``str``: the atom is the CELL and the
+        # ``str`` is the STRING, and neither answers the other's test.
         mod = _atoms_mod("tsaa_string_str")
-        assert _succeeds("string", mint("red"), mod=mod)
         assert _succeeds("atom", mint("red"), mod=mod)
+        assert not _succeeds("string", mint("red"), mod=mod)
+        assert _succeeds("string", "red", mod=mod)
+        assert not _succeeds("atom", "red", mod=mod)
 
 
 class TestIsAtomValueHelper:
@@ -473,9 +475,15 @@ class TestIsAtomValueHelper:
     untouched because some compiler call sites key off "zero-field CLASS,
     not str" -- this new helper is what the runtime readers use instead)."""
 
-    def test_true_for_plain_str(self):
-        assert is_atom_value("red") is True
-        assert is_atom_value("") is True
+    def test_true_for_the_arity_0_cell(self):
+        assert is_atom_value(mint("red")) is True
+        assert is_atom_value(mint("")) is True
+
+    def test_false_for_plain_str(self):
+        # THE FLIP (spec §5.1) INVERTS the P3-1 acceptance: a ``str`` is a
+        # STRING, so it is not an atom value.
+        assert is_atom_value("red") is False
+        assert is_atom_value("") is False
 
     def test_true_for_zero_field_class(self):
         atom_cls = make_predicate("tiav_class_atom", [])
@@ -501,23 +509,30 @@ class TestIsAtomValueHelper:
         assert is_atom_value(pt) is False  # 1-field class is not an atom
 
 
-class TestFunctorArityStrAtom:
-    """functor_arity("red") == ("red", 0) -- the str-atom-value reading,
-    documented in _helpers.py as deliberately distinct from the ISO
-    cons-cell reading _functor_name/_arity give a non-empty str (functor
-    ".", arity 2). See tests/test_funnel_accessors.py::TestFunctorArity for
-    the primary pin; this class covers the P3-1-specific framing."""
+class TestFunctorArityAtomCell:
+    """``functor_arity(mint("red")) == ("red", 0)`` -- slot 0 and arity 0.
 
-    def test_functor_arity_plain_str(self):
-        assert functor_arity("red") == ("red", 0)
+    THE FLIP INVERTS the P3-1 str-atom-value reading this class used to pin:
+    a ``str`` is a STRING (a list), which is outside ``functor_arity``'s
+    declared domain, so it answers ``None`` the way any other list does.
+    See tests/test_funnel_accessors.py::TestFunctorArity for the primary
+    pin."""
 
-    def test_functor_arity_empty_str(self):
-        assert functor_arity("") == ("", 0)
+    def test_functor_arity_atom_cell(self):
+        assert functor_arity(mint("red")) == ("red", 0)
+
+    def test_functor_arity_empty_atom_cell(self):
+        assert functor_arity(mint("")) == ("", 0)
+
+    def test_functor_arity_plain_str_is_out_of_domain(self):
+        assert functor_arity("red") is None
+        assert functor_arity("") is None
 
     def test_functor_arity_matches_zero_field_class_shape(self):
         atom_cls = make_predicate("tfasa_class_atom", [])
         assert functor_arity(atom_cls) == (atom_cls, 0)
-        assert functor_arity("tfasa_class_atom")[1] == functor_arity(atom_cls)[1] == 0
+        assert (functor_arity(mint("tfasa_class_atom"))[1]
+                == functor_arity(atom_cls)[1] == 0)
 
 
 class TestStrAtomUnification:
@@ -615,10 +630,11 @@ def test_declared_atoms_unify_across_module_and_private():
     assert unify(val_a, val_b, trail)
 
 
-def test_bare_atom_arrives_as_plain_str_at_python_seam():
-    """The value a solved query binds for a bare atom is the plain str
-    itself -- not a ``PredicateMeta`` instance -- at the actual Python seam
-    (the object a caller of ``solve``/``call`` gets back after ``deref``)."""
+def test_bare_atom_arrives_as_the_arity_0_cell_at_python_seam():
+    """The value a solved query binds for a bare atom is the arity-0 CELL
+    at the actual Python seam (the object a caller of ``solve``/``call``
+    gets back after ``deref``).  THE FLIP inverts the P3-1 pin that it was
+    a plain ``str``."""
     source = (
         "-module(atompivot_seam_test, [Seam(X), atompivot_seam_red])\n"
         "\n"
@@ -631,14 +647,14 @@ def test_bare_atom_arrives_as_plain_str_at_python_seam():
     assert len(results) == 1
     val = results[0]
     assert val == mint("atompivot_seam_red")
-    assert type(val) is str
+    assert type(val) is tuple and len(val) == 1 and type(val[0]) is str
 
 
 def test_strictness_preserved_across_the_lowering_flip():
-    """The lowering flip changes WHAT a bare atom compiles to (a str, not a
-    class) but not WHETHER an undeclared one is allowed: strict-by-default
-    still raises ``NameError``, and ``-implicit_atoms`` still lifts it --
-    now producing a plain str rather than a minted class."""
+    """The lowering flip changes WHAT a bare atom compiles to (the arity-0
+    cell, not a class) but not WHETHER an undeclared one is allowed:
+    strict-by-default still raises ``NameError``, and ``-implicit_atoms``
+    still lifts it -- now producing the cell rather than a minted class."""
     with pytest.raises(NameError):
         _load_inline_clausal(
             "_atompivot_strict_still_raises",
@@ -648,7 +664,7 @@ def test_strictness_preserved_across_the_lowering_flip():
         "_atompivot_implicit_lifts",
         "-implicit_atoms\n\nSeamImplicit(atompivot_implicit_atom),\n",
     )
-    assert isinstance(mod.atompivot_implicit_atom, str)
+    assert mod.atompivot_implicit_atom == mint("atompivot_implicit_atom")
 
 
 def test_true_lowers_to_truth_value_not_atom():

@@ -114,7 +114,7 @@ def test_failing_goal_named_for_doc_block(failing_report):
     assert "goal 2 of 2 failed" in failing_report
     # the source text of the failing conjunct with its source variable name —
     # the full diagnosis, not the degraded path-less fallback
-    assert "prc('gamma', NUM)" in failing_report
+    assert "prc(gamma, NUM)" in failing_report
 
 
 def test_bindings_reported_for_doc_block(failing_report):

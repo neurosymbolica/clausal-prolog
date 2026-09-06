@@ -175,9 +175,9 @@ class TestEndToEnd:
     """Import .pl files using atoms and ISO operators, query predicates."""
 
     def test_atoms_as_data(self, tmp_path):
-        """Prolog atoms are global-by-spelling interned strs when imported
-        (P3-1 §1b/R2 INVERSION: pre-pivot these were zero-arity
-        PredicateMeta class instances)."""
+        """Prolog atoms import as the arity-0 CELL (THE FLIP, spec §5.1 --
+        INVERTS the P3-1 interned-str reading, which had itself inverted the
+        zero-arity PredicateMeta class instances)."""
         # nv
         path = _write_pl(tmp_path, "_plop_atoms", """\
             color(red).
@@ -188,8 +188,8 @@ class TestEndToEnd:
         lm = mod.__clausal_module__
         v = Var()
         results = [deref(v) for _ in call("Color", v, module=lm)]
-        assert {type(r).__name__ for r in results} == {"str"}
-        assert {str(r) for r in results} == {"red", "green", "blue"}
+        assert {type(r).__name__ for r in results} == {"tuple"}
+        assert set(results) == {mint("red"), mint("green"), mint("blue")}
 
     def test_iso_truncate_div(self, tmp_path):
         """Prolog // uses ISO truncation-toward-zero semantics."""

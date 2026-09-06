@@ -3,6 +3,10 @@
 # A value(unit) amount in a clause head compiles to a PyThunk; unhoisted it
 # is captured as an opaque head literal and the clause never matches.
 
+# THE FLIP (2026-09-06-atoms-as-cells-strings §7): the only ``"..."`` literals
+# below are ``Tagd``'s f-string head literal and the ``ChkTag`` caller that has
+# to match it -- an f-string evaluates to a STRING, so this file means chars.
+-double_quotes(chars)
 -module(quantity_head_literal, [Len(AMOUNT, NAME), Chk(N), Amt(A),
                                 Sel(AMOUNT, NAME), Pick(N),
                                 Pack(L, N), ChkPack(N),

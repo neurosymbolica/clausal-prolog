@@ -10,6 +10,7 @@ import textwrap
 import pytest
 
 from clausal.import_hook import _load_module
+from clausal.logic.atoms import mint
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -65,7 +66,8 @@ def test_enumerate_a_modules_constants(tmp_path):
         (deref(n), deref(v))
         for _ in call("got", n, v, module=m.__dict__["$module"])
     )
-    assert results == [("_A_", 1), ("_B_", 2)]
+    # THE FLIP (spec §6.4): the NAME position answers ATOMS.
+    assert results == [(mint("_A_"), 1), (mint("_B_"), 2)]
 
 
 def test_module_unbound_enumerates_across_loaded_modules(tmp_path):
@@ -112,5 +114,6 @@ def test_reflected_value_is_the_same_frozen_object(tmp_path):
     m = _load(tmp_path, "owner8", "-constants(_L_ = [1, 2, 3])\n")
     v = Var()
     [result] = [deref(v) for _
-                in call("module_constant", m, "_L_", v, module=m.__dict__["$module"])]
+                in call("module_constant", m, mint("_L_"), v,
+                        module=m.__dict__["$module"])]
     assert result is m.__dict__["_L_"]

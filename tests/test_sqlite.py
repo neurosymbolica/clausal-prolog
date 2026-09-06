@@ -8,6 +8,8 @@ Covers three layers:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
@@ -626,3 +628,21 @@ kv_key(_k) <- (setup() and query("db6", "SELECT k FROM kv", _k))
 """, tmp_path)
         keys = _all("kv_key", module=mod)
         assert set(keys) == {"x", "y"}
+
+    def test_a_path_written_as_a_quoted_atom_opens_that_database(self, tmp_path):
+        """THE FLIP (spec §9.4): every text argument here is an ATOM under
+        the default ``-double_quotes(atom)``, and ``':memory:'`` is one in
+        EVERY mode.  Before the wrappers routed text through ``to_text``,
+        ``str()`` handed sqlite the atom's Python tuple repr and it opened a
+        file literally named ``(':memory:',)`` in the working directory.
+        """
+        # nv
+        mod = _load("sq7", """
+setup <- (connect(':memory:', 'db7') and exec('db7', 'CREATE TABLE t (v INTEGER)') and exec('db7', 'INSERT INTO t VALUES (?)', [7]))
+
+got(_v) <- (setup() and query('db7', 'SELECT v FROM t', _v))
+""", tmp_path)
+        assert _all("got", module=mod) == [7]
+        # ...and no stray file was created for the repr of the path atom.
+        assert not list(tmp_path.glob("*memory*"))
+        assert not list(Path.cwd().glob("*(':memory:',)*"))

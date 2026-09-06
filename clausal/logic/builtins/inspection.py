@@ -719,9 +719,11 @@ def _module_constant__3(m, name, value, trail, k):
 
     ``Module`` is the Python module object a ``-import_module(...)``
     directive binds (the same object a qualified reference like
-    ``other_module._PI_`` resolves against); ``Name`` is the constant's full
-    declaration spelling as a string (``"_PI_"``, underscores included, not
-    ``"PI"``); ``Value`` is the constant's frozen value (see
+    ``other_module._PI_`` resolves against); ``Name`` is the ATOM of the
+    constant's full declaration spelling (``'_PI_'``, underscores included,
+    not ``'PI'``) -- the NAME POSITION speaks atoms in and atoms out (spec
+    §6.4), and the registry itself stays keyed by the spelling; ``Value`` is
+    the constant's frozen value (see
     ``clausal.logic.constants._freeze``) — the identical object the module's
     own clause bodies embed.
 
@@ -745,22 +747,25 @@ def _module_constant__3(m, name, value, trail, k):
     name_val = deref(name)
     m_bound = not is_var(m_val)
     name_bound = not is_var(name_val)
+    # THE FLIP (spec §6.4): the Name argument is an ATOM read by spelling; a
+    # STRING there names no constant.
+    name_key = spelling(name_val) if _term_is_atom(name_val) else None
 
     if m_bound:
         cdict = _module_constants_dict(m_val)
         if cdict is None:
             return
         if name_bound:
-            if not isinstance(name_val, str) or name_val not in cdict:
+            if name_key is None or name_key not in cdict:
                 return
             mark = trail.mark()
-            if unify(value, cdict[name_val], trail):
+            if unify(value, cdict[name_key], trail):
                 yield None
             trail.undo(mark)
             return
         for n, v in list(cdict.items()):
             mark = trail.mark()
-            if unify(name, n, trail) and unify(value, v, trail):
+            if unify(name, mint(n), trail) and unify(value, v, trail):
                 yield None
             trail.undo(mark)
         return
@@ -774,16 +779,16 @@ def _module_constant__3(m, name, value, trail, k):
         if not cdict:
             continue
         if name_bound:
-            if not isinstance(name_val, str) or name_val not in cdict:
+            if name_key is None or name_key not in cdict:
                 continue
             mark = trail.mark()
-            if unify(m, py_module, trail) and unify(value, cdict[name_val], trail):
+            if unify(m, py_module, trail) and unify(value, cdict[name_key], trail):
                 yield None
             trail.undo(mark)
             continue
         for n, v in list(cdict.items()):
             mark = trail.mark()
-            if (unify(m, py_module, trail) and unify(name, n, trail)
+            if (unify(m, py_module, trail) and unify(name, mint(n), trail)
                     and unify(value, v, trail)):
                 yield None
             trail.undo(mark)

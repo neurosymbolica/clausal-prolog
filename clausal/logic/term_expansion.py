@@ -9,7 +9,7 @@ Protocol::
     TermExpansion(TERM, EXPANSION, MODULE_BEFORE, MODULE_AFTER)
 
 - TERM: runtime Predicate node being expanded
-- EXPANSION: single Predicate, list of Predicates, or atom ``"none"`` (suppress)
+- EXPANSION: single Predicate, list of Predicates, or the atom ``none`` (suppress)
 - MODULE_BEFORE: ``ModuleExpansionState(InitList, FinalList, UserState)``
 - MODULE_AFTER: same, updated
 
@@ -22,12 +22,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from clausal.logic.atoms import mint as _mint
 from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.builtins._helpers import functor_arity
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.pythonic_ast.nodes import Predicate as PredicateItem
+
+#: The suppression sentinel, as the ATOM the compiler emits for ``none``.
+_NONE_ATOM = _mint("none")
 
 
 def _is_term_expansion_clause(pred_node) -> bool:
@@ -313,7 +317,10 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     if not found:
         return None
 
-    if expansion == "none":
+    # THE FLIP (spec §5.1): the suppression sentinel is written ``none`` (or
+    # ``"none"``) in source and is therefore the ATOM.  A ``str`` is still
+    # accepted for a hand-built expansion and for a chars-mode module.
+    if expansion == _NONE_ATOM or expansion == "none":
         return None, new_state
     if isinstance(expansion, list):
         if wrap_head:

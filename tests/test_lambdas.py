@@ -680,7 +680,7 @@ class TestLambdaImport:
         logic_mod = mod.__dict__["$module"]
         goal = Call(func=LoadName(name="get_color"), args=[c], kwargs=[])
         results = [row["c"] for row in query(goal, {"c": c}, logic_mod)]
-        assert sorted(results) == [mint("blue"), "green", mint("red")]
+        assert sorted(results) == [mint("blue"), mint("green"), mint("red")]
 
     def test_python_lambda_rejected_in_clausal_file(self, tmp_path):
         """Python lambda syntax raises SyntaxError in .clausal files."""

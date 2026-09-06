@@ -715,7 +715,7 @@ class TestLanguageIntegration:
         m = load("lang", LANG_SRC)
         x, y = Var(), Var()
         got = answers(solve(m.pair_diff(x, y)), x, y)
-        assert got == [(mint("red"), "green"), ("green", mint("red"))]
+        assert got == [(mint("red"), mint("green")), (mint("green"), mint("red"))]
 
     def test_is_not_survives_clause_backtracking(self, load):
         m = load("lang", LANG_SRC)

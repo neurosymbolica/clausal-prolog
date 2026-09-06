@@ -56,8 +56,11 @@ class TestExtractFirstArgKey:
 
     def test_compound_string(self):
         # nv
-        c = Clause(head=Compound("f", ("hello", 1)), body=[True])
-        assert _extract_first_arg_key(c, 2) == "hello"
+        c = Clause(head=Compound("f", (mint("hello"), 1)), body=[True])
+        assert _extract_first_arg_key(c, 2) == ("hello", 0)
+        # ...and the STRING of the same text is unindexable (spec §6.9).
+        c_str = Clause(head=Compound("f", ("hello", 1)), body=[True])
+        assert _extract_first_arg_key(c_str, 2) is _INDEX_VAR
 
     def test_compound_var(self):
         # nv
@@ -76,8 +79,8 @@ class TestExtractFirstArgKey:
         """Unify with reversed left/right."""
         # nv
         v = Var()
-        c = Clause(head=Compound("f", (v,)), body=[Unify(left="abc", right=v)])
-        assert _extract_first_arg_key(c, 1) == "abc"
+        c = Clause(head=Compound("f", (v,)), body=[Unify(left=mint("abc"), right=v)])
+        assert _extract_first_arg_key(c, 1) == ("abc", 0)
 
     def test_zero_arity(self):
         # nv
@@ -91,8 +94,8 @@ class TestExtractFirstArgKey:
 
         v = Var()
         head = color(name=v, code=Var())
-        c = Clause(head=head, body=[Unify(left=v, right="red")])
-        assert _extract_first_arg_key(c, 2) == "red"
+        c = Clause(head=head, body=[Unify(left=v, right=mint("red"))])
+        assert _extract_first_arg_key(c, 2) == ("red", 0)
 
     def test_non_indexable_first_arg(self):
         """Term instances are not indexed; int-lists are now bytes-indexed (Task 11)."""
@@ -324,10 +327,10 @@ class TestImportedAtomIndexKey:
         # dotted ast.Name id (a single global lookup) -- see
         # terms_to_ast._resolve_functor_binding's docstring.
         ref = LoadName(name="pkg.schema.aa")
-        env = {"pkg.schema.aa": "aa"}
+        env = {"pkg.schema.aa": mint("aa")}
         compile_key = _arg_to_index_key(ref, env)
-        runtime_key = _runtime_arg_key("aa")
-        assert compile_key == runtime_key == "aa"
+        runtime_key = _runtime_arg_key(mint("aa"))
+        assert compile_key == runtime_key == ("aa", 0)
 
     def test_key_agreement_row_dotted_loadattr_chain(self):
         """Item 2: the same agreement for a genuine ``LoadAttr`` chain (a
@@ -340,10 +343,10 @@ class TestImportedAtomIndexKey:
         )
         from clausal.terms import LoadName, LoadAttr
         ref = LoadAttr(object=LoadName(name="schema"), attr="aa")
-        env = {"schema.aa": "aa"}
+        env = {"schema.aa": mint("aa")}
         compile_key = _arg_to_index_key(ref, env)
-        runtime_key = _runtime_arg_key("aa")
-        assert compile_key == runtime_key == "aa"
+        runtime_key = _runtime_arg_key(mint("aa"))
+        assert compile_key == runtime_key == ("aa", 0)
 
     def test_key_agreement_row_hide_mangled_atom(self):
         """Item 3: a ``-hide``-mangled atom keys as the MANGLED string on
@@ -361,14 +364,10 @@ class TestImportedAtomIndexKey:
         from clausal.terms import LoadName
         mangled = "hidden_owner\x1fhidden_aa"
         ref = LoadName(name=mangled)
-        env = {mangled: mangled}
+        env = {mangled: mint(mangled)}
         compile_key = _arg_to_index_key(ref, env)
-        runtime_key = _runtime_arg_key(mangled)
-        assert compile_key == runtime_key == mangled
-        # The old formula's shape, for contrast -- must NOT be what we get.
-        old_wrong_key = (mangled.rsplit(".", 1)[-1], 0)
-        assert old_wrong_key == (mangled, 0)  # sanity: no '.' to split on
-        assert compile_key != old_wrong_key
+        runtime_key = _runtime_arg_key(mint(mangled))
+        assert compile_key == runtime_key == (mangled, 0)
         assert compile_key is not _INDEX_VAR
 
     def test_unresolvable_dotted_name_is_index_var(self):
@@ -538,7 +537,7 @@ class TestGroundnessWalkCompleteness:
         lm = mod.__dict__["$module"]
 
         def build_chain(n):
-            c = "nil"
+            c = mint("nil")
             for i in range(n):
                 c = ("cons", i, c)
             return c
@@ -1331,12 +1330,12 @@ class TestAtomInListHead:
         back as the plain str ``'usd'``, not the ``usd`` class object.
         """
         # nv
-        usd = make_predicate(mint("usd"), [])
+        usd = make_predicate("usd", [])
         non_o_a = make_predicate("non_o_a", [])
         non_o_x = make_predicate("non_o_x", [])
         ltr = make_predicate("ltr", [])
         smart_t = make_predicate("smart_t", [])
-        unrestricted = make_predicate(mint("unrestricted"), [])
+        unrestricted = make_predicate("unrestricted", [])
 
         db = Database()
         clauses = [
@@ -1355,8 +1354,8 @@ class TestAtomInListHead:
             db.clauses_for("InsuranceRequired", 4),
             db,
             globals_={
-                mint("usd"): usd, "non_o_a": non_o_a, "non_o_x": non_o_x,
-                "ltr": ltr, "smart_t": smart_t, mint("unrestricted"): unrestricted,
+                "usd": usd, "non_o_a": non_o_a, "non_o_x": non_o_x,
+                "ltr": ltr, "smart_t": smart_t, "unrestricted": unrestricted,
             },
         )
 
@@ -1368,8 +1367,9 @@ class TestAtomInListHead:
         results = _simple_solutions(fn, [a, b, c, d], trail)
         assert len(results) == 4
         # The list-pattern clauses round-trip the atom-bearing last arg.
-        # The atom comes back as the plain str 'usd' (§1b/R2), not the
-        # `usd` PredicateMeta class object passed in as a compile-time value.
+        # THE FLIP: the atom round-trips as the arity-0 CELL ("usd",), not
+        # the `usd` PredicateMeta class object passed in as a compile-time
+        # value (and no longer as the P3-1 bare str either).
         last_args = [r[3] for r in results]
         assert [mint("usd"), 50000] in last_args
         assert [mint("usd"), 100000] in last_args

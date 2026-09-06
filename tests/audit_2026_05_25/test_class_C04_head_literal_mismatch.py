@@ -97,7 +97,7 @@ Zorp(['a', 'b', 'c']) <- (Helper(1))
     n_bar_list = sum(1 for _ in call("Bar", [mint("a"), mint("b"), mint("c")], module=mod))
     n_quux_str = sum(1 for _ in call("Quux", mint("abc"), module=mod))
     n_quux_list = sum(1 for _ in call("Quux", [mint("a"), mint("b"), mint("c")], module=mod))
-    n_zorp_str = sum(1 for _ in call("Zorp", mint("abc"), module=mod))
+    n_zorp_str = sum(1 for _ in call("Zorp", "abc", module=mod))
     n_zorp_list = sum(1 for _ in call("Zorp", [mint("a"), mint("b"), mint("c")], module=mod))
 
     # P3-1 \u00a71b: same-type combinations still return 1; cross-type
@@ -129,11 +129,10 @@ Zorp(['a', 'b', 'c']) <- (Helper(1))
         f"runs unify(_scap0, 'abc', trail), which now declines a list)"
     )
     assert n_zorp_str == 1, (
-        f"Rule Zorp(['a','b','c']) <- Helper(1) called with \"abc\" "
-        f"returned {n_zorp_str} solutions; expected 1 -- list-literal "
-        f"RULE heads destructure a str target natively via "
-        f"_head_list_unify_input (a separate, untouched mechanism from "
-        f"the retired do_unify cross-type branch)"
+        f"Rule Zorp(['a','b','c']) <- Helper(1) called with the STRING "
+        f"\"abc\" returned {n_zorp_str} solutions; expected 1 -- THE FLIP "
+        f"(spec §6.2) makes a string and its char-atom list one term, and "
+        f"the head list holds char atoms"
     )
     assert n_zorp_list == 1, (
         f"Rule Zorp(['a','b','c']) <- Helper(1) called with "
@@ -183,7 +182,10 @@ def test_F046_segstring_caller_against_str_head():
     from clausal.logic.variables import Var, walk
     from clausal.terms import SegString, VarSeg
 
+    # THE FLIP (spec §7): ``"abc"`` means a STRING only under
+    # ``-double_quotes(chars)``; that is what this test is about.
     source = """\
+-double_quotes(chars)
 Helper(1),
 
 Quux("abc") <- (Helper(1))
@@ -200,7 +202,7 @@ Quux("abc") <- (Helper(1))
     x = Var()
     partial = SegString(["a", VarSeg(x), "c"])
     bindings = [walk(x) for _ in call("Quux", partial, module=mod)]
-    assert bindings == [mint("b")], (
+    assert bindings == ["b"], (
         f"partial SegString caller a<X>c vs head \"abc\": expected exactly "
         f"one solution binding X='b', got bindings={bindings!r}"
     )
@@ -223,7 +225,11 @@ def test_F046_str_head_compiles_to_unify_guard_not_matchvalue():
 
     from clausal.logic.compiler.head_match import compile_head_to_match_case
 
+    # THE FLIP (spec §7): under ``-double_quotes(chars)`` the head literal is
+    # a STRING, which is what the ``_scap0`` guard below is about; the atom
+    # spelling of the same text takes the ``_acap0`` guard instead.
     source = """\
+-double_quotes(chars)
 Helper(1),
 
 Quux("abc") <- (Helper(1))

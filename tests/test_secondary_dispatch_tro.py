@@ -20,6 +20,7 @@ from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from clausal.terms import term_str
 
 
 @pytest.fixture(scope="module")
@@ -34,10 +35,11 @@ def hop_mod():
 def _solutions(mod, *args):
     lm = mod.__dict__["$module"]
     vals = [Var() if a is None else a for a in args]
-    return sorted(str(deref(vals[-1])) for _ in call("Hop", *vals, module=lm))
+    return sorted(term_str(deref(vals[-1]), quoted=False)
+                  for _ in call("Hop", *vals, module=lm))
 
 
-BASE_SOLUTIONS = ["['a1']", "['a2']", "['b1']", "['b2']", "['c1']", "['c2']"]
+BASE_SOLUTIONS = ["[a1]", "[a2]", "[b1]", "[b2]", "[c1]", "[c2]"]
 
 
 class TestSecondaryDispatchTro:
@@ -70,7 +72,7 @@ class TestSecondaryDispatchTro:
     def test_ground_key_recursion(self, hop_mod):
         """Control: bucket-routed recursion (compiled without TRO) works."""
         # nv
-        assert _solutions(hop_mod, "a", 1, 2, None) == ["['a1']"]
+        assert _solutions(hop_mod, mint("a"), 1, 2, None) == ["[a1]"]
 
     def test_unbound_key_recursion_via_fallback(self, hop_mod):
         """THE regression: unbound K routes to the SIGNAL-mode fallback;
@@ -84,13 +86,14 @@ class TestSecondaryDispatchTro:
 
     def test_unbound_key_negative_terminates(self, hop_mod):
         # nv
-        assert _solutions(hop_mod, None, None, -1, None) == ["['neg']"]
+        assert _solutions(hop_mod, None, None, -1, None) == ["[neg]"]
 
 
 def _solutions2(mod, *args):
     lm = mod.__dict__["$module"]
     vals = [Var() if a is None else a for a in args]
-    return sorted(str(deref(vals[-1])) for _ in call("Hop2", *vals, module=lm))
+    return sorted(term_str(deref(vals[-1]), quoted=False)
+                  for _ in call("Hop2", *vals, module=lm))
 
 
 class TestSecondaryDispatchTroBucketLanding:
@@ -107,8 +110,8 @@ class TestSecondaryDispatchTroBucketLanding:
         """Unbound start signals from the fallback; the updated args are
         ground ("a", 1) and must route into that level-0/level-1 bucket."""
         # nv
-        assert _solutions2(hop_mod, None, None, 3, None) == ["['a1']"]
+        assert _solutions2(hop_mod, None, None, 3, None) == ["[a1]"]
 
     def test_ground_other_bucket_start(self, hop_mod):
         # nv
-        assert _solutions2(hop_mod, "b", 2, 2, None) == ["['a1']"]
+        assert _solutions2(hop_mod, mint("b"), 2, 2, None) == ["[a1]"]

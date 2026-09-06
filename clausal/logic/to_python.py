@@ -55,6 +55,22 @@ def to_python(val):
     NamedTuple subclasses are reconstructed via their own constructor so
     attribute access (``.init`` / ``.update`` on optax's
     ``GradientTransformation``, etc.) survives a round-trip.
+
+    What this changes for ``f"…"`` and ``++`` (Task 8 carry-forward)
+    ----------------------------------------------------------------
+    The thunk argument path lowers to ``$to_python`` (see the module
+    docstring), so a CONTAINER interpolated into an f-string or read inside a
+    ``++`` escape crosses as the plain Python container -- a ``DictTerm``
+    arrives as a ``dict``, a ``SegList``/``SegString`` as the ``list``/``str``
+    it walks to, a cell as a ``tuple`` -- and is therefore rendered by
+    PYTHON's ``repr``/``format``, not by the engine's ``term_str``.  Concretely
+    ``f"{D}"`` on ``D = {a: 1}`` renders ``{'a': 1}`` (Python dict syntax,
+    the atom key as its spelling) rather than the engine's ``{a: 1}``.  That
+    is the whole point of the single outbound conversion -- a foreign callee
+    sees Python values, never engine term objects -- but it is a visible
+    change in interpolated TEXT, so it is spelled out here.  Code that wants
+    the engine's rendering asks for it: ``term_to_string(D, S)`` (or
+    ``print_term/1``), then interpolate ``S``.
     """
     # A str is an atom AND its own spelling AND can never be a bound Var, so
     # it needs neither the deref nor the atom branch.  It is the hot case on

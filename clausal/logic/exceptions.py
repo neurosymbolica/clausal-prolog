@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.atoms import mint
+from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
 
 # ── The is/== hint ────────────────────────────────────────────────────────────
@@ -81,8 +81,13 @@ def arith_in_numeric_position_hint(term: Any) -> str | None:
             and len(inner.args) == 2):
         return None
     expected, culprit = inner.args
-    # ``expected`` is a str at every raise site, but an unhashable one thrown
-    # from .clausal would make the set membership itself raise.
+    # THE FLIP (spec §6.4): the formal term's TYPE NAME is an ATOM -- read its
+    # spelling.  A ``str`` is still accepted (a hand-built term, or one thrown
+    # from ``.clausal`` under ``-double_quotes(chars)``); anything else, and
+    # in particular an unhashable term, must not make the set membership below
+    # raise on top of the error this note exists to explain.
+    if is_atom(expected):
+        expected = spelling(expected)
     if not isinstance(expected, str) or expected not in _NUMERIC_EXPECTATIONS:
         return None
     if not is_arith_operator_term(culprit):

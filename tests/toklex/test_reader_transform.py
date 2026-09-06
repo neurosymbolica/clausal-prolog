@@ -10,8 +10,8 @@ def tt(src):
 
 class TestCells:
     def test_atoms_numbers(self):
-        assert tt(mint("foo"))[0] == mint("foo")
-        assert tt("'b ar'")[0] == "b ar"
+        assert tt("foo")[0] == mint("foo")
+        assert tt("'b ar'")[0] == mint("b ar")
         assert tt("42")[0] == 42
         assert tt("1.5")[0] == 1.5
 
@@ -28,9 +28,12 @@ class TestCells:
         assert cell == (".", mint("a"), (".", mint("b"), VarRef(0)))
         assert vn == {0: "T"}
 
-    def test_double_quoted_is_char_list(self):
-        assert tt('"ab"')[0] == [mint("a"), mint("b")]
-        assert tt('""')[0] == []
+    def test_double_quoted_is_a_string(self):
+        # THE FLIP (spec §9.7): a ``PString`` reads as the ``str`` -- the
+        # STRING, which IS the list of its char atoms (spec §6.2), so this
+        # inverts the "emit the char list" reading, not its meaning.
+        assert tt('"ab"')[0] == "ab"
+        assert tt('""')[0] == ""
 
     def test_curly(self):
         assert tt("{a, b}")[0] == ("{}", (",", mint("a"), mint("b")))
@@ -59,9 +62,9 @@ class TestSpanTrees:
         assert whole == (0, 6)
         assert elems[0] == (1, 2) and elems[1] == (4, 5)
 
-    def test_charlist_is_leaf_span(self):
+    def test_string_is_leaf_span(self):
         cell, spans, _ = tt('"ab"')
-        assert cell == [mint("a"), "b"] and spans == (0, 4)
+        assert cell == "ab" and spans == (0, 4)
 
     def test_partial_list_span_outermost_covers_bracket(self):
         # [a, b | T]: the OUTERMOST cons node's span is the PList node's
@@ -73,7 +76,7 @@ class TestSpanTrees:
         # anything that wants "the span of this list term" (e.g. a
         # diagnostic pointing at `[a, b | T]` as a whole).
         cell, spans, vn = tt("[a, b | T]")
-        assert cell == (".", mint("a"), (".", "b", VarRef(0)))
+        assert cell == (".", mint("a"), (".", mint("b"), VarRef(0)))
         assert vn == {0: "T"}
         outer, a_span, inner = spans
         assert outer == (0, 10)          # the whole `[a, b | T]`
@@ -89,7 +92,7 @@ class TestExtra:
         cell, spans, vn = tt('f(g(h([X, "ab" | T])))')
         assert cell == (
             "f",
-            ("g", ("h", (".", VarRef(0), (".", [mint("a"), "b"], VarRef(1))))),
+            ("g", ("h", (".", VarRef(0), (".", "ab", VarRef(1))))),
         )
         assert vn == {0: "X", 1: "T"}
         # span tree mirrors the cell shape
@@ -98,7 +101,7 @@ class TestExtra:
 
     def test_none_span_pnode_emits_placeholder(self):
         # Hand-built P-tree with no spans (span=None everywhere) must not crash.
-        term = PCompound("f", (PAtom(mint("a")), PVar("X")))
+        term = PCompound("f", (PAtom("a"), PVar("X")))
         cell, spans, vn = transform_term(term)
         assert cell == ("f", mint("a"), VarRef(0))
         assert spans == ((-1, -1), (-1, -1), (-1, -1))

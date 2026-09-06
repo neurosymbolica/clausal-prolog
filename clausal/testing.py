@@ -774,17 +774,19 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
                 if len(declared._fields or ()) != arity:
                     continue
             else:
-                # P3-2 Task 2 (THE FLIP, R6): a declared DATA functor binds
-                # its interned spelling, not a class, and the term this
-                # module constructs for it is the cell ``("cite", _)``.  The
-                # confusion this note exists for is unchanged -- a generic
-                # ``Compound("cite", (_,))`` still renders identically and
-                # still never unifies -- so the declaredness test reads the
-                # signature registry when the binding is a spelling.
+                # THE FLIP (spec §5.1): a declared DATA functor binds the
+                # arity-0 ATOM of its spelling, not a class, and the term
+                # this module constructs for it is the cell ``("cite", _)``.
+                # The confusion this note exists for is unchanged -- a
+                # generic ``Compound("cite", (_,))`` still renders
+                # identically and still never unifies -- so the declaredness
+                # test reads the signature registry when the binding is that
+                # atom.
+                from clausal.logic.atoms import mint as _mint
                 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
                 registry = namespace.get(FUNCTOR_SIGNATURES_KEY) or {}
                 fields = registry.get(functor)
-                if not (declared == functor and fields is not None
+                if not (declared == _mint(functor) and fields is not None
                         and len(fields) == arity):
                     continue
             key = f"{functor}/{arity}"

@@ -500,7 +500,7 @@ class TestInitFinalInjection:
         for trail in call("val", x, module=lm):
             results.append(deref(x))
         # Original + init copy + final copy = 3 solutions
-        assert results.count("one") == 3
+        assert results.count(mint("one")) == 3
 
 
 class TestNestedVarSubstitution:
@@ -521,7 +521,7 @@ class TestNestedVarSubstitution:
         lm = mod.__dict__["$module"]
         x = Var()
         results = [deref(x) for _ in call("marker", x, module=lm)]
-        names = sorted(getattr(r, "__name__", str(r)) for r in results)
+        names = sorted(results, key=repr)
         assert names == [mint("income"), mint("stays")], (
             f"matched KEY must flow into the quoted output; got {results!r}"
         )

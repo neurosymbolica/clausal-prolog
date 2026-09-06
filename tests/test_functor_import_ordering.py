@@ -55,7 +55,7 @@ def _solutions(pred_cls, arity: int):
     """All solutions of *pred_cls* as tuples of stringified bindings."""
     args = [Var() for _ in range(arity)]
     return [
-        tuple(str(walk(deref(a))) for a in args)
+        tuple(walk(deref(a)) for a in args)
         for _ in call(pred_cls, *args)
     ]
 
@@ -178,7 +178,7 @@ class TestDeclareThenImport:
         vocab = _load_fixture("impord_fact_vocab")
         use = _load_fixture("impord_declare_then_import_fact")
         assert use.impord_fverdict is vocab.impord_fverdict
-        assert _solutions(vocab.impord_fverdict, 2) == [(mint("maybe"), "pending")]
+        assert _solutions(vocab.impord_fverdict, 2) == [(mint("maybe"), mint("pending"))]
 
 
 class TestImportThenDeclare:

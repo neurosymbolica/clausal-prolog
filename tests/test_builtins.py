@@ -136,23 +136,23 @@ class TestFunctor:
         # nv
         mod = fresh_module()
         f, a = Var(), Var()
-        goal = Call(func=LoadName(name="functor"), args=[Compound(mint("foo"), (1, 2)), f, a], kwargs=[])
+        goal = Call(func=LoadName(name="functor"), args=[Compound("foo", (1, 2)), f, a], kwargs=[])
         results = sol_var(goal, f, mod=mod)
         assert results == [mint("foo")]
         results_a = sol_var(goal, a, mod=mod)
         assert results_a == [2]
 
-    def test_decompose_str_is_its_own_atom_functor(self):
-        # nv — P3-1 Task 5 (§1b/R2): the cons rule is retired. A non-empty
-        # str is now always an atom, so it is its own functor with arity 0
-        # — NOT the ISO cons-cell (".", 2) reading this test pinned
-        # pre-pivot (formerly ``test_decompose_str_cons_cell``, asserting
-        # ``functor("hello", F, A) -> F=".", A=2``).
+    def test_decompose_str_is_the_cons_cell_of_its_char_list(self):
+        # nv — THE FLIP (spec §6.4): a ``str`` is a STRING, i.e. the LIST of
+        # its char atoms, so ``functor/3`` answers it exactly as it answers
+        # that list: ``F = ('.',)``, ``A = 2``.  This INVERTS the P3-1
+        # str-is-its-own-atom reading (which itself had inverted the
+        # original cons-cell pin -- the cons-cell answer is back).
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=["hello", f, a], kwargs=[])
-        assert sol_var(goal, f, mod=mod) == ["hello"]
-        assert sol_var(goal, a, mod=mod) == [0]
+        assert sol_var(goal, f, mod=mod) == [mint(".")]
+        assert sol_var(goal, a, mod=mod) == [2]
 
     def test_decompose_empty_str_nil(self):
         # nv
@@ -177,7 +177,7 @@ class TestFunctor:
         # nv
         mod = fresh_module()
         t = Var()
-        goal = Call(func=LoadName(name="functor"), args=[t, "bar", 2], kwargs=[])
+        goal = Call(func=LoadName(name="functor"), args=[t, mint("bar"), 2], kwargs=[])
         results = sol_var(goal, t, mod=mod)
         assert len(results) == 1
         r = results[0]
@@ -191,8 +191,8 @@ class TestFunctor:
         # nv
         mod = fresh_module()
         t = Var()
-        goal = Call(func=LoadName(name="functor"), args=[t, "hello", 0], kwargs=[])
-        assert sol_var(goal, t, mod=mod) == ["hello"]
+        goal = Call(func=LoadName(name="functor"), args=[t, mint("hello"), 0], kwargs=[])
+        assert sol_var(goal, t, mod=mod) == [mint("hello")]
 
     def test_fails_both_unbound(self):
         # nv
@@ -300,7 +300,7 @@ class TestUniv:
         # nv
         mod = fresh_module()
         lst = Var()
-        goal = Call(func=LoadName(name="unpack"), args=[Compound(mint("f"), (1, 2)), lst], kwargs=[])
+        goal = Call(func=LoadName(name="unpack"), args=[Compound("f", (1, 2)), lst], kwargs=[])
         results = sol_var(goal, lst, mod=mod)
         assert results == [[mint("f"), 1, 2]]
 
@@ -308,24 +308,21 @@ class TestUniv:
         # nv
         mod = fresh_module()
         t = Var()
-        goal = Call(func=LoadName(name="unpack"), args=[t, ["g", 3, 4]], kwargs=[])
+        goal = Call(func=LoadName(name="unpack"), args=[t, [mint("g"), 3, 4]], kwargs=[])
         results = sol_var(goal, t, mod=mod)
         assert len(results) == 1
         # ``=..`` constructs a CELL (atoms-as-cells design §6.4).
         assert results[0] == ("g", 3, 4)
 
-    def test_decompose_str_is_its_own_atom_functor(self):
-        # nv — P3-1 Task 5 (§1b/R2): the cons rule is retired. ``unpack``
-        # (``=..``) on a non-empty str now gives the ISO atom reading
-        # ``['hello']`` — NOT the cons-cell decomposition this test
-        # pinned pre-pivot (formerly ``test_decompose_str_cons_cell``,
-        # asserting ``unpack("hello", X) -> X=[".", "h", "ello"]``). See
-        # ``tests/conformity/iso_term_manipulation.clausal::"decompose
-        # string: 'Hello' =.. X"``.
+    def test_decompose_str_is_the_cons_cell_of_its_char_list(self):
+        # nv — THE FLIP (spec §6.4, §5.4): a ``str`` is the LIST of its char
+        # atoms, so ``=..`` decomposes it as that list does -- the head is
+        # the char atom and the tail is the ``str`` SLICE (R-S2: nothing is
+        # expanded).  INVERTS the P3-1 atom reading ``['hello']``.
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=["hello", lst], kwargs=[])
-        assert sol_var(goal, lst, mod=mod) == [["hello"]]
+        assert sol_var(goal, lst, mod=mod) == [[mint("."), mint("h"), "ello"]]
 
     def test_decompose_list_cons_cell(self):
         # nv

@@ -9,10 +9,15 @@ test("decompose atom: functor('Hello', Name, Arity)") :-
     N == hello,
     A == 0.
 
-test("decompose empty string") :-
+test("decompose empty atom") :-
     functor("", N, A),
-    N == "[]",
+    N = "",
     A == 0.
+
+test("decompose empty list") :-
+    functor([], N2, A2),
+    N2 = "[]",
+    A2 == 0.
 
 test("construct atom from list: T =.. ['a']") :-
     unpack(T, [a]),

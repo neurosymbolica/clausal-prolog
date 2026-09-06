@@ -71,11 +71,11 @@ class TestInString:
 class TestInCheckString:
     def test_memberchk_hit(self, mod):
         # nv
-        assert _first("in_check", "l", "hello", module=mod)
+        assert _first("in_check", char_atom("l"), "hello", module=mod)
 
     def test_memberchk_miss(self, mod):
         # nv
-        assert not _first("in_check", "z", "hello", module=mod)
+        assert not _first("in_check", char_atom("z"), "hello", module=mod)
 
 
 # ── append/3 ────────────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ class TestAppendString:
             pairs.append((deref(X), deref(Y)))
         assert pairs == [
             ("", "abc"),
-            (mint("a"), "bc"),
+            ("a", "bc"),
             ("ab", "c"),
             ("abc", ""),
         ]
@@ -278,9 +278,9 @@ class TestSelectString:
         for _ in call("select", E, "abc", R, module=mod):
             pairs.append((deref(E), deref(R)))
         assert pairs == [
-            (mint("a"), "bc"),
-            ("b", "ac"),
-            (mint("c"), "ab"),
+            (char_atom("a"), "bc"),
+            (char_atom("b"), "ac"),
+            (char_atom("c"), "ab"),
         ]
 
 
@@ -344,13 +344,14 @@ class TestZipString:
         # nv
         X = Var()
         r = _collect(X, "zip_", "ab", "12", X, module=mod)
-        assert r == [[[mint("a"), "1"], [mint("b"), mint("2")]]]
+        assert r == [[[char_atom("a"), char_atom("1")],
+                      [char_atom("b"), char_atom("2")]]]
 
     def test_zip_string_list(self, mod):
         # nv
         X = Var()
         r = _collect(X, "zip_", "ab", [1, 2], X, module=mod)
-        assert r == [[[mint("a"), 1], [mint("b"), 2]]]
+        assert r == [[[char_atom("a"), 1], [char_atom("b"), 2]]]
 
 
 # ── split_with/3 ───────────────────────────────────────────────────────────
@@ -360,13 +361,15 @@ class TestSplitWithString:
     def test_split_by_comma(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "split_with", ",", "a,b,c", X, module=mod)
+        # THE FLIP: the separator is an ELEMENT of the string, i.e. a CHAR
+        # ATOM; the ``str`` "," is a one-element STRING and matches nothing.
+        r = _collect(X, "split_with", char_atom(","), "a,b,c", X, module=mod)
         assert r == [["a", "b", "c"]]
 
     def test_split_no_sep(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "split_with", ",", "abc", X, module=mod)
+        r = _collect(X, "split_with", char_atom(","), "abc", X, module=mod)
         assert r == [["abc"]]
 
 

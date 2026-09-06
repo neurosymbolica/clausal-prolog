@@ -233,7 +233,8 @@ Map(2, "two"),
 Map(3, "three"),
 Map(4, "four"),
 """)
-        for key, expected in [(1, "one"), (2, "two"), (3, "three"), (4, "four")]:
+        for key, expected in [(1, mint("one")), (2, mint("two")),
+                              (3, mint("three")), (4, mint("four"))]:
             x = Var()
             results = [deref(x) for _ in call("Map", key, x, module=mod)]
             assert results == [expected], f"Map({key}, X) failed"
@@ -391,11 +392,11 @@ Info(X, "default"),
 """)
         v = Var()
         results = [deref(v) for _ in call("Info", 1, v, module=mod)]
-        assert results == ["specific_1", mint("default")]
+        assert results == [mint("specific_1"), mint("default")]
 
         v = Var()
         results = [deref(v) for _ in call("Info", 2, v, module=mod)]
-        assert results == ["specific_2", mint("default")]
+        assert results == [mint("specific_2"), mint("default")]
 
         v = Var()
         results = [deref(v) for _ in call("Info", 99, v, module=mod)]

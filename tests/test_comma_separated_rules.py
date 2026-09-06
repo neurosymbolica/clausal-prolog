@@ -61,7 +61,7 @@ def test_compound_list_heads_with_commas_between_rules(tmp_path):
     assert mod.__dict__["pair"] == mint("pair")
     # pairs with A==1 contribute B; A!=1 contribute 0.
     # [pair(1,10), pair(0,99), pair(1,5)] -> 10 + 5 = 15
-    lst = [(mint("pair"), 1, 10), (mint("pair"), 0, 99), (mint("pair"), 1, 5)]
+    lst = [("pair", 1, 10), ("pair", 0, 99), ("pair", 1, 5)]
     sols = list(call("q", lst, 15, module=logic_mod))
     assert len(sols) >= 1
 

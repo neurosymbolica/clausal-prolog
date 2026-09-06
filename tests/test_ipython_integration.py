@@ -52,11 +52,11 @@ def test_embed_float_is_native_float():
     assert isinstance(ns["result"], float)
 
 
-def test_embed_string_is_native_str():
-    # nv
+def test_embed_double_quoted_is_an_atom():
+    # nv — THE FLIP (spec §7): ``"hello"`` is an ATOM under the default
+    # ``-double_quotes(atom)`` mode the embed cell compiles under.
     ns = run_cell('result = --"hello"')
     assert ns["result"] == mint("hello")
-    assert isinstance(ns["result"], str)
 
 
 def test_embed_bool_is_native_bool():

@@ -99,7 +99,7 @@ class TestListing:
         animal._assertz(Clause(animal("cat"), []))
         output = _capture_listing(animal)
         assert "animal(" in output
-        assert "'cat'" in output
+        assert '"cat"' in output
 
     def test_instance_resolves_to_class(self):
         """listing with a PredicateMeta instance resolves to its class."""
@@ -151,9 +151,9 @@ class TestListingClassArgumentGoldenOutput:
         output = _capture_listing(color)
         assert output == (
             "% color/2 — 3 clause(s)\n"
-            "color('red', '#ff0000').\n"
-            "color('green', '#00ff00').\n"
-            "color('blue', '#0000ff').\n"
+            'color("red", "#ff0000").\n'
+            'color("green", "#00ff00").\n'
+            'color("blue", "#0000ff").\n'
         )
 
 
@@ -188,7 +188,7 @@ class TestListingStrAtomArgument:
     def test_str_atom_lists_the_zero_arity_predicate_by_name(self):
         db = _db_with_fact("greet", 0)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, "greet")
+        output = _run_listing(dispatch, mint("greet"))
         assert "greet/0" in output
         assert "1 clause(s)" in output
 
@@ -203,15 +203,18 @@ class TestListingStrAtomArgument:
         db = Database()
         dispatch = get_builtin_dispatch("listing", 1, db)
         with pytest.raises(LogicException) as exc_info:
-            _run_listing(dispatch, "no_such_predicate")
+            _run_listing(dispatch, mint("no_such_predicate"))
         err = exc_info.value.term
         # error(existence_error(procedure, Compound("/", (name, arity))), _)
         assert isinstance(err, Compound) and err.functor == "error"
         inner = err.args[0]
         assert isinstance(inner, Compound) and inner.functor == "existence_error"
-        assert inner.args[0] == "procedure"
+        assert inner.args[0] == mint("procedure")
         indicator = inner.args[1]
         assert isinstance(indicator, Compound) and indicator.functor == "/"
+        # The engine's own indicator builders carry the SPELLING in the
+        # Name slot (uniformly across the tree: see test_cell_goals'
+        # existence-error rows); only the type/domain NAMES are atoms.
         assert indicator.args == ("no_such_predicate", 0)
 
 
@@ -532,7 +535,7 @@ class TestFormatClauseHeadCompound:
         result = _format_clause_head(head)
         # Old shape: "Compound(<functor repr>, <args repr>, <position repr>)"
         # — the funneled functor ("foo") must NOT stand in for the type name.
-        assert result == "Compound('foo', (1, 2), None)"
+        assert result == 'Compound("foo", (1, 2), None)'
         assert not result.startswith("foo(")
 
     def test_var_functor_compound_does_not_crash(self):

@@ -51,7 +51,7 @@ class TestFunctor:
         """ISO: functor(f(a,b), X, Y) → X = f, Y = 2."""
         # nv
         name, arity = Var(), Var()
-        result = _call_binding("functor", Compound("f", (char_atom(mint("a")), char_atom("b"))), name, arity)
+        result = _call_binding("functor", Compound("f", (char_atom("a"), char_atom("b"))), name, arity)
         assert result is not None
         assert result == (char_atom("f"), 2)
 
@@ -65,7 +65,7 @@ class TestFunctor:
         name, arity = Var(), Var()
         result = _call_binding("functor", mint("a"), name, arity)
         assert result is not None
-        assert result == (char_atom(mint("a")), 0)
+        assert result == (char_atom("a"), 0)
 
     def test_decompose_arity1(self):
         """functor(f(x), Name, Arity) → Name = f, Arity = 1."""
@@ -79,7 +79,7 @@ class TestFunctor:
         """ISO: functor(T, f, 2) → T = f(_, _) (fresh vars)."""
         # nv
         t = Var()
-        result = _call_binding("functor", t, "f", 2, var_indices=[0])
+        result = _call_binding("functor", t, mint("f"), 2, var_indices=[0])
         assert result is not None
         term = result[0]
         # The name position CONSTRUCTS CELLS (atoms-as-cells design §6.4):
@@ -105,7 +105,7 @@ class TestFunctor:
         name, arity = Var(), Var()
         result = _call_binding(
             "functor",
-            Compound("f", (char_atom(mint("a")), char_atom("b"), char_atom("c"), char_atom("d"), char_atom("e"))),
+            Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"), char_atom("d"), char_atom("e"))),
             name, arity,
         )
         assert result is not None
@@ -122,7 +122,7 @@ class TestArg:
         """ISO: arg(1, f(a,b,c), X) → X = a."""
         # nv
         x = Var()
-        result = _call_binding("arg", 1, Compound("f", (char_atom(mint("a")), char_atom(mint("b")), char_atom(mint("c")))), x)
+        result = _call_binding("arg", 1, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
         assert result is not None
         assert result[0] == mint("a")
 
@@ -130,14 +130,14 @@ class TestArg:
         """ISO: arg(2, f(a,b,c), X) → X = b."""
         # nv
         x = Var()
-        result = _call_binding("arg", 2, Compound("f", (char_atom(mint("a")), char_atom(mint("b")), char_atom(mint("c")))), x)
+        result = _call_binding("arg", 2, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
         assert result is not None
         assert result[0] == mint("b")
 
     def test_third_arg(self):
         # nv
         x = Var()
-        result = _call_binding("arg", 3, Compound("f", (char_atom(mint("a")), char_atom(mint("b")), char_atom(mint("c")))), x)
+        result = _call_binding("arg", 3, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
         assert result is not None
         assert result[0] == mint("c")
 
@@ -145,20 +145,20 @@ class TestArg:
         """ISO: arg(4, f(a,b,c), X) fails."""
         # nv
         x = Var()
-        result = _call_binding("arg", 4, Compound("f", (char_atom(mint("a")), char_atom(mint("b")), char_atom(mint("c")))), x)
+        result = _call_binding("arg", 4, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
         assert result is None
 
     def test_zero_fails(self):
         """ISO: arg(0, f(a), X) fails."""
         # nv
         x = Var()
-        result = _call_binding("arg", 0, Compound("f", (char_atom(mint("a")),)), x)
+        result = _call_binding("arg", 0, Compound("f", (char_atom("a"),)), x)
         assert result is None
 
     def test_negative_fails(self):
         # nv
         x = Var()
-        result = _call_binding("arg", -1, Compound("f", (char_atom(mint("a")),)), x)
+        result = _call_binding("arg", -1, Compound("f", (char_atom("a"),)), x)
         assert result is None
 
     def test_nested_compound(self):
@@ -181,9 +181,9 @@ class TestUniv:
         """ISO: f(a,b) =.. X → X = [f, a, b]."""
         # nv
         x = Var()
-        result = _call_binding("unpack", Compound(mint("f"), (char_atom(mint("a")), char_atom(mint("b")))), x)
+        result = _call_binding("unpack", Compound("f", (char_atom("a"), char_atom("b"))), x)
         assert result is not None
-        assert result[0] == [char_atom(mint("f")), char_atom(mint("a")), char_atom(mint("b"))]
+        assert result[0] == [char_atom("f"), char_atom("a"), char_atom("b")]
 
     def test_decompose_str_is_its_own_atom_functor(self):
         """P3-1 Task 5 (\u00a71b/R2): the cons rule is retired -- "a" =.. X ->
@@ -195,32 +195,32 @@ class TestUniv:
         x = Var()
         result = _call_binding("unpack", mint("a"), x)
         assert result is not None
-        assert result[0] == [char_atom(mint("a"))]
+        assert result[0] == [char_atom("a")]
 
     def test_decompose_arity1(self):
         """f(x) =.. L → L = [f, x]."""
         # nv
         lst = Var()
-        result = _call_binding("unpack", Compound(mint("f"), (char_atom("x"),)), lst)
+        result = _call_binding("unpack", Compound("f", (char_atom("x"),)), lst)
         assert result is not None
-        assert result[0] == [char_atom(mint("f")), char_atom("x")]
+        assert result[0] == [char_atom("f"), char_atom("x")]
 
     def test_construct_from_list(self):
         """ISO: T =.. [f, a, b] → T = f(a, b)."""
         # nv
         t = Var()
-        result = _call_binding("unpack", t, [char_atom(mint("f")), char_atom(mint("a")), char_atom(mint("b"))], var_indices=[0])
+        result = _call_binding("unpack", t, [char_atom("f"), char_atom("a"), char_atom("b")], var_indices=[0])
         assert result is not None
         term = result[0]
         # ``=..`` constructs a CELL (atoms-as-cells design §6.4) — see
         # ``TestFunctor::test_construct_compound``.
-        assert term == (char_atom(mint("f")), char_atom(mint("a")), char_atom(mint("b")))
+        assert term == ("f", char_atom("a"), char_atom("b"))
 
     def test_construct_atom_from_list(self):
         """ISO: T =.. [a] → T = a."""
         # nv
         t = Var()
-        result = _call_binding("unpack", t, [char_atom(mint("a"))], var_indices=[0])
+        result = _call_binding("unpack", t, [char_atom("a")], var_indices=[0])
         assert result is not None
         assert result[0] == mint("a")
 

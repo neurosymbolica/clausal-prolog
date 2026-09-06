@@ -146,12 +146,65 @@ def simple_to_trampoline(simple_fn):
     return trampoline_fn
 
 
+def to_text(val):
+    """The plain ``str`` a ``py.*`` wrapper argument denotes, or ``None``.
+
+    Spec §9.4: a wrapper that takes text accepts an **atom** or a **string**,
+    and both convert to the same ``str``.  THE FLIP
+    (2026-09-06-atoms-as-cells-strings) made routing this through ``str()``
+    a live footgun: ``str(("bar",))`` is the Python tuple *repr*
+    ``"('bar',)"``, so a wrapper that coerced that way would silently use a
+    repr as a filename, a regex, a logger name or a SQL string — during the
+    flip that is exactly how a file literally named ``(':memory:',)`` got
+    created in the repo root.  Every text coercion in a wrapper routes here.
+
+    - a ``str`` → itself;
+    - an ATOM ``("bar",)`` → its spelling;
+    - a ``SegString`` / any object with a ``__walk__`` that yields a ``str``
+      (a partial string that is now complete) → that ``str``;
+    - a list/tuple of char atoms → the string it denotes;
+    - a CELL of arity >= 1 → ``type_error(text, …)``: a compound is not text,
+      and answering with its repr is the bug above;
+    - anything else (an unbound ``Var``, a number, a non-char list, …) →
+      ``None``, so the caller keeps its own "fail cleanly / record a
+      type-mismatch note" behaviour.
+    """
+    if type(val) is str:
+        return val
+    from clausal.logic.atoms import is_atom as _is_atom, spelling as _spelling
+    from clausal.logic.variables import deref
+    val = deref(val)
+    if type(val) is str:
+        return val
+    if _is_atom(val):
+        return _spelling(val)
+    walk = getattr(val, "__walk__", None)
+    if callable(walk):
+        walked = walk()
+        if type(walked) is str:
+            return walked
+        val = walked
+    if isinstance(val, tuple) and val and type(val[0]) is str:
+        # A cell of arity >= 1: a compound term, not text.  Loud, never a repr.
+        from clausal.logic.exceptions import LogicException, type_error
+        raise LogicException(type_error("text", val))
+    if isinstance(val, (list, tuple)):
+        if not val:
+            return ""
+        from clausal.logic.runtime._seg_helpers import maybe_promote_to_str
+        promoted = maybe_promote_to_str([deref(e) for e in val])
+        if type(promoted) is str:
+            return promoted
+    return None
+
+
 def to_bytes(val):
-    """Convert string or bytes to bytes, or return None."""
-    if isinstance(val, str):
-        return val.encode("utf-8")
+    """Convert text (a string or an ATOM, spec §9.4) or bytes to bytes, else None."""
     if isinstance(val, bytes):
         return val
+    text = to_text(val)
+    if text is not None:
+        return text.encode("utf-8")
     return None
 
 

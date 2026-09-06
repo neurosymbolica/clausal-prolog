@@ -18,6 +18,8 @@ Findings tested here:
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
+
 
 def test_F012_bare_str_vs_list_is_retired_segstring_var_binding_still_works():
     """RETIRED by P3-1 Task 5 (\u00a71b): `unify("a", [v])` was a direct bare
@@ -109,8 +111,10 @@ def test_F032_head_list_unify_input_ground_segstring():
         f"SegString walks to 'abc' but the helper never invokes "
         f"__walk__ (no SegString branch at list_unify.py:114-117)."
     )
-    assert deref(H) == "a" and deref(T) == "bc", (
-        f"expected H='a', T='bc' from destructuring SegString(['abc']); "
+    # THE FLIP (spec §6.2): the head of a string is its CHAR ATOM; the tail
+    # stays a ``str`` slice (R-S2).
+    assert deref(H) == char_atom("a") and deref(T) == "bc", (
+        f"expected H=('a',), T='bc' from destructuring SegString(['abc']); "
         f"got H={deref(H)!r}, T={deref(T)!r}"
     )
 
@@ -134,7 +138,7 @@ def test_F034_head_list_unify_output_walks_segstring_star_val():
 
     target = Var()
     H, T = Var(), Var()
-    unify(H, "h", Trail())
+    unify(H, char_atom("h"), Trail())
     unify(T, SegString(["ello"]), Trail())
     _head_list_unify_output(target, [H], T, [], Trail())
 
@@ -142,7 +146,7 @@ def test_F034_head_list_unify_output_walks_segstring_star_val():
     # The actual current behaviour is ['h', SegString(['ello'])] — a list
     # with an opaque SegString tail element. The expected behaviour
     # (symmetric with the SegList branch) walks the SegString.
-    assert bound == ["h", "e", "l", "l", "o"] or bound == "hello", (
+    assert bound == [char_atom(c) for c in "hello"] or bound == "hello", (
         f"_head_list_unify_output with T bound to SegString(['ello']) "
         f"should walk the SegString into chars (or, under 'input type "
         f"wins', into the str 'hello'); got {bound!r} "
@@ -295,16 +299,15 @@ def test_F047_multi_star_head_guard_segstring():
     )
 
 
-def test_F075_chars_builtins_accept_segstring():
-    """`atom_length(SegString(["hi"]), N)` should bind N=2 (and parallel
-    predicates should behave like their str counterparts).
-
-    ``_atom_to_str`` in chars.py:47-57 accepts only a plain Python str
-    or a zero-arity PredicateMeta; SegString is neither, so every
-    atom-accepting predicate raises ``type_error("atom", SegString)``
-    even when the SegString is fully ground and walks to a plain str.
-    char_type/2 uses ``isinstance(vc, str)`` directly and silently
-    fails (zero solutions, no error).
+def test_F075_chars_builtins_refuse_a_segstring_as_an_atom():
+    """THE FLIP (spec §6.1/§6.6) INVERTS this pin: a ground ``SegString``
+    walks to a ``str``, and a ``str`` is a STRING, not an atom.
+    ``_atom_to_str`` is the funnel for "read an ATOM's spelling", so the
+    ``str``/``SegString`` arms are gone and ``atom_length/2`` answers
+    ``type_error(atom, …)`` -- exactly as it does for the plain ``str``
+    ``"hi"``.  The C25 question the original test asked (does the
+    SegString reach the same code path as its walked form?) is still
+    answered here, just with the post-flip answer.
     """
     from clausal.logic.builtins import get_builtin_dispatch
     from clausal.logic.variables import Var, Trail, deref
@@ -327,32 +330,39 @@ def test_F075_chars_builtins_accept_segstring():
     # the way real callers see solutions one at a time).
     N = Var()
     disp = get_builtin_dispatch("atom_length", 2, None)
-    try:
-        sols = solutions(
+    with pytest.raises(LogicException) as exc:
+        solutions(
             StepGenerator(disp, None, None, None, seg, N, Trail()),
             snapshot=lambda: deref(N),
         )
-    except LogicException as e:
-        pytest.fail(
-            f"atom_length(SegString(['hi']), N) raised LogicException "
-            f"{e!r}; expected one solution with N=2. _atom_to_str at "
-            f"chars.py:47-57 has no SegString branch."
+    assert "type_error" in str(exc.value) and "atom" in str(exc.value)
+    # ...and the plain ``str`` it walks to gets the identical answer, which
+    # is the parity the original test was really asking about.
+    N2 = Var()
+    with pytest.raises(LogicException):
+        solutions(
+            StepGenerator(disp, None, None, None, "hi", N2, Trail()),
+            snapshot=lambda: deref(N2),
         )
-    assert len(sols) >= 1 and sols[0] == 2, (
-        f"atom_length(SegString(['hi']), N) snapshot yielded {sols!r}; "
-        f"expected [2] (the SegString walks to 'hi', length 2)."
+    # The ATOM of that spelling is what has a length.
+    N3 = Var()
+    sols = solutions(
+        StepGenerator(disp, None, None, None, mint("hi"), N3, Trail()),
+        snapshot=lambda: deref(N3),
     )
+    assert sols == [2]
 
-    # char_type/2 with a single-char SegString should yield >0 solutions
-    # for the "alpha" type — currently silent zero.
+    # char_type/2 takes a CHAR (an atom of length 1) and a Type ATOM.  A
+    # single-char SegString walks to the ``str`` "a", which is a
+    # one-element STRING and not a char, so it yields nothing -- the same
+    # answer the plain ``str`` gets.  The char atom is what succeeds.
     seg1 = SegString(["a"])
     assert seg1.is_ground() and seg1.__walk__() == "a"
     disp_ct = get_builtin_dispatch("char_type", 2, None)
-    n_ct = len(
-        solutions(StepGenerator(disp_ct, None, None, None, seg1, "alpha", Trail()))
-    )
-    assert n_ct >= 1, (
-        f"char_type(SegString(['a']), alpha) yielded {n_ct} solutions; "
-        f"expected >=1 (the SegString walks to 'a', which is alpha). "
-        f"chars.py:105 uses isinstance(vc, str) which excludes SegString."
-    )
+    assert len(solutions(StepGenerator(
+        disp_ct, None, None, None, seg1, mint("alpha"), Trail()))) == 0
+    assert len(solutions(StepGenerator(
+        disp_ct, None, None, None, "a", mint("alpha"), Trail()))) == 0
+    assert len(solutions(StepGenerator(
+        disp_ct, None, None, None, char_atom("a"), mint("alpha"),
+        Trail()))) >= 1

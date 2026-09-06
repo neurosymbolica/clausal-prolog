@@ -42,14 +42,14 @@ def _collect(name, out_vars, *args, module):
 def _ctor(mod, name):
     """A cell CONSTRUCTOR for a declared term functor.
 
-    P3-2 Task 2 (THE FLIP, R6): a declared data functor's name binds its
-    interned spelling, not a class -- ``mod.module_dict["point"]`` is the str
-    ``"point"``, and the module's clauses build and match the cell
-    ``("point", X, Y)``.  Returning a builder keeps every call site below
-    reading as the term it constructs, and the equality assertions compare
-    cells to cells.
+    THE FLIP (spec §5.1): a declared data functor's name binds the arity-0
+    CELL, not a class -- ``mod.module_dict["point"]`` is ``("point",)`` --
+    while the module's clauses build and match the compound cell
+    ``("point", X, Y)``, whose slot 0 is the plain SPELLING.  Returning a
+    builder keeps every call site below reading as the term it constructs,
+    and the equality assertions compare cells to cells.
     """
-    assert mod.module_dict[name] == name   # R6: the binding IS the spelling
+    assert mod.module_dict[name] == mint(name)   # the binding IS the atom
     return lambda *args: (name, *args)
 
 
@@ -68,7 +68,7 @@ class TestStructuralHeadOutputMode:
         point = _ctor(mod, "point")
         line = _ctor(mod, "line")
         L = Var()
-        assert _collect("seg", [L], L, "diag", module=mod) == [
+        assert _collect("seg", [L], L, mint("diag"), module=mod) == [
             (line(point(0, 0), point(3, 4)),)
         ]
 

@@ -158,7 +158,8 @@ class TestAtomShadowsPredicate:
             "tests.fixtures.atomshadow_schema",
             os.path.join(FIXTURES, "atomshadow_schema.clausal"),
         )
-        with pytest.raises(TypeError, match="'str' object is not callable"):
+        # THE FLIP: the atom binding is the arity-0 CELL, a tuple.
+        with pytest.raises(TypeError, match="'tuple' object is not callable"):
             _load_module(
                 "tests.fixtures.atomshadow_use",
                 os.path.join(FIXTURES, "atomshadow_use.clausal"),

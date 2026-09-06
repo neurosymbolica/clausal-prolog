@@ -101,11 +101,11 @@ class TestFunctor3RegistrationAndCellParity:
     def test_decompose_cell_matches_decompose_compound(self):
         name_c, arity_c = Var(), Var()
         [(nc, ac)] = _sol_vars(
-            _goal("functor", (mint("pt"), 1, 2), name_c, arity_c), name_c, arity_c
+            _goal("functor", ("pt", 1, 2), name_c, arity_c), name_c, arity_c
         )
         name_p, arity_p = Var(), Var()
         [(npv, apv)] = _sol_vars(
-            _goal("functor", Compound(mint("pt"), (1, 2)), name_p, arity_p), name_p, arity_p
+            _goal("functor", Compound("pt", (1, 2)), name_p, arity_p), name_p, arity_p
         )
         assert (nc, ac) == (npv, apv) == (mint("pt"), 2)
 
@@ -261,7 +261,7 @@ class TestUnivIsRegisteredAsUnpackAndCellParity:
 
     def test_decompose_cell_matches_decompose_compound(self):
         lst_c = Var()
-        [result_c] = _sol_var(_goal("unpack", (mint("pt"), 1, 2), lst_c), lst_c)
+        [result_c] = _sol_var(_goal("unpack", ("pt", 1, 2), lst_c), lst_c)
         lst_p = Var()
-        [result_p] = _sol_var(_goal("unpack", Compound(mint("pt"), (1, 2)), lst_p), lst_p)
+        [result_p] = _sol_var(_goal("unpack", Compound("pt", (1, 2)), lst_p), lst_p)
         assert result_c == result_p == [mint("pt"), 1, 2]

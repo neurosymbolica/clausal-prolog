@@ -16,6 +16,8 @@ Findings tested here:
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
+
 
 def test_F021_seglist_sequence_protocol_no_bare_typeerror():
     """`len(sl)`, `list(sl)`, and `sl[0]` on a non-ground SegList must
@@ -156,7 +158,8 @@ def test_F023_segstring_unify_list_non_ground():
     )
 
     t = Trail()
-    result = unify(ss, ["a", "b", "c"], t)
+    # THE FLIP (spec §6.2): a char list holds CHAR ATOMS.
+    result = unify(ss, [char_atom(c) for c in "abc"], t)
     assert result is True, (
         f"unify(SegString(['a', VarSeg(X), 'c']), ['a','b','c']) "
         f"returned {result!r}; expected True (the goal is satisfiable "
@@ -264,9 +267,11 @@ def test_F038_in_iter_ground_segstring_no_bare_typeerror():
             f"and is not a str subclass, so iter(ss) fails."
         )
 
-    assert items == ["a", "b", "c"], (
+    # THE FLIP: iterating a string yields its CHAR ATOMS (Task 7
+    # carry-forward: ``X in "abc"`` binds ``("a",)``).
+    assert items == [char_atom(c) for c in "abc"], (
         f"_in_iter(ground SegString(['abc'])) yielded {items!r}; "
-        f"expected ['a', 'b', 'c'] (the walked str iterated as chars)."
+        f"expected the char ATOMS of 'abc'."
     )
 
 
@@ -334,8 +339,9 @@ def test_F039_in_iter_non_ground_no_bare_typeerror():
             f"typed clausal exception."
         )
 
-    concrete_chars = [c for c in ss_items if c in ("a", "c")]
-    assert {"a", "c"}.issubset(set(concrete_chars)), (
+    wanted = {char_atom("a"), char_atom("c")}
+    concrete_chars = [c for c in ss_items if c in wanted]
+    assert wanted.issubset(set(concrete_chars)), (
         f"_in_iter(non-ground SegString) yielded {ss_items!r}; "
-        f"expected the concrete chars 'a' and 'c' to be present."
+        f"expected the concrete char ATOMS ('a',) and ('c',) to be present."
     )

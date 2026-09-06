@@ -925,7 +925,8 @@ class TestSecondaryIndexing:
             ("black",  "neutral", "dark"),
         ]
         clauses = [
-            _normalize_fact_clause(Compound("Color", (n, c, b)))
+            _normalize_fact_clause(
+                Compound("Color", (mint(n), mint(c), mint(b))))
             for n, c, b in facts
         ]
         for cl in clauses:
@@ -945,7 +946,8 @@ class TestSecondaryIndexing:
             ("black",  "neutral", "dark"),
         ]
         clauses = [
-            _normalize_fact_clause(Compound("Color", (n, c, b)))
+            _normalize_fact_clause(
+                Compound("Color", (mint(n), mint(c), mint(b))))
             for n, c, b in facts
         ]
         sec = _build_secondary_index(clauses, 3, 1, 2)
@@ -963,14 +965,14 @@ class TestSecondaryIndexing:
         """Color(blue, cool, light) → exactly one solution."""
         # nv
         fn, _, _ = self._make_color_predicate()
-        solutions = _run_trampoline(fn, "blue", "cool", "light")
+        solutions = _run_trampoline(fn, mint("blue"), mint("cool"), mint("light"))
         assert len(solutions) == 1, f"Expected 1 solution, got {solutions}"
 
     def test_all_ground_no_match(self):
         """Color(blue, warm, light) → no solution (blue is not warm)."""
         # nv
         fn, _, _ = self._make_color_predicate()
-        solutions = _run_trampoline(fn, "blue", "warm", "light")
+        solutions = _run_trampoline(fn, mint("blue"), mint("warm"), mint("light"))
         assert solutions == [], f"Expected [], got {solutions}"
 
     def test_partial_ground_first_arg(self):
@@ -978,18 +980,20 @@ class TestSecondaryIndexing:
         # nv
         fn, _, _ = self._make_color_predicate()
         x, b = Var(), Var()
-        solutions = _run_trampoline(fn, x, "warm", b)
+        solutions = _run_trampoline(fn, x, mint("warm"), b)
         names = sorted(s[0] for s in solutions)
-        assert names == ["orange", "red"], f"Expected [orange, red], got {names}"
+        assert names == [mint("orange"), mint("red")], \
+            f"Expected [orange, red], got {names}"
 
     def test_partial_ground_third_arg(self):
         """Color(X, C, light) — light facts via arg2 single-arg index."""
         # nv
         fn, _, _ = self._make_color_predicate()
         x, c = Var(), Var()
-        solutions = _run_trampoline(fn, x, c, "light")
+        solutions = _run_trampoline(fn, x, c, mint("light"))
         names = sorted(s[0] for s in solutions)
-        assert names == ["blue", "red", "white"], f"Expected [blue,red,white], got {names}"
+        assert names == [mint("blue"), mint("red"), mint("white")], \
+            f"Expected [blue,red,white], got {names}"
 
     def test_fully_unbound_returns_all(self):
         """Color(X, C, B) with all unbound → all 6 facts."""
@@ -1036,7 +1040,8 @@ class TestJointKeyIndexing:
             ("wind", "wet", "cold"),
         ]
         clauses = [
-            _normalize_fact_clause(Compound("Combo", (g, s, r)))
+            _normalize_fact_clause(
+                Compound("Combo", (mint(g), mint(s), mint(r))))
             for g, s, r in facts
         ]
         for cl in clauses:
@@ -1053,7 +1058,8 @@ class TestJointKeyIndexing:
             ("wind", "dry", "hot"), ("wind", "wet", "cold"),
         ]
         clauses = [
-            _normalize_fact_clause(Compound("Combo", (g, s, r)))
+            _normalize_fact_clause(
+                Compound("Combo", (mint(g), mint(s), mint(r))))
             for g, s, r in facts
         ]
         idx = _build_joint_arg_index(clauses, 3, 0, 1)
@@ -1074,7 +1080,8 @@ class TestJointKeyIndexing:
             ("wind", "dry", "hot"), ("wind", "wet", "cold"),
         ]
         clauses = [
-            _normalize_fact_clause(Compound("Combo", (g, s, r)))
+            _normalize_fact_clause(
+                Compound("Combo", (mint(g), mint(s), mint(r))))
             for g, s, r in facts
         ]
         singles = _analyze_index_positions(clauses, 3)
@@ -1094,23 +1101,23 @@ class TestJointKeyIndexing:
         # nv
         fn, _, _ = self._make_pair_predicate()
         result = Var()
-        solutions = _run_trampoline(fn, "fire", "dry", result)
-        assert solutions == [("hot",)], f"Expected [('hot',)], got {solutions}"
+        solutions = _run_trampoline(fn, mint("fire"), mint("dry"), result)
+        assert solutions == [(mint("hot"),)], f"Expected [('hot',)], got {solutions}"
 
     def test_both_args_ground_opposite(self):
         """Combo(fire, wet, R) → R = cold."""
         # nv
         fn, _, _ = self._make_pair_predicate()
         result = Var()
-        solutions = _run_trampoline(fn, "fire", "wet", result)
-        assert solutions == [("cold",)], f"Expected [('cold',)], got {solutions}"
+        solutions = _run_trampoline(fn, mint("fire"), mint("wet"), result)
+        assert solutions == [(mint("cold"),)], f"Expected [('cold',)], got {solutions}"
 
     def test_both_args_ground_no_match(self):
         """Combo(earth, dry, R) → no solution."""
         # nv
         fn, _, _ = self._make_pair_predicate()
         result = Var()
-        solutions = _run_trampoline(fn, "earth", "dry", result)
+        solutions = _run_trampoline(fn, mint("earth"), mint("dry"), result)
         assert solutions == [], f"Expected [], got {solutions}"
 
     def test_first_arg_only_ground(self):
@@ -1118,9 +1125,9 @@ class TestJointKeyIndexing:
         # nv
         fn, _, _ = self._make_pair_predicate()
         s, r = Var(), Var()
-        solutions = _run_trampoline(fn, "fire", s, r)
+        solutions = _run_trampoline(fn, mint("fire"), s, r)
         pairs = sorted((sol[0], sol[1]) for sol in solutions)
-        assert pairs == [("dry", "hot"), ("wet", "cold")], \
+        assert pairs == [(mint("dry"), mint("hot")), (mint("wet"), mint("cold"))], \
             f"Expected [(dry,hot),(wet,cold)], got {pairs}"
 
     def test_second_arg_only_ground(self):
@@ -1128,9 +1135,9 @@ class TestJointKeyIndexing:
         # nv
         fn, _, _ = self._make_pair_predicate()
         g, r = Var(), Var()
-        solutions = _run_trampoline(fn, g, "dry", r)
+        solutions = _run_trampoline(fn, g, mint("dry"), r)
         groups = sorted(sol[0] for sol in solutions)
-        assert groups == ["fire", "ice", "wind"], \
+        assert groups == [mint("fire"), mint("ice"), mint("wind")], \
             f"Expected [fire, ice, wind], got {groups}"
 
     def test_fully_unbound_returns_all(self):

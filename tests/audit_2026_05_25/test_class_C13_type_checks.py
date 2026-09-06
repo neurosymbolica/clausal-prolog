@@ -115,9 +115,10 @@ def test_F082_atomic_predicate_not_registered():
     Users porting from Prolog will expect atomic(X) to work but will
     see "predicate not defined" instead of a type test.
 
-    Expected: atomic/1 is registered and succeeds for str, int, float,
+    Expected: atomic/1 is registered and succeeds for an ATOM, int, float,
     bool, None, and zero-arity PredicateMeta; fails for Compound,
-    KWTerm, list, dict, term-instances, SegList, SegString.
+    KWTerm, list, dict, term-instances, SegList, SegString -- and, since
+    THE FLIP (spec §6.3), for a ``str``, which is a STRING, i.e. a list.
 
     Actual (design-gap): atomic/1 is undefined (get_builtin_predicate
     returns None).
@@ -125,18 +126,26 @@ def test_F082_atomic_predicate_not_registered():
     # Load an empty module to get access to the database and builtins.
     mod = load_inline_clausal("c13_f082", "").__dict__["$module"]
 
-    # The expected behaviour: atomic("abc") should succeed.
-    result = _check(mod, "atomic", "abc")
+    # The expected behaviour: atomic on the ATOM should succeed.
+    result = _check(mod, "atomic", mint("abc"))
     assert result == "T", (
-        f"atomic(\"abc\") should succeed (str is atomic), "
+        f"atomic((\"abc\",)) should succeed (an atom is atomic), "
         f"got {result} (expected T)"
     )
 
-    # And it should fail for a list (compound structure).
-    result = _check(mod, "atomic", ["a", "b", "c"])
+    # THE FLIP (spec §6.3) INVERTS the str row: a ``str`` is a STRING, the
+    # list of its char atoms, and a list is not atomic.
+    result = _check(mod, "atomic", "abc")
     assert result == "F", (
-        f"atomic([\"a\",\"b\",\"c\"]) should fail (list is not atomic), "
+        f"atomic(\"abc\") should fail (a string is a list), "
         f"got {result} (expected F)"
+    )
+
+    # And it fails for a list (compound structure) as it always did.
+    result = _check(mod, "atomic", [mint("a"), mint("b"), mint("c")])
+    assert result == "F", (
+        f"atomic([(\"a\",),(\"b\",),(\"c\",)]) should fail (list is not "
+        f"atomic), got {result} (expected F)"
     )
 
 

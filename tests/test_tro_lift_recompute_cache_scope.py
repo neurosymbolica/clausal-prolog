@@ -96,7 +96,8 @@ def loaded():
         results = {}
         for key in ("a", "b"):
             k = Var()
-            results[key] = [deref(k) for _ in call("Cnt", key, 4, k, module=lm)]
+            results[key] = [deref(k)
+                            for _ in call("Cnt", mint(key), 4, k, module=lm)]
     finally:
         predicate_mod._sweep_tro_eligible = _orig_sweep
 

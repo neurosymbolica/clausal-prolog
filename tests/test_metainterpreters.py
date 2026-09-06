@@ -42,7 +42,7 @@ def _terms(mod):
     term it constructs while handing the engine the shape its clauses match.
     """
     d = mod.__dict__
-    assert d[mint("Natnum")] == mint("Natnum")  # R6: the binding IS the spelling
+    assert d["Natnum"] == mint("Natnum")  # R6: the binding IS the atom
     return (
         lambda *args: ("Natnum", *args),
         lambda *args: ("succ", *args),
@@ -100,13 +100,13 @@ class TestSolveBindings:
         m = _module(mod)
         p = Var()
         y = Var()
-        goal = [Edge("a", y)]
+        goal = [Edge(mint("a"), y)]
         results = []
         for _ in call("GraphProgram", p, module=m):
             prog = deref(p)
             for _ in call("Solve", goal, prog, module=m):
                 results.append(_deref_walk(y))
-        assert "b" in results
+        assert mint("b") in results
 
     def test_path_binds_destination(self, mod):
         """Solve [path(a, Y)] should find Y = b, c, d."""
@@ -115,7 +115,7 @@ class TestSolveBindings:
         m = _module(mod)
         p = Var()
         y = Var()
-        goal = [Path("a", y)]
+        goal = [Path(mint("a"), y)]
         results = []
         for _ in call("GraphProgram", p, module=m):
             prog = deref(p)
@@ -125,7 +125,7 @@ class TestSolveBindings:
                 count += 1
                 if count >= 5:
                     break
-        assert set(results[:3]) == {"b", "c", "d"}
+        assert set(results[:3]) == {mint("b"), mint("c"), mint("d")}
 
 
 # ── Inference counting: exact values ─────────────────────────────────────────
@@ -154,7 +154,7 @@ class TestSolveCount:
         p = Var()
         count = Var()
         for _ in call("GraphProgram", p, module=m):
-            for _ in call("SolveCount", [Path("a", "c")], deref(p), count, module=m):
+            for _ in call("SolveCount", [Path(mint("a"), mint("c"))], deref(p), count, module=m):
                 assert deref(count) == 4
                 return
         pytest.fail("no solution")
@@ -208,7 +208,7 @@ class TestSolveIterativeDeepening:
         for _ in call("CyclicProgram", p, module=m):
             results = []
             for _ in call("SolveIterativeDeepening",
-                          [Path("a", "b")], deref(p), module=m):
+                          [Path(mint("a"), mint("b"))], deref(p), module=m):
                 results.append(True)
                 break  # just need one solution
             assert results == [True]
@@ -262,16 +262,16 @@ class TestSolveTree:
         p = Var()
         tree = Var()
         for _ in call("GraphProgram", p, module=m):
-            for _ in call("SolveTree", [Path("a", "c")], deref(p), tree, module=m):
+            for _ in call("SolveTree", [Path(mint("a"), mint("c"))], deref(p), tree, module=m):
                 t = _deref_walk(tree)
                 # Top-level: one node for path(a,c)
                 assert len(t) == 1
                 goal, subtree = t[0]
-                assert goal == Path("a", "c")
+                assert goal == Path(mint("a"), mint("c"))
                 # Subtree: edge(a,b) and path(b,c)
                 assert len(subtree) == 2
-                assert subtree[0] == [Edge("a", "b"), []]
+                assert subtree[0] == [Edge(mint("a"), mint("b")), []]
                 path_bc = subtree[1]
-                assert path_bc[0] == Path("b", "c")
+                assert path_bc[0] == Path(mint("b"), mint("c"))
                 return
         pytest.fail("no solution")

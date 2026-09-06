@@ -19,7 +19,7 @@ import pytest
 from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
-from clausal.logic.variables import Var, deref, is_var
+from clausal.logic.variables import Trail, Var, deref, is_var, unify
 
 
 @pytest.fixture(scope="module")
@@ -56,17 +56,21 @@ class TestHeadListBindsPastTailCall:
     def test_two_element_list_query_as_var(self, mod, pymod):
         a, b = _atoms(pymod)
         B = Var()
-        assert _collect("tail2", [B], 1, B, module=mod) == [([a, b],)]
+        assert _collect("tail2", [B], 1, B, module=mod) == [("ab",)]
+        # ...which IS the char-atom list (spec §6.2).
+        trail = Trail()
+        assert unify(_collect("tail2", [B], 1, B, module=mod)[0][0],
+                     [a, b], trail)
 
     def test_one_element_list_query_as_var(self, mod, pymod):
         a, _ = _atoms(pymod)
         B = Var()
-        assert _collect("tail1", [B], 1, B, module=mod) == [([a],)]
+        assert _collect("tail1", [B], 1, B, module=mod) == [("a",)]
 
     def test_multi_goal_body_tail_call(self, mod, pymod):
         a, b = _atoms(pymod)
         B = Var()
-        assert _collect("multi", [B], 1, B, module=mod) == [([a, b],)]
+        assert _collect("multi", [B], 1, B, module=mod) == [("ab",)]
 
     def test_body_bound_var_element(self, mod, pymod):
         a, _ = _atoms(pymod)
@@ -96,9 +100,9 @@ class TestControlsStillWork:
     def test_inline_body_query_as_var(self, mod, pymod):
         a, b = _atoms(pymod)
         B = Var()
-        assert _collect("inline", [B], 1, B, module=mod) == [([a, b],)]
+        assert _collect("inline", [B], 1, B, module=mod) == [("ab",)]
 
     def test_star_list_tail_call_query_as_var(self, mod, pymod):
         a, b = _atoms(pymod)
         B = Var()
-        assert _collect("star", [B], 1, B, module=mod) == [([a, b],)]
+        assert _collect("star", [B], 1, B, module=mod) == [("ab",)]

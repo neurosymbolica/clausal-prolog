@@ -37,23 +37,24 @@ class TestHeadTailString:
         # nv
         H, T = Var(), Var()
         results = []
-        for _ in call("HeadTail", mint("abc"), H, T, module=edge_mod):
+        for _ in call("HeadTail", "abc", H, T, module=edge_mod):
             results.append((deref(H), deref(T)))
-        assert results == [("a", "bc")]
+        # THE FLIP (spec §6.2): the head is a CHAR ATOM, the tail a str slice.
+        assert results == [(char_atom("a"), "bc")]
 
     def test_head_tail_single_char(self, edge_mod):
         # nv
         H, T = Var(), Var()
         results = []
-        for _ in call("HeadTail", mint("a"), H, T, module=edge_mod):
+        for _ in call("HeadTail", "a", H, T, module=edge_mod):
             results.append((deref(H), deref(T)))
-        assert results == [("a", "")]
+        assert results == [(char_atom("a"), "")]
 
     def test_head_tail_empty_fails(self, edge_mod):
         """Empty string has no head — should fail."""
         # nv
         H, T = Var(), Var()
-        assert list(call("HeadTail", mint(""), H, T, module=edge_mod)) == []
+        assert list(call("HeadTail", "", H, T, module=edge_mod)) == []
 
 
 class TestCaptureAllString:

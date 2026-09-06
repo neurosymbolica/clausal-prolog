@@ -515,34 +515,33 @@ class TestAtomIdentity:
 
 
 class TestMakeAtom:
-    """P3-3 Task 7: ``make_atom(name)`` returns the plain atom ``str``.
+    """``make_atom(spelling)`` returns the ATOM for that spelling.
 
-    An atom has been a ``str`` since the P3-1 pivot, and a public factory
-    still minting a zero-arity ``PredicateMeta`` was the one door left in the
-    public API through which a class atom could enter a program that has none
-    anywhere else — a live mixed-representation path.  ``make_atom`` stays for
-    API continuity and hands back the atom itself; ``make_predicate(name, [])``
-    is how a caller asks for a /0 PREDICATE class.
+    THE FLIP (spec §6.1): ``make_atom`` is ``mint`` under its API-continuity
+    name, so it hands back the arity-0 CELL -- INVERTING the P3-3 Task 7 pin
+    that it returned a plain ``str`` (which itself inverted the zero-arity
+    ``PredicateMeta`` it used to mint).  ``make_predicate(name, [])`` is
+    still how a caller asks for a /0 PREDICATE class.
     """
 
-    def test_returns_the_atom_str(self):
+    def test_returns_the_atom_cell(self):
         # nv
         from clausal.logic.predicate import make_atom
-        a = make_atom(mint("a"))
-        assert type(a) == str
+        a = make_atom("a")
         assert a == mint("a")
+        assert type(a) is tuple and len(a) == 1 and type(a[0]) is str
         assert not isinstance(a, PredicateMeta)
 
     def test_repeated_calls_agree(self):
-        """Same spelling, same atom — identity, since the atom IS the str."""
+        """Same spelling, same atom — EQUALITY, never identity (spec §5.2)."""
         # nv
         from clausal.logic.predicate import make_atom
-        assert make_atom(mint("a")) == make_atom(mint("a"))
+        assert make_atom("a") == make_atom("a")
 
     def test_hashable(self):
         # nv
         from clausal.logic.predicate import make_atom
-        a = make_atom(mint("a"))
+        a = make_atom("a")
         d = {a: 42}
         assert d[mint("a")] == 42
 
@@ -550,7 +549,7 @@ class TestMakeAtom:
         # nv
         from clausal.logic.predicate import make_atom
         from clausal.logic.variables import Trail, unify, deref
-        a = make_atom(mint("a"))
+        a = make_atom("a")
         b = make_atom("b")
         trail = Trail()
         x = Var()
@@ -562,7 +561,7 @@ class TestMakeAtom:
         """The behaviour ``make_atom`` used to provide, at its new address."""
         # nv
         from clausal.logic.predicate import make_predicate
-        a = make_predicate(mint("a"), [])
+        a = make_predicate("a", [])
         assert isinstance(a, PredicateMeta)
         assert a._fields == ()
         assert a._arity == 0

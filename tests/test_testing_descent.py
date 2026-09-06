@@ -37,7 +37,7 @@ def test_two_plus_args_differ_shows_example_solutions(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "two or more arguments differ" in out   # old sentence survives
     assert "it does have:" in out                  # new suffix
-    assert "pairx('a', 1)" in out                  # an actual solution, rendered
+    assert "pairx(a, 1)" in out                  # an actual solution, rendered
 
 
 # ── rung 3: descent into the failing predicate ───────────────────────────────
@@ -479,7 +479,7 @@ def test_ground_fact_near_miss_keeps_rung_1(capsys, tmp_path):
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "argument 1 differs" in out
-    assert "gpair('a', 1)" in out
+    assert "gpair(a, 1)" in out
     assert "no clause head unifies" not in out
 
 

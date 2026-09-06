@@ -39,7 +39,10 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
-from clausal.logic.atoms import HIDDEN_SEP, demangle, demangle_for_display, is_mangled, mangle
+from clausal.logic.atoms import (
+    HIDDEN_SEP, char_atom, demangle, demangle_for_display, is_mangled, mangle,
+    mint,
+)
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.solve import call
 from clausal.logic.trampoline import StepGenerator, solutions
@@ -135,7 +138,7 @@ def test_hidden_atom_unifies_within_its_module():
     vals = [(deref(out_x), deref(out_y)) for _ in mod.same(out_x, out_y)]
     assert len(vals) == 1
     val_x, val_y = vals[0]
-    expected = mangle("hide_owner", "hide_secret")
+    expected = mint(mangle("hide_owner", "hide_secret"))
     assert val_x == val_y == expected
     assert is_mangled(val_x)
     trail = Trail()
@@ -158,8 +161,8 @@ def test_cross_module_same_spelling_does_not_unify():
     out_other = Var()
     other_vals = [deref(out_other) for _ in other.reaches(out_other)]
 
-    assert owner_vals == [mangle("hide_owner", "hide_secret")]
-    assert other_vals == ["hide_secret"]
+    assert owner_vals == [mint(mangle("hide_owner", "hide_secret"))]
+    assert other_vals == [mint("hide_secret")]
     assert owner_vals[0] != other_vals[0]
 
     trail = Trail()
@@ -189,8 +192,8 @@ def test_importer_cannot_spell_hidden_atom():
         deref(out_local) for _ in importer.local_secret(out_local)
     ]
 
-    assert imported_vals == [mangle("hide_owner", "hide_secret")]
-    assert local_vals == ["hide_secret"]
+    assert imported_vals == [mint(mangle("hide_owner", "hide_secret"))]
+    assert local_vals == [mint("hide_secret")]
     assert imported_vals[0] != local_vals[0]
 
 
@@ -207,8 +210,9 @@ def test_atom_chars_forgery_constructs_mangled_str():
     the atom's bare spelling, which is the same "collision avoidance, not
     a lock" stance Python's own ``__name`` mangling takes."""
     target = mangle("hide_owner", "hide_secret")
-    chars = list(target)
-    assert HIDDEN_SEP in chars  # the forger must supply the raw separator
+    # THE FLIP (spec §6.6): ``atom_chars/2`` takes CHAR ATOMS.
+    chars = [char_atom(c) for c in target]
+    assert char_atom(HIDDEN_SEP) in chars  # the forger supplies the separator
 
     out = Var()
     trail = Trail()
@@ -217,7 +221,7 @@ def test_atom_chars_forgery_constructs_mangled_str():
         StepGenerator(dispatch, None, None, None, out, chars, trail),
         snapshot=lambda: deref(out),
     )
-    assert results == [target]
+    assert results == [mint(target)]
     assert is_mangled(results[0])
 
 
@@ -242,7 +246,7 @@ def test_near_miss_renderer_shows_human_form():
     ``demangle_for_display`` substitution point as the reflection
     renderer above."""
     mangled = mangle("hide_owner", "hide_secret")
-    text = _render_value(mangled, path=_fixture_path("hide_owner.clausal"))
+    text = _render_value(mint(mangled), path=_fixture_path("hide_owner.clausal"))
     assert text == "hide_owner.hide_secret"
 
 
@@ -474,7 +478,7 @@ def test_hide_entries_count_as_declared_for_strictness():
     lm = mod.__dict__["$module"]
     out = Var()
     vals = [deref(out) for _ in call("Probe", out, module=lm)]
-    assert vals == [mangle("hide_strict_test", "hide_strict_secret")]
+    assert vals == [mint(mangle("hide_strict_test", "hide_strict_secret"))]
 
 
 def test_hide_does_not_satisfy_strictness_for_other_undeclared_atoms():

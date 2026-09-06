@@ -1,87 +1,88 @@
+-double_quotes(chars)
 -private([a, b, hello])
 
 -module(iso_unification, [Test/1])
 
 SameValue(X, Y) <- (X is Y, X == Y)
 
-Test('atom unifies with itself') <- (X is a, X == a)
+Test("atom unifies with itself") <- (X is a, X == a)
 
-Test('var unifies with atom') <- (X is a, X == a)
+Test("var unifies with atom") <- (X is a, X == a)
 
-Test('var unifies with integer') <- (X is 42, X == 42)
+Test("var unifies with integer") <- (X is 42, X == 42)
 
-Test('var unifies with list') <- (X is [1, 2, 3], X == [1, 2, 3])
+Test("var unifies with list") <- (X is [1, 2, 3], X == [1, 2, 3])
 
-Test('different atoms fail') <- (not (X is a, X is b, X == b))
+Test("different atoms fail") <- (not (X is a, X is b, X == b))
 
-Test('list unification') <- (X is [a], X == [a])
+Test("list unification") <- (X is [a], X == [a])
 
-Test('empty lists unify') <- (X is [], X == [])
+Test("empty lists unify") <- (X is [], X == [])
 
-Test('different atoms: is not succeeds') <- (X is a, dif(X, b))
+Test("different atoms: is not succeeds") <- (X is a, dif(X, b))
 
-Test('same atom: is not fails') <- (X is a, not dif(X, a))
+Test("same atom: is not fails") <- (X is a, not dif(X, a))
 
-Test('same atom ==') <- (a == a)
+Test("same atom ==") <- (a == a)
 
-Test('different atoms == fails') <- (a != b)
+Test("different atoms == fails") <- (a != b)
 
-Test('same integer ==') <- (42 == 42)
+Test("same integer ==") <- (42 == 42)
 
-Test('bound var == value') <- (X is hello, X == hello)
+Test("bound var == value") <- (X is hello, X == hello)
 
-Test('different atoms !=') <- (a != b)
+Test("different atoms !=") <- (a != b)
 
-Test('same atom != fails') <- (not a != a)
+Test("same atom != fails") <- (not a != a)
 
-Test('same_value: integers') <- (SameValue(42, 42))
+Test("same_value: integers") <- (SameValue(42, 42))
 
-Test('same_value: strings') <- (SameValue(hello, hello))
+Test("same_value: strings") <- (SameValue(hello, hello))
 
-Test('same_value: lists') <- (SameValue([1, 2], [1, 2]))
+Test("same_value: lists") <- (SameValue([1, 2], [1, 2]))
 
-Test('integer unifies with itself') <- (X is 1, X == 1)
+Test("integer unifies with itself") <- (X is 1, X == 1)
 
-Test('float unifies with itself') <- (X is 1.0, X == 1.0)
+Test("float unifies with itself") <- (X is 1.0, X == 1.0)
 
-Test('var unifies with var (aliasing)') <- (X is Y, X == Y)
+Test("var unifies with var (aliasing)") <- (X is Y, X == Y)
 
-Test('different integers fail to unify') <- (not (X is 1, X is 2))
+Test("different integers fail to unify") <- (not (X is 1, X is 2))
 
-Test('int vs float (clausal quirk): 1 is 1.0') <- (X is 1, X is 1.0)
+Test("int vs float (clausal quirk): 1 is 1.0") <- (X is 1, X is 1.0)
 
-Test('list unify with var') <- (X is [1, 2, 3], X == [1, 2, 3])
+Test("list unify with var") <- (X is [1, 2, 3], X == [1, 2, 3])
 
-Test('arithmetic term is structural: 1+2 != 3 in unify') <- (not (X is 1 + 2, X is 3))
+Test("arithmetic term is structural: 1+2 != 3 in unify") <- (not (X is 1 + 2, X is 3))
 
-Test('var/atom is not: succeeds with constraint') <- (dif(_x_unused, a))
+Test("var/atom is not: succeeds with constraint") <- (dif(_x_unused, a))
 
-Test('different numbers: 1 is not 2') <- (dif(1, 2))
+Test("different numbers: 1 is not 2") <- (dif(1, 2))
 
-Test('int == float (Python quirk)') <- (1 == 1.0)
+Test("int == float (Python quirk)") <- (1 == 1.0)
 
-Test('two fresh vars: X == Y (CLP(FD) posts)') <- (_x_unused == _y_unused)
+Test("two fresh vars: X == Y (CLP(FD) posts)") <- (_x_unused == _y_unused)
 
-Test('same var: X == X') <- (X == X)
+Test("same var: X == X") <- (X == X)
 
-Test('var != atom raises catchable type_error') <- (catch((_x_unused != a, False), _, True))
+Test("var != atom raises catchable type_error") <- (catch((_x_unused != a, False), _, True))
 
-Test('two fresh vars: X != Y') <- (_x_unused != _y_unused)
+Test("two fresh vars: X != Y") <- (_x_unused != _y_unused)
 
-Test('structural_eq: a == a') <- (StructuralEq(a, a))
+Test("structural_eq: a == a") <- (StructuralEq(a, a))
 
-Test('structural_eq: a != b fails') <- (not StructuralEq(a, b))
+Test("structural_eq: a != b fails") <- (not StructuralEq(a, b))
 
-Test('structural_eq: 42 == 42') <- (StructuralEq(42, 42))
+Test("structural_eq: 42 == 42") <- (StructuralEq(42, 42))
 
-Test('structural_eq: same var') <- (X is Y, StructuralEq(X, Y))
+Test("structural_eq: same var") <- (X is Y, StructuralEq(X, Y))
 
-Test('structural_eq: distinct unbound vars fail') <- (not StructuralEq(_x_unused, _y_unused))
+Test("structural_eq: distinct unbound vars fail") <- (not StructuralEq(_x_unused, _y_unused))
 
-Test('structural_eq: unbound var vs atom fails') <- (not StructuralEq(_x_unused, a))
+Test("structural_eq: unbound var vs atom fails") <- (not StructuralEq(_x_unused, a))
 
-Test('structural_eq: nested lists') <- (StructuralEq([1, [2, 3]], [1, [2, 3]]))
+Test("structural_eq: nested lists") <- (StructuralEq([1, [2, 3]], [1, [2, 3]]))
 
-Test('structural_eq: distinct lists fail') <- (not StructuralEq([1, 2], [1, 3]))
+Test("structural_eq: distinct lists fail") <- (not StructuralEq([1, 2], [1, 3]))
 
-Test('structural_neq: same var fails') <- (X is Y, not not StructuralEq(X, Y))
+Test("structural_neq: same var fails") <- (X is Y, not not StructuralEq(X, Y))

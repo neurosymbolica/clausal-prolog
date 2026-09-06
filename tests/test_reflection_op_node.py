@@ -27,6 +27,7 @@ def _clear_query_cache():
 
 
 _MATCHERS = """\
+-double_quotes(chars)
 -import_from(reflection, [
     reified_clause, reified_subterm, op_node,
 ])

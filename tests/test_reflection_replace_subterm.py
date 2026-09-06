@@ -187,6 +187,7 @@ class TestReifiedClauseRewrite:
     list, position-preservingly, driven entirely from Clausal."""
 
     _MATCHERS = """\
+-double_quotes(chars)
 -import_from(reflection, [
     reified_clause, reified_subterm, op_node, replace_subterm,
 ])

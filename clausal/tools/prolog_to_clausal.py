@@ -548,6 +548,29 @@ class _PrologToClausal:
         # :- table pred/N
         if isinstance(body, PCompound) and body.functor == "table":
             return self._emit_meta_directive("table", body)
+        # :- double_quotes(Mode)
+        #
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §7): clausal spells this
+        # directive the same way, and the module emitter above writes it into
+        # the preamble (FIRST, because it is position-sensitive).  Routing it
+        # through the generic branch instead produced ``-DoubleQuotes(chars)``
+        # -- a predicate-shaped directive nothing reads -- next to a second,
+        # auto-generated ``-double_quotes(chars)``, and ``chars`` was
+        # additionally collected as a data atom into ``-private([chars])``.
+        if (isinstance(body, PCompound) and body.functor == "double_quotes"
+                and len(body.args) == 1):
+            mode = body.args[0]
+            mode_name = mode.name if isinstance(mode, PAtom) else None
+            if mode_name == "chars":
+                # The preamble carries it; emitting it here too would double it.
+                self._emitted_string = True
+                return None
+            if mode_name == "atom":
+                return "-double_quotes(atom)"
+            # ``codes`` (and anything else) has no clausal directive: codes are
+            # spelled ``b"..."`` at the literal, so the mode cannot be set.
+            return f"# double_quotes({mode_name or self._emit_term(mode)}) " \
+                   f"is not a clausal mode (codes are spelled b\"...\")"
         # :- op(P, T, N) → comment
         if isinstance(body, PCompound) and body.functor == "op" and len(body.args) == 3:
             return f"# operator: op({self._emit_term(body.args[0])}, {self._emit_term(body.args[1])}, {self._emit_term(body.args[2])})"

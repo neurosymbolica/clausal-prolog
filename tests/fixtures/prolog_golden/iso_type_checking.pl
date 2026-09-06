@@ -1,3 +1,5 @@
+:- double_quotes(chars).
+
 :- module(iso_type_checking, [test/1]).
 
 is_bound_number(X) :-
@@ -39,8 +41,8 @@ test("atom: declared atom succeeds") :-
 test("atom: declared atom Abc") :-
     atom(abc).
 
-test("atom: string succeeds") :-
-    atom("hello").
+test("atom: string fails") :-
+    \+ atom("hello").
 
 test("atom: char list fails") :-
     \+ atom(["h", "e", "l", "l", "o"]).
@@ -57,8 +59,8 @@ test("str: plain string succeeds") :-
 test("str: empty string succeeds") :-
     atom("").
 
-test("str: declared atom now succeeds") :-
-    atom(hello).
+test("str: declared atom fails") :-
+    \+ atom(hello).
 
 test("str: integer fails") :-
     \+ atom(1).
@@ -96,11 +98,11 @@ test("number: string fails") :-
 test("number: var fails") :-
     \+ number(X_UNUSED).
 
-test("callable: declared atom now fails") :-
-    \+ callable(hello).
+test("callable: declared atom succeeds") :-
+    callable(hello).
 
-test("callable: registered predicate name") :-
-    callable("is_bound_number").
+test("callable: registered predicate name as a string fails") :-
+    \+ callable("is_bound_number").
 
 test("callable: arbitrary string fails") :-
     \+ callable("hello").
@@ -120,8 +122,8 @@ test("is_list: empty") :-
 test("is_list: nested") :-
     is_list([[1], [2]]).
 
-test("is_list: declared atom now a string list") :-
-    is_list(hello).
+test("is_list: declared atom fails") :-
+    \+ is_list(hello).
 
 test("is_list: int fails") :-
     \+ is_list(42).

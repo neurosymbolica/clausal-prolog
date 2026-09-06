@@ -74,8 +74,8 @@ class TestFilterString:
         # nv
         R = Var()
         r = _collect(R, "include", mod.module_dict["is_vowel"],
-                     ["a", "b", "c", "e"], R, module=mod)
-        assert r == [["a", "e"]]
+                     [char_atom(c) for c in "abce"], R, module=mod)
+        assert r == [[char_atom("a"), char_atom("e")]]
 
 
 # ── exclude/3 ───────────────────────────────────────────────────────────────
@@ -125,9 +125,11 @@ class TestFoldLeftString:
         """Fold over string chars, concatenating into accumulator."""
         # nv
         R = Var()
+        # ``atom_concat/3`` takes ATOMS (spec §6.6), so the seed is the
+        # empty ATOM and the answer is the atom ("abc",).
         r = _collect(R, "foldl", mod.module_dict["concat_chars"],
-                     "abc", "", R, module=mod)
-        assert r == ["abc"]
+                     "abc", mint(""), R, module=mod)
+        assert r == [mint("abc")]
 
 
 # ── partition/4 ─────────────────────────────────────────────────────────────

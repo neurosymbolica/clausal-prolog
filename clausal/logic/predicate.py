@@ -1424,16 +1424,18 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     """
     if isinstance(obj, PredicateMeta):
         return obj._get_dispatch(arity)
-    if isinstance(obj, str):
-        # P3-1 Task 2 fix round (controller ruling, 2026-09-04): a bare atom
-        # is a plain str post-pivot, reached here whenever a goal resolves
-        # to a NAME that turned out to be data, not a predicate (a dotted
-        # cross-module reference to an atom, or any other resolution path
-        # that used to find a minted 0-arity class and now finds the str
-        # itself).  Pre-pivot this quirk of class re-minting sometimes
+    if isinstance(obj, str) or (type(obj) is tuple and len(obj) == 1
+                                and type(obj[0]) is str):
+        # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
+        # through THE FLIP: a bare atom is the arity-0 CELL (a ``str`` is
+        # still accepted -- a spelling reached through an older resolution
+        # path), reached here whenever a goal resolves to a NAME that turned
+        # out to be data, not a predicate (a dotted cross-module reference to
+        # an atom, or any other resolution path that used to find a minted
+        # 0-arity class).  Pre-pivot this quirk of class re-minting sometimes
         # silently reached a DIFFERENT module's re-minted class of the same
         # name (see task-2-report.md's "resolved by fix round 1"); that was
-        # never a contract, so the ruling is: calling a str atom as a goal,
+        # never a contract, so the ruling is: calling an atom as a goal,
         # at any arity, through any resolution path, is a genuine error —
         # but a clean, positioned one, never a raw AttributeError.  Do NOT
         # special-case dispatch-to-local-predicate here; that routing is
@@ -1442,11 +1444,12 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             LogicException, existence_error,
         )
         from clausal.terms import Compound  # noqa: PLC0415
-        indicator = Compound("/", (obj, arity))
+        name = obj if isinstance(obj, str) else obj[0]
+        indicator = Compound("/", (name, arity))
         raise LogicException(
             existence_error(
                 "procedure", indicator,
-                f"atom {obj!r} is not callable at arity {arity} "
+                f"atom {name!r} is not callable at arity {arity} "
                 f"(resolved via a data reference; define or import the "
                 f"predicate, or call it by its local name)",
             )

@@ -58,7 +58,7 @@ def _solutions(pred_cls, arity: int):
     args = [Var() for _ in range(arity)]
     out = []
     for _ in call(pred_cls, *args):
-        out.append(tuple(str(walk(deref(a))) for a in args))
+        out.append(tuple(walk(deref(a)) for a in args))
     return out
 
 
@@ -92,7 +92,7 @@ class TestFunctorReExport:
 
         # The whole point: goals over the re-exported functor find the kit's
         # facts rather than silently finding nothing.
-        assert _solutions(downstream.check, 2) == [(mint("a"), mint("x")), ("b", mint("y"))]
+        assert _solutions(downstream.check, 2) == [(mint("a"), mint("x")), (mint("b"), mint("y"))]
 
     def test_intermediate_clause_uses_reexported_functor(self):
         _kit = _load_fixture("functor_reexport_vocab")

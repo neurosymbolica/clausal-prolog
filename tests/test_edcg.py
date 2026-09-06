@@ -459,15 +459,18 @@ class TestEdcgPatterns:
         code = Var()
         ops = Var()
         # Args in edcg_pred order: code_in, code_out, ops_in, ops_out, dcg_in, dcg_out
+        # THE FLIP: the fixture's ``["push", _v]`` / ``["add"]`` terminals and
+        # ``emit("ADD")`` argument are ATOMS under the default
+        # ``-double_quotes(atom)``, so the token stream is a list of atoms.
         for _ in call("compile_all",
                        [], code, 0, ops,
-                       ["push", 1, "push", 2, "add"], rest,
+                       [mint("push"), 1, mint("push"), 2, mint("add")], rest,
                        module=mod):
             assert deref(rest) == []
             assert deref(ops) == 3
             # code is built by prepend, so reversed
             code_val = deref(code)
-            assert code_val[0] == "ADD"
+            assert code_val[0] == mint("ADD")
             assert len(code_val) == 3
             break
 

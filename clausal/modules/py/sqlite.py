@@ -30,9 +30,30 @@ import sqlite3 as _sqlite3
 import threading as _threading
 from typing import Any
 
-from clausal.modules.py import ModulePredicate, simple_to_trampoline
+from clausal.logic.to_python import to_python
+from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
+
+
+
+def _text(val, what: str) -> str:
+    """The ``str`` *val* denotes -- a string or an ATOM (spec §9.4).
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings): these arguments used to be
+    coerced with ``str()``, which post-flip renders the atom ``(':memory:',)``
+    as its Python tuple REPR -- during the flip that literally created a file
+    named ``(':memory:',)``.  ``to_text`` unwraps the atom and raises
+    ``type_error(text, …)`` for a compound; anything else that is not text
+    (a number, an unbound Var) is a loud ``type_error`` here too, since every
+    one of these positions is a database path, alias, table name or SQL
+    string.
+    """
+    text = to_text(val)
+    if text is None:
+        from clausal.logic.exceptions import LogicException, type_error
+        raise LogicException(type_error("text", val, f"sqlite {what}"))
+    return text
 
 
 # ── Connection registry ────────────────────────────────────────────────────
@@ -43,7 +64,7 @@ _LOCK = _threading.Lock()
 
 def _get_connection(alias: str) -> _sqlite3.Connection:
     """Look up a connection by alias; raise if not found."""
-    alias = str(alias)
+    alias = _text(alias, "alias")
     conn = _CONNECTIONS.get(alias)
     if conn is None:
         raise ValueError(f"No SQLite connection with alias {alias!r}")
@@ -56,8 +77,8 @@ def _sqlite_connect_2(path, alias, trail, k):
     """connect/2: open a database and register under alias."""
     path = deref(path)
     alias = deref(alias)
-    path_str = str(path)
-    alias_str = str(alias)
+    path_str = _text(path, "path")
+    alias_str = _text(alias, "alias")
     # NEVER yield while holding ``_LOCK``: a generator suspended at a yield
     # inside the ``with`` is abandoned (not closed) whenever the caller drops
     # its choice point — the test harness's diagnostic re-run is one such
@@ -74,7 +95,7 @@ def _sqlite_connect_2(path, alias, trail, k):
 def _sqlite_disconnect_1(alias, trail, k):
     """disconnect/1: close and unregister a connection."""
     alias = deref(alias)
-    alias_str = str(alias)
+    alias_str = _text(alias, "alias")
     with _LOCK:
         conn = _CONNECTIONS.pop(alias_str, None)
     if conn is None:
@@ -88,7 +109,7 @@ def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alia
     alias = deref(alias)
     if not is_var(alias):
         # Check if this specific alias exists
-        if str(alias) in _CONNECTIONS:
+        if _text(alias, "alias") in _CONNECTIONS:
             yield (_proceed, None)
         yield (_fail, DONE)
         return
@@ -110,7 +131,7 @@ def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_v
     alias = deref(alias)
     sql = deref(sql)
     conn = _get_connection(alias)
-    cur = conn.execute(str(sql))
+    cur = conn.execute(_text(sql, "sql"))
     for row in cur:
         mark = trail.mark()
         # Single-column rows unwrap to the value itself
@@ -128,11 +149,11 @@ def _sqlite_query_4(this_generator, _proceed, _fail, _catcher, alias, sql, param
     params = deref(params)
     # Accept list or tuple of params
     if isinstance(params, (list, tuple)):
-        param_seq = tuple(deref(p) for p in params)
+        param_seq = tuple(to_python(p) for p in params)
     else:
-        param_seq = (params,)
+        param_seq = (to_python(params),)
     conn = _get_connection(alias)
-    cur = conn.execute(str(sql), param_seq)
+    cur = conn.execute(_text(sql, "sql"), param_seq)
     for row in cur:
         mark = trail.mark()
         value = row[0] if len(row) == 1 else row
@@ -147,7 +168,7 @@ def _sqlite_exec_2(alias, sql, trail, k):
     alias = deref(alias)
     sql = deref(sql)
     conn = _get_connection(alias)
-    conn.execute(str(sql))
+    conn.execute(_text(sql, "sql"))
     conn.commit()
     yield None
 
@@ -158,11 +179,11 @@ def _sqlite_exec_3(alias, sql, params, trail, k):
     sql = deref(sql)
     params = deref(params)
     if isinstance(params, (list, tuple)):
-        param_seq = tuple(deref(p) for p in params)
+        param_seq = tuple(to_python(p) for p in params)
     else:
-        param_seq = (params,)
+        param_seq = (to_python(params),)
     conn = _get_connection(alias)
-    conn.execute(str(sql), param_seq)
+    conn.execute(_text(sql, "sql"), param_seq)
     conn.commit()
     yield None
 
@@ -172,7 +193,7 @@ def _sqlite_row_count_3(alias, sql, count_var, trail, k):
     alias = deref(alias)
     sql = deref(sql)
     conn = _get_connection(alias)
-    cur = conn.execute(str(sql))
+    cur = conn.execute(_text(sql, "sql"))
     conn.commit()
     if unify(count_var, cur.rowcount, trail):
         yield None
@@ -191,7 +212,7 @@ def _sqlite_table_2(this_generator, _proceed, _fail, _catcher, alias, table_var,
     )
     if not is_var(table_var_d):
         # Check if specific table exists
-        table_name = str(table_var_d)
+        table_name = _text(table_var_d, "table")
         for (name,) in cur:
             if name == table_name:
                 yield (_proceed, None)
@@ -213,7 +234,7 @@ def _sqlite_column_4(this_generator, _proceed, _fail, _catcher, alias, table, co
     alias = deref(alias)
     table = deref(table)
     conn = _get_connection(alias)
-    cur = conn.execute(f"PRAGMA table_info({str(table)})")
+    cur = conn.execute(f"PRAGMA table_info({_text(table, 'table')})")
     for row in cur:
         # row: (cid, name, type, notnull, dflt_value, pk)
         name = row[1]

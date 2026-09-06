@@ -289,8 +289,8 @@ class TestPrintTerm:
         # nv
         t = Trail()
         out = _capture_stdout("print_term", 1, "hello", t)
-        # term_str shows strings with quotes
-        assert out.strip() == "'hello'"
+        # term_str shows a STRING double-quoted (spec §6.7)
+        assert out.strip() == '"hello"'
 
     def test_print_term_list(self):
         # nv
@@ -424,7 +424,7 @@ class TestWriteToString:
         vals = solutions(
             StepGenerator(dispatch, None, None, None, (TUPLE_TAG, "a", "b"), result, t),
             snapshot=lambda: deref(result))
-        assert vals == ["('a', 'b')"]
+        assert vals == ["(a, b)"]
 
     def test_fstring(self):
         # nv
@@ -469,7 +469,7 @@ class TestTermToString:
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, "hello", result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["'hello'"]
+        assert vals == ['"hello"']
 
     def test_list(self):
         # nv

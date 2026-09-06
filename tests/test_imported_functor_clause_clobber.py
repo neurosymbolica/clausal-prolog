@@ -78,9 +78,12 @@ def _load_fixture(stem: str, as_name: str | None = None):
 
 
 def _solutions(pred_cls, arity: int):
+    # THE FLIP: the answers are compared as TERMS.  ``str()`` used to
+    # normalise a str-shaped atom for display; post-flip it would render the
+    # arity-0 cell as its Python tuple repr, which compares against nothing.
     args = [Var() for _ in range(arity)]
     return [
-        tuple(str(walk(deref(a))) for a in args)
+        tuple(walk(deref(a)) for a in args)
         for _ in call(pred_cls, *args)
     ]
 

@@ -106,7 +106,7 @@ class TestNoShadowingUnderGlobalAtoms:
             module_dict, _ = _run_declarations(source, "_atomshadow_priv")
         assert not caught, [str(w.message) for w in caught]
         assert module_dict["atomshadow_red"] == mint("atomshadow_red")
-        assert isinstance(module_dict["atomshadow_red"], str)
+        assert module_dict["atomshadow_red"] == mint("atomshadow_red")
 
     def test_atom_in_module_decl_and_imported_share_identity_no_warning(self):
         source = (

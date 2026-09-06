@@ -32,6 +32,7 @@ builds the *declared* one — only the generic shape's spelling moved.
 
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.builtins.inspection import _functor__3, _univ__2
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
@@ -90,7 +91,7 @@ def test_atom_name_builds_a_generic_cell(cite):
     §6.4): cells are how the engine represents a compound data term, so what
     construction builds now unifies with the same term written longhand.
     """
-    built = built_by(_functor__3, "tfcdt_cite", 1)
+    built = built_by(_functor__3, mint("tfcdt_cite"), 1)
     assert type(built) is tuple and built[0] == "tfcdt_cite" and len(built) == 2
     assert not isinstance(built, cite)
 
@@ -176,7 +177,7 @@ def test_unpack_carries_the_argument_values(cite):
 
 
 def test_unpack_atom_name_builds_a_generic_cell(cite):
-    assert built_by(_univ__2, ["tfcdt_cite", 42]) == ("tfcdt_cite", 42)
+    assert built_by(_univ__2, [mint("tfcdt_cite"), 42]) == ("tfcdt_cite", 42)
 
 
 def test_unpack_arity_mismatch_falls_through_to_a_generic_cell(cite):

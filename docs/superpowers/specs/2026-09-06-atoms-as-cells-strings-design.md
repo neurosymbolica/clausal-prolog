@@ -126,12 +126,28 @@ Equality is the semantics; identity is an optimisation.
   `sys.intern`s the spelling and returns the cell `(spelling,)`. There is
   **no process-wide atom table**: a table would pin every spelling ever
   minted, and `sub_atom/5`/`atom_concat/3` mint one atom per enumerated
-  substring; CPython's interned strings are mortal, so intern garbage is
-  reclaimed. Two equal atoms compare equal by tuple `==`, which on interned
+  substring. Two equal atoms compare equal by tuple `==`, which on interned
   slot-0 strings is an identity hit on the first element (measured 21.7 ns
   same tuple vs 29.5 ns distinct-but-equal tuples with interned spellings;
   F7 of the design note) — the fast path lives in slot 0, not in the tuple
   object. (Ruling 2026-09-06, Task 6 review.)
+- **Who interns** (corrected 2026-09-06, Task 11: the original text here said
+  "CPython's interned strings are mortal, so intern garbage is reclaimed" —
+  that is **false** on CPython 3.13, where `sys.intern` makes the string
+  immortal). Interning is therefore restricted to **bounded producers**:
+  `mint` interns, and its callers are the compiler's emitted atom constants,
+  declared atoms and the pool, and dict/JSON keys — all bounded by the
+  program text or by the data actually being read. The **unbounded**
+  producers do **not** intern: `atoms.char_atom` and the C char/atom result
+  helpers (`_list_unify.c`/`_lists_core.c`'s `char_atom_obj`,
+  `_chars_core.c`'s `atom_from_str`) build the cell with `PyTuple_Pack`
+  directly, because `char_type/2` enumerates the whole Unicode alphabet
+  (~49,000 alphabetic characters) and interning there would pin one immortal
+  string per character ever enumerated. Equality is unaffected either way —
+  interning is only the fast path. Residual, recorded: `sub_atom/5` and
+  `atom_concat/3` go through `mint`, so an enumeration over a long atom
+  still pins one immortal string per enumerated substring; the fix, if it is
+  ever needed, is a non-interning sibling of `mint` for enumerators.
 - The compiler is free to emit atom **constants** (`("bar",)` folds into
   `co_consts`; verified `compile('x=("bar",)').co_consts == (('bar',), …)`,
   marshal-clean). A constant unmarshalled from a `.pyc` is *not* the minted

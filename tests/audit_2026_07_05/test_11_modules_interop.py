@@ -86,9 +86,11 @@ def test_F002_match_charlist_equals_string(tmp_path):
         M2(S) <- match(r"\\d+", S)
         R4(S, R) <- replace(r"b", "X", S, R)
     ''', "f002")
-    assert len(list(solve(m.M2(["1", "2", "3"]), module=m))) == 1
+    char_list = [char_atom("1"), char_atom("2"), char_atom("3")]
+    assert len(list(solve(m.M2(char_list), module=m))) == 1
     R = Var()
-    assert _values(m.R4(["a", "b", "c"], R), R, m) == ["aXc"]
+    assert _values(m.R4([char_atom("a"), char_atom("b"), char_atom("c")], R),
+                   R, m) == ["aXc"]
 
 
 def test_F002_charlist_repr_false_positive(tmp_path):
@@ -99,7 +101,7 @@ def test_F002_charlist_repr_false_positive(tmp_path):
     ''', "f002b")
     # char-list "a" contains no quote; the repr "['a']" does — current code
     # falsely succeeds by scanning the repr
-    assert list(solve(m.SQ(["a"]), module=m)) == []
+    assert list(solve(m.SQ([char_atom("a")]), module=m)) == []
 
 
 def test_F003_user_defined_match_not_hijacked(tmp_path):
@@ -121,7 +123,7 @@ def test_F004_invalid_pattern_catchable(tmp_path):
     ''', "f004")
     R = Var()
     out = _values(m.CatchRegex(R), R, m)
-    assert [str(v) for v in out] == ["caught"]
+    assert out == [mint("caught")]
 
 
 def test_F004_replace_unbound_repl_fails_cleanly():
@@ -182,7 +184,7 @@ def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
         Pair(X) <- (Dyn(r"x", "x", "one"), Dyn(r"x", "x", "two"), X is "ok")
     ''', "f007b")
     X = Var()
-    assert _values(m.Pair(X), X, m) == ["ok"]
+    assert _values(m.Pair(X), X, m) == [mint("ok")]
 
 
 def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
@@ -930,5 +932,5 @@ def test_guard_units_mismatch_catchable(tmp_path):
         T(R) <- catch(eval_(3(Metre) + 2(Second), Q), UnitsMismatch(_), (R is caught))
     ''', "unitsm")
     r = Var()
-    out = [str(deref(r)) for _ in call("T", r, module=_logic(mod))]
+    out = [deref(r) for _ in call("T", r, module=_logic(mod))]
     assert out == [mint("caught")]

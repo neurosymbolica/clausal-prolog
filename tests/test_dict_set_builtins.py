@@ -25,6 +25,7 @@ from clausal.logic.solve import solve, query
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Call, LoadName, DictTerm, SetTerm
 from clausal.import_hook import _load_module
+from clausal.logic.atoms import char_atom, is_atom, mint, spelling
 
 _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -636,15 +637,19 @@ class TestClausalIntegration:
         """get_name/2 uses sub_dict to extract a name field."""
         # nv
         name_var = Var()
-        sols = self._capture("get_name", DictTerm({"name": "Alice", "age": 30}), name_var)
+        sols = self._capture(
+            "get_name",
+            DictTerm({mint("name"): "Alice", mint("age"): 30}),
+            name_var,
+        )
         assert sols
         assert sols[0][1] == "Alice"
 
     def test_is_admin(self):
         # nv
         from clausal.logic.solve import call as lc_call
-        admin = DictTerm({"name": "Bob", "role": "admin"})
-        user = DictTerm({"name": "Alice", "role": "user"})
+        admin = DictTerm({mint("name"): "Bob", mint("role"): mint("admin")})
+        user = DictTerm({mint("name"): "Alice", mint("role"): mint("user")})
         assert list(lc_call("is_admin", admin, module=self.logic_mod))
         assert not list(lc_call("is_admin", user, module=self.logic_mod))
 
@@ -765,7 +770,7 @@ class TestInOperatorDictSet:
 
     def test_pair_in_dict_filter_by_key(self):
         # nv
-        d = DictTerm({"x": 42, "y": 99})
+        d = DictTerm({mint("x"): 42, mint("y"): 99})
         v = Var()
         sols = self._capture("find_value", v, d)
         assert len(sols) == 1

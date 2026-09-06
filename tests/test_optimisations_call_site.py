@@ -18,10 +18,11 @@ from tests.test_callsite_specialization import _make_locked_pred_cls
 
 def _case_eligible_literal_arg():
     callee_cls, _ = _make_locked_pred_cls("color_e3", [
-        ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+        (mint("red"),), (mint("green"),), (mint("blue"),),
+        (mint("yellow"),), (mint("purple"),),
     ])
     x = Var()
-    body = [Call(func=LoadName(name="color_e3"), args=["red", x], kwargs=[])]
+    body = [Call(func=LoadName(name="color_e3"), args=[mint("red"), x], kwargs=[])]
     clause = Clause(head=Compound("caller", (x,)), body=body)
     base_globals = {"color_e3": callee_cls}
     return clause, base_globals
@@ -29,7 +30,8 @@ def _case_eligible_literal_arg():
 
 def _case_ineligible_variable_arg():
     callee_cls, _ = _make_locked_pred_cls("color_e3v", [
-        ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+        (mint("red"),), (mint("green"),), (mint("blue"),),
+        (mint("yellow"),), (mint("purple"),),
     ])
     x, y = Var(), Var()
     body = [Call(func=LoadName(name="color_e3v"), args=[y, x], kwargs=[])]

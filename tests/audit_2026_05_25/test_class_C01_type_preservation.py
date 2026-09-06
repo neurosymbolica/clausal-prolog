@@ -18,6 +18,8 @@ Findings tested here:
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
+
 
 def test_F018_seglist_walk_promotes_all_char_str_to_str():
     """Under the user-confirmed Liskov "strings-as-lists" rule,
@@ -43,7 +45,7 @@ def test_F018_seglist_walk_promotes_all_char_str_to_str():
     # Case A: walk yields all-1-char-str list → promote to str.
     X = Var()
     unify(X, "ello", Trail())
-    sl = SegList([ConcreteSeg(["h"]), VarSeg(X)])
+    sl = SegList([ConcreteSeg([char_atom("h")]), VarSeg(X)])
     walked = sl.__walk__()
     assert walked == "hello", (
         f"all-1-char-str walked list should promote to str 'hello', "
@@ -75,10 +77,11 @@ def test_F020_seglist_add_accepts_str():
     """
     from clausal.terms import SegList, ConcreteSeg
 
-    sl = SegList([ConcreteSeg(["a", "b"])])
+    sl = SegList([ConcreteSeg([char_atom("a"), char_atom("b")])])
 
     # Control: SegList + list works today.
-    assert sl + ["c", "d"] == ["a", "b", "c", "d"]
+    abcd = [char_atom(c) for c in "abcd"]
+    assert sl + [char_atom("c"), char_atom("d")] == abcd
 
     # Contract: SegList + str should also work.
     try:
@@ -97,11 +100,13 @@ def test_F020_seglist_add_accepts_str():
         )
 
     # Both directions should yield the concatenation in the natural order.
-    assert forward == ["a", "b", "c", "d"], (
-        f"SegList + 'cd' expected to equal ['a','b','c','d'], got {forward!r}"
+    assert forward == abcd, (
+        f"SegList + 'cd' expected to equal the char-atom list of 'abcd', "
+        f"got {forward!r}"
     )
-    assert backward == ["c", "d", "a", "b"], (
-        f"'cd' + SegList expected to equal ['c','d','a','b'], got {backward!r}"
+    assert backward == [char_atom(c) for c in "cdab"], (
+        f"'cd' + SegList expected to equal the char-atom list of 'cdab', "
+        f"got {backward!r}"
     )
 
 
@@ -120,7 +125,7 @@ def test_F033_head_list_unify_output_preserves_str():
 
     target = Var()
     H, T = Var(), Var()
-    unify(H, "h", Trail())
+    unify(H, char_atom("h"), Trail())
     unify(T, "ello", Trail())  # str-typed tail
     _head_list_unify_output(target, [H], T, [], Trail())
 
@@ -154,9 +159,9 @@ def test_F042_body_multi_star_unify_promotes_str_when_provable():
     target = Var()
     H, S, R = Var(), Var(), Var()
     trail = Trail()
-    unify(H, "h", trail)
+    unify(H, char_atom("h"), trail)
     unify(S, "ell", trail)
-    unify(R, "o", trail)
+    unify(R, char_atom("o"), trail)
     segments = [("fixed", [H]), ("star", S), ("fixed", [R])]
 
     bound = None
@@ -210,8 +215,8 @@ def test_F043_build_star_list_preserves_str_for_list_of_chars():
 
     # _build_star_list with star bound to a list-of-1-char-strs.
     X = Var()
-    unify(X, ["e", "l", "l", "o"], Trail())
-    r1 = _build_star_list(["h"], X, [])
+    unify(X, [char_atom(c) for c in "ello"], Trail())
+    r1 = _build_star_list([char_atom("h")], X, [])
     assert r1 == "hello", (
         f"_build_star_list with list-of-chars star: expected str 'hello', "
         f"got {r1!r} (type={type(r1).__name__})"
@@ -223,8 +228,8 @@ def test_F043_build_star_list_preserves_str_for_list_of_chars():
 
     # _build_multi_star_list with star bound to a list-of-1-char-strs.
     Z = Var()
-    unify(Z, ["e", "l", "l", "o"], Trail())
-    r2 = _build_multi_star_list([("fixed", ["h"]), ("star", Z)])
+    unify(Z, [char_atom(c) for c in "ello"], Trail())
+    r2 = _build_multi_star_list([("fixed", [char_atom("h")]), ("star", Z)])
     assert r2 == "hello", (
         f"_build_multi_star_list with list-of-chars star: expected str "
         f"'hello', got {r2!r} (type={type(r2).__name__})"
@@ -239,7 +244,7 @@ def test_F043_build_star_list_preserves_str_for_list_of_chars():
     W = Var()
     Inner = Var()
     unify(W, SegString(["el", VarSeg(Inner), "o"]), Trail())
-    r3 = _build_multi_star_list([("fixed", ["h"]), ("star", W)])
+    r3 = _build_multi_star_list([("fixed", [char_atom("h")]), ("star", W)])
     assert isinstance(r3, SegString), (
         f"_build_multi_star_list with non-ground SegString star: expected "
         f"a SegString container (prefix 'hel', var hole, suffix 'o'), got "

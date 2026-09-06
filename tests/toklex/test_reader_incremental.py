@@ -18,7 +18,7 @@ class TestBatch:
         assert items[1].term == (":-", ("bar", VarRef(0)), ("foo", VarRef(0)))
         assert items[1].var_names == {0: "X"}
         assert items[2].term == ("dynamic", ("/", mint("baz"), 1))
-        assert items[4].term == ("-->", "greet", [mint("hello")])
+        assert items[4].term == ("-->", mint("greet"), [mint("hello")])
 
     def test_shared_var_numbering_across_head_and_body(self):
         (item,) = read_module("p(X, Y) :- q(Y, X).\n")

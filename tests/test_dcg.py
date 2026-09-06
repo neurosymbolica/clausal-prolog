@@ -62,10 +62,10 @@ class TestAtomHeadDispatch:
         r = mod.module_dict["r"]
         foo = mod.module_dict["foo"]
         bar = mod.module_dict["bar"]
-        assert _succeeds("phrase", r(foo), ["F"], module=mod)
-        assert not _succeeds("phrase", r(foo), ["B"], module=mod)
-        assert _succeeds("phrase", r(bar), ["B"], module=mod)
-        assert not _succeeds("phrase", r(bar), ["F"], module=mod)
+        assert _succeeds("phrase", r(foo), [mint("F")], module=mod)
+        assert not _succeeds("phrase", r(foo), [mint("B")], module=mod)
+        assert _succeeds("phrase", r(bar), [mint("B")], module=mod)
+        assert not _succeeds("phrase", r(bar), [mint("F")], module=mod)
 
     def test_dcg_atom_head_no_compound_match(self, tmp_path):
         """An atom-head clause must NOT match a compound input."""
@@ -83,11 +83,11 @@ class TestAtomHeadDispatch:
         assert mod.module_dict["ve"] == mint("ve")
         ve = lambda *args: ("ve", *args)
         # r(foo) only the atom clause
-        assert _succeeds("phrase", r(foo), ["atom"], module=mod)
-        assert not _succeeds("phrase", r(foo), ["compound"], module=mod)
+        assert _succeeds("phrase", r(foo), [mint("atom")], module=mod)
+        assert not _succeeds("phrase", r(foo), [mint("compound")], module=mod)
         # r(ve(foo)) only the compound clause
-        assert _succeeds("phrase", r(ve(foo)), ["compound"], module=mod)
-        assert not _succeeds("phrase", r(ve(foo)), ["atom"], module=mod)
+        assert _succeeds("phrase", r(ve(foo)), [mint("compound")], module=mod)
+        assert not _succeeds("phrase", r(ve(foo)), [mint("atom")], module=mod)
 
     def test_plain_rule_atom_head_dispatch(self, tmp_path):
         """Core (non-DCG) regression: plain ``<-`` rule with atom heads."""
@@ -146,13 +146,13 @@ class TestTerminals:
         # nv
         mod = _load("t1", 'hi >> (["hello"])\n', tmp_path)
         cls = mod.module_dict["hi"]
-        assert _succeeds("phrase", cls, ["hello"], module=mod)
+        assert _succeeds("phrase", cls, [mint("hello")], module=mod)
 
     def test_multi_terminal(self, tmp_path):
         # nv
         mod = _load("t2", 'greet >> (["hello", "world"])\n', tmp_path)
         cls = mod.module_dict["greet"]
-        assert _succeeds("phrase", cls, ["hello", "world"], module=mod)
+        assert _succeeds("phrase", cls, [mint("hello"), mint("world")], module=mod)
 
     def test_empty_terminal(self, tmp_path):
         # nv
@@ -180,8 +180,8 @@ class TestNonTerminals:
         )
         mod = _load("nt1", src, tmp_path)
         cls = mod.module_dict["abcd"]
-        assert _succeeds("phrase", cls, ["a", "c"], module=mod)
-        assert not _succeeds("phrase", cls, ["a"], module=mod)
+        assert _succeeds("phrase", cls, [mint("a"), mint("c")], module=mod)
+        assert not _succeeds("phrase", cls, [mint("a")], module=mod)
 
     def test_non_terminal_with_args(self, tmp_path):
         # nv
@@ -299,7 +299,7 @@ class TestConjunction:
         )
         mod = _load("cj1", src, tmp_path)
         cls = mod.module_dict["xy"]
-        assert _succeeds("phrase", cls, ["x", "y"], module=mod)
+        assert _succeeds("phrase", cls, [mint("x"), mint("y")], module=mod)
 
     def test_and_conjunction(self, tmp_path):
         # nv
@@ -310,7 +310,7 @@ class TestConjunction:
         )
         mod = _load("cj2", src, tmp_path)
         cls = mod.module_dict["ab_and"]
-        assert _succeeds("phrase", cls, ["a", "b"], module=mod)
+        assert _succeeds("phrase", cls, [mint("a"), mint("b")], module=mod)
 
 
 # ── Disjunction ──────────────────────────────────────────────────────────────
@@ -322,10 +322,10 @@ class TestDisjunction:
         src = 'letter >> (["a"] or ["b"] or ["c"])\n'
         mod = _load("dj1", src, tmp_path)
         cls = mod.module_dict["letter"]
-        assert _succeeds("phrase", cls, ["a"], module=mod)
-        assert _succeeds("phrase", cls, ["b"], module=mod)
-        assert _succeeds("phrase", cls, ["c"], module=mod)
-        assert not _succeeds("phrase", cls, ["d"], module=mod)
+        assert _succeeds("phrase", cls, [mint("a")], module=mod)
+        assert _succeeds("phrase", cls, [mint("b")], module=mod)
+        assert _succeeds("phrase", cls, [mint("c")], module=mod)
+        assert not _succeeds("phrase", cls, [mint("d")], module=mod)
 
 
 # ── Negation ─────────────────────────────────────────────────────────────────
@@ -338,9 +338,9 @@ class TestNegation:
         mod = _load("neg1", src, tmp_path)
         cls = mod.module_dict["not_a"]
         # Should succeed for non-'a' inputs.
-        assert _succeeds("phrase", cls, ["b"], module=mod)
+        assert _succeeds("phrase", cls, [mint("b")], module=mod)
         # Should fail for 'a' input.
-        assert not _succeeds("phrase", cls, ["a"], module=mod)
+        assert not _succeeds("phrase", cls, [mint("a")], module=mod)
 
 
 # ── If-then-else ─────────────────────────────────────────────────────────────
@@ -359,11 +359,11 @@ class TestIfThenElse:
         mod = _load("ite1", src, tmp_path)
         cls = mod.module_dict["a_or_c"]
         # "a" matches condition → then branch "b"
-        assert _succeeds("phrase", cls, ["a", "b"], module=mod)
+        assert _succeeds("phrase", cls, [mint("a"), mint("b")], module=mod)
         # "c" doesn't match "a" condition → else branch "c"
-        assert _succeeds("phrase", cls, ["c"], module=mod)
+        assert _succeeds("phrase", cls, [mint("c")], module=mod)
         # "b" doesn't match either path
-        assert not _succeeds("phrase", cls, ["b"], module=mod)
+        assert not _succeeds("phrase", cls, [mint("b")], module=mod)
 
     def test_if_then_else_terminal_branches(self, tmp_path):
         """R2: If-then-else with terminal (list) branches must not crash.
@@ -434,7 +434,7 @@ class TestPhrase:
         src = 'hi >> (["hello", "world"])\n'
         mod = _load("ph1", src, tmp_path)
         cls = mod.module_dict["hi"]
-        assert _succeeds("phrase", cls, ["hello", "world"], module=mod)
+        assert _succeeds("phrase", cls, [mint("hello"), mint("world")], module=mod)
 
     def test_phrase_2_fail(self, tmp_path):
         # nv
@@ -502,26 +502,33 @@ class TestFixtureIntegration:
     def test_greeting(self):
         # nv
         cls = self.module_dict["greeting"]
-        assert _succeeds("phrase", cls, ["hello", "world"], module=self.mod)
-        assert not _succeeds("phrase", cls, ["hi"], module=self.mod)
+        assert _succeeds(
+            "phrase", cls, [mint("hello"), mint("world")], module=self.mod
+        )
+        assert not _succeeds("phrase", cls, [mint("hi")], module=self.mod)
 
     def test_noun_phrase(self):
         # nv
         cls = self.module_dict["noun_phrase"]
-        assert _succeeds("phrase", cls, ["the", "dog"], module=self.mod)
-        assert _succeeds("phrase", cls, ["a", "bird"], module=self.mod)
-        assert not _succeeds("phrase", cls, ["the", "fish"], module=self.mod)
+        assert _succeeds("phrase", cls, [mint("the"), mint("dog")], module=self.mod)
+        assert _succeeds("phrase", cls, [mint("a"), mint("bird")], module=self.mod)
+        assert not _succeeds(
+            "phrase", cls, [mint("the"), mint("fish")], module=self.mod
+        )
 
     def test_sentence(self):
         # nv
         cls = self.module_dict["sentence"]
         assert _succeeds(
             "phrase", cls,
-            ["the", "dog", "chases", "the", "cat"],
+            [mint("the"), mint("dog"), mint("chases"), mint("the"), mint("cat")],
             module=self.mod,
         )
         assert not _succeeds(
-            "phrase", cls, ["the", "dog", "chases"], module=self.mod
+            "phrase",
+            cls,
+            [mint("the"), mint("dog"), mint("chases")],
+            module=self.mod,
         )
 
     def test_digit_with_args(self):
@@ -538,7 +545,7 @@ class TestFixtureIntegration:
         # nv
         assert _succeeds(
             "valid_sentence",
-            ["the", "dog", "sees", "a", "bird"],
+            [mint("the"), mint("dog"), mint("sees"), mint("a"), mint("bird")],
             module=self.mod,
         )
 
@@ -555,8 +562,8 @@ class TestFixtureIntegration:
     def test_not_a(self):
         # nv
         cls = self.module_dict["not_a"]
-        assert _succeeds("phrase", cls, ["b"], module=self.mod)
-        assert not _succeeds("phrase", cls, ["a"], module=self.mod)
+        assert _succeeds("phrase", cls, [mint("b")], module=self.mod)
+        assert not _succeeds("phrase", cls, [mint("a")], module=self.mod)
 
 
 # ── State threading (Triska-style) ─────────────────────────────────────────
@@ -975,7 +982,7 @@ class TestDCGStringInput:
         cls = mod.module_dict["tok"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), mint("x"), module=mod):
+        for _ in call("phrase", cls(v), "x", module=mod):
             results.append(deref(v))
         assert results == [mint("x")]
 
@@ -987,7 +994,7 @@ class TestDCGStringInput:
         cls = mod.module_dict["vowel"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), mint("e"), module=mod):
+        for _ in call("phrase", cls(v), "e", module=mod):
             results.append(deref(v))
         assert results == [mint("e")]
         # Consonant should fail
@@ -1002,7 +1009,7 @@ class TestDCGStringInput:
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds10", src, tmp_path)
         cls = mod.module_dict["hi"]
-        assert _succeeds("phrase", cls, ["h", "i"], module=mod)
+        assert _succeeds("phrase", cls, [mint("h"), mint("i")], module=mod)
 
 
 # ── P3-1 Task 5 audit: cons-rule retirement vs the DCG strings-as-lists ──────
@@ -1051,8 +1058,8 @@ class TestConsRuleRetirementDCGAudit:
         src = 'hi >> (["h", "i"])\n'
         mod = _load("t5_dcg1", src, tmp_path)
         cls = mod.module_dict["hi"]
-        assert _succeeds("phrase", cls, ["h", "i"], module=mod)
-        assert not _succeeds("phrase", cls, ["h", "o"], module=mod)
+        assert _succeeds("phrase", cls, [mint("h"), mint("i")], module=mod)
+        assert not _succeeds("phrase", cls, [mint("h"), mint("o")], module=mod)
 
     def test_phrase_bare_str_rule_reference_fails_cleanly(self, tmp_path):
         # nv — a bare str standing in for the RULE (not the input list) is
@@ -1082,11 +1089,17 @@ class TestStringTerminals:
         assert not _succeeds("phrase", cls, "ho", module=mod)
 
     def test_string_terminal_list_input(self, tmp_path):
-        """A string terminal also matches a char-list caller (strings-as-lists)."""
+        """A string terminal also matches a char-list caller (strings-as-lists).
+
+        THE FLIP (spec §6.2): the chars of "hi" are the ATOMS (("h",), ("i",)).
+        The pre-flip list of 1-char STRINGS is a different term (a list of two
+        one-character strings) and no longer matches.
+        """
         src = 'hi >> ("hi")\n'
         mod = _load("st2", src, tmp_path)
         cls = mod.module_dict["hi"]
-        assert _succeeds("phrase", cls, ["h", "i"], module=mod)
+        assert _succeeds("phrase", cls, [char_atom("h"), char_atom("i")], module=mod)
+        assert not _succeeds("phrase", cls, ["h", "i"], module=mod)
 
     def test_string_terminal_in_sequence(self, tmp_path):
         """String terminal threaded between other terminals."""
@@ -1117,8 +1130,8 @@ class TestCallNonterminal:
         mod = _load("cn1", src, tmp_path)
         run = mod.module_dict["run"]
         greeting = mod.module_dict["greeting"]
-        assert _succeeds("phrase", run(greeting), ["hello"], module=mod)
-        assert not _succeeds("phrase", run(greeting), ["bye"], module=mod)
+        assert _succeeds("phrase", run(greeting), [mint("hello")], module=mod)
+        assert not _succeeds("phrase", run(greeting), [mint("bye")], module=mod)
 
 
 # ── Prolog import round-trip of {..} embedded goals ──────────────────────────

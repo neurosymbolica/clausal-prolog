@@ -235,7 +235,18 @@ class _ClauseReifier:
     def term(self, node):
         """Reify in term context: tuples stay tuples."""
         if isinstance(node, ast.Constant):
-            return node.value
+            value = node.value
+            # THE FLIP (spec §5.1): a quoted atom literal (``'widget'``, or
+            # ``"widget"`` in the default ``-double_quotes(atom)`` mode)
+            # compiles to the arity-0 CELL constant, and the reified
+            # vocabulary spells an atom ``Atom(name)`` -- the same term a
+            # BARE name reifies to below.  Without this the two spellings of
+            # one atom reified to two different vocabulary terms and the
+            # renderer had no atom to render.
+            if (type(value) is tuple and len(value) == 1
+                    and type(value[0]) is str):
+                return Atom(value[0])
+            return value
         if isinstance(node, ast.List):
             return [self.term(elt) for elt in node.elts]
         if isinstance(node, ast.Tuple):
@@ -252,11 +263,20 @@ class _ClauseReifier:
             # dict: "dicts appear as themselves" (F013).
             if any(key is not None and not _is_const_key(key) for key in node.keys):
                 return simple_ast.DictLiteral(
-                    keys=[self.term(key) for key in node.keys],
+                    keys=[self._dict_key(key) for key in node.keys],
                     values=[self.term(value) for value in node.values],
                 )
+            # An all-constant dict stays a RAW dict, so its keys must stay
+            # HASHABLE: an atom key is kept as the arity-0 CELL the compiler
+            # emitted, not lifted to the unhashable ``Atom`` vocabulary node
+            # ``term`` gives it elsewhere.  A cell IS the atom (spec §5.1), and
+            # it is exactly what the runtime ``DictTerm`` a pattern builds
+            # holds, so the two still unify.  Mixed literals take the
+            # ``DictLiteral`` branch above, where ``Atom`` is the right shape
+            # and hashability is not required.
             return {
-                self.term(key): self.term(value)
+                key.value if isinstance(key, ast.Constant) else self.term(key):
+                    self.term(value)
                 for key, value in zip(node.keys, node.values)
                 if key is not None
             }
@@ -283,6 +303,25 @@ class _ClauseReifier:
         if isinstance(node, ast.Call):
             return self._call(node)
         raise ReifyError(f"cannot reify: {ast.unparse(node)}")
+
+    def _dict_key(self, node):
+        """A ``DictLiteral`` key, with the two atom spellings unified.
+
+        A BARE atom key (``{foo: V}``) is rewritten by the compiler to
+        ``$intern_atom('foo')`` and would reify as that ``Goal``; a QUOTED one
+        (``{'baz': V}``) compiles to the arity-0 cell and reifies as ``Atom``
+        through :meth:`term`.  They are the same term, so they reify to the
+        same vocabulary node — otherwise the renderer (which writes both back
+        as a bare name, ``_dict_key_ast``) would not round-trip.
+        """
+        if node is None:
+            return None
+        reified = self.term(node)
+        if isinstance(reified, Goal) and reified.name == "$intern_atom":
+            args = reified.args
+            if len(args) == 1 and isinstance(args[0], str):
+                return Atom(args[0])
+        return reified
 
     # -- constructor calls ----------------------------------------------------
 
@@ -390,6 +429,13 @@ class _ClauseReifier:
         for key, value in kwargs.items():
             if key in ("position", "_position"):
                 fields["position"] = _const_value(value)
+            elif (name == "DictLiteral" and key == "keys"
+                  and isinstance(value, (ast.List, ast.Tuple))):
+                # The SPLAT dict form arrives here as a ``DictLiteral(...)``
+                # constructor call rather than through the ``ast.Dict`` branch
+                # of ``term``, so it needs the same key normalisation -- an
+                # atom key must reify identically with and without a splat.
+                fields[key] = [self._dict_key(elt) for elt in value.elts]
             else:
                 fields[key] = self.term(value)
         return cls(**fields)
@@ -466,6 +512,41 @@ def _deref_seq_field(value, what):
     if not isinstance(value, (list, tuple)):
         raise RenderError(f"cannot render {what}: expected a sequence, got {value!r}")
     return value
+
+
+def _is_dotted_identifier(dotted: str) -> bool:
+    """True iff every dotted segment is a plain Python identifier."""
+    parts = dotted.split(".")
+    return all(part.isidentifier() and part != _LAMBDA_ARROW_MARKER
+               for part in parts)
+
+
+def _single_quoted(text: str) -> str:
+    """``foo bar`` -> ``\'foo bar\'`` -- a single-quoted clausal ATOM literal."""
+    body = (text.replace("\\", "\\\\").replace("'", "\\'")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"))
+    return "'" + body + "'"
+
+
+def _double_quoted(text: str) -> str:
+    """``foo bar`` -> ``"foo bar"`` -- a double-quoted clausal STRING literal."""
+    body = (text.replace("\\", "\\\\").replace('"', '\\"')
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"))
+    return '"' + body + '"'
+
+
+def _raw_source(text: str) -> ast.Name:
+    """An ``ast`` node that unparses to *text* VERBATIM.
+
+    ``ast.unparse`` writes a ``Name``'s ``id`` through untouched and never
+    validates it -- the property ``_name_ast``'s own refusal exists to
+    protect.  Used here deliberately, for the two literal forms whose QUOTE
+    CHARACTER carries meaning in ``.clausal`` source (``'atom'`` vs
+    ``"string"``) and which ``ast.Constant`` therefore cannot express: the
+    unparser picks quotes by content, and the ``.clausal`` reader reads them
+    as different terms.
+    """
+    return ast.Name(id=text, ctx=ast.Load())
 
 
 class _ClauseRenderer:
@@ -567,7 +648,16 @@ class _ClauseRenderer:
             # prints via ``_name_ast``'s dotted-chain support) while the
             # RAW str keeps the separator everywhere else.
             from clausal.logic.atoms import demangle_for_display
-            return self._name_ast(demangle_for_display(value.name))
+            display = demangle_for_display(value.name)
+            if not isinstance(display, str):
+                raise RenderError(f"cannot render non-string name: {display!r}")
+            if _is_dotted_identifier(display):
+                return self._name_ast(display)
+            # THE FLIP (spec §6.7/§7): an atom whose spelling is not an
+            # identifier renders SINGLE-quoted -- ``'foo bar'`` is an atom in
+            # every ``-double_quotes`` mode, so the output re-reads as the
+            # atom it rendered.  (Before this it was a ``RenderError``.)
+            return _raw_source(_single_quoted(display))
         if isinstance(value, Goal):
             return self._goal_ast(value)
         if value is None or value is Ellipsis:
@@ -582,8 +672,16 @@ class _ClauseRenderer:
             return ast.Constant(value)
         if isinstance(value, (int, float, complex)):
             return ast.Constant(value)
-        if isinstance(value, (str, bytes)):
+        if isinstance(value, bytes):
             return ast.Constant(value)
+        if isinstance(value, str):
+            # THE FLIP (spec §6.7/§7): a ``str`` is a STRING and has to come
+            # back DOUBLE-quoted -- single quotes would re-read as an atom in
+            # every mode.  Written directly rather than through a blanket
+            # re-quoting pass over the unparsed text, which could not tell a
+            # string apart from a quoted atom (or from a ``b'…'`` literal,
+            # which it used to rewrite by mistake).
+            return _raw_source(_double_quoted(value))
         if isinstance(value, (ModuleDirective, PythonCode)):
             raise RenderError(
                 f"cannot render {type(value).__name__} — only clause bodies "
@@ -1323,11 +1421,13 @@ def render_source(term):
     """Render a reified term to ``.clausal`` source text — :func:`render_ast`
     followed by ``ast.unparse`` with the ``<-`` arrow repair.
 
-    Every text literal in the output is a STRING (an atom renders as a bare
-    or quoted NAME, never as a literal — see ``_ClauseRenderer.term``), so
-    the text is re-quoted with ``fmt.emit._prefer_double_quotes``: a string
-    has to come back double-quoted or it would re-read as an atom under the
-    engine's default ``-double_quotes(atom)`` mode (spec §6.7/§7).
+    The renderer writes each text literal with the quote character its TERM
+    requires (spec §6.7/§7): an atom is a bare name when its spelling is an
+    identifier and ``'…'`` when it is not, and a string is always ``"…"`` —
+    single quotes would re-read as an atom in every mode.  Both are written
+    at the node, not by a re-quoting pass over the unparsed text: such a pass
+    cannot tell a string from a quoted atom, and the one that used to run
+    here also rewrote ``b'…'`` bytes literals by mistake.
 
     The directive itself is NOT prepended here, and that is deliberate
     (Task 11 ruling): this function renders ONE clause or term, not a
@@ -1338,8 +1438,7 @@ def render_source(term):
     carries a string — otherwise the module's ``"…"`` literals re-read as
     atoms.
     """
-    from clausal.fmt.emit import _prefer_double_quotes
     node = render_ast(term)
     if isinstance(node, ast.Expr):
-        return _prefer_double_quotes(_unparse_clause(node))
-    return _prefer_double_quotes(_tighten_nested_arrows(ast.unparse(node)))
+        return _unparse_clause(node)
+    return _tighten_nested_arrows(ast.unparse(node))

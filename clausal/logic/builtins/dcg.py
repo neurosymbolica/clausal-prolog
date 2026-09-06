@@ -9,7 +9,7 @@ from clausal.logic.predicate import (
 from clausal.logic.trampoline import DONE, StepGenerator
 
 from clausal.logic.builtins._registry import _trampoline_builtin
-from clausal.logic.runtime._seg_helpers import normalize_seg_input
+from clausal.logic.runtime._seg_helpers import normalize_seg_input, str_chars
 
 
 # ── _DCG_ARITY_NOTE ──────────────────────────────────────────────────────────
@@ -26,6 +26,23 @@ from clausal.logic.runtime._seg_helpers import normalize_seg_input
 # args actually built keeps the refusal's claim true in that case, which is the
 # case worth catching — it is exactly the "you named a plain predicate, not a
 # nonterminal" mistake.
+
+
+
+def _elements(seq):
+    """The list of TERMS *seq* denotes, for a ``str``/``bytes``/list.
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings §6.2): the elements of a
+    ``str`` are its CHAR ATOMS, so ``list(s)`` -- which yields 1-char
+    ``str`` values, each a one-element STRING -- is no longer the right
+    splat.  ``bytes`` keeps the codes model (``list(b)`` yields ints) and a
+    list is already elements.
+    """
+    if type(seq) is str:
+        return str_chars(seq)
+    if isinstance(seq, bytes):
+        return list(seq)
+    return seq
 
 
 def _empty_remainder_like(list_val):
@@ -168,17 +185,16 @@ def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
         # F070 Mode A: when S0 and lst are both str, ``s0_val[n:]`` is a
         # str slice; when both are bytes, ``s0_val[n:]`` is a bytes slice.
         # (list, str, bytes) are all handled uniformly by normalising both
-        # sides to list for the ``==`` comparison so we accept either input
-        # type.  ``list(str)`` yields 1-char strs and ``list(bytes)`` yields
-        # ints — they never compare equal across the str/bytes divide,
-        # preserving the no-cross-unification guard.
+        # sides to a list of ELEMENTS for the comparison so we accept either
+        # input type.  A ``str`` splats to its CHAR ATOMS (``str_chars``,
+        # THE FLIP: ``list("hi")`` would give 1-char STRINGS, which are one
+        # ``[("h",)]`` list each and unify with nothing) and ``bytes``
+        # splats to ints — they never compare equal across the str/bytes
+        # divide, preserving the no-cross-unification guard.
         n = len(lst_val)
-        # Normalise both sides to list for the comparison so we accept
-        # any combination of (list, str, bytes) without cross-type errors.
         s0_pref = s0_val[:n]
-        lst_pref = lst_val
-        s0_pref_norm = list(s0_pref) if isinstance(s0_pref, (str, bytes)) else s0_pref
-        lst_pref_norm = list(lst_pref) if isinstance(lst_pref, (str, bytes)) else lst_pref
+        s0_pref_norm = _elements(s0_pref)
+        lst_pref_norm = _elements(lst_val)
         # F009: unify the prefix element-wise rather than comparing with
         # Python ``==`` — a Var terminal (e.g. ``sequence([X], "a", S)``)
         # must bind to the corresponding S0 element, which ``==`` never does.
@@ -198,9 +214,7 @@ def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
         elif isinstance(lst_val, str) and isinstance(s_val, str):
             expected = lst_val + s_val
         else:
-            lst_as_list = list(lst_val) if isinstance(lst_val, (str, bytes)) else lst_val
-            s_as_list = list(s_val) if isinstance(s_val, (str, bytes)) else s_val
-            expected = lst_as_list + s_as_list
+            expected = _elements(lst_val) + _elements(s_val)
         mark = trail.mark()
         if unify(s0, expected, trail):
             yield (_proceed, None)

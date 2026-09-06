@@ -71,7 +71,10 @@ Free(Q) <- (not Busy(Q))
 _CROSSED = "MyPred(X, Y) <- (Goalx(Y), Goaly(X))\n"
 _RENAMED = "MyPred(P, Q) <- (Goalx(P), Goaly(Q))\n"
 _NEGATIVE = "Positive(N) <- (N < 0)\n"
-_STRING_NOT_ATOM = 'Tagged(1, "ok"),\n'
+# THE FLIP (spec §7): ``"ok"`` is an ATOM under the default
+# ``-double_quotes(atom)`` -- the source has to DECLARE the chars mode for
+# its ``"ok"`` to be the string this negative case is about.
+_STRING_NOT_ATOM = '-double_quotes(chars)\nTagged(1, "ok"),\n'
 
 
 @pytest.fixture(scope="module")

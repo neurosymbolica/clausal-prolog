@@ -211,21 +211,21 @@ def test_bool_matches_int_element(build):
     assert len(_solutions(build, "bools", 7)) == 1
 
 
-def test_string_matches_same_named_atom(build):
-    """P3-1 §5/R2: an atom is an interned global ``str`` — its name IS the
-    atom, so ``a`` (the atom) and ``"a"`` (the string) are the SAME term
-    under both ``unify()`` and ``hash``/``__eq__``. ``mixed`` holds both
-    ``a`` and ``"a"`` as distinct list *elements* (still two occurrences,
-    per the duplicates contract this module pins elsewhere), so querying
-    either spelling now matches both positions.
+def test_a_string_query_does_not_match_the_atom_elements(build):
+    """THE FLIP (spec §7): in the fixture's default ``-double_quotes(atom)``
+    mode BOTH ``a`` and ``"a"`` in ``mixed``'s list are the ATOM ``("a",)``
+    -- two occurrences of one term, per the duplicates contract this module
+    pins elsewhere -- so the ATOM matches both positions and a Python
+    ``str`` (a STRING) matches neither.
 
-    (Formerly ``test_string_does_not_match_same_named_atom``, inverted —
-    the pre-pivot per-module atom-class identity this test pinned no
-    longer exists.)
+    (INVERTS the P3-1 §5/R2 reading that a str and the atom were the same
+    term, which had itself inverted the pre-pivot per-module atom-class
+    identity.)
     """
-    assert len(_solutions(build, "mixed", "a")) == 2
     assert len(_solutions(build, "mixed", _atom(build, "a"))) == 2
-    assert len(_solutions(build, "mixed", "b")) == 0
+    assert len(_solutions(build, "mixed", mint("a"))) == 2
+    assert len(_solutions(build, "mixed", "a")) == 0
+    assert len(_solutions(build, "mixed", mint("b"))) == 0
 
 
 def test_atom_from_a_different_module_matches(build):

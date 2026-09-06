@@ -368,7 +368,9 @@ class TestF008WalkFunctorTerms:
         wl, wt = walk([X]), walk((X,))
         A = Var()
         assert unify(A, "i!", trail)
-        ws = walk(SegList([ConcreteSeg(["h"]), VarSeg(A)]))
+        # THE FLIP: a char list holds CHAR ATOMS; ``["h"]`` is a list of one
+        # one-character STRING and would not promote.
+        ws = walk(SegList([ConcreteSeg([char_atom("h")]), VarSeg(A)]))
         trail.reset()
         assert wl == [1] and wt == (1,)
         assert ws == "hi!"  # F018 Liskov promotion (prior art regression guard)
@@ -584,20 +586,22 @@ class TestAttrHooks:
 
 
 class TestUnifyModes:
-    def test_str_list_cons_rule_retired_all_modes(self, trail):
-        """P3-1 Task 5 (§1b): the str~char-list cons rule is retired — a
-        bare str no longer unifies with a list in any mode, including
-        the empty/empty case. (Formerly
-        ``test_str_list_liskov_all_modes``, pinning the retired rule.)
+    def test_str_char_atom_list_unifies_all_modes(self, trail):
+        """THE FLIP (spec §6.2): a string IS the list of its CHAR ATOMS, so
+        the str~list arm is back — INVERTING the P3-1 Task 5 retirement this
+        test pinned. What stays false is the pre-flip 1-char-``str`` reading:
+        ``"a"`` is a one-element STRING, not a char, so it never unifies
+        with the char atom.
         """
         H, T = Var(), Var()
-        assert not unify("ab", [H, T], trail)
-        assert deref(H) is H and deref(T) is T  # unbound: no partial bindings leaked
+        assert unify("ab", [H, T], trail)
+        assert deref(H) == char_atom("a") and deref(T) == char_atom("b")
         trail.reset()
-        assert not unify("", [], trail) and not unify([], "", trail)
-        assert not unify("a", ["a"], trail)
-        assert not unify(["ab"], "ab", trail)   # 'ab' is 2 chars
-        assert not unify("ab", ["a"], trail)
+        assert unify("", [], trail) and unify([], "", trail)
+        assert unify("a", [char_atom("a")], trail)
+        assert not unify("a", ["a"], trail)     # "a" is a STRING, not a char
+        assert not unify([mint("ab")], "ab", trail)   # 'ab' is 2 chars
+        assert not unify("ab", [char_atom("a")], trail)
 
     def test_bytes_list_codes_all_modes(self, trail):
         H = Var()

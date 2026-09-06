@@ -18,12 +18,31 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     simple_to_trampoline,
+    to_text,
 )
 _subprocess = _import_stdlib("subprocess")
 _time = _import_stdlib("time")
 
+
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import DictTerm
+
+
+def _env_text(val) -> str:
+    """The ``str`` an environment variable name or value denotes.
+
+    Text is a string or an ATOM, and both convert to the same ``str``
+    (spec §9.4).
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings): ``str()`` on the arity-0
+    cell ``("bar",)`` is the Python tuple repr ``"('bar',)"``, so every text
+    coercion in a wrapper routes through ``to_text`` instead.  A term that is
+    not text keeps the old ``str`` fallback -- this position never promised a
+    type contract.
+    """
+    text = to_text(val)
+    return text if text is not None else str(val)
+
 
 
 # ── Predicates ──────────────────────────────────────────────────────────
@@ -159,12 +178,14 @@ def _process_create_4(program, args, options, result_var, trail, k):
         if isinstance(env_val, DictTerm):
             import os as _os_mod
             merged = dict(_os_mod.environ)
-            merged.update({str(k_): str(deref(v_)) for k_, v_ in env_val.data.items()})
+            merged.update({_env_text(k_): _env_text(deref(v_))
+                           for k_, v_ in env_val.data.items()})
             run_kwargs["env"] = merged
         elif isinstance(env_val, dict):
             import os as _os_mod
             merged = dict(_os_mod.environ)
-            merged.update({str(k_): str(deref(v_)) for k_, v_ in env_val.items()})
+            merged.update({_env_text(k_): _env_text(deref(v_))
+                           for k_, v_ in env_val.items()})
             run_kwargs["env"] = merged
 
     try:

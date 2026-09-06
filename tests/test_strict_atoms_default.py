@@ -43,9 +43,9 @@ def test_implicit_atoms_mints_undeclared_bare_atom():
     """`-implicit_atoms` opts into loose auto-accept: an undeclared bare
     atom is accepted into the global dict (today's default behavior).
 
-    P3-1 Task 2 (§1b/R2): the accepted value is now the plain interned str
-    itself, not a minted ``PredicateMeta`` class -- the shared-identity
-    claim (``mod.x is predicate_builtins[x]``) is unaffected.
+    THE FLIP (spec §5.1/§5.2): the accepted value is the arity-0 CELL, and
+    the sharing claim is stated as EQUALITY -- the pool stays keyed by the
+    SPELLING.
     """
     assert "sad_implicit_red" not in predicate_builtins
     source = (
@@ -54,8 +54,8 @@ def test_implicit_atoms_mints_undeclared_bare_atom():
         "ColorImplicit(sad_implicit_red),\n"
     )
     mod = _load_inline_clausal("_sad_implicit_mints", source)
-    assert isinstance(predicate_builtins["sad_implicit_red"], str)
-    assert mod.sad_implicit_red is predicate_builtins["sad_implicit_red"]
+    assert predicate_builtins["sad_implicit_red"] == mint("sad_implicit_red")
+    assert mod.sad_implicit_red == predicate_builtins["sad_implicit_red"]
 
 
 def test_implicit_atoms_parenthesised_form():
@@ -66,8 +66,8 @@ def test_implicit_atoms_parenthesised_form():
         "ColorImplicitParen(sad_implicit_paren_blue),\n"
     )
     mod = _load_inline_clausal("_sad_implicit_paren", source)
-    # P3-1 Task 2 (§1b/R2): accepted atoms are plain strs, not classes.
-    assert isinstance(mod.sad_implicit_paren_blue, str)
+    # THE FLIP: accepted atoms are arity-0 cells.
+    assert mod.sad_implicit_paren_blue == mint("sad_implicit_paren_blue")
 
 
 def test_implicit_atoms_rejects_arguments():
@@ -138,11 +138,11 @@ def test_undeclared_bare_atom_raises_by_default():
 def test_implicit_atoms_still_mints_after_flip():
     """`-implicit_atoms` remains the loose escape hatch after the flip.
 
-    P3-1 Task 2 (§1b/R2): accepted atoms are plain strs, not classes.
+    THE FLIP: accepted atoms are arity-0 cells.
     """
     source = "-implicit_atoms\nColorStill(sad_still_green),\n"
     mod = _load_inline_clausal("_sad_still_mints", source)
-    assert isinstance(mod.sad_still_green, str)
+    assert mod.sad_still_green == mint("sad_still_green")
 
 
 def test_strict_atoms_deprecation_warns_once_per_process():
@@ -252,7 +252,7 @@ class TestDeclarednessIsPerModuleNotProcessWide:
             "-private([t7leak_ba_atom])\n"
             "P(t7leak_ba_atom),\n",
         )
-        assert isinstance(mod_owner.t7leak_ba_atom, str)
+        assert mod_owner.t7leak_ba_atom == mint("t7leak_ba_atom")
         with pytest.raises(NameError) as exc_info:
             _load_inline_clausal(
                 "_t7leak_ba_user_after",
@@ -272,7 +272,7 @@ class TestDeclarednessIsPerModuleNotProcessWide:
             "-private([t7leak_ctrl_atom])\n"
             "P(t7leak_ctrl_atom),\n",
         )
-        assert isinstance(mod.t7leak_ctrl_atom, str)
+        assert mod.t7leak_ctrl_atom == mint("t7leak_ctrl_atom")
 
     def test_dict_key_atom_raises_even_though_another_module_declared_it_first(self):
         """Dict-key path (``import_hook._make_intern_atom``) counterpart of
@@ -310,7 +310,7 @@ class TestDeclarednessIsPerModuleNotProcessWide:
             "-private([t7leakd_ba_atom])\n"
             "P(t7leakd_ba_atom),\n",
         )
-        assert isinstance(mod_owner.t7leakd_ba_atom, str)
+        assert mod_owner.t7leakd_ba_atom == mint("t7leakd_ba_atom")
         with pytest.raises(NameError) as exc_info:
             _load_inline_clausal(
                 "_t7leakd_ba_user_after",
@@ -386,9 +386,9 @@ class TestPredicateBuiltinsPoolSplit:
             "-private([Sub])\n"
             "P(Sub),\n",
         )
-        assert isinstance(mod_a.Sub, str) and mod_a.Sub == "Sub"
+        assert mod_a.Sub == mint("Sub")
         assert mod_a.Sub is not simple_ast.Sub
-        assert predicate_builtins["Sub"] is mod_a.Sub
+        assert predicate_builtins["Sub"] == mod_a.Sub
         # runtime_builtins is untouched by the declaration.
         assert runtime_builtins["Sub"] is simple_ast.Sub
 
@@ -398,7 +398,7 @@ class TestPredicateBuiltinsPoolSplit:
             "-private([Sub])\n"
             "Q(Sub),\n",
         )
-        assert mod_b.Sub is mod_a.Sub  # global identity by spelling
+        assert mod_b.Sub == mod_a.Sub  # global equality by spelling
 
     def test_simple_ast_name_raises_regardless_of_load_order(self):
         """Same pattern as ``TestDeclarednessIsPerModuleNotProcessWide``:
@@ -419,7 +419,7 @@ class TestPredicateBuiltinsPoolSplit:
             "-private([Mult])\n"
             "P(Mult),\n",
         )
-        assert isinstance(mod_owner.Mult, str)
+        assert mod_owner.Mult == mint("Mult")
 
         with pytest.raises(NameError) as exc_info:
             _load_inline_clausal(
@@ -429,7 +429,7 @@ class TestPredicateBuiltinsPoolSplit:
             )
         msg = str(exc_info.value)
         assert "strict_atoms" in msg
-        assert mint("Mult") in msg
+        assert "Mult" in msg
 
     def test_dict_key_path_also_rejects_simple_ast_name(self):
         """``import_hook._make_intern_atom`` (the dict-key path) counterpart:
@@ -470,7 +470,8 @@ class TestPredicateBuiltinsPoolSplit:
 
         v = Var()
         results = [walk(deref(v)) for _ in _call(mod.Result, v)]
-        assert results == [(mint("Call"), 1, 2)]
+        # A cell's slot 0 is the plain SPELLING.
+        assert results == [("Call", 1, 2)]
         # Locally shadowed to the plain interned spelling (P3-2 Task 2,
         # R6 revised) -- no longer the runtime class in THIS module.
         assert mod.Call == mint("Call")
@@ -479,8 +480,9 @@ class TestPredicateBuiltinsPoolSplit:
         # deliberate) and the runtime pool itself is untouched -- purely a
         # per-module rebinding, so every OTHER module still sees the real
         # simple_ast.Call class under that name.
-        assert mint("Call") not in predicate_builtins
-        assert runtime_builtins[mint("Call")] is simple_ast.Call
+        # Both pools stay keyed by the SPELLING (spec §6.4, last row).
+        assert "Call" not in predicate_builtins
+        assert runtime_builtins["Call"] is simple_ast.Call
 
     def test_generated_code_fixture_with_fstrings_and_arith_still_loads(self):
         """Regression: every clause's generated code constructs a bare
@@ -503,7 +505,7 @@ class TestPredicateBuiltinsPoolSplit:
         results = [
             getattr(deref(n), "__name__", deref(n)) for _ in _call(mod.ChkTag, n)
         ]
-        assert results == ["tagged_"]
+        assert results == [mint("tagged_")]
 
     def test_synthetic_future_runtime_name_still_raises(self):
         """Task 8 fix round 1 (Important, review-caught, RULING): the
@@ -553,7 +555,7 @@ class TestPredicateBuiltinsPoolSplit:
             "-private([Mult])\n"
             "P(Mult),\n",
         )
-        assert predicate_builtins[mint("Mult")] == mint("Mult")
+        assert predicate_builtins["Mult"] == mint("Mult")
 
         mod = _load_inline_clausal(
             "_p8_seedorder_arith",

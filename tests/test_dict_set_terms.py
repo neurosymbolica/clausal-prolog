@@ -100,7 +100,9 @@ class TestDictTermBasics:
         # nv
         d = DictTerm({"x": 1})
         s = term_str(d)
-        assert "'x': 1" in s
+        assert '"x": 1' in s
+        # ...and an ATOM key prints unquoted.
+        assert "x: 1" in term_str(DictTerm({mint("x"): 1}))
 
 
 # ── DictTerm unification ─────────────────────────────────────────────────────

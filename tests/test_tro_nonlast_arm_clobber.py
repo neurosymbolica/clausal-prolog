@@ -35,13 +35,13 @@ def prc_mod():
 def _prc_solutions(mod, k, n):
     lm = mod.__dict__["$module"]
     x = Var()
-    return sorted(str(deref(x)) for _ in call("Prc", k, n, x, module=lm))
+    return sorted((deref(x) for _ in call("Prc", k, n, x, module=lm)), key=repr)
 
 
 def _drv_solutions(mod):
     lm = mod.__dict__["$module"]
     x = Var()
-    return sorted(str(deref(x)) for _ in call("Drv", x, module=lm))
+    return sorted((deref(x) for _ in call("Drv", x, module=lm)), key=repr)
 
 
 class TestTroNonLastArmClobber:
@@ -59,13 +59,13 @@ class TestTroNonLastArmClobber:
 
     def test_recursion_alone(self, prc_mod):
         """Baseline: the tail recursion yields all three solutions on its own."""
-        assert len(_prc_solutions(prc_mod, "k", 2)) == 3
+        assert len(_prc_solutions(prc_mod, mint("k"), 2)) == 3
 
     def test_sibling_reentry_preserves_solutions(self, prc_mod):
         """THE regression: a deterministic sibling goal after the recursive
         call must not drop any solutions.  Drv(X) := Prc("k",2,X), Prc("w",0,_)
         — the sibling re-enters dispatch while the tail flag is pending."""
-        alone = _prc_solutions(prc_mod, "k", 2)
+        alone = _prc_solutions(prc_mod, mint("k"), 2)
         drv = _drv_solutions(prc_mod)
         assert drv == alone
         assert len(drv) == 3

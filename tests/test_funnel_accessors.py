@@ -198,15 +198,16 @@ class TestFunctorArity:
         assert functor_arity(42) is None
         assert functor_arity(None) is None
 
-    def test_str_is_atom_value(self):
-        # P3-1 Task 1 (R2, str-as-atom acceptance): a plain str is now an
-        # atom VALUE for functor_arity — it IS its own functor, arity 0 —
-        # same shape as test_predicate_meta_atom_class above. This inverts
-        # the pre-P3-1 "strings are out of functor_arity's domain" behavior
-        # (formerly asserted here as ``functor_arity("abc") is None``);
-        # see ``clausal/logic/predicate.py::is_atom_value``.
-        assert functor_arity("abc") == ("abc", 0)
-        assert functor_arity("") == ("", 0)
+    def test_atom_cell_is_an_atom_value_and_a_str_is_not(self):
+        # THE FLIP (spec §5.1) INVERTS the P3-1 str-as-atom-value reading:
+        # the ATOM is the arity-0 cell and answers ``(spelling, 0)``; a
+        # ``str`` is a STRING, i.e. a LIST, which is outside
+        # ``functor_arity``'s declared domain -- so ``None``, as it was
+        # before P3-1.
+        assert functor_arity(mint("abc")) == ("abc", 0)
+        assert functor_arity(mint("")) == ("", 0)
+        assert functor_arity("abc") is None
+        assert functor_arity("") is None
 
     @pytest.mark.parametrize(
         "term",

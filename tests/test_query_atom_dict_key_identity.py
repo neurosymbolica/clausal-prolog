@@ -206,11 +206,15 @@ def test_same_named_atom_from_a_second_load_is_not_conflated(tmp_path):
     assert _one(lambda V: reader.soft_read(DictTerm({atoms.query_date: 5}), V)) == 5
 
 
-def test_string_key_control_still_works(tmp_path):
-    """String keys lower to ``Constant`` — the immune baseline."""
+def test_double_quoted_key_is_an_atom_key(tmp_path):
+    """THE FLIP (spec §6.8/§7): the fixture's ``"query_date"`` key is the
+    ATOM under the default mode, so an ATOM-keyed dict is what it reads; a
+    Python ``str`` key is a STRING key and a different key."""
     reader = _load(tmp_path, "qk_str_reader", STR_READER_SRC)
-    profile = DictTerm({"query_date": 5})
-    assert _one(lambda V: reader.soft_read(profile, V)) == 5
+    assert _one(lambda V: reader.soft_read(
+        DictTerm({mint("query_date"): 5}), V)) == 5
+    assert _one(lambda V: reader.soft_read(
+        DictTerm({"query_date": 5}), V)) is None
 
 
 def test_int_key_control_still_works(tmp_path):

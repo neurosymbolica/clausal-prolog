@@ -122,8 +122,8 @@ def test_F003_edcg_sequence_of_plain_dcg_nonterminals(tmp_path):
         p >> (a, b)
     """)
     lm = _logic(m)
-    assert len(list(call("p", ["a", "b"], [], module=lm))) == 1
-    assert len(list(call("p", ["b", "a"], [], module=lm))) == 0
+    assert len(list(call("p", [mint("a"), mint("b")], [], module=lm))) == 1
+    assert len(list(call("p", [mint("b"), mint("a")], [], module=lm))) == 0
 
 
 def test_F003_guard_plain_dcg_sequence(tmp_path):
@@ -133,8 +133,8 @@ def test_F003_guard_plain_dcg_sequence(tmp_path):
         p >> (a, b)
     """)
     lm = _logic(m)
-    assert len(list(call("p", ["a", "b"], [], module=lm))) == 1
-    assert len(list(call("p", ["b", "a"], [], module=lm))) == 0
+    assert len(list(call("p", [mint("a"), mint("b")], [], module=lm))) == 1
+    assert len(list(call("p", [mint("b"), mint("a")], [], module=lm))) == 0
 
 
 def test_F003_guard_edcg_accumulator_with_plain_call(tmp_path):
@@ -147,7 +147,7 @@ def test_F003_guard_edcg_accumulator_with_plain_call(tmp_path):
     """)
     lm = _logic(m)
     out = Var()
-    vals = [out.value for _ in call("q", 0, out, ["w"], [], module=lm)]
+    vals = [out.value for _ in call("q", 0, out, [mint("w")], [], module=lm)]
     assert vals == [3]
 
 
@@ -593,7 +593,7 @@ def test_guard_bare_atom_automint(tmp_path):
     # -implicit_atoms: this test verifies the auto-mint behaviour itself
     m = _load(tmp_path, "-implicit_atoms\nv(X) <- (X is a10_minted_atom)")
     x = Var()
-    assert [str(v) for v in _values(m.v(x), x)] == [mint("a10_minted_atom")]
+    assert _values(m.v(x), x) == [mint("a10_minted_atom")]
 
 
 def test_guard_dcg_parse_generate_if_not_str(tmp_path):
@@ -605,16 +605,20 @@ def test_guard_dcg_parse_generate_if_not_str(tmp_path):
         hi >> ("hi")
     """)
     lm = _logic(m)
-    assert len(list(call("greeting", ["hello", "world"], [], module=lm))) == 1
+    assert len(list(call("greeting", [mint("hello"), mint("world")], [],
+                         module=lm))) == 1
     s = Var()
     assert len(list(call("greeting", s, [], module=lm))) == 1
-    assert len(list(call("opt", ["a", "b"], [], module=lm))) == 1
-    assert len(list(call("opt", ["c"], [], module=lm))) == 1
-    assert len(list(call("opt", ["a", "c"], [], module=lm))) == 0
-    assert len(list(call("nox", ["y"], [], module=lm))) == 1
-    assert len(list(call("nox", ["x"], [], module=lm))) == 0
+    assert len(list(call("opt", [mint("a"), mint("b")], [], module=lm))) == 1
+    assert len(list(call("opt", [mint("c")], [], module=lm))) == 1
+    assert len(list(call("opt", [mint("a"), mint("c")], [], module=lm))) == 0
+    assert len(list(call("nox", [mint("y")], [], module=lm))) == 1
+    assert len(list(call("nox", [mint("x")], [], module=lm))) == 0
+    # ``hi >> ("hi")`` is a STRING terminal routed through ``sequence//1``,
+    # so it consumes the string and, equivalently, its char-ATOM list.
     assert len(list(call("hi", "hi", "", module=lm))) == 1
-    assert len(list(call("hi", ["h", "i"], [], module=lm))) == 1
+    assert len(list(call("hi", [char_atom("h"), char_atom("i")], [],
+                         module=lm))) == 1
 
 
 def test_guard_dcg_pushback_and_meta_nonterminal(tmp_path):
@@ -627,13 +631,14 @@ def test_guard_dcg_pushback_and_meta_nonterminal(tmp_path):
     lm = _logic(m)
     rest = Var()
     n = 0
-    for _ in call("u", ["x", "y"], rest, module=lm):
+    for _ in call("u", [mint("x"), mint("y")], rest, module=lm):
         n += 1
         got = rest.value
-        # strings-as-lists: ["p","y"] may surface as "py" — both acceptable
-        assert got in (["p", "y"], "py")
+        # strings-as-lists: [("p",), ("y",)] may surface as "py" -- the
+        # same term either way (spec §6.2)
+        assert got in ([mint("p"), mint("y")], "py")
     assert n == 1
-    assert len(list(call("run", m.word, ["w"], [], module=lm))) == 1
+    assert len(list(call("run", m.word, [mint("w")], [], module=lm))) == 1
 
 
 def test_guard_qualified_import_and_var_rejection(tmp_path):

@@ -25,7 +25,9 @@ Messages use Clausal's f-string support for interpolation::
 
 from __future__ import annotations
 
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.modules.py import (
+    _import_stdlib, ModulePredicate, simple_to_trampoline, to_text,
+)
 
 _pylogging = _import_stdlib("logging")
 
@@ -50,12 +52,41 @@ _LEVEL_MAP = {
 }
 
 
+
+def _text(val) -> str:
+    """The ``str`` a logging argument denotes -- a name, a path, a format.
+
+    Spec §9.4: text is a string OR an ATOM, and both convert to the same
+    ``str``.  THE FLIP (2026-09-06-atoms-as-cells-strings) made the old
+    ``str(val)`` wrong here: ``str(("stderr",))`` is the tuple repr
+    ``"('stderr',)"``, which silently missed every name comparison below and
+    would have named a log file after a repr.  A non-text term still falls
+    back to ``str`` -- these positions are advisory, not a type contract.
+    """
+    text = to_text(val)
+    return text if text is not None else str(val)
+
+
+def _message_text(val) -> str:
+    """The text of a log MESSAGE, which may be any term.
+
+    Text (a string or an atom) crosses as itself; anything else is rendered
+    by the engine's own unquoted writer, so a compound logs as ``f(a, b)``
+    rather than as a Python tuple repr.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    from clausal.terms import term_str
+    return term_str(val, quoted=False)
+
+
 def _resolve_level(level: Any) -> int:
     """Convert a level name (string) or int to a Python logging level int."""
     level = deref(level)
     if isinstance(level, int):
         return level
-    name = str(level).lower()
+    name = _text(level).lower()
     return _LEVEL_MAP.get(name, _pylogging.NOTSET)
 
 
@@ -65,7 +96,7 @@ def _resolve_logger(logger_val: Any) -> _pylogging.Logger:
     if isinstance(logger_val, _pylogging.Logger):
         return logger_val
     # Treat as a logger name string.
-    return _pylogging.getLogger(str(logger_val))
+    return _pylogging.getLogger(_text(logger_val))
 
 
 # ── get_logger ────────────────────────────────────────────────────────────────
@@ -81,7 +112,7 @@ def _get_logger_1(logger_out, trail, k):
 def _get_logger_2(name, logger_out, trail, k):
     """get_logger/2: unify Logger with getLogger(Name)."""
     name = deref(name)
-    lg = _pylogging.getLogger(str(name))
+    lg = _pylogging.getLogger(_text(name))
     if unify(logger_out, lg, trail):
         yield None
 
@@ -123,72 +154,72 @@ def _log_3(logger, level, msg, trail, k):
     """log/3: log at an arbitrary level."""
     lg = _resolve_logger(logger)
     lv = _resolve_level(level)
-    lg.log(lv, "%s", str(deref(msg)))
+    lg.log(lv, "%s", _message_text(deref(msg)))
     yield None
 
 
 def _debug_1(msg, trail, k):
     """debug/1: log at DEBUG with default logger."""
-    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).debug("%s", str(deref(msg)))
+    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).debug("%s", _message_text(deref(msg)))
     yield None
 
 
 def _debug_2(logger, msg, trail, k):
     """debug/2: log at DEBUG level."""
     lg = _resolve_logger(logger)
-    lg.debug("%s", str(deref(msg)))
+    lg.debug("%s", _message_text(deref(msg)))
     yield None
 
 
 def _info_1(msg, trail, k):
     """info/1: log at INFO with default logger."""
-    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).info("%s", str(deref(msg)))
+    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).info("%s", _message_text(deref(msg)))
     yield None
 
 
 def _info_2(logger, msg, trail, k):
     """info/2: log at INFO level."""
     lg = _resolve_logger(logger)
-    lg.info("%s", str(deref(msg)))
+    lg.info("%s", _message_text(deref(msg)))
     yield None
 
 
 def _warning_1(msg, trail, k):
     """warning/1: log at WARNING with default logger."""
-    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).warning("%s", str(deref(msg)))
+    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).warning("%s", _message_text(deref(msg)))
     yield None
 
 
 def _warning_2(logger, msg, trail, k):
     """warning/2: log at WARNING level."""
     lg = _resolve_logger(logger)
-    lg.warning("%s", str(deref(msg)))
+    lg.warning("%s", _message_text(deref(msg)))
     yield None
 
 
 def _error_1(msg, trail, k):
     """error/1: log at ERROR with default logger."""
-    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).error("%s", str(deref(msg)))
+    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).error("%s", _message_text(deref(msg)))
     yield None
 
 
 def _error_2(logger, msg, trail, k):
     """error/2: log at ERROR level."""
     lg = _resolve_logger(logger)
-    lg.error("%s", str(deref(msg)))
+    lg.error("%s", _message_text(deref(msg)))
     yield None
 
 
 def _critical_1(msg, trail, k):
     """critical/1: log at CRITICAL with default logger."""
-    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).critical("%s", str(deref(msg)))
+    _pylogging.getLogger(_DEFAULT_LOGGER_NAME).critical("%s", _message_text(deref(msg)))
     yield None
 
 
 def _critical_2(logger, msg, trail, k):
     """critical/2: log at CRITICAL level."""
     lg = _resolve_logger(logger)
-    lg.critical("%s", str(deref(msg)))
+    lg.critical("%s", _message_text(deref(msg)))
     yield None
 
 
@@ -198,7 +229,7 @@ def _critical_2(logger, msg, trail, k):
 def _stream_handler_2(stream_name, handler_out, trail, k):
     """stream_handler/2: create a stream_handler for 'stdout' or 'stderr'."""
     stream_name = deref(stream_name)
-    name = str(stream_name).lower()
+    name = _text(stream_name).lower()
     if name == "stdout":
         h = _pylogging.StreamHandler(_sys.stdout)
     elif name == "stderr":
@@ -212,7 +243,7 @@ def _stream_handler_2(stream_name, handler_out, trail, k):
 def _file_handler_2(path, handler_out, trail, k):
     """file_handler/2: create a file_handler for the given path."""
     path = deref(path)
-    h = _pylogging.FileHandler(str(path))
+    h = _pylogging.FileHandler(_text(path))
     if unify(handler_out, h, trail):
         yield None
 
@@ -221,7 +252,7 @@ def _set_formatter_2(handler, fmt_str, trail, k):
     """set_formatter/2: set a Formatter on a handler."""
     handler = deref(handler)
     fmt_str = deref(fmt_str)
-    formatter = _pylogging.Formatter(str(fmt_str))
+    formatter = _pylogging.Formatter(_text(fmt_str))
     handler.setFormatter(formatter)
     yield None
 
@@ -257,13 +288,13 @@ def _basic_config_1(opts, trail, k):
     kwargs = {}
     if isinstance(opts, dict):
         for key, val in opts.items():
-            key = str(key)
+            key = _text(key)
             if key == "level":
                 kwargs["level"] = _resolve_level(val)
             elif key in ("format", "datefmt", "filename", "filemode"):
-                kwargs[key] = str(val)
+                kwargs[key] = _text(val)
             elif key == "stream":
-                name = str(val).lower()
+                name = _text(val).lower()
                 if name == "stdout":
                     kwargs["stream"] = _sys.stdout
                 elif name == "stderr":

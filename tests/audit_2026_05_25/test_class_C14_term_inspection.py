@@ -43,11 +43,10 @@ def test_F088_unpack_on_list_uses_cons_cell():
     cons-cell shape ``[".", head, tail]`` where ``tail`` is the rest
     of the list.
 
-    P3-1 Task 5 (\u00a71b/R2): the str~list cons rule is RETIRED, so
-    the str case is NO LONGER Liskov-symmetric with list -- a str is
-    now atomic, so ``unpack("abc", L)`` gives ``["abc"]``, not the
-    cons-cell shape (formerly asserted here as
-    ``[".", "a", "bc"]``).
+    THE FLIP (spec §6.4) INVERTS P3-1 Task 5's str-is-atomic reading: a
+    ``str`` is the LIST of its char atoms, so ``unpack("abc", L)`` is back
+    to the cons-cell shape ``[".", ("a",), "bc"]`` (the tail a ``str``
+    SLICE, R-S2).  The ATOM ``("abc",)`` is what decomposes as ``[atom]``.
     """
     L = Var()
     sols = _collect(
@@ -58,14 +57,22 @@ def test_F088_unpack_on_list_uses_cons_cell():
         f'[".", "a", ["b","c"]] under ISO cons-cell.'
     )
 
-    # P3-1 \u00a71b/R2: str is atomic -- unpack gives [self], not a cons cell.
+    # THE FLIP: the ATOM decomposes as [self]; the STRING decomposes as the
+    # cons cell of the char list it denotes.
     L2 = Var()
     sols2 = _collect(
         "unpack", 2, mint("abc"), L2, snap=lambda L=L2: deref(L)
     )
     assert sols2 == [[mint("abc")]], (
-        f'unpack("abc", L) bound L={sols2!r}; expected ["abc"] -- a str '
-        f'is its own atom under the retired cons rule (\u00a71b/R2).'
+        f'unpack(("abc",), L) bound L={sols2!r}; expected [("abc",)].'
+    )
+    L2b = Var()
+    sols2b = _collect(
+        "unpack", 2, "abc", L2b, snap=lambda L=L2b: deref(L)
+    )
+    assert sols2b == [[mint("."), mint("a"), "bc"]], (
+        f'unpack("abc", L) bound L={sols2b!r}; expected '
+        f'[".", ("a",), "bc"] -- a STRING is a list (spec §6.4).'
     )
 
     # Empty cases — nil atom.
@@ -75,42 +82,47 @@ def test_F088_unpack_on_list_uses_cons_cell():
         f'unpack([], L) bound L={sols3!r}; expected ["[]"].'
     )
     L4 = Var()
-    sols4 = _collect("unpack", 2, mint(""), L4, snap=lambda L=L4: deref(L))
+    sols4 = _collect("unpack", 2, "", L4, snap=lambda L=L4: deref(L))
     assert sols4 == [[mint("[]")]], (
         f'unpack("", L) bound L={sols4!r}; expected ["[]"].'
     )
 
 
-def test_F089_functor_and_univ_no_longer_agree_on_str_vs_list():
-    """P3-1 Task 5 (\u00a71b/R2): the str~list cons rule is RETIRED, so
-    ``functor/3`` on str vs list is NO LONGER Liskov-symmetric -- a str
-    is atomic (its own functor, arity 0); a list still decomposes as
-    the ISO cons cell (unaffected). (Formerly
-    ``test_F089_functor_and_univ_agree_on_str_vs_list``, which asserted
-    both gave ``(".", 2)`` and were equal.)
+def test_F089_functor_agrees_on_string_vs_char_list_and_diverges_on_the_atom():
+    """THE FLIP (spec §6.4): a STRING and its char-atom LIST are one term, so
+    ``functor/3`` answers ``(".", 2)`` for both -- symmetric again, INVERTING
+    P3-1 Task 5's "str is atomic" divergence.  What diverges now is the ATOM
+    ``("abc",)``, which is its own functor at arity 0.
     """
     F1, A1 = Var(), Var()
-    sols_str = _collect(
+    sols_atom = _collect(
         "functor", 3, mint("abc"), F1, A1,
         snap=lambda F=F1, A=A1: (deref(F), deref(A)),
+    )
+    F1b, A1b = Var(), Var()
+    sols_str = _collect(
+        "functor", 3, "abc", F1b, A1b,
+        snap=lambda F=F1b, A=A1b: (deref(F), deref(A)),
     )
     F2, A2 = Var(), Var()
     sols_lst = _collect(
         "functor", 3, [mint("a"), mint("b"), mint("c")], F2, A2,
         snap=lambda F=F2, A=A2: (deref(F), deref(A)),
     )
-    assert sols_str == [(mint("abc"), 0)], (
-        f'functor("abc", F, A) returned {sols_str!r}; expected '
-        f'[("abc", 0)] -- a str is its own atom functor under the '
-        f'retired cons rule (\u00a71b/R2).'
+    assert sols_atom == [(mint("abc"), 0)], (
+        f'functor(("abc",), F, A) returned {sols_atom!r}; expected '
+        f'[(("abc",), 0)] -- an atom is its own functor at arity 0.'
     )
     assert sols_lst == [(mint("."), 2)], (
         f'functor(["a","b","c"], F, A) returned {sols_lst!r}; '
-        f'expected [(".", 2)] under ISO cons-cell (list unaffected).'
+        f'expected [(".", 2)] under ISO cons-cell.'
     )
-    assert sols_str != sols_lst, (
-        f"str and list functor/3 results must now DIVERGE (the retired "
-        f"rule was what made them agree). Got str={sols_str!r}, "
+    assert sols_str == sols_lst, (
+        f"a STRING and its char-atom LIST are one term, so functor/3 must "
+        f"AGREE. Got str={sols_str!r}, list={sols_lst!r}."
+    )
+    assert sols_atom != sols_lst, (
+        f"the ATOM diverges from the list. Got atom={sols_atom!r}, "
         f"list={sols_lst!r}."
     )
 
@@ -119,7 +131,7 @@ def test_F089_functor_and_univ_no_longer_agree_on_str_vs_list():
     # nil atom).
     F3, A3 = Var(), Var()
     sols_empty_str = _collect(
-        "functor", 3, mint(""), F3, A3,
+        "functor", 3, "", F3, A3,
         snap=lambda F=F3, A=A3: (deref(F), deref(A)),
     )
     F4, A4 = Var(), Var()

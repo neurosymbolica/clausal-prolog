@@ -156,6 +156,7 @@ def test_inline_lambda_in_a_surviving_goal_keeps_its_arrow(head_fold_rules):
 def test_runaway_rule_hits_the_bound(tmp_path, head_fold_rules):
     runaway = tmp_path / "runaway.clausal"
     runaway.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause])
 
         RewriteClause(Clause(H, G, P), Clause(H, G, P)),
@@ -173,6 +174,7 @@ def test_a_rule_that_invents_a_goal_is_refused_loudly(tmp_path):
     """
     inventive = tmp_path / "inventive.clausal"
     inventive.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
         RewriteClause(Clause(H, [G], P), Clause(H, [G, Goal("extra", [], [])], P)),
@@ -192,6 +194,7 @@ def test_a_rule_that_puts_a_lambda_in_the_head_is_refused(tmp_path):
     """
     lambda_head = tmp_path / "lambda_head.clausal"
     lambda_head.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
         # carry the lambda term out of the body goal and into the head
@@ -210,6 +213,7 @@ def test_a_head_that_cannot_be_rendered_at_all_is_refused(tmp_path):
     """
     callable_head = tmp_path / "callable_head.clausal"
     callable_head.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
         RewriteClause(Clause(Goal(NAME, ARGS, KW), GOALS, POS), Clause(HEAD2, GOALS, POS)) <- (
@@ -233,6 +237,7 @@ def _rename_rule(tmp_path):
     """old(...) becomes new(...) -- a one-goal modification, same goal count."""
     rule = tmp_path / "rename.clausal"
     rule.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
         RewriteClause(Clause(H, GOALS, P), Clause(H, GOALS2, P)) <- (
@@ -294,6 +299,7 @@ def test_equal_count_reorder_is_refused(tmp_path):
     not read the swap as two modifications and shuffle their comments."""
     swap = tmp_path / "swap.clausal"
     swap.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause])
 
         RewriteClause(Clause(H, [G1, G2], P), Clause(H, [G2, G1], P)),
@@ -306,6 +312,7 @@ def test_modification_with_count_change_is_refused(tmp_path):
     """Modify one goal AND drop another: neither correspondence covers it."""
     mixed = tmp_path / "mixed.clausal"
     mixed.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
         RewriteClause(Clause(H, [Goal("old", A, K), _], P), Clause(H, [Goal("new", A, K)], P)),
@@ -319,6 +326,7 @@ def test_modified_goal_that_is_not_a_goal_is_refused(tmp_path):
     LITERAL -- no faithful node, so the driver refuses rather than corrupt."""
     grouping = tmp_path / "grouping.clausal"
     grouping.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
         RewriteClause(Clause(H, [G], P), Clause(H, [[G, Goal("extra", [], [])]], P)),
@@ -336,10 +344,22 @@ def test_modified_goal_rewrite_is_idempotent(tmp_path):
     assert again.fired == []
 
 
-def test_folds_a_single_char_string(head_fold_rules):
-    # The rule answer's head args come back as the promoted str "t", not
-    # ["t"] (F018 strings-as-lists promotion at reconstruction sites); the
-    # renderer must read that as the char list, not refuse the head.
+def test_folds_a_single_char_atom(head_fold_rules):
+    # THE FLIP (spec §7): ``"t"`` in the default ``-double_quotes(atom)``
+    # mode is the ATOM ("t",), so the folded head renders as the bare name.
     result = rewrite_source('p(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
-    assert result.text == 'p("t") <- (\n    m(1)\n)\n'
+    assert result.text == 'p(t) <- (\n    m(1)\n)\n'
     assert len(result.fired) == 1
+
+
+def test_folds_a_single_char_string(head_fold_rules):
+    # The chars twin, written as the STRING the ``is`` goal binds rather than
+    # through ``-double_quotes(chars)``: the driver reifies each clause
+    # SEGMENT on its own (``reify_ast(statement, source=segment)``), so a
+    # module-level directive does not reach it -- recorded as a parked
+    # follow-up, invisible before THE FLIP because both modes agreed then.
+    # What this pins is the renderer's half: a folded STRING head argument
+    # comes back DOUBLE-quoted, and is not demoted to an atom.
+    from clausal.reflection import Clause, Goal, render_source
+    folded = Clause(Goal("p", ["t"], []), [Goal("m", [1], [])], None)
+    assert render_source(folded) == 'p("t") <- (m(1))'

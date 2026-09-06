@@ -28,6 +28,7 @@ from clausal.logic.solve import solve
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Compound, DictTerm, KWTerm, SetTerm
+from clausal.logic.atoms import char_atom, is_atom, mint, spelling
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -182,35 +183,40 @@ class TestStandardOrderShape:
 class TestAtomKeyCollapse:
     """``_standard_order_key``'s atom branch after the collapse.
 
-    Pre-pivot, a str and a same-spelled zero-arity declared-class atom got
-    DIFFERENT keys (``(_ORD_ATOM, name, 0)`` vs. ``(_ORD_ATOM, name, 1)``) so
-    ties broke str-first.  Post-pivot (§1b/R2: a str IS the atom), there is
-    one shape: ``(_ORD_ATOM, name)``.  ``make_predicate(name, [])`` still
-    legitimately produces a zero-arity ``PredicateMeta`` class (a
-    general-purpose test/infra helper, and the same class shape a bare
-    0-arity PREDICATE declared with call syntax -- ``-module(m, [p()])``
-    -- mints for real; the P3-1 Task 7 sweep confirmed this is not a
-    retireable pre-pivot straggler, and P3-3 Task 7 moved the spelling off
-    ``make_atom``, which now returns the atom str), so it must key
-    IDENTICALLY to the same-spelled str, not merely adjacently.
+    THE FLIP (spec §6.5): the ATOM is the arity-0 cell and keys
+    ``(_ORD_ATOM, spelling)``; a ``str`` is a STRING and keys in the
+    SEQUENCE band as the char list it denotes.  That INVERTS the P3-1
+    "a str IS the atom, one key shape" reading below it -- what is still
+    true, and what this class is really about, is that a zero-arity
+    ``PredicateMeta`` class atom keys IDENTICALLY to the atom of the same
+    spelling, not merely adjacently.  (``make_predicate(name, [])`` still
+    legitimately produces that class: it is a general-purpose test/infra
+    helper and the shape a bare 0-arity PREDICATE declared with call
+    syntax -- ``-module(m, [p()])`` -- mints for real.)
     """
 
-    def test_str_atom_key_shape_has_no_discriminator(self):
-        assert _standard_order_key("work") == (_ORD_ATOM, "work")
+    def test_atom_key_shape_has_no_discriminator(self):
+        assert _standard_order_key(mint("work")) == (_ORD_ATOM, "work")
 
-    def test_class_atom_key_matches_same_spelled_str_key(self):
+    def test_string_keys_in_the_sequence_band_as_its_char_list(self):
+        assert _standard_order_key("work") == _standard_order_key(
+            [char_atom(c) for c in "work"]
+        )
+        assert _standard_order_key("work")[0] != _ORD_ATOM
+
+    def test_class_atom_key_matches_same_spelled_atom_key(self):
         from clausal.logic.predicate import make_predicate
 
         atom_cls = make_predicate("work", [])
-        assert _standard_order_key(atom_cls) == _standard_order_key("work")
+        assert _standard_order_key(atom_cls) == _standard_order_key(mint("work"))
         assert _standard_order_key(atom_cls) == (_ORD_ATOM, "work")
 
-    def test_same_spelled_str_and_class_atom_sort_adjacent_equal(self):
+    def test_same_spelled_atom_and_class_atom_sort_adjacent_equal(self):
         from clausal.logic.predicate import make_predicate
 
         atom_cls = make_predicate("work", [])
         # Neither is ordered strictly before the other by the key.
-        ordered = _key_sorted(["work", atom_cls])
+        ordered = _key_sorted([mint("work"), atom_cls])
         assert {_standard_order_key(x) for x in ordered} == {(_ORD_ATOM, "work")}
 
     def test_mixed_atoms_strings_numbers_compounds_key_shape(self):
@@ -300,7 +306,7 @@ class TestCellStandardOrder:
 
     def test_cell_atom_keys_in_atom_band(self):
         assert _standard_order_key(("bar",)) == (_ORD_ATOM, "bar")
-        assert _standard_order_key(("bar",)) == _standard_order_key("bar")
+        assert _standard_order_key(("bar",)) == _standard_order_key(mint("bar"))
 
     def test_cell_keys_in_compound_band_arity_first(self):
         k = _standard_order_key(("f", 1, 2))

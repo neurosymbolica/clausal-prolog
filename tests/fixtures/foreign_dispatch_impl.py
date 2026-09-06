@@ -13,6 +13,7 @@ without importing any engine base class, so that this file keeps passing only
 as long as the single-argument protocol is honoured.
 """
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import deref, unify
 from clausal.logic.trampoline import DONE
 
@@ -20,7 +21,11 @@ from clausal.logic.trampoline import DONE
 def _foreign_pair_dispatch(this_generator, _proceed, _fail, _catcher,
                            key, value_var, trail):
     """foreign_pair(Key, Value) — a two-argument foreign goal."""
-    table = {"a": 1, "b": 2}
+    # THE FLIP: the ``.clausal`` caller's ``a``/``b`` are ATOMS; a foreign
+    # adapter that wanted plain text would route the key through
+    # ``clausal.logic.to_python.to_python`` (spec §9.1).  This one keys by the
+    # term, so its table holds the atoms.
+    table = {mint("a"): 1, mint("b"): 2}
     val = table.get(deref(key))
     if val is None:
         yield (_fail, DONE)

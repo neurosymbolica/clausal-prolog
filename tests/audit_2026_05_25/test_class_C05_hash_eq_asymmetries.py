@@ -13,6 +13,8 @@ Findings tested here:
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
+
 
 def test_F017_segstring_unhashable():
     """SegString is *unconditionally* unhashable, matching Python's
@@ -66,7 +68,10 @@ def test_F019_seglist_segstring_eq_asymmetry():
     """
     from clausal.terms import SegList, SegString, ConcreteSeg
 
-    sl = SegList([ConcreteSeg(["a", "b", "c"])])
+    # THE FLIP (spec §6.2): a char is the ATOM ("a",); a list of 1-char
+    # ``str`` values is a list of one-element STRINGS, a different term.
+    chars = [char_atom(c) for c in "abc"]
+    sl = SegList([ConcreteSeg(chars)])
     ss = SegString(["abc"])
 
     # Under the fix, both should accept both container types (symmetric).
@@ -82,10 +87,10 @@ def test_F019_seglist_segstring_eq_asymmetry():
         f"(ss == 'abc') is {ss == 'abc'}. These should be equal."
     )
 
-    assert (sl == ["a", "b", "c"]) == (ss == ["a", "b", "c"]), (
+    assert (sl == chars) == (ss == chars), (
         f"Symmetric fix: SegList.__eq__ and SegString.__eq__ should agree "
-        f"on list containers. (sl == [...]) is {sl == ['a','b','c']}, "
-        f"(ss == [...]) is {ss == ['a','b','c']}. These should be equal."
+        f"on list containers. (sl == [...]) is {sl == chars}, "
+        f"(ss == [...]) is {ss == chars}. These should be equal."
     )
 
 
@@ -110,7 +115,7 @@ def test_F025_seglist_segstring_hashability_asymmetry():
     from clausal.terms import SegList, SegString, ConcreteSeg, VarSeg
 
     # Ground SegList: is_ground() is True.
-    sl_ground = SegList([ConcreteSeg(["a", "b", "c"])])
+    sl_ground = SegList([ConcreteSeg([char_atom(c) for c in "abc"])])
     assert sl_ground.is_ground(), (
         f"SegList([ConcreteSeg(['a','b','c'])]) should be ground. "
         f"is_ground() returned {sl_ground.is_ground()}"

@@ -389,12 +389,31 @@ class TestUnifiedCLI:
         assert result.returncode == 0
         assert "clausal-translate" in result.stdout or "translate" in result.stdout
 
-    def test_roundtrip_flag(self):
+    def test_roundtrip_flag(self, tmp_path):
         # nv
+        # THE FLIP (spec §7): a ``.pl`` whose ``"..."`` mean STRINGS has to
+        # DECLARE that mode for the trip to be byte-identical -- the clausal
+        # side spells it ``-double_quotes(chars)`` and the return leg writes
+        # it back out, so a source that relied on the reader's implicit
+        # default comes back one directive richer.  ``edge_graph.pl`` (the
+        # former input here) is exactly such a source; this fixture states
+        # its mode, which is what the round trip is for.
         import subprocess
+        src = tmp_path / "roundtrip.pl"
+        src.write_text(
+            ':- double_quotes(chars).\n'
+            '\n'
+            'edge(1, 2).\n'
+            '\n'
+            'reach(X, Y) :-\n'
+            '    edge(X, Y).\n'
+            '\n'
+            'test("edge 1 2") :-\n'
+            '    edge(1, 2).\n',
+            encoding="utf-8",
+        )
         result = subprocess.run(
-            ["python", "-m", "clausal.tools.translate", "--roundtrip",
-             str(GOLDEN / "edge_graph.pl")],
+            ["python", "-m", "clausal.tools.translate", "--roundtrip", str(src)],
             capture_output=True, text=True,
         )
-        assert result.returncode == 0
+        assert result.returncode == 0, result.stderr

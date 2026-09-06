@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.terms import (
     Compound,
     KWTerm,
@@ -85,7 +86,7 @@ class TestCompound:
 
     def test_str_with_args(self):
         # nv
-        assert str(Compound("foo", (1, "x"))) == "foo(1, 'x')"
+        assert str(Compound("foo", (1, "x"))) == 'foo(1, "x")'
 
     def test_nested_str(self):
         # nv
@@ -121,7 +122,7 @@ class TestPythonLiteralsAreTerms:
     def test_str_is_term(self):
         # nv
         t = "hello"
-        assert term_str(t) == "'hello'"
+        assert term_str(t) == '"hello"'
 
     def test_bool_true_is_term(self):
         # nv
@@ -257,8 +258,9 @@ class TestTermStr:
         assert "1" in result and "2" in result
 
     def test_str(self):
-        # nv
-        assert term_str("abc") == "'abc'"
+        # nv — a STRING is double-quoted; the ATOM is what quotes with ''.
+        assert term_str("abc") == '"abc"'
+        assert term_str(mint("abc")) == "abc"
 
     def test_bytes(self):
         # nv

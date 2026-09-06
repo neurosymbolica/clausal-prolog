@@ -55,17 +55,17 @@ def test_F050_split_with_join_preserves_str_parts():
     # First confirm the split direction yields ['a','b','c'] (precondition).
     parts = Var()
     split_results = []
-    for _ in call("split_with", ",", "a,b,c", parts, module=mod):
+    for _ in call("split_with", char_atom(","), "a,b,c", parts, module=mod):
         split_results.append(deref(parts))
-    assert split_results == [[char_atom("a"), char_atom("b"), char_atom("c")]], (
+    assert split_results == [["a", "b", "c"]], (
         f"precondition: split_with(',', 'a,b,c', P) should yield "
-        f"P = ['a','b','c']; got {split_results!r}"
+        f"P = ['a','b','c'] (str parts); got {split_results!r}"
     )
 
     # Now run the inverse direction (join mode) with the same parts.
     J = Var()
     join_results = []
-    for _ in call("split_with", ",", J, [char_atom("a"), char_atom("b"), char_atom("c")], module=mod):
+    for _ in call("split_with", char_atom(","), J, ["a", "b", "c"], module=mod):
         join_results.append(deref(J))
 
     assert len(join_results) > 0, (
@@ -83,7 +83,7 @@ def test_F050_split_with_join_preserves_str_parts():
         f"``['a',',','b',',','c']``)."
     )
     # Stronger: every str part should appear somewhere in J.
-    flat = list(j) if not isinstance(j, str) else j
+    flat = [char_atom(c) for c in j] if isinstance(j, str) else list(j)
     for p in (char_atom("a"), char_atom("b"), char_atom("c")):
         assert p in flat, (
             f"split_with(',', J, ['a','b','c']) returned J = {j!r}; "
@@ -278,7 +278,9 @@ def test_F053_output_mode_builders_respect_str_type_hint():
     # replicate(5, 'a', R) — all 1-char strs, so str output is lossless.
     R = Var()
     rep_results = []
-    for _ in call("replicate", 5, "a", R, module=mod):
+    # THE FLIP (spec §6.2): a char is the ATOM ("a",); replicating the 1-char
+    # ``str`` would replicate a one-element STRING, not a char.
+    for _ in call("replicate", 5, char_atom("a"), R, module=mod):
         rep_results.append(deref(R))
         break
     assert len(rep_results) == 1, (
@@ -632,7 +634,7 @@ key_of(_c, _k) <- if_(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
     )
     R = Var()
     n_ss_fold = sum(
-        1 for _ in call("foldl", concat, ss, "", R, module=mod)
+        1 for _ in call("foldl", concat, ss, mint(""), R, module=mod)
     )
     assert n_ss_fold > 0, (
         f"foldl(concat, SegString, '', R) yielded {n_ss_fold} solutions; "
@@ -836,7 +838,8 @@ def test_F072_char_type_modes_agree_on_non_ascii():
 
     # Test mode: char_type('α', alpha) — Char bound, Type bound.
     n_test = len(
-        solutions(StepGenerator(disp, None, None, None, "α", "alpha", Trail()))
+        solutions(StepGenerator(
+            disp, None, None, None, char_atom("α"), mint("alpha"), Trail()))
     )
     assert n_test == 1, (
         f"precondition: char_type('α', alpha) should succeed (Char-bound "
@@ -847,10 +850,10 @@ def test_F072_char_type_modes_agree_on_non_ascii():
     # Enumeration mode: findall(C, char_type(C, alpha), L) — Type bound.
     v = Var()
     chars_for_alpha = solutions(
-        StepGenerator(disp, None, None, None, v, "alpha", Trail()),
+        StepGenerator(disp, None, None, None, v, mint("alpha"), Trail()),
         snapshot=lambda: deref(v),
     )
-    assert "α" in chars_for_alpha, (
+    assert char_atom("α") in chars_for_alpha, (
         f"findall(C, char_type(C, alpha), L) returned a list of "
         f"{len(chars_for_alpha)} entries; expected 'α' to appear since "
         f"char_type('α', alpha) succeeds in the Char-bound test mode. "
