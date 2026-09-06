@@ -8,7 +8,13 @@ import sys as _sys
 from clausal.logic.atoms import demangle_for_display, is_mangled
 from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.terms import term_str as _term_str, term_pformat as _term_pformat, Compound, Div
+from clausal.terms import (
+    term_str as _term_str,
+    term_canonical as _term_canonical,
+    term_pformat as _term_pformat,
+    Compound,
+    Div,
+)
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
 from clausal.logic.exceptions import (
     LogicException, type_error, existence_error, instantiation_error,
@@ -30,6 +36,13 @@ def _format_term_for_io(val):
     """
     if isinstance(val, str):
         return demangle_for_display(val) if is_mangled(val) else val
+    if isinstance(val, list):
+        # A LIST -- routed through ``term_str`` for the same reason the cell
+        # branch below is: ``str()`` on a list renders each ELEMENT with
+        # ``repr``, so an element that is a cell (``("a",)``, an atom now
+        # that atoms are cells) leaked a Python tuple repr into write/1's
+        # output.  ``[1, 2]`` is unchanged (spec §6.7's table row).
+        return _term_str(val, quoted=False)
     if type(val) is tuple and val and (type(val[0]) is str or val[0] is TUPLE_TAG):
         # A CELL -- ``("pt", 1, 2)`` (or a tuple-DATA cell, ``(tuple, ...)``).
         # P3-2 Task 2 (THE FLIP) makes this how every compound term is
@@ -44,7 +57,12 @@ def _format_term_for_io(val):
         # ``clausal/logic/cells.py``'s module docstring) and falls through
         # to the ordinary ``str()`` rendering below, same as any other
         # non-str, non-``TUPLE_TAG`` slot 0.
-        return _term_str(val)
+        #
+        # ``quoted=False`` (spec §6.7): write/1 is the DISPLAY family, so an
+        # atom prints its bare spelling (``foo bar``, not ``'foo bar'``) --
+        # exactly what the str branch above already does for a str atom.
+        # ``writeq/1`` below is the quoted family.
+        return _term_str(val, quoted=False)
     return str(val)
 
 
@@ -70,6 +88,33 @@ def _writeln__1(term, trail, k):
     """
     val = deref(term)
     print(_format_term_for_io(val))
+    yield None
+
+
+@_builtin("writeq", 1)
+def _writeq__1(term, trail, k):
+    """writeq(Term) — write Term quoted so the reader reads it back (ISO 8.14.2).
+
+    The quoted member of the writer family (spec §6.7): an atom that would
+    not re-read as itself is single-quoted (``'foo bar'``); operators and
+    display spacing are write/1's, unlike write_canonical/1 below.
+    """
+    from clausal.logic.solve import _deref_walk
+    _sys.stdout.write(_term_str(_deref_walk(term), quoted=True))
+    _sys.stdout.flush()
+    yield None
+
+
+@_builtin("write_canonical", 1)
+def _write_canonical__1(term, trail, k):
+    """write_canonical(Term) — ISO 8.14.2 canonical form: quoted atoms, no
+    operators, no space after a comma, and every list as its ``'.'/2``
+    structure (spec §6.7; Scryer prints ``write_canonical("hello")`` as
+    ``'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))``).
+    """
+    from clausal.logic.solve import _deref_walk
+    _sys.stdout.write(_term_canonical(_deref_walk(term)))
+    _sys.stdout.flush()
     yield None
 
 

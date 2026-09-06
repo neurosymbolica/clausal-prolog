@@ -2361,12 +2361,90 @@ def _locale_name(name: str, style: TermStyle, arity: int | None = None) -> str:
     return result if result is not None else name
 
 
-def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
+# ── ISO atom / string quoting (spec §6.7) ─────────────────────────────────────
+
+#: ISO 6.4.2 graphic characters: an atom made only of these is a bare
+#: "graphic token" (``+``, ``=..``, ``-->``) and needs no quotes.
+_GRAPHIC_CHARS = frozenset("#$&*+-./:<=>?@^~\\")
+#: ISO 6.4.2 solo / bracket tokens that stand for themselves unquoted.
+_SOLO_ATOMS = frozenset({"[]", "{}", "!", ";"})
+
+
+def atom_needs_quotes(s: str) -> bool:
+    """Return True when the atom spelled *s* must be quoted to re-read as
+    itself (ISO 6.4.2).
+
+    Bare iff *s* is a solo token (``[]``, ``{}``, ``!``, ``;``), a
+    lowercase-initial identifier (``foo``, ``fooBar_1``), or a run of
+    graphic characters (``+``, ``=..``).  The empty atom and ``,`` need
+    quotes.
+    """
+    if s in _SOLO_ATOMS:
+        return False
+    if not s:
+        return True
+    if s[0].islower() and all(c.isalnum() or c == "_" for c in s):
+        return False
+    if all(c in _GRAPHIC_CHARS for c in s):
+        return False
+    return True
+
+
+def _escape_quoted(s: str, quote: str) -> str:
+    """Escape *s* for placement inside *quote* delimiters (ISO 6.4.2 escapes)."""
+    out = []
+    for c in s:
+        if c == "\\":
+            out.append("\\\\")
+        elif c == quote:
+            out.append("\\" + quote)
+        elif c == "\n":
+            out.append("\\n")
+        elif c == "\t":
+            out.append("\\t")
+        elif ord(c) < 0x20 or c == "\x7f":
+            out.append(f"\\x{ord(c):02x}\\")
+        else:
+            out.append(c)
+    return "".join(out)
+
+
+def quote_atom(s: str) -> str:
+    """Return *s* as a single-quoted atom token."""
+    return "'" + _escape_quoted(s, "'") + "'"
+
+
+def quote_string(s: str) -> str:
+    """Return *s* as a double-quoted string token."""
+    return '"' + _escape_quoted(s, '"') + '"'
+
+
+def _quoted_atom_spelling(spelling: str) -> str:
+    """Return the writer's spelling of the atom whose runtime str is
+    *spelling*, quoted when ISO says it must be.
+
+    A mangled (``-hide``) atom renders its human ``module.name`` display
+    form and is never quoted — that form is display-only and does not
+    round-trip anyway (design doc §1b).
+    """
+    if is_mangled(spelling):
+        return demangle_for_display(spelling)
+    return quote_atom(spelling) if atom_needs_quotes(spelling) else spelling
+
+
+def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
+             *, quoted: bool = True) -> str:
     """Return a readable string representation of any term.
 
     *style* controls anonymous-variable display and optional ANSI colouring;
     defaults to the module-level style (see :func:`set_style`).  *_bd* is the
     bracket-depth counter used internally for rainbow-bracket colouring.
+
+    *quoted* (spec §6.7) selects the writer family: the default ``True`` is
+    the ``writeq/1`` family, which quotes an atom that would not re-read as
+    itself (``'foo bar'``); ``quoted=False`` is the ``write/1`` display
+    family, which prints the bare spelling.  It threads through every
+    recursive call.
     """
     if style is None:
         style = _current_style
@@ -2394,7 +2472,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
     if isinstance(t, list):
         ob = _c('[', 'bracket', style, _bd)
         cb = _c(']', 'bracket', style, _bd)
-        return ob + ", ".join(term_str(e, style, _bd + 1) for e in t) + cb
+        return ob + ", ".join(term_str(e, style, _bd + 1, quoted=quoted) for e in t) + cb
     if isinstance(t, Var):
         return _c(style.anon_var, 'var', style)
     if type(t) is tuple and t and type(t[0]) is str:
@@ -2416,12 +2494,27 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
         # same mangled-atom display substitution as the str branch above --
         # WITHOUT the quoting, since a functor position is never quoted.
         display_functor = demangle_for_display(functor) if is_mangled(functor) else functor
+        if len(t) == 1:
+            # An ATOM -- an arity-0 cell (spec §6.7).  It is a name, not a
+            # zero-argument call, so it prints bare (``flag``), never
+            # ``flag()``.  Unlike the functor position above, an atom in an
+            # ARGUMENT position must re-read as itself, so the writeq family
+            # (``quoted=True``, the default) quotes it when ISO 6.4.2 says
+            # it would not (``'foo bar'``); the write/1 display family
+            # (``quoted=False``) always prints the bare spelling.
+            # Locale translation happens BEFORE quoting (the translated
+            # spelling is what has to re-read), and keeps the arity-0
+            # lookup this branch had when it still printed ``flag()``.
+            display = _locale_name(display_functor, style, 0)
+            if quoted and not is_mangled(functor) and atom_needs_quotes(display):
+                display = quote_atom(display)
+            return _c(display, 'atom', style)
         args = t[1:]
         functor_s = _c(_locale_name(display_functor, style, len(args)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         return functor_s + ob + ", ".join(
-            term_str(a, style, _bd + 1) for a in args) + cb
+            term_str(a, style, _bd + 1, quoted=quoted) for a in args) + cb
     if type(t) is tuple and t and t[0] is TUPLE_TAG:
         # A tuple-DATA cell -- ``(tuple, e1, e2)`` -- represents plain tuple
         # data, not a compound (P3-2 Task 5's ``TUPLE_TAG`` convention).  It
@@ -2432,33 +2525,33 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         return ob + ", ".join(
-            term_str(e, style, _bd + 1) for e in elems) + cb
+            term_str(e, style, _bd + 1, quoted=quoted) for e in elems) + cb
     if isinstance(t, Compound):
         functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
-        functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd)
+        functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd, quoted=quoted)
         functor_s = _c(functor_raw, 'atom', style) if isinstance(functor, str) else functor_raw
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        args_str = ", ".join(term_str(a, style, _bd + 1) for a in t.args)
+        args_str = ", ".join(term_str(a, style, _bd + 1, quoted=quoted) for a in t.args)
         return functor_s + ob + args_str + cb
     if isinstance(t, KWTerm):
         functor_s = _c(_locale_name(t.functor, style, len(t)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        args = ", ".join(f"{k}={term_str(v, style, _bd + 1)}" for k, v in t.items())
+        args = ", ".join(f"{k}={term_str(v, style, _bd + 1, quoted=quoted)}" for k, v in t.items())
         return functor_s + ob + args + cb
     if isinstance(t, DictTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
         inner = ", ".join(
-            f"{term_str(k, style, _bd + 1)}: {term_str(v, style, _bd + 1)}"
+            f"{term_str(k, style, _bd + 1, quoted=quoted)}: {term_str(v, style, _bd + 1, quoted=quoted)}"
             for k, v in t.items()
         )
         return ob + inner + cb
     if isinstance(t, SetTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
-        inner = ", ".join(term_str(e, style, _bd + 1) for e in sorted(t.elements, key=repr))
+        inner = ", ".join(term_str(e, style, _bd + 1, quoted=quoted) for e in sorted(t.elements, key=repr))
         return ob + inner + cb
     cls = type(t)
     op = getattr(cls, "op", None)
@@ -2467,11 +2560,11 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
     if op is not None and hasattr(t, "left") and hasattr(t, "right"):
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        return ob + term_str(t.left, style, _bd + 1) + f" {op} " + term_str(t.right, style, _bd + 1) + cb
+        return ob + term_str(t.left, style, _bd + 1, quoted=quoted) + f" {op} " + term_str(t.right, style, _bd + 1, quoted=quoted) + cb
 
     # UnaryOp-style: op operand
     if op is not None and hasattr(t, "operand"):
-        operand_str = term_str(t.operand, style, _bd)
+        operand_str = term_str(t.operand, style, _bd, quoted=quoted)
         if op.isalpha():
             return f"{op} {operand_str}"
         return f"{op}{operand_str}"
@@ -2479,12 +2572,12 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
     if isinstance(t, Call):
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        args_str = ", ".join(term_str(a, style, _bd + 1) for a in t.args)
-        return term_str(t.func, style, _bd) + ob + args_str + cb
+        args_str = ", ".join(term_str(a, style, _bd + 1, quoted=quoted) for a in t.args)
+        return term_str(t.func, style, _bd, quoted=quoted) + ob + args_str + cb
     if isinstance(t, LoadName):
         return _c(t.name, 'atom', style)
     if isinstance(t, Predicate):
-        return f"{term_str(t.head, style, _bd)} <- {term_str(t.body, style, _bd)}"
+        return f"{term_str(t.head, style, _bd, quoted=quoted)} <- {term_str(t.body, style, _bd, quoted=quoted)}"
 
     # PredicateMeta instances with locale translation.
     if style.locale is not None:
@@ -2496,10 +2589,91 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0) -> str:
             cls_name = _locale_name(type(t).__name__, style, len(term_field_names(t)))
             ob = _c('(', 'bracket', style, _bd)
             cb = _c(')', 'bracket', style, _bd)
-            parts = ", ".join(term_str(getattr(t, f), style, _bd + 1) for f in term_field_names(t))
+            parts = ", ".join(term_str(getattr(t, f), style, _bd + 1, quoted=quoted) for f in term_field_names(t))
             return _c(cls_name, 'atom', style) + ob + parts + cb
 
     return repr(t)
+
+
+def term_canonical(t: Any) -> str:
+    """Return the ``write_canonical/1`` rendering of *t* (spec §6.7).
+
+    Quoted atoms, no operator forms, no space after a comma, and every list
+    printed as the ``'.'/2`` cons structure it denotes, ending in ``[]``
+    (``'.'(1,'.'(2,[]))``) — byte-comparable with Scryer's output.  The
+    representation itself is untouched (spec §5.4: ``'.'/2`` is a view,
+    never a representation); only the rendering expands.  Same dispatch
+    order as :func:`term_str`, which it falls back to for every shape ISO
+    does not specify a canonical form for.
+    """
+    if not isinstance(t, (str, bytes, int, float)):
+        t = deref(t)
+    if t is None or t is ... or isinstance(t, (bool, Decimal, int, float, complex)):
+        return term_str(t)
+    if isinstance(t, str):
+        # Stage A: a str is still an atom, so it renders as the quoted atom
+        # spelling.  Task 11 (THE FLIP) replaces this branch with the cons
+        # form of the string's char list, per spec §6.7's table row
+        # ``"abc"`` -> ``'.'(a,'.'(b,'.'(c,[])))``.
+        return _quoted_atom_spelling(t)
+    if isinstance(t, bytes):
+        return repr(t)
+    if isinstance(t, list):
+        out = "[]"
+        for e in reversed(t):
+            out = "'.'(" + term_canonical(e) + "," + out + ")"
+        return out
+    if isinstance(t, (SegList, SegString)):
+        # A partial list/string: walk first (spec §6.7) and print what it
+        # walks to.  A still-partial walk keeps its holes, each rendered as
+        # the variable it is: ``[h, e | T]`` -> ``'.'(h,'.'(e,_N))``.
+        walked = t.__walk__()
+        if not isinstance(walked, (SegList, SegString)):
+            return term_canonical(walked)
+        return _seg_canonical(walked)
+    if isinstance(t, Var):
+        return term_str(t)
+    if type(t) is tuple and t and type(t[0]) is str:
+        # A CELL.  Slot 0 read RAW, no deref -- the recognition rule every
+        # cell site uses.  An arity-0 cell is an atom and prints bare.
+        head = _quoted_atom_spelling(t[0])
+        if len(t) == 1:
+            return head
+        return head + "(" + ",".join(term_canonical(a) for a in t[1:]) + ")"
+    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+        return "(" + ",".join(term_canonical(e) for e in t[1:]) + ")"
+    if isinstance(t, Compound):
+        f = deref(t.functor)
+        head = _quoted_atom_spelling(f) if isinstance(f, str) else term_canonical(f)
+        return head + "(" + ",".join(term_canonical(a) for a in t.args) + ")"
+    return term_str(t)
+
+
+def _seg_canonical(seg) -> str:
+    """Render a still-partial ``SegList``/``SegString`` as a ``'.'/2`` chain
+    whose tail is the trailing hole (a helper for :func:`term_canonical`)."""
+    # Flatten to (elements..., tail) where tail is the LAST segment when it
+    # is an unbound hole, else the empty list.
+    rendered: list[str] = []
+    segments = list(seg.segments)
+    tail = "[]"
+    if segments and isinstance(segments[-1], VarSeg):
+        tail = term_str(deref(segments[-1].var))
+        segments = segments[:-1]
+    for s in segments:
+        if isinstance(s, VarSeg):
+            # An interior hole stands for an unknown NUMBER of elements, so
+            # no cons chain can spell it exactly; it renders as the variable
+            # in the one element position it occupies.
+            rendered.append(term_str(deref(s.var)))
+        elif isinstance(s, str):
+            rendered.extend(term_canonical(c) for c in s)  # SegString text
+        else:
+            rendered.extend(term_canonical(e) for e in s.elements)  # ConcreteSeg
+    out = tail
+    for r in reversed(rendered):
+        out = "'.'(" + r + "," + out + ")"
+    return out
 
 
 # ── Pretty-formatted term representation ──────────────────────────────────────
@@ -2723,6 +2897,10 @@ def term_html(t: Any, _bd: int = 0) -> str:
         # counterpart (P3-2 Task 7); without this a cell fell through to the
         # ``esc(repr(t))`` tail, leaking the Python tuple repr into Jupyter
         # output.  Slot 0 read RAW, no deref (Task 5's rule).
+        if len(t) == 1:
+            # An ATOM -- an arity-0 cell prints as its (quoted) name, never
+            # as ``flag()`` (spec §6.7); ``term_str`` owns that spelling.
+            return _html_c(esc(term_str(t)), 'atom')
         functor_s = _html_c(esc(t[0]), 'atom')
         ob = _html_c('(', 'bracket', _bd)
         cb = _html_c(')', 'bracket', _bd)

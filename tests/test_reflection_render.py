@@ -882,7 +882,10 @@ class TestRawCellRendering:
         assert render_source(("pt", 1, ("q", 2))) == "pt(1, q(2))"
 
     def test_zero_arg_str_functor_cell_renders_bare(self):
-        assert render_source(("atom_like",)) == "atom_like()"
+        # Spec §6.7: an arity-0 cell is an ATOM, not a zero-argument call,
+        # so it renders as the bare name (it used to render ``atom_like()``,
+        # which this test pinned before atoms became cells).
+        assert render_source(("atom_like",)) == "atom_like"
 
     def test_tuple_data_cell_renders_as_a_plain_tuple(self):
         from clausal.logic.cells import TUPLE_TAG

@@ -472,7 +472,10 @@ class TestCellTermPformat:
     def test_zero_arg_cell_stays_flat_like_zero_arg_compound(self):
         # A str-functor cell always has slot 0, so "zero args" means a
         # 1-tuple; matches Compound's `if not t.args: return flat` guard.
-        assert term_pformat(("atom_like",), width=1) == "atom_like()"
+        # Spec §6.7: that flat form is the ATOM's bare name -- the 1-tuple
+        # is an atom, not a zero-argument call (it printed ``atom_like()``
+        # before atoms became cells).
+        assert term_pformat(("atom_like",), width=1) == "atom_like"
 
     def test_wide_tuple_data_cell_gets_multiline_form(self):
         from clausal.logic.cells import TUPLE_TAG

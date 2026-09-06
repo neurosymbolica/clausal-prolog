@@ -606,6 +606,12 @@ class _ClauseRenderer:
             # functor gets the same human-form substitution the ``Atom``
             # case above gives a hidden atom NAME.
             from clausal.logic.atoms import demangle_for_display
+            if len(value) == 1:
+                # An ATOM -- an arity-0 cell (spec §6.7).  It is a name, not
+                # a zero-argument call, so it renders as the bare name,
+                # exactly as the ``Atom`` case above renders a str atom;
+                # without this it came out as ``flag()``.
+                return self._name_ast(demangle_for_display(value[0]))
             return ast.Call(
                 func=self._name_ast(demangle_for_display(value[0])),
                 args=[self.term(item) for item in value[1:]],
