@@ -202,3 +202,31 @@ def test_reify_does_not_refuse_a_double_quoted_callee():
     from clausal.reflection import reify_source
 
     reify_source('p("foo"(1)),\n')
+
+
+def test_reify_still_refuses_mixed_quote_styles():
+    """The exemption is for the FUNCTOR rule only, not for well-formedness.
+
+    "Reflection models more than it compiles" means more LEGAL shapes, never
+    malformed input.  `"a" 'b'` has no meaning to model — one style says atom,
+    the other says string — so reifying it must raise rather than quietly
+    pick a reading.  It picked one before fix round 2: the whole quote lookup
+    sat behind the `_reify` guard, and `reify_source` answered with the atom
+    `ab`.
+    """
+    from clausal.reflection import ReifyError, reify_source
+
+    with pytest.raises((SyntaxError, ReifyError)) as exc_info:
+        reify_source('p("a" \'b\'(1)),\n')
+    message = str(exc_info.value)
+    assert "mixed quote styles" in message
+    # reify_source re-raises a SyntaxError as ReifyError(str(enriched)), so
+    # the position survives as text: this pins that the error was POSITIONED
+    # rather than bare (fix round 1) all the way through the reify path.
+    assert "line 1" in message
+
+    # ...and with a .clausal filename it earns the full caret window.
+    with pytest.raises(ReifyError) as exc_info:
+        reify_source('p("a" \'b\'(1)),\n', filename="probe.clausal")
+    assert "probe.clausal" in str(exc_info.value)
+    assert "^" in str(exc_info.value)

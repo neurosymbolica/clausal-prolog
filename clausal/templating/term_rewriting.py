@@ -1483,13 +1483,19 @@ class TermTransformer(NodeTransformer):
             # when the default moves.  A `None` answer means the quote is
             # unknown (no source lines: the REPL, a programmatic AST) and the
             # sugar keeps its pre-strings behaviour.
-            # ``reify=True`` is exempt: reflection models MORE than it
-            # compiles (see the class docstring's contract), and rendering a
-            # term back to source must keep accepting shapes the compiler
-            # refuses.  Refusing here would make a file un-reifiable for a
-            # reason reification does not care about.
-            if not transformer._reify \
-                    and _quote_of_positioned(transformer, call.func) == '"':
+            # Unconditional, ``reify`` included: the mixed-quote-style error
+            # this can raise is a WELL-FORMEDNESS rule, and "reflection models
+            # more than it compiles" means more legal shapes, never malformed
+            # input.  `"a" 'b'` has no meaning to model — gating this call on
+            # ``_reify`` made ``reify_source`` answer with the atom ``ab``,
+            # silently inventing one of the two readings (fix round 2).
+            quote = _quote_of_positioned(transformer, call.func)
+            # The FUNCTOR refusal, by contrast, IS compile-only and so IS
+            # exempt under ``reify=True``: it rejects a well-formed literal
+            # for a reason (ISO 6.3.3) that reflection does not care about,
+            # and a file must not become un-reifiable over it.  See the
+            # ``_reify`` contract in the class docstring.
+            if quote == '"' and not transformer._reify:
                 spelling = call.func.value
                 # The suggestion is source text, so it has to survive being
                 # re-read: a spelling containing a quote or a backslash needs
