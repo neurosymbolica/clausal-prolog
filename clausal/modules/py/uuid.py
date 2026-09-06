@@ -26,6 +26,7 @@ from clausal.modules.py import (
     note_mismatch,
     note_rejected_call,
     simple_to_trampoline,
+    text_or_str,
     to_text,
 )
 _uuid = _import_stdlib("uuid")
@@ -34,23 +35,6 @@ _uuid = _import_stdlib("uuid")
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
-
-
-def _name_text(val) -> str:
-    """The ``str`` a UUID name argument denotes.
-
-    Text is a string or an ATOM, and both convert to the same ``str``
-    (spec §9.4).
-
-    THE FLIP (2026-09-06-atoms-as-cells-strings): ``str()`` on the arity-0
-    cell ``("bar",)`` is the Python tuple repr ``"('bar',)"``, so every text
-    coercion in a wrapper routes through ``to_text`` instead.  A term that is
-    not text keeps the old ``str`` fallback -- this position never promised a
-    type contract.
-    """
-    text = to_text(val)
-    return text if text is not None else str(val)
-
 
 
 # ── Namespace resolver ───────────────────────────────────────────────────
@@ -109,7 +93,7 @@ def _uuid3_3(ns, name, u, trail, k):
     if is_var(name):
         return
     try:
-        result = _uuid.uuid3(namespace, _name_text(name))
+        result = _uuid.uuid3(namespace, text_or_str(name))
     except (TypeError, ValueError) as exc:
         note_rejected_call("uuid_v3/3", exc)
         return
@@ -132,7 +116,7 @@ def _uuid5_3(ns, name, u, trail, k):
     if is_var(name):
         return
     try:
-        result = _uuid.uuid5(namespace, _name_text(name))
+        result = _uuid.uuid5(namespace, text_or_str(name))
     except (TypeError, ValueError) as exc:
         note_rejected_call("uuid_v5/3", exc)
         return

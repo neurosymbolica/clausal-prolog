@@ -16,6 +16,7 @@ from clausal.modules.py import (
     expect_type,
     note_rejected_call,
     option,
+    require_text,
     simple_to_trampoline,
     text_or_str,
     to_text,
@@ -30,28 +31,7 @@ from clausal.terms import DictTerm
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 
-def _require_text(val, pred, arg):
-    """The ``str`` a Url/String argument denotes, or ``None`` (note recorded).
-
-    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and both
-    convert to the same ``str`` -- so ``encode('hello world', E)`` in a
-    ``.clausal`` file works exactly as ``"hello world"`` does under
-    ``-double_quotes(chars)``.  THE FLIP (2026-09-06-atoms-as-cells-strings)
-    made the bare ``expect_type(x, str, ...)`` guards below reject every
-    source-written argument, silently: in the default ``-double_quotes(atom)``
-    mode a written ``"..."`` IS the arity-0 cell.
-
-    A bound value that is not text keeps this module's existing behaviour --
-    a recorded type-mismatch note and a clean failure, not a raise.
-    """
-    text = to_text(val)
-    if text is not None:
-        return text
-    expect_type(val, str, pred, arg=arg)   # records the note; always False here
-    return None
-
-
-def _port_text(val):
+def _port_value(val):
     """The netloc port a Parts dict's ``port`` denotes: an int, or its text.
 
     ``parse/2`` answers an ``int`` (``0`` meaning "no port"), and a program
@@ -73,7 +53,7 @@ def _port_text(val):
 
 def _encode_2(string, encoded, trail, k):
     """encode/2: encode(String, Encoded) — URL-encode."""
-    s = _require_text(deref(string), "encode/2", 1)
+    s = require_text(deref(string), "encode/2", 1)
     if s is None:
         return
     result = _urllib_parse.quote(s, safe="")
@@ -83,7 +63,7 @@ def _encode_2(string, encoded, trail, k):
 
 def _decode_2(encoded, string, trail, k):
     """decode/2: decode(Encoded, String) — URL-decode."""
-    e = _require_text(deref(encoded), "decode/2", 1)
+    e = require_text(deref(encoded), "decode/2", 1)
     if e is None:
         return
     result = _urllib_parse.unquote(e)
@@ -100,7 +80,7 @@ def _parse_2(url, parts, trail, k):
     so ``P.scheme`` reads it and ``join/2`` consumes it unchanged.  The
     VALUES stay text (§9.4).
     """
-    u = _require_text(deref(url), "parse/2", 1)
+    u = require_text(deref(url), "parse/2", 1)
     if u is None:
         return
     try:
@@ -143,7 +123,7 @@ def _join_2(parts, url, trail, k):
     d = p.data
     scheme = text_or_str(option(d, "scheme", ""))
     host = text_or_str(option(d, "host", ""))
-    port = _port_text(option(d, "port", 0))
+    port = _port_value(option(d, "port", 0))
     path = text_or_str(option(d, "path", ""))
     query = text_or_str(option(d, "query", ""))
     fragment = text_or_str(option(d, "fragment", ""))

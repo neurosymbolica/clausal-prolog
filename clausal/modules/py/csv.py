@@ -28,9 +28,9 @@ from clausal.modules.py import (
     expect_type,
     note_mismatch,
     note_rejected_call,
+    require_text,
     simple_to_trampoline,
     text_or_str,
-    to_text,
 )
 _csv = _import_stdlib("csv")
 
@@ -62,25 +62,6 @@ def _field_key(name):
     return mint(name) if type(name) is str else name
 
 
-def _require_text(val, pred, arg):
-    """The ``str`` a String or Path argument denotes, or ``None`` (noted).
-
-    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and both
-    convert to the same ``str``.  THE FLIP (2026-09-06-atoms-as-cells-strings)
-    made the bare ``expect_type(x, str, ...)`` guards below reject every
-    source-written argument, silently -- and a PATH that went through ``str()``
-    would have opened a file literally named ``('/tmp/x',)``.
-
-    A bound value that is not text keeps this module's existing behaviour --
-    a recorded type-mismatch note and a clean failure, not a raise.
-    """
-    text = to_text(val)
-    if text is not None:
-        return text
-    expect_type(val, str, pred, arg=arg)   # records the note; always False here
-    return None
-
-
 def _deref_row(row):
     """Deref all elements in a row, converting to strings."""
     result = []
@@ -99,7 +80,7 @@ def _deref_row(row):
 
 def _parse_row_2(string, row, trail, k):
     """parse_row/2: parse a single CSV line into a list of strings."""
-    string = _require_text(deref(string), "parse_row/2", 1)
+    string = require_text(deref(string), "parse_row/2", 1)
     if string is None:
         return
     reader = _csv.reader(io.StringIO(string))
@@ -113,7 +94,7 @@ def _parse_row_2(string, row, trail, k):
 
 def _parse_2(string, rows, trail, k):
     """parse/2: parse a multi-line CSV string into a list of rows."""
-    string = _require_text(deref(string), "parse/2", 1)
+    string = require_text(deref(string), "parse/2", 1)
     if string is None:
         return
     reader = _csv.reader(io.StringIO(string))
@@ -130,7 +111,7 @@ def _parse_records_3(string, headers, records, trail, k):
     get(R, H, V)`` has to reach the wrapper's own records.  The VALUES stay
     strings — CSV does no type coercion.
     """
-    string = _require_text(deref(string), "parse_records/3", 1)
+    string = require_text(deref(string), "parse_records/3", 1)
     if string is None:
         return
     reader = _csv.DictReader(io.StringIO(string))
@@ -213,7 +194,7 @@ def _generate_records_3(headers, records, string, trail, k):
 
 def _read_file_2(path, rows, trail, k):
     """read_file/2: read and parse a CSV file into list of rows."""
-    path = _require_text(deref(path), "read_file/2", 1)
+    path = require_text(deref(path), "read_file/2", 1)
     if path is None:
         return
     try:
@@ -231,7 +212,7 @@ def _read_records_2(path, records, trail, k):
 
     Records are keyed by the header cells' ATOMS, as ``parse_records/3``.
     """
-    path = _require_text(deref(path), "read_records/2", 1)
+    path = require_text(deref(path), "read_records/2", 1)
     if path is None:
         return
     try:
@@ -249,7 +230,7 @@ def _read_records_2(path, records, trail, k):
 
 def _write_file_2(path, rows, trail, k):
     """write_file/2: serialize rows and write to CSV file."""
-    path, rows = _require_text(deref(path), "write_file/2", 1), deref(rows)
+    path, rows = require_text(deref(path), "write_file/2", 1), deref(rows)
     if path is None:
         return
     if not expect_type(rows, list, "write_file/2", arg=2):

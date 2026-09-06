@@ -17,6 +17,7 @@ from clausal.modules.py import (
     note_mismatch,
     note_rejected_call,
     option,
+    require_text,
     simple_to_trampoline,
     text_or_str,
     to_bytes,
@@ -79,32 +80,12 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30):
 
 
 
-def _url_text(val, pred):
-    """The ``str`` a Url argument denotes, or ``None`` (note recorded).
-
-    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and
-    both convert to the same ``str``.  THE FLIP
-    (2026-09-06-atoms-as-cells-strings) made the bare
-    ``isinstance(url, str)`` guards below reject every source-written URL,
-    silently: an atom is the arity-0 cell ``("http://…",)``, and in the
-    default ``-double_quotes(atom)`` mode that is what ``"http://…"`` is.
-
-    A bound value that is not text keeps this module's existing behaviour --
-    a recorded type-mismatch note and a clean failure, not a raise.
-    """
-    text = to_text(val)
-    if text is not None:
-        return text
-    expect_type(val, str, pred, arg=1)   # records the note; always False here
-    return None
-
-
 # ── Predicate implementations ────────────────────────────────────────────
 
 
 def _get_2(url, body, trail, k):
     """get/2: get(Url, Body) — GET request, body as string."""
-    url_d = _url_text(deref(url), "get/2")
+    url_d = require_text(deref(url), "get/2")
     if url_d is None:
         return
     result = _do_request(url_d)
@@ -119,7 +100,7 @@ def _get_2(url, body, trail, k):
 
 def _get_3(url, headers, body, trail, k):
     """get/3: get(Url, Headers, Body) — GET with custom headers."""
-    url_d = _url_text(deref(url), "get/3")
+    url_d = require_text(deref(url), "get/3")
     headers_d = deref(headers)
     if url_d is None:
         return
@@ -139,7 +120,7 @@ def _get_3(url, headers, body, trail, k):
 
 def _post_3(url, data, body, trail, k):
     """post/3: post(Url, Data, Body) — POST text or bytes data."""
-    url_d = _url_text(deref(url), "post/3")
+    url_d = require_text(deref(url), "post/3")
     data_d = deref(data)
     if url_d is None:
         return
@@ -164,7 +145,7 @@ def _post_3(url, data, body, trail, k):
 
 def _post_4(url, data, headers, body, trail, k):
     """post/4: post(Url, Data, Headers, Body) — POST with custom headers."""
-    url_d = _url_text(deref(url), "post/4")
+    url_d = require_text(deref(url), "post/4")
     data_d = deref(data)
     headers_d = deref(headers)
     if url_d is None:
@@ -237,7 +218,7 @@ def _request_3(options, status_out, body_out, trail, k):
 
 def _json_get_2(url, term_out, trail, k):
     """json_get/2: GET + parse JSON response into DictTerm/list."""
-    url_d = _url_text(deref(url), "json_get/2")
+    url_d = require_text(deref(url), "json_get/2")
     if url_d is None:
         return
     result = _do_request(url_d, headers={"Accept": "application/json"})
@@ -257,7 +238,7 @@ def _json_get_2(url, term_out, trail, k):
 
 def _json_post_3(url, term_in, term_out, trail, k):
     """json_post/3: POST JSON body + parse JSON response."""
-    url_d = _url_text(deref(url), "json_post/3")
+    url_d = require_text(deref(url), "json_post/3")
     term_d = deref(term_in)
     if url_d is None:
         return

@@ -14,9 +14,9 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
+    require_text,
     simple_to_trampoline,
     to_bytes,
-    to_text,
 )
 _socket = _import_stdlib("socket")
 
@@ -26,33 +26,12 @@ from clausal.logic.variables import deref, is_var, unify
 # ── Internal helpers ─────────────────────────────────────────────────────
 
 
-def _host_text(val, pred):
-    """The ``str`` a Host argument denotes, or ``None`` (note recorded).
-
-    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and
-    both convert to the same ``str`` -- so ``connect('127.0.0.1', P, S)``
-    written in a ``.clausal`` file works exactly as the string form does.
-    THE FLIP (2026-09-06-atoms-as-cells-strings) made the bare
-    ``isinstance(host, str)`` guard below reject every source-written host,
-    silently: an atom is the arity-0 cell ``("127.0.0.1",)``.  Routed through
-    ``to_text``, never ``str()``, which would hand ``socket`` a tuple repr.
-
-    A bound value that is not text keeps this module's existing behaviour --
-    a recorded type-mismatch note and a clean failure, not a raise.
-    """
-    text = to_text(val)
-    if text is not None:
-        return text
-    expect_type(val, str, pred, arg=1)   # records the note; always False here
-    return None
-
-
 # ── Predicate implementations ────────────────────────────────────────────
 
 
 def _connect_3(host, port, sock_out, trail, k):
     """connect/3: connect(Host, Port, Socket) — connect to TCP server."""
-    host_d = _host_text(deref(host), "connect/3")
+    host_d = require_text(deref(host), "connect/3")
     port_d = deref(port)
     if host_d is None:
         return
@@ -69,7 +48,7 @@ def _connect_3(host, port, sock_out, trail, k):
 
 def _listen_3(host, port, server_out, trail, k):
     """listen/3: listen(Host, Port, ServerSocket) — create listening socket."""
-    host_d = _host_text(deref(host), "listen/3")
+    host_d = require_text(deref(host), "listen/3")
     port_d = deref(port)
     if host_d is None:
         return

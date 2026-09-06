@@ -19,6 +19,7 @@ from clausal.modules.py import (
     expect_type,
     has_option,
     option,
+    require_text,
     simple_to_trampoline,
     text_or_str,
     to_text,
@@ -46,33 +47,12 @@ _STDOUT = mint("stdout")
 _STDERR = mint("stderr")
 
 
-def _cmd_text(val, pred, arg=1):
-    """The ``str`` a command, program or argument denotes, or ``None``.
-
-    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and
-    both convert to the same ``str`` -- so ``shell('true')`` written in a
-    ``.clausal`` file works exactly as ``shell("true")`` does under
-    ``-double_quotes(chars)``.  THE FLIP (2026-09-06-atoms-as-cells-strings)
-    made the bare ``isinstance(command, str)`` guards below reject every
-    source-written command, silently, and made ``str(deref(a))`` on an
-    argument hand the SHELL a Python tuple repr.  Routed through ``to_text``.
-
-    A bound value that is not text keeps this module's existing behaviour --
-    a recorded type-mismatch note and a clean failure, not a raise.
-    """
-    text = to_text(val)
-    if text is not None:
-        return text
-    expect_type(val, str, pred, arg=arg)  # records the note; always False here
-    return None
-
-
 # ── Predicates ──────────────────────────────────────────────────────────
 
 
 def _shell_1(command, trail, k):
     """shell/1: run shell command. Succeeds if exit code is 0."""
-    command = _cmd_text(deref(command), "shell/1")
+    command = require_text(deref(command), "shell/1")
     if command is None:
         return
     try:
@@ -85,7 +65,7 @@ def _shell_1(command, trail, k):
 
 def _shell_2(command, exit_code, trail, k):
     """shell/2: run shell command, unify ExitCode with the exit code."""
-    command = _cmd_text(deref(command), "shell/2")
+    command = require_text(deref(command), "shell/2")
     if command is None:
         return
     try:
@@ -98,7 +78,7 @@ def _shell_2(command, exit_code, trail, k):
 
 def _shell_output_2(command, output, trail, k):
     """shell_output/2: run shell command, capture stdout. Fails on non-zero exit."""
-    command = _cmd_text(deref(command), "shell_output/2")
+    command = require_text(deref(command), "shell_output/2")
     if command is None:
         return
     try:
@@ -115,7 +95,7 @@ def _shell_output_2(command, output, trail, k):
 
 def _shell_output_3(command, output, error, trail, k):
     """shell_output/3: run shell command, capture stdout and stderr. Fails on non-zero exit."""
-    command = _cmd_text(deref(command), "shell_output/3")
+    command = require_text(deref(command), "shell_output/3")
     if command is None:
         return
     try:
@@ -136,7 +116,7 @@ def _process_create_3(program, args, result_var, trail, k):
     Result is a ``DictTerm`` keyed by the ATOMS ``exit_code``, ``stdout``
     and ``stderr`` (spec §6.8), so ``R.stdout`` reads it.
     """
-    program = _cmd_text(deref(program), "process_create/3")
+    program = require_text(deref(program), "process_create/3")
     args = deref(args)
     if program is None:
         return
@@ -164,7 +144,7 @@ def _process_create_4(program, args, options, result_var, trail, k):
     The Result dict is keyed by the ATOMS ``exit_code``/``stdout``/``stderr``
     for the same reason.
     """
-    program = _cmd_text(deref(program), "process_create/4")
+    program = require_text(deref(program), "process_create/4")
     args = deref(args)
     options = deref(options)
     if program is None:

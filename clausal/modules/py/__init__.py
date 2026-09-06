@@ -253,19 +253,59 @@ def text_or_str(val):
     ``("bar",)``, so a bare ``str(val)`` would splice the Python tuple repr
     ``"('bar',)"`` into a URL, a CSV file or a log line.
 
-    Six modules had grown their own copy of exactly this
-    (``csv._field_text``, ``http._hdr_text``, ``logging._text``,
-    ``process._env_text``/``_arg_text``, ``url._part_text``); they all call
-    here now.  The sibling shape — text or a recorded type-mismatch note and
-    a clean failure — stays per-module (``files._require_ground_str``,
-    ``http._url_text``, ``process._cmd_text``, ``tcp._host_text``), because
-    each names its own predicate and argument position in the note.
+    Eight per-module copies of exactly this had accumulated
+    (``csv._field_text`` and ``_deref_row``'s inline twin, ``http._hdr_text``,
+    ``logging._text``, ``process._env_text``/``_arg_text``,
+    ``url._part_text``, ``uuid._name_text``); every one of them calls here
+    now, and a new wrapper should too rather than growing a ninth.
+
+    The sibling shape — text, or a recorded type-mismatch note and a clean
+    failure — is :func:`require_text`.  The one deliberate non-adopter of
+    either is ``sqlite._text``, which RAISES on a non-text argument because a
+    sqlite path/alias/SQL/table is unambiguously text.
     """
     text = to_text(val)
     if text is not None:
         return text
     from clausal.logic.variables import deref  # noqa: PLC0415
     return str(deref(val))
+
+
+def require_text(val, pred, arg=1):
+    """The ``str`` a wrapper's text argument denotes, or ``None`` (noted).
+
+    The companion to :func:`text_or_str` for a position that has a type
+    contract: a path, a URL, a host, a command, an algorithm name, a JSON or
+    CSV document.  There is no sensible ``str()`` rendering of a compound
+    there, so a bound value that is not text records a diagnostic note and
+    the caller fails cleanly.  It never raises — a py-interop guard is a
+    guard, not an error (see ``expect_type``), and an unbound ``Var`` stays
+    silent because that is a mode signal.
+
+    Spec §9.4: text is a string or an ATOM and both convert to the same
+    ``str``, so ``read_file('/tmp/x', T)``, ``read_file("/tmp/x", T)`` and a
+    ``-double_quotes(chars)`` string all reach the library identically.  THE
+    FLIP (2026-09-06-atoms-as-cells-strings) is why this has to be a funnel
+    and not an ``isinstance`` gate: in the default ``-double_quotes(atom)``
+    mode a source-written ``"…"`` IS the arity-0 cell, so a bare
+    ``expect_type(x, str, …)`` rejected every documented call, silently.
+
+    *pred* is the registered predicate name/arity (e.g. ``"read_file/2"``)
+    and *arg* the 1-based argument position; both appear in the note, which
+    is why this takes them rather than being a bare coercion.
+
+    Ten modules had grown their own copy (``csv``, ``files``, ``hash``,
+    ``hmac``, ``http``, ``json``, ``os``, ``process``, ``tcp``, ``url``);
+    they all call here now.  The note is recorded on the DEREFERENCED value
+    so it names the actual type (``int``) and not the box (``Var``).
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    from clausal.logic.variables import deref  # noqa: PLC0415
+    # Records the note (and stays silent on an unbound Var); always False here.
+    expect_type(deref(val), str, pred, arg=arg)
+    return None
 
 
 def to_bytes(val):

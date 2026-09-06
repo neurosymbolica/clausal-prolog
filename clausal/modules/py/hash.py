@@ -21,9 +21,9 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     note_rejected_call,
+    require_text,
     simple_to_trampoline,
     to_bytes,
-    to_text,
 )
 _hashlib = _import_stdlib("hashlib")
 
@@ -33,33 +33,12 @@ from clausal.logic.variables import deref, is_var, unify
 # ── Helper ───────────────────────────────────────────────────────────────
 
 
-def _algo_text(val, pred):
-    """The ``str`` an algorithm NAME denotes, or ``None`` (note recorded).
-
-    Spec §9.1/§9.4: a hash algorithm name is a literal handed to a library,
-    which is a text position -- ``hash(sha256, D, H)``, ``hash('sha256', …)``
-    and (in the default ``-double_quotes(atom)`` mode) ``hash("sha256", …)``
-    all name the same ``hashlib`` constructor.  THE FLIP
-    (2026-09-06-atoms-as-cells-strings) made the bare
-    ``expect_type(algo, str, …)`` guard reject every source-written name,
-    silently.
-
-    A bound value that is not text keeps this module's existing behaviour --
-    a recorded type-mismatch note and a clean failure, not a raise.
-    """
-    text = to_text(val)
-    if text is not None:
-        return text
-    expect_type(val, str, pred, arg=1)   # records the note; always False here
-    return None
-
-
 # ── Predicate implementations ────────────────────────────────────────────
 
 
 def _hash_3(algorithm, data, hex_out, trail, k):
     """hash/3: hash(Algorithm, Data, Hex) — compute hex digest."""
-    algo = _algo_text(deref(algorithm), "hash/3")
+    algo = require_text(deref(algorithm), "hash/3")
     data_d = deref(data)
     if algo is None:
         return
@@ -86,7 +65,7 @@ def _hash_3(algorithm, data, hex_out, trail, k):
 
 def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
     """hash_bytes/3: hash_bytes(Algorithm, Data, Bytes) — compute raw digest bytes."""
-    algo = _algo_text(deref(algorithm), "hash_bytes/3")
+    algo = require_text(deref(algorithm), "hash_bytes/3")
     data_d = deref(data)
     if algo is None:
         return
