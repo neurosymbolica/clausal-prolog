@@ -20,6 +20,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal import Var, solve
 from clausal.import_hook import _load_module, _load_prolog_module
 from clausal.logic.solve import call
@@ -592,7 +593,7 @@ def test_guard_bare_atom_automint(tmp_path):
     # -implicit_atoms: this test verifies the auto-mint behaviour itself
     m = _load(tmp_path, "-implicit_atoms\nv(X) <- (X is a10_minted_atom)")
     x = Var()
-    assert [str(v) for v in _values(m.v(x), x)] == ["a10_minted_atom"]
+    assert [str(v) for v in _values(m.v(x), x)] == [mint("a10_minted_atom")]
 
 
 def test_guard_dcg_parse_generate_if_not_str(tmp_path):

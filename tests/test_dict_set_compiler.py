@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import pytest
 from clausal.logic.variables import Var, Trail, deref, unify
+from clausal.logic.atoms import mint
 from clausal.logic.solve import call, solve, _deref_walk
 from clausal.import_hook import _load_module
 from clausal.terms import DictTerm, SetTerm
@@ -135,8 +136,12 @@ class TestDictSetFixture:
         return mod.__dict__["$module"]
 
     def _query_test(self, mod, logic_mod, test_name):
+        # The fixture carries ``-double_quotes(chars)`` (its ``"..."`` keys
+        # MEAN strings — that is the contrast it draws against its bare-name
+        # atom keys), so a description is the STRING it is written as.
         result = Var()
-        sols = [deref(result) for _ in call("Test", test_name, module=logic_mod)]
+        sols = [deref(result)
+                for _ in call("Test", test_name, module=logic_mod)]
         return sols
 
     def test_origin(self, mod, logic_mod):
@@ -368,7 +373,7 @@ class TestDictSetFixture:
         # from the pre-pivot "distinct" pin; see
         # phase3-decomposition-and-p31-atom-pivot.md Task 7 work item 2.
         # The broader dict/set-vs-atom audit stays Phase 4 scope.
-        assert self._query_test(mod, logic_mod, "atom key same as string")
+        assert self._query_test(mod, logic_mod, "atom key is not the string key")
 
     # ── dot attribute-access sugar: P.key ≡ P[key] ──
 
@@ -653,7 +658,7 @@ class TestDictSubscriptRead:
                       module=logic_mod))
         term = exc.value.term
         assert term.functor == "error"
-        assert term.args[0] == "instantiation_error"
+        assert term.args[0] == mint("instantiation_error")
 
     def test_unbound_object_raises_instantiation_error(self, mod, logic_mod):
         """An unbound base is under-instantiated, not wrong-typed — it used to
@@ -665,7 +670,7 @@ class TestDictSubscriptRead:
             list(call("subscript_get", Var(), "a", v, module=logic_mod))
         term = exc.value.term
         assert term.functor == "error"
-        assert term.args[0] == "instantiation_error"
+        assert term.args[0] == mint("instantiation_error")
 
 
 # ── Backtracking tests ──────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ indexed dispatch produces the same results as unindexed dispatch.
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import (
     compile_predicate_trampoline as compile_predicate,
@@ -1330,12 +1331,12 @@ class TestAtomInListHead:
         back as the plain str ``'usd'``, not the ``usd`` class object.
         """
         # nv
-        usd = make_predicate("usd", [])
+        usd = make_predicate(mint("usd"), [])
         non_o_a = make_predicate("non_o_a", [])
         non_o_x = make_predicate("non_o_x", [])
         ltr = make_predicate("ltr", [])
         smart_t = make_predicate("smart_t", [])
-        unrestricted = make_predicate("unrestricted", [])
+        unrestricted = make_predicate(mint("unrestricted"), [])
 
         db = Database()
         clauses = [
@@ -1354,8 +1355,8 @@ class TestAtomInListHead:
             db.clauses_for("InsuranceRequired", 4),
             db,
             globals_={
-                "usd": usd, "non_o_a": non_o_a, "non_o_x": non_o_x,
-                "ltr": ltr, "smart_t": smart_t, "unrestricted": unrestricted,
+                mint("usd"): usd, "non_o_a": non_o_a, "non_o_x": non_o_x,
+                "ltr": ltr, "smart_t": smart_t, mint("unrestricted"): unrestricted,
             },
         )
 
@@ -1370,8 +1371,8 @@ class TestAtomInListHead:
         # The atom comes back as the plain str 'usd' (§1b/R2), not the
         # `usd` PredicateMeta class object passed in as a compile-time value.
         last_args = [r[3] for r in results]
-        assert ["usd", 50000] in last_args
-        assert ["usd", 100000] in last_args
+        assert [mint("usd"), 50000] in last_args
+        assert [mint("usd"), 100000] in last_args
 
 
 class TestNonAtomNestedInCellHeadArgUnreachable:

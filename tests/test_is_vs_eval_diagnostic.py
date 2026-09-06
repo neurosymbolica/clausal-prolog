@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import textwrap
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.exceptions import LogicException, type_error
 from clausal.terms import Add, Compound, FloorDiv
 from clausal.testing import main
@@ -36,7 +37,7 @@ IS_VS_EQ = "`is` unifies without evaluating"
 
 def test_type_error_number_on_arith_term_names_the_operator():
     exc = LogicException(
-        type_error("number", FloorDiv(left=10000, right=4), "sum_list/2"))
+        type_error(mint("number"), FloorDiv(left=10000, right=4), "sum_list/2"))
     msg = str(exc)
     assert "unevaluated arithmetic term" in msg
     assert IS_VS_EQ in msg
@@ -181,7 +182,7 @@ def test_site1_fires_for_an_integer_expectation_too():
     asserted nowhere and could have been dropped silently.
     """
     exc = LogicException(
-        type_error("integer", FloorDiv(left=10000, right=4), "nth0/3"))
+        type_error(mint("integer"), FloorDiv(left=10000, right=4), "nth0/3"))
     msg = str(exc)
     assert "unevaluated arithmetic term" in msg
     assert IS_VS_EQ in msg

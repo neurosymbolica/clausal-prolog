@@ -2,6 +2,7 @@
 import textwrap
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -217,7 +218,7 @@ def test_structured_rhs_nesting_and_mixing(tmp_path):
     v = Var()
     [result] = [deref(v) for _ in call("got", v, module=m.__dict__["$module"])]
     assert result[0] == 20
-    assert result[1] is m.__dict__["tag"]
+    assert result[1] == m.__dict__["tag"]
     # P3-2 Task 2 (THE FLIP, R6): ``Point`` is a data functor, so the
     # constant's functor value is the cell ``("Point", 1, 2)`` -- slots, not
     # attributes.
@@ -659,7 +660,7 @@ def test_constants_rhs_can_construct_an_imported_functor():
         v = Var()
         return [deref(v) for _ in call(goal, v, module=lm)]
 
-    assert one("wrapped") == [("Wrap", "inner")]
+    assert one("wrapped") == [("Wrap", mint("inner"))]
     assert one("paired") == [("Pair", 1, 2)]
     assert one("nested") == [[("Wrap", ("Pair", 3, 4))]]
 

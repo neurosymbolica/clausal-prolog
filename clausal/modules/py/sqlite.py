@@ -58,13 +58,16 @@ def _sqlite_connect_2(path, alias, trail, k):
     alias = deref(alias)
     path_str = str(path)
     alias_str = str(alias)
+    # NEVER yield while holding ``_LOCK``: a generator suspended at a yield
+    # inside the ``with`` is abandoned (not closed) whenever the caller drops
+    # its choice point — the test harness's diagnostic re-run is one such
+    # caller — and the lock is then held for the life of the process, so the
+    # NEXT ``connect/2`` blocks forever.  The idempotent "already connected"
+    # branch used to yield inside; it now records the decision and yields
+    # after the lock is released, like the fresh-connection path always did.
     with _LOCK:
-        if alias_str in _CONNECTIONS:
-            # Already connected under this alias — succeed idempotently
-            yield None
-            return
-        conn = _sqlite3.connect(path_str)
-        _CONNECTIONS[alias_str] = conn
+        if alias_str not in _CONNECTIONS:
+            _CONNECTIONS[alias_str] = _sqlite3.connect(path_str)
     yield None
 
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import char_atom, mint, spelling
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
@@ -38,44 +38,44 @@ def _run_collect(name, arity, *args, trail=None, snap=None):
 class TestCharType:
     def test_both_bound_match(self):
         # nv
-        assert _run("char_type", 2, "a", "alpha") > 0
+        assert _run("char_type", 2, char_atom("a"), mint("alpha")) > 0
 
     def test_both_bound_mismatch(self):
         # nv
-        assert _run("char_type", 2, "a", "digit") == 0
+        assert _run("char_type", 2, char_atom("a"), mint("digit")) == 0
 
     def test_digit_match(self):
         # nv
-        assert _run("char_type", 2, "1", "digit") > 0
+        assert _run("char_type", 2, char_atom("1"), mint("digit")) > 0
 
     def test_upper_match(self):
         # nv
-        assert _run("char_type", 2, "A", "upper") > 0
+        assert _run("char_type", 2, char_atom("A"), mint("upper")) > 0
 
     def test_space_match(self):
         # nv
-        assert _run("char_type", 2, " ", "space") > 0
+        assert _run("char_type", 2, char_atom(" "), mint("space")) > 0
 
     def test_punct_match(self):
         # nv
-        assert _run("char_type", 2, "!", "punct") > 0
+        assert _run("char_type", 2, char_atom("!"), mint("punct")) > 0
 
     def test_not_single_char_fails(self):
         # nv
-        assert _run("char_type", 2, "ab", "alpha") == 0
+        assert _run("char_type", 2, mint("ab"), mint("alpha")) == 0
 
     def test_enum_types_for_char(self):
         """char_type('a', TYPE) → enumerate matching types."""
         # nv
         TYPE = Var()
-        results = _run_collect("char_type", 2, "a", TYPE,
+        results = _run_collect("char_type", 2, char_atom("a"), TYPE,
                                snap=lambda: deref(TYPE))
-        assert "alpha" in results
-        assert "alnum" in results
-        assert "lower" in results
-        assert "ascii" in results
-        assert "print" in results
-        assert "digit" not in results
+        assert mint("alpha") in results
+        assert mint("alnum") in results
+        assert mint("lower") in results
+        assert mint("ascii") in results
+        assert mint("print") in results
+        assert mint("digit") not in results
 
     def test_enum_chars_for_digit(self):
         """char_type(C, 'digit') → enumerate every Unicode digit.
@@ -87,11 +87,11 @@ class TestCharType:
         """
         # nv
         C = Var()
-        results = _run_collect("char_type", 2, C, "digit",
+        results = _run_collect("char_type", 2, C, mint("digit"),
                                snap=lambda: deref(C))
-        assert set(str(i) for i in range(10)) <= set(results)
-        assert "٣" in results  # ARABIC-INDIC THREE
-        assert all(c.isdigit() for c in results)
+        assert set(char_atom(str(i)) for i in range(10)) <= set(results)
+        assert char_atom("٣") in results  # ARABIC-INDIC THREE
+        assert all(spelling(c).isdigit() for c in results)
 
     def test_both_unbound_error(self):
         # nv
@@ -100,11 +100,11 @@ class TestCharType:
 
     def test_control_char(self):
         # nv
-        assert _run("char_type", 2, chr(0), "control") > 0
+        assert _run("char_type", 2, char_atom(chr(0)), mint("control")) > 0
 
     def test_ascii_char(self):
         # nv
-        assert _run("char_type", 2, "z", "ascii") > 0
+        assert _run("char_type", 2, char_atom("z"), mint("ascii")) > 0
 
 
 # ── char_code/2 ───────────────────────────────────────────────────────────────
@@ -113,22 +113,23 @@ class TestCharCode:
     def test_char_to_code(self):
         # nv
         N = Var()
-        results = _run_collect("char_code", 2, "A", N, snap=lambda: deref(N))
+        results = _run_collect("char_code", 2, char_atom("A"), N,
+                               snap=lambda: deref(N))
         assert results == [65]
 
     def test_code_to_char(self):
         # nv
         C = Var()
         results = _run_collect("char_code", 2, C, 65, snap=lambda: deref(C))
-        assert results == ["A"]
+        assert results == [char_atom("A")]
 
     def test_both_bound_match(self):
         # nv
-        assert _run("char_code", 2, "A", 65) > 0
+        assert _run("char_code", 2, char_atom("A"), 65) > 0
 
     def test_both_bound_mismatch(self):
         # nv
-        assert _run("char_code", 2, "A", 66) == 0
+        assert _run("char_code", 2, char_atom("A"), 66) == 0
 
     def test_both_unbound_error(self):
         # nv
@@ -138,7 +139,7 @@ class TestCharCode:
     def test_non_char_error(self):
         # nv
         with pytest.raises(LogicException):
-            _run("char_code", 2, "AB", Var())
+            _run("char_code", 2, mint("AB"), Var())
 
 
 # ── upcase_atom/2, downcase_atom/2 ────────────────────────────────────────────
@@ -147,29 +148,30 @@ class TestCaseConversion:
     def test_upcase(self):
         # nv
         S = Var()
-        results = _run_collect("upcase_atom", 2, "hello", S,
+        results = _run_collect("upcase_atom", 2, mint("hello"), S,
                                snap=lambda: deref(S))
-        assert results == ["HELLO"]
+        assert results == [mint("HELLO")]
 
     def test_upcase_mixed(self):
         # nv
         S = Var()
-        results = _run_collect("upcase_atom", 2, "Hello World", S,
+        results = _run_collect("upcase_atom", 2, mint("Hello World"), S,
                                snap=lambda: deref(S))
-        assert results == ["HELLO WORLD"]
+        assert results == [mint("HELLO WORLD")]
 
     def test_downcase(self):
         # nv
         S = Var()
-        results = _run_collect("downcase_atom", 2, "HELLO", S,
+        results = _run_collect("downcase_atom", 2, mint("HELLO"), S,
                                snap=lambda: deref(S))
-        assert results == ["hello"]
+        assert results == [mint("hello")]
 
     def test_upcase_empty(self):
         # nv
         S = Var()
-        results = _run_collect("upcase_atom", 2, "", S, snap=lambda: deref(S))
-        assert results == [""]
+        results = _run_collect("upcase_atom", 2, mint(""), S,
+                               snap=lambda: deref(S))
+        assert results == [mint("")]
 
     def test_upcase_unbound_error(self):
         # nv
@@ -188,23 +190,24 @@ class TestAtomLength:
     def test_length(self):
         # nv
         N = Var()
-        results = _run_collect("atom_length", 2, "hello", N,
+        results = _run_collect("atom_length", 2, mint("hello"), N,
                                snap=lambda: deref(N))
         assert results == [5]
 
     def test_empty(self):
         # nv
         N = Var()
-        results = _run_collect("atom_length", 2, "", N, snap=lambda: deref(N))
+        results = _run_collect("atom_length", 2, mint(""), N,
+                               snap=lambda: deref(N))
         assert results == [0]
 
     def test_both_bound_match(self):
         # nv
-        assert _run("atom_length", 2, "hello", 5) > 0
+        assert _run("atom_length", 2, mint("hello"), 5) > 0
 
     def test_both_bound_mismatch(self):
         # nv
-        assert _run("atom_length", 2, "hello", 3) == 0
+        assert _run("atom_length", 2, mint("hello"), 3) == 0
 
     def test_unbound_error(self):
         # nv
@@ -218,24 +221,27 @@ class TestAtomChars:
     def test_atom_to_chars(self):
         # nv
         L = Var()
-        results = _run_collect("atom_chars", 2, "hi", L, snap=lambda: deref(L))
-        assert results == [["h", "i"]]
+        results = _run_collect("atom_chars", 2, mint("hi"), L,
+                               snap=lambda: deref(L))
+        assert results == [[char_atom("h"), char_atom("i")]]
 
     def test_chars_to_atom(self):
         # nv
         A = Var()
-        results = _run_collect("atom_chars", 2, A, ["h", "i"],
+        results = _run_collect("atom_chars", 2, A,
+                               [char_atom("h"), char_atom("i")],
                                snap=lambda: deref(A))
-        assert results == ["hi"]
+        assert results == [mint("hi")]
 
     def test_both_bound_match(self):
         # nv
-        assert _run("atom_chars", 2, "hi", ["h", "i"]) > 0
+        assert _run("atom_chars", 2, mint("hi"), [char_atom("h"), char_atom("i")]) > 0
 
     def test_empty(self):
         # nv
         L = Var()
-        results = _run_collect("atom_chars", 2, "", L, snap=lambda: deref(L))
+        results = _run_collect("atom_chars", 2, mint(""), L,
+                               snap=lambda: deref(L))
         assert results == [[]]
 
     def test_both_unbound_error(self):
@@ -250,7 +256,8 @@ class TestAtomCodes:
     def test_atom_to_codes(self):
         # nv
         L = Var()
-        results = _run_collect("atom_codes", 2, "hi", L, snap=lambda: deref(L))
+        results = _run_collect("atom_codes", 2, mint("hi"), L,
+                               snap=lambda: deref(L))
         assert results == [[104, 105]]
 
     def test_codes_to_atom(self):
@@ -258,11 +265,11 @@ class TestAtomCodes:
         A = Var()
         results = _run_collect("atom_codes", 2, A, [104, 105],
                                snap=lambda: deref(A))
-        assert results == ["hi"]
+        assert results == [mint("hi")]
 
     def test_both_bound_match(self):
         # nv
-        assert _run("atom_codes", 2, "hi", [104, 105]) > 0
+        assert _run("atom_codes", 2, mint("hi"), [104, 105]) > 0
 
     def test_both_unbound_error(self):
         # nv
@@ -276,54 +283,57 @@ class TestAtomConcat:
     def test_forward(self):
         # nv
         S = Var()
-        results = _run_collect("atom_concat", 3, "hel", "lo", S,
+        results = _run_collect("atom_concat", 3, mint("hel"), mint("lo"), S,
                                snap=lambda: deref(S))
-        assert results == ["hello"]
+        assert results == [mint("hello")]
 
     def test_forward_empty_left(self):
         # nv
         S = Var()
-        results = _run_collect("atom_concat", 3, "", "hello", S,
+        results = _run_collect("atom_concat", 3, mint(""), mint("hello"), S,
                                snap=lambda: deref(S))
-        assert results == ["hello"]
+        assert results == [mint("hello")]
 
     def test_forward_empty_right(self):
         # nv
         S = Var()
-        results = _run_collect("atom_concat", 3, "hello", "", S,
+        results = _run_collect("atom_concat", 3, mint("hello"), mint(""), S,
                                snap=lambda: deref(S))
-        assert results == ["hello"]
+        assert results == [mint("hello")]
 
     def test_reverse_enumerate_splits(self):
         """atom_concat(A, B, 'abc') → 4 solutions."""
         # nv
         A = Var()
         B = Var()
-        results = _run_collect("atom_concat", 3, A, B, "abc",
+        results = _run_collect("atom_concat", 3, A, B, mint("abc"),
                                snap=lambda: (deref(A), deref(B)))
-        assert results == [("", "abc"), ("a", "bc"), ("ab", "c"), ("abc", "")]
+        assert results == [(mint(""), mint("abc")),
+                           (mint("a"), mint("bc")),
+                           (mint("ab"), mint("c")),
+                           (mint("abc"), mint(""))]
 
     def test_prefix_bound(self):
         # nv
         B = Var()
-        results = _run_collect("atom_concat", 3, "a", B, "abc",
+        results = _run_collect("atom_concat", 3, mint("a"), B, mint("abc"),
                                snap=lambda: deref(B))
-        assert results == ["bc"]
+        assert results == [mint("bc")]
 
     def test_suffix_bound(self):
         # nv
         A = Var()
-        results = _run_collect("atom_concat", 3, A, "bc", "abc",
+        results = _run_collect("atom_concat", 3, A, mint("bc"), mint("abc"),
                                snap=lambda: deref(A))
-        assert results == ["a"]
+        assert results == [mint("a")]
 
     def test_all_bound_match(self):
         # nv
-        assert _run("atom_concat", 3, "a", "bc", "abc") > 0
+        assert _run("atom_concat", 3, mint("a"), mint("bc"), mint("abc")) > 0
 
     def test_all_bound_mismatch(self):
         # nv
-        assert _run("atom_concat", 3, "x", "bc", "abc") == 0
+        assert _run("atom_concat", 3, mint("x"), mint("bc"), mint("abc")) == 0
 
     def test_all_unbound_error(self):
         # nv
@@ -333,7 +343,7 @@ class TestAtomConcat:
     def test_c_unbound_a_bound_error(self):
         # nv
         with pytest.raises(LogicException):
-            _run("atom_concat", 3, "abc", Var(), Var())
+            _run("atom_concat", 3, mint("abc"), Var(), Var())
 
 
 # ── sub_atom/5 ────────────────────────────────────────────────────────────────
@@ -342,37 +352,37 @@ class TestSubAtom:
     def test_all_bound_extract(self):
         # nv
         S = Var()
-        results = _run_collect("sub_atom", 5, "hello", 1, 3, 1, S,
+        results = _run_collect("sub_atom", 5, mint("hello"), 1, 3, 1, S,
                                snap=lambda: deref(S))
-        assert results == ["ell"]
+        assert results == [mint("ell")]
 
     def test_whole_string(self):
         # nv
         S = Var()
-        results = _run_collect("sub_atom", 5, "hello", 0, 5, 0, S,
+        results = _run_collect("sub_atom", 5, mint("hello"), 0, 5, 0, S,
                                snap=lambda: deref(S))
-        assert results == ["hello"]
+        assert results == [mint("hello")]
 
     def test_empty_prefix(self):
         # nv
         S = Var()
-        results = _run_collect("sub_atom", 5, "hello", 0, 0, 5, S,
+        results = _run_collect("sub_atom", 5, mint("hello"), 0, 0, 5, S,
                                snap=lambda: deref(S))
-        assert results == [""]
+        assert results == [mint("")]
 
     def test_sub_bound_find(self):
         # nv
         B = Var()
-        results = _run_collect("sub_atom", 5, "hello", B, Var(), Var(), "ell",
-                               snap=lambda: deref(B))
+        results = _run_collect("sub_atom", 5, mint("hello"), B, Var(), Var(),
+                               mint("ell"), snap=lambda: deref(B))
         assert results == [1]
 
     def test_sub_bound_multiple_occurrences(self):
         """sub_atom('abcabc', B, _, _, 'bc') → B=1 and B=4."""
         # nv
         B = Var()
-        results = _run_collect("sub_atom", 5, "abcabc", B, Var(), Var(), "bc",
-                               snap=lambda: deref(B))
+        results = _run_collect("sub_atom", 5, mint("abcabc"), B, Var(), Var(),
+                               mint("bc"), snap=lambda: deref(B))
         assert results == [1, 4]
 
     def test_length_bound_enumerate(self):
@@ -381,23 +391,24 @@ class TestSubAtom:
         B = Var()
         A = Var()
         S = Var()
-        results = _run_collect("sub_atom", 5, "abc", B, 1, A, S,
+        results = _run_collect("sub_atom", 5, mint("abc"), B, 1, A, S,
                                snap=lambda: (deref(B), deref(A), deref(S)))
-        assert results == [(0, 2, "a"), (1, 1, "b"), (2, 0, "c")]
+        assert results == [(0, 2, mint("a")), (1, 1, mint("b")),
+                           (2, 0, mint("c"))]
 
     def test_all_unbound_enumerate(self):
         """sub_atom('abc', B, L, A, S) → 10 solutions (all substrings)."""
         # nv
-        assert _run("sub_atom", 5, "abc", Var(), Var(), Var(), Var()) == 10
+        assert _run("sub_atom", 5, mint("abc"), Var(), Var(), Var(), Var()) == 10
 
     def test_inconsistent_fails(self):
         """sub_atom('hello', 1, 3, 2, 'ell') → fails (After should be 1)."""
         # nv
-        assert _run("sub_atom", 5, "hello", 1, 3, 2, "ell") == 0
+        assert _run("sub_atom", 5, mint("hello"), 1, 3, 2, mint("ell")) == 0
 
     def test_consistent_succeeds(self):
         # nv
-        assert _run("sub_atom", 5, "hello", 1, 3, 1, "ell") > 0
+        assert _run("sub_atom", 5, mint("hello"), 1, 3, 1, mint("ell")) > 0
 
     def test_unbound_atom_error(self):
         # nv
@@ -411,10 +422,10 @@ class TestSubAtom:
         L = Var()
         A = Var()
         S = Var()
-        results = _run_collect("sub_atom", 5, "", B, L, A, S,
+        results = _run_collect("sub_atom", 5, mint(""), B, L, A, S,
                                snap=lambda: (deref(B), deref(L),
                                              deref(A), deref(S)))
-        assert results == [(0, 0, 0, "")]
+        assert results == [(0, 0, 0, mint(""))]
 
     def test_before_bound_enumerate(self):
         """sub_atom('abc', 0, L, A, S) → 4 solutions (all prefixes)."""
@@ -422,9 +433,10 @@ class TestSubAtom:
         L = Var()
         A = Var()
         S = Var()
-        results = _run_collect("sub_atom", 5, "abc", 0, L, A, S,
+        results = _run_collect("sub_atom", 5, mint("abc"), 0, L, A, S,
                                snap=lambda: (deref(L), deref(A), deref(S)))
-        assert results == [(0, 3, ""), (1, 2, "a"), (2, 1, "ab"), (3, 0, "abc")]
+        assert results == [(0, 3, mint("")), (1, 2, mint("a")),
+                           (2, 1, mint("ab")), (3, 0, mint("abc"))]
 
 
 # ── number_chars/2 ──────────────────────────────────────────────────────────────
@@ -438,13 +450,14 @@ class TestNumberChars:
         v = Var()
         results = _run_collect("number_chars", 2, 42, v,
                                snap=lambda: deref(v))
-        assert results == [["4", "2"]]
+        assert results == [[char_atom("4"), char_atom("2")]]
 
     def test_int_reverse(self):
         """number_chars(N, ["4", "2"]) → N = 42."""
         # nv
         v = Var()
-        results = _run_collect("number_chars", 2, v, ["4", "2"],
+        results = _run_collect("number_chars", 2, v,
+                               [char_atom("4"), char_atom("2")],
                                snap=lambda: deref(v))
         assert results == [42]
 
@@ -454,13 +467,14 @@ class TestNumberChars:
         v = Var()
         results = _run_collect("number_chars", 2, 3.14, v,
                                snap=lambda: deref(v))
-        assert results == [["3", ".", "1", "4"]]
+        assert results == [[char_atom(c) for c in "3.14"]]
 
     def test_float_reverse(self):
         """number_chars(N, ["3", ".", "1", "4"]) → N = 3.14."""
         # nv
         v = Var()
-        results = _run_collect("number_chars", 2, v, ["3", ".", "1", "4"],
+        results = _run_collect("number_chars", 2, v,
+                               [char_atom(c) for c in "3.14"],
                                snap=lambda: deref(v))
         assert results == [3.14]
 
@@ -470,23 +484,23 @@ class TestNumberChars:
         v = Var()
         results = _run_collect("number_chars", 2, -5, v,
                                snap=lambda: deref(v))
-        assert results == [["-", "5"]]
+        assert results == [[char_atom("-"), char_atom("5")]]
 
     def test_invalid_chars_fails(self):
         """number_chars(N, ["a", "b"]) → no solutions."""
         # nv
         v = Var()
-        assert _run("number_chars", 2, v, ["a", "b"]) == 0
+        assert _run("number_chars", 2, v, [char_atom("a"), char_atom("b")]) == 0
 
     def test_both_bound_consistent(self):
         """number_chars(42, ["4", "2"]) → succeeds."""
         # nv
-        assert _run("number_chars", 2, 42, ["4", "2"]) == 1
+        assert _run("number_chars", 2, 42, [char_atom("4"), char_atom("2")]) == 1
 
     def test_both_bound_inconsistent(self):
         """number_chars(42, ["4", "3"]) → fails."""
         # nv
-        assert _run("number_chars", 2, 42, ["4", "3"]) == 0
+        assert _run("number_chars", 2, 42, [char_atom("4"), char_atom("3")]) == 0
 
     def test_both_unbound_raises(self):
         """number_chars(N, C) with both unbound → instantiation error."""

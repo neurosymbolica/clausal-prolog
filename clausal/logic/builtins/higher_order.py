@@ -6,6 +6,7 @@ max_by/3, min_by/3, filter_map/3."""
 from __future__ import annotations
 
 from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.exceptions import LogicException, type_error
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result
 from clausal.logic.builtins._helpers import _standard_order_key
@@ -121,9 +122,13 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     if is_cell:
         goal_args = list(goal_val[1:])
     elif type(goal_val) is str:
-        # A str IS an atom (P3-1 §1b/R2), so a bare atom goal is a zero-arity
-        # predicate name; with extras it names the arity they make up.
-        functor, goal_args = goal_val, []
+        # THE FLIP (spec §6.4): a ``str`` is a STRING, and a string is not
+        # callable — ``call("foo")`` is a type error, not a call to ``foo/0``.
+        # It is raised rather than failed silently (the treatment a
+        # non-callable goal otherwise gets) because a string here is always a
+        # mistake about representation, and a silent failure is exactly how
+        # that mistake stays invisible.
+        raise LogicException(type_error("callable", goal_val, "call/N"))
     else:
         return None
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]

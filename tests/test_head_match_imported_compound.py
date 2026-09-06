@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref

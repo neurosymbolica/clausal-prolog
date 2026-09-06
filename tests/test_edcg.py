@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
@@ -571,7 +572,7 @@ class TestEdcgEdgeCases:
         items = Var()
         for _ in call("run", 0, cnt, [], items, module=mod):
             assert deref(cnt) == 2
-            assert deref(items) == ["world", "hello"]
+            assert deref(items) == [mint("world"), mint("hello")]
             break
 
 

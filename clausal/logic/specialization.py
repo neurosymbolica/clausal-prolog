@@ -21,6 +21,9 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
+from clausal.logic.atoms import (
+    is_atom as _term_is_atom, spelling as _atom_spelling,
+)
 from clausal.logic.variables import Var, deref, is_var, unify, Trail
 from clausal.logic.predicate import (
     PredicateMeta,
@@ -1243,6 +1246,14 @@ def _make_solve_goal_predicate(
 
         functor = goal[0]
         args = goal[1:]
+
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4): a list-form
+        # goal written in source names its predicate with an ATOM, so the
+        # NAME read out of slot 0 is a cell.  The handler map and the module
+        # namespace are both keyed by the SPELLING (identifier ``str``s —
+        # §6.4's "compiler-side name consumers" row), so read it.
+        if _term_is_atom(functor):
+            functor = _atom_spelling(functor)
 
         handler = handlers.get(functor)
         if handler is not None:

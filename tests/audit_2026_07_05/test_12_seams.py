@@ -23,6 +23,7 @@ name (atoms/functors and table state are module-scoped).
 """
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, _query_cache
 from clausal.logic.variables import (
@@ -249,7 +250,7 @@ class TestF002EqNonRealOperand:
         assert term.functor == "error"
         inner = term.args[0]
         assert inner.functor == "type_error"
-        assert inner.args[0] == "evaluable"
+        assert inner.args[0] == mint("evaluable")
         assert inner.args[1] == culprit
         assert term.args[1] == "(==)/2"
 
@@ -357,7 +358,7 @@ class TestF002NeNonRealOperand:
         assert term.functor == "error"
         inner = term.args[0]
         assert inner.functor == "type_error"
-        assert inner.args[0] == "evaluable"
+        assert inner.args[0] == mint("evaluable")
         assert inner.args[1] == culprit
         assert term.args[1] == "(!=)/2"
 
@@ -466,7 +467,7 @@ class TestF002ExprTreeVsNonNumericOperand:
             fd_eq(self._add(Var(), 1), "banana", Trail())
         term = ei.value.term
         assert term.args[0].functor == "type_error"
-        assert term.args[0].args[0] == "evaluable"
+        assert term.args[0].args[0] == mint("evaluable")
         assert term.args[0].args[1] == "banana"
         assert term.args[1] == "(==)/2"
 
@@ -557,7 +558,11 @@ class TestNonNumericLeafInsideExprTree:
         assert term.functor == "error"
         inner = term.args[0]
         assert inner.functor == "type_error"
-        assert inner.args[0] == "integer"
+        assert inner.args[0] == mint("integer")
+        # The culprit is the operand AS THE CALLER PASSED IT: a Python
+        # ``str`` operand stays a STRING (THE FLIP), while an operand
+        # written as ``"a"`` in .clausal source is an ATOM — see
+        # ``test_compiled_leaf_error_is_catchable``, which expects one.
         assert inner.args[1] == culprit
         assert term.args[1] == "clpfd expression"
 
@@ -566,38 +571,38 @@ class TestNonNumericLeafInsideExprTree:
     def test_eq_str_leaf_raises(self):
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as ei:
-            fd_eq(self._add(Var(), "a"), 5, Trail())
-        self._assert_integer_leaf_error(ei, "a")
+            fd_eq(self._add(Var(), mint("a")), 5, Trail())
+        self._assert_integer_leaf_error(ei, mint("a"))
 
     def test_eq_str_leaf_on_rhs_raises(self):
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException):
-            fd_eq(5, self._add(Var(), "a"), Trail())
+            fd_eq(5, self._add(Var(), mint("a")), Trail())
 
     def test_ne_str_leaf_raises(self):
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as ei:
-            fd_ne(self._add(Var(), "a"), 5, Trail())
-        self._assert_integer_leaf_error(ei, "a")
+            fd_ne(self._add(Var(), mint("a")), 5, Trail())
+        self._assert_integer_leaf_error(ei, mint("a"))
 
     def test_lt_str_leaf_raises(self):
         from clausal.logic.clpfd import fd_lt
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as ei:
-            fd_lt(self._add(Var(), "a"), 5, Trail())
-        self._assert_integer_leaf_error(ei, "a")
+            fd_lt(self._add(Var(), mint("a")), 5, Trail())
+        self._assert_integer_leaf_error(ei, mint("a"))
 
     def test_le_str_leaf_raises(self):
         from clausal.logic.clpfd import fd_le
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException):
-            fd_le(self._add(Var(), "a"), 5, Trail())
+            fd_le(self._add(Var(), mint("a")), 5, Trail())
 
     def test_gt_str_leaf_raises(self):
         from clausal.logic.clpfd import fd_gt
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException):
-            fd_gt(self._add(Var(), "a"), 5, Trail())
+            fd_gt(self._add(Var(), mint("a")), 5, Trail())
 
     # ── other garbage leaf kinds (same allowlist as the operand guards) ──
 
@@ -652,7 +657,7 @@ class TestNonNumericLeafInsideExprTree:
         # posted, default domain ∩ {5} non-empty → True).
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException):
-            fd_eq(self._add(2, "a"), 5, Trail())
+            fd_eq(self._add(2, mint("a")), 5, Trail())
 
     # ── the sibling walkers: reification and _expr_domain itself ─────────
 
@@ -660,7 +665,7 @@ class TestNonNumericLeafInsideExprTree:
         from clausal.logic.clpfd import reify_fd
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException):
-            reify_fd("eq", self._add(Var(), "a"), 5, Trail())
+            reify_fd("eq", self._add(Var(), mint("a")), 5, Trail())
 
     def test_expr_domain_unknown_leaf_raises(self):
         # The enforcement point named by the todo: the catch-all must never
@@ -695,8 +700,8 @@ safeleaf(SX, SE) <- catch((SX + "a" == 5), SE, 1 == 1)
         term = caught[0]
         assert term.functor == "error"
         assert term.args[0].functor == "type_error"
-        assert term.args[0].args[0] == "integer"
-        assert term.args[0].args[1] == "a"
+        assert term.args[0].args[0] == mint("integer")
+        assert term.args[0].args[1] == mint("a")
         assert term.args[1] == "clpfd expression"
 
     # ── controls: legitimate leaves and nodes keep working ───────────────
@@ -805,8 +810,8 @@ class TestF004EngineNamespaceLeak:
         # a user predicate can use those public names.
         m = load(f"f004_{name}", f'{name}("a", "b"),\n')
         x = Var()
-        got = [deref(x) for _ in solve(getattr(m, name)("a", x))]
-        assert got == ["b"]
+        got = [deref(x) for _ in solve(getattr(m, name)(mint("a"), x))]
+        assert got == [mint("b")]
 
     def test_leak_is_observable_in_module_dict(self, load):
         m = load("f004_obs", "q(1),\n")
@@ -824,7 +829,7 @@ class TestF004EngineNamespaceLeak:
         # control: 'solve' is NOT leaked, so a solve/2 user predicate is fine
         m = load("f004_solve", 'solve("a", "b"),\n')
         x = Var()
-        assert [deref(x) for _ in solve(m.solve("a", x))] == ["b"]
+        assert [deref(x) for _ in solve(m.solve(mint("a"), x))] == [mint("b")]
 
     def test_headlit_guard_immune_to_user_unify_predicate(self, load):
         # A12-F004 follow-up: the opaque head-literal guard (A02-F003) must
@@ -876,7 +881,7 @@ seed <- assertz(ghost("x"))
         list(call("seed", module=logic_mod))
         x = Var()
         got = [deref(x) for _ in call("ghost", x, module=logic_mod)]
-        assert got == ["x"]
+        assert got == [mint("x")]
 
     def test_declared_but_empty_dynamic_predicate_fails_cleanly(self, load):
         # A12-F005 spec acceptance: querying a declared-but-empty dynamic
@@ -900,10 +905,10 @@ probe(PX) <- ghost2(PX)
         assert list(solve(m.probe(x))) == []
         # assertz after the empty queries still works (dynamic stays open)
         _query_cache.clear()
-        list(call("assertz", m.ghost2("y"), module=logic_mod))
+        list(call("assertz", m.ghost2(mint("y")), module=logic_mod))
         _query_cache.clear()
         x = Var()
-        assert [deref(x) for _ in solve(m.ghost2(x))] == ["y"]
+        assert [deref(x) for _ in solve(m.ghost2(x))] == [mint("y")]
 
     def test_directive_then_clause_keeps_named_fields(self, load):
         # A12-F005 regression: the -dynamic(pers/2) handler pre-registered
@@ -920,7 +925,7 @@ pers(NAME, AGE) <- likes(NAME, AGE)
 """)
         assert m.pers._fields == ("name", "age")
         x = Var()
-        got = [deref(x) for _ in solve(m.pers(name="bob", age=x))]
+        got = [deref(x) for _ in solve(m.pers(name=mint("bob"), age=x))]
         assert got == [42]
 
     def test_dynamic_with_seed_fact_works(self, load):
@@ -936,7 +941,7 @@ seed <- assertz(ghost("x"))
         list(call("seed", module=logic_mod))
         x = Var()
         got = sorted(deref(x) for _ in solve(m.ghost(x)))
-        assert got == ["init", "x"]
+        assert got == [mint("init"), mint("x")]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -960,7 +965,7 @@ bad_elem(R) <- (
 """)
         r = Var()
         got = [deref(r) for _ in solve(m.guarded(r))]
-        assert got == ["caught"]
+        assert got == [mint("caught")]
 
     def test_tabled_list_answer_via_liskov_char_list(self, load):
         # A04-F005 seam consequence, fixed by commit 5f0a5088 (tabled
@@ -973,8 +978,8 @@ bad_elem(R) <- (
 sl(["a", "b"], R) <- (R is "matched")
 """)
         r = Var()
-        got = [deref(r) for _ in solve(m.sl(["a", "b"], r))]
-        assert got == ["matched"]
+        got = [deref(r) for _ in solve(m.sl([mint("a"), mint("b")], r))]
+        assert got == [mint("matched")]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1029,7 +1034,7 @@ p(5, "five"),
         x, r = Var(), Var()
         in_domain(x, 2, 3, t)
         got = [(deref(x), deref(r)) for _ in solve(m.p(x, r))]
-        assert got == [(2, "two"), (3, "three")]
+        assert got == [(2, mint("two")), (3, mint("three"))]
 
     def test_dif_constrained_query_var(self, load):
         m = load("disp", self.SRC)
@@ -1037,7 +1042,7 @@ p(5, "five"),
         x, r = Var(), Var()
         dif(x, 2, t)
         got = [(deref(x), deref(r)) for _ in solve(m.p(x, r))]
-        assert got == [(1, "one"), (3, "three"), (4, "four"), (5, "five")]
+        assert got == [(1, mint("one")), (3, mint("three")), (4, mint("four")), (5, mint("five"))]
 
 
 class TestControlConstraintScoping:
@@ -1157,7 +1162,7 @@ cnt(N, R) <- (
 )
 """)
         r = Var()
-        assert [deref(r) for _ in solve(m.cnt(3, r))] == ["done"]
+        assert [deref(r) for _ in solve(m.cnt(3, r))] == [mint("done")]
 
 
 class TestStringsAsListsDispatchParity:
@@ -1189,21 +1194,19 @@ h([_, _], R) <- (R is "two")
 h([_, _, _, *_], R) <- (R is "many")
 """
 
+    # THE FLIP (2026-09-06-atoms-as-cells-strings §6.2) UNDID P3-1 Task 5's
+    # retirement of the str~char-list cons rule, and this class's parity
+    # claim — "a str and its char list take the same path" — holds again in
+    # BOTH forms.  A body ``Is``-goal against a star-free list literal
+    # compiles to a plain ``unify(L, [...], trail)``, and ``do_unify`` now
+    # has the str↔list arm back, so the str probe reaches the same clause
+    # its char-list twin does.  ``""`` and ``[]`` are one term.
     @pytest.mark.parametrize("probe,expected", [
-        (["a", "b"], ["two"]),
-        # P3-1 Task 5 (§1b): a body ``Is``-goal against a STAR-FREE list
-        # literal (``L is [_, _]``, ``L is []``) compiles to a plain
-        # ``unify(L, [...], trail)`` call — the retired do_unify cross-type
-        # branch — so a str probe no longer reaches it (formerly ["two"]).
-        # Contrast with a star-containing pattern (``[_, _, _, *_]``,
-        # the "abc" case below) or ANY clause-HEAD list pattern
-        # (``test_head_pattern_parity``), both of which route through the
-        # separate, untouched ``_head_list_unify_input`` str-native
-        # destructuring and are unaffected.
-        ("ab", []),
-        ([], ["empty"]),
-        ("", []),
-        ("abc", ["many"]),
+        ([mint("a"), mint("b")], [mint("two")]),
+        ("ab", [mint("two")]),
+        ([], [mint("empty")]),
+        ("", [mint("empty")]),
+        ("abc", [mint("many")]),
     ])
     def test_guard_form_parity(self, load, probe, expected):
         m = load("liskov_guard", self.GUARD_SRC)
@@ -1212,11 +1215,11 @@ h([_, _, _, *_], R) <- (R is "many")
         assert [deref(r) for _ in solve(m.r(probe, r))] == expected
 
     @pytest.mark.parametrize("probe,expected", [
-        (["a", "b"], ["two"]),
-        ("ab", ["two"]),
-        ([], ["empty"]),
-        ("", ["empty"]),
-        ("abcd", ["many"]),
+        ([mint("a"), mint("b")], [mint("two")]),
+        ("ab", [mint("two")]),
+        ([], [mint("empty")]),
+        ("", [mint("empty")]),
+        ("abcd", [mint("many")]),
     ])
     def test_head_pattern_parity(self, load, probe, expected):
         m = load("liskov_head", self.HEAD_SRC)
@@ -1231,7 +1234,9 @@ h([_, _, _, *_], R) <- (R is "many")
 sl(["a", "b"], R) <- (R is "matched")
 """)
         r = Var()
-        assert [deref(r) for _ in solve(m.sl("ab", r))] == ["matched"]
+        # The head list ["a", "b"] is a list of char ATOMS — that IS the
+        # string "ab" (THE FLIP §6.2) — so a str probe matches it.
+        assert [deref(r) for _ in solve(m.sl("ab", r))] == [mint("matched")]
 
 
 class TestAssertzReindexSeam:
@@ -1257,16 +1262,18 @@ addone <- assertz(f("e", 5))
         logic_mod = m.__dict__["$module"]
         L = Var()
         for _ in solve(m.keys(L)):
-            assert deref(L) == ["a", "b", "c", "d"]
+            assert deref(L) == [mint("a"), mint("b"), mint("c"), mint("d")]
         list(call("addone", module=logic_mod))
         _query_cache.clear()
         L2 = Var()
         for _ in solve(m.keys(L2)):
-            assert deref(L2) == ["a", "b", "c", "d", "e"]
+            assert deref(L2) == [mint("a"), mint("b"), mint("c"),
+                                 mint("d"), mint("e")]
         _query_cache.clear()
         v = Var()
-        assert [deref(v) for _ in solve(m.f("e", v))] == [5]
+        assert [deref(v) for _ in solve(m.f(mint("e"), v))] == [5]
         _query_cache.clear()
         k, v2 = Var(), Var()
         got = [(deref(k), deref(v2)) for _ in solve(m.f(k, v2))]
-        assert got == [("a", 1), ("b", 2), ("c", 3), ("d", 4), ("e", 5)]
+        assert got == [(mint("a"), 1), (mint("b"), 2), (mint("c"), 3),
+                       (mint("d"), 4), (mint("e"), 5)]

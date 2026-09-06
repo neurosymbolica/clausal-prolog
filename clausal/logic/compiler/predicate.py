@@ -72,6 +72,10 @@ from clausal.logic.runtime.const_set import _const_set, _CONST_SET_TYPES  # noqa
 # edge into ``clausal.modules``.  Its own imports — clausal.terms,
 # clausal.logic.atoms, clausal.logic.variables — are already pulled in above.
 from clausal.logic.to_python import to_python as _to_python_fn  # noqa: F401
+from clausal.logic.atoms import mint as _mint  # noqa: F401
+from clausal.logic.runtime._seg_helpers import (  # noqa: F401
+    seq_getitem as _seq_getitem,
+)
 
 from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -317,6 +321,12 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # bound (A12-F004); generated code references them ``$``-prefixed.
     "$walk": _walk_fn,
     "$deref": deref,
+    # One element of a possibly-``str`` sequence target, as a TERM: a str's
+    # element is its char ATOM, a list's is itself, a bytes' is the int code
+    # (spec §6.2).  Emitted by the multi-star head guard, which used to index
+    # the target directly and so compared a head literal against a 1-char
+    # ``str`` — a one-element STRING after THE FLIP, not a char.
+    "$seq_getitem": _seq_getitem,
     # The ONE outbound term → Python conversion (spec
     # 2026-09-06-atoms-as-cells-strings §9.1).  Emitted by the PyThunk
     # lowering in terms_to_ast, so ``++`` escapes and f-strings convert their
@@ -324,6 +334,12 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # DictTerm → dict with converted keys, tuples preserved).  It derefs
     # first, so it is a strict widening of ``$deref`` on that path.
     "$to_python": _to_python_fn,
+    # The canonical atom constructor (spec §6.1).  Referenced by the
+    # declaration-site statement ``term_rewriting._make_atom_str_assign_ast``
+    # generates for ``-module``/``-private``: ``foo = $mint('foo')`` binds the
+    # module attribute to the atom CELL with an interned slot 0 (§9.3), and
+    # ``$``-prefixed so a user predicate named ``mint`` cannot shadow it.
+    "$mint": _mint,
     "$unify": unify,
     "$ast": ast,
     # The cells module itself, so a head pattern can name the tuple-DATA tag

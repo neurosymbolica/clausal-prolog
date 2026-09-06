@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import os
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -113,8 +114,8 @@ class TestBareImportedAtomHeadArg:
         # Each of the 4 rule clauses names a DIFFERENT imported atom in its
         # head. A ground call with the matching atom bound must reach
         # EXACTLY that clause (pre-fix: reached NONE -- zero solutions).
-        assert _level_of(mod, 1) == ["aa"]
-        assert _level_of(mod, 2) == ["bb"]
+        assert _level_of(mod, 1) == [mint("aa")]
+        assert _level_of(mod, 2) == [mint("bb")]
         assert _level_of(mod, 3) == ["cc"]
         assert _level_of(mod, 4) == ["dd"]
 
@@ -123,7 +124,7 @@ class TestBareImportedAtomHeadArg:
         bound 2nd argument) rather than reading it out -- this is exactly
         the shape the corpus escalation hit (``cdd_level(P, 'standard')``)."""
         mod = _load_bare_importer()
-        assert _level_solutions(mod, 1, "aa") == ["aa"]
+        assert _level_solutions(mod, 1, mint("aa")) == [mint("aa")]
         assert _level_solutions(mod, 4, "dd") == ["dd"]
         # A mismatched pairing must still correctly fail (not spuriously
         # succeed via some other clause's bucket).
@@ -144,14 +145,14 @@ class TestDottedQualifiedAtomHeadArg:
 
     def test_ground_call_reaches_the_matching_clause(self):
         mod = _load_dotted_importer()
-        assert _level_of(mod, 1) == ["aa"]
-        assert _level_of(mod, 2) == ["bb"]
+        assert _level_of(mod, 1) == [mint("aa")]
+        assert _level_of(mod, 2) == [mint("bb")]
         assert _level_of(mod, 3) == ["cc"]
         assert _level_of(mod, 4) == ["dd"]
 
     def test_ground_call_with_the_atom_supplied_by_the_caller(self):
         mod = _load_dotted_importer()
-        assert _level_solutions(mod, 1, "aa") == ["aa"]
+        assert _level_solutions(mod, 1, mint("aa")) == [mint("aa")]
         assert _level_solutions(mod, 4, "dd") == ["dd"]
         assert _level_solutions(mod, 1, "dd") == []
 
@@ -190,14 +191,14 @@ class TestPackageReexportedAtomHeadArg:
 
     def test_ground_call_reaches_the_matching_clause(self):
         mod = _load_pkg_reexport_importer()
-        assert _level_of(mod, 1) == ["aa"]
-        assert _level_of(mod, 2) == ["bb"]
+        assert _level_of(mod, 1) == [mint("aa")]
+        assert _level_of(mod, 2) == [mint("bb")]
         assert _level_of(mod, 3) == ["cc"]
         assert _level_of(mod, 4) == ["dd"]
 
     def test_ground_call_with_the_atom_supplied_by_the_caller(self):
         mod = _load_pkg_reexport_importer()
-        assert _level_solutions(mod, 1, "aa") == ["aa"]
+        assert _level_solutions(mod, 1, mint("aa")) == [mint("aa")]
         assert _level_solutions(mod, 4, "dd") == ["dd"]
         assert _level_solutions(mod, 1, "dd") == []
 
@@ -236,5 +237,5 @@ class TestPackageReexportedAtomHeadArg:
         assert seen.get("result") is not None, (
             "expected a real index at position 1 -- got None (unindexed fallback)"
         )
-        assert sorted(seen["result"]["buckets"].keys()) == ["aa", "bb", "cc", "dd"]
+        assert sorted(seen["result"]["buckets"].keys()) == [mint("aa"), mint("bb"), "cc", "dd"]
         assert seen["result"]["n_distinct"] == 4

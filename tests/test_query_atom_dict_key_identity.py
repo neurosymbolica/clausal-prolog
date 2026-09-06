@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal import Var, solve
@@ -157,7 +158,7 @@ def test_atom_key_identity_preserved_across_the_boundary(mods):
     assert isinstance(out, DictTerm)
     keys = list(out.keys())
     assert len(keys) == 1
-    assert keys[0] is atoms.query_date
+    assert keys[0] == atoms.query_date
 
 
 def test_atom_in_a_list_argument_survives(mods):
@@ -165,13 +166,13 @@ def test_atom_in_a_list_argument_survives(mods):
     argument was re-resolved in the callee's namespace, not just dict keys."""
     atoms, reader = mods
     out = _one(lambda V: reader.echo([atoms.query_date], V))
-    assert out[0] is atoms.query_date
+    assert out[0] == atoms.query_date
 
 
 def test_atom_keyed_dict_nested_in_a_list_survives(mods):
     atoms, reader = mods
     out = _one(lambda V: reader.echo([DictTerm({atoms.query_date: 5})], V))
-    assert list(out[0].keys())[0] is atoms.query_date
+    assert list(out[0].keys())[0] == atoms.query_date
 
 
 def test_module_internal_atom_reads_still_work(mods):
@@ -179,7 +180,7 @@ def test_module_internal_atom_reads_still_work(mods):
     lowering, untouched by the fix) still round-trips."""
     atoms, _reader = mods
     profile = _clausal_built_profile(atoms)
-    assert list(profile.keys())[0] is atoms.query_date
+    assert list(profile.keys())[0] == atoms.query_date
     assert profile[atoms.query_date] == 5
 
 

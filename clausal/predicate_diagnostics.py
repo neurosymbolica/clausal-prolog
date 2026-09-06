@@ -240,7 +240,11 @@ def _local_entries(module_globals, modname, db):
     for name, value in _items(module_globals):
         if not isinstance(name, str) or name.startswith("_") or "$" in name:
             continue
-        if predicate_builtins.get(name) is value:
+        # Equality, never identity, for an atom (spec §2/§5.2): two
+        # equal atoms are the same atom whether or not they are the
+        # same tuple object, and ``mint`` returns a fresh tuple each
+        # call.  THE FLIP retired the last of these ``is`` pins.
+        if predicate_builtins.get(name) == value:
             continue
         if modname is not None and getattr(value, "__module__", None) != modname:
             continue  # imported or re-exported; not this module's own
@@ -263,7 +267,11 @@ def _imported_entries(module_globals, modname):
     for name, value in _items(module_globals):
         if not isinstance(name, str) or name.startswith("_") or "$" in name:
             continue
-        if predicate_builtins.get(name) is value:
+        # Equality, never identity, for an atom (spec §2/§5.2): two
+        # equal atoms are the same atom whether or not they are the
+        # same tuple object, and ``mint`` returns a fresh tuple each
+        # call.  THE FLIP retired the last of these ``is`` pins.
+        if predicate_builtins.get(name) == value:
             continue
         origin = getattr(value, "__module__", None)
         if origin is None or origin == modname:

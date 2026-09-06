@@ -15,6 +15,7 @@ from typing import Any
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import is_atom, is_atom_value, is_term_instance, term_field_names
 from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.atoms import char_atom
 from clausal.terms import (
     Compound, KWTerm, DictTerm, SetTerm,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
@@ -360,10 +361,30 @@ _args_list_precell = _args_list
 _is_compound_precell = _is_compound
 
 
+# THE FLIP (2026-09-06-atoms-as-cells-strings §6.4): a ``str`` is a STRING —
+# the LIST of its char atoms — so every accessor below answers for a str
+# exactly what it answers for that list: ``functor("hello", N, A)`` gives
+# ``N = '.'``, ``A = 2``; ``arg(1, "hello", C)`` gives the char atom
+# ``("h",)``; ``arg(2, "hello", T)`` gives the ``str`` SLICE ``"ello"``
+# (R-S2: decomposition answers virtually, nothing is expanded), and the
+# empty string answers as ``[]`` does.  These arms sit in FRONT of the
+# pre-cell implementations (C or Python), which still carry the retired
+# "a str is its own functor, arity 0" reading of the P3-1 pivot and are
+# therefore never reached for a ``str`` any more.
+#
+# The str arms are spelled ``type(term) is str`` rather than routed through
+# ``normalize_seg_input``, and that is deliberate rather than an exception to
+# spec §14 item 8: a ``SegString`` never reaches these wrappers un-walked
+# (``inspection.py`` normalizes at the builtin boundary), and a future
+# mapped-string representation slots in at that same boundary, walking to
+# whatever these arms already answer for.
+
 def _functor_name(term: Any) -> Any:
     is_compound_cell, f = _cell_functor(term)
     if is_compound_cell:
         return f
+    if type(term) is str:
+        return "[]" if not term else "."
     return _functor_name_precell(term)
 
 
@@ -371,6 +392,8 @@ def _arity(term: Any) -> int | None:
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return len(term) - 1
+    if type(term) is str:
+        return 0 if not term else 2
     return _arity_precell(term)
 
 
@@ -380,6 +403,13 @@ def _nth_arg(term: Any, n: int) -> Any:
         if n < 1 or n > len(term) - 1:
             raise IndexError(f"arg index {n} out of range for {term!r}")
         return term[n]
+    if type(term) is str:
+        if term:
+            if n == 1:
+                return char_atom(term[0])
+            if n == 2:
+                return term[1:]
+        raise IndexError(f"arg index {n} out of range for {term!r}")
     return _nth_arg_precell(term, n)
 
 
@@ -387,6 +417,8 @@ def _args_list(term: Any) -> list:
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return list(term[1:])
+    if type(term) is str:
+        return [] if not term else [char_atom(term[0]), term[1:]]
     return _args_list_precell(term)
 
 
@@ -394,6 +426,12 @@ def _is_compound(term: Any) -> bool:
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return True
+    if type(term) is str:
+        # A string answers what the LIST it denotes answers, and a list is
+        # not compound in this funnel (``_is_compound_py([1])`` is False) —
+        # ``compound/1`` gates on this, and ISO's answer for a list is a
+        # separate question the parked ``[]``-as-an-atom item covers.
+        return False
     return _is_compound_precell(term)
 
 
@@ -579,7 +617,12 @@ def _standard_order_key(term: Any) -> tuple:
     if isinstance(term, (bool, int, float, _Fraction, _Decimal, _Real)):
         return (_ORD_NUM, term)
     if isinstance(term, str):
-        return (_ORD_ATOM, term)
+        # THE FLIP (spec §6.5): a string keys as the LIST OF CHAR ATOMS it
+        # denotes, in the sequence band — so ``"ab"`` and
+        # ``[("a",), ("b",)]`` have EQUAL keys and ``""`` keys like ``[]``.
+        # That equality is what makes ``sort/2`` collapse the two spellings
+        # of one term (dedup below is by key, not by ``==``).
+        return (_ORD_SEQ, tuple((_ORD_ATOM, c) for c in term))
     if is_atom(term):
         # P3-1 Task 4 (standard-order collapse), status corrected by the
         # Task 7 sweep: NOT a transient pre-pivot straggler after all. The
@@ -600,9 +643,10 @@ def _standard_order_key(term: Any) -> tuple:
     if isinstance(term, bytes):
         return (_ORD_BYTES, term)
     if type(term) is tuple and term and type(term[0]) is str:
-        # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5): same key as
-        # the str spelling so a str atom and a cell atom are one atom in the
-        # order.  Arity > 0 keys like ``Compound`` — arity first, then name
+        # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5) and keys in the
+        # atom band by its spelling — the same key a 0-arity predicate class
+        # of that name gets, so the two spellings of one atom are one atom in
+        # the order.  Arity > 0 keys like ``Compound`` — arity first, then name
         # (ISO 7.2.1), positional flavour — never as a sequence.
         if len(term) == 1:
             return (_ORD_ATOM, term[0])

@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # tests/fixtures/dict_set_patterns.clausal
 # Phase 2: DictTerm and SetTerm pattern matching in clause heads and bodies.
 -private([foo, bar, num, inner])
@@ -120,7 +121,7 @@ Test("subscript nonground errors") <- (
     catch(
         (_ is {"a": 1}[K_UNUSED]),
         error(ETYPE, _),
-        ETYPE is "instantiation_error",
+        ETYPE is 'instantiation_error',
     )
 )  # nv
 
@@ -179,7 +180,7 @@ Test("subscript nondict object errors") <- (
     catch(
         (_ is 5["a"]),
         error(type_error(TY, _), _),
-        TY is "dict",
+        TY is 'dict',
     )
 )  # nv
 Test("get nondict fails") <- (not get(5, "a", _))  # nv
@@ -187,14 +188,14 @@ Test("splat unbound source errors") <- (
     catch(
         (_ is {**P_UNUSED, "b": 9}),
         error(ETYPE, _),
-        ETYPE is "instantiation_error",
+        ETYPE is 'instantiation_error',
     )
 )  # nv
 Test("splat nondict source errors") <- (
     catch(
         (_ is {**5, "b": 9}),
         error(type_error(TY, _), _),
-        TY is "dict",
+        TY is 'dict',
     )
 )  # nv
 
@@ -205,7 +206,7 @@ Test("delete unhashable key throws") <- (
     catch(
         delete({"a": 1}, [1, 2], _),
         error(type_error(TY, _), _),
-        TY is "dict_key",
+        TY is 'dict_key',
     )
 )  # nv
 
@@ -223,9 +224,15 @@ Test("atom key delete") <- (delete({foo: 1, bar: 2}, foo, P2), P2 is {bar: 2})  
 # collapse, not a dict-specific rule). Inverted from the pre-pivot pin that
 # they were distinct; see phase3-decomposition-and-p31-atom-pivot.md Task 7
 # work item 2. The broader dict/set-vs-atom audit stays Phase 4 scope.
-Test("atom key same as string") <- (
+# THE FLIP (2026-09-06-atoms-as-cells-strings §6.8): an atom key and a
+# STRING key are DIFFERENT keys, which is what docs/dicts_sets.md has always
+# claimed and what this test used to contradict (a bare name and a "..."
+# literal were both the same str, so the dict had one key either way).  In
+# this -double_quotes(chars) module "foo" is the string, foo is the atom, and
+# a dict keyed by the atom does not answer for the string.
+Test("atom key is not the string key") <- (
     D is {foo: 1},
-    get(D, "foo", V1), V1 is 1,
+    not get(D, "foo", _),
     get(D, foo, V2), V2 is 1,
 )  # nv
 
@@ -298,7 +305,7 @@ Test("dot nondict throws") <- (
     catch(
         (_ is P.foo),
         error(type_error(TY, _), _),
-        TY is "dict",
+        TY is 'dict',
     ),
 )  # nv
 
@@ -307,14 +314,14 @@ Test("dot unbound base throws") <- (
     catch(
         (_ is P_UNUSED.foo),
         error(ETYPE, _),
-        ETYPE is "instantiation_error",
+        ETYPE is 'instantiation_error',
     )
 )  # nv
 Test("bracket unbound base throws") <- (
     catch(
         (_ is P_UNUSED[foo]),
         error(ETYPE, _),
-        ETYPE is "instantiation_error",
+        ETYPE is 'instantiation_error',
     )
 )  # nv
 
@@ -327,7 +334,7 @@ Test("dot has no dot functor") <- (
 )  # nv
 Test("dot does not unify with a dot compound") <- (
     P is {foo: 1},
-    functor(DOTTERM, ".", 2),
+    functor(DOTTERM, '.', 2),
     not (DOTTERM is P.foo),
 )  # nv
 

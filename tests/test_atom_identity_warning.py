@@ -31,6 +31,7 @@ import sys
 import textwrap
 import warnings
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.compiler_v2 import _process_declarations
 
 
@@ -101,7 +102,7 @@ class TestAtomsAreGlobal:
             t = EmbedTransformer()
             t.visit(tree)
         _process_declarations(t._module_items, module_dict)
-        assert module_dict["t3_owned_atom"] == "t3_owned_atom"
+        assert module_dict["t3_owned_atom"] == mint("t3_owned_atom")
         assert isinstance(module_dict["t3_owned_atom"], str)
 
     def test_two_modules_declaring_the_same_atom_get_the_same_object(self):

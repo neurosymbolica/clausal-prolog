@@ -243,25 +243,46 @@ def load_clausal_module(path: str | Path) -> object:
     return mod
 
 
+def _test_description_term(head):
+    """The description ARGUMENT of a ``Test/1`` clause head."""
+    if hasattr(head, "args"):
+        return head.args[0]
+    from clausal.logic.predicate import term_field_names
+    names = term_field_names(head)
+    return getattr(head, names[0]) if names else head
+
+
+def _test_description_name(desc) -> str:
+    """The display NAME of a test description term.
+
+    A description is human text, so the name is that text: the SPELLING of
+    an atom (the common case — an unquoted ``Test("...")`` literal compiles
+    to an atom under the engine's default ``-double_quotes(atom)`` mode) or
+    the string itself under ``-double_quotes(chars)``.  Both spellings of
+    one description therefore name the same test, which is what a reader,
+    a report and a ``-k`` selector all expect.
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings) is why this is a function:
+    ``str(desc)`` used to be the text because an atom WAS its spelling; on
+    a cell it is the tuple repr ``("in: found",)``.  Any other ground value
+    still names itself through ``str``.
+    """
+    from clausal.logic.atoms import is_atom as _term_is_atom, spelling
+    if _term_is_atom(desc):
+        return spelling(desc)
+    if isinstance(desc, str):
+        return desc
+    return str(desc)
+
+
 def collect_tests(mod: object) -> list[str]:
     """Return the list of test/1 clause descriptions from a loaded module."""
     logic_module = mod.__dict__.get("$module")
     if logic_module is None:
         return []
     clauses = logic_module.db.clauses_for("Test", 1)
-    descriptions = []
-    for clause in clauses:
-        head = clause.head
-        # Head is a PredicateMeta instance or Compound with 1 arg (the description).
-        if hasattr(head, "args"):
-            desc = head.args[0]
-        else:
-            from clausal.logic.predicate import term_field_names
-            names = term_field_names(head)
-            desc = getattr(head, names[0]) if names else str(head)
-        # Description might be a string or a ground value.
-        descriptions.append(str(desc))
-    return descriptions
+    return [_test_description_name(_test_description_term(clause.head))
+            for clause in clauses]
 
 
 def run_test(
@@ -283,7 +304,13 @@ def run_test(
     logic_module = mod.__dict__["$module"]
     t0 = time.perf_counter()
     try:
-        solutions = list(call("Test", description, module=logic_module))
+        # *description* is the display NAME (what ``collect_tests`` returns);
+        # the goal is called with the clause's own description TERM, which is
+        # an ATOM for an ordinary ``Test("...")`` clause and a string under
+        # ``-double_quotes(chars)``.  Calling with the name would pass a
+        # ``str`` — a different term from the atom, matching nothing.
+        goal_desc = _test_description_for_name(logic_module, description)
+        solutions = list(call("Test", goal_desc, module=logic_module))
         passed = len(solutions) > 0
         result = TestResult(name=description, passed=passed,
                             duration=time.perf_counter() - t0)
@@ -503,18 +530,24 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
 
 
 def _test_clause(logic_module, description):
-    from clausal.logic.predicate import term_field_names
-
     for clause in logic_module.db.clauses_for("Test", 1):
-        head = clause.head
-        if hasattr(head, "args"):
-            desc = head.args[0]
-        else:
-            names = term_field_names(head)
-            desc = getattr(head, names[0]) if names else None
-        if str(desc) == description:
+        desc = _test_description_term(clause.head)
+        if _test_description_name(desc) == description:
             return clause
     return None
+
+
+def _test_description_for_name(logic_module, description):
+    """The description TERM whose display name is *description*.
+
+    Falls back to *description* itself when no clause matches, so an
+    embedder calling ``run_test`` with a term it built rather than with a
+    collected name still reaches its own clause.
+    """
+    clause = _test_clause(logic_module, description)
+    if clause is None:
+        return description
+    return _test_description_term(clause.head)
 
 
 #: Reifying a file is the same work for every failing test in it, so cache —
@@ -565,73 +598,6 @@ def _reified_goals(path, clause, arity):
     except Exception:  # noqa: BLE001
         return None
     return goals if len(goals) == arity else None
-
-
-#: Same key/eviction discipline as ``_REIFY_CACHE`` (indeed, shares its
-#: underlying ``reify_file`` call and file-content cache) — see
-#: :func:`_declared_atoms`.
-_DECLARED_ATOMS_CACHE: dict[str, frozenset] = {}
-
-
-def _declared_atoms(path) -> frozenset:
-    """Atom names declared via ``-module(...)``/``-private([...])`` in the
-    source file at *path*, parsed straight from that file's own text.
-
-    P3-1 Task 4 (atom-aware near-miss rendering): a declared atom compiles
-    to a plain ``ast.Constant(str)`` (Task 2's lowering flip), so the
-    reifier can no longer distinguish a former bare-atom reference from a
-    genuine quoted string literal of the same spelling by TERM SHAPE alone
-    — see the note above ``_atomize_declared_atoms``.  The process-global
-    ``predicate_builtins`` pool (and every module's own ``module_dict``,
-    which is seeded FROM that pool at exec start — confirmed empirically)
-    is *not* usable to disambiguate: any module's ``-private``/``-module``
-    declaration anywhere in the process registers there, so a genuine
-    string literal that happens to share a spelling some unrelated,
-    earlier-loaded module declared as an atom would be misclassified —
-    order-dependent, not a real fix.  This file's OWN ``-module``/
-    ``-private`` directives (also already reified and cached by
-    :func:`_reified_clause`'s ``_REIFY_CACHE``, reused here) are the one
-    signal that is both accurate AND immune to cross-test/cross-module
-    pollution: it says exactly what THIS source text declared.
-    """
-    if path is None:
-        return frozenset()
-    try:
-        from clausal.reflection import ModuleDirective, reify_file
-
-        key = str(path)
-        cached = _DECLARED_ATOMS_CACHE.get(key)
-        if cached is not None:
-            return cached
-        items = _REIFY_CACHE.get(key)
-        if items is None:
-            items = list(reify_file(key))
-            if len(_REIFY_CACHE) >= _REIFY_CACHE_MAX:
-                _REIFY_CACHE.pop(next(iter(_REIFY_CACHE)), None)
-            _REIFY_CACHE[key] = items
-        names: set = set()
-        for item in items:
-            if not isinstance(item, ModuleDirective):
-                continue
-            # ``-private([...])`` reifies args=[items, constants]; the export
-            # list is args[0].  ``-module(name, [...])`` reifies
-            # args=[module_name, exports] — the export list is args[1], NOT
-            # args[0] (that slot holds the module's own name, a str — do not
-            # iterate its characters as if it were the export list).
-            if item.name == "private" and item.args:
-                exports = item.args[0]
-            elif item.name == "module" and len(item.args) > 1:
-                exports = item.args[1]
-            else:
-                continue
-            names.update(e for e in exports if isinstance(e, str))
-        result = frozenset(names)
-        if len(_DECLARED_ATOMS_CACHE) >= _REIFY_CACHE_MAX:
-            _DECLARED_ATOMS_CACHE.pop(next(iter(_DECLARED_ATOMS_CACHE)), None)
-        _DECLARED_ATOMS_CACHE[key] = result
-        return result
-    except Exception:  # noqa: BLE001 - best-effort rendering aid, never fatal
-        return frozenset()
 
 
 def _goal_sources(body, reified) -> list[str]:
@@ -1476,69 +1442,49 @@ def _substitute_bound(reified, bound):
     return reified
 
 
-# ── P3-1 Task 4: atom-aware near-miss rendering ───────────────────────────
+# ── Atom-aware near-miss rendering ────────────────────────────────────────
 #
-# Before the atom pivot, a bound atom was a zero-arity ``PredicateMeta``
-# class, and every reified/render path had a distinct case for it: the
-# reifier's ``ast.Name``/``LoadName`` branches wrapped it as ``Atom(name=...)``
-# (``clausal/reflection.py``), and the renderer printed an ``Atom`` bare
-# while quoting a plain ``str`` — so runtime atoms and runtime strings
-# already rendered differently at the type level.
+# THE FLIP (2026-09-06-atoms-as-cells-strings §6.7) closed this problem
+# rather than solving it.  Between the P3-1 atom pivot and the flip an atom
+# WAS a ``str``, so a reified term could not tell a former bare atom from a
+# genuine quoted string of the same spelling, and this module had to consult
+# the source file's own ``-module``/``-private`` directives to guess (a
+# lexical-shape guess is wrong for ``gpair("a", 1)``; the process-global
+# ``predicate_builtins`` pool is wrong because any earlier-loaded module's
+# declaration pollutes it).  An atom is now the arity-0 CELL and a ``str`` is
+# a STRING: the SHAPE answers, the guess and its file-scanning helper are
+# retired, and ``_atomize_declared_atoms`` keeps only the walk that wraps an
+# atom as ``Atom`` (which the renderer prints bare, demangling a ``-hide``
+# spelling) and leaves a string to be quoted.
 #
-# Post-pivot an atom just IS a ``str`` (§1b/R2), and Task 2's lowering flip
-# means a declared/module atom (``-module``/``-private``) now compiles to a
-# plain ``ast.Constant(str)`` (``term_rewriting.py``'s ``visit_Name``,
-# ``if identifier in transformer.atoms: return replace(Constant(...))``)
-# instead of a Name reference resolving through ``atom_identity_expr`` — so
-# the reifier's ``ast.Constant`` branch (``reflection.py``'s
-# ``_ClauseReifier.term``) hands back an indistinguishable plain ``str`` for
-# both a former bare atom and a genuine quoted string literal of the same
-# spelling.  The renderer (``_ClauseRenderer.term``, same module) still only
-# renders an ``Atom`` bare; every plain ``str`` is quoted via
-# ``ast.Constant`` — so a bound atom now prints as ``'work'`` instead of
-# ``work``.
-#
-# A LEXICAL-SHAPE guess ("lowercase identifier -> bare") is NOT enough: a
-# genuine quoted string with that same shape (``gpair("a", 1)``,
-# ``chain_subject("simple")``) is common in these fixtures too, and would be
-# wrongly un-quoted by shape alone (verified: breaks
-# ``test_ground_fact_near_miss_keeps_rung_1`` et al).  A per-module registry
-# check is not enough EITHER: the process-global ``predicate_builtins`` pool
-# (and every module's own ``module_dict``, which is seeded FROM that pool at
-# exec start — confirmed empirically) would misclassify an unrelated
-# same-spelled string the moment ANY module loaded earlier in the *same
-# process* happened to declare that spelling as an atom (confirmed
-# empirically: ``-private([a, b, ...])`` in one test's fixture pollutes
-# ``predicate_builtins["a"]``, and every later-loaded module's
-# ``module_dict``, for the rest of the session — order-dependent, not a
-# real fix).  The one signal that is both accurate AND immune to
-# cross-test/cross-module pollution is *this source file's own*
-# ``-module``/``-private`` directives — see :func:`_declared_atoms`.
+# *path* stays in these signatures: it identifies the source file for the
+# rest of the diagnostic pipeline that threads it, and nothing here needs to
+# churn those call sites to drop an argument.
 
 def _atomize_declared_atoms(reified, path):
-    """Recursively rewrap ``str`` leaves that :func:`_declared_atoms` says
-    *path* declared as atoms into ``Atom`` so
+    """Recursively rewrap ATOM leaves into ``Atom`` so
     :func:`clausal.reflection.render_source` prints them unquoted — the same
     treatment it already gives a reified ``Atom``.  Applied to reified terms
     that came straight from :func:`clausal.reflection.reify_file` (clause
-    heads / leaf goals), which never pass through :func:`_reify_value` and so
-    would otherwise keep their post-pivot plain-``str`` shape all the way to
-    the renderer.  See the module-level note above."""
-    from clausal.logic.atoms import is_mangled
+    heads / leaf goals), which never pass through :func:`_reify_value`.  A
+    ``str`` leaf is a STRING and is left to be quoted.  *path* is carried for
+    the pipeline's benefit, not read here.  See the module-level note above."""
+    from clausal.logic.atoms import is_atom as _term_is_atom, spelling
     from clausal.reflection import Atom, Goal
 
-    declared = _declared_atoms(path)
+    if _term_is_atom(reified):
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §6.7): an atom is the
+        # arity-0 CELL, so there is nothing left to guess — the shape says
+        # it.  The declared-atom heuristic this branch used to run
+        # (which strs did this file declare as atoms?) is retired with the
+        # representation that forced it; a plain ``str`` is a STRING and is
+        # returned unchanged below, quoted by the renderer.  A hidden
+        # (``-hide``) atom needs no separate test either: its MANGLED
+        # spelling is in slot 0, and ``_ClauseRenderer``'s Atom branch
+        # renders the human ``module.name`` form for it.
+        return Atom(name=spelling(reified))
     if isinstance(reified, str):
-        # P3-1 Task 6: a hidden (``-hide``) atom's mangled spelling is
-        # never a member of ``_declared_atoms`` (that set holds only the
-        # BARE names parsed from ``-module``/``-private`` — a hidden
-        # atom's Constant, per ``visit_Name``, already carries the
-        # MANGLED string by the time it reaches source reification) — so
-        # check ``is_mangled`` too; ``_ClauseRenderer``'s Atom branch then
-        # renders the human ``module.name`` form for it (same helper the
-        # module-level docstring above references).
-        return (Atom(name=reified)
-                if reified in declared or is_mangled(reified) else reified)
+        return reified
     if isinstance(reified, Goal):
         return Goal(
             name=reified.name,
@@ -1593,22 +1539,21 @@ def _reify_value(value, depth: int = 0, path=None):
     if is_var(value):
         return Variable(name="_")
     if isinstance(value, str):
-        # P3-1 Task 4: a bound atom is a plain str post-pivot, same as a
-        # bound string value — see the module note above ``_declared_atoms``.
-        # P3-1 Task 6: a hidden atom's runtime str is never itself in
-        # ``_declared_atoms`` (that set holds bare spellings only) — check
-        # ``is_mangled`` too so a hidden atom's bound value also renders
-        # via ``Atom`` (the reflection renderer then demangles it to the
-        # human ``module.name`` form).
-        from clausal.logic.atoms import is_mangled
-
-        return (Atom(name=value)
-                if value in _declared_atoms(path) or is_mangled(value)
-                else value)
+        # A STRING (THE FLIP) — it renders as a string literal.  The
+        # declared-atom guess that used to decide whether a bound ``str``
+        # was "really" an atom is retired: an atom is a cell and is caught
+        # by the arity-0 branch below.
+        return value
     if value is None or isinstance(value, (bool, int, float, complex, bytes)):
         return value
     if isinstance(value, list):
         return [_reify_value(v, depth + 1, path) for v in value]
+    if type(value) is tuple and len(value) == 1 and type(value[0]) is str:
+        # An ATOM — the arity-0 cell (spec §6.7).  It is a NAME, so it
+        # reifies as ``Atom`` and prints bare; without this branch the cell
+        # branch below would reify it as a 0-argument ``Goal`` and print
+        # ``foo()``, which is not a term form at all.
+        return Atom(name=value[0])
     if type(value) is tuple and value and type(value[0]) is str:
         # A CELL -- ``("cite", art52)``.  P3-2 Task 2 (THE FLIP): this is how
         # a compound term is represented, so it reifies as a ``Goal`` and

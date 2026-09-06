@@ -17,6 +17,7 @@ import weakref
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import (
     Trail,
     UnboundVarCoercionError,
@@ -422,7 +423,7 @@ class TestF010SliceWithinPrefix:
     def test_control_int_index_semantics(self):
         B = Var()
         ss = SegString(["abc", VarSeg(B)])
-        assert ss[1] == "b"
+        assert ss[1] == mint("b")
         with pytest.raises(PartialTermError):
             ss[5]  # beyond knowable prefix
 

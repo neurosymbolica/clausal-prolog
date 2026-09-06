@@ -10,6 +10,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call, _deref_walk
 from clausal.logic.variables import Var, Trail, deref
 from clausal.testing import load_clausal_module
@@ -41,7 +42,7 @@ def _terms(mod):
     term it constructs while handing the engine the shape its clauses match.
     """
     d = mod.__dict__
-    assert d["Natnum"] == "Natnum"  # R6: the binding IS the spelling
+    assert d[mint("Natnum")] == mint("Natnum")  # R6: the binding IS the spelling
     return (
         lambda *args: ("Natnum", *args),
         lambda *args: ("succ", *args),

@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/http.md display snippets.
 # HTTP predicates need network access — test URL utilities only.
 

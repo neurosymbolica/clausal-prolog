@@ -68,12 +68,13 @@ def _string__1(x, trail, k):
 
 @_builtin("atom", 1)
 def _is_atom__1(x, trail, k):
-    """atom(X) — succeeds if X is a plain str or a zero-arity PredicateMeta
-    (a declared atom).
+    """atom(X) — succeeds if X is the arity-0 cell ``("bar",)`` or a
+    zero-arity PredicateMeta (a declared atom).
 
-    R2 (P3-1 Task 1, str-as-atom acceptance): every ``str`` is an atom now,
-    co-extensional with ``string/1``; the zero-arity class case is the
-    transitional dual-accept path, retired in Task 2/3.
+    THE FLIP (2026-09-06-atoms-as-cells-strings §6.3): a plain ``str`` is a
+    STRING — the list of its char atoms — so ``atom("bar")`` is FALSE and
+    ``string("bar")``/``is_list("bar")`` are true.  The two questions that
+    were co-extensional under the pivot are now disjoint.
     """
     x_val = deref(x)
     if not is_var(x_val) and is_atom_value(x_val):
@@ -141,9 +142,12 @@ def _compound__1(x, trail, k):
 def _atomic__1(x, trail, k):
     """atomic(X) — succeeds if X is a non-variable, non-compound term.
 
-    Accepts ``str``, ``int``, ``float``, ``bool``, ``None``, and
-    zero-arity ``PredicateMeta`` classes. Rejects ``Var``, ``Compound``,
-    ``KWTerm``, term-instances, ``list``, ``SegList``, ``SegString``.
+    Accepts the arity-0 cell atom, ``int``, ``float``, ``bool``, ``bytes``,
+    ``None``, and zero-arity ``PredicateMeta`` classes. Rejects ``Var``,
+    ``Compound``, ``KWTerm``, term-instances, ``list``, ``SegList``,
+    ``SegString`` — and, since THE FLIP, a plain ``str``: a string is the
+    LIST of its char atoms (spec §6.3), so it is no more atomic than the
+    list it denotes.  ``""``/``[]`` stay non-atomic, today's answer (§4).
     """
     # F029 (A09): walk a ground Seg* to its concrete form first — a ground
     # SegString walks to a str (atomic) so is_str(X) no longer contradicts
@@ -157,16 +161,17 @@ def _atomic__1(x, trail, k):
         return
     if is_term_instance(x_val):
         return
-    # Stage A (2026-09-06-atoms-as-cells-strings, Task 2): a 1-tuple cell
-    # atom ("foo",) is atomic beside today's str atom — checked via the
-    # public atom API (dual-accept: str or the arity-0 cell) so a plain
-    # data tuple like (1, 2) still falls off the end below unrecognized.
+    # THE FLIP (2026-09-06-atoms-as-cells-strings): the arity-0 cell atom
+    # ("foo",) is the atomic term here — checked via the public atom API so
+    # a plain data tuple like (1, 2) still falls off the end below
+    # unrecognized.
     if _term_is_atom(x_val):
         yield None
         return
     # Atomic primitives. ``bool`` is-a ``int`` in Python — that's fine
-    # for ``atomic``, but ``number/1`` continues to exclude it.
-    if x_val is None or isinstance(x_val, (bool, int, float, str, bytes)):
+    # for ``atomic``, but ``number/1`` continues to exclude it.  ``str`` is
+    # deliberately ABSENT: a string is a list of char atoms.
+    if x_val is None or isinstance(x_val, (bool, int, float, bytes)):
         yield None
         return
     # Zero-arity PredicateMeta class — a declared atom.
@@ -174,61 +179,15 @@ def _atomic__1(x, trail, k):
         yield None
 
 
-def _str_is_identifier(s: str) -> bool:
-    """Return True if *s* could plausibly be a predicate name.
-
-    Conservative: non-empty + Python ``str.isidentifier`` rule. Predicate
-    names in clausal use the same lexical class as Python identifiers
-    (head-of-word: letter/underscore; body: alphanumeric/underscore).
-    """
-    return bool(s) and s.isidentifier()
-
-
-# F084 (audit 2026-05-25): tighten ``callable_/1`` so it no longer
-# accepts arbitrary Python strs. A str now has to (a) be a non-empty
-# valid identifier *and* (b) name a predicate that is registered in
-# the current module's database — either as user-defined clauses or
-# as a builtin / stdlib entry. Compound, KWTerm, term-instance, and
+# F084 (audit 2026-05-25) tightened ``callable_/1`` so it no longer accepted
+# arbitrary Python strs: a str had to be a valid identifier naming a
+# registered predicate.  THE FLIP (2026-09-06-atoms-as-cells-strings §6.3)
+# retires that check entirely — a ``str`` is a STRING, and no string is
+# callable, whatever it spells.  Compound, KWTerm, term-instance, cell and
 # zero-arity PredicateMeta classes continue to succeed unchanged.
-# See [[F084]] for the full rationale.
 @_db_builtin("callable_", 1, fields=("x",))
 def _callable__1_factory(db):
-    """Factory for ``callable_/1`` — captures *db* for predicate-name lookups."""
-    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
-
-    def _str_is_callable(name: str) -> bool:
-        if not _str_is_identifier(name):
-            return False
-        # Any registered arity counts: scan user clauses, dispatch table,
-        # and the builtin / db-builtin registries for at least one match.
-        try:
-            iter_clauses = db._clauses  # internal — same shape used elsewhere
-        except AttributeError:
-            iter_clauses = {}
-        for (fn, _arity) in iter_clauses:
-            if fn == name:
-                return True
-        try:
-            iter_dispatch = db._dispatch
-        except AttributeError:
-            iter_dispatch = {}
-        for (fn, _arity) in iter_dispatch:
-            if fn == name:
-                return True
-        for (fn, _arity) in _BUILTINS:
-            if fn == name:
-                return True
-        for (fn, _arity) in _DB_BUILTINS:
-            if fn == name:
-                return True
-        # Module-globals fallback: a PredicateMeta class registered
-        # under this name in the importing module.
-        module_dict = getattr(db, "module_dict", None)
-        if module_dict is not None:
-            obj = module_dict.get(name)
-            if obj is not None and hasattr(obj, "_get_dispatch"):
-                return True
-        return False
+    """Factory for ``callable_/1`` — *db* is kept for the registry shape."""
 
     def callable___1(x, trail, k):
         x_val = deref(x)
@@ -263,11 +222,13 @@ def _callable__1_factory(db):
         if isinstance(x_val, type) and isinstance(x_val, PredicateMeta):
             yield None
             return
-        if isinstance(x_val, str):
-            if _str_is_callable(x_val):
-                yield None
-            return
-        # Any other shape (int, float, list, SegList, …) — not callable.
+        # THE FLIP (spec §6.3/§6.4): a plain ``str`` is a STRING, and a
+        # string is not callable — ``call("foo")`` is ``type_error(callable,
+        # "foo")``, not a call to ``foo/0``.  The old branch (and its
+        # ``_str_is_callable`` predicate-name lookup) is deleted with the
+        # representation that motivated it; a program that means the atom
+        # writes ``foo`` or mints one.
+        # Any other shape (int, float, str, list, SegList, …) — not callable.
 
     return callable___1
 
@@ -354,9 +315,9 @@ def _check_type(type_name: str, term) -> bool:
     elif type_name == "number":
         return isinstance(term, (int, float)) and not isinstance(term, bool)
     elif type_name == "atom":
-        # Stage A: is_atom_value already dual-accepts a str and the arity-0
-        # cell atom via the widened clausal.logic.atoms.is_atom (Task 2
-        # controller ruling) — same call the atom/1 builtin makes.
+        # THE FLIP: is_atom_value is the arity-0 cell (or a declared-atom
+        # class) and NOT a str — the same call the atom/1 builtin makes, so
+        # ``must_be(atom, "x")`` and ``atom("x")`` cannot drift apart.
         return is_atom_value(term)
     elif type_name in ("string", "str"):
         return isinstance(term, str) or (
@@ -372,8 +333,10 @@ def _check_type(type_name: str, term) -> bool:
     elif type_name in ("boolean", "bool"):
         return isinstance(term, bool)
     elif type_name == "callable":
+        # THE FLIP: ``str`` is gone from this tuple — a string is not
+        # callable (§6.3), matching callable_/1.
         return (
-            isinstance(term, (str, Compound, KWTerm))
+            isinstance(term, (Compound, KWTerm))
             or is_term_instance(term)
             or (isinstance(term, type) and hasattr(term, '_get_dispatch'))
             or hasattr(term, '_get_dispatch')
@@ -419,11 +382,11 @@ def _must_be__2(type_name, term, trail, k):
     if is_var(type_val):
         raise LogicException(instantiation_error("must_be/2"))
     if _term_is_atom(type_val):
-        # Stage A: Type may arrive as today's str atom (Plan 0) or as the
-        # arity-0 cell atom ("atom",) — read either through its spelling.
-        # Stage B deletes the plain isinstance(str) arm below.
+        # The Type argument is an ATOM (it arrives as ("atom",) from source);
+        # read it through its spelling.  THE FLIP deleted the plain-``str``
+        # arm that used to sit here: a string Type is a type_error(atom).
         type_val = _spelling(type_val)
-    elif not isinstance(type_val, str):
+    else:
         raise LogicException(type_error("atom", type_val, "must_be/2"))
     if type_val not in _KNOWN_TYPES:
         raise LogicException(domain_error("type", type_val, "must_be/2"))
@@ -451,9 +414,9 @@ def _can_be__2(type_name, term, trail, k):
     if is_var(type_val):
         raise LogicException(instantiation_error("can_be/2"))
     if _term_is_atom(type_val):
-        # Stage A: same Type-spelling widening as must_be/2 above.
+        # Same Type-spelling rule as must_be/2 above.
         type_val = _spelling(type_val)
-    elif not isinstance(type_val, str):
+    else:
         raise LogicException(type_error("atom", type_val, "can_be/2"))
     if type_val not in _KNOWN_TYPES:
         raise LogicException(domain_error("type", type_val, "can_be/2"))

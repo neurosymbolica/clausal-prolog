@@ -1,6 +1,7 @@
 from ast import *
 from collections import Counter
 from copy import deepcopy
+import sys
 
 from .parser import is_template_func
 from .compiler import compile_template_func
@@ -1659,8 +1660,39 @@ class TermTransformer(NodeTransformer):
         )
 
     def visit_Constant(transformer, constant):
-        # Python built-in literals are terms directly — return the constant as-is.
-        # The evaluator sees the native Python value (int, float, str, bool, None, …).
+        """A literal is a term directly — except a text literal, which is an
+        ATOM or a STRING depending on how it was quoted (spec §7).
+
+        ``'foo'`` is an atom in every mode; ``"foo"`` is an atom under
+        ``-double_quotes(atom)`` (today's default) and a string under
+        ``-double_quotes(chars)``.  An atom is the arity-0 cell
+        ``("foo",)``; a string is the ``str`` itself.
+
+        The quote character is not in the AST, so it comes from the file's
+        quote map (``quote_map.py``), keyed by position.  A SYNTHETIC
+        ``Constant`` — one the compiler built rather than read — has no
+        position, so the map answers ``None``, which reads as "an atom":
+        every compiler-built text literal is a spelling.
+
+        The map is consulted UNCONDITIONALLY for a text literal, including
+        under ``reify``: the mixed-quote-styles ``SyntaxError`` it can raise
+        is a well-formedness rule about the source, not a compilation
+        choice, so it fires wherever the source is read.
+
+        Everything else (int, float, bytes, bool, ``None``, Ellipsis) is
+        returned unchanged; ``b"…"`` is checked as ``bytes`` here, before
+        the map is reached, because the codes model is quote-insensitive.
+        """
+        value = constant.value
+        if type(value) is str:
+            # A DCG terminal literal is a char sequence to consume, not an
+            # atom — see ``_dcg_body_ast``'s Constant case.
+            if getattr(constant, "_dcg_terminal_text", False):
+                return constant
+            quote = _quote_of_positioned(transformer, constant)
+            if quote == '"' and transformer._double_quotes_mode == "chars":
+                return constant                     # a string
+            return replace(Constant(value=(sys.intern(value),)), constant)
         return constant
 
     def _visit_dict_key(transformer, key):
@@ -1990,13 +2022,20 @@ class TermTransformer(NodeTransformer):
         # a different module's bare use of the same spelling never reaches
         # this branch and resolves to the plain global atom instead (§1b:
         # "other modules simply can't spell it").
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §5.1): the emitted
+        # Constant is the arity-0 CELL ``("bar",)``, not the bare spelling —
+        # a bare ``str`` is a string now.  A tuple of a str folds into
+        # ``co_consts`` and is marshal-clean, so the ``.pyc`` carries it
+        # (verified; §5.2).  The constant unmarshalled from a cache is not
+        # the ``mint``ed instance, which is fine: nothing may compare an
+        # atom by identity.
         if identifier in transformer._hidden_atoms:
             return replace(
-                Constant(value=mangle(transformer._module_name, identifier)),
+                Constant(value=(mangle(transformer._module_name, identifier),)),
                 name,
             )
         if identifier in transformer.atoms:
-            return replace(Constant(value=identifier), name)
+            return replace(Constant(value=(sys.intern(identifier),)), name)
         # Imported predicate: remap to full dotted path so Python code in the
         # .clausal file cannot accidentally clobber the predicate reference.
         dotted = transformer._import_remap.get(identifier)
@@ -2678,15 +2717,23 @@ def _make_functor_class_ast(functor_name, field_names, source):
 
     P3-1 Task 2 (§1b/R2): a bare atom no longer mints a class at all — an
     earlier file's auto-accepted or declared atom of this exact spelling
-    sits in ``predicate_builtins``/this module's globals as the plain str
-    ``functor_name`` itself.  That shape gets the same re-raise-and-mint
-    treatment as the old arity-mismatched class: an atom placeholder of the
-    SAME spelling is exactly as safe to override as the old 0-arity class
-    was, and for the same reason (Phenomenon A — an atom name and an
-    N-arity predicate of the same spelling can coexist across files; the
-    predicate wins in the file that actually declares it).  A str binding
-    that is NOT equal to ``functor_name`` (some unrelated user value) is
-    left alone, same as any other non-``PredicateMeta`` binding.
+    sits in ``predicate_builtins``/this module's globals as the ATOM of
+    that spelling.  That shape gets the same re-raise-and-mint treatment as
+    the old arity-mismatched class: an atom placeholder of the SAME spelling
+    is exactly as safe to override as the old 0-arity class was, and for the
+    same reason (Phenomenon A — an atom name and an N-arity predicate of the
+    same spelling can coexist across files; the predicate wins in the file
+    that actually declares it).  A binding that is NOT that atom (some
+    unrelated user value) is left alone, same as any other
+    non-``PredicateMeta`` binding.
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings) changed what that atom
+    placeholder LOOKS like: it is the arity-0 cell ``('bar',)``, not the
+    ``str`` ``'bar'``, so the guard tests the cell.  Without the update the
+    seeded atom survived, and the very next statement — the fact
+    ``bar(1),`` — called it: ``TypeError: 'tuple' object is not callable``
+    at load, in any process where some EARLIER module had declared ``bar``
+    as an atom.
 
     The guard is deliberately narrowed to ``isinstance(.., PredicateMeta)``:
     a non-``PredicateMeta`` binding of the same name (e.g. a user-defined
@@ -2712,8 +2759,7 @@ def _make_functor_class_ast(functor_name, field_names, source):
         f"    if isinstance({functor_name}, PredicateMeta) and getattr(",
         f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",
-        f"    if isinstance({functor_name}, str) and "
-        f"{functor_name} == {functor_name!r}:",
+        f"    if {functor_name} == {(functor_name,)!r}:",
         "        raise NameError",
         "except NameError:",
         f"    class {functor_name}(metaclass=PredicateMeta):",
@@ -2765,23 +2811,37 @@ def _make_atom_str_assign_ast(atom_name, source, value=None):
     Generated code (example for ``foo``)::
 
         if not isinstance(globals().get('foo'), PredicateMeta):
-            foo = 'foo'
+            foo = $mint('foo')
 
     The guard mirrors ``_make_functor_class_ast``'s spirit: a name already
     bound to a genuine ``PredicateMeta`` (a real predicate, minted by an
     earlier clause/import in this same file) is left alone rather than
     clobbered by the atom placeholder; any other existing value (unbound,
-    or a stale str from the process-wide ``predicate_builtins`` preseed) is
+    or a stale atom from the process-wide ``predicate_builtins`` preseed) is
     safely overwritten with this atom's own spelling.
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings §9.3): the RHS is
+    ``$mint(spelling)`` — the module attribute ``mod.foo`` is the atom CELL
+    ``("foo",)`` with an interned slot 0, not the bare spelling (a bare
+    ``str`` is a string now).  ``$mint`` is an injected runtime builtin
+    (``INJECTED_RUNTIME_BUILTINS``); a ``$`` name cannot be spelled in
+    Python source, so the assignment's RHS is built as an AST node and
+    swapped in after ``parse``.
     """
     if value is None:
         value = atom_name
     lines = [
         f"if not isinstance(globals().get({atom_name!r}), PredicateMeta):",
-        f"    {atom_name} = {value!r}",
+        f"    {atom_name} = None",
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
+    assign = block.body[0]
+    assign.value = Call(
+        func=Name(id="$mint", ctx=load),
+        args=[Constant(value=value)],
+        keywords=[],
+    )
     for node in walk(block):
         copy_location(node, source)
     return block
@@ -3048,10 +3108,22 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             # (sequence(Str, s_in, s_out)), which already destructures str/bytes
             # input natively and builds a typed residue in generation mode —
             # so a str terminal matches both str and char-list callers.
+            #
+            # THE FLIP (2026-09-06-atoms-as-cells-strings): a terminal
+            # literal stays DESTRUCTURED AS CHARS regardless of quote style
+            # and regardless of the file's ``-double_quotes`` mode — a
+            # terminal is a sequence of tokens to consume, never an atom, so
+            # ``>> ('hi')`` and ``>> ("hi")`` must keep meaning the same
+            # thing.  ``_dcg_terminal_text`` tells ``visit_Constant`` to
+            # leave this ``str`` alone (a string IS that char list now, so
+            # the pre-flip behaviour survives verbatim).  Making the quote
+            # style matter here is Plan 2's question, parked.
+            terminal = Constant(value=value)
+            terminal._dcg_terminal_text = True
             call = Call(
                 func=Name(id="sequence", ctx=load),
                 args=[
-                    Constant(value=value),
+                    terminal,
                     Name(id=s_in, ctx=load),
                     Name(id=s_out, ctx=load),
                 ],
@@ -4559,7 +4631,7 @@ class EmbedTransformer(NodeTransformer):
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):
-            return compile_template_func(node)
+            return compile_template_func(node, transformer._quote_map)
         transformer._scope_depth += 1
         result = transformer.generic_visit(node)
         transformer._scope_depth -= 1
@@ -5013,18 +5085,27 @@ class EmbedTransformer(NodeTransformer):
         )
 
     def _handle_double_quotes_directive(transformer, args, expr_stmt):
-        """Process ``-double_quotes(atom)`` — the strings-migration RATCHET.
+        """Process ``-double_quotes(atom|chars)`` — the strings-migration
+        RATCHET.
 
         Step 2 of the strings/atom-tag program (canonical
         ``todo/strings-lost-in-the-atom-pivot-double-quotes-are-char-lists-2026-09-06.md``,
         ruling R-S4): a module that still relies on ``"..."`` denoting an
         ATOM declares ``-double_quotes(atom)`` so it keeps that meaning
         after the engine flips the default to ``chars`` (``"..."`` = a
-        string unifying with its char list).  This commit only ACCEPTS the
-        directive so every downstream module can carry it BEFORE the flip
-        reaches them; ``atom`` is a no-op today because the atom meaning is
-        still the only one there is.  ``chars`` is refused until the flip
-        lands so no module can claim string semantics it does not get.
+        string unifying with its char list).  ``atom`` remains the engine
+        default, so declaring it is still a no-op that states a dependency.
+
+        THE FLIP (2026-09-06-atoms-as-cells-strings §7) makes ``chars`` real:
+        below a ``-double_quotes(chars)`` directive a ``"..."`` literal
+        compiles to the ``str`` — a STRING, which unifies with its char-atom
+        list — while ``'...'`` stays an atom in every mode.  ``codes`` is
+        refused: codes are spelled ``b"..."``.
+
+        Both modes are file-scoped and POSITION-SENSITIVE: the mode governs
+        the literals BELOW the directive, so it is instance state set during
+        the walk (the ``-allow_singletons`` shape) rather than a module item
+        drained after it.  ``visit_Constant`` reads it.
 
         Lifetime: the directive is deleted from the engine — and its use
         pinned as a load error — once the last module has dropped it.  It
@@ -5037,25 +5118,14 @@ class EmbedTransformer(NodeTransformer):
                 "`-double_quotes(atom)`"
             )
         mode = args[0].id
-        if mode == "atom":
-            # File-scoped and POSITION-SENSITIVE (spec §7): the mode governs
-            # the literals below the directive, so it is instance state set
-            # during the walk (the -allow_singletons shape) rather than a
-            # module item drained after it.  Still semantically a no-op while
-            # ``atom`` is the engine default; the state is what Stage B's flip
-            # reads.
-            transformer._double_quotes_mode = "atom"
+        if mode in ("atom", "chars"):
+            transformer._double_quotes_mode = mode
             return replace(Pass(), expr_stmt)
-        if mode == "chars":
-            raise SyntaxError(
-                "-double_quotes(chars) is not yet supported: the engine still "
-                "reads every \"...\" literal as an atom.  Declare "
-                "-double_quotes(atom) to state that dependency explicitly; "
-                "chars becomes the default when the strings flip lands."
-            )
         raise SyntaxError(
-            f"-double_quotes({mode}): unknown mode; the only accepted mode "
-            f"is `atom` (`chars` arrives with the strings flip)"
+            f"-double_quotes({mode}): unknown mode; the accepted modes are "
+            f"`atom` (the engine default: \"...\" is an atom) and `chars` "
+            f"(\"...\" is a string — the list of its char atoms).  Codes are "
+            f"spelled b\"...\" and have no mode."
         )
 
     def _declare_predicate_export(transformer, spec, entry_node, expr_stmt,

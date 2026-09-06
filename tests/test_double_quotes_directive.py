@@ -18,6 +18,7 @@ import tempfile
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve
@@ -38,26 +39,39 @@ def _load_inline_clausal(name: str, source: str):
 
 def test_double_quotes_atom_is_accepted_and_is_a_no_op():
     """``-double_quotes(atom)`` loads, and a double-quoted literal keeps
-    today's meaning (the atom)."""
+    the engine-default meaning (the ATOM)."""
     mod = _load_inline_clausal(
         "_dq_ratchet_atom",
         '-double_quotes(atom)\n'
         'dq_ratchet_probe("hello"),\n',
     )
-    answers = list(solve(("dq_ratchet_probe", "hello"), mod))
+    answers = list(solve(("dq_ratchet_probe", mint("hello")), mod))
     assert len(answers) == 1
 
 
-def test_double_quotes_chars_is_refused_until_the_flip():
-    with pytest.raises(SyntaxError) as exc_info:
-        _load_inline_clausal(
-            "_dq_ratchet_chars",
-            '-double_quotes(chars)\n'
-            'dq_ratchet_probe2("hello"),\n',
-        )
-    msg = str(exc_info.value)
-    assert "-double_quotes(chars)" in msg
-    assert "not yet supported" in msg
+def test_double_quotes_chars_is_accepted_after_the_flip():
+    """THE FLIP (spec §13 row 26): ``chars`` is real now — a ``"..."``
+    literal below the directive is a STRING, and the SAME literal in an
+    ``atom`` module is an atom."""
+    chars_mod = _load_inline_clausal(
+        "_dq_ratchet_chars",
+        '-double_quotes(chars)\n'
+        'dq_ratchet_probe2("hello"),\n'
+        'dq_is_string(X) <- string(X),\n'
+        'dq_is_atom(X) <- atom(X),\n',
+    )
+    assert len(list(solve(("dq_ratchet_probe2", "hello"), chars_mod))) == 1
+    assert len(list(solve(("dq_is_string", "hello"), chars_mod))) == 1
+    assert list(solve(("dq_is_atom", "hello"), chars_mod)) == []
+
+    atom_mod = _load_inline_clausal(
+        "_dq_ratchet_atom2",
+        '-double_quotes(atom)\n'
+        'dq_probe3("hello"),\n'
+        'dq_atom(X) <- atom(X),\n',
+    )
+    assert len(list(solve(("dq_probe3", mint("hello")), atom_mod))) == 1
+    assert len(list(solve(("dq_atom", mint("hello")), atom_mod))) == 1
 
 
 @pytest.mark.parametrize(
@@ -119,13 +133,15 @@ def test_double_quoted_functor_refusal_is_positioned():
 
 
 def test_double_quoted_atom_argument_is_still_an_atom():
-    """Stage A is additive: the refusal is about the FUNCTOR position only."""
+    """The refusal is about the FUNCTOR position only: in ``atom`` mode both
+    spellings of the literal are the same ATOM in argument position."""
     mod = _load_inline_clausal(
         "_dq_arg_ok",
         '-double_quotes(atom)\n'
         'dq_arg_probe("foo", \'foo\'),\n',
     )
-    assert len(list(solve(("dq_arg_probe", "foo", "foo"), mod))) == 1
+    assert len(list(solve(
+        ("dq_arg_probe", mint("foo"), mint("foo")), mod))) == 1
 
 
 def test_directive_sets_the_mode_on_the_transformer():

@@ -31,6 +31,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.database import Clause, Database, WriteStamp
@@ -302,7 +303,7 @@ def test_alias_scenario_1_one_file_under_two_module_names_is_not_refused():
     _load_fixture("impclob_decl_vocab")
     a = _load_fixture("impclob_implements", as_name="_gate_probe_a")
     b = load_clausal_module(_fixture_path("impclob_implements"))
-    assert _answers(a, "impclob_check") == ["ok"]
+    assert _answers(a, "impclob_check") == [mint("ok")]
     assert list(call("impclob_check", Var(), module=b.__dict__["$module"]))
 
 
@@ -328,7 +329,7 @@ def test_alias_scenario_3_a_second_implementer_of_a_vocabulary_is_refused():
     msg = str(exc_info.value)
     assert "may not write impclob_verdict/2" in msg
     assert "impclob_implements" in msg
-    assert _answers(use, "impclob_check") == ["ok"]
+    assert _answers(use, "impclob_check") == [mint("ok")]
 
 
 # ── Fix round 1: the gate's own hygiene ────────────────────────────────────
@@ -462,16 +463,16 @@ def test_an_assert_through_a_shared_class_keeps_the_owners_namespace():
     owner = _load_fixture("gate_shared_owner")
     user = _load_fixture("gate_shared_user")
 
-    assert _answers(owner, "sp") == ["owner_value"]
-    assert _answers(user, "shared_helper") == ["user_value"]
+    assert _answers(owner, "sp") == [mint("owner_value")]
+    assert _answers(user, "shared_helper") == [mint("user_value")]
 
     next(call("gsu_add", 9, module=user.__dict__["$module"]), None)
 
-    assert _answers(owner, "sp") == ["owner_value", 9], (
+    assert _answers(owner, "sp") == [mint("owner_value"), 9], (
         "the owner's rule still resolves the OWNER's shared_helper"
     )
-    assert _answers(owner, "shared_helper") == ["owner_value"]
-    assert _answers(user, "shared_helper") == ["user_value"], (
+    assert _answers(owner, "shared_helper") == [mint("owner_value")]
+    assert _answers(user, "shared_helper") == [mint("user_value")], (
         "and the importer's own helper is untouched"
     )
 

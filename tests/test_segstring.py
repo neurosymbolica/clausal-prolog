@@ -7,6 +7,7 @@ Tests cover:
 4. _build_star_list / _build_multi_star_list string support
 """
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.terms import (
     SegString, SegList, ConcreteSeg, VarSeg,
@@ -77,7 +78,7 @@ class TestSegStringWalk:
         # nv
         trail = Trail()
         X = Var()
-        unify(X, ["l", "o"], trail)
+        unify(X, [char_atom("l"), char_atom("o")], trail)
         ss = SegString(["hel", VarSeg(X)])
         assert ss.__walk__() == "hello"
 
@@ -170,7 +171,7 @@ class TestSegStringUnification:
         # nv
         trail = Trail()
         ss = SegString(["hello"])
-        assert unify(ss, ['h', 'e', 'l', 'l', 'o'], trail)
+        assert unify(ss, [char_atom('h'), char_atom('e'), char_atom('l'), char_atom('l'), char_atom('o')], trail)
 
     def test_segstring_vs_char_list_with_var(self):
         """SegString with bound VarSeg unifies with char list."""
@@ -179,7 +180,7 @@ class TestSegStringUnification:
         X = Var()
         unify(X, "lo", trail)
         ss = SegString(["hel", VarSeg(X)])
-        assert unify(ss, ['h', 'e', 'l', 'l', 'o'], trail)
+        assert unify(ss, [char_atom('h'), char_atom('e'), char_atom('l'), char_atom('l'), char_atom('o')], trail)
 
     def test_segstring_vs_wrong_list_fails(self):
         """SegString 'hello' does NOT unify with [1, 2, 3]."""
@@ -203,7 +204,7 @@ class TestConsRuleRetirementLockstep:
     def test_segstring_still_unifies_with_list_ground(self):
         # nv — restates test_segstring_vs_char_list as an explicit
         # lockstep pin: SegString stays the char-list optimization.
-        assert unify(SegString(["hi"]), ['h', 'i'], Trail())
+        assert unify(SegString(["hi"]), [char_atom('h'), char_atom('i')], Trail())
 
     def test_segstring_still_unifies_with_list_containing_var(self):
         # nv — the list side may hold an unbound Var; SegString unify
@@ -211,34 +212,40 @@ class TestConsRuleRetirementLockstep:
         # path after this task's fix, not the retired str~list path).
         trail = Trail()
         X = Var()
-        assert unify(SegString(["hi"]), ['h', X], trail)
-        assert deref(X) == 'i'
+        assert unify(SegString(["hi"]), [char_atom('h'), X], trail)
+        assert deref(X) == char_atom('i')
 
     def test_list_still_unifies_with_segstring_symmetric(self):
         # nv — list on the left, SegString on the right: do_unify's
         # __unify__-protocol probe tries SegString.__unify__(list, trail),
         # the symmetric call shape to test_segstring_vs_char_list.
-        assert unify(['h', 'i'], SegString(["hi"]), Trail())
+        assert unify([char_atom('h'), char_atom('i')], SegString(["hi"]), Trail())
 
     def test_segstring_still_unifies_with_seglist_ground(self):
         # nv — a ground SegList is walked to a plain list; must still
         # match a SegString element-wise.
         from clausal.terms import ConcreteSeg
-        sl = SegList([ConcreteSeg(['h', 'i'])])
+        sl = SegList([ConcreteSeg([char_atom('h'), char_atom('i')])])
         assert unify(SegString(["hi"]), sl, Trail())
 
-    # ── now fails: a BARE str (no SegString) vs a char list ───────────────
+    # ── a BARE str (no SegString) vs a char list ─────────────────────────
 
-    def test_bare_str_no_longer_unifies_with_char_list(self):
-        # nv — the retired direction: a plain Python str, not wrapped in
-        # SegString, must NOT unify with a char list. Contrast with
-        # test_segstring_still_unifies_with_list_ground just above, which
-        # is the SAME character content but through SegString.
-        assert not unify("hi", ['h', 'i'], Trail())
+    def test_bare_str_unifies_with_its_char_list(self):
+        # nv — THE FLIP (2026-09-06-atoms-as-cells-strings §6.2) reinstated
+        # the str↔list arm P3-1 retired: a plain ``str`` IS the list of its
+        # char atoms, so it unifies with one directly, not only through
+        # SegString.  (The retirement was right while a str was an ATOM; it
+        # is a STRING now.)
+        assert unify("hi", [char_atom('h'), char_atom('i')], Trail())
 
-    def test_char_list_no_longer_unifies_with_bare_str(self):
+    def test_char_list_unifies_with_a_bare_str(self):
         # nv — symmetric direction.
-        assert not unify(['h', 'i'], "hi", Trail())
+        assert unify([char_atom('h'), char_atom('i')], "hi", Trail())
+
+    def test_a_one_char_string_is_not_the_char(self):
+        # nv — spec §6.2's row: ``"a"`` is the one-element LIST [a], not the
+        # char atom, so the two do not unify.
+        assert not unify("a", char_atom("a"), Trail())
 
 
 class TestSegStringOccursCheck:
@@ -305,7 +312,7 @@ class TestSegListStringPreserving:
         # nv
         trail = Trail()
         T = Var()
-        sl = SegList([ConcreteSeg(["h"]), VarSeg(T)])
+        sl = SegList([ConcreteSeg([char_atom("h")]), VarSeg(T)])
         assert unify(sl, "hello", trail)
         assert deref(T) == "ello"
         assert isinstance(deref(T), str)
@@ -314,7 +321,7 @@ class TestSegListStringPreserving:
         # nv
         trail = Trail()
         A, B = Var(), Var()
-        sl = SegList([VarSeg(A), ConcreteSeg([","]), VarSeg(B)])
+        sl = SegList([VarSeg(A), ConcreteSeg([char_atom(",")]), VarSeg(B)])
         assert unify(sl, "hello,world", trail)
         assert deref(A) == "hello"
         assert deref(B) == "world"
@@ -323,7 +330,7 @@ class TestSegListStringPreserving:
         # nv
         trail = Trail()
         A = Var()
-        sl = SegList([VarSeg(A), ConcreteSeg(["x"])])
+        sl = SegList([VarSeg(A), ConcreteSeg([char_atom("x")])])
         assert unify(sl, "x", trail)
         assert deref(A) == ""
 
@@ -356,7 +363,7 @@ class TestSegListStringPreserving:
         # nv
         trail = Trail()
         A, B = Var(), Var()
-        sl = SegList([VarSeg(A), ConcreteSeg(["l"]), VarSeg(B)])
+        sl = SegList([VarSeg(A), ConcreteSeg([char_atom("l")]), VarSeg(B)])
         walked = sl.__walk__()
         solutions = []
         for _ in _seglist_unify_gen(walked, "hello", trail):
@@ -376,7 +383,7 @@ class TestBodyMultiStarString:
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
-        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
         solutions = []
         for _ in _body_multi_star_unify("hello,world", segments, trail):
             solutions.append((deref(A), deref(B)))
@@ -386,7 +393,7 @@ class TestBodyMultiStarString:
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
-        segments = [("star", A), ("fixed", ["l"]), ("star", B)]
+        segments = [("star", A), ("fixed", [char_atom("l")]), ("star", B)]
         solutions = []
         for _ in _body_multi_star_unify("hello", segments, trail):
             solutions.append((deref(A), deref(B)))
@@ -408,7 +415,7 @@ class TestBodyMultiStarString:
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
-        segments = [("star", A), ("fixed", ["x"]), ("star", B)]
+        segments = [("star", A), ("fixed", [char_atom("x")]), ("star", B)]
         solutions = list(_body_multi_star_unify("hello", segments, trail))
         assert len(solutions) == 0
 
@@ -424,7 +431,7 @@ class TestBuildStarListString:
         trail = Trail()
         X = Var()
         unify(X, "ello", trail)
-        result = _build_star_list(["h"], X, [])
+        result = _build_star_list([char_atom("h")], X, [])
         assert result == "hello"
         assert isinstance(result, str)
 
@@ -433,7 +440,7 @@ class TestBuildStarListString:
         trail = Trail()
         X = Var()
         unify(X, "ell", trail)
-        result = _build_star_list(["h"], X, ["o"])
+        result = _build_star_list([char_atom("h")], X, [char_atom("o")])
         assert result == "hello"
         assert isinstance(result, str)
 
@@ -456,7 +463,7 @@ class TestBuildStarListString:
         unify(X, ss, trail)
         # before has int, not single-char str → mixed types
         result = _build_star_list([1], X, [2])
-        assert result == [1, 'e', 'l', 'l', 'o', 2]
+        assert result == [1, char_atom('e'), char_atom('l'), char_atom('l'), char_atom('o'), 2]
         assert isinstance(result, list)
 
     def test_star_nonground_segstring_mixed(self):
@@ -473,7 +480,7 @@ class TestBuildStarListString:
         from clausal.logic.runtime.body_star_unify import _build_star_list
         Y = Var()
         ss = SegString([VarSeg(Y), "orld"])
-        result = _build_star_list(["h"], ss, ["!"])
+        result = _build_star_list([char_atom("h")], ss, [char_atom("!")])
         assert isinstance(result, SegString)
 
 
@@ -500,7 +507,7 @@ class TestBuildMultiStarListString:
         unify(A, "he", trail)
         unify(B, "lo", trail)
         result = _build_multi_star_list([
-            ("star", A), ("fixed", ["l"]), ("star", B),
+            ("star", A), ("fixed", [char_atom("l")]), ("star", B),
         ])
         # All chars are single-char strings → str result
         assert result == "hello"
@@ -524,7 +531,7 @@ class TestClauseLevelStringPatterns:
         )
         mod = _load_module("lec_segstr", fixture).__dict__["$module"]
         H, T = Var(), Var()
-        for _ in call("HeadTail", "hello", H, T, module=mod):
+        for _ in call("HeadTail", mint("hello"), H, T, module=mod):
             assert deref(H) == "h"
             assert deref(T) == "ello"
             break
@@ -534,7 +541,7 @@ class TestClauseLevelStringPatterns:
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
         trail = Trail()
         A, B = Var(), Var()
-        segments = [("star", A), ("fixed", [","]), ("star", B)]
+        segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
         found = False
         for _ in _body_multi_star_unify("hello,world", segments, trail):
             if deref(A) == "hello" and deref(B) == "world":

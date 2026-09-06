@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/logging.md display snippets.
 
 -import_from(py.logging, [

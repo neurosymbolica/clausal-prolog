@@ -68,35 +68,31 @@ call_unify(PyObject *t1, PyObject *t2, PyObject *trail)
  * Twins of ``clausal.logic.atoms.char_atom`` / ``is_char_atom`` /
  * ``spelling`` — keep the three copies in lockstep.
  *
- * Plan 0: a char IS its 1-char str — but ``is_char_atom_obj`` and
- * ``char_spelling_obj`` ALSO accept the arity-0 cell ``(ch,)``, mirroring
- * the Stage A dual acceptance in ``clausal.logic.atoms.is_char_atom`` /
- * ``spelling``.  The twins must agree on ``("a",)``: the Python
- * ``maybe_promote_to_str`` promotes a list of cell chars, so a str-only C
- * test would make the C and Python paths disagree on the same input.
- * Stage B: char_atom_obj builds the 1-tuple and the str arms below go away.
+ * THE FLIP (Stage B): a char IS the arity-0 cell ``("a",)`` — an ordinary
+ * atom whose spelling is one character — and a 1-char ``str`` is a
+ * one-element STRING, not a char.  The str arms these helpers carried for
+ * Stage A's dual acceptance are gone with the representation that needed
+ * them.
  */
 
 /* Build the char whose spelling is the 1-char str *ch1*. New reference. */
 static inline PyObject *
 char_atom_obj(PyObject *ch1)
 {
-    return Py_NewRef(ch1);
+    return PyTuple_Pack(1, ch1);
 }
 
-/* True iff *e* is a char — a 1-char str, or the arity-0 cell of one. */
+/* True iff *e* is a char — the arity-0 cell of a 1-char str. */
 static inline int
 is_char_atom_obj(PyObject *e)
 {
-    if (PyUnicode_Check(e))
-        return PyUnicode_GET_LENGTH(e) == 1;
     return PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1
         && PyUnicode_Check(PyTuple_GET_ITEM(e, 0))
         && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(e, 0)) == 1;
 }
 
 /* The spelling of the char *e* — BORROWED reference, valid while *e* is.
- * The size test keeps this total: a non-cell tuple is returned unchanged
+ * The size test keeps this total: a non-cell object is returned unchanged
  * rather than indexed out of range (``seq_join_chars``'s callers pass
  * trusted-but-unvalidated lists). */
 static inline PyObject *
@@ -456,13 +452,15 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
     Py_ssize_t n_before = PyList_GET_SIZE(var_vals);
     Py_ssize_t n_after  = PyList_GET_SIZE(after_vals);
     int has_star = (star_val != Py_None);
-    /* P3-1 §1b: only the str-star branch below sets this to 1 — mirrors
-     * the Python _head_list_unify_output_py gate. maybe_promote_to_str
-     * at the tail of this function must NOT fire unconditionally (that
-     * would reintroduce the retired str~list cons identity via result-
-     * type "promotion" whenever the constructed list happens to be all
-     * 1-char strs — which is now common, since atoms are plain strs). */
-    int star_was_str = 0;
+    /* THE FLIP (atoms-as-cells/strings §6.2) DELETED the ``star_was_str``
+     * anti-back-door gate that used to stand here (and its Python twin in
+     * ``list_unify.py``).  It guarded a hazard that no longer exists: under
+     * P3-1 an atom was a plain ``str``, so a constructed list that happened
+     * to hold 1-char atoms would have been "promoted" into a str and
+     * silently re-created the retired str~list cons identity.  A char is a
+     * CELL now, so a list of chars IS the string — promoting it is not a
+     * back door, it is the same term in its compact representation (R-S2).
+     * ``maybe_promote_to_str`` therefore fires unconditionally at the tail. */
 
     PyObject *result = PyList_New(0);
     if (!result) { Py_DECREF(d); return NULL; }
@@ -496,11 +494,8 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
         } else if (PyUnicode_Check(s)) {
             /* Liskov "strings-as-lists" rule: a str-bound star is
              * treated as a list of CHARS. Splat its chars into
-             * the result; the final ``maybe_promote_to_str`` will
-             * re-promote when every element is a char. Legitimate
-             * (unlike the plain-list branch above): the star itself WAS
-             * a str, so preserving that shape is type-preservation. */
-            star_was_str = 1;
+             * the result; the final ``maybe_promote_to_str`` re-promotes
+             * when every element is a char. */
             if (extend_with_str_chars(result, s) < 0) {
                 Py_DECREF(s);
                 goto error;
@@ -790,18 +785,11 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
 
     /* unify(d, result, trail) */
     {
-        /* P3-1 §1b: only promote when star_was_str (a genuine str source
-         * contributed the star portion) — no star, a list-bound star, or
-         * a generic scalar star all keep the plain list. See the
-         * star_was_str declaration above for the rationale. */
-        PyObject *promoted;
-        if (star_was_str) {
-            promoted = maybe_promote_to_str(result);
-            if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
-        } else {
-            promoted = result;
-            Py_INCREF(promoted);
-        }
+        /* A list of chars IS a string (§6.2), so the compact
+         * representation is always the right one to build — see the note
+         * where ``star_was_str`` used to be declared. */
+        PyObject *promoted = maybe_promote_to_str(result);
+        if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
         int ok = call_unify(d, promoted, trail);
         Py_DECREF(promoted);
         Py_DECREF(d);

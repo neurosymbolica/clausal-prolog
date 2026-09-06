@@ -8,6 +8,7 @@ compiled and callable.
 from __future__ import annotations
 
 import pytest
+from clausal.logic.atoms import char_atom, mint
 
 
 # ── Fixture imports ──────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ class TestSpecializeCountNatnum:
 
         count = Var()
         results = []
-        for _ in call(specialize_natnum.SolveCountNatnum, [["natnum", 0]], count):
+        for _ in call(specialize_natnum.SolveCountNatnum, [[mint("natnum"), 0]], count):
             results.append(walk(deref(count)))
         assert 1 in results
 
@@ -93,7 +94,7 @@ class TestSpecializeCountNatnum:
 
         count = Var()
         results = []
-        for _ in call(specialize_natnum.SolveCountNatnum, [["natnum", ["s", 0]]], count):
+        for _ in call(specialize_natnum.SolveCountNatnum, [[mint("natnum"), [mint("s"), 0]]], count):
             results.append(walk(deref(count)))
         assert 2 in results
 
@@ -104,7 +105,7 @@ class TestSpecializeCountNatnum:
 
         count = Var()
         results = []
-        for _ in call(specialize_natnum.SolveCountNatnum, [["natnum", ["s", ["s", 0]]]], count):
+        for _ in call(specialize_natnum.SolveCountNatnum, [[mint("natnum"), [mint("s"), [mint("s"), 0]]]], count):
             results.append(walk(deref(count)))
         assert 3 in results
 
@@ -127,31 +128,31 @@ class TestSpecializeSolveGraph:
     def test_edge_ab(self, specialize_graph):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_graph.SolveGraph, [["edge", "a", "b"]]))
+        results = list(call(specialize_graph.SolveGraph, [[mint("edge"), mint("a"), mint("b")]]))
         assert len(results) >= 1
 
     def test_path_ab(self, specialize_graph):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_graph.SolveGraph, [["path", "a", "b"]]))
+        results = list(call(specialize_graph.SolveGraph, [[mint("path"), mint("a"), mint("b")]]))
         assert len(results) >= 1
 
     def test_path_ac_transitive(self, specialize_graph):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_graph.SolveGraph, [["path", "a", "c"]]))
+        results = list(call(specialize_graph.SolveGraph, [[mint("path"), mint("a"), mint("c")]]))
         assert len(results) >= 1
 
     def test_path_ad_transitive(self, specialize_graph):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_graph.SolveGraph, [["path", "a", "d"]]))
+        results = list(call(specialize_graph.SolveGraph, [[mint("path"), mint("a"), mint("d")]]))
         assert len(results) >= 1
 
     def test_no_path_ca(self, specialize_graph):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_graph.SolveGraph, [["path", "c", "a"]]))
+        results = list(call(specialize_graph.SolveGraph, [[mint("path"), mint("c"), mint("a")]]))
         assert len(results) == 0
 
     def test_solve_graph_fields(self, specialize_graph):
@@ -182,7 +183,7 @@ class TestSpecializeLimitNatnum:
         # nv
         from clausal.logic.solve import call
         results = list(call(
-            specialize_limit.SolveLimitNatnum, [["natnum", 0]], 1,
+            specialize_limit.SolveLimitNatnum, [[mint("natnum"), 0]], 1,
         ))
         assert len(results) >= 1
 
@@ -190,7 +191,7 @@ class TestSpecializeLimitNatnum:
         # nv
         from clausal.logic.solve import call
         results = list(call(
-            specialize_limit.SolveLimitNatnum, [["natnum", ["s", 0]]], 1,
+            specialize_limit.SolveLimitNatnum, [[mint("natnum"), [mint("s"), 0]]], 1,
         ))
         assert len(results) == 0
 
@@ -198,7 +199,7 @@ class TestSpecializeLimitNatnum:
         # nv
         from clausal.logic.solve import call
         results = list(call(
-            specialize_limit.SolveLimitNatnum, [["natnum", ["s", 0]]], 2,
+            specialize_limit.SolveLimitNatnum, [[mint("natnum"), [mint("s"), 0]]], 2,
         ))
         assert len(results) >= 1
 
@@ -206,7 +207,7 @@ class TestSpecializeLimitNatnum:
         # nv
         from clausal.logic.solve import call
         results = list(call(
-            specialize_limit.SolveLimitNatnum, [["natnum", ["s", ["s", 0]]]], 3,
+            specialize_limit.SolveLimitNatnum, [[mint("natnum"), [mint("s"), [mint("s"), 0]]]], 3,
         ))
         assert len(results) >= 1
 
@@ -227,9 +228,9 @@ class TestEquivalence:
         spec_cls = mi_module.SolveCountNatnum
 
         for goal, expected in [
-            ([["natnum", 0]], 1),
-            ([["natnum", ["s", 0]]], 2),
-            ([["natnum", ["s", ["s", 0]]]], 3),
+            ([[mint("natnum"), 0]], 1),
+            ([[mint("natnum"), [mint("s"), 0]]], 2),
+            ([[mint("natnum"), [mint("s"), [mint("s"), 0]]]], 3),
         ]:
             count = Var()
             results = []
@@ -248,18 +249,18 @@ class TestEquivalence:
 
         # Should succeed
         for goal in [
-            [["edge", "a", "b"]],
-            [["path", "a", "b"]],
-            [["path", "a", "c"]],
-            [["path", "a", "d"]],
+            [[mint("edge"), mint("a"), mint("b")]],
+            [[mint("path"), mint("a"), mint("b")]],
+            [[mint("path"), mint("a"), mint("c")]],
+            [[mint("path"), mint("a"), mint("d")]],
         ]:
             results = list(call(spec_cls, goal))
             assert len(results) >= 1, f"Expected success for {goal}"
 
         # Should fail
         for goal in [
-            [["path", "c", "a"]],
-            [["edge", "c", "a"]],
+            [[mint("path"), mint("c"), mint("a")]],
+            [[mint("edge"), mint("c"), mint("a")]],
         ]:
             results = list(call(spec_cls, goal))
             assert len(results) == 0, f"Expected failure for {goal}"
@@ -291,19 +292,19 @@ class TestSpecializeFactorial:
     def test_factorial_0(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 0, 1]]))
+        results = list(call(specialize_builtins.SolveFactorial, [[mint("factorial"), 0, 1]]))
         assert len(results) >= 1
 
     def test_factorial_3(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 3, 6]]))
+        results = list(call(specialize_builtins.SolveFactorial, [[mint("factorial"), 3, 6]]))
         assert len(results) >= 1
 
     def test_factorial_5(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 5, 120]]))
+        results = list(call(specialize_builtins.SolveFactorial, [[mint("factorial"), 5, 120]]))
         assert len(results) >= 1
 
     def test_factorial_query_var(self, specialize_builtins):
@@ -314,14 +315,14 @@ class TestSpecializeFactorial:
 
         r = Var()
         results = []
-        for _ in call(specialize_builtins.SolveFactorial, [["factorial", 4, r]]):
+        for _ in call(specialize_builtins.SolveFactorial, [[mint("factorial"), 4, r]]):
             results.append(walk(deref(r)))
         assert 24 in results
 
     def test_factorial_wrong_fails(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveFactorial, [["factorial", 3, 7]]))
+        results = list(call(specialize_builtins.SolveFactorial, [[mint("factorial"), 3, 7]]))
         assert len(results) == 0
 
 
@@ -339,7 +340,7 @@ class TestSpecializeCountFactorial:
 
         count = Var()
         results = []
-        for _ in call(specialize_builtins.SolveCountFactorial, [["factorial", 0, 1]], count):
+        for _ in call(specialize_builtins.SolveCountFactorial, [[mint("factorial"), 0, 1]], count):
             results.append(walk(deref(count)))
         assert 1 in results
 
@@ -354,13 +355,13 @@ class TestSpecializeLimitFactorial:
     def test_limit_factorial_0_depth_1(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveLimitFactorial, [["factorial", 0, 1]], 1))
+        results = list(call(specialize_builtins.SolveLimitFactorial, [[mint("factorial"), 0, 1]], 1))
         assert len(results) >= 1
 
     def test_limit_factorial_3_depth_30(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveLimitFactorial, [["factorial", 3, 6]], 30))
+        results = list(call(specialize_builtins.SolveLimitFactorial, [[mint("factorial"), 3, 6]], 30))
         assert len(results) >= 1
 
 
@@ -370,19 +371,19 @@ class TestSpecializeEven:
     def test_even_0(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveEven, [["even", 0]]))
+        results = list(call(specialize_builtins.SolveEven, [[mint("even"), 0]]))
         assert len(results) >= 1
 
     def test_even_4(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveEven, [["even", 4]]))
+        results = list(call(specialize_builtins.SolveEven, [[mint("even"), 4]]))
         assert len(results) >= 1
 
     def test_odd_1_fails(self, specialize_builtins):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_builtins.SolveEven, [["even", 1]]))
+        results = list(call(specialize_builtins.SolveEven, [[mint("even"), 1]]))
         assert len(results) == 0
 
 
@@ -419,13 +420,13 @@ class TestDeepPipeline:
     def test_deep_natnum_0(self, specialize_deep):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_deep.DeepNatnum, [["natnum", 0]]))
+        results = list(call(specialize_deep.DeepNatnum, [[mint("natnum"), 0]]))
         assert len(results) >= 1
 
     def test_deep_natnum_s0(self, specialize_deep):
         # nv
         from clausal.logic.solve import call
-        results = list(call(specialize_deep.DeepNatnum, [["natnum", ["s", 0]]]))
+        results = list(call(specialize_deep.DeepNatnum, [[mint("natnum"), [mint("s"), 0]]]))
         assert len(results) >= 1
 
     def test_deep_natnum_ss0(self, specialize_deep):
@@ -433,7 +434,7 @@ class TestDeepPipeline:
         from clausal.logic.solve import call
         results = list(call(
             specialize_deep.DeepNatnum,
-            [["natnum", ["s", ["s", 0]]]],
+            [[mint("natnum"), [mint("s"), [mint("s"), 0]]]],
         ))
         assert len(results) >= 1
 
@@ -443,7 +444,7 @@ class TestDeepPipeline:
         from clausal.logic.solve import call
         count = Var()
         results = []
-        for _ in call(specialize_deep.DeepCountNatnum, [["natnum", 0]], count):
+        for _ in call(specialize_deep.DeepCountNatnum, [[mint("natnum"), 0]], count):
             results.append(walk(deref(count)))
         assert 1 in results
 
@@ -454,7 +455,7 @@ class TestDeepPipeline:
         count = Var()
         results = []
         for _ in call(
-            specialize_deep.DeepCountNatnum, [["natnum", ["s", 0]]], count,
+            specialize_deep.DeepCountNatnum, [[mint("natnum"), [mint("s"), 0]]], count,
         ):
             results.append(walk(deref(count)))
         assert 2 in results
@@ -465,10 +466,10 @@ class TestDeepPipeline:
         from clausal.logic.solve import call
         for val in [0, ["s", 0], ["s", ["s", 0]]]:
             shallow = list(call(
-                specialize_deep.ShallowNatnum, [["natnum", val]],
+                specialize_deep.ShallowNatnum, [[mint("natnum"), val]],
             ))
             deep = list(call(
-                specialize_deep.DeepNatnum, [["natnum", val]],
+                specialize_deep.DeepNatnum, [[mint("natnum"), val]],
             ))
             assert len(shallow) == len(deep), (
                 f"Mismatch for natnum({val}): "
@@ -572,12 +573,12 @@ class TestCpdPipeline:
     def test_cpd_natnum_query(self, cpd_module):
         # nv
         from clausal.logic.solve import call
-        assert sum(1 for _ in call(cpd_module.CpdNatnum, [["natnum", 0]])) == 1
+        assert sum(1 for _ in call(cpd_module.CpdNatnum, [[mint("natnum"), 0]])) == 1
 
     def test_cpd_graph_path(self, cpd_module):
         # nv
         from clausal.logic.solve import call
-        assert sum(1 for _ in call(cpd_module.CpdGraph, [["path", "a", "c"]])) == 1
+        assert sum(1 for _ in call(cpd_module.CpdGraph, [[mint("path"), mint("a"), mint("c")]])) == 1
 
     def test_cpd_count_value(self, cpd_module):
         # nv
@@ -585,7 +586,7 @@ class TestCpdPipeline:
         from clausal.logic.solve import call
         v = Var()
         result = None
-        for _ in call(cpd_module.CpdCountNatnum, [["natnum", ["s", 0]]], v):
+        for _ in call(cpd_module.CpdCountNatnum, [[mint("natnum"), [mint("s"), 0]]], v):
             result = walk(deref(v))
         assert result == 2
 
@@ -593,14 +594,14 @@ class TestCpdPipeline:
         # nv
         from clausal.logic.solve import call
         assert sum(1 for _ in call(
-            cpd_module.CpdLimitNatnum, [["natnum", ["s", ["s", 0]]]], 10
+            cpd_module.CpdLimitNatnum, [[mint("natnum"), [mint("s"), [mint("s"), 0]]]], 10
         )) == 1
 
     def test_cpd_inline_tests(self, cpd_module):
         """All inline Test predicates in the fixture should pass."""
         # nv
         from clausal.logic.solve import call
-        results = list(call(cpd_module.Test, "cpd natnum(0)"))
+        results = list(call(cpd_module.Test, mint("cpd natnum(0)")))
         assert len(results) == 1
 
     def test_cpd_directive_parsing(self):
@@ -750,7 +751,8 @@ class TestSpecializedPredicateIsARow:
         assert term.functor == "error"
         assert term.args[0] == Compound(
             "permission_error",
-            ("modify", "static_procedure", Compound("/", ("MyAlias", 1))),
+            (mint("modify"), mint("static_procedure"),
+             Compound("/", ("MyAlias", 1))),
         )
         # The channel names the DIRECTIVE and the author names the
         # specializer; they are no longer the same word (fix round 1, F3).

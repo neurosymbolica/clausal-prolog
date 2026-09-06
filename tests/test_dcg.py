@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
@@ -79,7 +80,7 @@ class TestAtomHeadDispatch:
         # P3-2 Task 2 (THE FLIP, R6): ``ve`` is a DATA functor -- the term is
         # the cell ``("ve", V)``, and the name binds the spelling.  ``r`` is a
         # predicate and ``foo`` an atom, both unchanged.
-        assert mod.module_dict["ve"] == "ve"
+        assert mod.module_dict["ve"] == mint("ve")
         ve = lambda *args: ("ve", *args)
         # r(foo) only the atom clause
         assert _succeeds("phrase", r(foo), ["atom"], module=mod)
@@ -115,7 +116,7 @@ class TestAtomHeadDispatch:
         )
         mod = _load("r1d", src, tmp_path)
         # R6: a cell constructor, as in test_dcg_atom_head_no_compound_match.
-        assert mod.module_dict["ve"] == "ve"
+        assert mod.module_dict["ve"] == mint("ve")
         ve = lambda *args: ("ve", *args)
         foo = mod.module_dict["foo"]
         bar = mod.module_dict["bar"]
@@ -974,9 +975,9 @@ class TestDCGStringInput:
         cls = mod.module_dict["tok"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), "x", module=mod):
+        for _ in call("phrase", cls(v), mint("x"), module=mod):
             results.append(deref(v))
-        assert results == ["x"]
+        assert results == [mint("x")]
 
     def test_phrase2_inline_goal_string(self, tmp_path):
         """DCG with inline goal on string input."""
@@ -986,9 +987,9 @@ class TestDCGStringInput:
         cls = mod.module_dict["vowel"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), "e", module=mod):
+        for _ in call("phrase", cls(v), mint("e"), module=mod):
             results.append(deref(v))
-        assert results == ["e"]
+        assert results == [mint("e")]
         # Consonant should fail
         results2 = []
         for _ in call("phrase", cls(v), "b", module=mod):

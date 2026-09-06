@@ -11,6 +11,7 @@ all.
 import ast
 import textwrap
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var, deref
@@ -215,7 +216,7 @@ def test_engine_lambda_param_shadows_the_enclosing_binding(tmp_path):
         BareCase(L, R) <- (X is 99, maplist(big, L), R is "yes")
         """)
     assert _solutions(module, "ShadowCase", [4, 5], Var()) == \
-        _solutions(module, "BareCase", [4, 5], Var()) == [([4, 5], "yes")]
+        _solutions(module, "BareCase", [4, 5], Var()) == [([4, 5], mint("yes"))]
 
 
 def test_forwarding_lambda_reifies_as_lambda_node_with_atom_params():

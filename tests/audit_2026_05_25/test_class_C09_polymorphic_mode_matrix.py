@@ -22,6 +22,7 @@ Findings tested here:
 """
 
 import pytest
+from clausal.logic.atoms import char_atom, mint
 
 
 def test_F050_split_with_join_preserves_str_parts():
@@ -56,7 +57,7 @@ def test_F050_split_with_join_preserves_str_parts():
     split_results = []
     for _ in call("split_with", ",", "a,b,c", parts, module=mod):
         split_results.append(deref(parts))
-    assert split_results == [["a", "b", "c"]], (
+    assert split_results == [[char_atom("a"), char_atom("b"), char_atom("c")]], (
         f"precondition: split_with(',', 'a,b,c', P) should yield "
         f"P = ['a','b','c']; got {split_results!r}"
     )
@@ -64,7 +65,7 @@ def test_F050_split_with_join_preserves_str_parts():
     # Now run the inverse direction (join mode) with the same parts.
     J = Var()
     join_results = []
-    for _ in call("split_with", ",", J, ["a", "b", "c"], module=mod):
+    for _ in call("split_with", ",", J, [char_atom("a"), char_atom("b"), char_atom("c")], module=mod):
         join_results.append(deref(J))
 
     assert len(join_results) > 0, (
@@ -75,7 +76,7 @@ def test_F050_split_with_join_preserves_str_parts():
     # The bug: the join only contains the separators. Under any
     # reasonable round-trip / inverse-of-split contract the join
     # must include the 'a', 'b', 'c' parts.
-    assert j != [",", ","], (
+    assert j != [char_atom(","), char_atom(",")], (
         f"split_with(',', J, ['a','b','c']) returned J = {j!r}; this is "
         f"the bug signature (only separators, all str parts dropped). "
         f"Expected J to include 'a', 'b', 'c' (e.g. ``'a,b,c'`` or "
@@ -83,7 +84,7 @@ def test_F050_split_with_join_preserves_str_parts():
     )
     # Stronger: every str part should appear somewhere in J.
     flat = list(j) if not isinstance(j, str) else j
-    for p in ("a", "b", "c"):
+    for p in (char_atom("a"), char_atom("b"), char_atom("c")):
         assert p in flat, (
             f"split_with(',', J, ['a','b','c']) returned J = {j!r}; "
             f"expected part {p!r} to appear in J (round-trip with the "
@@ -116,7 +117,7 @@ def test_F051_as_items_accepts_ground_seg_inputs():
         "c09_f051_seg_builtins", "-module(t, [])\n"
     ).__dict__["$module"]
 
-    sl = SegList([ConcreteSeg(["a", "b", "c"])])
+    sl = SegList([ConcreteSeg([char_atom("a"), char_atom("b"), char_atom("c")])])
     ss = SegString(["abc"])
     # Preconditions: both ground. Under the Phase 2 Task 13 Liskov rule
     # (default output is list; promote to str when all elements are
@@ -135,7 +136,7 @@ def test_F051_as_items_accepts_ground_seg_inputs():
     # Controls: list/str inputs succeed.
     R = Var()
     n_list_append = sum(
-        1 for _ in call("append", ["a", "b", "c"], "d", R, module=mod)
+        1 for _ in call("append", [char_atom("a"), char_atom("b"), char_atom("c")], "d", R, module=mod)
     )
     R = Var()
     n_str_append = sum(1 for _ in call("append", "abc", "d", R, module=mod))
@@ -336,59 +337,59 @@ def test_F053_output_mode_builders_respect_str_type_hint():
     [
         (
             "reverse",
-            ("reverse", ["a", "b", "c"]),
+            ("reverse", [char_atom("a"), char_atom("b"), char_atom("c")]),
             ("reverse", "abc"),
             "cba",
-            ["c", "b", "a"],
+            [char_atom("c"), char_atom("b"), char_atom("a")],
         ),
         (
             "msort",
-            ("msort", ["c", "b", "a"]),
+            ("msort", [char_atom("c"), char_atom("b"), char_atom("a")]),
             ("msort", "cba"),
             "abc",
-            ["a", "b", "c"],
+            [char_atom("a"), char_atom("b"), char_atom("c")],
         ),
         (
             "sort",
-            ("sort", ["a", "b", "c"]),
+            ("sort", [char_atom("a"), char_atom("b"), char_atom("c")]),
             ("sort", "abc"),
             "abc",
-            ["a", "b", "c"],
+            [char_atom("a"), char_atom("b"), char_atom("c")],
         ),
         (
             "take",
-            ("take", 2, ["a", "b", "c"]),
+            ("take", 2, [char_atom("a"), char_atom("b"), char_atom("c")]),
             ("take", 2, "abc"),
             "ab",
-            ["a", "b"],
+            [char_atom("a"), char_atom("b")],
         ),
         (
             "drop",
-            ("drop", 1, ["a", "b", "c"]),
+            ("drop", 1, [char_atom("a"), char_atom("b"), char_atom("c")]),
             ("drop", 1, "abc"),
             "bc",
-            ["b", "c"],
+            [char_atom("b"), char_atom("c")],
         ),
         (
             "list_to_set",
-            ("list_to_set", ["a", "b", "c"]),
+            ("list_to_set", [char_atom("a"), char_atom("b"), char_atom("c")]),
             ("list_to_set", "abc"),
             "abc",
-            ["a", "b", "c"],
+            [char_atom("a"), char_atom("b"), char_atom("c")],
         ),
         (
             "subtract",
-            ("subtract", ["a", "b", "c"], ["b"]),
+            ("subtract", [char_atom("a"), char_atom("b"), char_atom("c")], [char_atom("b")]),
             ("subtract", "abc", "b"),
             "ac",
-            ["a", "c"],
+            [char_atom("a"), char_atom("c")],
         ),
         (
             "union",
-            ("union", ["a", "b", "c"], ["d"]),
+            ("union", [char_atom("a"), char_atom("b"), char_atom("c")], [char_atom("d")]),
             ("union", "abc", "d"),
             "abcd",
-            ["a", "b", "c", "d"],
+            [char_atom("a"), char_atom("b"), char_atom("c"), char_atom("d")],
         ),
     ],
     ids=[
@@ -538,7 +539,7 @@ def test_F056_flatten_str_list_equivalence():
         return None
 
     r_str_wrapped = _first(["ab"])
-    r_list_wrapped = _first([["a", "b"]])
+    r_list_wrapped = _first([[char_atom("a"), char_atom("b")]])
 
     assert r_str_wrapped is not None and r_list_wrapped is not None, (
         f"precondition: both flatten calls should yield a solution; "
@@ -582,7 +583,7 @@ key_of(_c, _k) <- if_(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
         "$module"
     ]
 
-    sl = SegList([ConcreteSeg(["a", "e", "i"])])
+    sl = SegList([ConcreteSeg([char_atom("a"), char_atom("e"), char_atom("i")])])
     ss = SegString(["aei"])
     # Phase 2 Task 13 Liskov rule: all-1-char-str SegList walks to str.
     assert sl.is_ground() and sl.__walk__() == "aei", (
@@ -600,7 +601,7 @@ key_of(_c, _k) <- if_(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
 
     # Control: list/str inputs succeed for maplist/2.
     ok_list = any(
-        True for _ in call("maplist", is_vowel, ["a", "e", "i"], module=mod)
+        True for _ in call("maplist", is_vowel, [char_atom("a"), char_atom("e"), char_atom("i")], module=mod)
     )
     ok_str = any(True for _ in call("maplist", is_vowel, "aei", module=mod))
     assert ok_list and ok_str, (
@@ -683,7 +684,7 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
     ).__dict__["$module"]
     is_vowel = mod.module_dict["is_vowel"]
 
-    list_input = ["h", "e", "l", "l", "o"]
+    list_input = [char_atom("h"), char_atom("e"), char_atom("l"), char_atom("l"), char_atom("o")]
     str_input = "hello"
 
     # include — list keeps list, str preserves str (input-type wins).
@@ -711,7 +712,7 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
         f"{type(str_inc).__name__}; expected str (str input → str "
         f"output under option A)."
     )
-    assert list_inc == ["e", "o"], (
+    assert list_inc == [char_atom("e"), char_atom("o")], (
         f"include(is_vowel, ['h','e','l','l','o'], R) should return "
         f"['e', 'o'] (list); got {list_inc!r}."
     )
@@ -746,7 +747,7 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
         f"partition(is_vowel, 'hello', Y, N) bound ({str_par[0]!r}, "
         f"{str_par[1]!r}); expected both str under option A."
     )
-    assert list_par == (["e", "o"], ["h", "l", "l"]), (
+    assert list_par == ([char_atom("e"), char_atom("o")], [char_atom("h"), char_atom("l"), char_atom("l")]), (
         f"partition(is_vowel, ['h','e','l','l','o'], Y, N) bound "
         f"{list_par!r}; expected (['e','o'], ['h','l','l'])."
     )
@@ -879,7 +880,7 @@ def test_F077_atom_concat_type_error_for_non_atom_bound_args():
     # Each of these is fully-bound with a non-atom arg, so the correct
     # ISO error is type_error(atom, NonAtom).
     cases = [
-        ("list-arg", (["h", "e", "l"], "lo", Var())),
+        ("list-arg", ([char_atom("h"), char_atom("e"), char_atom("l")], "lo", Var())),
         ("int-args", (1, 2, Var())),
         ("float-arg", (3.14, "x", Var())),
     ]

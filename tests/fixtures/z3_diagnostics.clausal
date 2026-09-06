@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Z3 diagnostics tests — exercises z3.named, z3.unsatisfiable_core,
 # z3.satisfiability, z3.model, z3.simplify, z3.assertions.
 

@@ -450,8 +450,10 @@ def resolve_qualified_goal_cell(
             f"{MAX_QUALIFICATION_DEPTH} deep, or is cyclic — there is no "
             f"innermost goal to run and so no module that answers",
         ))
-    if type(goal) is str:
-        goal = (goal,)
+    # THE FLIP (spec §6.4): the ``str`` → ``(str,)`` wrap that used to sit
+    # here is gone — a ``str`` inner goal is a STRING, which is not callable,
+    # and the caller (``_resolve_named_goal`` / ``_term_to_goal``) is where
+    # that refusal belongs, uniformly with an unqualified string goal.
     return module, goal
 
 

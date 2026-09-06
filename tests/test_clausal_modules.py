@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Module
 from clausal.logic.solve import call, _deref_walk
 from clausal.logic.variables import Var, deref
@@ -301,12 +302,12 @@ class TestExceptionsNested:
     def test_inner_miss(self):
         # nv
         r = Var()
-        assert _call_collect("InnerMiss", r, mod=self.mod) == ["outer_problem"]
+        assert _call_collect("InnerMiss", r, mod=self.mod) == [mint("outer_problem")]
 
     def test_inner_hit(self):
         # nv
         r = Var()
-        assert _call_collect("InnerHit", r, mod=self.mod) == ["inner_caught"]
+        assert _call_collect("InnerHit", r, mod=self.mod) == [mint("inner_caught")]
 
 
 class TestExceptionsDeadChildRecovery:
@@ -330,7 +331,7 @@ class TestExceptionsCatchTransparent:
     def test_no_throw(self):
         # nv
         r = Var()
-        assert _call_collect("CatchNoThrow", r, mod=self.mod) == ["normal"]
+        assert _call_collect("CatchNoThrow", r, mod=self.mod) == [mint("normal")]
 
     def test_multiple_solutions(self):
         # nv

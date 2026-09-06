@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/sqlite.md display snippets.
 
 -import_from(sqlite, [connect, disconnect, current_connection,

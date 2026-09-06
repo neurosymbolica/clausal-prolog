@@ -28,6 +28,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Clause
 from clausal.logic.predicate import make_predicate
 from clausal.logic.solve import call
@@ -412,7 +413,7 @@ class TestTermConstructionUnaffected:
             (walk(deref(k)), walk(deref(v)))
             for _ in call("impord_qd", k, v, module=lm)
         )
-        assert results == [("a", 1), ("b", 2)]
+        assert results == [(mint("a"), 1), (mint("b"), 2)]
 
     def test_atom_vocabulary_then_predicate_applied_form_answers(self):
         """(b) half of the same shape: ``impord_atp_lookup``'s body applies
@@ -434,7 +435,7 @@ class TestTermConstructionUnaffected:
             (walk(deref(k)), walk(deref(v)))
             for _ in call("impord_atp_lookup", k, v, module=lm)
         )
-        assert results == [("a", 1), ("b", 2)]
+        assert results == [(mint("a"), 1), (mint("b"), 2)]
 
 
 class TestCorrectCallsUnaffected:
@@ -479,7 +480,7 @@ class TestForeignSingleArgumentImplementor:
                            os.path.join(FIXTURES, "foreign_dispatch_use.clausal"))
         v = Var()
         # Bindings are live on the yielded trail, not after it is undone.
-        bound = [deref(v) for _ in call("fordisp_lookup", "b", v,
+        bound = [deref(v) for _ in call("fordisp_lookup", mint("b"), v,
                                        module=mod.__dict__["$module"])]
         assert bound == [2], (
             "a correct-arity call to a foreign implementor must succeed; "

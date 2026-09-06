@@ -8,6 +8,7 @@ import io
 import sys
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
@@ -520,7 +521,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("Greet", "World", module=logic_mod))
+            results = list(call("Greet", mint("World"), module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
@@ -541,7 +542,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowPair", "cats", "dogs", module=logic_mod))
+            results = list(call("ShowPair", mint("cats"), mint("dogs"), module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
@@ -604,7 +605,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowUpper", "hello", module=logic_mod))
+            results = list(call("ShowUpper", mint("hello"), module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1

@@ -18,6 +18,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.logic.constraints as C
 from clausal.logic.constraints import (
     dif,
@@ -714,7 +715,7 @@ class TestLanguageIntegration:
         m = load("lang", LANG_SRC)
         x, y = Var(), Var()
         got = answers(solve(m.pair_diff(x, y)), x, y)
-        assert got == [("red", "green"), ("green", "red")]
+        assert got == [(mint("red"), "green"), ("green", mint("red"))]
 
     def test_is_not_survives_clause_backtracking(self, load):
         m = load("lang", LANG_SRC)

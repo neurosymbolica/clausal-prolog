@@ -33,6 +33,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import PredicateMeta
@@ -75,11 +76,11 @@ class TestImportedAtomWithLocalArityNPredicate:
         assert _solutions(self.use.t5b_go, 1) == [(2,)]
 
     def test_every_local_clause_answers_through_the_rerouted_site(self):
-        assert _solutions(self.use.t5b_all, 2) == [("t5b_a", 2), ("t5b_b", 3)]
+        assert _solutions(self.use.t5b_all, 2) == [(mint("t5b_a"), 2), ("t5b_b", 3)]
 
     def test_the_bare_form_in_a_head_stays_the_imported_atom(self):
         (value,), = _solutions(self.use.t5b_head_data, 1)
-        assert value == "t5b_slot"
+        assert value == mint("t5b_slot")
         assert type(value) is str
 
     def test_the_bare_form_in_a_body_stays_the_imported_atom(self):
@@ -87,7 +88,7 @@ class TestImportedAtomWithLocalArityNPredicate:
         re-pointed at the local name, the bare form keeps the dotted import
         key — so one file can mean both with the same spelling."""
         (value,), = _solutions(self.use.t5b_body_data, 1)
-        assert value == "t5b_slot"
+        assert value == mint("t5b_slot")
         assert type(value) is str
 
     def test_a_genuinely_imported_predicate_still_reaches_its_owner(self):
@@ -98,7 +99,7 @@ class TestImportedAtomWithLocalArityNPredicate:
     def test_the_module_attribute_is_unchanged(self):
         """The Python ``getattr`` surface is out of scope: the imported atom
         is what the attribute holds, exactly as before."""
-        assert self.use.t5b_slot == "t5b_slot"
+        assert self.use.t5b_slot == mint("t5b_slot")
         assert type(self.use.t5b_slot) is str
 
 
@@ -154,7 +155,7 @@ class TestImportedDeclaredAtomWithZeroArityClauses:
         """The precondition this task is about: the /0 clause block wins the
         owner's binding, so the declaration alone no longer shows in it."""
         assert isinstance(self.owner.t5b_kfact, PredicateMeta)
-        assert self.owner.t5b_kplain == "t5b_kplain"
+        assert self.owner.t5b_kplain == mint("t5b_kplain")
 
     def test_the_owners_own_read_answers(self):
         """The control: the owner's lowering always wrote the str."""
@@ -179,12 +180,12 @@ class TestImportedDeclaredAtomWithZeroArityClauses:
         value = Var()
         assert [
             deref(value)
-            for _ in call(self.use.t5b_ikey, {"t5b_kfact": 7}, value)
+            for _ in call(self.use.t5b_ikey, {mint("t5b_kfact"): 7}, value)
         ] == [7]
 
     def test_the_key_is_the_plain_str_in_a_head_argument(self):
         (value,), = _solutions(self.use.t5b_ihead, 1)
-        assert value == "t5b_kfact"
+        assert value == mint("t5b_kfact")
         assert type(value) is str
 
     def test_goal_position_still_runs_the_owners_zero_arity_predicate(self):

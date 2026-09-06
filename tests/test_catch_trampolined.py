@@ -23,6 +23,7 @@ import importlib
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import _deref_walk
 from clausal.logic.variables import Var
 from clausal.terms import Compound
@@ -112,12 +113,12 @@ def test_non_matching_catcher_propagates_the_original_exception(mod):
 
 
 def test_nested_catch_inner_absorbs_and_outer_does_not_fire(mod):
-    assert _answers(mod.inner_catches) == [("inner",)]
+    assert _answers(mod.inner_catches) == [(mint("inner"),)]
 
 
 def test_nested_catch_inner_declines_and_outer_catches(mod):
     """Exercises walking *past* a declining handler to the next catcher."""
-    assert _answers(mod.outer_catches) == [("outer",)]
+    assert _answers(mod.outer_catches) == [(mint("outer"),)]
 
 
 # ── control-flow exceptions must not be stolen ───────────────────────────────
@@ -168,7 +169,7 @@ def test_catch_inside_a_predicate_called_through_findall(mod):
 
 def test_throw_caught_inside_a_predicate_called_through_once(mod):
     """The LogicException half of the same hole."""
-    assert _answers(mod.catch_throw_via_once) == [("boom",)]
+    assert _answers(mod.catch_throw_via_once) == [(mint("boom"),)]
 
 
 # ── the two remaining tramp_call drivers, and a raising recovery goal ────────
@@ -183,7 +184,7 @@ def test_catch_inside_a_negated_goal_absorbs_the_exception(mod):
     then fails, so the negation succeeds.  Before the fix the exception
     escaped the negation entirely and the whole query raised.
     """
-    assert _answers(mod.naf_over_catch) == [("absorbed_then_failed",)]
+    assert _answers(mod.naf_over_catch) == [(mint("absorbed_then_failed"),)]
 
 
 def test_catch_inside_a_goal_lambda_absorbs_the_exception(mod):
@@ -202,7 +203,7 @@ def test_catch_inside_an_ite_condition_absorbs_the_exception(mod):
     which — emitted inline — had no exception routing, so the ValueError
     escaped the whole construct instead of reaching the handler.
     """
-    assert _answers(mod.ite_cond_catch) == [("then",)]
+    assert _answers(mod.ite_cond_catch) == [(mint("then"),)]
 
 
 def test_declining_catch_in_an_ite_condition_still_lets_the_error_escape(mod):

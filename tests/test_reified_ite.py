@@ -14,6 +14,7 @@ Tests cover:
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.constraints import reify_eq, dif
 from clausal.logic.clpfd import reify_fd, fd_eq, fd_lt, in_domain
@@ -1319,7 +1320,7 @@ class TestTabledIteCondition:
         goal = Call(func=LoadName(name="CheckPath"), args=[3, r], kwargs=[])
         results = list(query(goal, {"r": r}, logic_mod))
         labels = [res["r"] for res in results]
-        assert "reachable" in labels
+        assert mint("reachable") in labels
 
     def test_tabled_condition_fails(self):
         """check_path(99, R) with tabled path(1,99) unreachable → 'unreachable'."""
@@ -1332,8 +1333,8 @@ class TestTabledIteCondition:
         goal = Call(func=LoadName(name="CheckPath"), args=[99, r], kwargs=[])
         results = list(query(goal, {"r": r}, logic_mod))
         labels = [res["r"] for res in results]
-        assert "unreachable" in labels
-        assert "reachable" not in labels
+        assert mint("unreachable") in labels
+        assert mint("reachable") not in labels
 
 
 # ── Import integration tests ─────────────────────────────────────────────────
@@ -1361,13 +1362,13 @@ class TestIteImportIntegration:
         goal = Call(func=LoadName(name="Classify"), args=[5, l], kwargs=[])
         results = list(query(goal, {"l": l}, logic_mod))
         labels = [r["l"] for r in results]
-        assert "positive" in labels
+        assert mint("positive") in labels
 
         l2 = Var()
         goal2 = Call(func=LoadName(name="Classify"), args=[-3, l2], kwargs=[])
         results2 = list(query(goal2, {"l": l2}, logic_mod))
         labels2 = [r["l"] for r in results2]
-        assert "negative" in labels2
+        assert mint("negative") in labels2
 
     def test_memberd_ground_deterministic(self):
         """memberd(1, [1,2,3]) — ground query is deterministic (one solution, no duplicates).

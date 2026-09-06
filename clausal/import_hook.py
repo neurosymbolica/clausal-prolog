@@ -429,7 +429,9 @@ def _preseed_py_submodules(module_items) -> None:
 # instead of a generated class.  A stale pre-flip ``.pyc`` against the new
 # runtime calls that spelling: ``TypeError: 'str' object is not callable``
 # from inside generated code.
-CLAUSAL_BYTECODE_TAG = 8
+# 8 -> 9 (atoms-as-cells Stage B): atom Constants are ("bar",) cells; a stale
+# .pyc binds foo = 'foo', a STRING.
+CLAUSAL_BYTECODE_TAG = 9
 
 
 # ── One source file → one compilation ────────────────────────────────────────

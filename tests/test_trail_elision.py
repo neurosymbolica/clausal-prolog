@@ -31,6 +31,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.compiler import (
     compile_predicate_trampoline_ast,
     compile_predicate_trampoline,
@@ -217,11 +218,11 @@ Color(3, "cool"),
 """)
         x = Var()
         results = [deref(x) for _ in call("Color", 1, x, module=mod)]
-        assert results == ["warm"]
+        assert results == [mint("warm")]
 
         x = Var()
         results = [deref(x) for _ in call("Color", 2, x, module=mod)]
-        assert results == ["cool"]
+        assert results == [mint("cool")]
 
     def test_each_bucket_returns_exactly_one_solution(self):
         """Each distinct first-arg key yields exactly one solution (deterministic)."""
@@ -256,7 +257,7 @@ Attempt(3, R) <- Color(3, R)
 """)
         # Call Try for each key — verifies that previous Color bindings
         # don't leak into subsequent calls.
-        for key, expected in [(1, "warm"), (2, "cool"), (3, "cool")]:
+        for key, expected in [(1, mint("warm")), (2, mint("cool")), (3, mint("cool"))]:
             r = Var()
             results = [deref(r) for _ in call("Attempt", key, r, module=mod)]
             assert results == [expected]
@@ -390,12 +391,12 @@ Info(X, "default"),
 """)
         v = Var()
         results = [deref(v) for _ in call("Info", 1, v, module=mod)]
-        assert results == ["specific_1", "default"]
+        assert results == ["specific_1", mint("default")]
 
         v = Var()
         results = [deref(v) for _ in call("Info", 2, v, module=mod)]
-        assert results == ["specific_2", "default"]
+        assert results == ["specific_2", mint("default")]
 
         v = Var()
         results = [deref(v) for _ in call("Info", 99, v, module=mod)]
-        assert results == ["default"]
+        assert results == [mint("default")]

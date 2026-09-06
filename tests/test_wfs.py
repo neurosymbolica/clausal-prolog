@@ -3,6 +3,7 @@
 import os
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.tabling import (
     TableEntry,
     DelayedNegation,
@@ -450,7 +451,7 @@ class TestWfsAsymmetricWin:
             results.append(deref(X))
 
         # win("a") should be in results (true: via move("a","c"), not win("c"))
-        assert "a" in results
+        assert mint("a") in results
 
 
 # ── No negation cycle ───────────────────────────────────────────────────────
@@ -743,7 +744,7 @@ class TestWfsDisjunctiveDerivations:
         lm = _module(_load("wfs_win_asym"))
         X = Var()
         results = query_wfs(_win_goal(X), {"X": X}, lm, Trail())
-        assert [(r["X"], r["_truth"]) for r in results] == [("a", True)]
+        assert [(r["X"], r["_truth"]) for r in results] == [(mint("a"), True)]
         assert results[0]["_delays"] == frozenset()
 
 

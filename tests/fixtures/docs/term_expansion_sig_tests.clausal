@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/term_expansion.md display snippets.
 
 # Identity expansion: items pass through unchanged

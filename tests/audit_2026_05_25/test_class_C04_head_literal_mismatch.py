@@ -28,6 +28,7 @@ regression test below locks in that a bytes-literal head still matches a bytes
 caller and is unaffected by this change.
 """
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call
 from tests.audit_2026_05_25._helpers import load_inline_clausal
 
@@ -90,14 +91,14 @@ Zorp(['a', 'b', 'c']) <- (Helper(1))
     mod = load_inline_clausal("c04_f046_heads", source).__dict__["$module"]
 
     # Collect all 8 solution counts.
-    n_foo_str = sum(1 for _ in call("Foo", "abc", module=mod))
-    n_foo_list = sum(1 for _ in call("Foo", ["a", "b", "c"], module=mod))
-    n_bar_str = sum(1 for _ in call("Bar", "abc", module=mod))
-    n_bar_list = sum(1 for _ in call("Bar", ["a", "b", "c"], module=mod))
-    n_quux_str = sum(1 for _ in call("Quux", "abc", module=mod))
-    n_quux_list = sum(1 for _ in call("Quux", ["a", "b", "c"], module=mod))
-    n_zorp_str = sum(1 for _ in call("Zorp", "abc", module=mod))
-    n_zorp_list = sum(1 for _ in call("Zorp", ["a", "b", "c"], module=mod))
+    n_foo_str = sum(1 for _ in call("Foo", mint("abc"), module=mod))
+    n_foo_list = sum(1 for _ in call("Foo", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_bar_str = sum(1 for _ in call("Bar", mint("abc"), module=mod))
+    n_bar_list = sum(1 for _ in call("Bar", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_quux_str = sum(1 for _ in call("Quux", mint("abc"), module=mod))
+    n_quux_list = sum(1 for _ in call("Quux", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_zorp_str = sum(1 for _ in call("Zorp", mint("abc"), module=mod))
+    n_zorp_list = sum(1 for _ in call("Zorp", [mint("a"), mint("b"), mint("c")], module=mod))
 
     # P3-1 \u00a71b: same-type combinations still return 1; cross-type
     # (str-head/list-caller or list-head/str-caller) now return 0.
@@ -164,11 +165,11 @@ Color("blue") <- (Helper(1))
     assert sum(1 for _ in call("Color", list("green"), module=mod)) == 0
     assert sum(1 for _ in call("Color", list("blue"), module=mod)) == 0
     # str callers (control, same-type) still match.
-    assert sum(1 for _ in call("Color", "red", module=mod)) == 1
-    assert sum(1 for _ in call("Color", "green", module=mod)) == 1
+    assert sum(1 for _ in call("Color", mint("red"), module=mod)) == 1
+    assert sum(1 for _ in call("Color", mint("green"), module=mod)) == 1
     # A char-list still matches nothing for a non-matching clause either.
     assert sum(1 for _ in call("Color", list("purple"), module=mod)) == 0
-    assert sum(1 for _ in call("Color", ["x"], module=mod)) == 0
+    assert sum(1 for _ in call("Color", [mint("x")], module=mod)) == 0
 
 
 def test_F046_segstring_caller_against_str_head():
@@ -199,7 +200,7 @@ Quux("abc") <- (Helper(1))
     x = Var()
     partial = SegString(["a", VarSeg(x), "c"])
     bindings = [walk(x) for _ in call("Quux", partial, module=mod)]
-    assert bindings == ["b"], (
+    assert bindings == [mint("b")], (
         f"partial SegString caller a<X>c vs head \"abc\": expected exactly "
         f"one solution binding X='b', got bindings={bindings!r}"
     )
@@ -327,7 +328,7 @@ Quux(b"abc") <- (Helper(1))
     # bytes-as-lists: the int-code list form now matches (was 0 pre-feature).
     assert sum(1 for _ in call("Quux", [97, 98, 99], module=mod)) == 1
     # No str/bytes cross-unification: a str caller must NOT match.
-    assert sum(1 for _ in call("Quux", "abc", module=mod)) == 0
+    assert sum(1 for _ in call("Quux", mint("abc"), module=mod)) == 0
 
 
 def test_F046_same_type_str_fast_path():
@@ -343,6 +344,6 @@ Quux("hello") <- (Helper(1))
 """
     mod = load_inline_clausal("c04_f046_fastpath", source).__dict__["$module"]
 
-    assert sum(1 for _ in call("Quux", "hello", module=mod)) == 1
+    assert sum(1 for _ in call("Quux", mint("hello"), module=mod)) == 1
     # A different str does not match.
-    assert sum(1 for _ in call("Quux", "world", module=mod)) == 0
+    assert sum(1 for _ in call("Quux", mint("world"), module=mod)) == 0

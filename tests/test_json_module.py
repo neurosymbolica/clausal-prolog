@@ -50,15 +50,16 @@ class TestConverters:
         # nv
         result = _python_to_clausal({"a": 1, "b": 2})
         assert isinstance(result, DictTerm)
-        assert result.data == {"a": 1, "b": 2}
+        # JSON object keys are minted as ATOMS (spec §9.2).
+        assert result.data == {mint("a"): 1, mint("b"): 2}
 
     def test_python_to_clausal_nested(self):
         # nv
         result = _python_to_clausal({"a": {"b": 1}})
         assert isinstance(result, DictTerm)
-        inner = result.data["a"]
+        inner = result.data[mint("a")]
         assert isinstance(inner, DictTerm)
-        assert inner.data == {"b": 1}
+        assert inner.data == {mint("b"): 1}
 
     def test_python_to_clausal_list(self):
         # nv
@@ -109,8 +110,8 @@ class TestParse:
         assert len(sols) == 1
         result = deref(t)
         assert isinstance(result, DictTerm)
-        assert result.data["a"] == 1
-        assert result.data["b"] == 2
+        assert result.data[mint("a")] == 1
+        assert result.data[mint("b")] == 2
 
     def test_nested_object(self):
         # nv
@@ -118,9 +119,9 @@ class TestParse:
         sols, trail = simple_solutions(_parse_2, '{"a": {"b": 3}}', t)
         assert len(sols) == 1
         result = deref(t)
-        inner = result.data["a"]
+        inner = result.data[mint("a")]
         assert isinstance(inner, DictTerm)
-        assert inner.data["b"] == 3
+        assert inner.data[mint("b")] == 3
 
     def test_array(self):
         # nv
@@ -338,8 +339,8 @@ class TestFileIO:
         assert len(sols) == 1
         result = deref(t)
         assert isinstance(result, DictTerm)
-        assert result.data["hello"] == "world"
-        assert result.data["n"] == 42
+        assert result.data[mint("hello")] == "world"
+        assert result.data[mint("n")] == 42
 
     def test_read_nonexistent_fails(self):
         # nv
@@ -420,7 +421,7 @@ class TestParse3AtomsOption:
         # the same text.  At Stage B, ``atoms(["red"])`` written in source is
         # a list of STRINGS — demanding atoms there would make the option
         # unwritable in the notation it exists to serve.
-        for element in (mint("red"), "red", ("red",)):
+        for element in ("red", "red", ("red",)):
             t = Var()
             sols, _ = simple_solutions(
                 _parse_3, '{"k": "red"}', t, [("atoms", [element])]

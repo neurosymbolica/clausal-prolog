@@ -11,6 +11,7 @@ Verifies that:
 
 from __future__ import annotations
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, deref, is_var, get_attr, unify, unify_with_occurs_check
 from clausal.logic.clpfd import (
     FD_KEY, fd_eq, fd_ne, fd_lt, fd_le, fd_gt, fd_ge,

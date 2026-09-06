@@ -31,6 +31,7 @@ import warnings
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import ClausalTermConstructionError, PredicateMeta
@@ -161,7 +162,7 @@ class TestDeclareThenImport:
         use = _load_module(
             "tests.fixtures.fnmismatch_use", _fixture_path("fnmismatch_use"),
         )
-        assert _solutions(use.fnm_chk, 1) == [("ok",)]
+        assert _solutions(use.fnm_chk, 1) == [(mint("ok"),)]
 
     def test_differing_field_names_across_the_import(self):
         """The local declaration spells (STATUS, CITATIONS), the exporter
@@ -169,7 +170,7 @@ class TestDeclareThenImport:
         vocab = _load_fixture("impord_vocab")
         use = _load_fixture("impord_declare_then_import")
         assert use.impord_verdict is vocab.impord_verdict
-        assert _solutions(use.impord_dti_check, 1) == [("ok",), ("no",)]
+        assert _solutions(use.impord_dti_check, 1) == [(mint("ok"),), (mint("no"),)]
 
     def test_a_local_fact_fills_the_foreign_slots_in_order(self):
         """The bodyless-fact path: ``impord_fverdict(maybe, pending)`` must
@@ -177,7 +178,7 @@ class TestDeclareThenImport:
         vocab = _load_fixture("impord_fact_vocab")
         use = _load_fixture("impord_declare_then_import_fact")
         assert use.impord_fverdict is vocab.impord_fverdict
-        assert _solutions(vocab.impord_fverdict, 2) == [("maybe", "pending")]
+        assert _solutions(vocab.impord_fverdict, 2) == [(mint("maybe"), "pending")]
 
 
 class TestImportThenDeclare:
@@ -188,7 +189,7 @@ class TestImportThenDeclare:
         vocab = _load_fixture("impord_vocab")
         use = _load_fixture("impord_import_then_declare")
         assert use.impord_verdict is vocab.impord_verdict
-        assert _solutions(use.impord_itd_check, 1) == [("ok",), ("no",)]
+        assert _solutions(use.impord_itd_check, 1) == [(mint("ok"),), (mint("no"),)]
 
 
 class TestZeroArityAtomThenPredicate:
@@ -227,7 +228,7 @@ class TestZeroArityAtomThenPredicate:
             (walk(deref(k)), walk(deref(v)))
             for _ in call("impord_qd", k, v, module=lm)
         )
-        assert results == [("a", 1), ("b", 2)]
+        assert results == [(mint("a"), 1), (mint("b"), 2)]
 
     def test_the_applied_form_reaches_the_local_predicate(self):
         """(b), as P3-3 Task 5b re-decides it: ``impord_atp_lookup``'s body
@@ -248,7 +249,7 @@ class TestZeroArityAtomThenPredicate:
             (walk(deref(k)), walk(deref(v)))
             for _ in call("impord_atp_lookup", k, v, module=lm)
         )
-        assert results == [("a", 1), ("b", 2)]
+        assert results == [(mint("a"), 1), (mint("b"), 2)]
 
 
 class TestGenuineArityDisagreementStillRaises:

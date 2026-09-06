@@ -27,10 +27,25 @@
  * ================================================================ */
 
 /* atom_from_str(s): the atom whose spelling is *s* (new reference).
- * Plan 0 body — an atom IS its spelling.  Stage B of the atoms-as-cells
- * plan rewrites this to PyTuple_Pack(1, s).  Keep every result that is
- * an ATOM (not a code, not a position) going through here. */
-static inline PyObject *atom_from_str(PyObject *s) { return Py_NewRef(s); }
+ * THE FLIP (atoms-as-cells/strings §6.1): an atom is the arity-0 CELL, so
+ * this packs the spelling into a 1-tuple.  Keep every result that is an
+ * ATOM (not a code, not a position) going through here.
+ *
+ * Deliberately does NOT intern, unlike ``clausal.logic.atoms.mint`` — this
+ * is the twin of ``atoms.char_atom`` in that respect, and for the same
+ * reason (see that function's docstring).  Every caller here is an
+ * ENUMERATOR: char_type/2 over the Unicode alphabet, sub_atom/5's
+ * substrings, atom_concat/3's splits.  Interning is permanent on CPython,
+ * so interning an enumerated spelling pins it for the life of the process —
+ * exactly the "enumeration garbage must not be pinned" rule spec §5.2 gives
+ * for the atom table.  Equality is unaffected: two atoms of the same
+ * spelling compare equal by tuple ``==`` whether or not slot 0 is shared.
+ * The two pre-built tables below hold interned literals already (they are
+ * built with PyUnicode_InternFromString at module init). */
+static inline PyObject *atom_from_str(PyObject *s)
+{
+    return PyTuple_Pack(1, s);
+}
 
 
 /*

@@ -29,6 +29,7 @@ import pathlib
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.solve import call
 
@@ -602,7 +603,7 @@ class TestPartialHeadReferenceIndexing:
 
     def test_saturated_reference_above_threshold_dispatches(self, lm):
         """Full declared arity written in the head: correct today."""
-        assert self._probe(lm, "probe_sat", ("pt", 1, 2)) == ["hit"]
+        assert self._probe(lm, "probe_sat", ("pt", 1, 2)) == [mint("hit")]
 
     @pytest.mark.xfail(
         strict=True,
@@ -614,7 +615,7 @@ class TestPartialHeadReferenceIndexing:
         ),
     )
     def test_partial_positional_reference_above_threshold_dispatches(self, lm):
-        assert self._probe(lm, "probe_partial", ("pt", 1, 9)) == ["hit"]
+        assert self._probe(lm, "probe_partial", ("pt", 1, 9)) == [mint("hit")]
 
     @pytest.mark.xfail(
         strict=True,
@@ -626,16 +627,16 @@ class TestPartialHeadReferenceIndexing:
         ),
     )
     def test_keyword_reference_above_threshold_dispatches(self, lm):
-        assert self._probe(lm, "probe_kw", ("pt", 7, 2)) == ["hit"]
+        assert self._probe(lm, "probe_kw", ("pt", 7, 2)) == [mint("hit")]
 
     def test_partial_positional_reference_below_threshold_dispatches(self, lm):
         """Same clause shape, below ``_INDEX_THRESHOLD``: no bucket exists,
         the unindexed linear scan's full ``unify()`` finds it correctly —
         the regression floor the eventual fix must not narrow."""
-        assert self._probe(lm, "probe_partial_below", ("pt", 1, 9)) == ["hit"]
+        assert self._probe(lm, "probe_partial_below", ("pt", 1, 9)) == [mint("hit")]
 
     def test_keyword_reference_below_threshold_dispatches(self, lm):
-        assert self._probe(lm, "probe_kw_below", ("pt", 7, 2)) == ["hit"]
+        assert self._probe(lm, "probe_kw_below", ("pt", 7, 2)) == [mint("hit")]
 
 
 class TestParity:
@@ -727,11 +728,11 @@ class TestCellHeadDispatch:
     @pytest.mark.parametrize(
         "shape, expected",
         [
-            (lambda m: ("point", 1, 2), ["pt"]),
-            (lambda m: ("circle", 0, 5), ["circ"]),
-            (lambda m: ("seg", 1, 2, 3), ["seg3"]),
-            (lambda m: m.nil, ["empty"]),
-            (lambda m: 42, ["num"]),
+            (lambda m: (mint("point"), 1, 2), [mint("pt")]),
+            (lambda m: ("circle", 0, 5), [mint("circ")]),
+            (lambda m: ("seg", 1, 2, 3), [mint("seg3")]),
+            (lambda m: m.nil, [mint("empty")]),
+            (lambda m: 42, [mint("num")]),
             (lambda m: "s", ["str"]),
         ],
     )
@@ -741,7 +742,7 @@ class TestCellHeadDispatch:
 
     def test_wrong_arity_cell_matches_no_clause(self):
         """``point/3`` is not ``point/2``: arity is part of the discriminator."""
-        assert self._kind_of(_TAGGED, lambda m: ("point", 1, 2, 3)) == []
+        assert self._kind_of(_TAGGED, lambda m: (mint("point"), 1, 2, 3)) == []
 
     def test_unknown_functor_cell_matches_no_clause(self):
         assert self._kind_of(_TAGGED, lambda m: ("square", 1, 2)) == []
@@ -757,11 +758,11 @@ class TestCellHeadDispatch:
         constructor existed, was callable, and matched nothing.)
         """
         mod = _fixture(_TAGGED)
-        assert mod.point == "point"          # the binding IS the spelling
+        assert mod.point == mint("point")          # the binding IS the spelling
         with pytest.raises(TypeError):
             mod.point(1, 2)
         # ... and the cell of that shape selects its clause.
-        assert self._kind_of(_TAGGED, lambda m: ("point", 1, 2)) == ["pt"]
+        assert self._kind_of(_TAGGED, lambda m: (mint("point"), 1, 2)) == [mint("pt")]
 
 
 # ── Head patterns ────────────────────────────────────────────────────────────
@@ -1225,7 +1226,7 @@ class TestHeadPatternReachability:
             predicate_mod.functiondef_to_function = original
             pred._dispatch_fn = None  # don't leak the instrumented closures
 
-        assert got == ["pt"]
+        assert got == [mint("pt")]
         assert calls == {"bucket": 1, "fallback": 0}, calls
 
 
@@ -1426,7 +1427,7 @@ class TestCellHeadReachability:
         """
         fn = _capture_bucket_functions(_TAGGED, "kind")["kind__p0_b0__2"]
         K = Var()
-        assert _drive_bucket(fn, ("point", 1, 2), K) == ["pt"]
+        assert _drive_bucket(fn, ("point", 1, 2), K) == [mint("pt")]
         # ... and it rejects every other shape.
         for other in [("circle", 1, 2), ("point", 1, 2, 3), 42, "point"]:
             assert _drive_bucket(fn, other, Var()) == [], other
@@ -1435,7 +1436,7 @@ class TestCellHeadReachability:
         mod = _fixture(_TAGGED)
         lm = _logic_module(mod)
         for shape, expected in [
-            (("point", 1, 2), ["pt"]),
+            (("point", 1, 2), [mint("pt")]),
             (("circle", 1, 2), ["circ"]),
             (("seg", 1, 2, 3), ["seg3"]),
             (42, ["num"]),
@@ -1453,8 +1454,8 @@ class TestCellHeadReachability:
         S, K = Var(), Var()
         got = [(normalize_term(deref(S)), deref(K))
                for _t in call("kind", S, K, module=lm)]
-        assert [k for _s, k in got] == ["pt", "circ", "seg3", "empty",
-                                        "num", "str"]
+        assert [k for _s, k in got] == [mint("pt"), "circ", "seg3", "empty",
+                                        "num", mint("str")]
         assert got[0][0] == ("point", ("$var",), ("$var",))
 
     def test_a_reference_carrying_a_nested_thunk_is_not_lifted(self):
@@ -1477,9 +1478,9 @@ class TestCellHeadReachability:
         bucket = fns["kind__p0_b0__2"]
         # The bucket also holds the var-headed catch-all, which matches
         # anything -- so "fallback" trails every answer here.
-        assert _drive_bucket(bucket, ("pt", 3, "x1"), Var()) == ["fs", "fallback"]
-        assert _drive_bucket(bucket, ("pt", 1, 9), Var()) == ["a", "fallback"]
-        assert _drive_bucket(bucket, ("wrap", "s"), Var()) == ["fallback"]
+        assert _drive_bucket(bucket, (mint("pt"), 3, "x1"), Var()) == [mint("fs"), mint("fallback")]
+        assert _drive_bucket(bucket, (mint("pt"), 1, 9), Var()) == ["a", mint("fallback")]
+        assert _drive_bucket(bucket, ("wrap", "s"), Var()) == [mint("fallback")]
         # The two thunk-free clauses ARE lifted; the thunk one keeps its
         # body Unify, which is where the thunk gets evaluated.
         src = capture_predicate_codegen("_tt_nested_thunk", ["kind"])
@@ -1507,10 +1508,10 @@ class TestCellHeadReachability:
         R = Var()
         assert [deref(R) for _t in
                 call("CheckIndexed", ("Wrap", "direct"), R, module=lm)] \
-            == ["first", "second", "fallback"]
+            == [mint("first"), "second", mint("fallback")]
         R2 = Var()
         assert [deref(R2) for _t in
-                call("CheckIndexed", 42, R2, module=lm)] == ["fallback"]
+                call("CheckIndexed", 42, R2, module=lm)] == [mint("fallback")]
 
 
 class TestLiveCellHeadArg:
@@ -1773,8 +1774,8 @@ class TestCellHeadArgOpaqueSlots:
 
         Q = make_predicate(functor, ("S", "K"))
         db = Database()
-        db.assertz(Clause(head=Q(S=arg, K="yes"), body=[]))
-        db.assertz(Clause(head=Q(S=Var(), K="catchall"), body=[]))
+        db.assertz(Clause(head=Q(S=arg, K=mint("yes")), body=[]))
+        db.assertz(Clause(head=Q(S=Var(), K=mint("catchall")), body=[]))
         predicate_mod.compile_predicate_trampoline(
             functor, 2, db.clauses_for(functor, 2), db, globals_={functor: Q})
         m = Module("_tt_opaque_slot")
@@ -1797,12 +1798,12 @@ class TestCellHeadArgOpaqueSlots:
 
         assert self._ask(cell_mod, "oc", ("pt", 1, value)) == \
             self._ask(comp_mod, "od", Compound("pt", (1, value))) == \
-            ["yes", "catchall"]
+            [mint("yes"), mint("catchall")]
         assert self._ask(cell_mod, "oc", 42) == \
-            self._ask(comp_mod, "od", 42) == ["catchall"]
+            self._ask(comp_mod, "od", 42) == [mint("catchall")]
         # ... and a DIFFERENT value in the slot is rejected, so the guard is
         # really testing the value rather than accepting anything.
-        assert self._ask(cell_mod, "oc", ("pt", 1, "other")) == ["catchall"]
+        assert self._ask(cell_mod, "oc", ("pt", 1, "other")) == [mint("catchall")]
 
     def test_the_clausal_assertz_repro(self):
         """The reviewer's repro, from source rather than from the Python API:
@@ -1815,14 +1816,14 @@ class TestCellHeadArgOpaqueSlots:
         d = datetime.date(2020, 1, 1)
         K = Var()
         assert [deref(K) for _t in call("q", ("pt", 1, d), K, module=lm)] \
-            == ["yes", "catchall"]
+            == [mint("yes"), mint("catchall")]
         K2 = Var()
-        assert [deref(K2) for _t in call("q", 42, K2, module=lm)] == ["catchall"]
+        assert [deref(K2) for _t in call("q", 42, K2, module=lm)] == [mint("catchall")]
         # the nested-cell variant of the same shape
         K3 = Var()
         assert [deref(K3) for _t in
                 call("n", ("pt", 1, ("pt", 2, d)), K3, module=lm)] \
-            == ["yes", "catchall"]
+            == [mint("yes"), mint("catchall")]
 
     def test_the_walker_records_a_cells_inner_literals(self):
         """Directly, at the seam that was inconsistent: the head walker must
@@ -1839,7 +1840,7 @@ class TestCellHeadArgOpaqueSlots:
         cell = ("pt", 1, d)          # keyed by id(), so hold the ONE object
         Q = make_predicate("ww", ("S", "K"))
         types, _thunks, _targets = _collect_globals_info(
-            [Clause(head=Q(S=cell, K="yes"), body=[])])
+            [Clause(head=Q(S=cell, K=mint("yes")), body=[])])
         assert headlit_global_key(d) in types, sorted(types)
         # The whole-cell entry stays too -- a TUPLE_TAG cell compiled without
         # $cells, and a bound-Var-functor cell, still reach the capture.
@@ -1967,9 +1968,9 @@ class TestNormalizer:
         chain = _python_minted(
             "point", ("X", "Y"), 3,
             _python_minted("point", ("X", "Y"), 2, plain.nil))
-        assert normalize_term(chain) == ("point", 3, ("point", 2, "nil"))
+        assert normalize_term(chain) == ("point", 3, ("point", 2, mint("nil")))
         assert normalize_term(("point", 3, ("point", 2, plain.nil))) \
-            == ("point", 3, ("point", 2, "nil"))
+            == ("point", 3, ("point", 2, mint("nil")))
 
     def test_different_functors_stay_different(self):
         assert (normalize_term(_python_minted("point", ("X", "Y"), 1, 2))
@@ -1988,7 +1989,7 @@ class TestNormalizer:
         the pivot an atom would have needed ("nil",) wrapping (Task 7 work
         item 1)."""
         plain = _fixture(_PLAIN)
-        assert normalize_term([1, "a", plain.nil]) == [1, "a", "nil"]
+        assert normalize_term([1, "a", plain.nil]) == [1, "a", mint("nil")]
         assert normalize_term(42) == 42
 
     def test_normalize_answers_handles_binding_dicts_and_bare_terms(self):
@@ -1998,8 +1999,8 @@ class TestNormalizer:
         rows = [{"T": _python_minted("point", ("X", "Y"), 1, plain.nil)},
                 ("point", 1, plain.nil)]
         assert normalize_answers(rows) == [
-            {"T": ("point", 1, "nil")},
-            ("point", 1, "nil"),
+            {"T": ("point", 1, mint("nil"))},
+            ("point", 1, mint("nil")),
         ]
 
 
@@ -2048,7 +2049,7 @@ class TestGateSymmetry:
         Inverts ``test_position_field_functor_matches_as_a_class``.
         """
         mod = self._pos_module()
-        assert mod.rec == "rec"
+        assert mod.rec == mint("rec")
         with pytest.raises(TypeError):
             mod.rec(1, 2)
 
@@ -2075,13 +2076,13 @@ class TestGateSymmetry:
         from clausal.logic.predicate import PredicateMeta
 
         tagged = _fixture(_TAGGED)
-        assert tagged.point == "point"                    # the premise ...
+        assert tagged.point == mint("point")                    # the premise ...
         assert isinstance(tagged.kind, PredicateMeta)     # ... both halves
-        term = self._source_compound_for("point", 2)
+        term = self._source_compound_for(mint("point"), 2)
         with lowering_scope(tagged.__dict__):
             pattern = head_to_match_pattern(
                 term, {}, [], [], None,
-                globals_={"__name__": tagged.__name__, "point": tagged.kind},
+                globals_={"__name__": tagged.__name__, mint("point"): tagged.kind},
             )
         assert _unparse_pattern(pattern).startswith("case point(")
 
@@ -2112,15 +2113,15 @@ class TestGateSymmetry:
         empty: dict = {"__name__": "_tt_empty"}
         assert lowering_globals() is None
         with lowering_scope(tagged.__dict__):
-            assert cell_signature_for_name("point") == ("point", ("X", "Y"))
+            assert cell_signature_for_name(mint("point")) == (mint("point"), ("X", "Y"))
             with lowering_scope(empty):
                 # Inner namespace knows no ``point``: resolves nothing,
                 # rather than inheriting the outer scope's answer.
                 assert lowering_globals() is empty
-                assert cell_signature_for_name("point") is None
+                assert cell_signature_for_name(mint("point")) is None
                 with lowering_scope(None):
-                    assert cell_signature_for_name("point") is None
-            assert cell_signature_for_name("point") == ("point", ("X", "Y"))
+                    assert cell_signature_for_name(mint("point")) is None
+            assert cell_signature_for_name(mint("point")) == (mint("point"), ("X", "Y"))
         assert lowering_globals() is None
 
 

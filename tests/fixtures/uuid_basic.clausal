@@ -1,3 +1,4 @@
+-double_quotes(chars)
 -import_from(py.uuid, [uuid_v4, uuid_v1, uuid_v3, uuid_v5, uuid_str, uuid_hex, uuid_urn, uuid_bytes, uuid_int, uuid_version, uuid_fields, is_uuid])
 
 # ── Generation ──────────────────────────────────────────────────────

@@ -98,12 +98,18 @@ def is_mangled(value) -> bool:
     is (or forges, per §1b's documented-out-of-warranty allowance) a mangled
     hidden-atom spelling.  False for anything that is not an atom.
 
-    2026-09-06-atoms-as-cells-strings §5.3: the atom itself is accepted
-    beside its bare spelling, so a caller holding ``("m\\x1fbar",)`` need not
-    unwrap first.  Under Stage A's dual-accepting ``is_atom`` a plain ``str``
-    is still an atom, so this is a no-op widening today.
+    2026-09-06-atoms-as-cells-strings §5.3: these three helpers are
+    SPELLING-level and accept "the atom as well as the spelling" — the cell
+    ``("m\\x1fbar",)`` and the bare ``str`` ``"m\\x1fbar"`` alike — because
+    every renderer reaches them holding one or the other (``terms.py`` has
+    already unwrapped slot 0; ``io.py`` has not).  A ``str`` argument is NOT
+    being treated as an atom term here; ``HIDDEN_SEP`` is reader-unwritable,
+    so a string carrying it is the same documented out-of-warranty forgery
+    the module docstring describes.
     """
-    return is_atom(value) and HIDDEN_SEP in spelling(value)
+    if type(value) is str:
+        return HIDDEN_SEP in value
+    return is_atom(value) and HIDDEN_SEP in value[0]
 
 
 def demangle(value) -> tuple[str, str]:
@@ -122,7 +128,8 @@ def demangle(value) -> tuple[str, str]:
     """
     if not is_mangled(value):
         raise ValueError(f"not a mangled atom: {value!r}")
-    module_name, _, atom = spelling(value).partition(HIDDEN_SEP)
+    text = value if type(value) is str else value[0]
+    module_name, _, atom = text.partition(HIDDEN_SEP)
     return module_name, atom
 
 
@@ -145,17 +152,26 @@ def demangle_for_display(value) -> str:
 
 # ── Public atom API (spec 2026-09-06-atoms-as-cells-strings-design §6.1) ──
 #
-# Plan 0 bodies: an atom IS its spelling (a plain str) on this tree.  Stage B
-# of the same plan rewrites the five bodies below to the arity-0 cell
-# ``(spelling,)`` — callers written against these names survive that flip
-# unchanged.  Equality is the semantics; ``mint`` returns a canonical object
-# as an optimisation only (never rely on ``is``).
+# THE FLIP (Stage B, Task 11): an atom IS the arity-0 cell ``("bar",)`` — a
+# 1-tuple whose slot 0 is the interned spelling — and a plain ``str`` is a
+# STRING (the list of its char atoms), not an atom.  Callers written against
+# these five names survived the flip unchanged.  Equality is the semantics;
+# ``mint`` interns slot 0 as an optimisation only (never rely on ``is``, not
+# even for the tuple: two ``mint`` calls return distinct, equal tuples).
 
 def mint(spelling: str):
-    """Return the canonical atom for *spelling*."""
+    """Return the canonical atom for *spelling* — the cell ``(spelling,)``.
+
+    The spelling is ``sys.intern``ed so equality between two equal atoms hits
+    the identity fast path on slot 0 (spec §5.2).  There is deliberately NO
+    process-wide atom table: ``sub_atom/5``/``atom_concat/3`` mint one atom
+    per enumerated substring, and a table would pin every one of them for the
+    life of the process; CPython's interned strings are mortal, so the
+    enumeration garbage is reclaimed.
+    """
     if type(spelling) is not str:
         raise TypeError(f"mint: spelling must be a str, got {type(spelling).__name__}")
-    return sys.intern(spelling)
+    return (sys.intern(spelling),)
 
 
 def is_atom(term) -> bool:
@@ -163,34 +179,53 @@ def is_atom(term) -> bool:
     is not an atom — see ``predicate.is_atom_value`` for the value-level
     widening that still admits one).
 
-    Stage A dual-acceptance (2026-09-06-atoms-as-cells-strings, controller
-    ruling on Task 2): today's ``str`` atom AND the arity-0 cell
-    ``("bar",)`` the Stage B flip will make canonical are both atoms here.
-    Task 11 narrows this to the cell only."""
-    return type(term) is str or (
-        type(term) is tuple and len(term) == 1 and type(term[0]) is str
-    )
+    An atom is the arity-0 cell: a 1-tuple whose slot 0 is a ``str`` (THE
+    DISCIPLINE, ``cells.py:53-64``).  A plain ``str`` is a STRING and is not
+    an atom (spec §6.3)."""
+    return type(term) is tuple and len(term) == 1 and type(term[0]) is str
 
 
 def spelling(atom) -> str:
     """The spelling of *atom*; ``TypeError`` for a non-atom."""
-    if type(atom) is str:
-        return atom
-    if is_atom(atom):
+    if type(atom) is tuple and len(atom) == 1 and type(atom[0]) is str:
         return atom[0]
     raise TypeError(f"not an atom: {atom!r}")
 
 
 def char_atom(ch: str):
-    """The atom whose spelling is the single character *ch*."""
+    """The atom whose spelling is the single character *ch*.
+
+    Deliberately does NOT ``sys.intern`` the spelling, unlike ``mint``.  Two
+    reasons, and they point the same way:
+
+    * There is nothing to gain.  CPython already hands out singletons for
+      every Latin-1 character, so an ASCII/Latin-1 char spelling is canonical
+      before this function sees it, and comparing two 1-character strings is
+      O(1) whether or not they are the same object.
+    * There is something to lose.  ``sys.intern`` is permanent on CPython
+      (an interned string is immortal and stays in the interned table for the
+      life of the interpreter), and ``char_type/2`` enumerates over the whole
+      Unicode alphabet — ``char_type(C, alpha)`` alone visits ~49,000
+      characters.  Interning each would pin one immortal string per character
+      ever enumerated, which is precisely the "enumeration garbage must not
+      be pinned" rule spec §5.2 states for the atom table.
+
+    Equality is unaffected: two char atoms of the same character compare
+    equal by tuple ``==`` either way.
+    """
     if type(ch) is not str or len(ch) != 1:
         raise ValueError(f"char_atom: expected a 1-char str, got {ch!r}")
-    return mint(ch)
+    return (ch,)
 
 
 def is_char_atom(term) -> bool:
     """True iff *term* is an atom whose spelling is one character."""
-    return is_atom(term) and len(spelling(term)) == 1
+    return (
+        type(term) is tuple
+        and len(term) == 1
+        and type(term[0]) is str
+        and len(term[0]) == 1
+    )
 
 
 __all__ = [

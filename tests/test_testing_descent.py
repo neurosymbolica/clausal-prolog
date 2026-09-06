@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import textwrap
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.testing import main
 
 

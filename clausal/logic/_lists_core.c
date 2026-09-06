@@ -55,33 +55,29 @@ call_unify(PyObject *t1, PyObject *t2, TrailObject *trail)
  * bodies alone — in every copy. Twins of ``clausal.logic.atoms.char_atom``
  * / ``is_char_atom`` / ``spelling``.
  *
- * Plan 0: a char IS its 1-char str — but ``is_char_atom_obj`` and
- * ``char_spelling_obj`` ALSO accept the arity-0 cell ``(ch,)``, mirroring
- * the Stage A dual acceptance in ``clausal.logic.atoms.is_char_atom`` /
- * ``spelling``, so the C and Python twins agree on ``("a",)``.
- * Stage B: char_atom_obj builds the 1-tuple and the str arms below go away.
+ * THE FLIP (Stage B): a char IS the arity-0 cell ``("a",)`` — an ordinary
+ * atom whose spelling is one character — and a 1-char ``str`` is a
+ * one-element STRING, not a char.
  */
 
 /* Build the char whose spelling is the 1-char str *ch1*. New reference. */
 static inline PyObject *
 char_atom_obj(PyObject *ch1)
 {
-    return Py_NewRef(ch1);
+    return PyTuple_Pack(1, ch1);
 }
 
-/* True iff *e* is a char — a 1-char str, or the arity-0 cell of one. */
+/* True iff *e* is a char — the arity-0 cell of a 1-char str. */
 static inline int
 is_char_atom_obj(PyObject *e)
 {
-    if (PyUnicode_Check(e))
-        return PyUnicode_GET_LENGTH(e) == 1;
     return PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1
         && PyUnicode_Check(PyTuple_GET_ITEM(e, 0))
         && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(e, 0)) == 1;
 }
 
 /* The spelling of the char *e* — BORROWED reference, valid while *e* is.
- * The size test keeps this total: a non-cell tuple is returned unchanged
+ * The size test keeps this total: a non-cell object is returned unchanged
  * rather than indexed out of range (``seq_join_chars``'s callers pass
  * trusted-but-unvalidated lists). */
 static inline PyObject *

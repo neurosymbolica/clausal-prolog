@@ -608,13 +608,12 @@ def _global_atom__2(name, atom, trail, k):
         they are the same object.
       (-Name, +Atom): reverse lookup.  Succeed iff Atom resolves back to
         Name in the dict (i.e. Atom is genuinely the registered global, not
-        a module-local namesake); unify Name with that name.  Atom is
-        ordinarily the interned str itself; a 0-arity ``PredicateMeta``
-        (what ``make_predicate(name, [])`` builds, and what ``make_atom``
-        built before P3-3 Task 7 made it return the str) is still accepted
-        for anything that manually installs one.
+        a module-local namesake); unify Name with the ATOM of that name.
+        Atom is ordinarily the cell itself; a 0-arity ``PredicateMeta``
+        (what ``make_predicate(name, [])`` builds) is still accepted for
+        anything that manually installs one.
       (-Name, -Atom): enumerate.  Yield one solution per registered atom —
-        an interned str (key == value, the P3-1 shape) or a legacy 0-arity
+        a cell whose spelling is its key, or a legacy 0-arity
         PredicateMeta.  Order not guaranteed.
 
     P3-1 Task 7 sweep: pre-pivot this builtin minted a fresh
@@ -666,7 +665,8 @@ def _global_atom__2(name, atom, trail, k):
         if predicate_builtins.get(cls_name) != atom_val:
             return
         mark = trail.mark()
-        if unify(name, cls_name, trail):
+        # The NAME position answers an ATOM (spec §6.4), not the spelling.
+        if unify(name, mint(cls_name), trail):
             yield None
         trail.undo(mark)
         return
@@ -676,13 +676,17 @@ def _global_atom__2(name, atom, trail, k):
     # PredicateMeta.  Snapshot keys so concurrent minting elsewhere can't
     # perturb iteration.
     for key, val in list(predicate_builtins.items()):
-        if isinstance(val, str):
-            if val != key:
+        # THE FLIP: a registered global atom is the CELL ``(key,)``; the
+        # legacy 0-arity PredicateMeta is still accepted.  A pool entry that
+        # is neither (or whose spelling disagrees with its key) is not this
+        # predicate's business and is skipped, as before.
+        if _term_is_atom(val):
+            if spelling(val) != key:
                 continue
         elif not is_atom(val):
             continue
         mark = trail.mark()
-        if unify(name, key, trail) and unify(atom, val, trail):
+        if unify(name, mint(key), trail) and unify(atom, val, trail):
             yield None
         trail.undo(mark)
 

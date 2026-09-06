@@ -16,6 +16,7 @@ import ast
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.fmt.comments import arrow_candidates, arrow_nodes
 from clausal.rewrite.driver import rewrite_source
 from tests.fmt.test_corpus import CORPUS, _ids

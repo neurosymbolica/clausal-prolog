@@ -28,6 +28,7 @@ import tempfile
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.compiler.compile_ctx import (
     _ALL_OPTIMISATIONS,
@@ -152,13 +153,13 @@ def test_unbound_left_operand_enumerates_in_list_order(build):
     returned value.
     """
     names = _values(build, "order", Var())
-    assert names == ["c", "a", "b"]
+    assert names == [char_atom("c"), char_atom("a"), char_atom("b")]
 
 
 def test_unbound_left_operand_enumerates_strings_in_list_order(build):
     """Same for a list whose elements are literals, where CPython would
     otherwise be free to constant-fold the display into a frozenset."""
-    assert _values(build, "order_strings", Var()) == ["c", "a", "b"]
+    assert _values(build, "order_strings", Var()) == [char_atom("c"), char_atom("a"), char_atom("b")]
 
 
 # ── Duplicates ────────────────────────────────────────────────────────────────
@@ -169,7 +170,7 @@ def test_duplicate_element_yields_one_solution_per_occurrence(build):
     P3-1 R2: atoms are interned global ``str``s — no ``.__name__``.
     """
     names = _values(build, "dup_enumerate", Var())
-    assert names == ["a", "a", "b"]
+    assert names == [char_atom("a"), char_atom("a"), char_atom("b")]
 
 
 def test_duplicate_element_yields_two_solutions_when_ground(build):
@@ -328,7 +329,7 @@ class TestConstSetBuilder:
         assert _const_set([1, 2, 3]) == frozenset({1, 2, 3})
 
     def test_refuses_duplicates(self):
-        assert _const_set(["a", "a", "b"]) is False
+        assert _const_set([char_atom("a"), char_atom("a"), char_atom("b")]) is False
 
     def test_refuses_hash_equal_duplicates(self):
         assert _const_set([1, 1.0]) is False

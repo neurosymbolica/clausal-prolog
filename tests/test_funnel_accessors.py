@@ -40,6 +40,7 @@ import dataclasses
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.predicate import (
     PredicateMeta,
     is_atom,

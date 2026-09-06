@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Z3 mixed theory tests — exercises multiple theories on the same trail,
 # solver configuration.
 

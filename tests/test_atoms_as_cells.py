@@ -60,8 +60,11 @@ def test_callable_1_accepts_cell_atom(mod):       # §6.3 row callable/1
 
 
 def test_must_be_atom_accepts_cell_atom_and_cell_type_name(mod):
+    # THE FLIP retired Stage A's dual acceptance: a plain ``str`` is a
+    # STRING now, so only the cell shape answers.
     assert _true(("must_be", ("atom",), CELL), mod)
-    assert _true(("must_be", "atom", CELL), mod)
+    with pytest.raises(LogicException):
+        list(solve(("must_be", "atom", CELL), _lm(mod)))
 
 
 def test_must_be_compound_accepts_cell(mod):
@@ -278,14 +281,13 @@ def test_ground_seglist_of_cell_chars_round_trips():
     # ... and against a SegList built from the same cell chars.
     t2 = Trail()
     assert unify(sl, SegList([ConcreteSeg(list(chars))]).to_list(), t2)
-    # The plain-str char shape still unifies with the promoted str; the CELL
-    # shape does not, because Stage A keeps ``("a",)`` and ``"a"`` distinct
-    # (spec §6.2: ``("a",)`` vs ``"a"`` FAILS; the str<->char-list cons rule
-    # is reinstated only at Stage B). Pinned so the flip is visible here.
+    # THE FLIP reinstated the str<->char-list rule, so the CELL char shape
+    # is the one that unifies with the promoted str; a list of one-element
+    # STRINGS does not (spec §6.2: ``("a",)`` vs ``"a"`` still FAILS).
     t3 = Trail()
-    assert unify(SegList([ConcreteSeg(["a", "b"])]), "ab", t3)
+    assert not unify(SegList([ConcreteSeg(["a", "b"])]), "ab", t3)
     t4 = Trail()
-    assert not unify(sl, "ab", t4)
+    assert unify(sl, "ab", t4)
 
     # ... and the vars in a matching pattern bind to the CELL chars.
     A, B = Var(), Var()
@@ -302,11 +304,11 @@ def test_ground_seglist_of_cell_chars_round_trips():
     partial = SegList([ConcreteSeg([char_atom("h")]), VarSeg(X)])
     assert unify(partial, "hi", t5)
     assert deref(X) == "i"
-    # The cell shape does not match a str target's elements in Stage A —
-    # the same ``("h",)`` vs ``"h"`` rule as above. Stage B flips this.
+    # The CELL char is the canonical char now, so the same pattern written
+    # with a literal 1-tuple matches too — it is the same term.
     Y = Var()
     t6 = Trail()
-    assert not unify(SegList([ConcreteSeg([("h",)]), VarSeg(Y)]), "hi", t6)
+    assert unify(SegList([ConcreteSeg([("h",)]), VarSeg(Y)]), "hi", t6)
 
 
 def test_seglist_str_tail_and_head_are_char_lists():
@@ -328,8 +330,9 @@ def test_call_n_folds_cell_atom_goal(mod):
     ``higher_order._resolve_named_goal`` needed changing (an arity-0 cell
     already answers ``compound_cell_shape``); this pins that it stays so."""
     assert _true(("call", ("atom",), ("foo",)), mod)
-    # ... and the str atom goal keeps working beside it (Stage A additivity).
-    assert _true(("call", "atom", ("foo",)), mod)
+    # ... and a STRING goal is refused (THE FLIP, spec §6.4).
+    with pytest.raises(LogicException):
+        list(solve(("call", "atom", ("foo",)), _lm(mod)))
 
 
 def test_is_mangled_accepts_atom():
@@ -369,7 +372,9 @@ def test_functor_spelling_accepts_cell_atom():
     — the declared-data-functor binding shape, R6)."""
     from clausal.logic.compiler.terms_to_ast import _functor_spelling
     assert _functor_spelling(("pt",), "local_pt") == "pt"
-    assert _functor_spelling("pt", "local_pt") == "pt"
+    # A plain ``str`` binding is a STRING after THE FLIP — not an atom, so
+    # it is "some unrelated value" and the leaf name is the answer.
+    assert _functor_spelling("pt", "local_pt") == "local_pt"
     assert _functor_spelling(None, "local_pt") == "local_pt"
 
 
@@ -382,8 +387,9 @@ def test_atom_shadows_row_accepts_cell_atom():
 
     db = Database()
     db.assertz(Clause(head=Compound("shade", (1,)), body=[True]))
-    assert _atom_shadows_row("shade", db, "shade", 1)
     assert _atom_shadows_row(("shade",), db, "shade", 1)
+    # A ``str`` binding is a STRING, not an atom, and is trusted as before.
+    assert not _atom_shadows_row("shade", db, "shade", 1)
     # No such row → no shadowing; a non-atom binding is trusted as before.
     assert not _atom_shadows_row(("shade",), db, "shade", 2)
     assert not _atom_shadows_row(len, db, "shade", 1)

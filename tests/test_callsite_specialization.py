@@ -11,6 +11,7 @@ and wiring into compile_predicate_trampoline.
 import ast
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
 from clausal.logic.compiler.arg_index import (
@@ -67,7 +68,8 @@ class TestIndexPlansExposed:
         """_index_plans is populated when the predicate has enough clauses."""
         # nv
         clauses = _make_fact_clauses("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
@@ -78,7 +80,8 @@ class TestIndexPlansExposed:
         """Keys of _index_plans are argument positions (ints)."""
         # nv
         clauses = _make_fact_clauses("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
@@ -89,7 +92,8 @@ class TestIndexPlansExposed:
         """Values of _index_plans are dicts mapping index keys to callable bucket fns."""
         # nv
         clauses = _make_fact_clauses("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
@@ -101,12 +105,14 @@ class TestIndexPlansExposed:
     def test_index_plans_contains_expected_keys(self):
         """_index_plans[0] contains the exact set of atom keys from clause heads."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
         assert 0 in pred_cls._index_plans
-        assert set(pred_cls._index_plans[0].keys()) == set(atoms)
+        # An atom keys as the arity-0 CELL it is: (spelling, 0) — spec §6.9.
+        assert set(pred_cls._index_plans[0].keys()) == {
+            (a[0], 0) for a in atoms}
 
     def test_index_plans_contains_integer_keys(self):
         """Integer-keyed predicates expose integer keys in _index_plans."""
@@ -134,7 +140,8 @@ class TestIndexPlansExposed:
         """when pred_cls is None, no _index_plans attribute is injected."""
         # nv
         clauses = _make_fact_clauses("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         # compile without pred_cls — should not raise
         compile_predicate("color", 1, clauses, pred_cls=None)
@@ -142,27 +149,27 @@ class TestIndexPlansExposed:
     def test_dispatch_routes_through_bucket(self):
         """The compiled dispatch routes to the correct bucket for a ground arg."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
         dispatch = compile_predicate("color", 1, clauses, pred_cls=pred_cls)
 
         trail = Trail()
-        arg = "green"
+        arg = mint("green")
         sg = StepGenerator(dispatch, None, None, None, arg, trail)
         sols = solutions(sg, lambda: deref(arg))
-        assert sols == ["green"]
+        assert sols == [mint("green")]
 
     def test_dispatch_no_solutions_for_unknown_value(self):
         """The dispatch yields nothing for a value with no matching clause."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
         dispatch = compile_predicate("color", 1, clauses, pred_cls=pred_cls)
 
         trail = Trail()
-        arg = "orange"
+        arg = mint("orange")
         sg = StepGenerator(dispatch, None, None, None, arg, trail)
         sols = solutions(sg, lambda: deref(arg))
         assert sols == []
@@ -172,7 +179,9 @@ class TestIndexPlansExposed:
         # nv
         pred_cls = _make_pred_cls("tiny", ["x"])
         # First compile: enough clauses to index
-        clauses5 = _make_fact_clauses("tiny", [("a",), ("b",), ("c",), ("d",), ("e",)])
+        clauses5 = _make_fact_clauses("tiny", [
+            (mint("a"),), (mint("b"),), (mint("c"),), (mint("d"),),
+            (mint("e"),)])
         compile_predicate("tiny", 1, clauses5, pred_cls=pred_cls)
         assert pred_cls._index_plans != {}
 
@@ -185,13 +194,15 @@ class TestIndexPlansExposed:
         """Two-argument predicate: _index_plans[0] keyed on first argument."""
         # nv
         clauses = _make_fact_clauses("edge", [
-            ("a", "b"), ("a", "c"), ("b", "c"),
-            ("b", "d"), ("c", "d"), ("d", "a"),
+            (mint("a"), mint("b")), (mint("a"), mint("c")),
+            (mint("b"), mint("c")), (mint("b"), mint("d")),
+            (mint("c"), mint("d")), (mint("d"), mint("a")),
         ])
         pred_cls = _make_pred_cls("edge", ["from_node", "to_node"])
         compile_predicate("edge", 2, clauses, pred_cls=pred_cls)
         assert 0 in pred_cls._index_plans
-        assert set(pred_cls._index_plans[0].keys()) == {"a", "b", "c", "d"}
+        assert set(pred_cls._index_plans[0].keys()) == {
+            ("a", 0), ("b", 0), ("c", 0), ("d", 0)}
 
     def test_second_position_indexed_when_more_selective(self):
         """when position 1 is more selective, it also appears in _index_plans."""
@@ -255,9 +266,18 @@ class TestStaticCallKey:
         # nv
         assert _static_call_key(ast.Constant(value=42)) == 42
 
-    def test_string_constant(self):
-        # nv
-        assert _static_call_key(ast.Constant(value="red")) == "red"
+    def test_string_constant_has_no_static_key(self):
+        # nv — THE FLIP (spec §6.9): a ``str`` constant is a STRING and is
+        # UNINDEXABLE, so it has no static key either; the ATOM it used to
+        # be is now the arity-0 cell, which reaches a call site as an
+        # ``ast.Tuple`` (below).
+        assert _static_call_key(ast.Constant(value="red")) is None
+
+    def test_atom_cell_constant(self):
+        # nv — an atom argument is ``ast.Tuple([Constant("red")])`` after
+        # THE FLIP, and keys like every other cell: (functor, arity).
+        assert _static_call_key(
+            ast.Tuple(elts=[ast.Constant(value="red")])) == ("red", 0)
 
     def test_float_constant(self):
         # nv
@@ -320,8 +340,8 @@ class TestStaticCallKey:
         assert _static_call_key(ast.Constant(value=0)) == 0
 
     def test_empty_string(self):
-        # nv
-        assert _static_call_key(ast.Constant(value="")) == ""
+        # nv — a string has no static key (see test_string_constant_*).
+        assert _static_call_key(ast.Constant(value="")) is None
 
     def test_clausal_new_fast_path_call_keys_by_class_name(self):
         # Phase 0 construction fast path: term_to_ast_expr now emits
@@ -420,14 +440,15 @@ class TestInjectBucketRefs:
         """inject_bucket_refs injects a bucket fn for a static literal call-site arg."""
         # nv
         callee_cls, callee_arity = _make_locked_pred_cls("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         assert hasattr(callee_cls, "_index_plans") and callee_cls._index_plans
 
         # Build a caller clause: caller(_x) <- color("red", _x)
         # We test inject directly, so we just need the Call term in the body.
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["red", x])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red"), x])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -437,7 +458,7 @@ class TestInjectBucketRefs:
         # Set locked_dispatch_keys so _disp_key-based check won't interfere
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
-        expected_gkey = _bucket_key("color", 0, "red")
+        expected_gkey = _bucket_key("color", 0, ("red", 0))
         assert expected_gkey in base_globals, \
             f"Expected {expected_gkey!r} in base_globals; got {list(base_globals.keys())}"
         assert callable(base_globals[expected_gkey])
@@ -485,10 +506,11 @@ class TestInjectBucketRefs:
     def test_bucket_ref_map_populated(self):
         """inject_bucket_refs populates ctx.bucket_ref_map."""
         callee_cls, _ = _make_locked_pred_cls("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["red", x])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red"), x])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -497,13 +519,14 @@ class TestInjectBucketRefs:
         ctx = _mkctx()
         _inject_bucket_refs_trampoline(ctx, [caller_clause], base_globals)
 
-        assert ("color", 2, 0, "red") in ctx.bucket_ref_map
+        assert ("color", 2, 0, ("red", 0)) in ctx.bucket_ref_map
 
     def test_no_injection_for_variable_arg(self):
         """inject_bucket_refs does NOT inject for a variable (non-static) argument."""
         # nv
         callee_cls, _ = _make_locked_pred_cls("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         x = Var()
         y = Var()
@@ -523,12 +546,13 @@ class TestInjectBucketRefs:
         """inject_bucket_refs only specialises locked predicates."""
         # nv
         callee_cls, _ = _make_locked_pred_cls("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         callee_cls._locked = False  # explicitly unlock
 
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["red", x])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red"), x])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -543,10 +567,11 @@ class TestInjectBucketRefs:
         """inject_bucket_refs skips keys not in the callee's bucket dict."""
         # nv
         callee_cls, _ = _make_locked_pred_cls("color", [
-            ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
+            (mint("red"),), (mint("green"),), (mint("blue"),),
+            (mint("yellow"),), (mint("purple"),),
         ])
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["orange", x])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("orange"), x])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -577,7 +602,7 @@ def _make_caller_via_import_hook(callee_facts, callee_name="color",
 class TestCallsiteCorrectnessAndFallback:
     def _setup_color_pair(self):
         """Compile a locked 'color' predicate and a caller that queries it."""
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
         return callee_cls, atoms
 
@@ -589,24 +614,24 @@ class TestCallsiteCorrectnessAndFallback:
         # Compile a caller: find_red(_x) <- color("red", _x)
         # We test that after compile_predicate_trampoline the callee's bucket
         # is accessible by checking _index_plans was used.
-        assert "red" in callee_cls._index_plans.get(0, {})
+        assert ("red", 0) in callee_cls._index_plans.get(0, {})
 
     def test_locked_callee_returns_correct_results(self):
         """Calling a locked callee with a literal arg returns expected results."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
         dispatch = callee_cls._dispatch_fn
 
         trail = Trail()
-        arg = "green"
+        arg = mint("green")
         sg = StepGenerator(dispatch, None, None, None, arg, trail)
-        assert solutions(sg, lambda: deref(arg)) == ["green"]
+        assert solutions(sg, lambda: deref(arg)) == [mint("green")]
 
     def test_locked_callee_variable_arg_returns_all(self):
         """Calling a locked callee with a variable returns all solutions."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
         dispatch = callee_cls._dispatch_fn
 
@@ -620,12 +645,12 @@ class TestCallsiteCorrectnessAndFallback:
         """compile_predicate_trampoline for a caller with a literal arg injects
         a bucket key into base_globals (verifiable by checking _index_plans on the callee)."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 
         # Manually run inject to verify it works for a clause referencing the callee
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["red"])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("find_red", (x,)),
             body=[call_goal],
@@ -633,15 +658,16 @@ class TestCallsiteCorrectnessAndFallback:
         base_globals = {"color": callee_cls}
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
-        expected_gkey = _bucket_key("color", 0, "red")
+        expected_gkey = _bucket_key("color", 0, ("red", 0))
         assert expected_gkey in base_globals
         # The injected function should be the same as the bucket fn in _index_plans
-        assert base_globals[expected_gkey] is callee_cls._index_plans[0]["red"]
+        assert base_globals[expected_gkey] is \
+            callee_cls._index_plans[0][("red", 0)]
 
     def test_dynamic_predicate_not_specialised(self):
         """A dynamic predicate (not locked) never gets bucket specialisation."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls = _make_pred_cls("dyn_color", ["name"])
         clauses = _make_fact_clauses("dyn_color", [(a,) for a in atoms])
         compile_predicate("dyn_color", 1, clauses, pred_cls=callee_cls)
@@ -649,7 +675,7 @@ class TestCallsiteCorrectnessAndFallback:
         callee_cls._locked = False
 
         x = Var()
-        call_goal = Call(func=LoadName(name="dyn_color"), args=["red"])
+        call_goal = Call(func=LoadName(name="dyn_color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -664,14 +690,14 @@ class TestCallsiteCorrectnessAndFallback:
         """A predicate calling itself is compiled while unlocked → no bucket ref."""
         # Self-recursive calls happen before locking; the callee has no _locked=True
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         pred_cls = _make_pred_cls("color", ["name"])
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         # pred_cls not locked yet (simulating compile-time self-call)
         pred_cls._locked = False
 
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["red"])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("color", (x,)),
             body=[call_goal],
@@ -685,14 +711,14 @@ class TestCallsiteCorrectnessAndFallback:
     def test_multiple_literal_calls_different_buckets(self):
         """Multiple clauses with different literal args each get their own bucket ref."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 
         x = Var()
         clauses = [
             Clause(
                 head=Compound("caller", (x,)),
-                body=[Call(func=LoadName(name="color"), args=[a])],
+                body=[Call(func=LoadName(name="color"), args=[mint(a)])],
             )
             for a in ["red", "green", "blue"]
         ]
@@ -700,17 +726,17 @@ class TestCallsiteCorrectnessAndFallback:
         _inject_bucket_refs_trampoline(_mkctx(),clauses, base_globals)
 
         for atom in ["red", "green", "blue"]:
-            gkey = _bucket_key("color", 0, atom)
+            gkey = _bucket_key("color", 0, (atom, 0))
             assert gkey in base_globals, f"Missing bucket ref for {atom!r}"
 
     def test_bucket_ref_is_correct_callable(self):
         """The injected bucket fn is the same object as _index_plans[0][key]."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["blue"])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("blue")])
         caller_clause = Clause(
             head=Compound("find_blue", (x,)),
             body=[call_goal],
@@ -718,29 +744,29 @@ class TestCallsiteCorrectnessAndFallback:
         base_globals = {"color": callee_cls}
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
 
-        gkey = _bucket_key("color", 0, "blue")
+        gkey = _bucket_key("color", 0, ("blue", 0))
         bucket_fn = base_globals[gkey]
 
         # The injected fn is identical to the one stored in _index_plans
-        assert bucket_fn is callee_cls._index_plans[0]["blue"]
+        assert bucket_fn is callee_cls._index_plans[0][("blue", 0)]
         # It is callable
         assert callable(bucket_fn)
 
     def test_inject_idempotent_for_same_key(self):
         """Calling inject twice does not replace an existing bucket ref."""
         # nv
-        atoms = ["red", "green", "blue", "yellow", "purple"]
+        atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
 
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=["red"])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("f", (x,)),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
         _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
-        gkey = _bucket_key("color", 0, "red")
+        gkey = _bucket_key("color", 0, ("red", 0))
         first_fn = base_globals[gkey]
 
         # Inject again — should NOT overwrite
@@ -763,7 +789,8 @@ class TestDirectBucketCallSiteExecution:
     def _compile_caller(self, body_args, callee_name="cat"):
         """Locked arity-2 callee + caller(x) <- cat(<body_args>) compiled
         with the callee locked in globals_ (imported-predicate shape)."""
-        facts = [("a", 1), ("b", 2), ("c", 3), ("d", 4), ("e", 5)]
+        facts = [(mint("a"), 1), (mint("b"), 2), (mint("c"), 3),
+                 (mint("d"), 4), (mint("e"), 5)]
         callee_cls, _ = _make_locked_pred_cls(callee_name, facts)
         x = Var()
         args = [x if a is None else a for a in body_args]
@@ -777,35 +804,36 @@ class TestDirectBucketCallSiteExecution:
         return fn, callee_name
 
     def _assert_specialised(self, fn, callee_name, key):
-        gkey = _bucket_key(callee_name, 0, key)
+        # An atom's index key is the arity-0 cell key (spec §6.9).
+        gkey = _bucket_key(callee_name, 0, (key, 0))
         assert gkey in fn.__globals__, (
             "caller was not bucket-specialised — test no longer exercises "
             "the direct-bucket-ref path"
         )
 
     def test_direct_bucket_first_key_solves(self):
-        fn, callee = self._compile_caller(["a", None])
+        fn, callee = self._compile_caller([mint("a"), None])
         self._assert_specialised(fn, callee, "a")
         assert _trampoline_solutions(fn, [Var()]) == [(1,)]
 
     def test_direct_bucket_middle_key_solves(self):
-        fn, callee = self._compile_caller(["c", None])
+        fn, callee = self._compile_caller([mint("c"), None])
         self._assert_specialised(fn, callee, "c")
         assert _trampoline_solutions(fn, [Var()]) == [(3,)]
 
     def test_direct_bucket_last_key_solves(self):
-        fn, callee = self._compile_caller(["e", None])
+        fn, callee = self._compile_caller([mint("e"), None])
         self._assert_specialised(fn, callee, "e")
         assert _trampoline_solutions(fn, [Var()]) == [(5,)]
 
     def test_direct_bucket_ground_both_args_solves(self):
         """Fully ground call (the BUG.md shape): cat("a", 1)."""
-        fn, callee = self._compile_caller(["a", 1])
+        fn, callee = self._compile_caller([mint("a"), 1])
         self._assert_specialised(fn, callee, "a")
         assert len(_trampoline_solutions(fn, [Var()])) == 1
 
     def test_direct_bucket_no_solution_terminates(self):
         """Exhaustion without a solution must yield DONE, not fall off the end."""
-        fn, callee = self._compile_caller(["a", 2])
+        fn, callee = self._compile_caller([mint("a"), 2])
         self._assert_specialised(fn, callee, "a")
         assert _trampoline_solutions(fn, [Var()]) == []

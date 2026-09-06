@@ -13,6 +13,7 @@ from decimal import Decimal
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic import solve as solve_mod
 from clausal.logic.solve import call
@@ -273,7 +274,7 @@ class TestF001IndexedDispatchPartialTerms:
     # return [], not their historical (pre-retirement) solutions.
     def test_control_partial_charlist_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "strs3", [X, "b", "c"], R, outv=[X, R]) == []
+        assert collect(mod, "strs3", [X, mint("b"), mint("c")], R, outv=[X, R]) == []
 
     def test_control_empty_list_vs_empty_str_retired(self, mod):
         R = Var()
@@ -281,20 +282,25 @@ class TestF001IndexedDispatchPartialTerms:
 
     def test_control_partial_codelist_unindexed(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "byt3", [97, X], R, outv=[X, R]) == [(98, "AB")]
+        assert collect(mod, "byt3", [97, X], R, outv=[X, R]) == [(98, mint("AB"))]
 
     def test_control_seglist_unindexed(self, mod):
+        # THE FLIP (2026-09-06-atoms-as-cells-strings): the head literal
+        # ``"abc"`` is the ATOM abc in this module (the engine default is
+        # ``-double_quotes(atom)``), and an atom is not a list — so a
+        # char-list / SegList caller reaches nothing, which is the same
+        # answer the P3-1 retirement pins above give for a plain list.
         A, R = Var(), Var()
-        sl = SegList([VarSeg(A), ConcreteSeg(["c"])])
-        assert collect(mod, "strs3", sl, R, outv=[A, R]) == [("ab", "A")]
+        sl = SegList([VarSeg(A), ConcreteSeg([char_atom("c")])])
+        assert collect(mod, "strs3", sl, R, outv=[A, R]) == []
 
     def test_control_decimal_unindexed(self, mod):
         R = Var()
-        assert collect(mod, "kind3", Decimal(1), R, outv=[R]) == [("one",)]
+        assert collect(mod, "kind3", Decimal(1), R, outv=[R]) == [(mint("one"),)]
 
     def test_partial_charlist_indexed_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "strs4", [X, "b", "c"], R, outv=[X, R]) == []
+        assert collect(mod, "strs4", [X, mint("b"), mint("c")], R, outv=[X, R]) == []
 
     def test_empty_list_vs_empty_str_indexed_retired(self, mod):
         R = Var()
@@ -302,20 +308,25 @@ class TestF001IndexedDispatchPartialTerms:
 
     def test_partial_codelist_indexed(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "byt4", [97, X], R, outv=[X, R]) == [(98, "AB")]
+        assert collect(mod, "byt4", [97, X], R, outv=[X, R]) == [(98, mint("AB"))]
 
     def test_seglist_indexed(self, mod):
+        # THE FLIP (2026-09-06-atoms-as-cells-strings): the head literal
+        # ``"abc"`` is the ATOM abc in this module (the engine default is
+        # ``-double_quotes(atom)``), and an atom is not a list — so a
+        # char-list / SegList caller reaches nothing, which is the same
+        # answer the P3-1 retirement pins above give for a plain list.
         A, R = Var(), Var()
-        sl = SegList([VarSeg(A), ConcreteSeg(["c"])])
-        assert collect(mod, "strs4", sl, R, outv=[A, R]) == [("ab", "A")]
+        sl = SegList([VarSeg(A), ConcreteSeg([char_atom("c")])])
+        assert collect(mod, "strs4", sl, R, outv=[A, R]) == []
 
     def test_decimal_indexed(self, mod):
         R = Var()
-        assert collect(mod, "kind4", Decimal(1), R, outv=[R]) == [("one",)]
+        assert collect(mod, "kind4", Decimal(1), R, outv=[R]) == [(mint("one"),)]
 
     def test_joint_partial_container_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "jnt2", [X, "a"], 2, R, outv=[X, R]) == []
+        assert collect(mod, "jnt2", [X, mint("a")], 2, R, outv=[X, R]) == []
 
     def test_secondary_partial_container_no_longer_reaches_str_heads(self, mod):
         # P3-1 Task 5 (§1b): [X] (a partial 1-element list) no longer
@@ -353,15 +364,15 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
         R = Var()
         assert collect(mod, "acc4", 3, 0, R, outv=[R]) == [(3,)]
         R = Var()
-        assert collect(mod, "sgl4", "go", R, outv=[R]) == [(["aye"],)]
+        assert collect(mod, "sgl4", mint("go"), R, outv=[R]) == [([mint("aye")],)]
 
     def test_control_multi_plan_tro_recursion(self, mod):
         R = Var()
-        assert collect(mod, "str5", "go", R, outv=[R]) == [("A",)]
+        assert collect(mod, "str5", mint("go"), R, outv=[R]) == [(mint("A"),)]
 
     def test_control_joint_tro_recursion(self, mod):
         R = Var()
-        assert collect(mod, "jt3", "go", 3, R, outv=[R]) == [(["ja2"],)]
+        assert collect(mod, "jt3", mint("go"), 3, R, outv=[R]) == [([mint("ja2")],)]
 
     # single-plan TRO loop
     def test_single_plan_decimal_key(self, mod):
@@ -378,7 +389,7 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
     # multi-plan TRO loop
     def test_multi_plan_decimal_key(self, mod):
         R = Var()
-        assert collect(mod, "mp5", Decimal(2), R, outv=[R]) == [("two",)]
+        assert collect(mod, "mp5", Decimal(2), R, outv=[R]) == [(mint("two"),)]
 
     def test_multi_plan_partial_charlist_no_longer_reaches_str_heads(self, mod):
         # P3-1 Task 5 (§1b): retired, same rationale as the single-plan case.
@@ -389,7 +400,7 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
         # the fallback is compiled in SIGNAL mode: a tail call fired from its
         # TRO clause must re-dispatch through the outer loop, not be dropped
         R = Var()
-        assert collect(mod, "mp5", Decimal(6), R, outv=[R]) == [("four",)]
+        assert collect(mod, "mp5", Decimal(6), R, outv=[R]) == [(mint("four"),)]
 
     # joint TRO inline body: one component uncomputable → degrade to the
     # single-position dispatch on the other; both → full scan
@@ -400,7 +411,7 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
 
     def test_joint_decimal_component(self, mod):
         R = Var()
-        assert collect(mod, "jt3", "a", Decimal(2), R, outv=[R]) == [(["ja2"],)]
+        assert collect(mod, "jt3", mint("a"), Decimal(2), R, outv=[R]) == [([mint("ja2")],)]
 
     def test_joint_both_components_uncomputable_no_longer_reaches_str_heads(self, mod):
         # P3-1 Task 5 (§1b): retired, same rationale as above (the Decimal
@@ -414,7 +425,7 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
         # single dispatch, whose "go" bucket signals a TRO tail call that
         # must re-dispatch into the "a" bucket
         R = Var()
-        assert collect(mod, "jt3", "go", Decimal(3), R, outv=[R]) == [(["ja2"],)]
+        assert collect(mod, "jt3", mint("go"), Decimal(3), R, outv=[R]) == [([mint("ja2")],)]
 
 
 # ── A02-F002: list-structure dispatch drops non-list/str/Var callers ─────────
@@ -424,37 +435,40 @@ class TestF002ListDispatchFallthrough:
     # controls: list / str / var callers route correctly
     def test_control_nil(self, mod):
         R = Var()
-        assert collect(mod, "ld2", [], R, outv=[R]) == [("nil2",), ("any2",)]
+        assert collect(mod, "ld2", [], R, outv=[R]) == [(mint("nil2"),), (mint("any2"),)]
 
     def test_control_cons(self, mod):
         R = Var()
-        assert collect(mod, "ld2", [9], R, outv=[R]) == [("cons2",), ("any2",)]
+        assert collect(mod, "ld2", [9], R, outv=[R]) == [(mint("cons2"),), (mint("any2"),)]
 
     def test_control_str(self, mod):
+        # A STRING caller: "ab" is the list of its char atoms, so it takes
+        # the ``[LH, *LT]`` cons clause exactly as ``[9]`` does.
         R = Var()
-        assert collect(mod, "ld2", "ab", R, outv=[R]) == [("cons2",), ("any2",)]
+        assert collect(mod, "ld2", "ab", R, outv=[R]) == [
+            (mint("cons2"),), (mint("any2"),)]
 
     def test_control_var_enumerates_all(self, mod):
         X, R = Var(), Var()
-        assert collect(mod, "ld2", X, R, outv=[R]) == [("nil2",), ("cons2",), ("any2",)]
+        assert collect(mod, "ld2", X, R, outv=[R]) == [(mint("nil2"),), (mint("cons2"),), (mint("any2"),)]
 
     def test_int_caller_matches_var_clause(self, mod):
         R = Var()
-        assert collect(mod, "ld2", 5, R, outv=[R]) == [("any2",)]
+        assert collect(mod, "ld2", 5, R, outv=[R]) == [(mint("any2"),)]
 
     def test_tuple_caller_matches_var_clause(self, mod):
         R = Var()
-        assert collect(mod, "ld2", (1, 2), R, outv=[R]) == [("any2",)]
+        assert collect(mod, "ld2", (1, 2), R, outv=[R]) == [(mint("any2"),)]
 
     def test_bytes_caller(self, mod):
         R = Var()
-        assert collect(mod, "ld2", b"ab", R, outv=[R]) == [("cons2",), ("any2",)]
+        assert collect(mod, "ld2", b"ab", R, outv=[R]) == [(mint("cons2"),), (mint("any2"),)]
 
     @pytest.mark.xfail(strict=False, reason="A02-F002: non-ground SegList vs cons head needs SegList-vs-partial-pattern unify, blocked on F030 (Phase 6). The else-arm fix routes it to the var clause (any2); cons2 requires destructuring [1,*A] against [LH,*LT], which _head_list_unify_input returns False for by design.")
     def test_seglist_caller(self, mod):
         A, R = Var(), Var()
         sl = SegList([ConcreteSeg([1]), VarSeg(A)])
-        assert collect(mod, "ld2", sl, R, outv=[R]) == [("cons2",), ("any2",)]
+        assert collect(mod, "ld2", sl, R, outv=[R]) == [(mint("cons2"),), (mint("any2"),)]
 
 
 # ── A02-F003: unguarded accept-all wildcard for unhandled head-literal types
@@ -505,11 +519,11 @@ class TestF004MultiStarTrailingFixed:
     # controls: no trailing fixed after the last star — all fine
     def test_control_fixed_between_stars(self, mod):
         A, B = Var(), Var()
-        assert collect(mod, "ms", [1, "x", 2], A, B, outv=[A, B]) == [([1], [2])]
+        assert collect(mod, "ms", [1, mint("x"), 2], A, B, outv=[A, B]) == [([1], [2])]
 
     def test_control_enumerates_splits(self, mod):
         A, B = Var(), Var()
-        assert collect(mod, "ms", ["x", "x"], A, B, outv=[A, B]) == [([], ["x"]), (["x"], [])]
+        assert collect(mod, "ms", [mint("x"), mint("x")], A, B, outv=[A, B]) == [([], [mint("x")]), ([mint("x")], [])]
 
     def test_control_adjacent_stars(self, mod):
         A, B = Var(), Var()
@@ -528,6 +542,9 @@ class TestF004MultiStarTrailingFixed:
     def test_control_single_star_trailing_fixed(self, mod):
         # single-star trailing fixed takes the $head_list_unify runtime path
         A = Var()
+        # A STRING caller destructures into char atoms; the head's trailing
+        # ``"d"`` is the ATOM d, which is what the last char atom is.  The
+        # star binds the remaining char list, promoted back to a string.
         assert collect(mod, "ssok", "xd", A, outv=[A]) == [("x",)]
 
     def test_minimal_input(self, mod):
@@ -554,30 +571,30 @@ class TestIndexedDispatchGuards:
     def test_bool_and_float_callers_share_int_bucket(self, mod):
         # hash-equal cross-type keys (True/1.0 vs 1) stay consistent with unify
         R = Var()
-        assert collect(mod, "kind4", True, R, outv=[R]) == [("one",)]
+        assert collect(mod, "kind4", True, R, outv=[R]) == [(mint("one"),)]
         R = Var()
-        assert collect(mod, "kind4", 1.0, R, outv=[R]) == [("one",)]
+        assert collect(mod, "kind4", 1.0, R, outv=[R]) == [(mint("one"),)]
 
     def test_ground_charlist_no_longer_reaches_str_bucket(self, mod):
         # P3-1 Task 5 (§1b): a GROUND char-list caller no longer reaches
         # a str-literal head either (formerly asserting [("A",)]).
         R = Var()
-        assert collect(mod, "strs4", ["a", "b", "c"], R, outv=[R]) == []
+        assert collect(mod, "strs4", [mint("a"), mint("b"), mint("c")], R, outv=[R]) == []
 
     def test_ground_codelist_reaches_bytes_bucket(self, mod):
         R = Var()
-        assert collect(mod, "byt4", [97, 98], R, outv=[R]) == [("AB",)]
+        assert collect(mod, "byt4", [97, 98], R, outv=[R]) == [(mint("AB"),)]
 
     def test_clause_order_preserved_in_bucket(self, mod):
         R = Var()
         assert collect(mod, "ord6", 1, R, outv=[R]) == [
-            ("s1",), ("v1",), ("s2",), ("v2",), ("s3",),
+            (mint("s1"),), (mint("v1"),), (mint("s2"),), (mint("v2"),), (mint("s3"),),
         ]
 
     def test_clause_order_preserved_var_caller(self, mod):
         X, R = Var(), Var()
         assert collect(mod, "ord6", X, R, outv=[R]) == [
-            ("s1",), ("v1",), ("s2",), ("other",), ("v2",), ("s3",),
+            (mint("s1"),), (mint("v1"),), (mint("s2"),), (mint("other"),), (mint("v2"),), (mint("s3"),),
         ]
 
     def test_str_charlist_heads_no_longer_coalesce_for_list_caller(self, mod):
@@ -606,13 +623,13 @@ class TestIndexedDispatchGuards:
         asserting BOTH callers reached both facts.)
         """
         R = Var()
-        assert collect(mod, "coll", "abc", R, outv=[R]) == [("s",)]
+        assert collect(mod, "coll", mint("abc"), R, outv=[R]) == [(mint("s"),)]
         R = Var()
-        assert collect(mod, "coll", ["a", "b", "c"], R, outv=[R]) == [("l",)]
+        assert collect(mod, "coll", [mint("a"), mint("b"), mint("c")], R, outv=[R]) == [(mint("l"),)]
 
     def test_call_site_specialisation(self, mod):
         R = Var()
-        assert collect(mod, "usek", R, outv=[R]) == [("one",)]
+        assert collect(mod, "usek", R, outv=[R]) == [(mint("one"),)]
         # P3-1 Task 5 (§1b): usekl's body calls kind4(["x"], UR2) -- a
         # 1-element list caller against kind4's str-literal head "x".
         # Retired: no longer matches (formerly [("ex",)]).
@@ -629,9 +646,9 @@ class TestIndexedDispatchGuards:
         solve_mod._query_cache.clear()
         list(call("addk", module=mod))
         R = Var()
-        assert collect(mod, "dynk", 5, R, outv=[R]) == [("five",)]
+        assert collect(mod, "dynk", 5, R, outv=[R]) == [(mint("five"),)]
         R = Var()
-        assert collect(mod, "dynk", 1, R, outv=[R]) == [("one",)]
+        assert collect(mod, "dynk", 1, R, outv=[R]) == [(mint("one"),)]
         X, R = Var(), Var()
         assert len(collect(mod, "dynk", X, R, outv=[R])) == 5
 
@@ -645,66 +662,66 @@ class TestJointAndSecondaryDispatchGuards:
 
     def test_joint_modes(self, mod):
         R = Var()
-        assert collect(mod, "jnt2", "aa", 2, R, outv=[R]) == [(["a2"],)]
+        assert collect(mod, "jnt2", mint("aa"), 2, R, outv=[R]) == [([mint("a2")],)]
         R = Var()
-        assert collect(mod, "jnt2", "aa", Var(), R, outv=[R]) == [
-            (["a1"],), (["a2"],), (["a3"],), (["a4"],)]
+        assert collect(mod, "jnt2", mint("aa"), Var(), R, outv=[R]) == [
+            ([mint("a1")],), ([mint("a2")],), ([mint("a3")],), ([mint("a4")],)]
         R = Var()
-        assert collect(mod, "jnt2", Var(), 2, R, outv=[R]) == [(["a2"],), (["b2"],)]
+        assert collect(mod, "jnt2", Var(), 2, R, outv=[R]) == [([mint("a2")],), ([mint("b2")],)]
         assert len(collect(mod, "jnt2", Var(), Var(), Var())) == 8
-        assert collect(mod, "jnt2", "zz", 9, Var()) == []
+        assert collect(mod, "jnt2", mint("zz"), 9, Var()) == []
 
     def test_secondary_modes(self, mod):
         R = Var()
-        assert collect(mod, "sec2", "a", 1, R, outv=[R]) == [(["sa1"],), (["sav"],)]
+        assert collect(mod, "sec2", mint("a"), 1, R, outv=[R]) == [([mint("sa1")],), ([mint("sav")],)]
         R = Var()
-        assert collect(mod, "sec2", "a", Var(), R, outv=[R]) == [
-            (["sa1"],), (["sa2"],), (["sav"],)]
+        assert collect(mod, "sec2", mint("a"), Var(), R, outv=[R]) == [
+            ([mint("sa1")],), ([mint("sa2")],), ([mint("sav")],)]
         assert len(collect(mod, "sec2", Var(), 1, Var())) == 8
-        assert collect(mod, "sec2", "zz", 1, Var()) == []
+        assert collect(mod, "sec2", mint("zz"), 1, Var()) == []
 
     def test_secondary_partial_at_level1_consistent(self, mod):
         # [X] cannot unify an int column: only the var-at-pos1 clause matches
         X, R = Var(), Var()
-        assert collect(mod, "sec2", "a", [X], R, outv=[R]) == [(["sav"],)]
+        assert collect(mod, "sec2", mint("a"), [X], R, outv=[R]) == [([mint("sav")],)]
 
 
 class TestCompoundAtomIndexGuards:
     def test_compound_key_input_and_partial(self, mod, moddict):
         # P3-2 Task 2 (THE FLIP, R6): ``fc`` is a data functor -- its name
         # binds the interned spelling, and the term is the cell.
-        assert moddict["fc"] == "fc"
+        assert moddict["fc"] == mint("fc")
         fc = lambda *args: ("fc", *args)
         R = Var()
-        assert collect(mod, "cmq4", fc(1), R, outv=[R]) == [(["f1"],)]
+        assert collect(mod, "cmq4", fc(1), R, outv=[R]) == [([mint("f1")],)]
         X, R = Var(), Var()
         assert collect(mod, "cmq4", fc(X), R, outv=[X, R]) == [
-            (1, ["f1"]), (2, ["f2"]), (3, ["f3"])]
+            (1, [mint("f1")]), (2, [mint("f2")]), (3, [mint("f3")])]
 
     def test_compound_output_mode(self, mod):
         R = Var()
         assert collect(mod, "cmq4", Var(), R, outv=[R]) == [
-            (["f1"],), (["f2"],), (["f3"],), (["g9"],)]
+            ([mint("f1")],), ([mint("f2")],), ([mint("f3")],), ([mint("g9")],)]
 
     def test_atom_key_input_and_output(self, mod, moddict):
         R = Var()
         assert collect(mod, "col4", moddict["red"], R, outv=[R]) == [(1,)]
         A, R = Var(), Var()
         sols = collect(mod, "col4", A, R, outv=[A, R])
-        assert [(getattr(a, "__name__", a), n) for a, n in sols] == [
-            ("red", 1), ("green", 2), ("blue", 3), ("yellow", 4)]
+        assert sols == [(mint("red"), 1), (mint("green"), 2),
+                        (mint("blue"), 3), (mint("yellow"), 4)]
 
     def test_atom_rule_head_output_mode(self, mod):
         A, R = Var(), Var()
         sols = collect(mod, "colr", A, R, outv=[A, R])
-        assert [(getattr(a, "__name__", a), r) for a, r in sols] == [("red", "atomrule")]
+        assert sols == [(mint("red"), mint("atomrule"))]
 
     def test_tro_across_buckets(self, mod):
         R = Var()
-        assert collect(mod, "cds", 3, R, outv=[R]) == [("zero",)]
+        assert collect(mod, "cds", 3, R, outv=[R]) == [(mint("zero"),)]
         R = Var()
         # bucket 9 holds cds(9,"nine") plus the recursive default clause
-        assert collect(mod, "cds", 9, R, outv=[R]) == [("nine",), ("zero",)]
+        assert collect(mod, "cds", 9, R, outv=[R]) == [(mint("nine"),), (mint("zero"),)]
 
 
 class TestHeadPatternGuards:
@@ -716,11 +733,11 @@ class TestHeadPatternGuards:
 
     def test_negative_literal_heads_both_modes(self, mod):
         R = Var()
-        assert collect(mod, "negf", -5, R, outv=[R]) == [("ok",)]
+        assert collect(mod, "negf", -5, R, outv=[R]) == [(mint("ok"),)]
         X, R = Var(), Var()
-        assert collect(mod, "negf", X, R, outv=[X, R]) == [(-5, "ok")]
+        assert collect(mod, "negf", X, R, outv=[X, R]) == [(-5, mint("ok"))]
         X, R = Var(), Var()
-        assert collect(mod, "negr", X, R, outv=[X, R]) == [(-7, "rok")]
+        assert collect(mod, "negr", X, R, outv=[X, R]) == [(-7, mint("rok"))]
 
     def test_str_rule_head_no_longer_honours_strings_as_lists(self, mod):
         """P3-1 Task 5 (§1b): ``shr("abc", SR) <- (SR is 1)`` is a RULE
@@ -730,9 +747,9 @@ class TestHeadPatternGuards:
         — that's same-type reconstruction, not cross-type unification.
         """
         R = Var()
-        assert collect(mod, "shr", ["a", "b", "c"], R, outv=[R]) == []
+        assert collect(mod, "shr", [mint("a"), mint("b"), mint("c")], R, outv=[R]) == []
         X, R = Var(), Var()
-        assert collect(mod, "shr", X, R, outv=[X, R]) == [("abc", 1)]
+        assert collect(mod, "shr", X, R, outv=[X, R]) == [(mint("abc"), 1)]
 
     def test_bytes_rule_head_honours_bytes_as_lists(self, mod):
         R = Var()
@@ -742,27 +759,29 @@ class TestHeadPatternGuards:
 
     def test_tuple_rule_head_all_modes(self, mod):
         R = Var()
-        assert collect(mod, "tup", (1, 2), R, outv=[R]) == [("t",)]
+        assert collect(mod, "tup", (1, 2), R, outv=[R]) == [(mint("t"),)]
         assert collect(mod, "tup", (9, 9), Var()) == []
         X, R = Var(), Var()
-        assert collect(mod, "tup", X, R, outv=[X, R]) == [((1, 2), "t")]
+        assert collect(mod, "tup", X, R, outv=[X, R]) == [((1, 2), mint("t"))]
 
     def test_dict_head_all_modes(self, mod):
         from clausal.terms import DictTerm
         V = Var()
-        assert collect(mod, "dh", {"k": 5}, V, outv=[V]) == [(5,)]
+        assert collect(mod, "dh", {mint("k"): 5}, V, outv=[V]) == [(5,)]
         V = Var()
-        assert collect(mod, "dh", DictTerm({"k": 7}), V, outv=[V]) == [(7,)]
+        assert collect(mod, "dh", DictTerm({mint("k"): 7}), V,
+                       outv=[V]) == [(7,)]
         D = Var()
-        assert collect(mod, "dh", D, 9, outv=[D]) == [(DictTerm({"k": 9}),)]
+        assert collect(mod, "dh", D, 9,
+                       outv=[D]) == [(DictTerm({mint("k"): 9}),)]
 
     def test_set_head_all_modes(self, mod):
         from clausal.terms import SetTerm
         R = Var()
-        assert collect(mod, "sth", {1, 2}, R, outv=[R]) == [("set",)]
+        assert collect(mod, "sth", {1, 2}, R, outv=[R]) == [(mint("set"),)]
         assert collect(mod, "sth", {1, 3}, Var()) == []
         S, R = Var(), Var()
-        assert collect(mod, "sth", S, R, outv=[S, R]) == [(SetTerm({1, 2}), "set")]
+        assert collect(mod, "sth", S, R, outv=[S, R]) == [(SetTerm({1, 2}), mint("set"))]
 
     def test_duplicate_head_vars(self, mod):
         assert len(collect(mod, "same", 1, 1)) == 1
@@ -782,21 +801,22 @@ class TestHeadPatternGuards:
 
     def test_nested_star_list_head(self, mod):
         A, B, C = Var(), Var(), Var()
-        assert collect(mod, "nst", [[1, 2, 3], "t"], A, B, C, outv=[A, B, C]) == [
-            (1, [2, 3], ["t"])]
+        assert collect(mod, "nst", [[1, 2, 3], mint("t")], A, B, C, outv=[A, B, C]) == [
+            (1, [2, 3], [mint("t")])]
         L = Var()
-        assert collect(mod, "nst", L, 1, [2], ["t"], outv=[L]) == [([[1, 2], "t"],)]
-        assert collect(mod, "nst", [[], "t"], Var(), Var(), Var()) == []
+        assert collect(mod, "nst", L, 1, [2], [mint("t")], outv=[L]) == [([[1, 2], mint("t")],)]
+        assert collect(mod, "nst", [[], mint("t")], Var(), Var(), Var()) == []
         # inner pattern against a str element
         A, B, C = Var(), Var(), Var()
-        assert collect(mod, "nst", ["ab", "t"], A, B, C, outv=[A, B, C]) == [
-            ("a", "b", ["t"])]
+        assert collect(mod, "nst", ["ab", mint("t")], A, B, C,
+                       outv=[A, B, C]) == [
+            (char_atom("a"), "b", [mint("t")])]
 
     def test_multi_star_str_caller_and_output_construction(self, mod):
         A, B = Var(), Var()
         assert collect(mod, "ms", "axb", A, B, outv=[A, B]) == [("a", "b")]
         L = Var()
-        assert collect(mod, "ms", L, [1], [2], outv=[L]) == [([1, "x", 2],)]
+        assert collect(mod, "ms", L, [1], [2], outv=[L]) == [([1, mint("x"), 2],)]
 
     def test_output_list_construction_multi_solution(self, mod):
         L = Var()
@@ -811,17 +831,17 @@ class TestGoalOpShapes:
 
     def test_reified_if_ground_and_unbound(self, mod):
         A = Var()
-        assert collect(mod, "iffu", 5, A, outv=[A]) == [("big",)]
+        assert collect(mod, "iffu", 5, A, outv=[A]) == [(mint("big"),)]
         A = Var()
-        assert collect(mod, "iffu", 1, A, outv=[A]) == [("small",)]
+        assert collect(mod, "iffu", 1, A, outv=[A]) == [(mint("small"),)]
         A = Var()
-        assert collect(mod, "iffu", Var(), A, outv=[A]) == [("big",), ("small",)]
+        assert collect(mod, "iffu", Var(), A, outv=[A]) == [(mint("big"),), (mint("small"),)]
 
     def test_if_with_list_unify_test(self, mod):
         A = Var()
-        assert collect(mod, "iffl", [1], A, outv=[A]) == [("one",)]
+        assert collect(mod, "iffl", [1], A, outv=[A]) == [(mint("one"),)]
         A = Var()
-        assert collect(mod, "iffl", [2], A, outv=[A]) == [("other",)]
+        assert collect(mod, "iffl", [2], A, outv=[A]) == [(mint("other"),)]
 
     def test_false_truncates_true_is_unit(self, mod):
         assert collect(mod, "ftr", Var()) == []

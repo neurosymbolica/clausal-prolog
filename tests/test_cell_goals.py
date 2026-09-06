@@ -39,6 +39,7 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
+from clausal.logic.atoms import mint
 from clausal.logic.database import Database, head_key
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call as pcall, solve
@@ -169,9 +170,19 @@ class TestCallNOverCells:
         assert list(pcall("cg3", ("pair",), 3, 5, module=lm)) == []
 
     def test_a_bare_atom_goal_resolves_with_the_extra_args(self, mod):
-        """A str IS an atom (P3-1), so ``call(p, X)`` is the goal ``p(X)``."""
+        """``call(p, X)`` is the goal ``p(X)``.  THE FLIP: the atom is the
+        arity-0 cell; a bare ``str`` is a STRING and is refused below."""
         X = Var()
-        assert [deref(X) for _ in pcall("cg2", "p", X, module=_lm(mod))] == [1, 2]
+        assert [deref(X)
+                for _ in pcall("cg2", mint("p"), X, module=_lm(mod))] == [1, 2]
+
+    def test_a_bare_str_goal_is_a_type_error(self, mod):
+        """THE FLIP (spec §6.4): a ``str`` is a string, and a string is not
+        callable — ``call("p", X)`` raises rather than running ``p/1``."""
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("cg2", "p", Var(), module=_lm(mod)))
+        assert _error_term(exc_info.value)[0] == Compound(
+            "type_error", (mint("callable"), "p"))
 
     def test_a_non_cell_non_callable_goal_still_fails_silently(self, mod):
         """The translator session's pinned §4.2 contract, unchanged."""
@@ -237,7 +248,7 @@ class TestCallNOverCells:
         fail silently while ``solve((",",), m)`` raised.  Fix round 1, F3."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("cg1", (",",), module=_lm(mod)))
-        assert _error_term(exc_info.value)[0].args[0] == (
+        assert _error_term(exc_info.value)[0].args[0] == mint(
             "callable_control_construct_unsupported")
 
     def test_the_atom_spelling_of_a_qualified_goal_folds_the_same_way(
@@ -254,7 +265,7 @@ class TestCallNOverCells:
         lm = _lm(mod)
         X, Y = Var(), Var()
         by_atom = [deref(X) for _ in pcall(
-            "cg3", ":", "cellgoals", ("p", X), module=lm)]
+            "cg3", mint(":"), "cellgoals", ("p", X), module=lm)]
         by_cell = [deref(Y) for _ in pcall(
             "cg1", (":", "cellgoals", ("p", Y)), module=lm)]
         assert by_atom == by_cell == [1, 2]
@@ -265,13 +276,13 @@ class TestCallNOverCells:
         too, and only the context differs (call/3 vs call/1)."""
         lm = _lm(mod)
         errors = []
-        for goal_args in ((":", "nosuchmodule", ("p", 1)),
+        for goal_args in ((mint(":"), "nosuchmodule", ("p", 1)),
                           ((":", "nosuchmodule", ("p", 1)),)):
             with pytest.raises(LogicException) as exc_info:
                 list(pcall("cg" + str(len(goal_args)), *goal_args, module=lm))
             errors.append(_error_term(exc_info.value))
         assert errors[0][0] == errors[1][0] == Compound(
-            "existence_error", ("module", "'nosuchmodule'"))
+            "existence_error", (mint("module"), "'nosuchmodule'"))
         assert "call/3" in errors[0][1] and "call/1" in errors[1][1]
 
     def test_the_atom_spelling_of_a_control_construct_hits_the_same_refusal(
@@ -279,7 +290,7 @@ class TestCallNOverCells:
         """Same folding, the other deferred route."""
         lm = _lm(mod)
         with pytest.raises(LogicException) as a:
-            list(pcall("cg3", ",", ("p", 1), ("p", 2), module=lm))
+            list(pcall("cg3", mint(","), ("p", 1), ("p", 2), module=lm))
         with pytest.raises(LogicException) as b:
             list(pcall("cg1", (",", ("p", 1), ("p", 2)), module=lm))
         assert _error_term(a.value)[0] == _error_term(b.value)[0]
@@ -324,7 +335,8 @@ class TestDeferredCellGoalForms:
             list(solve(cell, _lm(mod)))
         inner, context = _error_term(exc_info.value)
         assert inner == Compound(
-            "type_error", ("callable_control_construct_unsupported", cell))
+            "type_error", (mint("callable_control_construct_unsupported"),
+                           cell))
         assert f"{functor}/2 is a control construct" in context
 
     def test_a_control_construct_cell_goal_is_refused_by_call(self, mod):
@@ -333,7 +345,7 @@ class TestDeferredCellGoalForms:
             list(pcall("cg1", cell, module=_lm(mod)))
         inner, context = _error_term(exc_info.value)
         assert inner.functor == "type_error"
-        assert inner.args[0] == "callable_control_construct_unsupported"
+        assert inner.args[0] == mint("callable_control_construct_unsupported")
         assert "call/1" in context
 
     def test_the_refusal_names_the_compile_time_form(self, mod):
@@ -360,7 +372,7 @@ class TestDeferredCellGoalForms:
             list(solve((":", "nosuchmodule", ("p", 1)), _lm(mod)))
         inner, context = _error_term(exc_info.value)
         assert inner == Compound(
-            "existence_error", ("module", "'nosuchmodule'"))
+            "existence_error", (mint("module"), "'nosuchmodule'"))
         assert "sys.modules" in context
 
     def test_a_qualified_goal_cell_resolves_through_call_too(self, mod):
@@ -424,15 +436,15 @@ class TestZeroArityControlConstructsByName:
     answered directly now: not refused (unlike ``,``/``;``/``->``, they need
     no goal-tree interpreter) and not looked up (no database defines them)."""
 
-    @pytest.mark.parametrize("goal", ["true", ("true",)])
+    @pytest.mark.parametrize("goal", [("true",)])
     def test_true_succeeds_exactly_once(self, mod, goal):
         assert len(list(pcall("cg1", goal, module=_lm(mod)))) == 1
 
-    @pytest.mark.parametrize("goal", ["fail", ("fail",), "false", ("false",)])
+    @pytest.mark.parametrize("goal", [("fail",), ("false",)])
     def test_fail_and_false_fail(self, mod, goal):
         assert list(pcall("cg1", goal, module=_lm(mod))) == []
 
-    @pytest.mark.parametrize("goal", ["!", ("!",)])
+    @pytest.mark.parametrize("goal", [("!",)])
     def test_cut_succeeds_once_because_it_is_local_to_the_call(self, mod, goal):
         """ISO 7.8.3: a cut inside ``call/1`` is local to that call, so the
         barrier IS the call and there is nothing left inside it to cut.
@@ -444,40 +456,46 @@ class TestZeroArityControlConstructsByName:
             self, mod):
         """``call(true, X)`` is the goal ``true/1`` — an ordinary undefined
         predicate, as ISO has it — not ``true`` with an argument thrown away."""
-        assert list(pcall("cg2", "true", 1, module=_lm(mod))) == []
+        assert list(pcall("cg2", mint("true"), 1, module=_lm(mod))) == []
 
     def test_they_answer_without_a_database_too(self):
         """Decided before the db lookups, like the control-construct refusal,
         so the behaviour never depends on how the builtin was reached."""
         from clausal.logic.builtins.higher_order import _resolve_named_goal
-        assert _resolve_named_goal(None, "true", (), "call/1") is not None
+        assert _resolve_named_goal(None, ("true",), (), "call/1") is not None
         assert _resolve_named_goal(None, ("fail",), (), "call/1") is not None
-        assert _resolve_named_goal(None, "no_such_pred", (), "call/1") is None
+        assert _resolve_named_goal(
+            None, ("no_such_pred",), (), "call/1") is None
 
 
 # ── a bare str goal is the 1-tuple cell (final review M-b) ─────────────────
 
 
 class TestBareStrGoalInSolve:
-    """``solve("z0", m)`` used to raise ``NotImplementedError`` out of
-    ``terms_to_goalop`` while ``call("z0")``, ``solve(("z0",), m)`` and
-    ``(":", M, "z0")`` all worked — three spellings of one goal, one of them
-    broken."""
+    """THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) settled the question
+    this class used to answer the other way.  A bare ``str`` goal was made to
+    mean the 1-tuple cell (final review M-b, so that three spellings of one
+    goal agreed); a ``str`` is a STRING now, a string is not callable, and
+    ``solve("z0", m)`` is a ``type_error(callable, "z0")``.  The cell is the
+    only spelling of the goal."""
 
-    def test_a_bare_str_goal_answers_what_the_one_tuple_cell_answers(self, mod):
+    def test_a_bare_str_goal_is_a_type_error(self, mod):
         lm = _lm(mod)
-        assert len(list(solve("z0", lm))) == len(list(solve(("z0",), lm))) == 1
+        assert len(list(solve(("z0",), lm))) == 1
+        with pytest.raises(LogicException) as exc_info:
+            list(solve("z0", lm))
+        assert _error_term(exc_info.value)[0] == Compound(
+            "type_error", (mint("callable"), "z0"))
 
-    def test_a_bare_str_goal_lowers_to_the_same_node_the_cell_lowers_to(self):
+    def test_the_lowering_path_refuses_a_bare_str_goal(self):
         from clausal.logic.solve import _term_to_goal
-        assert _term_to_goal("z0") == _term_to_goal(("z0",))
+        with pytest.raises(LogicException):
+            _term_to_goal("z0")
 
-    def test_an_unknown_bare_str_goal_reports_it_the_way_the_cell_does(
+    def test_an_unknown_cell_goal_still_reports_the_missing_predicate(
             self, mod):
         from clausal.predicate_diagnostics import PredicateNotFoundError
         lm = _lm(mod)
-        with pytest.raises(PredicateNotFoundError):
-            list(solve("no_such_pred", lm))
         with pytest.raises(PredicateNotFoundError):
             list(solve(("no_such_pred",), lm))
 
@@ -586,7 +604,8 @@ class TestCellAssertRetract:
         inner, context = _error_term(exc_info.value)
         assert inner == Compound(
             "permission_error",
-            ("modify", "static_procedure", Compound("/", ("stat", 1))))
+            (mint("modify"), mint("static_procedure"),
+             Compound("/", ("stat", 1))))
         assert "assertz/1" in context and "-dynamic(stat/1)" in context
 
     def test_a_cell_assert_against_an_unknown_predicate_is_an_existence_error(
@@ -598,7 +617,8 @@ class TestCellAssertRetract:
             list(pcall("assertz", ("nope", 3), module=_lm(mod)))
         inner, context = _error_term(exc_info.value)
         assert inner == Compound(
-            "existence_error", ("procedure", Compound("/", ("nope", 1))))
+            "existence_error",
+            (mint("procedure"), Compound("/", ("nope", 1))))
         assert "does not create one" in context
 
     def test_a_cell_assert_against_a_declared_data_functor_is_a_permission_error(
@@ -619,7 +639,8 @@ class TestCellAssertRetract:
         inner, context = _error_term(exc_info.value)
         assert inner == Compound(
             "permission_error",
-            ("modify", "static_procedure", Compound("/", ("d", 1))))
+            (mint("modify"), mint("static_procedure"),
+             Compound("/", ("d", 1))))
         assert "data functor" in context and "-dynamic(d/1)" in context
 
     def test_the_declaration_check_is_arity_checked(self, tmp_path):
@@ -636,7 +657,7 @@ class TestCellAssertRetract:
             list(pcall("assertz", ("d", 7, 8), module=_lm(m)))
         inner, _context = _error_term(exc_info.value)
         assert inner == Compound(
-            "existence_error", ("procedure", Compound("/", ("d", 2))))
+            "existence_error", (mint("procedure"), Compound("/", ("d", 2))))
         # ...while arity 1, the declared one, is the permission_error.
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("d", 7), module=_lm(m)))
@@ -690,7 +711,7 @@ class TestTheLowLevelDoorRefusesACellHead:
         with pytest.raises(LogicException) as exc_info:
             db.assertz(Clause(head=("p", 1), body=[]))
         inner, context = _error_term(exc_info.value)
-        assert inner == Compound("type_error", ("callable", ("p", 1)))
+        assert inner == Compound("type_error", (mint("callable"), ("p", 1)))
         assert "Database.assertz" in context and "assertz/1" in context
         assert db.clauses_for("p", 1) == [], "and it stored nothing"
 
@@ -714,7 +735,7 @@ class TestTheLowLevelDoorRefusesACellHead:
         with pytest.raises(LogicException) as exc_info:
             db.retract(("p", 1))
         inner, context = _error_term(exc_info.value)
-        assert inner == Compound("type_error", ("callable", ("p", 1)))
+        assert inner == Compound("type_error", (mint("callable"), ("p", 1)))
         assert "Database.retract" in context and "assertz/1" in context
         assert len(db.clauses_for("p", 1)) == 1, "and it removed nothing"
 

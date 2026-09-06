@@ -15,6 +15,7 @@ Findings tested here:
 - F084 (smell) callable_/1 succeeds for any str including ""
 """
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call
 from clausal.logic.variables import Var
 from clausal.terms import SegList, SegString, VarSeg

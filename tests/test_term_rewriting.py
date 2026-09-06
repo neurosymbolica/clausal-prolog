@@ -10,6 +10,7 @@ TermTransformer output and detecting other DSL patterns.
 """
 import ast
 import pytest
+from clausal.logic.atoms import char_atom, mint
 from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import (
     TermTransformer,
@@ -426,8 +427,8 @@ def test_dict_literal():
     # nv
     node = term_eval("{'k': v}", DictTerm)
     assert len(node) == 1
-    assert 'k' in node
-    assert isinstance(node['k'], sa.LoadName)
+    assert mint('k') in node
+    assert isinstance(node[mint('k')], sa.LoadName)
 
 
 # ── TermTransformer: call expressions ─────────────────────────────────────────
@@ -638,7 +639,7 @@ def test_embed_double_dash():
 def test_embed_double_dash_nested():
     # nv
     ns = embed_exec("result = --'hello'")
-    assert ns['result'] == 'hello'   # plain Python string, not StringLiteral
+    assert ns['result'] == mint('hello')   # plain Python string, not StringLiteral
 
 
 def test_embed_spaced_double_dash_not_escaped():

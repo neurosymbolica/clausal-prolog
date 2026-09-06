@@ -9,6 +9,7 @@ from __future__ import annotations
 import gc
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.clpsat import (
     SATState, SATVarInfo, SAT_KEY,

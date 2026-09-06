@@ -12,6 +12,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.fmt import format_source
 from clausal.rewrite.driver import RewriteError, rewrite_source
 

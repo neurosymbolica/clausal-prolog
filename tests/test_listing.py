@@ -7,6 +7,7 @@ import sys
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.builtins.io import _format_clause_head
@@ -455,12 +456,12 @@ class TestListingIndicatorInstantiation:
 
         err = self._instantiation_error_for(Div(left=Var(), right=2))
         assert err.functor == "error"
-        assert err.args[0] == "instantiation_error"
+        assert err.args[0] == mint("instantiation_error")
         assert "listing/1" in err.args[1]
 
     def test_an_unbound_arity_is_an_instantiation_error_too(self):
         err = self._instantiation_error_for(("/", "pt", Var()))
-        assert err.args[0] == "instantiation_error"
+        assert err.args[0] == mint("instantiation_error")
 
     def test_a_bound_but_wrong_operand_is_still_a_type_error(self):
         """Only the UNBOUND case moved: ``3/2`` and ``fib/"oops"`` are

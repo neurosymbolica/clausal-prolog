@@ -37,6 +37,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
 )
 from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape
+from clausal.logic.atoms import is_atom as _term_is_atom
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -354,11 +355,19 @@ def head_to_match_pattern(
             return ast.MatchAs(pattern=None, name=cap_name)
         return ast.MatchValue(value=ast.Constant(value=term))
 
-    # Python str literal → wildcard capture + runtime unify guard, mirroring the
-    # list-literal path below. Routes the comparison through unify() so the
-    # strings-as-lists contract (str ↔ char-list) is honoured for clause heads.
-    # The guard, assembled in compile_head_to_match_case, short-circuits on a
-    # same-type str caller via `==` before falling through to unify(). (F046)
+    # STRING head literal → wildcard capture + runtime unify guard, mirroring
+    # the list-literal path below. Routes the comparison through unify() so the
+    # strings-as-lists contract (str ↔ char-atom list) is honoured for clause
+    # heads. The guard, assembled in compile_head_to_match_case, short-circuits
+    # on a same-type str caller via `==` before falling through to unify().
+    # (F046)
+    #
+    # WHICH literals reach here after THE FLIP (spec §7): a ``"..."`` literal
+    # in a ``-double_quotes(chars)`` module, a string a ``.pl`` load emitted,
+    # and any ``str`` a Python caller or ``assertz`` put in a head.  A bare
+    # name, a ``'...'`` literal and (in the default ``atom`` mode) a ``"..."``
+    # literal are ATOMS -- the arity-0 cell -- and take the cell branch at the
+    # bottom of this cascade instead.
     if isinstance(term, str):
         cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
@@ -802,19 +811,27 @@ def head_to_match_pattern(
         # constant is neither (``compile()`` raises "patterns may only match
         # literals and attribute lookups").
         #
-        # The gate is the LITERAL cell shape, deliberately NOT ``atoms.
-        # is_atom``: under Stage A a plain ``str`` is still an atom, and a
-        # ``str`` resolved value must keep taking the ``MatchValue`` line
-        # below, because the RUNTIME value it has to match is that same
-        # ``str`` -- a cell pattern would never fire for it.  Task 11 (the
-        # Stage B flip, where a ``str`` stops being an atom) replaces this
-        # gate with ``_term_is_atom(resolved)`` / ``spelling(resolved)`` and
-        # deletes the ``MatchValue`` line.
-        if (type(resolved) is tuple and len(resolved) == 1
-                and type(resolved[0]) is str):
-            return _cell_match_pattern(resolved[0], [])
+        # Task 11 (THE FLIP): the gate is now the public atom test, because
+        # the cell is the ONLY atom shape -- a resolved ``str`` is a STRING.
+        # An atom takes the capture + ``unify`` guard, not a value pattern,
+        # for the output-mode reason spelled out at the arity-0 cell branch
+        # below.
+        if _term_is_atom(resolved):
+            cap_name = f"_acap{len(list_guards) if list_guards is not None else 0}"
+            if list_guards is not None:
+                list_guards.append(("atom", cap_name, resolved))
+            return ast.MatchAs(pattern=None, name=cap_name)
+        # A reference that resolves to a STRING takes the same capture +
+        # ``unify`` guard a literal ``str`` head argument takes (the branch
+        # above at "Python str literal"), NOT a ``MatchValue``: a string is
+        # the list of its char atoms, so ``p(SOME_STR)`` must match a
+        # char-list caller as well as a ``str`` one.  A value pattern
+        # compares with ``==`` and would reject the char-list caller.
         if isinstance(resolved, str):
-            return ast.MatchValue(value=ast.Constant(value=resolved))
+            cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
+            if list_guards is not None:
+                list_guards.append(("str", cap_name, resolved))
+            return ast.MatchAs(pattern=None, name=cap_name)
 
     # PredicateMeta atom (a zero-arity predicate *class* used as a value)
     # → wildcard capture + unify guard. Atoms became class objects in the
@@ -908,6 +925,23 @@ def head_to_match_pattern(
     # its own recursion for the same reason.
     _is_cell, _tag = _cell_shape(term)
     if _is_cell:
+        if isinstance(_tag, str) and len(term) == 1:
+            # An ATOM (THE FLIP): an arity-0 cell is an ATOMIC term, not a
+            # structural one — it has no arguments, nothing to destructure,
+            # and no inner Var to couple to the body.  It takes the capture +
+            # ``unify`` guard the PredicateMeta-atom branch below and the
+            # str/bytes branches above take, for the reason they take it: a
+            # bare value PATTERN matches only an already-equal caller, so an
+            # unbound (output-mode) caller would silently fail the match
+            # instead of being BOUND to the atom.  Before the flip an atom
+            # was a ``str`` and reached the str branch, which is exactly this
+            # treatment; routing it through the compound-cell sequence
+            # pattern instead would have been a silent output-mode
+            # regression on every atom-headed fact.
+            cap_name = f"_acap{len(list_guards) if list_guards is not None else 0}"
+            if list_guards is not None:
+                list_guards.append(("atom", cap_name, term))
+            return ast.MatchAs(pattern=None, name=cap_name)
         if isinstance(_tag, str):
             return _cell_match_pattern(_tag, [
                 head_to_match_pattern(a, var_context, dup_guards, list_guards,
@@ -1092,9 +1126,18 @@ def _compile_multi_star_guard(
                             left=idx_expr, op=ast.Add(),
                             right=ast.Constant(value=j),
                         )
-                subscript = ast.Subscript(
-                    value=_name(d_name), slice=idx_expr, ctx=ast.Load(),
-                )
+                # THE FLIP (2026-09-06-atoms-as-cells-strings §6.2): read the
+                # element through ``$seq_getitem``, not a raw subscript.  A
+                # ``str`` target is the list of its CHAR ATOMS, and
+                # ``"axb"[1]`` is the 1-char ``str`` ``"x"`` — a one-element
+                # STRING, which does not unify with the char atom the head
+                # literal is.  ``seq_getitem`` is the funnel that answers
+                # ``("x",)`` for a str and the element itself for a list
+                # (and the int code for a bytes, unchanged).  SLICES stay
+                # raw: a slice of a string is a string, which is exactly
+                # what a star should bind (R-S2).
+                subscript = _call(
+                    _name("$seq_getitem"), _name(d_name), idx_expr)
                 unify_calls.append(
                     _call(_name("$unify"), _var_or_const_expr(elem), subscript, _name(trail_name))
                 )

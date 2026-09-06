@@ -30,10 +30,22 @@ Test("decompose atom: functor('Hello', Name, Arity)") <- (
     _a == 0
 )  # nv
 
-Test("decompose empty string") <- (
+# THE FLIP (2026-09-06-atoms-as-cells-strings): this module reads "..." as
+# an ATOM (the engine default), so ``""`` here is the atom whose spelling is
+# empty -- an atom decomposes as itself at arity 0 (spec §6.4).  The ISO
+# question this test is named for -- how the empty STRING decomposes -- is
+# ``functor([], N, A)`` below, since "" and [] are one term and this module
+# can spell the second.
+Test("decompose empty atom") <- (
     functor("", _n, _a),
-    _n == "[]",
+    _n is "",
     _a == 0
+)  # nv
+
+Test("decompose empty list") <- (
+    functor([], _n2, _a2),
+    _n2 is '[]',
+    _a2 == 0
 )  # nv
 
 # ── univ/2 — construction from list ──────────────────────────────────────────

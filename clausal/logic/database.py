@@ -1181,7 +1181,18 @@ def _is_structural_head_value(val: Any) -> bool:
     # ``type(val[0]) is str`` (not ``isinstance``) matches ``cells.
     # _valid_functor_slot``'s own exact-type convention (a ``str`` subclass
     # is deliberately excluded there too — see that function's docstring).
-    if type(val) is tuple and val and (
+    # THE FLIP (2026-09-06-atoms-as-cells-strings): an ARITY-0 cell is an
+    # ATOM — an atomic term — and is deliberately excluded.  It has no
+    # arguments, so there is no inner Var to couple to the body and nothing
+    # to destructure; ``head_to_match_pattern`` compiles it to the same
+    # capture + ``unify`` guard it gives a ``str``/``bytes``/atom-class head
+    # argument, which already binds an unbound caller in output mode.
+    # Hoisting it would be worse than pointless: the head argument would
+    # become a fresh Var, so every reader of a stored clause head — clause
+    # inspection (``clauses_for``), ``listing/1``, the test harness's
+    # description, first-argument indexing — would see a variable where the
+    # program wrote an atom.
+    if type(val) is tuple and len(val) > 1 and (
             type(val[0]) is str or val[0] is TUPLE_TAG):
         return True
     # A deferred Python expression (quantity/currency literal `5(m)`,

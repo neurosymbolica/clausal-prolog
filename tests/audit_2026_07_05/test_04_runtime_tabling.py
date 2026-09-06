@@ -16,6 +16,7 @@ import gc
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, once, query, query_wfs, _query_cache
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -873,7 +874,7 @@ class TestF003WfsModeOrderDependence:
         m = load("f003b", WIN_ASYM_SRC.replace("win", "winv").replace("move", "movv"))
         X = Var()
         got = sorted(a[0] for a in answers(call("winv", X, module=m), X))
-        assert got == ["a"]
+        assert got == [mint("a")]
 
 
 # ══ A04-F004: query_wfs truth annotation is a stub ════════════════════════════
@@ -1113,7 +1114,7 @@ class TestF010WhenDisjunctionFiredFlag:
         for _ in call("w8", R, module=m):
             v = deref(R)
             got.append("UNBOUND" if is_var(v) else v)
-        assert got == ["fired"]
+        assert got == [mint("fired")]
 
     def test_both_conditions_satisfied_fires_once(self, load):
         # Regression guard: when both disjuncts become true in a SURVIVING
@@ -1123,7 +1124,7 @@ class TestF010WhenDisjunctionFiredFlag:
                           'R is "fired"), (A is 1, B is 2))\n')
         R = Var()
         got = [deref(R) for _ in call("w8b", R, module=m)]
-        assert got == ["fired"]
+        assert got == [mint("fired")]
 
 
 # ══ A04-F011: freeze commits to the first solution of the frozen goal ═════════

@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Z3 optimization tests — exercises z3.soft, z3.maximize_satisfaction,
 # z3.optimize_label.
 

@@ -13,7 +13,7 @@ from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
-from clausal.logic.builtins._helpers import _standard_order_sorted
+from clausal.logic.builtins._helpers import _standard_order_key, _standard_order_sorted
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -513,14 +513,25 @@ def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail)
 
 @_trampoline_builtin("sort", 2)
 def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
-    """sort(List, Sorted) — Sorted is List sorted with duplicates removed."""
+    """sort(List, Sorted) — Sorted is List sorted with duplicates removed.
+
+    THE FLIP (spec §6.5): duplicates are decided by STANDARD-ORDER KEY
+    equality, not by Python ``==``.  A string and the list of its char atoms
+    are the same term (``"ab"`` and ``[a, b]``) but are not ``==``, so a
+    ``==``-based dedup would leave both in a sorted set that is supposed to
+    hold each term once.  The FIRST occurrence survives, as it did before.
+    ``msort/2`` keeps every element and is unaffected.
+    """
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
         items = [deref(x) for x in items]
         seen: list = []
+        seen_keys: list = []
         for x in items:
-            if x not in seen:
+            key = _standard_order_key(x)
+            if key not in seen_keys:
+                seen_keys.append(key)
                 seen.append(x)
         result = _standard_order_sorted(seen)
         out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))

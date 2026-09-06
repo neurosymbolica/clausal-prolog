@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/date_time.md display snippets.
 
 -import_from(date_time, [now, now_utc, today, date, time, datetime,

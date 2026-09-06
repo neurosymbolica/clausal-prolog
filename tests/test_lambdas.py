@@ -12,6 +12,7 @@ import dataclasses
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import TermTransformer, _is_logic_var_name
 from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
@@ -679,7 +680,7 @@ class TestLambdaImport:
         logic_mod = mod.__dict__["$module"]
         goal = Call(func=LoadName(name="get_color"), args=[c], kwargs=[])
         results = [row["c"] for row in query(goal, {"c": c}, logic_mod)]
-        assert sorted(results) == ["blue", "green", "red"]
+        assert sorted(results) == [mint("blue"), "green", mint("red")]
 
     def test_python_lambda_rejected_in_clausal_file(self, tmp_path):
         """Python lambda syntax raises SyntaxError in .clausal files."""
@@ -731,7 +732,7 @@ class TestLambdaImport:
         assert isinstance(term, Compound) and term.functor == "error"
         inner = term.args[0]
         assert isinstance(inner, Compound) and inner.functor == "type_error"
-        assert inner.args[0] == "callable"
+        assert inner.args[0] == mint("callable")
 
 
 # ── Phase 5: Arrow lambda syntax  (_x, _y) <- (body) ─────────────────────────

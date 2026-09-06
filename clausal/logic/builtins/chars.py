@@ -55,28 +55,21 @@ except ImportError:
 def _atom_to_str(val: Any) -> str | None:
     """Extract a string name from an atom value.
 
-    Returns the spelling for a term atom (``clausal.logic.atoms.is_atom``:
-    today's ``str`` and the arity-0 cell ``("foo",)`` alike), __name__ for
-    zero-arity PredicateMeta classes, the walked str for a ground
-    ``SegString``, or None if val is not an atom.
+    This is THE funnel for "read an atom's spelling in a builtin" (spec
+    §6.1).  Returns the spelling for a term atom — the arity-0 cell
+    ``("foo",)`` — or ``__name__`` for a zero-arity PredicateMeta class,
+    else ``None`` so the caller raises ``type_error(atom, …)``.
 
-    F075 (C3 audit): SegString is a str-shaped container; under the
-    "strings-as-lists / input-type wins" contract every atom-accepting
-    predicate should treat a ground SegString as the str it walks to. A
-    non-ground SegString walks to itself (still a SegString) and is
-    rejected with None so the caller raises the usual type_error.
+    THE FLIP retired the ``str``/``SegString`` arms F075 (C3 audit) added
+    under the old "a str IS an atom" representation: a ``str`` and a ground
+    ``SegString`` are STRINGS now, and a string in atom position is an ISO
+    ``type_error(atom, …)`` — ``atom_length("abc", N)`` raises rather than
+    answering 3 (spec §6.6).
     """
     if _term_is_atom(val):
         return spelling(val)
     if is_atom(val):
         return val.__name__
-    # Late import to avoid an import cycle (clausal.terms → clausal.logic
-    # via SegString's __walk__).
-    from clausal.terms import SegString
-    if isinstance(val, SegString):
-        walked = val.__walk__()
-        if isinstance(walked, str):
-            return walked
     return None
 
 

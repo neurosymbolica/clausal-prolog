@@ -11,6 +11,7 @@ import warnings
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -45,10 +46,10 @@ class TestIfUnderscore:
         mod = _load("ifu_goal", CLASSIFY.format(ite="if_"), tmp_path)
         out = Var()
         assert [deref(out) for _ in call("Classify", 5, out, module=mod)] == [
-            "positive"]
+            mint("positive")]
         out2 = Var()
         assert [deref(out2) for _ in call("Classify", -3, out2, module=mod)] == [
-            "negative"]
+            mint("negative")]
 
     def test_does_not_warn(self, tmp_path, recwarn):
         """# nv"""
@@ -115,7 +116,7 @@ class TestLegacyIf:
         mod = _load_quietly("legacy_run", CLASSIFY.format(ite="If"), tmp_path)
         out = Var()
         assert [deref(out) for _ in call("Classify", 5, out, module=mod)] == [
-            "positive"]
+            mint("positive")]
 
     def test_warns_naming_the_rewrite(self, tmp_path):
         """# nv"""

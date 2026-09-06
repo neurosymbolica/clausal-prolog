@@ -1,3 +1,4 @@
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.runtime.list_unify import (
     _head_list_unify_input_py, _head_list_unify_output_py,
@@ -131,7 +132,7 @@ class TestGroundSegListOfCharsOutputPy:
         trail = Trail()
         target = Var()
         S = Var()
-        sl = SegList([ConcreteSeg(["a", "b"])])
+        sl = SegList([ConcreteSeg([char_atom("a"), char_atom("b")])])
         unify(S, sl, trail)
         ok = _head_list_unify_output_py(target, [], S, [], trail)
         assert ok is True
@@ -146,13 +147,13 @@ class TestGroundSegListOfCharsOutputPy:
         trail_py = Trail()
         target_py = Var()
         S_py = Var()
-        unify(S_py, SegList([ConcreteSeg(["a", "b"])]), trail_py)
+        unify(S_py, SegList([ConcreteSeg([char_atom("a"), char_atom("b")])]), trail_py)
         ok_py = _head_list_unify_output_py(target_py, [], S_py, [], trail_py)
 
         trail_c = Trail()
         target_c = Var()
         S_c = Var()
-        unify(S_c, SegList([ConcreteSeg(["a", "b"])]), trail_c)
+        unify(S_c, SegList([ConcreteSeg([char_atom("a"), char_atom("b")])]), trail_c)
         ok_c = _head_list_unify_output(target_c, [], S_c, [], trail_c)
 
         assert ok_py == ok_c is True

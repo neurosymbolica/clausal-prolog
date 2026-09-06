@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.builtins import (
     _map_list__2, _map_list__3, _include__3, _exclude__3, _foldl__4,
 )
@@ -292,10 +293,10 @@ class TestAliases:
     def test_unpack(self):
         # nv
         r = Var()
-        goal = _make_goal_call("unpack", [Compound("foo", (1, 2)), r])
+        goal = _make_goal_call("unpack", [Compound(mint("foo"), (1, 2)), r])
         results = sol_var(goal, r)
         assert len(results) == 1
-        assert results[0] == ["foo", 1, 2]
+        assert results[0] == [mint("foo"), 1, 2]
 
 
 # ── Builtin predicates as arguments to meta-predicates ────────────────────────

@@ -1,3 +1,4 @@
+-double_quotes(chars)
 -import_from(py.re, [match, search, findall])
 
 # -allow_singletons: every clause head parameter here is a regex named-group

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pathlib import Path
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.tools.prolog_to_clausal import (
     prolog_to_clausal, prolog_ast_to_clausal,
     emit_clausal_term, emit_clausal_item,

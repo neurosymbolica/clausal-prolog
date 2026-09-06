@@ -36,7 +36,15 @@ from clausal.logic.cells import TUPLE_TAG
 # ── First-argument indexing (V2-1) ────────────────────────────────────────────
 
 _INDEX_VAR = object()  # sentinel: clause has variable/non-indexable first arg
-_INDEXABLE_TYPES = (int, float, str, bytes, bool, type(None))
+# THE FLIP (2026-09-06-atoms-as-cells-strings §6.9): ``str`` is NOT in this
+# tuple.  A string is the list of its char atoms, so a string head argument
+# and a char-list head argument are the SAME term and must land in the same
+# bucket -- and a list head is unindexed (``_INDEX_VAR``, a full scan), so a
+# string head has to be too.  Atoms did not leave the indexable set with it:
+# an atom is a cell now and keys ``(spelling, 0)`` through the cell branch.
+# The perf consequence is deliberate pressure: a fact table keyed by string
+# first arguments loses first-argument indexing; write atoms as atoms.
+_INDEXABLE_TYPES = (int, float, bytes, bool, type(None))
 _INDEX_THRESHOLD = 4  # minimum clauses before indexing kicks in
 _JOINT_COVERAGE_THRESHOLD = 0.8  # min fraction of clauses needing joint key for 9b
 
@@ -70,7 +78,9 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
     other branch is unaffected by it.
 
     Returns a hashable key for indexable terms:
-    - Scalars (int, float, str, bytes, bool, None) → the value itself
+    - Scalars (int, float, bytes, bool, None) → the value itself.  A ``str``
+      is NOT a scalar here: THE FLIP made it a STRING, i.e. the list of its
+      char atoms, and a list head is unindexed (§6.9).
     - A cell (a non-empty ``tuple`` whose slot 0 is a ``str`` functor or the
       ``TUPLE_TAG`` marker) → ``(functor, len(arg) - 1)`` / ``(TUPLE_TAG,
       len(arg) - 1)`` (P3-2 Task 4).  Must run BEFORE the generic
@@ -80,12 +90,15 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
       the same functor land in ONE bucket regardless of which one wrote it.
     - ``list``/``tuple`` of ints in [0, 255] → the joined ``bytes`` (the
       codes model, kept — see :func:`_bytelist_to_bytes_or_none`).  The
-      str/char-list analog (F095) is RETIRED: R8 (P3-2) ruled that
-      co-bucketing a str head with an equal char-list head is wrong now
-      that P3-1 retired str~list unification (§1b: lists unify with lists,
-      str unifies with str) — a list head consequently keys ``_INDEX_VAR``
-      (unindexed, correctly: it was only indexable via the retired
-      coalesce).
+      str/char-list analog (F095) stays RETIRED, but for the OPPOSITE
+      reason it was retired under R8 (P3-2).  R8's reasoning was that a str
+      and a char list are DIFFERENT terms, so co-bucketing them was wrong.
+      THE FLIP (2026-09-06-atoms-as-cells-strings §6.9) makes them the SAME
+      term — and the answer is the same, from the other side: a char-list
+      head is unindexed, so a string head must be unindexed too, or a
+      caller passing the char-list spelling of the term would miss the
+      bucket the string spelling built.  Both key ``_INDEX_VAR`` (a full
+      scan is always correct).
     - Compound nodes → ``(functor, arity)`` tuple  (Phase 9a)
     - PredicateMeta instances → ``(class_name, field_count)`` tuple  (Phase 9a)
     - ``Call(LoadName(qn), args)`` (imported-compound head arg) →
@@ -97,6 +110,10 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
       runtime value ever matches.
     - Anything else (Var, list, DictTerm, …) → ``_INDEX_VAR``
     """
+    # ``[]``/``""``/``b""`` key alike -- see the twin guard in
+    # :func:`_runtime_arg_key`.
+    if type(arg) in (bytes, str) and not arg:
+        return _INDEX_VAR
     if isinstance(arg, _INDEXABLE_TYPES):
         return arg
     if type(arg) is tuple and arg:
@@ -313,12 +330,20 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
     heads use, so a live cell argument reaches the bucket a source-written
     compound head of the same functor built.  Must run BEFORE the generic
     ``(list, tuple)`` branch, which retains only the bytes/byte-list
-    coalesce (the codes model) — R8 retired the str/char-list half (§1b: a
-    list head is unindexed, keys ``_INDEX_VAR``).
+    coalesce (the codes model); the str/char-list half stays retired (see
+    :func:`_arg_to_index_key` for why THE FLIP keeps rather than reverses
+    that answer).
     """
     t = type(a)
-    if t is int or t is str:
+    if t is int:
         return a
+    # ``[]``, ``""`` and ``b""`` all denote the empty list and unify with each
+    # other, so they must key ALIKE -- and the only key all three can share is
+    # ``_INDEX_VAR`` (an empty list already keys it: ``_bytelist_to_bytes_or_
+    # none([])`` answers None).  Without this guard ``b""`` keyed itself while
+    # its two equal spellings keyed a full scan.
+    if (t is bytes or t is str) and not a:
+        return _INDEX_VAR
     if isinstance(a, _INDEXABLE_TYPES):
         return a
     if type(a) is tuple and a:
@@ -373,8 +398,26 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
     P3-2): see :func:`_arg_to_index_key`.
     """
     if isinstance(arg_expr, ast.Constant):
-        # scalar: int, str, float, bool, None — key is the value itself
+        # scalar: int, float, bool, None, bytes — key is the value itself.
+        # A ``str`` constant is a STRING after THE FLIP and is unindexable
+        # (§6.9), so it has no static key either; answering the ``str``
+        # would name a bucket no head ever built.
+        if type(arg_expr.value) is str:
+            return None
         return arg_expr.value
+    if isinstance(arg_expr, ast.Tuple) and arg_expr.elts \
+            and all(isinstance(e, ast.Constant) for e in arg_expr.elts) \
+            and type(arg_expr.elts[0].value) is str:
+        # A literal CELL — most often an atom, which after THE FLIP is the
+        # arity-0 cell ``("foo",)`` and reaches a call site as
+        # ``ast.Tuple([Constant("foo")])`` (``term_to_ast_expr``'s tuple
+        # branch), not as the bare ``str`` Constant it used to be.  Without
+        # this branch every atom-argument call site silently lost its
+        # first-argument bucket specialisation at the flip.  Every element is
+        # required to be a Constant so the cell is fully ground and the
+        # deep-groundness gate :func:`_runtime_arg_key` applies cannot
+        # disagree with the key computed here.
+        return (arg_expr.elts[0].value, len(arg_expr.elts) - 1)
     if isinstance(arg_expr, (ast.List, ast.Tuple)):
         # literal list/tuple — if every element is an int constant in
         # [0, 255], canonicalise to the joined bytes so dispatch sees the

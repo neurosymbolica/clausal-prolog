@@ -474,6 +474,7 @@ def test_allowlist_entries_point_at_real_paths_and_in_range_lines():
 
 
 _BAD_ATOM_BYPASS_SNIPPET = '''\
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.predicate import PredicateMeta
 
 def _sneaky_is_atom(x):

@@ -11,6 +11,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.reflection import (
     Atom,
     Clause,
@@ -67,7 +68,7 @@ class TestFacts:
     def test_string_and_float_literals_stay_raw(self):
         items = reify_source("Item('widget', 2.5),\n")
         (clause,) = clauses_of(items)
-        assert clause.head.args == ["widget", 2.5]
+        assert clause.head.args == [mint("widget"), 2.5]
 
     def test_atom_argument_reifies_as_atom(self):
         items = reify_source("Status(ok, 1),\n")

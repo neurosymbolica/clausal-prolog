@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/regex.md display snippets.
 
 -import_from(regex, [match, search, replace, split])

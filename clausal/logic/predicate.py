@@ -1582,27 +1582,23 @@ else:
 
 
 def is_atom_value(obj: Any) -> bool:
-    """True if obj is an atom-shaped VALUE: a plain str, or a zero-arity
-    PredicateMeta class (a declared atom).
+    """True if obj is an atom-shaped VALUE: the arity-0 cell ``("bar",)``, or
+    a zero-arity PredicateMeta class (a declared atom).
 
-    P3-1 Task 1 (str-as-atom acceptance, dual-accept transitional): this is
-    the runtime-reader-facing widening of ``is_atom`` -- R2 rules that
-    ``atom(X)`` is true for every ``str``, but ``is_atom`` itself is left
-    untouched here because several COMPILER call sites (``terms_to_ast.py``,
-    ``_lower_goalop_shared.py``) key off "is this a zero-field atom CLASS"
-    to decide identity-lowering / bare-Name-reference behavior, and a str
-    reaching those branches would be lowered wrong (as a class reference
-    rather than a literal). Those call sites are guarded today (a plain str
-    is intercepted by an earlier literal/scalar branch before any ``is_atom``
-    check in each of them), so they don't yet MISBEHAVE, but flipping
-    ``is_atom``'s global semantics is Task 2's deliberate, reviewed move —
-    not an accidental side effect of Task 1. Runtime readers (``atom/1``,
-    ``functor_arity``) use this helper instead.
+    Two different questions share the stem ``is_atom`` in this tree, and this
+    is the union of them:
 
-    Widened via ``clausal.logic.atoms.is_atom`` (spec §6.1) rather than a
-    bare ``isinstance(obj, str)`` — behaviourally identical under Plan 0's
-    str-is-an-atom representation, but written against the public atom API
-    so it survives the Stage B flip unchanged.
+    * ``clausal.logic.atoms.is_atom`` is the TERM test — after the flip
+      (2026-09-06-atoms-as-cells-strings §6.1) exactly the 1-tuple whose
+      slot 0 is a ``str``.  A plain ``str`` is a STRING and fails it.
+    * ``predicate.is_atom`` below is the CLASS test — "a zero-field
+      ``PredicateMeta`` class", the declared-atom form.  Several COMPILER
+      call sites (``terms_to_ast.py``, ``_lower_goalop_shared.py``) key off
+      that one to decide identity-lowering / bare-Name-reference behaviour,
+      so it must stay the narrow class question.
+
+    Runtime readers (``atom/1``, ``functor_arity``) want either shape and
+    call THIS helper, never one of the two halves alone.
     """
     from clausal.logic.atoms import is_atom as _term_is_atom
     return _term_is_atom(obj) or is_atom(obj)

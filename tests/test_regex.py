@@ -47,7 +47,10 @@ from clausal.import_hook import _load_module
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-_REGEX_IMPORT = '-import_from(py.re, [match, search, replace, split, findall])\n'
+# The inline modules below MEAN STRINGS by every ``"..."`` they write:
+# regex patterns and subject text (THE FLIP, migration rule (c)).
+_REGEX_IMPORT = ('-double_quotes(chars)\n'
+                 '-import_from(py.re, [match, search, replace, split, findall])\n')
 
 
 def _load(name, src_text, tmp_path):

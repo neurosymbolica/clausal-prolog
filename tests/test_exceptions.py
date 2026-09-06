@@ -6,6 +6,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import mint
 from clausal.logic.compiler import (
     compile_predicate_shallow as compile_predicate,
     compile_predicate_trampoline,
@@ -337,7 +338,9 @@ class TestStructuredErrors:
         t = type_error("integer", "foo", "bar/1")
         assert t.functor == "error"
         assert t.args[0].functor == "type_error"
-        assert t.args[0].args == ("integer", "foo")
+        # The TYPE name is an atom; the culprit and the CONTEXT are as the
+        # caller passed them — here plain Python strings (spec §6.4).
+        assert t.args[0].args == (mint("integer"), "foo")
         assert t.args[1] == "bar/1"
 
     def test_instantiation_error_helper(self):
@@ -345,7 +348,7 @@ class TestStructuredErrors:
         from clausal.logic.exceptions import instantiation_error
         t = instantiation_error("is/2")
         assert t.functor == "error"
-        assert t.args[0] == "instantiation_error"
+        assert t.args[0] == mint("instantiation_error")
         assert t.args[1] == "is/2"
 
     def test_existence_error_helper(self):
@@ -453,7 +456,8 @@ class TestRaisingGuardThroughFindAll:
         term = result.error.term
         assert term[0] == "wf_bad_shape"
         assert list(term[1:]) == [
-            "window_days_used: REF_YMD must be [Y,M,D]", "2020-01-01"]
+            mint("window_days_used: REF_YMD must be [Y,M,D]"),
+            mint("2020-01-01")]
         # The RAISED diagnostic path is taken (verb == "raised"), and it names
         # the findall goal the throw escaped from.
         diag = result.diagnostic
@@ -520,10 +524,12 @@ class TestAssertzAgainstADataFunctor:
         assert term.functor == "error"
         inner = term.args[0]
         assert inner.functor == "permission_error"
-        assert inner.args[0] == "modify"
-        assert inner.args[1] == "static_procedure"
+        assert inner.args[0] == mint("modify")
+        assert inner.args[1] == mint("static_procedure")
         indicator = inner.args[2]
         assert indicator.functor == "/"
+        # The indicator the engine builds holds the SPELLING (a str) and the
+        # arity, as it always has.
         assert indicator.args == ("f", 1)
 
     def test_the_message_points_at_dynamic(self, tmp_path):

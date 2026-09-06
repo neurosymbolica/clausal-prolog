@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # V3-5: Structured logging — fixture tests
 
 -import_from(py.logging, [

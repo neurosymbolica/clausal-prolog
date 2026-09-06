@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys as _sys
 import time as _time
 
+from clausal.logic.atoms import is_atom as _term_is_atom, mint, spelling
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.predicate import (
@@ -164,15 +165,18 @@ def _statistics__2(key, value, trail, k):
         pass
 
     if is_var(key_val):
-        # Enumerate all stats
+        # Enumerate all stats.  THE FLIP (spec §6.4): a Key is an ATOM, so
+        # the enumeration binds the minted atom, not the bare spelling.
         for stat_name, stat_fn in stats:
             mark = trail.mark()
-            if unify(key, stat_name, trail) and unify(value, stat_fn(), trail):
+            if unify(key, mint(stat_name), trail) \
+                    and unify(value, stat_fn(), trail):
                 yield None
             trail.undo(mark)
-    elif isinstance(key_val, str):
+    elif _term_is_atom(key_val):
+        spelt = spelling(key_val)
         for stat_name, stat_fn in stats:
-            if stat_name == key_val:
+            if stat_name == spelt:
                 if unify(value, stat_fn(), trail):
                     yield None
                 return

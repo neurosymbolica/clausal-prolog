@@ -12,6 +12,7 @@ import types
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call, query, solve
@@ -299,7 +300,7 @@ class TestQualifiedValueAtoms:
         y2 = Var()
         next(call("QualifiedMatchesImported", y2, module=logic_mod))
         # P3-1 Task 2 (§1b/R2): atoms are plain strs now, not classes.
-        assert deref(y2) == "ok"
+        assert deref(y2) == mint("ok")
 
     def test_qualified_atom_in_head_position_constructs_real_atom(self):
         # nv

@@ -10,11 +10,13 @@ checks) — never on the engine (``clausal.logic.*``). Task 4 appends
 ``PrologReader`` (the toklex-driving item-at-a-time reader) below the
 IR + transformer section defined here.
 
-Cell mapping (locked):
-    PAtom      -> .name (str; quoted flag is irrelevant to cells — mangling
-                  is the compiler's job)
+Cell mapping (locked; the two atom/string lines updated by THE FLIP,
+2026-09-06-atoms-as-cells-strings §9.7):
+    PAtom      -> the arity-0 CELL (.name,) — an atom (quoted flag is
+                  irrelevant to cells — mangling is the compiler's job)
     PNumber    -> .value (native int/float)
-    PString    -> list of 1-char strings ('' -> [])
+    PString    -> .value (a str — a STRING, which denotes the list of its
+                  char atoms; '' -> "", which denotes [])
     PCompound  -> (functor, *arg_cells)
     PList (proper)   -> Python list [cell, ...]
     PList (with tail) -> right-nested cons cells ('.', H, T), folding the
@@ -24,7 +26,7 @@ Cell mapping (locked):
                   allocates a fresh index
 
 Span tree (locked, mirrors the cell shape exactly):
-    leaf cell (str atom, number, VarRef, char-list-from-PString)
+    leaf cell (atom cell, number, VarRef, string-from-PString)
         -> the P-node's (start, end), or (-1, -1) when the P-node's span
            is None (e.g. hand-built P-trees in tests)
     compound tuple cell ('f', c1, ..., cN)
@@ -50,6 +52,7 @@ Span tree (locked, mirrors the cell shape exactly):
 from __future__ import annotations
 
 from dataclasses import dataclass
+import sys as _sys
 
 from clausal.tools.prolog_ast import (
     PAtom,
@@ -154,11 +157,18 @@ class _Transform:
 
     def cell(self, node):
         if isinstance(node, PAtom):
-            return node.name
+            # THE FLIP (§9.7): an atom is the arity-0 cell.  Built inline
+            # rather than through ``clausal.logic.atoms.mint`` — this module
+            # is the §1c contract's data heart and must not grow an import
+            # edge into the engine — but it is the same term ``mint`` makes,
+            # interned spelling included.
+            return (_sys.intern(node.name),)
         if isinstance(node, PNumber):
             return node.value
         if isinstance(node, PString):
-            return list(node.value)
+            # THE FLIP (§9.7): a string IS a ``str``; it denotes the list of
+            # its char atoms, so nothing is expanded here (R-S2).
+            return node.value
         if isinstance(node, PVar):
             return VarRef(self.var_index(node.name))
         if isinstance(node, PCompound):

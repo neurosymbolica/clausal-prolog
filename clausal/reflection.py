@@ -1321,8 +1321,25 @@ def render_ast(term):
 
 def render_source(term):
     """Render a reified term to ``.clausal`` source text — :func:`render_ast`
-    followed by ``ast.unparse`` with the ``<-`` arrow repair."""
+    followed by ``ast.unparse`` with the ``<-`` arrow repair.
+
+    Every text literal in the output is a STRING (an atom renders as a bare
+    or quoted NAME, never as a literal — see ``_ClauseRenderer.term``), so
+    the text is re-quoted with ``fmt.emit._prefer_double_quotes``: a string
+    has to come back double-quoted or it would re-read as an atom under the
+    engine's default ``-double_quotes(atom)`` mode (spec §6.7/§7).
+
+    The directive itself is NOT prepended here, and that is deliberate
+    (Task 11 ruling): this function renders ONE clause or term, not a
+    module, and a directive line in front of a clause makes the result
+    something no caller can splice back into a file.  A caller assembling a
+    MODULE out of rendered clauses is the one that owns the header, and it
+    must emit ``-double_quotes(chars)`` there whenever any rendered clause
+    carries a string — otherwise the module's ``"…"`` literals re-read as
+    atoms.
+    """
+    from clausal.fmt.emit import _prefer_double_quotes
     node = render_ast(term)
     if isinstance(node, ast.Expr):
-        return _unparse_clause(node)
-    return _tighten_nested_arrows(ast.unparse(node))
+        return _prefer_double_quotes(_unparse_clause(node))
+    return _prefer_double_quotes(_tighten_nested_arrows(ast.unparse(node)))

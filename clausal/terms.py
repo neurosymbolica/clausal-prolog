@@ -1197,19 +1197,17 @@ class SegString:
             return _drive_seg_unify(self._unify_gens, walked, other, trail,
                                     concrete_len, _apply_segstring_split)
         if isinstance(other, list):
-            # SegString stays the char-LIST optimization: it still unifies
-            # with a plain list / SegList element-wise. P3-1 §1b retires
-            # the C str↔list cons rule (a bare ``str`` no longer unifies
-            # with a char list), so this arm can no longer delegate the
-            # ground case to ``unify(walked_str, other_list, trail)`` —
-            # that call would now always fail (str-vs-list is False post-
-            # retirement). Instead, explicitly materialise the walked
-            # str's characters as a list and unify list-vs-list, which is
-            # untouched by the retirement and still supports binding
-            # unbound Vars inside ``other``.
+            # A ground SegString walks to a ``str``, and THE FLIP
+            # (2026-09-06-atoms-as-cells-strings §6.2) reinstated the
+            # str↔list arm in ``do_unify``: a ``str`` IS the list of its
+            # char atoms.  So the ground case delegates straight back to
+            # ``unify`` and the C arm does the work — no materialisation of
+            # a char list here, which is what R-S2 (efficient
+            # representations, always) asks for.  P3-1 had retired that arm,
+            # which is why this branch used to build the list itself.
             walked = self.__walk__()
             if isinstance(walked, str):
-                return unify([char_atom(c) for c in walked], other, trail)
+                return unify(walked, other, trail)
             # F023 (audit 2026-05-25): non-ground SegString vs list — the
             # old branch returned ``NotImplemented`` which the C top-level
             # unify treats as "no protocol match → False", silently
@@ -1270,45 +1268,57 @@ class SegString:
         return len(chars)
 
     def __iter__(self):
-        # Ground: iterate the walked str as chars (matches Python's
-        # ``iter(str)`` contract under the strings-as-lists rule).
+        # Ground: iterate the walked str as its CHAR ATOMS — a string is the
+        # list of char atoms it denotes (THE FLIP, spec §6.2), so iterating
+        # it must yield the same elements iterating that list does, and
+        # ``X in "abc"`` binds ``X = ("a",)``.  Python's ``iter(str)``
+        # yields 1-char ``str``s, which are one-element STRINGS here and
+        # would be the wrong elements.
         # Non-ground: yield the concrete chars from str segments in
         # order, skipping VarSeg gaps.
         chars, _ = self._concrete_prefix()
-        return iter(chars)
+        return iter([char_atom(c) for c in chars])
 
     def __contains__(self, item) -> bool:
+        # Membership is over the ELEMENTS of the list this string denotes,
+        # so the item that can be found is a CHAR ATOM (THE FLIP, §6.2) —
+        # matching ``__iter__`` above and ``member/2`` on a plain ``str``.
+        # A string item (``"ab" in "abc"``) is a substring question, not a
+        # membership one, and is False here as it is for a list.
+        if not is_char_atom(item):
+            return False
+        ch = spelling(item)
         w = self.__walk__()
         if isinstance(w, str):
-            # ``item in str`` requires item to be a str (substring test).
-            # Anything else is False under Python's str.__contains__ rule.
-            if isinstance(item, str):
-                return item in w
-            return False
-        # Non-ground: True if the item is in any concrete str segment.
+            return ch in w
+        # Non-ground: True if the char is in any concrete str segment.
         # If absent but a VarSeg remains, return True conservatively
-        # (the item could be bound inside the VarSeg). See SegList
+        # (the char could be bound inside the VarSeg). See SegList
         # for the same satisfiable-membership rule.
         has_var = False
         for seg in w._segments:
             if isinstance(seg, str):
-                if isinstance(item, str) and item in seg:
+                if ch in seg:
                     return True
             else:
                 has_var = True
-        return has_var if isinstance(item, str) else False
+        return has_var
 
     def __getitem__(self, index):
+        # An INT index selects one element of the list this string denotes —
+        # a char atom (THE FLIP, §6.2).  A SLICE selects a sub-list, which
+        # for a string is a ``str`` slice (R-S2: the tail of a string stays
+        # a string, never expands).
         w = self.__walk__()
         if isinstance(w, str):
-            return w[index]
+            return char_atom(w[index]) if isinstance(index, int) else w[index]
         chars: list[str] = []
         for seg in w._segments:
             if isinstance(seg, str):
                 chars.extend(seg)
             else:
                 if isinstance(index, int) and 0 <= index < len(chars):
-                    return chars[index]
+                    return char_atom(chars[index])
                 # In-prefix forward slice is knowable (A01-F010); return a
                 # str to match ground SegString slicing.
                 if _slice_within_prefix(index, len(chars)):
@@ -1318,7 +1328,8 @@ class SegString:
                     f"VarSeg; only the concrete prefix (indices "
                     f"0..{len(chars) - 1}) is knowable. SegString={self!r}"
                 )
-        return "".join(chars)[index]
+        prefix = "".join(chars)
+        return char_atom(prefix[index]) if isinstance(index, int) else prefix[index]
 
     def __repr__(self):
         return f"SegString({self._segments!r})"
@@ -2495,17 +2506,29 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
     if isinstance(t, (int, float, complex)):
         return _c(repr(t), 'number', style)
     if isinstance(t, str):
-        # P3-1 Task 6 (-hide, design doc section 1b): "the writer renders
-        # the human form" -- a mangled atom's DISPLAY substitutes
-        # demangle_for_display before quoting; the raw runtime str (and
-        # therefore unification/data semantics) is untouched.  NOT a
-        # round-trip: the human form re-reads as a different (unmangled)
-        # term -- display only, per section 1b's guarantee.
-        display = demangle_for_display(t) if is_mangled(t) else t
-        return _c(repr(display), 'string', style)
+        # A STRING (THE FLIP, spec §6.7).  The colour role ``'string'`` finally
+        # means what it says.  ``writeq`` prints it as a double-quoted string
+        # token; ``write`` prints the bare text.  ``repr`` is gone: it picks
+        # its own quotes by content, so ``"it's"`` came out single-quoted --
+        # an ATOM to any reader.
+        #
+        # The EMPTY string is the empty list and prints ``[]`` in both
+        # families (spec §6.7's table row), which is also what the list
+        # branch below prints for ``[]``: the two spellings of one term
+        # render alike.
+        if t == "":
+            return _c('[]', 'bracket', style, _bd)
+        return _c(quote_string(t) if quoted else t, 'string', style)
     if isinstance(t, bytes):
         return repr(t)
     if isinstance(t, list):
+        # A list of CHAR ATOMS *is* a string (spec §6.7's table row: Scryer
+        # prints ``[a, b]`` as ``"ab"``), so it renders as one -- the same
+        # text the equal ``str`` renders.  ``[1, 2]`` and every other list
+        # keep the bracketed element form.
+        if t and all(is_char_atom(e) for e in t):
+            text = "".join(spelling(e) for e in t)
+            return _c(quote_string(text) if quoted else text, 'string', style)
         ob = _c('[', 'bracket', style, _bd)
         cb = _c(']', 'bracket', style, _bd)
         return ob + ", ".join(term_str(e, style, _bd + 1, quoted=quoted) for e in t) + cb
@@ -2664,11 +2687,15 @@ def term_canonical(t: Any) -> str:
     if isinstance(t, (int, float, complex)):
         return repr(t)
     if isinstance(t, str):
-        # Stage A: a str is still an atom, so it renders as the quoted atom
-        # spelling.  Task 11 (THE FLIP) replaces this branch with the cons
-        # form of the string's char list, per spec §6.7's table row
-        # ``"abc"`` -> ``'.'(a,'.'(b,'.'(c,[])))``.
-        return _quoted_atom_spelling(t)
+        # A STRING (THE FLIP) — the list of its char atoms, so it prints as
+        # the cons structure that list denotes (spec §6.7, Scryer-verified):
+        # ``"abc"`` -> ``'.'(a,'.'(b,'.'(c,[])))``, ``""`` -> ``[]``.
+        # ``write_canonical/1`` ignores the ``double_quotes`` flag by design,
+        # which is why there is no mode to consult here.
+        out = "[]"
+        for c in reversed(t):
+            out = "'.'(" + _quoted_atom_spelling(c) + "," + out + ")"
+        return out
     if isinstance(t, bytes):
         return repr(t)
     if isinstance(t, list):
@@ -2829,6 +2856,12 @@ def term_pformat(
     if isinstance(t, list):
         if not t:
             return flat
+        if all(is_char_atom(e) for e in t):
+            # A list of char atoms IS a string and ``term_str`` renders it as
+            # one (spec §6.7).  There is nothing to break across lines — a
+            # string is a single token — so a long one stays flat rather
+            # than being exploded into one char atom per line.
+            return flat
         ob = _c('[', 'bracket', style, _bd)
         cb = _c(']', 'bracket', style, _bd)
         items = [_r(e) for e in t]
@@ -2978,10 +3011,20 @@ def term_html(t: Any, _bd: int = 0) -> str:
     if isinstance(t, (int, float, complex)):
         return _html_c(esc(repr(t)), 'number')
     if isinstance(t, str):
-        return _html_c(esc(repr(t)), 'string')
+        # A STRING -- the same writeq spelling ``term_str`` produces (spec
+        # §6.7): a double-quoted string token, and ``[]`` for the empty
+        # string, which is the empty list.
+        if t == "":
+            return _html_c('[]', 'bracket', _bd)
+        return _html_c(esc(quote_string(t)), 'string')
     if isinstance(t, bytes):
         return esc(repr(t))
     if isinstance(t, list):
+        # A list of char atoms IS a string and renders as one -- same rule as
+        # ``term_str``'s list branch.
+        if t and all(is_char_atom(e) for e in t):
+            return _html_c(
+                esc(quote_string("".join(spelling(e) for e in t))), 'string')
         ob = _html_c('[', 'bracket', _bd)
         cb = _html_c(']', 'bracket', _bd)
         return ob + ", ".join(term_html(e, _bd + 1) for e in t) + cb

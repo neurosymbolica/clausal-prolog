@@ -39,6 +39,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.variables import Trail, Var, occurs_check, unify
@@ -192,7 +193,7 @@ class TestClausalSourceRepro:
             ),
         """)
         from clausal.logic.solve import solve
-        assert len(list(solve(mod.check("cite")))) == 1
+        assert len(list(solve(mod.check(mint("cite"))))) == 1
 
     def test_the_field_body_verbatim_now_succeeds(self, tmp_path):
         """``test_load.clausal:57``, reduced to one module.

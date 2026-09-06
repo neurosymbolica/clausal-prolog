@@ -18,6 +18,7 @@ Findings tested here (all closed as of 2026-06-13 follow-up):
 - F094 (design-gap) numbervars/3 cannot number Vars inside Seg* containers
 """
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Trail, Var, deref
@@ -50,9 +51,9 @@ def test_F088_unpack_on_list_uses_cons_cell():
     """
     L = Var()
     sols = _collect(
-        "unpack", 2, ["a", "b", "c"], L, snap=lambda L=L: deref(L)
+        "unpack", 2, [mint("a"), mint("b"), mint("c")], L, snap=lambda L=L: deref(L)
     )
-    assert sols == [[".", "a", ["b", "c"]]], (
+    assert sols == [[mint("."), mint("a"), [mint("b"), mint("c")]]], (
         f'unpack(["a","b","c"], L) bound L={sols!r}; expected '
         f'[".", "a", ["b","c"]] under ISO cons-cell.'
     )
@@ -60,9 +61,9 @@ def test_F088_unpack_on_list_uses_cons_cell():
     # P3-1 \u00a71b/R2: str is atomic -- unpack gives [self], not a cons cell.
     L2 = Var()
     sols2 = _collect(
-        "unpack", 2, "abc", L2, snap=lambda L=L2: deref(L)
+        "unpack", 2, mint("abc"), L2, snap=lambda L=L2: deref(L)
     )
-    assert sols2 == [["abc"]], (
+    assert sols2 == [[mint("abc")]], (
         f'unpack("abc", L) bound L={sols2!r}; expected ["abc"] -- a str '
         f'is its own atom under the retired cons rule (\u00a71b/R2).'
     )
@@ -70,12 +71,12 @@ def test_F088_unpack_on_list_uses_cons_cell():
     # Empty cases — nil atom.
     L3 = Var()
     sols3 = _collect("unpack", 2, [], L3, snap=lambda L=L3: deref(L))
-    assert sols3 == [["[]"]], (
+    assert sols3 == [[mint("[]")]], (
         f'unpack([], L) bound L={sols3!r}; expected ["[]"].'
     )
     L4 = Var()
-    sols4 = _collect("unpack", 2, "", L4, snap=lambda L=L4: deref(L))
-    assert sols4 == [["[]"]], (
+    sols4 = _collect("unpack", 2, mint(""), L4, snap=lambda L=L4: deref(L))
+    assert sols4 == [[mint("[]")]], (
         f'unpack("", L) bound L={sols4!r}; expected ["[]"].'
     )
 
@@ -90,20 +91,20 @@ def test_F089_functor_and_univ_no_longer_agree_on_str_vs_list():
     """
     F1, A1 = Var(), Var()
     sols_str = _collect(
-        "functor", 3, "abc", F1, A1,
+        "functor", 3, mint("abc"), F1, A1,
         snap=lambda F=F1, A=A1: (deref(F), deref(A)),
     )
     F2, A2 = Var(), Var()
     sols_lst = _collect(
-        "functor", 3, ["a", "b", "c"], F2, A2,
+        "functor", 3, [mint("a"), mint("b"), mint("c")], F2, A2,
         snap=lambda F=F2, A=A2: (deref(F), deref(A)),
     )
-    assert sols_str == [("abc", 0)], (
+    assert sols_str == [(mint("abc"), 0)], (
         f'functor("abc", F, A) returned {sols_str!r}; expected '
         f'[("abc", 0)] -- a str is its own atom functor under the '
         f'retired cons rule (\u00a71b/R2).'
     )
-    assert sols_lst == [(".", 2)], (
+    assert sols_lst == [(mint("."), 2)], (
         f'functor(["a","b","c"], F, A) returned {sols_lst!r}; '
         f'expected [(".", 2)] under ISO cons-cell (list unaffected).'
     )
@@ -118,7 +119,7 @@ def test_F089_functor_and_univ_no_longer_agree_on_str_vs_list():
     # nil atom).
     F3, A3 = Var(), Var()
     sols_empty_str = _collect(
-        "functor", 3, "", F3, A3,
+        "functor", 3, mint(""), F3, A3,
         snap=lambda F=F3, A=A3: (deref(F), deref(A)),
     )
     F4, A4 = Var(), Var()
@@ -126,11 +127,11 @@ def test_F089_functor_and_univ_no_longer_agree_on_str_vs_list():
         "functor", 3, [], F4, A4,
         snap=lambda F=F4, A=A4: (deref(F), deref(A)),
     )
-    assert sols_empty_str == [("[]", 0)], (
+    assert sols_empty_str == [(mint("[]"), 0)], (
         f'functor("", F, A) returned {sols_empty_str!r}; expected '
         f'[("[]", 0)] — the nil atom.'
     )
-    assert sols_empty_lst == [("[]", 0)], (
+    assert sols_empty_lst == [(mint("[]"), 0)], (
         f'functor([], F, A) returned {sols_empty_lst!r}; expected '
         f'[("[]", 0)] — the nil atom.'
     )
@@ -144,7 +145,7 @@ def test_F090_arg_on_str_is_retired_str_is_atomic():
     """
     # n=1 → no longer the head; str is atomic (arity 0), so this fails.
     X = Var()
-    sols = _collect("arg", 3, 1, "abc", X, snap=lambda X=X: deref(X))
+    sols = _collect("arg", 3, 1, mint("abc"), X, snap=lambda X=X: deref(X))
     assert sols == [], (
         f'arg(1, "abc", X) bound X={sols!r}; expected [] -- a str is '
         f'atomic under the retired cons rule (\u00a71b/R2), so it has '
@@ -152,14 +153,14 @@ def test_F090_arg_on_str_is_retired_str_is_atomic():
     )
     # n=2 → likewise no longer the tail.
     X = Var()
-    sols = _collect("arg", 3, 2, "abc", X, snap=lambda X=X: deref(X))
+    sols = _collect("arg", 3, 2, mint("abc"), X, snap=lambda X=X: deref(X))
     assert sols == [], (
         f'arg(2, "abc", X) bound X={sols!r}; expected [] -- same '
         f'rationale as n=1.'
     )
     # n=3 → still fails (was already out of range; still is).
     X = Var()
-    sols = _collect("arg", 3, 3, "abc", X, snap=lambda X=X: deref(X))
+    sols = _collect("arg", 3, 3, mint("abc"), X, snap=lambda X=X: deref(X))
     assert sols == [], (
         f'arg(3, "abc", X) bound X={sols!r}; expected [] '
         f"(str is arity 0, unchanged conclusion)."
@@ -176,24 +177,24 @@ def test_F091_arg_on_list_uses_cons_cell():
     # n=1 → head.
     X = Var()
     sols = _collect(
-        "arg", 3, 1, ["a", "b", "c"], X, snap=lambda X=X: deref(X)
+        "arg", 3, 1, [mint("a"), mint("b"), mint("c")], X, snap=lambda X=X: deref(X)
     )
-    assert sols == ["a"], (
+    assert sols == [mint("a")], (
         f'arg(1, ["a","b","c"], X) bound X={sols!r}; expected ["a"].'
     )
     # n=2 → tail (list of rest).
     X = Var()
     sols = _collect(
-        "arg", 3, 2, ["a", "b", "c"], X, snap=lambda X=X: deref(X)
+        "arg", 3, 2, [mint("a"), mint("b"), mint("c")], X, snap=lambda X=X: deref(X)
     )
-    assert sols == [["b", "c"]], (
+    assert sols == [[mint("b"), mint("c")]], (
         f'arg(2, ["a","b","c"], X) bound X={sols!r}; expected '
         f'[["b", "c"]] — cons-cell tail.'
     )
     # n=3 → fail (arity is 2).
     X = Var()
     sols = _collect(
-        "arg", 3, 3, ["a", "b", "c"], X, snap=lambda X=X: deref(X)
+        "arg", 3, 3, [mint("a"), mint("b"), mint("c")], X, snap=lambda X=X: deref(X)
     )
     assert sols == [], (
         f'arg(3, ["a","b","c"], X) bound X={sols!r}; expected [] '

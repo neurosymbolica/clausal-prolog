@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/tcp.md display snippets.
 # TCP predicates require network I/O — test via loopback echo.
 

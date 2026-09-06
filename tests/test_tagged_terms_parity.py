@@ -56,6 +56,7 @@ import time
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.cells import is_cell, cell_args
 from clausal.logic.variables import Var, deref
 from clausal.logic.solve import call
@@ -119,7 +120,7 @@ class TestStructTablingParity:
         def build(mod):
             return (3, Var())
 
-        expected = ("cons", 3, ("cons", 2, ("cons", 1, "nil")))
+        expected = ("cons", 3, ("cons", 2, ("cons", 1, mint("nil"))))
         plain = _answers(_ST_PLAIN, "Nats", build, [1])
         tagged = _answers(_ST_TAGGED, "Nats", build, [1])
         assert plain == [(expected,)]
@@ -210,7 +211,7 @@ class TestTaggedShapesParity:
             for _t in call("pair_up", 1, 2, P, module=lm):
                 for _t2 in call("kind", P, K, module=lm):
                     got.append(deref(K))
-            assert got == ["seg3"], module_name
+            assert got == [mint("seg3")], module_name
 
     def test_open_kind_query_answer_set_parity(self):
         def build(mod):
@@ -297,7 +298,7 @@ class TestHeadListCompoundParity:
                 normalize_term(S)
                 for _t in call("ev_deep", [("c", ("d", S))], module=lm)
             ]
-            assert got == ["met"], module_name
+            assert got == [mint("met")], module_name
 
     def test_must_fail_ev_deep_input_mismatch_fails_both_halves(self):
         for module_name in (_HLC_PLAIN, _HLC_TAGGED):

@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/crypto.md display snippets.
 # Validates that documented predicates exist and work as shown.
 

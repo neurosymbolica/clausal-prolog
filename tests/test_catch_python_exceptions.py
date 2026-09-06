@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal import Var, solve
@@ -65,7 +66,7 @@ def _solutions(goal, out=None):
 
 def test_class_catcher_matches_python_exception(mod):
     r = Var()
-    assert _solutions(mod.c_class(r), r) == ["caught"]
+    assert _solutions(mod.c_class(r), r) == [mint("caught")]
 
 
 def test_instance_catcher_binds_the_real_args(mod):
@@ -86,7 +87,7 @@ def test_wrong_instance_catcher_stays_selective(mod):
 
 def test_superclass_catcher_matches_by_isinstance(mod):
     r = Var()
-    assert _solutions(mod.c_super(r), r) == ["caught_super"]
+    assert _solutions(mod.c_super(r), r) == [mint("caught_super")]
 
 
 def test_structural_shape_still_matches(mod):

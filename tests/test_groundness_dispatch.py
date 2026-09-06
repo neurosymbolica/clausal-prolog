@@ -8,6 +8,7 @@ which arguments are ground.
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
 from clausal.logic.compiler.arg_index import (

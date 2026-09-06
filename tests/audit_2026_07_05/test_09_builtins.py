@@ -19,6 +19,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint, spelling
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic import solve as solve_mod
@@ -221,7 +222,7 @@ def test_F004_regression_maplist_first_solution(fix):
     """The committed-choice first solution itself is produced correctly."""
     _, m = fix
     Y = Var()
-    assert _collect(m, Y, "mlfirst", Y) == ["a"]
+    assert _collect(m, Y, "mlfirst", Y) == [mint("a")]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -249,7 +250,7 @@ def test_F005_assertz_rule(fix):
     except NotImplementedError:
         pytest.fail("predicate poisoned: NotImplementedError on later query")
     # The base fact survives; the rejected rule never derived 7.
-    assert "dummy" in got and 7 not in got
+    assert mint("dummy") in got and 7 not in got
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -268,8 +269,8 @@ def _assert_static_procedure_error(ei, context):
     """
     inner = ei.value.term.args[0]
     assert getattr(inner, "functor", None) == "permission_error"
-    assert inner.args[0] == "modify"
-    assert inner.args[1] == "static_procedure"
+    assert inner.args[0] == mint("modify")
+    assert inner.args[1] == mint("static_procedure")
     assert str(ei.value.term.args[1]).startswith(context)
 
 
@@ -328,7 +329,7 @@ def test_F008_retract_binds_pattern(fix):
     _, m = fix
     X = Var()
     assert _first(m, "retprobe", X)
-    assert not is_var(deref(X)) and deref(X) == "dummy"
+    assert not is_var(deref(X)) and deref(X) == mint("dummy")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -420,7 +421,7 @@ def test_F012_set_add_unhashable(fix):
         _first(m, "set_add", [9], SetTerm([1, 2]), Var())
     inner = ei.value.term.args[0]
     assert getattr(inner, "functor", None) == "type_error"
-    assert inner.args[0] == "hashable"
+    assert inner.args[0] == mint("hashable")
 
 
 def test_F012_set_remove_unhashable(fix):
@@ -429,7 +430,7 @@ def test_F012_set_remove_unhashable(fix):
         _first(m, "set_remove", [9], SetTerm([1, 2]), Var())
     inner = ei.value.term.args[0]
     assert getattr(inner, "functor", None) == "type_error"
-    assert inner.args[0] == "hashable"
+    assert inner.args[0] == mint("hashable")
 
 
 def test_F012_regression_set_add_remove_hashable(fix):
@@ -475,32 +476,34 @@ def test_F012_regression_sort_by_incomparable_keys(fix):
 
 def test_F013_char_type_digit_consistency(fix):
     _, m = fix
-    assert _first(m, "char_type", "٣", "digit")  # ARABIC-INDIC THREE
+    assert _first(m, "char_type", char_atom("٣"), mint("digit"))
     C = Var()
-    chars = _collect(m, C, "char_type", C, "digit")
-    assert "٣" in chars
+    chars = _collect(m, C, "char_type", C, mint("digit"))
+    assert char_atom("٣") in chars
 
 
 def test_F013_char_type_space_consistency(fix):
     _, m = fix
-    assert _first(m, "char_type", "\xa0", "space")
+    assert _first(m, "char_type", char_atom("\xa0"), mint("space"))
     C = Var()
-    assert "\xa0" in _collect(m, C, "char_type", C, "space")
+    assert char_atom("\xa0") in _collect(
+        m, C, "char_type", C, mint("space"))
 
 
 def test_F013_char_type_punct_consistency(fix):
     _, m = fix
-    assert _first(m, "char_type", "\xa1", "punct")
+    assert _first(m, "char_type", char_atom("\xa1"), mint("punct"))
     C = Var()
-    assert "\xa1" in _collect(m, C, "char_type", C, "punct")
+    assert char_atom("\xa1") in _collect(
+        m, C, "char_type", C, mint("punct"))
 
 
 def test_F013_regression_alpha_enum_unicode(fix):
     """F072 half that WAS fixed: alpha enumeration includes non-ASCII."""
     _, m = fix
     C = Var()
-    chars = _collect(m, C, "char_type", C, "alpha")
-    assert "α" in chars  # α
+    chars = _collect(m, C, "char_type", C, mint("alpha"))
+    assert char_atom("α") in chars  # α
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -514,17 +517,17 @@ def test_F014_char_type_python_fallback_non_ascii(fix):
     ch._c_char_type_find_types = None
     try:
         T = Var()
-        types = _collect(m, T, "char_type", "α", T)
+        types = _collect(m, T, "char_type", char_atom("α"), T)
     finally:
         ch._c_char_type_find_types = saved
-    assert "alpha" in types
+    assert mint("alpha") in types
 
 
 def test_F014_regression_char_type_c_path_non_ascii(fix):
     _, m = fix
     T = Var()
-    types = _collect(m, T, "char_type", "α", T)
-    assert "alpha" in types and "lower" in types
+    types = _collect(m, T, "char_type", char_atom("α"), T)
+    assert mint("alpha") in types and mint("lower") in types
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -567,7 +570,7 @@ def test_F015_regression_succ_rejects_bool(fix):
 def test_F016_must_be_list_string(fix):
     _, m = fix
     assert _first(m, "is_list", "abc")  # locked-in F080 behaviour
-    assert _first(m, "must_be", "list", "abc")  # raises today
+    assert _first(m, "must_be", mint("list"), "abc")  # raises today
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -579,22 +582,23 @@ def test_F017_atom_chars_str_arg(fix):
     _, m = fix
     A = Var()
     assert _first(m, "atom_chars", A, "abc")
-    assert deref(A) == "abc"
+    assert deref(A) == mint("abc")
 
 
 def test_F017_atom_codes_bytes_arg(fix):
     _, m = fix
     A = Var()
     assert _first(m, "atom_codes", A, b"ab")
-    assert deref(A) == "ab"
+    assert deref(A) == mint("ab")
 
 
 def test_F017_regression_list_forms_work(fix):
     _, m = fix
     A = Var()
-    assert _first(m, "atom_chars", A, ["a", "b"]) and deref(A) == "ab"
+    assert (_first(m, "atom_chars", A, [char_atom("a"), char_atom("b")])
+            and deref(A) == mint("ab"))
     B = Var()
-    assert _first(m, "atom_codes", B, [97, 98]) and deref(B) == "ab"
+    assert _first(m, "atom_codes", B, [97, 98]) and deref(B) == mint("ab")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -630,15 +634,20 @@ def test_F019_regression_same_length_str(fix):
 
 def test_F029_ground_segstring_typecheck_coherent(fix):
     """A09-F029: for a ground SegString the type-check matrix must cohere —
-    is_str = string = is_list = atomic = is_chars = True, compound = False.
-    Before the fix, atomic and is_chars rejected it while is_str/is_list
-    accepted it (is_str(X) implying not-atomic(X) is incoherent)."""
+    is_str = string = is_list = is_chars = True, compound = False.
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings §6.3) moved ``atomic`` out of
+    that row and into the FALSE column, and the coherence argument moves with
+    it: a string IS the list of its char atoms, so ``atomic`` must answer for
+    it exactly what it answers for that list, which is False.  The
+    incoherence F029 fixed (``is_str`` true while ``is_list`` false) is not
+    reintroduced — the two still agree."""
     _, m = fix
     seg = SegString(["ab"])
     assert _first(m, "is_str", seg)
     assert _first(m, "string", seg)
     assert _first(m, "is_list", seg)
-    assert _first(m, "atomic", seg)
+    assert not _first(m, "atomic", seg)
     assert _first(m, "is_chars", seg)
     assert not _first(m, "compound", seg)
 
@@ -698,11 +707,11 @@ def test_F020_regression_c_error_paths_hold_under_loop(refcount_stable, fix):
         X = Var()
         _collect(m, X, "in_", X, [1, 2, 3])
         A, B = Var(), Var()
-        _collect(m, A, "atom_concat", A, B, "abcd")
+        _collect(m, A, "atom_concat", A, B, mint("abcd"))
         S = Var()
-        _collect(m, S, "sub_atom", "abc", Var(), Var(), Var(), S)
+        _collect(m, S, "sub_atom", mint("abc"), Var(), Var(), Var(), S)
         C = Var()
-        _collect(m, C, "char_type", C, "digit")
+        _collect(m, C, "char_type", C, mint("digit"))
         E, R = Var(), Var()
         _collect(m, E, "select", E, [1, 2, 3], R)
 
@@ -796,7 +805,7 @@ def test_F028_must_be_unknown_type_domain_error(fix):
     TYPE is wrong, not the term — not a misleading type_error(Name, Term)."""
     _, m = fix
     with pytest.raises(LogicException) as ei:
-        _first(m, "must_be", "nonsense", 5)
+        _first(m, "must_be", mint("nonsense"), 5)
     inner = ei.value.term.args[0]
     assert getattr(inner, "functor", None) == "domain_error"
 
@@ -811,9 +820,9 @@ def test_F028_must_be_unbound_type_raises(fix):
 
 def test_F028_regression_must_be_known_types(fix):
     _, m = fix
-    assert _first(m, "must_be", "integer", 5)
+    assert _first(m, "must_be", mint("integer"), 5)
     with pytest.raises(LogicException):
-        _first(m, "must_be", "integer", "x")
+        _first(m, "must_be", mint("integer"), mint("x"))
 
 
 def test_F031_atom_concat_check_mode_type_error(fix):
@@ -821,13 +830,14 @@ def test_F031_atom_concat_check_mode_type_error(fix):
     mode too, not just the open mode (was a silent failure)."""
     _, m = fix
     with pytest.raises(LogicException):
-        _first(m, "atom_concat", 12, "a", "12a")
+        _first(m, "atom_concat", 12, mint("a"), mint("12a"))
 
 
 def test_F031_regression_atom_concat_valid(fix):
     _, m = fix
     C = Var()
-    assert _first(m, "atom_concat", "1", "2", C) and deref(C) == "12"
+    assert (_first(m, "atom_concat", mint("1"), mint("2"), C)
+            and deref(C) == mint("12"))
 
 
 def test_F030_number_chars_python_lenient(fix):
@@ -873,17 +883,19 @@ def test_regression_arg_bounds(fix):
 
 
 def test_regression_arg_cons_semantics(fix):
-    """Lists decompose as cons cells (user decision 2026-06-13, unaffected
-    by P3-1 Task 5). Strings do NOT any more (§1b/R2, Task 5): a str is
-    atomic (its own functor, arity 0), so arg/3 on a str always fails —
-    formerly asserted ``arg(2, "abc", Y) -> Y = "bc"`` under the retired
-    cons rule.
+    """Lists decompose as cons cells (user decision 2026-06-13).
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings §5.4/§13 row 18b) restores
+    the same reading for a STRING, which is the list of its char atoms:
+    ``arg(2, "abc", Y)`` gives ``Y = "bc"``, a ``str`` SLICE — the tail of a
+    string stays a string, nothing is expanded.  P3-1 Task 5 had retired
+    that because a str was then an ATOM, and an atom has no arguments.
     """
     _, m = fix
     X = Var()
     assert _first(m, "arg", 2, [10, 20, 30], X) and _dw(X) == [20, 30]
     Y = Var()
-    assert not _first(m, "arg", 2, "abc", Y)
+    assert _first(m, "arg", 2, "abc", Y) and _dw(Y) == "bc"
 
 
 def test_regression_tfilter_user_reified(fix):
@@ -929,7 +941,9 @@ def test_regression_numbervars(fix):
 def test_regression_replicate_str_promotion(fix):
     _, m = fix
     R = Var()
-    assert _first(m, "replicate", 3, "a", R) and deref(R) == "aaa"
+    # A list of CHAR ATOMS is a string, so the result promotes back to one.
+    assert (_first(m, "replicate", 3, char_atom("a"), R)
+            and deref(R) == "aaa")
 
 
 def test_regression_atom_concat_typed_error(fix):
@@ -937,13 +951,13 @@ def test_regression_atom_concat_typed_error(fix):
     instantiation_error."""
     _, m = fix
     with pytest.raises(LogicException):
-        _first(m, "atom_concat", 12, "a", Var())
+        _first(m, "atom_concat", 12, mint("a"), Var())
 
 
 def test_regression_must_be_and_listing_errors(fix):
     _, m = fix
     with pytest.raises(LogicException):
-        _first(m, "must_be", "integer", "x")
+        _first(m, "must_be", mint("integer"), mint("x"))
     with pytest.raises(LogicException):
         _first(m, "listing", 3)
 
@@ -956,7 +970,8 @@ def test_regression_dcg_state_oracle(fix):
     N = Var()
     assert _first(m, "phrase", pymod.count3, [0], [N]) and deref(N) == 3
     N2 = Var()
-    assert _first(m, "num_leaves", ["leaf", ["leaf", "leaf"]], N2)
+    leaf = mint("leaf")
+    assert _first(m, "num_leaves", [leaf, [leaf, leaf]], N2)
     assert deref(N2) == 3
 
 
@@ -970,9 +985,10 @@ def test_regression_statistics_and_gensym(fix):
     _, m = fix
     K = Var()
     keys = _collect(m, K, "statistics", K, Var())
-    assert "wall_time" in keys and "cpu_time" in keys
+    assert mint("wall_time") in keys and mint("cpu_time") in keys
     A = Var()
-    assert _first(m, "gensym", "g", A) and deref(A).startswith("g_")
+    assert (_first(m, "gensym", mint("g"), A)
+            and spelling(deref(A)).startswith("g_"))
 
 
 def test_regression_take_drop_negative(fix):

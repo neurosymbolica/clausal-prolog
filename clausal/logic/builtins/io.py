@@ -6,9 +6,7 @@ from __future__ import annotations
 import sys as _sys
 
 from clausal.logic.atoms import (
-    demangle_for_display,
     is_atom as _term_is_atom,
-    is_mangled,
     spelling,
 )
 from clausal.logic.cells import TUPLE_TAG
@@ -17,6 +15,7 @@ from clausal.terms import (
     term_str as _term_str,
     term_canonical as _term_canonical,
     term_pformat as _term_pformat,
+    quote_string as _quote_string,
     Compound,
     Div,
 )
@@ -31,16 +30,17 @@ from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS
 def _format_term_for_io(val):
     """Format a dereffed value for I/O output.
 
-    Strings pass through as-is (supports f-strings naturally) -- except a
-    mangled (-hide) atom, which substitutes its human ``module.name`` form
-    (P3-1 Task 6, design doc section 1b: "the writer renders the human
-    form"; NOT a round-trip -- the human form re-reads as a different,
-    unmangled term -- display only).  The raw runtime str is untouched;
-    only what reaches write/1, writeln/1, write_to_string/2 changes.
+    A STRING passes through as its text (supports f-strings naturally) --
+    ``write/1`` is the display family, so no quotes.  THE FLIP removed the
+    mangled-atom substitution from this branch: ``-hide`` mangling lives in
+    an ATOM's spelling, and an atom is a cell, so it is the cell branch
+    below (through ``term_str``) that demangles.  A ``str`` cannot carry
+    ``HIDDEN_SEP`` except by the documented out-of-warranty forgery, and the
+    display substitution is not owed to a forgery.
     Other values use str() which auto-derefs Vars via __str__.
     """
     if isinstance(val, str):
-        return demangle_for_display(val) if is_mangled(val) else val
+        return val
     if isinstance(val, list):
         # A LIST -- routed through ``term_str`` for the same reason the cell
         # branch below is: ``str()`` on a list renders each ELEMENT with
@@ -188,12 +188,12 @@ def _format_clause_term(val):
     if isinstance(val, Var):
         return str(val)  # _N format for anonymous vars
     if isinstance(val, str):
-        # P3-1 Task 6: listing/1's own argument formatting does not route
-        # through term_str -- apply the same mangled-atom display
-        # substitution directly (see term_str's str branch for the full
-        # rationale; same display-only, no-round-trip guarantee).
-        display = demangle_for_display(val) if is_mangled(val) else val
-        return repr(display)
+        # A STRING (THE FLIP) -- ``listing/1`` is in the quoted family, so it
+        # prints as a double-quoted string literal, which is how the module
+        # it is listing would have to spell it.  ``repr`` is not that: it
+        # picks quotes by content (``"it\'s"``) and would emit a single-
+        # quoted literal -- an ATOM -- for the common case.
+        return _quote_string(val)
     if isinstance(val, list):
         return "[" + ", ".join(_format_clause_term(e) for e in val) + "]"
     if is_term_instance(val):
@@ -297,6 +297,14 @@ def _as_name_arity_indicator(val):
     if isinstance(name, PredicateMeta):
         pred_cls = name
         name = name.__name__
+    elif _term_is_atom(name):
+        # THE FLIP (spec §6.4): the name half of a predicate indicator is an
+        # ATOM, so ``r30_foo/1`` written in source arrives as the arity-0
+        # cell ``("r30_foo",)``.  A plain ``str`` name is still accepted
+        # below: the engine's own indicator builders (``database_ops.py``'s
+        # ``Compound("/", (functor, arity))``) hold the SPELLING, which is a
+        # ``str`` and always was.
+        name = spelling(name)
     if not isinstance(name, str) or not isinstance(arity, int) or isinstance(arity, bool):
         return None
     if arity < 0:

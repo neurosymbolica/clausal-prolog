@@ -214,8 +214,15 @@ def _normalize_bases(raw_var: str, result_var: str) -> list[ast.stmt]:
 class ASTBuilder:
     """Emit AST stmts that construct other AST nodes at runtime."""
 
-    def __init__(self, sub_names: set[str]):
+    def __init__(self, sub_names: set[str], quote_map: dict | None = None):
         self.sub_names = sub_names
+        # THE FLIP / spec §7: the file's ``(lineno, byte col) -> quote char``
+        # map, threaded in from the EmbedTransformer so the ISO functor rule
+        # (``"foo"(1)`` is refused; ``'foo'(1)`` is the functor sugar) holds
+        # inside a ``@{}`` template body too.  ``None``/empty means "quotes
+        # unknown" — every lookup answers None and the pre-strings behaviour
+        # stands, which is what a programmatically built template gets.
+        self._quote_map = quote_map or {}
         self._counter = 0
         self._stmts: list[ast.stmt] = []
 
@@ -405,6 +412,16 @@ class ASTBuilder:
     def _build_Call(self, node: ast.Call) -> str:
         # String callable: '+'(a, b) → Name(id='+')(a, b)
         if isinstance(node.func, ast.Constant) and isinstance(node.func.value, str):
+            # ISO 6.3.3 (spec §7): a DOUBLE-quoted literal is never a
+            # functor.  Same rule, same message, as the compiler's own
+            # ``_visit_call_func`` — a template body is source too.
+            from .quote_map import quote_of
+            if quote_of(self._quote_map, node.func) == '"':
+                raise SyntaxError(
+                    'a double-quoted literal cannot be a functor: write '
+                    f'\'{node.func.value}\'(...) for the atom, or a bare '
+                    'name.  A "..." literal is a string (ISO 6.3.3).'
+                )
             node = copy.copy(node)
             node.func = ast.copy_location(
                 ast.Name(id=node.func.value, ctx=ast.Load()), node.func)
@@ -422,8 +439,13 @@ class ASTBuilder:
 # Compiler entry points
 # ======================================================================
 
-def compile_template_func(func_node: ast.FunctionDef) -> ast.FunctionDef:
-    """Compile @{} template → function returning list[ast.stmt]."""
+def compile_template_func(func_node: ast.FunctionDef,
+                          quote_map: dict | None = None) -> ast.FunctionDef:
+    """Compile @{} template → function returning list[ast.stmt].
+
+    *quote_map* is the owning file's quote map (``quote_map.py``); it is what
+    lets the ISO functor refusal fire inside the template body.
+    """
     if not is_template_func(func_node):
         raise TemplateCompileError("Not an @{} template function")
 
@@ -431,7 +453,7 @@ def compile_template_func(func_node: ast.FunctionDef) -> ast.FunctionDef:
                                   *func_node.args.args,
                                   *func_node.args.kwonlyargs]}
 
-    builder = ASTBuilder(sub_names)
+    builder = ASTBuilder(sub_names, quote_map)
     builder.build_stmt_list(func_node.body, "_body")
     builder._emit(_expr_stmt(_call(
         _ast_attr("fix_missing_locations"),

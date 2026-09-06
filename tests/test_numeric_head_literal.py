@@ -13,6 +13,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -107,4 +108,4 @@ class TestControlsStillWork:
 
     def test_string_literal_head_query_as_var(self, mod):
         S = Var()
-        assert _collect("elig_dq", [S], "alice", S, module=mod) == [("yes",)]
+        assert _collect("elig_dq", [S], mint("alice"), S, module=mod) == [(mint("yes"),)]

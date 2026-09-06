@@ -452,6 +452,15 @@ def _in_iter(collection, pair_mode):
         # without this arm, pair mode iterated its KEYS, which never unify
         # with the tuple pattern — silent no-solutions.
         return collection.items()
+    if type(collection) is str:
+        # THE FLIP (spec §6.2): a string is the LIST OF ITS CHAR ATOMS, so
+        # ``X in "abc"`` enumerates ``("a",)``, ``("b",)``, ``("c",)`` — the
+        # same elements ``X in [a, b, c]`` enumerates.  Python's own
+        # ``iter(str)`` yields 1-char ``str``s, which are one-element
+        # STRINGS and would make the two spellings of one term enumerate
+        # different things.  ``SegString.__iter__`` answers char atoms for
+        # the same reason.
+        return iter(str_chars(collection))
     return iter(collection)
 
 

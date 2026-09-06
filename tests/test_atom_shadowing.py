@@ -28,6 +28,7 @@ import warnings
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import EmbedTransformer
 from clausal.logic.compiler_v2 import _process_declarations
 
@@ -104,7 +105,7 @@ class TestNoShadowingUnderGlobalAtoms:
             warnings.simplefilter("always")
             module_dict, _ = _run_declarations(source, "_atomshadow_priv")
         assert not caught, [str(w.message) for w in caught]
-        assert module_dict["atomshadow_red"] == "atomshadow_red"
+        assert module_dict["atomshadow_red"] == mint("atomshadow_red")
         assert isinstance(module_dict["atomshadow_red"], str)
 
     def test_atom_in_module_decl_and_imported_share_identity_no_warning(self):
@@ -116,7 +117,7 @@ class TestNoShadowingUnderGlobalAtoms:
             warnings.simplefilter("always")
             module_dict, _ = _run_declarations(source, "_atomshadow_mod")
         assert not caught, [str(w.message) for w in caught]
-        assert module_dict["atomshadow_blue"] == "atomshadow_blue"
+        assert module_dict["atomshadow_blue"] == mint("atomshadow_blue")
 
     def test_alias_import_and_local_decl_share_identity_no_warning(self):
         """``-import_from(M, [alias(Bar, red)])`` + ``-private([red])`` used
@@ -131,4 +132,4 @@ class TestNoShadowingUnderGlobalAtoms:
             warnings.simplefilter("always")
             module_dict, _ = _run_declarations(source, "_atomshadow_alias")
         assert not caught, [str(w.message) for w in caught]
-        assert module_dict["atomshadow_aliased"] == "atomshadow_aliased"
+        assert module_dict["atomshadow_aliased"] == mint("atomshadow_aliased")

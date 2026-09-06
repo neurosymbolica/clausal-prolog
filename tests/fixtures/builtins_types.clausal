@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Tests for type-checking predicates
 #
 # Note: float_ ends with relevant Python name; it can be called as float_ in .clausal

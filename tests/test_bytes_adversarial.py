@@ -6,6 +6,7 @@ file exists so these unhappy paths cannot silently regress. Mirrors the spirit
 of the strings-as-lists adversarial suite (docs/superpowers/audits/
 2026-05-25-string-implementation), applied to the codes model.
 """
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Var, Trail, unify, deref
@@ -88,27 +89,27 @@ class TestBytesTermInspectionBuiltins:
         # nv  — b"abc" =.. ['.', 97, b'bc']
         L = Var()
         assert _collect("unpack", 2, b"abc", L, snap=lambda L=L: deref(L)) == [
-            [".", 97, b"bc"]
+            [mint("."), 97, b"bc"]
         ]
 
     def test_unpack_empty_is_nil(self):
         # nv
         L = Var()
-        assert _collect("unpack", 2, b"", L, snap=lambda L=L: deref(L)) == [["[]"]]
+        assert _collect("unpack", 2, b"", L, snap=lambda L=L: deref(L)) == [[mint("[]")]]
 
     def test_functor_nonempty(self):
         # nv
         F, A = Var(), Var()
         assert _collect(
             "functor", 3, b"abc", F, A, snap=lambda F=F, A=A: (deref(F), deref(A))
-        ) == [(".", 2)]
+        ) == [(mint("."), 2)]
 
     def test_functor_empty_is_nil(self):
         # nv
         F, A = Var(), Var()
         assert _collect(
             "functor", 3, b"", F, A, snap=lambda F=F, A=A: (deref(F), deref(A))
-        ) == [("[]", 0)]
+        ) == [(mint("[]"), 0)]
 
     def test_arg_head_is_int(self):
         # nv  — codes model: head is an int, not a 1-byte bytes
@@ -132,7 +133,7 @@ class TestBytesTermInspectionBuiltins:
             "functor", 3, [97, 98, 99], Fl, Al,
             snap=lambda F=Fl, A=Al: (deref(F), deref(A)),
         )
-        assert s_bytes == s_list == [(".", 2)]
+        assert s_bytes == s_list == [(mint("."), 2)]
 
 
 class TestSegBytesCrossDomainAndEdges:

@@ -18,6 +18,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 
@@ -119,7 +120,7 @@ class TestImportedGroundCallSiteMultiSolution:
         results = sorted(
             str(deref(r)) for _ in call("Multi", r, module=use_mod)
         )
-        assert results == ["one", "two"]
+        assert results == [mint("one"), mint("two")]
 
 
 @pytest.fixture(scope="module")
@@ -166,7 +167,7 @@ class TestImportedJointGroundCallSite:
         results = sorted(
             str(deref(r)) for _ in call("JTwo", r, module=joint_use_mod)
         )
-        assert results == ["one", "two"]
+        assert results == [mint("one"), mint("two")]
 
 
 @pytest.fixture(scope="module")
@@ -187,11 +188,11 @@ class TestImportedCallSiteExceptions:
         from clausal.logic.variables import Var, deref
         r = Var()
         results = [str(deref(r)) for _ in call("CatchIt", r, module=throw_use_mod)]
-        assert results == ["caught"]
+        assert results == [mint("caught")]
 
     def test_non_throwing_bucket_unaffected(self, throw_use_mod):
         # nv
         from clausal.logic.variables import Var, deref
         r = Var()
         results = [str(deref(r)) for _ in call("PassThru", r, module=throw_use_mod)]
-        assert results == ["ok"]
+        assert results == [mint("ok")]

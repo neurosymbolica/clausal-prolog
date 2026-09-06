@@ -13,6 +13,7 @@ import warnings
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 import clausal.logic.compiler_v2 as _compiler_v2
 from clausal.import_hook import _load_module, predicate_builtins, runtime_builtins
@@ -428,7 +429,7 @@ class TestPredicateBuiltinsPoolSplit:
             )
         msg = str(exc_info.value)
         assert "strict_atoms" in msg
-        assert "Mult" in msg
+        assert mint("Mult") in msg
 
     def test_dict_key_path_also_rejects_simple_ast_name(self):
         """``import_hook._make_intern_atom`` (the dict-key path) counterpart:
@@ -469,17 +470,17 @@ class TestPredicateBuiltinsPoolSplit:
 
         v = Var()
         results = [walk(deref(v)) for _ in _call(mod.Result, v)]
-        assert results == [("Call", 1, 2)]
+        assert results == [(mint("Call"), 1, 2)]
         # Locally shadowed to the plain interned spelling (P3-2 Task 2,
         # R6 revised) -- no longer the runtime class in THIS module.
-        assert mod.Call == "Call"
+        assert mod.Call == mint("Call")
         assert mod.Call is not simple_ast.Call
         # ...but never routed through the shared atom pool (Task 2,
         # deliberate) and the runtime pool itself is untouched -- purely a
         # per-module rebinding, so every OTHER module still sees the real
         # simple_ast.Call class under that name.
-        assert "Call" not in predicate_builtins
-        assert runtime_builtins["Call"] is simple_ast.Call
+        assert mint("Call") not in predicate_builtins
+        assert runtime_builtins[mint("Call")] is simple_ast.Call
 
     def test_generated_code_fixture_with_fstrings_and_arith_still_loads(self):
         """Regression: every clause's generated code constructs a bare
@@ -552,7 +553,7 @@ class TestPredicateBuiltinsPoolSplit:
             "-private([Mult])\n"
             "P(Mult),\n",
         )
-        assert predicate_builtins["Mult"] == "Mult"
+        assert predicate_builtins[mint("Mult")] == mint("Mult")
 
         mod = _load_inline_clausal(
             "_p8_seedorder_arith",

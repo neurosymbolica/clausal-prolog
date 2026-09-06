@@ -13,6 +13,7 @@ import warnings
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import (
     EmbedTransformer,
     PredicateLoader,
@@ -230,7 +231,7 @@ class TestV2PipelineEquivalence:
         lm = md["$module"]
         greeting_cls = md.get("greeting")
         assert greeting_cls is not None
-        count = sum(1 for _ in call("greeting", ["hello", "world"], [], module=lm))
+        count = sum(1 for _ in call("greeting", [mint("hello"), mint("world")], [], module=lm))
         assert count >= 1
 
 

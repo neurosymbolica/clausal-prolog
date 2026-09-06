@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Companion tests for docs/builtins.md signature blocks.
 # Validates that documented predicates exist and accept the documented arities.
 
@@ -41,7 +42,7 @@ Test("count_all exists") <- (
 
 Test("current_time exists") <- current_time(_)  # nv
 
-Test("statistics exists") <- statistics("wall_time", _)  # nv
+Test("statistics exists") <- statistics('wall_time', _)  # nv
 
 # ── Higher-Order Call ────────────────────────────────────────────────────────
 
@@ -56,12 +57,13 @@ Test("phrase/2 exists") <- phrase(greet_dcg, ["hi"])  # nv
 # ── Term Inspection ──────────────────────────────────────────────────────────
 
 Test("functor exists") <- (
-    # P3-1 Task 5 (§1b/R2): the str~char-list cons rule is retired -- a
-    # str is now its own atom functor, arity 0 (formerly ISO cons-cell
-    # on str: F089, audit 2026-06-13).
+    # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4): a STRING is the
+    # list of its char atoms, so it decomposes as one -- functor '.'/2,
+    # the ISO cons-cell reading (F089, audit 2026-06-13).  P3-1 Task 5 had
+    # retired that because a str was then an atom.
     functor("hello", NAME, ARITY),
-    NAME == "hello",
-    ARITY == 0
+    NAME is '.',
+    ARITY == 2
 )  # nv
 
 Test("arg exists") <- (
@@ -76,7 +78,7 @@ Test("term_variables exists") <- (
     length(VARS, 2)
 )  # nv
 
-Test("gensym exists") <- gensym("test_", _)  # nv
+Test("gensym exists") <- gensym('test_', _)  # nv
 
 # ── Runtime Database ─────────────────────────────────────────────────────────
 
@@ -322,36 +324,36 @@ Test("drop_while exists") <- (
 # ── Character/String ─────────────────────────────────────────────────────────
 
 Test("char_code exists") <- (
-    char_code("A", C),
+    char_code('A', C),
     C == 65
 )  # nv
 
 Test("upcase_atom exists") <- (
-    upcase_atom("hello", U),
-    U == "HELLO"
+    upcase_atom('hello', U),
+    U is 'HELLO'
 )  # nv
 
 Test("downcase_atom exists") <- (
-    downcase_atom("HELLO", D),
-    D == "hello"
+    downcase_atom('HELLO', D),
+    D is 'hello'
 )  # nv
 
 Test("atom_length exists") <- (
-    atom_length("hello", N),
+    atom_length('hello', N),
     N == 5
 )  # nv
 
 Test("atom_chars exists") <- (
-    atom_chars("hi", CS),
-    CS == ["h", "i"]
+    atom_chars('hi', CS),
+    CS is ['h', 'i']
 )  # nv
 
 Test("atom_concat exists") <- (
-    atom_concat("he", "llo", R),
-    R == "hello"
+    atom_concat('he', 'llo', R),
+    R is 'hello'
 )  # nv
 
-Test("number_chars exists") <- number_chars(42, ["4", "2"])  # nv
+Test("number_chars exists") <- number_chars(42, ['4', '2'])  # nv
 
 # ── I/O ──────────────────────────────────────────────────────────────────────
 

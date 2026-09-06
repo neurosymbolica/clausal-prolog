@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # ISO Prolog conformity: type-checking predicates
 #
 # ISO §8.3 — var/1, nonvar/1, atom/1, integer/1, float/1, number/1,
@@ -54,11 +55,11 @@ Test("nonvar: list succeeds") <- nonvar([1, 2])  # nv
 
 Test("atom: declared atom succeeds") <- atom(Hello)  # nv
 Test("atom: declared atom Abc") <- atom(Abc)  # nv
-# R2 (P3-1 atom pivot, 2026-09-04): atom/1 is true for every str in the
-# current Python surface; ISO conformity is preserved under the future
-# reader surface where double-quoted literals are char lists (R3) —
-# atom(['a','b','c']) remains false.
-Test("atom: string succeeds") <- atom("hello")  # nv
+# THE FLIP (2026-09-06-atoms-as-cells-strings §6.3) restored ISO's answer:
+# a STRING is not an atom.  R2 (the P3-1 pivot) had made atom/1 true for
+# every str because a str WAS an atom; a str is the list of its char atoms
+# now, and this module reads "..." as one (-double_quotes(chars) above).
+Test("atom: string fails") <- (not atom("hello"))  # nv
 Test("atom: char list fails") <- (not atom(["h", "e", "l", "l", "o"]))  # nv
 Test("atom: integer fails") <- (not atom(1))  # nv
 Test("atom: unbound var fails") <- (not atom(_x_UNUSED))  # nv
@@ -67,10 +68,9 @@ Test("atom: unbound var fails") <- (not atom(_x_UNUSED))  # nv
 
 Test("str: plain string succeeds") <- is_str("hello")  # nv
 Test("str: empty string succeeds") <- is_str("")  # nv
-# P3-1 §1b/R2 INVERSION: a declared atom is now an interned global str, so
-# is_str/1 succeeds on it too (pre-pivot ``Hello`` was a zero-field
-# PredicateMeta class and this pinned ``not is_str(Hello)``).
-Test("str: declared atom now succeeds") <- is_str(Hello)  # nv
+# THE FLIP: a declared atom is the arity-0 CELL, not a str, so is_str/1
+# fails on it again — the pre-pivot answer, reached by a different route.
+Test("str: declared atom fails") <- (not is_str(Hello))  # nv
 Test("str: integer fails") <- (not is_str(1))  # nv
 Test("str: unbound var fails") <- (not is_str(_x_UNUSED))  # nv
 Test("str: list fails") <- (not is_str([]))  # nv
@@ -102,12 +102,11 @@ Test("number: var fails") <- (not number(_x_UNUSED))  # nv
 # arity ``PredicateMeta`` atoms (``Hello``) and ``Compound`` terms
 # continue to succeed unchanged.
 
-# P3-1 §1b/R2 INVERSION: a declared atom is now a plain str, not a
-# zero-arity PredicateMeta class, so it falls into the F084 tightened str
-# path — "Hello" is not a registered predicate name, so callable_/1 now
-# fails on it (pre-pivot the class branch made this succeed unconditionally).
-Test("callable: declared atom now fails") <- (not callable_(Hello))  # nv
-Test("callable: registered predicate name") <- callable_("is_bound_number")  # nv
+# THE FLIP (spec §6.3): an ATOM is callable (it names a procedure), and a
+# STRING is not, whatever it spells — F084's "is it a registered predicate
+# name?" test is retired with the representation that motivated it.
+Test("callable: declared atom succeeds") <- callable_(Hello)  # nv
+Test("callable: registered predicate name as a string fails") <- (not callable_("is_bound_number"))  # nv
 Test("callable: arbitrary string fails") <- (not callable_("hello"))  # nv
 Test("callable: int fails") <- (not callable_(42))  # nv
 Test("callable: var fails") <- (not callable_(_x_UNUSED))  # nv
@@ -117,11 +116,9 @@ Test("callable: var fails") <- (not callable_(_x_UNUSED))  # nv
 Test("is_list: list") <- is_list([1, 2, 3])  # nv
 Test("is_list: empty") <- is_list([])  # nv
 Test("is_list: nested") <- is_list([[1], [2]])  # nv
-# P3-1 §1b/R2 INVERSION: a declared atom is now a plain str, and is_list/1
-# has always treated a str as a (character) list (see type_checks.py's
-# is_list docstring), so is_list(Hello) now succeeds (pre-pivot ``Hello``
-# was a zero-field PredicateMeta class, not a str, and this pinned failure).
-Test("is_list: declared atom now a string list") <- is_list(Hello)  # nv
+# THE FLIP: a declared atom is a CELL, not a str, so it is not a list —
+# the pre-pivot answer again.
+Test("is_list: declared atom fails") <- (not is_list(Hello))  # nv
 Test("is_list: int fails") <- (not is_list(42))  # nv
 Test("is_list: var fails") <- (not is_list(_x_UNUSED))  # nv
 

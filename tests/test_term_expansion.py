@@ -19,6 +19,7 @@ import warnings
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import (
     EmbedTransformer,
     _fact_to_predicate_node,
@@ -142,7 +143,7 @@ class TestIdentityExpansion:
         results = []
         for t in call("foo", x, module=lm):
             results.append(deref(x))
-        assert sorted(results) == ["a", "b", "c"]
+        assert sorted(results) == [mint("a"), mint("b"), mint("c")]
 
 
 class TestSuppression:
@@ -221,7 +222,7 @@ class TestOneToMany:
         for trail in call("item", x, module=lm):
             results.append(deref(x))
         # Each item duplicated: x, x, y, y
-        assert sorted(results) == ["x", "x", "y", "y"]
+        assert sorted(results) == [mint("x"), mint("x"), mint("y"), mint("y")]
 
 
 class TestModuleState:
@@ -323,7 +324,7 @@ class TestIntegrationWithCompileModule:
         results = []
         for trail in call("foo", x, module=lm):
             results.append(deref(x))
-        assert sorted(results) == ["a", "b"]
+        assert sorted(results) == [mint("a"), mint("b")]
 
     def test_identity_expansion_full_pipeline(self):
         """Full pipeline with identity TE — all clauses survive."""
@@ -341,7 +342,7 @@ class TestIntegrationWithCompileModule:
         results = []
         for trail in call("bar", x, module=lm):
             results.append(deref(x))
-        assert sorted(results) == ["x", "y"]
+        assert sorted(results) == [mint("x"), mint("y")]
 
     def test_suppression_full_pipeline(self):
         """Full pipeline with suppression TE — no clauses compiled."""
@@ -383,7 +384,7 @@ class TestImportedExpansionRules:
             for t in call("color", x, module=lm):
                 results.append(deref(x))
             # The imported TE rule duplicates each item.
-            assert sorted(results) == ["green", "green", "red", "red"]
+            assert sorted(results) == [mint("green"), mint("green"), mint("red"), mint("red")]
         finally:
             sys.modules.pop("expansion_provider", None)
             sys.modules.pop("_exp_imp", None)
@@ -446,7 +447,7 @@ class TestNewFunctorsFromExpansion:
         for trail in call("color", x, module=lm):
             results.append(deref(x))
         # Each duplicated: red, red, blue, blue
-        assert sorted(results) == ["blue", "blue", "red", "red"]
+        assert sorted(results) == [mint("blue"), mint("blue"), mint("red"), mint("red")]
 
 
 class TestInitFinalInjection:
@@ -521,6 +522,6 @@ class TestNestedVarSubstitution:
         x = Var()
         results = [deref(x) for _ in call("marker", x, module=lm)]
         names = sorted(getattr(r, "__name__", str(r)) for r in results)
-        assert names == ["income", "stays"], (
+        assert names == [mint("income"), mint("stays")], (
             f"matched KEY must flow into the quoted output; got {results!r}"
         )

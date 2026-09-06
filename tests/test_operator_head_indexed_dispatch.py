@@ -30,6 +30,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.compiler.head_match import head_to_match_pattern
 from clausal.logic.solve import solve, _query_cache
@@ -100,7 +101,7 @@ class TestOperatorHeadUnderArgIndexing:
         """The bug: raises NameError '$headlit_<id>' instead of matching."""
         n = Var()
         got = [str(deref(n)) for _ in solve(indexed.Chk(n))]
-        assert got == ["plus_"]
+        assert got == [mint("plus_")]
 
     def test_indexed_agrees_with_unindexed(self, indexed, unindexed):
         a, b = Var(), Var()
@@ -113,12 +114,12 @@ class TestOperatorHeadUnderArgIndexing:
         n = Var()
         goal = indexed.Kind(Mult(left=indexed.p, right=indexed.q), n)
         got = [str(deref(n)) for _ in solve(goal)]
-        assert got == ["times_"]
+        assert got == [mint("times_")]
 
     def test_non_operator_clause_unaffected(self, indexed):
         n = Var()
         got = [str(deref(n)) for _ in solve(indexed.Kind(9, n))]
-        assert got == ["other_"]
+        assert got == [mint("other_")]
 
 
 class TestHeadPatternIgnoresNonSemanticFields:

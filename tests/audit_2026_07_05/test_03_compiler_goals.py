@@ -12,6 +12,7 @@ import inspect
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic import solve as solve_mod
 from clausal.logic.solve import call
@@ -281,7 +282,9 @@ def has_sol(mod, goal):
     return False
 
 
-NAT3 = [["natnum", ["s", ["s", ["s", 0]]]]]
+# The fixture module reads "..." as an ATOM (the engine default), so the
+# goal terms this Python side builds have to name the same atoms.
+NAT3 = [[mint("natnum"), [mint("s"), [mint("s"), [mint("s"), 0]]]]]
 
 
 def _program(mod, source_pred):
@@ -309,20 +312,20 @@ class TestF001TroNondetPrefix:
         """atom_concat(P,Q,"ab") is nondet (3 splits), so TRO is off and all
         three prefix solutions survive.
 
-        P3-1 Task 5 (§1b): ``ACC1 is [P, *ACC]`` compiles through
-        ``_head_list_unify_output`` (construction mode, ACC1 unbound).
-        The P="a" accumulator ``["a"]`` used to be promoted to the str
-        "a" by the (now-source-gated) ``maybe_promote_to_str`` — that
-        promotion fired unconditionally there regardless of whether a
-        str actually contributed. The star position here (``*ACC``) is
-        bound to ``[]`` (a plain LIST, not a str/SegString), so under
-        the ``star_was_str`` gate (list_unify.py, this task) it no
-        longer promotes: all three rows now stay LISTS. (Formerly
-        asserting the P="a" row promoted to the bare str "a".)
+        ``ACC1 is [P, *ACC]`` compiles through
+        ``_head_list_unify_output`` (construction mode, ACC1 unbound), whose
+        tail promotes a list of CHARS back to the compact ``str``.
+
+        THE FLIP (2026-09-06-atoms-as-cells-strings §6.2) DELETED P3-1's
+        ``star_was_str`` gate, so that promotion fires unconditionally
+        again — and correctly: a list of char atoms IS the string, so
+        building the compact representation is not a coercion.  The
+        ``P = a`` row is therefore the string "a" once more; the ``P = ""``
+        and ``P = "ab"`` rows hold a non-char ATOM each and stay lists.
         """
         O = Var()
         assert sorted(sols(mod, mod.tac(1, [], O), O), key=repr) == sorted(
-            [([""],), (["a"],), (["ab"],)], key=repr
+            [([mint("")],), ("a",), ([mint("ab")],)], key=repr
         )
 
     # controls / oracle
@@ -422,17 +425,17 @@ class TestF002DestructiveReuseNondetPrefix:
 class TestF003TroSignalBucketNotGenerator:
     def test_dispatch_to_tro_only_bucket(self, mod):
         O = Var()
-        assert sols(mod, mod.idx(3, O), O) == [("z0",)]
+        assert sols(mod, mod.idx(3, O), O) == [(mint("z0"),)]
 
     def test_keyed_bucket_works(self, mod):
         O = Var()
-        assert sols(mod, mod.idx(0, O), O) == [("z0",)]
+        assert sols(mod, mod.idx(0, O), O) == [(mint("z0"),)]
 
     def test_bucket_with_extra_var_clause_works(self, mod):
         O = Var()
-        assert sols(mod, mod.jdx(3, O), O) == [("z0",)]
+        assert sols(mod, mod.jdx(3, O), O) == [(mint("z0"),)]
         O2 = Var()
-        assert sols(mod, mod.jdx(200, O2), O2) == [("big",)]
+        assert sols(mod, mod.jdx(200, O2), O2) == [(mint("big"),)]
 
     def test_default_bucket_is_generator_function(self, mod):
         """The compiled default-bucket function must be a generator function."""
@@ -455,7 +458,7 @@ class TestF003TroSignalBucketNotGenerator:
         it1 = iter(solve(mod.jdx(3, R1), mod))
         it2 = iter(solve(mod.jdx(7, R2), mod))
         out = [(walk(deref(R1)), walk(deref(R2))) for _ in zip(it1, it2)]
-        assert out == [("z0", "z0")]
+        assert out == [(mint("z0"), mint("z0"))]
 
     def test_tro_check_indices_with_indexing(self, mod):
         O1, O2 = Var(), Var()
@@ -464,7 +467,7 @@ class TestF003TroSignalBucketNotGenerator:
 
     def test_tro_check_indices_keyed_overlap(self, mod):
         O = Var()
-        assert sols(mod, mod.wk5([9], 9, O), O) == [("nine",), (18,)]
+        assert sols(mod, mod.wk5([9], 9, O), O) == [(mint("nine"),), (18,)]
 
 
 # ── A03-F004 — catch never matches declared-functor exception terms ──────────
@@ -473,19 +476,19 @@ class TestF003TroSignalBucketNotGenerator:
 class TestF004CatchFunctorCatcher:
     def test_functor_catcher_direct_throw(self, mod):
         N, R = Var(), Var()
-        assert sols(mod, mod.cfun(N, R), N, R) == [(7, "caught")]
+        assert sols(mod, mod.cfun(N, R), N, R) == [(7, mint("caught"))]
 
     def test_functor_catcher_through_chain(self, mod):
         N, R = Var(), Var()
-        assert sols(mod, mod.cchain(N, R), N, R) == [(5, "caught")]
+        assert sols(mod, mod.cchain(N, R), N, R) == [(5, mint("caught"))]
 
     def test_var_catcher_catches_through_chain(self, mod):
         R = Var()
-        assert sols(mod, mod.cvar(R), R) == [("caught",)]
+        assert sols(mod, mod.cvar(R), R) == [(mint("caught"),)]
 
     def test_string_catcher_catches(self, mod):
         R = Var()
-        assert sols(mod, mod.cstr(R), R) == [("caught",)]
+        assert sols(mod, mod.cstr(R), R) == [(mint("caught"),)]
 
     def test_prebuilt_catcher_via_variable_arg_catches(self, mod):
         """Passing a pre-built catcher TERM through a variable works — the
@@ -497,7 +500,7 @@ class TestF004CatchFunctorCatcher:
         spelling now, so there is no constructor to call.)
         """
         N, R = Var(), Var()
-        assert sols(mod, mod.targ(("kab", N), R), N, R) == [(7, "caught")]
+        assert sols(mod, mod.targ(("kab", N), R), N, R) == [(7, mint("caught"))]
 
     def test_compound_vs_cell_unify_is_the_root_cause(self, mod):
         """A ``Compound`` catcher cannot match the thrown term — the reason
@@ -525,9 +528,9 @@ class TestF004CatchFunctorCatcher:
 
     def test_catch_error_and_catch_recover(self, mod):
         R = Var()
-        assert sols(mod, mod.ce1(R), R) == [("sw",)]
+        assert sols(mod, mod.ce1(R), R) == [(mint("sw"),)]
         R2 = Var()
-        assert sols(mod, mod.cr1(R2), R2) == [("rec",)]
+        assert sols(mod, mod.cr1(R2), R2) == [(mint("rec"),)]
 
     # Spec acceptance (fix-A03-catch-functor-catcher.md): atoms/functors are
     # module-scoped, so a catcher naming an IMPORTED functor must resolve to
@@ -549,7 +552,7 @@ cimp(N, R) <- catch(thrower(7), kex(N), R is "caught")
         imp.write_text(self._F004_CATCH_IMPORTER)
         m = _load_module("a03_f004_catchimp", str(imp))
         N, R = Var(), Var()
-        assert sols(m, m.cimp(N, R), N, R) == [(7, "caught")]
+        assert sols(m, m.cimp(N, R), N, R) == [(7, mint("caught"))]
 
 
 # ── A03-F005 / A03-F006 — setof sort, findall template freshness ─────────────
@@ -635,11 +638,11 @@ class TestF007SpecializationDropsMidBodyGoals:
 class TestF008DeepUnfoldConstantCheck:
     def test_generic_and_shallow_spec_fail(self, mod):
         prog = _program(mod, mod.ConstProg)
-        assert not has_sol(mod, mod.Solve([["g"]], prog))
-        assert not has_sol(mod, mod.ConstShallow([["g"]]))
+        assert not has_sol(mod, mod.Solve([[mint("g")]], prog))
+        assert not has_sol(mod, mod.ConstShallow([[mint("g")]]))
 
     def test_deep_spec_fails_like_generic(self, mod):
-        assert not has_sol(mod, mod.ConstDeep([["g"]]))
+        assert not has_sol(mod, mod.ConstDeep([[mint("g")]]))
 
     # A03-F008 remaining case: var-goal-arg vs const-head-arg. Inlining
     # f(GV) against fact f(1) binds the GOAL-side var GV, but the binding
@@ -648,47 +651,47 @@ class TestF008DeepUnfoldConstantCheck:
     def test_deep_spec_propagates_goal_side_binding(self, mod):
         prog = _program(mod, mod.GvProg)
         V1, V2 = Var(), Var()
-        assert sols(mod, mod.Solve([["gv", V1]], prog), V1) == [(1,)]
-        assert sols(mod, mod.GvDeep([["gv", V2]]), V2) == [(1,)]
+        assert sols(mod, mod.Solve([[mint("gv"), V1]], prog), V1) == [(1,)]
+        assert sols(mod, mod.GvDeep([[mint("gv"), V2]]), V2) == [(1,)]
 
     def test_deep_spec_rejects_conflicting_goal_side_const(self, mod):
         prog = _program(mod, mod.GvProg)
-        assert not has_sol(mod, mod.Solve([["gv", 2]], prog))
-        assert not has_sol(mod, mod.GvDeep([["gv", 2]]))
+        assert not has_sol(mod, mod.Solve([[mint("gv"), 2]], prog))
+        assert not has_sol(mod, mod.GvDeep([[mint("gv"), 2]]))
 
     def test_deep_spec_goal_side_binding_reaches_later_sibling_goal(self, mod):
         prog = _program(mod, mod.GsProg)
         X1, R1, X2, R2 = Var(), Var(), Var(), Var()
-        gen = sols(mod, mod.Solve([["gs", X1, R1]], prog), X1, R1)
-        spec = sols(mod, mod.GsDeep([["gs", X2, R2]]), X2, R2)
-        assert spec == gen == [(1, "ok")]
-        assert not has_sol(mod, mod.GsDeep([["gs", 2, Var()]]))
+        gen = sols(mod, mod.Solve([[mint("gs"), X1, R1]], prog), X1, R1)
+        spec = sols(mod, mod.GsDeep([[mint("gs"), X2, R2]]), X2, R2)
+        assert spec == gen == [(1, mint("ok"))]
+        assert not has_sol(mod, mod.GsDeep([[mint("gs"), 2, Var()]]))
 
 
 class TestF009CpdExtensionChaining:
     def test_plain_cpd_matches_generic(self, mod):
         prog = _program(mod, mod.GraphProg)
         Y1, Y2, Y3 = Var(), Var(), Var()
-        gen = sorted(sols(mod, mod.Solve([["path", "a", Y1]], prog), Y1))
-        spec = sorted(sols(mod, mod.GraphSpec([["path", "a", Y2]]), Y2))
-        cpd = sorted(sols(mod, mod.GraphCPD([["path", "a", Y3]]), Y3))
-        assert spec == gen == [("b",), ("c",), ("d",)]
+        gen = sorted(sols(mod, mod.Solve([[mint("path"), mint("a"), Y1]], prog), Y1))
+        spec = sorted(sols(mod, mod.GraphSpec([[mint("path"), mint("a"), Y2]]), Y2))
+        cpd = sorted(sols(mod, mod.GraphCPD([[mint("path"), mint("a"), Y3]]), Y3))
+        assert spec == gen == [(mint("b"),), (mint("c"),), (mint("d"),)]
         assert cpd == gen
 
     def test_counting_spec_matches_generic(self, mod):
         prog = _program(mod, mod.GraphProg)
         Y1, C1, Y2, C2 = Var(), Var(), Var(), Var()
-        gen = sorted(sols(mod, mod.SolveCount([["path", "a", Y1]], prog, C1), Y1, C1))
-        spec = sorted(sols(mod, mod.CountGraph([["path", "a", Y2]], C2), Y2, C2))
-        assert spec == gen == [("b", 2), ("c", 4), ("d", 4)]
+        gen = sorted(sols(mod, mod.SolveCount([[mint("path"), mint("a"), Y1]], prog, C1), Y1, C1))
+        spec = sorted(sols(mod, mod.CountGraph([[mint("path"), mint("a"), Y2]], C2), Y2, C2))
+        assert spec == gen == [(mint("b"), 2), (mint("c"), 4), (mint("d"), 4)]
 
     def test_cpd_counting_matches_generic(self, mod):
         # A03-F009: deep CPD clauses now telescope the count with exactly one
         # increment per inlined step (single per-level template splice, not a
         # re-chain of the accumulated body), so counts equal the generic MI.
         Y, C = Var(), Var()
-        got = sorted(sols(mod, mod.CountGraphCPD([["path", "a", Y]], C), Y, C))
-        assert got == [("b", 2), ("c", 4), ("d", 4)]
+        got = sorted(sols(mod, mod.CountGraphCPD([[mint("path"), mint("a"), Y]], C), Y, C))
+        assert got == [(mint("b"), 2), (mint("c"), 4), (mint("d"), 4)]
 
     def test_cpd_limit_matches_non_cpd(self, mod):
         # A03-F009: the pre-match chaining path (SolveLimit's ``MAX > 0`` /
@@ -710,13 +713,13 @@ class TestSpecializationRegressionGuards:
     def test_split_style_proof_trees_equal(self, mod):
         prog = _program(mod, mod.GraphProg)
         Y1, T1, Y2, T2 = Var(), Var(), Var(), Var()
-        gen = [str(x) for x in sols(mod, mod.SolveTree([["path", "a", Y1]], prog, T1), Y1, T1)]
-        spec = [str(x) for x in sols(mod, mod.TreeGraph([["path", "a", Y2]], T2), Y2, T2)]
+        gen = [str(x) for x in sols(mod, mod.SolveTree([[mint("path"), mint("a"), Y1]], prog, T1), Y1, T1)]
+        spec = [str(x) for x in sols(mod, mod.TreeGraph([[mint("path"), mint("a"), Y2]], T2), Y2, T2)]
         assert spec == gen
 
     def test_residual_builtin_dispatch(self, mod):
         F = Var()
-        assert sols(mod, mod.FactSpec([["fact", 4, F]]), F) == [(24,)]
+        assert sols(mod, mod.FactSpec([[mint("fact"), 4, F]]), F) == [(24,)]
 
 
 # ── control constructs / ITE / TCO — regression guards ───────────────────────
@@ -725,7 +728,7 @@ class TestSpecializationRegressionGuards:
 class TestControlConstructGuards:
     def test_once_commits_continuation_backtracks(self, mod):
         X, Y = Var(), Var()
-        assert sols(mod, mod.onc(X, Y), X, Y) == [(1, "a"), (1, "b")]
+        assert sols(mod, mod.onc(X, Y), X, Y) == [(1, mint("a")), (1, mint("b"))]
 
     def test_once_failing_goal_fails(self, mod):
         X = Var()
@@ -753,46 +756,46 @@ class TestControlConstructGuards:
 
     def test_freeze_and_when(self, mod):
         X, R = Var(), Var()
-        assert sols(mod, mod.fz(X, R), X, R) == [(1, "fired")]
+        assert sols(mod, mod.fz(X, R), X, R) == [(1, mint("fired"))]
         X2, R2 = Var(), Var()
-        assert sols(mod, mod.wgr(X2, R2), X2, R2) == [(5, "g")]
+        assert sols(mod, mod.wgr(X2, R2), X2, R2) == [(5, mint("g"))]
         WX, WY, R3 = Var(), Var(), Var()
-        assert sols(mod, mod.wand(WX, WY, R3), WX, WY, R3) == [(1, 2, "both")]
+        assert sols(mod, mod.wand(WX, WY, R3), WX, WY, R3) == [(1, 2, mint("both"))]
 
 
 class TestIteGuards:
     def test_undetermined_unify_ite_two_solutions(self, mod):
         X = Var()
-        assert sols(mod, mod.ifu(X), X) == [("then",), ("else",)]
+        assert sols(mod, mod.ifu(X), X) == [(mint("then"),), (mint("else"),)]
 
     def test_nested_undetermined_ite_four_paths(self, mod):
         X, Y = Var(), Var()
         assert sols(mod, mod.ifn(X, Y), X, Y) == [
-            ("t", "t"), ("t", "e"), ("e", "t"), ("e", "e")]
+            (mint("t"), mint("t")), (mint("t"), mint("e")), (mint("e"), mint("t")), (mint("e"), mint("e"))]
 
     def test_fd_reified_ground_and_undetermined(self, mod):
         L1, L2 = Var(), Var()
-        assert sols(mod, mod.clfd(5, L1), L1) == [("pos",)]
-        assert sols(mod, mod.clfd(-2, L2), L2) == [("neg",)]
+        assert sols(mod, mod.clfd(5, L1), L1) == [(mint("pos"),)]
+        assert sols(mod, mod.clfd(-2, L2), L2) == [(mint("neg"),)]
         X, L3 = Var(), Var()
-        assert sorted(sols(mod, mod.clfd(X, L3), L3)) == [("neg",), ("pos",)]
+        assert sorted(sols(mod, mod.clfd(X, L3), L3)) == [(mint("neg"),), (mint("pos"),)]
 
     def test_dif_reified_all_modes(self, mod):
         L1, L2 = Var(), Var()
-        assert sols(mod, mod.cldif(3, L1), L1) == [("eq",)]
-        assert sols(mod, mod.cldif(4, L2), L2) == [("ne",)]
+        assert sols(mod, mod.cldif(3, L1), L1) == [(mint("eq"),)]
+        assert sols(mod, mod.cldif(4, L2), L2) == [(mint("ne"),)]
         X, L3 = Var(), Var()
-        assert sorted(sols(mod, mod.cldif(X, L3), L3)) == [("eq",), ("ne",)]
+        assert sorted(sols(mod, mod.cldif(X, L3), L3)) == [(mint("eq"),), (mint("ne"),)]
 
     def test_general_ite_runs_then_per_condition_solution(self, mod):
         X, R = Var(), Var()
         assert sols(mod, mod.altif(X, R), X, R) == [
-            ("a", "yes"), ("b", "yes"), ("c", "yes")]
+            (mint("a"), mint("yes")), (mint("b"), mint("yes")), (mint("c"), mint("yes"))]
 
     def test_tabled_ite_and_naf(self, mod):
         R1, R2 = Var(), Var()
-        assert sols(mod, mod.CheckPath(2, R1), R1) == [("reachable",)]
-        assert sols(mod, mod.CheckPath(99, R2), R2) == [("unreachable",)]
+        assert sols(mod, mod.CheckPath(2, R1), R1) == [(mint("reachable"),)]
+        assert sols(mod, mod.CheckPath(99, R2), R2) == [(mint("unreachable"),)]
         assert sols(mod, mod.NotPath(2)) == []
         assert sols(mod, mod.NotPath(99)) == [()]
 
@@ -800,13 +803,13 @@ class TestIteGuards:
 class TestContinuationTcoGuards:
     def test_passthrough_wrappers_all_solutions(self, mod):
         X1, X2 = Var(), Var()
-        assert sols(mod, mod.w(X1), X1) == [("a",), ("b",), ("c",)]
-        assert sols(mod, mod.w2(X2), X2) == [("a",), ("b",), ("c",)]
+        assert sols(mod, mod.w(X1), X1) == [(mint("a"),), (mint("b"),), (mint("c"),)]
+        assert sols(mod, mod.w2(X2), X2) == [(mint("a"),), (mint("b"),), (mint("c"),)]
 
     def test_or_arm_tail_calls(self, mod):
         X = Var()
         assert sols(mod, mod.alt(X), X) == [
-            ("a",), ("b",), ("c",), ("a",), ("b",), ("c",)]
+            (mint("a"),), (mint("b"),), (mint("c"),), (mint("a"),), (mint("b"),), (mint("c"),)]
 
     def test_deferred_head_pattern_gates_tco_output_mode(self, mod):
         L = Var()
@@ -814,7 +817,7 @@ class TestContinuationTcoGuards:
 
     def test_tail_call_into_indexed_bucket_ref(self, mod):
         R = Var()
-        assert sols(mod, mod.wk(R), R) == [("a",), ("b",)]
+        assert sols(mod, mod.wk(R), R) == [(mint("a"),), (mint("b"),)]
 
     def test_shallow_trampoline_parity_disjoint_guards(self, mod):
         for days, want in [(30, [(75,)]), (10, [(30,)])]:

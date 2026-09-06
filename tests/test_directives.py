@@ -17,6 +17,7 @@ import ast
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook
 from clausal.import_hook import _load_module
 from clausal.logic.database import Database, Clause
@@ -251,5 +252,5 @@ class TestShallowDirectiveParsing:
         from clausal.logic.solve import call
         mod = _load_fixture("shallow_pred.clausal", "shallow_pred_q")
         logic_mod = mod.__dict__["$module"]
-        results = list(call("Color", "sky", "blue", module=logic_mod))
+        results = list(call("Color", mint("sky"), mint("blue"), module=logic_mod))
         assert len(results) == 1

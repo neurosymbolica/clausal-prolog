@@ -11,6 +11,7 @@ logic lives in ``clausal/tools/doc_snippet_check.py``.
 
 from pathlib import Path
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.tools.doc_snippet_check import (
     check_no_raw_untested_blocks,
     check_no_skip_blocks,

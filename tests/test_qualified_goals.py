@@ -58,6 +58,7 @@ import types
 import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
+from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.database import Module
 from clausal.logic.exceptions import LogicException
@@ -132,7 +133,7 @@ class TestResolveModule:
         with pytest.raises(LogicException) as exc_info:
             resolve_module(name, None)
         inner, _context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", repr(name)))
+        assert inner == Compound("existence_error", (mint("module"), repr(name)))
 
     @pytest.mark.parametrize("designator", [7, 1.5, ("m",), (":",), b"m", None])
     def test_a_non_designator_is_an_existence_error(self, designator):
@@ -140,7 +141,7 @@ class TestResolveModule:
             resolve_module(designator, None)
         inner, _context = _error_term(exc_info.value)
         assert inner == Compound(
-            "existence_error", ("module", repr(designator)))
+            "existence_error", (mint("module"), repr(designator)))
 
     def test_an_unbound_var_designator_is_an_existence_error(self):
         """An unbound Var names no module; it must not bind to one either."""
@@ -168,7 +169,7 @@ class TestResolveModule:
         with pytest.raises(LogicException) as exc_info:
             resolve_module(V, None)
         inner, _context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "7"))
+        assert inner == Compound("existence_error", (mint("module"), "7"))
 
 
 # ── the qualified goal in solve() ──────────────────────────────────────────
@@ -193,7 +194,7 @@ class TestQualifiedCellGoal:
     def test_a_qualified_goal_answers_the_exporters_witness(self, mods):
         W = Var()
         assert [deref(W) for _ in solve((":", EXPORTER, ("home", W)),
-                                        mods.importer)] == ["exporter"]
+                                        mods.importer)] == [mint("exporter")]
 
     def test_a_qualified_goal_needs_no_module_argument(self, mods):
         """The qualification names the module, so ``module=`` is redundant."""
@@ -213,27 +214,33 @@ class TestQualifiedCellGoal:
                               mods.importer))) == 1
 
     def test_a_bare_atom_inner_goal_is_the_zero_arity_cell(self, mods):
-        """``M:k`` with a bare-str ``k`` is ``M:k()`` — the same cell path.
+        """``M:k`` with an ATOM ``k`` is ``M:k()`` — the same cell path.
 
-        A bare ``str`` is an atom (P3-1 §1b/R2) and names a zero-arity
-        predicate, so the qualified form accepts it where the unqualified
-        top-level cell path cannot yet spell it (see
-        todo/bare-zero-arity-predicate-body-goal-does-not-compile).
+        THE FLIP (2026-09-06-atoms-as-cells-strings §6.4): the atom is the
+        arity-0 cell.  A bare ``str`` inner goal was accepted here while a
+        ``str`` was an atom; it is a STRING now, and a string is not
+        callable, so it raises through the same route an unqualified string
+        goal does.
         """
-        assert len(list(solve((":", EXPORTER, "ready"), mods.importer))) == 1
+        assert len(list(solve((":", EXPORTER, mint("ready")),
+                              mods.importer))) == 1
+        with pytest.raises(LogicException) as exc_info:
+            list(solve((":", EXPORTER, "ready"), mods.importer))
+        assert _error_term(exc_info.value)[0] == Compound(
+            "type_error", (mint("callable"), "ready"))
 
     def test_an_unresolvable_module_is_an_existence_error(self, mods):
         with pytest.raises(LogicException) as exc_info:
             list(solve((":", "t6_nope", ("p", Var())), mods.importer))
         inner, context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "'t6_nope'"))
+        assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
         assert "solve/1" in context
 
     def test_a_non_str_module_designator_is_an_existence_error(self, mods):
         with pytest.raises(LogicException) as exc_info:
             list(solve((":", 7, ("p", Var())), mods.importer))
         inner, _context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "7"))
+        assert inner == Compound("existence_error", (mint("module"), "7"))
 
     def test_a_control_construct_under_a_qualification_is_still_refused(
             self, mods):
@@ -242,7 +249,7 @@ class TestQualifiedCellGoal:
             list(solve(cell, mods.importer))
         inner, context = _error_term(exc_info.value)
         assert inner.functor == "type_error"
-        assert inner.args[0] == "callable_control_construct_unsupported"
+        assert inner.args[0] == mint("callable_control_construct_unsupported")
         assert ",/2 is a control construct" in context
 
 
@@ -264,14 +271,14 @@ class TestNestedQualification:
         with pytest.raises(LogicException) as exc_info:
             list(solve(goal, mods.importer))
         inner, _context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "'t6_nope'"))
+        assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
 
     def test_an_unresolvable_inner_module_raises(self, mods):
         goal = (":", EXPORTER, (":", "t6_nope", ("p", Var())))
         with pytest.raises(LogicException) as exc_info:
             list(solve(goal, mods.importer))
         inner, _context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "'t6_nope'"))
+        assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
 
     def test_a_cyclic_qualification_terminates_with_an_error(self, mods):
         """``V`` bound to ``(":", M, V)`` has no innermost goal.  ``unify``
@@ -286,7 +293,7 @@ class TestNestedQualification:
             list(solve(cyclic, mods.importer))
         inner, context = _error_term(exc_info.value)
         assert inner.functor == "existence_error"
-        assert inner.args[0] == "module"
+        assert inner.args[0] == mint("module")
         assert "cyclic" in context
 
     def test_a_qualification_nested_past_the_cap_is_refused(self, mods):
@@ -296,7 +303,7 @@ class TestNestedQualification:
             goal = (":", EXPORTER, goal)
         with pytest.raises(LogicException) as exc_info:
             list(solve(goal, mods.importer))
-        assert _error_term(exc_info.value)[0].args[0] == "module"
+        assert _error_term(exc_info.value)[0].args[0] == mint("module")
 
     def test_a_qualification_at_the_cap_still_answers(self, mods):
         """The bound is a guard, not a new limit on legitimate nesting: the
@@ -357,7 +364,7 @@ class TestSolveModuleDesignator:
         with pytest.raises(LogicException) as exc_info:
             list(solve(("p", Var()), "t6_nope"))
         inner, _context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "'t6_nope'"))
+        assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
 
     def test_an_unqualified_cell_goal_without_a_module_names_the_gap(self):
         """Cells never reach ``_infer_module`` — the gap is reported, not guessed."""
@@ -369,7 +376,7 @@ class TestSolveModuleDesignator:
         # The culprit is the REPR, not the live cell (fix round 1, F4): the
         # cell holds the caller's Var, so a catch/3 pattern unifying with the
         # culprit would alias it.
-        assert inner == Compound("existence_error", ("module", repr(goal)))
+        assert inner == Compound("existence_error", (mint("module"), repr(goal)))
         assert isinstance(inner.args[1], str)
         assert "module=" in context and "qualify" in context
         # ...and unifying with it therefore leaves the user's Var alone.
@@ -404,7 +411,8 @@ class TestQualifiedCallN:
         by_cell = [deref(X) for _ in pcall(
             "CallHost1", (":", EXPORTER, ("p", X)), module=mods.importer)]
         by_atom = [deref(Y) for _ in pcall(
-            "CallHost3", ":", EXPORTER, ("p", Y), module=mods.importer)]
+            "CallHost3", mint(":"), EXPORTER, ("p", Y),
+            module=mods.importer)]
         assert by_cell == by_atom == [11, 12]
 
     def test_call_over_a_qualified_cell_does_not_see_the_callers_predicate(
@@ -429,8 +437,8 @@ class TestQualifiedCallN:
             "CallHost1", (":", EXPORTER, ("libp", X)),
             module=mods.importer)] == [31, 32]
 
-    def test_a_qualified_goal_with_a_bare_atom_inner_goal_runs(self, mods):
-        assert len(list(pcall("CallHost1", (":", EXPORTER, "ready"),
+    def test_a_qualified_goal_with_an_atom_inner_goal_runs(self, mods):
+        assert len(list(pcall("CallHost1", (":", EXPORTER, mint("ready")),
                               module=mods.importer))) == 1
 
     def test_an_unresolvable_module_raises_out_of_call(self, mods):
@@ -438,7 +446,7 @@ class TestQualifiedCallN:
             list(pcall("CallHost1", (":", "t6_nope", ("p", Var())),
                        module=mods.importer))
         inner, context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "'t6_nope'"))
+        assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
         assert "call/1" in context
 
     def test_a_control_construct_under_a_qualification_is_refused_by_call(
@@ -448,7 +456,7 @@ class TestQualifiedCallN:
                        (":", EXPORTER, (",", ("p", 11), ("p", 12))),
                        module=mods.importer))
         inner, _context = _error_term(exc_info.value)
-        assert inner.args[0] == "callable_control_construct_unsupported"
+        assert inner.args[0] == mint("callable_control_construct_unsupported")
 
     def test_a_qualified_goal_naming_nothing_fails_silently(self, mods):
         """The §4.2 contract: a name that resolves to nothing FAILS, and a
@@ -465,7 +473,7 @@ class TestQualifiedCallN:
         silently (P3-3 Task 6 fix round 1, ruling R-A)."""
         X = Var()
         assert [deref(X) for _ in pcall(
-            "CallHost2", (":", EXPORTER, "p"), X,
+            "CallHost2", (":", EXPORTER, mint("p")), X,
             module=mods.importer)] == [11, 12]
         B = Var()
         assert [deref(B) for _ in pcall(
@@ -480,7 +488,7 @@ class TestQualifiedCallN:
             "CallHost2", (":", EXPORTER, ("pair", 11)), X,
             module=mods.importer)]
         by_atom = [deref(Y) for _ in pcall(
-            "CallHost4", ":", EXPORTER, ("pair", 11), Y,
+            "CallHost4", mint(":"), EXPORTER, ("pair", 11), Y,
             module=mods.importer)]
         assert by_cell == by_atom == [12]
 
@@ -488,18 +496,18 @@ class TestQualifiedCallN:
         """Locality holds once the extras have folded, too."""
         X = Var()
         assert [deref(X) for _ in pcall(
-            "CallHost2", (":", EXPORTER, "p"), X,
+            "CallHost2", (":", EXPORTER, mint("p")), X,
             module=mods.importer)] == [11, 12]
         Y = Var()
         assert [deref(Y) for _ in pcall(
-            "CallHost2", "p", Y, module=mods.importer)] == [1, 2]
+            "CallHost2", mint("p"), Y, module=mods.importer)] == [1, 2]
 
     def test_an_unresolvable_module_with_extras_still_raises(self, mods):
         with pytest.raises(LogicException) as exc_info:
-            list(pcall("CallHost2", (":", "t6_nope", "p"), Var(),
+            list(pcall("CallHost2", (":", "t6_nope", mint("p")), Var(),
                        module=mods.importer))
         inner, context = _error_term(exc_info.value)
-        assert inner == Compound("existence_error", ("module", "'t6_nope'"))
+        assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
         assert "call/2" in context
 
 

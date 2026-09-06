@@ -1,3 +1,4 @@
+from clausal.logic.atoms import char_atom, mint
 from clausal.tools.prolog_reader import (
     Clause, DCGRule, Directive, EOF, NEED_MORE, PrologReader, Query, VarRef, read_module,
 )
@@ -13,11 +14,11 @@ class TestBatch:
             "greet --> [hello].\n")
         kinds = [type(i).__name__ for i in items]
         assert kinds == ["Clause", "Clause", "Directive", "Query", "DCGRule"]
-        assert items[0].term == ("foo", "a")
+        assert items[0].term == ("foo", mint("a"))
         assert items[1].term == (":-", ("bar", VarRef(0)), ("foo", VarRef(0)))
         assert items[1].var_names == {0: "X"}
-        assert items[2].term == ("dynamic", ("/", "baz", 1))
-        assert items[4].term == ("-->", "greet", ["hello"])
+        assert items[2].term == ("dynamic", ("/", mint("baz"), 1))
+        assert items[4].term == ("-->", "greet", [mint("hello")])
 
     def test_shared_var_numbering_across_head_and_body(self):
         (item,) = read_module("p(X, Y) :- q(Y, X).\n")
@@ -36,18 +37,18 @@ class TestIncremental:
         assert r.read_term() is NEED_MORE
         r.feed(". bar")
         item = r.read_term()
-        assert isinstance(item, Clause) and item.term == ("foo", "a")
+        assert isinstance(item, Clause) and item.term == ("foo", mint("a"))
         assert r.read_term() is NEED_MORE   # 'bar' could extend / no end yet
         r.feed("(b).")
         r.close()
-        assert r.read_term().term == ("bar", "b")
+        assert r.read_term().term == ("bar", mint("b"))
         assert r.read_term() is EOF
         assert r.read_term() is EOF
 
     def test_op_directive_applies_to_later_items(self):
         src = ":- op(700, xfx, ===).\na === b.\n"
         items = read_module(src)
-        assert items[1].term == ("===", "a", "b")
+        assert items[1].term == ("===", mint("a"), mint("b"))
         # Without the directive, a fresh reader parsing the same item does
         # not parse cleanly -- Task 5's recovery turns that failure into a
         # SyntaxIssue item rather than raising.

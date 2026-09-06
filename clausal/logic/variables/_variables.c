@@ -967,6 +967,33 @@ do_occurs_check(VarObject *var, PyObject *term, int depth)
  * push_attr_var_binding() to defer hook execution.
  * ================================================================ */
 
+/* ── The char atom (atoms-as-cells/strings §6.2) ──────────────────────────
+ *
+ * ``char_atom_from_ucs4(c)`` is the C twin of
+ * ``clausal.logic.atoms.char_atom``: the arity-0 CELL ``("a",)`` whose
+ * spelling is the single character *c*.  New reference.
+ *
+ * ASCII is served from a 128-entry cache built at module init, so the
+ * str↔list unification arms below allocate nothing for ordinary text; a
+ * non-ASCII character packs a fresh cell.  The cache is bounded and
+ * process-lived by construction (128 entries, one per ASCII codepoint) —
+ * it is NOT the process-wide atom table §5.2 rules out, which would have
+ * grown with every enumerated spelling.
+ */
+static PyObject *g_ascii_char_atoms[128] = {NULL};
+
+static PyObject *
+char_atom_from_ucs4(Py_UCS4 c)
+{
+    if (c < 128 && g_ascii_char_atoms[c] != NULL)
+        return Py_NewRef(g_ascii_char_atoms[c]);
+    PyObject *spelling = PyUnicode_FromOrdinal((int)c);
+    if (!spelling) return NULL;
+    PyObject *cell = PyTuple_Pack(1, spelling);
+    Py_DECREF(spelling);
+    return cell;
+}
+
 /* Interned "__unify__", set in PyInit__variables before any unify runs. */
 static PyObject *str_dunder_unify = NULL;
 
@@ -1165,18 +1192,81 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         }
     }
 
-    /* ---- String ↔ List unification: RETIRED (P3-1 §1b) ----
-     * A Python str no longer unifies with a list of single-character
-     * strings ("abc" vs ['a','b','c']) in either direction. Per §1b,
-     * str unifies with str by equality; lists unify with lists. A str
-     * that needs list-shaped char-by-char unification is expressed as an
-     * explicit SegString (clausal/terms.py) or an explicit char list.
-     * str-vs-list now falls to the __unify__-protocol probe just below
-     * (str has no __unify__, so it declines) and then hits the
-     * "either side is a list/tuple with no match" guard, which returns 0 —
-     * it never reaches PyObject_RichCompareBool (str == list is always
-     * False in Python anyway, so the observable result is identical).
+    /* ---- String ↔ List unification (atoms-as-cells/strings §6.2) ----
+     * A str DENOTES the list of its char atoms, so the two spellings of
+     * one term unify: "abc" with [("a",), ("b",), ("c",)], and "" with [].
+     * P3-1 §1b had retired this arm because a char was then a 1-char str
+     * and the rule made an atom indistinguishable from a one-element
+     * list; a char is a CELL now, and the rule is sound again.
+     *
+     * Modelled on the bytes↔list arms below: a Var element binds to the
+     * char atom; an element that is already a char atom compares code
+     * points with no allocation; anything else (a SegString, a custom
+     * term with __unify__) delegates to do_unify against the char atom.
+     *
+     * A 1-char str on the other side does NOT match a char atom — ``("a",)
+     * = "a"`` stays FALSE via the mixed list/tuple guard further down,
+     * because "a" is the one-element LIST [("a",)], not the char.
      */
+    if (PyUnicode_Check(t1) && PyList_Check(t2)) {
+        Py_ssize_t n = PyUnicode_GET_LENGTH(t1);
+        if (n != PyList_GET_SIZE(t2)) return 0;
+        if (n == 0) return 1;
+        int kind = PyUnicode_KIND(t1);
+        const void *data = PyUnicode_DATA(t1);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            Py_UCS4 c1 = PyUnicode_READ(kind, data, i);
+            PyObject *elem_raw = PyList_GetItemRef(t2, i);
+            if (elem_raw == NULL) return -1;
+            PyObject *elem = var_deref(elem_raw);
+            if (!Var_Check(elem) && PyTuple_CheckExact(elem)
+                    && PyTuple_GET_SIZE(elem) == 1
+                    && PyUnicode_Check(PyTuple_GET_ITEM(elem, 0))
+                    && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(elem, 0)) == 1) {
+                Py_UCS4 c2 = PyUnicode_READ_CHAR(PyTuple_GET_ITEM(elem, 0), 0);
+                Py_DECREF(elem_raw);
+                if (c1 != c2) return 0;
+            } else {
+                PyObject *a = char_atom_from_ucs4(c1);
+                if (!a) { Py_DECREF(elem_raw); return -1; }
+                int r = do_unify(a, elem, trail, depth + 1, oc);
+                Py_DECREF(a);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
+            }
+        }
+        return 1;
+    }
+    if (PyList_Check(t1) && PyUnicode_Check(t2)) {
+        /* Symmetric: list on left, str on right. */
+        Py_ssize_t n = PyUnicode_GET_LENGTH(t2);
+        if (PyList_GET_SIZE(t1) != n) return 0;
+        if (n == 0) return 1;
+        int kind = PyUnicode_KIND(t2);
+        const void *data = PyUnicode_DATA(t2);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            Py_UCS4 c2 = PyUnicode_READ(kind, data, i);
+            PyObject *elem_raw = PyList_GetItemRef(t1, i);
+            if (elem_raw == NULL) return -1;
+            PyObject *elem = var_deref(elem_raw);
+            if (!Var_Check(elem) && PyTuple_CheckExact(elem)
+                    && PyTuple_GET_SIZE(elem) == 1
+                    && PyUnicode_Check(PyTuple_GET_ITEM(elem, 0))
+                    && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(elem, 0)) == 1) {
+                Py_UCS4 c1 = PyUnicode_READ_CHAR(PyTuple_GET_ITEM(elem, 0), 0);
+                Py_DECREF(elem_raw);
+                if (c1 != c2) return 0;
+            } else {
+                PyObject *a = char_atom_from_ucs4(c2);
+                if (!a) { Py_DECREF(elem_raw); return -1; }
+                int r = do_unify(elem, a, trail, depth + 1, oc);
+                Py_DECREF(a);
+                Py_DECREF(elem_raw);
+                if (r != 1) return r;
+            }
+        }
+        return 1;
+    }
 
     /* ---- Bytes ↔ List unification (codes model) ----
      * Treat a Python bytes as a list of ints in [0, 255]:
@@ -3575,6 +3665,16 @@ PyInit__variables(void)
     /* Interned before any unify can run — do_unify's hook probe uses it. */
     str_dunder_unify = PyUnicode_InternFromString("__unify__");
     if (!str_dunder_unify) return NULL;
+
+    /* The ASCII char-atom cache the str↔list unification arms read. */
+    for (int i = 0; i < 128; i++) {
+        PyObject *spelling = PyUnicode_FromOrdinal(i);
+        if (!spelling) return NULL;
+        PyUnicode_InternInPlace(&spelling);
+        g_ascii_char_atoms[i] = PyTuple_Pack(1, spelling);
+        Py_DECREF(spelling);
+        if (!g_ascii_char_atoms[i]) return NULL;
+    }
 
     /* Interned before any walk can run — do_walk's fast-path gate uses it. */
     str__clausal_new = PyUnicode_InternFromString("_clausal_new");

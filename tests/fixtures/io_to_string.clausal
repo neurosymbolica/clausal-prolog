@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # write_to_string/2 and term_to_string/2 behavior tests.
 #
 # These observe the *string output* of write_to_string / term_to_string via
@@ -31,9 +32,12 @@ Test("term_to_string: integer") <- (
     S == "42"
 )  # nv
 
+# THE FLIP (spec §6.7): the quoted writer family spells a STRING with
+# DOUBLE quotes (a single-quoted token is an atom), so the rendering of
+# "hello" is the six-character text "hello" wrapped in quotes.
 Test("term_to_string: string gets quoted") <- (
     term_to_string("hello", S),
-    S == "'hello'"
+    S is ['"', 'h', 'e', 'l', 'l', 'o', '"']
 )  # nv
 
 Test("term_to_string: list") <- (

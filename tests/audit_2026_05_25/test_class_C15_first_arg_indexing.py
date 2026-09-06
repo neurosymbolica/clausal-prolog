@@ -86,14 +86,14 @@ TestPred(['a', 'b', 'c']),
     # (list_dispatch.py) now also skips lifting a ground list literal, for
     # exactly this reason — see that function's docstring for the full
     # trace. Fixed: todo/done/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md.
-    n_str_caller = sum(1 for _ in call("TestPred", "abc", module=mod))
+    n_str_caller = sum(1 for _ in call("TestPred", mint("abc"), module=mod))
     assert n_str_caller == 1, (
         f"TestPred('abc') returned {n_str_caller} solutions; expected 1 "
         f"(same-type str-headed clause only; §1b/R8: a str no longer "
         f"reaches a list-headed clause)."
     )
 
-    n_list_caller = sum(1 for _ in call("TestPred", ["a", "b", "c"], module=mod))
+    n_list_caller = sum(1 for _ in call("TestPred", [mint("a"), mint("b"), mint("c")], module=mod))
     assert n_list_caller == 1, (
         f"TestPred(['a','b','c']) returned {n_list_caller} solutions; "
         f"expected 1 (same-type list-headed clause only; §1b/R8: a list "

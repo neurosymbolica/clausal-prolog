@@ -1,3 +1,4 @@
+from clausal.logic.atoms import char_atom, mint
 from clausal.tools.prolog_ast import PAtom, PCompound, PList, PString, PVar
 from clausal.tools.prolog_parser import parse_term
 from clausal.tools.prolog_reader import VarRef, transform_term
@@ -9,30 +10,30 @@ def tt(src):
 
 class TestCells:
     def test_atoms_numbers(self):
-        assert tt("foo")[0] == "foo"
+        assert tt(mint("foo"))[0] == mint("foo")
         assert tt("'b ar'")[0] == "b ar"
         assert tt("42")[0] == 42
         assert tt("1.5")[0] == 1.5
 
     def test_compound_and_nesting(self):
         cell, spans, vn = tt("f(a, g(1), X)")
-        assert cell == ("f", "a", ("g", 1), VarRef(0))
+        assert cell == ("f", mint("a"), ("g", 1), VarRef(0))
         assert vn == {0: "X"}
 
     def test_proper_list_is_python_list(self):
-        assert tt("[a, 1, [b]]")[0] == ["a", 1, ["b"]]
+        assert tt("[a, 1, [b]]")[0] == [mint("a"), 1, [mint("b")]]
 
     def test_partial_list_is_cons_cells(self):
         cell, _, vn = tt("[a, b | T]")
-        assert cell == (".", "a", (".", "b", VarRef(0)))
+        assert cell == (".", mint("a"), (".", mint("b"), VarRef(0)))
         assert vn == {0: "T"}
 
     def test_double_quoted_is_char_list(self):
-        assert tt('"ab"')[0] == ["a", "b"]
+        assert tt('"ab"')[0] == [mint("a"), mint("b")]
         assert tt('""')[0] == []
 
     def test_curly(self):
-        assert tt("{a, b}")[0] == ("{}", (",", "a", "b"))
+        assert tt("{a, b}")[0] == ("{}", (",", mint("a"), mint("b")))
 
     def test_var_numbering_first_occurrence_and_anon(self):
         cell, _, vn = tt("f(X, Y, X, _, _)")
@@ -60,7 +61,7 @@ class TestSpanTrees:
 
     def test_charlist_is_leaf_span(self):
         cell, spans, _ = tt('"ab"')
-        assert cell == ["a", "b"] and spans == (0, 4)
+        assert cell == [mint("a"), "b"] and spans == (0, 4)
 
     def test_partial_list_span_outermost_covers_bracket(self):
         # [a, b | T]: the OUTERMOST cons node's span is the PList node's
@@ -72,7 +73,7 @@ class TestSpanTrees:
         # anything that wants "the span of this list term" (e.g. a
         # diagnostic pointing at `[a, b | T]` as a whole).
         cell, spans, vn = tt("[a, b | T]")
-        assert cell == (".", "a", (".", "b", VarRef(0)))
+        assert cell == (".", mint("a"), (".", "b", VarRef(0)))
         assert vn == {0: "T"}
         outer, a_span, inner = spans
         assert outer == (0, 10)          # the whole `[a, b | T]`
@@ -88,7 +89,7 @@ class TestExtra:
         cell, spans, vn = tt('f(g(h([X, "ab" | T])))')
         assert cell == (
             "f",
-            ("g", ("h", (".", VarRef(0), (".", ["a", "b"], VarRef(1))))),
+            ("g", ("h", (".", VarRef(0), (".", [mint("a"), "b"], VarRef(1))))),
         )
         assert vn == {0: "X", 1: "T"}
         # span tree mirrors the cell shape
@@ -97,9 +98,9 @@ class TestExtra:
 
     def test_none_span_pnode_emits_placeholder(self):
         # Hand-built P-tree with no spans (span=None everywhere) must not crash.
-        term = PCompound("f", (PAtom("a"), PVar("X")))
+        term = PCompound("f", (PAtom(mint("a")), PVar("X")))
         cell, spans, vn = transform_term(term)
-        assert cell == ("f", "a", VarRef(0))
+        assert cell == ("f", mint("a"), VarRef(0))
         assert spans == ((-1, -1), (-1, -1), (-1, -1))
         assert vn == {0: "X"}
 

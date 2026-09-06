@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import os
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import PredicateMeta
@@ -91,7 +92,7 @@ class TestFunctorReExport:
 
         # The whole point: goals over the re-exported functor find the kit's
         # facts rather than silently finding nothing.
-        assert _solutions(downstream.check, 2) == [("a", "x"), ("b", "y")]
+        assert _solutions(downstream.check, 2) == [(mint("a"), mint("x")), ("b", mint("y"))]
 
     def test_intermediate_clause_uses_reexported_functor(self):
         _kit = _load_fixture("functor_reexport_vocab")
@@ -99,4 +100,4 @@ class TestFunctorReExport:
 
         # A clause in the intermediate module that uses the imported functor
         # also resolves to the kit's class.
-        assert _solutions(queries.my_query, 1) == [("x",), ("y",)]
+        assert _solutions(queries.my_query, 1) == [(mint("x"),), (mint("y"),)]

@@ -57,6 +57,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
@@ -99,12 +100,12 @@ class TestExporterClausesSurvive:
     def test_the_exporters_clauses_are_untouched_after_the_refusal(self):
         owner = _load_fixture("impclob_owner")
         assert sorted(_solutions(owner.impclob_colour, 1)) == [
-            ("green",), ("red",)]
+            (mint("green"),), (mint("red"),)]
         with pytest.raises(SyntaxError):
             _load_fixture("impclob_redefine")
         # The whole point: the refusal must fire before anything is mutated.
         assert sorted(_solutions(owner.impclob_colour, 1)) == [
-            ("green",), ("red",)]
+            (mint("green"),), (mint("red"),)]
 
     def test_the_refusal_says_what_to_do_instead(self):
         _load_fixture("impclob_owner")
@@ -131,7 +132,7 @@ class TestExporterClausesSurvive:
         assert "impclob_owner" in msg
         # And, as ever, nothing was mutated on the way to the refusal.
         assert sorted(_solutions(owner.impclob_colour, 1)) == [
-            ("green",), ("red",)]
+            (mint("green"),), (mint("red"),)]
 
 
 class TestTheDiagnosticAttributesClausesCorrectly:
@@ -166,7 +167,7 @@ class TestTheDiagnosticAttributesClausesCorrectly:
         use = _load_fixture("impclob_implements")
         with pytest.raises(SyntaxError):
             _load_fixture("impclob_implements_rival")
-        assert _solutions(use.impclob_check, 1) == [("ok",)]
+        assert _solutions(use.impclob_check, 1) == [(mint("ok"),)]
 
 
 class TestDeclarationOnlyExporterStillWorks:
@@ -176,7 +177,7 @@ class TestDeclarationOnlyExporterStillWorks:
         vocab = _load_fixture("impclob_decl_vocab")
         use = _load_fixture("impclob_implements")
         assert use.impclob_verdict is vocab.impclob_verdict
-        assert _solutions(use.impclob_check, 1) == [("ok",)]
+        assert _solutions(use.impclob_check, 1) == [(mint("ok"),)]
 
     def test_reloading_the_implementer_is_idempotent(self):
         """A module's own clauses must not count as "someone else's" on a
@@ -184,7 +185,7 @@ class TestDeclarationOnlyExporterStillWorks:
         _load_fixture("impclob_decl_vocab")
         _load_fixture("impclob_implements")
         use = _load_fixture("impclob_implements")  # again
-        assert _solutions(use.impclob_check, 1) == [("ok",)]
+        assert _solutions(use.impclob_check, 1) == [(mint("ok"),)]
         assert len(use.impclob_verdict._clauses) == 1
 
 
@@ -202,8 +203,8 @@ class TestOneFileLoadedTwiceUnderTwoNames:
         _load_fixture("impclob_decl_vocab")
         a = _load_fixture("impclob_implements", as_name="_impclob_probe_a")
         b = _load_fixture("impclob_implements", as_name="_impclob_probe_b")
-        assert _solutions(a.impclob_check, 1) == [("ok",)]
-        assert _solutions(b.impclob_check, 1) == [("ok",)]
+        assert _solutions(a.impclob_check, 1) == [(mint("ok"),)]
+        assert _solutions(b.impclob_check, 1) == [(mint("ok"),)]
 
     def test_the_atom_vocabulary_shape_survives_both_load_routes(self):
         """``impord_atom_then_pred`` is the live corpus shape: import a
@@ -243,14 +244,14 @@ class TestOneFileLoadedTwiceUnderTwoNames:
                 (walk(deref(k)), walk(deref(v)))
                 for _ in call("impord_qd", k, v, module=lm)
             )
-            assert results == [("a", 1), ("b", 2)]
+            assert results == [(mint("a"), 1), (mint("b"), 2)]
 
             k2, v2 = Var(), Var()
             lookup = sorted(
                 (walk(deref(k2)), walk(deref(v2)))
                 for _ in call("impord_atp_lookup", k2, v2, module=lm)
             )
-            assert lookup == [("a", 1), ("b", 2)]
+            assert lookup == [(mint("a"), 1), (mint("b"), 2)]
 
 
 class TestRuntimeAssertzIsAlreadySafe:
@@ -270,4 +271,4 @@ class TestRuntimeAssertzIsAlreadySafe:
             next(solve(az.go(Var())), None)
         assert "permission_error" in str(exc_info.value)
         assert sorted(_solutions(owner.impclob_colour, 1)) == [
-            ("green",), ("red",)]
+            (mint("green"),), (mint("red"),)]

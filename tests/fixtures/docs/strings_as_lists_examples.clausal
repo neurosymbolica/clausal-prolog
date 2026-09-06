@@ -1,25 +1,22 @@
+-double_quotes(chars)
 # Doc snippet fixtures for docs/strings_as_lists.md
 
 # --8<-- [start:unification]
-# P3-1 Task 5 (§1b/R2): the str~char-list cons rule is RETIRED. A bare
-# str no longer unifies with a char-list LITERAL via a direct body
-# ``is``/unify (no star) -- str unifies with str by equality, lists
-# with lists. See todo/docs-strings-as-lists-md-stale-after-cons-rule-
-# retirement-2026-09-04.md for the docs/strings_as_lists.md prose
-# rewrite this implies (Task 8 close-out scope). The three tests below
-# now pin the RETIRED behaviour (formerly asserting the str/char-list
-# equivalence). Star-containing / head-position patterns are UNAFFECTED
-# — see the pattern_matching section below, which still works.
-Test("string no longer equals char list") <- (not ("abc" is ["a", "b", "c"]))  # nv
-Test("with vars no longer unifies") <- (not ("abc" is [X_UNUSED, Y_UNUSED, Z_UNUSED]))  # nv
-Test("partial no longer unifies") <- (not ("hello" is ["h", "e", X_UNUSED, Y_UNUSED, "o"]))  # nv
+# THE FLIP (2026-09-06-atoms-as-cells-strings §6.2): a string IS the list
+# of its char atoms, so it unifies with that list — the rule P3-1 Task 5
+# retired (because a str was then an ATOM, and an atom is not a list) is
+# back, and the doc these snippets illustrate is true again.  This module
+# reads "..." as a string (-double_quotes(chars) above); the list elements
+# are char atoms, which is what a string's elements are.
+Test("string equals its char list") <- ("abc" is ['a', 'b', 'c'])  # nv
+Test("with vars unifies") <- ("abc" is [X_UNUSED, Y_UNUSED, Z_UNUSED])  # nv
+Test("partial unifies") <- ("hello" is ['h', 'e', X_UNUSED, Y_UNUSED, 'o'])  # nv
 # --8<-- [end:unification]
 
 # --8<-- [start:empty_string]
-# P3-1 Task 5 (§1b): empty str and empty list are DIFFERENT types now too
-# — no cross-type exception for the empty case (formerly asserting they
-# unified).
-Test("empty no longer unifies") <- (not ("" is []))  # nv
+# THE FLIP: "" and [] are one term again (spec §5.1) — the empty string is
+# the empty list.
+Test("empty unifies") <- ("" is [])  # nv
 # --8<-- [end:empty_string]
 
 # --8<-- [start:pattern_matching]
@@ -29,7 +26,9 @@ contains([*_, X, *_], X),
 
 Test("prefix") <- starts_with("hello", "hel")  # nv
 Test("suffix") <- ends_with("hello", "lo")  # nv
-Test("contains l") <- contains("hello", "l")  # nv
+# ``contains(S, X)`` picks one ELEMENT out of the sequence, and an element
+# of a string is a CHAR ATOM — ``'l'``, not the one-element string "l".
+Test("contains l") <- contains("hello", 'l')  # nv
 # --8<-- [end:pattern_matching]
 
 # --8<-- [start:append_examples]
@@ -43,10 +42,10 @@ Test("length") <- length("hello", 5)  # nv
 # --8<-- [end:length_example]
 
 # --8<-- [start:member_examples]
-Test("member") <- in_("e", "hello")  # nv
+Test("member") <- in_('e', "hello")  # nv
 Test("enumerate") <- (
     findall(C, in_(C, "abc"), CHARS),
-    CHARS == ["a", "b", "c"]
+    CHARS is ['a', 'b', 'c']
 )  # nv
 # --8<-- [end:member_examples]
 
@@ -61,7 +60,7 @@ Test("split") <- split_at(3, "hello", "hel", "lo")  # nv
 # --8<-- [end:take_drop_split]
 
 # --8<-- [start:list_item_example]
-Test("index") <- (list_item(1, "hello", C), C == "e")  # nv
+Test("index") <- (list_item(1, "hello", C), C is 'e')  # nv
 # --8<-- [end:list_item_example]
 
 # --8<-- [start:type_checking]

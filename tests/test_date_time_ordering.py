@@ -12,6 +12,7 @@ from fractions import Fraction
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.clpfd import (
     fd_lt, fd_le, fd_gt, fd_ge, _incomparable_order_error,
@@ -62,7 +63,7 @@ def _assert_orderable_error(exc_info, context):
     assert term.functor == "error"
     inner = term.args[0]
     assert inner.functor == "type_error"
-    assert inner.args[0] == "orderable"
+    assert inner.args[0] == mint("orderable")
     assert term.args[1] == context
 
 
@@ -336,7 +337,7 @@ class TestHelper:
         assert isinstance(exc, LogicException)
         assert exc.term.functor == "error"
         assert exc.term.args[0].functor == "type_error"
-        assert exc.term.args[0].args[0] == "orderable"
+        assert exc.term.args[0].args[0] == mint("orderable")
         assert exc.term.args[0].args[1] == culprit
         assert exc.term.args[1] == "(<)/2"
 

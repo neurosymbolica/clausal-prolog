@@ -13,6 +13,7 @@ the deleted str↔list cons-rule block).
 """
 
 import pytest
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, unify, deref, is_var
 
 
@@ -325,7 +326,7 @@ class TestSegListStringUnification:
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
         assert unify(sl, "hello", trail)
-        assert deref(X) == "h"
+        assert deref(X) == mint("h")
         assert deref(T) == "ello"
 
     def test_prefix_suffix(self):
@@ -366,13 +367,13 @@ class TestSegListStringUnification:
     def test_full_concrete_match(self):
         """['h', 'i'] matches 'hi'."""
         # nv
-        sl = SegList([ConcreteSeg(["h", "i"])])
+        sl = SegList([ConcreteSeg([mint("h"), "i"])])
         assert unify(sl, "hi", Trail())
 
     def test_full_concrete_mismatch(self):
         """['h', 'i'] does NOT match 'ho'."""
         # nv
-        sl = SegList([ConcreteSeg(["h", "i"])])
+        sl = SegList([ConcreteSeg([mint("h"), "i"])])
         assert not unify(sl, "ho", Trail())
 
     def test_concrete_length_mismatch(self):
@@ -426,7 +427,7 @@ class TestSegListStringUnification:
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
         assert unify(sl, "日本語", trail)
-        assert deref(X) == "日"
+        assert deref(X) == mint("日")
         assert deref(T) == "本語"
 
     def test_symmetric_string_seglist(self):
@@ -437,7 +438,7 @@ class TestSegListStringUnification:
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
         # SegList is on the right, string on the left — C tries t2.__unify__(t1)
         assert unify("hello", sl, trail)
-        assert deref(X) == "h"
+        assert deref(X) == mint("h")
         assert deref(T) == "ello"
 
 

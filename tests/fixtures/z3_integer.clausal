@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Z3 integer constraint tests — exercises z3.integer, z3.label, z3.check,
 # z3.all_different, z3.maximize, z3.minimize, z3.optimize_label via the
 # full Clausal compiler and runtime.

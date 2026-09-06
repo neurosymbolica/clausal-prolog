@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # Tests for keyword-term introspection predicates: vary/3, extend/3, unbound_keys/2, signature/3
 
 # vary/3 — copy a term with field overrides

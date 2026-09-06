@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_to_clausal import prolog_to_clausal
 

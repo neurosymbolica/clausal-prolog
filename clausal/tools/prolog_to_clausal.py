@@ -37,6 +37,10 @@ from clausal.tools.prolog_dialect import (
     BUILTIN_NAME_MAP,
 )
 from clausal.tools.prolog_parser import parse
+# The two quoted-token writers (spec §6.7): an ATOM is single-quoted, a
+# STRING is double-quoted, and which one a literal gets is the whole
+# difference between the two terms after THE FLIP.
+from clausal.terms import quote_atom as _quote_atom, quote_string as _quote_string
 
 
 __all__ = [
@@ -261,6 +265,13 @@ class _PrologToClausal:
         self._dialect = dialect
         self._user_ops = operator_mappings or {}
         self._data_atoms: set[str] = set()  # atoms used as data values
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §7): a Prolog
+        # ``"..."`` is a STRING and is emitted as a double-quoted literal,
+        # which only MEANS a string under ``-double_quotes(chars)``.  The
+        # module emitter writes that directive iff at least one string was
+        # emitted, so a translated module that has no strings keeps the
+        # engine default and no directive it does not need.
+        self._emitted_string = False
         # Per-clause variable rename table (reset in _emit_item). Prolog var
         # names are scoped per clause; prolog_var_to_clausal is non-injective
         # (Foo and FOO both → _foo), so without disambiguation a satisfiable
@@ -295,6 +306,10 @@ class _PrologToClausal:
         body = "\n\n".join(lines) + "\n"
         # Prepend auto-generated directives.
         preamble_parts: list[str] = []
+        # FIRST, above every other directive: it is position-sensitive and
+        # governs the literals below it.
+        if self._emitted_string:
+            preamble_parts.append("-double_quotes(chars)")
         if "prolog." in body:
             preamble_parts.append("-import_module(prolog)")
         if "math." in body:
@@ -614,7 +629,10 @@ class _PrologToClausal:
                 return repr(term.value)
             return str(term.value)
         if isinstance(term, PString):
-            return repr(term.value)
+            # A STRING (THE FLIP): double-quoted, and the module carries
+            # ``-double_quotes(chars)`` so it re-reads as one.
+            self._emitted_string = True
+            return _quote_string(term.value)
         if isinstance(term, PList):
             return self._emit_list(term)
         if isinstance(term, PCurly):
@@ -669,7 +687,13 @@ class _PrologToClausal:
         # become a variable/predicate reference. Emit a Python string literal
         # instead (F025).
         if getattr(atom, "quoted", False) or not _is_plain_atom_name(name):
-            return repr(name)
+            # SINGLE quotes (THE FLIP, spec §7): ``'...'`` is an atom in
+            # every mode, which is what this atom must stay.  ``repr`` is
+            # not usable — it picks its quotes by content, so an atom whose
+            # spelling holds an apostrophe would come out DOUBLE-quoted and,
+            # under the ``-double_quotes(chars)`` header this emitter may
+            # write, would re-read as a string.
+            return _quote_atom(name)
         # Register as a data atom (will be declared via -private).
         self._data_atoms.add(name)
         return name

@@ -13,6 +13,7 @@ from clausal.logic.builtins.higher_order import (
     _take_while__3, _drop_while__3, _span__4,
     _group_by__3, _sort_by__3, _max_by__3, _min_by__3, _filter_map__3,
 )
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.variables import Var, Trail, deref, unify
@@ -194,15 +195,17 @@ class TestZip:
 
 class TestReplicate:
     def test_basic(self):
-        # nv — F053 (C9 audit, option A): replicating a 1-char str
-        # produces a str (input-type-wins, str is lossless when every
-        # element is a 1-char str).
-        assert run_trampoline_var(_replicate__3, 3, "x") == ["xxx"]
+        # nv — F053 (C9 audit, option A): replicating a CHAR produces a str
+        # (a list of char atoms IS a string, so the compact representation
+        # is the right one to build).  THE FLIP
+        # (2026-09-06-atoms-as-cells-strings): the element has to be the
+        # char ATOM; a 1-char ``str`` is a one-element STRING and a list of
+        # those is a list of strings, which does not promote.
+        assert run_trampoline_var(_replicate__3, 3, char_atom("x")) == ["xxx"]
 
     def test_zero(self):
-        # nv — F053 (C9 audit, option A): zero copies of a 1-char str
-        # is the empty str, matching the str-shaped output rule.
-        assert run_trampoline_var(_replicate__3, 0, "x") == [""]
+        # nv — F053: zero copies is the empty list, which is the empty str.
+        assert run_trampoline_var(_replicate__3, 0, char_atom("x")) == [""]
 
     def test_one(self):
         # nv
@@ -441,5 +444,6 @@ class TestListUtilFixture:
         "filter_map none pass",
     ])
     def test_fixture(self, name):
-        # nv
-        assert _succeeds("Test", name, module=self.mod)
+        # nv — the fixture keeps the engine-default ``-double_quotes(atom)``
+        # mode, so a ``Test("...")`` description is an ATOM (THE FLIP).
+        assert _succeeds("Test", mint(name), module=self.mod)

@@ -133,14 +133,15 @@ class TestFunctorNameFallback:
         # nv
         assert _functor_name_py(42) == _functor_name(42)
 
-    def test_string_nonempty_is_its_own_atom_functor(self):
-        # nv — P3-1 §1b/R2: the C str~char-list cons rule is RETIRED. A
-        # str is now always an atom (runtime str = atom), so a non-empty
-        # str is its own functor name (arity 0), exactly like any other
-        # atomic constant — NOT the ISO cons-cell "." reading this test
-        # pinned pre-pivot (formerly ``test_string_nonempty_cons_cell``,
-        # asserting ``_functor_name_py("hello") == "."``).
-        assert _functor_name_py("hello") == _functor_name("hello") == "hello"
+    def test_string_nonempty_is_a_cons_cell(self):
+        # nv
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) reversed
+        # P3-1's retirement: a str is a STRING now — the list of its
+        # char atoms — so it decomposes as that list does.  The funnel
+        # WRAPPER answers; the pre-cell ``_py`` twin still carries the
+        # retired atom reading and is no longer reached for a str.
+        assert _functor_name("hello") == "."
+        assert _functor_name_py("hello") == "hello"
 
     def test_string_empty_nil(self):
         # nv
@@ -171,10 +172,15 @@ class TestArityFallback:
         # nv
         assert _arity_py(Atom) == _arity(Atom) == 0
 
-    def test_string_nonempty_is_arity_zero(self):
-        # nv — P3-1 §1b/R2: cons-rule retirement — a non-empty str is
-        # atomic (arity 0), not a "."/2 cons cell (arity 2).
-        assert _arity_py("hello") == _arity("hello") == 0
+    def test_string_nonempty_is_arity_two(self):
+        # nv
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) reversed
+        # P3-1's retirement: a str is a STRING now — the list of its
+        # char atoms — so it decomposes as that list does.  The funnel
+        # WRAPPER answers; the pre-cell ``_py`` twin still carries the
+        # retired atom reading and is no longer reached for a str.
+        assert _arity("hello") == 2
+        assert _arity_py("hello") == 0
 
     def test_string_empty_is_arity_zero(self):
         # nv — unaffected by the retirement (empty str was already 0).
@@ -201,14 +207,19 @@ class TestNthArgFallback:
         with pytest.raises(IndexError):
             _nth_arg(c, 5)
 
-    def test_string_has_no_args(self):
-        # nv — P3-1 §1b/R2: cons-rule retirement — a non-empty str is
-        # atomic (arity 0), so even index 1 (formerly the cons-cell
-        # head) now raises IndexError, matching any other atom.
+    def test_string_args_are_head_char_and_str_tail(self):
+        # nv
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) reversed
+        # P3-1's retirement: a str is a STRING now — the list of its
+        # char atoms — so it decomposes as that list does.  The funnel
+        # WRAPPER answers; the pre-cell ``_py`` twin still carries the
+        # retired atom reading and is no longer reached for a str.
+        assert _nth_arg("hello", 1) == char_atom("h")
+        assert _nth_arg("hello", 2) == "ello"
+        with pytest.raises(IndexError):
+            _nth_arg("hello", 3)
         with pytest.raises(IndexError):
             _nth_arg_py("hello", 1)
-        with pytest.raises(IndexError):
-            _nth_arg("hello", 1)
 
 
 class TestArgsListFallback:
@@ -227,11 +238,15 @@ class TestArgsListFallback:
         # nv
         assert _args_list_py(42) == _args_list(42) == []
 
-    def test_string_nonempty_has_no_args(self):
-        # nv — P3-1 §1b/R2: cons-rule retirement — a non-empty str is
-        # atomic, so its args list is empty (formerly ``["h", "ello"]``
-        # under the ISO cons-cell reading).
-        assert _args_list_py("hello") == _args_list("hello") == []
+    def test_string_nonempty_args_are_head_and_tail(self):
+        # nv
+        # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) reversed
+        # P3-1's retirement: a str is a STRING now — the list of its
+        # char atoms — so it decomposes as that list does.  The funnel
+        # WRAPPER answers; the pre-cell ``_py`` twin still carries the
+        # retired atom reading and is no longer reached for a str.
+        assert _args_list("hello") == [char_atom("h"), "ello"]
+        assert _args_list_py("hello") == []
 
 
 class TestIsCompoundFallback:
@@ -1128,8 +1143,9 @@ class TestListUnifyCharTwinParity:
         assert outs[0] == "ab"
         assert len(set(outs)) == 1, f"twins disagree: {outs}"
 
-    def test_a_list_of_chars_star_is_not_promoted(self):
-        """``["a", "b"]`` is a LIST of chars, not a string — no promotion."""
+    def test_a_list_of_chars_star_is_promoted(self):
+        """``[a, b]`` IS the string "ab" — THE FLIP deleted the
+        ``star_was_str`` gate, so both twins build the compact form."""
         # nv
         outs = []
         for impl in _OUTPUT_TWINS:
@@ -1138,9 +1154,8 @@ class TestListUnifyCharTwinParity:
             unify(star, [char_atom("a"), char_atom("b")], trail)
             assert impl(target, [], star, [], trail) is True
             got = deref(target)
-            assert isinstance(got, list) and len(got) == 2
-            assert all(is_char_atom(c) for c in got)
-            outs.append("".join(_spelling(c) for c in got))
+            assert got == "ab"
+            outs.append(got)
         assert outs == ["ab"] * len(_OUTPUT_TWINS)
 
     def test_two_char_strs_beside_a_str_star_are_not_promoted(self):

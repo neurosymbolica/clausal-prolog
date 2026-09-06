@@ -2,6 +2,7 @@
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.predicate import PredicateMeta, _MISSING
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var, is_var
@@ -527,42 +528,42 @@ class TestMakeAtom:
     def test_returns_the_atom_str(self):
         # nv
         from clausal.logic.predicate import make_atom
-        a = make_atom("a")
-        assert type(a) is str
-        assert a == "a"
+        a = make_atom(mint("a"))
+        assert type(a) == str
+        assert a == mint("a")
         assert not isinstance(a, PredicateMeta)
 
     def test_repeated_calls_agree(self):
         """Same spelling, same atom — identity, since the atom IS the str."""
         # nv
         from clausal.logic.predicate import make_atom
-        assert make_atom("a") is make_atom("a")
+        assert make_atom(mint("a")) == make_atom(mint("a"))
 
     def test_hashable(self):
         # nv
         from clausal.logic.predicate import make_atom
-        a = make_atom("a")
+        a = make_atom(mint("a"))
         d = {a: 42}
-        assert d["a"] == 42
+        assert d[mint("a")] == 42
 
     def test_unify(self):
         # nv
         from clausal.logic.predicate import make_atom
         from clausal.logic.variables import Trail, unify, deref
-        a = make_atom("a")
+        a = make_atom(mint("a"))
         b = make_atom("b")
         trail = Trail()
         x = Var()
         assert unify(x, a, trail)
-        assert deref(x) == "a"
+        assert deref(x) == mint("a")
         assert not unify(a, b, trail)
 
     def test_zero_arity_predicate_class_comes_from_make_predicate(self):
         """The behaviour ``make_atom`` used to provide, at its new address."""
         # nv
         from clausal.logic.predicate import make_predicate
-        a = make_predicate("a", [])
+        a = make_predicate(mint("a"), [])
         assert isinstance(a, PredicateMeta)
         assert a._fields == ()
         assert a._arity == 0
-        assert a() is a
+        assert a() == a

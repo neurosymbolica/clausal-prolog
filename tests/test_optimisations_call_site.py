@@ -7,6 +7,7 @@ Same three-property contract as E1 and E2.  Correctness coverage
 
 from __future__ import annotations
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var
 from clausal.terms import Compound, Call, LoadName

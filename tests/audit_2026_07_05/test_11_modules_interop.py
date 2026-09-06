@@ -18,6 +18,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal import Var, solve
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
@@ -108,7 +109,7 @@ def test_F003_user_defined_match_not_hijacked(tmp_path):
         Caller(X) <- match("hello", X)
     ''', "f003")
     X = Var()
-    assert _values(m.Caller(X), X, m) == ["hello"]
+    assert _values(m.Caller(X), X, m) == [mint("hello")]
 
 
 def test_F004_invalid_pattern_catchable(tmp_path):
@@ -145,7 +146,7 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
     assert isinstance(term, Compound) and term.functor == "error"
     inner = term.args[0]
     assert inner.functor == "existence_error"
-    assert inner.args[0] == "procedure"
+    assert inner.args[0] == mint("procedure")
     assert inner.args[1] == Compound("/", ("match", 4))
 
 
@@ -917,7 +918,7 @@ def test_F059_docs_quickstart_import_line(tmp_path):
         HuBad(R) <- (has_units(5(m), s), R is "never")
     ''', "f059")  # must not raise ImportError
     r = Var()
-    assert [deref(r) for _ in call("Hu", r, module=_logic(mod))] == ["yes"]
+    assert [deref(r) for _ in call("Hu", r, module=_logic(mod))] == [mint("yes")]
     r2 = Var()
     assert [deref(r2) for _ in call("HuBad", r2, module=_logic(mod))] == []
 
@@ -930,4 +931,4 @@ def test_guard_units_mismatch_catchable(tmp_path):
     ''', "unitsm")
     r = Var()
     out = [str(deref(r)) for _ in call("T", r, module=_logic(mod))]
-    assert out == ["caught"]
+    assert out == [mint("caught")]

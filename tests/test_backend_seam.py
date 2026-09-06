@@ -25,6 +25,7 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.import_hook import _load_module
 from clausal.logic.database import Database
 from clausal.logic.exceptions import LogicException
@@ -133,8 +134,8 @@ class TestBakeInReadsTheRow:
         mod = _load_module(
             "_t4_bakein_answers", os.path.join(FIXTURES, "family.clausal"))
         who = Var()
-        got = sorted(deref(who) for _ in call(mod.Ancestor, "tom", who))
-        assert got == ["ann", "bob", "liz", "pat"]
+        got = sorted(deref(who) for _ in call(mod.Ancestor, mint("tom"), who))
+        assert got == [mint("ann"), mint("bob"), mint("liz"), mint("pat")]
 
 
 # ── The backend seam ───────────────────────────────────────────────────────
@@ -228,7 +229,7 @@ class TestBackendSeam:
         assert term.functor == "error"
         inner = term.args[0]
         assert inner.functor == "existence_error"
-        assert inner.args[0] == "backend"
+        assert inner.args[0] == mint("backend")
         assert inner.args[1] == "no-such-backend"
         assert "no-such-backend" in str(exc.value)
         assert "p/1" in str(exc.value)
@@ -250,5 +251,5 @@ class TestBackendSeam:
         assert sorted(baseline.__dict__["$module"].db._clauses) == sorted(
             db._clauses)
         who = Var()
-        assert sorted(deref(who) for _ in call(with_seam.Ancestor, "tom", who)) \
-            == ["ann", "bob", "liz", "pat"]
+        assert sorted(deref(who) for _ in call(with_seam.Ancestor, mint("tom"), who)) \
+            == [mint("ann"), mint("bob"), mint("liz"), mint("pat")]

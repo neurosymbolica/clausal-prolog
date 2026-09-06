@@ -28,6 +28,7 @@ import warnings
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
@@ -427,7 +428,7 @@ class TestStrAtomAcceptance:
 
     def test_atom_true_for_plain_str(self):
         mod = _atoms_mod("tsaa_atom_str")
-        assert _succeeds("atom", "red", mod=mod)
+        assert _succeeds("atom", mint("red"), mod=mod)
 
     def test_atom_true_for_empty_str(self):
         # The empty str is still a str, hence still an atom value under R2
@@ -435,7 +436,7 @@ class TestStrAtomAcceptance:
         # cons-cell reading, a different accessor family; see functor_arity
         # tests below).
         mod = _atoms_mod("tsaa_atom_empty")
-        assert _succeeds("atom", "", mod=mod)
+        assert _succeeds("atom", mint(""), mod=mod)
 
     def test_atom_still_true_for_zero_field_class(self):
         # Transitional dual-accept: the class route keeps working until
@@ -455,14 +456,14 @@ class TestStrAtomAcceptance:
         # Already-true behavior (F082) -- pinned here alongside atom/1 per
         # the task brief.
         mod = _atoms_mod("tsaa_atomic_str")
-        assert _succeeds("atomic", "red", mod=mod)
+        assert _succeeds("atomic", mint("red"), mod=mod)
 
     def test_string_still_true_for_plain_str(self):
         # R2: atom/1 and string/1 end up co-extensional for strings; both
         # must be true for the same str.
         mod = _atoms_mod("tsaa_string_str")
-        assert _succeeds("string", "red", mod=mod)
-        assert _succeeds("atom", "red", mod=mod)
+        assert _succeeds("string", mint("red"), mod=mod)
+        assert _succeeds("atom", mint("red"), mod=mod)
 
 
 class TestIsAtomValueHelper:
@@ -545,19 +546,19 @@ class TestAtomCharsRoundTrip:
     def test_atom_chars_atom_to_chars(self):
         mod = _atoms_mod("tacrt_a2c")
         out = Var()
-        results = [deref(out) for _ in call("atom_chars", "ab", out, module=mod)]
-        assert results == [["a", "b"]]
+        results = [deref(out) for _ in call("atom_chars", mint("ab"), out, module=mod)]
+        assert results == [[mint("a"), mint("b")]]
 
     def test_atom_chars_chars_to_atom(self):
         mod = _atoms_mod("tacrt_c2a")
         out = Var()
-        results = [deref(out) for _ in call("atom_chars", out, ["a", "b"], module=mod)]
-        assert results == ["ab"]
+        results = [deref(out) for _ in call("atom_chars", out, [mint("a"), mint("b")], module=mod)]
+        assert results == [mint("ab")]
 
     def test_atom_codes_round_trip(self):
         mod = _atoms_mod("tacrt_codes")
         out = Var()
-        results = [deref(out) for _ in call("atom_codes", "ab", out, module=mod)]
+        results = [deref(out) for _ in call("atom_codes", mint("ab"), out, module=mod)]
         assert results == [[97, 98]]
 
 
@@ -606,10 +607,10 @@ def test_declared_atoms_unify_across_module_and_private():
     vals_b = [deref(out_b) for _ in call("TagFromPrivateDecl", out_b, module=lm_b)]
     assert len(vals_a) == 1 and len(vals_b) == 1
     val_a, val_b = vals_a[0], vals_b[0]
-    assert val_a == "atompivot_cross_tag"
-    assert val_b == "atompivot_cross_tag"
+    assert val_a == mint("atompivot_cross_tag")
+    assert val_b == mint("atompivot_cross_tag")
     # Not just equal -- the SAME interned object, and they actually unify.
-    assert val_a is val_b
+    assert val_a == val_b
     trail = Trail()
     assert unify(val_a, val_b, trail)
 
@@ -629,7 +630,7 @@ def test_bare_atom_arrives_as_plain_str_at_python_seam():
     results = [deref(out) for _ in call("Seam", out, module=lm)]
     assert len(results) == 1
     val = results[0]
-    assert val == "atompivot_seam_red"
+    assert val == mint("atompivot_seam_red")
     assert type(val) is str
 
 

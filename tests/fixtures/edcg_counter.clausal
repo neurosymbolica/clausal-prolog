@@ -1,3 +1,4 @@
+-double_quotes(chars)
 # EDCG counter example: multiple accumulators, passed arguments
 #
 # Demonstrates: counter accumulator, list accumulator, passed scale factor

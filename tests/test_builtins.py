@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref
@@ -135,9 +136,9 @@ class TestFunctor:
         # nv
         mod = fresh_module()
         f, a = Var(), Var()
-        goal = Call(func=LoadName(name="functor"), args=[Compound("foo", (1, 2)), f, a], kwargs=[])
+        goal = Call(func=LoadName(name="functor"), args=[Compound(mint("foo"), (1, 2)), f, a], kwargs=[])
         results = sol_var(goal, f, mod=mod)
-        assert results == ["foo"]
+        assert results == [mint("foo")]
         results_a = sol_var(goal, a, mod=mod)
         assert results_a == [2]
 
@@ -159,7 +160,7 @@ class TestFunctor:
         mod = fresh_module()
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=["", f, a], kwargs=[])
-        assert sol_var(goal, f, mod=mod) == ["[]"]
+        assert sol_var(goal, f, mod=mod) == [mint("[]")]
         assert sol_var(goal, a, mod=mod) == [0]
 
     def test_decompose_integer(self):
@@ -212,7 +213,7 @@ class TestFunctor:
 
         f, a = Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=[point(x=1, y=2), f, a], kwargs=[])
-        assert sol_var(goal, f, mod=mod) == ["point"]
+        assert sol_var(goal, f, mod=mod) == [mint("point")]
         assert sol_var(goal, a, mod=mod) == [2]
 
 
@@ -299,9 +300,9 @@ class TestUniv:
         # nv
         mod = fresh_module()
         lst = Var()
-        goal = Call(func=LoadName(name="unpack"), args=[Compound("f", (1, 2)), lst], kwargs=[])
+        goal = Call(func=LoadName(name="unpack"), args=[Compound(mint("f"), (1, 2)), lst], kwargs=[])
         results = sol_var(goal, lst, mod=mod)
-        assert results == [["f", 1, 2]]
+        assert results == [[mint("f"), 1, 2]]
 
     def test_construct(self):
         # nv
@@ -333,7 +334,7 @@ class TestUniv:
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=[[1, 2, 3], lst], kwargs=[])
-        assert sol_var(goal, lst, mod=mod) == [[".", 1, [2, 3]]]
+        assert sol_var(goal, lst, mod=mod) == [[mint("."), 1, [2, 3]]]
 
     def test_decompose_empty_list_nil(self):
         # nv
@@ -342,7 +343,7 @@ class TestUniv:
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=[[], lst], kwargs=[])
-        assert sol_var(goal, lst, mod=mod) == [["[]"]]
+        assert sol_var(goal, lst, mod=mod) == [[mint("[]")]]
 
     def test_decompose_empty_str_nil(self):
         # nv
@@ -350,7 +351,7 @@ class TestUniv:
         mod = fresh_module()
         lst = Var()
         goal = Call(func=LoadName(name="unpack"), args=["", lst], kwargs=[])
-        assert sol_var(goal, lst, mod=mod) == [["[]"]]
+        assert sol_var(goal, lst, mod=mod) == [[mint("[]")]]
 
 
 
@@ -582,7 +583,7 @@ class TestBetweenArithmeticBounds:
         err = exc.value.term
         assert err.functor == "error"
         assert err.args[0].functor == "type_error"
-        assert err.args[0].args[0] == "integer"
+        assert err.args[0].args[0] == mint("integer")
 
     def test_ground_non_numeric_expression_raises_type_error(self):
         """An arith term over non-numeric ground leaves cannot evaluate:
@@ -594,7 +595,7 @@ class TestBetweenArithmeticBounds:
             sol_var(self._between(0, Add(left="a", right="b"), x), x)
         err = exc.value.term
         assert err.args[0].functor == "type_error"
-        assert err.args[0].args[0] == "integer"
+        assert err.args[0].args[0] == mint("integer")
 
     @pytest.mark.parametrize("shape", ["var_first", "garbage_first"])
     def test_unbound_var_mixed_with_garbage_still_raises(self, shape):
@@ -623,7 +624,7 @@ class TestBetweenArithmeticBounds:
             sol_var(self._between(0, FloorDiv(left=1, right=0), x), x)
         err = exc.value.term
         assert err.args[0].functor == "type_error"
-        assert err.args[0].args[0] == "integer"
+        assert err.args[0].args[0] == mint("integer")
         assert "between/3" in str(err)
 
     def test_expression_with_unbound_leaf_keeps_mode_failure(self):

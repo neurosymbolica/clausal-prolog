@@ -2,6 +2,7 @@
 sequence protocol, concat, and __repr__."""
 
 import pytest
+from clausal.logic.atoms import char_atom, mint
 from clausal.terms import ConcreteSeg, VarSeg, SegList, _multi_star_splits, _seglist_unify_gen
 from clausal.logic.variables import Var, Trail, walk, unify
 

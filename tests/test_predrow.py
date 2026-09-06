@@ -11,6 +11,7 @@ COHERENCE between the row facade and that legacy state, in both directions.
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Clause, Database, PredRow, WriteStamp
 from clausal.terms import Compound
 
@@ -874,13 +875,13 @@ def test_predicate_functor_names_says_data_and_the_database_agrees(
     module, db, names = _load_pfn_module(
         tmp_path, monkeypatch, "pfn_sync_data", _PFN_SOURCE
     )
-    assert "pfn_point" not in names
-    assert db.row("pfn_point", 2) is None
-    assert not [k for k in db._clauses if k[0] == "pfn_point"]
+    assert mint("pfn_point") not in names
+    assert db.row(mint("pfn_point"), 2) is None
+    assert not [k for k in db._clauses if k[0] == mint("pfn_point")]
     # ... and the binding shape that answer produced is the interned spelling,
     # which is what makes ``pfn_point(0, 0)`` compile to a cell.
-    assert getattr(module, "pfn_point") == "pfn_point"
-    assert not isinstance(getattr(module, "pfn_point"), PredicateMeta)
+    assert getattr(module, mint("pfn_point")) == mint("pfn_point")
+    assert not isinstance(getattr(module, mint("pfn_point")), PredicateMeta)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

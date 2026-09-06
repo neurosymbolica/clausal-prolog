@@ -1,6 +1,7 @@
 """Tests for Phase 5: higher-order predicates accept strings."""
 
 import pytest
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.import_hook import _load_module
@@ -136,7 +137,7 @@ class TestPartitionString:
     def test_partition_vowels(self, mod):
         # nv
         Y, N = Var(), Var()
-        for _ in call("partition", mod.module_dict["is_vowel"], "hello", Y, N, module=mod):
+        for _ in call("partition", mod.module_dict["is_vowel"], mint("hello"), Y, N, module=mod):
             assert deref(Y) == "eo"
             assert deref(N) == "hll"
 
@@ -176,6 +177,6 @@ class TestSpanString:
     def test_span_vowels(self, mod):
         # nv
         Y, N = Var(), Var()
-        for _ in call("span", mod.module_dict["is_vowel"], "aeibc", Y, N, module=mod):
+        for _ in call("span", mod.module_dict["is_vowel"], mint("aeibc"), Y, N, module=mod):
             assert deref(Y) == "aei"
             assert deref(N) == "bc"

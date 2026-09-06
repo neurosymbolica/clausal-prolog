@@ -22,6 +22,7 @@ from unittest.mock import patch
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 import clausal.import_hook
 from clausal.import_hook import PredicateLoader, _load_module
 from clausal.logic.compiler import compile_predicate_trampoline
@@ -185,7 +186,7 @@ class TestCachedCorrectness:
         lm2 = mod2.__dict__["$module"]
         results2 = _query_greet(lm2)
 
-        assert results1 == results2 == ["hello", "world"]
+        assert results1 == results2 == [mint("hello"), mint("world")]
 
     def test_rules_from_cache(self, tmp_path):
         """Rules (head <- body) work from cache."""
@@ -236,7 +237,7 @@ class TestDynamicAfterCache:
             # Query initial state.
             v = Var()
             results = [deref(v) for _ in call("color", v, module=lm)]
-            assert results == ["red"]
+            assert results == [mint("red")]
 
             # Runtime assertz — dynamic should still work.
             color_cls = mod.__dict__["color"]

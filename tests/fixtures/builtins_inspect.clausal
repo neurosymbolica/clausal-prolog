@@ -27,7 +27,12 @@ ListToTerm(LIST, TERM) <- unpack(TERM, LIST)
 #   arg(2, [a,b,c], X)      → X=[b,c]         (cons-cell tail, list unaffected)
 #   unpack("foo", L)        → L=["foo"]       (str is its own atom, was [".","f","oo"])
 Test("functor str is its own atom") <- (GetFunctor("hello", FUNCTOR, ARITY), FUNCTOR == "hello", ARITY == 0)  # nv
-Test("functor empty str nil") <- (GetFunctor("", FUNCTOR, ARITY), FUNCTOR == "[]", ARITY == 0)  # nv
+# THE FLIP: "" is the ATOM with the empty spelling in this (default
+# ``-double_quotes(atom)``) module, and an atom is its own functor at
+# arity 0.  The empty STRING, which decomposes as the empty list does, is
+# spelled [] here.
+Test("functor empty atom") <- (GetFunctor("", FUNCTOR, ARITY), FUNCTOR is "", ARITY == 0)  # nv
+Test("functor empty list nil") <- (GetFunctor([], FUNCTOR2, ARITY2), FUNCTOR2 is '[]', ARITY2 == 0)  # nv
 Test("functor number") <- (GetFunctor(42, FUNCTOR, ARITY), FUNCTOR == 42, ARITY == 0)  # nv A09-F027: constant is its own functor name
 Test("arg list head") <- (FirstArg([10, 20, 30], ARG), ARG == 10)  # nv
 Test("arg list tail") <- (SecondArg([10, 20, 30], ARG), ARG == [20, 30])  # nv

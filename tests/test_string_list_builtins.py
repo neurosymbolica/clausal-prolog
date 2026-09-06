@@ -6,6 +6,7 @@ the result is returned as a string.
 """
 
 import pytest
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.import_hook import _load_module
@@ -46,11 +47,11 @@ class TestInString:
     def test_enumerate_chars(self, mod):
         # nv
         V = Var()
-        assert _collect(V, "in_", V, "abc", module=mod) == ["a", "b", "c"]
+        assert _collect(V, "in_", V, "abc", module=mod) == [mint("a"), mint("b"), mint("c")]
 
     def test_member_check(self, mod):
         # nv
-        assert _first("in_", "b", "abc", module=mod)
+        assert _first("in_", mint("b"), "abc", module=mod)
 
     def test_member_miss(self, mod):
         # nv
@@ -107,7 +108,7 @@ class TestAppendString:
             pairs.append((deref(X), deref(Y)))
         assert pairs == [
             ("", "abc"),
-            ("a", "bc"),
+            (mint("a"), "bc"),
             ("ab", "c"),
             ("abc", ""),
         ]
@@ -117,7 +118,7 @@ class TestAppendString:
         # nv
         X = Var()
         r = _collect(X, "append", "ab", [1, 2], X, module=mod)
-        assert r == [["a", "b", 1, 2]]
+        assert r == [[mint("a"), mint("b"), 1, 2]]
 
     def test_empty_strings(self, mod):
         # nv
@@ -174,7 +175,7 @@ class TestLastString:
     def test_last_char(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "last", "hello", X, module=mod) == ["o"]
+        assert _collect(X, "last", "hello", X, module=mod) == [mint("o")]
 
     def test_empty_fails(self, mod):
         # nv
@@ -189,7 +190,7 @@ class TestListItemString:
     def test_index(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "list_item", 1, "hello", X, module=mod) == ["e"]
+        assert _collect(X, "list_item", 1, "hello", X, module=mod) == [mint("e")]
 
     def test_enumerate(self, mod):
         # nv
@@ -197,7 +198,7 @@ class TestListItemString:
         pairs = []
         for _ in call("list_item", N, "ab", E, module=mod):
             pairs.append((deref(N), deref(E)))
-        assert pairs == [(0, "a"), (1, "b")]
+        assert pairs == [(0, mint("a")), (1, mint("b"))]
 
 
 # ── take/3, drop/3, split_at/4 ─────────────────────────────────────────────
@@ -277,9 +278,9 @@ class TestSelectString:
         for _ in call("select", E, "abc", R, module=mod):
             pairs.append((deref(E), deref(R)))
         assert pairs == [
-            ("a", "bc"),
+            (mint("a"), "bc"),
             ("b", "ac"),
-            ("c", "ab"),
+            (mint("c"), "ab"),
         ]
 
 
@@ -314,13 +315,13 @@ class TestMaxMinString:
         # nv
         X = Var()
         r = _collect(X, "max_list", "hello", X, module=mod)
-        assert r == ["o"]
+        assert r == [mint("o")]
 
     def test_min(self, mod):
         # nv
         X = Var()
         r = _collect(X, "min_list", "hello", X, module=mod)
-        assert r == ["e"]
+        assert r == [mint("e")]
 
 
 # ── permutation/2 ─────────────────────────────────────────────────────────
@@ -343,13 +344,13 @@ class TestZipString:
         # nv
         X = Var()
         r = _collect(X, "zip_", "ab", "12", X, module=mod)
-        assert r == [[["a", "1"], ["b", "2"]]]
+        assert r == [[[mint("a"), "1"], [mint("b"), mint("2")]]]
 
     def test_zip_string_list(self, mod):
         # nv
         X = Var()
         r = _collect(X, "zip_", "ab", [1, 2], X, module=mod)
-        assert r == [[["a", 1], ["b", 2]]]
+        assert r == [[[mint("a"), 1], [mint("b"), 2]]]
 
 
 # ── split_with/3 ───────────────────────────────────────────────────────────
