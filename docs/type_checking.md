@@ -63,14 +63,6 @@ and the same term, and so are `"ab"` and `['a', 'b']`, so `string/1` holds for
 all four. A string is stored compactly as a `str`, but that is a
 representation choice and no test keys on it.
 
-!!! warning "Engine defect: `string([])` and `string(['a','b'])`"
-    The engine currently answers **false** for `string([])` and for a proper
-    list of char atoms, keying on the `str` representation rather than on the
-    term. `string("")` and `string("ab")` are true, and `"" = []` succeeds, so
-    two equal terms get different answers. The contract above is what the
-    engine will answer; the divergence is re-aligned in the final wave of this
-    program and is not pinned by the examples on this page.
-
 ```clausal
 --8<-- "tests/fixtures/docs/type_checking_sigs.txt:atom_vs_string"
 ```
@@ -103,7 +95,6 @@ Test("int is not atom") <- (not atom(42))
 That covers a Python `str`, a partial string that has become ground, `[]`, and
 a proper list of char atoms, since those are the same terms. It does **not**
 match atoms, and it does not match a list with a non-character element.
-(See the engine-defect note above: `[]` and char lists currently answer false.)
 
 ```clausal
 -private([red])
@@ -112,7 +103,10 @@ match atoms, and it does not match a list with a non-character element.
 Test("str") <- is_str("hello")
 Test("string") <- string("hello")
 Test("empty string") <- string("")
+Test("empty list") <- string([])
+Test("char list") <- string(['h', 'i'])
 Test("not str") <- (not is_str(42))
+Test("list with a non-char") <- (not string([1, 2]))
 Test("atom is not a string") <- (not string(red))
 ```
 

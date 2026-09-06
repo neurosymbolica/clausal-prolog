@@ -68,8 +68,11 @@ test("str: integer fails") :-
 test("str: unbound var fails") :-
     \+ atom(X_UNUSED).
 
-test("str: list fails") :-
-    \+ atom([]).
+test("str: empty list succeeds") :-
+    atom([]).
+
+test("str: non-char list fails") :-
+    \+ atom([1, 2]).
 
 test("integer: positive") :-
     integer(1).

@@ -477,7 +477,7 @@ Test("functor on a list is the cons view") <- (
 # field-carrying -private entry with no clauses).
 Test("functor constructs a cell") <- (
     functor(T3, 'pair_probe', 2),
-    T3 is pair_probe(_A, _B),
+    T3 is pair_probe(_A_UNUSED, _B_UNUSED),
     functor(T3, N3, A3),
     N3 is 'pair_probe',
     A3 == 2

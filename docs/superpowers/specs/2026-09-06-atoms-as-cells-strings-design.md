@@ -246,7 +246,14 @@ Consequences pinned:
   `str` yields `char_atom(c)` instead of a 1-char `str`; the four
   "list is really a string" promotions (`_seg_helpers.maybe_promote_to_str`,
   `_list_unify.c:111–137`, `lists._seq_result` :126–143,
-  `_lists_core.make_seq_result` :66–80) test "every element is a char atom".
+  `_lists_core.make_seq_result` :66–80) test "every element is a char atom"
+  *and* keep the input-type-wins rule they have today: `_seq_result`
+  promotes only when the INPUT was a string, so a list input stays a list.
+  The two are not in tension — a list of char atoms and the equal `str`
+  denote the SAME term (R-S2), so which one a builtin hands back is a
+  representation choice, and the cheapest choice is the caller's own shape.
+  The char-atom test says what MAY be promoted; input-type-wins says when it
+  IS. (Task 13 review; controller ruling 2026-09-06.)
   The P3-1 `star_was_str` anti-back-door gate (:366–372, :696–707) and its
   Python twin (`list_unify.py:185–195`) are deleted: the hazard they guarded
   (two 1-char atoms coalescing into a str) cannot occur when chars are
@@ -628,6 +635,23 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
 4. After Plan 2: migrate domain by domain (drop the directive, write strings
    as `"…"`, atoms as bare names or `'…'`); report when none remain. Plan 3
    waits on that report.
+5. Four smaller behaviours a reader will meet in passing, none of them new
+   with this design but each easy to mistake for a regression:
+   - A cell built by `functor/3` or `=..` unifies with a compound written in
+     source only when the functor is a DATA functor. A declared predicate's
+     source form is a predicate INSTANCE, not a cell, so the constructed
+     term does not unify with it — the pre-existing shape from the
+     tagged-tuple program, unchanged here.
+   - Attribute keys are stored by SPELLING, in one namespace shared with the
+     C-level `dif` and `fd` keys. Two spellings that differ are two
+     attributes; the same spelling is the same attribute whichever side
+     wrote it.
+   - A `py.*` wrapper's result dict has ATOM keys, and a wrapper's text
+     position accepts an atom or a string (both denote text at the
+     boundary); only the key side is normalised.
+   - `:- set_prolog_flag(double_quotes, …)` inside an imported `.pl` file is
+     NOT translated. Only `:- double_quotes(Mode)` carries across; a program
+     that sets the flag the ISO way must state the mode the clausal way.
 
 The announcement names no downstream project, corpus domain, or battery
 size (information barrier).

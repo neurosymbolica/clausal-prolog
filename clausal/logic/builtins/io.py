@@ -40,6 +40,13 @@ def _format_term_for_io(val):
     Other values use str() which auto-derefs Vars via __str__.
     """
     if isinstance(val, str):
+        # The EMPTY string is the empty list and prints ``[]`` in the display
+        # family too (spec §6.7's ``""``/``[]`` row; Scryer) -- ``term_str``
+        # already answers so for both families, and ``write("")`` printing
+        # NOTHING while ``write([])`` printed ``[]`` was the last place the
+        # ``str`` representation of one term leaked into an answer.
+        if val == "":
+            return "[]"
         return val
     if isinstance(val, list):
         # A LIST -- routed through ``term_str`` for the same reason the cell

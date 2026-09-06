@@ -71,6 +71,11 @@ Test("is_chars list") <- is_chars([1, 2, 3])  # nv
 # agrees with maplist/length/append/reverse/member/take/drop/etc.
 Test("is_list string succeeds") <- is_list("hello")  # nv
 Test("is_str list fails") <- (not is_str([1, 2, 3]))  # nv
+# is_str/1 answers for the TERM: a proper list of char atoms IS the string
+# it is equal to, and [] is "".  is_chars/1 is the wider union test, so it
+# also takes [1, 2, 3] above.
+Test("is_str char list succeeds") <- is_str(['h', 'i'])  # nv
+Test("is_str empty list succeeds") <- is_str([])  # nv
 # --8<-- [end:type_checking]
 
 # --8<-- [start:atom_family]

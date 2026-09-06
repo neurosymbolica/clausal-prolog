@@ -38,14 +38,18 @@ Test("empty string row") <- (
     not atom(""), not atomic("")
 )  # nv
 
-# The `string([])` row is deliberately NOT asserted here.  "" and [] are one
-# term, so the contract is string([]) TRUE; the engine currently answers
-# false because it keys on the `str` representation.  Pinning either answer
-# would be wrong -- the defect is re-aligned in the final wave of the
-# atoms-as-cells/strings program, and this row goes back then.
+# "" and [] are one term, so string([]) is TRUE -- re-asserted in Task 14b,
+# where string/1 stopped keying on the `str` representation.
 Test("empty list row") <- (
-    is_list([]), is_chars([]),
+    string([]), is_str([]), is_list([]), is_chars([]),
     not atom([]), not atomic([])
+)  # nv
+
+# The other spelling of the same rule: a proper list of char atoms is the
+# string it is equal to (spec §6.3).
+Test("char list row") <- (
+    string(['a', 'b']), is_str(['a', 'b']),
+    not string([1, 2]), not string(['ab'])
 )  # nv
 
 Test("compound row") <- (

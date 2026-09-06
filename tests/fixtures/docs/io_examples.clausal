@@ -35,6 +35,13 @@ Test("writeq prints a char list as a string") <- (
     term_to_string(['a', 'b'], S4),
     S4 == "\"ab\""
 )  # nv
+
+# "" and [] are one term, so BOTH families print them alike.
+Test("the empty string writes as the empty list") <- (
+    write_to_string("", S5), S5 == "[]",
+    write_to_string([], S6), S6 == "[]",
+    term_to_string("", S7), S7 == "[]"
+)  # nv
 # --8<-- [end:three_writers]
 
 # --8<-- [start:write_family]

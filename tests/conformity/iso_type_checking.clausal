@@ -76,7 +76,12 @@ Test("str: empty string succeeds") <- is_str("")  # nv
 Test("str: declared atom fails") <- (not is_str(Hello))  # nv
 Test("str: integer fails") <- (not is_str(1))  # nv
 Test("str: unbound var fails") <- (not is_str(_x_UNUSED))  # nv
-Test("str: list fails") <- (not is_str([]))  # nv
+# Task 14b: is_str/1 answers for the TERM, so the empty list -- which IS the
+# empty string -- succeeds, and only a list with a NON-char element fails.
+# (The char-list row lives in the docs fixture, not here: it translates to
+# `atom(['h','i'])`, which an ISO system answers false.)
+Test("str: empty list succeeds") <- is_str([])  # nv
+Test("str: non-char list fails") <- (not is_str([1, 2]))  # nv
 
 # ── integer/1 ────────────────────────────────────────────────────────────────────
 

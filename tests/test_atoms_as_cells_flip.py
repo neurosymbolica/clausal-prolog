@@ -286,6 +286,77 @@ def test_row_18c_construction_through_the_name_position_keeps_shapes(
     assert not (type(built3) is tuple and built3 and built3[0] == ".")
 
 
+def test_row_18d_write_of_the_empty_string_prints_the_empty_list(capsys):
+    """``write("")`` prints ``[]`` (spec §6.7's ``""``/``[]`` row; Scryer).
+
+    ``""`` and ``[]`` are one term, so the display family must not render
+    them differently: ``write("")`` printing nothing while ``write([])``
+    printed ``[]`` was the last place the ``str`` REPRESENTATION leaked
+    into an answer.  ``writeq("")`` already printed ``[]``.
+    """
+    from clausal.logic.builtins.io import _format_term_for_io
+
+    assert term_str("", quoted=False) == "[]"
+    assert term_str("", quoted=True) == "[]"
+    assert _format_term_for_io("") == "[]"
+
+    mod = _load_inline_clausal("_flip_row18d", "-double_quotes(chars)\n")
+    list(solve(("write", ""), mod))
+    list(solve(("write", []), mod))
+    assert capsys.readouterr().out == "[][]"
+
+
+# ── The string/1 family answers for the TERM ────────────────────────────────
+
+
+def _string_answers(mod, value):
+    """``(string(V), is_str(V))`` for one *value* — the two must agree."""
+    return (
+        bool(list(solve(("string", value), mod))),
+        bool(list(solve(("is_str", value), mod))),
+    )
+
+
+def test_string_holds_for_every_spelling_of_a_string(builtins_mod):
+    """``string/1``/``is_str/1`` answer for the TERM, not the storage.
+
+    ``""`` and ``[]`` are one term and so are ``"ab"`` and
+    ``['a', 'b']`` (spec §6.3's ``""``/``[]`` column), so the check cannot
+    key on the ``str`` representation.  A list with a non-char element is
+    not a string; nor is an atom, a cell or a number.
+    """
+    from clausal.terms import SegString
+
+    for value in ("bar", "", [], [mint("a"), mint("b")], [mint("a")]):
+        assert _string_answers(builtins_mod, value) == (True, True), value
+
+    for value in ([1, 2], [mint("a"), 1], [mint("ab")], mint("bar"),
+                  ("f", 1), 42, b"ab"):
+        assert _string_answers(builtins_mod, value) == (False, False), value
+
+    # A ground SegString is a string; a non-ground one is not.  A Seg* cannot
+    # be compiled into a goal's argument list, so these two go through
+    # ``call`` (the runtime entry the audit suite uses for Seg* rows).
+    from clausal.logic.solve import call
+    from clausal.terms import VarSeg
+
+    for name in ("string", "is_str"):
+        assert any(True for _ in call(name, SegString(["ab"]),
+                                      module=builtins_mod))
+        assert not any(True for _ in call(name, SegString(["a", VarSeg(Var())]),
+                                          module=builtins_mod))
+
+
+def test_must_be_string_agrees_with_the_string_builtin(builtins_mod):
+    """``must_be(string, X)`` and ``string(X)`` cannot drift apart."""
+    assert list(solve(("must_be", mint("string"), [mint("a"), mint("b")]),
+                      builtins_mod))
+    assert list(solve(("must_be", mint("str"), []), builtins_mod))
+    with pytest.raises(LogicException) as exc_info:
+        list(solve(("must_be", mint("string"), [1, 2]), builtins_mod))
+    assert _formal(exc_info).args[0] == mint("string")
+
+
 # ── Rows 19-23: dicts, JSON, boundaries ─────────────────────────────────────
 
 

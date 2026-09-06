@@ -9,7 +9,10 @@ from clausal.logic.predicate import (
     PredicateMeta, is_zero_field_class, is_atom_value, is_term_instance,
     term_field_names,
 )
-from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
+from clausal.logic.atoms import (
+    is_atom as _term_is_atom, is_char_atom as _is_char_atom,
+    spelling as _spelling,
+)
 from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
@@ -31,19 +34,40 @@ def _nonvar__1(x, trail, k):
         yield None
 
 
+def _is_string_term(x) -> bool:
+    """True iff *x* is the term a ``"…"`` literal denotes — a STRING.
+
+    Task 14b (spec §6.3's ``""``/``[]`` column): the check answers for the
+    TERM, never for the storage.  ``""`` and ``[]`` are one term and so are
+    ``"ab"`` and ``['a', 'b']``, so a proper list whose every element is a
+    char atom is a string exactly as the equal ``str`` is; the empty list is
+    the empty string.  A list with a NON-char element (``[1, 2]``,
+    ``['ab']``) is not, and neither is an atom, a cell or a number.
+
+    A ground ``Seg*`` is walked first, so a ground ``SegString`` (which
+    walks to a ``str``) and a ground ``SegList`` of char atoms both answer
+    true, while a non-ground one stays a ``Seg*`` and answers false.
+
+    The one implementation behind ``is_str/1``, ``string/1`` and
+    ``_check_type``'s ``string``/``str`` row, so the three cannot drift.
+    """
+    x_val = normalize_seg_input(deref(x))
+    if isinstance(x_val, str):
+        return True
+    if type(x_val) is list:
+        return all(_is_char_atom(deref(e)) for e in x_val)
+    return False
+
+
 @_builtin("is_str", 1)
 def _atom__1(x, trail, k):
-    """is_str(X) — succeeds if X is a Python str.
+    """is_str(X) — succeeds if X is a STRING (spec §6.3).
 
-    Also succeeds for a ground ``SegString`` (its ``walk`` returns a
-    plain ``str``).
+    That is a Python ``str``, a ground ``SegString``, ``[]``, or a proper
+    list of char atoms — every spelling of the same term.  See
+    :func:`_is_string_term`, which ``string/1`` shares.
     """
-    x_val = deref(x)
-    if is_var(x_val):
-        return
-    if isinstance(x_val, str):
-        yield None
-    elif isinstance(x_val, SegString) and _is_ground(x_val):
+    if _is_string_term(x):
         yield None
 
 
@@ -54,16 +78,12 @@ def _atom__1(x, trail, k):
 # — see [[F081]].
 @_builtin("string", 1)
 def _string__1(x, trail, k):
-    """string(X) — succeeds if X is a Python str (ISO/SWI alias of ``is_str``).
+    """string(X) — the ISO/SWI alias of ``is_str/1``, one implementation.
 
-    Also succeeds for a ground ``SegString``.
+    Succeeds for a STRING: a ``str``, a ground ``SegString``, ``[]``, or a
+    proper list of char atoms (spec §6.3).
     """
-    x_val = deref(x)
-    if is_var(x_val):
-        return
-    if isinstance(x_val, str):
-        yield None
-    elif isinstance(x_val, SegString) and _is_ground(x_val):
+    if _is_string_term(x):
         yield None
 
 
@@ -321,9 +341,10 @@ def _check_type(type_name: str, term) -> bool:
         # ``must_be(atom, "x")`` and ``atom("x")`` cannot drift apart.
         return is_atom_value(term)
     elif type_name in ("string", "str"):
-        return isinstance(term, str) or (
-            isinstance(term, SegString) and _is_ground(term)
-        )
+        # Task 14b: the same call the string/1 builtin makes, so
+        # ``must_be(string, ['a','b'])`` and ``string(['a','b'])`` cannot
+        # drift apart (the pattern the ``atom`` row above already follows).
+        return _is_string_term(term)
     elif type_name == "list":
         # F016 (A09): align with is_list/1 — under strings-as-lists a str is
         # a char list and a bytes is a code list, and a ground Seg* walks to

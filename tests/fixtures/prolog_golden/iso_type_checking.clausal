@@ -45,7 +45,9 @@ Test("str: integer fails") <- (not atom(1))
 
 Test("str: unbound var fails") <- (not atom(_x_unused))
 
-Test("str: list fails") <- (not atom([]))
+Test("str: empty list succeeds") <- (atom([]))
+
+Test("str: non-char list fails") <- (not atom([1, 2]))
 
 Test("integer: positive") <- (integer(1))
 

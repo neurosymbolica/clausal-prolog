@@ -186,13 +186,6 @@ that a value is *text* rather than an arbitrary list.
 `is_str/1` tests the **term**, not its storage: `"ab"` and `['a', 'b']` are one
 term, so both answer true, and so do `""` and `[]`.
 
-!!! warning "Engine defect"
-    The engine currently answers `string/1` and `is_str/1` on the `str`
-    representation alone, so `string(['a', 'b'])` and `string([])` come back
-    **false** even though the terms are equal to `"ab"` and `""`. The table
-    above is the contract; the divergence is re-aligned in the final wave of
-    this program.
-
 None of the three accepts an **atom**: an atom is a symbol, not a sequence.
 `atom("hello")` and `string(hello)` are both false, and the two never unify.
 The atom-flavoured predicates in the next section are the bridge between them.
