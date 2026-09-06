@@ -69,3 +69,97 @@ def test_double_quotes_other_forms_are_refused(directive):
     with pytest.raises(SyntaxError) as exc_info:
         _load_inline_clausal("_dq_ratchet_bad", directive + "\n")
     assert "-double_quotes" in str(exc_info.value)
+
+
+# ─── The mode is threaded, and the ISO functor rule is enforced ──────────────
+#
+# Task 10 adds no literal-semantics change: ``'x'`` and ``"x"`` still both
+# compile to the atom ``x``.  What it adds is the MACHINERY the flip needs —
+# a quote map per file, a ``_double_quotes_mode`` on the EmbedTransformer that
+# ``-double_quotes(Mode)`` sets in file order, and both of those threaded into
+# every per-clause TermTransformer — plus the one rule that is mode-independent
+# and can therefore land early: a double-quoted string is never a functor.
+
+
+def test_double_quoted_string_as_functor_is_refused():
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal("_dq_functor", 'p("foo"(1)),\n')
+    assert "functor" in str(exc_info.value)
+
+
+def test_single_quoted_functor_sugar_still_works():
+    """``'name'(Args)`` keeps lowering to a name reference.
+
+    The last clause is the operator spelling from the brief, ``'+'(1, 2)``:
+    it is compiled (that is what this test pins) but never solved — building
+    that term at run time wants a ``+/2`` term class in scope, which is a
+    scoping question the sugar has never answered and this task does not
+    change.
+    """
+    mod = _load_inline_clausal(
+        "_sq_functor",
+        "sq_probe(1),\n"
+        "sq_run(X) <- 'sq_probe'(X),\n"
+        "sq_op_term('+'(1, 2)),\n",
+    )
+    assert len(list(solve(("sq_run", 1), mod))) == 1
+
+
+def test_double_quoted_functor_refusal_is_positioned():
+    """The refusal carries the offending line, so the loader's caret window
+    points at the literal rather than at the top of the file."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal(
+            "_dq_functor_pos",
+            "p(1),\n"
+            'r("foo"(1)),\n',
+        )
+    assert exc_info.value.lineno == 2
+    assert "6.3.3" in str(exc_info.value)
+
+
+def test_double_quoted_atom_argument_is_still_an_atom():
+    """Stage A is additive: the refusal is about the FUNCTOR position only."""
+    mod = _load_inline_clausal(
+        "_dq_arg_ok",
+        '-double_quotes(atom)\n'
+        'dq_arg_probe("foo", \'foo\'),\n',
+    )
+    assert len(list(solve(("dq_arg_probe", "foo", "foo"), mod))) == 1
+
+
+def test_directive_sets_the_mode_on_the_transformer():
+    import ast as _ast
+
+    from clausal.templating.term_rewriting import EmbedTransformer
+
+    source = '-double_quotes(atom)\ndq_mode_probe(1),\n'
+    transformer = EmbedTransformer(
+        source_lines=source.splitlines(keepends=True), filename="<probe>")
+    transformer.visit(_ast.parse(source))
+    assert transformer._double_quotes_mode == "atom"
+
+
+def test_mode_and_quote_map_reach_every_term_transformer():
+    import ast as _ast
+
+    from clausal.templating.term_rewriting import EmbedTransformer
+
+    source = 'dq_thread_probe("x"),\n'
+    transformer = EmbedTransformer(
+        source_lines=source.splitlines(keepends=True), filename="<probe>")
+    transformer.visit(_ast.parse(source))
+    term_transformer = transformer._make_term_transformer()
+    assert term_transformer._double_quotes_mode == "atom"
+    assert term_transformer._quote_map == transformer._quote_map
+    assert term_transformer._quote_map  # the file's one literal is in it
+
+
+def test_no_source_lines_means_no_quote_map():
+    """The REPL/IPython transform site passes no source_lines; the map
+    degrades to empty and the functor refusal simply cannot fire there."""
+    from clausal.templating.term_rewriting import EmbedTransformer
+
+    transformer = EmbedTransformer(implicit_atoms_default=True, interactive=True)
+    assert transformer._quote_map == {}
+    assert transformer._double_quotes_mode == "atom"

@@ -461,6 +461,43 @@ def test_call_string_callable():
     assert all(isinstance(arg, sa.LoadName) for arg in node.args)
 
 
+def _term_eval_with_quote_map(src: str):
+    """``term_eval`` but with the file's quote map threaded in.
+
+    ``term_eval`` builds a bare ``TermTransformer()`` — no quote map, so the
+    quote character is unknown and the double-quoted-functor rule cannot
+    fire.  These tests are about the rule, so they supply the map the
+    EmbedTransformer would have built.
+    """
+    from clausal.templating.quote_map import build_quote_map
+
+    tree = ast.parse(src, mode='eval')
+    ast.fix_missing_locations(tree)
+    transformer = TermTransformer(
+        source_lines=src.splitlines(keepends=True),
+        quote_map=build_quote_map(src.splitlines(keepends=True)),
+    )
+    transformed = transformer.visit(tree.body)
+    expr_tree = ast.fix_missing_locations(ast.Expression(body=transformed))
+    return eval(compile(expr_tree, '<test>', 'eval'), _ns())
+
+
+def test_double_quoted_string_is_never_a_functor():
+    """ISO 6.3.3: only an atom can name a functor, and ``"foo"`` is not an
+    atom spelling under the strings design.  Refused in every mode, so it
+    can land before the mode means anything."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _term_eval_with_quote_map('"+"(a, b)')
+    assert "functor" in str(exc_info.value)
+
+
+def test_single_quoted_string_callable_survives_the_quote_map():
+    node = _term_eval_with_quote_map("'+'(a, b)")
+    assert isinstance(node, sa.Call)
+    assert isinstance(node.func, sa.LoadName)
+    assert node.func.name == '+'
+
+
 def test_call_string_callable_keyword():
     # nv
     node = term_eval("'f'(x=1)", sa.Call)

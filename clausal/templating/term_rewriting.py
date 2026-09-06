@@ -5,6 +5,10 @@ from copy import deepcopy
 from .parser import is_template_func
 from .compiler import compile_template_func
 from .desugar import desugar_surface, dotted_attr_chain, is_dict_attr_access
+# The quote character ``ast`` erased, recovered from the token stream — the
+# one thing that tells ``'foo'`` (an atom in every mode) from ``"foo"``
+# (mode-dependent, and never a functor).  See spec §7.
+from .quote_map import build_quote_map, quote_of
 
 # Module-level item types for the pipeline-split ModuleAST.
 from clausal.pythonic_ast.nodes import (
@@ -1209,7 +1213,8 @@ class TermTransformer(NodeTransformer):
                  source_lines=None, bare_atom_refs=None,
                  logic_var_refs=None, constants=frozenset(), filename=None,
                  reify=False, hidden_atoms=frozenset(), module_name=None,
-                 declared_functors=None, atom_functor_sites=None):
+                 declared_functors=None, atom_functor_sites=None,
+                 quote_map=None, double_quotes_mode="atom"):
         transformer.seen_vars = set()
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
@@ -1257,6 +1262,18 @@ class TermTransformer(NodeTransformer):
         transformer.constants = constants
         transformer._import_remap = import_remap or {}
         transformer._source_lines = source_lines
+        # P3-3 strings program (spec §7): the file's ``(lineno, byte col) ->
+        # quote char`` map, built ONCE by the owning EmbedTransformer and
+        # shared by every per-clause TermTransformer, plus the
+        # ``-double_quotes`` mode in force at the point this transformer was
+        # made (the directive is position-sensitive, so a transformer built
+        # for a clause below the directive sees the new mode and one built
+        # above it does not).  An empty map means "quotes unknown" — the
+        # REPL/IPython transform site and every programmatic AST land there,
+        # and ``quote_of`` answers ``None`` for each lookup, which every
+        # reader treats as the pre-strings behaviour.
+        transformer._quote_map = quote_map if quote_map is not None else {}
+        transformer._double_quotes_mode = double_quotes_mode
         # Source file being rewritten, used only to attribute compile-time
         # errors (mirrors EmbedTransformer._filename) — threaded through so
         # an undeclared-constant SyntaxError raised from here qualifies for
@@ -1435,6 +1452,28 @@ class TermTransformer(NodeTransformer):
         # A string literal used as the callable, e.g. '+'(a, b), is sugar for a
         # name reference whose identifier is that string.
         if isinstance(call.func, Constant) and isinstance(call.func.value, str):
+            # ...but only the ATOM spelling.  ISO 6.3.3: a functor is named by
+            # an atom, and under the strings design (spec §7) a double-quoted
+            # literal is not an atom spelling — in `chars` mode it is a char
+            # list, which cannot name anything.  Refusing it in every mode
+            # (rather than only after the flip) means the diagnostic is the
+            # same before and after, and no module quietly changes meaning
+            # when the default moves.  A `None` answer means the quote is
+            # unknown (no source lines: the REPL, a programmatic AST) and the
+            # sugar keeps its pre-strings behaviour.
+            if quote_of(transformer._quote_map, call.func) == '"':
+                spelling = call.func.value
+                # The suggestion is source text, so it has to survive being
+                # re-read: a spelling containing a quote or a backslash needs
+                # them escaped or the "fix" would not parse.
+                single_quoted = "'{}'".format(
+                    spelling.replace("\\", "\\\\").replace("'", "\\'"))
+                _raise_located_syntax_error(
+                    f'a double-quoted string is never a functor (ISO 6.3.3): '
+                    f'write {single_quoted}(...) for the atom, or '
+                    f'{spelling}(...) if it is a plain name',
+                    call.func, transformer._source_lines,
+                    transformer._filename)
             func_node = transformer._visit_call_func(
                 replace(Name(id=call.func.value, ctx=load), call.func)
             )
@@ -1732,6 +1771,8 @@ class TermTransformer(NodeTransformer):
             module_name=transformer._module_name,
             declared_functors=transformer._declared_functors,
             atom_functor_sites=transformer._atom_functor_sites,
+            quote_map=transformer._quote_map,
+            double_quotes_mode=transformer._double_quotes_mode,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
         # Shared object (not a copy): occurrences inside the lambda body
@@ -3775,6 +3816,21 @@ class EmbedTransformer(NodeTransformer):
         transformer._imported_functors: set[str] = set()
         transformer._module_items: list = []
         transformer._source_lines = source_lines
+        # P3-3 strings program (spec §7).  ``ast`` erases the quote character,
+        # so it is recovered ONCE per file from the token stream and threaded
+        # into every per-clause TermTransformer by _make_term_transformer.
+        # Without source lines (the REPL/IPython transform site, and any
+        # programmatically built tree) there is no token stream to read and
+        # the map is empty — every lookup then answers "unknown", which is
+        # exactly the pre-strings behaviour.
+        transformer._quote_map = (
+            build_quote_map(source_lines) if source_lines else {})
+        # The ``-double_quotes`` mode in force at the CURRENT point in the
+        # file.  Unlike the module-item directives (drained after the walk,
+        # so they cannot govern only the literals below them) this is
+        # position-sensitive state on the instance, the ``-allow_singletons``
+        # shape.  ``atom`` is the engine default until the flip.
+        transformer._double_quotes_mode = "atom"
         # When True (set by the REPL/IPython transform site), the file
         # defaults to loose auto-mint: visit_Module seeds an
         # ImplicitAtomsDeclaration unless the cell states its own mode.
@@ -4256,6 +4312,8 @@ class EmbedTransformer(NodeTransformer):
             module_name=transformer._module_name,
             declared_functors=transformer._seen_functors,
             atom_functor_sites=transformer._atom_functor_sites,
+            quote_map=transformer._quote_map,
+            double_quotes_mode=transformer._double_quotes_mode,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -4944,6 +5002,13 @@ class EmbedTransformer(NodeTransformer):
             )
         mode = args[0].id
         if mode == "atom":
+            # File-scoped and POSITION-SENSITIVE (spec §7): the mode governs
+            # the literals below the directive, so it is instance state set
+            # during the walk (the -allow_singletons shape) rather than a
+            # module item drained after it.  Still semantically a no-op while
+            # ``atom`` is the engine default; the state is what Stage B's flip
+            # reads.
+            transformer._double_quotes_mode = "atom"
             return replace(Pass(), expr_stmt)
         if mode == "chars":
             raise SyntaxError(
