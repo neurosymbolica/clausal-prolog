@@ -117,6 +117,28 @@ class TestImportedFunctorCollisionIsUnchanged:
         assert "-import_from" in message
         assert "no -multifile" in message
         assert "may not write t5b_pair/2" in message
+        # Same key on both sides here, so the refusal says it once: the
+        # attempted-key clause (M-e) appears only when they differ.
+        assert "reached by writing" not in message
+
+
+class TestBlastRadiusRefusalNamesTheAttemptedKey:
+    """Final review M-e.  A write's blast radius includes the row a shared
+    ``-import_from``'d class is reading, and that row can be at a DIFFERENT
+    ARITY: the importer writing ``t5b_kfact/2`` against an owner that exports
+    the dual-declared atom ``t5b_kfact`` (a /0 fact) was refused with "may not
+    write t5b_kfact/0" — a key that appears nowhere in the importer's source.
+    The refusal and the row it names are both right; the line has to say both
+    keys or the reader hunts for a ``/0`` they never wrote.
+    Fixture: ``tests/fixtures/t5b_dual_arity_clash``."""
+
+    def test_the_refusal_names_the_owned_key_and_the_attempted_key(self):
+        _load_fixture("t5b_dual_owner")
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_fixture("t5b_dual_arity_clash")
+        message = str(exc_info.value)
+        assert "may not write t5b_kfact/0" in message, "the row that refused"
+        assert "(reached by writing t5b_kfact/2)" in message, "what was written"
 
 
 class TestImportedDeclaredAtomWithZeroArityClauses:

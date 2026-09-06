@@ -63,7 +63,8 @@ def _error_term(exc: LogicException):
 
 @pytest.fixture
 def mod(tmp_path):
-    """One module with a dynamic predicate, a static one and two call/N hosts."""
+    """One module with a dynamic predicate, a static one, a zero-arity one
+    and two call/N hosts."""
     return _write_module(tmp_path, "cellgoals", """
         -dynamic(p/1)
         -dynamic(pair/2)
@@ -74,6 +75,8 @@ def mod(tmp_path):
         p(2),
 
         stat(9),
+
+        z0,
 
         q(X) <- p(X),
 
@@ -410,6 +413,75 @@ class TestDeferredCellGoalForms:
         assert module.name == "cellgoals" and inner == ("p", 1)
 
 
+# ── the zero-arity control constructs reached by NAME (final review I-3) ───
+
+
+class TestZeroArityControlConstructsByName:
+    """``true``/``fail``/``false``/``!`` are lowered by the compiler, so they
+    have no row and no registry entry.  Reached by NAME through ``call/1``
+    they resolved to nothing and FAILED SILENTLY — ``call(true)`` yielded zero
+    solutions, which is the worst failure mode a Prolog can have.  They are
+    answered directly now: not refused (unlike ``,``/``;``/``->``, they need
+    no goal-tree interpreter) and not looked up (no database defines them)."""
+
+    @pytest.mark.parametrize("goal", ["true", ("true",)])
+    def test_true_succeeds_exactly_once(self, mod, goal):
+        assert len(list(pcall("cg1", goal, module=_lm(mod)))) == 1
+
+    @pytest.mark.parametrize("goal", ["fail", ("fail",), "false", ("false",)])
+    def test_fail_and_false_fail(self, mod, goal):
+        assert list(pcall("cg1", goal, module=_lm(mod))) == []
+
+    @pytest.mark.parametrize("goal", ["!", ("!",)])
+    def test_cut_succeeds_once_because_it_is_local_to_the_call(self, mod, goal):
+        """ISO 7.8.3: a cut inside ``call/1`` is local to that call, so the
+        barrier IS the call and there is nothing left inside it to cut.
+        ``call(!)`` is therefore ``call(true)`` — opaque, not a silent change
+        to the caller's choice points."""
+        assert len(list(pcall("cg1", goal, module=_lm(mod)))) == 1
+
+    def test_the_control_constructs_do_not_consume_the_arity_one_spelling(
+            self, mod):
+        """``call(true, X)`` is the goal ``true/1`` — an ordinary undefined
+        predicate, as ISO has it — not ``true`` with an argument thrown away."""
+        assert list(pcall("cg2", "true", 1, module=_lm(mod))) == []
+
+    def test_they_answer_without_a_database_too(self):
+        """Decided before the db lookups, like the control-construct refusal,
+        so the behaviour never depends on how the builtin was reached."""
+        from clausal.logic.builtins.higher_order import _resolve_named_goal
+        assert _resolve_named_goal(None, "true", (), "call/1") is not None
+        assert _resolve_named_goal(None, ("fail",), (), "call/1") is not None
+        assert _resolve_named_goal(None, "no_such_pred", (), "call/1") is None
+
+
+# ── a bare str goal is the 1-tuple cell (final review M-b) ─────────────────
+
+
+class TestBareStrGoalInSolve:
+    """``solve("z0", m)`` used to raise ``NotImplementedError`` out of
+    ``terms_to_goalop`` while ``call("z0")``, ``solve(("z0",), m)`` and
+    ``(":", M, "z0")`` all worked — three spellings of one goal, one of them
+    broken."""
+
+    def test_a_bare_str_goal_answers_what_the_one_tuple_cell_answers(self, mod):
+        lm = _lm(mod)
+        assert len(list(solve("z0", lm))) == len(list(solve(("z0",), lm))) == 1
+
+    def test_a_bare_str_goal_lowers_to_the_same_node_the_cell_lowers_to(self):
+        from clausal.logic.solve import _term_to_goal
+        assert _term_to_goal("z0") == _term_to_goal(("z0",))
+
+    def test_an_unknown_bare_str_goal_reports_it_the_way_the_cell_does(
+            self, mod):
+        from clausal.predicate_diagnostics import PredicateNotFoundError
+        lm = _lm(mod)
+        with pytest.raises(PredicateNotFoundError):
+            list(solve("no_such_pred", lm))
+        with pytest.raises(PredicateNotFoundError):
+            list(solve(("no_such_pred",), lm))
+
+
 # ── assertz / asserta / retract with a cell ────────────────────────────────
 
 
@@ -628,6 +700,23 @@ class TestTheLowLevelDoorRefusesACellHead:
         with pytest.raises(LogicException) as exc_info:
             db.asserta(Clause(head=("p", 1), body=[]))
         assert "Database.asserta" in _error_term(exc_info.value)[1]
+
+    def test_database_retract_refuses_a_cell_head(self):
+        """Final review M-c: the retract door read the head with plain
+        ``head_key``, so a cell produced a key, matched no stored clause
+        (stored heads are class terms, never cells) and returned a bare
+        ``False`` — "nothing matched", for a head this door cannot store in
+        the first place.  Same refusal as the assert side, naming the same
+        remedy."""
+        from clausal.logic.database import Clause
+        db = Database()
+        db.assertz(Clause(head=Compound("p", (1,)), body=[]))
+        with pytest.raises(LogicException) as exc_info:
+            db.retract(("p", 1))
+        inner, context = _error_term(exc_info.value)
+        assert inner == Compound("type_error", ("callable", ("p", 1)))
+        assert "Database.retract" in context and "assertz/1" in context
+        assert len(db.clauses_for("p", 1)) == 1, "and it removed nothing"
 
     def test_a_tuple_tag_head_keeps_the_old_typeerror(self):
         from clausal.logic.database import Clause

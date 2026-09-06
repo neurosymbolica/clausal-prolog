@@ -501,6 +501,40 @@ class TestErrors:
             t.visit(tree)
 
 
+class TestTableOnASpecializeAliasIsRefused:
+    """Final review M-d.  ``-table`` on a ``-specialize`` alias is refused —
+    the specializer compiles and installs the alias's dispatch itself, at a
+    later step than the ``-table`` wrapper, so the directive would silently
+    buy nothing.  P3-3 Task 7 narrowed the REASON (the specializer no longer
+    has a database of its own) but kept the refusal; nothing pinned either
+    the message or the ORDERING, which is what makes the failure clean:
+    step 4b runs before step 6b, so the refusal cannot half-install an alias.
+    Fixture: ``tests/fixtures/specialize_tabled_alias.clausal``."""
+
+    def _load(self):
+        import tests.fixtures.specialize_tabled_alias  # noqa: F401
+
+    def test_the_load_is_refused_with_a_syntax_error_naming_the_alias(self):
+        with pytest.raises(SyntaxError) as exc_info:
+            self._load()
+        message = str(exc_info.value)
+        assert "-table(SolveCountTabled/2)" in message
+        assert (
+            "SolveCountTabled is a -specialize alias, and -table is not "
+            "supported on one"
+        ) in message
+
+    def test_it_fires_before_the_alias_is_installed(self):
+        """Step 4b, not step 6b: the module never finishes loading, so the
+        alias is bound nowhere — no half-installed predicate is left behind."""
+        import sys
+
+        sys.modules.pop("tests.fixtures.specialize_tabled_alias", None)
+        with pytest.raises(SyntaxError):
+            self._load()
+        assert "tests.fixtures.specialize_tabled_alias" not in sys.modules
+
+
 # ── Phase 5: CPD Pipeline Tests ──────────────────────────────────────────────
 
 

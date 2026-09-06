@@ -524,7 +524,7 @@ def _inject_resolved_targets(
         predicate closed?" and "what is its dispatch?" — are asked of the
         :class:`~clausal.logic.database.PredRow`, the single home of
         predicate state since Task 2, rather than of class attributes that
-        forward there.  The row is the CLASS's own (``cls._row``), not
+        forward there.  The row is the CLASS's own (``obj._row``), not
         ``db.row(name, arity)``: the call site this key serves resolves to
         THIS class, so it is this class's row whose dispatch may be baked
         under the key.  A same-named predicate in the compiling module's own

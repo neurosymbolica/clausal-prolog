@@ -314,7 +314,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # ``_stored_head_key`` just below).  The atom_bypass line this entry exists
     # for is untouched.  See
     # .superpowers/sdd/p33-state-relocation/task-5-report.md.
-    AllowEntry("clausal/logic/database.py", (1224, 1264),
+    # Range 1224-1264 -> 1250-1290 by the P3-3 final fix wave, a pure
+    # line-count shift: ``refusal_error`` (earlier in the file) gained the
+    # optional ``attempted`` key for M-e and ``Database.retract`` gained the
+    # ``_stored_head_key`` docstring paragraph for M-c.  ``head_key`` itself
+    # is byte-identical, the atom_bypass line this entry exists for included.
+    AllowEntry("clausal/logic/database.py", (1250, 1290),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list); task-5 (R11) "
                "added its cell branch"),

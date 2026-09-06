@@ -27,6 +27,39 @@ from clausal.logic.builtins._registry import (
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
 
 
+def _control_succeed_once(this_generator, _proceed, _fail, _catcher, trail):
+    """Trampoline dispatch for ``true/0`` (and ``!/0``) reached by NAME.
+
+    Final review I-3.  ``true`` is lowered at COMPILE time, so it has no row
+    and no registry entry, and a name that resolves to nothing fails silently
+    — which meant ``call("true")`` yielded zero solutions.  One solution, no
+    choice point: exactly what the lowered form does.
+    """
+    yield (_proceed, None)
+    yield (_fail, DONE)
+
+
+def _control_fail(this_generator, _proceed, _fail, _catcher, trail):
+    """Trampoline dispatch for ``fail/0`` and ``false/0`` reached by NAME."""
+    yield (_fail, DONE)
+
+
+# The zero-arity control constructs, which the compiler lowers and therefore
+# never registers as predicates, mapped to the dispatch that reproduces the
+# lowered behaviour when they are reached by NAME instead (final review I-3).
+#
+# ``!`` succeeds once and cuts NOTHING: ISO 7.8.3 makes a cut inside ``call/1``
+# local to that call, so the barrier is the call itself and there is nothing
+# left inside it to cut.  ``call("!")`` is therefore ``call("true")`` — opaque,
+# not a no-op that silently changes the caller's choice points.
+_ZERO_ARITY_CONTROL_GOALS = {
+    "true": _control_succeed_once,
+    "!": _control_succeed_once,
+    "fail": _control_fail,
+    "false": _control_fail,
+}
+
+
 def _resolve_named_goal(db, goal_val, extra_args, context):
     """Resolve a goal named by a CELL or a bare ATOM to ``(dispatch, args)``.
 
@@ -78,9 +111,11 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     A resolvable module does not change it: ``call(M:nosuch(X))`` fails.
 
     Raises for an unresolvable module designator (P3-3 Task 6) and for the
-    control constructs (deferred to the ISO-surface phase).  Both raise even
-    when *db* is None, so the diagnostic never depends on how the builtin was
-    reached.
+    n-ary control constructs (deferred to the ISO-surface phase).  Both raise
+    even when *db* is None, so the diagnostic never depends on how the builtin
+    was reached.  The ZERO-arity constructs ``true``/``fail``/``false``/``!``
+    are answered instead of refused, also independently of *db* — see
+    ``_ZERO_ARITY_CONTROL_GOALS``.
     """
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell:
@@ -113,6 +148,18 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     # here while ``solve((",",), m)`` raised.
     if functor in CELL_GOAL_CONTROL_FUNCTORS:
         refuse_control_construct_cell(folded, functor, context)
+    if not call_args and functor in _ZERO_ARITY_CONTROL_GOALS:
+        # SUPPORTED, not refused (final review I-3).  Unlike ``,``/``;``/``->``
+        # these need no goal-tree interpreter: ``true`` succeeds once, ``fail``
+        # and ``false`` fail, and ``!`` inside ``call/1`` is ISO-local to the
+        # call, so it is ``true`` here.  Decided BEFORE the db lookups and
+        # before the ``db is None`` bail, because these four are lowered
+        # constructs rather than predicates — no database defines them, so no
+        # database can answer for them, and a goal that is definitionally true
+        # failing silently is the worst failure mode this engine has.
+        # ``not call_args`` keeps it to arity 0: ``call("true", X)`` is the
+        # ordinary (undefined) goal ``true/1``, as ISO has it.
+        return _ZERO_ARITY_CONTROL_GOALS[functor], call_args
     if db is None:
         return None
     arity = len(call_args)

@@ -284,6 +284,11 @@ class BuiltinPredicate:
     Match/2 and Match/3), ``_merge`` combines them into one adapter with
     an arity-dispatching ``_get_dispatch()`` that selects at call time.
     """
+    # ``_dispatch_fn`` here is NOT row state and the P3-3 mutation gate does
+    # not apply to it: a builtin has no ``PredRow`` (nothing in the tree calls
+    # ``db.row`` for one), so there is no row to transact against and nothing
+    # to clobber — it is this adapter's own memo of the factory's product.
+    # Deliberate stop for a future gate-bypass sweep: not an ungated write.
     __slots__ = ("_functor", "_arity", "_dispatch_fn", "_factory", "_db",
                  "_arity_map")
 

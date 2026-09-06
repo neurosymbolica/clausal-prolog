@@ -208,6 +208,15 @@ def _term_to_goal(term: Any) -> Any:
     from clausal.logic.predicate import PredicateMeta
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
+    if type(term) is str:
+        # A str IS an atom (P3-1 §1b/R2), so a bare atom in goal position is
+        # the zero-arity goal the 1-tuple cell ``(s,)`` spells — the same goal
+        # ``call/1`` already resolves for a bare atom (final review M-b).
+        # Wrapped rather than lowered directly so the one cell path below
+        # decides everything after this: ``solve("z0", m)`` and
+        # ``solve(("z0",), m)`` are then the same call by construction, and a
+        # zero-arity control construct still reaches its refusal.
+        term = (term,)
     if isinstance(type(term), PredicateMeta):
         cls = type(term)
         fields = term_field_names(term)

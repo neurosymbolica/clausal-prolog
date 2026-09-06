@@ -401,6 +401,78 @@ class TestListingDivIndicatorArgument:
             _run_listing(dispatch, Div(left="fib", right="oops"))
 
 
+class TestListingAnImportedPredicateByIndicator:
+    """Final review M-a.  An ``-import_from`` binds the EXPORTER's class, whose
+    clauses live on the exporter's row, so reducing the indicator's left
+    operand to ``__name__`` and looking that name up in the CALLING database
+    found nothing: ``listing(qq)`` worked while ``listing(qq/1)`` and
+    ``listing("qq"/1)`` raised ``existence_error`` for a predicate the caller
+    can see and call.  All three spellings name one predicate and must print
+    one thing."""
+
+    @staticmethod
+    def _capture(module, goal_name):
+        import io as _io
+        import sys as _sys
+        from clausal.logic.database import Module
+        from clausal.logic.solve import call
+
+        m = Module("_ma_listing", db=module.__clausal_module__.db)
+        buf = _io.StringIO()
+        saved = _sys.stdout
+        _sys.stdout = buf
+        try:
+            list(call(goal_name, module=m))
+        finally:
+            _sys.stdout = saved
+        return buf.getvalue()
+
+    def test_all_three_spellings_are_byte_identical_from_the_importer(self):
+        import tests.fixtures.listing_import_user as user
+
+        by_name = self._capture(user, "ListByName")
+        assert "qq/1" in by_name and "2 clause(s)" in by_name
+        assert self._capture(user, "ListByClassIndicator") == by_name
+        assert self._capture(user, "ListByStrIndicator") == by_name
+
+
+class TestListingIndicatorInstantiation:
+    """Final review M-a: an indicator-SHAPED term with an unbound operand is
+    not a malformed indicator, it is an unfinished one.  ``type_error`` said
+    "``/`` is the wrong sort of term here" when the term is right and only the
+    variable is missing."""
+
+    def _instantiation_error_for(self, val):
+        from clausal.logic.database import Database
+
+        dispatch = get_builtin_dispatch("listing", 1, Database())
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, val)
+        return exc_info.value.term
+
+    def test_an_unbound_left_operand_is_an_instantiation_error(self):
+        from clausal.terms import Div
+
+        err = self._instantiation_error_for(Div(left=Var(), right=2))
+        assert err.functor == "error"
+        assert err.args[0] == "instantiation_error"
+        assert "listing/1" in err.args[1]
+
+    def test_an_unbound_arity_is_an_instantiation_error_too(self):
+        err = self._instantiation_error_for(("/", "pt", Var()))
+        assert err.args[0] == "instantiation_error"
+
+    def test_a_bound_but_wrong_operand_is_still_a_type_error(self):
+        """Only the UNBOUND case moved: ``3/2`` and ``fib/"oops"`` are
+        well-instantiated and genuinely the wrong shape."""
+        from clausal.terms import Div
+
+        dispatch = get_builtin_dispatch("listing", 1, None)
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, Div(left=3, right=2))
+        assert exc_info.value.term.args[0].functor == "type_error"
+
+
 class TestListingSpecializedAliasByIndicator:
     """P3-3 Task 7's ``-specialize`` alias (``SolveCountNatnum/2``, 3
     clauses — Task 7's own review confirmed the row) listed through its

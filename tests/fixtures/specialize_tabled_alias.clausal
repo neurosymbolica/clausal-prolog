@@ -1,0 +1,16 @@
+# clausal: no-collect
+# Final review M-d: a `-specialize` alias that is ALSO `-table`d.  The load
+# must be refused at step 4b (`_validate_directive_targets` →
+# `_refuse_untablable_target`), which runs BEFORE step 6b installs the
+# specialized dispatch, so the refusal cannot half-install anything.
+-import_from(clausal.examples.metainterpreters, [SolveCount])
+
+NatnumProgram(PROGRAM) <- (
+    PROGRAM is [
+        [["natnum", 0], []],
+        [["natnum", ["s", X]], [["natnum", X]]]
+    ]
+)
+
+-specialize(SolveCount, NatnumProgram, alias=SolveCountTabled)
+-table(SolveCountTabled/2)

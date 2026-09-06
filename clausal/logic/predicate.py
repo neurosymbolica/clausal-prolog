@@ -618,6 +618,74 @@ time, so the same descriptor serves every predicate class and class creation
 allocates nothing."""
 
 
+def _describe_row(row) -> str:
+    """``f/N`` plus where the row lives — for the I-1 refusal text."""
+    functor, arity = row.key
+    if row.detached:
+        return f"{functor}/{arity} (the class's private detached row)"
+    where = None
+    if row.source:
+        where = row.source[0]
+    else:
+        module_dict = getattr(row.db, "module_dict", None) or {}
+        where = module_dict.get("__name__")
+    return (f"{functor}/{arity} (module {where})" if where
+            else f"{functor}/{arity} (a bound Database row)")
+
+
+def _migrate_detached_clauses(old_row, new_row) -> None:
+    """Carry clauses held on a DETACHED row onto the real row being bound.
+
+    Final review I-1.  ``make_predicate`` mints a class with no Database, so
+    ``P._assertz(...)`` before any load lands on the private row
+    ``_detached_row`` created for it.  Binding that class to a real row used
+    to move only ``dynamic_arities``/``locked``/``source``: the clauses stayed
+    on a row that nothing could reach again, and since Task 2 made the row the
+    single store there is no longer a second copy to recover them from — a
+    later ``assertz`` through the class appended to the (empty) real row and
+    the earlier clauses were simply gone, with no error, warning or write
+    stamp.
+
+    Two outcomes, never a third:
+
+    * the target row has NO clauses — the ordinary standalone-then-loaded
+      shape — so the detached clauses and their write stamps MOVE onto it and
+      the detached row is emptied.  The bind stays lossless, which is what the
+      docstring above claims of every other field it carries;
+    * BOTH rows hold clauses — two independent clause sets for one predicate,
+      with no rule saying which wins or in what order they would interleave —
+      so the bind is REFUSED.  Silently picking one is the outcome I-1 exists
+      to forbid.
+
+    No transaction of its own: every in-tree ``_bind_row`` caller that can
+    reach here already runs inside the ``Database.mutate`` its clause or
+    dispatch install opened (``compiler_v2`` step 4/4a,
+    ``compiler.predicate._install``, ``specialization._install_specialized``),
+    so this write is inside that authorization and stamped by it.
+    """
+    if new_row.clauses:
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, permission_error,
+        )
+        from clausal.terms import Compound  # noqa: PLC0415
+        functor, arity = new_row.key
+        raise LogicException(permission_error(
+            "modify", "static_procedure", Compound("/", (functor, arity)),
+            f"cannot bind {_describe_row(old_row)} onto "
+            f"{_describe_row(new_row)}: the detached row holds "
+            f"{len(old_row.clauses)} clause(s) and the target row already "
+            f"holds {len(new_row.clauses)} — binding would silently discard "
+            f"one set (retract or clear one side first)",
+        ))
+    new_row.ensure_clauses().extend(old_row.clauses)
+    if old_row.writes:
+        new_row.writes.extend(old_row.writes)
+        old_row.writes.clear()
+    # Emptied, not left holding a stale duplicate: this is a MOVE, and the
+    # detached row can still be reached by a caller that kept a reference.
+    old_row.clauses = []
+
+
 class PredicateMeta(type):
     """Metaclass that turns a class with ``_fields`` into a predicate.
 
@@ -825,13 +893,21 @@ class PredicateMeta(type):
         refused the case this guard exists for -- an alias name that resolves
         to somebody else's predicate -- before the bind is reached.  See the
         body.
-        The old row keeps its own contents (it is the Database's, not the class's);
-        three pieces of state that were per-CLASS rather than per-key before
-        this task travel with the class so the move stays lossless —
-        ``dynamic_arities`` (unioned: it is a set ACROSS arities by
+        A REAL old row keeps its own contents (it is the Database's, not the
+        class's); three pieces of state that were per-CLASS rather than
+        per-key before this task travel with the class so the move stays
+        lossless — ``dynamic_arities`` (unioned: it is a set ACROSS arities by
         construction), ``locked`` (or-ed: locking was one-way on the class,
         never undone by a later module), and ``source`` (only when the target
         has none; step 4 re-stamps it immediately after binding anyway).
+
+        A DETACHED old row holding clauses is the exception, and it is the one
+        case where the clauses travel too (final review I-1): a detached row
+        is nobody's Database — once the class stops pointing at it nothing can
+        reach it again — so leaving clauses behind there is not "the
+        Database's contents", it is silent loss, and since Task 2 the row is
+        the ONLY store, so there is no second copy to recover from.  See
+        ``_migrate_detached_clauses``.
         """
         new_row = db.row(functor, arity, create=True)
         old_row = cls._row
@@ -863,6 +939,8 @@ class PredicateMeta(type):
             # elsewhere, so its first real bind is always fine.
             return
         if old_row is not None:
+            if old_row.detached and old_row.clauses:
+                _migrate_detached_clauses(old_row, new_row)
             old_declared = old_row.dynamic_arities
             if old_declared:
                 if new_row.dynamic_arities is None:

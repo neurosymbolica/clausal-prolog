@@ -1,0 +1,11 @@
+# clausal: no-collect
+# Final review M-a: the IMPORTER.  All three spellings of the same listing
+# must agree -- the bare class, the class-left indicator, and the str-left
+# indicator -- because they name one predicate.
+-module(listing_import_user, [ListByName(), ListByClassIndicator(),
+                              ListByStrIndicator()])
+-import_from(tests.fixtures.listing_import_owner, [qq])
+
+ListByName() <- listing(qq)
+ListByClassIndicator() <- listing(qq/1)
+ListByStrIndicator() <- listing("qq"/1)

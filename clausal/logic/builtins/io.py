@@ -10,7 +10,9 @@ from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import term_str as _term_str, term_pformat as _term_pformat, Compound, Div
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
-from clausal.logic.exceptions import LogicException, type_error, existence_error
+from clausal.logic.exceptions import (
+    LogicException, type_error, existence_error, instantiation_error,
+)
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS, BuiltinPredicate
 
@@ -222,25 +224,92 @@ def _as_name_arity_indicator(val):
       ``deref(term.left)`` / ``deref(term.right)``) — since either slot may
       hold a trail-bound Var.
 
-    Returns ``(name, arity)`` or ``None`` if *val* is not one of those three
-    shapes with a name that is a str (or a ``PredicateMeta`` class, reduced
-    to its ``__name__``) and a non-bool int arity.
+    Returns ``(name, arity, pred_cls)`` or ``None`` if *val* is not one of
+    those three shapes with a name that is a str (or a ``PredicateMeta``
+    class, reduced to its ``__name__``) and a non-bool int arity.
+
+    *pred_cls* is the class itself when the left operand WAS one, and ``None``
+    otherwise (final review M-a).  The name alone is not enough to find the
+    predicate: an ``-import_from``'d class lives on the EXPORTER's row, so
+    reducing it to ``__name__`` and looking that up in the calling database
+    turned ``listing(qq/1)`` into an ``existence_error`` for a predicate the
+    caller can see and call.  The class knows its own row; the name does not.
     """
+    pred_cls = None
     if type(val) is tuple and len(val) == 3 and val[0] == "/":
         name, arity = deref(val[1]), deref(val[2])
     elif isinstance(val, Compound) and val.functor == "/" and len(val.args) == 2:
         name, arity = deref(val.args[0]), deref(val.args[1])
     elif isinstance(val, Div):
         name, arity = deref(val.left), deref(val.right)
-        if isinstance(name, PredicateMeta):
-            name = name.__name__
     else:
         return None
+    if isinstance(name, PredicateMeta):
+        pred_cls = name
+        name = name.__name__
     if not isinstance(name, str) or not isinstance(arity, int) or isinstance(arity, bool):
         return None
     if arity < 0:
         return None
-    return name, arity
+    return name, arity, pred_cls
+
+
+def _indicator_operands(val):
+    """The two operands of an indicator-SHAPED *val*, dereffed, or ``None``.
+
+    Shape only — it says nothing about whether the operands are well formed,
+    which is exactly what the instantiation-vs-type distinction needs
+    (final review M-a).
+    """
+    if type(val) is tuple and len(val) == 3 and val[0] == "/":
+        return deref(val[1]), deref(val[2])
+    if isinstance(val, Compound) and val.functor == "/" and len(val.args) == 2:
+        return deref(val.args[0]), deref(val.args[1])
+    if isinstance(val, Div):
+        return deref(val.left), deref(val.right)
+    return None
+
+
+def _indicator_row(db, name, arity, pred_cls):
+    """The row whose clauses ``listing/1`` should print, or ``None``.
+
+    Three lookups, in the order that makes an indicator name the same
+    predicate the equivalent GOAL would (final review M-a):
+
+    1. the CLASS's own bound row, when the indicator's left operand was a
+       class and its row is a REAL row at the requested arity.  A shared
+       ``-import_from``'d class reads the exporter's row, which is the whole
+       point: ``listing(qq/1)`` must print what ``listing(qq)`` prints.  A
+       DETACHED row is skipped — it is nobody's predicate (same rule
+       ``PredicateMeta._bind_row`` applies), so a standalone class of the
+       same name must not shadow the caller's real one;
+    2. the calling database's own row — the ordinary local predicate;
+    3. the calling module's NAMESPACE, resolved exactly as
+       ``higher_order._namespace_dispatch`` resolves a named goal
+       (``_find_pred_cls`` for the arity-checked class, then ``_home_db``
+       for the row it actually reads), so the str spelling
+       ``listing("qq"/1)`` finds the same imported predicate the class
+       spelling does.
+    """
+    if pred_cls is not None:
+        row = pred_cls._row
+        if row is not None and not row.detached and row.key[1] == arity:
+            return row
+    if db is None:
+        return None
+    row = db.row(name, arity, create=False)
+    if row is not None:
+        return row
+    from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
+        _find_pred_cls, _home_db,
+    )
+    module_dict = getattr(db, "module_dict", None)
+    if module_dict is None:
+        return None
+    found = _find_pred_cls(name, arity, module_dict)
+    if found is None:
+        return None
+    return _home_db(db, found).row(found.__name__, arity, create=False)
 
 
 @_db_builtin("listing", 1, fields=("pred",))
@@ -312,15 +381,28 @@ def _make_listing__1(db):
             yield None
             return
         else:
+            pred_cls = None
             if isinstance(val, str):
                 name, arity = val, 0
             elif indicator is not None:
-                name, arity = indicator
+                name, arity, pred_cls = indicator
             else:
+                # An indicator-SHAPED value with an unbound operand is not a
+                # malformed indicator, it is an unfinished one (final review
+                # M-a): ``listing(X/2)`` gave a type_error naming the whole
+                # Div, which reads as "``/`` is the wrong sort of term here"
+                # when the term is right and only the variable is missing.
+                operands = _indicator_operands(val)
+                if operands is not None and any(is_var(o) for o in operands):
+                    raise LogicException(instantiation_error(
+                        "listing/1: the predicate indicator is not "
+                        "sufficiently instantiated — bind Name/Arity before "
+                        "listing it",
+                    ))
                 raise LogicException(type_error("predicate", val, "listing/1"))
-            if db is None:
+            if db is None and pred_cls is None:
                 raise LogicException(type_error("predicate", val, "listing/1"))
-            row = db.row(name, arity, create=False)
+            row = _indicator_row(db, name, arity, pred_cls)
             if row is None:
                 raise LogicException(existence_error(
                     "procedure", Compound("/", (name, arity)), "listing/1",

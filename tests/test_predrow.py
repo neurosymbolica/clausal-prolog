@@ -682,6 +682,110 @@ def test_an_unauthorized_rebind_leaves_the_class_where_it_is():
     assert cls._row is db1.row("p", 3)
 
 
+# ── _bind_row: a DETACHED row's clauses travel, or the bind is refused ──────
+#
+# Final review I-1.  A class minted by ``make_predicate`` and asserted into
+# before any load holds its clauses on a private detached row that nothing but
+# the class can reach.  Binding it to a real row used to carry three fields
+# and leave the clauses behind — invisibly, and since Task 2 made the row the
+# only store, unrecoverably.  Two outcomes now, and silent loss is neither.
+
+
+class TestBindRowCarriesDetachedClauses:
+    """The reviewer's own P2 scenario, both ways round."""
+
+    def test_a_standalone_predicate_keeps_its_clauses_when_it_is_bound(self):
+        """``make_predicate`` + two ``_assertz``, compiled into a Module's
+        database, then a builtin ``assertz`` of a third clause: three answers,
+        in order, from the one row the class now reads."""
+        from clausal.logic.compiler.predicate import compile_predicate_trampoline
+        from clausal.logic.database import Module
+        from clausal.logic.solve import solve
+        from clausal.logic.variables import Var, deref
+
+        P = make_predicate("dp", ["x"])
+        P._assertz(Clause(head=P(x=1), body=[]))
+        P._assertz(Clause(head=P(x=2), body=[]))
+        assert P._row.detached is True and len(P._clauses) == 2
+
+        module_dict = {"dp": P}
+        mod = Module("i1_prog", module_dict=module_dict)
+        mod.db.mark_dynamic("dp", 1)
+        compile_predicate_trampoline(
+            "dp", 1, list(P._clauses), mod.db,
+            globals_=module_dict, pred_cls=P,
+        )
+        # The bind happened, and it did not cost the two clauses.
+        assert P._row is mod.db.row("dp", 1)
+        assert P._row.detached is False
+        assert len(P._clauses) == 2
+
+        X = Var()
+        assert [deref(X) for _ in solve(("dp", X), mod)] == [1, 2]
+
+        for _ in solve(("assertz", ("dp", 3)), mod):
+            pass
+        assert len(P._clauses) == 3
+        assert P._row is mod.db.row("dp", 1)
+        Y = Var()
+        assert [deref(Y) for _ in solve(("dp", Y), mod)] == [1, 2, 3]
+
+    def test_the_detached_rows_write_stamps_travel_with_its_clauses(self):
+        db = Database()
+        P = make_predicate("dpw", ["x"])
+        P._assertz(Clause(head=P(x=1), body=[]))
+        stamps_before = list(P._row.writes)
+        assert stamps_before, "the _assertz is a stamped write"
+
+        P._bind_row(db, "dpw", 1)
+        assert P._row is db.row("dpw", 1)
+        assert len(P._clauses) == 1
+        assert P._row.writes[:len(stamps_before)] == stamps_before
+
+    def test_the_detached_row_is_emptied_rather_than_left_duplicating(self):
+        db = Database()
+        P = make_predicate("dpe", ["x"])
+        P._assertz(Clause(head=P(x=1), body=[]))
+        old_row = P._row
+        P._bind_row(db, "dpe", 1)
+        assert old_row.clauses == []
+        assert len(P._clauses) == 1
+
+    def test_two_non_empty_clause_sets_refuse_the_bind_instead_of_losing_one(self):
+        """Nothing says which set wins or how they interleave, so the bind is
+        refused — naming both rows.  This is the reviewer's probe verbatim
+        (``compile_predicate_trampoline`` with no database, so the class is
+        still detached when the builtin ``assertz`` writes the db row):
+        before the fix it answered ``[3]``, two clauses gone in silence."""
+        from clausal.logic.compiler.predicate import compile_predicate_trampoline
+        from clausal.logic.database import Module
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.solve import solve
+
+        P = make_predicate("dq", ["x"])
+        P._assertz(Clause(head=P(x=1), body=[]))
+        P._assertz(Clause(head=P(x=2), body=[]))
+        module_dict = {"dq": P}
+        mod = Module("i1_prog2", module_dict=module_dict)
+        mod.db.mark_dynamic("dq", 1)
+        compile_predicate_trampoline(
+            "dq", 1, list(P._clauses), None,
+            globals_=module_dict, pred_cls=P,
+        )
+        assert P._row.detached is True
+
+        with pytest.raises(LogicException) as exc_info:
+            for _ in solve(("assertz", ("dq", 3)), mod):
+                pass
+        message = exc_info.value.term.args[1]
+        assert "detached row" in message
+        assert "dq/1" in message
+        assert "silently discard" in message
+        # And nothing was lost on the way out: both sets are still readable.
+        assert len(P._clauses) == 2
+        assert len(mod.db.row("dq", 1).clauses) == 1
+
+
 # ── _dynamic_arities keeps its None-vs-set semantics (row-LOCAL, not derived)
 
 

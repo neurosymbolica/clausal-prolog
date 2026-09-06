@@ -417,7 +417,8 @@ def write_refusal(row: "PredRow", author: str, kind: str) -> "str | None":
 
 
 def refusal_error(functor: str, arity: int, author: str, kind: str,
-                  reason: str, channel: "str | None" = None) -> LogicException:
+                  reason: str, channel: "str | None" = None,
+                  attempted: "tuple[str, int] | None" = None) -> LogicException:
     """The ONE refusal.  Every channel raises this exception or wraps it; no
     channel keeps a diagnostic of its own.
 
@@ -428,10 +429,24 @@ def refusal_error(functor: str, arity: int, author: str, kind: str,
     It still LEADS with the channel (``assertz/1``, ``retract/1``, ...) where
     the caller named one, because that is the part of the old context a
     reader of the error was using to find the call.
+
+    *attempted* is the key the CALLER asked to write, when the refusing row is
+    not it (final review M-e).  A write's blast radius includes the row a
+    shared ``-import_from``'d class is reading, and that row can have a
+    different ARITY from the one the caller named: the importer writing
+    ``k(a, 2)`` against an owner that exports the atom ``k`` was refused with
+    "may not write k/0", naming a key that appears nowhere in the importer's
+    source.  The refusal is right and the row it names is the right row; the
+    line just has to say both, or the reader hunts for a ``k/0`` they never
+    wrote.  Omitted (or equal to the row's own key) leaves the text exactly as
+    it was.
     """
+    where = f"{functor}/{arity}"
+    if attempted is not None and tuple(attempted) != (functor, arity):
+        where = f"{where} (reached by writing {attempted[0]}/{attempted[1]})"
     return LogicException(permission_error(
         "modify", "static_procedure", Compound("/", (functor, arity)),
-        f"{channel or kind}: {author} may not write {functor}/{arity}: "
+        f"{channel or kind}: {author} may not write {where}: "
         f"{reason}",
     ))
 
@@ -680,6 +695,7 @@ class Database:
                 return refusal_error(
                     *row.key, author, kind, reason,
                     channel=detail if isinstance(detail, str) else None,
+                    attempted=(functor, arity),
                 )
         return None
 
@@ -727,6 +743,7 @@ class Database:
                 raise refusal_error(
                     *row.key, author, kind, reason,
                     channel=detail if isinstance(detail, str) else None,
+                    attempted=(functor, arity),
                 )
         before = [(row, row.dispatch_fn) for row in opened]
         for row in opened:
@@ -808,8 +825,17 @@ class Database:
 
         See ``assertz`` for why no class mirror is needed any more, and for
         what the gate does with *author*.
+
+        ``_stored_head_key``, symmetrically with ``assertz``/``asserta`` (final
+        review M-c): a CELL head read by plain ``head_key`` produced a key,
+        matched no stored clause (stored heads are class terms or
+        ``Compound``s, never cells) and returned a bare ``False`` — "nothing
+        matched", indistinguishable from a genuine miss, for a head this door
+        cannot store in the first place.  The same refusal the assert side
+        gives points at the same remedy: go through the ``retract/1`` builtin,
+        which normalizes the cell.
         """
-        functor, arity = head_key(head)
+        functor, arity = _stored_head_key(head, "retract")
         clause_list = self._clauses.get((functor, arity))
         if clause_list is None:
             return False
