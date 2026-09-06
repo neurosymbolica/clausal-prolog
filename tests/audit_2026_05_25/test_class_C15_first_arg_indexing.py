@@ -38,7 +38,7 @@ def test_F095_first_arg_index_coalesces_str_and_charlist():
     default clause merged into every specific bucket; see the mechanism note
     on the assertions below for why that merge does not reopen F095).
     """
-    from clausal.logic.atoms import char_atom, mint
+    from clausal.logic.atoms import mint
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref
     from tests.audit_2026_05_25._helpers import load_inline_clausal

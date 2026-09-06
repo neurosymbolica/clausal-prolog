@@ -18,7 +18,7 @@ Findings tested here (all closed as of 2026-06-13 follow-up):
 - F094 (design-gap) numbervars/3 cannot number Vars inside Seg* containers
 """
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Trail, Var, deref

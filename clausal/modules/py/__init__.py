@@ -163,11 +163,18 @@ def to_text(val):
     - a ``SegString`` / any object with a ``__walk__`` that yields a ``str``
       (a partial string that is now complete) → that ``str``;
     - a list/tuple of char atoms → the string it denotes;
-    - a CELL of arity >= 1 → ``type_error(text, …)``: a compound is not text,
-      and answering with its repr is the bug above;
+    - a CELL of arity >= 1 → ``None``: a compound is not text.  It does not
+      raise here — every caller already documents and implements a fallback
+      for "not text" (``logging`` writes the term with the engine's own
+      writer, the others note the mismatch and fail cleanly), and a raise
+      would reach past all of them: ``info(Logger, foo(1))`` must log
+      ``foo(1)``, not throw.  The one position where a non-text argument is
+      unambiguously an error — a sqlite path/alias/SQL/table — raises at the
+      CALL SITE (``py/sqlite.py``'s ``_text``, which is loud on ``None``);
     - anything else (an unbound ``Var``, a number, a non-char list, …) →
-      ``None``, so the caller keeps its own "fail cleanly / record a
-      type-mismatch note" behaviour.
+      ``None``, likewise.
+
+    What this never does is answer with a Python ``repr``.
     """
     if type(val) is str:
         return val
@@ -185,9 +192,9 @@ def to_text(val):
             return walked
         val = walked
     if isinstance(val, tuple) and val and type(val[0]) is str:
-        # A cell of arity >= 1: a compound term, not text.  Loud, never a repr.
-        from clausal.logic.exceptions import LogicException, type_error
-        raise LogicException(type_error("text", val))
+        # A cell of arity >= 1: a compound term, not text.  The caller's
+        # fallback decides what to do with it — never a repr from here.
+        return None
     if isinstance(val, (list, tuple)):
         if not val:
             return ""

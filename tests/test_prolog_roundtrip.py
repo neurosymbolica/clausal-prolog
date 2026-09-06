@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
 from clausal.tools.clausal_to_prolog import (
     clausal_source_to_prolog,
     clausal_source_to_prolog_ast,
@@ -426,26 +425,14 @@ class TestCLIRoundtrip:
             code = main(["--roundtrip", "--dialect", "swi", f.name])
         assert code == 0
 
-    def test_roundtrip_file_based(self, tmp_path):
+    def test_roundtrip_file_based(self):
         # nv
-        # THE FLIP (spec §7): a ``.pl`` whose ``"..."`` mean STRINGS must
-        # DECLARE ``double_quotes`` for the trip to be byte-identical -- the
-        # return leg writes the mode out explicitly.  See
+        # THE FLIP (spec §7): a ``.pl`` whose ``"..."`` mean STRINGS DECLARES
+        # ``double_quotes``, and the return leg writes the mode out again, so
+        # the CHECKED-IN golden round-trips byte-identically.  See
         # ``tests/test_prolog_golden.py::TestUnifiedCLI::test_roundtrip_flag``.
         from clausal.tools.translate import main
-        src = tmp_path / "roundtrip.pl"
-        src.write_text(
-            ':- double_quotes(chars).\n'
-            '\n'
-            'edge(1, 2).\n'
-            '\n'
-            'reach(X, Y) :-\n'
-            '    edge(X, Y).\n'
-            '\n'
-            'test("edge 1 2") :-\n'
-            '    edge(1, 2).\n',
-            encoding="utf-8",
-        )
+        src = GOLDEN / "edge_graph.pl"
         # Prolog file roundtrip
         code = main(["--roundtrip", "--dialect", "swi", str(src)])
         assert code == 0

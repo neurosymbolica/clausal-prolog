@@ -102,15 +102,31 @@ def Reach__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def Test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
-        case [_acap0]:
+        case [_scap0]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                if $unify(_acap0, ('edge 1 2',), trail):
-                    _gen3 = StepGenerator($dispatch_at(Edge, 2), _proceed, this_generator, this_generator, 1, 2, trail)
+                if _scap0 == 'edge 1 2' or $unify(_scap0, 'edge 1 2', trail):
+                    _gen1 = StepGenerator($dispatch_at(Edge, 2), _proceed, this_generator, this_generator, 1, 2, trail)
+                    _st1 = (yield (_gen1, None))
+                    while _st1 is not $DONE:
+                        _st1 = (yield (_gen1, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_scap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _scap0 == 'edge 2 3' or $unify(_scap0, 'edge 2 3', trail):
+                    _gen3 = StepGenerator($dispatch_at(Edge, 2), _proceed, this_generator, this_generator, 2, 3, trail)
                     _st3 = (yield (_gen3, None))
                     while _st3 is not $DONE:
                         _st3 = (yield (_gen3, None))
@@ -121,12 +137,12 @@ def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if not _mark_cl:
                     trail.undo(_mark)
     match (_d0,):
-        case [_acap0]:
+        case [_scap0]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                if $unify(_acap0, ('edge 2 3',), trail):
-                    _gen4 = StepGenerator($dispatch_at(Edge, 2), _proceed, this_generator, this_generator, 2, 3, trail)
+                if _scap0 == 'reach 1 2' or $unify(_scap0, 'reach 1 2', trail):
+                    _gen4 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 1, 2, trail)
                     _st4 = (yield (_gen4, None))
                     while _st4 is not $DONE:
                         _st4 = (yield (_gen4, None))
@@ -137,12 +153,12 @@ def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if not _mark_cl:
                     trail.undo(_mark)
     match (_d0,):
-        case [_acap0]:
+        case [_scap0]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                if $unify(_acap0, ('reach 1 2',), trail):
-                    _gen5 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 1, 2, trail)
+                if _scap0 == 'reach 1 3' or $unify(_scap0, 'reach 1 3', trail):
+                    _gen5 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 1, 3, trail)
                     _st5 = (yield (_gen5, None))
                     while _st5 is not $DONE:
                         _st5 = (yield (_gen5, None))
@@ -153,12 +169,12 @@ def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if not _mark_cl:
                     trail.undo(_mark)
     match (_d0,):
-        case [_acap0]:
+        case [_scap0]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                if $unify(_acap0, ('reach 1 3',), trail):
-                    _gen6 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 1, 3, trail)
+                if _scap0 == 'reach 2 3' or $unify(_scap0, 'reach 2 3', trail):
+                    _gen6 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 2, 3, trail)
                     _st6 = (yield (_gen6, None))
                     while _st6 is not $DONE:
                         _st6 = (yield (_gen6, None))
@@ -168,85 +184,4 @@ def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             finally:
                 if not _mark_cl:
                     trail.undo(_mark)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('reach 2 3',), trail):
-                    _gen7 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 2, 3, trail)
-                    _st7 = (yield (_gen7, None))
-                    while _st7 is not $DONE:
-                        _st7 = (yield (_gen7, None))
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-
-# ----
-
-def Test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('edge 1 2',), trail):
-                _gen8 = StepGenerator($dispatch_at(Edge, 2), _proceed, this_generator, this_generator, 1, 2, trail)
-                _st8 = (yield (_gen8, None))
-                while _st8 is not $DONE:
-                    _st8 = (yield (_gen8, None))
-
-# ----
-
-def Test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('edge 2 3',), trail):
-                _gen9 = StepGenerator($dispatch_at(Edge, 2), _proceed, this_generator, this_generator, 2, 3, trail)
-                _st9 = (yield (_gen9, None))
-                while _st9 is not $DONE:
-                    _st9 = (yield (_gen9, None))
-
-# ----
-
-def Test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('reach 1 2',), trail):
-                _gen10 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 1, 2, trail)
-                _st10 = (yield (_gen10, None))
-                while _st10 is not $DONE:
-                    _st10 = (yield (_gen10, None))
-
-# ----
-
-def Test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('reach 1 3',), trail):
-                _gen11 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 1, 3, trail)
-                _st11 = (yield (_gen11, None))
-                while _st11 is not $DONE:
-                    _st11 = (yield (_gen11, None))
-
-# ----
-
-def Test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('reach 2 3',), trail):
-                _gen12 = StepGenerator($dispatch_at(Reach, 2), _proceed, this_generator, this_generator, 2, 3, trail)
-                _st12 = (yield (_gen12, None))
-                while _st12 is not $DONE:
-                    _st12 = (yield (_gen12, None))
-
-# ----
-
-def Test__p0_dflt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    return None
-    yield None
+    yield (_fail, $DONE)

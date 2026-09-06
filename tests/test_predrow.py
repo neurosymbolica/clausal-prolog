@@ -11,7 +11,7 @@ COHERENCE between the row facade and that legacy state, in both directions.
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database, PredRow, WriteStamp
 from clausal.terms import Compound
 

@@ -7,7 +7,7 @@ indexed dispatch produces the same results as unindexed dispatch.
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import (
     compile_predicate_trampoline as compile_predicate,

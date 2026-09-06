@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.builtins import structural_unify
 from clausal.logic.variables import Var, Trail, deref, walk, is_var, unify
 from clausal.terms import DictTerm, SetTerm, term_str

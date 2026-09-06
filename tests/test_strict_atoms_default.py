@@ -13,7 +13,7 @@ import warnings
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 import clausal.logic.compiler_v2 as _compiler_v2
 from clausal.import_hook import _load_module, predicate_builtins, runtime_builtins

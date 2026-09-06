@@ -18,7 +18,7 @@ Findings tested here:
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import char_atom
 
 
 def test_F018_seglist_walk_promotes_all_char_str_to_str():

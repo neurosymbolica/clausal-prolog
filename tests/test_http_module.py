@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch, MagicMock
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm

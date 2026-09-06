@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.database import Module
 from clausal.logic.solve import call, _deref_walk
 from clausal.logic.variables import Var, deref

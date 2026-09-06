@@ -29,7 +29,7 @@ import pathlib
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.solve import call
 

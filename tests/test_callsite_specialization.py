@@ -340,8 +340,23 @@ class TestStaticCallKey:
         assert _static_call_key(ast.Constant(value=0)) == 0
 
     def test_empty_string(self):
-        # nv — a string has no static key (see test_string_constant_*).
-        assert _static_call_key(ast.Constant(value="")) is None
+        # nv — ``[]``/``""``/``b""`` all denote the empty list and must key
+        # ALIKE: ``_INDEX_VAR``, the same answer the two runtime twins give.
+        from clausal.logic.compiler.arg_index import _INDEX_VAR
+
+        assert _static_call_key(ast.Constant(value="")) is _INDEX_VAR
+
+    def test_empty_bytes_keys_like_the_empty_list(self):
+        # nv — before the guard, ``b""`` keyed ITSELF while ``""`` and ``[]``
+        # keyed a full scan, so a ``b""`` call site could specialise into a
+        # bucket a ``[]``-headed clause is not in.
+        from clausal.logic.compiler.arg_index import _INDEX_VAR
+
+        assert _static_call_key(ast.Constant(value=b"")) is _INDEX_VAR
+        # The literal ``[]`` answers ``None`` ("unknown"), which every
+        # consumer reads the same way ``_INDEX_VAR`` reads — neither is ever
+        # a bucket key — so all three spellings now decline to specialise.
+        assert _static_call_key(ast.List(elts=[], ctx=ast.Load())) is None
 
     def test_clausal_new_fast_path_call_keys_by_class_name(self):
         # Phase 0 construction fast path: term_to_ast_expr now emits

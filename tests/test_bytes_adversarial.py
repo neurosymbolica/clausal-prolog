@@ -6,7 +6,7 @@ file exists so these unhappy paths cannot silently regress. Mirrors the spirit
 of the strings-as-lists adversarial suite (docs/superpowers/audits/
 2026-05-25-string-implementation), applied to the codes model.
 """
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Var, Trail, unify, deref

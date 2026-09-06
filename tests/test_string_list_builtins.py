@@ -54,8 +54,19 @@ class TestInString:
         assert _first("in_", mint("b"), "abc", module=mod)
 
     def test_member_miss(self, mod):
+        # nv — a char atom that is genuinely absent from "abc".
+        assert not _first("in_", char_atom("z"), "abc", module=mod)
+
+    def test_a_one_element_string_is_not_an_element(self, mod):
+        """``"z"`` is the LIST ``[('z',)]``, not the char ``('z',)``.
+
+        THE FLIP (spec §6.2): the elements of a string are char atoms, so a
+        one-character STRING never matches one — the old ``in_("z", "abc")``
+        spelling passed for this reason, not because ``z`` was absent.
+        """
         # nv
-        assert not _first("in_", "z", "abc", module=mod)
+        assert not _first("in_", "a", "abc", module=mod)   # "a" IS in "abc"…
+        assert _first("in_", char_atom("a"), "abc", module=mod)  # …as an atom
 
     def test_empty_string(self, mod):
         # nv

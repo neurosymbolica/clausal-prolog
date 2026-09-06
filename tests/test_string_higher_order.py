@@ -137,11 +137,13 @@ class TestFoldLeftString:
 
 class TestPartitionString:
     def test_partition_vowels(self, mod):
-        # nv
+        # nv — the INPUT is a string; both halves come back as strings
+        # (a list of char atoms IS the string it denotes, spec §6.2).
         Y, N = Var(), Var()
-        for _ in call("partition", mod.module_dict["is_vowel"], mint("hello"), Y, N, module=mod):
-            assert deref(Y) == "eo"
-            assert deref(N) == "hll"
+        results = []
+        for _ in call("partition", mod.module_dict["is_vowel"], "hello", Y, N, module=mod):
+            results.append((deref(Y), deref(N)))
+        assert results == [("eo", "hll")]
 
 
 # ── take_while/3 ─────────────────────────────────────────────────────────────
@@ -177,8 +179,10 @@ class TestDropWhileString:
 
 class TestSpanString:
     def test_span_vowels(self, mod):
-        # nv
+        # nv — the INPUT is a string; both halves come back as strings
+        # (a list of char atoms IS the string it denotes, spec §6.2).
         Y, N = Var(), Var()
-        for _ in call("span", mod.module_dict["is_vowel"], mint("aeibc"), Y, N, module=mod):
-            assert deref(Y) == "aei"
-            assert deref(N) == "bc"
+        results = []
+        for _ in call("span", mod.module_dict["is_vowel"], "aeibc", Y, N, module=mod):
+            results.append((deref(Y), deref(N)))
+        assert results == [("aei", "bc")]

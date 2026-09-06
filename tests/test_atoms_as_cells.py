@@ -1,5 +1,9 @@
-"""Stage A probes: a 1-tuple ("foo",) is accepted as an atom beside today's
-str atom (spec §6.3, §6.4).  Each test names the spec row it pins.
+"""Atom probes: the 1-tuple ``("foo",)`` IS the atom (spec §6.3, §6.4).
+Each test names the spec row it pins.
+
+Written as Stage A "accepted BESIDE the str atom" probes; after THE FLIP
+(Task 11) a plain ``str`` is a STRING, so the dual-acceptance halves are
+refusals now and these read as the atom's own contract.
 
 Builtin goals are cell-shaped tuples, and ``solve/1`` (module=None) refuses
 an unqualified cell goal outright (P3-3 Task 6, ``solve.py``'s
@@ -16,8 +20,11 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
-from clausal.logic.solve import solve
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.exceptions import LogicException
+from clausal.logic.predicate import is_atom_value
+from clausal.logic.solve import solve
+from clausal.logic.variables import Var, deref
 
 CELL = ("foo",)
 
@@ -79,10 +86,6 @@ def test_must_be_compound_accepts_cell(mod):
 # ``Compound``, and hand back ``mint(slot0)`` as the name.  ``'.'``/2 in the
 # name position builds the engine's list shapes (§5.4) — never a
 # ``(".", H, T)`` cell.
-
-from clausal.logic.atoms import char_atom, mint            # noqa: E402
-from clausal.logic.predicate import is_atom_value          # noqa: E402
-from clausal.logic.variables import Var, deref             # noqa: E402
 
 
 def _one(goal, m, *vars_):

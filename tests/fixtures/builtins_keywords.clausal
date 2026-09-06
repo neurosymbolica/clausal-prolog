@@ -1,4 +1,3 @@
--double_quotes(chars)
 # Tests for keyword-term introspection predicates: vary/3, extend/3, unbound_keys/2, signature/3
 
 # vary/3 — copy a term with field overrides
@@ -18,7 +17,10 @@ vec(x=0, y=0),
 vec(x=1, y=2),
 vec(x=3, y=4),
 
-Test("signature vec fields") <- (pred_params("vec", 2, PARAMS), length(PARAMS, 2))  # nv
+# THE FLIP (spec §6.4): the name positions of signature/3 and
+# unbound_keys/2 speak ATOMS, so the literals here are atoms — this file
+# is in the default `-double_quotes(atom)` mode on purpose.
+Test("signature vec fields") <- (pred_params("vec", 2, PARAMS), PARAMS == ["x", "y"])  # nv
 Test("free fields unbound y") <- (free_fields(vec(x=1), KEYS), "y" in KEYS)  # nv
 Test("vary vec x") <- (
     update_x(vec(x=1, y=2), 99, UPDATED),

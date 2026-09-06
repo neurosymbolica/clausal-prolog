@@ -56,7 +56,7 @@ import time
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.cells import is_cell, cell_args
 from clausal.logic.variables import Var, deref
 from clausal.logic.solve import call

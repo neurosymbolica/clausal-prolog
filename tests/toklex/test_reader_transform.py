@@ -1,4 +1,4 @@
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.tools.prolog_ast import PAtom, PCompound, PList, PString, PVar
 from clausal.tools.prolog_parser import parse_term
 from clausal.tools.prolog_reader import VarRef, transform_term
@@ -34,6 +34,25 @@ class TestCells:
         # inverts the "emit the char list" reading, not its meaning.
         assert tt('"ab"')[0] == "ab"
         assert tt('""')[0] == ""
+
+    def test_atom_cell_is_parity_with_mint(self):
+        """The reader INLINES ``mint``'s body and must stay in step with it.
+
+        ``prolog_reader.cell`` builds ``(sys.intern(name),)`` by hand rather
+        than importing ``clausal.logic.atoms.mint`` — the §1c contract keeps
+        this module free of an import edge into the engine — so nothing but
+        this assertion couples the two.  If ``mint`` ever changes shape (an
+        atom table, a different slot-0 discipline), this fails instead of the
+        reader quietly producing a term the engine no longer calls an atom.
+        """
+        from clausal.logic.atoms import is_atom, spelling
+
+        cell, _, _ = transform_term(PAtom("hi"))
+        assert cell == mint("hi")
+        assert is_atom(cell)
+        assert spelling(cell) == "hi"
+        # slot 0 is the interned spelling, exactly as ``mint`` leaves it
+        assert cell[0] is mint("hi")[0]
 
     def test_curly(self):
         assert tt("{a, b}")[0] == ("{}", (",", mint("a"), mint("b")))

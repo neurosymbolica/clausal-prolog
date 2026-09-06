@@ -30,7 +30,7 @@ import os
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.compiler.head_match import head_to_match_pattern
 from clausal.logic.solve import solve, _query_cache

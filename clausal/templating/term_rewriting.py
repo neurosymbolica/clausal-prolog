@@ -1685,11 +1685,14 @@ class TermTransformer(NodeTransformer):
         """
         value = constant.value
         if type(value) is str:
+            quote = _quote_of_positioned(transformer, constant)
             # A DCG terminal literal is a char sequence to consume, not an
-            # atom — see ``_dcg_body_ast``'s Constant case.
+            # atom — see ``_dcg_body_ast``'s Constant case.  The lookup above
+            # still runs: it is unconditional (the mixed-quote-styles
+            # ``SyntaxError`` is a rule about the SOURCE), and only the
+            # ANSWER is exempt.
             if getattr(constant, "_dcg_terminal_text", False):
                 return constant
-            quote = _quote_of_positioned(transformer, constant)
             if quote == '"' and transformer._double_quotes_mode == "chars":
                 return constant                     # a string
             return replace(Constant(value=(sys.intern(value),)), constant)
@@ -2759,7 +2762,13 @@ def _make_functor_class_ast(functor_name, field_names, source):
         f"    if isinstance({functor_name}, PredicateMeta) and getattr(",
         f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",
-        f"    if {functor_name} == {(functor_name,)!r}:",
+        # The seeded-pool ATOM placeholder.  ``type(...) is tuple`` FIRST:
+        # the name may be bound to anything the user put there, and a value
+        # with a broadcasting ``__eq__`` (a numpy array, a pandas frame)
+        # would raise at LOAD time on the bare ``==`` — the isinstance
+        # short-circuit the pre-flip ``isinstance(.., str)`` guard had.
+        f"    if type({functor_name}) is tuple and "
+        f"{functor_name} == {(functor_name,)!r}:",
         "        raise NameError",
         "except NameError:",
         f"    class {functor_name}(metaclass=PredicateMeta):",

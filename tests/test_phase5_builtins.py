@@ -986,7 +986,7 @@ from clausal.logic.clpfd import (
     SumConstraint, ScalarProductConstraint, ElementConstraint, CircuitConstraint,
 )
 from clausal.logic.variables import get_attr
-from clausal.logic.atoms import char_atom, is_atom, mint, spelling
+from clausal.logic.atoms import is_atom, mint, spelling
 
 
 def fresh_trail():

@@ -372,7 +372,7 @@ def _indicator_row(db, name, arity, pred_cls):
 
 @_db_builtin("listing", 1, fields=("pred",))
 def _make_listing__1(db):
-    """Factory for ``listing/1`` — captures *db* so a bare predicate-name str
+    """Factory for ``listing/1`` — captures *db* so a predicate-name ATOM
     or a ``Name/Arity`` indicator can be resolved to a row.
 
     P3-3 Task 8: migrated off a bare class-only builtin.  The class/instance/
@@ -380,7 +380,7 @@ def _make_listing__1(db):
     ``PredicateMeta``'s ``_clauses`` has read through its row since Task 2 —
     so ``db=None`` (the db-less path ``get_builtin_dispatch("listing", 1,
     None)`` and ``tests/test_listing.py`` exercise) keeps working for those
-    three exactly as before.  The two NEW shapes below (a bare str atom, a
+    three exactly as before.  The two NEW shapes below (a name ATOM, a
     ``Name/Arity`` indicator) genuinely need a database to resolve against,
     and raise the pre-existing ``type_error`` when there isn't one.
     """
@@ -390,9 +390,9 @@ def _make_listing__1(db):
         Accepts:
           - a PredicateMeta class or instance (resolves to class)
           - a BuiltinPredicate (prints the "% name/arity — builtin" line)
-          - an atom naming a predicate (NEW, P3-3 Task 8) — a bare ``str``
-            or, since the atoms-as-cells design's §6.4, the arity-0 cell
-            ``("foo",)``
+          - an atom naming a predicate (NEW, P3-3 Task 8) — the arity-0
+            cell ``("foo",)`` (the atoms-as-cells design's §6.4; a bare
+            ``str`` is a STRING and raises ``type_error(predicate, …)``)
           - a ``Name/Arity`` indicator (NEW, P3-3 Task 8): the cell
             ``('/', name, arity)``, the engine's ``Compound("/", (name,
             arity))``, or -- what a user-written ``Fib/2`` actually
@@ -419,9 +419,10 @@ def _make_listing__1(db):
         is_indicator_shaped = (
             type(val) is tuple and len(val) == 3 and val[0] == "/"
         ) or isinstance(val, (Compound, Div))
-        # Spec §6.4: ``listing/1`` accepts an ATOM as the predicate name.  A
-        # bare ``str`` is one of those today, so this is a widening, not a
-        # replacement — the arity-0 cell ``("z0",)`` now names z0/0 as well.
+        # Spec §6.4: ``listing/1`` accepts an ATOM as the predicate name —
+        # the arity-0 cell ``("z0",)`` names z0/0.  A bare ``str`` is a
+        # STRING after THE FLIP and is NOT a name: it falls through to the
+        # ``type_error(predicate, …)`` at the bottom of this function.
         indicator = None if _term_is_atom(val) else _as_name_arity_indicator(val)
 
         # Accept an instance → resolve to its class

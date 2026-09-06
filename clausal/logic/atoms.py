@@ -164,10 +164,20 @@ def mint(spelling: str):
 
     The spelling is ``sys.intern``ed so equality between two equal atoms hits
     the identity fast path on slot 0 (spec §5.2).  There is deliberately NO
-    process-wide atom table: ``sub_atom/5``/``atom_concat/3`` mint one atom
-    per enumerated substring, and a table would pin every one of them for the
-    life of the process; CPython's interned strings are mortal, so the
-    enumeration garbage is reclaimed.
+    process-wide atom TABLE either: nothing here maps a spelling back to a
+    single canonical tuple, so two ``mint`` calls return distinct (equal)
+    cells and no structure grows with the number of atoms ever made.
+
+    Interning is permanent on this CPython — an interned string is immortal
+    for the life of the interpreter — so ``mint`` is for **bounded**
+    producers: compiler-emitted constants, declared atoms, the seeded pool,
+    dict/JSON keys.  **Unbounded enumerators do not come here**:
+    ``char_atom`` and the C result helpers (``char_atom_obj``,
+    ``atom_from_str``) build the cell WITHOUT interning, because
+    ``char_type/2`` alone visits ~49,000 characters and each interned
+    spelling would be pinned forever (see ``char_atom``'s docstring and spec
+    §5.2).  ``sub_atom/5``/``atom_concat/3`` still reach ``mint`` per
+    enumerated substring; that residual pinning is recorded in §5.2.
     """
     if type(spelling) is not str:
         raise TypeError(f"mint: spelling must be a str, got {type(spelling).__name__}")

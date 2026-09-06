@@ -1,4 +1,3 @@
--double_quotes(chars)
 # EDCG counter example: multiple accumulators, passed arguments
 #
 # Demonstrates: counter accumulator, list accumulator, passed scale factor
@@ -31,15 +30,16 @@ run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS) <- (
 )
 
 Test("scaled count 3 items") <- (
-    run_scaled(["a", "b", "c"], 10, COUNT, ITEMS),
+    run_scaled(['a', 'b', 'c'], 10, COUNT, ITEMS),
     COUNT == 30,
-    # P3-1 Task 5 (§1b): the accumulator star (_in) is a plain LIST
-    # source (initially []), not a str/SegString, so under the
-    # source-gated maybe_promote_to_str fix (list_unify.py) the result
-    # stays a list — it no longer promotes to the str "cba" (formerly
-    # asserted here under the old unconditional Phase 2 Task 13 Liskov
-    # promotion, which fired regardless of source type).
-    ITEMS == ["c", "b", "a"]
+    # THE FLIP (spec §6.2): the accumulated items are single-char ATOMS,
+    # and a list of char atoms IS the string it denotes, so the engine is
+    # free to hand the accumulator back in the promoted `str` form.  `is`
+    # UNIFIES, so this holds for either representation — which is the
+    # point of the representation freedom (R-S2).  (The P3-1 `star_was_str`
+    # source gate that used to block the promotion is gone: chars are
+    # cells now, so two char atoms can no longer coalesce by accident.)
+    ITEMS is ['c', 'b', 'a']
 )  # nv
 Test("scaled count empty") <- (
     run_scaled([], 5, COUNT, ITEMS),

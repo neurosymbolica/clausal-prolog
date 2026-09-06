@@ -13,7 +13,7 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref
@@ -427,7 +427,8 @@ class TestWK5:
         keys = Var()
         goal = Call(func=LoadName(name="unbound_keys"), args=[t, keys], kwargs=[])
         results = sol_var(goal, keys, mod=mod)
-        assert results == [["y"]]
+        # THE FLIP (spec §6.4): a field NAME answered to the program is an atom.
+        assert results == [[mint("y")]]
 
     def test_unbound_keys_kwterm(self):
         # nv
@@ -437,7 +438,8 @@ class TestWK5:
         keys = Var()
         goal = Call(func=LoadName(name="unbound_keys"), args=[t, keys], kwargs=[])
         results = sol_var(goal, keys, mod=mod)
-        assert results == [["b"]]
+        # THE FLIP (spec §6.4): a field NAME answered to the program is an atom.
+        assert results == [[mint("b")]]
 
     def test_signature(self):
         # nv
@@ -448,19 +450,40 @@ class TestWK5:
         mod.db.register_signature("mypred", 2, ("arg0", "arg1"))
         names = Var()
         goal = Call(
-            func=LoadName(name="signature"), args=["mypred", 2, names], kwargs=[]
+            func=LoadName(name="signature"), args=[mint("mypred"), 2, names], kwargs=[]
         )
         results = sol_var(goal, names, mod=mod)
-        assert results == [["arg0", "arg1"]]
+        # THE FLIP (spec §6.4): the name position speaks atoms in AND out.
+        assert results == [[mint("arg0"), mint("arg1")]]
 
     def test_signature_unknown(self):
         # nv
         mod = fresh_module()
         names = Var()
         goal = Call(
-            func=LoadName(name="signature"), args=["unknown_pred", 3, names], kwargs=[]
+            func=LoadName(name="signature"),
+            args=[mint("unknown_pred"), 3, names],
+            kwargs=[],
         )
         assert sol_var(goal, names, mod=mod) == []
+
+    def test_signature_rejects_a_string_name(self):
+        """A string in the name position is a type error, not a silent miss."""
+        # nv — spec §6.4: `signature("mypred", 2, N)` asks about the LIST
+        # [m,y,p,r,e,d], which is not a predicate name.
+        from clausal.logic.exceptions import LogicException
+
+        mod = fresh_module()
+        mod.db.register_signature("mypred", 2, ("arg0", "arg1"))
+        names = Var()
+        goal = Call(
+            func=LoadName(name="signature"), args=["mypred", 2, names], kwargs=[]
+        )
+        with pytest.raises(LogicException) as exc:
+            sol_var(goal, names, mod=mod)
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
 
 
 

@@ -72,9 +72,10 @@ def to_python(val):
     the engine's rendering asks for it: ``term_to_string(D, S)`` (or
     ``print_term/1``), then interpolate ``S``.
     """
-    # A str is an atom AND its own spelling AND can never be a bound Var, so
-    # it needs neither the deref nor the atom branch.  It is the hot case on
-    # the thunk path (f-strings), hence the short-circuit.
+    # A str is a STRING (spec §5.1) whose Python form is itself, and it can
+    # never be a bound Var, so it needs neither the deref nor the atom
+    # branch.  It is the hot case on the thunk path (f-strings), hence the
+    # short-circuit.
     if type(val) is str:
         return val
     val = deref(val)

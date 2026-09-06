@@ -3,11 +3,35 @@ unbound_keys/2, signature/3."""
 
 from __future__ import annotations
 
+from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.exceptions import LogicException, type_error
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names, term_field_dict
 from clausal.terms import KWTerm, DictTerm
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
+
+
+def _field_keys(mapping):
+    """Normalise an overrides/additions dict to identifier-spelling keys.
+
+    THE FLIP (spec §6.4): a field name written in source is an ATOM, so
+    ``vary({x: V}, …)`` (and ``{"x": V}`` in the default double-quotes mode)
+    arrives with the cell ``("x",)`` as its key.  KWTerm field names
+    themselves stay identifier ``str``s (§6.4, last row), so the atom is read
+    through ``spelling`` here.  A plain ``str`` key — what the Python API and
+    a ``-double_quotes(chars)`` module hand over — is already the spelling.
+    Returns ``None`` if any key is neither.
+    """
+    out = {}
+    for key, value in mapping.items():
+        key = deref(key)
+        if is_atom(key):
+            key = spelling(key)
+        elif not isinstance(key, str):
+            return None
+        out[key] = value
+    return out
 
 
 @_builtin("vary", 3)
@@ -25,6 +49,9 @@ def _vary__3(overrides, term, new_term, trail, k):
     if isinstance(overrides_val, DictTerm):
         overrides_val = overrides_val.data
     if not isinstance(overrides_val, dict):
+        return
+    overrides_val = _field_keys(overrides_val)
+    if overrides_val is None:
         return
     if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
         try:
@@ -62,6 +89,9 @@ def _extend__3(additions, term, new_term, trail, k):
         additions_val = additions_val.data
     if not isinstance(additions_val, dict):
         return
+    additions_val = _field_keys(additions_val)
+    if additions_val is None:
+        return
     if isinstance(term_val, KWTerm):
         try:
             result = term_val.with_extensions(**additions_val)
@@ -80,19 +110,23 @@ def _unbound_keys__2(term, keys_list, trail, k):
     """unbound_keys(Term, Keys) — Keys is the list of field names holding unbound Vars.
 
     Works for functor dataclass instances and KWTerm.
+
+    THE FLIP (spec §6.4): a field NAME handed back to the program is an
+    ATOM.  The registry stays keyed by the identifier spelling (a ``str``);
+    only the answer is minted.
     """
     term_val = deref(term)
     if is_var(term_val):
         return
-    keys: list[str] = []
+    keys: list[tuple] = []
     if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
         for name in term_field_names(term_val):
             if is_var(deref(getattr(term_val, name))):
-                keys.append(name)
+                keys.append(mint(name))
     elif isinstance(term_val, KWTerm):
         for fname, val in term_val.items():
             if is_var(deref(val)):
-                keys.append(fname)
+                keys.append(mint(fname))
     mark = trail.mark()
     if unify(keys_list, keys, trail):
         yield None
@@ -101,7 +135,14 @@ def _unbound_keys__2(term, keys_list, trail, k):
 
 @_db_builtin("signature", 3, fields=("functor_name", "arity", "names"))
 def _signature_factory(db):
-    """signature(FunctorName, Arity, Names) — reflect the registered signature."""
+    """signature(FunctorName, Arity, Names) — reflect the registered signature.
+
+    THE FLIP (spec §6.4): the name position speaks ATOMS.  *FunctorName* is
+    read through ``spelling``; a string (or any other non-atom) raises
+    ``type_error(atom, …)``.  Each answered parameter name is a name too, so
+    *Names* comes back as a list of atoms.  The database registry itself
+    stays keyed by the identifier spelling.
+    """
     def signature__3(functor_name, arity, names, trail, k):
         f_val = deref(functor_name)
         a_val = deref(arity)
@@ -109,11 +150,13 @@ def _signature_factory(db):
             return
         if not isinstance(a_val, int):
             return
-        sig = db.signature_for(str(f_val), a_val)
+        if not is_atom(f_val):
+            raise LogicException(type_error("atom", f_val, "signature/3"))
+        sig = db.signature_for(spelling(f_val), a_val)
         if sig is None:
             return
         mark = trail.mark()
-        if unify(names, list(sig), trail):
+        if unify(names, [mint(n) for n in sig], trail):
             yield None
         trail.undo(mark)
     return signature__3

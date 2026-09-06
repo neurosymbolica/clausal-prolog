@@ -82,7 +82,7 @@ import ast
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.compiler import compile_predicate_trampoline_ast
 from clausal.logic.compiler.goal_trampoline import compile_goal_trampoline
 from clausal.logic.database import Clause, Database

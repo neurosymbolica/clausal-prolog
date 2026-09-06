@@ -2,7 +2,7 @@
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.predicate import PredicateMeta, _MISSING
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var, is_var

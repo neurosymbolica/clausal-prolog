@@ -1,3 +1,5 @@
+-double_quotes(chars)
+
 # Edge facts
 Edge(1, 2),
 Edge(2, 3),

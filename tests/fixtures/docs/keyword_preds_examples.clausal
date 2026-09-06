@@ -24,10 +24,12 @@ Test("change multiple") <- (
 # --8<-- [end:vary_examples]
 
 # --8<-- [start:unbound_keys_examples]
+# A field name is an ATOM (spec §6.4), so the keys are `y`/`z`, not the
+# strings "y"/"z" — this file is in `-double_quotes(chars)` mode.
 Test("unbound") <- (
     unbound_keys(point(1, Y_UNUSED, Z_UNUSED), KEYS),
-    in_("y", KEYS),
-    in_("z", KEYS),
+    in_('y', KEYS),
+    in_('z', KEYS),
     length(KEYS, 2)
 )  # nv
 
@@ -35,8 +37,9 @@ Test("fully bound") <- unbound_keys(point(1, 2, 3), [])  # nv
 # --8<-- [end:unbound_keys_examples]
 
 # --8<-- [start:signature_example]
+# The name position speaks atoms in AND out (spec §6.4).
 Test("signature") <- (
-    signature("point", 3, NAMES),
-    NAMES == ["x", "y", "z"]
+    signature('point', 3, NAMES),
+    NAMES == ['x', 'y', 'z']
 )  # nv
 # --8<-- [end:signature_example]

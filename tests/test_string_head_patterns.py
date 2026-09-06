@@ -1,8 +1,13 @@
 """Tests for compiler head pattern matching against strings.
 
-Compiled clause heads with list patterns now accept strings as input.
-String slicing preserves string type through recursion (e.g., [H, *T]
-on "hello" gives H='h', T='ello').
+Compiled clause heads with list patterns accept strings as input, because
+a string IS the list of its char atoms (spec §6.2). String slicing
+preserves string type through recursion: ``[H, *T]`` on ``"hello"`` gives
+``H = ('h',)`` (a char atom) and ``T = "ello"`` (a str slice, R-S2).
+
+Every test here feeds a STRING and asserts the solutions it produced, so a
+head pattern that stopped matching strings would empty the result list and
+fail the assertion rather than pass vacuously.
 """
 
 import pytest
@@ -61,65 +66,77 @@ class TestCaptureAllString:
     def test_capture_all(self, edge_mod):
         # nv
         A = Var()
-        for _ in call("CaptureAll", mint("hello"), A, module=edge_mod):
-            assert deref(A) == "hello"
+        results = []
+        for _ in call("CaptureAll", "hello", A, module=edge_mod):
+            results.append(deref(A))
+        # THE FLIP (spec §6.2): a star over a string captures a str slice.
+        assert results == ["hello"]
 
     def test_capture_all_empty(self, edge_mod):
         # nv
         A = Var()
-        for _ in call("CaptureAll", mint(""), A, module=edge_mod):
-            assert deref(A) == ""
+        results = []
+        for _ in call("CaptureAll", "", A, module=edge_mod):
+            results.append(deref(A))
+        assert results == [""]
 
 
 class TestThreeAndRestString:
     def test_three_and_rest(self, edge_mod):
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
-        for _ in call("ThreeAndRest", mint("abcde"), A, B, C, R, module=edge_mod):
-            assert deref(A) == "a"
-            assert deref(B) == "b"
-            assert deref(C) == "c"
-            assert deref(R) == "de"
+        results = []
+        for _ in call("ThreeAndRest", "abcde", A, B, C, R, module=edge_mod):
+            results.append((deref(A), deref(B), deref(C), deref(R)))
+        # THE FLIP (spec §6.2): fixed elements are CHAR ATOMS, the rest a str.
+        assert results == [
+            (char_atom("a"), char_atom("b"), char_atom("c"), "de")
+        ]
 
     def test_three_exact(self, edge_mod):
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
-        for _ in call("ThreeAndRest", mint("abc"), A, B, C, R, module=edge_mod):
-            assert deref(R) == ""
+        results = []
+        for _ in call("ThreeAndRest", "abc", A, B, C, R, module=edge_mod):
+            results.append((deref(A), deref(B), deref(C), deref(R)))
+        assert results == [(char_atom("a"), char_atom("b"), char_atom("c"), "")]
 
     def test_too_short_fails(self, edge_mod):
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
-        assert list(call("ThreeAndRest", mint("ab"), A, B, C, R, module=edge_mod)) == []
+        assert list(call("ThreeAndRest", "ab", A, B, C, R, module=edge_mod)) == []
 
 
 class TestExactlyTwoString:
     def test_exactly_two(self, edge_mod):
         # nv
         X, Y = Var(), Var()
-        for _ in call("ExactlyTwo", mint("ab"), X, Y, module=edge_mod):
-            assert deref(X) == "a"
-            assert deref(Y) == "b"
+        results = []
+        for _ in call("ExactlyTwo", "ab", X, Y, module=edge_mod):
+            results.append((deref(X), deref(Y)))
+        assert results == [(char_atom("a"), char_atom("b"))]
 
     def test_wrong_length_fails(self, edge_mod):
         # nv
         X, Y = Var(), Var()
-        assert list(call("ExactlyTwo", mint("abc"), X, Y, module=edge_mod)) == []
-        assert list(call("ExactlyTwo", mint("a"), X, Y, module=edge_mod)) == []
+        assert list(call("ExactlyTwo", "abc", X, Y, module=edge_mod)) == []
+        assert list(call("ExactlyTwo", "a", X, Y, module=edge_mod)) == []
 
 
 class TestIsEmptyString:
-    def test_empty_string_no_longer_matches_empty_list_head(self, edge_mod):
-        # nv — P3-1 Task 5 (§1b): IsEmpty's fact head is the literal empty
-        # LIST `[]`, called here with the empty STR "". Empty str and
-        # empty list are different types now too (no cross-type
-        # exception for the empty case), so this no longer matches.
-        # (Formerly ``test_empty_string``, asserting it DID match.)
-        assert list(call("IsEmpty", mint(""), module=edge_mod)) == []
+    def test_empty_string_matches_empty_list_head(self, edge_mod):
+        # nv — THE FLIP (spec §6.2): `""` unifies with `[]`, so IsEmpty's
+        # literal `[]` fact head matches the empty STRING. (Under P3-1 a
+        # `str` was an atom and this failed; the inversion is deliberate.)
+        assert len(list(call("IsEmpty", "", module=edge_mod))) == 1
 
     def test_nonempty_string_fails(self, edge_mod):
-        # nv
-        assert list(call("IsEmpty", mint("x"), module=edge_mod)) == []
+        # nv — "x" is the one-element list [('x',)], not [].
+        assert list(call("IsEmpty", "x", module=edge_mod)) == []
+
+    def test_atom_does_not_match_empty_list_head(self, edge_mod):
+        # nv — the ATOM `''` is a cell, not a list; it never matches `[]`.
+        assert list(call("IsEmpty", mint(""), module=edge_mod)) == []
 
 
 # ── Recursive predicates on strings ────────────────────────────────────────
@@ -129,26 +146,35 @@ class TestRecursiveOnString:
     def test_length(self, lists_mod):
         # nv
         N = Var()
-        for _ in call("length", mint("hello"), N, module=lists_mod):
-            assert deref(N) == 5
+        results = []
+        for _ in call("length", "hello", N, module=lists_mod):
+            results.append(deref(N))
+        assert results == [5]
 
     def test_length_empty(self, lists_mod):
         # nv
         N = Var()
-        for _ in call("length", mint(""), N, module=lists_mod):
-            assert deref(N) == 0
+        results = []
+        for _ in call("length", "", N, module=lists_mod):
+            results.append(deref(N))
+        assert results == [0]
 
     def test_last(self, lists_mod):
         # nv
         L = Var()
-        for _ in call("last", mint("hello"), L, module=lists_mod):
-            assert deref(L) == "o"
+        results = []
+        for _ in call("last", "hello", L, module=lists_mod):
+            results.append(deref(L))
+        # THE FLIP (spec §6.2): an element of a string is a CHAR ATOM.
+        assert results == [char_atom("o")]
 
     def test_last_single(self, lists_mod):
         # nv
         L = Var()
-        for _ in call("last", mint("x"), L, module=lists_mod):
-            assert deref(L) == "x"
+        results = []
+        for _ in call("last", "x", L, module=lists_mod):
+            results.append(deref(L))
+        assert results == [char_atom("x")]
 
 
 # ── String type preservation through recursion ─────────────────────────────
@@ -160,24 +186,38 @@ class TestStringPreservation:
     def test_tail_is_string(self, edge_mod):
         # nv
         H, T = Var(), Var()
-        for _ in call("HeadTail", mint("abc"), H, T, module=edge_mod):
-            assert isinstance(deref(T), str), f"T should be str, got {type(deref(T))}"
+        results = []
+        for _ in call("HeadTail", "abc", H, T, module=edge_mod):
+            results.append(deref(T))
+        assert results == ["bc"]
+        assert isinstance(results[0], str), f"T should be str, got {type(results[0])}"
 
     def test_star_capture_is_string(self, edge_mod):
         # nv
         A = Var()
-        for _ in call("CaptureAll", mint("hello"), A, module=edge_mod):
-            assert isinstance(deref(A), str)
+        results = []
+        for _ in call("CaptureAll", "hello", A, module=edge_mod):
+            results.append(deref(A))
+        assert results == ["hello"]
+        assert isinstance(results[0], str)
 
     def test_rest_is_string(self, edge_mod):
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
-        for _ in call("ThreeAndRest", mint("abcde"), A, B, C, R, module=edge_mod):
-            assert isinstance(deref(R), str)
+        results = []
+        for _ in call("ThreeAndRest", "abcde", A, B, C, R, module=edge_mod):
+            results.append(deref(R))
+        assert results == ["de"]
+        assert isinstance(results[0], str)
 
     def test_list_input_still_gives_list(self, edge_mod):
         """List input is unchanged — tail is still a list."""
         # nv
         H, T = Var(), Var()
-        for _ in call("HeadTail", [mint("a"), mint("b"), mint("c")], H, T, module=edge_mod):
-            assert isinstance(deref(T), list)
+        results = []
+        for _ in call(
+            "HeadTail", [mint("a"), mint("b"), mint("c")], H, T, module=edge_mod
+        ):
+            results.append((deref(H), deref(T)))
+        assert results == [(mint("a"), [mint("b"), mint("c")])]
+        assert isinstance(results[0][1], list)

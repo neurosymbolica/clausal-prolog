@@ -14,7 +14,7 @@ Tests cover:
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.constraints import reify_eq, dif
 from clausal.logic.clpfd import reify_fd, fd_eq, fd_lt, in_domain

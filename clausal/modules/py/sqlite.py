@@ -43,11 +43,10 @@ def _text(val, what: str) -> str:
     THE FLIP (2026-09-06-atoms-as-cells-strings): these arguments used to be
     coerced with ``str()``, which post-flip renders the atom ``(':memory:',)``
     as its Python tuple REPR -- during the flip that literally created a file
-    named ``(':memory:',)``.  ``to_text`` unwraps the atom and raises
-    ``type_error(text, …)`` for a compound; anything else that is not text
-    (a number, an unbound Var) is a loud ``type_error`` here too, since every
-    one of these positions is a database path, alias, table name or SQL
-    string.
+    named ``(':memory:',)``.  ``to_text`` unwraps the atom and answers
+    ``None`` for anything that is not text (a compound, a number, an unbound
+    Var); here that is a loud ``type_error``, since every one of these
+    positions is a database path, alias, table name or SQL string.
     """
     text = to_text(val)
     if text is None:

@@ -3,7 +3,7 @@
 import os
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.tabling import (
     TableEntry,
     DelayedNegation,

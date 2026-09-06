@@ -1,4 +1,4 @@
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import char_atom
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.runtime.list_unify import (
     _head_list_unify_input_py, _head_list_unify_output_py,

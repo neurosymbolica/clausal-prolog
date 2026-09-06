@@ -18,7 +18,7 @@ import textwrap
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 import clausal.logic.constraints as C
 from clausal.logic.constraints import (
     dif,

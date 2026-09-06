@@ -25,7 +25,7 @@ whichever way it points.
 
 from __future__ import annotations
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref

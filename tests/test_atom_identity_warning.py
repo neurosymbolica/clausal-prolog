@@ -31,7 +31,7 @@ import sys
 import textwrap
 import warnings
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.compiler_v2 import _process_declarations
 
 

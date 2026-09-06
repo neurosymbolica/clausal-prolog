@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_to_clausal import prolog_to_clausal
 
@@ -389,31 +388,18 @@ class TestUnifiedCLI:
         assert result.returncode == 0
         assert "clausal-translate" in result.stdout or "translate" in result.stdout
 
-    def test_roundtrip_flag(self, tmp_path):
+    def test_roundtrip_flag(self):
         # nv
-        # THE FLIP (spec §7): a ``.pl`` whose ``"..."`` mean STRINGS has to
-        # DECLARE that mode for the trip to be byte-identical -- the clausal
-        # side spells it ``-double_quotes(chars)`` and the return leg writes
-        # it back out, so a source that relied on the reader's implicit
-        # default comes back one directive richer.  ``edge_graph.pl`` (the
-        # former input here) is exactly such a source; this fixture states
-        # its mode, which is what the round trip is for.
+        # THE FLIP (spec §7): a ``.pl`` whose ``"..."`` mean STRINGS DECLARES
+        # that mode -- the clausal side spells it ``-double_quotes(chars)``
+        # and the return leg writes it back out, so the checked-in golden
+        # carries ``:- double_quotes(chars).`` and the trip is byte-identical.
+        # The CHECKED-IN fixture is the subject on purpose: a synthetic file
+        # written by the test would only round-trip itself.
         import subprocess
-        src = tmp_path / "roundtrip.pl"
-        src.write_text(
-            ':- double_quotes(chars).\n'
-            '\n'
-            'edge(1, 2).\n'
-            '\n'
-            'reach(X, Y) :-\n'
-            '    edge(X, Y).\n'
-            '\n'
-            'test("edge 1 2") :-\n'
-            '    edge(1, 2).\n',
-            encoding="utf-8",
-        )
+        src = GOLDEN / "edge_graph.pl"
         result = subprocess.run(
             ["python", "-m", "clausal.tools.translate", "--roundtrip", str(src)],
             capture_output=True, text=True,
         )
-        assert result.returncode == 0, result.stderr
+        assert result.returncode == 0, result.stdout + result.stderr

@@ -1,4 +1,4 @@
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.tools.prolog_reader import Clause, SyntaxIssue, read_module
 
 

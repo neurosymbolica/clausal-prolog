@@ -12,7 +12,7 @@ from fractions import Fraction
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.clpfd import (
     fd_lt, fd_le, fd_gt, fd_ge, _incomparable_order_error,

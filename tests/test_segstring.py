@@ -7,7 +7,7 @@ Tests cover:
 4. _build_star_list / _build_multi_star_list string support
 """
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import char_atom
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.terms import (
     SegString, SegList, ConcreteSeg, VarSeg,
@@ -531,10 +531,12 @@ class TestClauseLevelStringPatterns:
         )
         mod = _load_module("lec_segstr", fixture).__dict__["$module"]
         H, T = Var(), Var()
-        for _ in call("HeadTail", mint("hello"), H, T, module=mod):
-            assert deref(H) == "h"
-            assert deref(T) == "ello"
-            break
+        results = []
+        for _ in call("HeadTail", "hello", H, T, module=mod):
+            results.append((deref(H), deref(T)))
+        # THE FLIP (spec §6.2): the head of a string is a CHAR ATOM, the
+        # tail a str slice (R-S2).
+        assert results == [(char_atom("h"), "ello")]
 
     def test_body_multi_star_string_direct(self):
         """_body_multi_star_unify with string target — star vars are substrings."""

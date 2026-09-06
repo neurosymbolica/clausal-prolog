@@ -28,7 +28,7 @@ regression test below locks in that a bytes-literal head still matches a bytes
 caller and is unaffected by this change.
 """
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.solve import call
 from tests.audit_2026_05_25._helpers import load_inline_clausal
 

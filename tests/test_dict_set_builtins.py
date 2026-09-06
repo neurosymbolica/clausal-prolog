@@ -25,7 +25,7 @@ from clausal.logic.solve import solve, query
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Call, LoadName, DictTerm, SetTerm
 from clausal.import_hook import _load_module
-from clausal.logic.atoms import char_atom, is_atom, mint, spelling
+from clausal.logic.atoms import is_atom, mint, spelling
 
 _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 

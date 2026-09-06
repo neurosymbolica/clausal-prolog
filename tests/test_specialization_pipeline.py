@@ -8,7 +8,7 @@ compiled and callable.
 from __future__ import annotations
 
 import pytest
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 
 
 # ── Fixture imports ──────────────────────────────────────────────────────────

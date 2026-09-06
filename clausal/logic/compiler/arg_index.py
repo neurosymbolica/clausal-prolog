@@ -111,8 +111,9 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
     - Anything else (Var, list, DictTerm, …) → ``_INDEX_VAR``
     """
     # ``[]``/``""``/``b""`` key alike -- see the twin guard in
-    # :func:`_runtime_arg_key`.
-    if type(arg) in (bytes, str) and not arg:
+    # :func:`_runtime_arg_key` and :func:`_static_call_key`.
+    _t = type(arg)
+    if (_t is bytes or _t is str) and not arg:
         return _INDEX_VAR
     if isinstance(arg, _INDEXABLE_TYPES):
         return arg
@@ -398,13 +399,25 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
     P3-2): see :func:`_arg_to_index_key`.
     """
     if isinstance(arg_expr, ast.Constant):
+        value = arg_expr.value
+        t = type(value)
+        # ``[]``, ``""`` and ``b""`` all denote the empty list and unify with
+        # each other, so they must key ALIKE -- the twin guard in
+        # :func:`_runtime_arg_key` and :func:`_arg_to_index_key`.  Without it
+        # ``b""`` keyed ITSELF here while its two equal spellings did not, so
+        # a ``b""`` call site could specialise to a bucket that a ``[]``
+        # clause head is missing from.  ``_INDEX_VAR`` is never a bucket key
+        # (:func:`_build_arg_index` groups only the specific keys), so every
+        # consumer reads this as "no specialisation", which is the full scan.
+        if (t is bytes or t is str) and not value:
+            return _INDEX_VAR
         # scalar: int, float, bool, None, bytes — key is the value itself.
         # A ``str`` constant is a STRING after THE FLIP and is unindexable
         # (§6.9), so it has no static key either; answering the ``str``
         # would name a bucket no head ever built.
-        if type(arg_expr.value) is str:
+        if t is str:
             return None
-        return arg_expr.value
+        return value
     if isinstance(arg_expr, ast.Tuple) and arg_expr.elts \
             and all(isinstance(e, ast.Constant) for e in arg_expr.elts) \
             and type(arg_expr.elts[0].value) is str:

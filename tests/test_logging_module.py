@@ -207,6 +207,29 @@ class TestOutputCapture:
         _run_simple(_log_3, logger, "warning", "log3 msg")
         assert buf.getvalue() == "WARNING:log3 msg\n"
 
+    def test_compound_message_is_written_by_the_engine_writer(self):
+        """A message that is not text logs as the TERM, and does not raise.
+
+        THE FLIP (spec §9.4): ``to_text`` answers ``None`` for a cell of
+        arity >= 1 rather than raising, precisely so ``_message_text``'s
+        documented fallback — the engine's own unquoted writer — is
+        reachable.  A Python ``repr`` here would print ``('foo', 1)``.
+        """
+        # nv
+        from clausal.terms import Compound
+
+        logger, buf = _make_capture_handler("test.unit.cap.compound")
+        _run_simple(_info_2, logger, Compound("foo", (1,)))
+        assert buf.getvalue() == "INFO:foo(1)\n"
+
+    def test_atom_message_logs_its_spelling(self):
+        # nv — an ATOM is text (spec §9.4): its spelling, not its repr.
+        from clausal.logic.atoms import mint
+
+        logger, buf = _make_capture_handler("test.unit.cap.atommsg")
+        _run_simple(_info_2, logger, mint("hello atom"))
+        assert buf.getvalue() == "INFO:hello atom\n"
+
 
 class TestLevelFiltering:
     """Verify that messages below the logger's level are suppressed."""

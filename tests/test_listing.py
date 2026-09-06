@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.builtins.io import _format_clause_head

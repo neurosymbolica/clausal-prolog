@@ -19,7 +19,6 @@ from pathlib import Path
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
 from clausal.fmt import format_source
 from clausal.fmt.comments import arrow_nodes
 from clausal.fmt.verify import ast_equivalent

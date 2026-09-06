@@ -13,7 +13,7 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.terms import (
     Compound,
     KWTerm,

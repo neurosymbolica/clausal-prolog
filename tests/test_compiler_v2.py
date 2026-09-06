@@ -13,7 +13,7 @@ import warnings
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.import_hook import (
     EmbedTransformer,
     PredicateLoader,

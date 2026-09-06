@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.builtins import (
     _map_list__2, _map_list__3, _include__3, _exclude__3, _foldl__4,
 )

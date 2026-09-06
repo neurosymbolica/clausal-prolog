@@ -12,7 +12,7 @@ import dataclasses
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import TermTransformer, _is_logic_var_name
 from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate

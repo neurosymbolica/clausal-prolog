@@ -7,7 +7,7 @@ should produce simple_ast nodes as values.
 
 import ast
 import pytest
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.import_hook import (
     _FreshEmbedTransformer, _simple_ast_builtins,
     _star_query_input_transformer, _STAR_QUERY_SENTINEL,

@@ -60,7 +60,10 @@ Test("atom: declared atom Abc") <- atom(Abc)  # nv
 # every str because a str WAS an atom; a str is the list of its char atoms
 # now, and this module reads "..." as one (-double_quotes(chars) above).
 Test("atom: string fails") <- (not atom("hello"))  # nv
-Test("atom: char list fails") <- (not atom(["h", "e", "l", "l", "o"]))  # nv
+# This module is in `-double_quotes(chars)` mode, so `"h"` would be a
+# one-element STRING, not a char — the char atoms are spelled `'h'` (an atom
+# in every mode, spec §7).
+Test("atom: char list fails") <- (not atom(['h', 'e', 'l', 'l', 'o']))  # nv
 Test("atom: integer fails") <- (not atom(1))  # nv
 Test("atom: unbound var fails") <- (not atom(_x_UNUSED))  # nv
 

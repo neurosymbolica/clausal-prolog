@@ -10,7 +10,6 @@ import uuid
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.uuid import (
     uuid_v4, uuid_v1, uuid_v3, uuid_v5,

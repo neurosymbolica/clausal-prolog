@@ -10,7 +10,7 @@ TermTransformer output and detecting other DSL patterns.
 """
 import ast
 import pytest
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import (
     TermTransformer,
@@ -639,7 +639,9 @@ def test_embed_double_dash():
 def test_embed_double_dash_nested():
     # nv
     ns = embed_exec("result = --'hello'")
-    assert ns['result'] == mint('hello')   # plain Python string, not StringLiteral
+    # THE FLIP: a single-quoted literal is an ATOM in every mode — the
+    # arity-0 cell ``('hello',)``, not a StringLiteral node.
+    assert ns['result'] == mint('hello')
 
 
 def test_embed_spaced_double_dash_not_escaped():

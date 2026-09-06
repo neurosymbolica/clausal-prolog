@@ -10,7 +10,6 @@ import tempfile
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
 from clausal.modules.countries._data import CURRENCIES, JURISDICTIONS
 
 # Authoritative ISO 4217 minor-unit exceptions; everything else is 2.

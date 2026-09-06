@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
@@ -646,3 +646,23 @@ got(_v) <- (setup() and query('db7', 'SELECT v FROM t', _v))
         # ...and no stray file was created for the repr of the path atom.
         assert not list(tmp_path.glob("*memory*"))
         assert not list(Path.cwd().glob("*(':memory:',)*"))
+
+    def test_a_compound_path_raises_rather_than_opening_its_repr(self, tmp_path):
+        """A COMPOUND in a text position is a loud ``type_error(text, …)``.
+
+        ``to_text`` answers ``None`` for a cell of arity >= 1 (spec §9.4) so
+        that a caller with a fallback can use it; sqlite has no fallback —
+        a path, alias, table or SQL argument is text or it is an error —
+        so ``_text`` raises here.  Never a repr, and never a stray file.
+        """
+        # nv
+        from clausal.logic.exceptions import LogicException
+        from clausal.modules.py.sqlite import _text
+        from clausal.terms import Compound
+
+        with pytest.raises(LogicException) as exc:
+            _text(Compound("db", (1,)), "path")
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("text")
+        assert not list(Path.cwd().glob("*('db', 1)*"))

@@ -23,7 +23,7 @@ import importlib
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.solve import _deref_walk
 from clausal.logic.variables import Var
 from clausal.terms import Compound

@@ -45,7 +45,7 @@ import os
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.compiler import predicate as predicate_mod
 from clausal.logic.solve import call

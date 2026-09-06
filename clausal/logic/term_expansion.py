@@ -317,10 +317,10 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     if not found:
         return None
 
-    # THE FLIP (spec §5.1): the suppression sentinel is written ``none`` (or
-    # ``"none"``) in source and is therefore the ATOM.  A ``str`` is still
-    # accepted for a hand-built expansion and for a chars-mode module.
-    if expansion == _NONE_ATOM or expansion == "none":
+    # THE FLIP (spec §6.4): ``none`` is a sentinel NAME, so it is an ATOM.
+    # A plain ``str`` is a string (the char list) and is NOT the sentinel —
+    # a chars-mode module writes the sentinel ``none`` or ``'none'``.
+    if expansion == _NONE_ATOM:
         return None, new_state
     if isinstance(expansion, list):
         if wrap_head:

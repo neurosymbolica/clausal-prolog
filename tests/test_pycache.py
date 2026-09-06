@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 import clausal.import_hook
 from clausal.import_hook import PredicateLoader, _load_module
 from clausal.logic.compiler import compile_predicate_trampoline

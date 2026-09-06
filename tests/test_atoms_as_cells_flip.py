@@ -38,6 +38,16 @@ def _load_inline_clausal(name: str, source: str):
         os.unlink(path)
 
 
+def _formal(exc_info):
+    """The FORMAL term of a raised ``error(Formal, Context)``.
+
+    Asserting on ``str(exc)`` cannot tell ``type_error(atom, X)`` from a
+    context string that merely mentions "atom"; every refusal row here goes
+    through this and names the formal term and its type ATOM (spec §6.4).
+    """
+    return exc_info.value.term.args[0]
+
+
 def _answers(goal, mod, *vars_):
     """Every solution's walked bindings for *vars_* (walked INSIDE the loop)."""
     out = []
@@ -177,10 +187,16 @@ def test_row_11_unpack_constructs_a_cell(builtins_mod):
 def test_row_12_unpack_refuses_a_string_name(builtins_mod):
     with pytest.raises(LogicException) as exc:
         list(solve(("unpack", Var(), ["foo", 1]), builtins_mod))
-    assert "atom" in str(exc.value)
+    formal = _formal(exc)
+    assert formal.functor == "type_error"
+    assert formal.args[0] == mint("atom")
+    assert formal.args[1] == "foo"          # the culprit is the STRING
     with pytest.raises(LogicException) as exc:
         list(solve(("unpack", Var(), ["foo"]), builtins_mod))
-    assert "atomic" in str(exc.value)
+    formal = _formal(exc)
+    assert formal.functor == "type_error"
+    assert formal.args[0] == mint("atomic")
+    assert formal.args[1] == "foo"
 
 
 def test_row_13_call_takes_an_atom_and_refuses_a_string():
@@ -413,9 +429,20 @@ def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):
     indicator = ("/", mint("r30_foo"), 1)
     assert len(list(solve(("r30_list", indicator), mod))) == 1
     assert "r30_foo/1" in capsys.readouterr().out
+    # ...and the bare ATOM names the /0 predicate of that spelling (§6.4).
+    with pytest.raises(LogicException) as exc:
+        list(solve(("r30_list", mint("r30_foo")), mod))
+    formal = _formal(exc)
+    assert formal.functor == "existence_error"      # r30_foo/0, not r30_foo/1
+    assert formal.args[0] == mint("procedure")
+    capsys.readouterr()
+    # A STRING is not a predicate indicator: type_error(predicate, "…").
     with pytest.raises(LogicException) as exc:
         list(solve(("r30_list", "r30_foo"), mod))
-    assert "type_error" in str(exc.value) or "predicate" in str(exc.value)
+    formal = _formal(exc)
+    assert formal.functor == "type_error"
+    assert formal.args[0] == mint("predicate")
+    assert formal.args[1] == "r30_foo"
 
 
 # ── Carry-forward pins (items Stage A deferred to THE FLIP) ─────────────────

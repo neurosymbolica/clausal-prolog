@@ -31,7 +31,7 @@ import os
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.compiler import (
     compile_predicate_trampoline_ast,
     compile_predicate_trampoline,

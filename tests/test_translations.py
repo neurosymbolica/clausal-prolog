@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.translations import (
     TranslatedEntry,
     register_predicate,

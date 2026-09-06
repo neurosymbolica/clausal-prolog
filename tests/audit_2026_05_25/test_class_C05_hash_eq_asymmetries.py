@@ -13,7 +13,7 @@ Findings tested here:
 
 import pytest
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import char_atom
 
 
 def test_F017_segstring_unhashable():

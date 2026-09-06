@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import textwrap
 
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import mint
 from clausal.logic.exceptions import LogicException, type_error
 from clausal.terms import Add, Compound, FloorDiv
 from clausal.testing import main
