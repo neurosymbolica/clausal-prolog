@@ -108,6 +108,7 @@ Standing preferences applied throughout: design questions are recorded in
 | char `a` | `("a",)` | an ordinary atom of length 1 |
 | codes `b"ab"` | `b"ab"` | unchanged (`bytes`-as-lists, the codes model) |
 | Python tuple data `("bar",)` | `("bar",)` | **the same term as the atom** — THE DISCIPLINE (`cells.py:53–64`, pinned by `tests/test_funnel_accessors.py::TestCellFunnelAwareness`) |
+| `foo()` in source | `("foo",)` | **the same term as `foo`**. ISO/Scryer have no zero-arity compound (`foo()` is a syntax error there); SWI 7+ makes `foo()` a distinct term (`foo() \= foo`). Clausal takes the ISO side: one term. |
 
 The discipline is unchanged and is what makes D free: a non-empty tuple
 whose slot 0 is a `str` is a cell by shape, full stop, and a 1-tuple is the
