@@ -309,6 +309,10 @@ def quote_atom(s: str) -> str             # "'" + s with \\ and \' and control c
 def quote_string(s: str) -> str           # '"' + s with \\ and \" and control chars escaped + '"'
 def term_str(t, style=None, _bd=0, *, quoted=True) -> str   # NEW keyword; quoted=False is the write/1 family
 ```
+def term_canonical(t) -> str             # write_canonical/1 renderer (spec §6.7): quoted atoms, NO space after commas, no operators,
+                                         # every list as the '.'/2 cons structure ending in [] ('.'(1,'.'(2,[]))); Var as term_str prints it;
+                                         # Stage A: a str is an atom → quoted spelling; Task 11 turns the str branch into the cons form.
+```
 `_format_term_for_io(val)` = `term_str(val, quoted=False)` for cells and lists; `str` is text; everything else `str(val)` as today.
 
 - [ ] **Step 1: Failing tests**
@@ -356,12 +360,22 @@ def test_write_family_prints_cell_atom_bare():
     assert buf.getvalue() == "flagfoo(foo bar)"
 
 
-def test_writeq_quotes_and_write_canonical_exists():
+def test_writeq_quotes_and_write_canonical_is_cons_form():
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         list(solve(("writeq", ("foo bar",))))
         list(solve(("write_canonical", ("foo", ("foo bar",), 1))))
-    assert buf.getvalue() == "'foo bar'foo('foo bar', 1)"
+        list(solve(("write_canonical", [1, 2])))
+        list(solve(("write_canonical", [])))
+    assert buf.getvalue() == "'foo bar'foo('foo bar',1)'.'(1,'.'(2,[]))[]"
+
+
+def test_term_canonical_partial_list_and_nesting():
+    from clausal.terms import term_canonical
+    from clausal.logic.variables import Var
+    assert term_canonical(("f", [("a",), ("b c",)])) == "f('.'(a,'.'('b c',[])))"
+    t = term_canonical([1, Var()])
+    assert t.startswith("'.'(1,_") and t.endswith(")")
 
 
 def test_term_str_hidden_atom_display_unchanged():
@@ -422,12 +436,54 @@ def test_term_str_hidden_atom_display_unchanged():
 
     @_builtin("write_canonical", 1)
     def _write_canonical__1(term, trail, k):
-        """write_canonical(Term) — quoted, operator-free (this engine never prints operators, so identical to writeq/1)."""
+        """write_canonical(Term) — ISO 8.14.2 canonical form: quoted atoms, no operators,
+        no spaces, every list as its '.'/2 structure (Scryer: write_canonical("hello")
+        prints '.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))."""
         from clausal.logic.solve import _deref_walk
-        _sys.stdout.write(_term_str(_deref_walk(term), quoted=True))
+        _sys.stdout.write(_term_canonical(_deref_walk(term)))
         _sys.stdout.flush()
         yield None
     ```
+  - `terms.py`: add `term_canonical(t)` next to `term_str`:
+    ```python
+    def term_canonical(t: Any) -> str:
+        """write_canonical/1 rendering (spec §6.7): quoted, operator-free, no spaces,
+        lists as '.'/2 cons cells.  Same dispatch order as term_str."""
+        t = deref(t) if not isinstance(t, (str, bytes, int, float)) else t
+        if t is None or t is ... or isinstance(t, (bool, Decimal, int, float, complex)):
+            return term_str(t)
+        if isinstance(t, str):
+            # Stage A: a str is an atom.  Task 11 replaces this branch with the
+            # cons form of the string's char list.
+            display = demangle_for_display(t) if is_mangled(t) else t
+            return quote_atom(display) if (not is_mangled(t) and atom_needs_quotes(display)) else display
+        if isinstance(t, bytes):
+            return repr(t)
+        if isinstance(t, list):
+            out = "[]"
+            for e in reversed(t):
+                out = "'.'(" + term_canonical(e) + "," + out + ")"
+            return out
+        if isinstance(t, (SegList, SegString)):
+            return term_canonical(t.__walk__())
+        if isinstance(t, Var):
+            return term_str(t)
+        if type(t) is tuple and t and type(t[0]) is str:
+            functor = t[0]
+            display = demangle_for_display(functor) if is_mangled(functor) else functor
+            head = quote_atom(display) if (not is_mangled(functor) and atom_needs_quotes(display)) else display
+            if len(t) == 1:
+                return head
+            return head + "(" + ",".join(term_canonical(a) for a in t[1:]) + ")"
+        if type(t) is tuple and t and t[0] is TUPLE_TAG:
+            return "(" + ",".join(term_canonical(e) for e in t[1:]) + ")"
+        if isinstance(t, Compound):
+            f = deref(t.functor)
+            head = term_canonical(f) if not isinstance(f, str) else (quote_atom(f) if atom_needs_quotes(f) else f)
+            return head + "(" + ",".join(term_canonical(a) for a in t.args) + ")"
+        return term_str(t)
+    ```
+    (A `SegList`/`SegString` that walks to itself — non-ground — prints its elements with holes as `Var`s: walk, then if still a Seg*, render each concrete segment's elements and each `VarSeg` as `term_str` of the hole; keep it simple and note it in the report.)
   - `reflection.py` cell branch: `if len(value) == 1: return self._name_ast(demangle_for_display(value[0]))` before the `ast.Call` construction (an arity-0 cell renders as the bare name, exactly as the `Atom` case).
 - [ ] **Step 4:** focused PASS; suite gate empty. (`tests/test_listing.py`, `tests/test_io.py`, `tests/test_reflection_render.py` are the consumers to watch.)
 - [ ] **Step 5:** Commit: `"writers: arity-0 cell prints as the atom; writeq/1 and write_canonical/1; ISO atom quoting helpers"`.
@@ -846,7 +902,7 @@ Replace `test_repr_probe_plan0_str` in `tests/test_atoms_api.py` with `assert mi
   - `SegString`: `__walk__` accepts only char atoms in a list segment (the Plan 0 `str` arm inside the element loop goes); `__unify__` list arm → `return unify(walked, other, trail)` (the C arm does the work now).
   - `is_list/1`, `is_chars/1`, `length/2`, `_as_items`: unchanged (a `str` IS a list).
   - `exceptions.py`: unchanged (Task 5 minted).
-  - `io.py` `_format_term_for_io`: `str` → text (as today, minus the `is_mangled` check, which cannot fire on a string); `_format_clause_term` `str` → `quote_string(val)`; cells/lists → `term_str(val, quoted=False)`.
+  - `io.py` `_format_term_for_io`: `str` → text (as today, minus the `is_mangled` check, which cannot fire on a string); `_format_clause_term` `str` → `quote_string(val)`; cells/lists → `term_str(val, quoted=False)`. `term_canonical`'s `str` branch → the cons form of the char list (`'.'(h,'.'(e,…,[]))`; `""` → `[]`), spec §6.7 / §13 row 18b.
   - `terms.py term_str` `str` branch → `quote_string(t)` if `quoted` else `t`; the `list` branch → `if t and all(is_char_atom(e) for e in t): return quote_string("".join(spelling(e) for e in t)) if quoted else "".join(...)` (spec §6.7 row 4) — `[]`/`""`: `""` is a `str` → hits the str branch → renders `""`? Spec says `[]`. Add `if t == "": return "[]"` at the top of the str branch. `term_html`: same shape.
   - `reflection._ClauseRenderer.term`: `str` → `ast.Constant(value)` (a string; the renderer's caller `render_source` post-processes with the `fmt/emit.py:320` `_prefer_double_quotes` shape — call it on the rendered text so every string constant is double-quoted, and have `render_source` prepend `-double_quotes(chars)` when it emitted at least one string).
   - `testing._atomize_declared_atoms` / `_reify_value` :1517–1545, :1595–1610: the `isinstance(value, str)` guess → `if _term_is_atom(value) and (spelling(value) in declared or is_mangled(value)): return Atom(name=spelling(value))`; a plain `str` is a string and is returned as is.

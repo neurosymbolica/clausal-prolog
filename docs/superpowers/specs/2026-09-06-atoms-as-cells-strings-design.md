@@ -304,21 +304,39 @@ on strings because they are lists: `append("ab", "cd", X)` → `X = "abcd"`
 
 ### 6.7 Writers
 
-Two families, as ISO: `write/1`, `writeln/1`, `print_term/1`,
-`write_to_string/2`, `term_to_string/2`, `term_str` (display) and the new
-`writeq/1`, `write_canonical/1` (quoted, re-readable by the surface reader).
+Three writers, as ISO/Scryer: `write/1` (and `writeln/1`, `print_term/1`,
+`write_to_string/2`, `term_to_string/2`, `term_str` — the display family),
+`writeq/1` (quoted, `double_quotes`-aware), and `write_canonical/1`
+(quoted, ignores operators AND the `double_quotes` flag: every list — a
+string included — prints as the `'.'/2` structure it denotes). Scryer,
+verified by the operator 2026-09-06:
+`write_canonical("hello")` → `'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))`.
+The representation stays a `str` (R-S2); the writer makes it *look like*
+the cons structure, exactly as the funnel already answers
+`functor("hello", '.', 2)` and `arg(2, "hello", "ello")` (§6.4).
 
-| Term | `write` | `writeq` / `write_canonical` / `term_str` |
-|---|---|---|
-| `("foo",)` | `foo` | `foo` |
-| `("foo bar",)` | `foo bar` | `'foo bar'` (ISO quoting: bare iff a solo, graphic, or lowercase-initial identifier token) |
-| `("m\x1fbar",)` | `m.bar` (demangled display, as today) | `m.bar` |
-| `"abc"` | `abc` | `"abc"` (double quotes, not Python `repr`) |
-| `[("a",), ("b",)]` | `ab` | `"ab"` — a list of chars *is* a string (Scryer prints it so) |
-| `""` / `[]` | `[]` | `[]` |
-| `("foo", ("bar",), "baz")` | `foo(bar, baz)` | `foo(bar, "baz")` |
-| `b"ab"` | as today | as today |
+| Term | `write` / `term_str(quoted=False)` | `writeq` / `term_str` | `write_canonical` |
+|---|---|---|---|
+| `("foo",)` | `foo` | `foo` | `foo` |
+| `("foo bar",)` | `foo bar` | `'foo bar'` (ISO 6.4.2 quoting: bare iff a solo, graphic, or lowercase-initial identifier token) | `'foo bar'` |
+| `("m\x1fbar",)` | `m.bar` (demangled display, as today) | `m.bar` | `m.bar` |
+| `"abc"` | `abc` | `"abc"` | `'.'(a,'.'(b,'.'(c,[])))` |
+| `[("a",), ("b",)]` | `ab` | `"ab"` — a list of chars *is* a string (Scryer prints it so) | `'.'(a,'.'(b,[]))` |
+| `[1, 2]` | `[1, 2]` | `[1, 2]` | `'.'(1,'.'(2,[]))` |
+| `""` / `[]` | `[]` | `[]` | `[]` |
+| `("foo", ("bar",), "baz")` | `foo(bar, baz)` | `foo(bar, "baz")` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
+| `("+", 1, 2)` | `+(1, 2)` | `+(1, 2)` | `+(1,2)` |
+| unbound `Var` | as today (`_N`) | as today | `_N` |
+| `b"ab"` | as today | as today | as today (codes model, out of scope) |
 
+Rules:
+
+- `write_canonical/1` prints no space after commas and no operator forms
+  (`f(a,b)`, `'.'(1,[])`) so its output is byte-comparable with Scryer's;
+  `write/1` and `writeq/1` keep the engine's display spacing (`f(a, b)`),
+  which existing tests pin. A partial list `[h, e | T]` prints as
+  `'.'(h,'.'(e,_N))`; a `SegString`/`SegList` is walked first and printed as
+  what it walks to.
 - The cell branch of every renderer (`terms.py` `term_str` :2400–2424,
   `term_pformat` :2571–2584, `term_html` :2721–2730; `io._format_term_for_io`
   :20–47, `io._format_clause_term` :135–160; `reflection._ClauseRenderer.term`
@@ -333,7 +351,6 @@ Two families, as ISO: `write/1`, `writeln/1`, `print_term/1`,
   declared identifier, else as `'…'`; a string as `"…"`; and the module it
   writes carries `-double_quotes(chars)` while the engine default is still
   `atom` (§7), so its output re-reads as the terms it rendered.
-- Spacing and operator display stay `term_str`'s (`f(a, b)`); §4.
 
 ### 6.8 Dicts and sets
 
@@ -608,6 +625,7 @@ following are pinned as tests in Plan 1:
 | 16 | `msort([b, "a", 1, foo(x), [z]], L)` | `L = [1, b, "a", [z], foo(x)]` (atom < string/list < compound; `"a"` and `[z]` in the sequence band by element) |
 | 17 | `sort(["ab", [a, b]], L)` | `L = ["ab"]` |
 | 18 | `write(foo(bar, "baz"))` | `foo(bar, baz)`; `writeq` → `foo(bar, "baz")`; `writeq('a b')` → `'a b'`; `writeq([a, b])` → `"ab"` |
+| 18b | `write_canonical("hello")` | `'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))` (Scryer-verified); `write_canonical([1, 2])` → `'.'(1,'.'(2,[]))`; `write_canonical(foo(a, "b"))` → `foo(a,'.'(b,[]))`; `functor("hello", N, A)` → `N = '.'`, `A = 2`; `arg(2, "hello", T)` → `T = "ello"` |
 | 19 | `{foo: 1}.foo` | 1; `{"foo": 1}` (chars mode) has a string key; the two dicts do not unify |
 | 20 | `json.parse("{\"k\": \"v\"}", D)` | `D = {k: "v"}` with `atom(k)`, `string(v)` |
 | 21 | Python: `mod.bar == mint("bar")` | true; no test anywhere relies on `is` |
