@@ -26,6 +26,13 @@
  * Helpers
  * ================================================================ */
 
+/* atom_from_str(s): the atom whose spelling is *s* (new reference).
+ * Plan 0 body — an atom IS its spelling.  Stage B of the atoms-as-cells
+ * plan rewrites this to PyTuple_Pack(1, s).  Keep every result that is
+ * an ATOM (not a code, not a position) going through here. */
+static inline PyObject *atom_from_str(PyObject *s) { return Py_NewRef(s); }
+
+
 /*
  * Call unify(t1, t2, trail) via the direct C API (no occurs check).
  * Returns 1 if success, 0 if fail, -1 on error.
@@ -82,7 +89,12 @@ static char_classifier classifiers[NUM_TYPES] = {
     is_lower, is_ascii, is_punct, is_print, is_control,
 };
 
-/* Interned type name strings (Python str objects) */
+/* Interned type name SPELLINGS (Python str objects) — the str→index lookup
+ * (type_name_index) receives a plain str from the Python side and compares
+ * against these. */
+static PyObject *type_name_strs[NUM_TYPES] = {NULL};
+
+/* The type-name ATOMS — what char_type/2 unifies its Type argument with. */
 static PyObject *type_name_objs[NUM_TYPES] = {NULL};
 
 /* Pre-computed: for each ASCII char [0..127], which type indices match */
@@ -93,23 +105,29 @@ static int char_to_type_indices[128][MAX_TYPES_PER_CHAR + 1]; /* -1 terminated *
 static Py_UCS4 type_to_chars[NUM_TYPES][129]; /* 0-terminated (Py_UCS4=0 as sentinel won't work, use count) */
 static int type_to_chars_count[NUM_TYPES];
 
-/* Single-char Python string cache for ASCII [0..127] */
+/* Single-char ATOM cache for ASCII [0..127] */
 static PyObject *ascii_char_objs[128] = {NULL};
 
 
 static int
 init_char_tables(void)
 {
-    /* Intern type name strings */
+    /* Intern type name strings, then mint the atom for each */
     for (int t = 0; t < NUM_TYPES; t++) {
-        type_name_objs[t] = PyUnicode_InternFromString(type_names[t]);
+        type_name_strs[t] = PyUnicode_InternFromString(type_names[t]);
+        if (!type_name_strs[t]) return -1;
+        type_name_objs[t] = atom_from_str(type_name_strs[t]);
         if (!type_name_objs[t]) return -1;
     }
 
     /* Build ascii_char_objs — use FromOrdinal for endian safety and
-     * to benefit from CPython's Latin-1 singleton cache. */
+     * to benefit from CPython's Latin-1 singleton cache; each spelling
+     * is then minted into the char atom actually unified. */
     for (int i = 0; i < 128; i++) {
-        ascii_char_objs[i] = PyUnicode_FromOrdinal(i);
+        PyObject *ch_str = PyUnicode_FromOrdinal(i);
+        if (!ch_str) return -1;
+        ascii_char_objs[i] = atom_from_str(ch_str);
+        Py_DECREF(ch_str);
         if (!ascii_char_objs[i]) return -1;
     }
 
@@ -243,7 +261,9 @@ py_char_type_find_chars(PyObject *Py_UNUSED(module), PyObject *args)
         /* type_to_chars is ASCII-only by construction (init loop at L128-136).
          * All values are guaranteed to be in [0, 128), so ascii_char_objs[ch]
          * is always present. The unreachable non-ASCII allocation branch that
-         * previously lived here (F078 closure) was removed. */
+         * previously lived here (F078 closure) was removed.  The table
+         * already holds ATOMS (built through atom_from_str at init), so
+         * the entry is unified as-is. */
         PyObject *ch_obj = ascii_char_objs[ch];
 
         Py_ssize_t mark = VarAPI->trail_mark(trail);
@@ -286,9 +306,16 @@ py_atom_concat_split_find(PyObject *Py_UNUSED(module), PyObject *args)
     Py_ssize_t n = PyUnicode_GET_LENGTH(c_str);
 
     for (Py_ssize_t i = start; i <= n; i++) {
-        PyObject *prefix = PyUnicode_Substring(c_str, 0, i);
+        /* Both halves of a split are ATOMS. */
+        PyObject *prefix_str = PyUnicode_Substring(c_str, 0, i);
+        if (!prefix_str) return NULL;
+        PyObject *prefix = atom_from_str(prefix_str);
+        Py_DECREF(prefix_str);
         if (!prefix) return NULL;
-        PyObject *suffix = PyUnicode_Substring(c_str, i, n);
+        PyObject *suffix_str = PyUnicode_Substring(c_str, i, n);
+        if (!suffix_str) { Py_DECREF(prefix); return NULL; }
+        PyObject *suffix = atom_from_str(suffix_str);
+        Py_DECREF(suffix_str);
         if (!suffix) { Py_DECREF(prefix); return NULL; }
 
         Py_ssize_t mark = VarAPI->trail_mark(trail);
@@ -471,7 +498,11 @@ py_sub_atom_enum(PyObject *Py_UNUSED(module), PyObject *args)
             PyObject *a_obj = PyLong_FromSsize_t(a);
             if (!a_obj) { Py_DECREF(b_obj); Py_DECREF(l_obj); return NULL; }
 
-            PyObject *s_obj = PyUnicode_Substring(atom_str, b, b + l);
+            /* Sub is an ATOM (Before/Length/After stay plain ints). */
+            PyObject *s_str = PyUnicode_Substring(atom_str, b, b + l);
+            if (!s_str) { Py_DECREF(b_obj); Py_DECREF(l_obj); Py_DECREF(a_obj); return NULL; }
+            PyObject *s_obj = atom_from_str(s_str);
+            Py_DECREF(s_str);
             if (!s_obj) { Py_DECREF(b_obj); Py_DECREF(l_obj); Py_DECREF(a_obj); return NULL; }
 
             Py_ssize_t mark = VarAPI->trail_mark(trail);
@@ -541,7 +572,7 @@ py_type_name_index(PyObject *Py_UNUSED(module), PyObject *arg)
         return PyLong_FromLong(-1);
     }
     for (int t = 0; t < NUM_TYPES; t++) {
-        if (PyUnicode_Compare(arg, type_name_objs[t]) == 0) {
+        if (PyUnicode_Compare(arg, type_name_strs[t]) == 0) {
             if (PyErr_Occurred()) return NULL;
             return PyLong_FromLong(t);
         }

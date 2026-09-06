@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.atoms import char_atom, mint
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
@@ -563,3 +564,75 @@ class TestNumberCodes:
         # nv
         with pytest.raises(LogicException):
             _run("number_codes", 2, Var(), ["4", "2"])
+
+
+# ── Cell atoms (atoms-as-cells, Stage A) ─────────────────────────────────────
+
+
+class TestCellAtoms:
+    """Spec §6.6 with a 1-tuple atom input (Stage A: outputs still str)."""
+
+    def test_atom_length_accepts_cell_atom(self):
+        # nv
+        N = Var()
+        answers = _run_collect("atom_length", 2, ("abc",), N,
+                               snap=lambda: deref(N))
+        assert len(answers) == 1 and answers[0] == 3
+
+    def test_atom_chars_accepts_cell_atom_and_char_atoms(self):
+        # nv
+        L = Var()
+        answers = _run_collect("atom_chars", 2, ("ab",), L,
+                               snap=lambda: deref(L))
+        assert answers == [[char_atom("a"), char_atom("b")]]
+        A = Var()
+        answers = _run_collect("atom_chars", 2, A,
+                               [char_atom("a"), char_atom("b")],
+                               snap=lambda: deref(A))
+        assert answers == [mint("ab")]
+
+    def test_atom_concat_cell_atoms(self):
+        # nv
+        X = Var()
+        answers = _run_collect("atom_concat", 3, ("a",), ("b",), X,
+                               snap=lambda: deref(X))
+        assert answers == [mint("ab")]
+
+    def test_sub_atom_cell_atom(self):
+        # nv
+        S = Var()
+        answers = _run_collect("sub_atom", 5, ("abc",), 1, 1, 1, S,
+                               snap=lambda: deref(S))
+        assert len(answers) == 1 and answers[0] == mint("b")
+
+    def test_char_code_cell_char(self):
+        # nv
+        C = Var()
+        answers = _run_collect("char_code", 2, ("a",), C,
+                               snap=lambda: deref(C))
+        assert answers == [97]
+        Ch = Var()
+        answers = _run_collect("char_code", 2, Ch, 97,
+                               snap=lambda: deref(Ch))
+        assert answers == [char_atom("a")]
+
+    def test_char_type_cell_char_and_cell_type(self):
+        # nv
+        assert _run("char_type", 2, ("a",), ("alpha",)) == 1
+
+
+class TestCellAtomsPythonFallback(TestCellAtoms):
+    """The same §6.6 rows with the C inner loops disabled.
+
+    ``chars.py`` has no runtime switch for the C helpers (they are bound at
+    import), so the twin-parity run nulls the module-level handles for the
+    duration of each test — the Python fallback branches then run instead.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_c(self, monkeypatch):
+        from clausal.logic.builtins import chars as _chars
+        for _name in ("_c_char_type_find_types", "_c_char_type_find_chars",
+                      "_c_atom_concat_split_find", "_c_sub_atom_search",
+                      "_c_sub_atom_enum", "_c_type_name_index"):
+            monkeypatch.setattr(_chars, _name, None)

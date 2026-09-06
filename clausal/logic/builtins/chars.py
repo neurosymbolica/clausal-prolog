@@ -21,6 +21,13 @@ from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_atom
+from clausal.logic.atoms import (
+    char_atom,
+    is_atom as _term_is_atom,
+    is_char_atom,
+    mint,
+    spelling,
+)
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins.lists import _as_items
@@ -48,9 +55,10 @@ except ImportError:
 def _atom_to_str(val: Any) -> str | None:
     """Extract a string name from an atom value.
 
-    Returns the string for str atoms, __name__ for zero-arity PredicateMeta
-    classes, the walked str for a ground ``SegString``, or None if val is
-    not an atom.
+    Returns the spelling for a term atom (``clausal.logic.atoms.is_atom``:
+    today's ``str`` and the arity-0 cell ``("foo",)`` alike), __name__ for
+    zero-arity PredicateMeta classes, the walked str for a ground
+    ``SegString``, or None if val is not an atom.
 
     F075 (C3 audit): SegString is a str-shaped container; under the
     "strings-as-lists / input-type wins" contract every atom-accepting
@@ -58,8 +66,8 @@ def _atom_to_str(val: Any) -> str | None:
     non-ground SegString walks to itself (still a SegString) and is
     rejected with None so the caller raises the usual type_error.
     """
-    if isinstance(val, str):
-        return val
+    if _term_is_atom(val):
+        return spelling(val)
     if is_atom(val):
         return val.__name__
     # Late import to avoid an import cycle (clausal.terms → clausal.logic
@@ -167,6 +175,11 @@ def _char_type__2(char, type_, trail, k):
     if not c_bound and not t_bound:
         raise LogicException(instantiation_error("char_type/2"))
 
+    # Atoms-as-cells: Type is an atom, so it may arrive as a 1-tuple cell.
+    # Read its spelling once here and classify on that; None means "bound to
+    # something that is not an atom at all", which every mode rejects.
+    type_name = spelling(vt) if t_bound and _term_is_atom(vt) else None
+
     # F075 (C3 audit): walk a ground SegString to its str form so the
     # single-char classifier below recognises it.
     if c_bound:
@@ -175,14 +188,15 @@ def _char_type__2(char, type_, trail, k):
             walked = vc.__walk__()
             if isinstance(walked, str):
                 vc = walked
-        if not isinstance(vc, str) or len(vc) != 1:
+        if not is_char_atom(vc):
             return  # fail — not a single character
+        vc = spelling(vc)
 
         if t_bound:
             # Both bound → test
-            if not isinstance(vt, str):
+            if type_name is None:
                 return
-            fn = _CHAR_TYPES.get(vt)
+            fn = _CHAR_TYPES.get(type_name)
             if fn is not None and fn(vc):
                 yield None
         elif _c_char_type_find_types is not None:
@@ -206,33 +220,33 @@ def _char_type__2(char, type_, trail, k):
                 matching = [t for t, fn in _CHAR_TYPES.items() if fn(vc)]
             for t_name in matching:
                 mark = trail.mark()
-                if unify(type_, t_name, trail):
+                if unify(type_, mint(t_name), trail):
                     yield None
                 trail.undo(mark)
-    elif (vt in _UNICODE_TYPES) or _c_char_type_find_chars is None \
+    elif (type_name in _UNICODE_TYPES) or _c_char_type_find_chars is None \
             or _c_type_name_index is None:
         # Type bound, Char unbound → Python enumeration. F072 (C9
         # audit): the C-accelerator only knows about ASCII, so we take
         # the Python path for any type whose Char-bound classifier
         # supports Unicode (alpha/alnum/upper/lower/print) — this keeps
         # the test-mode and enumeration-mode relations consistent.
-        if not isinstance(vt, str):
+        if type_name is None:
             return
-        chars = _type_to_chars_unicode(vt)
+        chars = _type_to_chars_unicode(type_name)
         if not chars:
             return
         for c in chars:
             mark = trail.mark()
-            if unify(char, c, trail):
+            if unify(char, char_atom(c), trail):
                 yield None
             trail.undo(mark)
     else:
         # Type bound, Char unbound → C-accelerated ASCII enumeration
         # (used for types whose classifier is codepoint-bounded ASCII,
         # e.g. ``ascii``, ``control``).
-        if not isinstance(vt, str):
+        if type_name is None:
             return
-        tidx = _c_type_name_index(vt)
+        tidx = _c_type_name_index(type_name)
         if tidx < 0:
             return
         idx = 0
@@ -270,9 +284,9 @@ def _char_code__2(char, code, trail, k):
             walked = vc.__walk__()
             if isinstance(walked, str):
                 vc = walked
-        if not isinstance(vc, str) or len(vc) != 1:
+        if not is_char_atom(vc):
             raise LogicException(type_error("character", vc, "char_code/2"))
-        expected = ord(vc)
+        expected = ord(spelling(vc))
         mark = trail.mark()
         if unify(code, expected, trail):
             yield None
@@ -285,7 +299,7 @@ def _char_code__2(char, code, trail, k):
         if not (0 <= vn < 0x110000):
             return  # logical failure — out-of-range code point
         mark = trail.mark()
-        if unify(char, chr(vn), trail):
+        if unify(char, char_atom(chr(vn)), trail):
             yield None
         trail.undo(mark)
 
@@ -302,7 +316,7 @@ def _upcase_atom__2(atom, upper, trail, k):
     if atom_str is None:
         raise LogicException(type_error("atom", va, "upcase_atom/2"))
     mark = trail.mark()
-    if unify(upper, atom_str.upper(), trail):
+    if unify(upper, mint(atom_str.upper()), trail):
         yield None
     trail.undo(mark)
 
@@ -317,7 +331,7 @@ def _downcase_atom__2(atom, lower, trail, k):
     if atom_str is None:
         raise LogicException(type_error("atom", va, "downcase_atom/2"))
     mark = trail.mark()
-    if unify(lower, atom_str.lower(), trail):
+    if unify(lower, mint(atom_str.lower()), trail):
         yield None
     trail.undo(mark)
 
@@ -363,7 +377,7 @@ def _atom_chars__2(atom, chars, trail, k):
         if atom_str is None:
             raise LogicException(type_error("atom", va, "atom_chars/2"))
         mark = trail.mark()
-        if unify(chars, list(atom_str), trail):
+        if unify(chars, [char_atom(c) for c in atom_str], trail):
             yield None
         trail.undo(mark)
     elif c_bound:
@@ -379,11 +393,11 @@ def _atom_chars__2(atom, chars, trail, k):
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("atom_chars/2"))
-            if not isinstance(e, str) or len(e) != 1:
+            if not is_char_atom(e):
                 raise LogicException(type_error("character", e, "atom_chars/2"))
-            elems.append(e)
+            elems.append(spelling(e))
         mark = trail.mark()
-        if unify(atom, "".join(elems), trail):
+        if unify(atom, mint("".join(elems)), trail):
             yield None
         trail.undo(mark)
     else:
@@ -427,7 +441,7 @@ def _atom_codes__2(atom, codes, trail, k):
                 return  # logical failure — out-of-range code point
             elems.append(chr(e))
         mark = trail.mark()
-        if unify(atom, "".join(elems), trail):
+        if unify(atom, mint("".join(elems)), trail):
             yield None
         trail.undo(mark)
     else:
@@ -467,21 +481,21 @@ def _atom_concat__3(a, b, c, trail, k):
     if a_bound and b_bound:
         # Forward: A + B → C
         mark = trail.mark()
-        if unify(c, sa + sb, trail):
+        if unify(c, mint(sa + sb), trail):
             yield None
         trail.undo(mark)
     elif c_bound and a_bound:
         # C and A bound: check prefix, unify remainder
         if sc.startswith(sa):
             mark = trail.mark()
-            if unify(b, sc[len(sa):], trail):
+            if unify(b, mint(sc[len(sa):]), trail):
                 yield None
             trail.undo(mark)
     elif c_bound and b_bound:
         # C and B bound: check suffix, unify prefix
         if sc.endswith(sb):
             mark = trail.mark()
-            if unify(a, sc[:len(sc) - len(sb)], trail):
+            if unify(a, mint(sc[:len(sc) - len(sb)]), trail):
                 yield None
             trail.undo(mark)
     elif c_bound and _c_atom_concat_split_find is not None:
@@ -498,7 +512,7 @@ def _atom_concat__3(a, b, c, trail, k):
         # C bound, A and B unbound: enumerate all splits
         for i in range(len(sc) + 1):
             mark = trail.mark()
-            if unify(a, sc[:i], trail) and unify(b, sc[i:], trail):
+            if unify(a, mint(sc[:i]), trail) and unify(b, mint(sc[i:]), trail):
                 yield None
             trail.undo(mark)
     else:
@@ -531,22 +545,25 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
         return
     vs = deref(sub)
 
-    # Optimization: if Sub is bound, use str.find to locate occurrences.
-    if not is_var(vs) and isinstance(vs, str):
+    # Optimization: if Sub is bound to an atom, use str.find to locate
+    # occurrences.  Atoms-as-cells: search on the spelling, so a 1-tuple
+    # cell atom takes the same fast path a ``str`` atom does.
+    vs_str = spelling(vs) if not is_var(vs) and _term_is_atom(vs) else None
+    if vs_str is not None:
         if _c_sub_atom_search is not None:
             idx = 0
             while True:
-                result = _c_sub_atom_search(va, vs, idx, before, length, after, trail)
+                result = _c_sub_atom_search(va, vs_str, idx, before, length, after, trail)
                 if result is None:
                     break
                 idx, mark = result
                 yield None
                 trail.undo(mark)
             return
-        sub_len = len(vs)
+        sub_len = len(vs_str)
         start = 0
         while True:
-            pos = va.find(vs, start)
+            pos = va.find(vs_str, start)
             if pos == -1:
                 break
             b, l, a = pos, sub_len, n - pos - sub_len
@@ -601,7 +618,7 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
             s = va[b:b + l]
             mark = trail.mark()
             if (unify(before, b, trail) and unify(length, l, trail)
-                    and unify(after, a, trail) and unify(sub, s, trail)):
+                    and unify(after, a, trail) and unify(sub, mint(s), trail)):
                 yield None
             trail.undo(mark)
 
