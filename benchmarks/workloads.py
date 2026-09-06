@@ -9,6 +9,8 @@ Each function exercises a distinct execution pattern:
   bench_tabling  -- SLG tabling (hash lookups, suspension, completion)
   bench_struct_tabling -- SLG tabling over compound-term answers (walker
                           normalize/copy: do_deref_walk/c_copy_term/do_walk)
+  bench_thunk_atoms -- ``++`` escapes over an atom-bearing argument (the
+                       outbound term -> Python conversion on the thunk path)
 
 Run standalone to verify all workloads complete without error:
     python benchmarks/workloads.py
@@ -140,6 +142,43 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
     return result
 
 
+def _cons_chain_length(node: object) -> int:
+    """Length of a ``cons(H, T)`` chain, in EITHER term representation.
+
+    The two ``struct_tabling`` benchmarks below walk the answer chain their
+    fixture builds; this helper is the one place that knows what a link and
+    a terminator look like, because the answer to that question changed
+    twice:
+
+    * a link is the cell ``("cons", H, T)`` (tail in slot 2) or, in the class
+      representation, an instance with a ``.T`` attribute;
+    * the terminator ``nil`` is a class instance in the class representation
+      and the arity-0 cell ``("nil",)`` after the atoms-as-cells flip -- and
+      an arity-0 cell IS a cell by shape, so ``is_cell(node)`` no longer
+      separates link from terminator.  The arity does: a link's ``cell_args``
+      has two slots, ``nil``'s has none.
+
+    Terminating on the SHAPE rather than on ``node is nil`` also drops an
+    identity comparison of an atom, which the atoms-as-cells design forbids
+    (atoms compare by equality; two equal atom cells need not be one object).
+    """
+    from clausal.logic.variables import deref
+    from clausal.logic.cells import cell_args, is_cell
+
+    length = 0
+    while True:
+        if is_cell(node):
+            args = cell_args(node)
+            if len(args) < 2:       # ("nil",) -- the terminator
+                return length
+            node = deref(args[1])
+        elif hasattr(node, "T"):    # class representation: cons(H, T)
+            node = deref(node.T)
+        else:                       # class representation: the nil instance
+            return length
+        length += 1
+
+
 def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     """Tabled Nats(n) repeated reps times — stresses SLG tabling's per-answer
     normalization/copy over COMPOUND answers (bench_tabling's Fib/2 answers
@@ -184,26 +223,16 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     from clausal.testing import load_clausal_module
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, Trail, deref
-    from clausal.logic.cells import cell_args, is_cell
 
     fixture = os.path.join(_FIXTURES, "struct_tabling.clausal")
     length = 0
     for _ in range(reps):
         mod = load_clausal_module(fixture)
         lm = mod.__dict__["$module"]
-        nil = mod.nil
         trail = Trail()
         L = Var()
         for _ in call("Nats", n, L, module=lm, trail=trail):
-            length = 0
-            node = deref(L)
-            while node is not nil:
-                length += 1
-                # P3-2 Task 2 (THE FLIP): ``cons`` is a data functor, so a
-                # chain link is the cell ``("cons", H, T)`` -- the tail is a
-                # slot, not an attribute.  Same shape the cell twin below
-                # has always used; both halves read it the same way now.
-                node = deref(cell_args(node)[1]) if is_cell(node) else deref(node.T)
+            length = _cons_chain_length(deref(L))
             break
         else:
             raise RuntimeError(f"Nats({n}) produced no solutions")
@@ -252,9 +281,7 @@ def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = Fal
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref
     from clausal.logic.cells import (
-        cell_args,
         clear_intern_table,
-        is_cell,
         set_intern_enabled,
     )
 
@@ -266,14 +293,9 @@ def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = Fal
         for _ in range(reps):
             mod = load_clausal_module(fixture)
             lm = mod.__dict__["$module"]
-            nil = mod.nil
             L = Var()
             for _ in call("Nats", n, L, module=lm):
-                length = 0
-                node = deref(L)
-                while node is not nil:
-                    length += 1
-                    node = deref(cell_args(node)[1]) if is_cell(node) else deref(node.T)
+                length = _cons_chain_length(deref(L))
                 break
             else:
                 raise RuntimeError(f"Nats({n}) produced no solutions")
@@ -310,6 +332,64 @@ def bench_naf_ite(n: int = 3000) -> str:
     return "ok"
 
 
+def bench_thunk_atoms(n: int = 100_000) -> int:
+    """``++`` escape over an atom-bearing argument — the outbound-conversion
+    benchmark named by the atoms-as-cells/strings design's perf gate.
+
+    ``ThunkLoop/4`` recurses *n* times; every iteration evaluates one
+    ``++len(L)`` escape whose single thunk argument is the five-element atom
+    list ``[a, b, c, d, e]``.  The thunk argument path is where the design's
+    §9.1 single outbound conversion lands: the compiler lowers a thunk
+    argument to ``$to_python`` (a full recursive walk that unwraps each atom
+    cell to its spelling) where it used to lower to a single-level
+    ``$deref``.  This workload is deliberately shaped so that walk is the
+    only thing that changed under it -- the loop around it is a plain tail
+    recursion over integers, and the list is bound once, in ``ThunkAtoms/2``,
+    then passed down unchanged.
+
+    Returns the accumulated sum (5 per iteration, so ``5 * n``), not a bare
+    ``"ok"``: the accumulator is what forces every ``++`` result to be
+    consumed rather than discarded by an optimiser.
+
+    The source is written to a temp file rather than living in
+    ``tests/fixtures/`` so this benchmark can be run against an arbitrary
+    engine checkout by path, which is what the interleaved A/B gate does.
+
+    Expected wall time (n=100 000): ~2 s.
+    """
+    import tempfile
+
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+
+    source = (
+        "-private([a, b, c, d, e])\n"
+        "-allow_singletons\n"
+        "\n"
+        "ThunkLoop(0, _L, S, S),\n"
+        "ThunkLoop(N, L, ACC, S) <- (N > 0, K is ++len(L), ACC1 == ACC + K,\n"
+        "                            M == N - 1, ThunkLoop(M, L, ACC1, S)),\n"
+        "\n"
+        "ThunkAtoms(N, S) <- (ThunkLoop(N, [a, b, c, d, e], 0, S)),\n"
+    )
+    with tempfile.NamedTemporaryFile(
+        suffix=".clausal", mode="w", delete=False
+    ) as f:
+        f.write(source)
+        path = f.name
+    try:
+        pymod = _load_module("bench_thunk_atoms_src", path)
+    finally:
+        os.unlink(path)
+    lm = pymod.__dict__["$module"]
+
+    S = Var()
+    for _ in call("ThunkAtoms", n, S, module=lm):
+        return int(deref(S))
+    raise RuntimeError(f"ThunkAtoms({n}) produced no solutions")
+
+
 # ── Smoke-test all workloads ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -327,6 +407,7 @@ if __name__ == "__main__":
         ("bench_struct_tabling_tagged (intern=True)",
          lambda: bench_struct_tabling_tagged(300, 2, intern=True)),
         ("bench_naf_ite",  lambda: bench_naf_ite()),
+        ("bench_thunk_atoms", lambda: bench_thunk_atoms(20_000)),
     ]
 
     def _display(result: object) -> str:
