@@ -136,6 +136,10 @@ def test_directive_sets_the_mode_on_the_transformer():
     source = '-double_quotes(atom)\ndq_mode_probe(1),\n'
     transformer = EmbedTransformer(
         source_lines=source.splitlines(keepends=True), filename="<probe>")
+    # The constructor default IS "atom", so asserting "atom" after the walk
+    # would pass with the directive handler deleted.  Pre-seed a value the
+    # handler must overwrite.
+    transformer._double_quotes_mode = "<unset>"
     transformer.visit(_ast.parse(source))
     assert transformer._double_quotes_mode == "atom"
 
@@ -149,8 +153,11 @@ def test_mode_and_quote_map_reach_every_term_transformer():
     transformer = EmbedTransformer(
         source_lines=source.splitlines(keepends=True), filename="<probe>")
     transformer.visit(_ast.parse(source))
+    # A sentinel the constructor default cannot supply, so the assertion pins
+    # the THREADING rather than the default.
+    transformer._double_quotes_mode = "<sentinel>"
     term_transformer = transformer._make_term_transformer()
-    assert term_transformer._double_quotes_mode == "atom"
+    assert term_transformer._double_quotes_mode == "<sentinel>"
     assert term_transformer._quote_map == transformer._quote_map
     assert term_transformer._quote_map  # the file's one literal is in it
 
@@ -163,3 +170,35 @@ def test_no_source_lines_means_no_quote_map():
     transformer = EmbedTransformer(implicit_atoms_default=True, interactive=True)
     assert transformer._quote_map == {}
     assert transformer._double_quotes_mode == "atom"
+
+
+def test_mixed_quote_styles_error_is_attributed_to_the_file():
+    """The mixed-style refusal must reach the loader's caret window.
+
+    ``quote_map.quote_of`` raises a bare ``SyntaxError`` — it holds neither
+    filename nor source text — and a half-filled position would be WORSE
+    than none: ``enrich_syntax_error`` bails unless ``exc.filename`` is the
+    file it is rendering.  The compiler attaches the position, so the error
+    arrives enriched.
+    """
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal("_dq_mixed", 'p("a" \'b\'(1)),\n')
+    exc = exc_info.value
+    assert "mixed quote styles" in exc.msg
+    assert exc.filename is not None
+    assert exc.filename.endswith(".clausal")
+    assert exc.lineno == 1
+    assert getattr(exc, "clausal_report", "")
+
+
+def test_reify_does_not_refuse_a_double_quoted_callee():
+    """Reflection models MORE than it compiles (TermTransformer._reify).
+
+    The trailing comma matters: it is what makes this a CLAUSE, so the term
+    transformer actually walks the call.  Without it the statement is a bare
+    call the EmbedTransformer never hands to a TermTransformer, and the test
+    would pass with the exemption deleted.
+    """
+    from clausal.reflection import reify_source
+
+    reify_source('p("foo"(1)),\n')

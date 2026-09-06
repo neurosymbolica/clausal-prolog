@@ -1175,6 +1175,28 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     )
 
 
+def _quote_of_positioned(transformer, node):
+    """``quote_of`` for the node, with this file's position on any error.
+
+    ``quote_map.quote_of`` raises a BARE ``SyntaxError`` for a literal
+    written in two quote styles: that module holds no filename and no source
+    text, and a half-filled position (``filename=None``) would opt the error
+    out of ``syntax_diagnostics.enrich_syntax_error``, which bails unless
+    ``exc.filename`` is the file it is rendering.  So the position is
+    attached HERE, where the transformer knows both — the same treatment the
+    functor refusal below gets.
+
+    Task 11 widens the map from the callee position to every literal, which
+    means many more call sites; they all go through this one wrapper so the
+    diagnostic cannot drift apart between them.
+    """
+    try:
+        return quote_of(transformer._quote_map, node)
+    except SyntaxError as exc:
+        _raise_located_syntax_error(
+            exc.msg, node, transformer._source_lines, transformer._filename)
+
+
 def _atom_as_functor_message(name, filename, lineno, owner=None):
     """The refusal for a declared ATOM applied with arguments.
 
@@ -1461,17 +1483,26 @@ class TermTransformer(NodeTransformer):
             # when the default moves.  A `None` answer means the quote is
             # unknown (no source lines: the REPL, a programmatic AST) and the
             # sugar keeps its pre-strings behaviour.
-            if quote_of(transformer._quote_map, call.func) == '"':
+            # ``reify=True`` is exempt: reflection models MORE than it
+            # compiles (see the class docstring's contract), and rendering a
+            # term back to source must keep accepting shapes the compiler
+            # refuses.  Refusing here would make a file un-reifiable for a
+            # reason reification does not care about.
+            if not transformer._reify \
+                    and _quote_of_positioned(transformer, call.func) == '"':
                 spelling = call.func.value
                 # The suggestion is source text, so it has to survive being
                 # re-read: a spelling containing a quote or a backslash needs
                 # them escaped or the "fix" would not parse.
                 single_quoted = "'{}'".format(
                     spelling.replace("\\", "\\\\").replace("'", "\\'"))
+                # ...and the bare-name alternative only exists when the
+                # spelling IS a name.  `"a b"(1)` has no bare form.
+                bare_hint = (f', or {spelling}(...) if it is a plain name'
+                             if spelling.isidentifier() else '')
                 _raise_located_syntax_error(
                     f'a double-quoted string is never a functor (ISO 6.3.3): '
-                    f'write {single_quoted}(...) for the atom, or '
-                    f'{spelling}(...) if it is a plain name',
+                    f'write {single_quoted}(...) for the atom{bare_hint}',
                     call.func, transformer._source_lines,
                     transformer._filename)
             func_node = transformer._visit_call_func(
@@ -3823,8 +3854,7 @@ class EmbedTransformer(NodeTransformer):
         # programmatically built tree) there is no token stream to read and
         # the map is empty — every lookup then answers "unknown", which is
         # exactly the pre-strings behaviour.
-        transformer._quote_map = (
-            build_quote_map(source_lines) if source_lines else {})
+        transformer._quote_map = build_quote_map(source_lines)
         # The ``-double_quotes`` mode in force at the CURRENT point in the
         # file.  Unlike the module-item directives (drained after the walk,
         # so they cannot govern only the literals below them) this is

@@ -54,7 +54,7 @@ def _byte_col(source_lines: list[str], lineno: int, char_col: int) -> int | None
     return len(source_lines[lineno - 1][:char_col].encode("utf-8"))
 
 
-def build_quote_map(source_lines) -> dict[tuple[int, int], str]:
+def build_quote_map(source_lines: list[str]) -> dict[tuple[int, int], str]:
     """Map ``(lineno, byte col_offset)`` → quote character for every literal.
 
     *source_lines* is the file's lines WITH line endings (what
@@ -62,14 +62,14 @@ def build_quote_map(source_lines) -> dict[tuple[int, int], str]:
     already carries).  Both the start and the end position of each STRING
     token are keyed, both to the same character.
 
-    A tokenize failure yields an empty map rather than an exception: text
-    that cannot be tokenized cannot be parsed either, so ``ast.parse`` is
-    already raising the real error — this module has nothing better to say
-    and no business pre-empting it.
+    Falsy input (``None``, ``[]`` — the REPL/IPython transform site, which
+    has no file to read) yields an empty map, and so does a tokenize
+    failure: text that cannot be tokenized cannot be parsed either, so
+    ``ast.parse`` is already raising the real error — this module has
+    nothing better to say and no business pre-empting it.  This is the ONLY
+    emptiness guard; callers pass whatever they have.
     """
-    if not source_lines:
-        return {}
-    lines = list(source_lines)
+    lines = list(source_lines or ())
     quote_map: dict[tuple[int, int], str] = {}
     try:
         for token in tokenize.generate_tokens(iter(lines).__next__):
@@ -91,7 +91,7 @@ def build_quote_map(source_lines) -> dict[tuple[int, int], str]:
     return quote_map
 
 
-def quote_of(quote_map, node) -> str | None:
+def quote_of(quote_map: dict[tuple[int, int], str], node) -> str | None:
     """The quote character *node* was written with, or ``None`` if unknown.
 
     ``None`` is the honest answer for a synthetic ``Constant`` (no position
@@ -104,6 +104,15 @@ def quote_of(quote_map, node) -> str | None:
     disagree — ``"a" 'b'``.  Implicit concatenation makes one term out of
     several tokens, and there is no defensible answer to "which mode does
     this literal follow?" when the author wrote both (spec §7).
+
+    That error is raised as a BARE ``SyntaxError`` — message only, no
+    position tuple.  This module holds neither the filename nor the source
+    text, and a ``SyntaxError`` carrying ``filename=None`` is worse than one
+    carrying nothing: ``syntax_diagnostics.enrich_syntax_error`` bails on
+    ``exc.filename != filename``, so a half-filled position silently opts
+    the error OUT of the caret window it looks like it is asking for.
+    Positioning is the caller's job, and callers inside the compiler do it
+    through ``term_rewriting._quote_of_positioned``.
     """
     lineno = getattr(node, "lineno", None)
     col = getattr(node, "col_offset", None)
@@ -119,10 +128,6 @@ def quote_of(quote_map, node) -> str | None:
         raise SyntaxError(
             "mixed quote styles in one literal: an implicitly concatenated "
             "string literal must be written entirely in one style, because "
-            "the style is what decides whether it is an atom or a string",
-            # No filename/line text here: this module holds neither.  The
-            # loader's ``clausal_syntax_diagnostics`` context manager
-            # re-attaches both from the file it is holding open.
-            (None, lineno, col + 1, None),
+            "the style is what decides whether it is an atom or a string"
         )
     return start
