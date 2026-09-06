@@ -649,7 +649,7 @@ def _number_chars__2(number, chars, trail, k):
         if isinstance(vn, bool) or not isinstance(vn, (int, float)):
             raise LogicException(type_error("number", vn, "number_chars/2"))
         mark = trail.mark()
-        if unify(chars, list(str(vn)), trail):
+        if unify(chars, [char_atom(c) for c in str(vn)], trail):
             yield None
         trail.undo(mark)
     elif c_bound:
@@ -661,9 +661,9 @@ def _number_chars__2(number, chars, trail, k):
             e = deref(elem)
             if is_var(e):
                 raise LogicException(instantiation_error("number_chars/2"))
-            if not isinstance(e, str) or len(e) != 1:
+            if not is_char_atom(e):
                 raise LogicException(type_error("character", e, "number_chars/2"))
-            elems.append(e)
+            elems.append(spelling(e))
         s = "".join(elems)
         try:
             parsed = int(s)

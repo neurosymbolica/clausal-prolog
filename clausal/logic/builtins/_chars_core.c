@@ -117,7 +117,13 @@ init_char_tables(void)
         type_name_strs[t] = PyUnicode_InternFromString(type_names[t]);
         if (!type_name_strs[t]) return -1;
         type_name_objs[t] = atom_from_str(type_name_strs[t]);
-        if (!type_name_objs[t]) return -1;
+        if (!type_name_objs[t]) {
+            /* Plan 0's Py_NewRef cannot fail, but Stage B's PyTuple_Pack can:
+             * drop the spelling we just took so the failed init leaves no
+             * half-built table entry behind. */
+            Py_CLEAR(type_name_strs[t]);
+            return -1;
+        }
     }
 
     /* Build ascii_char_objs — use FromOrdinal for endian safety and

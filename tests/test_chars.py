@@ -620,6 +620,57 @@ class TestCellAtoms:
         # nv
         assert _run("char_type", 2, ("a",), ("alpha",)) == 1
 
+    def test_number_chars_cell_char_atoms(self):
+        """§6.6: number_chars(12, L) → L = [("1",), ("2",)] and back."""
+        # nv
+        L = Var()
+        answers = _run_collect("number_chars", 2, 12, L,
+                               snap=lambda: deref(L))
+        assert answers == [[char_atom("1"), char_atom("2")]]
+        N = Var()
+        answers = _run_collect("number_chars", 2, N, [("1",), ("2",)],
+                               snap=lambda: deref(N))
+        assert answers == [12]
+
+    def test_atom_concat_split_enumeration_cell_atom(self):
+        """Split mode: every enumerated half is an atom.
+
+        Reaches ``_c_atom_concat_split_find`` (and its ``atom_from_str``
+        wraps) on a build with the C extension.
+        """
+        # nv
+        A, B = Var(), Var()
+        answers = _run_collect("atom_concat", 3, A, B, ("ab",),
+                               snap=lambda: (deref(A), deref(B)))
+        assert answers == [(mint(""), mint("ab")),
+                           (mint("a"), mint("b")),
+                           (mint("ab"), mint(""))]
+
+    def test_char_type_char_enumeration_cell_type(self):
+        """Type bound to a cell atom → every enumerated Char is a char atom.
+
+        ``control`` is codepoint-bounded ASCII, so this reaches
+        ``_c_char_type_find_chars`` and the ``ascii_char_objs`` table.
+        """
+        # nv
+        C = Var()
+        answers = _run_collect("char_type", 2, C, ("control",),
+                               snap=lambda: deref(C))
+        assert answers == [char_atom(chr(i)) for i in range(32)] + \
+            [char_atom(chr(127))]
+
+    def test_char_type_type_enumeration_cell_char(self):
+        """Char bound to a cell atom → every enumerated Type is an atom.
+
+        Reaches ``_c_char_type_find_types`` and the ``type_name_objs`` table.
+        """
+        # nv
+        T = Var()
+        answers = _run_collect("char_type", 2, ("a",), T,
+                               snap=lambda: deref(T))
+        assert answers == [mint("alpha"), mint("alnum"), mint("lower"),
+                           mint("ascii"), mint("print")]
+
 
 class TestCellAtomsPythonFallback(TestCellAtoms):
     """The same §6.6 rows with the C inner loops disabled.
@@ -627,6 +678,12 @@ class TestCellAtomsPythonFallback(TestCellAtoms):
     ``chars.py`` has no runtime switch for the C helpers (they are bound at
     import), so the twin-parity run nulls the module-level handles for the
     duration of each test — the Python fallback branches then run instead.
+
+    Only four of the rows above have a C path in the mode they exercise:
+    ``sub_atom/5``'s (Before, Length) enumeration, ``atom_concat/3``'s split
+    enumeration and ``char_type/2``'s two enumerations.  The rest already run
+    pure Python in the base class and are re-run here only as cheap
+    regression cover.
     """
 
     @pytest.fixture(autouse=True)
