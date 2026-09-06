@@ -139,28 +139,32 @@ Color(green),
 Color(blue),
 ```
 
-From the Python side, `red`, `green`, and `blue` are class objects (not
-strings). They have identity: `red is red` and `red is not blue`. Calling
-them returns themselves: `red() is red`.
+From the Python side, `red`, `green`, and `blue` are **arity-0 cells**: the
+1-tuple `('red',)`, whose single slot holds the spelling. Compare them with
+`==`, never with `is` — two equal atoms need not be the same object.
 
 ```python
 # From Python:
-from my_module import red, green, Color
-red is red          # True — identity, not equality
-red() is red        # True — zero-arity call returns the class itself
-isinstance(red, type)  # True — it's a class
+from my_module import red, blue
+from clausal.logic.atoms import mint, is_atom, spelling
+
+red                  # ('red',)
+red == mint("red")   # True — value equality is the test
+red == blue          # False
+is_atom(red)         # True
+spelling(red)        # 'red'
 ```
 
-You can also create atoms dynamically. `make_atom` returns the atom itself —
-a plain `str`, because since the P3-1 atom pivot a `str` *is* the atom:
+A plain `str` is **not** an atom — it is a *string*, the list of its character
+atoms — so `red == "red"` is False. Create atoms dynamically with `mint`:
 
 ```python
-from clausal.logic.predicate import make_atom, is_atom_value
+from clausal.logic.atoms import mint, is_atom
 
-ok = make_atom("ok")     # 'ok'
-err = make_atom("err")
-is_atom_value(ok)        # True
-ok == "ok"               # True — the atom is its own spelling
+ok = mint("ok")          # ('ok',)
+is_atom(ok)              # True
+is_atom("ok")            # False — that is the string "ok"
+ok == "ok"               # False — an atom is not its spelling
 ```
 
 If you specifically want a zero-arity `PredicateMeta` **class** — a 0-arity

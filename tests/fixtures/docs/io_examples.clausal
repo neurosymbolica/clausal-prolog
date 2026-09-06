@@ -1,0 +1,52 @@
+-double_quotes(chars)
+-private([bar])
+-implicit_functors
+# Doc snippet fixtures for docs/io.md.
+#
+# The three ISO writers (spec 2026-09-06-atoms-as-cells-strings §6.7):
+# write/1 is the unquoted family, writeq/1 the quoted one, and
+# write_canonical/1 prints every list -- a string included -- as the '.'/2
+# structure it denotes.  Each Test compares against write_to_string/2 or
+# term_to_string/2, which are the same two families in string form, so the
+# table in the doc is pinned by an assertion rather than by eyeball.
+
+# --8<-- [start:three_writers]
+# write/1: text comes out bare.
+Test("write is unquoted") <- (
+    write_to_string(foo(bar, "baz"), S),
+    S == "foo(bar, baz)"
+)  # nv
+
+# writeq/1 (through term_to_string/2, its string form): an atom is quoted
+# when it needs quoting, and a string prints in double quotes -- so you can
+# tell the two kinds apart in the output.
+Test("writeq distinguishes atom from string") <- (
+    term_to_string(foo(bar, "baz"), S2),
+    S2 == "foo(bar, \"baz\")"
+)  # nv
+
+Test("writeq quotes an atom that needs it") <- (
+    term_to_string('foo bar', S3),
+    S3 == "'foo bar'"
+)  # nv
+
+# A list of chars IS a string, so writeq prints it as one.
+Test("writeq prints a char list as a string") <- (
+    term_to_string(['a', 'b'], S4),
+    S4 == "\"ab\""
+)  # nv
+# --8<-- [end:three_writers]
+
+# --8<-- [start:write_family]
+Test("write/1 and writeln/1 are the unquoted family") <- (
+    write("hello"), write(" "), writeln("world")
+)  # nv
+
+Test("writeq/1 and print_term/1 are the quoted family") <- (
+    writeq("hello"), nl(), print_term("hello")
+)  # nv
+
+Test("write_canonical/1 spells the cons structure") <- (
+    write_canonical("hi"), nl()
+)  # nv
+# --8<-- [end:write_family]

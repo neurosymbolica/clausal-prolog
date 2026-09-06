@@ -146,16 +146,20 @@ Query: `valid_sentence(["the", "dog", "chases", "the", "cat"])` succeeds.
 
 ### Strings as input
 
-Strings can be passed directly to `phrase` — they are treated as lists of
-single-character strings. This makes character-level DCGs natural:
+Strings can be passed directly to `phrase` — a string *is* the list of its
+one-character **atoms**. This makes character-level DCGs natural:
 
 ```clausal
-digit >> ([D], {char_type(D, digit)})
+-double_quotes(chars)
+
+# `'digit'` is single-quoted: char_type/2's Type argument is an atom, and a
+# bare `digit` would name the nonterminal on the next line.
+digit >> ([D], {char_type(D, 'digit')})
 digits >> (digit)
 digits >> (digit, digits)
 
 Test("parse string") <- phrase(digits, "123")
-Test("partial") <- (phrase(digits, "12ab", Rest), Rest == ['a', 'b'])
+Test("partial") <- (phrase(digits, "12ab", REST), REST is ['a', 'b'])
 ```
 
 No `atom_chars` conversion is needed. See [Strings as Lists](strings_as_lists.md)

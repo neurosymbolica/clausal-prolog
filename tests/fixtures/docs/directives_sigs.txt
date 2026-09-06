@@ -78,3 +78,12 @@ verdict(ok, cited),
 -module(vault, [Check(X)])
 -hide([vault_secret])
 --8<-- [end:hide]
+
+--8<-- [start:double_quotes]
+-double_quotes(chars)      # "hello" is the string ['h','e','l','l','o']
+# -double_quotes(atom)     # "hello" is the atom hello (today's default)
+
+greeting("hello"),         # a string under chars, an atom under atom
+tag('hello'),              # ALWAYS the atom hello, in either mode
+raw(b"hello"),             # ALWAYS a list of integer codes
+--8<-- [end:double_quotes]

@@ -90,7 +90,7 @@ Notation in signature lines:
 | [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
 | [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
-| [I/O](#io) | write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
+| [I/O](#io) | write/1, writeq/1, write_canonical/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between, date_max, date_min, ordinal |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
@@ -451,6 +451,25 @@ DCG non-terminal that matches a list of terminals in sequence. `sequence([a, b, 
 ```
 Decompose a term into its functor name and arity, or construct a term from a name and arity (fields are fresh vars).
 
+**The Name position is an ATOM**, in both directions — never a bare spelling, never a string:
+
+| Call | Answer |
+|---|---|
+| `functor(foo(a), N, A)` | `N = foo` (an atom), `A = 1` |
+| `functor(bar, N, A)` | `N = bar`, `A = 0` |
+| `functor(42, N, A)` | `N = 42`, `A = 0` |
+| `functor([], N, A)` | `N = '[]'`, `A = 0` |
+| `functor([1, 2], N, A)` | `N = '.'`, `A = 2` — a list is the `'.'/2` structure |
+| `functor("ab", N, A)` | `N = '.'`, `A = 2` — a string is the list of its chars |
+| `functor("", N, A)` | `N = '[]'`, `A = 0` |
+| `functor(T, foo, 2)` | `T = foo(_, _)` |
+| `functor(T, foo, 0)` | `T = foo` |
+| `functor(T, '.', 2)` | `T = [_ \| _]` — a partial LIST, never a `'.'/2` cell |
+| `functor(T, "foo", 1)` | `type_error(atomic, "foo")` — a string is a compound |
+| `functor(T, 42, 2)` | `type_error(atom, 42)` |
+
+The `'.'/2` reading is a **view**: decomposition answers virtually (`arg(2, "hello", T)` gives the `str` slice `"ello"`), and construction through the name position builds the engine's real list shapes, never a `(".", H, T)` cell. See `write_canonical/1` for the same view in the writer.
+
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:353`
     **Clausal tests:** `tests/fixtures/builtins_inspect.clausal`
@@ -477,7 +496,22 @@ unbound, enumerates `(N, arg)` pairs in order on backtracking; semidet when
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:unpack_2"
 ```
-Decompose a term to `[functor | args]` list, or construct a term from such a list. (Prolog's `=..` operator.)
+Decompose a term to a `[functor | args]` list, or construct a term from such a list. (Prolog's `=..` operator.) The head of the list is an **ATOM**, the same name position `functor/3` uses:
+
+| Call | Answer |
+|---|---|
+| `unpack(foo(a, "b"), L)` | `L = [foo, a, "b"]` |
+| `unpack(bar, L)` | `L = [bar]` |
+| `unpack(42, L)` | `L = [42]` |
+| `unpack([1, 2], L)` | `L = ['.', 1, [2]]` |
+| `unpack("abc", L)` | `L = ['.', a, "bc"]` |
+| `unpack(T, [foo, 1])` | `T = foo(1)`, a cell |
+| `unpack(T, ['.', a, "bc"])` | `T = "abc"` — a char consed onto a string is a string |
+| `unpack(T, ['.', 1, [2]])` | `T = [1, 2]` — a Python list |
+| `unpack(T, ["foo", 1])` | `type_error(atom, "foo")` |
+| `unpack(T, ["foo"])` | `type_error(atomic, "foo")` |
+
+Constructed compounds are **cells** (plain tuples), not `Compound` objects — Python code that tested `isinstance(x, Compound)` on a constructed term needs a cell-shape test instead.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:413`
@@ -1029,10 +1063,12 @@ Succeeds if `X` is bound (not an unbound `Var`).
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_1"
 ```
-Succeeds if `X` is a declared atom (a zero-arity PredicateMeta class).
-Atoms are created by `-private([red, blue])` or `-module(m, [red])` directives.
-The zero-arity class shape can also be built dynamically with
-`make_predicate("name", [])`; `make_atom("name")` returns the plain atom `str`.
+Succeeds if `X` is an **atom**: the arity-0 cell `("red",)`. Written bare
+(`red`, declared via `-private([red, blue])`, `-module(m, [red])`, an import,
+or `-implicit_atoms`) or single-quoted (`'hello world'`, no declaration
+needed). A **string** is not an atom — use `string/1` / `is_str/1` for that —
+and neither is `[]`. From Python, build one with
+`clausal.logic.atoms.mint("red")` and read its spelling with `spelling/1`.
 
 ---
 
@@ -1040,8 +1076,7 @@ The zero-arity class shape can also be built dynamically with
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:is_str_1"
 ```
-Succeeds if `X` is a Python `str`. Does not match declared atoms (use
-`atom/1` for those).
+Succeeds if `X` is a **string** (a Python `str`, or a partial string that has become ground). `string/1` is the same test. Does not match atoms — use `atom/1` for those — and note that `atomic/1` rejects a string, because a string is a list.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:877`
@@ -1093,7 +1128,7 @@ Succeeds if `X` is a Python `float`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:compound_1"
 ```
-Succeeds if `X` is a compound term with arity > 0 (`Compound`, `KWTerm`, or `PredicateMeta` instance with at least one field).
+Succeeds if `X` is a compound term with arity > 0 (a cell `("f", …)`, `Compound`, `KWTerm`, or `PredicateMeta` instance with at least one field). An **atom** is arity 0, so `compound/1` rejects it; a list (a string included) is not compound either.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:921`
@@ -1106,7 +1141,7 @@ Succeeds if `X` is a compound term with arity > 0 (`Compound`, `KWTerm`, or `Pre
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:callable__1"
 ```
-Succeeds if `X` is an atom (string) or a compound term.
+Succeeds if `X` is an **atom** or a compound term — something that could appear as a goal. A **string** is not callable: `call("foo")` raises `type_error(callable, "foo")`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:935`
@@ -1119,7 +1154,7 @@ Succeeds if `X` is an atom (string) or a compound term.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:is_list_1"
 ```
-Succeeds if `X` is a Python `list`.
+Succeeds if `X` is list-shaped: a Python `list`, or a **string**, which *is* the list of its character atoms. Use `is_str/1` when you need to tell a `str` from a `list`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:947`
@@ -1147,7 +1182,7 @@ Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 ```
 assertz that `Term` is of the given type. Succeeds silently if it matches. Throws `instantiation_error` if Term is unbound. Throws `type_error(Type, Term, "must_be/2")` if Term is ground but wrong type.
 
-Supported type strings: `"integer"`, `"float"`, `"number"`, `"atom"` / `"string"`, `"list"`, `"boolean"`, `"callable"`, `"dict"`, `"compound"`.
+The Type argument is an **atom**. Supported types: `integer`, `float`, `number`, `atom`, `string` / `str`, `list`, `boolean`, `callable`, `dict`, `compound`. `atom` and `string` are now separate types (they used to be one entry): `must_be(atom, "abc")` raises, and so does `must_be(string, abc)`.
 
 ---
 
@@ -2155,17 +2190,27 @@ Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` 
 
 ## Character/String
 
-Logic-aware character and string predicates that participate in unification and backtracking. Unlike Python string methods, these are *relations* — e.g. `atom_concat(A, B, "hello")` with A and B unbound enumerates all splits, `char_type(C, digit)` enumerates digits.
+Logic-aware character and atom predicates that participate in unification and backtracking. Unlike Python string methods, these are *relations* — e.g. `atom_concat(A, B, hello)` with A and B unbound enumerates all splits, `char_type(C, digit)` enumerates digits.
 
-!!! note "Prefer list predicates for common operations"
+!!! warning "These take ATOMS, not strings"
 
-    Since strings behave as character lists, `append/3` subsumes `atom_concat/3` and `length/2` subsumes `atom_length/2`. The string-specific predicates below remain useful for ISO compatibility, explicit type conversion (`atom_chars/2`), code-point operations (`atom_codes/2`, `char_code/2`), character classification (`char_type/2`), and case conversion (`upcase_atom/2`, `downcase_atom/2`). See [Strings as Lists](strings_as_lists.md).
+    Every predicate in this section whose ISO name begins `atom_` (plus `char_code/2`, `char_type/2`, `upcase_atom/2`, `downcase_atom/2`) takes an **atom** in the atom position and answers with atoms. Handing one a **string** raises `type_error(atom, S)` — `atom_length("abc", N)` is an error, not a failure. `char_code/2` raises `type_error(character, S)` for the same reason.
+
+    That is the ISO/Scryer split: an atom is a symbol, a string is the list of its character atoms, and the two never unify. See [Atoms vs strings](syntax.md#atoms-vs-strings).
+
+!!! note "Prefer list predicates for STRING operations"
+
+    A string *is* a list, so `append/3` subsumes `atom_concat/3`, `length/2` subsumes `atom_length/2`, `nth0/3` indexes, `in_/2` tests membership, and `reverse/2` reverses. Reach for the `atom_*` family when you are working with an atom, or when you need it as the **bridge** between the two kinds: `atom_chars/2` turns an atom into the char list of its spelling and back. See [Strings as Lists](strings_as_lists.md).
+
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:chars_family_kinds"
+```
 
 ### `char_type/2`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:char_type_2"
 ```
-Character classification as a relation. At least one argument must be bound. Types: `alpha`, `digit`, `alnum`, `space`, `upper`, `lower`, `ascii`, `punct`, `print`, `control`. With Char bound, enumerates matching types. With Type bound, enumerates matching ASCII characters. With both bound, tests membership.
+Character classification as a relation. `Char` is a **char atom** (`'a'`), `Type` an atom. At least one argument must be bound. Types: `alpha`, `digit`, `alnum`, `space`, `upper`, `lower`, `ascii`, `punct`, `print`, `control`. With Char bound, enumerates matching types. With Type bound, enumerates matching ASCII characters. With both bound, tests membership.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`
@@ -2177,7 +2222,7 @@ Character classification as a relation. At least one argument must be bound. Typ
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:char_code_2"
 ```
-Bidirectional char ↔ integer code point conversion. `char_code('A', N)` unifies N with 65. `char_code(C, 65)` unifies C with `'A'`. Both bound tests equality. Both unbound raises `instantiation_error`.
+Bidirectional char-atom ↔ integer code point conversion. `char_code('A', N)` unifies N with 65. `char_code(C, 65)` unifies C with the atom `'A'`. Both bound tests equality. Both unbound raises `instantiation_error`. A **string** in the Char position raises `type_error(character, S)` — `"a"` is the one-element list `['a']`, not the character.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`
@@ -2189,7 +2234,7 @@ Bidirectional char ↔ integer code point conversion. `char_code('A', N)` unifie
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:upcase_atom_2"
 ```
-Unify `Upper` with the uppercase version of `Atom`. First argument must be bound to a string.
+Unify `Upper` with the uppercase version of `Atom` — atom in, atom out. The first argument must be a bound **atom**; a string raises `type_error(atom, …)`.
 
 ---
 
@@ -2197,7 +2242,7 @@ Unify `Upper` with the uppercase version of `Atom`. First argument must be bound
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:downcase_atom_2"
 ```
-Unify `Lower` with the lowercase version of `Atom`. First argument must be bound to a string.
+Unify `Lower` with the lowercase version of `Atom` — atom in, atom out. The first argument must be a bound **atom**; a string raises `type_error(atom, …)`.
 
 ---
 
@@ -2205,7 +2250,7 @@ Unify `Lower` with the lowercase version of `Atom`. First argument must be bound
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_length_2"
 ```
-Unify `length` with the length of `Atom`. First argument must be bound.
+Unify `length` with the number of characters in `Atom`'s spelling. The first argument must be a bound **atom**; `atom_length("abc", N)` raises `type_error(atom, "abc")` — use `length/2`, which counts a string's characters because a string is a list.
 
 ---
 
@@ -2213,7 +2258,7 @@ Unify `length` with the length of `Atom`. First argument must be bound.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_chars_2"
 ```
-Bidirectional conversion between a string and a list of single-character strings. `atom_chars("hi", L)` unifies L with `['h', 'i']`. `atom_chars(A, ['h', 'i'])` unifies A with `"hi"`.
+Bidirectional conversion between an **atom** and the list of its character atoms — the bridge between atoms and text. `atom_chars(hi, L)` unifies L with `['h', 'i']`, which is the same term as the string `"hi"`. `atom_chars(A, ['h', 'i'])` and `atom_chars(A, "hi")` both unify A with the atom `hi`. An atom in the second position, or a string in the first, raises `type_error(atom, …)`.
 
 ---
 
@@ -2221,7 +2266,7 @@ Bidirectional conversion between a string and a list of single-character strings
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_codes_2"
 ```
-Bidirectional conversion between a string and a list of integer code points. `atom_codes("hi", L)` unifies L with `[104, 105]`.
+Bidirectional conversion between an **atom** and the list of its integer code points. `atom_codes(hi, L)` unifies L with `[104, 105]`.
 
 ---
 
@@ -2229,7 +2274,7 @@ Bidirectional conversion between a string and a list of integer code points. `at
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_concat_3"
 ```
-String concatenation as a relation. Forward: A and B bound → unify C with `A + B`. reverse: C bound, A and/or B unbound → enumerate all splits. `atom_concat(A, B, "abc")` yields 4 solutions: `("","abc")`, `("a","bc")`, `("ab","c")`, `("abc","")`. Optimized paths for prefix/suffix-bound cases.
+**Atom** concatenation as a relation. Forward: A and B bound → unify C with the atom of their concatenated spellings. Reverse: C bound, A and/or B unbound → enumerate all splits as atoms. `atom_concat(A, B, abc)` yields 4 solutions: `('', abc)`, `(a, bc)`, `(ab, c)`, `(abc, '')`. Optimized paths for prefix/suffix-bound cases. To concatenate **strings**, use `append/3`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`
@@ -2241,7 +2286,7 @@ String concatenation as a relation. Forward: A and B bound → unify C with `A +
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:sub_atom_5"
 ```
-Substring relation. Relates `Atom` to its substrings with position information: `Before + length + After = len(Atom)`, `Sub = Atom[Before:Before+length]`. Multi-modal — any combination of bound/unbound arguments works (Atom must be bound). With Sub bound, uses `str.find()` for efficient lookup. Otherwise enumerates all valid `(Before, length)` pairs.
+Sub-atom relation. Relates an **atom** to the atoms of its sub-spellings with position information: `Before + length + After = len(Atom)`, `Sub = Atom[Before:Before+length]`, and every `Sub` answer is an atom. Multi-modal — any combination of bound/unbound arguments works (Atom must be bound). With Sub bound, uses `str.find()` for efficient lookup. Otherwise enumerates all valid `(Before, length)` pairs. For **substrings of a string**, use `append/3` or the multi-star patterns of [Strings as Lists](strings_as_lists.md).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/chars.py`
@@ -2253,7 +2298,7 @@ Substring relation. Relates `Atom` to its substrings with position information: 
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:number_chars_2"
 ```
-Bidirectional number ↔ character-list conversion. Number bound → `Chars` unifies with `list(str(Number))`. Chars bound (list of single-char strings) → parse as `int` or `float`. Both bound → test equality. Both unbound → instantiation error. Rejects `bool` values (not considered numbers).
+Bidirectional number ↔ character-list conversion. Number bound → `Chars` unifies with the list of the number's **character atoms** (which is the same term as the string of its digits). Chars bound (a char list or the string that is that list) → parse as `int` or `float`. Both bound → test equality. Both unbound → instantiation error. Rejects `bool` values (not considered numbers).
 
 Parsing is deliberately Python-native (`int()` then `float()`), per the language-is-Python contract. It is therefore *lenient* relative to ISO `number_chars`: surrounding whitespace (`" 1"`), digit-group underscores (`"1_0"`), and the float literals `"inf"`/`"nan"` are accepted; anything Python cannot parse as a number fails. `number_codes/2` shares this behaviour.
 
@@ -2289,7 +2334,7 @@ Bidirectional number ↔ code-point-list conversion. Like `number_chars/2` but u
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:write_1"
 ```
-Print `Term` to stdout without a trailing newline. Strings are printed as-is; other values use `str()`. Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`. F-strings work naturally: `f"{X}"` derefs `X` at search time.
+Print `Term` to stdout without a trailing newline, **unquoted**: an atom prints its spelling bare, a string prints its text bare, and the two are indistinguishable in the output. Operators and list syntax are kept (`f(a, b)`, `[1, 2]`). Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`. F-strings work naturally: `f"{X}"` derefs `X` at search time. Use `writeq/1` when you need to tell an atom from a string.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`write/1`)
@@ -2297,11 +2342,45 @@ Print `Term` to stdout without a trailing newline. Strings are printed as-is; ot
 
 ---
 
+### `writeq/1`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:writeq_1"
+```
+Print `Term` to stdout **quoted**, without a trailing newline. An atom is quoted when its spelling is not a bare token (`'foo bar'`); a string prints in double quotes (`"abc"`); a list of characters prints as the string it is (`[a, b]` → `"ab"`). Operators and list syntax are kept, as in `write/1`. This is the writer to reach for when the atom/string distinction matters. `print_term/1` and `term_to_string/2` are the same family.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`writeq/1`)
+    **Python tests:** `tests/test_writers_atoms_strings.py`
+
+---
+
+### `write_canonical/1`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:write_canonical_1"
+```
+Print `Term` to stdout quoted, ignoring operator syntax **and** list syntax: every list — a string included — prints as the `'.'/2` cons structure it denotes, with no space after commas, so the output is byte-comparable with other ISO systems.
+
+| Term | `write_canonical` output |
+|---|---|
+| `"hello"` | `'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))` |
+| `[1, 2]` | `'.'(1,'.'(2,[]))` |
+| `[]` | `[]` |
+| `foo(a, "b")` | `foo(a,'.'(b,[]))` |
+| `1 + 2` | `+(1,2)` |
+
+The cons form is a **view**, not the representation: a string stays a compact `str` and a list stays a Python `list`. The same view is what `functor/3` and `=..` report for them.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`write_canonical/1`)
+    **Python tests:** `tests/test_writers_atoms_strings.py`
+
+---
+
 ### `writeln/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:writeln_1"
 ```
-Like `write/1` but appends a newline.
+Like `write/1` (unquoted) but appends a newline.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`writeln/1`)
@@ -2313,7 +2392,7 @@ Like `write/1` but appends a newline.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:print_term_1"
 ```
-Print the structured `term_str` representation of `Term` (strings are quoted, compounds show functor/args) followed by a newline. Useful for debugging.
+Print the quoted (`writeq/1`) representation of `Term` — an atom quoted where it needs it, a string in double quotes, compounds as functor/args — followed by a newline. Useful for debugging, because it distinguishes an atom from a string.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`print_term/1`)
@@ -2325,7 +2404,7 @@ Print the structured `term_str` representation of `Term` (strings are quoted, co
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:nl_0"
 ```
-Print a newline to stdout. equivalent to `write("\n")`.
+Print a newline to stdout.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`nl/0`)
@@ -2349,7 +2428,7 @@ Print `N` spaces to stdout. `N` must be a bound non-negative integer.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:write_to_string_2"
 ```
-Unify `String` with the `write`-style string representation of `Term` (strings pass through, others use `str()`). Does not print anything.
+Unify `String` with the **unquoted** (`write/1`) rendering of `Term`, as a string. Does not print anything.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`write_to_string/2`)
@@ -2361,7 +2440,7 @@ Unify `String` with the `write`-style string representation of `Term` (strings p
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:term_to_string_2"
 ```
-Unify `String` with the `term_str` representation of `Term` (structured, with quoted strings). Does not print anything.
+Unify `String` with the **quoted** (`writeq/1`) rendering of `Term`, as a string. Does not print anything.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`term_to_string/2`)
@@ -2373,7 +2452,7 @@ Unify `String` with the `term_str` representation of `Term` (structured, with qu
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:listing_1"
 ```
-Print all clauses of a predicate to stdout in readable Clausal syntax. Accepts, in any of these shapes: a `PredicateMeta` class or instance; a builtin predicate; a bare str atom naming a 0-arity predicate; or a `Name/Arity` indicator naming a predicate at any arity. The indicator has three representations: the cell `('/', Name, Arity)` and the engine's `Compound("/", (Name, Arity))` (both reachable from Python/engine callers holding the name and arity as data), and a runtime `Div` node — what a user-written `foo/2` actually compiles to in `.clausal` source, since `/` is the arithmetic operator and a structural (non-`is`) use of it stays a reified operator term rather than data. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). Reports `"% name/arity — no clauses"` for a known predicate with an empty clause list, `"% name/arity — builtin"` for a builtin predicate, and raises `existence_error(procedure, Name/Arity)` for a `name/arity` that was never declared at all (an atom or `Name/Arity` indicator only — a class/instance/builtin argument is always "known" by construction). An indicator naming an IMPORTED predicate resolves to the exporter's predicate, so `listing(qq/1)` and `listing("qq"/1)` from a module that `-import_from`s `qq` print what `listing(qq)` prints there; an indicator whose name or arity is unbound (`listing(X/2)`) raises `instantiation_error`.
+Print all clauses of a predicate to stdout in readable Clausal syntax. Accepts, in any of these shapes: a `PredicateMeta` class or instance; a builtin predicate; an **atom** naming a 0-arity predicate (a string raises `type_error(predicate, …)` — a string is not a name); or a `Name/Arity` indicator naming a predicate at any arity. The indicator has three representations: the cell `('/', Name, Arity)` and the engine's `Compound("/", (Name, Arity))` (both reachable from Python/engine callers holding the name and arity as data), and a runtime `Div` node — what a user-written `foo/2` actually compiles to in `.clausal` source, since `/` is the arithmetic operator and a structural (non-`is`) use of it stays a reified operator term rather than data. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). Reports `"% name/arity — no clauses"` for a known predicate with an empty clause list, `"% name/arity — builtin"` for a builtin predicate, and raises `existence_error(procedure, Name/Arity)` for a `name/arity` that was never declared at all (an atom or `Name/Arity` indicator only — a class/instance/builtin argument is always "known" by construction). An indicator naming an IMPORTED predicate resolves to the exporter's predicate, so `listing(qq/1)` and `listing('qq'/1)` from a module that `-import_from`s `qq` print what `listing(qq)` prints there; an indicator whose name or arity is unbound (`listing(X/2)`) raises `instantiation_error`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`listing/1`)

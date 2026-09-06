@@ -98,3 +98,15 @@ set_remove(+Elem, +OldSet, -NewSet)
 --8<-- [start:gen_set_2]
 gen_set(?Elem, +Set)
 --8<-- [end:gen_set_2]
+
+--8<-- [start:atom_vs_string_keys]
+-double_quotes(chars)
+-private([k])            # a bare atom key must be declared (strict atoms)
+
+# `k` bare and `'k'` quoted are both the ATOM key k; "k" is the STRING key.
+config({k: 1}),          # atom key
+labels({"k": 1}),        # string key -- a DIFFERENT dict
+
+# config(D), labels(D)  fails: the two dicts do not unify.
+# V is D[k]  and  V is D.k  both look up the ATOM key.
+--8<-- [end:atom_vs_string_keys]

@@ -1,4 +1,10 @@
+-double_quotes(chars)
+-private([k])
 # Companion tests for docs/dicts_sets.md signature blocks.
+#
+# The file declares -double_quotes(chars) so it can pin the
+# `atom_vs_string_keys` snippet: an atom key and the same-spelled STRING key
+# are distinct (spec 2026-09-06-atoms-as-cells-strings §6.8).
 
 Test("dict operations") <- (
     is_dict({"a": 1}),
@@ -12,4 +18,36 @@ Test("set operations") <- (
     is_set({1, 2, 3}),
     set_union({1}, {2}, U),
     set_subset({1}, U)
+)  # nv
+
+# ── Atom keys vs string keys ─────────────────────────────────────────────
+
+config({k: 1}),
+labels({"k": 1}),
+
+Test("bare and quoted spell the same atom key") <- (
+    {k: 1} is {'k': 1}
+)  # nv
+
+Test("an atom key and a string key are different dicts") <- (
+    config(C), labels(L),
+    not (C is L)
+)  # nv
+
+Test("dot access reads the atom key") <- (
+    config(C2),
+    V is C2.k,
+    V == 1
+)  # nv
+
+Test("subscript reads the atom key") <- (
+    config(C3),
+    V2 is C3[k],
+    V2 == 1
+)  # nv
+
+Test("a string key is reached with a string") <- (
+    labels(L2),
+    V3 is L2["k"],
+    V3 == 1
 )  # nv

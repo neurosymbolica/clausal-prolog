@@ -72,3 +72,21 @@ Test("is_chars list") <- is_chars([1, 2, 3])  # nv
 Test("is_list string succeeds") <- is_list("hello")  # nv
 Test("is_str list fails") <- (not is_str([1, 2, 3]))  # nv
 # --8<-- [end:type_checking]
+
+# --8<-- [start:atom_family]
+# The atom position takes an ATOM (written bare, or single-quoted as here so
+# the snippet needs no -private declaration) and answers with atoms; a STRING
+# there raises type_error(atom, …).  atom_chars/2 is the bridge between the
+# two kinds: it relates an atom to the string of its spelling.
+Test("atom to text") <- (atom_chars('hello', S), S is "hello")  # nv
+Test("text to atom") <- (atom_chars(A, "hello"), A is 'hello', atom(A))  # nv
+Test("length of an atom") <- atom_length('hello', 5)  # nv
+Test("concat gives an atom") <- (atom_concat('he', 'llo', X), X is 'hello')  # nv
+Test("upcase gives an atom") <- (upcase_atom('hello', U), U is 'HELLO')  # nv
+Test("char_type takes a char atom") <- char_type('a', 'alpha')  # nv
+Test("a string is not an atom here") <- catch(
+    atom_length("hello", _),
+    error(type_error('atom', "hello"), _),
+    (1 == 1)
+)  # nv
+# --8<-- [end:atom_family]

@@ -1,0 +1,39 @@
+-double_quotes(chars)
+-private([red, colour, note])
+-implicit_functors
+-import_from(py.json, [parse, generate])
+# Doc snippet fixtures for docs/json.md.
+#
+# Spec 2026-09-06-atoms-as-cells-strings §9.2: object KEYS are minted as
+# atoms, string VALUES stay strings, and parse/3's atoms(Spellings) option
+# is the vocabulary hook that promotes chosen values to atoms.
+
+# --8<-- [start:parse_atoms]
+# Keys are atoms; string values are strings.
+Test("keys are atoms, values are strings") <- (
+    parse("{\"colour\": \"red\", \"note\": \"hi\"}", D),
+    V is D.colour,
+    string(V),
+    V == "red"
+)  # nv
+
+# 'atoms'(["red"]) promotes just that value to the atom red.  The option
+# term is data, so the module carries -implicit_functors (or declares
+# atoms/1 in -private).
+Test("the atoms option mints a vocabulary") <- (
+    parse("{\"colour\": \"red\", \"note\": \"red flag\"}", D2, ['atoms'(["red"])]),
+    C is D2.colour,
+    atom(C),
+    C is red,
+    N is D2.note,
+    string(N)              # not in the vocabulary -- still text
+)  # nv
+# --8<-- [end:parse_atoms]
+
+# --8<-- [start:generate_kinds]
+# Generating is the mirror: an atom becomes the JSON string of its spelling.
+Test("an atom generates as a JSON string") <- (
+    generate({colour: red}, S),
+    S == "{\"colour\": \"red\"}"
+)  # nv
+# --8<-- [end:generate_kinds]

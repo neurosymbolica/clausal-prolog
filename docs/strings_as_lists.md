@@ -1,8 +1,17 @@
 # Strings as Lists of Characters
 
-In Clausal, strings are treated as lists of single-character strings at the
-logic level. You can use list predicates, pattern matching, and DCGs on strings
-directly — no conversion needed.
+In Clausal a string **is** the list of its one-character atoms — the ISO
+Prolog *chars* model, as in Scryer. You can use list predicates, pattern
+matching, and DCGs on strings directly; no conversion needed, because there is
+nothing to convert.
+
+!!! note "Writing a string literal"
+    A double-quoted literal means a string only in a file that declares
+    [`-double_quotes(chars)`](directives.md#-double_quotes). The engine default
+    is still `atom`, where `"hello"` is the atom `hello`; the default flips to
+    `chars` once every module has migrated. Every example on this page is run
+    under `-double_quotes(chars)`. A single-quoted `'hello'` is always an atom,
+    in either mode.
 
 ---
 
@@ -14,16 +23,21 @@ split, join, reverse, search, filter, iterate. Maintaining two parallel sets of
 predicates — one for lists, one for strings — doubles the API surface and forces
 users to constantly ask "am I working with a string or a list right now?"
 
-Clausal eliminates this by treating a string as a list of its characters
-wherever a list is expected. Under the hood, strings are still Python `str`
-objects (fast, compact, interoperable with Python libraries). But at the logic
-level, `"hello"` and `['h', 'e', 'l', 'l', 'o']` are interchangeable.
+Clausal answers that by making the string *be* the list. Under the hood a string
+is still a Python `str` (fast, compact, interoperable with Python libraries) —
+it is never expanded into a chain of cons cells — but at the logic level
+`"hello"` and `['h', 'e', 'l', 'l', 'o']` are one and the same term.
+
+The elements are **character atoms**: `'h'` is the atom whose spelling is the
+single character `h`, not the one-character string `"h"`. So
+`nth0(0, "abc", C)` gives `C = 'a'`, and `in_("a", "abc")` fails — `"a"` is the
+*list* `['a']`, not the character.
 
 ---
 
 ## Unification
 
-A string unifies with a list of single-character strings:
+A string unifies with the list of its character atoms:
 
 ```clausal
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:unification"
@@ -114,14 +128,19 @@ is a character sequence, the result is returned as a string:
 [Definite Clause Grammars](dcg.md) parse strings directly:
 
 ```clausal
-digit >> ([D], {char_type(D, digit)})
+-double_quotes(chars)
+
+# `'digit'` is single-quoted: char_type/2's Type argument is an ATOM, and a
+# bare `digit` here would name the nonterminal defined on the next line.
+digit >> ([D], {char_type(D, 'digit')})
 digits >> (digit)
 digits >> (digit, digits)
 
 Test("parse digits") <- phrase(digits, "123")
 Test("partial parse") <- (
-    phrase(digits, "12ab", Rest),
-    Rest == ['a', 'b']
+    phrase(digits, "12ab", REST),
+    REST is ['a', 'b'],   # the leftover is the string "ab"
+    string(REST)
 )
 ```
 
@@ -134,6 +153,8 @@ Because strings are character lists, you can write character-level grammars
 naturally:
 
 ```clausal
+-double_quotes(chars)
+
 letter >> ([C], {char_type(C, alpha)})
 space >> ([' '])
 word >> (letter)
@@ -150,11 +171,11 @@ Test("parse words") <- phrase(words, "hello world")
 
 Three predicates test sequence types (see [Type Checking](type_checking.md) for the full set):
 
-| Predicate | Strings | Lists | Purpose |
-|-----------|---------|-------|---------|
-| `is_list/1` | Succeeds | Succeeds | Polymorphic: is this a list-shaped value (list or char-sequence str)? |
-| `is_str/1` | Succeeds | Fails | Exact type test: is this a Python str? |
-| `is_chars/1` | Succeeds | Succeeds | union test: is this a character sequence? |
+| Predicate | Strings | Lists | Atoms | Purpose |
+|-----------|---------|-------|-------|---------|
+| `is_list/1` | Succeeds | Succeeds | Fails | Polymorphic: is this a list-shaped value (list or char-sequence str)? |
+| `is_str/1`, `string/1` | Succeeds | Fails | Fails | Exact type test: is this a Python str? |
+| `is_chars/1` | Succeeds | Succeeds | Fails | union test: is this a character sequence? |
 
 `is_list/1` is polymorphic over `list` and `str` (audit 2026-05-25, F080)
 so it agrees with every list-flavoured builtin — `append`, `length`,
@@ -162,28 +183,44 @@ so it agrees with every list-flavoured builtin — `append`, `length`,
 accept a `str` as a character sequence. Use `is_str/1` when you
 specifically need to distinguish a `str` from a `list`.
 
+None of the three accepts an **atom**: an atom is a symbol, not a sequence.
+`atom("hello")` and `string(hello)` are both false, and the two never unify.
+The atom-flavoured predicates in the next section are the bridge between them.
+
 ```clausal
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:type_checking"
 ```
 
 ---
 
-## String-Specific Predicates
+## The `atom_*` family works on ATOMS
 
-The traditional string predicates (`atom_chars/2`, `atom_concat/3`, `sub_atom/5`,
-`atom_length/2`, etc.) still work. They are useful for:
+The ISO `atom_*` predicates (`atom_chars/2`, `atom_codes/2`, `atom_concat/3`,
+`sub_atom/5`, `atom_length/2`, `upcase_atom/2`, `downcase_atom/2`) take an
+**atom** in the atom position and give atoms back. Handing one a string raises
+`type_error(atom, …)` — it is not a silent failure:
 
-- **Explicit conversion:** `atom_chars("hello", Chars)` gives you a plain list
-  when you specifically need one
-- **Code-point operations:** `atom_codes/2`, `char_code/2` relate characters to
-  integer code points
-- **Character classification:** `char_type/2` tests character types (alpha, digit,
-  etc.)
-- **Case conversion:** `upcase_atom/2`, `downcase_atom/2`
-- **ISO Prolog compatibility**
+```clausal
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:atom_family"
+```
 
-For concatenation, splitting, length, and membership, prefer the [list predicates](lists.md)
-(`append/3`, `length/2`, `in_/2`) — they work uniformly on both strings and lists.
+That makes `atom_chars/2` the **bridge between the two kinds**: it turns an
+atom into the string (equivalently, the char list) of its spelling, and turns
+text back into an atom.
+
+- **Atom ↔ text:** `atom_chars(hello, S)` gives the char list
+  `['h','e','l','l','o']`, which unifies with `"hello"` because they are the
+  same term; `atom_chars(A, "hello")` gives `A = hello`.
+- **Code-point operations:** `atom_codes/2` and `char_code/2` relate characters
+  to integer code points.
+- **Character classification:** `char_type/2` tests a **char atom** —
+  `char_type('a', alpha)`.
+- **Case conversion:** `upcase_atom/2`, `downcase_atom/2` — atom in, atom out.
+
+For concatenation, splitting, length, and membership **of strings**, use the
+[list predicates](lists.md) (`append/3`, `length/2`, `in_/2`, `reverse/2`,
+`nth0/3`) — they work uniformly on strings and lists, because a string is a
+list.
 
 ---
 
@@ -192,11 +229,16 @@ For concatenation, splitting, length, and membership, prefer the [list predicate
 Clausal keeps Python `str` as the internal representation of strings. This
 preserves performance (string comparison, hashing, and concatenation are fast)
 and Python interoperability (strings passed to Python functions remain `str`).
+**The representation is never materialised into cons cells** — a string is a
+`str`, a proper list is a `list`, and a partial list or partial string is the
+engine's `SegList`/`SegString`. The `'.'/2` cons structure is only ever a
+*view* onto those, produced on demand by `functor/3`, `arg/3`, `=..` and
+`write_canonical/1`.
 
-The logic layer adds string-as-list behaviour in four places:
+The logic layer makes the string *be* its char list in four places:
 
-1. **Unification:** when a string meets a list, the string is treated as a list
-   of its characters. `"abc"` unifies with `['a', 'b', 'c']` element-wise.
+1. **Unification:** when a string meets a list, they unify element-wise against
+   the string's character atoms. `"abc"` unifies with `['a', 'b', 'c']`.
    String-vs-string remains fast equality.
 
 2. **Pattern matching:** Multi-star patterns (`[*A, 'l', *B]`) accept strings
@@ -204,16 +246,19 @@ The logic layer adds string-as-list behaviour in four places:
    `B = "lo"`), preserving the `str` type throughout — no character-list
    conversion happens.
 
-3. **Builtins:** List predicates accept strings wherever they accept lists. when
+3. **Builtins:** List predicates accept strings wherever they accept lists. When
    the result should be a string (all inputs were strings, result is a char
    sequence), a string is returned.
 
 4. **Head patterns:** Compiled clause head patterns like `[H, *T]` work on
-   strings. `H` binds to a single character, `T` binds to the remaining
+   strings. `H` binds to a **char atom**, `T` binds to the remaining
    substring (`str`, not a list).
 
-This is a Liskov-style subtyping approach: a string can be used anywhere a list
-of characters is expected, with no loss of functionality.
+!!! warning "Strings are not indexed"
+    First-argument indexing keys on atoms, numbers and functors. A **string**
+    first argument is not indexable — a string head and a char-list head are
+    the same term, so both land in the same full-scan bucket. A fact table
+    keyed by symbols should key them as **atoms**, not as strings.
 
 ---
 
@@ -223,17 +268,18 @@ Clausal's strings-as-lists contract operates at **code-point granularity**,
 not grapheme granularity. This means:
 
 - A multi-codepoint emoji like `"👍🏽"` (thumbs-up + skin-tone modifier)
-  has `len("👍🏽") == 2` and unifies with `["👍", "🏽"]`, not `["👍🏽"]`.
+  has `len("👍🏽") == 2` and unifies with `['👍', '🏽']`, not `['👍🏽']`.
 - A base character followed by a combining mark — `"é"` written as
   decomposed form (base `e` + combining acute U+0301) — has length 2 and unifies
-  with `["e", "́"]`. The same character in precomposed form (`"é"`, U+00E9)
-  has length 1 and unifies with `["é"]`. NFC and NFD representations of the
+  with `['e', '́']`. The same character in precomposed form (`"é"`, U+00E9)
+  has length 1 and unifies with `['é']`. NFC and NFD representations of the
   same grapheme do not unify with each other.
 - Lone surrogate halves are processed as individual code points
   (Python permits malformed Unicode at the surrogate level).
-- List elements that are multi-character strings (e.g. `["ab", "c"]`)
-  are **rejected** by the per-element check; only 1-character list elements
-  participate in str↔list unification.
+- Only **one-character atoms** are string elements. A list of multi-character
+  atoms (`['ab', 'c']`) does not unify with a string, and neither does a list
+  of one-character *strings* (`["a", "b"]`, which is a list of two one-element
+  lists).
 
 This rule applies uniformly across:
 
@@ -253,26 +299,26 @@ movement in a text editor), use the standard Python library
 
 ## Comparison with Prolog
 
-In Prolog systems like [Scryer Prolog](scryer.md), strings *are* lists of characters — the
-same data structure, with no distinction. This gives maximum uniformity at the
-cost of performance (no compact string representation) and foreign-function
-interop (every string is a linked list of character atoms).
+Clausal follows [Scryer Prolog](scryer.md) here: a string **is** the list of
+its character atoms, the two never unify with an atom, and the `atom_*` family
+raises `type_error(atom, …)` on a string. Scryer likewise keeps a compact
+internal representation rather than materialising cons cells; Clausal's is the
+Python `str`, so a string handed to a Python callee is a `str` with no
+conversion at all.
 
-Clausal takes a pragmatic middle path: strings *behave as* lists of characters
-at the logic level, but remain Python `str` objects internally. You get the
-logical uniformity of Prolog's approach with the performance and interop of
-Python's native strings.
-
-This doc covers the **`chars`** model (a `str` is a list of one-character
-strings). Clausal also has the Prolog **`codes`** model for byte sequences:
-a Python `bytes` behaves as a list of integer codes in `[0, 255]`. See
-[Bytes as Lists of Codes](bytes_as_lists.md) for byte-stream unification and
-binary-protocol DCGs.
+This doc covers the **`chars`** model (a `str` is the list of its
+one-character atoms). Clausal also has the Prolog **`codes`** model for byte
+sequences: a Python `bytes` behaves as a list of integer codes in `[0, 255]`,
+written `b"…"`. See [Bytes as Lists of Codes](bytes_as_lists.md) for
+byte-stream unification and binary-protocol DCGs.
 
 | Feature | Traditional Prolog | Clausal |
 |---------|-------------------|---------|
-| String representation | List of character atoms | Python `str` |
-| `append/3` on strings | Works (strings are lists) | Works (strings behave as lists) |
+| String representation | List of character atoms | Python `str` — the same *term*, a compact representation |
+| `"abc" = [a, b, c]` | True | True |
+| `atom("abc")` | False | False |
+| `atom_length("abc", N)` | `type_error(atom, …)` | `type_error(atom, …)` |
+| `append/3` on strings | Works (strings are lists) | Works (strings are lists) |
 | DCGs on strings | Works | Works |
 | Pattern matching | Works | Works — star vars bind to substrings |
 | Performance | O(n) cons cells | O(1) Python str operations |
@@ -285,11 +331,13 @@ binary-protocol DCGs.
 ### Palindrome check (works on both strings and lists)
 
 ```clausal
+-double_quotes(chars)
+
 palindrome(XS) <- reverse(XS, XS)
 
 Test("list palindrome") <- palindrome([1, 2, 1])
 Test("string palindrome") <- palindrome("racecar")
-Test("not palindrome") <- not palindrome("hello")
+Test("not palindrome") <- (not palindrome("hello"))
 ```
 
 ### Character frequency
@@ -297,11 +345,15 @@ Test("not palindrome") <- not palindrome("hello")
 Using [findall](meta_predicates.md) to count matching characters:
 
 ```clausal
-char_count(Str, Char, Count) <- (
-    findall(C, (in_(C, Str), C == Char), Matches),
-    length(Matches, Count)
+-double_quotes(chars)
+
+char_count(STR, CHAR, COUNT) <- (
+    findall(C, (in_(C, STR), C is CHAR), MATCHES),
+    length(MATCHES, COUNT)
 )
 
+# The Char argument is a CHARACTER — a one-character atom, written 'l'.
+# "l" would be the one-element string ['l'], which is not an element.
 Test("count l") <- char_count("hello", 'l', 2)
 Test("count z") <- char_count("hello", 'z', 0)
 ```
@@ -309,8 +361,12 @@ Test("count z") <- char_count("hello", 'z', 0)
 ### Simple tokenizer with DCGs
 
 ```clausal
-alpha >> ([C], {char_type(C, alpha)})
-digit >> ([C], {char_type(C, digit)})
+-double_quotes(chars)
+
+# char_type/2's Type argument and the token tags are ATOMS, single-quoted
+# so they cannot be mistaken for the nonterminals of the same spelling.
+alpha >> ([C], {char_type(C, 'alpha')})
+digit >> ([C], {char_type(C, 'digit')})
 
 alphas >> (alpha)
 alphas >> (alpha, alphas)
@@ -318,9 +374,9 @@ alphas >> (alpha, alphas)
 digits >> (digit)
 digits >> (digit, digits)
 
-token(word) >> (alphas)
-token(number) >> (digits)
+token('word') >> (alphas)
+token('number') >> (digits)
 
-Test("word token") <- phrase(token(word), "hello")
-Test("number token") <- phrase(token(number), "42")
+Test("word token") <- phrase(token('word'), "hello")
+Test("number token") <- phrase(token('number'), "42")
 ```

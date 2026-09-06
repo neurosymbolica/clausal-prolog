@@ -6,7 +6,7 @@ Clausal has first-class support for dictionaries and sets as logic terms. Unlike
 
 ## DictTerm
 
-`DictTerm` is a unification-aware dictionary. Keys must be ground (strings, ints, or other hashable atoms). Values may be logic variables.
+`DictTerm` is a unification-aware dictionary. Keys must be ground and hashable — an atom (`k`, `'k'`), a string, an int, or any other hashable ground term. An atom key and the same-spelled string key are **distinct** (see [Key kinds](#the-python-dict-surface) below). Values may be logic variables.
 
 ### Syntax
 
@@ -151,9 +151,22 @@ fail this one rule rather than abort the query; `get/4` when a default is
 the honest answer; `tri_get/3` when absence means the three-valued
 `Undefined`, not failure.
 
-Keys may be strings, ints, or atoms — an atom key and the same-spelled
-string key are **distinct** (atoms do not unify with strings), exactly as in
-head-position dict patterns above.
+Keys may be atoms, strings, or ints. An atom key and the same-spelled **string**
+key are **distinct** — atoms and strings are disjoint kinds and never unify
+([Syntax § Atoms vs strings](syntax.md#atoms-vs-strings)) — exactly as in
+head-position dict patterns above:
+
+```clausal
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:atom_vs_string_keys"
+```
+
+Which one you get from a `{…}` literal follows the file's
+[`-double_quotes`](directives.md#-double_quotes) mode for a `"k"` key, and is
+always an atom for a bare `k` or a single-quoted `'k'`. Dot access `D.k` looks
+up the **atom** `k`, so the dot syntax and a bare-key literal agree. Result
+dicts built by the `py.*` wrappers (`py.json.parse/2`, `py.process`,
+`py.url.parse/2`, `py.csv`) key by **atoms**, which is what makes `R.stdout`
+and `get(R, stdout, V)` work.
 
 All of these accept a plain Python `dict` argument wherever a `DictTerm` is
 accepted (the two unify and compare equal), as does the whole `dict_*`/`set_*`

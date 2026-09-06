@@ -370,6 +370,141 @@ Test("term_to_string exists") <- (
     is_str(S)
 )  # nv
 
+# The two string forms are the two writer FAMILIES: write_to_string is
+# unquoted, term_to_string is quoted (docs/builtins.md, docs/io.md).
+Test("write_to_string is the unquoted family") <- (
+    write_to_string('a b', S),
+    S == "a b"
+)  # nv
+
+Test("term_to_string is the quoted family") <- (
+    term_to_string('a b', S),
+    S == "'a b'"
+)  # nv
+
+Test("term_to_string keeps a string's quotes") <- (
+    term_to_string("hello", S),
+    S == "\"hello\""
+)  # nv
+
+Test("writeq/1 exists") <- writeq('a b')  # nv
+
+Test("write_canonical/1 spells the cons view") <- write_canonical("hi")  # nv
+
+# ── The chars family takes ATOMS (docs/builtins.md Character/String) ─────────
+
+Test("atom_length on an atom") <- atom_length('hello', 5)  # nv
+
+Test("atom_length on a string is an error") <- catch(
+    atom_length("hello", _),
+    error(type_error('atom', "hello"), _),
+    (1 == 1)
+)  # nv
+
+Test("char_code on a string is an error") <- catch(
+    char_code("a", _),
+    error(type_error('character', "a"), _),
+    (1 == 1)
+)  # nv
+
+Test("atom_chars bridges atom and text") <- (
+    atom_chars('hello', CS2),
+    CS2 is "hello",
+    atom_chars(A2, "hello"),
+    A2 is 'hello'
+)  # nv
+
+Test("atom_concat gives an atom") <- (
+    atom_concat('he', 'llo', X2),
+    X2 is 'hello',
+    atom(X2)
+)  # nv
+
+Test("upcase_atom gives an atom") <- (
+    upcase_atom('hello', U2),
+    U2 is 'HELLO'
+)  # nv
+
+Test("number_chars answers char atoms") <- (
+    number_chars(42, NCS),
+    NCS is ['4', '2'],
+    number_chars(N2, "10"),
+    N2 == 10
+)  # nv
+
+Test("list predicates do the string work") <- (
+    length("hello", 5),
+    append("he", "llo", "hello")
+)  # nv
+
+# ── functor/3 and unpack/2 speak ATOMS (docs/builtins.md Term Inspection) ────
+
+Test("functor decomposes to an atom name") <- (
+    functor(pair_probe(1, 2), FN, FA),
+    FN is 'pair_probe',
+    atom(FN),
+    FA == 2
+)  # nv
+
+Test("functor on an atom is arity 0") <- (
+    functor('bar', FN2, FA2),
+    FN2 is 'bar',
+    FA2 == 0
+)  # nv
+
+Test("functor on a list is the cons view") <- (
+    functor([1, 2], LN, LA),
+    LN is '.',
+    LA == 2,
+    functor([], EN, EA),
+    EN is '[]',
+    EA == 0
+)  # nv
+
+Test("functor constructs a cell") <- (
+    functor(T3, 'pair_probe', 2),
+    functor(T3, 'pair_probe', 2)
+)  # nv
+
+Test("functor refuses a string name") <- catch(
+    functor(_, "foo", 1),
+    error(type_error('atomic', "foo"), _),
+    (1 == 1)
+)  # nv
+
+Test("unpack decomposes with an atom head") <- (
+    unpack(pair_probe(1, 2), UL),
+    UL is ['pair_probe', 1, 2]
+)  # nv
+
+Test("unpack sees a string as its cons view") <- (
+    unpack("abc", SL),
+    SL is ['.', 'a', "bc"]
+)  # nv
+
+Test("unpack builds the engine list shapes") <- (
+    unpack(T4, ['.', 'a', "bc"]),
+    T4 == "abc",
+    string(T4),
+    unpack(T5, ['.', 1, [2]]),
+    T5 == [1, 2],
+    is_list(T5)
+)  # nv
+
+Test("unpack refuses a string name") <- catch(
+    unpack(_, ["foo", 1]),
+    error(type_error('atom', "foo"), _),
+    (1 == 1)
+)  # nv
+
+Test("arg answers virtually on a string") <- (
+    arg(2, "hello", AT),
+    AT == "ello",
+    string(AT)
+)  # nv
+
+pair_probe(1, 2),
+
 # ── Logging (log module) ─────────────────────────────────────────────────────
 
 -import_from(log, [get_logger, debug, info, set_level, get_level])

@@ -323,9 +323,17 @@ Inside a logical term:
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms"
 ```
 
-An identifier that collides with a Python keyword or builtin (`not`, `is`, `max`) cannot be written as a bare atom. Quoting it — `'not'` — yields a **string**, not a declared atom (see [Atoms vs strings](#atoms-vs-strings-there-are-no-string-atoms)): it works as a symbolic *value*, but `atom/1` will not match it. If you need a true `PredicateMeta` atom, pick a non-colliding identifier (e.g. `not_`) or mint the zero-arity class dynamically with `make_predicate("not", [])` (`make_atom("not")` returns the plain atom `str`).
+An identifier that collides with a Python keyword or builtin (`not`, `is`, `max`) cannot be written as a bare atom. **Single-quote it** — `'not'` — and you get exactly the atom `not`, in every [`-double_quotes`](directives.md#-double_quotes) mode (see [Atoms vs strings](#atoms-vs-strings)). Single quotes are also how you spell an atom whose name has spaces or punctuation: `'hello world'`, `'order #42'`.
 
-Every atom is reified at compile time as a zero-arity `PredicateMeta` class — atoms are first-class values you can pass around, store in dicts, and compare with `is`. Unification on atoms is class identity.
+An atom is the **arity-0 cell** `("red",)` — a 1-tuple whose slot 0 is the (interned) spelling, the same shape every compound term has at arity 0. Atoms are first-class values you can pass around, store in dicts, and use as goals. They are compared by **value equality**, never by identity: `("red",) == ("red",)` is the test, and no code — in the engine or outside it — may rely on `is`. From Python, build and read them with `clausal.logic.atoms`:
+
+```python
+from clausal.logic.atoms import mint, is_atom, spelling
+
+mint("red")            # → ('red',)
+is_atom(("red",))      # → True
+spelling(("red",))     # → 'red'
+```
 
 !!! info "Strict by default; global identity when resolved"
     An undeclared bare atom reference is a compile-time `NameError` by default —
@@ -338,18 +346,20 @@ Every atom is reified at compile time as a zero-arity `PredicateMeta` class — 
 
     Once an atom **is** resolved — declared in `-module([...])` (public),
     `-private([...])` (private), imported, or reached via `global_atom/2` —
-    it has **process-wide global identity**: every module that resolves the same
-    name to the global atom gets the identical `PredicateMeta` class, matching
-    Prolog's convention.
+    it is **global by spelling**: every module that writes `red` has the same
+    atom `("red",)`, and the two compare equal, matching Prolog's convention.
+    Equality is the whole story; `is` is never the test.
 
     ```clausal
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_global_default"
     ```
 
-    A module opts an atom into **module-local** identity (a class distinct from
-    the global one) by listing it in `-module([...])` or [`-private([...])`](directives.md#-private).
-    The two lists differ only in whether the name is advertised as part of the
-    module's surface — a `-private` atom is still importable:
+    `-module([...])` and [`-private([...])`](directives.md#-private) differ only
+    in whether the name is advertised as part of the module's surface — a
+    `-private` atom is still importable, and neither changes the atom's
+    spelling. For an atom another module genuinely cannot reach, use
+    [`-hide([...])`](directives.md#-hide), which renames it to a spelling the
+    reader refuses to accept:
 
     ```clausal
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_module_local"
@@ -605,63 +615,77 @@ See [Dicts & Sets](dicts_sets.md) for details.
 
 ## Strings
 
-Every string literal — `"…"`, `'…'`, or `u"…"` — is a Python `str`, and a `str`
-behaves as a **list of character atoms** under unification (the classical Prolog *chars*
-model). See [strings as lists](strings_as_lists.md):
+A **string** is a Python `str`, and a `str` *is* the list of its one-character
+atoms — the classical Prolog *chars* model, as in ISO Prolog and Scryer. See
+[strings as lists](strings_as_lists.md):
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:strings"
 ```
 
-All list operations apply to strings. A string is **not** a declared (`PredicateMeta`)
-atom — `atom/1` rejects it, `is_str/1` accepts it. The analogous `b"…"` byte literal is a
+All list operations apply to strings, because a string is a list:
+`append/3`, `length/2`, `reverse/2`, `nth0/3`, `in_/2`, `maplist/N`, DCGs.
+`""` and `[]` are one and the same term. A string is **not** an atom —
+`atom/1` rejects it, `string/1` and `is_str/1` accept it, and `is_list/1`
+accepts it too. The analogous `b"…"` byte literal is a
 [list of integer codes](bytes_as_lists.md) (`0–255`); `str` and `bytes` are distinct
 domains and never cross-unify.
 
-!!! note "Quote style, and the `u"…"` prefix, carry no meaning"
-    Single vs double quotes are indistinguishable — Python's parser erases the quote
-    character before Clausal sees the term. The `u` prefix is likewise inert: `u"abc"`,
-    `"abc"`, and `'abc'` all produce the same `str`. Clausal keys on the value's *type*
-    (`str` vs `bytes`), never on how it was written.
+Under the hood a string stays a compact `str` — it is never expanded into a
+chain of cons cells — but every relation treats it as the char list it
+denotes.
+
+!!! note "Which quote you write decides what you get"
+    Unlike every earlier release, the quote character is now **significant**:
+    `'foo'` is always the atom `foo`; `"foo"` is an atom or a string
+    depending on the file's [`-double_quotes`](directives.md#-double_quotes)
+    mode. The `u`, `r` and triple-quote prefixes are inert — the quote
+    character after any prefix is what counts. `b"…"`/`b'…'` are always
+    [codes](bytes_as_lists.md), in either quote style.
 
 ---
 
-## Atoms vs strings: there are no "string atoms"
+## Atoms vs strings
 
-Clausal deliberately keeps two disjoint kinds where Prolog blurs them behind quoting:
+Clausal keeps two disjoint kinds, exactly as ISO Prolog does:
 
-| | **Symbol** | **Text / data** |
+| | **Atom (a symbol)** | **String (text / data)** |
 |---|---|---|
-| written as | identifier — `red`, `café`, `δικαίωμα` | string — `"hello world"`, `'Reg (XX) 2020/123'` |
-| reifies as | interned zero-arity `PredicateMeta` class | Python `str` (a list of character atoms) |
-| identity | global class identity; `is` works | value equality; also unifies as a char-list |
-| typo-safe? | yes, under [`-strict_atoms`](directives.md#-strict_atoms) | no (it's data) |
-| `atom/1` | matches | does **not** match (use `is_str/1`) |
+| written as | bare identifier `red`, `café`, `δικαίωμα`; or `'any spelling'` | `"hello world"` under `-double_quotes(chars)` |
+| represented as | the arity-0 cell `("red",)` — a 1-tuple whose slot 0 is the spelling | Python `str` — the list of its char atoms |
+| compared by | value equality (`("red",) == ("red",)`); **never** `is` | value equality; also unifies with its char list |
+| typo-safe? | yes, under [`-strict_atoms`](directives.md#-strict_atoms) (the default) | no (it's data) |
+| `atom/1` | matches | does **not** match (use `string/1` / `is_str/1`) |
+| `atomic/1` | matches | does **not** match — a string is a list |
+| `callable_/1` | matches (an atom can name a goal) | does **not** match |
+| indexed on? | yes — first-argument indexing keys `("red", 0)` | no — a string head argument falls in the full-scan bucket |
 
-Unlike Prolog, a **quoted string never denotes an atom** — it is always text. This is a
-conscious choice, not a missing feature. Prolog's quoted atoms (`'hello world'`) exist for
-exactly one reason: to give a *symbol* a human-readable name with spaces or punctuation
-that a bare token can't carry. Clausal covers that need two other ways, so the construct
-earns nothing:
+The two never unify: `red = "red"` fails. A one-character string is not a
+character either — `"a"` is the *list* `[a]`, while `a` is the char atom, so
+`"a" = a` fails as well.
 
-- **Any-language names, unquoted.** Identifiers accept the full Unicode *is-letter* set
-  (they ride Python's identifier rules), so `café`, `größe`, `δικαίωμα`, and CJK names are
-  ordinary atoms — no quoting required. Only spaces, punctuation, and leading digits remain
-  out of reach, and those belong to *display text*, not symbol identity.
-- **Human-readable display lives in the translation layer.** Verbatim, punctuated,
-  multilingual text (e.g. a citation `Regulation (XX) 2020/123, Art 6`) is held in the
-  translation lexicon keyed by an identifier atom — so the logic depends on the typo-safe
-  symbol while presentation stays free-form.
+Quoting is how you spell an atom whose name is not a bare identifier.
+`'hello world'`, `'order #42'` and `'not'` are ordinary atoms — the
+single quote works in every `-double_quotes` mode, including for names that
+collide with a Python keyword or builtin.
 
-Adding string atoms would also actively *harm* the model: because a `str` already unifies
-as a list of characters, a quoted "atom" could not simultaneously be a distinct symbol and
-a char-list without new disambiguating syntax — reintroducing precisely the `str`-vs-symbol
-confusion this split removes.
+A string is never a functor. `"foo"(1)` is a `SyntaxError` in every mode (the
+ISO functor rule); write `'foo'(1)` — or a bare `foo(1)` — when you mean the
+compound term.
 
-**If you genuinely need an atom whose name isn't a valid identifier** (e.g. interning
-symbols imported from an external system), mint it at runtime with `make_atom("any name")`
-rather than quoting a literal. Prefer the identifier-plus-lexicon pattern for everything
-else.
+!!! tip "Choosing between them"
+    Reach for an **atom** when the value is a symbol the program reasons
+    about: a tag, a status, a colour, a key. It is typo-safe under strict
+    atoms, it is cheap to compare, and it participates in first-argument
+    indexing. Reach for a **string** when the value is text that came from,
+    or is going to, the outside world: a file line, a JSON value, a message.
+    Text that crosses to Python and back comes back as a string
+    ([Python integration](python_integration.md)), so this is also the
+    direction the boundary pushes you.
+
+**If you need an atom built at runtime** — interning symbols imported from an
+external system, say — use `atom_chars/2` on the text, or Python's
+`clausal.logic.atoms.mint("any name")`.
 
 ---
 

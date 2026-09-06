@@ -188,7 +188,7 @@ unifies with the matching `bytes`:
 ```
 
 This is intentional and symmetric with strings-as-lists (where any list of
-1-char strings unifies with the matching `str`). The contract only fires when a
+one-character **atoms** unifies with the matching `str`). The contract only fires when a
 `bytes` object is actually present on one side of the unification — two plain
 int lists unify as int lists, and **nothing ever spuriously becomes `bytes`.**
 

@@ -19,31 +19,55 @@ Test("greet") <- greet("Alice")
 
 ## Output Predicates
 
-### write/1 vs writeln/1 vs print_term/1
+### The three writers: `write/1`, `writeq/1`, `write_canonical/1`
 
-All three write a term to stdout, but differ in formatting:
+Clausal has the three ISO writers, and they differ in **how much of the term's
+structure they spell out**:
 
-| Builtin | Newline? | Strings | Terms |
+| Builtin | Quotes? | Operators / list syntax | Use it for |
 |---|---|---|---|
-| `write/1` | No | Quoted (`"hello"`) | functor notation |
-| `writeln/1` | Yes | Quoted (`"hello"`) | functor notation |
-| `print_term/1` | No | Unquoted (`hello`) | `str()` representation |
+| `write/1` | No — text comes out bare | Yes | human-facing output |
+| `writeq/1` | Yes — atoms quoted when needed, strings in `"…"` | Yes | showing a term's structure |
+| `write_canonical/1` | Yes | **No** — every list, string included, prints as the `'.'/2` structure it denotes | a form another Prolog can read back |
+
+| Term | `write` | `writeq` | `write_canonical` |
+|---|---|---|---|
+| atom `foo` | `foo` | `foo` | `foo` |
+| atom `'foo bar'` | `foo bar` | `'foo bar'` | `'foo bar'` |
+| string `"abc"` | `abc` | `"abc"` | `'.'(a,'.'(b,'.'(c,[])))` |
+| char list `[a, b]` | `ab` | `"ab"` | `'.'(a,'.'(b,[]))` |
+| `[1, 2]` | `[1, 2]` | `[1, 2]` | `'.'(1,'.'(2,[]))` |
+| `[]` | `[]` | `[]` | `[]` |
+| `foo(bar, "baz")` | `foo(bar, baz)` | `foo(bar, "baz")` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
+| `1 + 2` | `+(1, 2)` | `+(1, 2)` | `+(1,2)` |
+
+A list of characters *is* a string, so `writeq/1` prints `[a, b]` as `"ab"` —
+they are the same term. `write_canonical/1` prints no space after commas and no
+operator forms, so its output is byte-comparable with other ISO systems; the
+string stays a compact `str` internally, the writer only *shows* the cons
+structure.
 
 ```clausal
-# write: no newline, quoted strings
-Test("write") <- (write("hello"), write(" "), write("world"), nl())
-
-# writeln: like write + nl
-Test("writeln") <- writeln("hello")
-
-# print_term: unquoted, str()-style
-Test("print term") <- print_term("hello")
+--8<-- "tests/fixtures/docs/io_examples.clausal:three_writers"
 ```
 
-**when to use which:**
+### writeln/1, print_term/1 and the string forms
 
-- `write` / `writeln` — standard output, preserves Clausal term syntax
-- `print_term` — human-readable output (no quotes around strings)
+| Builtin | Family | Newline? |
+|---|---|---|
+| `write/1`, `writeln/1`, `write_to_string/2` | unquoted (`write`) | `writeln` only |
+| `writeq/1`, `print_term/1`, `term_to_string/2` | quoted (`writeq`) | `print_term` only |
+| `write_canonical/1` | canonical | no |
+
+```clausal
+--8<-- "tests/fixtures/docs/io_examples.clausal:write_family"
+```
+
+**When to use which:**
+
+- `write` / `writeln` — human-facing output; text comes out bare
+- `writeq` / `print_term` — debugging: you can tell an atom from a string
+- `write_canonical` — a form another Prolog can read back
 - `write` + `nl` — when you need precise control over newlines
 
 ### nl/0
@@ -68,39 +92,51 @@ Test("indented") <- indented("hello")
 
 ## String Conversion
 
+Both answer with a **string**, never with an atom.
+
 ### write_to_string/2
 
-`write_to_string(Term, String)` — unify String with the write representation of Term (quoted strings, functor notation):
+`write_to_string(Term, String)` — unify String with the `write/1` rendering of
+Term: unquoted, operators and list syntax intact.
 
 ```clausal
+-double_quotes(chars)
+
 format_pair(K, V, S) <- write_to_string(K - V, S)
 
 Test("write to string") <- (
     format_pair("name", "alice", S),
-    nonvar(S)
+    S == "name - alice"
 )
 ```
 
 ### term_to_string/2
 
-`term_to_string(Term, String)` — unify String with the `str()` representation of Term (unquoted strings):
+`term_to_string(Term, String)` — unify String with the `writeq/1` rendering of
+Term: quoted, so an atom is distinguishable from a string.
 
 ```clausal
+-double_quotes(chars)
+
 label(X, S) <- term_to_string(X, S)
 
 Test("term to string int") <- (label(42, S), S == "42")
-Test("term to string str") <- (label("hello", S), nonvar(S))
+Test("term to string keeps the quotes") <- (label("hello", S2), S2 == "\"hello\"")
 ```
 
 **write_to_string vs term_to_string:**
 
-| Input | write_to_string | term_to_string |
+| Input | `write_to_string` | `term_to_string` |
 |---|---|---|
 | `42` | `"42"` | `"42"` |
-| `"hello"` | quoted | unquoted |
+| the atom `hello` | `"hello"` | `"hello"` |
+| the atom `'a b'` | `"a b"` | `"'a b'"` |
+| the string `"hello"` | `"hello"` | `"\"hello\""` |
 | `[1, 2]` | `"[1, 2]"` | `"[1, 2]"` |
 
-Use `term_to_string` when building human-readable strings. Use `write_to_string` when you need a representation that could be read back.
+Use `write_to_string` when building human-readable text. Use `term_to_string`
+when you need to see which kind a value is; use `write_canonical/1` when you
+need a representation another Prolog can read back.
 
 ---
 
@@ -109,6 +145,8 @@ Use `term_to_string` when building human-readable strings. Use `write_to_string`
 In `.clausal` files, f-strings build strings with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated:
 
 ```clausal
+-double_quotes(chars)
+
 describe(NAME, AGE, S) <- (
     S is f"Name: {NAME}, Age: {AGE}"
 )
@@ -124,6 +162,8 @@ Test("describe") <- (
 F-strings support arbitrary Python expressions inside `{}`:
 
 ```clausal
+-double_quotes(chars)
+
 summarize(XS, S) <- (
     length(XS, N),
     S is f"List has {N} element(s)"
@@ -140,6 +180,8 @@ Test("summarize") <- (
 All logic variables referenced in the f-string are dereferenced:
 
 ```clausal
+-double_quotes(chars)
+
 full_name(FIRST, LAST, S) <- (
     S is f"{FIRST} {LAST}"
 )
@@ -155,6 +197,8 @@ Test("full name") <- (
 F-strings use deferred evaluation — the f-string is evaluated at search time, after variables are bound. This means f-strings work correctly with backtracking:
 
 ```clausal
+-double_quotes(chars)
+
 color("red"),
 color("green"),
 color("blue"),
@@ -188,6 +232,8 @@ Test("show all") <- show_all([1, 2, 3])
 ### String Building with term_to_string
 
 ```clausal
+-double_quotes(chars)
+
 format_item(X, S) <- term_to_string(X, S)
 
 Test("format item") <- (
@@ -198,19 +244,23 @@ Test("format item") <- (
 
 ### Building Strings with [foldl](higher_order.md)
 
-Use `==` with `+` to concatenate strings inside a foldl closure:
+A string is a list, so `append/3` concatenates one — use it inside a foldl
+closure. (`==` is the arithmetic comparison and raises
+`type_error(integer, …)` on text; it is not a string operator.)
 
 ```clausal
+-double_quotes(chars)
+
 concat_all(XS, RESULT) <- (
     foldl(
-        ((E, A, R) <- (R == A + E)),
+        ((E, A, R) <- append(A, E, R)),
         XS, "", RESULT
     )
 )
 
 Test("concat all") <- (
     concat_all(["a", "b", "c"], R),
-    R == "abc"
+    R is "abc"
 )
 ```
 
@@ -229,11 +279,11 @@ Test("concat all") <- (
 # List all clauses for a predicate:
 debug_fib <- listing(fib)
 
-# Also accepted: a bare predicate-name atom (0-arity only), or a
-# Name/Arity indicator naming any arity -- `fib/2` here is `/`, the
-# arithmetic operator, applied to a predicate reference and an int; it is
-# NOT data (see the paragraph below):
-debug_greet <- listing("greet")
+# Also accepted: an ATOM naming a 0-arity predicate, or a Name/Arity
+# indicator naming any arity -- `fib/2` here is `/`, the arithmetic
+# operator, applied to a predicate reference and an int; it is NOT data
+# (see the paragraph below):
+debug_greet <- listing('greet')
 debug_fib2 <- listing(fib/2)
 
 # Pretty-print a complex term:
@@ -241,9 +291,10 @@ show_deep(TERM) <- portray_clause(TERM)
 ```
 
 `listing` accepts, in any of these shapes: a `PredicateMeta` class or
-instance; a builtin predicate (prints a `"% name/arity — builtin"` line); a
-bare str atom naming a 0-arity predicate; or a `Name/Arity` indicator naming
-a predicate at any arity. The indicator has three representations: the
+instance; a builtin predicate (prints a `"% name/arity — builtin"` line); an
+**atom** naming a 0-arity predicate; or a `Name/Arity` indicator naming
+a predicate at any arity. A **string** is not a name: `listing("greet")`
+raises `type_error(predicate, "greet")`. The indicator has three representations: the
 cell `('/', Name, Arity)` and the engine's `Compound("/", (Name, Arity))`
 (both reachable from Python/engine callers that already hold the name and
 arity as data), and — what a user-written `foo/2` actually compiles to in
@@ -259,7 +310,7 @@ in `head <- (body).` format.
 
 The indicator finds an IMPORTED predicate as well as a local one: an
 `-import_from` binds the exporter's predicate, whose clauses live on the
-exporter's row, so `listing(qq/1)` and `listing("qq"/1)` from the importer
+exporter's row, so `listing(qq/1)` and `listing('qq'/1)` from the importer
 print exactly what `listing(qq)` prints there. (Before the P3-3 close-out
 fix they raised `existence_error` for a predicate the importer could see and
 call, because the name was looked up in the calling module's database alone.)
@@ -290,7 +341,12 @@ print(f"Bound: {v}")     # hello
 
 ## Gotchas
 
-- **write quotes strings**, print_term does not. If your output has unwanted quotes, switch to `print_term` or use f-strings.
+- **`write/1` does NOT quote; `writeq/1` and `print_term/1` do.** If your
+  output has unwanted quotes, switch to `write`/`writeln` or use f-strings.
+  (This is the opposite of what earlier releases of this page said.)
+- **`write/1` cannot tell an atom from a string** — both print bare. Use
+  `writeq/1` when the distinction matters, `write_canonical/1` when you need to
+  see the list structure a string denotes.
 - **F-strings evaluate at search time**, not at parse time. An f-string with an unbound variable will show the Var placeholder (`_N`), not raise an error.
 - **nl/0 takes no arguments** — `nl()` not `nl(1)`. Use `tab(N)` for spacing.
 

@@ -150,10 +150,15 @@ Where you would use green cuts in Prolog, Clausal offers:
 
 ### Atoms
 
-Atoms declared in `-private` or `-module` directives are zero-arity
-PredicateMeta classes with identity semantics (`red() is red`). Undeclared
-atoms (string literals like `"foo"`, `"bar"`) remain plain Python strings.
-Both work in unification and pattern matching.
+An atom is the arity-0 cell `("red",)` — a 1-tuple whose slot 0 is the
+spelling — and is compared by **value equality**, never by identity. Write one
+bare (`red`, declared in `-private`/`-module`, imported, or under
+`-implicit_atoms`) or single-quoted (`'hello world'`, no declaration needed).
+
+A double-quoted `"red"` is an atom or a **string** depending on the file's
+[`-double_quotes`](directives.md#-double_quotes) mode; a string is the list of
+its character atoms, and atoms and strings never unify — exactly as in ISO
+Prolog. See [Atoms vs strings](syntax.md#atoms-vs-strings).
 
 ### Naming conventions
 

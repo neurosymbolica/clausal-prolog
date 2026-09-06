@@ -783,6 +783,30 @@ filter_map(+Goal, +List, -Result)
 
 # === Character/String ===
 
+--8<-- [start:chars_family_kinds]
+-double_quotes(chars)
+
+# ATOM in, ATOMS out:
+atom_length('hello', 5),
+atom_concat('he', 'llo', 'hello'),
+upcase_atom('hello', 'HELLO'),
+char_code('a', 97),
+char_type('a', alpha),
+
+# atom_chars/2 is the bridge: an atom's spelling AS a char list, which is
+# the same term as the string of that text.
+atom_chars('hello', "hello"),
+atom_chars(A, "hello"),            # A = hello, an atom
+
+# A STRING in an atom position is an ERROR, not a failure:
+# atom_length("hello", N)   -->  type_error(atom, "hello")
+# char_code("a", C)         -->  type_error(character, "a")
+
+# For a STRING, use the list predicates -- a string IS a list:
+length("hello", 5),
+append("he", "llo", "hello"),
+--8<-- [end:chars_family_kinds]
+
 --8<-- [start:char_type_2]
 char_type(?Char, ?Type)
 --8<-- [end:char_type_2]
@@ -824,9 +848,10 @@ number_chars(?Number, ?Chars)
 --8<-- [end:number_chars_2]
 
 --8<-- [start:number_chars_2_ex2]
-number_chars(42, ["4", "2"])        # succeeds
-number_chars(-3.14, CHARS)          # CHARS = ["-", "3", ".", "1", "4"]
-number_chars(N, ["1", "0"])         # N = 10
+number_chars(42, ['4', '2'])        # succeeds -- the elements are char ATOMS
+number_chars(-3.14, CHARS)          # CHARS = ['-', '3', '.', '1', '4']
+number_chars(N, ['1', '0'])         # N = 10
+number_chars(N, "10")               # N = 10 -- same term as ['1', '0']
 --8<-- [end:number_chars_2_ex2]
 
 --8<-- [start:number_codes_2]
@@ -848,6 +873,14 @@ write(+Term)
 --8<-- [start:writeln_1]
 writeln(+Term)
 --8<-- [end:writeln_1]
+
+--8<-- [start:writeq_1]
+writeq(+Term)
+--8<-- [end:writeq_1]
+
+--8<-- [start:write_canonical_1]
+write_canonical(+Term)
+--8<-- [end:write_canonical_1]
 
 --8<-- [start:print_term_1]
 print_term(+Term)

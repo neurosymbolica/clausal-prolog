@@ -5,6 +5,16 @@
 
 *For practical instructions on importing and running Prolog programs, see [Importing Prolog Code](importing_prolog.md).*
 
+!!! warning "Historical record — the representation has moved on"
+    This report records decisions as of 2026-03-25. The *semantics* it settles
+    still stand (strings are lists of characters; atoms are a distinct type),
+    but the **representation** described under Issues 2 and 3 does not: an atom
+    is now the arity-0 cell `("red",)`, not a zero-field `PredicateMeta` class,
+    and the elements of a character list are one-character **atoms**, not
+    one-character strings. Atoms are compared by value equality, never by `is`.
+    See [Atoms vs strings](syntax.md#atoms-vs-strings) and
+    [Strings as Lists](strings_as_lists.md) for the current model.
+
 ## Executive Summary
 
 Clausal has a comprehensive bidirectional Prolog translator (tokenizer, Pratt

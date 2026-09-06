@@ -558,26 +558,42 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 
 ### -double_quotes
 
-**Transitional — scheduled for removal.** Today a double-quoted literal
-`"hello"` denotes the *atom* `hello`, indistinguishable from bare `hello`.
-That is a leftover of the atom pivot, not the intended surface: the ruling on
-record is Prolog's — `'hello'` is a quoted atom, `"hello"` is a string that
-unifies with its char list `['h','e','l','l','o']`, and `atom("hello")` is
-false. The engine flip that restores this is in progress.
+**Transitional — scheduled for removal.** It selects what a **double-quoted**
+literal means in the file, and it exists only so modules can migrate one at a
+time. Single quotes are unaffected: `'hello'` is the atom `hello` in every
+mode, and `b"…"`/`b'…'` are always [codes](bytes_as_lists.md).
 
-`-double_quotes(atom)` is a **file-level declaration** that a module still
-relies on the current atom meaning of `"..."`. It is a no-op today and keeps
-the module's meaning unchanged when the flip lands, so every existing module
-can carry it *before* the default becomes `chars`. `-double_quotes(chars)` is
-refused until the flip lands ("not yet supported"), so no file can claim
-string semantics it does not yet get; any other argument is an error.
+```clausal
+--8<-- "tests/fixtures/docs/directives_sigs.txt:double_quotes"
+```
 
-This is a ratchet, not a compatibility flag: migrate a module (rewrite the
-`"x"` literals it uses as atoms to `'x'`, keep genuine text as `"..."`),
-drop the directive, and when the last module has dropped it the directive is
-deleted from the engine and its use becomes a load error. Support for
-string-bearing Prolog dialects is a translation-layer concern, never an
-engine flag.
+| Mode | `"hello"` means | Status |
+|---|---|---|
+| `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the engine **default today**; becomes the opt-out after the default flips |
+| `chars` | the string `"hello"`, which *is* the list `['h','e','l','l','o']`; `atom("hello")` is false, `string("hello")` is true | the **destination**; opt in now |
+| `codes` | — | **refused**. Codes are spelled `b"…"`. Any other argument is likewise an error. |
+
+The directive is **file-scoped and position-sensitive**: it governs the
+literals written below it, so it belongs at the top of the file, above the
+clauses. It is not inherited by importers — each file declares its own.
+
+The whole lifetime is a three-step **ratchet**, not a compatibility flag:
+
+1. **Now.** The default is `atom`. Add `-double_quotes(atom)` to a module to
+   record that it still relies on that meaning — a no-op today, and the thing
+   that keeps it working when the default moves. Add `-double_quotes(chars)`
+   to a module that is ready for strings.
+2. **When every module carries one of the two**, the default flips to `chars`.
+   `-double_quotes(atom)` becomes the opt-out.
+3. **When every module has dropped the directive**, `-double_quotes/1` is
+   deleted from the engine and writing it becomes a load error.
+
+Migrating a module means: rewrite each `"x"` it used as a *symbol* to `'x'`
+(or to a bare declared atom), leave genuine text as `"..."`, then drop the
+directive. Support for string-bearing Prolog dialects is a translation-layer
+concern, never an engine flag — a `.pl` file whose strings must load as
+strings gets `-double_quotes(chars)` written into its translation
+automatically ([Importing Prolog](importing_prolog.md)).
 
 ---
 

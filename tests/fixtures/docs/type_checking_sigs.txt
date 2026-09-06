@@ -1,9 +1,22 @@
 # Display snippets for docs/type_checking.md
 
 --8<-- [start:describe_example]
-describe(X, "variable")  <- var(X),
-describe(X, "integer")   <- (nonvar(X), integer(X)),
-describe(X, "string")    <- (nonvar(X), is_str(X)),
-describe(X, "compound")  <- (nonvar(X), compound(X)),
-describe(X, "other")     <- nonvar(X)
+# The answer is a symbol, so it is an ATOM: single quotes spell one in
+# every -double_quotes mode, and need no -private declaration.
+describe(X, 'variable')  <- var(X),
+describe(X, 'integer')   <- (nonvar(X), integer(X)),
+describe(X, 'string')    <- (nonvar(X), is_str(X)),
+describe(X, 'compound')  <- (nonvar(X), compound(X)),
+describe(X, 'other')     <- nonvar(X)
 --8<-- [end:describe_example]
+
+--8<-- [start:atom_vs_string]
+-double_quotes(chars)
+-private([bar])
+
+atom(bar),          string("bar")        # both true
+not atom("bar"),    not string(bar)      # neither kind is the other
+atomic(bar),        not atomic("bar")    # a string is a list, not atomic
+is_list("bar"),     is_chars("bar")      # ... so every list test accepts it
+"" is [],           string("")           # the empty string IS the empty list
+--8<-- [end:atom_vs_string]

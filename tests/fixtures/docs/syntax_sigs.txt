@@ -15,10 +15,14 @@ ast_node = ~~(x + y * z)
 # === Atoms ===
 
 --8<-- [start:atoms]
-# These are atoms (identifiers → interned PredicateMeta; unicode letters OK):
+# These are atoms (bare identifiers; unicode letters OK). Each is the
+# arity-0 cell ("red",) / ("active",) at runtime:
 color(red),
 status(active),
-# A quoted string is NOT a declared atom — it is a list of chars (see Strings):
+# Single quotes spell an atom whose name is not a bare identifier:
+grade('A+'),
+# A double-quoted literal is an atom or a string per the file's
+# -double_quotes mode (see Strings):
 greeting("hello world"),
 --8<-- [end:atoms]
 
@@ -29,24 +33,25 @@ ColorA(red),
 # module_b.clausal — bare reference, no -module/-private listing
 ColorB(red),
 
-# Both files' `red` resolve to the same global PredicateMeta class.
+# Both files' `red` are the same atom, global by spelling.
 # In Python:
 #     from module_a import red as red_a
 #     from module_b import red as red_b
-#     assert red_a is red_b   # same class identity
+#     assert red_a == red_b        # value equality — never `is`
+#     assert red_a == mint("red")  # clausal.logic.atoms.mint
 --8<-- [end:atoms_global_default]
 
 --8<-- [start:atoms_module_local]
-# Pick exactly one of the two listings below — an atom cannot appear in
-# both -module and -private (the compiler rejects that as a hard error).
-
-# Public, module-local: importers see traffic.red as a distinct class
-# from the global red.
+# -module and -private only say whether the name is part of the module's
+# advertised surface; the atom is `red` either way, global by spelling.
 -module(traffic, [red, amber, green])
 
-# OR private, module-local: red here is invisible outside this module
-# and distinct from the global red.
+# OR: internal to this module, still an ordinary global `red`.
 -private([red])
+
+# For an atom no other module can reach or spell, use -hide (requires a
+# preceding -module): the compiler renames it into the module's namespace.
+-hide([sentinel])
 --8<-- [end:atoms_module_local]
 
 
@@ -88,7 +93,11 @@ Rule >> ListDescription,
 # === Strings ===
 
 --8<-- [start:strings]
-u"ABC" is [A, B, C] is ['A', 'B', 'C'],
+-double_quotes(chars)      # until this becomes the default
+
+"abc" is ['a', 'b', 'c'],  # a string IS its char list
+"" is [],                  # the empty string is the empty list
+"abc" is [H, *T],          # H = 'a' (a char atom), T = "bc" (a string)
 --8<-- [end:strings]
 
 

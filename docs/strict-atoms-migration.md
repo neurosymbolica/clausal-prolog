@@ -114,8 +114,9 @@ fixtures, or code that deliberately relies on ceremony-free tag atoms.
 > atom `-private` in two files used to mint two DIFFERENT classes, so a query
 > comparing one against the other silently had no solution. That failure mode
 > is gone. Atoms are now global by spelling: `-module`, `-private`, and an
-> `-import_from` of the same spelling all resolve to the identical interned
-> `str`, so there is nothing left to disagree about (see [Import System §
+> `-import_from` of the same spelling all resolve to the same atom — the
+> arity-0 cell `("red",)`, equal by value — so there is nothing left to
+> disagree about (see [Import System §
 > Atoms are global by spelling](import.md#atoms-are-global-by-spelling)).
 
 Two files that each independently declare `-private([red])` (or one declares

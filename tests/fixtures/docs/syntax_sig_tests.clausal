@@ -1,5 +1,12 @@
+-double_quotes(chars)
+-private([red])
 # Companion tests for docs/syntax.md signature blocks.
 # Validates core syntax constructs exist and work.
+#
+# The file reads "..." as a STRING (the char list it denotes) so the
+# "Strings" and "Atoms vs strings" sections of docs/syntax.md are pinned
+# by the same rules they document (spec 2026-09-06-atoms-as-cells-strings
+# §5-§7).  Atoms are written bare or single-quoted, which is mode-independent.
 
 Test("clause with body") <- (1 == 1)  # nv
 
@@ -16,3 +23,43 @@ Test("between constraint") <- (
 )  # nv
 
 Test("maplist higher order") <- maplist(number, [1, 2, 3])  # nv
+
+# ── Strings (docs/syntax.md "Strings") ───────────────────────────────────
+
+Test("string is its char list") <- ("abc" is ['a', 'b', 'c'])  # nv
+
+Test("empty string is the empty list") <- ("" is [])  # nv
+
+Test("string head/tail keeps the tail a string") <- (
+    "abc" is [H2, *T2],
+    H2 is 'a',
+    T2 == "bc",
+    string(T2)
+)  # nv
+
+Test("list predicates apply to strings") <- (
+    append("hel", "lo", "hello"),
+    length("hello", 5),
+    reverse("ab", "ba")
+)  # nv
+
+# ── Atoms vs strings (docs/syntax.md "Atoms vs strings") ─────────────────
+
+Test("bare and single-quoted spell the same atom") <- (red is 'red')  # nv
+
+Test("an atom is not a string") <- (not (red is "red"))  # nv
+
+Test("a one-char string is not a char atom") <- (not ("a" is 'a'))  # nv
+
+Test("type tests split the two kinds") <- (
+    atom(red), atomic(red), callable_(red),
+    not atom("red"),
+    string("red"), is_str("red"), is_list("red"),
+    not atomic("red"),
+    not callable_("red")
+)  # nv
+
+Test("quoted atoms carry any spelling") <- (
+    atom('hello world'),
+    atom_length('hello world', 11)
+)  # nv

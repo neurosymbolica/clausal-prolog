@@ -52,6 +52,91 @@ add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 
 ---
 
+## Crossing the boundary: atoms out, strings back
+
+There is **one** outbound conversion, `clausal.logic.to_python.to_python`, and
+every `py.*` wrapper and every `++`/f-string thunk argument goes through it:
+
+| Term | What the Python callee sees |
+|---|---|
+| atom `bar` (the cell `("bar",)`) | the `str` `'bar'` — its spelling |
+| string `"bar"` | the `str` `'bar'` |
+| a partial string that has become ground | the `str` it walks to |
+| compound cell `foo(bar, 1)` | the tuple `('foo', 'bar', 1)` (converted elementwise) |
+| list `[bar, 1]` | `['bar', 1]` |
+| `DictTerm` / dict | a `dict`, **keys converted too** — an atom key becomes a `str` key |
+| anything else | itself |
+
+Inbound is deliberately **not** symmetric: a Python `str` coming back is a
+**string**, never the atom that went out. So
+
+```clausal
+-double_quotes(chars)
+-private([bar])
+
+round_trip(X, Y) <- (Y is ++X)
+
+Test("an atom crosses out as text and comes back as a string") <- (
+    round_trip(bar, Y),
+    string(Y),
+    Y is "bar",
+    not (Y is bar)
+)
+```
+
+That is the ISO/Scryer rule — foreign text is a string — and it is loud on
+purpose: a program that silently treated a file line as a symbol was relying
+on the two kinds being confused. A program that needs an atom back **mints
+one**: `atom_chars(A, Text)` in Clausal, or `mint(text)` in Python.
+
+### The Python atom API
+
+```python
+from clausal.logic.atoms import mint, is_atom, spelling, char_atom
+
+mint("bar")            # → ('bar',)   the canonical atom for a spelling
+is_atom(("bar",))      # → True       the term test
+spelling(("bar",))     # → 'bar'      TypeError if not an atom
+char_atom("a")         # → ('a',)     the one-character atom
+```
+
+Write new Python-side atom handling against these four names rather than
+against the tuple shape. Compare atoms with `==`, **never** with `is`:
+`mint` returns a fresh (equal) tuple each call, and a compiler-emitted atom
+constant unmarshalled from a `.pyc` is a different object again.
+
+A module attribute for a declared atom is that cell:
+
+```python
+import my_module
+from clausal.logic.atoms import mint
+
+my_module.bar == mint("bar")      # True
+my_module.bar                     # ('bar',)
+```
+
+### What the `py.*` wrappers accept and answer
+
+- **Text arguments** (a path, a URL, a header name, an environment variable
+  name, a regex) accept an **atom or a string** — both convert to the same
+  `str`, so `read_file('/tmp/x', T)` and `read_file("/tmp/x", T)` reach the
+  library identically.
+- **Text results** (a file line, an environment value, a regex group, a
+  header value, a JSON string value) are **strings**.
+- **Result dicts** built by a wrapper — `py.process`'s
+  `exit_code`/`stdout`/`stderr`, `py.url.parse/2`'s
+  `scheme`/`host`/`port`/`path`, `py.csv`'s header cells, `py.json.parse/2`'s
+  object keys — are keyed by **atoms**, which is what makes `R.stdout` and
+  `get(R, stdout, V)` work.
+
+!!! note "Interpolated containers render as Python"
+    Because the thunk path converts, `f"{D}"` on a dict `D = {a: 1}` renders
+    Python's `{'a': 1}` (the atom key as its spelling), not the engine's
+    `{a: 1}`. Ask for the engine's rendering explicitly when you want it:
+    `term_to_string(D, S)`, then interpolate `S`.
+
+---
+
 ## Querying from Python
 
 ### Direct iteration — the simplest way

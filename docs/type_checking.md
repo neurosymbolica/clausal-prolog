@@ -38,28 +38,82 @@ Test("unbound") <- (not nonvar(_))
 
 ---
 
+## The atom / string / list table
+
+Atoms and strings are disjoint kinds ([Syntax § Atoms vs strings](syntax.md#atoms-vs-strings)).
+An atom is the arity-0 cell `("bar",)`; a string is a Python `str`, which *is*
+the list of its one-character atoms. Everything below follows from that:
+
+| | atom `bar` | string `"bar"` | `""` | `[]` | compound `f(1)` | number |
+|---|---|---|---|---|---|---|
+| `atom/1` | ✓ | | | | | |
+| `string/1`, `is_str/1` | | ✓ | ✓ | | | |
+| `atomic/1` | ✓ | | | | | ✓ |
+| `compound/1` | | | | | ✓ | |
+| `callable_/1` | ✓ | | | | ✓ | |
+| `is_list/1` | | ✓ | ✓ | ✓ | | |
+| `is_chars/1` | | ✓ | ✓ | ✓ | | |
+| `ground/1` | ✓ | ✓ | ✓ | ✓ | per args | ✓ |
+
+`atomic/1` is false for a string because a string is a **list**, not an atomic
+constant. `compound/1` is false for an atom because an atom has arity 0.
+`[]` is neither an atom nor a string — it is the empty list, and `""` unifies
+with it while still answering `string/1`.
+
+```clausal
+--8<-- "tests/fixtures/docs/type_checking_sigs.txt:atom_vs_string"
+```
+
+---
+
 ## Atomic Type Tests
 
 ### atom/1
 
-`atom(X)` — succeeds if `X` is a declared atom (a zero-arity PredicateMeta
-class). Atoms are created by `-private([red])` or `-module(m, [red])` directives.
+`atom(X)` — succeeds if `X` is an atom: a bare identifier such as `red`, or a
+single-quoted spelling such as `'hello world'`. Bare atoms must be declared
+(`-private([red])`, `-module(m, [red])`, an import) unless the file carries
+[`-implicit_atoms`](directives.md#-implicit_atoms).
 
 ```clausal
 -private([red, blue])
+-double_quotes(chars)
 
-Test("declared atom") <- atom(red)
+Test("bare atom") <- atom(red)
+Test("quoted atom") <- atom('hello world')
 Test("string is not atom") <- (not atom("hello"))
 Test("int is not atom") <- (not atom(42))
 ```
 
-### is_str/1
+### string/1 and is_str/1
 
-`is_str(X)` — succeeds if `X` is a Python string. Does not match declared atoms.
+`string(X)` and `is_str(X)` are the same test: succeeds if `X` is a string (a
+Python `str`, or a partial string that has become ground). They do not match
+atoms.
 
 ```clausal
+-private([red])
+-double_quotes(chars)
+
 Test("str") <- is_str("hello")
+Test("string") <- string("hello")
+Test("empty string") <- string("")
 Test("not str") <- (not is_str(42))
+Test("atom is not a string") <- (not string(red))
+```
+
+### atomic/1
+
+`atomic(X)` — succeeds if `X` is an atom, a number, or another atomic constant.
+It is **false for a string**, which is a list.
+
+```clausal
+-private([red])
+-double_quotes(chars)
+
+Test("atom is atomic") <- atomic(red)
+Test("number is atomic") <- atomic(42)
+Test("string is not atomic") <- (not atomic("red"))
 ```
 
 ### integer/1
@@ -100,43 +154,61 @@ Test("not str") <- (not number("42"))
 ### compound/1
 
 `compound(X)` — succeeds if `X` is a compound term with arity > 0. This
-includes predicate instances, `Compound` terms, and `KWTerm` values.
-
-```clausal
-point(1, 2, 3),
-
-Test("compound") <- compound(point(1, 2, 3))
-```
-
-### callable_/1
-
-`callable_(X)` — succeeds if `X` is an atom (declared or string) or a
-compound term. In Prolog terms, something that could appear as a goal.
+includes predicate instances, `Compound` terms, and `KWTerm` values. An **atom
+is not compound**: it is the arity-0 cell, and arity 0 is not `> 0`.
 
 ```clausal
 -private([red])
 
-Test("declared atom") <- callable_(red)
-Test("string") <- callable_("hello")
+point(1, 2, 3),
+
+Test("compound") <- compound(point(1, 2, 3))
+Test("atom is not compound") <- (not compound(red))
+```
+
+### callable_/1
+
+`callable_(X)` — succeeds if `X` is an **atom** or a compound term: something
+that could appear as a goal. A string is not callable — `call("foo")` raises
+`type_error(callable, "foo")` rather than calling `foo`.
+
+```clausal
+-private([red])
+-double_quotes(chars)
+
+point(1, 2, 3),
+
+Test("atom") <- callable_(red)
+Test("compound") <- callable_(point(1, 2, 3))
+Test("not string") <- (not callable_("hello"))
 Test("not int") <- (not callable_(42))
 ```
 
 ### is_list/1
 
-`is_list(X)` — succeeds if `X` is a Python list.
+`is_list(X)` — succeeds if `X` is a list. A **string is a list** (of its
+character atoms), so `is_list/1` accepts one, agreeing with every list-flavoured
+builtin: `append`, `length`, `reverse`, `member`, `maplist`, `take`, `drop`.
+Use `is_str/1` when you specifically need to tell a `str` from a `list`.
 
 ```clausal
+-double_quotes(chars)
+
 Test("list") <- is_list([1, 2, 3])
 Test("empty") <- is_list([])
-Test("not str") <- (not is_list("hello"))
+Test("string is a list") <- is_list("hello")
+Test("empty string is a list") <- is_list("")
+Test("not int") <- (not is_list(42))
 ```
 
 ### is_chars/1
 
 `is_chars(X)` — succeeds if `X` is a character sequence: either a string or a
-list. Use this when you want to accept both strings and lists uniformly.
+list. Use this when you want to accept both spellings uniformly.
 
 ```clausal
+-double_quotes(chars)
+
 Test("string") <- is_chars("hello")
 Test("list") <- is_chars([1, 2, 3])
 Test("not int") <- (not is_chars(42))
@@ -144,8 +216,8 @@ Test("not int") <- (not is_chars(42))
 
 | Predicate | Strings | Lists | Purpose |
 |-----------|---------|-------|---------|
-| `is_list/1` | Fails | Succeeds | Exact type: Python list? |
-| `is_str/1` | Succeeds | Fails | Exact type: Python str? |
+| `is_list/1` | Succeeds | Succeeds | Is this list-shaped (a `list` or a char-sequence `str`)? |
+| `is_str/1` | Succeeds | Fails | Exact type: Python `str`? (same test as `string/1`) |
 | `is_chars/1` | Succeeds | Succeeds | union: character sequence? |
 
 See [Strings as Lists](strings_as_lists.md) for the full story on string/list
@@ -180,11 +252,19 @@ safe_print(X) <- (ground(X), writeln(X))
 
 ### Type-dispatched processing
 
+A string is a list, so an `is_list/1` clause would also catch strings. Put the
+narrower `is_str/1` test first, or gate the list clause with `not is_str(X)`:
+
 ```clausal
-process(X, R) <- (integer(X),    R == X * 2)
-process(X, R) <- (is_str(X),    R is f"got: {X}")
-process(X, R) <- (is_list(X),   length(X, R))
-process(X, R) <- (var(X),    R == "unknown")
+-double_quotes(chars)
+
+process(X, R) <- (var(X),                    R is 'unknown')
+process(X, R) <- (nonvar(X), integer(X),     R == X * 2)
+process(X, R) <- (nonvar(X), is_str(X),      R is f"got: {X}")
+process(X, R) <- (nonvar(X), is_list(X), not is_str(X), length(X, R))
+
+Test("dispatch on string") <- (process("ab", R1), R1 == "got: ab")
+Test("dispatch on list") <- (process([1, 2], R2), R2 == 2)
 ```
 
 ### Safe arithmetic guard
@@ -204,8 +284,13 @@ safe_add(X, Y, Z) <- (
   but `integer(True)` fails. Use `nonvar` if you want to accept any non-variable.
 - **`var` tests the current binding** — if `X` was unified earlier in the
   clause, `var(X)` will fail even though `X` started as a variable.
-- **`is_list` checks for Python lists** — it does not recognize cons-cell chains
-  (Clausal uses native Python lists, so this is rarely an issue).
+- **`is_list` accepts strings** — a string *is* the list of its char atoms, so
+  `is_list("hello")` succeeds. Use `is_str/1` to tell the two apart. (It does
+  not recognise `'.'/2` cons-cell chains: Clausal stores lists as native Python
+  lists and strings as `str`, and only ever *shows* the cons form, through
+  `write_canonical/1`, `functor/3` and `=..`.)
+- **A string is not atomic, an atom is not compound** — `atomic("bar")` fails
+  because a string is a list; `compound(bar)` fails because an atom has arity 0.
 - **Order matters** — put `var` checks first in multi-clause predicates,
   since they match the broadest case.
 

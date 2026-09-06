@@ -148,24 +148,50 @@ The translator **rejects** programs containing:
 These are rejected rather than silently mistranslated, because their semantics
 cannot be faithfully represented in Clausal's pure core.
 
-### Bare atoms
+### Atoms and strings
 
-Prolog atoms like `red`, `foo`, `bar` translate to bare Python names, which
-must be defined in the module namespace to avoid `NameError`. For data values,
-use integers, floats, or quoted strings instead:
+The translator preserves the ISO distinction: a Prolog **atom** loads as a
+Clausal atom, and a Prolog **double-quoted string** loads as a Clausal string.
 
 ```prolog
-% This works:
-color("red").
-color("green").
-score(100).
-
-% This will fail at runtime (bare atoms):
-% color(red).    % NameError: name 'red' is not defined
+p("ab").          % a STRING -- the list ['a','b']
+q(red).           % the ATOM red
+r('hello world'). % the ATOM 'hello world'
 ```
 
-If you need symbolic atoms, declare them in a `:- module` directive or use
-quoted Prolog atoms (`'red'`), which translate to Python strings.
+translates to:
+
+```
+-double_quotes(chars)
+-private([red])
+
+P("ab"),
+
+Q(red),
+
+R('hello world'),
+```
+
+- A **bare atom** (`red`) is emitted as a bare name and collected into an
+  auto-generated `-private([...])` list, so it compiles under strict atoms
+  with no work from you.
+- A **quoted atom** (`'hello world'`), or one whose spelling is not a plain
+  lowercase identifier or that collides with a Python keyword, is emitted
+  single-quoted — `'…'` is an atom in every
+  [`-double_quotes`](directives.md#-double_quotes) mode, so it stays an atom
+  no matter what the engine default becomes.
+- A **double-quoted string** is emitted double-quoted, and the generated
+  module carries `-double_quotes(chars)` (written above every other directive,
+  because it governs the literals below it) so the literal re-reads as the
+  string it was. The directive is written only when the file actually
+  contains a string.
+- `true`, `false` and `fail` map to Python `True`/`False`.
+
+A `:- double_quotes(Mode)` directive in the source is carried across in
+place, where it governs the clauses below it: `atom` becomes
+`-double_quotes(atom)`; `chars` is already what the emitted header says, so
+it is not written twice; `codes` has no Clausal mode (codes are spelled
+`b"…"` at the literal) and is emitted as a comment.
 
 ---
 

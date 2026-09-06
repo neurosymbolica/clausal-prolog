@@ -1,6 +1,56 @@
 -double_quotes(chars)
+-private([bar])
 # Companion tests for docs/type_checking.md display snippets.
 
 Test("var check") <- var(_)  # nv
 Test("integer check") <- integer(42)  # nv
 Test("is_str check") <- is_str("hello")  # nv
+
+# The `describe_example` snippet, run: the answer is a single-quoted ATOM,
+# which needs no -private declaration and means the same in every
+# -double_quotes mode.
+describe(X, 'variable')  <- var(X),
+describe(X, 'integer')   <- (nonvar(X), integer(X)),
+describe(X, 'string')    <- (nonvar(X), is_str(X)),
+describe(X, 'compound')  <- (nonvar(X), compound(X)),
+describe(X, 'other')     <- nonvar(X)
+
+Test("describe var") <- describe(_, 'variable')  # nv
+Test("describe integer") <- describe(42, 'integer')  # nv
+Test("describe string") <- describe("hi", 'string')  # nv
+
+# The `atom_vs_string` snippet, row by row (spec §6.3).
+Test("atom row") <- (
+    atom(bar), atomic(bar), callable_(bar), ground(bar),
+    not string(bar), not is_list(bar), not is_chars(bar), not compound(bar)
+)  # nv
+
+Test("string row") <- (
+    string("bar"), is_str("bar"), is_list("bar"), is_chars("bar"),
+    ground("bar"),
+    not atom("bar"), not atomic("bar"), not callable_("bar"),
+    not compound("bar")
+)  # nv
+
+Test("empty string row") <- (
+    "" is [],
+    string(""), is_list(""), is_chars(""),
+    not atom(""), not atomic("")
+)  # nv
+
+Test("empty list row") <- (
+    is_list([]), is_chars([]),
+    not atom([]), not atomic([]), not string([])
+)  # nv
+
+Test("compound row") <- (
+    compound(pair(1, 2)), callable_(pair(1, 2)),
+    not atom(pair(1, 2)), not atomic(pair(1, 2)), not is_list(pair(1, 2))
+)  # nv
+
+Test("number row") <- (
+    atomic(42), ground(42),
+    not atom(42), not string(42), not is_list(42), not compound(42)
+)  # nv
+
+pair(1, 2),

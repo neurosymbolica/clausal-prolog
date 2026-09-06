@@ -25,14 +25,24 @@ Or via [module import](import.md):
 
 | JSON | Clausal |
 |---|---|
-| `{}` object | [`DictTerm`](dicts_sets.md) |
+| `{}` object | [`DictTerm`](dicts_sets.md) with **atom** keys |
 | `[]` array | Python `list` |
-| `"string"` | Python `str` |
+| `"string"` (a value) | a **string** (Python `str`) |
 | `123` / `1.5` | Python `int` / `float` |
 | `true`/`false` | Python `True`/`False` |
 | `null` | Python `None` |
 
-Conversion is recursive: nested JSON objects produce nested DictTerms.
+An object **key** is a name, so it comes back as an atom: `D.name` and
+`get(D, name, V)` read a parsed object. A string **value** is text, so it
+comes back as a string. `parse/3`'s `atoms(...)` option (below) is how you
+promote chosen values to atoms as well.
+
+Generating is the mirror: an atom serialises as the JSON string of its
+spelling, a string as itself, and a compound cell — which has no JSON
+counterpart — raises `type_error(json_term, Cell)`.
+
+Conversion is recursive: nested JSON objects produce nested DictTerms, and
+the `atoms` vocabulary reaches every nested string value.
 
 ---
 
@@ -46,12 +56,31 @@ Conversion is recursive: nested JSON objects produce nested DictTerms.
 parse_config(S, CONFIG) <- parse(S, CONFIG)
 ```
 
+### parse/3
+
+`parse(String, Term, Options)` — `parse/2` plus a vocabulary of string values
+that should come back as **atoms**. The only option is `atoms(Spellings)`,
+where `Spellings` is a list of the texts to mint; anything else raises
+`domain_error(json_option, Opt)`.
+
+```clausal
+--8<-- "tests/fixtures/docs/json_examples.clausal:parse_atoms"
+```
+
+Use it when a JSON document carries a closed vocabulary — a status, a colour,
+an enum — that the program wants to reason about as symbols rather than as
+text. Everything not listed stays a string.
+
 ### generate/2
 
-`generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md).
+`generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md). An atom serialises as the JSON string of its spelling; a compound cell raises `type_error(json_term, Cell)`.
 
 ```clausal
 to_json(DATA, JSON) <- generate(DATA, JSON)
+```
+
+```clausal
+--8<-- "tests/fixtures/docs/json_examples.clausal:generate_kinds"
 ```
 
 ### pretty_generate/2
