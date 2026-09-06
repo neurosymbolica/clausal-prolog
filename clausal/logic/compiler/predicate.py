@@ -64,7 +64,11 @@ from clausal.logic.runtime.tramp_call import (  # noqa: F401
     _tramp_call, _naf_has_solution,
 )
 from clausal.logic.runtime.dict_ops import _subscript, _splat_data, _dict_key  # noqa: F401
-from clausal.logic.runtime.const_set import _const_set, _CONST_SET_TYPES  # noqa: F401
+from clausal.logic.runtime.const_set import (  # noqa: F401
+    _const_set,
+    _CONST_SET_TYPES,
+    _cset_atom,
+)
 # The outbound term → Python conversion the PyThunk lowering emits as
 # ``$to_python`` (spec 2026-09-06-atoms-as-cells-strings §9.1).  It is a core
 # module, NOT ``clausal.modules.py._helpers`` (which re-exports it for the
@@ -893,6 +897,7 @@ def _compile_predicate_trampoline_impl(
         "$in_iter": _in_iter,
         "$const_set": _const_set,
         "$CSET_TYPES": _CONST_SET_TYPES,
+        "$cset_atom": _cset_atom,
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,
@@ -1706,6 +1711,7 @@ def _compile_predicate_shallow_impl(
         "$in_iter": _in_iter,
         "$const_set": _const_set,
         "$CSET_TYPES": _CONST_SET_TYPES,
+        "$cset_atom": _cset_atom,
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,

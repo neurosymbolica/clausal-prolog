@@ -55,6 +55,7 @@ from clausal.logic.compiler.terms_to_ast import (
     arith_to_ast_expr,
     term_to_ast_expr,
 )
+from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.predicate import PredicateMeta, is_zero_field_class
 from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast.nodes import literal_value
@@ -127,6 +128,12 @@ def _is_const_element(term) -> bool:
         return True
     if isinstance(term, PredicateMeta):
         return is_zero_field_class(term)
+    if _term_is_atom(term):
+        # The arity-0 cell ``("foo",)``.  ``literal_value`` hands a tuple
+        # back unchanged and ``tuple`` is not (and must not be) a
+        # ``_CONST_SET_LITERALS`` member, so the atom shape is tested here
+        # rather than through the literal arm below.
+        return True
     value = literal_value(term)
     return value is None or isinstance(value, _CONST_SET_LITERALS)
 
@@ -216,23 +223,38 @@ def _assign_multi(targets: list[ast.expr], value: ast.expr) -> ast.stmt:
 
 
 def _const_set_guard(set_local: str, elem_local: str) -> ast.expr:
-    """``set_local and elem_local.__class__ in $CSET_TYPES``.
+    """``set_local and (elem.__class__ in $CSET_TYPES or $cset_atom(elem))``.
 
-    The left conjunct rejects a callsite ``$const_set`` refused.  The right
-    one rejects a left operand — an unbound Var, a compound term, a list —
-    whose ``==`` is not known to answer the same question as ``unify()``, or
-    which is not hashable at all.  Either way the scan runs instead; for an
-    unbound Var that is what preserves list-order enumeration.
+    The first conjunct rejects a callsite ``$const_set`` refused.  The second
+    rejects a left operand — an unbound Var, a compound term, a list — whose
+    ``==`` is not known to answer the same question as ``unify()``, or which
+    is not hashable at all.  Either way the scan runs instead; for an unbound
+    Var that is what preserves list-order enumeration.
+
+    An ATOM is eligible but cannot be spelled as a type: after the
+    atoms-as-cells flip it is the arity-0 cell ``("bar",)``, and admitting
+    ``tuple`` wholesale would admit compound cells, whose ``==`` is not their
+    ``unify()`` (see ``runtime/const_set``'s module docstring).  Hence the
+    ``or``: ``$cset_atom`` is the arity-0-cell shape test, and Python's
+    short-circuit means a left operand that already passed the class test —
+    an int, a str — never pays for the call.
+
+    The call was measured against an inlined ``__class__ is tuple and
+    len(...) == 1 and ...`` expansion of the same test: no difference outside
+    noise on the membership micro-benchmark, so the readable form stands.
     """
     return _locate(ast.BoolOp(op=ast.And(), values=[
         _name(set_local),
-        _locate(ast.Compare(
-            left=_locate(ast.Attribute(
-                value=_name(elem_local), attr="__class__", ctx=ast.Load(),
+        _locate(ast.BoolOp(op=ast.Or(), values=[
+            _locate(ast.Compare(
+                left=_locate(ast.Attribute(
+                    value=_name(elem_local), attr="__class__", ctx=ast.Load(),
+                )),
+                ops=[ast.In()],
+                comparators=[_name("$CSET_TYPES")],
             )),
-            ops=[ast.In()],
-            comparators=[_name("$CSET_TYPES")],
-        )),
+            _call(_name("$cset_atom"), _name(elem_local)),
+        ])),
     ]))
 
 

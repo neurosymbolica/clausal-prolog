@@ -33,7 +33,15 @@ _ATOMS = [f"a{i}" for i in range(64)]
 def _source() -> str:
     def lst(n):
         return ", ".join(_ATOMS[:n])
+    # ``-double_quotes(chars)`` is what keeps the ``strings4`` probe a probe
+    # over STRINGS.  Under the default ``atom`` mode a ``"…"`` literal
+    # compiles to an atom, so after the atoms-as-cells flip that row measured
+    # a second atom list AND yielded zero solutions for the plain ``str``
+    # argument ``_arg`` hands it (a Python str is a string, and a string does
+    # not unify with an atom) — the assertion in ``__main__`` below would
+    # have caught it the next time anyone ran this file.
     return f"""\
+-double_quotes(chars)
 -private([{", ".join(_ATOMS)}])
 
 control(_),

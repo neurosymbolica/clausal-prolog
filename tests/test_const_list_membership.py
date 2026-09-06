@@ -36,7 +36,11 @@ from clausal.logic.compiler.compile_ctx import (
 )
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from clausal.logic.runtime.const_set import _const_set, _CONST_SET_TYPES
+from clausal.logic.runtime.const_set import (
+    _const_set,
+    _CONST_SET_TYPES,
+    _cset_atom,
+)
 
 
 # ── Harness ───────────────────────────────────────────────────────────────────
@@ -328,6 +332,26 @@ class TestConstSetBuilder:
     def test_accepts_distinct_scalars(self):
         assert _const_set([1, 2, 3]) == frozenset({1, 2, 3})
 
+    def test_accepts_atoms(self):
+        """An atom is the arity-0 cell ``("a",)``, whose ``==``/``hash`` are
+        1-tuple ones and whose ``unify()`` is exactly that equality."""
+        assert _const_set([mint("a"), mint("b")]) == frozenset(
+            {mint("a"), mint("b")})
+
+    def test_refuses_compound_cells(self):
+        """``tuple`` must NOT be whitelisted wholesale: a cell of arity >= 1
+        may hold a Var or a ``__unify__``-carrying element, so its ``==`` is
+        not its ``unify()``.  Only the arity-0 shape is eligible."""
+        assert _const_set([("f", 1), ("f", 2)]) is False
+        assert _const_set([("f", Var()), ("f", Var())]) is False
+
+    def test_the_atom_shape_test_is_the_arity_zero_cell(self):
+        assert _cset_atom(mint("a")) is True
+        assert _cset_atom(char_atom("a")) is True
+        assert _cset_atom(("f", 1)) is False
+        assert _cset_atom("a") is False       # a STRING, not an atom
+        assert _cset_atom(1) is False
+
     def test_refuses_duplicates(self):
         assert _const_set([char_atom("a"), char_atom("a"), char_atom("b")]) is False
 
@@ -361,6 +385,31 @@ class TestConstSetBuilder:
         for value in samples:
             assert value.__class__ in _CONST_SET_TYPES
             hash(value)  # must not raise
+
+
+def test_the_atom_fast_path_actually_fires():
+    """Every other test here asserts the two builds AGREE, which they also do
+    when the fast path silently declines — so nothing above notices a
+    callsite pinned to the scan forever.  This one looks at the memo cell.
+
+    It exists because the atoms-as-cells flip did exactly that: an atom
+    became the arity-0 cell ``("a",)``, ``tuple`` is not on
+    ``_CONST_SET_TYPES`` (and must not be — see ``_const_set``'s docstring),
+    so ``$const_set`` refused every declared-atom list and the motivating
+    workload silently reverted to the O(n) scan.  Agreement tests stayed
+    green throughout; the A/B perf gate is what caught it.
+    """
+    pymod, mod = _ON
+    fn = pymod.atoms4._get_dispatch()
+    cells = [k for k in fn.__globals__ if k.startswith("$cset_")
+             and k != "$cset_atom"]
+    assert len(cells) == 1, cells
+    cell = cells[0]
+
+    assert list(call("atoms4", mint("a"), module=mod))          # one solution
+    assert fn.__globals__[cell][0] == frozenset(
+        {mint("a"), mint("b"), mint("c"), mint("d")}
+    ), "the atom membership callsite fell back to the scan"
 
 
 def test_const_set_is_a_registered_optimisation():

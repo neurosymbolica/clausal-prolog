@@ -36,9 +36,24 @@ the following hold.
   identity, which keeps ``nan`` out of a set that holds a *different*
   ``nan``, matching ``unify``'s ``==``-based failure).
 * ``str``/``bytes``/``NoneType`` — value equality, hash total.
-* ``PredicateMeta`` — an atom is a class, so ``==`` and ``hash`` are
-  ``type``'s identity ones, and ``unify()`` on two atoms is likewise
+* ``PredicateMeta`` — a zero-field predicate class, whose ``==`` and
+  ``hash`` are ``type``'s identity ones and whose ``unify()`` is likewise
   identity.
+
+**An atom is eligible too, and is not a type test.**  After the
+atoms-as-cells flip an atom is the arity-0 cell ``("bar",)`` — a ``tuple``,
+and ``tuple`` is emphatically NOT on the whitelist: a cell of arity ≥ 1 may
+hold a Var or a ``__unify__``-carrying element, so its ``==`` does not
+answer ``unify()``.  Atoms specifically do coincide: two ground atoms unify
+exactly when their spellings are equal, which is exactly 1-tuple ``==``, and
+``hash`` on a 1-tuple of a ``str`` is total.  So eligibility is
+``element.__class__ in _CONST_SET_TYPES`` **or** :func:`is_atom` — a shape
+test, not a type test, which is why the generated guard
+(``_lower_goalop_shared._const_set_guard``) ORs the injected ``$cset_atom``
+onto the class test rather than growing the type set.  Without this an
+``ACTION in [acquire, dispose, amend, cancel]`` over declared atoms — the
+motivating shape for the whole optimisation — would pin itself to the scan
+forever, which is what it did between the flip and this note.
 
 ``Decimal`` is deliberately *absent*: ``hash(Decimal('nan'))`` raises
 ``ValueError``, so it could turn a membership test into an exception.
@@ -68,9 +83,15 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.predicate import PredicateMeta
 
-__all__ = ["_CONST_SET_TYPES", "_const_set"]
+__all__ = ["_CONST_SET_TYPES", "_const_set", "_cset_atom"]
+
+#: The shape half of the eligibility test — see the module docstring.  Bound
+#: into generated code as ``$cset_atom`` and ORed onto the class test, so a
+#: non-tuple left operand never pays for the call.
+_cset_atom = _term_is_atom
 
 
 #: Types for which ``hash``/``__eq__`` provably answer the same question as
@@ -99,7 +120,7 @@ def _const_set(elements):
     if type(elements) is not list or len(elements) < 2:
         return False
     for element in elements:
-        if element.__class__ not in _CONST_SET_TYPES:
+        if element.__class__ not in _CONST_SET_TYPES and not _cset_atom(element):
             return False
     try:
         as_set = frozenset(elements)
