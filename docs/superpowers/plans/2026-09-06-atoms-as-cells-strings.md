@@ -308,7 +308,6 @@ def atom_needs_quotes(s: str) -> bool     # ISO 6.4.2: bare iff [a-z][A-Za-z0-9_
 def quote_atom(s: str) -> str             # "'" + s with \\ and \' and control chars escaped + "'"
 def quote_string(s: str) -> str           # '"' + s with \\ and \" and control chars escaped + '"'
 def term_str(t, style=None, _bd=0, *, quoted=True) -> str   # NEW keyword; quoted=False is the write/1 family
-```
 def term_canonical(t) -> str             # write_canonical/1 renderer (spec §6.7): quoted atoms, NO space after commas, no operators,
                                          # every list as the '.'/2 cons structure ending in [] ('.'(1,'.'(2,[]))); Var as term_str prints it;
                                          # Stage A: a str is an atom → quoted spelling; Task 11 turns the str branch into the cons form.
