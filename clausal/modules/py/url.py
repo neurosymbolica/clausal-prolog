@@ -17,6 +17,7 @@ from clausal.modules.py import (
     note_rejected_call,
     option,
     simple_to_trampoline,
+    text_or_str,
     to_text,
 )
 _urllib_parse = _import_stdlib("urllib.parse")
@@ -29,18 +30,42 @@ from clausal.terms import DictTerm
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 
-def _part_text(val) -> str:
-    """The ``str`` a URL part denotes.
+def _require_text(val, pred, arg):
+    """The ``str`` a Url/String argument denotes, or ``None`` (note recorded).
 
-    Text is a string or an ATOM, and both convert to the same ``str``
-    (spec §9.4).  ``str()`` on the arity-0 cell ``("https",)`` would splice
-    its Python tuple repr into the URL, so the coercion routes through
-    ``to_text``; a part that is not text keeps the old ``str`` fallback --
-    this position never promised a type contract.
+    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and both
+    convert to the same ``str`` -- so ``encode('hello world', E)`` in a
+    ``.clausal`` file works exactly as ``"hello world"`` does under
+    ``-double_quotes(chars)``.  THE FLIP (2026-09-06-atoms-as-cells-strings)
+    made the bare ``expect_type(x, str, ...)`` guards below reject every
+    source-written argument, silently: in the default ``-double_quotes(atom)``
+    mode a written ``"..."`` IS the arity-0 cell.
+
+    A bound value that is not text keeps this module's existing behaviour --
+    a recorded type-mismatch note and a clean failure, not a raise.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=arg)   # records the note; always False here
+    return None
+
+
+def _port_text(val):
+    """The netloc port a Parts dict's ``port`` denotes: an int, or its text.
+
+    ``parse/2`` answers an ``int`` (``0`` meaning "no port"), and a program
+    writing a Parts dict by hand writes either an int or a name/string.  Text
+    crosses through ``to_text`` (§9.4): ``str(("8080",))`` would have spliced
+    ``example.com:('8080',)`` into the netloc.  A port that is neither an int
+    nor text answers ``""``, which the caller's ``if port`` treats as absent
+    -- dropping a nonsense port rather than pasting its repr into the URL.
     """
     v = deref(val)
+    if isinstance(v, int) and not isinstance(v, bool):
+        return v
     text = to_text(v)
-    return text if text is not None else str(v)
+    return text if text is not None else ""
 
 
 # ── Predicate implementations ────────────────────────────────────────────
@@ -48,8 +73,8 @@ def _part_text(val) -> str:
 
 def _encode_2(string, encoded, trail, k):
     """encode/2: encode(String, Encoded) — URL-encode."""
-    s = deref(string)
-    if not expect_type(s, str, "encode/2", arg=1):
+    s = _require_text(deref(string), "encode/2", 1)
+    if s is None:
         return
     result = _urllib_parse.quote(s, safe="")
     if unify(encoded, result, trail):
@@ -58,8 +83,8 @@ def _encode_2(string, encoded, trail, k):
 
 def _decode_2(encoded, string, trail, k):
     """decode/2: decode(Encoded, String) — URL-decode."""
-    e = deref(encoded)
-    if not expect_type(e, str, "decode/2", arg=1):
+    e = _require_text(deref(encoded), "decode/2", 1)
+    if e is None:
         return
     result = _urllib_parse.unquote(e)
     if unify(string, result, trail):
@@ -75,8 +100,8 @@ def _parse_2(url, parts, trail, k):
     so ``P.scheme`` reads it and ``join/2`` consumes it unchanged.  The
     VALUES stay text (§9.4).
     """
-    u = deref(url)
-    if not expect_type(u, str, "parse/2", arg=1):
+    u = _require_text(deref(url), "parse/2", 1)
+    if u is None:
         return
     try:
         # urlparse itself raises ValueError on e.g. an unclosed IPv6 bracket
@@ -107,17 +132,21 @@ def _join_2(parts, url, trail, k):
     writes — has ATOM keys (§6.8), while a Python-built ``DictTerm`` in a
     test has ``str`` keys, and the documented ``parse``/``join`` round trip
     has to close over both.
+
+    Every VALUE is text (§9.4), including the ``port``: ``parse/2`` answers
+    an int, but a hand-written Parts dict may spell the port as a name, and
+    ``str()`` on that atom spliced its tuple repr into the netloc.
     """
     p = deref(parts)
     if not expect_type(p, DictTerm, "join/2", arg=1):
         return
     d = p.data
-    scheme = _part_text(option(d, "scheme", ""))
-    host = _part_text(option(d, "host", ""))
-    port = deref(option(d, "port", 0))
-    path = _part_text(option(d, "path", ""))
-    query = _part_text(option(d, "query", ""))
-    fragment = _part_text(option(d, "fragment", ""))
+    scheme = text_or_str(option(d, "scheme", ""))
+    host = text_or_str(option(d, "host", ""))
+    port = _port_text(option(d, "port", 0))
+    path = text_or_str(option(d, "path", ""))
+    query = text_or_str(option(d, "query", ""))
+    fragment = text_or_str(option(d, "fragment", ""))
 
     # Build netloc
     if port and port != 0:

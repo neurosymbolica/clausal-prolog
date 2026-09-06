@@ -972,7 +972,10 @@ def test_url_parse_answers_an_atom_keyed_dict_that_join_reads_back():
     silently produces an empty URL."""
     mod = _load_inline_clausal(
         "_t12c_url",
-        "-double_quotes(chars)\n"
+        # Written in the DEFAULT atom mode: Task 12c had to spell this snippet
+        # ``-double_quotes(chars)`` because ``parse/2`` still gated its Url on
+        # ``isinstance(u, str)``; Task 12d put that argument on ``to_text``,
+        # so the documented spelling is what the test drives.
         "-import_from(py.url, [parse, join])\n"
         "-private([scheme, host, port, path])\n"
         "scheme_of(S) <- (parse(\"https://example.com:8080/p?q=1\", P), "
@@ -997,7 +1000,9 @@ def test_csv_records_answer_atom_keyed_dicts_and_atom_headers():
     get(R, H, V)`` fails against the wrapper's own records."""
     mod = _load_inline_clausal(
         "_t12c_csv",
-        "-double_quotes(chars)\n"
+        # Default atom mode, as above: Task 12d put ``parse_records/3``'s
+        # String argument on ``to_text``, so the ``-double_quotes(chars)``
+        # workaround Task 12c needed here is gone.
         "-import_from(py.csv, [parse_records, generate_records])\n"
         "-private([name, age])\n"
         "first_name(N) <- (parse_records(\"name,age\\nalice,30\\n\", _, RS), "
@@ -1036,3 +1041,231 @@ def test_z3_satisfiability_answers_an_atom():
     r = Var()
     assert z3_is_sat(r, trail)
     assert deref(r) == mint("unsat")
+
+
+# ── Task 12d: the last ``py.*`` text-position sweep ──────────────────────────
+#
+# Spec §9.1/§9.4: a text position in a ``py.*`` wrapper accepts an ATOM (its
+# spelling) or a STRING, and both convert to the same ``str``; the funnel is
+# ``modules.py.to_text``.  Task 12b migrated ``http``, ``process``, ``tcp`` and
+# ``uuid``; Task 11 part 2 migrated ``logging``, ``re``, ``sqlite`` and
+# ``files``'s PATHS.  Everything below still gated its text on
+# ``isinstance(x, str)`` / ``expect_type(x, str, …)``, so in the default
+# ``-double_quotes(atom)`` mode — where a source-written ``"x"`` IS the atom
+# ``("x",)`` — each of these predicates failed SILENTLY when called exactly
+# the way its own documentation shows.  One row per wrapper, each asserting
+# the real effect (the digest, the parsed date, the env value, the bytes on
+# disk), never the guard.
+
+
+def test_os_env_and_working_directory_take_atom_text():
+    """``py.os``'s env-var NAMES and VALUES and ``change_directory``'s path
+    are text (§9.4): a name handed to ``os.environ`` is still text, not a
+    Python-``str``-only position."""
+    import os as _pyos
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        real_tmpdir = _pyos.path.realpath(tmpdir)
+        mod = _load_inline_clausal(
+            "_t12d_os",
+            "-import_from(py.os, [environment_variable, "
+            "set_environment_variable, unset_environment_variable, "
+            "working_directory, change_directory])\n"
+            "-private([t12d_name, t12d_value])\n"
+            "set_it() <- set_environment_variable(t12d_name, t12d_value),\n"
+            "read_it(V) <- environment_variable(t12d_name, V),\n"
+            "unset_it() <- unset_environment_variable(t12d_name),\n"
+            "cd_and_read(D) <- (change_directory(\"" + real_tmpdir + "\"), "
+            "working_directory(D)),\n",
+        )
+        prev_cwd = _pyos.getcwd()
+        prev_env = _pyos.environ.get("t12d_name")
+        try:
+            assert len(list(solve(("set_it",), mod))) == 1
+            assert _pyos.environ["t12d_name"] == "t12d_value"
+            V = Var()
+            # The wrapper ANSWERS text as a string (§9.4); only the argument
+            # positions accept an atom.
+            assert _answers(("read_it", V), mod, V) == [("t12d_value",)]
+            assert len(list(solve(("unset_it",), mod))) == 1
+            assert "t12d_name" not in _pyos.environ
+            D = Var()
+            assert _answers(("cd_and_read", D), mod, D) == [(real_tmpdir,)]
+        finally:
+            _pyos.chdir(prev_cwd)
+            if prev_env is None:
+                _pyos.environ.pop("t12d_name", None)
+            else:
+                _pyos.environ["t12d_name"] = prev_env
+
+
+def test_datetime_string_predicates_take_atom_text():
+    """A strftime FORMAT and an ISO-8601 date string are text (§9.4).  The
+    format is a Python identifier-ish literal handed to a library, which is
+    exactly the position §9.1 rules text: ``'%Y-%m-%d'`` and ``"%Y-%m-%d"``
+    denote the same thing."""
+    import datetime as _dt
+
+    mod = _load_inline_clausal(
+        "_t12d_datetime",
+        "-import_from(py.datetime, [datetime_string, date_string_iso, "
+        "datetime_string_iso])\n"
+        "parsed(DT) <- datetime_string(DT, \"2026-09-07 08:30\", "
+        "\"%Y-%m-%d %H:%M\"),\n"
+        "iso_date(D) <- date_string_iso(D, \"2026-09-07\"),\n"
+        "iso_dt(DT) <- datetime_string_iso(DT, \"2026-09-07T08:30:00\"),\n"
+        "formatted(S) <- (date_string_iso(D, \"2026-09-07\"), "
+        "datetime_string(D, S, \"%d/%m/%Y\")),\n",
+    )
+    DT, D, S = Var(), Var(), Var()
+    assert _answers(("parsed", DT), mod, DT) == [
+        (_dt.datetime(2026, 9, 7, 8, 30),)]
+    assert _answers(("iso_date", D), mod, D) == [(_dt.date(2026, 9, 7),)]
+    DT = Var()
+    assert _answers(("iso_dt", DT), mod, DT) == [
+        (_dt.datetime(2026, 9, 7, 8, 30),)]
+    assert _answers(("formatted", S), mod, S) == [("07/09/2026",)]
+
+
+def test_hash_takes_an_atom_algorithm_name():
+    """``hash/3``'s Algorithm is a NAME handed to ``hashlib`` — text (§9.4).
+    The digest is asserted, so a wrapper that read the tuple repr
+    ``"('sha256',)"`` cannot pass by failing quietly."""
+    mod = _load_inline_clausal(
+        "_t12d_hash",
+        "-import_from(py.hash, [hash, hash_bytes])\n"
+        "-private([sha256])\n"
+        "hex_of(H) <- hash(sha256, \"abc\", H),\n"
+        "raw_of(B) <- hash_bytes(sha256, \"abc\", B),\n",
+    )
+    H, B = Var(), Var()
+    assert _answers(("hex_of", H), mod, H) == [
+        ("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",)]
+    assert _answers(("raw_of", B), mod, B) == [
+        (bytes.fromhex(
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        ),)]
+
+
+def test_hmac_takes_an_atom_algorithm_and_an_atom_digest():
+    """``sign/4``'s Algorithm and ``verify/4``'s Hex are both text (§9.4) —
+    the Hex especially, because a source program compares against a literal
+    it wrote, which in the default mode is an atom."""
+    expected = "7c0e03d85b6ccac680ea6500e7dc506720bd332aa9aa8e24e6cbf8e0afeea228"
+    mod = _load_inline_clausal(
+        "_t12d_hmac",
+        "-import_from(py.hmac, [sign, verify])\n"
+        "-private([sha256])\n"
+        "signed(H) <- sign(sha256, \"k3y\", \"msg\", H),\n"
+        "ok() <- verify(sha256, \"k3y\", \"msg\", \"" + expected + "\"),\n"
+        "bad() <- verify(sha256, \"k3y\", \"msg\", \"" + "0" * 64 + "\"),\n",
+    )
+    H = Var()
+    assert _answers(("signed", H), mod, H) == [(expected,)]
+    assert len(list(solve(("ok",), mod))) == 1
+    assert list(solve(("bad",), mod)) == []
+
+
+def test_csv_reading_predicates_take_atom_text():
+    """``py.csv``'s String and Path arguments are text (§9.4).  A path that
+    went through ``str()`` would have opened a file named ``('/tmp/x',)`` —
+    the very accident §9.4 was written after."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "t12d.csv")
+        mod = _load_inline_clausal(
+            "_t12d_csv",
+            "-import_from(py.csv, [parse_row, parse, parse_records, "
+            "read_file, write_file])\n"
+            "-private([name])\n"
+            "row(R) <- parse_row(\"a,b,c\", R),\n"
+            "rows(RS) <- parse(\"a,b\\nc,d\\n\", RS),\n"
+            "first_name(N) <- (parse_records(\"name,age\\nalice,30\\n\", _, RS), "
+            "RS is [R, *_], N is R.name),\n"
+            "wrote() <- write_file(\"" + path + "\", [[\"x\", \"y\"]]),\n"
+            "read_back(RS) <- read_file(\"" + path + "\", RS),\n",
+        )
+        R, RS, N = Var(), Var(), Var()
+        assert _answers(("row", R), mod, R) == [(["a", "b", "c"],)]
+        assert _answers(("rows", RS), mod, RS) == [([["a", "b"], ["c", "d"]],)]
+        assert _answers(("first_name", N), mod, N) == [("alice",)]
+        assert len(list(solve(("wrote",), mod))) == 1
+        # The file is where the ATOM said, not where its repr would have been.
+        assert os.path.isfile(path)
+        assert os.listdir(tmpdir) == ["t12d.csv"]
+        RS = Var()
+        assert _answers(("read_back", RS), mod, RS) == [([["x", "y"]],)]
+
+
+def test_json_parse_and_file_predicates_take_atom_text():
+    """``py.json``'s String and Path arguments are text (§9.4).  The values
+    a parsed object carries stay strings and its keys are atoms (§9.2, Task
+    8) — this row is only about the ARGUMENT positions."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "t12d.json")
+        mod = _load_inline_clausal(
+            "_t12d_json",
+            "-import_from(py.json, [parse, read_file, write_file])\n"
+            "-private([a])\n"
+            "parsed(V) <- (parse('{\"a\": 1}', T), V is T.a),\n"
+            "parsed3(V) <- (parse('{\"a\": 1}', T, []), V is T.a),\n"
+            "wrote() <- (parse('{\"a\": 1}', T), "
+            "write_file(\"" + path + "\", T)),\n"
+            "read_back(V) <- (read_file(\"" + path + "\", T), V is T.a),\n",
+        )
+        V = Var()
+        assert _answers(("parsed", V), mod, V) == [(1,)]
+        V = Var()
+        assert _answers(("parsed3", V), mod, V) == [(1,)]
+        assert len(list(solve(("wrote",), mod))) == 1
+        assert os.listdir(tmpdir) == ["t12d.json"]
+        V = Var()
+        assert _answers(("read_back", V), mod, V) == [(1,)]
+
+
+def test_url_predicates_take_atom_text_including_the_port():
+    """``py.url``'s String/Url arguments are text (§9.4), and so is a PORT
+    written as a name: ``str(("8080",))`` spliced ``example.com:('8080',)``
+    into the netloc."""
+    mod = _load_inline_clausal(
+        "_t12d_url",
+        "-import_from(py.url, [encode, decode, parse, join])\n"
+        "-private([scheme, host, port, path])\n"
+        "enc(E) <- encode(\"hello world\", E),\n"
+        "dec(S) <- decode(\"hello%20world\", S),\n"
+        "sch(S) <- (parse(\"https://example.com:8080/p?q=1\", P), "
+        "S is P.scheme),\n"
+        "joined(U) <- join({scheme: \"https\", host: \"example.com\", "
+        "port: \"8080\", path: \"/p\"}, U),\n"
+        "joined_int(U) <- join({scheme: \"https\", host: \"example.com\", "
+        "port: 8080, path: \"/p\"}, U),\n",
+    )
+    E, S, U = Var(), Var(), Var()
+    assert _answers(("enc", E), mod, E) == [("hello%20world",)]
+    assert _answers(("dec", S), mod, S) == [("hello world",)]
+    S = Var()
+    assert _answers(("sch", S), mod, S) == [("https",)]
+    assert _answers(("joined", U), mod, U) == [("https://example.com:8080/p",)]
+    U = Var()
+    assert _answers(("joined_int", U), mod, U) == [
+        ("https://example.com:8080/p",)]
+
+
+def test_files_write_and_append_take_atom_contents():
+    """``py.files``'s PATHS were migrated in Task 11; its CONTENTS were not.
+    Text is text on both sides of the call (§9.4)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "t12d.txt")
+        mod = _load_inline_clausal(
+            "_t12d_files",
+            "-import_from(py.files, [write_string_to_file, "
+            "append_string_to_file, read_file_to_string])\n"
+            "wrote() <- (write_string_to_file(\"" + path + "\", \"hello \"), "
+            "append_string_to_file(\"" + path + "\", \"world\")),\n"
+            "read_back(S) <- read_file_to_string(\"" + path + "\", S),\n",
+        )
+        assert len(list(solve(("wrote",), mod))) == 1
+        S = Var()
+        assert _answers(("read_back", S), mod, S) == [("hello world",)]
+        # The bytes on disk, not just what the wrapper says it wrote.
+        with open(path, encoding="utf-8") as f:
+            assert f.read() == "hello world"

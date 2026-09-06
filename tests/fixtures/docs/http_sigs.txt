@@ -33,7 +33,7 @@ parse("https://example.com:8080/path?q=1#frag", PARTS)
 # PARTS = {scheme: "https", host: "example.com", port: 8080,
 #          path: "/path", query: "q=1", fragment: "frag"}   # atom keys
 
-join({"scheme": "https", "host": "example.com", "path": "/api"}, URL)
+join({scheme: "https", host: "example.com", path: "/api"}, URL)
 # URL = "https://example.com/api"
 --8<-- [end:url_parse_examples]
 

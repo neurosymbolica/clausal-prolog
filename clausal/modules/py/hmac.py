@@ -17,6 +17,7 @@ from clausal.modules.py import (
     note_rejected_call,
     simple_to_trampoline,
     to_bytes,
+    to_text,
 )
 _hmac = _import_stdlib("hmac")
 _hashlib = _import_stdlib("hashlib")
@@ -31,15 +32,34 @@ def _resolve_algo(algo_str):
     return algo_str
 
 
+def _require_text(val, pred, arg):
+    """The ``str`` an algorithm NAME or a hex DIGEST denotes, or ``None``.
+
+    Spec §9.1/§9.4: a hash algorithm name is a literal handed to a library and
+    a hex digest is text a program compares against a literal it wrote -- in
+    the default ``-double_quotes(atom)`` mode both of those literals are
+    ATOMS, so the bare ``expect_type(x, str, …)`` guards rejected every
+    source-written call, silently.
+
+    A bound value that is not text keeps this module's existing behaviour --
+    a recorded type-mismatch note and a clean failure, not a raise.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=arg)   # records the note; always False here
+    return None
+
+
 # ── Predicate implementations ────────────────────────────────────────────
 
 
 def _sign_4(algorithm, key, data, hex_out, trail, k):
     """sign/4: sign(Algorithm, Key, Data, Hex) — HMAC with specified algorithm."""
-    algo = deref(algorithm)
+    algo = _require_text(deref(algorithm), "sign/4", 1)
     key_d = deref(key)
     data_d = deref(data)
-    if not expect_type(algo, str, "sign/4", arg=1):
+    if algo is None:
         return
     if is_var(key_d) or is_var(data_d):
         return
@@ -76,8 +96,9 @@ def _verify_4(algorithm, key, data, hex_in, trail, k):
     hex_d = deref(hex_in)
     if any(is_var(x) for x in (algo, key_d, data_d, hex_d)):
         return
-    if (not expect_type(algo, str, "verify/4", arg=1)
-            or not expect_type(hex_d, str, "verify/4", arg=4)):
+    algo = _require_text(algo, "verify/4", 1)
+    hex_d = _require_text(hex_d, "verify/4", 4)
+    if algo is None or hex_d is None:
         return
     key_b = to_bytes(key_d)
     data_b = to_bytes(data_d)

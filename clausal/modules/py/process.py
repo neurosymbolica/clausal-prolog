@@ -20,6 +20,7 @@ from clausal.modules.py import (
     has_option,
     option,
     simple_to_trampoline,
+    text_or_str,
     to_text,
 )
 _subprocess = _import_stdlib("subprocess")
@@ -45,22 +46,6 @@ _STDOUT = mint("stdout")
 _STDERR = mint("stderr")
 
 
-def _env_text(val) -> str:
-    """The ``str`` an environment variable name or value denotes.
-
-    Text is a string or an ATOM, and both convert to the same ``str``
-    (spec §9.4).
-
-    THE FLIP (2026-09-06-atoms-as-cells-strings): ``str()`` on the arity-0
-    cell ``("bar",)`` is the Python tuple repr ``"('bar',)"``, so every text
-    coercion in a wrapper routes through ``to_text`` instead.  A term that is
-    not text keeps the old ``str`` fallback -- this position never promised a
-    type contract.
-    """
-    text = to_text(val)
-    return text if text is not None else str(val)
-
-
 def _cmd_text(val, pred, arg=1):
     """The ``str`` a command, program or argument denotes, or ``None``.
 
@@ -80,19 +65,6 @@ def _cmd_text(val, pred, arg=1):
         return text
     expect_type(val, str, pred, arg=arg)  # records the note; always False here
     return None
-
-
-def _arg_text(val) -> str:
-    """The ``str`` one element of a program's argument list denotes.
-
-    A number is spelled the way ``str`` spells it, as it always was; text --
-    a string or an ATOM (spec §9.4) -- crosses through ``to_text``, so a
-    source-written ``process_create(echo, [hello], R)`` passes ``hello`` and
-    not the Python tuple repr ``"('hello',)"``.  Anything else keeps the old
-    ``str`` fallback: this position never promised a type contract.
-    """
-    text = to_text(val)
-    return text if text is not None else str(val)
 
 
 # ── Predicates ──────────────────────────────────────────────────────────
@@ -170,7 +142,7 @@ def _process_create_3(program, args, result_var, trail, k):
         return
     if not expect_type(args, list, "process_create/3", arg=2):
         return
-    cmd = [program] + [_arg_text(deref(a)) for a in args]
+    cmd = [program] + [text_or_str(deref(a)) for a in args]
     try:
         result = _subprocess.run(cmd, capture_output=True, text=True)
     except (OSError, FileNotFoundError):
@@ -202,7 +174,7 @@ def _process_create_4(program, args, options, result_var, trail, k):
     if is_var(options):
         return
 
-    cmd = [program] + [_arg_text(deref(a)) for a in args]
+    cmd = [program] + [text_or_str(deref(a)) for a in args]
 
     # Extract options
     run_kwargs: dict = {"capture_output": True, "text": True}
@@ -238,13 +210,13 @@ def _process_create_4(program, args, options, result_var, trail, k):
         if isinstance(env_val, DictTerm):
             import os as _os_mod
             merged = dict(_os_mod.environ)
-            merged.update({_env_text(k_): _env_text(deref(v_))
+            merged.update({text_or_str(k_): text_or_str(deref(v_))
                            for k_, v_ in env_val.data.items()})
             run_kwargs["env"] = merged
         elif isinstance(env_val, dict):
             import os as _os_mod
             merged = dict(_os_mod.environ)
-            merged.update({_env_text(k_): _env_text(deref(v_))
+            merged.update({text_or_str(k_): text_or_str(deref(v_))
                            for k_, v_ in env_val.items()})
             run_kwargs["env"] = merged
 

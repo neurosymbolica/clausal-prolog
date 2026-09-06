@@ -39,6 +39,7 @@ from clausal.modules.py import (
     expect_type,
     note_rejected_call,
     simple_to_trampoline,
+    to_text,
     value_is_ground,
 )
 _json = _import_stdlib("json")
@@ -197,10 +198,31 @@ def _option_shape(opt: Any) -> tuple:
 # ── Predicates ──────────────────────────────────────────────────────────
 
 
+def _require_text(val, pred, arg):
+    """The ``str`` a JSON String or Path argument denotes, or ``None``.
+
+    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and both
+    convert to the same ``str``.  THE FLIP (2026-09-06-atoms-as-cells-strings)
+    made the bare ``expect_type(x, str, …)`` guards below reject every
+    source-written argument, silently -- in the default
+    ``-double_quotes(atom)`` mode a written ``"{…}"`` IS the arity-0 cell, and
+    single-quoting the JSON (the natural way to write a document full of
+    double quotes) always was.
+
+    A bound value that is not text keeps this module's existing behaviour --
+    a recorded type-mismatch note and a clean failure, not a raise.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=arg)   # records the note; always False here
+    return None
+
+
 def _parse_2(string, term, trail, k):
     """parse/2: parse JSON string into Clausal terms."""
-    string = deref(string)
-    if not expect_type(string, str, "parse/2", arg=1):
+    string = _require_text(deref(string), "parse/2", 1)
+    if string is None:
         return
     try:
         obj = _json.loads(string)
@@ -220,8 +242,8 @@ def _parse_3(string, term, options, trail, k):
     corresponding ATOM.  That is the whole vocabulary hook of spec §9.2 —
     "atoms by vocabulary" loaders are built on it rather than in here.
     """
-    string = deref(string)
-    if not expect_type(string, str, "parse/3", arg=1):
+    string = _require_text(deref(string), "parse/3", 1)
+    if string is None:
         return
     atoms = _parse_options(options)
     try:
@@ -293,8 +315,8 @@ def _get_3(term, key, value, trail, k):
 
 def _read_file_2(path, term, trail, k):
     """read_file/2: read and parse a JSON file."""
-    path = deref(path)
-    if not expect_type(path, str, "read_file/2", arg=1):
+    path = _require_text(deref(path), "read_file/2", 1)
+    if path is None:
         return
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -308,8 +330,8 @@ def _read_file_2(path, term, trail, k):
 
 def _write_file_2(path, term, trail, k):
     """write_file/2: serialize and write a JSON file."""
-    path, term = deref(path), deref(term)
-    if not expect_type(path, str, "write_file/2", arg=1):
+    path, term = _require_text(deref(path), "write_file/2", 1), deref(term)
+    if path is None:
         return
     if is_var(term):
         return

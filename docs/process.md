@@ -74,14 +74,20 @@ run_python(CODE, RESULT) <- process_create("python3", ["-c", CODE], RESULT)
 | `input` | string | String to send to stdin |
 | `env` | DictTerm | Extra environment variables (merged with current env) |
 
+The option keys are atoms, so declare the ones you write (or spell them
+`"cwd"`/`"input"`, which under the default `-double_quotes(atom)` are the same
+atoms):
+
 ```clausal
+-private([cwd, input])
+
 run_in_dir(DIR, RESULT) <- process_create(
     "python3", ["-c", "import os; print(os.getcwd())"],
-    {"cwd": DIR}, RESULT
+    {cwd: DIR}, RESULT
 )
 
 run_with_input(INPUT, RESULT) <- process_create(
-    "cat", [], {"input": INPUT}, RESULT
+    "cat", [], {input: INPUT}, RESULT
 )
 ```
 

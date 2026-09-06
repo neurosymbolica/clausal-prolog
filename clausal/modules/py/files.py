@@ -43,6 +43,10 @@ def _require_ground_str(val, pred, arg):
     ``-double_quotes(chars)``.  Routed through ``to_text``, never ``str()``
     (which would hand the library an atom's tuple repr).
 
+    Used for PATHS and for the CONTENTS a file is written from: text is text
+    on both sides of the call, and a source-written ``"hello"`` is an atom in
+    the default mode just as a source-written path is.
+
     *pred* is the registered predicate name/arity (e.g. ``"file_exists/1"``)
     and *arg* the 1-based argument position, used to record a type-mismatch
     note when the value is bound but not text.
@@ -253,8 +257,8 @@ def _write_string_to_file_2(path, contents, trail, k):
     path = _require_ground_str(path, "write_string_to_file/2", 1)
     if path is None:
         return
-    contents = deref(contents)
-    if not expect_type(contents, str, "write_string_to_file/2", arg=2):
+    contents = _require_ground_str(contents, "write_string_to_file/2", 2)
+    if contents is None:
         return
     try:
         pathlib.Path(path).write_text(contents, encoding="utf-8")
@@ -268,8 +272,8 @@ def _append_string_to_file_2(path, contents, trail, k):
     path = _require_ground_str(path, "append_string_to_file/2", 1)
     if path is None:
         return
-    contents = deref(contents)
-    if not expect_type(contents, str, "append_string_to_file/2", arg=2):
+    contents = _require_ground_str(contents, "append_string_to_file/2", 2)
+    if contents is None:
         return
     try:
         with open(path, "a", encoding="utf-8") as f:

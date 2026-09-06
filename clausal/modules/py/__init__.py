@@ -239,6 +239,35 @@ def has_option(mapping, name) -> bool:
     return mint(name) in mapping or name in mapping
 
 
+def text_or_str(val):
+    """The ``str`` a wrapper argument denotes, falling back to ``str(val)``.
+
+    The shape every ``py.*`` wrapper needs at a text position that never
+    promised a type contract — a header value, a CSV cell, an environment
+    value, a URL part, a logger name.  Text (a string or an ATOM, spec §9.4)
+    crosses through :func:`to_text`; anything else keeps the ``str()``
+    rendering those positions have always had.
+
+    The point is that ``str()`` is the FALLBACK and never the coercion: after
+    THE FLIP (2026-09-06-atoms-as-cells-strings) an atom is the arity-0 cell
+    ``("bar",)``, so a bare ``str(val)`` would splice the Python tuple repr
+    ``"('bar',)"`` into a URL, a CSV file or a log line.
+
+    Six modules had grown their own copy of exactly this
+    (``csv._field_text``, ``http._hdr_text``, ``logging._text``,
+    ``process._env_text``/``_arg_text``, ``url._part_text``); they all call
+    here now.  The sibling shape — text or a recorded type-mismatch note and
+    a clean failure — stays per-module (``files._require_ground_str``,
+    ``http._url_text``, ``process._cmd_text``, ``tcp._host_text``), because
+    each names its own predicate and argument position in the note.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    from clausal.logic.variables import deref  # noqa: PLC0415
+    return str(deref(val))
+
+
 def to_bytes(val):
     """Convert text (a string or an ATOM, spec §9.4) or bytes to bytes, else None."""
     if isinstance(val, bytes):

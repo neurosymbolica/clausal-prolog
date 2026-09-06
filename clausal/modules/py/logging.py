@@ -26,7 +26,8 @@ Messages use Clausal's f-string support for interpolation::
 from __future__ import annotations
 
 from clausal.modules.py import (
-    _import_stdlib, ModulePredicate, simple_to_trampoline, to_text,
+    _import_stdlib, ModulePredicate, simple_to_trampoline, text_or_str,
+    to_text,
 )
 
 _pylogging = _import_stdlib("logging")
@@ -53,20 +54,6 @@ _LEVEL_MAP = {
 
 
 
-def _text(val) -> str:
-    """The ``str`` a logging argument denotes -- a name, a path, a format.
-
-    Spec §9.4: text is a string OR an ATOM, and both convert to the same
-    ``str``.  THE FLIP (2026-09-06-atoms-as-cells-strings) made the old
-    ``str(val)`` wrong here: ``str(("stderr",))`` is the tuple repr
-    ``"('stderr',)"``, which silently missed every name comparison below and
-    would have named a log file after a repr.  A non-text term still falls
-    back to ``str`` -- these positions are advisory, not a type contract.
-    """
-    text = to_text(val)
-    return text if text is not None else str(val)
-
-
 def _message_text(val) -> str:
     """The text of a log MESSAGE, which may be any term.
 
@@ -86,7 +73,7 @@ def _resolve_level(level: Any) -> int:
     level = deref(level)
     if isinstance(level, int):
         return level
-    name = _text(level).lower()
+    name = text_or_str(level).lower()
     return _LEVEL_MAP.get(name, _pylogging.NOTSET)
 
 
@@ -96,7 +83,7 @@ def _resolve_logger(logger_val: Any) -> _pylogging.Logger:
     if isinstance(logger_val, _pylogging.Logger):
         return logger_val
     # Treat as a logger name string.
-    return _pylogging.getLogger(_text(logger_val))
+    return _pylogging.getLogger(text_or_str(logger_val))
 
 
 # ── get_logger ────────────────────────────────────────────────────────────────
@@ -112,7 +99,7 @@ def _get_logger_1(logger_out, trail, k):
 def _get_logger_2(name, logger_out, trail, k):
     """get_logger/2: unify Logger with getLogger(Name)."""
     name = deref(name)
-    lg = _pylogging.getLogger(_text(name))
+    lg = _pylogging.getLogger(text_or_str(name))
     if unify(logger_out, lg, trail):
         yield None
 
@@ -229,7 +216,7 @@ def _critical_2(logger, msg, trail, k):
 def _stream_handler_2(stream_name, handler_out, trail, k):
     """stream_handler/2: create a stream_handler for 'stdout' or 'stderr'."""
     stream_name = deref(stream_name)
-    name = _text(stream_name).lower()
+    name = text_or_str(stream_name).lower()
     if name == "stdout":
         h = _pylogging.StreamHandler(_sys.stdout)
     elif name == "stderr":
@@ -243,7 +230,7 @@ def _stream_handler_2(stream_name, handler_out, trail, k):
 def _file_handler_2(path, handler_out, trail, k):
     """file_handler/2: create a file_handler for the given path."""
     path = deref(path)
-    h = _pylogging.FileHandler(_text(path))
+    h = _pylogging.FileHandler(text_or_str(path))
     if unify(handler_out, h, trail):
         yield None
 
@@ -252,7 +239,7 @@ def _set_formatter_2(handler, fmt_str, trail, k):
     """set_formatter/2: set a Formatter on a handler."""
     handler = deref(handler)
     fmt_str = deref(fmt_str)
-    formatter = _pylogging.Formatter(_text(fmt_str))
+    formatter = _pylogging.Formatter(text_or_str(fmt_str))
     handler.setFormatter(formatter)
     yield None
 
@@ -288,13 +275,13 @@ def _basic_config_1(opts, trail, k):
     kwargs = {}
     if isinstance(opts, dict):
         for key, val in opts.items():
-            key = _text(key)
+            key = text_or_str(key)
             if key == "level":
                 kwargs["level"] = _resolve_level(val)
             elif key in ("format", "datefmt", "filename", "filemode"):
-                kwargs[key] = _text(val)
+                kwargs[key] = text_or_str(val)
             elif key == "stream":
-                name = _text(val).lower()
+                name = text_or_str(val).lower()
                 if name == "stdout":
                     kwargs["stream"] = _sys.stdout
                 elif name == "stderr":

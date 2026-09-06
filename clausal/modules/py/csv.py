@@ -29,6 +29,7 @@ from clausal.modules.py import (
     note_mismatch,
     note_rejected_call,
     simple_to_trampoline,
+    text_or_str,
     to_text,
 )
 _csv = _import_stdlib("csv")
@@ -61,16 +62,23 @@ def _field_key(name):
     return mint(name) if type(name) is str else name
 
 
-def _field_text(val) -> str:
-    """The ``str`` a header cell or record value denotes on the way OUT.
+def _require_text(val, pred, arg):
+    """The ``str`` a String or Path argument denotes, or ``None`` (noted).
 
-    Text is a string or an ATOM, and both convert to the same ``str``
-    (spec §9.4) -- including the atom keys ``parse_records/3`` now answers,
-    which ``generate_records/3`` has to write back as plain column names.
+    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and both
+    convert to the same ``str``.  THE FLIP (2026-09-06-atoms-as-cells-strings)
+    made the bare ``expect_type(x, str, ...)`` guards below reject every
+    source-written argument, silently -- and a PATH that went through ``str()``
+    would have opened a file literally named ``('/tmp/x',)``.
+
+    A bound value that is not text keeps this module's existing behaviour --
+    a recorded type-mismatch note and a clean failure, not a raise.
     """
-    v = deref(val)
-    text = to_text(v)
-    return text if text is not None else str(v)
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=arg)   # records the note; always False here
+    return None
 
 
 def _deref_row(row):
@@ -82,8 +90,7 @@ def _deref_row(row):
             raise TypeError("Cannot serialize unbound variable to CSV")
         # Spec §9.4: text is a string or an ATOM; ``str()`` on the arity-0
         # cell would write its Python tuple repr into the file.
-        text = to_text(v)
-        result.append(text if text is not None else str(v))
+        result.append(text_or_str(v))
     return result
 
 
@@ -92,8 +99,8 @@ def _deref_row(row):
 
 def _parse_row_2(string, row, trail, k):
     """parse_row/2: parse a single CSV line into a list of strings."""
-    string = deref(string)
-    if not expect_type(string, str, "parse_row/2", arg=1):
+    string = _require_text(deref(string), "parse_row/2", 1)
+    if string is None:
         return
     reader = _csv.reader(io.StringIO(string))
     try:
@@ -106,8 +113,8 @@ def _parse_row_2(string, row, trail, k):
 
 def _parse_2(string, rows, trail, k):
     """parse/2: parse a multi-line CSV string into a list of rows."""
-    string = deref(string)
-    if not expect_type(string, str, "parse/2", arg=1):
+    string = _require_text(deref(string), "parse/2", 1)
+    if string is None:
         return
     reader = _csv.reader(io.StringIO(string))
     result = [row for row in reader]
@@ -123,8 +130,8 @@ def _parse_records_3(string, headers, records, trail, k):
     get(R, H, V)`` has to reach the wrapper's own records.  The VALUES stay
     strings — CSV does no type coercion.
     """
-    string = deref(string)
-    if not expect_type(string, str, "parse_records/3", arg=1):
+    string = _require_text(deref(string), "parse_records/3", 1)
+    if string is None:
         return
     reader = _csv.DictReader(io.StringIO(string))
     header_list = reader.fieldnames
@@ -180,7 +187,7 @@ def _generate_records_3(headers, records, string, trail, k):
     if not expect_type(records, list, "generate_records/3", arg=2):
         return
     try:
-        header_strs = [_field_text(h) for h in headers]
+        header_strs = [text_or_str(h) for h in headers]
         buf = io.StringIO()
         writer = _csv.DictWriter(buf, fieldnames=header_strs)
         writer.writeheader()
@@ -193,7 +200,7 @@ def _generate_records_3(headers, records, string, trail, k):
                     "where a list of DictTerm records is required (argument 2)",
                 )
                 return
-            row_dict = {_field_text(k): _field_text(v)
+            row_dict = {text_or_str(k): text_or_str(v)
                         for k, v in record.data.items()}
             writer.writerow(row_dict)
         result = buf.getvalue()
@@ -206,8 +213,8 @@ def _generate_records_3(headers, records, string, trail, k):
 
 def _read_file_2(path, rows, trail, k):
     """read_file/2: read and parse a CSV file into list of rows."""
-    path = deref(path)
-    if not expect_type(path, str, "read_file/2", arg=1):
+    path = _require_text(deref(path), "read_file/2", 1)
+    if path is None:
         return
     try:
         with open(path, "r", encoding="utf-8", newline="") as f:
@@ -224,8 +231,8 @@ def _read_records_2(path, records, trail, k):
 
     Records are keyed by the header cells' ATOMS, as ``parse_records/3``.
     """
-    path = deref(path)
-    if not expect_type(path, str, "read_records/2", arg=1):
+    path = _require_text(deref(path), "read_records/2", 1)
+    if path is None:
         return
     try:
         with open(path, "r", encoding="utf-8", newline="") as f:
@@ -242,8 +249,8 @@ def _read_records_2(path, records, trail, k):
 
 def _write_file_2(path, rows, trail, k):
     """write_file/2: serialize rows and write to CSV file."""
-    path, rows = deref(path), deref(rows)
-    if not expect_type(path, str, "write_file/2", arg=1):
+    path, rows = _require_text(deref(path), "write_file/2", 1), deref(rows)
+    if path is None:
         return
     if not expect_type(rows, list, "write_file/2", arg=2):
         return

@@ -59,6 +59,7 @@ from clausal.modules.py import (
     note_mismatch,
     note_rejected_call,
     simple_to_trampoline,
+    to_text,
 )
 _dt = _import_stdlib("datetime")
 
@@ -325,13 +326,20 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
     Parse mode (DateTime unbound, String a string): DateTime =
     datetime.strptime(String, Format).
 
-    Format must be a ground string in both modes.  Note: ``strftime`` accepts a
-    ``date``/``time``/``datetime`` but ``strptime`` always yields a ``datetime``,
-    so a date round-trips to a midnight datetime.
+    Format must be ground TEXT in both modes -- a string or an ATOM, which is
+    the same ``str`` (spec §9.4): a strftime format is a literal handed to a
+    library, so ``'%Y-%m-%d'`` and (in the default ``-double_quotes(atom)``
+    mode) ``"%Y-%m-%d"`` both name it.  So is the String in parse mode.  Note:
+    ``strftime`` accepts a ``date``/``time``/``datetime`` but ``strptime``
+    always yields a ``datetime``, so a date round-trips to a midnight
+    datetime.
     """
     dt_obj, s, fmt = deref(dt_obj), deref(s), deref(fmt)
-    if not expect_type(fmt, str, "datetime_string/3", arg=3):
+    fmt_text = to_text(fmt)
+    if fmt_text is None:
+        expect_type(fmt, str, "datetime_string/3", arg=3)
         return
+    fmt = fmt_text
     if hasattr(dt_obj, 'strftime'):
         try:
             out = dt_obj.strftime(fmt)
@@ -340,7 +348,8 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
             return
         if unify(s, out, trail):
             yield None
-    elif is_var(dt_obj) and isinstance(s, str):
+    elif is_var(dt_obj) and (s_text := to_text(s)) is not None:
+        s = s_text
         try:
             out = _dt.datetime.strptime(s, fmt)
         except (TypeError, ValueError) as exc:
@@ -608,14 +617,15 @@ def _datetime_string_iso_2(dt_obj, s, trail, k):
     """datetime_string_iso/2: bidirectional ISO-8601 datetime.
 
     Forward (DateTime is a ``datetime``): String = DateTime.isoformat().
-    Inverse (DateTime unbound, String a string): DateTime =
-    datetime.fromisoformat(String).
+    Inverse (DateTime unbound, String is TEXT -- a string or an ATOM, spec
+    §9.4): DateTime = datetime.fromisoformat(String).
     """
     dt_obj, s = deref(dt_obj), deref(s)
     if isinstance(dt_obj, _dt.datetime):
         if unify(s, dt_obj.isoformat(), trail):
             yield None
-    elif is_var(dt_obj) and isinstance(s, str):
+    elif is_var(dt_obj) and (s_text := to_text(s)) is not None:
+        s = s_text
         try:
             out = _dt.datetime.fromisoformat(s)
         except (TypeError, ValueError) as exc:
@@ -633,13 +643,15 @@ def _date_string_iso_2(d_obj, s, trail, k):
     """date_string_iso/2: bidirectional ISO-8601 date (YYYY-MM-DD).
 
     Forward (Date is a ``date`` and not a ``datetime``): String = Date.isoformat().
-    Inverse (Date unbound, String a string): Date = date.fromisoformat(String).
+    Inverse (Date unbound, String is TEXT -- a string or an ATOM, spec §9.4):
+    Date = date.fromisoformat(String).
     """
     d_obj, s = deref(d_obj), deref(s)
     if isinstance(d_obj, _dt.date) and not isinstance(d_obj, _dt.datetime):
         if unify(s, d_obj.isoformat(), trail):
             yield None
-    elif is_var(d_obj) and isinstance(s, str):
+    elif is_var(d_obj) and (s_text := to_text(s)) is not None:
+        s = s_text
         try:
             out = _dt.date.fromisoformat(s)
         except (TypeError, ValueError) as exc:

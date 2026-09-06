@@ -18,11 +18,39 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     simple_to_trampoline,
+    to_text,
 )
 _os = _import_stdlib("os")
 _sys = _import_stdlib("sys")
 
 from clausal.logic.variables import Var, deref, is_var, unify
+
+
+# ── Helper ──────────────────────────────────────────────────────────────
+
+
+def _require_text(val, pred, arg):
+    """The ``str`` an env-var name/value or a path denotes, or ``None``.
+
+    Spec §9.4: a wrapper that takes text accepts a string or an ATOM, and both
+    convert to the same ``str``.  An environment variable's NAME is a Python
+    identifier handed to a library, which §9.1 rules text as well: ``HOME``,
+    ``'HOME'`` and (in the default ``-double_quotes(atom)`` mode) ``"HOME"``
+    all denote the same variable.
+
+    THE FLIP (2026-09-06-atoms-as-cells-strings) made the bare
+    ``expect_type(x, str, ...)`` guards below reject every source-written
+    argument, silently -- and had they merely coerced, ``str(("HOME",))``
+    would have set an environment variable literally named ``('HOME',)``.
+
+    A bound value that is not text keeps this module's existing behaviour --
+    a recorded type-mismatch note and a clean failure, not a raise.
+    """
+    text = to_text(val)
+    if text is not None:
+        return text
+    expect_type(val, str, pred, arg=arg)   # records the note; always False here
+    return None
 
 
 # ── Predicates ──────────────────────────────────────────────────────────
@@ -42,7 +70,8 @@ def _environment_variable_2(name, value, trail, k):
                 yield None
             trail.undo(mark)
     else:
-        if not expect_type(name, str, "environment_variable/2", arg=1):
+        name = _require_text(name, "environment_variable/2", 1)
+        if name is None:
             return
         env_value = _os.environ.get(name)
         if env_value is None:
@@ -56,9 +85,9 @@ def _set_environment_variable_2(name, value, trail, k):
     name, value = deref(name), deref(value)
     if is_var(name) or is_var(value):
         return
-    if not expect_type(name, str, "set_environment_variable/2", arg=1):
-        return
-    if not expect_type(value, str, "set_environment_variable/2", arg=2):
+    name = _require_text(name, "set_environment_variable/2", 1)
+    value = _require_text(value, "set_environment_variable/2", 2)
+    if name is None or value is None:
         return
     _os.environ[name] = value
     yield None
@@ -66,8 +95,8 @@ def _set_environment_variable_2(name, value, trail, k):
 
 def _unset_environment_variable_1(name, trail, k):
     """unset_environment_variable/1: remove an environment variable."""
-    name = deref(name)
-    if not expect_type(name, str, "unset_environment_variable/1", arg=1):
+    name = _require_text(deref(name), "unset_environment_variable/1", 1)
+    if name is None:
         return
     if name not in _os.environ:
         return
@@ -84,8 +113,8 @@ def _working_directory_1(path, trail, k):
 
 def _change_directory_1(path, trail, k):
     """change_directory/1: change the current working directory."""
-    path = deref(path)
-    if not expect_type(path, str, "change_directory/1", arg=1):
+    path = _require_text(deref(path), "change_directory/1", 1)
+    if path is None:
         return
     try:
         _os.chdir(path)
