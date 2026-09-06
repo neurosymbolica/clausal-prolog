@@ -922,7 +922,7 @@ Replace `test_repr_probe_plan0_str` in `tests/test_atoms_api.py` with `assert mi
   - `head_match.py:797` gate → `if _term_is_atom(resolved):` (replace the literal-shape gate from Task 9).
   - `CLAUSAL_BYTECODE_TAG = 9` with a comment line `8 -> 9 (atoms-as-cells Stage B): atom Constants are ("bar",) cells; a stale .pyc binds foo = 'foo', a STRING`.
 
-- [ ] **B3 — `str` demotion (Python):**
+- [ ] **B3 — `str` demotion (Python):** Binding (spec §14 item 8): introduce no NEW `type(x) is str` / `isinstance(x, str)` gate at any site that also accepts a `SegString` — route through the existing walk/`normalize_seg_input` convention, so a future memory-mapped string representation slots in the way `SegString` does.
   - `type_checks.py`: `_check_type` `("string","str")` unchanged; `"atom"` → `is_atom_value` (now excludes `str`); `must_be`/`can_be` Type arg: delete the `isinstance(type_val, str)` arm (a string Type → `type_error(atom)`); `callable_/1`: delete the `isinstance(x_val, str)` branch and `_str_is_callable`; `atomic/1`: remove `str` from the primitives tuple (a string is a list).
   - `chars._atom_to_str`: delete the ground-`SegString` arm (a string is not an atom; ISO `type_error(atom)`).
   - `higher_order._resolve_named_goal` :123–126, `solve._term_to_goal` :211–219, `cells.resolve_qualified_goal_cell` :453–454: delete the `type(x) is str` wraps; in `_resolve_named_goal` a `str` goal → `raise LogicException(type_error("callable", goal_val, "call/N"))`; in `_term_to_goal` likewise `"solve/1"`.

@@ -688,6 +688,23 @@ following are pinned as tests in Plan 1:
 7. String first-argument indexing (§6.9) if a string-keyed fact table turns
    out to matter after migration: a "list of chars → str key" coalesce is
    possible but costs a walk per lookup.
+8. **Memory-mapped strings** (operator, 2026-09-06, from a Scryer
+   comparison): the string representation must be able to back a string
+   with a memory-mapped file, as Scryer's partial strings can. R-S2 makes
+   this a representation choice, not a term-model one. The extension
+   point is the one `SegString` already uses — a string-like object that
+   participates through `__unify__`/`__walk__`/the sequence protocol rather
+   than by being a `str`; a `MappedString(mmap, encoding, start, end)` view
+   that slices by offset without copying and decodes chars on demand is a
+   third such representation. Python's `mmap` is a bytes-like buffer:
+   for the codes model (`b"…"`) a mapped file is a code list once the
+   bytes↔list arms accept any buffer object (`PyObject_CheckBuffer`, not
+   `PyBytes_Check`); for the chars model the view decodes (byte offset =
+   char offset for ASCII/Latin-1, a UTF-8 index otherwise). Binding on
+   this plan: Task 11 introduces no new `type(x) is str` gate where a
+   `SegString` is also accepted — every such site keeps routing through
+   the walk/`normalize_seg_input` convention so a third string type slots
+   in identically. The view itself is a later plan.
 
 ## 15. Risks
 
