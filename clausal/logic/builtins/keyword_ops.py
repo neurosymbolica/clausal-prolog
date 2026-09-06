@@ -4,7 +4,9 @@ unbound_keys/2, signature/3."""
 from __future__ import annotations
 
 from clausal.logic.atoms import is_atom, mint, spelling
-from clausal.logic.exceptions import LogicException, type_error
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, type_error,
+)
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names, term_field_dict
 from clausal.terms import KWTerm, DictTerm
@@ -28,10 +30,18 @@ def _field_keys(mapping, context: str):
     override read as "no such variation" instead of as the ill-typed call it
     is.  ``signature/3`` in this module already raises for the same mistake
     in its own name position.
+
+    An UNBOUND key is the instantiation fault, not the type fault, and gets
+    ``instantiation_error`` — the same split ``signature/3`` makes between
+    its ``is_var`` guard and its ``is_atom`` guard (Task 12 fix round 1).
+    ``type_error(atom, _G123)`` named a variable as the wrong SORT of term
+    when the term is right and only the binding is missing.
     """
     out = {}
     for key, value in mapping.items():
         key = deref(key)
+        if is_var(key):
+            raise LogicException(instantiation_error(context))
         if is_atom(key):
             key = spelling(key)
         elif not isinstance(key, str):

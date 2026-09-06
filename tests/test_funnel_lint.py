@@ -1,7 +1,7 @@
 """Phase 1 funnel guard: no NEW direct-probe patterns outside the funnel.
 
 Tasks 1-3 (see ``docs/superpowers/plans/2026-09-03-phase1-funnel.md``) filled
-the term-probe accessor funnel (``is_atom``, ``functor_arity``,
+the term-probe accessor funnel (``is_zero_field_class``, ``functor_arity``,
 ``term_field_names_of_class``, ``term_field_dict``, ...) in
 ``clausal/logic/predicate.py`` / ``clausal/logic/builtins/_helpers.py`` and
 migrated the safe call sites onto it.  This test *freezes that state*: it
@@ -10,7 +10,7 @@ fails if either appears anywhere that isn't:
 
   1. one of the two funnel modules themselves (they ARE the canonical
      definitions and are allowed to contain the raw idiom once, at the
-     ``is_atom``/``_functor_name`` implementation sites), or
+     ``is_zero_field_class``/``_functor_name`` implementation sites), or
   2. a file/line-range on the ALLOWLIST below, which transcribes the plan's
      Global Constraints exclusion list verbatim (source: "EXCLUSION LIST —
      do not touch these" in
@@ -24,7 +24,10 @@ The two patterns:
 
   * ``atom_bypass``  — ``isinstance(X, PredicateMeta) and not X._fields``
     (the hand-rolled "is this a zero-arity atom class" check that
-    ``is_atom`` replaces; also matches the
+    ``predicate.is_zero_field_class`` replaces — Task 12 of the
+    atoms-as-cells/strings plan renamed it out of the ``is_atom`` stem,
+    which now means the TERM test in ``clausal.logic.atoms``; also matches
+    the
     ``isinstance(X, type) and isinstance(X, PredicateMeta) and not X._fields``
     three-clause variant).
   * ``functor_fallback`` — ``getattr(X, "functor", None) or type(X).__name__``
@@ -478,7 +481,7 @@ _BAD_ATOM_BYPASS_SNIPPET = '''\
 from clausal.logic.atoms import char_atom, mint
 from clausal.logic.predicate import PredicateMeta
 
-def _sneaky_is_atom(x):
+def _sneaky_zero_field_class(x):
     return isinstance(x, PredicateMeta) and not x._fields
 '''
 
@@ -491,7 +494,7 @@ _CLEAN_SNIPPET = '''\
 from clausal.logic.predicate import is_zero_field_class
 from clausal.logic.builtins._helpers import functor_arity
 
-def _proper_is_atom(x):
+def _proper_zero_field_class(x):
     return is_zero_field_class(x)
 
 def _proper_functor(term):
@@ -533,8 +536,9 @@ def test_lint_does_not_flag_funneled_or_unrelated_code(tmp_path):
 
 
 def test_lint_ignores_bypass_pattern_inside_a_funnel_module(tmp_path):
-    """The funnel modules' own is_atom/_functor_name implementations are the
-    canonical *definition* sites for the raw idiom, not a bypass of it."""
+    """The funnel modules' own is_zero_field_class/_functor_name
+    implementations are the canonical *definition* sites for the raw idiom,
+    not a bypass of it."""
     fake_module_dir = tmp_path / "clausal" / "logic"
     fake_module_dir.mkdir(parents=True)
     (fake_module_dir / "predicate.py").write_text(_BAD_ATOM_BYPASS_SNIPPET, encoding="utf-8")

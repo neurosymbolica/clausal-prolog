@@ -10,11 +10,13 @@ Covers the four new accessors added to close gaps in the term-probe funnel:
   - ``predicate.term_field_values`` / ``predicate.term_field_dict`` — the
     reconstruct-pattern helpers (values tuple / name->value dict).
 
-Also regression-covers the ``is_atom`` adoption at the four hand-rolled
-``isinstance(x, PredicateMeta) and not x._fields`` sites inside
-``_helpers.py`` (``_functor_name_py``, ``_arity_py``, ``_is_ground_py``,
-``_standard_order_key``) — those sites must keep behaving exactly as before
-now that they route through ``is_atom``.
+Also regression-covers the ``predicate.is_zero_field_class`` adoption at the
+four hand-rolled ``isinstance(x, PredicateMeta) and not x._fields`` sites
+inside ``_helpers.py`` (``_functor_name_py``, ``_arity_py``,
+``_is_ground_py``, ``_standard_order_key``) — those sites must keep behaving
+exactly as before now that they route through it.  (Task 12 renamed that
+helper from ``predicate.is_atom``; the plain stem now means the TERM test,
+``clausal.logic.atoms.is_atom``.)
 
 Phase 2 bridge Task 1 (see ``docs/superpowers/plans/2026-09-03-phase2-bridge.md``)
 adds two more sections at the bottom of this file:
@@ -43,7 +45,7 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.predicate import (
     PredicateMeta,
-    is_atom,
+    is_zero_field_class,
     is_term_instance,
     make_predicate,
     term_field_dict,
@@ -236,19 +238,23 @@ class TestFunctorArity:
         assert functor_arity(term) == (_functor_name(term), _arity(term))
 
 
-# ── is_atom adoption regression (the four migrated _helpers.py sites) ────────
+# ── is_zero_field_class adoption regression (4 migrated _helpers.py sites) ───
 
 
-class TestIsAtomAdoptionRegression:
+class TestIsZeroFieldClassAdoptionRegression:
     """The four hand-rolled ``isinstance(x, PredicateMeta) and not x._fields``
-    sites in ``_helpers.py`` now route through ``is_atom``. Behavior at each
-    call site must be unchanged.
+    sites in ``_helpers.py`` now route through the funnel's zero-field-CLASS
+    test. Behavior at each call site must be unchanged.
+
+    Task 12 renamed that test ``predicate.is_atom`` -> ``is_zero_field_class``
+    (``atoms.is_atom`` is the TERM test and owns the plain stem now); the
+    sites and their answers are the same ones.
     """
 
     def test_functor_name_of_atom_class_is_itself(self):
         # nv — _functor_name_py line ~54
         assert _functor_name(foo_atom) is foo_atom
-        assert is_atom(foo_atom)
+        assert is_zero_field_class(foo_atom)
 
     def test_arity_of_atom_class_is_zero(self):
         # nv — _arity_py line ~79
@@ -256,15 +262,17 @@ class TestIsAtomAdoptionRegression:
 
     def test_is_ground_of_atom_class_is_true(self):
         # nv — _is_ground_py line ~172 (checked isinstance(term, type) AND
-        # isinstance(term, PredicateMeta) AND not term._fields; is_atom
-        # covers the same shape since PredicateMeta instances are classes)
+        # isinstance(term, PredicateMeta) AND not term._fields;
+        # is_zero_field_class covers the same shape since PredicateMeta
+        # instances are classes)
         assert _is_ground(foo_atom) is True
 
     def test_is_ground_of_nonatom_class_is_not_short_circuited_true(self):
         # nv — a PredicateMeta class WITH fields is not an atom, and is not
         # itself ground-checkable the same way (it's a class, not a term
-        # instance); confirms the is_atom guard doesn't over-match.
-        assert is_atom(bar) is False
+        # instance); confirms the is_zero_field_class guard doesn't
+        # over-match.
+        assert is_zero_field_class(bar) is False
 
     def test_standard_order_key_of_atom_class(self):
         # nv — _standard_order_key line ~368.  P3-1 Task 4 (standard-order

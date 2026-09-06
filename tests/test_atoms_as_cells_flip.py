@@ -628,13 +628,114 @@ def test_vary_and_extend_refuse_a_malformed_field_key(builtins_mod):
         assert f"{goal_name}/3" in exc.value.term.args[1]
 
 
+def test_vary_and_extend_report_an_unbound_field_key_as_uninstantiated(
+    builtins_mod,
+):
+    """Fix round 1: an UNBOUND key is the instantiation fault, not the type
+    fault.  ``type_error(atom, _G12)`` read as "a variable is the wrong SORT
+    of term here" when the term is right and only the binding is missing —
+    the same split ``listing/1`` makes for an unfinished indicator."""
+    for goal_name in ("vary", "extend"):
+        with pytest.raises(LogicException) as exc:
+            list(solve((goal_name, {Var(): 2}, mint("t12_term"), Var()),
+                       builtins_mod))
+        assert _formal(exc) == mint("instantiation_error")
+        assert exc.value.term.args[1] == f"{goal_name}/3"
+
+
+_PREDICATE_MODULE = "clausal.logic.predicate"
+
+
+def _offender_name(offender: str) -> str:
+    """The basename out of an ``_class_test_offenders`` entry."""
+    import pathlib
+    return pathlib.Path(offender.split(":")[0]).name
+
+
+def _dotted_package(path, repo_root):
+    """The dotted package *path*'s relative imports resolve against.
+
+    A module's relative imports are rooted at its PACKAGE, so the module name
+    is dropped — which is also right for ``__init__.py``, since that file IS
+    its package and ``from . import x`` there means the same directory.
+    """
+    parts = path.resolve().relative_to(repo_root.resolve()).with_suffix("").parts
+    return parts[:-1]
+
+
+def _import_from_module(node, package_parts):
+    """The absolute dotted module an ``ImportFrom`` names, relative or not."""
+    if not node.level:
+        return node.module or ""
+    # ``from .x import`` (level 1) resolves against the package itself;
+    # each extra dot drops one more trailing component.
+    base = list(package_parts[: len(package_parts) - (node.level - 1)])
+    if node.module:
+        base += node.module.split(".")
+    return ".".join(base)
+
+
+def _class_test_offenders(root, repo_root, skip):
+    """Every place under *root* that reaches the CLASS test as ``is_atom``.
+
+    Three spellings are covered, because all three would silently resolve
+    through the deprecated alias:
+
+    * ``from clausal.logic.predicate import is_atom`` (absolute),
+    * ``from ..predicate import is_atom`` (relative — resolved here, since
+      ``node.module`` is only the tail for a relative import), and
+    * ``predicate.is_atom(...)`` / ``P.is_atom`` attribute access on any name
+      bound to the predicate MODULE in that file.
+    """
+    import ast
+
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        if path.resolve() in skip:
+            continue
+        package_parts = _dotted_package(path, repo_root)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        module_aliases = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = _import_from_module(node, package_parts)
+                for alias in node.names:
+                    # ``from clausal.logic import predicate`` binds the MODULE.
+                    if (f"{module}.{alias.name}" == _PREDICATE_MODULE
+                            and not node.level):
+                        module_aliases.add(alias.asname or alias.name)
+                    if module == _PREDICATE_MODULE and alias.name == "is_atom":
+                        offenders.append(f"{path}:{node.lineno}: import")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name != _PREDICATE_MODULE:
+                        continue
+                    # ``import clausal.logic.predicate`` (no asname) binds
+                    # ``clausal``; only the aliased form binds a usable name.
+                    if alias.asname:
+                        module_aliases.add(alias.asname)
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Attribute) and node.attr == "is_atom"
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id in module_aliases):
+                offenders.append(f"{path}:{node.lineno}: attribute")
+    return offenders
+
+
 def test_the_zero_field_class_test_is_named_is_zero_field_class():
     """``predicate.is_atom`` was the zero-field-CLASS test while
     ``atoms.is_atom`` is the TERM test — one stem, two questions.  The class
     test is ``is_zero_field_class`` now; ``is_atom`` survives in
-    ``predicate.py`` only as a deprecated alias for the C symbol, and no
-    Python module calls the class test under that name any more."""
-    import ast
+    ``predicate.py`` only as a deprecated alias for the C symbol.
+
+    The guard below walks the AST of every ``*.py`` under BOTH ``clausal/``
+    and ``tests/`` (fix round 1: scanning only the package let
+    ``tests/test_funnel_accessors.py`` keep importing the old name) and fails
+    on any of the three ways the class test can be reached under that name:
+    an absolute import, a relative one, or attribute access on a name bound
+    to the predicate module.  Two files are exempt and named explicitly —
+    ``predicate.py``, which DEFINES the alias, and this file, which must
+    mention it to assert it still exists."""
     import pathlib
 
     from clausal.logic import predicate
@@ -648,18 +749,43 @@ def test_the_zero_field_class_test_is_named_is_zero_field_class():
     assert term_is_atom(mint("t12_zero"))
 
     definition = pathlib.Path(predicate.__file__).resolve()
-    root = definition.parent.parent
-    offenders = []
-    for path in root.rglob("*.py"):
-        if path.resolve() == definition:
-            continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom):
-                continue
-            if (node.module or "").split(".")[-2:] != ["logic", "predicate"]:
-                continue
-            for alias in node.names:
-                if alias.name == "is_atom":
-                    offenders.append(f"{path}:{node.lineno}")
+    package_root = definition.parent.parent          # clausal/
+    repo_root = package_root.parent
+    tests_root = repo_root / "tests"
+    assert tests_root.is_dir(), tests_root           # the root must exist
+    skip = {definition, pathlib.Path(__file__).resolve()}
+
+    offenders = (_class_test_offenders(package_root, repo_root, skip)
+                 + _class_test_offenders(tests_root, repo_root, skip))
     assert offenders == []
+
+
+def test_the_class_test_pin_actually_bites(tmp_path):
+    """The guard above is only worth having if it catches all three spellings
+    — fix round 1 found it silently passing on a live offender it could not
+    see.  Feed it each spelling and check it reports it."""
+    pkg = tmp_path / "clausal" / "logic"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "absolute.py").write_text(
+        "from clausal.logic.predicate import is_atom\n", encoding="utf-8")
+    (pkg / "relative.py").write_text(
+        "from .predicate import is_atom\n", encoding="utf-8")
+    (pkg / "relative_up.py").write_text(
+        "from ..logic.predicate import is_atom\n", encoding="utf-8")
+    (pkg / "attribute.py").write_text(
+        "from clausal.logic import predicate\n"
+        "def f(x):\n"
+        "    return predicate.is_atom(x)\n", encoding="utf-8")
+    (pkg / "clean.py").write_text(
+        "from clausal.logic.predicate import is_zero_field_class\n"
+        "from clausal.logic.atoms import is_atom\n"
+        "def f(x):\n"
+        "    return is_atom(x) or is_zero_field_class(x)\n", encoding="utf-8")
+
+    found = _class_test_offenders(tmp_path / "clausal", tmp_path, skip=set())
+    assert {_offender_name(f) for f in found} == {
+        "absolute.py", "relative.py", "relative_up.py", "attribute.py",
+    }
+    # ...and the clean file, which uses BOTH names correctly, is not reported.
+    assert "clean.py" not in {_offender_name(f) for f in found}
