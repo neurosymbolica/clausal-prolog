@@ -68,10 +68,13 @@ call_unify(PyObject *t1, PyObject *t2, PyObject *trail)
  * Twins of ``clausal.logic.atoms.char_atom`` / ``is_char_atom`` /
  * ``spelling`` — keep the three copies in lockstep.
  *
- * Plan 0: a char IS its 1-char str.
- * Stage B: a char is the arity-0 cell ``(ch,)`` — char_atom_obj builds the
- * 1-tuple, is_char_atom_obj checks the cell shape, char_spelling_obj
- * returns ``PyTuple_GET_ITEM(e, 0)``.
+ * Plan 0: a char IS its 1-char str — but ``is_char_atom_obj`` and
+ * ``char_spelling_obj`` ALSO accept the arity-0 cell ``(ch,)``, mirroring
+ * the Stage A dual acceptance in ``clausal.logic.atoms.is_char_atom`` /
+ * ``spelling``.  The twins must agree on ``("a",)``: the Python
+ * ``maybe_promote_to_str`` promotes a list of cell chars, so a str-only C
+ * test would make the C and Python paths disagree on the same input.
+ * Stage B: char_atom_obj builds the 1-tuple and the str arms below go away.
  */
 
 /* Build the char whose spelling is the 1-char str *ch1*. New reference. */
@@ -81,17 +84,26 @@ char_atom_obj(PyObject *ch1)
     return Py_NewRef(ch1);
 }
 
-/* True iff *e* is a char. */
+/* True iff *e* is a char — a 1-char str, or the arity-0 cell of one. */
 static inline int
 is_char_atom_obj(PyObject *e)
 {
-    return PyUnicode_Check(e) && PyUnicode_GET_LENGTH(e) == 1;
+    if (PyUnicode_Check(e))
+        return PyUnicode_GET_LENGTH(e) == 1;
+    return PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1
+        && PyUnicode_Check(PyTuple_GET_ITEM(e, 0))
+        && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(e, 0)) == 1;
 }
 
-/* The spelling of the char *e* — BORROWED reference, valid while *e* is. */
+/* The spelling of the char *e* — BORROWED reference, valid while *e* is.
+ * The size test keeps this total: a non-cell tuple is returned unchanged
+ * rather than indexed out of range (``seq_join_chars``'s callers pass
+ * trusted-but-unvalidated lists). */
 static inline PyObject *
 char_spelling_obj(PyObject *e)
 {
+    if (PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1)
+        return PyTuple_GET_ITEM(e, 0);
     return e;
 }
 

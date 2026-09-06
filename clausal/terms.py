@@ -377,6 +377,9 @@ def _apply_seglist_split(seglist, target_list, split, trail):
     success (bindings left on *trail*), False otherwise. Mirrors the inner
     loop of :func:`_seglist_unify_gen`."""
     from .logic.variables import unify
+    # A ``str`` target is a char list: its ELEMENTS are chars, its SLICES
+    # stay str (R-S2). Twin of ``_seg_helpers.seq_getitem``.
+    target_is_str = type(target_list) is str
     pos = 0
     si = 0
     for seg in seglist.segments:
@@ -389,7 +392,9 @@ def _apply_seglist_split(seglist, target_list, split, trail):
             for elem in seg.elements:
                 if pos >= len(target_list):
                     return False
-                if not unify(elem, target_list[pos], trail):
+                at = (char_atom(target_list[pos]) if target_is_str
+                      else target_list[pos])
+                if not unify(elem, at, trail):
                     return False
                 pos += 1
     return True
@@ -508,9 +513,22 @@ class SegList:
 
     # ── Walk / normalisation ──────────────────────────────────────────────────
 
-    def __walk__(self):
-        """Called by C do_walk. Normalise: collapse bound VarSegs, merge adjacent
-        ConcreteSegs. Returns a plain Python list when fully ground."""
+    def _walk_raw(self):
+        """``__walk__`` WITHOUT the F018 str promotion: a ground SegList
+        normalises to its plain element ``list``, a non-ground one to a
+        ``SegList`` (or ``[]``).
+
+        Every arm of this class that needs the term's own ELEMENTS —
+        ``__unify__``, ``__eq__``, ``__contains__``, ``__getitem__``,
+        ``to_list``, ``_concrete_prefix`` — uses this rather than reversing
+        ``__walk__``'s promotion.  While two char representations coexist
+        (Stage A of 2026-09-06-atoms-as-cells-strings: a plain 1-char ``str``
+        and the arity-0 cell ``("a",)`` are both chars), the promoted ``str``
+        is a LOSSY encoding of the elements — re-splitting ``"ab"`` can only
+        yield one of the two shapes, so a SegList of cell chars stopped being
+        equal to, and unifiable with, its own elements.  Reading the elements
+        directly is exact in both stages.
+        """
         from .logic.variables import walk
         new_segs: list = []
         for seg in self._segments:
@@ -523,8 +541,8 @@ class SegList:
             else:  # VarSeg
                 v = walk(seg.var)
                 if isinstance(v, str):
-                    # VarSeg bound to a substring — expand to chars for SegList
-                    chars = list(v)
+                    # VarSeg bound to a substring — expand to CHARS for SegList
+                    chars = [char_atom(c) for c in v]
                     if new_segs and isinstance(new_segs[-1], ConcreteSeg):
                         new_segs[-1] = ConcreteSeg(new_segs[-1].elements + chars)
                     else:
@@ -538,8 +556,11 @@ class SegList:
                         if v:
                             new_segs.append(ConcreteSeg(v))
                 elif isinstance(v, SegList):
-                    # Inline nested SegList's segments
-                    walked_inner = v.__walk__()
+                    # Inline nested SegList's segments. ``_walk_raw`` (not
+                    # ``__walk__``): a nested ground SegList of chars would
+                    # otherwise arrive PROMOTED to a str and fall into the
+                    # ``._segments`` branch below, which a str does not have.
+                    walked_inner = v._walk_raw()
                     if isinstance(walked_inner, list):
                         if new_segs and isinstance(new_segs[-1], ConcreteSeg):
                             new_segs[-1] = ConcreteSeg(new_segs[-1].elements + walked_inner)
@@ -572,14 +593,12 @@ class SegList:
                         )
                     new_segs.append(VarSeg(v))
 
-        # If no VarSegs remain, return a plain Python list (promoted to
-        # str when every element is a 1-char str — F018, Liskov rule).
+        # If no VarSegs remain, return a plain Python list of the elements.
         if all(isinstance(s, ConcreteSeg) for s in new_segs):
             result = []
             for s in new_segs:
                 result.extend(s.elements)
-            from .logic.runtime._seg_helpers import maybe_promote_to_str
-            return maybe_promote_to_str(result)
+            return result
 
         # Clean up empty ConcreteSegs
         new_segs = [s for s in new_segs
@@ -587,6 +606,22 @@ class SegList:
         if not new_segs:
             return []
         return SegList(new_segs)
+
+    def __walk__(self):
+        """Called by C do_walk. Normalise: collapse bound VarSegs, merge
+        adjacent ConcreteSegs. Returns a plain Python list when fully ground
+        — promoted to a ``str`` when every element is a CHAR (F018, the
+        Liskov "strings-as-lists" rule).
+
+        This is the OUTWARD-facing form. Code inside this class that needs
+        the elements themselves uses :meth:`_walk_raw`; see its docstring for
+        why reversing the promotion is not exact during Stage A.
+        """
+        w = self._walk_raw()
+        if isinstance(w, list):
+            from .logic.runtime._seg_helpers import maybe_promote_to_str
+            return maybe_promote_to_str(w)
+        return w
 
     def is_ground(self) -> bool:
         """True iff the term contains no unbound Var.
@@ -601,16 +636,13 @@ class SegList:
     def to_list(self) -> list:
         """Walk and flatten. Raises ``TypeError`` if not fully ground.
 
-        Under the F018 Liskov rule, a ground SegList whose elements are
-        all 1-char strs walks to a ``str`` — we convert back to a plain
-        list-of-chars here to honour the ``to_list`` contract.
+        Reads the elements via :meth:`_walk_raw`, so the F018 str promotion
+        never has to be reversed: the elements come back exactly as the
+        SegList held them.
         """
-        w = self.__walk__()
+        w = self._walk_raw()
         if isinstance(w, list):
             return w
-        if isinstance(w, str):
-            # Promoted SegList — convert back to list-of-chars.
-            return list(w)
         raise TypeError(
             f"SegList is not ground: {w!r}"
         )
@@ -665,20 +697,19 @@ class SegList:
             # consistent.
             return self.__unify__(list(other), trail)
         if isinstance(other, (list, str)):
-            walked = self.__walk__()
-            if isinstance(walked, (list, str)):
+            walked = self._walk_raw()
+            if isinstance(walked, list):
                 # No unbound *VarSeg* remains, but ConcreteSeg *element* Vars
-                # can still be present (``__walk__`` returns a plain list as
+                # can still be present (``_walk_raw`` returns a plain list as
                 # soon as the holes are filled). Comparing with ``==`` would
                 # treat those element Vars by identity and drop satisfiable
                 # bindings (A01-F006), so delegate to real (Var-aware,
-                # trail-restoring) unification. Under the F018 Liskov rule
-                # ``walked`` may be a promoted ``str``; normalise both sides
-                # to char-lists first.
-                if isinstance(walked, str):
-                    walked = list(walked)
+                # trail-restoring) unification. ``_walk_raw`` (not
+                # ``__walk__``) hands back the SegList's OWN elements, so the
+                # F018 promotion never has to be undone; only the ``other``
+                # side needs splitting, into CHARS.
                 if isinstance(other, str):
-                    other = list(other)
+                    other = [char_atom(c) for c in other]
                 return unify(walked, other, trail)
             # Non-ground — drive the cached split enumerator one step.
             # String targets pass through directly (list/str slicing both
@@ -719,12 +750,9 @@ class SegList:
         order; ``has_var_seg`` is True iff at least one VarSeg remains
         unbound after walking.
         """
-        w = self.__walk__()
+        w = self._walk_raw()
         if isinstance(w, list):
             return w, False
-        if isinstance(w, str):
-            # F018 promoted form — surface as list-of-chars.
-            return list(w), False
         elements: list = []
         has_var = False
         for seg in w._segments:
@@ -752,12 +780,12 @@ class SegList:
         return iter(elements)
 
     def __contains__(self, item) -> bool:
-        w = self.__walk__()
+        # ``_walk_raw``: membership is over the SegList's OWN elements, so a
+        # SegList of cell chars answers True for ``("a",)`` rather than for
+        # the raw ``"a"`` the F018 promotion would have decoded to.
+        w = self._walk_raw()
         if isinstance(w, list):
             return item in w
-        if isinstance(w, str):
-            # F018 promoted form — list-of-chars membership test.
-            return isinstance(item, str) and len(item) == 1 and item in w
         # Non-ground: True if the item is in any ConcreteSeg; otherwise
         # *also* True conservatively when an unbound VarSeg remains
         # (it could be bound to a list containing the item). Only
@@ -780,12 +808,9 @@ class SegList:
         # index falls within the concrete prefix we can return it; otherwise
         # raise PartialTermError so the caller can distinguish "known
         # absent" from "unknown until bound".
-        w = self.__walk__()
+        # ``_walk_raw``: indexing yields the element the SegList holds.
+        w = self._walk_raw()
         if isinstance(w, list):
-            return w[index]
-        if isinstance(w, str):
-            # F018 promoted form — index as list-of-chars (each char is
-            # a 1-char str).
             return w[index]
         elements: list = []
         for seg in w._segments:
@@ -809,67 +834,63 @@ class SegList:
                     f"VarSeg; only the concrete prefix (indices "
                     f"0..{len(elements) - 1}) is knowable. SegList={self!r}"
                 )
-        # All concrete — but __walk__ would have returned a list, so this
+        # All concrete — but _walk_raw would have returned a list, so this
         # branch is mostly unreachable. Fall through to normal indexing.
         return elements[index]
 
     def __add__(self, other):
         """Lazy concatenation — returns a new SegList.
 
-        F020 fix: ``str`` is accepted as a list-of-1-char-strs tail under
+        F020 fix: ``str`` is accepted as a char-list tail under
         the Liskov "strings-as-lists" rule. ``SegList(['a','b']) + 'cd'``
         produces ``SegList(['a','b','c','d'])`` shape.
         """
         if isinstance(other, list):
             return SegList(self._segments + [ConcreteSeg(other)])
         if isinstance(other, str):
-            # F020: Liskov — str is a list of chars.
-            return SegList(self._segments + [ConcreteSeg(list(other))])
+            # F020: Liskov — str is a list of CHARS.
+            return SegList(
+                self._segments + [ConcreteSeg([char_atom(c) for c in other])])
         if isinstance(other, SegList):
             return SegList(self._segments + other._segments)
         return NotImplemented
 
     def __radd__(self, other):
-        """F020 fix: accept ``str`` as a list-of-1-char-strs head."""
+        """F020 fix: accept ``str`` as a char-list head."""
         if isinstance(other, list):
             return SegList([ConcreteSeg(other)] + self._segments)
         if isinstance(other, str):
-            return SegList([ConcreteSeg(list(other))] + self._segments)
+            return SegList(
+                [ConcreteSeg([char_atom(c) for c in other])] + self._segments)
         return NotImplemented
 
     def __eq__(self, other):
         if isinstance(other, SegList):
             return self._segments == other._segments
         if isinstance(other, list):
-            w = self.__walk__()
+            # ``_walk_raw``: compare the SegList's OWN elements. Going via
+            # ``__walk__`` would compare a decoding of the F018 promotion,
+            # which under Stage A cannot reproduce a cell char.
+            w = self._walk_raw()
             if isinstance(w, list):
                 return w == other
-            if isinstance(w, str):
-                # F018 promoted form — list-of-chars equivalence.
-                return list(w) == other
             return False
         if isinstance(other, str):
             # Symmetric with SegString — str unifies with char-list at runtime,
-            # so equality should hold when the SegList walks to a 1-char-str list.
-            w = self.__walk__()
-            if isinstance(w, str):
-                # F018 promoted form — compare strings directly.
-                return w == other
-            if isinstance(w, list) and all(
-                isinstance(c, str) and len(c) == 1 for c in w
-            ):
-                return "".join(w) == other
+            # so equality should hold when the SegList walks to a char list.
+            # Compared by SPELLING, so both char shapes answer alike.
+            w = self._walk_raw()
+            if isinstance(w, list) and all(is_char_atom(c) for c in w):
+                return "".join(spelling(c) for c in w) == other
             return False
         if isinstance(other, SegString):
             # Walk both and compare under the strings-as-lists contract.
-            w_self = self.__walk__()
+            w_self = self._walk_raw()
             w_other = other.__walk__()
-            if isinstance(w_self, str) and isinstance(w_other, str):
-                return w_self == w_other
             if isinstance(w_self, list) and isinstance(w_other, str):
                 return (
-                    all(isinstance(c, str) and len(c) == 1 for c in w_self)
-                    and "".join(w_self) == w_other
+                    all(is_char_atom(c) for c in w_self)
+                    and "".join(spelling(c) for c in w_self) == w_other
                 )
             # Both non-ground (or mixed walks) — fall back to NotImplemented so
             # Python can try the right-hand side's __eq__.
@@ -910,6 +931,9 @@ def _seglist_unify_gen(seglist, target_list, trail):
     n = len(target_list)
     if n < min_len:
         return
+    # A ``str`` target is a char list: its ELEMENTS are chars, its SLICES
+    # stay str (R-S2). Twin of ``_seg_helpers.seq_getitem``.
+    target_is_str = type(target_list) is str
     n_stars = sum(1 for s in seglist.segments if isinstance(s, VarSeg))
     remainder = n - min_len
     for split in _multi_star_splits(n_stars, remainder):
@@ -927,7 +951,9 @@ def _seglist_unify_gen(seglist, target_list, trail):
                     if pos >= len(target_list):
                         ok = False
                         break
-                    ok = ok and unify(elem, target_list[pos], trail)
+                    at = (char_atom(target_list[pos]) if target_is_str
+                          else target_list[pos])
+                    ok = ok and unify(elem, at, trail)
                     pos += 1
             if not ok:
                 break

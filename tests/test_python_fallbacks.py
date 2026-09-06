@@ -1160,6 +1160,42 @@ class TestListUnifyCharTwinParity:
             outs.append(repr(got))
         assert len(set(outs)) == 1, f"twins disagree: {outs}"
 
+    def test_a_cell_shaped_char_is_a_char_to_both_twins(self):
+        """Stage A dual acceptance reaches the C twins.
+
+        ``char_atom("a")`` is a plain str under Plan 0, so the cell shape has
+        to be written as a literal here.  Fix round 1: the C
+        ``is_char_atom_obj`` was str-only, so ``[("a",)] + "b"`` promoted to
+        ``"ab"`` in Python and stayed a list in C — a silent twin divergence
+        on the very shape Stage B makes canonical.
+        """
+        # nv
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, before, star = Var(), Var(), Var()
+            trail = Trail()
+            unify(before, ("a",), trail)        # a CELL-shaped char
+            unify(star, "b", trail)
+            assert impl(target, [before], star, [], trail) is True
+            outs.append(deref(target))
+        assert outs[0] == "ab", outs
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"
+
+    def test_a_cell_shaped_non_char_blocks_promotion_in_both_twins(self):
+        """The dual acceptance is the CHAR cell only, not any 1-tuple."""
+        # nv
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, before, star = Var(), Var(), Var()
+            trail = Trail()
+            unify(before, ("ab",), trail)       # arity-0 cell, but not a char
+            unify(star, "c", trail)
+            assert impl(target, [before], star, [], trail) is True
+            got = deref(target)
+            assert isinstance(got, list), f"{impl} promoted {got!r}"
+            outs.append(repr(got))
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"
+
     def test_a_segstring_star_splats_into_char_atoms(self):
         """A ground SegString star walks to a str and splats as chars."""
         # nv

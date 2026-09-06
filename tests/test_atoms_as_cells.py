@@ -246,3 +246,74 @@ def test_segstring_walk_unify_and_eq_speak_chars():
     # __eq__ against a list of chars.
     assert SegString(["ab"]) == [char_atom("a"), char_atom("b")]
     assert not (SegString(["ab"]) == ["ab"])
+
+
+def test_ground_seglist_of_cell_chars_round_trips():
+    """§6.2 / Task 7 fix round 1: ``SegList.__walk__`` promotes a ground
+    SegList of CELL chars to a ``str`` (``maybe_promote_to_str`` accepts the
+    cell under Stage A dual acceptance), so every arm that reverses that
+    promotion must hand back CHARS again.  Before the fix ``list(w)`` gave raw
+    1-char strs and the SegList stopped being equal to — or unifiable with —
+    its own elements."""
+    from clausal.logic.variables import Trail, Var, deref, unify
+    from clausal.terms import ConcreteSeg, SegList, VarSeg
+    chars = [("a",), ("b",)]
+    sl = SegList([ConcreteSeg(list(chars))])
+
+    # The promotion itself (the premise of the bug).
+    assert sl.__walk__() == "ab"
+
+    # __eq__ list arm, __contains__, to_list, iteration, indexing.
+    assert sl == chars
+    assert ("a",) in sl and ("b",) in sl
+    assert ("c",) not in sl
+    assert sl.to_list() == chars
+    assert list(sl) == chars
+    assert sl[0] == ("a",)
+    assert len(sl) == 2
+
+    # __unify__ against the list of the same cell chars.
+    t = Trail()
+    assert unify(sl, list(chars), t)
+    # ... and against a SegList built from the same cell chars.
+    t2 = Trail()
+    assert unify(sl, SegList([ConcreteSeg(list(chars))]).to_list(), t2)
+    # The plain-str char shape still unifies with the promoted str; the CELL
+    # shape does not, because Stage A keeps ``("a",)`` and ``"a"`` distinct
+    # (spec §6.2: ``("a",)`` vs ``"a"`` FAILS; the str<->char-list cons rule
+    # is reinstated only at Stage B). Pinned so the flip is visible here.
+    t3 = Trail()
+    assert unify(SegList([ConcreteSeg(["a", "b"])]), "ab", t3)
+    t4 = Trail()
+    assert not unify(sl, "ab", t4)
+
+    # ... and the vars in a matching pattern bind to the CELL chars.
+    A, B = Var(), Var()
+    t3 = Trail()
+    assert unify(sl, [A, B], t3)
+    assert deref(A) == ("a",) and deref(B) == ("b",)
+
+    # A non-ground SegList still lines up against a str target, whose
+    # ELEMENTS are chars and whose star SLICE stays a str (R-S2) —
+    # ``_apply_seglist_split`` / ``_seglist_unify_gen``. Stage A's canonical
+    # char is the plain str, so that is what a str target's elements match.
+    X = Var()
+    t5 = Trail()
+    partial = SegList([ConcreteSeg([char_atom("h")]), VarSeg(X)])
+    assert unify(partial, "hi", t5)
+    assert deref(X) == "i"
+    # The cell shape does not match a str target's elements in Stage A —
+    # the same ``("h",)`` vs ``"h"`` rule as above. Stage B flips this.
+    Y = Var()
+    t6 = Trail()
+    assert not unify(SegList([ConcreteSeg([("h",)]), VarSeg(Y)]), "hi", t6)
+
+
+def test_seglist_str_tail_and_head_are_char_lists():
+    """``SegList + str`` / ``str + SegList`` splat the str into CHARS."""
+    from clausal.logic.atoms import is_char_atom
+    from clausal.terms import ConcreteSeg, SegList
+    tail = (SegList([ConcreteSeg([1])]) + "ab").__walk__()
+    assert tail[0] == 1 and all(is_char_atom(c) for c in tail[1:])
+    head = ("ab" + SegList([ConcreteSeg([1])])).__walk__()
+    assert head[-1] == 1 and all(is_char_atom(c) for c in head[:-1])
