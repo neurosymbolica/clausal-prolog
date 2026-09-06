@@ -153,6 +153,32 @@ A hidden atom is `("m\x1fbar",)`. `mangle` still produces the spelling;
 they accept the atom as well as the spelling. Nothing else changes; the
 `atom_chars/2` forgery route stays documented out-of-warranty (`atoms.py:36–41`).
 
+### 5.4 Efficient representations, always (R-S2 corollary; operator 2026-09-06)
+
+`'.'/2` is how a list *looks* through `functor/3`, `arg/3`, `=..` and
+`write_canonical/1` — never how one is *stored*. No runtime path
+constructs a `(".", H, T)` cell:
+
+- A proper list is a Python `list`; a string is a `str`; a partial list
+  (`[H | T]` with an unbound tail) is the engine's existing `SegList`
+  (`SegString` for a partial string). These are the only list shapes the
+  runtime holds.
+- Construction through the name position builds those shapes:
+  `T =.. ['.', a, []]` → `T = [a]`; `T =.. ['.', a, "bc"]` → `T = "abc"`
+  (a char atom consed onto a string stays a string); `T =.. ['.', 1, [2]]`
+  → `T = [1, 2]`; `functor(T, '.', 2)` → `T = [_ | _]` (a `SegList` with a
+  fresh head and an unbound tail); `T =.. ['.', a, X]` with `X` unbound →
+  the same partial-list shape with head `a`.
+- Decomposition answers virtually: `arg(2, "hello", T)` → `T = "ello"` is a
+  `str` slice; `arg(2, [1, 2, 3], T)` → `[2, 3]` is a list slice. Nothing
+  is expanded.
+- A `(".", H, T)` cell handed in from Python is just a cell whose functor
+  is spelled `.` — it is not a list, does not unify with one, and gets no
+  special treatment. The one producer of such cells in the tree is the
+  toklex reader's IR for `[H | Tail]` (`prolog_reader._cons_cell`, the
+  locked §1c contract), which the Phase 3 compiler lowers before any term
+  reaches the runtime.
+
 ## 6. Semantics
 
 ### 6.1 Public atom API (`clausal/logic/atoms.py`)
@@ -251,6 +277,7 @@ a bare `str`; after this design they are cells end to end.
 | `T =.. L` (`unpack/2`), T bound | `L = [mint(slot0) \| args]` for a cell; `[atom]` for an atom; `[T]` for atomic. |
 | `T =.. L`, T unbound | `[N]` with `N` atomic → `T = N`; `[N \| Args]`, `N` an atom → the cell; `[S]` or `[S \| Args]` with `S` a string → `type_error(atomic, S)` / `type_error(atom, S)` respectively; `[N \| Args]` with `N` a number and `Args ≠ []` → `type_error(atom, N)`. |
 | `arg/3` | unchanged (arguments are terms). |
+| `'.'`/2 in name position | builds the engine list shape, never a cell — §5.4. |
 | `call(G, A1, …)` | `G` an atom → `(spelling(G), A1, …)`; `G` a cell → fold; `G` a **string** → `type_error(callable, G)`. `_resolve_named_goal`'s plain-`str` branch (`higher_order.py:123–126`) is deleted, as are the `str`→`(s,)` wraps at `solve.py:211–219` and `cells.py:453–454`: a `str` goal is a string and raises. `_ZERO_ARITY_CONTROL_GOALS` keys stay spellings (they are read from slot 0). |
 | `listing/1` | accepts an atom (name), `name/arity`, an imported predicate; a string → `type_error(predicate_indicator, …)` — the `isinstance(val, str)` branch at `io.py:388` becomes the atom branch. |
 | `abolish_table/2`, `global_atom/2`, `gensym/2`, `char_type/2` (Type), `resolve_module` designator, `(":", M, G)` | name/type/prefix arguments are atoms read by spelling; a string raises `type_error(atom, …)`. `global_atom/2` mints with `mint`; its guard mode compares with `==`. `resolve_module` keeps accepting a Python `str` from the **Python** API (`solve(goal, module="pkg.mod")`) — that is a Python argument, not a term. |
@@ -626,6 +653,7 @@ following are pinned as tests in Plan 1:
 | 17 | `sort(["ab", [a, b]], L)` | `L = ["ab"]` |
 | 18 | `write(foo(bar, "baz"))` | `foo(bar, baz)`; `writeq` → `foo(bar, "baz")`; `writeq('a b')` → `'a b'`; `writeq([a, b])` → `"ab"` |
 | 18b | `write_canonical("hello")` | `'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))` (Scryer-verified); `write_canonical([1, 2])` → `'.'(1,'.'(2,[]))`; `write_canonical(foo(a, "b"))` → `foo(a,'.'(b,[]))`; `functor("hello", N, A)` → `N = '.'`, `A = 2`; `arg(2, "hello", T)` → `T = "ello"` |
+| 18c | `T =.. ['.', a, "bc"]` | `T = "abc"`, `string(T)`; `T2 =.. ['.', 1, [2]]` → `T2 = [1, 2]` (Python list); `functor(T3, '.', 2)` → `T3 = [_ \| _]` (SegList); no `(".", H, T)` cell is ever built (§5.4) |
 | 19 | `{foo: 1}.foo` | 1; `{"foo": 1}` (chars mode) has a string key; the two dicts do not unify |
 | 20 | `json.parse("{\"k\": \"v\"}", D)` | `D = {k: "v"}` with `atom(k)`, `string(v)` |
 | 21 | Python: `mod.bar == mint("bar")` | true; no test anywhere relies on `is` |

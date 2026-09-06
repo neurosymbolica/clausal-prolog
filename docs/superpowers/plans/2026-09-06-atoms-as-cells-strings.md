@@ -557,7 +557,38 @@ def test_listing_accepts_cell_atom(capsys):
             return (spelling(name_val), *args)          # a cell, never Compound
         raise LogicException(type_error("atom", name_val, who))
     ```
-    (`_term_is_atom` = `atoms.is_atom`; under Plan 0 a `str` passes it, so today's `isinstance(name_val, str)` arm is subsumed.) Grep `tests/` for `Compound(` assertions on `functor/3`/`unpack/2` results and update them to the cell shape in this task.
+    (`_term_is_atom` = `atoms.is_atom`; under Plan 0 a `str` passes it, so today's `isinstance(name_val, str)` arm is subsumed.) BEFORE that branch, the `'.'`/2 case (spec §5.4 — never build a `(".", H, T)` cell):
+    ```python
+        if _term_is_atom(name_val) and spelling(name_val) == "." and len(args) == 2:
+            return _cons(args[0], args[1])
+    ```
+    with a module-level helper in `inspection.py`:
+    ```python
+    def _cons(head, tail):
+        """[Head | Tail] in the engine's list shapes: list, str, or a partial SegList."""
+        tail = deref(tail)
+        if isinstance(tail, list):
+            return [head] + tail
+        if isinstance(tail, str):
+            h = deref(head)
+            if is_char_atom(h):
+                return spelling(h) + tail
+            return [head] + [char_atom(c) for c in tail]
+        if is_var(tail):
+            return SegList([ConcreteSeg([head]), VarSeg(tail)])
+        if isinstance(tail, (SegList, SegString)):
+            return SegList([ConcreteSeg([head]), *_segments_of(tail)])
+        raise LogicException(type_error("list", tail, who))
+    ```
+    Read `clausal/terms.py` for the real `SegList`/`ConcreteSeg`/`VarSeg` constructors and the SegString→segments accessor before writing `_segments_of`; keep the helper to the shapes above. `functor(T, '.', 2)` reaches `_construct_named` with two fresh Vars → the `is_var(tail)` arm. Tests (append):
+    ```python
+    def test_cons_construction_never_builds_a_dot_cell():          # §5.4, §13 row 18c
+        T = Var(); _one(("unpack", T, [mint("."), char_atom("a"), "bc"])); assert deref(T) == "abc"
+        T2 = Var(); _one(("unpack", T2, [mint("."), 1, [2]])); assert deref(T2) == [1, 2]
+        T3 = Var(); _one(("functor", T3, mint("."), 2))
+        from clausal.terms import SegList; assert isinstance(deref(T3), SegList)
+        T4 = Var(); _one(("unpack", T4, [mint("."), 1, []])); assert deref(T4) == [1]
+    ``` Grep `tests/` for `Compound(` assertions on `functor/3`/`unpack/2` results and update them to the cell shape in this task.
   - `functor/3` construction `arity_val == 0` → `constructed = name_val` stays (atomic names pass through). Add before it: `if not _term_is_atom(name_val) and not isinstance(name_val, (int, float, bool)) and name_val is not None: raise LogicException(type_error("atomic", name_val, "functor/3"))` — a list/string/dict name is `type_error(atomic)` (spec §6.4). Inspection mode: after `f_val = _functor_name(term_val)`, `if type(f_val) is str: f_val = mint(f_val)`.
   - `unpack/2` decomposition: same `mint` wrap of `f_val`. Construction: `len(args_vals) == 0` → `constructed = f_val` only if `_term_is_atom(f_val)` or a number/bool/None, else `type_error("atomic", f_val, "unpack/2")`; with args → `_construct_named`.
   - `global_atom/2`: `name_val` bound → `if _term_is_atom(name_val): key = spelling(name_val) else: return`; guard mode `predicate_builtins.get(key) == atom_val`; mint mode `predicate_builtins.setdefault(key, mint(key))`; reverse mode: `if _term_is_atom(atom_val): cls_name = spelling(atom_val)`; enumerate mode unchanged. All `is` → `==`.
