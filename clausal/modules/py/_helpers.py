@@ -1,14 +1,16 @@
 """Shared dispatch helpers for Clausal Python-library wrappers.
 
 Extracted from ``torch.py`` so that all wrappers (torch, scipy, etc.) share
-the same implementations — in particular ``_deep_deref`` which recursively
-unwraps ``Var`` / ``DictTerm`` objects inside lists and dicts.
+the same implementations — in particular ``to_python`` (historically
+``_deep_deref``, still exported under that name) which recursively unwraps
+``Var`` / ``DictTerm`` / atom objects inside lists, tuples and dicts.
 """
 
 from __future__ import annotations
 
 from typing import Callable
 
+from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
@@ -39,13 +41,29 @@ def _any_unbound(val):
     return False
 
 
-def _deep_deref(val):
-    """Deref a value, recursively deref-ing list, tuple, and dict elements.
+def to_python(val):
+    """The ONE outbound term → Python conversion (spec §9.1).
 
-    Handles both plain dicts and DictTerm (Clausal's unification-aware dict).
-    Tuples are preserved as tuples (not converted to lists) — library code
-    that distinguishes tuple-of-ints from list-of-ints relies on this, e.g.
-    ``a.at[(1, 2)]`` vs ``a.at[[1, 2]]`` in JAX have different semantics.
+    Used by every ``py.*`` wrapper (as ``_deep_deref``, the name it grew up
+    under) *and* by the ``PyThunk`` argument path, so ``++`` escapes and
+    f-strings see exactly what a wrapper call sees.
+
+    Derefs a value, then recursively converts list, tuple, and dict elements:
+
+    - an **atom** becomes its spelling, a plain ``str`` — an arity-0 cell
+      ``("bar",)`` unwraps to ``"bar"``; a ``str`` atom is already its own
+      spelling and comes back unchanged;
+    - a **cell of arity >= 1** stays a tuple with converted elements.
+      Tuples are preserved as tuples (not converted to lists) — library code
+      that distinguishes tuple-of-ints from list-of-ints relies on this, e.g.
+      ``a.at[(1, 2)]`` vs ``a.at[[1, 2]]`` in JAX have different semantics;
+    - a **DictTerm** or plain dict becomes a ``dict``, KEYS converted too, so
+      an atom key crosses out as a ``str`` key;
+    - everything else crosses raw.
+
+    Inbound is deliberately not symmetric (§9.1): a Python ``str`` coming
+    back is a *string*, not the atom that went out.  Programs that need an
+    atom back mint one.
 
     NamedTuple subclasses are reconstructed via their own constructor so
     attribute access (``.init`` / ``.update`` on optax's
@@ -53,10 +71,14 @@ def _deep_deref(val):
     """
     from clausal.terms import DictTerm
     val = deref(val)
+    # Atom first: it must win over the tuple arm, which would otherwise turn
+    # the arity-0 cell ``("bar",)`` into a 1-tuple of its spelling.
+    if _term_is_atom(val):
+        return _atom_spelling(val)
     if isinstance(val, list):
-        return [_deep_deref(x) for x in val]
+        return [to_python(x) for x in val]
     if isinstance(val, tuple):
-        items = tuple(_deep_deref(x) for x in val)
+        items = tuple(to_python(x) for x in val)
         if type(val) is tuple:
             return items
         # NamedTuple — preserve subclass so attribute access survives.
@@ -65,10 +87,16 @@ def _deep_deref(val):
         except TypeError:
             return items
     if isinstance(val, DictTerm):
-        return {k: _deep_deref(v) for k, v in val.items()}
+        return {to_python(k): to_python(v) for k, v in val.items()}
     if isinstance(val, dict):
-        return {k: _deep_deref(v) for k, v in val.items()}
+        return {to_python(k): to_python(v) for k, v in val.items()}
     return val
+
+
+#: Historical name, kept as an alias: the in-file callers below and the
+#: out-of-tree wrapper distributions (clausal-torch, clausal-jax, …) import
+#: ``_deep_deref`` by name.
+_deep_deref = to_python
 
 
 def _pure(fn: Callable) -> Callable:

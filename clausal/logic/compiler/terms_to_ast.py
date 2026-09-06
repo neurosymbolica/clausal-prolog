@@ -1177,7 +1177,13 @@ def term_to_ast_expr(
     # PyThunk: deferred Python expression via lambda wrapper.
     # Used for f-strings in .clausal files and ++() Python escapes.
     # The thunk stores a callable (lambda) and a list of Var objects.
-    # The compiler emits: thunk.fn(deref(local0), deref(local1), ...)
+    # The compiler emits: thunk.fn($to_python(local0), $to_python(local1), ...)
+    #
+    # $to_python — not $deref — is the ONE outbound term → Python conversion
+    # (spec 2026-09-06-atoms-as-cells-strings §9.1): a ++ escape and an
+    # f-string see an atom as its spelling, exactly as a py.* wrapper call
+    # does.  It subsumes $deref (it derefs first), so this is a widening of
+    # the old single-level deref, not a replacement of it.
     if isinstance(term, PyThunk):
         # Reference to the thunk's .fn stored in compiled function globals.
         # Use a unique name to avoid collisions.
@@ -1186,13 +1192,13 @@ def term_to_ast_expr(
         for var_obj in term.var_objects:
             vid = var_obj._id
             if vid in var_context:
-                arg_exprs.append(_call(_name("$deref"), _name(var_context[vid])))
+                arg_exprs.append(_call(_name("$to_python"), _name(var_context[vid])))
             else:
-                # Body-only var — allocate and deref
+                # Body-only var — allocate and convert
                 vname = _var_python_name(var_obj)
                 var_context[vid] = vname
                 arg_exprs.append(_call(
-                    _name("$deref"),
+                    _name("$to_python"),
                     ast.NamedExpr(
                         target=ast.Name(id=vname, ctx=ast.Store()),
                         value=_call(_name("Var")),

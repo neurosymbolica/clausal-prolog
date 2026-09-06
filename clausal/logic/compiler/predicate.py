@@ -65,6 +65,13 @@ from clausal.logic.runtime.tramp_call import (  # noqa: F401
 )
 from clausal.logic.runtime.dict_ops import _subscript, _splat_data, _dict_key  # noqa: F401
 from clausal.logic.runtime.const_set import _const_set, _CONST_SET_TYPES  # noqa: F401
+# The outbound term → Python conversion the PyThunk lowering emits as
+# ``$to_python`` (spec 2026-09-06-atoms-as-cells-strings §9.1).  It lives with
+# the ``py.*`` wrappers because they are its other caller; the import is safe
+# at module level because ``clausal.modules.py`` pulls in only stdlib plus
+# ``clausal.logic.trampoline``, and ``_helpers`` defers ``clausal.terms`` to
+# call time — no path back into the compiler.
+from clausal.modules.py._helpers import to_python as _to_python_fn  # noqa: F401
 
 from ._ast_helpers import (
     _name, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -310,6 +317,13 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # bound (A12-F004); generated code references them ``$``-prefixed.
     "$walk": _walk_fn,
     "$deref": deref,
+    # The ONE outbound term → Python conversion (spec
+    # 2026-09-06-atoms-as-cells-strings §9.1).  Emitted by the PyThunk
+    # lowering in terms_to_ast, so ``++`` escapes and f-strings convert their
+    # arguments exactly as a ``py.*`` wrapper call does (atom → spelling,
+    # DictTerm → dict with converted keys, tuples preserved).  It derefs
+    # first, so it is a strict widening of ``$deref`` on that path.
+    "$to_python": _to_python_fn,
     "$unify": unify,
     "$ast": ast,
     # The cells module itself, so a head pattern can name the tuple-DATA tag

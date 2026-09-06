@@ -6,10 +6,12 @@ import os
 
 import pytest
 
+from clausal.logic.atoms import mint
+from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.json import (
     parse, generate, pretty_generate, get, read_file, write_file,
-    _parse_2, _generate_2, _pretty_generate_2,
+    _parse_2, _parse_3, _generate_2, _pretty_generate_2,
     _get_3, _read_file_2, _write_file_2,
     _python_to_clausal, _clausal_to_python,
 )
@@ -353,3 +355,68 @@ class TestFileIO:
         # nv
         sols, _ = simple_solutions(_read_file_2, Var(), Var())
         assert len(sols) == 0
+
+
+# ── parse/3 (spec §9.2: the atoms(Spellings) vocabulary hook) ────────────
+
+
+class TestParse3AtomsOption:
+    def test_json_parse_3_atoms_option_mints_listed_strings(self):
+        t = Var()
+        sols, _ = simple_solutions(
+            _parse_3, '{"k": "red", "j": "text"}', t, [("atoms", ["red"])]
+        )
+        assert len(sols) == 1
+        d = deref(t)
+        assert d[mint("k")] == mint("red") and d[mint("j")] == "text"
+
+    def test_parse_3_empty_options_matches_parse_2(self):
+        t2, t3 = Var(), Var()
+        simple_solutions(_parse_2, '{"k": "red"}', t2)
+        sols, _ = simple_solutions(_parse_3, '{"k": "red"}', t3, [])
+        assert len(sols) == 1
+        assert deref(t3).data == deref(t2).data
+
+    def test_parse_3_atoms_option_reaches_nested_values(self):
+        t = Var()
+        sols, _ = simple_solutions(
+            _parse_3, '{"a": {"b": "red"}, "c": ["red", "blue"]}', t,
+            [("atoms", ["red"])],
+        )
+        assert len(sols) == 1
+        d = deref(t)
+        assert d[mint("a")][mint("b")] == mint("red")
+        assert d[mint("c")] == [mint("red"), "blue"]
+
+    def test_parse_3_rejects_an_unknown_option(self):
+        with pytest.raises(LogicException) as exc:
+            list(simple_solutions(
+                _parse_3, '{"k": 1}', Var(), [("colours", ["red"])],
+            ))
+        assert exc.value.term.args[0].functor == "domain_error"
+        assert exc.value.term.args[0].args[0] == mint("json_option")
+
+    def test_parse_3_is_reachable_through_the_module_predicate(self):
+        t = Var()
+        sols, _ = trampoline_solutions(
+            parse, '{"k": "red"}', t, [("atoms", ["red"])]
+        )
+        assert len(sols) == 1
+        assert deref(t)[mint("k")] == mint("red")
+
+
+# ── generate/2 on a cell (spec §9.2: type_error, not a stdlib TypeError) ─
+
+
+class TestGenerateRejectsCells:
+    def test_generate_of_a_compound_cell_is_a_type_error(self):
+        with pytest.raises(LogicException) as exc:
+            _clausal_to_python(("point", 1, 2))
+        assert exc.value.term.args[0].functor == "type_error"
+        assert exc.value.term.args[0].args[0] == mint("json_term")
+
+    def test_generate_of_an_atom_cell_is_its_spelling(self):
+        assert _clausal_to_python(("red",)) == "red"
+
+    def test_generate_of_a_dict_with_atom_keys(self):
+        assert _clausal_to_python(DictTerm({("k",): ("v",)})) == {"k": "v"}
