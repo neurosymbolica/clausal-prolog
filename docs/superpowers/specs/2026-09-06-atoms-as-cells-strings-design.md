@@ -598,7 +598,10 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
    mint; `'x'` is always an atom in `.clausal` source; `"x"` follows the
    module's `-double_quotes` mode (default still `atom`); `"foo"(1)` is a
    syntax error; the reader contract emits `mint(name)` for `PAtom` and a
-   `str` for `PString`; `writeq/1` and `write_canonical/1` exist; tests that
+   `str` for `PString`; `writeq/1` and `write_canonical/1` exist;
+   `functor/3` and `=..` construct CELLS (plain tuples) where they built a
+   `Compound` before — an `isinstance(x, Compound)` on a constructed term
+   must become a cell-shape test; tests that
    compared an atom result to a bare `str` compare to `mint(...)`.
 3. Request: insert `-double_quotes(atom)` in every module (kit first, then
    the repos that consume it); report when a grep shows every module carries
