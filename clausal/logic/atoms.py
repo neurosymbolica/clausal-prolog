@@ -135,6 +135,48 @@ def demangle_for_display(value: str) -> str:
     return f"{module_name}.{atom}"
 
 
+# ── Public atom API (spec 2026-09-06-atoms-as-cells-strings-design §6.1) ──
+#
+# Plan 0 bodies: an atom IS its spelling (a plain str) on this tree.  Stage B
+# of the same plan rewrites the five bodies below to the arity-0 cell
+# ``(spelling,)`` — callers written against these names survive that flip
+# unchanged.  Equality is the semantics; ``mint`` returns a canonical object
+# as an optimisation only (never rely on ``is``).
+
+def mint(spelling: str):
+    """Return the canonical atom for *spelling*."""
+    if type(spelling) is not str:
+        raise TypeError(f"mint: spelling must be a str, got {type(spelling).__name__}")
+    return sys.intern(spelling)
+
+
+def is_atom(term) -> bool:
+    """True iff *term* is an atom (the TERM test; a zero-field predicate class
+    is not an atom — see ``predicate.is_atom_value`` for the value-level
+    widening that still admits one)."""
+    return type(term) is str
+
+
+def spelling(atom) -> str:
+    """The spelling of *atom*; ``TypeError`` for a non-atom."""
+    if not is_atom(atom):
+        raise TypeError(f"not an atom: {atom!r}")
+    return atom
+
+
+def char_atom(ch: str):
+    """The atom whose spelling is the single character *ch*."""
+    if type(ch) is not str or len(ch) != 1:
+        raise ValueError(f"char_atom: expected a 1-char str, got {ch!r}")
+    return mint(ch)
+
+
+def is_char_atom(term) -> bool:
+    """True iff *term* is an atom whose spelling is one character."""
+    return is_atom(term) and len(spelling(term)) == 1
+
+
 __all__ = [
     "HIDDEN_SEP", "mangle", "is_mangled", "demangle", "demangle_for_display",
+    "mint", "is_atom", "spelling", "char_atom", "is_char_atom",
 ]

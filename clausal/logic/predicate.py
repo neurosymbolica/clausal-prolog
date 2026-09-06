@@ -1598,8 +1598,14 @@ def is_atom_value(obj: Any) -> bool:
     ``is_atom``'s global semantics is Task 2's deliberate, reviewed move —
     not an accidental side effect of Task 1. Runtime readers (``atom/1``,
     ``functor_arity``) use this helper instead.
+
+    Widened via ``clausal.logic.atoms.is_atom`` (spec §6.1) rather than a
+    bare ``isinstance(obj, str)`` — behaviourally identical under Plan 0's
+    str-is-an-atom representation, but written against the public atom API
+    so it survives the Stage B flip unchanged.
     """
-    return isinstance(obj, str) or is_atom(obj)
+    from clausal.logic.atoms import is_atom as _term_is_atom
+    return _term_is_atom(obj) or is_atom(obj)
 
 
 def _class_origin(cls: type) -> str:
@@ -1714,8 +1720,12 @@ def make_atom(name: str) -> str:
 
     A zero-arity PREDICATE class — the thing a bare ``p()`` declaration mints,
     which is a procedure and not an atom — is ``make_predicate(name, [])``.
+
+    Delegates to ``clausal.logic.atoms.mint`` (spec §6.1) — the public atom
+    API that Plan 0 of the atoms-as-cells/strings plan introduces.
     """
-    return name
+    from clausal.logic.atoms import mint
+    return mint(name)
 
 
 __all__ = ["PredicateMeta", "_MISSING", "is_term_instance", "is_atom",
