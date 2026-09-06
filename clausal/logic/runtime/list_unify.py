@@ -83,7 +83,9 @@ from clausal.terms import (
     SegList, ConcreteSeg, VarSeg,
     SegString, SegBytes,
 )
-from ._seg_helpers import maybe_promote_to_str, maybe_promote_to_bytes
+from ._seg_helpers import (
+    maybe_promote_to_str, maybe_promote_to_bytes, seq_getitem, str_chars,
+)
 
 
 def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
@@ -141,15 +143,18 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
         else:
             if len(d) < min_len:
                 return False
+        # ``seq_getitem`` (twin of the C ``seq_getitem``) makes a str's
+        # element a CHAR; a list's / bytes' element is unchanged. The star
+        # SLICE keeps the container's own type (R-S2: a str tail stays a str).
         for i, v in enumerate(var_vals):
-            if not unify(v, d[i], trail):
+            if not unify(v, seq_getitem(d, i), trail):
                 return False
         if star_val is not None:
             star_end = len(d) - n_after if n_after else len(d)
             if not unify(star_val, d[n_before:star_end], trail):
                 return False
         for i, v in enumerate(after_vals):
-            if not unify(v, d[len(d) - n_after + i], trail):
+            if not unify(v, seq_getitem(d, len(d) - n_after + i), trail):
                 return False
         return True
 
@@ -194,14 +199,14 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             result.extend(s)
         elif isinstance(s, str):
             # Liskov "strings-as-lists" rule: a str-bound star is treated
-            # as a list of 1-char strs. Splat its chars into the result;
+            # as a list of CHARS. Splat its chars into the result;
             # the final ``maybe_promote_to_str`` re-promotes the whole
-            # result to a str when every element is 1-char-str. Legitimate
+            # result to a str when every element is a char. Legitimate
             # here (unlike the plain-list case above): the star itself WAS
             # a str, so preserving that shape on the combined output is
             # type-preservation, not a cons-rule unification.
             star_was_str = True
-            result.extend(s)
+            result.extend(str_chars(s))
         elif isinstance(s, bytes):
             # Codes-model parallel of the str-star branch: a bytes-bound
             # star is treated as a list of int codes. Iterating bytes yields
@@ -237,16 +242,18 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             # Star derefs to a SegList — walk it first.
             # Review fix (fix round 1): SegList.__walk__ itself applies
             # maybe_promote_to_str to a fully-ground result (terms.py),
-            # so a ground SegList of all 1-char strs walks to a STR, not
+            # so a ground SegList of all chars walks to a STR, not
             # a list — mirror the C twin's ``PyList_Check(walked) ||
             # PyUnicode_Check(walked)`` gate exactly (_list_unify.c, the
             # SegList/SegString ground-walk branch) rather than only
-            # handling ``list``. ``result.extend(walked)`` already does
-            # the right thing for a str (iterates its chars, matching
-            # the C twin's per-char ``PyUnicode_Substring`` splice).
+            # handling ``list``. A walked str splats through ``str_chars``
+            # (the C twin's per-char ``PyUnicode_Substring`` splice, now
+            # wrapped in ``char_atom_obj``).
             walked = s.__walk__()
             if isinstance(walked, (list, str)):
-                result.extend(walked)
+                result.extend(
+                    str_chars(walked) if isinstance(walked, str) else walked
+                )
                 result.extend(deref(v) for v in after_vals)
                 # F033: promote list-of-1-char-strs back to str under the
                 # Liskov "strings-as-lists" rule (default output is list;
@@ -265,11 +272,11 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         elif isinstance(s, SegString):
             # F034 (C3 audit): Star derefs to a SegString — walk it parallel
             # to the SegList branch. Ground → extend chars (treat the str as
-            # a sequence of single-char strs, matching the "strings as char
+            # a sequence of chars, matching the "strings as char
             # lists" contract). Non-ground → rebuild via the segments.
             walked = s.__walk__()
             if isinstance(walked, str):
-                result.extend(walked)
+                result.extend(str_chars(walked))
                 result.extend(deref(v) for v in after_vals)
                 # F033: promote list-of-1-char-strs back to str under the
                 # Liskov "strings-as-lists" rule.
@@ -284,7 +291,7 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                     segs.append(ConcreteSeg(result))
                 for inner in walked.segments:
                     if isinstance(inner, str):
-                        segs.append(ConcreteSeg(list(inner)))
+                        segs.append(ConcreteSeg(str_chars(inner)))
                     else:  # VarSeg
                         segs.append(inner)
                 if after_result:

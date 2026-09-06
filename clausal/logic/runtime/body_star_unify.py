@@ -21,7 +21,10 @@ from clausal.terms import (
     _multi_star_splits,
 )
 
-from ._seg_helpers import maybe_promote_to_str
+from clausal.logic.atoms import is_char_atom
+from ._seg_helpers import (
+    maybe_promote_to_str, join_chars, seq_getitem, str_chars,
+)
 from .list_unify import _head_list_unify_input, _head_list_unify_output
 
 
@@ -68,18 +71,18 @@ def _build_star_list(before, star, after):
     in_ practice, star should be bound to a list by the time body code runs.
 
     when star is bound to a ``str`` and all before/after elements are
-    single-char strings, returns a ``str`` (or ``SegString`` when partial).
+    chars, returns a ``str`` (or ``SegString`` when partial).
     """
     d = deref(star)
     if isinstance(d, str):
-        # Check if all before/after elements are single-char strings
+        # Check if all before/after elements are chars
         b = list(before)
         a = list(after)
-        if (all(isinstance(e, str) and len(e) == 1 for e in b) and
-                all(isinstance(e, str) and len(e) == 1 for e in a)):
-            return "".join(b) + d + "".join(a)
+        if (all(is_char_atom(e) for e in b) and
+                all(is_char_atom(e) for e in a)):
+            return join_chars(b) + d + join_chars(a)
         # Mixed types — fall through to list construction
-        return b + list(d) + a
+        return b + str_chars(d) + a
     if isinstance(d, bytes):
         b = list(before)
         a = list(after)
@@ -90,14 +93,14 @@ def _build_star_list(before, star, after):
         # Mixed — fall through to list construction (codes view).
         return b + list(d) + a
     if isinstance(d, list):
-        # F043: promote list-of-1-char-strs back to str under the Liskov
+        # F043: promote a list of chars back to str under the Liskov
         # "strings-as-lists" rule. The default is list; str only when the
-        # whole result is provably all 1-char strs.
+        # whole result is provably all chars.
         return maybe_promote_to_str(list(before) + d + list(after))
     if isinstance(d, SegList):
         walked = d.__walk__()
         if isinstance(walked, list):
-            # F043: promote list-of-1-char-strs back to str.
+            # F043: promote a list of chars back to str.
             return maybe_promote_to_str(list(before) + walked + list(after))
         # non-ground SegList — wrap into a new SegList
         segs = []
@@ -112,21 +115,21 @@ def _build_star_list(before, star, after):
         if isinstance(walked, str):
             b = list(before)
             a = list(after)
-            if (all(isinstance(e, str) and len(e) == 1 for e in b) and
-                    all(isinstance(e, str) and len(e) == 1 for e in a)):
-                return "".join(b) + walked + "".join(a)
-            return b + list(walked) + a
+            if (all(is_char_atom(e) for e in b) and
+                    all(is_char_atom(e) for e in a)):
+                return join_chars(b) + walked + join_chars(a)
+            return b + str_chars(walked) + a
         # non-ground SegString — wrap into a new SegString or SegList
         b = list(before)
         a = list(after)
-        if (all(isinstance(e, str) and len(e) == 1 for e in b) and
-                all(isinstance(e, str) and len(e) == 1 for e in a)):
+        if (all(is_char_atom(e) for e in b) and
+                all(is_char_atom(e) for e in a)):
             new_segs = []
-            prefix = "".join(b)
+            prefix = join_chars(b)
             if prefix:
                 new_segs.append(prefix)
             new_segs.extend(walked.segments)
-            suffix = "".join(a)
+            suffix = join_chars(a)
             if suffix:
                 new_segs.append(suffix)
             return SegString(new_segs)
@@ -136,7 +139,7 @@ def _build_star_list(before, star, after):
             segs.append(ConcreteSeg(b))
         for seg in walked.segments:
             if isinstance(seg, str):
-                segs.append(ConcreteSeg(list(seg)))
+                segs.append(ConcreteSeg(str_chars(seg)))
             else:  # VarSeg
                 segs.append(seg)
         if a:
@@ -193,7 +196,7 @@ def _build_multi_star_list(segments):
     star vars are bound, otherwise a SegList.
 
     Under the Liskov "strings-as-lists" rule, when every part is
-    str-compatible (1-char-str fixed elements, str / ground-SegString
+    str-compatible (char fixed elements, str / ground-SegString
     stars, non-ground SegString stars) the result is promoted to a
     plain ``str`` (ground) or a ``SegString`` (non-ground). F043 fix:
     a non-ground SegString star no longer demotes the whole result to
@@ -202,7 +205,7 @@ def _build_multi_star_list(segments):
     """
     # First pass: do we have any non-string-compatible content?
     # If every star derefs to a str / ground-SegString / non-ground
-    # SegString and every fixed element is a 1-char str, we can build
+    # SegString and every fixed element is a char, we can build
     # a SegString instead of a SegList.
     string_mode = True
     for kind, val in segments:
@@ -213,14 +216,14 @@ def _build_multi_star_list(segments):
             if isinstance(d, SegString):
                 continue
             if isinstance(d, list):
-                if not all(isinstance(e, str) and len(e) == 1 for e in d):
+                if not all(is_char_atom(e) for e in d):
                     string_mode = False
                     break
                 continue
             if isinstance(d, SegList):
                 walked = d.__walk__()
                 if isinstance(walked, list):
-                    if not all(isinstance(e, str) and len(e) == 1 for e in walked):
+                    if not all(is_char_atom(e) for e in walked):
                         string_mode = False
                         break
                     continue
@@ -236,7 +239,7 @@ def _build_multi_star_list(segments):
             break
         else:  # "fixed"
             elems = [deref(e) for e in val]
-            if any(not isinstance(e, str) or len(e) != 1 for e in elems):
+            if any(not is_char_atom(e) for e in elems):
                 string_mode = False
                 break
 
@@ -271,8 +274,8 @@ def _build_multi_star_list(segments):
                             else:  # VarSeg
                                 str_segs.append(inner_seg)
                 elif isinstance(d, list):
-                    # list of 1-char strs (guaranteed by first-pass check)
-                    s = "".join(d)
+                    # list of chars (guaranteed by first-pass check)
+                    s = join_chars(d)
                     if s:
                         if str_segs and isinstance(str_segs[-1], str):
                             str_segs[-1] = str_segs[-1] + s
@@ -280,16 +283,16 @@ def _build_multi_star_list(segments):
                             str_segs.append(s)
                 elif isinstance(d, SegList):
                     walked = d.__walk__()
-                    # walked is a list of 1-char strs (first-pass check)
-                    s = "".join(walked)
+                    # walked is a list of chars (first-pass check)
+                    s = join_chars(walked)
                     if s:
                         if str_segs and isinstance(str_segs[-1], str):
                             str_segs[-1] = str_segs[-1] + s
                         else:
                             str_segs.append(s)
-            else:  # "fixed" — all 1-char strs (first-pass check)
+            else:  # "fixed" — all chars (first-pass check)
                 elems = [deref(e) for e in val]
-                s = "".join(elems)
+                s = join_chars(elems)
                 if s:
                     if str_segs and isinstance(str_segs[-1], str):
                         str_segs[-1] = str_segs[-1] + s
@@ -382,10 +385,10 @@ def _build_multi_star_list(segments):
             d = deref(val)
             if isinstance(d, str):
                 if segs and isinstance(segs[-1], ConcreteSeg):
-                    segs[-1] = ConcreteSeg(segs[-1].elements + list(d))
+                    segs[-1] = ConcreteSeg(segs[-1].elements + str_chars(d))
                 else:
                     if d:
-                        segs.append(ConcreteSeg(list(d)))
+                        segs.append(ConcreteSeg(str_chars(d)))
             elif isinstance(d, list):
                 if segs and isinstance(segs[-1], ConcreteSeg):
                     segs[-1] = ConcreteSeg(segs[-1].elements + d)
@@ -405,16 +408,17 @@ def _build_multi_star_list(segments):
                 walked = d.__walk__()
                 if isinstance(walked, str):
                     if segs and isinstance(segs[-1], ConcreteSeg):
-                        segs[-1] = ConcreteSeg(segs[-1].elements + list(walked))
+                        segs[-1] = ConcreteSeg(segs[-1].elements + str_chars(walked))
                     elif walked:
-                        segs.append(ConcreteSeg(list(walked)))
+                        segs.append(ConcreteSeg(str_chars(walked)))
                 else:
                     for inner_seg in walked.segments:
                         if isinstance(inner_seg, str):
                             if segs and isinstance(segs[-1], ConcreteSeg):
-                                segs[-1] = ConcreteSeg(segs[-1].elements + list(inner_seg))
+                                segs[-1] = ConcreteSeg(
+                                    segs[-1].elements + str_chars(inner_seg))
                             else:
-                                segs.append(ConcreteSeg(list(inner_seg)))
+                                segs.append(ConcreteSeg(str_chars(inner_seg)))
                         else:
                             segs.append(inner_seg)
             else:
@@ -430,7 +434,7 @@ def _build_multi_star_list(segments):
         result = []
         for seg in segs:
             result.extend(seg.elements)
-        # F043: promote list-of-1-char-strs back to str under the
+        # F043: promote a list of chars back to str under the
         # Liskov "strings-as-lists" rule.
         return maybe_promote_to_str(result)
     return SegList(segs)
@@ -516,7 +520,8 @@ def _segstring_align(ss, segments, trail, target):
                 break
             if kind == "fixed":
                 for v in val:
-                    if not unify(v, collapsed[pos], trail):
+                    # ``collapsed`` is a str: a fixed slot sees a CHAR.
+                    if not unify(v, seq_getitem(collapsed, pos), trail):
                         ok = False
                         break
                     pos += 1
@@ -663,7 +668,7 @@ def _body_multi_star_unify(target, segments, trail):
         elif is_var(d):
             # Unbound target: build the result via _build_multi_star_list so
             # the same str / SegString promotion rule applies. F042: when
-            # all fixed elements deref to 1-char strs and every star derefs
+            # all fixed elements deref to chars and every star derefs
             # to a str / SegString, the result is a plain str or SegString
             # rather than a SegList — the Liskov "strings-as-lists" rule
             # applied at the unbound-target construction site.
@@ -692,8 +697,8 @@ def _body_multi_star_unify(target, segments, trail):
 
     remainder = n - fixed_total
     # Generate all ways to distribute `remainder` items among `n_stars` stars.
-    # For strings, d[pos] yields single-char strings and d[pos:pos+n] yields
-    # substrings, so star vars bind to str — preserving the string type.
+    # For strings, seq_getitem(d, pos) yields a CHAR and d[pos:pos+n] yields a
+    # substring, so star vars bind to str — preserving the string type.
     for split in _multi_star_splits(n_stars, remainder):
         mark = trail.mark()
         ok = True
@@ -704,7 +709,7 @@ def _body_multi_star_unify(target, segments, trail):
                 break
             if kind == "fixed":
                 for v in val:
-                    if not unify(v, d[pos], trail):
+                    if not unify(v, seq_getitem(d, pos), trail):
                         ok = False
                         break
                     pos += 1

@@ -19,6 +19,43 @@ from __future__ import annotations
 
 from typing import Any
 
+from clausal.logic.atoms import char_atom, is_char_atom, spelling
+
+
+def seq_getitem(seq: Any, i: int) -> Any:
+    """Element *i* of a ``list`` / ``str`` / ``bytes`` sequence target.
+
+    The Python twin of ``_list_unify.c``'s ``seq_getitem``: a ``str``'s
+    element is a CHAR (``char_atom``), a ``list``'s element is itself, and
+    a ``bytes``' element is an int code (codes model — never a char).
+
+    Every list-machinery site that reads one element out of a possibly-str
+    sequence goes through here, so the Stage B representation flip
+    (2026-09-06-atoms-as-cells-strings) is a change to ``char_atom``'s body
+    alone.
+    """
+    if type(seq) is str:
+        return char_atom(seq[i])
+    return seq[i]
+
+
+def str_chars(s: str) -> list:
+    """Split *s* into its CHARS — the char-term twin of ``list(s)``.
+
+    Used wherever the list machinery splats a ``str`` into a char list
+    (star splats, ``ConcreteSeg`` construction, ``_as_items``); the
+    inverse is ``join_chars``.
+    """
+    return [char_atom(c) for c in s]
+
+
+def join_chars(chars) -> str:
+    """Join an iterable of CHARS back into a ``str`` — the char-term twin
+    of ``"".join(chars)``. Joins each char's SPELLING, never the char
+    object itself (under Stage A dual acceptance a char may already arrive
+    as a 1-tuple)."""
+    return "".join(spelling(c) for c in chars)
+
 
 def normalize_seg_input(x: Any) -> Any:
     """Walk a ``SegList`` / ``SegString`` to its ground form (``list`` or
@@ -66,12 +103,12 @@ def maybe_promote_to_bytes(result: Any) -> Any:
 
 
 def maybe_promote_to_str(result: Any) -> Any:
-    """If *result* is a list of all ground 1-char ``str`` elements, return
-    the equivalent ``str``. Otherwise return *result* unchanged.
+    """If *result* is a list of all ground CHARS, return the equivalent
+    ``str``. Otherwise return *result* unchanged.
 
     This implements the Liskov-substitution / strings-as-lists rule
     confirmed in the Phase 2 design review: a list whose contents are
-    *provably* all 1-character strs is interchangeable with the
+    *provably* all chars is interchangeable with the
     corresponding str (str ⊂ list-of-chars). The default output type is
     ``list`` — we only upgrade to ``str`` when the upgrade is provable
     from the result elements themselves.
@@ -84,7 +121,7 @@ def maybe_promote_to_str(result: Any) -> Any:
     elements.
     """
     if isinstance(result, list) and result and all(
-        isinstance(e, str) and len(e) == 1 for e in result
+        is_char_atom(e) for e in result
     ):
-        return "".join(result)
+        return join_chars(result)
     return result

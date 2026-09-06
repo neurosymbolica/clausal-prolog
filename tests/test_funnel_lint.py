@@ -339,8 +339,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    the arity-0 atom case added inside its cell branch), then -> 2474-2591
     #    by fix round 1's lone-dot rule in ``atom_needs_quotes`` -- again purely
     #    mechanical line-count shifts, see
-    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-4-report.md).
-    AllowEntry("clausal/terms.py", (2474, 2591),
+    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-4-report.md),
+    #    then -> 2479-2596 by the same plan's Task 7 (the char helpers added to
+    #    the ``clausal.logic.atoms`` import and to SegString's ``__walk__`` /
+    #    ``__unify__`` -- a uniform +5 shift, no new site; see
+    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-7-report.md).
+    AllowEntry("clausal/terms.py", (2479, 2596),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

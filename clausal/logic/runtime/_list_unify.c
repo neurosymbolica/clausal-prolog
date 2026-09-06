@@ -59,9 +59,46 @@ call_unify(PyObject *t1, PyObject *t2, PyObject *trail)
     return result;
 }
 
+/* ── The char term (atoms-as-cells/strings §6.2) ──────────────────────────
+ *
+ * Three one-line helpers, deliberately duplicated per .c file (these
+ * extensions share no header): every place the list machinery MAKES a char,
+ * TESTS for one, or reads a char's spelling goes through them, so the
+ * Stage B representation flip is an edit to these three bodies alone.
+ * Twins of ``clausal.logic.atoms.char_atom`` / ``is_char_atom`` /
+ * ``spelling`` — keep the three copies in lockstep.
+ *
+ * Plan 0: a char IS its 1-char str.
+ * Stage B: a char is the arity-0 cell ``(ch,)`` — char_atom_obj builds the
+ * 1-tuple, is_char_atom_obj checks the cell shape, char_spelling_obj
+ * returns ``PyTuple_GET_ITEM(e, 0)``.
+ */
+
+/* Build the char whose spelling is the 1-char str *ch1*. New reference. */
+static inline PyObject *
+char_atom_obj(PyObject *ch1)
+{
+    return Py_NewRef(ch1);
+}
+
+/* True iff *e* is a char. */
+static inline int
+is_char_atom_obj(PyObject *e)
+{
+    return PyUnicode_Check(e) && PyUnicode_GET_LENGTH(e) == 1;
+}
+
+/* The spelling of the char *e* — BORROWED reference, valid while *e* is. */
+static inline PyObject *
+char_spelling_obj(PyObject *e)
+{
+    return e;
+}
+
 /* Get item from list or string at index i.
  * For lists: borrows from list, returns new ref.
- * For strings: creates new 1-char string.
+ * For strings: builds the CHAR at that index (char_atom_obj).
+ * For bytes: the int code (codes model — never a char).
  */
 static inline PyObject *
 seq_getitem(PyObject *seq, Py_ssize_t i)
@@ -71,8 +108,56 @@ seq_getitem(PyObject *seq, Py_ssize_t i)
         Py_INCREF(item);
         return item;
     }
-    /* String: PySequence_GetItem returns new ref */
+    if (PyUnicode_Check(seq)) {
+        PyObject *ch = PySequence_GetItem(seq, i);
+        if (!ch) return NULL;
+        PyObject *a = char_atom_obj(ch);
+        Py_DECREF(ch);
+        return a;
+    }
+    /* bytes and friends: PySequence_GetItem returns new ref */
     return PySequence_GetItem(seq, i);
+}
+
+/* Split the str *s* into its CHARS — the C twin of ``str_chars``.
+ * Appends each char to *out* (a list). Returns 0 on success, -1 on error. */
+static int
+extend_with_str_chars(PyObject *out, PyObject *s)
+{
+    Py_ssize_t slen = PyUnicode_GET_LENGTH(s);
+    for (Py_ssize_t i = 0; i < slen; i++) {
+        PyObject *piece = PyUnicode_Substring(s, i, i + 1);
+        if (!piece) return -1;
+        PyObject *ch = char_atom_obj(piece);
+        Py_DECREF(piece);
+        if (!ch) return -1;
+        int rc = PyList_Append(out, ch);
+        Py_DECREF(ch);
+        if (rc < 0) return -1;
+    }
+    return 0;
+}
+
+/* Join a list of CHARS into a str via their spellings — the C twin of
+ * ``join_chars``. Returns a new reference, or NULL on error. */
+static PyObject *
+join_char_spellings(PyObject *chars)
+{
+    Py_ssize_t n = PyList_GET_SIZE(chars);
+    PyObject *spellings = PyList_New(n);
+    if (!spellings) return NULL;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *sp = char_spelling_obj(PyList_GET_ITEM(chars, i));
+        if (!sp) { Py_DECREF(spellings); return NULL; }
+        Py_INCREF(sp);
+        PyList_SET_ITEM(spellings, i, sp);
+    }
+    PyObject *empty = PyUnicode_FromStringAndSize("", 0);
+    if (!empty) { Py_DECREF(spellings); return NULL; }
+    PyObject *joined = PyUnicode_Join(empty, spellings);
+    Py_DECREF(empty);
+    Py_DECREF(spellings);
+    return joined;
 }
 
 /* Slice seq[start:end] — returns new ref. */
@@ -96,7 +181,7 @@ seq_length(PyObject *seq)
 /* maybe_promote_to_str(result) — F033 / C1 type-preservation:
  *
  * If *result* is a non-empty list whose every element is a ground
- * 1-char str, return the equivalent str. Otherwise return *result*
+ * CHAR, return the equivalent str. Otherwise return *result*
  * unchanged (with its refcount incremented).
  *
  * Mirrors the Python ``_seg_helpers.maybe_promote_to_str`` helper
@@ -120,20 +205,16 @@ maybe_promote_to_str(PyObject *result)
         Py_INCREF(result);
         return result;
     }
-    /* Verify every element is a 1-char str. */
+    /* Verify every element is a char. */
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *e = PyList_GET_ITEM(result, i);
-        if (!PyUnicode_Check(e) || PyUnicode_GET_LENGTH(e) != 1) {
+        if (!is_char_atom_obj(e)) {
             Py_INCREF(result);
             return result;
         }
     }
-    /* All 1-char strs — build the promoted str via str.join. */
-    PyObject *empty = PyUnicode_FromStringAndSize("", 0);
-    if (!empty) return NULL;
-    PyObject *joined = PyUnicode_Join(empty, result);
-    Py_DECREF(empty);
-    return joined;
+    /* All chars — build the promoted str from their spellings. */
+    return join_char_spellings(result);
 }
 
 /* maybe_promote_to_bytes(result) — codes-model parallel of
@@ -402,19 +483,15 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
             Py_DECREF(s);
         } else if (PyUnicode_Check(s)) {
             /* Liskov "strings-as-lists" rule: a str-bound star is
-             * treated as a list of 1-char strs. Splat its chars into
+             * treated as a list of CHARS. Splat its chars into
              * the result; the final ``maybe_promote_to_str`` will
-             * re-promote when every element is a 1-char str. Legitimate
+             * re-promote when every element is a char. Legitimate
              * (unlike the plain-list branch above): the star itself WAS
              * a str, so preserving that shape is type-preservation. */
             star_was_str = 1;
-            Py_ssize_t slen = PyUnicode_GET_LENGTH(s);
-            for (Py_ssize_t i = 0; i < slen; i++) {
-                PyObject *ch = PyUnicode_Substring(s, i, i + 1);
-                if (!ch) { Py_DECREF(s); goto error; }
-                int rc = PyList_Append(result, ch);
-                Py_DECREF(ch);
-                if (rc < 0) { Py_DECREF(s); goto error; }
+            if (extend_with_str_chars(result, s) < 0) {
+                Py_DECREF(s);
+                goto error;
             }
             Py_DECREF(s);
         } else if (PyBytes_Check(s)) {
@@ -497,17 +574,17 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 Py_RETURN_FALSE;
             } else if (PyList_Check(walked) || PyUnicode_Check(walked)) {
                 /* Ground SegList (→ list) or ground SegString (→ str):
-                 * extend result with the elements / chars. */
-                Py_ssize_t wlen = PyObject_Length(walked);
-                if (wlen < 0) { Py_DECREF(walked); goto error; }
-                for (Py_ssize_t i = 0; i < wlen; i++) {
-                    PyObject *item = PyList_Check(walked)
-                        ? PyList_GET_ITEM(walked, i)
-                        : PyUnicode_Substring(walked, i, i + 1);
-                    if (!item) { Py_DECREF(walked); goto error; }
-                    int rc = PyList_Append(result, item);
-                    if (!PyList_Check(walked)) Py_DECREF(item);
-                    if (rc < 0) { Py_DECREF(walked); goto error; }
+                 * extend result with the elements / CHARS. */
+                if (PyList_Check(walked)) {
+                    Py_ssize_t wlen = PyList_GET_SIZE(walked);
+                    for (Py_ssize_t i = 0; i < wlen; i++) {
+                        PyObject *item = PyList_GET_ITEM(walked, i);
+                        if (PyList_Append(result, item) < 0) {
+                            Py_DECREF(walked); goto error;
+                        }
+                    }
+                } else if (extend_with_str_chars(result, walked) < 0) {
+                    Py_DECREF(walked); goto error;
                 }
                 Py_DECREF(walked);
                 /* Append after_vals and unify */
@@ -570,10 +647,18 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                     PyObject *iseg = PyList_GET_ITEM(inner_segs, i);
                     if ((walked_is_segstring && PyUnicode_Check(iseg)) ||
                         PyBytes_Check(iseg)) {
-                        /* str segment → ConcreteSeg(list(seg)); bytes segment
-                         * → ConcreteSeg(list(seg)) where list(bytes) == int
-                         * codes. PySequence_List handles both. */
-                        PyObject *chars = PySequence_List(iseg);
+                        /* str segment → ConcreteSeg of its CHARS; bytes
+                         * segment → ConcreteSeg(list(seg)) where
+                         * list(bytes) == int codes (never chars). */
+                        PyObject *chars;
+                        if (PyUnicode_Check(iseg)) {
+                            chars = PyList_New(0);
+                            if (chars && extend_with_str_chars(chars, iseg) < 0) {
+                                Py_CLEAR(chars);
+                            }
+                        } else {
+                            chars = PySequence_List(iseg);
+                        }
                         if (!chars) {
                             Py_DECREF(inner_segs); Py_DECREF(segs); Py_DECREF(after_result); goto error;
                         }

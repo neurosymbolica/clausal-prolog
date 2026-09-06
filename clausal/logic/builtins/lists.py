@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from clausal.logic.atoms import char_atom, is_char_atom, spelling
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
@@ -56,7 +57,7 @@ def _is_int(v) -> bool:
 def _as_items(val):
     """Return list of elements if *val* is a sequence (list or str), else None.
 
-    For strings, returns list of single-char strings.
+    For strings, returns a list of CHARS (``char_atom``).
 
     F051/F061 (C9 audit): a *ground* ``SegList`` / ``SegString`` is
     walked to the concrete ``list`` / ``str`` it represents and then
@@ -67,7 +68,7 @@ def _as_items(val):
     if isinstance(val, list):
         return val
     if isinstance(val, str):
-        return list(val)
+        return [char_atom(c) for c in val]
     if isinstance(val, bytes):
         # Codes model: a bytes is a list of int codes (list(b"abc") == [97,98,99]).
         return list(val)
@@ -97,9 +98,9 @@ def _was_string(val):
     purposes.
 
     Used by every ``_seq_result``-consuming predicate to decide whether
-    to promote a result of 1-char strs back to a ``str``. Recognises a
+    to promote a result of chars back to a ``str``. Recognises a
     plain ``str`` and a ground ``SegString`` that walks to one. Lists —
-    including lists of 1-char strs — are *not* str-shaped under
+    including lists of chars — are *not* str-shaped under
     option A (input-type wins): list input keeps list output.
     """
     if isinstance(val, str):
@@ -126,13 +127,13 @@ def _was_bytes(val):
 def _seq_result(items, was_string, was_bytes=False):
     """Reconstruct the input container type from a result of elements.
 
-    When the input was a ``str`` and every result element is a 1-char str,
-    promote to ``str``. When the input was a ``bytes`` and every result element
-    is an int in ``[0, 255]`` (excluding ``bool``), promote to ``bytes`` (the
-    codes model). Otherwise return the plain list (input-type-wins; a list
-    input keeps a list output)."""
-    if was_string and all(isinstance(c, str) and len(c) == 1 for c in items):
-        return "".join(items)
+    When the input was a ``str`` and every result element is a CHAR,
+    promote to ``str`` (joining the chars' spellings). When the input was a
+    ``bytes`` and every result element is an int in ``[0, 255]`` (excluding
+    ``bool``), promote to ``bytes`` (the codes model). Otherwise return the
+    plain list (input-type-wins; a list input keeps a list output)."""
+    if was_string and all(is_char_atom(c) for c in items):
+        return "".join(spelling(c) for c in items)
     if was_bytes and all(
         isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 255
         for c in items
@@ -466,8 +467,9 @@ def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
                 # F056: nested str is recursed-into per the
                 # strings-as-lists equivalence; the top-level str case
                 # is handled by the early-return below the recursion.
+                # Its elements are CHARS, like every other str→list split.
                 for ch in x:
-                    result.append(ch)
+                    result.append(char_atom(ch))
             else:
                 # Ground Seg* walk to their concrete shape; reuse the
                 # _as_items helper for the Seg* recurse-or-atom decision.
@@ -821,16 +823,16 @@ def _replicate__3(this_generator, _proceed, _fail, _catcher, n, elem, lst, trail
     """replicate(N, Elem, List) — List is N copies of Elem.
 
     F053 (C9 audit, option A — input-type wins): when ``Elem`` is a
-    1-char ``str``, build the result as a ``str`` (e.g. ``replicate(5,
-    'a', R)`` → ``R = 'aaaaa'``). The single-char-str element gives the
+    CHAR, build the result as a ``str`` (e.g. ``replicate(5,
+    'a', R)`` → ``R = 'aaaaa'``). The char element gives the
     builder the type hint it needs to pick the str shape, matching the
     string-preserving contract followed by the rest of the family.
     """
     n_val = deref(n)
     elem_val = deref(elem)
     if isinstance(n_val, int) and n_val >= 0:
-        if isinstance(elem_val, str) and len(elem_val) == 1:
-            result = elem_val * n_val
+        if is_char_atom(elem_val):
+            result = spelling(elem_val) * n_val
         else:
             result = [elem_val] * n_val
         mark = trail.mark()

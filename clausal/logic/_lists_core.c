@@ -46,20 +46,65 @@ call_unify(PyObject *t1, PyObject *t2, TrailObject *trail)
     return result;
 }
 
+/* ── The char term (atoms-as-cells/strings §6.2) ──────────────────────────
+ *
+ * The second copy of the three char helpers (the first is in
+ * ``runtime/_list_unify.c``; these extensions share no header). Every place
+ * this file MAKES a char, TESTS for one, or reads a char's spelling goes
+ * through them, so the Stage B representation flip is an edit to these
+ * bodies alone — in every copy. Twins of ``clausal.logic.atoms.char_atom``
+ * / ``is_char_atom`` / ``spelling``.
+ *
+ * Plan 0: a char IS its 1-char str.
+ * Stage B: a char is the arity-0 cell ``(ch,)``.
+ */
+
+/* Build the char whose spelling is the 1-char str *ch1*. New reference. */
+static inline PyObject *
+char_atom_obj(PyObject *ch1)
+{
+    return Py_NewRef(ch1);
+}
+
+/* True iff *e* is a char. */
+static inline int
+is_char_atom_obj(PyObject *e)
+{
+    return PyUnicode_Check(e) && PyUnicode_GET_LENGTH(e) == 1;
+}
+
+/* The spelling of the char *e* — BORROWED reference, valid while *e* is. */
+static inline PyObject *
+char_spelling_obj(PyObject *e)
+{
+    return e;
+}
+
 /*
- * Join a list of single-char strings into a Python str.
- * Caller guarantees all items are single-char strings (no validation).
+ * Join a list of CHARS into a Python str via their spellings.
+ * Caller guarantees all items are chars (no validation).
  * Returns a new reference, or NULL on error.
  */
-static inline PyObject *
+static PyObject *
 seq_join_chars(PyObject *items)
 {
-    return PyUnicode_Join(empty_string, items);
+    Py_ssize_t n = PyList_GET_SIZE(items);
+    PyObject *spellings = PyList_New(n);
+    if (!spellings) return NULL;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *sp = char_spelling_obj(PyList_GET_ITEM(items, i));
+        if (!sp) { Py_DECREF(spellings); return NULL; }
+        Py_INCREF(sp);
+        PyList_SET_ITEM(spellings, i, sp);
+    }
+    PyObject *joined = PyUnicode_Join(empty_string, spellings);
+    Py_DECREF(spellings);
+    return joined;
 }
 
 /*
  * make_seq_result(items, was_string) — C version of Python _seq_result().
- * If was_string and all items are single-char strings, joins into a string.
+ * If was_string and all items are chars, joins their spellings into a string.
  * Otherwise returns items with an incremented refcount.
  * Returns a new reference.
  */
@@ -73,7 +118,7 @@ make_seq_result(PyObject *items, int was_string)
     Py_ssize_t n = PyList_GET_SIZE(items);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *c = PyList_GET_ITEM(items, i);
-        if (!PyUnicode_Check(c) || PyUnicode_GET_LENGTH(c) != 1) {
+        if (!is_char_atom_obj(c)) {
             Py_INCREF(items);
             return items;
         }

@@ -1056,3 +1056,119 @@ class TestTheWrapperActuallyReachesC:
         inspection._collect_vars_impl(seg, [])
         _helpers._is_ground(seg)
         assert seen == [], f"a Seg* shape reached the C twins: {seen}"
+
+
+# ── runtime/list_unify.py twins — chars go through char_atom/is_char_atom ────
+#
+# atoms-as-cells/strings Task 7. Under Plan 0 (an atom IS its spelling) these
+# assertions hold for both twins already; their value is as the regression net
+# for the Stage B flip, when a char becomes the arity-0 cell ``("a",)``. So
+# every *output* char is checked through ``is_char_atom`` / ``spelling`` rather
+# than against a literal ``"a"``, while *inputs* stay literal shapes — a Stage B
+# break shows up here as a twin divergence or a failed helper assertion instead
+# of as a silent behaviour change deep in a corpus program.
+
+from clausal.logic.atoms import char_atom, is_char_atom, spelling as _spelling
+from clausal.logic.runtime.list_unify import (
+    _head_list_unify_input_py,
+    _head_list_unify_output_py,
+)
+
+try:
+    from clausal.logic.runtime._list_unify import (
+        _head_list_unify_input as _c_list_unify_input,
+        _head_list_unify_output as _c_list_unify_output,
+    )
+    _HAVE_LIST_UNIFY_C = True
+except ImportError:  # pragma: no cover — pure-Python build
+    _HAVE_LIST_UNIFY_C = False
+
+requires_list_unify_c = pytest.mark.skipif(
+    not _HAVE_LIST_UNIFY_C, reason="_list_unify C accelerator not built"
+)
+
+_INPUT_TWINS = (
+    [_head_list_unify_input_py, _c_list_unify_input]
+    if _HAVE_LIST_UNIFY_C else [_head_list_unify_input_py]
+)
+_OUTPUT_TWINS = (
+    [_head_list_unify_output_py, _c_list_unify_output]
+    if _HAVE_LIST_UNIFY_C else [_head_list_unify_output_py]
+)
+
+
+@requires_list_unify_c
+class TestListUnifyCharTwinParity:
+    """``_head_list_unify_*`` C vs Python: which results promote to a str,
+    and what shape the destructured chars have."""
+
+    def test_a_str_target_destructures_into_char_atoms(self):
+        """``[H, *T]`` against ``"abc"``: H is a CHAR, T is the str tail."""
+        # nv
+        outs = []
+        for impl in _INPUT_TWINS:
+            h, t = Var(), Var()
+            trail = Trail()
+            assert impl("abc", [h], t, [], trail) is True
+            assert is_char_atom(deref(h))
+            outs.append((_spelling(deref(h)), deref(t)))
+        assert outs[0] == ("a", "bc")
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"
+
+    def test_a_str_star_promotes_the_output_back_to_a_str(self):
+        """A str-sourced star splats into chars and re-promotes (star_was_str)."""
+        # nv
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, star = Var(), Var()
+            trail = Trail()
+            unify(star, "ab", trail)
+            assert impl(target, [], star, [], trail) is True
+            outs.append(deref(target))
+        assert outs[0] == "ab"
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"
+
+    def test_a_list_of_chars_star_is_not_promoted(self):
+        """``["a", "b"]`` is a LIST of chars, not a string — no promotion."""
+        # nv
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, star = Var(), Var()
+            trail = Trail()
+            unify(star, [char_atom("a"), char_atom("b")], trail)
+            assert impl(target, [], star, [], trail) is True
+            got = deref(target)
+            assert isinstance(got, list) and len(got) == 2
+            assert all(is_char_atom(c) for c in got)
+            outs.append("".join(_spelling(c) for c in got))
+        assert outs == ["ab"] * len(_OUTPUT_TWINS)
+
+    def test_two_char_strs_beside_a_str_star_are_not_promoted(self):
+        """A non-char element blocks the promotion in both twins."""
+        # nv
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, before, star = Var(), Var(), Var()
+            trail = Trail()
+            unify(before, "xy", trail)          # a TWO-char str: not a char
+            unify(star, "ab", trail)
+            assert impl(target, [before], star, [], trail) is True
+            got = deref(target)
+            assert isinstance(got, list), f"{impl} promoted {got!r}"
+            assert got[0] == "xy"
+            assert all(is_char_atom(c) for c in got[1:])
+            outs.append(repr(got))
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"
+
+    def test_a_segstring_star_splats_into_char_atoms(self):
+        """A ground SegString star walks to a str and splats as chars."""
+        # nv
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, star = Var(), Var()
+            trail = Trail()
+            unify(star, SegString(["a", "b"]), trail)
+            assert impl(target, [], star, [], trail) is True
+            outs.append(deref(target))
+        assert outs[0] == "ab"
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"

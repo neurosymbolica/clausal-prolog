@@ -23,7 +23,9 @@ from decimal import (
 from types import MappingProxyType
 from typing import Any, Optional
 
-from .logic.atoms import demangle_for_display, is_mangled
+from .logic.atoms import (
+    char_atom, demangle_for_display, is_char_atom, is_mangled, spelling,
+)
 from .logic.cells import TUPLE_TAG
 from .logic.variables import Var, deref
 
@@ -1062,9 +1064,10 @@ class SegString:
                     else:
                         new_segs.append(v)
                 elif isinstance(v, list):
-                    # VarSeg bound to a char list — join into string.
+                    # VarSeg bound to a char list — join the chars'
+                    # SPELLINGS into a string.
                     # F024 (audit 2026-05-25): validate every element is a
-                    # ``str`` before delegating to ``str.join`` so the
+                    # CHAR before delegating to ``str.join`` so the
                     # malformed-segment case raises a typed clausal
                     # ``PartialTermError`` instead of leaking the raw
                     # ``TypeError: sequence item N: expected str instance,
@@ -1074,13 +1077,14 @@ class SegString:
                     # is_ground) and gives no signal that the SegString's
                     # VarSeg binding violates the char-list contract.
                     for i, elem in enumerate(v):
-                        if not isinstance(elem, str):
+                        if not is_char_atom(elem):
                             raise PartialTermError(
                                 f"SegString VarSeg bound to a non-char-list: "
                                 f"element [{i}] is {type(elem).__name__} "
-                                f"({elem!r}), expected str. Full binding: {v!r}"
+                                f"({elem!r}), expected a char. "
+                                f"Full binding: {v!r}"
                             )
-                    s = "".join(v)
+                    s = "".join(spelling(c) for c in v)
                     if new_segs and isinstance(new_segs[-1], str):
                         new_segs[-1] = new_segs[-1] + s
                     else:
@@ -1179,7 +1183,7 @@ class SegString:
             # unbound Vars inside ``other``.
             walked = self.__walk__()
             if isinstance(walked, str):
-                return unify(list(walked), other, trail)
+                return unify([char_atom(c) for c in walked], other, trail)
             # F023 (audit 2026-05-25): non-ground SegString vs list — the
             # old branch returned ``NotImplemented`` which the C top-level
             # unify treats as "no protocol match → False", silently
@@ -1193,7 +1197,8 @@ class SegString:
             equivalent_segs: list = []
             for seg in walked._segments:
                 if isinstance(seg, str):
-                    equivalent_segs.append(ConcreteSeg(list(seg)))
+                    equivalent_segs.append(
+                        ConcreteSeg([char_atom(c) for c in seg]))
                 else:  # VarSeg
                     equivalent_segs.append(seg)
             return SegList(equivalent_segs).__unify__(other, trail)
@@ -1303,8 +1308,8 @@ class SegString:
             w = self.__walk__()
             if isinstance(w, str):
                 return (
-                    all(isinstance(c, str) and len(c) == 1 for c in other)
-                    and w == "".join(other)
+                    all(is_char_atom(c) for c in other)
+                    and w == "".join(spelling(c) for c in other)
                 )
             return False
         if isinstance(other, SegList):

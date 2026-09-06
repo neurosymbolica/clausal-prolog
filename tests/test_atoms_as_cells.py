@@ -200,3 +200,49 @@ def test_resolve_module_accepts_a_cell_atom_designator(mod):
     from clausal.logic.solve import resolve_module
     assert (resolve_module(("_atoms_as_cells_probe",))
             is resolve_module("_atoms_as_cells_probe"))
+
+
+def test_maybe_promote_uses_is_char_atom():
+    """§6.2: the list→str promotion tests ``is_char_atom``, and joins the
+    elements' SPELLINGS — not the elements themselves (Task 7)."""
+    from clausal.logic.atoms import is_char_atom
+    from clausal.logic.runtime import _seg_helpers
+    assert _seg_helpers.maybe_promote_to_str([char_atom("a"), char_atom("b")]) == "ab"
+    assert _seg_helpers.maybe_promote_to_str(["ab", "c"]) == ["ab", "c"]
+    assert _seg_helpers.maybe_promote_to_str([]) == []
+    # Every element the promotion accepts is exactly a char atom.
+    assert is_char_atom(char_atom("a")) and not is_char_atom("ab")
+
+
+def test_as_items_yields_char_atoms_for_a_str():
+    """§6.2: ``_as_items`` on a str produces CHARS, not raw 1-char strs."""
+    from clausal.logic.atoms import is_char_atom, spelling
+    from clausal.logic.builtins.lists import _as_items, _seq_result
+    items = _as_items("abc")
+    assert len(items) == 3
+    assert all(is_char_atom(c) for c in items)
+    assert "".join(spelling(c) for c in items) == "abc"
+    # ... and _seq_result reconstructs the str from those same chars.
+    assert _seq_result(items, was_string=True) == "abc"
+    assert _seq_result(items, was_string=False) is items
+
+
+def test_segstring_walk_unify_and_eq_speak_chars():
+    """§6.2: SegString's list-facing arms are char-atom-shaped (Task 7)."""
+    from clausal.logic.atoms import is_char_atom, spelling
+    from clausal.logic.variables import Trail, Var, deref, unify
+    from clausal.terms import SegString, VarSeg
+    # __walk__: a VarSeg bound to a char LIST joins the chars' spellings.
+    X = Var()
+    trail = Trail()
+    assert unify(X, [char_atom("l"), char_atom("o")], trail)
+    assert SegString(["hel", VarSeg(X)]).__walk__() == "hello"
+    # __unify__ against a list: the walked str materialises as char atoms.
+    A, B = Var(), Var()
+    trail2 = Trail()
+    assert SegString(["ab"]).__unify__([A, B], trail2)
+    assert is_char_atom(deref(A)) and spelling(deref(A)) == "a"
+    assert is_char_atom(deref(B)) and spelling(deref(B)) == "b"
+    # __eq__ against a list of chars.
+    assert SegString(["ab"]) == [char_atom("a"), char_atom("b")]
+    assert not (SegString(["ab"]) == ["ab"])
