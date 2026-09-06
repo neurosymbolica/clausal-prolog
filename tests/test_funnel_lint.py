@@ -336,10 +336,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    .superpowers/sdd/p32-cell-default-flip/task-2-report.md and
     #    task-7-report.md), then -> 2469-2586 by the atoms-as-cells Task 4
     #    writers work (the ISO quoting helpers added above ``term_str`` and
-    #    the arity-0 atom case added inside its cell branch -- again purely
+    #    the arity-0 atom case added inside its cell branch), then -> 2474-2591
+    #    by fix round 1's lone-dot rule in ``atom_needs_quotes`` -- again purely
     #    mechanical line-count shifts, see
     #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-4-report.md).
-    AllowEntry("clausal/terms.py", (2469, 2586),
+    AllowEntry("clausal/terms.py", (2474, 2591),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

@@ -2376,12 +2376,17 @@ def atom_needs_quotes(s: str) -> bool:
 
     Bare iff *s* is a solo token (``[]``, ``{}``, ``!``, ``;``), a
     lowercase-initial identifier (``foo``, ``fooBar_1``), or a run of
-    graphic characters (``+``, ``=..``).  The empty atom and ``,`` need
-    quotes.
+    graphic characters (``+``, ``=..``).  The empty atom, ``,`` and a lone
+    ``.`` need quotes.
     """
     if s in _SOLO_ATOMS:
         return False
     if not s:
+        return True
+    if s == ".":
+        # A lone ``.`` is the END TOKEN: unquoted it would terminate the
+        # term being read.  Longer graphic runs containing a dot (``=..``)
+        # are safe and stay bare; Scryer quotes exactly this one.
         return True
     if s[0].islower() and all(c.isalnum() or c == "_" for c in s):
         return False
@@ -2603,13 +2608,30 @@ def term_canonical(t: Any) -> str:
     (``'.'(1,'.'(2,[]))``) — byte-comparable with Scryer's output.  The
     representation itself is untouched (spec §5.4: ``'.'/2`` is a view,
     never a representation); only the rendering expands.  Same dispatch
-    order as :func:`term_str`, which it falls back to for every shape ISO
-    does not specify a canonical form for.
+    order as :func:`term_str`.
+
+    The output never carries ANSI colour, whatever style is current: a
+    canonical rendering exists to be compared byte for byte, so it spells
+    numbers and variables itself rather than borrowing :func:`term_str`'s
+    coloured spellings.
+
+    Shapes ISO gives no canonical form for — ``KWTerm``, ``DictTerm``,
+    ``SetTerm``, ``Predicate``, ``Call``, and opaque Python objects — fall
+    back to :func:`term_str`; there is no ``'…'/N`` structure to print them
+    as, so the display rendering is the best available answer.
     """
     if not isinstance(t, (str, bytes, int, float)):
         t = deref(t)
-    if t is None or t is ... or isinstance(t, (bool, Decimal, int, float, complex)):
-        return term_str(t)
+    if t is None:
+        return "None"
+    if t is ...:
+        return "..."
+    if isinstance(t, bool):
+        return str(t)
+    if isinstance(t, Decimal):
+        return str(t)
+    if isinstance(t, (int, float, complex)):
+        return repr(t)
     if isinstance(t, str):
         # Stage A: a str is still an atom, so it renders as the quoted atom
         # spelling.  Task 11 (THE FLIP) replaces this branch with the cons
@@ -2632,7 +2654,7 @@ def term_canonical(t: Any) -> str:
             return term_canonical(walked)
         return _seg_canonical(walked)
     if isinstance(t, Var):
-        return term_str(t)
+        return _canonical_var(t)
     if type(t) is tuple and t and type(t[0]) is str:
         # A CELL.  Slot 0 read RAW, no deref -- the recognition rule every
         # cell site uses.  An arity-0 cell is an atom and prints bare.
@@ -2646,7 +2668,53 @@ def term_canonical(t: Any) -> str:
         f = deref(t.functor)
         head = _quoted_atom_spelling(f) if isinstance(f, str) else term_canonical(f)
         return head + "(" + ",".join(term_canonical(a) for a in t.args) + ")"
+    # Operator nodes -- recognised exactly as ``term_str`` recognises them
+    # (an ``op`` class attribute plus ``left``/``right`` or ``operand``),
+    # but canonical form has NO operator syntax: ``1 + 2`` is the term
+    # ``+(1,2)`` and prints as one.
+    cls = type(t)
+    op = getattr(cls, "op", None)
+    if op is not None and hasattr(t, "left") and hasattr(t, "right"):
+        head = _quoted_atom_spelling(_iso_op_functor(cls))
+        return (head + "(" + term_canonical(t.left) + ","
+                + term_canonical(t.right) + ")")
+    if op is not None and hasattr(t, "operand"):
+        head = _quoted_atom_spelling(_iso_op_functor(cls))
+        return head + "(" + term_canonical(t.operand) + ")"
     return term_str(t)
+
+
+def _canonical_var(v) -> str:
+    """Spell an unbound variable for canonical output: ``_`` + its identity.
+
+    ``term_str`` prints every variable as the style's single anonymous
+    ``_``, which makes ``f(X,Y)`` and ``f(X,X)`` indistinguishable;
+    ISO/Scryer print distinct ``_N``.  The engine's own variable identity
+    (``Var._id``, the counter ``compiler/terms_to_ast.py`` keys its variable
+    context on) is that ``N``; a variable-like object without one falls back
+    to its object identity, which is at least stable within a rendering.
+    """
+    vid = getattr(v, "_id", None)
+    return "_" + (str(vid) if vid is not None else str(id(v)))
+
+
+#: Operator node classes whose ISO functor name differs from the PYTHON
+#: surface spelling their ``op`` attribute carries.  ``mod`` is ISO 9.1.3's
+#: name for ``%``; the four comparison entries are the equivalences the node
+#: classes' own docstrings record (``pythonic_ast/nodes.py``: "Prolog
+#: ``=:=/2``", "Prolog ``=\\=/2``", "Prolog ``\\==/2``").  Every other
+#: operator's ``op`` string IS the functor's spelling, so it needs no entry.
+_ISO_OP_FUNCTOR = {
+    "Mod": "mod",
+    "ArithEq": "=:=",
+    "ArithNeq": "=\\=",
+    "StructuralNeq": "\\==",
+}
+
+
+def _iso_op_functor(cls) -> str:
+    """Return the functor name an operator node's class denotes."""
+    return _ISO_OP_FUNCTOR.get(cls.__name__, cls.op)
 
 
 def _seg_canonical(seg) -> str:
@@ -2658,14 +2726,14 @@ def _seg_canonical(seg) -> str:
     segments = list(seg.segments)
     tail = "[]"
     if segments and isinstance(segments[-1], VarSeg):
-        tail = term_str(deref(segments[-1].var))
+        tail = _canonical_var(deref(segments[-1].var))
         segments = segments[:-1]
     for s in segments:
         if isinstance(s, VarSeg):
             # An interior hole stands for an unknown NUMBER of elements, so
             # no cons chain can spell it exactly; it renders as the variable
             # in the one element position it occupies.
-            rendered.append(term_str(deref(s.var)))
+            rendered.append(_canonical_var(deref(s.var)))
         elif isinstance(s, str):
             rendered.extend(term_canonical(c) for c in s)  # SegString text
         else:
@@ -3006,6 +3074,11 @@ __all__ = [
     "cons_to_list",
     "term_str",
     "term_pformat",
+    # Canonical (write_canonical/1) rendering and ISO 6.4.2 quoting
+    "term_canonical",
+    "atom_needs_quotes",
+    "quote_atom",
+    "quote_string",
     # HTML rendering (Jupyter)
     "JUPYTER_CSS",
     "term_html",

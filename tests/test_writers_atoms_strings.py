@@ -7,6 +7,7 @@ and ``tests/test_double_quotes_directive.py`` use.
 """
 import contextlib
 import io
+import re
 import os
 import tempfile
 
@@ -41,6 +42,9 @@ def mod():
     ("foo", True), ("fooBar_1", True), ("Foo", False), ("foo bar", False),
     ("", False), ("[]", True), ("{}", True), ("!", True), (";", True), (",", False),
     ("+", True), ("=..", True), ("hello-world", False), ("_x", False), ("1a", False),
+    # A lone `.` is the end token -- quoted, though longer graphic runs
+    # containing a dot (`=..` above) stay bare.
+    (".", False),
 ])
 def test_atom_needs_quotes(s, bare):
     assert atom_needs_quotes(s) is (not bare)
@@ -90,8 +94,9 @@ def test_term_canonical_partial_list_and_nesting():
     # the hole in the tail position: ``'.'(1,_N)``.
     t = term_canonical(SegList([ConcreteSeg([1]), VarSeg(Var())]))
     assert t.startswith("'.'(1,_") and t.endswith(")")
-    # ...while the proper 2-element list keeps its ``[]`` terminator.
-    assert term_canonical([1, Var()]) == "'.'(1,'.'(_,[]))"
+    # ...while the proper 2-element list keeps its ``[]`` terminator.  The
+    # variable's number is its engine identity, so it is matched, not pinned.
+    assert re.fullmatch(r"'\.'\(1,'\.'\(_\d+,\[\]\)\)", term_canonical([1, Var()]))
 
 
 def test_term_canonical_partial_string_walks_to_chars():
@@ -99,8 +104,64 @@ def test_term_canonical_partial_string_walks_to_chars():
     chars with the hole as the tail (spec §6.7)."""
     from clausal.terms import term_canonical, SegString, VarSeg
     from clausal.logic.variables import Var
-    assert term_canonical(SegString(["he", VarSeg(Var())])) == "'.'(h,'.'(e,_))"
+    out = term_canonical(SegString(["he", VarSeg(Var())]))
+    assert re.fullmatch(r"'\.'\(h,'\.'\(e,_\d+\)\)", out), out
 
 
 def test_term_str_hidden_atom_display_unchanged():
     assert term_str(("m\x1fbar",)) == "m.bar"
+
+
+def test_term_canonical_has_no_operator_forms():
+    """§6.7: canonical output has no operator syntax and no spaces — an
+    operator node prints as the ``op(...)`` term it is.  Node fields are
+    ``position, left, right``, so the operands must be passed by keyword."""
+    from clausal.terms import Add, Div, Mod, Mult, Negate, term_canonical
+    assert term_canonical(Div(left=("foo",), right=2)) == "/(foo,2)"
+    assert term_canonical(Add(left=1, right=Mult(left=2, right=3))) == "+(1,*(2,3))"
+    # ISO spells `%` as mod/2 (9.1.3); a unary operator prints as `-(3)`.
+    assert term_canonical(Mod(left=7, right=2)) == "mod(7,2)"
+    assert term_canonical(Negate(operand=3)) == "-(3)"
+
+
+def test_term_canonical_numbers_variables_are_distinct():
+    """§6.7: distinct variables print distinctly (``f(X,X,Y)`` is not
+    ``f(_,_,_)``), which ISO/Scryer spell ``_N``."""
+    from clausal.terms import term_canonical
+    from clausal.logic.variables import Var
+    X, Y = Var(), Var()
+    out = term_canonical(("f", X, X, Y))
+    args = out[len("f("):-1].split(",")
+    assert args[0] == args[1] != args[2]
+    assert all(a.startswith("_") for a in args)
+
+
+def test_term_canonical_never_colours():
+    """Canonical output exists to be compared byte for byte, so it carries
+    no ANSI even when a colouring style is current."""
+    from clausal.terms import ANSI_COLORS, TermStyle, get_style, set_style, term_canonical
+    from clausal.logic.variables import Var
+    previous = get_style()
+    try:
+        set_style(TermStyle(colors=ANSI_COLORS))
+        assert "\x1b" not in term_canonical(("f", 1))
+        assert term_canonical(("f", 1)) == "f(1)"
+        assert "\x1b" not in term_canonical(("f", Var(), [1, ("a",)]))
+    finally:
+        set_style(previous)
+
+
+def test_lone_dot_atom_is_quoted():
+    """The end-token hazard: a lone ``.`` atom must re-read as an atom."""
+    from clausal.terms import term_canonical
+    assert quote_atom(".") == "'.'"
+    assert term_str((".",)) == "'.'"
+    assert term_canonical((".",)) == "'.'"
+    # ...and a cell whose functor is spelled `.` is just that cell (§5.4).
+    assert term_canonical((".", 1, 2)) == "'.'(1,2)"
+
+
+def test_writer_helpers_are_exported():
+    import clausal.terms as terms_mod
+    for name in ("term_canonical", "atom_needs_quotes", "quote_atom", "quote_string"):
+        assert name in terms_mod.__all__
