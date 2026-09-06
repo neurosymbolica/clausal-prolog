@@ -554,6 +554,33 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 
 ---
 
+## Migration Ratchet
+
+### -double_quotes
+
+**Transitional — scheduled for removal.** Today a double-quoted literal
+`"hello"` denotes the *atom* `hello`, indistinguishable from bare `hello`.
+That is a leftover of the atom pivot, not the intended surface: the ruling on
+record is Prolog's — `'hello'` is a quoted atom, `"hello"` is a string that
+unifies with its char list `['h','e','l','l','o']`, and `atom("hello")` is
+false. The engine flip that restores this is in progress.
+
+`-double_quotes(atom)` is a **file-level declaration** that a module still
+relies on the current atom meaning of `"..."`. It is a no-op today and keeps
+the module's meaning unchanged when the flip lands, so every existing module
+can carry it *before* the default becomes `chars`. `-double_quotes(chars)` is
+refused until the flip lands ("not yet supported"), so no file can claim
+string semantics it does not yet get; any other argument is an error.
+
+This is a ratchet, not a compatibility flag: migrate a module (rewrite the
+`"x"` literals it uses as atoms to `'x'`, keep genuine text as `"..."`),
+drop the directive, and when the last module has dropped it the directive is
+deleted from the engine and its use becomes a load error. Support for
+string-bearing Prolog dialects is a translation-layer concern, never an
+engine flag.
+
+---
+
 ## Removed Directive
 
 ### -tagged_terms (removed)

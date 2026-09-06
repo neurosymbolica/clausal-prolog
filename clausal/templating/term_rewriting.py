@@ -4907,13 +4907,54 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_constants_directive(args, expr_stmt)
         if name == "implicit_functors":
             return transformer._handle_implicit_functors_directive(args, expr_stmt)
+        if name == "double_quotes":
+            return transformer._handle_double_quotes_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -hide, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
             f"-strict_atoms, -implicit_atoms, -allow_singletons, "
-            f"-constants, -implicit_functors)"
+            f"-constants, -implicit_functors, -double_quotes)"
+        )
+
+    def _handle_double_quotes_directive(transformer, args, expr_stmt):
+        """Process ``-double_quotes(atom)`` — the strings-migration RATCHET.
+
+        Step 2 of the strings/atom-tag program (canonical
+        ``todo/strings-lost-in-the-atom-pivot-double-quotes-are-char-lists-2026-09-06.md``,
+        ruling R-S4): a module that still relies on ``"..."`` denoting an
+        ATOM declares ``-double_quotes(atom)`` so it keeps that meaning
+        after the engine flips the default to ``chars`` (``"..."`` = a
+        string unifying with its char list).  This commit only ACCEPTS the
+        directive so every downstream module can carry it BEFORE the flip
+        reaches them; ``atom`` is a no-op today because the atom meaning is
+        still the only one there is.  ``chars`` is refused until the flip
+        lands so no module can claim string semantics it does not get.
+
+        Lifetime: the directive is deleted from the engine — and its use
+        pinned as a load error — once the last module has dropped it.  It
+        is not a compatibility flag; a string-bearing Prolog is a
+        translation-layer concern.
+        """
+        if len(args) != 1 or not isinstance(args[0], Name):
+            raise SyntaxError(
+                "-double_quotes takes exactly one bare argument: "
+                "`-double_quotes(atom)`"
+            )
+        mode = args[0].id
+        if mode == "atom":
+            return replace(Pass(), expr_stmt)
+        if mode == "chars":
+            raise SyntaxError(
+                "-double_quotes(chars) is not yet supported: the engine still "
+                "reads every \"...\" literal as an atom.  Declare "
+                "-double_quotes(atom) to state that dependency explicitly; "
+                "chars becomes the default when the strings flip lands."
+            )
+        raise SyntaxError(
+            f"-double_quotes({mode}): unknown mode; the only accepted mode "
+            f"is `atom` (`chars` arrives with the strings flip)"
         )
 
     def _declare_predicate_export(transformer, spec, entry_node, expr_stmt,
