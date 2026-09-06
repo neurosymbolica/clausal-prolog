@@ -150,6 +150,20 @@ class TestNamedConstraintNamesAreAtoms:
         assert formal.args[0] == mint("atom")
         assert formal.args[1] == "x_big"
 
+    def test_an_unbound_name_fails_rather_than_raising(self):
+        """Fix round 1: a variable Name is a MODE signal, not a type fault —
+        the term is the right sort and only the binding is missing.  The two
+        sibling funnels this task added (``clpfd._op_spelling``,
+        ``attributes._storage_key``) both fail for an unbound argument, and
+        this one now matches them."""
+        # nv
+        trail = Trail()
+        x = Var()
+        in_z3(x, 1, 10, trail)
+        assert z3_named(Gt(left=x, right=5), Var(), trail) is False
+        state = get_z3_state(trail)
+        assert not getattr(state, "_named_constraints", {})
+
 
 class TestMinimalUnsatCore:
     def test_minimal_core_strips_redundant(self):

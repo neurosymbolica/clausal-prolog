@@ -858,13 +858,23 @@ def test_zcompare_binds_an_atom_and_reads_one():
     assert zcompare(mint("<"), a, b, trail)
     assert domain_max(_get_attr(a, FD_KEY).domain) <= 4
     assert domain_min(_get_attr(b, FD_KEY).domain) >= 2
-    # …and a STRING order is refused rather than read as the spelling.
-    with pytest.raises(LogicException) as exc:
-        zcompare("<", Var(), Var(), Trail())
-    formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == mint("atom")
-    assert formal.args[1] == "<"
+    # A ground ATOM order against ground operands is CHECKED, not just bound.
+    assert zcompare(mint("<"), 1, 5, Trail())
+    assert not zcompare(mint(">"), 1, 5, Trail())
+
+    # …and a STRING order is refused rather than read as the spelling — in
+    # BOTH shapes.  Fix round 1: the ground/ground fast path ran before the
+    # Order was validated, so ``zcompare("<", 1, 5)`` merely failed (the
+    # string does not unify with the order atom) while ``zcompare("<", X, Y)``
+    # raised — the same mistake got two different answers depending on the
+    # operands.
+    for shape in ((Var(), Var()), (1, 5)):
+        with pytest.raises(LogicException) as exc:
+            zcompare("<", shape[0], shape[1], Trail())
+        formal = _formal(exc)
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
+        assert formal.args[1] == "<"
 
 
 def test_attribute_keys_are_atoms():

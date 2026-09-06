@@ -305,6 +305,10 @@ class TestAtomArguments:
             result)
         assert len(sols) == 1
         # ``str(("t12b",))`` would have echoed the tuple repr.
+        # The ``str`` key here pins a RESIDUAL, not the contract: the result
+        # dict is still emitted with str keys, so ``R.stdout`` from source
+        # (which looks up the atom ``("stdout",)``, §6.8) finds nothing.  It
+        # moves to atom keys in the result-dict emission sweep.
         assert deref(result).data["stdout"].strip() == "t12b args"
 
     def test_process_create_reads_an_atom_keyed_options_dict(self, tmp_path):
@@ -314,6 +318,7 @@ class TestAtomArguments:
         sols, _ = simple_solutions(
             _process_create_4, mint("pwd"), [], opts, result)
         assert len(sols) == 1
+        # str key: the result-dict residual again — see above.
         assert str(tmp_path) in deref(result).data["stdout"]
 
     def test_process_create_accepts_an_atom_input(self):
@@ -323,4 +328,5 @@ class TestAtomArguments:
         sols, _ = simple_solutions(
             _process_create_4, mint("cat"), [], opts, result)
         assert len(sols) == 1
+        # str key: the result-dict residual again — see above.
         assert deref(result).data["stdout"] == "t12b stdin"

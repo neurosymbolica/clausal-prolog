@@ -708,10 +708,12 @@ class TestNeReflexivity:
         assert sum(1 for _ in label([x], t)) == 0
 
 
-# ── A06-F011: sum_/scalar_product op-string vocabulary ───────────────────────
+# ── A06-F011: sum_/scalar_product operator-atom vocabulary ───────────────────
+# Renamed from TestSumOpStrings by Task 12b: the Op is an ATOM (spec §6.4),
+# and a plain str in that position is now refused, not read as the spelling.
 
 
-class TestSumOpStrings:
+class TestSumOpAtoms:
     def test_prolog_style_ops_post(self):
         for op in ["#=", "=", "#<", "#>", "#=<", "#>=", "#\\="]:
             t = Trail()

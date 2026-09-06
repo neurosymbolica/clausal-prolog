@@ -3107,12 +3107,22 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     order = deref(order)
     x = deref(x)
     y = deref(y)
+    # Read (and validate) the Order BEFORE anything else, including the
+    # ground/ground fast path below.  Fix round 1: with the check further
+    # down, ``zcompare("<", 1, 5)`` took the fast path and merely FAILED (the
+    # string does not unify with the order atom) while ``zcompare("<", X, Y)``
+    # raised — one refusal for the same mistake, decided by the operands.
+    # It also means the refusal lands before ``_ensure_fd`` has touched the
+    # trail.
+    order_name = _op_spelling(order, "zcompare/3")
     if is_var(x):
         _ensure_fd(x, trail)
     if is_var(y):
         _ensure_fd(y, trail)
 
-    # If both x and y are ground, just determine the order directly
+    # If both x and y are ground, just determine the order directly.  The
+    # answer is unified against *order*, which is either an unbound Var (it
+    # gets bound) or the atom the caller already wrote (it is checked).
     if isinstance(x, int) and isinstance(y, int):
         if x < y:
             return unify(order, mint('<'), trail)
@@ -3122,7 +3132,6 @@ def zcompare(order, x, y, trail: Trail) -> bool:
             return unify(order, mint('='), trail)
 
     # If order is ground, use it to constrain x and y
-    order_name = _op_spelling(order, "zcompare/3")
     if order_name is not None:
         if order_name == '<':
             return fd_lt(x, y, trail)

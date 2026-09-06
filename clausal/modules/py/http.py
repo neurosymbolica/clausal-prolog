@@ -224,7 +224,8 @@ def _request_3(options, status_out, body_out, trail, k):
         elif not is_var(url_raw):
             note_mismatch("request/3",
                           f"was called with an options dict whose url is "
-                          f"{type(url_raw).__name__} where str is required")
+                          f"{type(url_raw).__name__} where text (an atom or "
+                          f"a string) is required")
         return
     method = deref(option(opts.data, "method", "GET"))
     if is_var(method):

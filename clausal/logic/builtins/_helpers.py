@@ -397,9 +397,16 @@ _is_compound_precell = _is_compound
 # ``("h",)``; ``arg(2, "hello", T)`` gives the ``str`` SLICE ``"ello"``
 # (R-S2: decomposition answers virtually, nothing is expanded), and the
 # empty string answers as ``[]`` does.  These arms sit in FRONT of the
-# pre-cell implementations (C or Python), which still carry the retired
-# "a str is its own functor, arity 0" reading of the P3-1 pivot and are
-# therefore never reached for a ``str`` any more.
+# pre-cell implementations (C or Python).  Task 12b retired P3-1's "a str is
+# its own functor, arity 0" reading from ``_functor_name``/``_arity`` in BOTH
+# halves (``_functor_name_py``/``_arity_py`` here and ``py_functor_name``/
+# ``py_arity`` in ``variables/_variables.c``), so for those two the wrapper
+# and the accessor it fronts now give the same answer.  ``_nth_arg`` and
+# ``_args_list`` are still fronted rather than agreed with: their pre-cell
+# halves have no ``str`` branch at all (a ``str`` falls through to
+# ``IndexError`` / ``[]``), and giving them one means BUILDING a char-atom
+# cell in C as well as Python — an addition, not a retirement, and not yet
+# done.
 #
 # The str arms are spelled ``type(term) is str`` rather than routed through
 # ``normalize_seg_input``, and that is deliberate rather than an exception to

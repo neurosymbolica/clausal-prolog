@@ -1865,7 +1865,7 @@ def z3_declare_datatype(name: str, constructors: list, trail: Trail) -> Any:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def _constraint_name(name: Any) -> str:
+def _constraint_name(name: Any) -> str | None:
     """The SPELLING of a named constraint's Name, which is an ATOM (§6.4).
 
     Before THE FLIP (2026-09-06-atoms-as-cells-strings) this was
@@ -1873,10 +1873,18 @@ def _constraint_name(name: Any) -> str:
     ``"('x_big',)"`` — so the Z3 indicator, the ``_named_constraints`` key
     and every unsat-core answer carried a repr for the atom every source
     program writes here.  Spec §3 goal 5 wants that class of leak loud.
+
+    An UNBOUND name answers ``None`` and the caller FAILS, matching the two
+    sibling funnels this task added (``clpfd._op_spelling``,
+    ``attributes._storage_key``): a variable here is a mode signal, not a
+    type fault — the term is the right sort, only the binding is missing.
+    Every other non-atom, a STRING included, is ``type_error(atom, …)``.
     """
     name = deref(name)
     if is_atom(name):
         return spelling(name)
+    if is_var(name):
+        return None
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, type_error,
     )
@@ -1890,10 +1898,13 @@ def z3_named(constraint_expr: Any, name: Any, trail: Trail) -> bool:
     The indicator is used as an assumption in ``z3_unsat_core``.
 
     *name* is an ATOM (§6.4); it is stored by its spelling and minted back
-    into an atom by ``z3_unsat_core``/``z3_minimal_unsat_core``.
+    into an atom by ``z3_unsat_core``/``z3_minimal_unsat_core``.  An unbound
+    Name fails; a string raises ``type_error(atom, …)``.
     """
     state = get_z3_state(trail)
     name = _constraint_name(name)
+    if name is None:
+        return False
 
     z3_expr = clausal_to_z3(constraint_expr, trail, default_sort=_z3.IntSort())
     indicator = _z3.Bool(f"_named_{name}")
