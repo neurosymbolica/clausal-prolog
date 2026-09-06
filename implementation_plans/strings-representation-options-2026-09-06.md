@@ -1,12 +1,12 @@
 # Strings vs atoms: representation options (design note, 2026-09-06)
 
-**Status: DECISION PENDING.** Input to the operator's ruling on how Clausal
-tells a *string* (`"hello"`, unifies with `['h','e','l','l','o']`) from an
-*atom* (`'hello'` / `hello`) now that P3-1 made every atom a plain interned
-`str`. Supersedes nothing yet: R-S3 in
+**Status: RULED — Option D (operator, 2026-09-06).** Atoms are arity-0
+cells `("bar",)`; plain `str` is a string; functor slot 0 stays the plain
+spelling. This supersedes R-S3 (C0-tag) and answers Q1/Q2 of
 `todo/strings-lost-in-the-atom-pivot-double-quotes-are-char-lists-2026-09-06.md`
-(canonical) still stands as the ruling of record until the operator rules on
-this note. The other engine lanes are HOLDING until it is ruled.
+(canonical); R-S1, R-S2 and R-S4 stand. The note was written as input to
+that ruling and is kept as its record; §5's plan shape is the seed of the
+implementation plan.
 Revision 2 (2026-09-06): adds Option D (atoms as arity-0 cells, the
 operator's proposal), measured in F7, and flips the recommendation to D.
 
