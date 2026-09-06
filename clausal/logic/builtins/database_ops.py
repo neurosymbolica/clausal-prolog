@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
+from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
 from clausal.logic.predicate import (
     PredicateMeta, is_term_instance, term_field_names,
 )
@@ -540,9 +541,10 @@ def _abolish_table_factory(db):
         a = deref(arity_arg)
         if is_var(f) or is_var(a):
             return
-        if not isinstance(f, str) or not isinstance(a, int):
+        # Spec §6.4: the functor argument is an ATOM, read by spelling.
+        if not _term_is_atom(f) or not isinstance(a, int):
             return
-        db.abolish_table(f, a)
+        db.abolish_table(_spelling(f), a)
         yield None
 
     return abolish_table__2

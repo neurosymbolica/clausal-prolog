@@ -180,9 +180,11 @@ class TestFunctor:
         results = sol_var(goal, t, mod=mod)
         assert len(results) == 1
         r = results[0]
-        assert isinstance(r, Compound)
-        assert r.functor == "bar"
-        assert len(r.args) == 2
+        # The name position CONSTRUCTS CELLS (atoms-as-cells design §6.4):
+        # ``bar(_, _)`` is the cell ``("bar", _, _)``, not a Compound.
+        assert type(r) is tuple
+        assert r[0] == "bar"
+        assert len(r) - 1 == 2
 
     def test_compose_atom(self):
         # nv
@@ -308,10 +310,8 @@ class TestUniv:
         goal = Call(func=LoadName(name="unpack"), args=[t, ["g", 3, 4]], kwargs=[])
         results = sol_var(goal, t, mod=mod)
         assert len(results) == 1
-        r = results[0]
-        assert isinstance(r, Compound)
-        assert r.functor == "g"
-        assert r.args == (3, 4)
+        # ``=..`` constructs a CELL (atoms-as-cells design §6.4).
+        assert results[0] == ("g", 3, 4)
 
     def test_decompose_str_is_its_own_atom_functor(self):
         # nv — P3-1 Task 5 (§1b/R2): the cons rule is retired. ``unpack``

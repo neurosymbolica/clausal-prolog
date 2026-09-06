@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from clausal.logic.atoms import mint
 from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
 
 # ── The is/== hint ────────────────────────────────────────────────────────────
@@ -191,20 +192,40 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
 # ── Structured error term helpers ─────────────────────────────────────────────
 
 
+def _name_atom(name: Any) -> Any:
+    """*name* as an ATOM when it is a spelling, unchanged otherwise.
+
+    Spec §6.4: the type/domain/operation name in a formal error term is an
+    atom.  These constructors are also reachable with a name that is not a
+    spelling at all — ``throw/1`` can put any term in the type slot, and
+    ``must_be/2`` forwards whatever the caller wrote — and building an
+    exception must never itself raise, so a non-``str`` passes through as the
+    term it is rather than tripping ``mint``'s type check.
+    """
+    return mint(name) if type(name) is str else name
+
+
 def type_error(expected_type: str, culprit: Any, context: str = "") -> Compound:
-    """Build error(type_error(Type, Culprit), Context)."""
-    inner = Compound("type_error", (expected_type, culprit))
+    """Build error(type_error(Type, Culprit), Context).
+
+    Spec §6.4 (2026-09-06-atoms-as-cells-strings): the formal term's
+    type/domain/operation NAMES are atoms, minted here so a ``catch/3``
+    pattern written in source matches them.  *Culprit* is whatever term was
+    at fault and *Context* is human text — a string, not an atom — so
+    neither is touched.
+    """
+    inner = Compound("type_error", (_name_atom(expected_type), culprit))
     return Compound("error", (inner, context))
 
 
 def instantiation_error(context: str = "") -> Compound:
     """Build error(instantiation_error, Context)."""
-    return Compound("error", ("instantiation_error", context))
+    return Compound("error", (mint("instantiation_error"), context))
 
 
 def existence_error(obj_type: str, culprit: Any, context: str = "") -> Compound:
     """Build error(existence_error(ObjType, Culprit), Context)."""
-    inner = Compound("existence_error", (obj_type, culprit))
+    inner = Compound("existence_error", (_name_atom(obj_type), culprit))
     return Compound("error", (inner, context))
 
 
@@ -212,7 +233,8 @@ def permission_error(
     operation: str, obj_type: str, culprit: Any, context: str = ""
 ) -> Compound:
     """Build error(permission_error(Op, ObjType, Culprit), Context)."""
-    inner = Compound("permission_error", (operation, obj_type, culprit))
+    inner = Compound("permission_error",
+                     (_name_atom(operation), _name_atom(obj_type), culprit))
     return Compound("error", (inner, context))
 
 
@@ -222,7 +244,7 @@ def domain_error(domain: str, culprit: Any, context: str = "") -> Compound:
     ISO domain error: *culprit* is the right Python/logic type but its value is
     outside the set the operation admits (e.g. an unknown type name given to
     must_be/2, where the TYPE — not the term — is wrong)."""
-    inner = Compound("domain_error", (domain, culprit))
+    inner = Compound("domain_error", (_name_atom(domain), culprit))
     return Compound("error", (inner, context))
 
 
@@ -232,5 +254,5 @@ def evaluation_error(error_type: str, context: str = "") -> Compound:
     ISO evaluation errors: ``zero_divisor``, ``undefined``, ``float_overflow``,
     ``int_overflow``, ``underflow`` — a numeric operation is mathematically
     undefined for its operands (e.g. a non-invertible modular inverse)."""
-    inner = Compound("evaluation_error", (error_type,))
+    inner = Compound("evaluation_error", (_name_atom(error_type),))
     return Compound("error", (inner, context))

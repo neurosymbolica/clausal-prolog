@@ -81,9 +81,12 @@ class TestFunctor:
         result = _call_binding("functor", t, "f", 2, var_indices=[0])
         assert result is not None
         term = result[0]
-        assert isinstance(term, Compound)
-        assert term.functor == "f"
-        assert len(term.args) == 2
+        # The name position CONSTRUCTS CELLS (atoms-as-cells design §6.4):
+        # ``f(_, _)`` is the cell ``("f", _, _)``, the engine's own compound
+        # representation, not the legacy ``Compound`` wrapper.
+        assert type(term) is tuple
+        assert term[0] == "f"
+        assert len(term) - 1 == 2
 
     def test_construct_atom(self):
         """ISO: functor(T, a, 0) → T = a."""
@@ -208,9 +211,9 @@ class TestUniv:
         result = _call_binding("unpack", t, ["f", "a", "b"], var_indices=[0])
         assert result is not None
         term = result[0]
-        assert isinstance(term, Compound)
-        assert term.functor == "f"
-        assert term.args == ("a", "b")
+        # ``=..`` constructs a CELL (atoms-as-cells design §6.4) — see
+        # ``TestFunctor::test_construct_compound``.
+        assert term == ("f", "a", "b")
 
     def test_construct_atom_from_list(self):
         """ISO: T =.. [a] → T = a."""

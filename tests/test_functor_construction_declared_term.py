@@ -18,11 +18,16 @@ rather than a fix ("ATTR-LIST BRANCH — VERIFIED SEMANTICS"): its note that a
 constructed entry "does NOT unify with a declared term-class instance of the
 same name/arity" is this defect, measured from the outside.
 
-Only the **class** arm changes.  A ``str`` name still builds a ``Compound``,
-with no attempt to resolve the string back to a class: which module's ``cite``
-a bare string names is genuinely ambiguous under module-local atom identity,
-and that library's ``entry_key/2`` depends on the string arm behaving exactly
-as it does today.
+Only the **class** arm changes.  A plain ATOM name still builds a generic
+term, with no attempt to resolve it back to a class: which module's ``cite`` a
+bare name means is genuinely ambiguous under module-local atom identity, and
+that library's ``entry_key/2`` depends on the name arm behaving exactly as it
+does today.
+
+The atoms-as-cells design (§6.4, 2026-09-06) then replaced that generic term:
+it is a CELL, ``("tfcdt_cite", X)``, not a ``Compound``.  The property these
+tests pin is unchanged — an atom name builds the *generic* shape, a class name
+builds the *declared* one — only the generic shape's spelling moved.
 """
 
 import pytest
@@ -30,7 +35,6 @@ import pytest
 from clausal.logic.builtins.inspection import _functor__3, _univ__2
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.terms import Compound
 
 
 def built_by(builtin, *args):
@@ -76,36 +80,44 @@ def test_constructed_term_unifies_with_the_real_thing(cite):
     assert unify(built_by(_functor__3, cite, 1), cite(Var()), Trail())
 
 
-def test_string_name_still_builds_a_compound(cite):
-    """The string arm is deliberately untouched.  Resolving ``"tfcdt_cite"``
-    back to a class would have to pick a module, and a downstream helper
-    library's ``entry_key/2`` relies on this arm building a Compound it can
-    decompose to a string."""
+def test_atom_name_builds_a_generic_cell(cite):
+    """An ATOM name is deliberately not resolved back to a class: resolving
+    ``tfcdt_cite`` would have to pick a module, and a downstream helper
+    library's ``entry_key/2`` relies on this arm building a generic term it
+    can decompose to a name.
+
+    That generic term is a CELL, not a ``Compound`` (atoms-as-cells design
+    §6.4): cells are how the engine represents a compound data term, so what
+    construction builds now unifies with the same term written longhand.
+    """
     built = built_by(_functor__3, "tfcdt_cite", 1)
-    assert isinstance(built, Compound)
+    assert type(built) is tuple and built[0] == "tfcdt_cite" and len(built) == 2
     assert not isinstance(built, cite)
 
 
-def test_arity_mismatch_falls_through_to_compound(cite):
+def test_arity_mismatch_falls_through_to_a_generic_cell(cite):
     """A declared arity-1 class asked for at arity 2 is not that term, so the
-    generic Compound remains the honest answer — as today, and not an error.
+    generic shape remains the honest answer — as today, and not an error.
 
-    The functor string is pinned too: A09-F027 exists because a fall-through
+    The functor spelling is pinned too: A09-F027 exists because a fall-through
     that stringified the name the wrong way once built a bogus functor like
     ``"f(1)"``, and a type-only assertion would not notice that.
     """
     built = built_by(_functor__3, cite, 2)
-    assert isinstance(built, Compound)
-    assert built.functor == "tfcdt_cite"
+    assert type(built) is tuple and len(built) == 3
+    assert built[0] == "tfcdt_cite"
 
 
-def test_arity_zero_atom_asked_at_arity_one_is_unchanged():
+def test_arity_zero_atom_asked_at_arity_one_is_still_generic():
     """A downstream helper library's own pattern: ``functor(PROBE, KEY, 1)``
-    over an arity-0 schema atom must keep building a Compound, because
-    ``entry_key/2`` then decomposes it to get the name string.  Pinned so
-    this fix cannot break that library."""
+    over an arity-0 schema atom must keep building a generic term, because
+    ``entry_key/2`` then decomposes it to get the name.  Pinned so this fix
+    cannot break that library; the generic term is a cell (§6.4), which
+    decomposes through the same funnel a Compound did."""
     schema_atom = make_predicate("tfcdt_applicant_age", [])
-    assert isinstance(built_by(_functor__3, schema_atom, 1), Compound)
+    built = built_by(_functor__3, schema_atom, 1)
+    assert type(built) is tuple and len(built) == 2
+    assert built[0] == "tfcdt_applicant_age"
 
 
 def test_arity_zero_still_yields_the_name_itself():
@@ -133,13 +145,15 @@ def test_metaclass_minted_class_also_rebuilds():
 
 
 def test_decompose_then_reconstruct_round_trips(cite):
-    """Decomposition still yields a *string* name, so rebuilding from that
-    string yields a Compound — but rebuilding from the class round-trips."""
+    """Decomposition yields an ATOM name, so rebuilding from that name yields
+    the generic cell — but rebuilding from the class round-trips."""
+    from clausal.logic.atoms import mint
+
     original = cite(Var())
     N, A, trail = Var(), Var(), Trail()
     gen = _functor__3(original, N, A, trail, None)
     next(gen)
-    assert deref(N) == "tfcdt_cite"  # unchanged: decomposition still strings
+    assert deref(N) == mint("tfcdt_cite")  # §6.4: the name position is atoms
     assert deref(A) == 1
 
     assert unify(built_by(_functor__3, cite, 1), original, Trail())
@@ -161,14 +175,13 @@ def test_unpack_carries_the_argument_values(cite):
     assert unify(built_by(_univ__2, [cite, 42]), cite(42), Trail())
 
 
-def test_unpack_string_name_still_builds_a_compound(cite):
-    assert isinstance(built_by(_univ__2, ["tfcdt_cite", 42]), Compound)
+def test_unpack_atom_name_builds_a_generic_cell(cite):
+    assert built_by(_univ__2, ["tfcdt_cite", 42]) == ("tfcdt_cite", 42)
 
 
-def test_unpack_arity_mismatch_falls_through_to_compound(cite):
+def test_unpack_arity_mismatch_falls_through_to_a_generic_cell(cite):
     built = built_by(_univ__2, [cite, 1, 2, 3])
-    assert isinstance(built, Compound)
-    assert built.functor == "tfcdt_cite"
+    assert built == ("tfcdt_cite", 1, 2, 3)
 
 
 # ── the shared error arm ───────────────────────────────────────────────────

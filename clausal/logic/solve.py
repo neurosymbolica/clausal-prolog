@@ -42,6 +42,7 @@ import types as _types
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
+from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
@@ -632,6 +633,12 @@ def resolve_module(designator: Any, calling_module: Any = None,
     # still a fault about the name the caller wrote.
     culprit = deref(designator)
     target = culprit
+    # Spec §6.4: a designator WRITTEN in source arrives as an atom, so it is
+    # read by spelling here.  The Python-API ``str`` path below is untouched
+    # (``solve(goal, module="pkg.mod")`` passes a Python argument, not a
+    # term), and under today's representation a str atom's spelling is itself.
+    if _term_is_atom(target):
+        target = _spelling(target)
     if isinstance(target, str):
         found = sys.modules.get(target)
         if found is None:

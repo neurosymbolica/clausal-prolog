@@ -359,10 +359,17 @@ def test_run_test_does_not_diagnose_by_default():
 
 # ── generic Compound vs declared term confusion ──────────────────────────────
 
+# The generic Compound is built through a ``++`` Python escape, not through
+# ``functor(T, "cite", 1)``: since the atoms-as-cells design's §6.4 the name
+# position CONSTRUCTS CELLS, and a cell ``("cite", _)`` unifies with the
+# declared term perfectly well — that route no longer produces the confusion
+# this note exists for.  A ``Compound`` handed in from Python still does.
 COMPOUND_CONFUSION_SRC = """
 -private([cite(A)])
 
-make(T) <- functor(T, "cite", 1)
+make(T) <- (
+    T is ++(__import__("clausal.terms", fromlist=["Compound"]).Compound("cite", (1,)))
+),
 
 Test("citation term mismatch") <- (
     make(T2),
@@ -389,9 +396,12 @@ def test_generic_compound_vs_declared_term_is_named(capsys, tmp_path):
 
 def test_no_confusion_note_without_a_declared_class(capsys, tmp_path):
     # A generic compound whose name matches nothing declared is not confusing
-    # — no note.
+    # — no note.  Same Python-escape producer as above (§6.4: functor/3 builds
+    # a cell now, not a generic Compound).
     src = """
-    make(T) <- functor(T, "zote", 1)
+    make(T) <- (
+        T is ++(__import__("clausal.terms", fromlist=["Compound"]).Compound("zote", (1,)))
+    ),
 
     Test("undeclared functor mismatch") <- (
         make(T2),

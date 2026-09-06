@@ -829,8 +829,8 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
                 f"`{name}` holds a GENERIC compound {key}, not the declared "
                 f"{key} term this module constructs — the two render "
                 f"identically and never unify. A generic compound comes from "
-                f"functor/3 with a string name, unpack/2, or a term built "
-                f"against another module's classes."
+                f"a Compound handed in from Python, or a term built against "
+                f"another module's classes (functor/3 and =.. build cells)."
             )
 
 

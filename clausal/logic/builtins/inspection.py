@@ -7,6 +7,16 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.predicate import PredicateMeta, is_atom, is_term_instance, term_field_names
+# ``predicate.is_atom`` above is the zero-field-CLASS test; ``atoms.is_atom``
+# is the TERM test (spec §6.1) and the one the name position speaks.  They are
+# different questions, so the term test is bound to a distinct name here.
+from clausal.logic.atoms import (
+    char_atom,
+    is_atom as _term_is_atom,
+    is_char_atom,
+    mint,
+    spelling,
+)
 from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, ConcreteSeg
 
 from clausal.logic.builtins._registry import _builtin
@@ -225,6 +235,51 @@ except ImportError:
 _copy_term = _copy_term_impl
 
 
+def _segments_of(tail):
+    """*tail* (a ``SegList`` or ``SegString``) as SegList-shaped segments.
+
+    ``SegString`` holds plain ``str`` segments alternating with ``VarSeg``
+    holes (``terms.py``'s ``SegString.__init__`` rejects anything else), while
+    ``SegList`` holds ``ConcreteSeg``/``VarSeg``.  A string segment is the
+    char list it denotes, which is how ``SegString`` already unifies against a
+    ``SegList`` (``SegString.__unify__``'s list arm).
+    """
+    if isinstance(tail, SegString):
+        return [
+            ConcreteSeg([char_atom(c) for c in seg]) if isinstance(seg, str) else seg
+            for seg in tail.segments
+        ]
+    return list(tail.segments)
+
+
+def _cons(head, tail, who: str):
+    """``[Head | Tail]`` in the engine's list shapes: list, str, or a partial
+    ``SegList`` — never a ``(".", H, T)`` cell.
+
+    Spec §5.4: ``'.'/2`` is how a list *looks* through ``functor/3`` and
+    ``=..``, never how one is *stored*.  So the name position's ``'.'``/2 case
+    builds the shape the runtime actually holds, and a term built this way is
+    a real list that unifies with one written longhand.  Consing a char atom
+    onto a ``str`` keeps it a ``str``; consing anything else onto one expands
+    the string to the char list it denotes, which is the only shape that can
+    hold the foreign head.
+    """
+    tail = deref(tail)
+    if isinstance(tail, list):
+        return [head] + tail
+    if isinstance(tail, str):
+        h = deref(head)
+        if is_char_atom(h):
+            return spelling(h) + tail
+        return [head] + [char_atom(c) for c in tail]
+    if is_var(tail):
+        return SegList([ConcreteSeg([head]), VarSeg(tail)])
+    if isinstance(tail, (SegList, SegString)):
+        return SegList([ConcreteSeg([head]), *_segments_of(tail)])
+    from clausal.logic.exceptions import LogicException, type_error
+    raise LogicException(type_error("list", tail, who))
+
+
 def _construct_named(name_val, args, who: str):
     """Build a term with functor *name_val* over *args*, for ``functor/3``/``unpack/2``.
 
@@ -238,14 +293,20 @@ def _construct_named(name_val, args, who: str):
     a defect.  See
     ``todo/done/functor-3-names-an-atom-as-a-class-but-a-compound-as-a-string.md``.
 
-    Only the class arm resolves.  A ``str`` name still builds a Compound and is
-    deliberately *not* resolved back to a class: which module's ``cite`` a bare
-    string names is ambiguous under module-local atom identity, and downstream
-    callers depend on the string arm behaving exactly as it does.
+    Only the class arm resolves.  An ATOM name is deliberately *not* resolved
+    back to a class: which module's ``cite`` a bare name means is ambiguous
+    under module-local atom identity, and downstream callers depend on the
+    name arm behaving exactly as it does.
 
     An arity that disagrees with the class's field count is not that term, so
-    it falls through to the Compound rather than raising — which keeps a
+    it falls through to the generic shape rather than raising — which keeps a
     downstream ``functor/3`` probe over an arity-0 schema atom working.
+
+    Spec §6.4 (2026-09-06-atoms-as-cells-strings): the generic shape is a
+    CELL, ``(spelling, *args)``, not a :class:`Compound` — cells are how the
+    engine represents a compound data term post-P3-2, so a term built here now
+    unifies with the same term written longhand.  §5.4 carves out ``'.'``/2,
+    which builds the engine's list shape instead (see :func:`_cons`).
     """
     if isinstance(name_val, PredicateMeta):
         # ``_fields`` is the field list whatever minted the class — a generated
@@ -257,17 +318,21 @@ def _construct_named(name_val, args, who: str):
         # bind every field positionally with nothing left over.
         if len(name_val._fields) == len(args):
             return name_val(*args)
-        # Arity disagrees → not this class; fall through to a generic Compound.
-        functor_str = name_val.__name__
-    elif isinstance(name_val, str):
-        functor_str = name_val
-    else:
-        # A09-F027: the functor of a compound must be atom-shaped (ISO:
-        # type_error(atom, Name)), else unpack(T, [3, 1, 2]) built
-        # Compound("3", (1, 2)) and functor/3 built a bogus functor "f(1)".
-        from clausal.logic.exceptions import LogicException, type_error
-        raise LogicException(type_error("atom", name_val, who))
-    return Compound(functor_str, tuple(args))
+        # Arity disagrees → not this class; fall through as the bare name.
+        name_val = mint(name_val.__name__)
+    if _term_is_atom(name_val):
+        # §5.4: ``'.'``/2 in the name position builds the engine's list shape.
+        # This is checked BEFORE the generic cell arm because a
+        # ``(".", H, T)`` cell is not a list, does not unify with one, and no
+        # runtime path may construct it.
+        if len(args) == 2 and spelling(name_val) == ".":
+            return _cons(args[0], args[1], who)
+        return (spelling(name_val), *args)
+    # A09-F027: the functor of a compound must be atom-shaped (ISO:
+    # type_error(atom, Name)), else unpack(T, [3, 1, 2]) built
+    # Compound("3", (1, 2)) and functor/3 built a bogus functor "f(1)".
+    from clausal.logic.exceptions import LogicException, type_error
+    raise LogicException(type_error("atom", name_val, who))
 
 
 @_builtin("functor", 3)
@@ -288,6 +353,20 @@ def _functor__3(term, name, arity, trail, k):
         # A09-F015 / A01-D001(c): a bool arity is rejected (True is not 1).
         if not isinstance(arity_val, int) or isinstance(arity_val, bool) or arity_val < 0:
             return
+        # Spec §6.4 / ISO 8.5.1.3 e: the name of a term built here must be
+        # ATOMIC.  A list, a dict, a set, a cell or any other compound shape
+        # is not, and used to be handed straight back as ``T`` at arity 0 —
+        # ``functor(T, [1, 2], 0)`` "succeeded" with a list as the name.
+        # ``PredicateMeta`` stays in: a declared functor class is an atom
+        # value (arity-0 declared atoms are the corpus's schema atoms) and
+        # ``_construct_named`` resolves it for itself.
+        if not (
+            _term_is_atom(name_val)
+            or isinstance(name_val, (PredicateMeta, int, float, bool, bytes))
+            or name_val is None
+        ):
+            from clausal.logic.exceptions import LogicException, type_error
+            raise LogicException(type_error("atomic", name_val, "functor/3"))
         if arity_val == 0:
             constructed = name_val
         else:
@@ -309,6 +388,10 @@ def _functor__3(term, name, arity, trail, k):
         a_val = _arity(term_val)
         if f_val is None or a_val is None:
             return
+        # §6.4: the name position hands back an ATOM.  The funnel answers a
+        # bare slot-0 spelling; ``mint`` is what turns that into the atom.
+        if type(f_val) is str:
+            f_val = mint(f_val)
         mark = trail.mark()
         if unify(name, f_val, trail):
             mark2 = trail.mark()
@@ -382,6 +465,9 @@ def _univ__2(term, lst, trail, k):
         f_val = _functor_name(term_val)
         if f_val is None:
             return
+        # §6.4: the head of the univ list is an ATOM, not a bare spelling.
+        if type(f_val) is str:
+            f_val = mint(f_val)
         decomposed = [f_val] + _args_list(term_val)
         mark = trail.mark()
         if unify(lst, decomposed, trail):
@@ -397,6 +483,16 @@ def _univ__2(term, lst, trail, k):
             return
         args_vals = [deref(a) for a in lst_val[1:]]
         if len(args_vals) == 0:
+            # ``T =.. [N]`` — N must be ATOMIC (spec §6.4 / ISO 8.5.3.3 e);
+            # a one-element list holding a list or any other compound shape
+            # is not a term description.  Same admissions as ``functor/3``.
+            if not (
+                _term_is_atom(f_val)
+                or isinstance(f_val, (PredicateMeta, int, float, bool, bytes))
+                or f_val is None
+            ):
+                from clausal.logic.exceptions import LogicException, type_error
+                raise LogicException(type_error("atomic", f_val, "unpack/2"))
             constructed: Any = f_val  # atom
         else:
             constructed = _construct_named(f_val, args_vals, "unpack/2")
@@ -480,12 +576,15 @@ def _gensym__2(prefix, atom, trail, k):
     backtracking. This is intentional and matches Prolog's gensym/2 semantics.
     """
     prefix_d = deref(prefix)
-    if is_var(prefix_d) or not isinstance(prefix_d, str):
+    if is_var(prefix_d) or not _term_is_atom(prefix_d):
         return
+    # §6.4: the prefix is an ATOM read by spelling, and the counter dict is
+    # keyed by that spelling so the two atom shapes share one counter.
+    prefix_spelling = spelling(prefix_d)
     with _gensym_lock:
-        count = _gensym_counters.get(prefix_d, 0) + 1
-        _gensym_counters[prefix_d] = count
-    result = f"{prefix_d}_{count}"
+        count = _gensym_counters.get(prefix_spelling, 0) + 1
+        _gensym_counters[prefix_spelling] = count
+    result = mint(f"{prefix_spelling}_{count}")
     if unify(atom, result, trail):
         yield None
 
@@ -500,10 +599,13 @@ def _global_atom__2(name, atom, trail, k):
     Exposes ``clausal.import_hook.predicate_builtins``, the dict that seeds
     every fresh predicate module's globals.  Modes:
 
-      (+Name, -Atom): mint-on-demand.  Look Name up in the global dict; if
-        absent, install the interned SPELLING itself (§1b/R2's atom pivot —
-        an atom IS the str, no class is minted).  Unify Atom with it.
-      (+Name, +Atom): guard.  Succeed iff ``predicate_builtins[Name] is Atom``.
+      (+Name, -Atom): mint-on-demand.  Name is an ATOM read by spelling
+        (spec §6.4).  Look that spelling up in the global dict; if absent,
+        install ``mint(spelling)``.  Unify Atom with it.
+      (+Name, +Atom): guard.  Succeed iff ``predicate_builtins[Name] ==
+        Atom`` — EQUALITY, never identity (spec §2/§5.2): an atom is a value,
+        and two atoms of the same spelling are the same atom whether or not
+        they are the same object.
       (-Name, +Atom): reverse lookup.  Succeed iff Atom resolves back to
         Name in the dict (i.e. Atom is genuinely the registered global, not
         a module-local namesake); unify Name with that name.  Atom is
@@ -533,15 +635,16 @@ def _global_atom__2(name, atom, trail, k):
     atom_bound = not is_var(atom_val)
 
     if name_bound:
-        if not isinstance(name_val, str):
+        if not _term_is_atom(name_val):
             return
+        key = spelling(name_val)
         if atom_bound:
-            # Guard mode: succeed iff atom_val IS the registered global.
-            if predicate_builtins.get(name_val) is atom_val:
+            # Guard mode: succeed iff atom_val EQUALS the registered global.
+            if predicate_builtins.get(key) == atom_val:
                 yield None
             return
-        # Mint-on-demand mode: install the spelling itself (no class).
-        val = predicate_builtins.setdefault(name_val, name_val)
+        # Mint-on-demand mode: install the atom for the spelling (no class).
+        val = predicate_builtins.setdefault(key, mint(key))
         mark = trail.mark()
         if unify(atom, val, trail):
             yield None
@@ -553,13 +656,14 @@ def _global_atom__2(name, atom, trail, k):
         # Reverse-lookup mode.  Atom must resolve back to Name in the
         # global dict — either the interned str itself, or (backward
         # compatibility) a 0-arity PredicateMeta's __name__.
-        if isinstance(atom_val, str):
-            cls_name = atom_val
+        if _term_is_atom(atom_val):
+            cls_name = spelling(atom_val)
         elif is_atom(atom_val):
             cls_name = atom_val.__name__
         else:
             return
-        if predicate_builtins.get(cls_name) is not atom_val:
+        # Equality, never identity (spec §2/§5.2).
+        if predicate_builtins.get(cls_name) != atom_val:
             return
         mark = trail.mark()
         if unify(name, cls_name, trail):

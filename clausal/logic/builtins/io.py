@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import sys as _sys
 
-from clausal.logic.atoms import demangle_for_display, is_mangled
+from clausal.logic.atoms import (
+    demangle_for_display,
+    is_atom as _term_is_atom,
+    is_mangled,
+    spelling,
+)
 from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import (
@@ -377,7 +382,9 @@ def _make_listing__1(db):
         Accepts:
           - a PredicateMeta class or instance (resolves to class)
           - a BuiltinPredicate (prints the "% name/arity — builtin" line)
-          - a bare str atom naming a predicate (NEW, P3-3 Task 8)
+          - an atom naming a predicate (NEW, P3-3 Task 8) — a bare ``str``
+            or, since the atoms-as-cells design's §6.4, the arity-0 cell
+            ``("foo",)``
           - a ``Name/Arity`` indicator (NEW, P3-3 Task 8): the cell
             ``('/', name, arity)``, the engine's ``Compound("/", (name,
             arity))``, or -- what a user-written ``Fib/2`` actually
@@ -404,12 +411,15 @@ def _make_listing__1(db):
         is_indicator_shaped = (
             type(val) is tuple and len(val) == 3 and val[0] == "/"
         ) or isinstance(val, (Compound, Div))
-        indicator = None if isinstance(val, str) else _as_name_arity_indicator(val)
+        # Spec §6.4: ``listing/1`` accepts an ATOM as the predicate name.  A
+        # bare ``str`` is one of those today, so this is a widening, not a
+        # replacement — the arity-0 cell ``("z0",)`` now names z0/0 as well.
+        indicator = None if _term_is_atom(val) else _as_name_arity_indicator(val)
 
         # Accept an instance → resolve to its class
         if (
             indicator is None
-            and not isinstance(val, str)
+            and not _term_is_atom(val)
             and not is_indicator_shaped
             and is_term_instance(val)
         ):
@@ -427,8 +437,8 @@ def _make_listing__1(db):
             return
         else:
             pred_cls = None
-            if isinstance(val, str):
-                name, arity = val, 0
+            if _term_is_atom(val):
+                name, arity = spelling(val), 0
             elif indicator is not None:
                 name, arity, pred_cls = indicator
             else:
