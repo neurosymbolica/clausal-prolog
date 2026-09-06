@@ -44,21 +44,32 @@ Atoms and strings are disjoint kinds ([Syntax § Atoms vs strings](syntax.md#ato
 An atom is the arity-0 cell `("bar",)`; a string is a Python `str`, which *is*
 the list of its one-character atoms. Everything below follows from that:
 
-| | atom `bar` | string `"bar"` | `""` | `[]` | compound `f(1)` | number |
-|---|---|---|---|---|---|---|
-| `atom/1` | ✓ | | | | | |
-| `string/1`, `is_str/1` | | ✓ | ✓ | | | |
-| `atomic/1` | ✓ | | | | | ✓ |
-| `compound/1` | | | | | ✓ | |
-| `callable_/1` | ✓ | | | | ✓ | |
-| `is_list/1` | | ✓ | ✓ | ✓ | | |
-| `is_chars/1` | | ✓ | ✓ | ✓ | | |
-| `ground/1` | ✓ | ✓ | ✓ | ✓ | per args | ✓ |
+| | atom `bar` | string `"bar"` | `""` | `[]` | `['a','b']` | compound `f(1)` | number |
+|---|---|---|---|---|---|---|---|
+| `atom/1` | ✓ | | | | | | |
+| `string/1`, `is_str/1` | | ✓ | ✓ | ✓ | ✓ | | |
+| `atomic/1` | ✓ | | | | | | ✓ |
+| `compound/1` | | | | | | ✓ | |
+| `callable_/1` | ✓ | | | | | ✓ | |
+| `is_list/1` | | ✓ | ✓ | ✓ | ✓ | | |
+| `is_chars/1` | | ✓ | ✓ | ✓ | ✓ | | |
+| `ground/1` | ✓ | ✓ | ✓ | ✓ | ✓ | per args | ✓ |
 
 `atomic/1` is false for a string because a string is a **list**, not an atomic
 constant. `compound/1` is false for an atom because an atom has arity 0.
-`[]` is neither an atom nor a string — it is the empty list, and `""` unifies
-with it while still answering `string/1`.
+
+`string/1` follows the **term**, not the representation: `""` and `[]` are one
+and the same term, and so are `"ab"` and `['a', 'b']`, so `string/1` holds for
+all four. A string is stored compactly as a `str`, but that is a
+representation choice and no test keys on it.
+
+!!! warning "Engine defect: `string([])` and `string(['a','b'])`"
+    The engine currently answers **false** for `string([])` and for a proper
+    list of char atoms, keying on the `str` representation rather than on the
+    term. `string("")` and `string("ab")` are true, and `"" = []` succeeds, so
+    two equal terms get different answers. The contract above is what the
+    engine will answer; the divergence is re-aligned in the final wave of this
+    program and is not pinned by the examples on this page.
 
 ```clausal
 --8<-- "tests/fixtures/docs/type_checking_sigs.txt:atom_vs_string"
@@ -87,9 +98,12 @@ Test("int is not atom") <- (not atom(42))
 
 ### string/1 and is_str/1
 
-`string(X)` and `is_str(X)` are the same test: succeeds if `X` is a string (a
-Python `str`, or a partial string that has become ground). They do not match
-atoms.
+`string(X)` and `is_str(X)` are the same test: succeeds if `X` is a **string**
+— the term a `"…"` literal denotes, which is the list of its character atoms.
+That covers a Python `str`, a partial string that has become ground, `[]`, and
+a proper list of char atoms, since those are the same terms. It does **not**
+match atoms, and it does not match a list with a non-character element.
+(See the engine-defect note above: `[]` and char lists currently answer false.)
 
 ```clausal
 -private([red])

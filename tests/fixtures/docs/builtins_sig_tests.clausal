@@ -1,4 +1,5 @@
 -double_quotes(chars)
+-private([pair_probe(A, B)])
 # Companion tests for docs/builtins.md signature blocks.
 # Validates that documented predicates exist and accept the documented arities.
 
@@ -156,6 +157,15 @@ Test("var exists") <- var(_)  # nv
 Test("nonvar exists") <- nonvar(42)  # nv
 Test("atom exists") <- (not atom(42))  # nv
 Test("is_str exists") <- is_str("hello")  # nv
+Test("string/1 is the same test as is_str/1") <- (
+    string("hello"), is_str("hello"),
+    not string(42)
+)  # nv
+Test("atomic/1 takes atoms and numbers, not strings") <- (
+    atomic('hello'), atomic(42),
+    not atomic("hello"),
+    not atomic(pair_probe(1, 2))
+)  # nv
 Test("number exists") <- number(42)  # nv
 Test("integer exists") <- integer(42)  # nv
 Test("float_ exists") <- float_(3.14)  # nv
@@ -461,9 +471,21 @@ Test("functor on a list is the cons view") <- (
     EA == 0
 )  # nv
 
+# Cell-ness, actually pinned: the term functor/3 builds must unify with a
+# SOURCE-WRITTEN pair_probe(A, B), which compiles to the cell
+# ("pair_probe", A, B) because pair_probe/2 is a declared DATA FUNCTOR (a
+# field-carrying -private entry with no clauses).
 Test("functor constructs a cell") <- (
     functor(T3, 'pair_probe', 2),
-    functor(T3, 'pair_probe', 2)
+    T3 is pair_probe(_A, _B),
+    functor(T3, N3, A3),
+    N3 is 'pair_probe',
+    A3 == 2
+)  # nv
+
+Test("unpack constructs the same cell") <- (
+    unpack(T6, ['pair_probe', 1, 2]),
+    T6 is pair_probe(1, 2)
 )  # nv
 
 Test("functor refuses a string name") <- catch(
@@ -502,8 +524,6 @@ Test("arg answers virtually on a string") <- (
     AT == "ello",
     string(AT)
 )  # nv
-
-pair_probe(1, 2),
 
 # ── Logging (log module) ─────────────────────────────────────────────────────
 

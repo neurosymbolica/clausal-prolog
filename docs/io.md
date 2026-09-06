@@ -245,8 +245,9 @@ Test("format item") <- (
 ### Building Strings with [foldl](higher_order.md)
 
 A string is a list, so `append/3` concatenates one — use it inside a foldl
-closure. (`==` is the arithmetic comparison and raises
-`type_error(integer, …)` on text; it is not a string operator.)
+closure. (`+` is arithmetic, not concatenation: `R == A + E` on text raises
+`type_error(integer, "ab")` from the CLP(ℤ) expression. `==` itself is fine on
+strings — it is the `+` that has no text meaning.)
 
 ```clausal
 -double_quotes(chars)

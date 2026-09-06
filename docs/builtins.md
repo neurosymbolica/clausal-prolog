@@ -84,7 +84,7 @@ Notation in signature lines:
 | [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
 | [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | sat/1, taut/2, sat_count/2, bool_labeling/1 |
-| [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, is_str/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
+| [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, string/1, is_str/1, atomic/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | get/3,4, tri_get/3, delete/3, is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
 | [Arithmetic](#arithmetic) | between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
 | [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
@@ -1072,11 +1072,27 @@ and neither is `[]`. From Python, build one with
 
 ---
 
-### `is_str/1`
+### `is_str/1` and `string/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:is_str_1"
 ```
-Succeeds if `X` is a **string** (a Python `str`, or a partial string that has become ground). `string/1` is the same test. Does not match atoms — use `atom/1` for those — and note that `atomic/1` rejects a string, because a string is a list.
+Succeeds if `X` is a **string** — the term a `"…"` literal denotes, which is the list of its character atoms. Does not match atoms — use `atom/1` for those — and note that `atomic/1` rejects a string, because a string is a list. See [Type Checking](type_checking.md#string1-and-is_str1) for the full table, including the recorded `string([])` engine defect.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/type_checks.py`
+    **Python tests:** `tests/test_builtins.py`
+
+---
+
+### `atomic/1`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:atomic_1"
+```
+Succeeds if `X` is an atomic constant: an **atom**, a number, a bool, or another indivisible value. It is **false for a string**, which is a list, and false for a compound term.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/type_checks.py`
+    **Python tests:** `tests/test_builtins.py`
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:877`
@@ -1190,7 +1206,7 @@ The Type argument is an **atom**. Supported types: `integer`, `float`, `number`,
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:can_be_2"
 ```
-assertz that `Term` could possibly be of the given type. Succeeds if Term is unbound (it could become anything) or already matches the type. Throws `type_error` only when Term is ground and definitely the wrong type. Same type strings as `must_be/2`.
+assertz that `Term` could possibly be of the given type. Succeeds if Term is unbound (it could become anything) or already matches the type. Throws `type_error` only when Term is ground and definitely the wrong type. The Type argument is an **atom**, and the same types `must_be/2` takes.
 
 ---
 
@@ -2258,7 +2274,7 @@ Unify `length` with the number of characters in `Atom`'s spelling. The first arg
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_chars_2"
 ```
-Bidirectional conversion between an **atom** and the list of its character atoms — the bridge between atoms and text. `atom_chars(hi, L)` unifies L with `['h', 'i']`, which is the same term as the string `"hi"`. `atom_chars(A, ['h', 'i'])` and `atom_chars(A, "hi")` both unify A with the atom `hi`. An atom in the second position, or a string in the first, raises `type_error(atom, …)`.
+Bidirectional conversion between an **atom** and the list of its character atoms — the bridge between atoms and text. `atom_chars(hi, L)` unifies L with `['h', 'i']`, which is the same term as the string `"hi"`. `atom_chars(A, ['h', 'i'])` and `atom_chars(A, "hi")` both unify A with the atom `hi`. A string in the first position raises `type_error(atom, "hi")`; a non-list in the second — an atom included — raises `type_error(list, hi)`.
 
 ---
 
@@ -2316,7 +2332,7 @@ Parsing is deliberately Python-native (`int()` then `float()`), per the language
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:number_codes_2"
 ```
-Bidirectional number ↔ code-point-list conversion. Like `number_chars/2` but uses integer code points (`ord`/`chr`) instead of single-character strings.
+Bidirectional number ↔ code-point-list conversion. Like `number_chars/2` but uses integer code points (`ord`/`chr`) instead of character atoms.
 
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:number_codes_2_ex2"

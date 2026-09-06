@@ -169,18 +169,32 @@ ok == "ok"               # False — an atom is not its spelling
 
 If you specifically want a zero-arity `PredicateMeta` **class** — a 0-arity
 predicate, which is a procedure and not an atom — that is
-`make_predicate("ok", [])`, and `is_atom` is the check for that class shape.
+`make_predicate("ok", [])`. Two differently-spelled helpers answer the two
+different questions, and it is worth keeping them straight:
 
-**Strings still work as data.** String literals like `"hello"` flow through
-unification as-is. The distinction is: declared atoms have identity (checked
-with `is`), while strings have value equality (checked with `==`). Use atoms
-for symbolic constants (colors, states, tags); use strings for text data.
+| Helper | Question |
+|---|---|
+| `clausal.logic.atoms.is_atom(x)` | Is this the **atom term** `("ok",)`? |
+| `clausal.logic.predicate.is_zero_field_class(x)` | Is this a zero-field `PredicateMeta` **class**? |
+| `clausal.logic.predicate.is_atom_value(x)` | Either of the above |
+
+`predicate.is_atom` is a **deprecated alias** for `is_zero_field_class`, kept
+for one release; import `is_zero_field_class` if you mean the class test and
+`clausal.logic.atoms.is_atom` if you mean the term test.
+
+**Strings are a separate kind, not a looser atom.** A `"hello"` literal is a
+string only under [`-double_quotes(chars)`](directives.md#-double_quotes) —
+today's default still reads it as the atom `hello` — and a string is the list
+of its character atoms. Atoms and strings never unify, and **both** are
+compared by value equality; `is` is not the test for either. Use atoms for
+symbolic constants (colours, states, tags); use strings for text data.
 
 | Type check | What it tests |
 |---|---|
-| `atom(X)` | Declared atom (zero-arity class) |
-| `is_str(X)` | Python string |
-| `callable_(X)` | Atom, string, or compound term |
+| `atom(X)` | An atom — the arity-0 cell `("red",)` |
+| `string(X)` / `is_str(X)` | A string (a character sequence) |
+| `atomic(X)` | An atom or a number — **not** a string, which is a list |
+| `callable_(X)` | An atom or a compound term — **not** a string |
 
 ---
 

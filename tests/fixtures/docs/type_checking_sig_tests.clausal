@@ -38,9 +38,14 @@ Test("empty string row") <- (
     not atom(""), not atomic("")
 )  # nv
 
+# The `string([])` row is deliberately NOT asserted here.  "" and [] are one
+# term, so the contract is string([]) TRUE; the engine currently answers
+# false because it keys on the `str` representation.  Pinning either answer
+# would be wrong -- the defect is re-aligned in the final wave of the
+# atoms-as-cells/strings program, and this row goes back then.
 Test("empty list row") <- (
     is_list([]), is_chars([]),
-    not atom([]), not atomic([]), not string([])
+    not atom([]), not atomic([])
 )  # nv
 
 Test("compound row") <- (

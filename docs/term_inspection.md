@@ -9,13 +9,16 @@ writing predicates that operate on other predicates.
 ## Quick Example
 
 ```clausal
+# The name position speaks ATOMS. `'hello'` is single-quoted, so it is the
+# atom in every -double_quotes mode and needs no -private declaration.
 Test("decompose atom") <- (
-    functor("hello", NAME_, ARITY_),
-    NAME_ == "hello",
+    functor('hello', NAME_, ARITY_),
+    NAME_ is 'hello',
+    atom(NAME_),
     ARITY_ == 0
 )
 
-Test("unpack atom") <- unpack("hello", ["hello"])
+Test("unpack atom") <- unpack('hello', ['hello'])
 ```
 
 ---
@@ -30,7 +33,7 @@ name and arity, or construct a term from a name and arity.
 **Decompose mode** (Term bound):
 
 ```clausal
-Test("atom") <- functor("hello", "hello", 0)
+Test("atom") <- functor('hello', 'hello', 0)
 ```
 
 **Decompose a compound term** — define the predicate first so it is a known term:
@@ -40,17 +43,21 @@ point(1, 2, 3),
 
 Test("decompose compound") <- (
     functor(point(1, 2, 3), NAME_, ARITY_),
-    NAME_ == "point",
+    NAME_ is 'point',
     ARITY_ == 3
 )
 ```
 
-**Construct mode** (Term unbound, Name + Arity bound):
+**Construct mode** (Term unbound, Name + Arity bound). The result is a
+**cell** — the same term a source-written data functor `pair(A, B)` compiles
+to, not a `Compound` object:
 
 ```clausal
+-implicit_functors
+
 Test("construct") <- (
-    functor(TERM_, "pair", 2),
-    functor(TERM_, "pair", 2)
+    functor(TERM_, 'pair', 2),
+    TERM_ is pair(A_UNUSED, B_UNUSED)
 )
 ```
 
@@ -88,19 +95,30 @@ term and a list `[functor | Args]`.
 ```clausal
 foo(1, 2, 3),
 
-Test("unpack") <- unpack(foo(1, 2, 3), ["foo", 1, 2, 3])
-Test("atom") <- unpack("hello", ["hello"])
+Test("unpack") <- unpack(foo(1, 2, 3), ['foo', 1, 2, 3])
+Test("atom") <- unpack('hello', ['hello'])
 ```
 
 **Construct mode**:
 
 ```clausal
+-implicit_functors
+
 Test("construct") <- (
-    unpack(TERM_, ["point", 10, 20]),
+    unpack(TERM_, ['point', 10, 20]),
+    TERM_ is point(10, 20),   # the same cell a source-written point(10, 20) is
     arg(1, TERM_, 10),
     arg(2, TERM_, 20)
 )
 ```
+
+!!! note "Constructed terms are data functors, not predicates"
+    The cell `("point", 10, 20)` unifies with a source-written `point(10, 20)`
+    when `point` is a **data functor** (declared as data, or under
+    `-implicit_functors`). If `point/2` is a declared *predicate*, a
+    source-written `point(10, 20)` in a body is a predicate instance instead
+    and does **not** unify with the constructed cell — build with `functor/3`
+    or `unpack/2` on both sides, or compare with `functor/3` + `arg/3`.
 
 ---
 
@@ -211,8 +229,16 @@ Test("count") <- var_count([X_, 1, Y_, Z_], 3)
   original, the copy will have the same fresh variable in both positions.
 - **`numbervars` mutates the term** — it binds variables in place. Use
   `copy_term` first if you need the original term unchanged.
-- **`unpack` constructs `Compound` terms** — when building from a list, the
-  result is a generic `Compound`, not a known predicate class.
+- **`unpack` constructs CELLS** — when building from a list, the result is a
+  plain tuple `("point", 10, 20)`, not a `Compound` object and not a known
+  predicate class. Python code that tested `isinstance(x, Compound)` on a
+  constructed term needs a cell-shape test instead. `functor/3` in construct
+  mode does the same.
+- **The name position is an atom** — `functor/3` and `unpack/2` hand back an
+  atom for the name and require one to build with; a string there raises
+  `type_error(atom, …)` (or `type_error(atomic, …)` for the 1-element case).
+  A list and a string both decompose as the `'.'/2` structure they denote;
+  see [`functor/3`](builtins.md#functor3) for the full table.
 
 ---
 

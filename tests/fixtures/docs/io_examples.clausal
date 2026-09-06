@@ -38,15 +38,61 @@ Test("writeq prints a char list as a string") <- (
 # --8<-- [end:three_writers]
 
 # --8<-- [start:write_family]
+# write/1 and writeln/1 are the UNQUOTED family: text comes out bare, and an
+# atom is indistinguishable from the string of the same spelling.
 Test("write/1 and writeln/1 are the unquoted family") <- (
-    write("hello"), write(" "), writeln("world")
+    write_to_string('a b', W1), W1 == "a b",
+    write_to_string("a b", W2), W2 == "a b",
+    write('a b'), write(" "), writeln("a b")
 )  # nv
 
+# writeq/1 and print_term/1 are the QUOTED family: the two kinds are
+# distinguishable again.
 Test("writeq/1 and print_term/1 are the quoted family") <- (
-    writeq("hello"), nl(), print_term("hello")
+    term_to_string('a b', Q1), Q1 == "'a b'",
+    term_to_string("a b", Q2), Q2 == "\"a b\"",
+    writeq('a b'), nl(), print_term("a b")
 )  # nv
 
+# write_canonical/1 spells the '.'/2 structure a string denotes:
+#     write_canonical("hi")   prints   '.'(h,'.'(i,[]))
+#     write_canonical([1, 2]) prints   '.'(1,'.'(2,[]))
+#     write_canonical([])     prints   []
 Test("write_canonical/1 spells the cons structure") <- (
-    write_canonical("hi"), nl()
+    write_canonical("hi"), nl(),
+    write_canonical([1, 2]), nl(),
+    write_canonical([])
 )  # nv
 # --8<-- [end:write_family]
+
+# Not part of the rendered snippet.  write_canonical/1 has no string form
+# (there is no write_canonical_to_string/2), so pinning its exact output text
+# means reaching the writer it uses.  That is what makes the three lines
+# commented in the snippet above assertions rather than claims.
+#
+# CAVEAT, and the reason only atom-free terms are pinned here: a ``++``
+# escape converts its arguments with ``to_python`` (spec §9.1), which unwraps
+# an atom to its spelling -- so an atom inside TERM would reach
+# term_canonical as a STRING and print as a char list.  Terms containing
+# atoms are pinned by tests/test_writers_atoms_strings.py, which calls the
+# builtin and captures stdout instead.
+canonical_text(TERM, TEXT) <- (
+    TEXT is ++__import__(
+        "clausal.terms", fromlist=["term_canonical"]
+    ).term_canonical(TERM)
+)
+
+Test("write_canonical text: a string") <- (
+    canonical_text("hi", C1),
+    C1 == "'.'(h,'.'(i,[]))"
+)  # nv
+
+Test("write_canonical text: a list") <- (
+    canonical_text([1, 2], C2),
+    C2 == "'.'(1,'.'(2,[]))"
+)  # nv
+
+Test("write_canonical text: the empty list") <- (
+    canonical_text([], C3),
+    C3 == "[]"
+)  # nv

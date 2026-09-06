@@ -32,7 +32,7 @@ out of the box, but some Prolog conventions must change.
 
 | Prolog | Clausal | Notes |
 |---|---|---|
-| `parent(alice, bob).` | `parent("alice", "bob"),` | Trailing comma, not period. Undeclared atoms are strings; declared atoms are zero-arity classes. |
+| `parent(alice, bob).` | `parent(alice, bob),` | Trailing comma, not period. Atoms are written bare (declare them in `-module`/`-private`, or carry `-implicit_atoms`) or single-quoted (`'alice'`, no declaration needed); each is the arity-0 cell `("alice",)`. A double-quoted `"alice"` follows the file's [`-double_quotes`](directives.md#-double_quotes) mode — an atom today, a string once the default flips. |
 | `X`, `Parent` | `X`, `PARENT` | Variables are ALLCAPS (or leading underscore: `_x`) |
 | `_` | `_` | Anonymous variable — same |
 | `_Foo` singleton silently allowed | [`_UNUSED` suffix](syntax.md#singleton-variables-and-_unused) (`_foo_UNUSED`, `FOO_UNUSED`) | Clausal warns by default on *any* named variable used once, in both styles — matching SWI's `singleton variable` warning, but the suppression is a **suffix**, not a leading-underscore reading. Leading underscore is already a first-class variable *style* here (`_x`), so it can't double as "don't warn" too — and a case-based exemption would be blind for caseless-script variables, which are forced into leading-underscore spelling. `-allow_singletons` opts a whole file out. |

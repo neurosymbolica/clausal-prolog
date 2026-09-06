@@ -193,6 +193,16 @@ place, where it governs the clauses below it: `atom` becomes
 it is not written twice; `codes` has no Clausal mode (codes are spelled
 `b"…"` at the literal) and is emitted as a comment.
 
+!!! warning "`set_prolog_flag` is not translated"
+    Only the bare `:- double_quotes(Mode)` spelling is carried across. The
+    ISO/SWI form `:- set_prolog_flag(double_quotes, Mode)` is **not**
+    recognised today: it falls through to the generic directive emitter as
+    `-SetPrologFlag(double_quotes, atom)`, which is not a Clausal directive,
+    so the import fails with `SyntaxError: Unknown directive:
+    -SetPrologFlag(...)`. It is a loud failure, not a silent mistranslation —
+    but if your `.pl` file sets the flag that way, rewrite it as
+    `:- double_quotes(Mode)`.
+
 ---
 
 ## Loading `.pl` files programmatically

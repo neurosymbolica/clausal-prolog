@@ -352,7 +352,12 @@ atom(+X)
 
 --8<-- [start:is_str_1]
 is_str(+X)
+string(+X)      % the same test
 --8<-- [end:is_str_1]
+
+--8<-- [start:atomic_1]
+atomic(+X)
+--8<-- [end:atomic_1]
 
 --8<-- [start:number_1]
 number(+X)

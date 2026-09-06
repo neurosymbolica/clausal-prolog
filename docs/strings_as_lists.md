@@ -171,17 +171,27 @@ Test("parse words") <- phrase(words, "hello world")
 
 Three predicates test sequence types (see [Type Checking](type_checking.md) for the full set):
 
-| Predicate | Strings | Lists | Atoms | Purpose |
-|-----------|---------|-------|-------|---------|
-| `is_list/1` | Succeeds | Succeeds | Fails | Polymorphic: is this a list-shaped value (list or char-sequence str)? |
-| `is_str/1`, `string/1` | Succeeds | Fails | Fails | Exact type test: is this a Python str? |
-| `is_chars/1` | Succeeds | Succeeds | Fails | union test: is this a character sequence? |
+| Predicate | `"ab"` | `['a','b']` | `[1, 2]` | atoms | Purpose |
+|-----------|--------|-------------|----------|-------|---------|
+| `is_list/1` | Succeeds | Succeeds | Succeeds | Fails | Polymorphic: is this a list-shaped value (a `list` or a char-sequence `str`)? |
+| `is_str/1`, `string/1` | Succeeds | Succeeds | Fails | Fails | Is this a **string** — a sequence of characters? |
+| `is_chars/1` | Succeeds | Succeeds | Succeeds | Fails | union test: is this a character sequence or a list? |
 
 `is_list/1` is polymorphic over `list` and `str` (audit 2026-05-25, F080)
 so it agrees with every list-flavoured builtin — `append`, `length`,
 `reverse`, `member`, `maplist`, `take`, `drop`, etc. — all of which
-accept a `str` as a character sequence. Use `is_str/1` when you
-specifically need to distinguish a `str` from a `list`.
+accept a `str` as a character sequence. Use `is_str/1` when you need to know
+that a value is *text* rather than an arbitrary list.
+
+`is_str/1` tests the **term**, not its storage: `"ab"` and `['a', 'b']` are one
+term, so both answer true, and so do `""` and `[]`.
+
+!!! warning "Engine defect"
+    The engine currently answers `string/1` and `is_str/1` on the `str`
+    representation alone, so `string(['a', 'b'])` and `string([])` come back
+    **false** even though the terms are equal to `"ab"` and `""`. The table
+    above is the contract; the divergence is re-aligned in the final wave of
+    this program.
 
 None of the three accepts an **atom**: an atom is a symbol, not a sequence.
 `atom("hello")` and `string(hello)` are both false, and the two never unify.
