@@ -123,11 +123,15 @@ be in to count.
 Equality is the semantics; identity is an optimisation.
 
 - `clausal/logic/atoms.py` gains the public atom API (§6.1). `mint(spelling)`
-  returns the canonical cell for that spelling from a process-wide table,
-  with the spelling `sys.intern`ed. Two equal atoms compare equal by tuple
-  `==`, which on interned slot-0 strings is an identity hit per element
-  (measured 21.7 ns canonical vs 29.5 ns distinct-but-equal; F7 of the
-  design note).
+  `sys.intern`s the spelling and returns the cell `(spelling,)`. There is
+  **no process-wide atom table**: a table would pin every spelling ever
+  minted, and `sub_atom/5`/`atom_concat/3` mint one atom per enumerated
+  substring; CPython's interned strings are mortal, so intern garbage is
+  reclaimed. Two equal atoms compare equal by tuple `==`, which on interned
+  slot-0 strings is an identity hit on the first element (measured 21.7 ns
+  same tuple vs 29.5 ns distinct-but-equal tuples with interned spellings;
+  F7 of the design note) — the fast path lives in slot 0, not in the tuple
+  object. (Ruling 2026-09-06, Task 6 review.)
 - The compiler is free to emit atom **constants** (`("bar",)` folds into
   `co_consts`; verified `compile('x=("bar",)').co_consts == (('bar',), …)`,
   marshal-clean). A constant unmarshalled from a `.pyc` is *not* the minted
@@ -141,10 +145,9 @@ Equality is the semantics; identity is an optimisation.
   spellings mapped to minted atoms); its identity-sharing rationale is
   deleted with the pins.
 - Hot dict keys (`DictTerm` data, `$intern_atom` results, the pool) use
-  `mint()` so the fast path is hit; nothing is incorrect if it is not.
-- Threads and subinterpreters: the mint table is a plain dict updated with
-  `setdefault` (atomic under the GIL and under free-threading); equality
-  semantics make a per-interpreter table correct without coordination.
+  `mint()` so slot 0 is interned; nothing is incorrect if it is not.
+- Threads and subinterpreters: `sys.intern` is per-interpreter and
+  thread-safe; equality semantics need no coordination.
 
 ### 5.3 `-hide` mangling
 

@@ -878,16 +878,10 @@ def test_single_quoted_functor_sugar_still_works():
 
 - [ ] **B1 — the five bodies** (`clausal/logic/atoms.py`): 
 ```python
-_ATOMS: dict[str, tuple] = {}
-
 def mint(spelling: str):
     if type(spelling) is not str:
         raise TypeError(...)
-    a = _ATOMS.get(spelling)
-    if a is None:
-        s = sys.intern(spelling)
-        a = _ATOMS.setdefault(s, (s,))
-    return a
+    return (sys.intern(spelling),)     # NO table (spec §5.2): enumeration garbage must not be pinned
 
 def is_atom(term) -> bool:
     return type(term) is tuple and len(term) == 1 and type(term[0]) is str
@@ -899,7 +893,7 @@ def spelling(atom) -> str:
 def char_atom(ch): (validate) return mint(ch)
 def is_char_atom(term): return is_atom(term) and len(term[0]) == 1
 ```
-Replace `test_repr_probe_plan0_str` in `tests/test_atoms_api.py` with `assert mint("foo") == ("foo",) and mint("foo") is mint("foo")` (the `is` here pins the CANONICAL-INSTANCE optimisation of `mint` itself, the one place identity is allowed to be observed). `predicate.is_atom_value(obj)` → `_term_is_atom(obj) or is_atom(obj)` is already right; its docstring is rewritten.
+Replace `test_repr_probe_plan0_str` in `tests/test_atoms_api.py` with `assert mint("foo") == ("foo",) and mint("foo")[0] is mint("foo")[0]` (the `is` pins the interned-spelling fast path, the one place identity is allowed to be observed; the tuples themselves are fresh). `predicate.is_atom_value(obj)` → `_term_is_atom(obj) or is_atom(obj)` is already right; its docstring is rewritten.
 
 - [ ] **B2 — compiler emission** (`term_rewriting.py`):
   - `visit_Name` atom branches :1915–1921 → `Constant(value=(mangle(...),))` and `Constant(value=(identifier,))`.
