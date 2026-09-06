@@ -252,8 +252,17 @@ node, since `/` is the arithmetic operator and a structural (non-`is`) use
 of it stays a reified operator term rather than data. For the last two, an
 unknown `name/arity` raises `existence_error(procedure, Name/Arity)` — a
 predicate nobody ever declared is not the same as one with an empty clause
-list, which instead prints `"% name/arity — no clauses"`. It prints a
-header with clause count, then each clause in `head <- (body).` format.
+list, which instead prints `"% name/arity — no clauses"`. An indicator whose
+name or arity is an unbound variable (`listing(X/2)`) raises
+`instantiation_error`. It prints a header with clause count, then each clause
+in `head <- (body).` format.
+
+The indicator finds an IMPORTED predicate as well as a local one: an
+`-import_from` binds the exporter's predicate, whose clauses live on the
+exporter's row, so `listing(qq/1)` and `listing("qq"/1)` from the importer
+print exactly what `listing(qq)` prints there. (Before the P3-3 close-out
+fix they raised `existence_error` for a predicate the importer could see and
+call, because the name was looked up in the calling module's database alone.)
 
 ---
 

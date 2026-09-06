@@ -268,6 +268,26 @@ qualified-goal entry funnels through that one strip.
 - A bare body goal `k` for a `/0` predicate does not compile (local and imported
   alike).
 
+**Added by the P3-3 final review (M-f, M-g) — the two gaps a Phase-4 author is
+most likely to trip over, because in each the CELL spelling works and its twin
+does not:**
+
+- **`retract/1` and `Database.retract` over a `Compound` goal silently no-op.**
+  `solve(Compound("retract", (Compound("tp", (10,)),)), lm)` yields 0 solutions
+  and removes nothing: stored heads are class instances, and a `Compound` never
+  compares equal to one. PRE-EXISTING at the P3-3 base, unchanged by the branch,
+  and not the same thing as the cell-head refusal M-c added (that one raises and
+  names the remedy). The cell form — `retract(("tp", 10))` — works. If Phase 4
+  probes retract behaviour, probe it with cells or class terms, not `Compound`s,
+  or the probe will mis-report (the final review's own P3 did, first time round).
+- **`control.py`'s goal builtins do not lower cell goals** — `findall/3`,
+  `forall/2`, `once/1`, `catch/3`, `time_goal`, `count_all`,
+  `setup_call_cleanup`, `call_cleanup`, `freeze`, `when`. A cell goal reaches
+  `terms_to_goalop` and raises `NotImplementedError` (not a typed error, not a
+  silent failure). Same root as the nested-cell gap above; the todo exists
+  (nested-cell). PARK-OK as of P3-3 — listed here so it is a known boundary
+  rather than a surprise.
+
 ---
 
 ## Deferred / parked from P3-3 (read before scoping Phase 4)
