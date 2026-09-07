@@ -69,6 +69,14 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
         return ".".join(reversed(parts))
 
     def lookup(name: str) -> Any:
+        # An imported name is remapped by the rewriter to its module-qualified
+        # spelling (``probe.lib.ok``), and ``-import_from`` binds exactly that
+        # dotted string as a KEY of the host module's namespace -- the same
+        # lookup the compiler's ``LOAD_GLOBAL`` performs for a clause.  Ask
+        # for the whole spelling first; only then walk it as attribute access
+        # (``-import_module``'d module objects).
+        if name in module_globals:
+            return module_globals[name]
         cur: Any = module_globals
         for part in name.split("."):
             if isinstance(cur, dict):

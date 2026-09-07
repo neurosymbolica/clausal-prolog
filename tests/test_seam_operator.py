@@ -218,3 +218,41 @@ class TestTermForms:
             "GOLD = --verdict(good, \"x\")\n"
         ))
         assert mod.GOLD == ("verdict", ("good",), "x")
+
+
+class TestImportedVocabulary:
+    """An oracle names the vocabulary its DOMAIN declares and imports; it
+    declares none of it itself.  Imported atoms and functors must resolve
+    inside ``--`` exactly as they do outside it."""
+
+    def _load_tree(self, tmp_path, monkeypatch, files: dict):
+        import sys
+        for rel, src in files.items():
+            p = tmp_path / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(src)
+        monkeypatch.syspath_prepend(str(tmp_path))
+        import clausal.import_hook  # noqa: F401 — installs the hook
+        for name in list(sys.modules):
+            if name.startswith("seamprobe"):
+                del sys.modules[name]
+        import importlib
+        return importlib.import_module("seamprobe.host")
+
+    def test_an_imported_atom_resolves_inside_the_seam(self, tmp_path, monkeypatch):
+        host = self._load_tree(tmp_path, monkeypatch, {
+            "seamprobe/__init__.py": "",
+            "seamprobe/lib.clausal": (
+                "-module(lib, [verdict(STATUS, IDS), dummy(X), ok, bad])\n"
+                "dummy(ok),\n"),
+            "seamprobe/host.clausal": (
+                "-module(host, [])\n"
+                "-double_quotes(chars)\n"
+                "-import_from(seamprobe.lib, [verdict, ok])\n"
+                "def outside():\n"
+                "    return ok\n"
+                "def inside():\n"
+                "    return --verdict(ok, \"text\")\n"),
+        })
+        assert host.outside() == ("ok",)
+        assert host.inside() == ("verdict", ("ok",), "text")
