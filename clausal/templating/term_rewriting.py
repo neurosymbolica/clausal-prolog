@@ -4614,6 +4614,22 @@ class EmbedTransformer(NodeTransformer):
     def _globals_call(transformer, anchor):
         return replace(Call(func=Name(id="globals", ctx=Load()), args=[], keywords=[]), anchor)
 
+    def _declare_locals(transformer, names, anchor):
+        """An unreachable ``if False:`` block whose body exports *names* --
+        so Python recognizes them as locals of the enclosing function
+        without binding them. A stray read after the seam then raises
+        ``UnboundLocalError`` instead of silently falling through to a
+        same-named module global."""
+        exports = transformer._export_stmts(names, anchor)
+        return replace(
+            If(
+                test=replace(Constant(value=False), anchor),
+                body=exports if exports else [replace(Pass(), anchor)],
+                orelse=[]
+            ),
+            anchor
+        )
+
     def _visit_stmts(transformer, stmts):
         """Visit each statement, splicing in any LIST result (a nested
         goal-seam ``if`` returns ``pre_stmts + [If]``) instead of nesting it
@@ -4634,21 +4650,14 @@ class EmbedTransformer(NodeTransformer):
         test = replace(Call(func=Name(id="$once_bind", ctx=Load()),
                             args=[goal_ast, transformer._globals_call(node.test)],
                             keywords=[]), node.test)
-        exports = transformer._export_stmts(fresh, node.test)
         if negated:
             test = replace(UnaryOp(op=Not(), operand=test), node.test)
             # In negated case, emit exports in unreachable ``if False:`` block
             # so Python recognizes variables as local without binding them.
-            if_false = replace(
-                If(
-                    test=replace(Constant(value=False), node.test),
-                    body=exports if exports else [replace(Pass(), node.test)],
-                    orelse=[]
-                ),
-                node.test
-            )
+            if_false = transformer._declare_locals(fresh, node.test)
             body = [if_false] + transformer._visit_stmts(node.body)
         else:
+            exports = transformer._export_stmts(fresh, node.test)
             body = exports + transformer._visit_stmts(node.body)
         node.test = test
         node.body = body
@@ -4656,6 +4665,49 @@ class EmbedTransformer(NodeTransformer):
         node.orelse = transformer._visit_stmts(node.orelse)
         fix_missing_locations(node)
         return pre + [node]
+
+    def visit_For(transformer, node):
+        found = transformer._goal_operand(node.iter)
+        if found is None or found[1]:
+            # ``for x in not --goal`` is not a goal position: leave it to Python.
+            return transformer.generic_visit(node)
+        expression, _ = found
+        # Targets: a Name, or a Tuple of Names, each a variable of the goal.
+        if isinstance(node.target, Name):
+            targets = [node.target.id]
+        elif isinstance(node.target, Tuple) and all(isinstance(e, Name) for e in node.target.elts):
+            targets = [e.id for e in node.target.elts]
+        else:
+            raise SyntaxError(
+                f"{transformer._filename}:{node.lineno}: `for ... in --goal` "
+                f"binds plain names (a name or a tuple of names); got "
+                f"{unparse(node.target)}")
+        pre, goal_ast, fresh = transformer._goal_seam(expression, node.iter)
+        for t in targets:
+            # A target not fresh here is either absent from the goal, or a
+            # name already bound by an enclosing seam -- a ``for`` never
+            # shares with an outer seam (spec §4), so both are refused alike.
+            if t not in fresh:
+                raise SyntaxError(
+                    f"{transformer._filename}:{node.lineno}: `{t}` is not a "
+                    f"variable of the goal `{unparse(expression)}`")
+        # Every goal variable that is not a loop target still becomes a
+        # local of the enclosing function (same loudness rule as the
+        # negated ``if`` above), so a stray read after the loop raises
+        # ``UnboundLocalError`` rather than reading a same-named module
+        # global left over from some earlier definition.
+        non_targets = [n for n in fresh if n not in targets]
+        declare = transformer._declare_locals(non_targets, node.iter)
+        var_refs = replace(Tuple(
+            elts=[replace(Name(id=f"$v_{t}", ctx=Load()), node.iter) for t in targets],
+            ctx=Load()), node.iter)
+        node.iter = replace(Call(func=Name(id="$each", ctx=Load()),
+                                 args=[goal_ast, var_refs, transformer._globals_call(node.iter)],
+                                 keywords=[]), node.iter)
+        node.body = transformer._visit_stmts(node.body)
+        node.orelse = transformer._visit_stmts(node.orelse)
+        fix_missing_locations(node)
+        return pre + [declare, node]
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
                                orig_kw_args, anchor, src_node, expr_stmt):

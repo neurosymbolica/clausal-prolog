@@ -173,3 +173,73 @@ class TestNot:
         assert mod.absent(("small",)) == "present"
         with pytest.raises(UnboundLocalError):
             mod.leaks(("tiny",))
+
+
+class TestFor:
+    def test_for_yields_every_solution_and_leaves_the_last_values(self):
+        mod = _load_inline("_gp_for1", RULEBASE.format(name="_gp_for1") + (
+            "def all_ids(profile):\n"
+            "    out = []\n"
+            "    for S, IDS in --decide(++profile, verdict(S, IDS)):\n"
+            "        out.append((S, IDS))\n"
+            "    return out, S\n"
+        ))
+        out, last = mod.all_ids(("large",))
+        assert out == [(("prohibited",), [("r1",)]), (("prohibited",), [("r2",)])]
+        assert last == ("prohibited",)
+
+    def test_a_single_target_gets_the_bare_value(self):
+        mod = _load_inline("_gp_for2", RULEBASE.format(name="_gp_for2") + (
+            "def verdicts(profile):\n"
+            "    out = []\n"
+            "    for V in --decide(++profile, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        assert mod.verdicts(("small",)) == [("verdict", ("permitted",), [("r1",), ("r2",)])]
+
+    def test_a_goal_variable_that_is_not_a_target_is_not_exported(self):
+        mod = _load_inline("_gp_for3", RULEBASE.format(name="_gp_for3") + (
+            "def only_status(profile):\n"
+            "    for S in --decide(++profile, verdict(S, IDS)):\n"
+            "        pass\n"
+            "    return IDS\n"
+        ))
+        with pytest.raises((UnboundLocalError, NameError)):
+            mod.only_status(("large",))
+
+    def test_a_target_not_in_the_goal_is_a_load_time_syntax_error(self):
+        with pytest.raises(SyntaxError, match="X"):
+            _load_inline("_gp_for4", RULEBASE.format(name="_gp_for4") + (
+                "def bad(profile):\n"
+                "    for S, X in --decide(++profile, verdict(S, _)):\n"
+                "        pass\n"
+            ))
+
+    def test_a_non_name_target_is_a_load_time_syntax_error(self):
+        with pytest.raises(SyntaxError):
+            _load_inline("_gp_for5", RULEBASE.format(name="_gp_for5") + (
+                "def bad(profile, box):\n"
+                "    for box.S in --decide(++profile, verdict(S, _)):\n"
+                "        pass\n"
+            ))
+
+    def test_values_are_copies_per_solution(self):
+        mod = _load_inline("_gp_for6", RULEBASE.format(name="_gp_for6") + (
+            "def mutate(profile):\n"
+            "    out = []\n"
+            "    for IDS in --decide(++profile, verdict(_, IDS)):\n"
+            "        IDS.append(('x',))\n"
+            "        out.append(len(IDS))\n"
+            "    return out\n"
+        ))
+        assert mod.mutate(("large",)) == [2, 2]
+
+    def test_break_stops_the_search(self):
+        mod = _load_inline("_gp_for7", RULEBASE.format(name="_gp_for7") + (
+            "def first(profile):\n"
+            "    for IDS in --decide(++profile, verdict(_, IDS)):\n"
+            "        break\n"
+            "    return IDS\n"
+        ))
+        assert mod.first(("large",)) == [("r1",)]
