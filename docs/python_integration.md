@@ -93,6 +93,26 @@ Inside `--` the grammar is Clausal's, under the host module's own rules:
 Outside `--`, the hosting Python is untouched: its strings are `str`, its
 names are Python names. `~~expr` is unrelated: it yields Python `ast` nodes.
 
+### Text crossings: `str(x)` and `f"{x}"`
+
+Going the other way — an engine answer reaching Python **text** — the two
+places Python makes text explicitly are rewritten to an atom-aware helper:
+`str(x)` and an f-string's `{x}` (also `{x!s}`, with or without a format
+spec) give an atom's **spelling**, and plain `str` for anything else. Without
+this, `str(answer)` on the atom `('ok',)` is the tuple repr `"('ok',)"`, and a
+comparison against text scores a wrong answer with no error. The rewrite is
+skipped in a file that binds `str` itself. It covers only those explicit
+forms: `%s`, `.format`, `print`, `json.dumps` and container reprs still show
+the cell — call `spelling()` there, or better, lift the text side to a term
+with `mint()` and compare terms.
+
+Two cautions. The rewrite fires **only** in Python hosted by a `.clausal`
+file; a plain `.py` module never gets it, so verify it from a host or you
+will measure the wrong thing. And it is for display and serialization, not
+for an oracle's comparison: `str(atom) == str(text)` is `True` for a domain
+that wrongly returns the string where the atom belongs, so a text-space
+comparison can no longer see that class of wrong answer. Compare terms.
+
 ## Crossing the boundary: atoms out, strings back
 
 There are **two** outbound conversions, and which one a boundary gets is a

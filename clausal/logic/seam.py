@@ -194,6 +194,23 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
     return build(node)
 
 
+def text_of(value: Any) -> str:
+    """The text Python-hosted code means by ``str(value)`` / ``f"{value}"``.
+
+    An ATOM gives its spelling -- the one case where Python's own ``str``
+    answers with a tuple repr (``"('ok',)"``) that a comparison against text
+    then silently mis-scores.  Everything else is plain ``str``: a compound
+    still prints as its cell, a Python list of strings the Python way.  The
+    rewriter routes only the EXPLICIT text crossings here (``str(x)``, an
+    f-string's ``{x}``); ``%s``, ``.format``, ``print`` and container reprs
+    are untouched and still show the cell.
+    """
+    from clausal.logic.atoms import is_atom, spelling
+    if is_atom(value):
+        return spelling(value)
+    return str(value)
+
+
 def _contains_var(term: Any) -> bool:
     from clausal.logic.variables import is_var
     if is_var(term):

@@ -902,6 +902,21 @@ def _is_unit_expr(node) -> bool:
     return False
 
 
+def _binds_name(module, name: str) -> bool:
+    """True if *module* binds *name* anywhere: an assignment target, a
+    def/class of that name, or an import (``import x as name``)."""
+    for node in walk(module):
+        if isinstance(node, Name) and node.id == name and isinstance(node.ctx, Store):
+            return True
+        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)) and node.name == name:
+            return True
+        if isinstance(node, alias) and (node.asname or node.name) == name:
+            return True
+        if isinstance(node, arg) and node.arg == name:
+            return True
+    return False
+
+
 def _collect_logic_var_names(node) -> list[str]:
     """Collect logic variable names from an AST node in first-occurrence order."""
     ordered: list[str] = []
@@ -4661,6 +4676,10 @@ class EmbedTransformer(NodeTransformer):
         and its logic-variable reads are both complete, so it is where
         ``_check_var_shaped_predicate_names`` can compare them.
         """
+        # Text crossings (``str(x)``, f-string ``{x}``) in Python-hosted code
+        # route through ``$text`` -- unless the file binds ``str`` itself, in
+        # which case its own binding wins and nothing is rewritten.
+        transformer._str_shadowed = _binds_name(module, "str")
         result = transformer.generic_visit(module)
         transformer._check_var_shaped_predicate_names()
         transformer._settle_atom_functor_sites()
@@ -4704,6 +4723,37 @@ class EmbedTransformer(NodeTransformer):
         if deferred:
             transformer._module_items.append(
                 AtomAppliedAsFunctorItem(sites=tuple(deferred)))
+
+    def visit_Call(transformer, call):
+        call = transformer.generic_visit(call)
+        # ``str(x)`` in Python-hosted code: the atom-aware text crossing.
+        if (isinstance(call.func, Name) and call.func.id == "str"
+                and not getattr(transformer, "_str_shadowed", False)
+                and len(call.args) == 1 and not call.keywords
+                and not isinstance(call.args[0], Starred)):
+            return replace(
+                Call(func=replace(Name(id="$text", ctx=Load()), call.func),
+                     args=call.args, keywords=[]),
+                call,
+            )
+        return call
+
+    def visit_JoinedStr(transformer, joined):
+        joined = transformer.generic_visit(joined)
+        # f-string ``{x}`` / ``{x!s}`` (with or without a format spec) in
+        # Python-hosted code: interpolate the atom-aware text.  ``!r`` and
+        # ``!a`` are left alone -- they ask for the repr on purpose.
+        if getattr(transformer, "_str_shadowed", False):
+            return joined
+        for part in joined.values:
+            if isinstance(part, FormattedValue) and part.conversion in (-1, 115):
+                part.value = replace(
+                    Call(func=replace(Name(id="$text", ctx=Load()), part.value),
+                         args=[part.value], keywords=[]),
+                    part.value,
+                )
+                part.conversion = -1
+        return joined
 
     def visit_FunctionDef(transformer, node):
         if is_template_func(node):

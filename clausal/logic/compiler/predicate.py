@@ -296,7 +296,7 @@ from clausal.logic.constants import (  # noqa: E402
     _FrozenList, _FrozenDict, _FrozenSet, _freeze_dict_term,
 )
 
-from clausal.logic.seam import seam_term as _seam_term
+from clausal.logic.seam import seam_term as _seam_term, text_of as _text_of
 
 INJECTED_RUNTIME_BUILTINS: dict = {
     # Term-constructor helpers and runtime types emitted as bare Names by
@@ -357,6 +357,8 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$mint": _mint,
     # THE SEAM: ``--term`` in Python-hosted code (clausal.logic.seam).
     "$seam": _seam_term,
+    # Explicit text crossings in Python-hosted code: str(x), f"{x}".
+    "$text": _text_of,
     # The computed-dict-literal-key helper (``runtime.dict_ops._dict_key``):
     # deref, refuse an unbound key with a catchable instantiation error, and
     # answer the canonical DICT-KEY form.  It is bound per-PREDICATE below
