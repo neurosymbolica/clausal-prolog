@@ -34,6 +34,7 @@ from clausal.logic.exceptions import (
     instantiation_error,
 )
 
+from clausal.logic.builtins._helpers import _is_empty_list
 from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS, BuiltinPredicate
 
 
@@ -73,6 +74,13 @@ def _format_term_as_text(val):
     display substitution is not owed to a forgery.
     Other values use str() which auto-derefs Vars via __str__.
     """
+    if _is_empty_list(val):
+        # Every spelling of the empty list -- ``[]``, ``""``, ``b""``, ``()``
+        # -- is the atom ``'[]'`` and prints ``[]`` in EVERY family (fix
+        # round 2, item 5).  Decided first: ``()`` is falsy at the cell test
+        # below and ``b""`` never reached ``term_str`` at all, so both used
+        # to fall to ``str()`` and print ``()`` / ``b''``.
+        return "[]"
     if isinstance(val, str):
         # The EMPTY string is the empty list and prints ``[]`` in the display
         # family too (spec §6.7's ``""``/``[]`` row; Scryer) -- ``term_str``
@@ -147,6 +155,10 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
     *double_quotes* is here only for ``write_term/2``'s option of that name;
     every other caller in the family leaves it False.
     """
+    if _is_empty_list(val):
+        # ``()`` is nil and is not caught by the cell test below (it is
+        # falsy), so it is decided here (fix round 2, item 5).
+        return "[]"
     if isinstance(val, _ISO_TERM_TYPES) or is_term_instance(val):
         return _term_str(val, quoted=quoted, double_quotes=double_quotes,
                          sep=ISO_SEP)
@@ -172,8 +184,8 @@ def _write__1(term, trail, k):
     f-string wants — use ``write_text/1`` / ``writeln_text/1`` (Task 15
     item 4 as amended, 2026-09-07).
     """
-    val = deref(term)
-    _sys.stdout.write(_format_term_iso(val, quoted=False))
+    from clausal.logic.solve import _deref_walk
+    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=False))
     _sys.stdout.flush()
     yield None
 
@@ -185,8 +197,8 @@ def _writeln__1(term, trail, k):
     Not an ISO name, but ``write/1``'s semantics: a string prints as its char
     list.  ``writeln_text/1`` is the text form.
     """
-    val = deref(term)
-    print(_format_term_iso(val, quoted=False))
+    from clausal.logic.solve import _deref_walk
+    print(_format_term_iso(_deref_walk(term), quoted=False))
     yield None
 
 
@@ -432,8 +444,8 @@ def _write_to_string__2(term, result, trail, k):
     Not an ISO name, but ``write/1``'s semantics: a string renders as the
     char list it is.  ``write_text_to_string/2`` is the text form.
     """
-    val = deref(term)
-    s = _format_term_iso(val, quoted=False)
+    from clausal.logic.solve import _deref_walk
+    s = _format_term_iso(_deref_walk(term), quoted=False)
     mark = trail.mark()
     if unify(result, s, trail):
         yield None

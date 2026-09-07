@@ -9,7 +9,7 @@ from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.exceptions import LogicException, string_goal_error
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result
-from clausal.logic.builtins._helpers import _standard_order_key
+from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 
 from clausal.logic.cells import (
     CELL_GOAL_CONTROL_FUNCTORS,
@@ -121,6 +121,14 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell:
         goal_args = list(goal_val[1:])
+    elif _is_empty_list(goal_val):
+        # The EMPTY LIST in goal position, in any spelling (fix round 2,
+        # item 4): ``call("")`` raised while ``call([])`` failed silently,
+        # for one and the same term.  Both raise now -- ``[]`` is the atom
+        # ``'[]'``, which is callable and names no procedure, so it is
+        # ``existence_error(procedure, '[]'/N)``, exactly what Scryer
+        # answers for ``call([])``.
+        raise LogicException(string_goal_error("", len(extra_args), "call/N"))
     elif type(goal_val) is str:
         # THE FLIP (spec §6.4): a ``str`` is a STRING, so ``call("foo")`` is
         # not a call to ``foo/0``.  Task 15 item 3 (ISO alignment): the

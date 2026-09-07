@@ -16,7 +16,10 @@ from clausal.terms import (
     VarSeg,
 )
 
-from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.atoms import (
+    NIL_SPELLING, is_atom, key_of, mint, spelling,
+)
+from clausal.logic.builtins._helpers import _is_empty_list
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
@@ -62,6 +65,13 @@ def _storage_key(key, context):
     close.
     """
     key = normalize_seg_input(key)
+    if _is_empty_list(key):
+        # The nil atom (fix round 2, item 2).  ``atoms.is_atom`` below is the
+        # arity-0-CELL shape test and answers False for ``[]``, so a nil key
+        # FAILED silently while ``""`` -- the same term -- raised
+        # ``type_error(atom, …)`` at the str branch.  It is an atom; its
+        # spelling is the two bracket characters.
+        return NIL_SPELLING
     if is_atom(key):
         return spelling(key)
     if is_var(key):
@@ -147,7 +157,10 @@ def _get_attrs__2(var, attrs, trail, k):
     if not is_var(var_d):
         return
     raw = var_d.attrs if hasattr(var_d, 'attrs') and var_d.attrs else {}
-    result = DictTerm({mint(key): value for key, value in raw.items()})
+    # ``key_of``, not ``mint``: an attribute stored under the spelling
+    # ``[]`` is the atom ``'[]'``, whose ``mint`` answer is the
+    # unhashable empty LIST (fix round 2, item 2).
+    result = DictTerm({key_of(key): value for key, value in raw.items()})
     if unify(attrs, result, trail):
         yield None
 

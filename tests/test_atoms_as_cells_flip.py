@@ -473,6 +473,97 @@ class TestEmptyListIsTheAtomNil:
         for nil in ([], "", b"", ()):
             assert spelling(nil) == "[]", nil
 
+    def test_calling_the_nil_atom_raises_in_every_spelling(self, builtins_mod):
+        """Fix round 2, item 4: ``call("")`` raised while ``call([])`` failed
+        silently, for one and the same term.  One term, one answer."""
+        from clausal.logic.solve import call
+        for nil in ([], "", ()):
+            with pytest.raises(LogicException) as exc:
+                list(call("call_goal", nil, module=builtins_mod))
+            formal = _formal(exc)
+            assert formal.functor == "existence_error", nil
+            assert formal.args[1] == Compound("/", (mint("[]"), 0)), nil
+        for nil in ([], ""):
+            with pytest.raises(LogicException) as exc:
+                list(solve(nil, builtins_mod))
+            assert _formal(exc).functor == "existence_error", nil
+
+
+class TestTheNilAtomInAKeyPosition:
+    """Fix round 2, item 2 (operator-ruled 2026-09-07).  ``mint("[]")`` is
+    the empty LIST, which is mutable and so unhashable: a nil atom reaching a
+    dict-key position crashed with a raw ``TypeError``.  The empty TUPLE is
+    the same term and IS hashable, so it is the canonical key form
+    (``atoms.NIL_KEY``); ``atoms.key_of`` builds it at the three key-building
+    sites and ``DictTerm`` folds every other nil spelling onto it."""
+
+    def test_key_of_answers_the_hashable_nil(self):
+        from clausal.logic.atoms import NIL_KEY, key_of
+        assert key_of("[]") == NIL_KEY == ()
+        hash(key_of("[]"))               # must not raise
+        assert key_of("foo") == mint("foo")
+        # ...and it is the same TERM as every other nil spelling.
+        assert unify(key_of("[]"), [], Trail())
+        assert unify(key_of("[]"), "", Trail())
+
+    def test_dict_term_folds_every_nil_spelling_onto_one_key(self):
+        from clausal.terms import DictTerm
+        for spelled in ((), "", b""):
+            d = DictTerm({spelled: 1})
+            assert list(d.keys()) == [()], spelled
+            for lookup in ((), "", b"", []):
+                assert d[lookup] == 1, (spelled, lookup)
+                assert lookup in d, (spelled, lookup)
+                assert d.get(lookup) == 1, (spelled, lookup)
+        # A raw dict on the right of == / unification is normalised too.
+        assert DictTerm({(): 1}) == {"": 1}
+        assert unify(DictTerm({(): 1}), DictTerm({b"": 1}), Trail())
+
+    def test_json_parse_makes_a_nil_key_usable(self):
+        """``json.parse('{"[]": 1}')`` raised a raw ``TypeError``."""
+        mod = _load_inline_clausal(
+            "_fix2_json_nil",
+            "-import_from(py.json, [parse])\n"
+            "j(S, D) <- parse(S, D),\n",
+        )
+        D = Var()
+        (parsed,), = _answers(("j", '{"[]": 1, "a": 2}', D), mod, D)
+        assert list(parsed.keys()) == [(), mint("a")]
+        assert parsed[()] == 1 and parsed[[]] == 1
+
+    def test_a_source_written_nil_dict_key_compiles(self):
+        """Fix round 2, item 6: ``{'[]': 1}`` raised a bare ``TypeError`` at
+        dict construction because the key compiled to a list display."""
+        mod = _load_inline_clausal(
+            "_fix2_dict_nil",
+            "-private([a])\n"
+            "d({'[]': 1, a: 2}),\n",
+        )
+        D = Var()
+        (d,), = _answers(("d", D), mod, D)
+        assert list(d.keys()) == [(), mint("a")]
+        assert d[[]] == 1
+
+    def test_get_attrs_survives_a_nil_attribute_name(self, builtins_mod):
+        """``attributes.py`` built its answer dict with ``mint(key)``."""
+        from clausal.logic.solve import call
+        V, D = Var(), Var()
+        assert len(list(call("put_attr", V, mint("[]"), 7,
+                             module=builtins_mod))) == 1
+        got = [_deref_walk(D)
+               for _ in call("get_attrs", V, D, module=builtins_mod)]
+        assert len(got) == 1 and got[0][()] == 7
+
+    def test_a_py_wrapper_option_table_survives_a_nil_name(self):
+        """``modules/py/__init__.py``'s ``option``/``has_option`` looked the
+        key up with ``mint(name)``."""
+        from clausal.modules.py import has_option, option
+        from clausal.terms import DictTerm
+        opts = DictTerm({(): 7, mint("k"): 9})
+        assert option(opts, "[]", None) == 7
+        assert option(opts, "k", None) == 9
+        assert has_option(opts, "[]") and not has_option(opts, "nope")
+
     def test_nil_reads_its_spelling_as_the_two_bracket_characters(
             self, builtins_mod):
         """``atom_length([], 2)`` and ``atom_chars([], ['[', ']'])`` —

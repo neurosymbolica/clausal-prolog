@@ -357,8 +357,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    then -> 2482-2717 by that task's fix round 1 (``term_str``'s third
     #    keyword ``sep``, threaded like the other two, and the ``bytes``
     #    branch that spells a code list out under ``double_quotes(false)``) --
-    #    a further +29 shift of the region's end, still no new site.
-    AllowEntry("clausal/terms.py", (2482, 2717),
+    #    a further +29 shift of the region's end, still no new site), then
+    #    -> 2482-2745 by fix round 2 (the empty-tuple nil branch added to
+    #    ``term_str`` and the ``b""`` reorder in its bytes branch) -- +28,
+    #    still no new site.
+    AllowEntry("clausal/terms.py", (2482, 2745),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

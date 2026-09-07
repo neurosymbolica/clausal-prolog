@@ -206,6 +206,54 @@ def mint(spelling: str):
     return (sys.intern(spelling),)
 
 
+#: The HASHABLE spelling of nil, and the canonical form of a nil DICT KEY
+#: (fix round 2, item 2, operator-ruled 2026-09-07).  ``mint("[]")`` answers
+#: the empty LIST, which is mutable and therefore unhashable, so a nil atom
+#: reaching a key position would crash with a raw ``TypeError``.  The empty
+#: TUPLE is the same term — ``spelling(())`` is ``"[]"``, ``atomic(())`` is
+#: true, ``()`` unifies with ``[]`` — and it is hashable, so it is what a
+#: key position uses.
+NIL_KEY: tuple = ()
+
+
+def key_of(spelling: str):
+    """The atom for *spelling* when it is going into a KEY position.
+
+    :func:`mint` with one substitution: ``'[]'`` answers :data:`NIL_KEY`
+    (the empty tuple) rather than the empty list, because a dict key must be
+    hashable.  The two are the same term, so nothing downstream can tell
+    them apart by unification or by ``atom/1``; only ``hash`` can.
+
+    Use this — not ``mint`` — wherever the result is immediately used as a
+    dict key: JSON object keys (``modules/py/json.py``), attribute names
+    (``builtins/attributes.py``), and the ``py.*`` wrapper option tables
+    (``modules/py/__init__.py``).
+    """
+    if type(spelling) is not str:
+        raise TypeError(
+            f"key_of: spelling must be a str, got {type(spelling).__name__}")
+    if spelling == NIL_SPELLING:
+        return NIL_KEY
+    return (sys.intern(spelling),)
+
+
+def as_dict_key(key):
+    """*key* in its canonical DICT-KEY form.
+
+    The empty list in any spelling — ``[]``, ``""``, ``b""``, ``()`` — is the
+    one atom ``'[]'``, so all four must be ONE key.  Only ``()`` is both
+    hashable and unambiguous (a ``str`` key ``""`` would otherwise be a
+    different key from ``b""``), so every nil spelling normalises to it.
+    Everything else passes through untouched.
+
+    ``DictTerm`` applies this on construction and on every lookup, so a
+    program cannot observe the difference.
+    """
+    if type(key) in (list, str, bytes, tuple) and len(key) == 0:
+        return NIL_KEY
+    return key
+
+
 def is_atom(term) -> bool:
     """True iff *term* is an atom (the TERM test; a zero-field predicate class
     is not an atom — see ``predicate.is_atom_value`` for the value-level
@@ -271,7 +319,7 @@ def is_char_atom(term) -> bool:
 
 
 __all__ = [
-    "HIDDEN_SEP", "NIL_SPELLING", "mangle", "is_mangled", "demangle",
-    "demangle_for_display", "mint", "is_atom", "spelling", "char_atom",
-    "is_char_atom",
+    "HIDDEN_SEP", "NIL_SPELLING", "NIL_KEY", "mangle", "is_mangled",
+    "demangle", "demangle_for_display", "mint", "key_of", "as_dict_key",
+    "is_atom", "spelling", "char_atom", "is_char_atom",
 ]

@@ -222,8 +222,11 @@ def option(mapping, name, default=None):
     the ``str`` spelling is the Python-side fallback.  *name* is the plain
     spelling — callers never build the key themselves.
     """
-    from clausal.logic.atoms import mint  # noqa: PLC0415
-    got = mapping.get(mint(name), _OPTION_MISSING)
+    # ``key_of``, not ``mint``: an option named ``[]`` is the atom ``'[]'``,
+    # whose ``mint`` answer is the unhashable empty LIST and would crash the
+    # lookup outright (fix round 2, item 2).
+    from clausal.logic.atoms import key_of  # noqa: PLC0415
+    got = mapping.get(key_of(name), _OPTION_MISSING)
     if got is _OPTION_MISSING:
         got = mapping.get(name, _OPTION_MISSING)
     return default if got is _OPTION_MISSING else got
@@ -235,8 +238,8 @@ def has_option(mapping, name) -> bool:
     The companion to :func:`option` for the ``"x" in opts`` shape, where a
     missing key and a key holding ``None`` must stay distinguishable.
     """
-    from clausal.logic.atoms import mint  # noqa: PLC0415
-    return mint(name) in mapping or name in mapping
+    from clausal.logic.atoms import key_of  # noqa: PLC0415
+    return key_of(name) in mapping or name in mapping
 
 
 def text_or_str(val):

@@ -12,7 +12,9 @@
 # rather than by eyeball.
 
 # --8<-- [start:three_writers]
-# write/1: no quotes, and a string is the list of characters it is.
+# write/1: no quotes, a string is the list of characters it is, and there
+# is no space after a comma -- the ISO family is byte-comparable with other
+# ISO systems.
 Test("write is unquoted") <- (
     write_to_string(foo(bar, "baz"), S),
     S == "foo(bar,[b,a,z])"
@@ -30,11 +32,12 @@ Test("writeq quotes an atom that needs it") <- (
     term_to_string('foo bar', S3), S3 == "'foo bar'"
 )  # nv
 
-# "" and [] are one term, so every writer prints them alike.
+# "", [] and b"" are one term, so every writer prints them alike.
 Test("the empty string writes as the empty list") <- (
     write_to_string("", S5), S5 == "[]",
     write_to_string([], S6), S6 == "[]",
-    term_to_string("", S7), S7 == "[]"
+    term_to_string("", S7), S7 == "[]",
+    write_text_to_string([], S8), S8 == "[]"
 )  # nv
 # --8<-- [end:three_writers]
 
@@ -49,10 +52,12 @@ Test("the text family prints a string as its text") <- (
     write_text('a b'), write_text(" "), writeln_text("a b")
 )  # nv
 
-# The Clausal DISPLAY family -- print_term/1 and term_to_string/2 -- is
-# write_term(T, [quoted(true), double_quotes(true)]): an atom is quoted
-# when it needs it, and a string prints in double quotes, so the two kinds
-# are distinguishable.  A list of chars IS a string, so it prints as one.
+# The Clausal DISPLAY family -- print_term/1 and term_to_string/2 -- gives a
+# string the SPELLING write_term(T, [quoted(true), double_quotes(true)])
+# gives it, and additionally keeps the ", " after a comma that the ISO
+# family drops.  An atom is quoted when it needs it and a string prints in
+# double quotes, so the two kinds are distinguishable.  A list of chars IS a
+# string, so it prints as one.
 Test("print_term/1 and term_to_string/2 are the display family") <- (
     term_to_string('a b', Q1), Q1 == "'a b'",
     term_to_string("a b", Q2), Q2 == "\"a b\"",
@@ -73,18 +78,21 @@ Test("write_canonical/1 spells the cons structure") <- (
 
 # --8<-- [start:write_term]
 # write_term/2 is the ISO writer with the switches named.  Both Booleans
-# default to FALSE, so an option-free call is the strict ISO display: a
-# string prints as the LIST of char atoms it is.
+# default to FALSE, so an option-free call is exactly write/1: a string
+# prints as the LIST of char atoms it is, with no space after the comma.
 #
-#     write_term("abc", [])                              prints  [a, b, c]
-#     write_term("abc", [quoted(true)])                  prints  [a, b, c]
-#     write_term("abc", [quoted(true), double_quotes(true)])   prints  "abc"
-#     write_term('a b', [quoted(true)])                  prints  'a b'
+#     write_term("abc", [])                                  prints  [a,b,c]
+#     write_term("abc", [quoted(true)])                      prints  [a,b,c]
+#     write_term("abc", [quoted(true), double_quotes(true)]) prints  "abc"
+#     write_term('a b', [quoted(true)])                      prints  'a b'
 #
-# The two-option form is exactly writeq/1, so the assertion below pins it
-# through term_to_string/2 (writeq's string form) and then shows the call.
-Test("write_term with both options is writeq") <- (
+# write_term(T, []) IS write/1 and write_term(T, [quoted(true)]) IS writeq/1.
+# The two-option form gives a string the SPELLING term_to_string/2 gives it
+# -- pinned below through term_to_string/2, which additionally keeps the
+# display comma spacing -- and then the calls are shown.
+Test("write_term option forms") <- (
     term_to_string("abc", T1), T1 == "\"abc\"",
+    write_to_string("abc", T2), T2 == "[a,b,c]",
     write_term("abc", [quoted(true), double_quotes(true)]), nl(),
     write_term("abc", []), nl(),
     write_term('a b', [quoted(true)])

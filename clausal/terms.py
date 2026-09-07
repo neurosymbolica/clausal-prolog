@@ -24,7 +24,8 @@ from types import MappingProxyType
 from typing import Any, Optional
 
 from .logic.atoms import (
-    char_atom, demangle_for_display, is_char_atom, is_mangled, spelling,
+    as_dict_key as _as_dict_key, char_atom, demangle_for_display,
+    is_char_atom, is_mangled, spelling,
 )
 from .logic.cells import TUPLE_TAG
 from .logic.variables import Var, deref
@@ -1694,11 +1695,23 @@ class DictTerm:
     Values may be Vars, participating in unification.
 
     Two DictTerms unify iff they have the same key set and values unify pairwise.
+
+    NIL KEYS (fix round 2, item 2, operator-ruled 2026-09-07).  The empty
+    list is the atom ``'[]'`` and has four spellings — ``[]``, ``""``,
+    ``b""``, ``()`` — of which only the last two are hashable and only the
+    last is unambiguous.  All four are ONE term, so they must be one key:
+    every key that enters or is looked up here goes through
+    ``atoms.as_dict_key``, which folds them onto ``()``.  Without it
+    ``mint("[]")`` (the empty LIST, mutable) crashed a key position with a
+    raw ``TypeError``, and ``{"": 1}`` and ``{b"": 1}`` were two different
+    keys for one term.
     """
     __slots__ = ("_data", "_position")
 
     def __init__(self, data: dict, *, _position=None):
-        self._data = dict(data)  # defensive copy
+        # Defensive copy AND nil-key normalisation in one pass.
+        items = data.items() if hasattr(data, "items") else data
+        self._data = {_as_dict_key(k): v for k, v in items}
         self._position = _position  # Slice G
 
     @property
@@ -1708,16 +1721,19 @@ class DictTerm:
     def keys(self):   return self._data.keys()
     def values(self): return self._data.values()
     def items(self):  return self._data.items()
+    def get(self, key, default=None): return self._data.get(_as_dict_key(key), default)
     def __len__(self): return len(self._data)
-    def __getitem__(self, key): return self._data[key]
-    def __contains__(self, key): return key in self._data
+    def __getitem__(self, key): return self._data[_as_dict_key(key)]
+    def __contains__(self, key): return _as_dict_key(key) in self._data
     def __iter__(self):          return iter(self._data)  # yields keys, like Python dict
 
     def __eq__(self, other):
         if isinstance(other, DictTerm):
             return self._data == other._data
         if isinstance(other, dict):
-            return self._data == other
+            # Normalise the raw dict's nil key the way ``__init__`` would,
+            # so ``DictTerm({(): 1}) == {"": 1}`` — one term, one key.
+            return self._data == {_as_dict_key(k): v for k, v in other.items()}
         return NotImplemented
 
     def __hash__(self):
@@ -1749,9 +1765,11 @@ class DictTerm:
         Clausal-native dict literals without forcing a ++({...}) escape.
         """
         if isinstance(other, DictTerm):
-            other_data = other._data
+            other_data = other._data          # already normalised
         elif isinstance(other, dict):
-            other_data = other
+            # A raw Python dict has NOT been through ``__init__``, so its
+            # keys still carry whichever nil spelling the producer used.
+            other_data = {_as_dict_key(k): v for k, v in other.items()}
         else:
             return NotImplemented
         if self._data.keys() != other_data.keys():
@@ -2570,10 +2588,14 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         # matching what ISO prints for the equal ``[97, 98]`` (fix round 1,
         # item 5).  The display family keeps the ``b'ab'`` spelling §6.7
         # records as "as today".
+        if not t:
+            # ``b""`` IS the empty list, in every family: one term, one
+            # rendering (fix round 2, item 5).  Checked BEFORE the
+            # ``double_quotes`` gate, which would otherwise print ``b''``
+            # for it in the display family while ``""`` printed ``[]``.
+            return _c('[]', 'bracket', style, _bd)
         if double_quotes:
             return repr(t)
-        if not t:
-            return _c('[]', 'bracket', style, _bd)
         ob = _c('[', 'bracket', style, _bd)
         cb = _c(']', 'bracket', style, _bd)
         return ob + sep.join(_c(repr(code), 'number', style) for code in t) + cb
@@ -2592,6 +2614,12 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         return ob + sep.join(term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in t) + cb
     if isinstance(t, Var):
         return _c(style.anon_var, 'var', style)
+    if type(t) is tuple and not t:
+        # The empty TUPLE is the empty list -- the hashable nil spelling
+        # ``atoms.NIL_KEY`` uses (fix round 2, items 2 and 5).  It must be
+        # decided HERE: both cell tests below are falsy on it, so it used to
+        # fall all the way to ``repr(t)`` and print ``()``.
+        return _c('[]', 'bracket', style, _bd)
     if type(t) is tuple and t and type(t[0]) is str:
         # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
         # every compound term is represented, so the reader must see

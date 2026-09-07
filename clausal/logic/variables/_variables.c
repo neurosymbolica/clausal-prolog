@@ -1024,6 +1024,19 @@ probe_unify_hook(PyObject *obj, PyObject **hook_out)
 #endif
 }
 
+/* True for any spelling of the empty list: [], "", b"", ().  All four are
+ * the reserved atom '[]' (ISO; Scryer round-trips it), so unification must
+ * not tell them apart -- see the nil branch inside do_unify below. */
+static inline int is_nil_spelling(PyObject *t)
+{
+    if (PyList_Check(t))    return PyList_GET_SIZE(t) == 0;
+    if (PyUnicode_Check(t)) return PyUnicode_GET_LENGTH(t) == 0;
+    if (PyBytes_Check(t))   return PyBytes_GET_SIZE(t) == 0;
+    if (PyTuple_Check(t))   return PyTuple_GET_SIZE(t) == 0;
+    return 0;
+}
+
+
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 {
@@ -1141,6 +1154,16 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
     }
 
     /* ---- Both non-Var: structural comparison ---- */
+
+    /* Every spelling of the EMPTY LIST is the one reserved atom '[]' (fix
+     * round 2, item 2, operator-ruled 2026-09-07), so they all unify with
+     * each other.  [] vs "" and [] vs b"" already did, through the str/list
+     * and bytes/list branches further down; the empty TUPLE -- atoms.NIL_KEY,
+     * the hashable spelling a dict key uses -- did not, because the
+     * tuple/list pair never meets in this dispatch.  Decided here, before
+     * the type-paired branches, so all four agree.  A non-empty tuple is a
+     * CELL (or tuple-data) and is unaffected. */
+    if (is_nil_spelling(t1) && is_nil_spelling(t2)) return 1;
 
     if (PyTuple_Check(t1) && PyTuple_Check(t2)) {
         Py_ssize_t n = PyTuple_GET_SIZE(t1);

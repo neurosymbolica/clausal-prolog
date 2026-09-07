@@ -243,7 +243,7 @@ Test("term to string keeps the quotes") <- (label("hello", S2), S2 == "\"hello\"
 | the atom `hello` | `"hello"` | `"hello"` | `"hello"` |
 | the atom `'a b'` | `"a b"` | `"a b"` | `"'a b'"` |
 | the string `"hi"` | `"hi"` | `"[h,i]"` | `"\"hi\""` |
-| `[1, 2]` | `"[1, 2]"` | `"[1, 2]"` | `"[1, 2]"` |
+| `[1, 2]` | `"[1, 2]"` | `"[1,2]"` | `"[1, 2]"` |
 
 Use `write_text_to_string` when building human-readable text. Use
 `term_to_string` when you need to see which kind a value is; use

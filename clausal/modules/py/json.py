@@ -46,7 +46,7 @@ _json = _import_stdlib("json")
 
 from typing import Any
 
-from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.atoms import is_atom, key_of, mint, spelling
 from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.exceptions import LogicException, domain_error, type_error
 from clausal.logic.variables import Var, deref, is_var, unify
@@ -68,8 +68,12 @@ def _python_to_clausal(obj: Any, atoms: frozenset = frozenset()) -> Any:
     string.
     """
     if isinstance(obj, dict):
+        # ``key_of``, not ``mint``: a JSON key spelled ``"[]"`` is the atom
+        # ``'[]'``, which ``mint`` answers as the (unhashable) empty LIST.
+        # ``key_of`` gives the hashable nil spelling ``()`` for that one key
+        # and ``mint``'s answer for every other (fix round 2, item 2).
         return DictTerm({
-            mint(k): _python_to_clausal(v, atoms) for k, v in obj.items()
+            key_of(k): _python_to_clausal(v, atoms) for k, v in obj.items()
         })
     if isinstance(obj, list):
         return [_python_to_clausal(item, atoms) for item in obj]

@@ -1755,7 +1755,19 @@ class TermTransformer(NodeTransformer):
                 ),
                 key,
             )
-        return transformer.visit(key)
+        visited = transformer.visit(key)
+        if isinstance(visited, List) and not visited.elts:
+            # The NIL key (fix round 2, item 2, operator-ruled 2026-09-07).
+            # ``'[]'`` in key position is the atom ``'[]'``, which IS the
+            # empty list, and ``visit_Constant`` emits a list display for it
+            # -- unhashable, so the dict literal blew up with a raw
+            # ``TypeError`` at construction.  A bare ``{[]: 1}`` reaches here
+            # as an empty ``List`` node too.  The empty TUPLE is the same
+            # term and is hashable, so it is the canonical key form
+            # (``atoms.NIL_KEY``); ``DictTerm`` normalises every other nil
+            # spelling onto it, so nothing downstream can tell them apart.
+            return replace(Tuple(elts=[], ctx=load), key)
+        return visited
 
     def visit_Dict(transformer, dict_expr):
         # If any key is None, this is a **splat dict — fall back to DictLiteral

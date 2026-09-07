@@ -209,6 +209,13 @@ def _term_to_goal(term: Any) -> Any:
     from clausal.logic.predicate import PredicateMeta
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
+    if type(term) in (list, bytes, tuple) and len(term) == 0:
+        # The EMPTY LIST in goal position, in any spelling (fix round 2,
+        # item 4): ``solve("", m)`` raised while ``solve([], m)`` fell
+        # through, for one and the same term.  ``[]`` is the atom ``'[]'``,
+        # so the answer is ``existence_error(procedure, '[]'/0)``.
+        from clausal.logic.exceptions import LogicException, string_goal_error
+        raise LogicException(string_goal_error("", 0, "solve/1"))
     if type(term) is str:
         # THE FLIP (spec §6.4): a ``str`` is a STRING, not an atom.
         # ``solve("z0", m)`` used to be the same call as ``solve(("z0",), m)``;

@@ -376,9 +376,46 @@ class TestTheThreeWriterFamilies:
         for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
                      ("a b",), [1, 2], "",
                      Compound("f", (1, "ab")), KWTerm("p", a="ab"),
-                     DictTerm({("k",): "ab"}), b"ab"):
+                     DictTerm({("k",): "ab"}), b"ab", ()):
             assert (_out(mod, ("write", term))
                     == _out(mod, ("write_term", term, []))), term
+
+    def test_write_equals_write_term_for_a_ground_seg(self, mod):
+        """Fix round 2, item 1: ``write/1``/``writeln/1``/
+        ``write_to_string/2`` formatted ``deref(term)``, and ``Seg*`` is not
+        in ``_ISO_TERM_TYPES``, so a ground ``SegList``/``SegString`` fell to
+        ``str()`` -- display spacing (``[1, 2]``) or a raw ``SegString([...])``
+        repr -- and ``write/1`` stopped agreeing with
+        ``write_term(T, [])``, which walks.  All three walk now.
+
+        A ``Seg*`` cannot be compiled into a goal's argument list, so these
+        go through ``call``."""
+        from clausal.logic.solve import call
+        from clausal.terms import ConcreteSeg, SegList, SegString
+
+        def out_call(name, *args):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                assert len(list(call(name, *args, module=mod))) == 1
+            return buf.getvalue()
+
+        for term, want in ((SegList([ConcreteSeg([1, 2])]), "[1,2]"),
+                           (SegString(["ab"]), "[a,b]"),
+                           (SegList([ConcreteSeg([("a",), ("b",)])]), "[a,b]")):
+            assert out_call("write", term) == want, term
+            assert out_call("write_term", term, []) == want, term
+            assert out_call("writeln", term) == want + "\n", term
+
+    def test_the_nil_tuple_prints_as_the_empty_list_in_every_family(self, mod):
+        """Fix round 2, item 5: ``()`` is the hashable spelling of nil, and
+        both cell tests are FALSY on it, so it used to fall to ``str()`` and
+        print ``()``.  ``b""`` had the same shape of hole in the text
+        family."""
+        for spelling in ((), "", [], b""):
+            assert _out(mod, ("write", spelling)) == "[]", spelling
+            assert _out(mod, ("writeq", spelling)) == "[]", spelling
+            assert _out(mod, ("write_text", spelling)) == "[]", spelling
+            assert _out(mod, ("write_term", spelling, [])) == "[]", spelling
 
     def test_writeq_is_iso_too_and_only_adds_quoting(self, mod):
         assert _out(mod, ("writeq", "abc")) == "[a,b,c]"

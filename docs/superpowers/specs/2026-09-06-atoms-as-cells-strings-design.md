@@ -321,7 +321,7 @@ a bare `str`; after this design they are cells end to end.
 | `T =.. L`, T unbound | `[N]` with `N` atomic → `T = N`; `[N \| Args]`, `N` an atom → the cell; `[S]` or `[S \| Args]` with `S` a string → `type_error(atomic, S)` / `type_error(atom, S)` respectively; `[N \| Args]` with `N` a number and `Args ≠ []` → `type_error(atom, N)`. |
 | `arg/3` | unchanged (arguments are terms). |
 | `'.'`/2 in name position | builds the engine list shape, never a cell — §5.4. |
-| `'[]'` in ANY position | **RULED 2026-09-07** (fix round 1, item 2): the reserved atom `'[]'` IS the empty list, so `mint("[]")` answers `[]` (a fresh list — a list is mutable) and no `("[]",)` cell is ever built. Every producer follows: the compiler's quoted-atom Constant becomes a list display (`term_rewriting.py`, bytecode tag 9 → 10), `_chars_core.c`'s `atom_from_str` and its Python twin `mint` both substitute, `_construct_named`/`functor/3`/`unpack/2` admit the empty list as an atomic NAME. Scryer round-trips it: `atom_chars(X, ['[',']'])` → `X = []`, `T =.. [[]]` → `T = []`, `functor(T, [], 0)` → `T = []`, `atom_concat('[', ']', X)` → `X = []`, and `sort([[], '[]'], L)` → `L = [[]]` (one element, legitimately — they are one term). Above arity 0 the name is an ordinary functor spelled `[]`: `T =.. [[], a]` → `[](a)`, the cell `("[]", a)`. `atoms.spelling([])` answers `"[]"`; `atoms.is_atom` stays the arity-0-CELL shape test and answers False for it — the TERM-level question is `atom/1` (§6.3). |
+| `'[]'` in ANY position | **RULED 2026-09-07** (fix round 1, item 2): the reserved atom `'[]'` IS the empty list, so `mint("[]")` answers `[]` (a fresh list — a list is mutable) and no `("[]",)` cell is ever built. Every producer follows: the compiler's quoted-atom Constant becomes a list display (`term_rewriting.py`, bytecode tag 9 → 10), `_chars_core.c`'s `atom_from_str` and its Python twin `mint` both substitute, `_construct_named`/`functor/3`/`unpack/2` admit the empty list as an atomic NAME. Scryer round-trips it: `atom_chars(X, ['[',']'])` → `X = []`, `T =.. [[]]` → `T = []`, `functor(T, [], 0)` → `T = []`, `atom_concat('[', ']', X)` → `X = []`, and `sort([[], '[]'], L)` → `L = [[]]` (one element, legitimately — they are one term). Above arity 0 the name is an ordinary functor spelled `[]`: `T =.. [[], a]` → `[](a)`, the cell `("[]", a)`. `atoms.spelling([])` answers `"[]"`; `atoms.is_atom` stays the arity-0-CELL shape test and answers False for it — the TERM-level question is `atom/1` (§6.3). **KEY POSITIONS** (fix round 2, ruled the same day): `[]` is a Python `list` and therefore unhashable, so a nil atom reaching a dict key crashed with a raw `TypeError`. The empty TUPLE `()` is the same term and IS hashable, so it is the canonical key form — `atoms.NIL_KEY`, built by `atoms.key_of(spelling)` (`mint` with that one substitution) at the three key-building sites: JSON object keys, attribute names, and the `py.*` option tables. `DictTerm` normalises every nil spelling onto it (`atoms.as_dict_key`) on construction, on `__getitem__`/`__contains__`/`get`, and on the right-hand side of `==`/`__unify__`, so a program cannot observe the difference; a source-written `{'[]': 1}` compiles its key to `()`. `do_unify` gained a nil branch so all four spellings unify with each other (`()` vs `[]` was the pair the type-paired dispatch never reached), and `attributes._storage_key` reads the nil atom's spelling instead of failing silently. |
 | `call(G, A1, …)` | `G` an atom → `(spelling(G), A1, …)`; `G` a cell → fold; `G` a **string** → `existence_error(procedure, '.'/(2+N))` (Task 15 item 3, **RULED 2026-09-07**; `""` names `'[]'/N`). `_resolve_named_goal`'s plain-`str` branch (`higher_order.py:123–126`) is deleted, as are the `str`→`(s,)` wraps at `solve.py:211–219` and `cells.py:453–454`: a `str` goal is a string and raises. The refusal is built by `exceptions.string_goal_error`, shared by `higher_order._resolve_named_goal` (`call/N`), `solve._term_to_goal` (`solve/1`) and `predicate._dispatch_at`. It is an existence error, not `type_error(callable, …)`, because a string IS the compound `'.'/2` and so IS callable (§6.3): what is missing is the procedure. Scryer answers `existence_error(procedure, './3')` for `call("foo", X)`. `_ZERO_ARITY_CONTROL_GOALS` keys stay spellings (they are read from slot 0). |
 | `listing/1` | accepts an atom (name), `name/arity`, an imported predicate; a string → `type_error(predicate, …)` (the formal `listing/1` has always used) — the `isinstance(val, str)` branch at `io.py:388` becomes the atom branch. |
 | `abolish_table/2`, `global_atom/2`, `gensym/2`, `char_type/2` (Type), `resolve_module` designator, `(":", M, G)` | name/type/prefix arguments are atoms read by spelling; a string raises `type_error(atom, …)`. `global_atom/2` mints with `mint`; its guard mode compares with `==`. `resolve_module` keeps accepting a Python `str` from the **Python** API (`solve(goal, module="pkg.mod")`) — that is a Python argument, not a term. |
@@ -818,6 +818,16 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
      cell — and `sort([[], '[]'], L)` keeps one element. Python callers
      comparing `mod.nil == ("[]",)` must compare to `[]`. The bytecode tag
      moves 9 → 10, so every cached `.pyc` recompiles.
+   - **Nil in a KEY position.** A dict key must be hashable and `[]` is
+     not, so the empty TUPLE `()` is the canonical key form
+     (`atoms.NIL_KEY`). Build keys with `atoms.key_of(spelling)`, not
+     `mint`, anywhere the result is immediately a dict key; `DictTerm`
+     folds `[]`/`""`/`b""` onto `()` on construction and on every lookup,
+     so `d[[]]`, `d[""]` and `d[()]` are one key. All four spellings unify
+     with each other now, and `()` prints `[]` in every writer.
+   - **The empty list in goal position raises.** `call([])` and
+     `solve([], m)` used to fail silently while `call("")` raised;
+     both give `existence_error(procedure, '[]'/N)` now.
 
 The announcement names no downstream project, corpus domain, or battery
 size (information barrier).
@@ -895,7 +905,10 @@ following are pinned as tests in Plan 1:
    `T =.. [[]]`, `functor(T, [], 0)` and `atom_concat('[', ']', X)` all
    answer the empty LIST rather than a `("[]",)` cell — §6.4's `'[]'` row
    has the full producer list. `sort([[], '[]'], L)` therefore keeps one
-   element legitimately.
+   element legitimately.  **Fix round 2** adds the key-position half:
+   `()` is the hashable spelling of nil and the canonical DICT-KEY form
+   (`atoms.NIL_KEY`/`key_of`/`as_dict_key`), and all four spellings unify
+   with each other.
 2. `compare/3`, `@</2` family, `keysort/2`, `predsort/3`: absent; the key of
    §6.5 makes them a small addition.
 3. `1 = 1.0` unifies (no numeric arm); ISO says no. Pre-existing.
