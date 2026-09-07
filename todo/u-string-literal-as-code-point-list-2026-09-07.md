@@ -9,3 +9,6 @@
 **Surface.** On the Python surface CPython erases the `u` prefix (`u"x"` is `str`), but the quote map (`clausal/templating/quote_map.py`) already sees the token and strips `bBrRuU` — it can record the prefix and give the literal its own meaning. The future surface parser can define it freely.
 
 **Status.** No use case yet ("it just seems right for completeness"). Park until one appears; do not implement speculatively.
+
+## Addendum (operator, 2026-09-07): which "unicode system" do the integers denote?
+`u"…"` giving integers raises the question of which units: code points (UTF-32), UTF-16 code units, UTF-8 bytes, or 7-bit ASCII. Ruling for when this is picked up: the default is UTF-8; a PER-MODULE directive selects another (UTF-16, UTF-32/code points, 7-bit/ASCII, others); the project config file can change the default. Out of scope now — this todo only records the shape.
