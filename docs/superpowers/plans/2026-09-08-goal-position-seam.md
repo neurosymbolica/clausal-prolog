@@ -862,3 +862,93 @@ Expected: `comm -3 /tmp/base_fail.txt /tmp/gp_fail.txt` is empty except the know
 git add docs/python_integration.md docs/superpowers/specs/2026-09-08-goal-position-seam-design.md tests/test_goal_position_seam.py
 git commit -m "seam: goal-position docs, soundness pins, REPL and reflection pins"
 ```
+
+---
+
+### Task 7: Query-cache participation for goal-position seams (added after Task 2's review)
+
+**Why:** Task 2's reviewer measured that a goal handed to `once_bind`/`each` as a
+reified goal node (`pythonic_ast.nodes.Call`/`Unify`/`And`) never hits `solve()`'s
+query cache — `_goal_cache_key` (`clausal/logic/solve.py:321-341`) admits only a
+`PredicateMeta` instance, a `Compound`, or a cell — so `if --goal:` inside a loop
+recompiles its query on every execution (~24x slower than an equivalent cached
+`solve()` over 2000 iterations). Oracle loops put `if --(pattern is ++answer)`
+inside a per-case loop, so this is load-bearing.
+
+**Files:**
+- Modify: `clausal/logic/solve.py` — `_goal_cache_key`, `_structural_key`, `_templatize_query_goal`, and the cache-hit path in `_compile_as_query` (`solve.py:502-566`)
+- Test: `tests/test_goal_position_seam.py` (new class `TestQueryCache`)
+
+**Interfaces:**
+- Consumes: goal nodes as emitted by Task 2/4/5 (`Call`/`Unify`/`And`/`TupleLiteral` nodes whose leaves are `Var`s, `PyThunk`s, cells, lists, scalars, `LoadName`/`LoadAttr`).
+- Produces: cache participation for such nodes; no signature changes to `solve`/`once`/`query`.
+
+**Approach (spike first, then implement the one that works; the implementer decides):**
+- (A, preferred — benefits every caller that passes a node goal) extend `_structural_key` to key the node structurally (node class name + recursively keyed fields), with a `Var` leaf keyed as the existing var sentinel and a `PyThunk` leaf keyed as a PARAMETER SLOT (`('thunk', i)`), and extend `_templatize_query_goal` so each `PyThunk` leaf is replaced by a fresh `Var` bound at run time to the current thunk object — the same parameterization already applied to ground scalar args — so the compiled query calls whatever thunk object the current execution supplies. Ground scalar/cell leaves are keyed by value exactly as today.
+- (B, fallback if A cannot bind a thunk through a Var at run time) parameterize only the thunks' RESULTS: evaluate every `PyThunk` in the node eagerly at `once_bind`/`each` entry (they are Python values now, spec §2), substitute the values, and cache on the resulting value-leafed node. Note B changes when a `++` that references a goal variable is evaluated (before the goal runs) — that is the reason A is preferred; if B is chosen, `++` inside a goal-position seam must be documented as evaluated before the goal runs.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+class TestQueryCache:
+    def _compile_count(self, fn):
+        """How many query compiles *fn()* triggers (instrumented, not timed)."""
+        import clausal.logic.compiler as comp
+        import clausal.logic.solve as solve_mod
+        calls = []
+        real = comp.compile_predicate_trampoline
+        def counting(*a, **k):
+            calls.append(1)
+            return real(*a, **k)
+        comp.compile_predicate_trampoline = counting
+        solve_mod._query_cache.clear()
+        try:
+            fn()
+        finally:
+            comp.compile_predicate_trampoline = real
+        return len(calls)
+
+    def test_a_goal_seam_in_a_loop_compiles_once(self):
+        mod = _load_inline("_gp_c1", RULEBASE.format(name="_gp_c1") + (
+            "def hits(profiles):\n"
+            "    n = 0\n"
+            "    for p in profiles:\n"
+            "        if --decide(++p, verdict(S, IDS)):\n"
+            "            n += 1\n"
+            "    return n\n"
+        ))
+        profiles = [("small",), ("large",), ("tiny",)] * 10
+        assert self._compile_count(lambda: mod.hits(profiles)) == 1
+        assert mod.hits(profiles) == 20
+
+    def test_a_thunk_is_re_evaluated_per_execution_not_captured(self):
+        mod = _load_inline("_gp_c2", RULEBASE.format(name="_gp_c2") + (
+            "def status(p):\n"
+            "    if --decide(++p, verdict(S, _)):\n"
+            "        return S\n"
+            "    return None\n"
+        ))
+        assert mod.status(("small",)) == ("permitted",)
+        assert mod.status(("large",)) == ("prohibited",)
+        assert mod.status(("small",)) == ("permitted",)
+
+    def test_a_unification_pattern_seam_compiles_once(self):
+        mod = _load_inline("_gp_c3", RULEBASE.format(name="_gp_c3") + (
+            "def parts(answers):\n"
+            "    out = []\n"
+            "    for a in answers:\n"
+            "        if --(verdict(S, IDS) is ++a):\n"
+            "            out.append(S)\n"
+            "    return out\n"
+        ))
+        answers = [("verdict", ("permitted",), []), ("verdict", ("prohibited",), [])] * 5
+        assert self._compile_count(lambda: mod.parts(answers)) == 1
+```
+
+- [ ] **Step 2: Run to verify they fail** — expected: compile count equals the number of loop iterations (30 / 10), not 1.
+
+- [ ] **Step 3: Implement A (or B with the documented caveat), keeping every existing test in `tests/test_goal_position_seam.py`, `tests/test_seam_operator.py`, `tests/test_query_cache*.py` (if present; `grep -rl "_query_cache" tests/`) and `tests/test_solve*.py` green.**
+
+- [ ] **Step 4: Run the tests to verify they pass; run the full suite once and compare the failing-name set to the branch base.**
+
+- [ ] **Step 5: Commit** — `git add clausal/logic/solve.py tests/test_goal_position_seam.py` and a neutral message with the two trailers.
