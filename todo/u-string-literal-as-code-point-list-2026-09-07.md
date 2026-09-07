@@ -10,5 +10,5 @@
 
 **Status.** No use case yet ("it just seems right for completeness"). Park until one appears; do not implement speculatively.
 
-## Addendum (operator, 2026-09-07): which "unicode system" do the integers denote?
-`u"…"` giving integers raises the question of which units: code points (UTF-32), UTF-16 code units, UTF-8 bytes, or 7-bit ASCII. Ruling for when this is picked up: the default is UTF-8; a PER-MODULE directive selects another (UTF-16, UTF-32/code points, 7-bit/ASCII, others); the project config file can change the default. Out of scope now — this todo only records the shape.
+## Addendum (operator, 2026-09-07): which units do the integers denote?
+`u"…"` giving integers raises the question of which units. Shape for when this is picked up: a default of UTF-8, with a PER-MODULE directive `-u_encoding(utf_8 | utf_7 | utf_16 | utf_32 | …)` selecting the units for that module's `u"…"` literals; the same directive can name non-Unicode code pages (`latin_1`, `cp1252`, `shift_jis`, …), so the mechanism doubles as the code-page story for byte/text conversion. Out of scope now — this todo only records the shape.
