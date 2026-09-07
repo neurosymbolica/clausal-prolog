@@ -113,6 +113,32 @@ for an oracle's comparison: `str(atom) == str(text)` is `True` for a domain
 that wrongly returns the string where the atom belongs, so a text-space
 comparison can no longer see that class of wrong answer. Compare terms.
 
+### Goal position: `if --goal`, `for ... in --goal`
+
+A term in goal position is called. Goal positions are exactly: the test of
+`if`/`elif`/`while`, the iterable of `for`, and `not` inside those tests.
+
+```clausal
+if --(verdict(S, IDS, _) is ++answer):      # unify once; S, IDS become locals
+    use(S, IDS)
+for S, IDS in --decide(++profile, verdict(S, IDS, _)):   # every solution
+    use(S, IDS)
+if not --decide(++profile, _):               # failure test; exports nothing
+    ...
+while --next(++cur, N):                      # re-run each iteration
+    cur = N
+```
+
+Exported names are ordinary locals: on success they survive the block; on
+failure nothing is assigned (a later read is an `UnboundLocalError`). A
+`for` exports exactly its target names, which must be variables of the goal.
+Values are copies; two seams never share a variable — goals that must share
+one go in one seam as a conjunction. The sugar is strict: a WFS-conditional
+answer raises `UndefinedAnswer` (use `query_wfs`), and an export that is
+unbound and constrained raises `ResidualConstraints` (keep the store with an
+explicit `Trail`, or ask for the residue inside the goal). Everywhere else
+`--` is still the term.
+
 ## Crossing the boundary: atoms out, strings back
 
 There are **two** outbound conversions, and which one a boundary gets is a
@@ -227,6 +253,9 @@ my_module.bar                     # ('bar',)
 ## Querying from Python
 
 ### Direct iteration — the simplest way
+
+> Legacy surface: iterating a predicate class instance predates the cell
+> representation. New code uses goal-position `--` above.
 
 Predicate term instances are directly iterable.  Each iteration yields the
 `Trail` after a solution — read bindings via `Var.value`, `int()`, `float()`,

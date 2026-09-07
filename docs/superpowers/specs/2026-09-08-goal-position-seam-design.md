@@ -59,25 +59,29 @@ is created inline, never stored.
 `if`:
 
 ```python
-_S = Var(); _IDS = Var()
-if $once_bind(('=', ('verdict', _S, _IDS, Var()), answer), globals()):
-    S = $walk(_S)
-    IDS = $walk(_IDS)
+$v_S = Var(); $v_IDS = Var()
+if $once_bind(Unify(('verdict', $v_S, $v_IDS, Var()), answer), globals()):
+    S = $export($v_S)
+    IDS = $export($v_IDS)
     use(S, IDS)
 ```
 
-`$once_bind(goal, globals)` runs `once(goal, module=globals["$module"],
-trail=Trail())`, returns `True`/`False`, and leaves the exported variables
-BOUND for the two `$walk` lines that immediately follow (the walk copies the
-values out fully dereferenced; the trail object is then unreachable and
-nothing else observes the bindings). `elif` and `while` are the same shape
-(`while` re-creates the variables and re-runs the goal each iteration).
+`$once_bind` receives the rewriter's own reified goal NODE — here a `Unify`
+node, the same shape a clause body compiles and `solve()` documents — not a
+cell; control goals (`,`, `=`) have no cell form to build. It runs the goal
+to its first UNCONDITIONAL answer (§4a) against `globals["$module"]`,
+returns `True`/`False`, and leaves the exported variables BOUND for the two
+`$export` lines that immediately follow: the seam's own variables are
+discarded with their bindings; exports are the copies `$export` took, and an
+unbound export is refused if it carries attributes. `elif` and `while` are
+the same shape (`while` re-creates the variables and re-runs the goal each
+iteration).
 
 `for`:
 
 ```python
-_S = Var(); _IDS = Var()
-for S, IDS in $each(('decide', profile, ('verdict', _S, _IDS, [])), (_S, _IDS), globals()):
+$v_S = Var(); $v_IDS = Var()
+for S, IDS in $each(('decide', profile, ('verdict', $v_S, $v_IDS, [])), ($v_S, $v_IDS), globals()):
     use(S, IDS)
 ```
 
@@ -91,7 +95,7 @@ name and `$each` yields the value itself, no 1-tuple.
 `not`:
 
 ```python
-if not $once_bind(('decide', profile, Var()), globals()):
+if not $once_bind(Call(decide, profile, Var()), globals()):
 ```
 
 No variables are created for a negated goal beyond the fresh ones the goal
@@ -121,13 +125,12 @@ needs; nothing is exported.
   single leading underscore; CamelCase is an atom) decides, and the seam
   calls it — never a private rule. If the convention moves toward ISO's,
   the seam follows without change.
-- **Exports are copies, and the trail is undone.** After the walk copies the
-  exported values out, the helper undoes its trail; the seam's own variable
-  objects revert and are discarded. An export that is still UNBOUND is a
-  fresh, unconstrained variable Python now holds: any attributes a
-  constraint solver attached during the goal are undone with the trail, so
-  exporting an unbound constrained variable loses its constraints. Exports
-  are for answers.
+- **Exports are copies; the seam's own variables are discarded.** The
+  seam's own variables are discarded with their bindings; exports are the
+  copies `$export` took, and an unbound export is refused if it carries
+  attributes (§4a). An export that is still UNBOUND and free of attributes
+  is a fresh, unconstrained variable Python now holds. Exports are for
+  answers.
 - **Nesting composes values, conjunction composes search.** A seam inside
   the body of another is an independent query; outer values reach it as
   Python values through `++`. Two goals that must share a still-unbound
@@ -136,6 +139,12 @@ needs; nothing is exported.
   with another; the trail is never exposed by the sugar. Holding a trail
   across two calls is the lower level (`unify`/`solve` with an explicit
   `Trail`), which stays available unchanged.
+- **Every mentioned variable is a local, exported or not.** A negated test's
+  variables and a `for`'s non-target goal variables are never exported, but
+  every variable the seam MENTIONS still becomes a local of the enclosing
+  function, via a dead `if False:` block that assigns it without ever
+  running. A stray read of one is an `UnboundLocalError`, never a silent
+  read of a same-named module global (Tasks 3/4).
 
 ## 4a. Soundness: undefined answers and residual constraints
 
@@ -172,8 +181,10 @@ silent:
   `L[0]`): `SyntaxError`; the export is an assignment to locals by design.
 - A goal that raises a logic exception propagates as today (`LogicException`
   out of `once`/`query`); the exported names are not assigned.
-- `--goal` in goal position inside a module that has no `$module` (a REPL
-  cell has one; a plain `.py` never reaches the rewriter): `$once_bind`
+- `--goal` in goal position inside a namespace that has no `$module` (a
+  `.clausal` file's own module namespace always has one; a fresh
+  `ClausalConsole`/IPython namespace does not unless the caller sets one,
+  and a plain `.py` file never reaches the rewriter at all): `$once_bind`
   raises `NameError` naming `$module`, the same failure a bare `call` gives.
 - `while --goal:` with variables: allowed; each iteration re-runs the goal
   with fresh variables and re-assigns. Documented as such.
@@ -190,8 +201,14 @@ silent:
 - **The documented class-iteration idiom** (`for trail in Fib(10, F :=
   Var())`) is the old surface; `docs/python_integration.md` re-centres on
   `for ... in --goal` and marks class iteration as legacy.
-- **REPL/IPython**: the same transformer, so `for X in --fact(X): print(X)`
-  works in a cell under the loose rules.
+- **REPL/IPython**: the same transformer runs the cell, and `$each`/
+  `$once_bind` are seeded from `runtime_builtins` under the loose rules, so
+  `for X in --fact(X): print(X)` drives the same helpers a file's `for`
+  does — PROVIDED the cell's namespace already has a `$module` and `fact`
+  bound (a `.clausal` file gets both from its own load; a bare `fact(1),`
+  typed at the console does not declare one today — no `$define_predicate`
+  is wired into the REPL/IPython namespace, so declaring a NEW predicate
+  interactively is a separate, unbuilt piece).
 - **Reflection** models Python code by source position, so nothing leaks
   into renderings (pinned already for `$text`; re-pinned here).
 
@@ -231,3 +248,6 @@ silent:
 - A push/callback query API (the pull generator is the control flow).
 - Dict-lookup rewriting of body names; exports are plain locals.
 - Any change to `unify`, `solve`, `query`, `once` or the trail.
+- Query-cache participation for node goals (Task 7 of the plan). Until it
+  lands, an `if --goal` inside a loop recompiles its query on every
+  execution.

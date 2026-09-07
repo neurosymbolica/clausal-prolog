@@ -317,3 +317,72 @@ class TestWhile:
         ))
         with pytest.raises((UnboundLocalError, NameError)):
             mod.find([("a",), ("b",), ("c",)])
+
+
+class TestSoundnessThroughTheRewriter:
+    def test_a_conditional_answer_raises_in_an_if(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = _load_inline("_gp_s1", (
+            "-module(_gp_s1, [move(A, B), wins(X), a, b, c])\n"
+            "-double_quotes(chars)\n"
+            "-table(wins/1)\n"
+            "move(a, b),\n"
+            "move(b, c),\n"
+            "move(c, a),\n"
+            "wins(X) <- (move(X, Y), not wins(Y))\n"
+            "def check():\n"
+            "    if --wins(a):\n"
+            "        return True\n"
+            "    return False\n"
+        ))
+        with pytest.raises(UndefinedAnswer):
+            mod.check()
+
+    def test_an_attributed_unbound_export_raises_in_a_for(self):
+        from clausal.logic.seam import ResidualConstraints
+        mod = _load_inline("_gp_s2", (
+            "-module(_gp_s2, [constrain(X)])\n"
+            "-double_quotes(chars)\n"
+            "constrain(X) <- dif(X, 1)\n"
+            "def get():\n"
+            "    for X in --constrain(X):\n"
+            "        return X\n"
+        ))
+        with pytest.raises(ResidualConstraints):
+            mod.get()
+
+
+class TestBoundaries:
+    def test_repl_cell_form(self):
+        # ClausalConsole itself has no `$define_predicate` wired into its
+        # namespace (only IPython's `$assert_fact`, which nothing emits any
+        # more — the compiler routes every fact through `$define_predicate`),
+        # so a bare `fact(1),` typed at the console cannot declare a new
+        # predicate today; no existing REPL test declares one either. What
+        # this pins instead — goal position running through the SAME
+        # ClausalConsole.runsource() transform path a file uses — is real:
+        # load a predicate the normal way, hand the console its `$module`
+        # and predicate binding, and confirm `for X in --fact(X):` inside an
+        # "exec"-mode multi-line cell drives `$each`/`$once_bind` exactly as
+        # a file does.
+        from clausal.python_repl import ClausalConsole
+        mod = _load_inline("_gp_repl1", (
+            "-module(_gp_repl1, [fact(X)])\n"
+            "-double_quotes(chars)\n"
+            "fact(1),\n"
+            "fact(2),\n"
+        ))
+        console = ClausalConsole(filename="<test>")
+        console.locals["$module"] = mod.__dict__["$module"]
+        console.locals["fact"] = mod.fact
+        console.runsource("out = [X for X in [1]]", "<test>", "single")
+        console.runsource(
+            "got = []\nfor X in --fact(X):\n    got.append(X)\n",
+            "<test>", "exec")
+        assert console.locals.get("got") == [1, 2]
+
+    def test_reflection_models_python_code_by_position_only(self):
+        from clausal.reflection import reify_source
+        src = RULEBASE.format(name="_gp_r") + "def f():\n    if --decide(small, V):\n        return V\n"
+        dumped = "\n".join(repr(vars(i)) if hasattr(i, "__dict__") else repr(i) for i in reify_source(src))
+        assert "PythonCode(kind='function', name='f'" in dumped and "$once_bind" not in dumped
