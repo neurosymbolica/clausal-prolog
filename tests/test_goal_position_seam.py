@@ -81,3 +81,55 @@ class TestHelpersDirectly:
             list(each(("wins", ("a",)), (), mod.__dict__))
         with pytest.raises(UndefinedAnswer):
             once_bind(("wins", ("a",)), mod.__dict__)
+
+
+class TestIf:
+    def test_if_binds_locals_on_success_and_they_survive_the_block(self):
+        mod = _load_inline("_gp_if1", RULEBASE.format(name="_gp_if1") + (
+            "def first(profile):\n"
+            "    if --decide(++profile, verdict(S, IDS)):\n"
+            "        seen = True\n"
+            "    return S, IDS\n"
+        ))
+        assert mod.first(("large",)) == (("prohibited",), [("r1",)])
+
+    def test_if_assigns_nothing_on_failure(self):
+        mod = _load_inline("_gp_if2", RULEBASE.format(name="_gp_if2") + (
+            "def first(profile):\n"
+            "    if --decide(++profile, verdict(S, IDS)):\n"
+            "        return S\n"
+            "    return S\n"
+        ))
+        with pytest.raises(UnboundLocalError):
+            mod.first(("tiny",))
+
+    def test_if_with_a_unification_pattern(self):
+        mod = _load_inline("_gp_if3", RULEBASE.format(name="_gp_if3") + (
+            "def parts(answer):\n"
+            "    if --(verdict(S, IDS) is ++answer):\n"
+            "        return S, IDS\n"
+            "    return None\n"
+        ))
+        assert mod.parts(("verdict", ("permitted",), [])) == (("permitted",), [])
+        assert mod.parts(("other", 1)) is None
+
+    def test_elif_and_a_conjunction(self):
+        mod = _load_inline("_gp_if4", RULEBASE.format(name="_gp_if4") + (
+            "def which(profile):\n"
+            "    if --decide(++profile, verdict(permitted, IDS)):\n"
+            "        return ('yes', IDS)\n"
+            "    elif --(decide(++profile, V), V is verdict(prohibited, IDS)):\n"
+            "        return ('no', IDS)\n"
+            "    return 'none'\n"
+        ))
+        assert mod.which(("small",)) == ("yes", [("r1",), ("r2",)])
+        assert mod.which(("large",)) == ("no", [("r1",)])
+        assert mod.which(("tiny",)) == "none"
+
+    def test_term_positions_are_unchanged(self):
+        mod = _load_inline("_gp_if5", RULEBASE.format(name="_gp_if5") + (
+            "def term():\n"
+            "    x = --decide(small, V)\n"
+            "    return x[0], x[1]\n"
+        ))
+        assert mod.term()[0] == "decide" and mod.term()[1] == ("small",)

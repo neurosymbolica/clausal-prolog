@@ -4515,6 +4515,130 @@ class EmbedTransformer(NodeTransformer):
             python_visitor=transformer.visit if seam else None,
         )
 
+    def _seam_term_ast(transformer, expression, anchor):
+        """Lower *expression* through a seam TermTransformer.  Returns
+        ``(term_ast, fresh)``: the lowered term and the ordered logic-variable
+        names this seam introduces (already-bound names of an enclosing seam
+        are excluded).  The caller decides how to bind ``fresh``."""
+        outer = set().union(*transformer._seam_bound) if transformer._seam_bound else set()
+        fresh = [n for n in _collect_logic_var_names(expression) if n not in outer]
+        term_tf = transformer._make_term_transformer(seam=True)
+        term_tf.seen_vars.update(outer)
+        term_tf.seen_vars.update(fresh)
+        transformer._seam_bound.append(outer | set(fresh))
+        try:
+            return term_tf.visit(expression), fresh
+        finally:
+            transformer._seam_bound.pop()
+
+    def _var_bind(transformer, name, anchor):
+        """``(NAME := Var())`` — the term-position binding of one variable."""
+        return replace(NamedExpr(
+            target=replace(Name(id=name, ctx=Store()), anchor),
+            value=replace(Call(func=replace(Name(id="Var", ctx=Load()), anchor),
+                               args=[], keywords=[]), anchor),
+        ), anchor)
+
+    def _seam_call(transformer, term_ast, anchor):
+        seam_kw = ([keyword(arg="loose", value=Constant(value=True))]
+                   if transformer._implicit_atoms_default else [])
+        return replace(
+            Call(func=Name(id="$seam", ctx=Load()),
+                 args=[term_ast, Call(func=Name(id="globals", ctx=Load()), args=[], keywords=[])],
+                 keywords=seam_kw),
+            anchor,
+        )
+
+    # ── goal position ──────────────────────────────────────────────────
+    @staticmethod
+    def _goal_operand(test):
+        """``--X`` -> (X, False); ``not --X`` -> (X, True); else None.
+        Adjacency of the two ``-`` is required, as for term position."""
+        negated = False
+        node = test
+        if isinstance(node, UnaryOp) and isinstance(node.op, Not):
+            negated, node = True, node.operand
+        if (isinstance(node, UnaryOp) and isinstance(node.op, USub)
+                and isinstance(node.operand, UnaryOp) and isinstance(node.operand.op, USub)
+                and node.col_offset == node.operand.col_offset - 1
+                and node.lineno == node.operand.lineno):
+            return node.operand.operand, negated
+        return None
+
+    def _goal_seam(transformer, expression, anchor):
+        """Lower a GOAL: returns ``(pre_stmts, goal_ast, fresh)`` where
+        ``pre_stmts`` assign ``$v_<NAME> = Var()`` for every fresh variable
+        and ``goal_ast`` is the lowered node with those names in place of the
+        variables, handed to ``$once_bind``/``$each`` UNWRAPPED — see the
+        comment on the ``return`` below for why this differs from term
+        position's ``$seam(...)`` wrapping."""
+        term_ast, fresh = transformer._seam_term_ast(expression, anchor)
+        rename = {n: f"$v_{n}" for n in fresh}
+
+        class _Rename(NodeTransformer):
+            def visit_Name(self, node):
+                if node.id in rename and isinstance(node.ctx, Load):
+                    return replace(Name(id=rename[node.id], ctx=Load()), node)
+                return node
+        goal_ast = _Rename().visit(term_ast)
+        pre = [
+            replace(Assign(
+                targets=[replace(Name(id=rename[n], ctx=Store()), anchor)],
+                value=replace(Call(func=replace(Name(id="Var", ctx=Load()), anchor),
+                                   args=[], keywords=[]), anchor),
+            ), anchor)
+            for n in fresh
+        ]
+        for stmt in pre:
+            fix_missing_locations(stmt)
+        # Unlike term position, the goal is NOT run through `$seam`/`build()`:
+        # `once_bind`/`each` hand the node straight to `solve()`, which
+        # compiles it exactly as it would a clause body (`Call`/`Unify`/
+        # `And`/`TupleLiteral`-as-conjunction all pass straight through
+        # `_term_to_goal`) — `build()` only knows how to collapse a node
+        # into a plain VALUE, which is term position's job, not a goal's.
+        return pre, goal_ast, fresh
+
+    def _export_stmts(transformer, names, anchor):
+        """``NAME = $export($v_NAME)`` — one assignment per exported name."""
+        out = []
+        for n in names:
+            out.append(replace(Assign(
+                targets=[replace(Name(id=n, ctx=Store()), anchor)],
+                value=replace(Call(func=replace(Name(id="$export", ctx=Load()), anchor),
+                                   args=[replace(Name(id=f"$v_{n}", ctx=Load()), anchor)],
+                                   keywords=[]), anchor),
+            ), anchor))
+        return out
+
+    def _globals_call(transformer, anchor):
+        return replace(Call(func=Name(id="globals", ctx=Load()), args=[], keywords=[]), anchor)
+
+    def visit_If(transformer, node):
+        found = transformer._goal_operand(node.test)
+        if found is None:
+            return transformer.generic_visit(node)
+        expression, negated = found
+        pre, goal_ast, fresh = transformer._goal_seam(expression, node.test)
+        test = replace(Call(func=Name(id="$once_bind", ctx=Load()),
+                            args=[goal_ast, transformer._globals_call(node.test)],
+                            keywords=[]), node.test)
+        if negated:
+            test = replace(UnaryOp(op=Not(), operand=test), node.test)
+            exports = []
+        else:
+            exports = transformer._export_stmts(fresh, node.test)
+        node.test = test
+        node.body = exports + [transformer.visit(s) for s in node.body]
+        # ``elif`` is an If nested in orelse: visit it so it gets the same treatment.
+        new_orelse = []
+        for s in node.orelse:
+            r = transformer.visit(s)
+            new_orelse.extend(r if isinstance(r, list) else [r])
+        node.orelse = new_orelse
+        fix_missing_locations(node)
+        return pre + [node]
+
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
                                orig_kw_args, anchor, src_node, expr_stmt):
         """Build AST for a bodyless fact ``functor(args)`` (arity >= 0 via args).
@@ -4787,25 +4911,10 @@ class EmbedTransformer(NodeTransformer):
                     # written later in the same term still finds it, and an
                     # inner seam (inside that ``++``) reuses the variables an
                     # enclosing seam already bound rather than shadowing them.
-                    outer = set().union(*transformer._seam_bound) if transformer._seam_bound else set()
-                    fresh = [n for n in _collect_logic_var_names(expression) if n not in outer]
-                    term_tf = transformer._make_term_transformer(seam=True)
-                    term_tf.seen_vars.update(outer)
-                    term_tf.seen_vars.update(fresh)
-                    transformer._seam_bound.append(outer | set(fresh))
-                    try:
-                        term_ast = term_tf.visit(expression)
-                    finally:
-                        transformer._seam_bound.pop()
+                    term_ast, fresh = transformer._seam_term_ast(expression, unary_op)
                     if fresh:
-                        binds = [
-                            replace(NamedExpr(
-                                target=replace(Name(id=n, ctx=Store()), unary_op),
-                                value=replace(Call(func=replace(Name(id="Var", ctx=Load()), unary_op),
-                                                   args=[], keywords=[]), unary_op),
-                            ), unary_op)
-                            for n in fresh
-                        ]
+                        # term position: bind the fresh variables inline
+                        binds = [transformer._var_bind(n, unary_op) for n in fresh]
                         term_ast = replace(
                             Subscript(
                                 value=replace(Tuple(elts=[*binds, term_ast], ctx=Load()), unary_op),
@@ -4814,17 +4923,7 @@ class EmbedTransformer(NodeTransformer):
                             ),
                             unary_op,
                         )
-                    seam_kw = ([keyword(arg="loose", value=Constant(value=True))]
-                               if transformer._implicit_atoms_default else [])
-                    return replace(
-                        Call(
-                            func=Name(id="$seam", ctx=Load()),
-                            args=[term_ast, Call(func=Name(id="globals", ctx=Load()),
-                                                 args=[], keywords=[])],
-                            keywords=seam_kw,
-                        ),
-                        unary_op,
-                    )
+                    return transformer._seam_call(term_ast, unary_op)
             case UnaryOp(op=Invert(), operand=UnaryOp(op=Invert(), operand=expression)):
                 # '~~' must be written without a space (the two '~' are adjacent).
                 if (
