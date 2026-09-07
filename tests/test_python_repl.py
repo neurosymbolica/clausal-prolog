@@ -122,10 +122,8 @@ def test_embed_double_minus_produces_term():
     # nv
     console = ClausalConsole(filename="<test>")
     console.runsource("result = --foo", "<test>", "single")
-    from clausal.pythonic_ast.nodes import LoadName
-    node = console.locals.get("result")
-    assert isinstance(node, LoadName)
-    assert node.name == "foo"
+    # THE SEAM: ``--foo`` is the atom cell, a runtime term, not a node.
+    assert console.locals.get("result") == ("foo",)
 
 
 # ── ClausalConsole — *(goals) query syntax ───────────────────────────────────

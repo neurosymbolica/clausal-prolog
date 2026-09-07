@@ -658,18 +658,20 @@ def test_guard_qualified_import_and_var_rejection(tmp_path):
 def test_guard_escapes_and_literals(tmp_path):
     m = _load(tmp_path, """
         node = ~~(1 + 2)
-        term = --(foo(X, 1))
         with --{} as goals:
             foo(X, 1)
             bar(Y)
         p(-3),
         p(2),
+        term = --(p(X, 1))    # a module-level seam sees what is bound above it
         d(D, V) <- (V is ++D["k"])
         sub(L, E) <- (E is ++L[1:3])
         greet(NAME, S) <- (S is f"hello {NAME}!")
     """)
     assert isinstance(m.node, ast.BinOp)
-    assert type(m.term).__name__ == "Call"
+    # THE SEAM: ``--p(X, 1)`` is the goal cell, functor first, X a fresh Var.
+    from clausal.logic.variables import is_var
+    assert m.term[0] == "p" and is_var(m.term[1]) and m.term[2] == 1
     assert [type(g).__name__ for g in m.goals] == ["Call", "Call"]
     x = Var()
     assert _values(m.p(x), x) == [-3, 2]

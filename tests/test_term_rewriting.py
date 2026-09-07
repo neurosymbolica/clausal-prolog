@@ -51,6 +51,8 @@ def embed_exec(src: str) -> dict:
     ast.fix_missing_locations(transformed)
     ns = _ns()
     ns['$ast'] = ast   # required by ~~ and with-the_following generated code
+    from clausal.logic.seam import seam_term
+    ns['$seam'] = seam_term   # required by -- (THE SEAM)
     exec(compile(transformed, '<test>', 'exec'), ns)
     return ns
 
@@ -630,10 +632,12 @@ def test_position_set():
 def test_embed_double_dash():
     # '--' applies to its immediate operand; wrap the whole expression in parens.
     # nv
-    ns = embed_exec("result = --(x + y)")
-    assert isinstance(ns['result'], sa.Add)
-    assert isinstance(ns['result'].left,  sa.LoadName)
-    assert isinstance(ns['result'].right, sa.LoadName)
+    # THE SEAM: arithmetic inside ``--`` is a VALUE; ``x``/``y`` are bare
+    # atoms this strict namespace never bound, so the seam refuses at the
+    # name (a bound atom is refused as not evaluable — see
+    # tests/test_seam_operator.py).
+    with pytest.raises(NameError, match="not bound"):
+        embed_exec("result = --(x + y)")
 
 
 def test_embed_double_dash_nested():

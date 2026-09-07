@@ -1,0 +1,220 @@
+"""The ``--`` seam: Python-hosted code in a ``.clausal`` file speaks TERMS.
+
+``++expr`` escapes to Python; ``--term`` escapes back to Clausal.  Inside
+``--`` the term grammar is the host module's: declared bare names are atoms,
+ALL-CAPS / leading-underscore names are logic variables, quoted literals
+follow the module's ``-double_quotes`` mode, and a Python value enters only
+through ``++``.  The result is the RUNTIME term — a cell — built at the
+point of execution, never a rewriter node.
+"""
+import os
+import tempfile
+
+import pytest
+
+from clausal.import_hook import _load_module
+
+
+def _load_inline(name: str, source: str):
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, f"{name}.clausal")
+        with open(path, "w") as fh:
+            fh.write(source)
+        return _load_module(name, path)
+
+
+class TestSeamBuildsCells:
+    def test_a_declared_functor_with_atom_and_string_args_is_the_cell(self):
+        mod = _load_inline("_seam_cell", (
+            "-module(_seam_cell, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "def build():\n"
+            "    return --verdict(good, \"baz\")\n"
+        ))
+        assert mod.build() == ("verdict", ("good",), "baz")
+
+    def test_under_atom_mode_a_double_quoted_literal_is_the_atom(self):
+        mod = _load_inline("_seam_atom_mode", (
+            "-module(_seam_atom_mode, [verdict(A, B)])\n"
+            "-double_quotes(atom)\n"
+            "-implicit_atoms\n"
+            "def build():\n"
+            "    return --verdict(good, \"baz\")\n"
+        ))
+        assert mod.build() == ("verdict", ("good",), ("baz",))
+
+    def test_a_single_quoted_literal_is_an_atom_in_chars_mode(self):
+        mod = _load_inline("_seam_sq", (
+            "-module(_seam_sq, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "def build():\n"
+            "    return --verdict('sq', \"dq\")\n"
+        ))
+        assert mod.build() == ("verdict", ("sq",), "dq")
+
+    def test_a_titlecase_name_is_an_atom_not_a_variable(self):
+        mod = _load_inline("_seam_title", (
+            "-module(_seam_title, [verdict(A, B), Foo])\n"
+            "-double_quotes(chars)\n"
+            "def build():\n"
+            "    return --verdict(Foo, 1)\n"
+        ))
+        assert mod.build() == ("verdict", ("Foo",), 1)
+
+    def test_the_built_term_unifies_with_the_engine_s_own(self):
+        from clausal.logic.solve import call
+        mod = _load_inline("_seam_unify", (
+            "-module(_seam_unify, [verdict(A, B), fact(X)])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "fact(verdict(good, \"baz\"))\n"
+            "def build():\n"
+            "    return --verdict(good, \"baz\")\n"
+        ))
+        lm = mod.__dict__["$module"]
+        assert list(call("fact", mod.build(), module=lm)) != []
+
+
+class TestVariablesAndEscapes:
+    def test_a_logic_variable_is_fresh_and_shared_within_one_expression(self):
+        from clausal.logic.variables import is_var
+        mod = _load_inline("_seam_var", (
+            "-module(_seam_var, [pair(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "def build():\n"
+            "    return --pair(X, [X, _y])\n"
+        ))
+        t1, t2 = mod.build(), mod.build()
+        assert t1[0] == "pair" and is_var(t1[1]) and t1[1] is t1[2][0]
+        assert is_var(t1[2][1]) and t1[2][1] is not t1[1]
+        assert t1[1] is not t2[1]
+
+    def test_a_python_value_enters_through_plus_plus_and_is_evaluated_now(self):
+        mod = _load_inline("_seam_pp", (
+            "-module(_seam_pp, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "def build(status, n):\n"
+            "    return --verdict(++status, ++(n + 1))\n"
+        ))
+        assert mod.build("ok", 41) == ("verdict", "ok", 42)
+
+    def test_seams_nest_to_any_depth(self):
+        mod = _load_inline("_seam_nest", (
+            "-module(_seam_nest, [outer(A, B), inner(A)])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "def build(xs):\n"
+            "    return --outer(++[--inner(++x) for x in xs], done)\n"
+        ))
+        assert mod.build([1, 2]) == ("outer", [("inner", 1), ("inner", 2)], ("done",))
+
+    def test_keyword_construction_places_named_slots(self):
+        mod = _load_inline("_seam_kw", (
+            "-module(_seam_kw, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "def build():\n"
+            "    return --verdict(B=2, A=1)\n"
+        ))
+        assert mod.build() == ("verdict", 1, 2)
+
+
+class TestHostModuleRulesApply:
+    def test_an_undeclared_functor_is_refused_loudly(self):
+        mod = _load_inline("_seam_undeclared", (
+            "-module(_seam_undeclared, [])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "def build():\n"
+            "    return --nosuch(1)\n"
+        ))
+        with pytest.raises(NameError, match="nosuch"):
+            mod.build()
+
+    def test_implicit_functors_opens_construction_at_the_written_arity(self):
+        mod = _load_inline("_seam_owa", (
+            "-module(_seam_owa, [])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "-implicit_functors\n"
+            "def build():\n"
+            "    return --nosuch(1, 2, 3)\n"
+        ))
+        assert mod.build() == ("nosuch", 1, 2, 3)
+
+    def test_a_double_quoted_literal_with_no_explicit_mode_warns(self):
+        with pytest.warns(Warning, match="double_quotes"):
+            mod = _load_inline("_seam_warn", (
+                "-module(_seam_warn, [verdict(A, B)])\n"
+                "-implicit_atoms\n"
+                "def build():\n"
+                "    return --verdict(good, \"baz\")\n"
+            ))
+        assert mod.build() == ("verdict", ("good",), ("baz",))
+
+
+class TestNoClassInstances:
+    def test_a_predicate_functor_builds_a_goal_cell_not_an_instance(self):
+        from clausal.logic.solve import call
+        mod = _load_inline("_seam_pred", (
+            "-module(_seam_pred, [fact(X)])\n"
+            "-double_quotes(chars)\n"
+            "fact(1)\n"
+            "def goal():\n"
+            "    return --fact(1)\n"
+        ))
+        g = mod.goal()
+        assert g == ("fact", 1) and type(g) is tuple
+        assert list(call("call", g, module=mod.__dict__["$module"])) != []
+
+
+class TestTermForms:
+    def test_a_zero_argument_call_is_not_a_term(self):
+        mod = _load_inline("_seam_arity0", (
+            "-module(_seam_arity0, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "def build():\n"
+            "    return --verdict()\n"
+        ))
+        with pytest.raises(SyntaxError, match="not a term"):
+            mod.build()
+
+    def test_ground_arithmetic_is_a_value_as_in_a_clause_body(self):
+        mod = _load_inline("_seam_arith", (
+            "-module(_seam_arith, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "def build():\n"
+            "    return --verdict(1 + 2, 10 * 4)\n"
+        ))
+        assert mod.build() == ("verdict", 3, 40)
+
+    def test_arithmetic_over_atoms_is_not_evaluable(self):
+        mod = _load_inline("_seam_arith_atoms", (
+            "-module(_seam_arith_atoms, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "def build():\n"
+            "    return --verdict(x + y, 0)\n"
+        ))
+        with pytest.raises(TypeError, match="evaluable"):
+            mod.build()
+
+    def test_arithmetic_over_an_unbound_variable_is_refused(self):
+        mod = _load_inline("_seam_arith_var", (
+            "-module(_seam_arith_var, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "def build():\n"
+            "    return --verdict(X + 1, X)\n"
+        ))
+        with pytest.raises(SyntaxError, match="unbound variable"):
+            mod.build()
+
+    def test_a_module_level_seam_is_an_ordinary_python_value(self):
+        mod = _load_inline("_seam_toplevel", (
+            "-module(_seam_toplevel, [verdict(A, B)])\n"
+            "-double_quotes(chars)\n"
+            "-implicit_atoms\n"
+            "GOLD = --verdict(good, \"x\")\n"
+        ))
+        assert mod.GOLD == ("verdict", ("good",), "x")

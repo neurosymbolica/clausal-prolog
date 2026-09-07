@@ -981,6 +981,14 @@ class ClausalSingletonWarning(ClausalLintWarning):
     """
 
 
+class ClausalSeamLiteralWarning(ClausalLintWarning):
+    """A ``"..."`` literal inside a ``--`` seam in a module that never said
+    which meaning it wants.  Under the engine default ``-double_quotes(atom)``
+    the literal is an ATOM; a Python author reads it as a string.  The
+    silent version of that mistake is a term that unifies with nothing, so
+    the seam says so once and points at the directive."""
+
+
 class ClausalDeprecatedSpellingWarning(ClausalLintWarning):
     """A construct written with a superseded surface spelling.
 
@@ -1237,8 +1245,19 @@ class TermTransformer(NodeTransformer):
                  logic_var_refs=None, constants=frozenset(), filename=None,
                  reify=False, hidden_atoms=frozenset(), module_name=None,
                  declared_functors=None, atom_functor_sites=None,
-                 quote_map=None, double_quotes_mode="atom"):
+                 quote_map=None, double_quotes_mode="atom",
+                 seam=False, double_quotes_explicit=True,
+                 python_visitor=None):
         transformer.seen_vars = set()
+        # THE SEAM (``--term`` in Python-hosted code): ``seam`` marks a
+        # transformer serving one seam expression; ``python_visitor`` is the
+        # enclosing EmbedTransformer's ``visit``, run over every ``++``
+        # operand so seams nest (a ``--`` inside a ``++`` inside a ``--``);
+        # ``double_quotes_explicit`` is False when the module never declared
+        # ``-double_quotes``, which makes a ``"..."`` inside the seam warn.
+        transformer._seam = seam
+        transformer._double_quotes_explicit = double_quotes_explicit
+        transformer._python_visitor = python_visitor
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
         # e.g. a logic-variable comprehension target, pinned by the renderer
@@ -1693,6 +1712,14 @@ class TermTransformer(NodeTransformer):
             # ANSWER is exempt.
             if getattr(constant, "_dcg_terminal_text", False):
                 return constant
+            if (quote == '"' and transformer._seam
+                    and not transformer._double_quotes_explicit):
+                import warnings  # noqa: PLC0415
+                warnings.warn(ClausalSeamLiteralWarning(
+                    f"--: \"{value}\" inside a seam denotes an ATOM under the "
+                    f"engine default -double_quotes(atom); declare "
+                    f"-double_quotes(chars) (a string) or -double_quotes(atom) "
+                    f"explicitly in this module"), stacklevel=2)
             if quote == '"' and transformer._double_quotes_mode == "chars":
                 return constant                     # a string
             if value == NIL_SPELLING:
@@ -2268,6 +2295,13 @@ class TermTransformer(NodeTransformer):
         ):
             expression = unary_op.operand.operand
             var_names = _collect_logic_var_names(expression)
+            if transformer._python_visitor is not None:
+                # A seam's ``++`` operand is Python-hosted code again, so it
+                # may itself contain ``--`` (nesting to any depth).  The
+                # variable names were collected from the ORIGINAL operand
+                # above: an inner seam's own new variables are bound inside
+                # the thunk and must not become outer parameters.
+                expression = transformer._python_visitor(expression)
             return _build_py_thunk_ast(transformer, unary_op, expression, var_names)
 
         # -n(Unit) / -n(): fold the USub into the numeric callee so the
@@ -3890,7 +3924,9 @@ class EmbedTransformer(NodeTransformer):
 
     Recognised patterns:
       -dir(...)   Module-level directive (e.g. -module(name, [exports])).
-      --expr      Nested adjacent USub: transforms expr via TermTransformer.
+      --expr      THE SEAM: expr is a Clausal TERM; yields the runtime term
+                  (a cell) built at that point, in the host module's rules
+                  (clausal.logic.seam).  ++ escapes back to Python inside it.
       ~~expr      Nested adjacent Invert: produces a standard Python ast.XXX node.
       head,       Trailing-comma tuple expression-statement: Prolog fact notation.
       head<-body  Module-level predicate definition (only at module scope).
@@ -3972,6 +4008,10 @@ class EmbedTransformer(NodeTransformer):
         # position-sensitive state on the instance, the ``-allow_singletons``
         # shape.  ``atom`` is the engine default until the flip.
         transformer._double_quotes_mode = "atom"
+        transformer._double_quotes_explicit = False
+        # Logic-variable names bound by the seams enclosing the expression
+        # being rewritten (innermost last) — see visit_UnaryOp's ``--``.
+        transformer._seam_bound: list[set] = []
         # When True (set by the REPL/IPython transform site), the file
         # defaults to loose auto-mint: visit_Module seeds an
         # ImplicitAtomsDeclaration unless the cell states its own mode.
@@ -4432,7 +4472,7 @@ class EmbedTransformer(NodeTransformer):
             transformer._directive_minted_functors.discard(functor_name)
             transformer._seen_functors.pop(functor_name, None)
 
-    def _make_term_transformer(transformer, atoms=None):
+    def _make_term_transformer(transformer, atoms=None, *, seam=False):
         """Build a TermTransformer sharing this EmbedTransformer's
         bare-atom and logic-variable collection sinks and import-remap table.
 
@@ -4455,6 +4495,9 @@ class EmbedTransformer(NodeTransformer):
             atom_functor_sites=transformer._atom_functor_sites,
             quote_map=transformer._quote_map,
             double_quotes_mode=transformer._double_quotes_mode,
+            seam=seam,
+            double_quotes_explicit=transformer._double_quotes_explicit,
+            python_visitor=transformer.visit if seam else None,
         )
 
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
@@ -4686,7 +4729,52 @@ class EmbedTransformer(NodeTransformer):
                     unary_op.col_offset == unary_op.operand.col_offset - 1
                     and unary_op.lineno == unary_op.operand.lineno
                 ):
-                    return transformer._make_term_transformer().visit(expression)
+                    # THE SEAM: ``--term`` yields the runtime TERM, built at
+                    # the point of execution in the host module's namespace
+                    # (clausal.logic.seam.seam_term), never a rewriter node.
+                    # Every logic variable of the expression is bound up
+                    # front, so a ``++`` thunk that names a variable first
+                    # written later in the same term still finds it, and an
+                    # inner seam (inside that ``++``) reuses the variables an
+                    # enclosing seam already bound rather than shadowing them.
+                    outer = set().union(*transformer._seam_bound) if transformer._seam_bound else set()
+                    fresh = [n for n in _collect_logic_var_names(expression) if n not in outer]
+                    term_tf = transformer._make_term_transformer(seam=True)
+                    term_tf.seen_vars.update(outer)
+                    term_tf.seen_vars.update(fresh)
+                    transformer._seam_bound.append(outer | set(fresh))
+                    try:
+                        term_ast = term_tf.visit(expression)
+                    finally:
+                        transformer._seam_bound.pop()
+                    if fresh:
+                        binds = [
+                            replace(NamedExpr(
+                                target=replace(Name(id=n, ctx=Store()), unary_op),
+                                value=replace(Call(func=replace(Name(id="Var", ctx=Load()), unary_op),
+                                                   args=[], keywords=[]), unary_op),
+                            ), unary_op)
+                            for n in fresh
+                        ]
+                        term_ast = replace(
+                            Subscript(
+                                value=replace(Tuple(elts=[*binds, term_ast], ctx=Load()), unary_op),
+                                slice=replace(Constant(value=-1), unary_op),
+                                ctx=Load(),
+                            ),
+                            unary_op,
+                        )
+                    seam_kw = ([keyword(arg="loose", value=Constant(value=True))]
+                               if transformer._implicit_atoms_default else [])
+                    return replace(
+                        Call(
+                            func=Name(id="$seam", ctx=Load()),
+                            args=[term_ast, Call(func=Name(id="globals", ctx=Load()),
+                                                 args=[], keywords=[])],
+                            keywords=seam_kw,
+                        ),
+                        unary_op,
+                    )
             case UnaryOp(op=Invert(), operand=UnaryOp(op=Invert(), operand=expression)):
                 # '~~' must be written without a space (the two '~' are adjacent).
                 if (
@@ -5153,6 +5241,7 @@ class EmbedTransformer(NodeTransformer):
         mode = args[0].id
         if mode in ("atom", "chars"):
             transformer._double_quotes_mode = mode
+            transformer._double_quotes_explicit = True
             return replace(Pass(), expr_stmt)
         raise SyntaxError(
             f"-double_quotes({mode}): unknown mode; the accepted modes are "

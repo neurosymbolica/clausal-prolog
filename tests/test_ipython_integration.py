@@ -36,11 +36,10 @@ def run_cell(source):
 
 # ── Basic term embedding ──────────────────────────────────────────────────────
 
-def test_embed_name_produces_LoadName():
-    # nv
+def test_embed_name_produces_the_atom():
+    # nv — THE SEAM: ``--foo`` is the atom cell, a runtime term.
     ns = run_cell("result = --foo")
-    assert isinstance(ns["result"], LoadName)
-    assert ns["result"].name == "foo"
+    assert ns["result"] == ("foo",)
 
 
 def test_embed_integer_is_native_int():
@@ -78,48 +77,30 @@ def test_embed_none_is_native_none():
 
 # ── Call terms ────────────────────────────────────────────────────────────────
 
-def test_embed_call_no_args():
-    # nv
-    ns = run_cell("result = --foo()")
-    node = ns["result"]
-    assert isinstance(node, Call)
-    assert isinstance(node.func, LoadName)
-    assert node.func.name == "foo"
-    assert node.args == []
-    assert node.kwargs == []
+def test_embed_call_no_args_is_refused():
+    # nv — ruled 2026-09-06: ``foo()`` is not a term form; the atom is ``foo``.
+    with pytest.raises(SyntaxError, match="not a term"):
+        run_cell("result = --foo()")
 
 
 def test_embed_call_with_int_args():
-    # nv
+    # nv — a compound is the cell, functor first.
     ns = run_cell("result = --foo(1, 2)")
-    node = ns["result"]
-    assert isinstance(node, Call)
-    assert node.func.name == "foo"
-    assert len(node.args) == 2
-    assert node.args[0] == 1   # plain int, not IntLiteral
-    assert node.args[1] == 2
+    assert ns["result"] == ("foo", 1, 2)
 
 
 def test_embed_nested_call():
     # nv
     ns = run_cell("result = --foo(bar(1))")
-    node = ns["result"]
-    assert isinstance(node, Call)
-    assert node.func.name == "foo"
-    assert isinstance(node.args[0], Call)
-    assert node.args[0].func.name == "bar"
-    assert node.args[0].args[0] == 1   # plain int
+    assert ns["result"] == ("foo", ("bar", 1))
 
 
 # ── Arithmetic ────────────────────────────────────────────────────────────────
 
 def test_embed_addition():
-    # nv
+    # nv — arithmetic is a VALUE in this surface, as in a clause body.
     ns = run_cell("result = --(1 + 2)")
-    node = ns["result"]
-    assert isinstance(node, Add)
-    assert node.left == 1    # plain int, not IntLiteral
-    assert node.right == 2
+    assert ns["result"] == 3
 
 
 # ── Transformer is fresh per cell ─────────────────────────────────────────────

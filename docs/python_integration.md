@@ -52,6 +52,47 @@ add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 
 ---
 
+## `--` — The Seam: Python Speaks Terms
+
+`++()` escapes from Clausal to Python. `--` is the escape in the other direction:
+inside Python code hosted by a `.clausal` file (a function body, a module-level
+assignment), `--term` yields the runtime **term** — the same tuple the engine
+builds for that source in a clause — at the point of execution.
+
+```clausal
+-module(oracle, [verdict(STATUS, IDS, CITATIONS)])
+-double_quotes(chars)
+-import_from(rulebase, [decide])
+
+def expected(status, ids, cites):
+    return --verdict(++status, ++ids, ++cites)      # ('verdict', status, ids, cites)
+
+GOLD = --verdict(permitted, ["r1"], [])              # ('verdict', ('permitted',), ['r1'], [])
+```
+
+Inside `--` the grammar is Clausal's, under the host module's own rules:
+
+- a **bare name** is the atom the module declares or imports (`permitted` →
+  `('permitted',)`); an undeclared one is the usual strict-atoms error, or is
+  minted under `-implicit_atoms`;
+- an **ALL-CAPS or `_leading` name** is a fresh logic variable, shared within
+  the one `--` expression;
+- `'...'` is an atom in every mode; `"..."` follows the module's
+  `-double_quotes` mode — declare it explicitly, because under the engine
+  default `atom` a `"..."` a Python author reads as a string is an atom (the
+  seam warns once per literal when the module never chose);
+- a **functor** must be declared, imported, or opened with `-implicit_functors`;
+  it builds the cell, functor first, positional arguments filling the declared
+  slots and keywords their named slots; a predicate name builds the same cell,
+  which `call/N` runs as a goal — no class instance is ever minted;
+- a **Python value** enters only through `++expr`, evaluated at once; seams
+  nest to any depth (`--outer(++[--inner(++x) for x in xs])`);
+- ground **arithmetic** is a value, as in a clause body (`--f(1 + 2)` is
+  `('f', 3)`); `foo()` is not a term — the atom is `foo`.
+
+Outside `--`, the hosting Python is untouched: its strings are `str`, its
+names are Python names. `~~expr` is unrelated: it yields Python `ast` nodes.
+
 ## Crossing the boundary: atoms out, strings back
 
 There are **two** outbound conversions, and which one a boundary gets is a

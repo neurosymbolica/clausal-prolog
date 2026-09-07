@@ -243,16 +243,14 @@ class TestNormalPython:
 class TestEmbedSyntax:
     """--expr term embedding syntax."""
 
-    def test_embed_name_produces_LoadName(self, driver):
-        # nv
-        from clausal.pythonic_ast.nodes import LoadName
+    def test_embed_name_produces_the_atom(self, driver):
+        # nv — THE SEAM: ``--foo`` is the atom, a runtime term, not a node.
         driver.run("my_term = --foo")
         if isinstance(driver, ConsoleDriver):
             ns = driver._console.locals
         else:
             ns = driver._ns
-        assert isinstance(ns.get("my_term"), LoadName)
-        assert ns["my_term"].name == "foo"
+        assert ns.get("my_term") == ("foo",)
 
 
 class TestSolutionsDisplay:

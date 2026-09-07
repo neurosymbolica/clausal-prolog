@@ -296,6 +296,8 @@ from clausal.logic.constants import (  # noqa: E402
     _FrozenList, _FrozenDict, _FrozenSet, _freeze_dict_term,
 )
 
+from clausal.logic.seam import seam_term as _seam_term
+
 INJECTED_RUNTIME_BUILTINS: dict = {
     # Term-constructor helpers and runtime types emitted as bare Names by
     # term_to_ast_expr.  ``$``-prefixed engine internals below can never be
@@ -353,6 +355,8 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # module attribute to the atom CELL with an interned slot 0 (§9.3), and
     # ``$``-prefixed so a user predicate named ``mint`` cannot shadow it.
     "$mint": _mint,
+    # THE SEAM: ``--term`` in Python-hosted code (clausal.logic.seam).
+    "$seam": _seam_term,
     # The computed-dict-literal-key helper (``runtime.dict_ops._dict_key``):
     # deref, refuse an unbound key with a catchable instantiation error, and
     # answer the canonical DICT-KEY form.  It is bound per-PREDICATE below
