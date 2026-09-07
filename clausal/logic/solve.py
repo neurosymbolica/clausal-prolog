@@ -328,12 +328,27 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
             # Not a Python function (no code object to name the site with):
             # nothing stable to key on, so this goal simply is not cached.
             raise _Uncacheable()
+        if t.var_objects:
+            # A thunk that takes LOGIC variables is refused outright, the way
+            # a ``Lambda`` node is below and for the same reason: this key and
+            # the remap have to agree about which Vars are rebindable, and
+            # ``_collect_vars`` does not reach a thunk's ``var_objects`` (it
+            # has no PyThunk branch, and PyThunk is not a dataclass, so its
+            # generic tail returns nothing).  Keying them as ``('var', i)``
+            # slots would promise a remap ``_compile_as_query`` cannot perform
+            # and the count guard cannot detect; keying them by arity alone
+            # would go the other way and CONFLATE goals that lower to
+            # different code (``f(X, X)`` and ``f(X, Y)`` are one arity but
+            # two programs).  So: no cache.  Nothing loses by it today — a
+            # probe over the whole suite found not one cacheable goal with a
+            # var-taking thunk, and the goal-position surface cannot build a
+            # working one — and when ``_collect_vars`` learns to descend into
+            # ``var_objects``, this refusal is the single line to lift.
+            raise _Uncacheable()
         if thunks is not None:
             thunks.append(t)
         return ("thunk", code,
-                _structural_key(t._position, var_index, thunks),
-                tuple(_structural_key(v, var_index, thunks)
-                      for v in t.var_objects))
+                _structural_key(t._position, var_index, thunks))
     if isinstance(t, (list, tuple)):
         is_cell, functor = compound_cell_shape(t)
         if is_cell:
@@ -645,6 +660,11 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # (dicts preserve insertion order) once the cap is reached.
         if len(_query_cache) >= _QUERY_CACHE_MAX:
             _query_cache.pop(next(iter(_query_cache)), None)
+        # ``id(t)`` is the name ``term_to_ast_expr`` lowered this very thunk
+        # under, and the ids cannot collide: every thunk in *goal_thunks* is
+        # alive right now, and the surface never puts one thunk object in two
+        # places — the rewriter builds a fresh ``PyThunk`` per ``++`` site per
+        # execution, so two slots are always two objects.
         cached_thunk_names = [f"_pyt_{id(t)}" for t in goal_thunks]
         _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__,
                                    cached_var_names, cached_thunk_names)

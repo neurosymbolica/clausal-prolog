@@ -255,6 +255,15 @@ silent:
 
 ## 8. Not in scope
 
+Query-cache participation for node goals (Task 7 of the plan) HAS landed:
+`solve()`'s `_goal_cache_key` now keys a goal node structurally, so the two
+executions of an `if --goal:` in a loop share one compiled query. A `++`
+escape is a parameter of that query, not part of its key — its per-execution
+closure is rebound on a cache hit, exactly as the goal's `Var`s already were —
+so `++` still runs when the goal runs, with the caller's current values.
+
+Still out of scope:
+
 - Sharing variables or a trail across separate seams (see §4: nesting
   composes values; conjunction composes search).
 - `--goal` in expression positions other than the listed tests and `for`.
@@ -264,10 +273,3 @@ silent:
 - A push/callback query API (the pull generator is the control flow).
 - Dict-lookup rewriting of body names; exports are plain locals.
 - Any change to `unify`, `solve`, `query`, `once` or the trail.
-
-Query-cache participation for node goals (Task 7 of the plan) HAS landed:
-`solve()`'s `_goal_cache_key` now keys a goal node structurally, so the two
-executions of an `if --goal:` in a loop share one compiled query. A `++`
-escape is a parameter of that query, not part of its key — its per-execution
-closure is rebound on a cache hit, exactly as the goal's `Var`s already were —
-so `++` still runs when the goal runs, with the caller's current values.

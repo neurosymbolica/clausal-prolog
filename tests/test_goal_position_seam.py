@@ -451,3 +451,43 @@ class TestQueryCache:
         ))
         answers = [("verdict", ("permitted",), []), ("verdict", ("prohibited",), [])] * 5
         assert self._compile_count(lambda: mod.parts(answers)) == 1
+        assert mod.parts(answers) == [("permitted",), ("prohibited",)] * 5
+
+    def test_a_reentrant_seam_site_keeps_each_execution_its_own_thunks(self):
+        """The SAME seam site, running again while its own generator is
+        suspended, must not have its cached query hijacked by the inner run.
+
+        The `for` holds a live generator over `edge(++node, N)`; the body
+        recurses and drives the same site with a different `node`/`tag`.  Both
+        executions share one compiled query, so the only thing keeping them
+        apart is that each gets its own globals copy with its own thunks — and
+        `lab(N, ++tag)` re-evaluates its thunk on every backtrack, i.e. after
+        the inner execution has been and gone."""
+        mod = _load_inline("_gp_c4", (
+            "-module(_gp_c4, [edge(A, B), lab(N, L), a, b, c, d, e, x, y])\n"
+            "-double_quotes(chars)\n"
+            "edge(a, b)\n"
+            "edge(a, c)\n"
+            "edge(b, d)\n"
+            "edge(c, e)\n"
+            "lab(b, x)\n"
+            "lab(c, x)\n"
+            "lab(d, y)\n"
+            "lab(e, y)\n"
+            "def walk(node, tag, out, depth):\n"
+            "    for N in --(edge(++node, N), lab(N, ++tag)):\n"
+            "        out.append((depth, tag, node, N))\n"
+            "        if depth < 1:\n"
+            "            walk(N, ('y',), out, depth + 1)\n"
+            "    return out\n"
+        ))
+        got = []
+        assert self._compile_count(lambda: mod.walk(("a",), ("x",), got, 0)) == 1
+        # The outer execution resumes with ITS tag and sees both of a's edges,
+        # interleaved with the inner executions it spawned.
+        assert got == [
+            (0, ("x",), ("a",), ("b",)),
+            (1, ("y",), ("b",), ("d",)),
+            (0, ("x",), ("a",), ("c",)),
+            (1, ("y",), ("c",), ("e",)),
+        ]
