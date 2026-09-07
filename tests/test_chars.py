@@ -345,6 +345,38 @@ class TestAtomConcat:
         with pytest.raises(LogicException):
             _run("atom_concat", 3, mint("abc"), Var(), Var())
 
+    def test_both_numbers_type_error(self):
+        """atom_concat(1, 2, X) -> type_error(atom, 1).
+
+        ISO 8.16.2 and Scryer 0.10 both reject a number in atom position;
+        an earlier spec note ("numbers accepted as ISO allows") had this
+        backwards.
+        """
+        with pytest.raises(LogicException) as exc:
+            _run("atom_concat", 3, 1, 2, Var())
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
+        assert formal.args[1] == 1
+
+    def test_second_arg_number_type_error(self):
+        """atom_concat(a, 1, X) -> type_error(atom, 1); the culprit is the
+        offending number, not the whole call."""
+        with pytest.raises(LogicException) as exc:
+            _run("atom_concat", 3, mint("a"), 1, Var())
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom")
+        assert formal.args[1] == 1
+
+    def test_atoms_still_concat(self):
+        """atom_concat(a, b, X) -> X = ab still works (regression guard next
+        to the number-rejection tests above)."""
+        S = Var()
+        results = _run_collect("atom_concat", 3, mint("a"), mint("b"), S,
+                               snap=lambda: deref(S))
+        assert results == [mint("ab")]
+
 
 # ── sub_atom/5 ────────────────────────────────────────────────────────────────
 

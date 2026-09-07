@@ -342,7 +342,7 @@ Inputs in atom position go through `_atom_to_str` (§6.1); outputs mint.
 | `atom_chars("ab", L)` | `type_error(atom, "ab")` |
 | `atom_codes(("ab",), C)` | `C = b"ab"` (codes model, unchanged shape) |
 | `atom_length(("abc",), N)` | `N = 3`; `atom_length("abc", N)` → `type_error(atom, "abc")` |
-| `atom_concat(("a",), ("b",), X)` | `X = ("ab",)`; split modes enumerate atoms; numbers accepted as ISO allows |
+| `atom_concat(("a",), ("b",), X)` | `X = ("ab",)`; split modes enumerate atoms; `atom_concat(1, 2, X)` → `type_error(atom, 1)` (ISO 8.16.2 / Scryer 0.10; corrects an earlier "numbers accepted" note) |
 | `sub_atom(("abc",), B, L, A, S)` | `S` atoms |
 | `upcase_atom/2`, `downcase_atom/2` | atom → atom |
 | `char_code(("a",), C)` | `C = 97`; `char_code("a", C)` → `type_error(character, "a")` |
@@ -777,6 +777,31 @@ following are pinned as tests in Plan 1:
    `SegString` is also accepted — every such site keeps routing through
    the walk/`normalize_seg_input` convention so a third string type slots
    in identically. The view itself is a later plan.
+9. Standard order of lists/strings vs compounds (Scryer-verified divergence,
+   `implementation_plans/scryer-comparison-queries-2026-09-07.md` row 1):
+   ISO 7.2.1 keys a compound by arity first, so `'.'/2` (lists and strings)
+   sorts among other arity-2 compounds; Clausal's §6.5 sequence band sorts
+   below *all* compounds regardless of arity. Pre-existing, not introduced
+   by the flip. Fix shape, if adopted: key lists/strings as arity-2 `'.'`
+   compounds with element-tuple args in `_standard_order_key`
+   (`builtins/_helpers.py:497–624`) rather than as a separate band — same
+   mechanism item 2 needs for `compare/3`/`@</2`.
+10. `write/1` of a string (Scryer-verified, row 13): Clausal prints the text
+    (`abc`); Scryer's `write/1` prints the underlying char list (`[a,b,c]`).
+    Ruling pending.
+11. `writeq/1` of a string (Scryer-verified, rows 14–16): Clausal's `writeq`
+    prints the double-quoted spelling (`"abc"`) — that is Scryer's
+    *toplevel* display form (`write_term(T, [quoted(true),
+    double_quotes(true)])`), not what Scryer's `writeq/1` itself prints
+    (the raw list, `[a,b,c]`). Same split for `write/1` of a list of chars:
+    Clausal collapses `[a,b]` to `ab`/`"ab"`; Scryer prints `[a,b]`. One
+    ruling needed for the family (write vs writeq vs toplevel display).
+12. Lists/strings as compounds for `compound/1`/`callable/1`, and
+    `atom([])`/`atomic([])` (Scryer-verified, rows 26 and 36): Scryer
+    answers `atom([])`, `atomic([])`, `atomic("")` all true (`[]` is a
+    reserved atom — same question as item 1 above) and `callable("foo")`
+    true (a list is a compound), where Clausal answers false throughout.
+    One ruling covers the whole family, not each predicate separately.
 
 ## 15. Risks
 
