@@ -246,3 +246,98 @@ def _load_names(term: Any) -> list:
 def _is_arith(term: Any) -> bool:
     from clausal.pythonic_ast.nodes import BinOp, UnaryOp
     return isinstance(term, (BinOp, UnaryOp))
+
+
+class UndefinedAnswer(Exception):
+    """A goal in goal position produced a WFS-conditional (undefined) answer.
+
+    The sugar is strict: it neither skips the answer nor takes it as true.
+    Truth-aware code uses ``clausal.query_wfs``.
+    """
+
+
+class ResidualConstraints(Exception):
+    """An exported variable is still unbound and carries constraint attributes.
+
+    Exports are answers; a constraint store crossing a seam is the lower
+    level (``solve`` with an explicit ``Trail``) or, once it exists,
+    ``copy_term/3`` inside the goal.
+    """
+
+
+def export(var: Any) -> Any:
+    """The fully dereferenced copy of *var*'s value for Python to keep."""
+    from clausal.logic.solve import _deref_walk
+    from clausal.logic.variables import deref, is_var
+    d = deref(var)
+    if is_var(d) and getattr(d, "attrs", None):
+        raise ResidualConstraints(
+            f"--: exported variable is unbound and constrained "
+            f"({sorted(d.attrs)}); exports are answers. Keep the store alive "
+            f"with an explicit Trail, or ask for the residue inside the goal")
+    return _deref_walk(var)
+
+
+def _module_of(module_globals: dict):
+    try:
+        return module_globals["$module"]
+    except KeyError:
+        raise NameError(
+            "--: goal position needs the host module's `$module`; a plain "
+            ".py file never reaches the rewriter — host this code in a "
+            ".clausal file") from None
+
+
+def _definite_answers(goal: Any, module) -> "Iterator[None]":
+    """Yield once per UNCONDITIONAL answer of *goal*; raise UndefinedAnswer
+    on a conditional one.
+
+    A single tabled-predicate goal can only be judged once SLG has
+    completed for it — and that completion happens INSIDE ``solve()``,
+    before its first answer streams out, not before ``solve()`` is asked
+    to start: the table entry ``_tabled_entry_for_goal`` looks up does not
+    exist yet on a goal's first-ever call, so looking it up before the
+    ``solve()`` loop starts would misread a genuinely tabled goal as
+    untabled. The lookup is deferred to the first answer instead (and
+    reused after that — the entry, once found, is stable for the rest of
+    this call); every other goal shape streams with no lookup at all.
+    """
+    from clausal.logic.solve import solve, _tabled_entry_for_goal
+    from clausal.logic.tabling import make_subgoal_key
+    from clausal.logic.variables import Trail, deref
+    from clausal.terms import Undefined
+    trail = Trail()
+    entry = None
+    goal_args = None
+    checked = False
+    for _ in solve(goal, module, trail):
+        if not checked:
+            entry, goal_args = _tabled_entry_for_goal(goal, module, trail)
+            checked = True
+        if entry is not None:
+            cand = [deref(a) for a in goal_args]
+            idx = entry._answer_index.get(make_subgoal_key(cand, None))
+            if idx is not None and entry.truth_value(idx) is Undefined:
+                raise UndefinedAnswer(
+                    f"--: {goal!r} has a conditional (undefined) answer; use "
+                    f"clausal.query_wfs for truth values and delays")
+        yield
+
+
+def once_bind(goal: Any, module_globals: dict) -> bool:
+    """True on the first unconditional answer, leaving the goal's variables
+    bound for the caller's ``$export`` lines; False if the goal fails."""
+    for _ in _definite_answers(goal, _module_of(module_globals)):
+        return True
+    return False
+
+
+def each(goal: Any, variables: tuple, module_globals: dict):
+    """Yield the exported values of *variables* once per unconditional answer:
+    the bare value for one variable, else a tuple in *variables* order."""
+    single = len(variables) == 1
+    for _ in _definite_answers(goal, _module_of(module_globals)):
+        if single:
+            yield export(variables[0])
+        else:
+            yield tuple(export(v) for v in variables)
