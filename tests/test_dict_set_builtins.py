@@ -815,6 +815,62 @@ class TestInOperatorDictSet:
         sols = self._capture("pair_absent", "a", 99, d)
         assert len(sols) == 1  # ("a", 99) not in dict (value doesn't match)
 
+    # ── the nil key enumerates in its canonical form (fix round 5, item 1) ──
+    #
+    # ``_in_iter`` was the last raw mapping reader: it iterated a caller's
+    # PLAIN dict without folding, so ``K in {"": 1}`` yielded the key ``""``
+    # while ``gen_dict/3`` and ``dict_keys/2`` over the same term yield
+    # ``()``.  One term, two enumerations.
+
+    def test_key_in_a_plain_dict_yields_the_canonical_nil_key(self):
+        # nv
+        d = {"": 1, mint("a"): 2}
+        sols = self._capture("enum_keys", Var(), d)
+        assert {s[0] for s in sols} == {(), mint("a")}
+
+    def test_pair_in_a_plain_dict_yields_the_canonical_nil_key(self):
+        # nv
+        d = {"": 1, mint("a"): 2}
+        sols = self._capture("enum_pairs", Var(), Var(), d)
+        assert {s[0]: s[1] for s in sols} == {(): 1, mint("a"): 2}
+
+    def test_a_plain_dict_enumerates_exactly_as_the_dictterm_does(self):
+        """The whole point: ``in`` must agree with itself across the two
+        flavours of one term, and with ``gen_dict/3``/``dict_keys/2``."""
+        # nv
+        plain, term = {"": 1, mint("a"): 2}, DictTerm({(): 1, mint("a"): 2})
+        assert (sorted(map(repr, (s[0] for s in
+                                  self._capture("enum_keys", Var(), plain))))
+                == sorted(map(repr, (s[0] for s in
+                                     self._capture("enum_keys", Var(), term)))))
+        # …and with the key-listing builtins, which already folded (as a
+        # SET: dict_keys/2 sorts, gen_dict/3 does not, and the order is not
+        # what this pins).
+        keys = Var()
+        assert set(_sols("dict_keys", plain, keys)[0][1]) == {(), mint("a")}
+        gen_keys = {s[0] for s in _sols("gen_dict", Var(), plain, Var())}
+        assert gen_keys == {(), mint("a")}
+
+    def test_a_nil_key_is_FOUND_by_every_spelling_through_in(self):
+        """The membership direction, not just enumeration."""
+        # nv
+        for d in ({"": 1}, DictTerm({(): 1})):
+            for key in ([], "", b"", ()):
+                assert len(self._capture("enum_keys", key, d)) == 1, (d, key)
+                assert len(self._capture("key_absent", key, d)) == 0, (d, key)
+
+    def test_a_nil_free_plain_dict_is_not_copied(self):
+        """``mapping_of``'s two O(1) membership tests, not a copy per
+        enumeration: a nil-free dict is iterated IN PLACE.  A live
+        ``dict_items`` view tracks its dict; a view over a copy would not."""
+        # nv
+        from clausal.logic.runtime.body_star_unify import _in_iter
+        d = {mint("a"): 1}
+        view = _in_iter(d, True)
+        d[mint("b")] = 2
+        assert dict(view) == {mint("a"): 1, mint("b"): 2}
+        assert list(_in_iter(d, False)) == [mint("a"), mint("b")]
+
 
 # ── Symmetric equality: DictTerm/dict and SetTerm/set ─────────────────────────
 #

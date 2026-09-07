@@ -5924,8 +5924,18 @@ class EmbedTransformer(NodeTransformer):
         # structured ``-constants`` RHS built a plain ``str`` key ``"[]"``
         # (a different key from the one every other path produces) and a bare
         # ``{[]: 1}`` raised a raw ``TypeError`` -- a list cannot key a dict.
-        # A double-quoted key in ``chars`` mode is a STRING and keeps its own
-        # meaning, exactly as ``visit_Constant`` decides it.
+        # The quote test guards ONE spelling: a double-quoted ``"[]"`` in
+        # ``chars`` mode is the two-character STRING and keeps its own
+        # meaning, exactly as ``visit_Constant`` decides it.  It says nothing
+        # about the EMPTY string (fix round 5, item 2): ``{"": 1}`` does not
+        # reach either branch above -- it falls to the ``$dict_key`` wrap
+        # below and folds to ``()`` at exec time like every other nil
+        # spelling, while a source-written ``{"": 1}`` in a CLAUSE compiles
+        # to the atom ``("",)``.  That divergence is the open design question
+        # in todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md
+        # (ISO has an empty-spelling atom `''` distinct from `[]`, so both
+        # readings are defensible); it needs the operator ruling `'[]'` got,
+        # and is not decided here.
         if isinstance(key, List) and not key.elts:
             return replace(Tuple(elts=[], ctx=load), key)
         if isinstance(key, Constant) and key.value == NIL_SPELLING:

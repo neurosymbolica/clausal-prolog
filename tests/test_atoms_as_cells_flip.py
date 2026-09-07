@@ -629,9 +629,11 @@ class TestTheNilAtomInAKeyPosition:
             "_fix4_constants_ref_nil",
             "-private([a])\n"
             "-constants(_N_ = [], _S_ = \"\", _D_ = {_N_: 1, a: 2})\n"
-            "-constants(_E_ = {_S_: 3})\n"
+            "-constants(_E_ = {_S_: 3}, _F_ = {\"\": 4})\n"
             "c1(_D_),\n"
-            "c2(_E_),\n",
+            "c2(_E_),\n"
+            "c3(_F_),\n"
+            "c4(D) <- (D is {\"\": 1}),\n",
         )
         X = Var()
         (d,), = _answers(("c1", X), mod, X)
@@ -641,6 +643,19 @@ class TestTheNilAtomInAKeyPosition:
         Y = Var()
         (e,), = _answers(("c2", Y), mod, Y)
         assert list(e.keys()) == [()] and e[[]] == 3
+        # A LITERAL empty-string key in a -constants RHS takes the same
+        # ``$dict_key`` wrap (fix round 5, item 2: the quote test above it
+        # guards only the two-character ``"[]"``), so it folds to ``()`` —
+        # while the same literal in a CLAUSE compiles to the atom ``("",)``.
+        # That divergence is the open design question filed as
+        # todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md;
+        # pinned here so the state is recorded rather than merely absent.
+        Z = Var()
+        (f,), = _answers(("c3", Z), mod, Z)
+        assert list(f.keys()) == [()] and f[[]] == 4
+        W = Var()
+        (clause_dict,), = _answers(("c4", W), mod, W)
+        assert list(clause_dict.keys()) == [("",)]
 
     def test_a_frozen_empty_list_is_the_nil_key(self):
         """The value half of item 4: ``atoms.as_dict_key`` tested the EXACT
@@ -909,9 +924,14 @@ def test_row_29_the_bytecode_tag_invalidates_a_pre_flip_pyc():
     Bumped 10 -> 11 by fix round 4, item 4: a ``-constants`` dict key the
     compiler cannot decide statically is emitted wrapped in
     ``$dict_key(...)``, so a tag-10 ``.pyc`` carries the bare key expression
-    and still raises the raw ``TypeError`` the fix removes."""
+    and still raises the raw ``TypeError`` the fix removes.
+
+    Bumped 11 -> 12 by fix round 5, item 1: an ``in`` goal in KEY mode emits
+    ``$in_iter($deref(coll), False)`` instead of a bare ``$deref(coll)``, so a
+    tag-11 ``.pyc`` still iterates the collection raw and still gives the
+    pre-fix answers for a plain dict's nil key and for a ``str``."""
     from clausal.import_hook import CLAUSAL_BYTECODE_TAG
-    assert CLAUSAL_BYTECODE_TAG == 11
+    assert CLAUSAL_BYTECODE_TAG == 12
 
 
 def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):
@@ -958,13 +978,27 @@ def test_seg_string_iteration_yields_char_atoms():
 
 
 def test_membership_over_a_plain_str_yields_char_atoms(builtins_mod):
-    """Task 7 carry-forward: ``X in "abc"`` binds ``X = ("a",)``."""
+    """Task 7 carry-forward: ``X in "abc"`` binds ``X = ("a",)``.
+
+    All THREE spellings of membership, because they used to disagree: the
+    ``_in_iter`` funnel and the ``in_/2`` predicate answered char atoms while
+    the ``in`` OPERATOR — the only one whose key-mode lowering emitted a bare
+    ``deref(coll)`` and let Python's own ``iter(str)`` run — answered 1-char
+    ``str``s, which are one-element STRINGS, not chars (Task 15 fix round 5,
+    item 1: both modes go through ``_in_iter`` now)."""
     from clausal.logic.runtime.body_star_unify import _in_iter
-    assert list(_in_iter("abc", False)) == [
-        char_atom("a"), char_atom("b"), char_atom("c")]
+    chars = [char_atom("a"), char_atom("b"), char_atom("c")]
+    assert list(_in_iter("abc", False)) == chars
     X = Var()
-    assert _answers(("in_", X, "abc"), builtins_mod, X) == [
-        (char_atom("a"),), (char_atom("b"),), (char_atom("c"),)]
+    assert _answers(("in_", X, "abc"), builtins_mod, X) == [(c,) for c in chars]
+    op_mod = _load_inline_clausal(
+        "_flip_in_operator_str", "enum_elems(X, C) <- (X in C)\n")
+    Y = Var()
+    assert _answers(("enum_elems", Y, "abc"), op_mod, Y) == [
+        (c,) for c in chars]
+    # …and the operator still enumerates an ordinary list unchanged.
+    Z = Var()
+    assert _answers(("enum_elems", Z, [1, 2]), op_mod, Z) == [(1,), (2,)]
 
 
 def test_a_promoted_seglist_decodes_back_to_char_atoms():

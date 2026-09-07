@@ -447,11 +447,20 @@ def _in_iter(collection, pair_mode):
     (e.g. ``(KEY, VALUE) in DICT``).  For DictTerms, pair_mode switches
     from key iteration to (key, value) pair iteration.
     """
-    if pair_mode and isinstance(collection, (DictTerm, dict)):
+    data = DictTerm.mapping_of(collection)
+    if data is not None:
         # A plain dict is a dict-valued term too (the dictterm-only sweep):
-        # without this arm, pair mode iterated its KEYS, which never unify
-        # with the tuple pattern — silent no-solutions.
-        return collection.items()
+        # without the pair arm, pair mode iterated its KEYS, which never
+        # unify with the tuple pattern — silent no-solutions.
+        #
+        # ``mapping_of``, not ``collection`` raw (Task 15 fix round 5, item
+        # 1): this was the last reader that took a caller's PLAIN dict
+        # unfolded, so ``K in {"": 1}`` ENUMERATED the key ``""`` while
+        # ``gen_dict/3`` and ``dict_keys/2`` over the same term yield the
+        # canonical ``()`` — one term, two enumerations.  A nil-free plain
+        # dict is handed back uncopied (two O(1) membership tests), so the
+        # common case still iterates in place.
+        return data.items() if pair_mode else iter(data)
     if type(collection) is str:
         # THE FLIP (spec §6.2): a string is the LIST OF ITS CHAR ATOMS, so
         # ``X in "abc"`` enumerates ``("a",)``, ``("b",)``, ``("c",)`` — the

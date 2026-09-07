@@ -440,7 +440,12 @@ def _preseed_py_submodules(module_items) -> None:
 # so a constant REFERENCE that evaluates to nil folds to the same key the
 # literal spellings do.  A stale tag-10 .pyc carries the bare key expression
 # and still raises the raw ``TypeError`` the fix removes.
-CLAUSAL_BYTECODE_TAG = 11
+# 11 -> 12 (Task 15 fix round 5, item 1): an ``in`` goal in KEY mode emitted a
+# bare ``$deref(coll)`` and let the ``for`` loop use Python's own iteration;
+# it emits ``$in_iter($deref(coll), False)`` now, so both modes fold a plain
+# dict's nil keys and read a ``str`` as its char atoms.  A stale tag-11 .pyc
+# still carries the bare iteration and still gives the pre-fix answers.
+CLAUSAL_BYTECODE_TAG = 12
 
 
 # ── One source file → one compilation ────────────────────────────────────────

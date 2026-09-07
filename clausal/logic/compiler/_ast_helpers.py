@@ -340,13 +340,20 @@ def _if(test: ast.expr, body: list[ast.stmt]) -> ast.If:
 def _in_iter_expr(elem: Any, coll_expr: ast.expr) -> ast.expr:
     """Build the iterator expression for an ``in`` goal.
 
-    If *elem* is a TupleLiteral, emits ``_in_iter(deref(coll), True)`` so that
-    DictTerms yield (key, value) pairs.  Otherwise emits ``deref(coll)``.
+    Always ``_in_iter(deref(coll), <pair_mode>)``; *elem* being a TupleLiteral
+    is what makes it pair mode, so a DictTerm yields (key, value) pairs
+    instead of keys.
+
+    KEY mode used to emit a bare ``deref(coll)`` and let the ``for`` loop use
+    Python's own iteration, which reads a caller's PLAIN dict raw: ``K in
+    {"": 1}`` enumerated the key ``""`` while ``gen_dict/3``/``dict_keys/2``
+    over the same term yield the canonical ``()`` (Task 15 fix round 5, item
+    1).  Both modes go through the one funnel now, so the nil fold — and
+    ``_in_iter``'s other term-level readings, notably THE FLIP's char atoms
+    for a ``str`` collection — apply to both.
     """
-    if isinstance(elem, TupleLiteral):
-        return _call(
-            _name("$in_iter"),
-            _call(_name("$deref"), coll_expr),
-            _locate(ast.Constant(value=True)),
-        )
-    return _call(_name("$deref"), coll_expr)
+    return _call(
+        _name("$in_iter"),
+        _call(_name("$deref"), coll_expr),
+        _locate(ast.Constant(value=isinstance(elem, TupleLiteral))),
+    )
