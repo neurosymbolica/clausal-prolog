@@ -17,7 +17,9 @@ from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
 from clausal.logic.cells import TUPLE_TAG
-from clausal.logic.atoms import char_atom, NIL_SPELLING as _NIL_SPELLING
+from clausal.logic.atoms import (
+    char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
+)
 from clausal.terms import (
     Compound, KWTerm, DictTerm, SetTerm,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
@@ -501,8 +503,12 @@ def _is_empty_list(term: Any) -> bool:
     here because a plain (non-cell, non-``TUPLE_TAG``) tuple is treated as
     the list it holds throughout this module.  A ``Seg*`` is walked by the
     caller before this is asked.
+
+    Delegates to ``atoms.is_nil`` rather than repeating the shape test (fix
+    round 4): the two had drifted apart on subclasses — ``as_dict_key``'s
+    copy of it did not fold a frozen ``-constants`` empty list.
     """
-    return type(term) in (list, str, bytes, tuple) and len(term) == 0
+    return _is_nil(term)
 
 
 def _is_non_empty_list(term: Any) -> bool:

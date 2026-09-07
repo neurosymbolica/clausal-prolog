@@ -48,15 +48,19 @@ def _subscript(obj: Any, key: Any) -> Any:
         raise LogicException(instantiation_error(_SUBSCRIPT_CTX))
     if is_var(key):
         raise LogicException(instantiation_error(_SUBSCRIPT_CTX))
-    if isinstance(obj, DictTerm):
-        data = obj.data
-    elif isinstance(obj, dict):
-        data = obj
-    else:
+    # ``mapping_of`` normalises a PLAIN dict's own nil keys (fix round 4,
+    # item 1).  Taking ``obj`` raw folded only the LOOKUP key, so on
+    # ``{"": 1}`` -- a dict a Python caller built, never through
+    # ``DictTerm.__init__`` -- the folded ``()`` missed the stored ``""`` and
+    # ``D[""]`` raised ``existence_error(dict_key, [])`` while the same read
+    # on the ``DictTerm`` hit.  It is the CALLER's mapping when there is
+    # nothing to fold, so it is read, never mutated.
+    data = DictTerm.mapping_of(obj)
+    if data is None:
         raise LogicException(type_error("dict", obj, _SUBSCRIPT_CTX))
-    # Read ``.data`` only with a NORMALISED key (fix round 3, item 1): every
-    # spelling of nil is one key, and ``[]`` -- the spelling ``mint("[]")``
-    # answers -- is unhashable, so ``D.'[]'`` used to raise
+    # Read the mapping only with a NORMALISED key (fix round 3, item 1):
+    # every spelling of nil is one key, and ``[]`` -- the spelling
+    # ``mint("[]")`` answers -- is unhashable, so ``D.'[]'`` used to raise
     # ``type_error(dict_key, [])`` out of the ``except TypeError`` arm below
     # while ``D.()`` hit.
     key = DictTerm.normalised_key(key)

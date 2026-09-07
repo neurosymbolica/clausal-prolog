@@ -672,6 +672,28 @@ class TestDictSubscriptRead:
         assert term.functor == "error"
         assert term.args[0] == mint("instantiation_error")
 
+    def test_subscript_folds_the_nil_key_on_a_plain_dict(self, mod, logic_mod):
+        """Task 15 fix round 4, item 1.  ``_subscript`` normalised the LOOKUP
+        key to ``()`` but read a plain dict's mapping directly, so ``D[""]``
+        on ``{"": 1}`` raised ``existence_error(dict_key, [])`` — the stored
+        key was never folded.  All four nil spellings are ONE key, and a plain
+        dict must answer exactly as the ``DictTerm`` does."""
+        # nv
+        for d in ({"": 1}, DictTerm({(): 1})):
+            for key in ([], "", b"", ()):
+                assert self._first_binding(logic_mod, d, key, Var()) == 1, (
+                    d, key)
+
+    def test_subscript_still_raises_for_an_absent_nil_key(self, mod, logic_mod):
+        """The fold must not turn a miss into a hit."""
+        # nv
+        from clausal.logic.exceptions import LogicException
+        for key in ([], "", b"", ()):
+            with pytest.raises(LogicException) as exc:
+                list(call("subscript_get", DictTerm({"a": 1}), key, Var(),
+                          module=logic_mod))
+            assert exc.value.term.args[0].functor == "existence_error"
+
 
 # ── Backtracking tests ──────────────────────────────────────────────────────
 

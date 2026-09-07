@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
-    is_char_atom, is_mangled, spelling,
+    is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
 from .logic.cells import TUPLE_TAG
 from .logic.variables import Var, deref
@@ -486,6 +486,34 @@ def _drive_seg_unify(cache, walked, other, trail, concrete_len, apply_fn):
         trail.undo(mark)
 
 
+# ── _EMPTY_SEG_IS_NIL — an empty Seg* is the empty list, in every spelling ───
+#
+# Task 15 fix round 4, item 5.  Nil is ONE term with several spellings --
+# ``[]``, ``""``, ``b""``, ``()`` -- and every top-level pair of them unifies.
+# A ``Seg*`` that WALKS to nothing is that same term, so it must answer alike
+# for all four; before this, each Seg only accepted the spelling its own arm
+# is typed for, leaving a residual NON-TRANSITIVITY: ``SegString([""])``
+# unified with ``""`` and ``""`` unified with ``b""``, but ``SegString([""])``
+# and ``b""`` were False.
+#
+# The six ``__unify__``/``__eq__`` methods therefore ask ``_is_nil`` of the
+# target and of their own WALKED value, ahead of everything else, and answer
+# True.  Two properties make that safe:
+#
+#   * it is gated on the target being nil, so the (cheap) walk runs only for
+#     a nil target, never on the hot arms;
+#   * it tests the WALKED term, so an OPEN ``Seg*`` -- one with an unbound
+#     ``VarSeg`` -- never reaches it and keeps its generator-driven split.
+#     That is exactly what the round-3 narrowing protects: ``[*A] = ""``
+#     binds ``A = ""`` (not ``A = []``), pinned by
+#     tests/test_string_list_unification.py and re-pinned by
+#     tests/test_segstring.py::TestAnEmptySegIsTheEmptyList.
+#
+# The round-3 ``()`` -> ``[]`` rewrite stays underneath for the NON-empty
+# case (``unify(SegList([ConcreteSeg([1])]), ())`` must still be False by the
+# ordinary list comparison, not by type mismatch).
+
+
 class SegList:
     """A first-class term representing a list with variable-length holes.
 
@@ -689,6 +717,11 @@ class SegList:
         surface all four splits.
         """
         from .logic.variables import unify, walk
+        # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
+        # item 5).  See ``_EMPTY_SEG_IS_NIL`` above this class for why this
+        # sits ahead of the ``()`` rewrite and why it leaves VarSeg alone.
+        if _is_nil(other) and _is_nil(self._walk_raw()):
+            return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
         # gate on ``list``/``str``/``bytes``, so ``()`` was rejected outright
@@ -878,6 +911,8 @@ class SegList:
     def __eq__(self, other):
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
+        if _is_nil(other) and _is_nil(self._walk_raw()):
+            return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
         if isinstance(other, SegList):
@@ -1202,6 +1237,10 @@ class SegString:
         delegate.
         """
         from .logic.variables import unify
+        # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
+        # item 5).  See ``_EMPTY_SEG_IS_NIL``, above ``class SegList``.
+        if _is_nil(other) and _is_nil(self.__walk__()):
+            return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
         # gate on ``list``/``str``/``bytes``, so ``()`` was rejected outright
@@ -1362,6 +1401,8 @@ class SegString:
     def __eq__(self, other):
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
+        if _is_nil(other) and _is_nil(self.__walk__()):
+            return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
         if isinstance(other, SegString):
@@ -1565,6 +1606,10 @@ class SegBytes:
 
     def __unify__(self, other, trail):
         from .logic.variables import unify
+        # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
+        # item 5).  See ``_EMPTY_SEG_IS_NIL``, above ``class SegList``.
+        if _is_nil(other) and _is_nil(self.__walk__()):
+            return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
         # gate on ``list``/``str``/``bytes``, so ``()`` was rejected outright
@@ -1664,6 +1709,8 @@ class SegBytes:
     def __eq__(self, other):
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
+        if _is_nil(other) and _is_nil(self.__walk__()):
+            return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
         if isinstance(other, SegBytes):
@@ -1761,6 +1808,24 @@ class DictTerm:
         #   * ``""``/``b""`` are hashable, so two O(1) membership tests find
         #     them and the comprehension runs only then.
         # ``()`` is already the canonical form and needs nothing.
+        if type(data) is not dict and not hasattr(data, "items"):
+            # A ONE-SHOT iterable (a generator, ``zip``, an iterator of
+            # pairs) is CONSUMED by the ``dict()`` below, so the ``except``
+            # arm had nothing left to re-iterate: every entry ``dict()`` had
+            # already drained was silently LOST, and
+            # ``DictTerm(iter([([], 1), (a, 2)]))`` came back as ``{a: 2}``
+            # (fix round 4, item 2).  Materialise once, here, so both arms
+            # read the same pairs.  Any MAPPING is exempt -- ``dict()`` does
+            # not consume one, and this constructor is hot -- and ``items``
+            # is the same test the ``except`` arm uses to tell the two
+            # shapes apart, so the two cannot disagree.  The exact-``dict``
+            # test short-circuits it: that is the overwhelmingly common
+            # caller and it costs ~8 ns against ``hasattr``'s ~36 ns on a
+            # ~200 ns constructor.  ``hasattr`` and not
+            # ``isinstance(data, dict)`` because callers do pass other
+            # mappings -- a ``mappingproxy`` (``Quantity.dimensions``) and
+            # ``DictTerm`` itself.
+            data = list(data)
         try:
             self._data = dict(data)
         except TypeError:
@@ -1786,6 +1851,34 @@ class DictTerm:
         (fix round 3, item 1).
         """
         return _as_dict_key(key)
+
+    @staticmethod
+    def mapping_of(value):
+        """The underlying mapping of a dict-valued TERM, or ``None``.
+
+        The reading twin of :meth:`normalised_key`, and the ONE place the
+        "read a mapping only with normalised keys" invariant is enforced: a
+        ``DictTerm``'s ``.data`` is already normalised, while a PLAIN Python
+        dict has not been through ``__init__`` and may still spell a nil key
+        ``""`` or ``b""`` (``[]`` cannot be in one at all — it is
+        unhashable).  Two O(1) membership tests decide that, and a
+        normalising copy is made only when one hits, so the common path costs
+        nothing (fix round 4, item 1).
+
+        Callers must NOT mutate the result: for a plain dict with no nil key
+        it IS the caller's object.
+
+        Lives on the class so ``runtime.dict_ops`` can share ONE
+        implementation with ``builtins.dict_set._dict_input`` — importing the
+        builtins package from the runtime would drag in the whole registry.
+        """
+        if isinstance(value, DictTerm):
+            return value._data                 # already nil-normalised
+        if isinstance(value, dict):
+            if "" in value or b"" in value:
+                return {_as_dict_key(k): v for k, v in value.items()}
+            return value
+        return None
 
     @property
     def data(self) -> dict:

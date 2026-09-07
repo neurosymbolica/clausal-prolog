@@ -435,7 +435,12 @@ def _preseed_py_submodules(module_items) -> None:
 # a list DISPLAY, not the Constant ("[]",) -- the nil atom IS the empty list
 # (ISO; Scryer round-trips it).  A stale tag-9 .pyc still carries the cell,
 # which compares unequal to the ``[]`` every runtime path now produces.
-CLAUSAL_BYTECODE_TAG = 10
+# 10 -> 11 (Task 15 fix round 4, item 4): a ``-constants`` dict key the
+# compiler cannot decide statically is emitted wrapped in ``$dict_key(...)``,
+# so a constant REFERENCE that evaluates to nil folds to the same key the
+# literal spellings do.  A stale tag-10 .pyc carries the bare key expression
+# and still raises the raw ``TypeError`` the fix removes.
+CLAUSAL_BYTECODE_TAG = 11
 
 
 # ── One source file → one compilation ────────────────────────────────────────

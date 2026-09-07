@@ -5933,7 +5933,27 @@ class EmbedTransformer(NodeTransformer):
             if not (quote == '"'
                     and transformer._double_quotes_mode == "chars"):
                 return replace(Tuple(elts=[], ctx=load), key)
-        return transformer._transform_constant_rhs(key, ident)
+        # Everything left is a key whose VALUE is only known at exec time --
+        # in practice a reference to an earlier constant, possibly under
+        # arithmetic or a ``++`` escape.  It cannot be folded statically, and
+        # a ``-constants`` list value is FROZEN, so
+        # ``-constants(_N_ = [], _D_ = {_N_: 1})`` handed the plain dict
+        # literal an unhashable ``_FrozenList`` and raised a raw, unlocated
+        # ``TypeError`` at load -- before ``DictTerm`` (which folds every nil
+        # spelling) ever saw the key.  Fold at exec time instead, through
+        # ``$dict_key`` (``runtime.dict_ops._dict_key``) -- the SAME helper a
+        # clause body's computed ``{K: V}`` key is wrapped in, whose answer
+        # is ``atoms.as_dict_key``'s -- so a constant reference that
+        # evaluates to nil is the SAME key as the literal spellings above
+        # (Task 15 fix round 4, item 4).  Load-time code, run once: the extra
+        # call costs nothing measurable, and a non-nil key passes straight
+        # through it.
+        return replace(
+            Call(
+                func=replace(Name(id="$dict_key", ctx=load), key),
+                args=[transformer._transform_constant_rhs(key, ident)],
+                keywords=[],
+            ), key)
 
     def _handle_predspec_directive(transformer, method_name, args, expr_stmt):
         """Process a directive that takes ``pred/arity, ...`` arguments.

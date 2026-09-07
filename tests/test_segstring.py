@@ -10,7 +10,7 @@ Tests cover:
 from clausal.logic.atoms import char_atom
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.terms import (
-    SegString, SegList, ConcreteSeg, VarSeg,
+    SegBytes, SegString, SegList, ConcreteSeg, VarSeg,
     _segstring_unify_gen, _seglist_unify_gen,
 )
 
@@ -186,6 +186,86 @@ class TestSegStringUnification:
         """SegString 'hello' does NOT unify with [1, 2, 3]."""
         # nv
         assert not unify(SegString(["hello"]), [1, 2, 3], Trail())
+
+
+class TestAnEmptySegIsTheEmptyList:
+    """Task 15 fix round 4, item 5.
+
+    Nil is ONE term with several spellings — ``[]``, ``""``, ``b""``, ``()``
+    — and every top-level pair of them unifies.  A ``Seg*`` that WALKS to
+    nothing is that same term, so it must unify with (and compare equal to)
+    every spelling, not only the one its own arm accepts.  Fix round 3 gave
+    the three empty ``Seg*`` the ``()`` and ``[]`` spellings; the str/bytes
+    CROSS pairs (``SegString([""])`` vs ``b""``, ``SegBytes([b""])`` vs
+    ``""``) and ``SegList`` vs ``b""`` under ``==`` were left False —
+    a residual non-transitivity, since ``""`` and ``b""`` unify with each
+    other directly.
+    """
+
+    NIL_SPELLINGS = ([], "", b"", ())
+
+    def _empties(self):
+        return (SegList([ConcreteSeg([])]), SegString([""]), SegBytes([b""]))
+
+    def test_every_empty_seg_unifies_with_every_nil_spelling(self):
+        # nv
+        for seg in self._empties():
+            for nil in self.NIL_SPELLINGS:
+                assert unify(seg, nil, Trail()), (seg, nil)
+
+    def test_the_nil_spelling_on_the_LEFT_unifies_too(self):
+        """Symmetry: the C top level dispatches on either operand."""
+        # nv
+        for seg in self._empties():
+            for nil in self.NIL_SPELLINGS:
+                assert unify(nil, seg, Trail()), (nil, seg)
+
+    def test_every_empty_seg_compares_equal_to_every_nil_spelling(self):
+        # nv
+        for seg in self._empties():
+            for nil in self.NIL_SPELLINGS:
+                assert seg == nil, (seg, nil)
+                assert nil == seg, (nil, seg)
+
+    def test_a_seg_whose_varsegs_are_bound_to_nothing_is_empty_too(self):
+        """Emptiness is a property of the WALKED term, not of the segment
+        list: a ``VarSeg`` bound to ``""`` walks away."""
+        # nv
+        trail = Trail()
+        A = Var()
+        ss = SegString([VarSeg(A)])
+        assert unify(A, "", trail)
+        for nil in self.NIL_SPELLINGS:
+            assert unify(ss, nil, Trail()), nil
+
+    def test_a_nonempty_seg_is_unaffected(self):
+        # nv
+        for seg in (SegList([ConcreteSeg([char_atom("a")])]),
+                    SegString(["ab"]), SegBytes([b"ab"])):
+            for nil in self.NIL_SPELLINGS:
+                assert not unify(seg, nil, Trail()), (seg, nil)
+                assert not (seg == nil), (seg, nil)
+
+    def test_the_varseg_pin_is_untouched(self):
+        """The round-3 narrowing exists because rewriting ``""``/``b""`` at
+        the top of the arms moved a same-type target off its own arm and
+        changed what a ``VarSeg`` binds to.  An OPEN ``Seg*`` does not walk
+        to nothing, so the new branch never sees it: ``[*A] = ""`` still
+        binds ``A = ""`` (and the list form still binds ``[]``)."""
+        # nv
+        trail = Trail()
+        A = Var()
+        assert unify(SegList([VarSeg(A)]), "", trail)
+        assert deref(A) == ""
+        assert not isinstance(deref(A), list)
+        trail2 = Trail()
+        B = Var()
+        assert unify(SegList([VarSeg(B)]), [], trail2)
+        assert deref(B) == []
+        trail3 = Trail()
+        C = Var()
+        assert unify(SegBytes([VarSeg(C)]), b"", trail3)
+        assert deref(C) == b""
 
 
 class TestConsRuleRetirementLockstep:

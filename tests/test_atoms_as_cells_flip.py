@@ -618,6 +618,67 @@ class TestTheNilAtomInAKeyPosition:
         (e,), = _answers(("c2", Y), mod, Y)
         assert list(e.keys()) == [()] and e[""] == 3
 
+    def test_a_constants_reference_in_key_position_folds_nil(self):
+        """Fix round 4, item 4: fix round 3 folded the two nil LITERAL
+        spellings at compile time, but a key written as a reference to an
+        earlier constant is only known at exec time — and a ``-constants``
+        list value is frozen, so ``{_N_: 1}`` with ``_N_ = []`` built a raw
+        ``TypeError: unhashable type: '_FrozenList'`` at load, before
+        ``DictTerm`` ever saw the key."""
+        mod = _load_inline_clausal(
+            "_fix4_constants_ref_nil",
+            "-private([a])\n"
+            "-constants(_N_ = [], _S_ = \"\", _D_ = {_N_: 1, a: 2})\n"
+            "-constants(_E_ = {_S_: 3})\n"
+            "c1(_D_),\n"
+            "c2(_E_),\n",
+        )
+        X = Var()
+        (d,), = _answers(("c1", X), mod, X)
+        assert list(d.keys()) == [(), mint("a")]
+        for nil in ([], "", b"", ()):
+            assert d[nil] == 1, nil
+        Y = Var()
+        (e,), = _answers(("c2", Y), mod, Y)
+        assert list(e.keys()) == [()] and e[[]] == 3
+
+    def test_a_frozen_empty_list_is_the_nil_key(self):
+        """The value half of item 4: ``atoms.as_dict_key`` tested the EXACT
+        type, so a ``_FrozenList([])`` — the empty list a ``-constants``
+        value is — did not fold, even though it IS the empty list."""
+        from clausal.logic.atoms import NIL_KEY, as_dict_key
+        from clausal.logic.constants import _FrozenList
+        from clausal.terms import DictTerm
+
+        assert as_dict_key(_FrozenList([])) == NIL_KEY
+        # …and so it can KEY a dict, which an unfolded ``_FrozenList``
+        # cannot (the pairs form: a plain ``{k: 1}`` literal is built by
+        # Python before ``DictTerm`` is called, so it raises first).
+        assert DictTerm([(_FrozenList([]), 1)])[[]] == 1
+        # A non-empty frozen list is NOT nil and stays unfolded.
+        frozen = _FrozenList([1, 2])
+        assert as_dict_key(frozen) is frozen
+
+    def test_dictterm_materialises_a_one_shot_iterable(self):
+        """Fix round 4, item 2: ``__init__``'s ``except TypeError`` arm
+        re-iterated *data* after ``dict(data)`` had already consumed it, so a
+        GENERATOR of pairs carrying an unhashable nil key silently lost every
+        entry ``dict()`` had drained before it raised."""
+        from clausal.terms import DictTerm
+
+        d = DictTerm(iter([([], 1), (mint("a"), 2)]))
+        assert d.data == {(): 1, mint("a"): 2}
+        # The unhashable key LAST as well — the arm must not depend on where
+        # ``dict()`` gave up.
+        d2 = DictTerm(iter([(mint("a"), 2), ([], 1)]))
+        assert d2.data == {(): 1, mint("a"): 2}
+        # A generator with no nil key is unaffected (the fast arm).
+        d3 = DictTerm((k, v) for k, v in ((mint("a"), 1), (mint("b"), 2)))
+        assert d3.data == {mint("a"): 1, mint("b"): 2}
+        # A re-iterable list of pairs and a plain mapping keep working.
+        assert DictTerm([([], 1)]).data == {(): 1}
+        assert DictTerm({"": 1}).data == {(): 1}
+
     def test_an_empty_seg_unifies_with_every_nil_spelling(self):
         """Fix round 3, item 3: the three ``Seg*`` ``__unify__``/``__eq__``
         gates accept ``list``/``str``/``bytes`` only, so ``()`` was rejected
@@ -639,15 +700,18 @@ class TestTheNilAtomInAKeyPosition:
         # A non-empty Seg is unaffected.
         assert not unify(SegString(["ab"]), [], Trail())
         assert unify(SegString(["ab"]), "ab", Trail())
-        # NOT widened past ``()``: rewriting ``""``/``b""`` too would move a
-        # same-type target off its own arm and change what a VarSeg binds to
-        # (``[*A] = ""`` binds ``A = ""``, pinned by
-        # tests/test_string_list_unification.py).  The two str/bytes CROSS
-        # pairs -- an empty ``SegString`` against ``b""``, an empty
-        # ``SegBytes`` against ``""`` -- are still False; pre-existing, and
-        # recorded in the fix-round-3 report.
-        assert not unify(SegString([""]), b"", Trail())
-        assert not unify(SegBytes([b""]), "", Trail())
+        # Fix round 4, item 5: the two str/bytes CROSS pairs -- an empty
+        # ``SegString`` against ``b""``, an empty ``SegBytes`` against ``""``
+        # -- were the residual non-transitivity round 3 left behind, and now
+        # hold.  The round-3 NARROWING is still in force where it belongs:
+        # it was about a NON-empty/``VarSeg`` case (``[*A] = ""`` binds
+        # ``A = ""``, pinned by tests/test_string_list_unification.py), and
+        # an OPEN ``Seg*`` does not walk to nothing, so it never reaches the
+        # empty-Seg branch.  Full matrix in
+        # tests/test_segstring.py::TestAnEmptySegIsTheEmptyList.
+        assert unify(SegString([""]), b"", Trail())
+        assert unify(SegBytes([b""]), "", Trail())
+        assert SegString([""]) == b"" and SegBytes([b""]) == ""
 
     def test_the_nil_goal_error_is_worded_for_nil(self, builtins_mod):
         """Fix round 3, item 6: the shared context said "a string goal is the
@@ -840,9 +904,14 @@ def test_row_28_the_reader_makes_atoms_and_strings():
 def test_row_29_the_bytecode_tag_invalidates_a_pre_flip_pyc():
     """Bumped 9 -> 10 by fix round 1, item 2: a source-written ``'[]'``
     compiles to a list DISPLAY now, so a tag-9 ``.pyc`` still carrying the
-    ``("[]",)`` cell must not be loaded against this runtime."""
+    ``("[]",)`` cell must not be loaded against this runtime.
+
+    Bumped 10 -> 11 by fix round 4, item 4: a ``-constants`` dict key the
+    compiler cannot decide statically is emitted wrapped in
+    ``$dict_key(...)``, so a tag-10 ``.pyc`` carries the bare key expression
+    and still raises the raw ``TypeError`` the fix removes."""
     from clausal.import_hook import CLAUSAL_BYTECODE_TAG
-    assert CLAUSAL_BYTECODE_TAG == 10
+    assert CLAUSAL_BYTECODE_TAG == 11
 
 
 def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):

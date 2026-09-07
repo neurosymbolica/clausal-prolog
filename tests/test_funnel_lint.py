@@ -364,8 +364,13 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    normalisation in ``DictTerm.__init__``/``normalised_key`` and the
     #    empty-tuple arms added to the three ``Seg*``
     #    ``__unify__``/``__eq__``, all ABOVE ``term_str``) -- a further +73
-    #    shift, still no new site.
-    AllowEntry("clausal/terms.py", (2482, 2818),
+    #    shift, still no new site), then -> 2482-2901 by fix round 4 (the
+    #    ``_EMPTY_SEG_IS_NIL`` rationale block and the empty-Seg nil branch
+    #    in the same six ``Seg*`` methods, plus ``DictTerm.mapping_of`` and
+    #    the one-shot-iterable materialisation in ``DictTerm.__init__`` --
+    #    again all ABOVE ``term_str``) -- a further +83 shift, still no new
+    #    site.
+    AllowEntry("clausal/terms.py", (2482, 2901),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

@@ -1101,3 +1101,128 @@ class TestInPredicateDictSet:
     def test_in_check_frozenset_element_succeeds(self):
         # nv
         assert _succeeds("in_check", 2, frozenset({1, 2, 3}))
+
+
+# ── The nil key across the whole dict family (Task 15 fix round 4) ────────────
+#
+# Nil is ONE term with several spellings -- ``[]``, ``""``, ``b""``, ``()``
+# (and ``'[]'``) -- of which ``()`` is the hashable dict-key form.  Fix round 3
+# normalised the LOOKUP key of every key-taking builtin but left four readers
+# indexing the mapping directly, so on a PLAIN dict ``{"": 1}`` the lookup key
+# folded to ``()`` while the stored key did not: ``get/3`` failed silently,
+# ``get/4`` returned the default, ``tri_get/3`` returned ``Undefined`` and
+# ``delete/3`` raised ``existence_error(dict_key, [])`` -- while
+# ``dict_get/3``, which goes through ``_dict_input``, hit.  The two BULK
+# WRITERS had the mirror hole: they stored a raw key.
+
+#: Every spelling of nil, as a caller may write it.
+_NIL_SPELLINGS = ([], "", b"", ())
+
+
+def _nil_dicts():
+    """A plain dict and a ``DictTerm``, each holding ONE nil key → 1.
+
+    The plain one is spelled ``""`` deliberately: it has NOT been through
+    ``DictTerm.__init__``, so its stored key is un-normalised and any reader
+    that indexes it directly with a folded key misses.
+    """
+    return ({"": 1}, DictTerm({(): 1}))
+
+
+class TestNilKeyAcrossTheDictFamily:
+    def test_get3_reads_a_nil_key_in_every_spelling(self):
+        # nv
+        for d in _nil_dicts():
+            for key in _NIL_SPELLINGS:
+                assert _sols("get", d, key, Var()) == [{2: 1}], (d, key)
+
+    def test_get4_reads_a_nil_key_and_not_the_default(self):
+        # nv
+        for d in _nil_dicts():
+            for key in _NIL_SPELLINGS:
+                assert _sols("get", d, key, Var(), 99) == [{2: 1}], (d, key)
+
+    def test_tri_get3_reads_a_nil_key_and_not_undefined(self):
+        # nv
+        for d in _nil_dicts():
+            for key in _NIL_SPELLINGS:
+                assert _sols("tri_get", d, key, Var()) == [{2: 1}], (d, key)
+
+    def test_delete3_removes_a_nil_key_in_every_spelling(self):
+        # nv
+        for d in _nil_dicts():
+            for key in _NIL_SPELLINGS:
+                assert _sols("delete", d, key, Var()) == [{2: DictTerm({})}], (
+                    d, key)
+
+    def test_dict_get3_agrees_with_the_whole_family(self):
+        """``dict_get/3`` already went through ``_dict_input``; the four above
+        must give the SAME answer for the same term."""
+        # nv
+        for d in _nil_dicts():
+            for key in _NIL_SPELLINGS:
+                assert _sols("dict_get", key, d, Var()) == [{2: 1}], (d, key)
+
+    def test_a_plain_dict_answers_exactly_as_the_dictterm_does(self):
+        # nv
+        plain, term = _nil_dicts()
+        for key in _NIL_SPELLINGS:
+            assert (_sols("get", plain, key, Var())
+                    == _sols("get", term, key, Var()))
+            assert (_sols("get", plain, key, Var(), 99)
+                    == _sols("get", term, key, Var(), 99))
+            assert (_sols("tri_get", plain, key, Var())
+                    == _sols("tri_get", term, key, Var()))
+            assert (_sols("delete", plain, key, Var())
+                    == _sols("delete", term, key, Var()))
+
+    def test_an_absent_key_still_takes_each_predicates_own_branch(self):
+        """The fold must not turn a MISS into a hit: a dict with no nil key
+        keeps ``get/3`` failing, ``get/4`` defaulting, ``tri_get/3``
+        ``Undefined`` and ``delete/3`` throwing."""
+        # nv
+        from clausal.logic.exceptions import LogicException
+        from clausal.terms import Undefined
+        for d in ({"k": 7}, DictTerm({"k": 7})):
+            for key in _NIL_SPELLINGS:
+                assert _fails("get", d, key, Var()), (d, key)
+                assert _sols("get", d, key, Var(), 99) == [{2: 99}], (d, key)
+                assert _sols("tri_get", d, key, Var()) == [{2: Undefined}], (
+                    d, key)
+                with pytest.raises(LogicException, match="existence_error"):
+                    _sols("delete", d, key, Var())
+
+    # ── the two bulk WRITERS store the canonical key ──────────────────────
+
+    def test_dict_pairs2_builds_the_canonical_nil_key(self):
+        """``dict_pairs/2``'s Pairs→Dict arm raised ``type_error(hashable, [])``
+        for a key the ruling makes legal."""
+        # nv
+        for key in _NIL_SPELLINGS:
+            sols = _sols("dict_pairs", Var(), [[key, 1]])
+            assert sols == [{0: DictTerm({(): 1})}], key
+            assert list(sols[0][0].keys()) == [()], key
+
+    def test_dict_put_pairs3_stores_the_canonical_nil_key(self):
+        """``dict_put_pairs/3`` raised a raw (uncatchable) ``TypeError``."""
+        # nv
+        for key in _NIL_SPELLINGS:
+            sols = _sols("dict_put_pairs", [[key, 1]], DictTerm({}), Var())
+            assert sols == [{2: DictTerm({(): 1})}], key
+            assert list(sols[0][2].keys()) == [()], key
+
+    def test_a_bulk_written_nil_key_reads_back_in_every_spelling(self):
+        """Writer and reader agree: what ``dict_pairs/2`` stores, ``get/3``
+        finds under any spelling."""
+        # nv
+        built = _sols("dict_pairs", Var(), [[b"", 1]])[0][0]
+        for key in _NIL_SPELLINGS:
+            assert _sols("get", built, key, Var()) == [{2: 1}], key
+
+    def test_a_genuinely_unhashable_key_still_raises_type_error(self):
+        """Only NIL folds — a non-empty list key is still
+        ``type_error(hashable, …)`` from ``dict_pairs/2`` (A09-F012)."""
+        # nv
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException, match="type_error"):
+            _sols("dict_pairs", Var(), [[[1, 2], 1]])

@@ -237,6 +237,25 @@ def key_of(spelling: str):
     return (sys.intern(spelling),)
 
 
+def is_nil(term) -> bool:
+    """True iff *term* is the empty list — in ANY spelling.
+
+    The ONE emptiness test for nil (fix round 4): ``[]``, ``""``, ``b""`` and
+    ``()`` are one term, and so is any SUBCLASS instance of those that holds
+    nothing.  The subclass case is not hypothetical: a ``-constants`` list
+    value is frozen to a ``_FrozenList`` (``clausal.logic.constants``), so
+    ``-constants(_N_ = [])`` names an empty list that is not exactly a
+    ``list`` — an exact-``type`` test made it a DIFFERENT term from the ``[]``
+    every other path produces, and an unhashable one in a key position.
+
+    A ``Seg*`` is walked by the caller before this is asked (it is a partial
+    term, not a container).  A non-empty ``tuple`` is a CELL and never
+    reaches the True arm; the empty one has no slot 0 and so is the list it
+    holds — nothing.
+    """
+    return isinstance(term, (list, str, bytes, tuple)) and len(term) == 0
+
+
 def as_dict_key(key):
     """*key* in its canonical DICT-KEY form.
 
@@ -249,7 +268,7 @@ def as_dict_key(key):
     ``DictTerm`` applies this on construction and on every lookup, so a
     program cannot observe the difference.
     """
-    if type(key) in (list, str, bytes, tuple) and len(key) == 0:
+    if is_nil(key):
         return NIL_KEY
     return key
 

@@ -353,6 +353,16 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # module attribute to the atom CELL with an interned slot 0 (§9.3), and
     # ``$``-prefixed so a user predicate named ``mint`` cannot shadow it.
     "$mint": _mint,
+    # The computed-dict-literal-key helper (``runtime.dict_ops._dict_key``):
+    # deref, refuse an unbound key with a catchable instantiation error, and
+    # answer the canonical DICT-KEY form.  It is bound per-PREDICATE below
+    # (``base_globals``) for a clause body's ``{K: V}``; it is listed HERE as
+    # well because a ``-constants`` dict key the compiler cannot decide
+    # statically is emitted wrapped in it and runs at MODULE-exec time, where
+    # only this dict has been layered in.  The SAME function in both places
+    # -- a second binding under this name would shadow the clause-body one
+    # (Task 15 fix round 4, item 4).
+    "$dict_key": _dict_key,
     "$unify": unify,
     "$ast": ast,
     # The cells module itself, so a head pattern can name the tuple-DATA tag

@@ -92,20 +92,13 @@ def _dict_input(v):
     todo/done/get3-rejects-a-plain-dict-that-subscript-accepts.md, swept by
     todo/dictterm-only-builtins-sweep.md).  Callers must NOT mutate the
     returned mapping: for a plain dict it IS the caller's object.
+
+    The nil-key folding a plain dict needs (fix round 3, item 1) lives on
+    ``DictTerm.mapping_of`` since fix round 4, so ``runtime.dict_ops``'s
+    subscript shares ONE implementation with the builtins here rather than
+    importing this package from the runtime layer.
     """
-    if isinstance(v, DictTerm):
-        return v.data                    # already nil-normalised
-    if isinstance(v, dict):
-        # A plain Python dict has NOT been through ``DictTerm.__init__``, so
-        # a nil key may still be spelled ``""`` or ``b""`` (``[]`` cannot be
-        # in one at all -- it is unhashable).  Two O(1) membership tests, and
-        # a normalising copy only when one hits, so every lookup below can
-        # index with a normalised key and get the same answer either way
-        # (fix round 3, item 1).
-        if "" in v or b"" in v:
-            return {_norm_key(kk): vv for kk, vv in v.items()}
-        return v
-    return None
+    return DictTerm.mapping_of(v)
 
 
 def _set_input(v):
@@ -196,7 +189,12 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
         for pair in pairs_val:
             pair = deref(pair)
             if isinstance(pair, list) and len(pair) == 2:
-                k = deref(pair[0])
+                # The nil key is legal and has a canonical (hashable) form
+                # (fix round 4, item 3): without the fold, ``[[[], 1]]``
+                # raised ``type_error(hashable, [])`` below for a key the
+                # ruling makes legal, and ``""``/``b""`` stored keys no
+                # reader could find.
+                k = _norm_key(deref(pair[0]))
                 v = deref(pair[1])
                 if is_var(k):
                     ok = False
@@ -282,7 +280,10 @@ def _dict_put_pairs__3(this_generator, _proceed, _fail, _catcher, pairs, old_dic
         for pair in pairs_val:
             pair = deref(pair)
             if isinstance(pair, list) and len(pair) == 2:
-                k = deref(pair[0])
+                # Fix round 4, item 3 — the mirror of ``dict_pairs/2``'s
+                # Pairs→Dict arm: an un-normalised nil key escaped as a raw,
+                # uncatchable ``TypeError`` (``[]`` is unhashable).
+                k = _norm_key(deref(pair[0]))
                 v = deref(pair[1])
                 if is_var(k):
                     ok = False
@@ -393,11 +394,14 @@ def _get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail):
     failing).
     """
     key_val = _norm_key(deref(key))
-    d_val = deref(d)
+    # Read the mapping through ``_dict_input``, never ``d_val`` directly (fix
+    # round 4, item 1): the lookup key is folded, so the STORED keys must be
+    # folded too or a plain ``{"": 1}`` misses a key a ``DictTerm`` finds.
+    data = _dict_input(deref(d))
     if (not is_var(key_val) and _is_hashable(key_val)
-            and isinstance(d_val, (DictTerm, dict)) and key_val in d_val):
+            and data is not None and key_val in data):
         mark = trail.mark()
-        if unify(value, d_val[key_val], trail):
+        if unify(value, data[key_val], trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -412,10 +416,10 @@ def _get__4(this_generator, _proceed, _fail, _catcher, d, key, value, default, t
     ``Key`` is a ground hashable key.
     """
     key_val = _norm_key(deref(key))
-    d_val = deref(d)
+    data = _dict_input(deref(d))          # fix round 4, item 1 — see get/3
     if (not is_var(key_val) and _is_hashable(key_val)
-            and isinstance(d_val, (DictTerm, dict))):
-        result = d_val[key_val] if key_val in d_val else default
+            and data is not None):
+        result = data[key_val] if key_val in data else default
         mark = trail.mark()
         if unify(value, result, trail):
             yield (_proceed, None)
@@ -440,10 +444,10 @@ def _tri_get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail)
     """
     from clausal.terms import Undefined  # noqa: PLC0415
     key_val = _norm_key(deref(key))
-    d_val = deref(d)
+    data = _dict_input(deref(d))          # fix round 4, item 1 — see get/3
     if (not is_var(key_val) and _is_hashable(key_val)
-            and isinstance(d_val, (DictTerm, dict))):
-        result = d_val[key_val] if key_val in d_val else Undefined
+            and data is not None):
+        result = data[key_val] if key_val in data else Undefined
         mark = trail.mark()
         if unify(value, result, trail):
             yield (_proceed, None)
@@ -463,15 +467,16 @@ def _delete__3(this_generator, _proceed, _fail, _catcher, d, key, new_dict, trai
     """
     key_val = _norm_key(deref(key))
     d_val = deref(d)
+    data = _dict_input(d_val)             # fix round 4, item 1 — see get/3
     if is_var(key_val):
         raise LogicException(instantiation_error("delete/3"))
     if not _is_hashable(key_val):
         raise LogicException(type_error("dict_key", key_val, "delete/3"))
-    if not isinstance(d_val, (DictTerm, dict)):
+    if data is None:
         raise LogicException(type_error("dict", d_val, "delete/3"))
-    if key_val not in d_val:
+    if key_val not in data:
         raise LogicException(existence_error("dict_key", key_val, "delete/3"))
-    new_data = {k: v for k, v in d_val.items() if k != key_val}
+    new_data = {k: v for k, v in data.items() if k != key_val}
     mark = trail.mark()
     if unify(new_dict, DictTerm(new_data), trail):
         yield (_proceed, None)
