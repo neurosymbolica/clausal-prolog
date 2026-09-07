@@ -119,11 +119,11 @@ A term in goal position is called. Goal positions are exactly: the test of
 `if`/`elif`/`while`, the iterable of `for`, and `not` inside those tests.
 
 ```clausal
-if --(verdict(S, IDS, _) is ++answer):      # unify once; S, IDS become locals
+if --(verdict(S, IDS) is ++answer):          # unify once; S, IDS become locals
     use(S, IDS)
-for S, IDS in --decide(++profile, verdict(S, IDS, _)):   # every solution
+for S, IDS in --decide(++profile, verdict(S, IDS)):   # every solution
     use(S, IDS)
-if not --decide(++profile, _):               # failure test; exports nothing
+if not --decide(++profile, verdict(S, _)):    # failure test; exports nothing
     ...
 while --next(++cur, N):                      # re-run each iteration
     cur = N

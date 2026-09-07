@@ -73,9 +73,8 @@ to its first UNCONDITIONAL answer (§4a) against `globals["$module"]`,
 returns `True`/`False`, and leaves the exported variables BOUND for the two
 `$export` lines that immediately follow: the seam's own variables are
 discarded with their bindings; exports are the copies `$export` took, and an
-unbound export is refused if it carries attributes. `elif` and `while` are
-the same shape (`while` re-creates the variables and re-runs the goal each
-iteration).
+unbound export is refused if it carries attributes. `elif` is the same
+shape as `if` (nested in the `else` branch — `visit_If` visits it too).
 
 `for`:
 
@@ -91,6 +90,23 @@ Python's own unpacking applies: the tuple exists because the `for` statement
 needs an iterable of something, and a 2-tuple per solution is that
 something. When there is exactly one exported variable the target is the bare
 name and `$each` yields the value itself, no 1-tuple.
+
+`while` is NOT the same shape as `if`/`elif`. Its fresh variables must be
+re-created on every evaluation of the test, not once before the loop, so
+there is no preceding `$v_NAME = Var()` statement at all: each is
+walrus-bound INSIDE the test, and the whole test is a tuple whose last
+element is the `$once_bind` call —
+
+```python
+while (($v_N := Var()), $once_bind(Call(next, cur, $v_N), globals()))[-1]:
+    N = $export($v_N)
+    cur = N
+```
+
+— so the tuple is rebuilt (fresh `Var()`s, fresh goal node evaluation) on
+every pass through the test, and the `[-1]` picks out `$once_bind`'s
+`True`/`False` for the `while` to test. The export lines stay the first
+statements of the body, exactly as for `if`/`for`.
 
 `not`:
 
