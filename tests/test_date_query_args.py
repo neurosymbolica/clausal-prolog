@@ -1,8 +1,8 @@
 """`datetime.date` (and datetime/time/timedelta) as first-class query-arg terms.
 
-The runtime always treated these as first-class terms — `Date/4` binds a real
-`datetime.date`, `DaysBetween`/`DateAdd` consume them, they unify by value and
-hash into tabling — but the input-lowering path rejected them:
+The runtime always treated these as first-class terms — a ground `date/3`
+IS a real `datetime.date`, `days_between/3` consumes them, they unify by
+value and hash into tabling — but the input-lowering path rejected them:
 `term_to_ast_expr: unsupported term type date`, forcing the `[Y, M, D]` triple
 + `Date/4` reconstruction dance on every Python-interop caller
 (todo/date-as-first-class-term-type.md).
@@ -12,7 +12,8 @@ Two coordinated paths:
   object is bound at runtime by reference — no reconstruction, tz-aware values
   included, and distinct dates reuse ONE compiled query like ints do;
 - a NESTED occurrence (inside a list/compound arg, which templatization leaves
-  structural) lowers through a `term_to_ast_expr` reconstruction branch.
+  structural) lowers through `term_to_ast_expr`'s `$date`/`$datetime`/`$time`/
+  `$timedelta` constructor-call branches (7fd537b3).
 """
 
 from __future__ import annotations
@@ -61,7 +62,7 @@ def test_date_arg_flows_into_date_time_builtins(tmp_path):
         tmp_path, "dq_c",
         "-import_from(date_time, [days_between, date])\n"
         "\n"
-        "window(REF, N) <- (date(2024, 1, 1, EPOCH), days_between(REF, EPOCH, N))\n",
+        "window(REF, N) <- (EPOCH is date(2024, 1, 1), days_between(REF, EPOCH, N))\n",
     )
     n = Var()
     expected = (date(2024, 6, 1) - date(2024, 1, 1)).days

@@ -1267,7 +1267,7 @@ _OPAQUE_ASSERTZ_SRC = """
 -dynamic(n/2)
 
 setup <- (
-    date(2020, 1, 1, D),
+    D is date(2020, 1, 1),
     assertz(q(pt(1, D), "yes")),
     assertz(q(_Any, "catchall")),
     assertz(n(pt(1, pt(2, D)), "yes")),
