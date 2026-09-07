@@ -234,6 +234,42 @@ def existence_error(obj_type: str, culprit: Any, context: str = "") -> Compound:
     return Compound("error", (inner, context))
 
 
+def string_goal_error(goal: str, extra_arity: int = 0,
+                      context: str = "") -> Compound:
+    """The error a STRING in goal position raises (Task 15 item 3, ruled
+    2026-09-07).
+
+    A string is the list of its char atoms, and a non-empty list is the
+    compound ``'.'/2`` — so a string goal IS callable (``callable("foo")`` is
+    true, §6.3) and what is wrong with it is that no procedure ``'.'/2`` is
+    defined.  That makes it an ``existence_error(procedure, '.'/2)``, not the
+    ``type_error(callable, …)`` the flip first gave it; the two answers
+    together — "callable" and "not callable" for one term — could not both
+    stand.  Scryer answers ``existence_error(procedure, './3')`` for
+    ``call("foo", X)``, which is this rule with one folded argument.
+
+    *extra_arity* is the number of arguments ``call/N`` folds onto the goal,
+    so ``call("foo")`` names ``'.'/2`` and ``call("foo", X)`` names ``'.'/3``.
+    The EMPTY string is ``[]``, the atom ``'[]'``, so it names ``'[]'/N``
+    instead (Scryer: ``call("")`` → ``existence_error(procedure, []/0)``).
+
+    *context* is the caller's position (``"call/N"``, ``"solve/1"``), kept so
+    the diagnostic says where the string was written.
+    """
+    if goal:
+        name, arity = ".", 2 + extra_arity
+    else:
+        name, arity = "[]", extra_arity
+    indicator = Compound("/", (mint(name), arity))
+    return existence_error(
+        "procedure", indicator,
+        f"{context}: a string goal is the list of its characters — the "
+        f"compound {name!r}/{arity} — and no such procedure is defined; "
+        f"write the ATOM (a bare name, or mint(...) from Python) or a cell "
+        f"goal such as ('name', Arg)",
+    )
+
+
 def permission_error(
     operation: str, obj_type: str, culprit: Any, context: str = ""
 ) -> Compound:

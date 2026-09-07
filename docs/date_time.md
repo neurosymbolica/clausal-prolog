@@ -90,7 +90,7 @@ intercepts it and binds the error term:
 CompareSafe(D, DT) <- catch(
     (D < DT),
     _Error,
-    writeln(_Error)
+    writeln_text(_Error)
 )
 ```
 

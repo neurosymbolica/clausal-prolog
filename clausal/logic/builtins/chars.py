@@ -30,6 +30,7 @@ from clausal.logic.atoms import (
 )
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.builtins._helpers import NIL_SPELLING, _is_empty_list
 from clausal.logic.builtins.lists import _as_items
 
 # ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
@@ -65,11 +66,20 @@ def _atom_to_str(val: Any) -> str | None:
     ``SegString`` are STRINGS now, and a string in atom position is an ISO
     ``type_error(atom, …)`` — ``atom_length("abc", N)`` raises rather than
     answering 3 (spec §6.6).
+
+    Task 15 item 2 (ISO alignment, Scryer-verified): the EMPTY list is the
+    reserved atom ``'[]'`` — in every spelling, ``[]``/``""``/``b""`` — and
+    its spelling is the two bracket characters, so ``atom_length([], 2)``
+    and ``atom_chars([], ['[', ']'])`` answer as they do in Scryer.  The
+    empty list is the ONE list this funnel reads: a non-empty one is the
+    ``'.'/2`` compound and still raises.
     """
     if _term_is_atom(val):
         return spelling(val)
     if is_zero_field_class(val):
         return val.__name__
+    if _is_empty_list(val):
+        return NIL_SPELLING
     return None
 
 

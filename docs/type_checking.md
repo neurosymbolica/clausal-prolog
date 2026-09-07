@@ -260,7 +260,7 @@ This is useful as a guard before [arithmetic](arithmetic.md) or [I/O](io.md) ope
 values to be determined:
 
 ```clausal
-safe_print(X) <- (ground(X), writeln(X))
+safe_print(X) <- (ground(X), writeln_text(X))
 ```
 
 ---

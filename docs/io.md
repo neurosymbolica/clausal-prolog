@@ -8,55 +8,131 @@ Clausal provides built-in predicates for formatted output, term-to-string conver
 
 ```clausal
 greet(NAME) <- (
-    write("Hello, "),
-    writeln(NAME)
+    write_text("Hello, "),
+    writeln_text(NAME)
 )
 
 Test("greet") <- greet("Alice")
 ```
 
+`write_text/1` and `writeln_text/1` are the **text** writers — a string prints
+as its characters. `write/1` and `writeln/1` are the **ISO** writers and print
+a string as the list of characters it is (`[H, e, l, l, o]`). Pick by whether
+you are producing human text or showing a term; the three families are laid
+out below.
+
 ---
 
 ## Output Predicates
 
-### The three writers: `write/1`, `writeq/1`, `write_canonical/1`
+### Three families of writer
 
-Clausal has the three ISO writers, and they differ in **how much of the term's
-structure they spell out**:
+Clausal has **three** groups of writing predicates. Which one you want depends
+on whether you are producing human text, spelling out a term the ISO way, or
+showing a term so a reader can tell an atom from a string.
 
-| Builtin | Quotes? | Operators / list syntax | Use it for |
+| Family | Predicates | A string prints as |
+|---|---|---|
+| **ISO** | `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2` (and `writeln/1`, `write_to_string/2`, which are `write/1`'s semantics under non-ISO names) | the LIST of its characters — `[a, b, c]` |
+| **Clausal text** | `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | its text — `abc` |
+| **Clausal display** | `print_term/1`, `term_to_string/2` | the double-quoted form — `"abc"` |
+
+#### The ISO writers: `write/1`, `writeq/1`, `write_canonical/1`
+
+They differ in **how much of the term's structure they spell out**:
+
+| Builtin | Quotes? | List syntax | Use it for |
 |---|---|---|---|
-| `write/1` | No — text comes out bare | Yes | human-facing output |
-| `writeq/1` | Yes — atoms quoted when needed, strings in `"…"` | Yes | showing a term's structure |
+| `write/1` | No — an atom prints its bare spelling | Yes | ISO term output |
+| `writeq/1` | Yes — an atom is quoted when it needs it | Yes | ISO term output you can read back |
 | `write_canonical/1` | Yes | **No** — every list, string included, prints as the `'.'/2` structure it denotes | a form another Prolog can read back |
 
 | Term | `write` | `writeq` | `write_canonical` |
 |---|---|---|---|
 | atom `foo` | `foo` | `foo` | `foo` |
 | atom `'foo bar'` | `foo bar` | `'foo bar'` | `'foo bar'` |
-| string `"abc"` | `abc` | `"abc"` | `'.'(a,'.'(b,'.'(c,[])))` |
-| char list `[a, b]` | `ab` | `"ab"` | `'.'(a,'.'(b,[]))` |
+| string `"abc"` | `[a, b, c]` | `[a, b, c]` | `'.'(a,'.'(b,'.'(c,[])))` |
+| char list `[a, b]` | `[a, b]` | `[a, b]` | `'.'(a,'.'(b,[]))` |
 | `[1, 2]` | `[1, 2]` | `[1, 2]` | `'.'(1,'.'(2,[]))` |
 | `""` / `[]` | `[]` | `[]` | `[]` |
-| `foo(bar, "baz")` | `foo(bar, baz)` | `foo(bar, "baz")` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
+| `foo(bar, "baz")` | `foo(bar, [b, a, z])` | `foo(bar, [b, a, z])` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
 | `1 + 2` | `+(1, 2)` | `+(1, 2)` | `+(1,2)` |
 
-A list of characters *is* a string, so `writeq/1` prints `[a, b]` as `"ab"` —
-they are the same term. `write_canonical/1` prints no space after commas and no
-operator forms, so its output is byte-comparable with other ISO systems; the
-string stays a compact `str` internally, the writer only *shows* the cons
-structure.
+A string *is* the list of its characters, so all three spell it out; they only
+differ in quoting and in whether list syntax is used at all.
+`write_canonical/1` prints no space after commas and no operator forms, so its
+output is byte-comparable with other ISO systems; the string stays a compact
+`str` internally, the writer only *shows* the cons structure.
 
 ```clausal
 --8<-- "tests/fixtures/docs/io_examples.clausal:three_writers"
 ```
 
-### writeln/1, print_term/1 and the string forms
+#### The text writers: `write_text/1`, `writeln_text/1`, `write_text_to_string/2`
+
+These print a string as its **text** and a char list as the text it spells; an
+atom prints its bare spelling, and every other term prints exactly as `write/1`
+prints it. This is Clausal's `~s`, and it is where f-strings go:
+
+| Term | `write_text` |
+|---|---|
+| string `"abc"` | `abc` |
+| char list `[a, b]` | `ab` |
+| atom `'foo bar'` | `foo bar` |
+| `[1, 2]` | `[1, 2]` |
+| `""` / `[]` | `[]` |
+
+`writeln_text(f"X is {X}")` is the idiomatic way to print an interpolated line.
+
+#### The display writers: `print_term/1`, `term_to_string/2`
+
+Exactly `write_term(Term, [quoted(true), double_quotes(true)])` — a string
+prints in double quotes (`"abc"`), a char list as the string it is (`"ab"`),
+and an atom is quoted when it needs to be. Reach for these when you need to
+tell an atom from a string in the output; that is what Scryer's *toplevel*
+displays for the same term. `print_term/1` adds a newline.
+
+### write_term/2
+
+`write_term(Term, Options)` is the ISO writer with its switches named. Both
+Boolean options default to **false**, so an option-free call is the strict
+ISO display.
+
+| Option | Meaning |
+|---|---|
+| `quoted(Bool)` | quote an atom that would not read back as itself (`'foo bar'`) |
+| `double_quotes(Bool)` | print a string (and the char list that *is* one) as `"abc"` rather than as `[a, b, c]` |
+| `ignore_ops(Bool)` | accepted and inert — the write family here never prints operator forms to begin with |
+
+| Call | Output |
+|---|---|
+| `write_term("abc", [])` | `[a, b, c]` |
+| `write_term("abc", [quoted(true)])` | `[a, b, c]` |
+| `write_term("abc", [quoted(true), double_quotes(true)])` | `"abc"` |
+| `write_term([a, b], [])` | `[a, b]` |
+| `write_term('a b', [quoted(true)])` | `'a b'` |
+
+`write_term(T, [quoted(true), double_quotes(true)])` is exactly `writeq/1`.
+An unrecognised option raises `domain_error(write_option, Opt)`; a non-list
+`Options` raises `type_error(list, Options)`. Streams are out of scope, so
+there is no `write_term/3`, and `max_depth(N)` is not supported.
+
+The engine's display spacing (`f(a, b)`, `[a, b, c]`) is kept here as it is in
+every writer but `write_canonical/1` — that one alone is byte-comparable with
+other ISO systems.
+
+```clausal
+--8<-- "tests/fixtures/docs/io_examples.clausal:write_term"
+```
+
+### The newline and string forms of each family
 
 | Builtin | Family | Newline? |
 |---|---|---|
-| `write/1`, `writeln/1`, `write_to_string/2` | unquoted (`write`) | `writeln` only |
-| `writeq/1`, `print_term/1`, `term_to_string/2` | quoted (`writeq`) | `print_term` only |
+| `write/1`, `writeln/1`, `write_to_string/2` | ISO (`write`) | `writeln` only |
+| `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | Clausal text | `writeln_text` only |
+| `print_term/1`, `term_to_string/2` | Clausal display | `print_term` only |
+| `writeq/1` | ISO, quoted | no |
 | `write_canonical/1` | canonical | no |
 
 ```clausal
@@ -65,10 +141,13 @@ structure.
 
 **When to use which:**
 
-- `write` / `writeln` — human-facing output; text comes out bare
-- `writeq` / `print_term` — debugging: you can tell an atom from a string
+- `write_text` / `writeln_text` — human-facing output and f-strings; text comes
+  out bare
+- `print_term` / `term_to_string` — debugging: you can tell an atom from a
+  string
+- `write` / `writeq` — ISO term output; a string spells itself out
 - `write_canonical` — a form another Prolog can read back
-- `write` + `nl` — when you need precise control over newlines
+- `write_text` + `nl` — when you need precise control over newlines
 
 ### nl/0
 
@@ -83,7 +162,7 @@ Test("newline") <- (nl(), nl())
 write N spaces:
 
 ```clausal
-indented(X) <- (tab(4), writeln(X))
+indented(X) <- (tab(4), writeln_text(X))
 
 Test("indented") <- indented("hello")
 ```
@@ -94,26 +173,45 @@ Test("indented") <- indented("hello")
 
 Both answer with a **string**, never with an atom.
 
-### write_to_string/2
+### write_text_to_string/2
 
-`write_to_string(Term, String)` — unify String with the `write/1` rendering of
-Term: unquoted, operators and list syntax intact.
+`write_text_to_string(Term, String)` — unify String with the `write_text/1`
+rendering of Term: text comes out bare. This is the one to build
+human-readable text with.
 
 ```clausal
 -double_quotes(chars)
 
-format_pair(K, V, S) <- write_to_string(K - V, S)
+format_pair(K, V, S) <- write_text_to_string(K - V, S)
 
-Test("write to string") <- (
+Test("write text to string") <- (
     format_pair("name", "alice", S),
     S == "name - alice"
 )
 ```
 
+### write_to_string/2
+
+`write_to_string(Term, String)` — unify String with the `write/1` (ISO)
+rendering of Term: unquoted, list syntax intact, and a string spelled out as
+the char list it is.
+
+```clausal
+-double_quotes(chars)
+
+iso_form(X, S) <- write_to_string(X, S)
+
+Test("write to string is ISO") <- (
+    iso_form("ab", S),
+    S == "[a, b]"
+)
+```
+
 ### term_to_string/2
 
-`term_to_string(Term, String)` — unify String with the `writeq/1` rendering of
-Term: quoted, so an atom is distinguishable from a string.
+`term_to_string(Term, String)` — unify String with the Clausal *display*
+rendering of Term (`write_term(Term, [quoted(true), double_quotes(true)])`):
+quoted, so an atom is distinguishable from a string.
 
 ```clausal
 -double_quotes(chars)
@@ -124,19 +222,20 @@ Test("term to string int") <- (label(42, S), S == "42")
 Test("term to string keeps the quotes") <- (label("hello", S2), S2 == "\"hello\"")
 ```
 
-**write_to_string vs term_to_string:**
+**The three string forms side by side:**
 
-| Input | `write_to_string` | `term_to_string` |
-|---|---|---|
-| `42` | `"42"` | `"42"` |
-| the atom `hello` | `"hello"` | `"hello"` |
-| the atom `'a b'` | `"a b"` | `"'a b'"` |
-| the string `"hello"` | `"hello"` | `"\"hello\""` |
-| `[1, 2]` | `"[1, 2]"` | `"[1, 2]"` |
+| Input | `write_text_to_string` | `write_to_string` | `term_to_string` |
+|---|---|---|---|
+| `42` | `"42"` | `"42"` | `"42"` |
+| the atom `hello` | `"hello"` | `"hello"` | `"hello"` |
+| the atom `'a b'` | `"a b"` | `"a b"` | `"'a b'"` |
+| the string `"hi"` | `"hi"` | `"[h, i]"` | `"\"hi\""` |
+| `[1, 2]` | `"[1, 2]"` | `"[1, 2]"` | `"[1, 2]"` |
 
-Use `write_to_string` when building human-readable text. Use `term_to_string`
-when you need to see which kind a value is; use `write_canonical/1` when you
-need a representation another Prolog can read back.
+Use `write_text_to_string` when building human-readable text. Use
+`term_to_string` when you need to see which kind a value is; use
+`write_canonical/1` when you need a representation another Prolog can read
+back.
 
 ---
 
@@ -223,7 +322,7 @@ Test("deferred f-string") <- (
 ```clausal
 show_all(XS) <- (
     in_(X, XS),
-    writeln(X)
+    writeln_text(X)
 )
 
 Test("show all") <- show_all([1, 2, 3])
@@ -325,7 +424,7 @@ Logic variables have `__str__` and `__format__` methods (in the C extension) tha
 - **Bound var**: displays the bound value
 - **Unbound var**: displays `_N` (unique numeric ID)
 
-This means `f"{X}"` and `write(X)` show the value if bound, or a placeholder if unbound. This works in both `.clausal` files and Python code:
+This means `f"{X}"` and `write_text(X)` show the value if bound, or a placeholder if unbound. This works in both `.clausal` files and Python code:
 
 ```python
 from clausal.logic.variables import Var, Trail, unify
@@ -342,12 +441,14 @@ print(f"Bound: {v}")     # hello
 
 ## Gotchas
 
-- **`write/1` does NOT quote; `writeq/1` and `print_term/1` do.** If your
-  output has unwanted quotes, switch to `write`/`writeln` or use f-strings.
-  (This is the opposite of what earlier releases of this page said.)
-- **`write/1` cannot tell an atom from a string** — both print bare. Use
-  `writeq/1` when the distinction matters, `write_canonical/1` when you need to
-  see the list structure a string denotes.
+- **`write/1` prints a string as `[a, b, c]`, not as `abc`.** It is the ISO
+  writer, and a string *is* a list of characters. For human text — and for
+  f-strings — use `write_text/1` / `writeln_text/1`.
+- **`write/1` does NOT quote; `print_term/1` and `term_to_string/2` do.** If
+  your output has unwanted quotes, switch to the text writers.
+- **`write_text/1` cannot tell an atom from a string** — both print bare. Use
+  `print_term/1` when the distinction matters, `write_canonical/1` when you need
+  to see the list structure a string denotes.
 - **F-strings evaluate at search time**, not at parse time. An f-string with an unbound variable will show the Var placeholder (`_N`), not raise an error.
 - **nl/0 takes no arguments** — `nl()` not `nl(1)`. Use `tab(N)` for spacing.
 

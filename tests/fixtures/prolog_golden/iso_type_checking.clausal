@@ -69,9 +69,13 @@ Test("number: var fails") <- (not number(_x_unused))
 
 Test("callable: declared atom succeeds") <- (callable_(hello))
 
-Test("callable: registered predicate name as a string fails") <- (not callable_("is_bound_number"))
+Test("callable: a string is callable as the list it is") <- (callable_("is_bound_number"))
 
-Test("callable: arbitrary string fails") <- (not callable_("hello"))
+Test("callable: an arbitrary string is callable too") <- (callable_("hello"))
+
+Test("callable: the empty list is the atom '[]' and is callable") <- (callable_([]))
+
+Test("callable: a non-empty list is the compound './2'") <- (callable_([1, 2]))
 
 Test("callable: int fails") <- (not callable_(42))
 

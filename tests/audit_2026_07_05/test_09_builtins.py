@@ -638,14 +638,18 @@ def test_F019_regression_same_length_str(fix):
 
 def test_F029_ground_segstring_typecheck_coherent(fix):
     """A09-F029: for a ground SegString the type-check matrix must cohere —
-    is_str = string = is_list = is_chars = True, compound = False.
+    is_str = string = is_list = is_chars = True.
 
     THE FLIP (2026-09-06-atoms-as-cells-strings §6.3) moved ``atomic`` out of
     that row and into the FALSE column, and the coherence argument moves with
     it: a string IS the list of its char atoms, so ``atomic`` must answer for
-    it exactly what it answers for that list, which is False.  The
-    incoherence F029 fixed (``is_str`` true while ``is_list`` false) is not
-    reintroduced — the two still agree."""
+    it exactly what it answers for that list, which is False.  Task 15
+    item 2 (ISO alignment, 2026-09-07) moves ``compound`` the other way for
+    the same reason: a NON-EMPTY list is the ``'.'/2`` compound, so a ground
+    non-empty ``SegString`` is compound, and the empty one is the atom
+    ``'[]'`` and is not.  The incoherence F029 fixed (``is_str`` true while
+    ``is_list`` false) is not reintroduced — every row still agrees with the
+    list the string denotes."""
     _, m = fix
     seg = SegString(["ab"])
     assert _first(m, "is_str", seg)
@@ -653,7 +657,13 @@ def test_F029_ground_segstring_typecheck_coherent(fix):
     assert _first(m, "is_list", seg)
     assert not _first(m, "atomic", seg)
     assert _first(m, "is_chars", seg)
-    assert not _first(m, "compound", seg)
+    assert _first(m, "compound", seg)
+    assert not _first(m, "atom", seg)
+    # …and each row answers what it answers for the LIST the string denotes.
+    lst = [mint("a"), mint("b")]
+    for pred in ("is_str", "string", "is_list", "atomic", "is_chars",
+                 "compound", "atom"):
+        assert bool(_first(m, pred, seg)) is bool(_first(m, pred, lst)), pred
 
 
 # ═══════════════════════════════════════════════════════════════════════════

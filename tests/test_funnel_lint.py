@@ -348,8 +348,13 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    ``__unify__`` -- a uniform +5 shift, no new site), then -> 2505-2622
     #    by Task 7 fix round 1 (SegList's ``_walk_raw`` split out of
     #    ``__walk__``) -- a further uniform +26 shift, still no new site; see
-    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-7-report.md).
-    AllowEntry("clausal/terms.py", (2482, 2654),
+    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-7-report.md),
+    #    then -> 2482-2688 by the same plan's Task 15 item 4 (``term_str``'s
+    #    new ``double_quotes`` keyword, threaded through every recursive call,
+    #    and the ``_char_list_str`` helper added above it) -- a +34 shift of
+    #    the region's end, no new site; see
+    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-15-report.md.
+    AllowEntry("clausal/terms.py", (2482, 2688),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

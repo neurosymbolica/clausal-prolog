@@ -16,6 +16,6 @@ compare_approaches(GOAL_A, GOAL_B) <- (
     time_goal(GOAL_A, TIME_A),
     time_goal(GOAL_B, TIME_B),
     FASTER == (TIME_A < TIME_B),
-    writeln(f"A: {TIME_A}s, B: {TIME_B}s")
+    writeln_text(f"A: {TIME_A}s, B: {TIME_B}s")
 )
 --8<-- [end:benchmark_recipe]

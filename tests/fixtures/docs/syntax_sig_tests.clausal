@@ -52,11 +52,14 @@ Test("an atom is not a string") <- (not (red is "red"))  # nv
 Test("a one-char string is not a char atom") <- (not ("a" is 'a'))  # nv
 
 Test("type tests split the two kinds") <- (
-    atom(red), atomic(red), callable_(red),
+    atom(red), atomic(red), callable_(red), not compound(red),
     not atom("red"),
     string("red"), is_str("red"), is_list("red"),
     not atomic("red"),
-    not callable_("red")
+    # Task 15 item 2: a non-empty string IS the compound './2', so it is
+    # callable as a compound -- not as a name.  ``atom`` is what splits the
+    # two kinds; ``callable`` never did.
+    compound("red"), callable_("red")
 )  # nv
 
 Test("quoted atoms carry any spelling") <- (

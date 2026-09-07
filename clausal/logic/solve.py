@@ -210,12 +210,13 @@ def _term_to_goal(term: Any) -> Any:
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
     if type(term) is str:
-        # THE FLIP (spec §6.4): a ``str`` is a STRING, not an atom, and a
-        # string is not callable.  ``solve("z0", m)`` used to be the same
-        # call as ``solve(("z0",), m)``; it is now a type error, and the
-        # cell spelling is the only one that names a goal.
-        from clausal.logic.exceptions import LogicException, type_error
-        raise LogicException(type_error("callable", term, "solve/1"))
+        # THE FLIP (spec §6.4): a ``str`` is a STRING, not an atom.
+        # ``solve("z0", m)`` used to be the same call as ``solve(("z0",), m)``;
+        # it is now an error, and the cell spelling is the only one that names
+        # a goal.  Task 15 item 3 (ISO alignment): the string is the compound
+        # ``'.'/2``, so what is missing is the PROCEDURE, not callability.
+        from clausal.logic.exceptions import LogicException, string_goal_error
+        raise LogicException(string_goal_error(term, 0, "solve/1"))
     if isinstance(type(term), PredicateMeta):
         cls = type(term)
         fields = term_field_names(term)

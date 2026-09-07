@@ -176,13 +176,18 @@ class TestCallNOverCells:
         assert [deref(X)
                 for _ in pcall("cg2", mint("p"), X, module=_lm(mod))] == [1, 2]
 
-    def test_a_bare_str_goal_is_a_type_error(self, mod):
-        """THE FLIP (spec §6.4): a ``str`` is a string, and a string is not
-        callable — ``call("p", X)`` raises rather than running ``p/1``."""
+    def test_a_bare_str_goal_has_no_procedure(self, mod):
+        """THE FLIP (spec §6.4): a ``str`` is a string — ``call("p", X)``
+        raises rather than running ``p/1``.  Task 15 item 3 (ISO alignment)
+        makes the refusal an ``existence_error`` for the ``'.'/N`` the string
+        actually names, not ``type_error(callable, …)``: the string IS a
+        compound and so IS callable (§6.3); the procedure is what is
+        missing."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("cg2", "p", Var(), module=_lm(mod)))
         assert _error_term(exc_info.value)[0] == Compound(
-            "type_error", (mint("callable"), "p"))
+            "existence_error", (mint("procedure"),
+                                Compound("/", (mint("."), 3))))
 
     def test_a_non_cell_non_callable_goal_still_fails_silently(self, mod):
         """The translator session's pinned §4.2 contract, unchanged."""
@@ -475,17 +480,19 @@ class TestBareStrGoalInSolve:
     """THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) settled the question
     this class used to answer the other way.  A bare ``str`` goal was made to
     mean the 1-tuple cell (final review M-b, so that three spellings of one
-    goal agreed); a ``str`` is a STRING now, a string is not callable, and
-    ``solve("z0", m)`` is a ``type_error(callable, "z0")``.  The cell is the
+    goal agreed); a ``str`` is a STRING now, the string ``"z0"`` is the
+    ``'.'/2`` compound, and ``solve("z0", m)`` is
+    ``existence_error(procedure, '.'/2)`` (Task 15 item 3).  The cell is the
     only spelling of the goal."""
 
-    def test_a_bare_str_goal_is_a_type_error(self, mod):
+    def test_a_bare_str_goal_has_no_procedure(self, mod):
         lm = _lm(mod)
         assert len(list(solve(("z0",), lm))) == 1
         with pytest.raises(LogicException) as exc_info:
             list(solve("z0", lm))
         assert _error_term(exc_info.value)[0] == Compound(
-            "type_error", (mint("callable"), "z0"))
+            "existence_error", (mint("procedure"),
+                                Compound("/", (mint("."), 2))))
 
     def test_the_lowering_path_refuses_a_bare_str_goal(self):
         from clausal.logic.solve import _term_to_goal

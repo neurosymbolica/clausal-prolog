@@ -19,6 +19,7 @@ What stays here:
 
 from __future__ import annotations
 
+from clausal.logic.atoms import mint
 from clausal.logic.database import Module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, unify
@@ -73,7 +74,7 @@ class TestCompoundArgs:
         assert _succeeds("compound", KWTerm("point", x=1, y=2))
 
     def test_compound_atom_fails(self):
-        assert _fails("compound", "a")
+        assert _fails("compound", mint("a"))
 
     def test_compound_int_fails(self):
         assert _fails("compound", 42)
@@ -81,9 +82,15 @@ class TestCompoundArgs:
     def test_compound_var_fails(self):
         assert _fails("compound", Var())
 
-    def test_compound_list_fails(self):
-        """Clausal lists are Python lists, not compound."""
-        assert _fails("compound", [1, 2])
+    def test_compound_list_succeeds(self):
+        """Task 15 item 2 (ISO alignment, 2026-09-07): a non-empty list is
+        the ``'.'/2`` compound, as ISO 7.1.6 has it and as Scryer answers —
+        and so is a STRING, which is the list of its characters.  The empty
+        list is the atom ``'[]'`` and is not compound."""
+        assert _succeeds("compound", [1, 2])
+        assert _succeeds("compound", "a")
+        assert _fails("compound", [])
+        assert _fails("compound", "")
 
     def test_arity0_compound_still_compound(self):
         """DIFFERS from ISO: arity-0 Compound is still compound in clausal."""

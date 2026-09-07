@@ -90,7 +90,7 @@ Notation in signature lines:
 | [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
 | [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
-| [I/O](#io) | write/1, writeq/1, write_canonical/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
+| [I/O](#io) | write/1, writeq/1, write_canonical/1, write_term/2, writeln/1, write_text/1, writeln_text/1, print_term/1, nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between, date_max, date_min, ordinal |
 | [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
@@ -2350,7 +2350,9 @@ Bidirectional number ↔ code-point-list conversion. Like `number_chars/2` but u
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:write_1"
 ```
-Print `Term` to stdout without a trailing newline, **unquoted**: an atom prints its spelling bare, a string prints its text bare, and the two are indistinguishable in the output. Operators and list syntax are kept (`f(a, b)`, `[1, 2]`). Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`. F-strings work naturally: `f"{X}"` derefs `X` at search time. Use `writeq/1` when you need to tell an atom from a string.
+Print `Term` to stdout without a trailing newline, **unquoted** — ISO 8.14.2's `write_term(Term, [numbervars(true)])`. An atom prints its spelling bare; a STRING prints as the list of characters it is, so `write("abc")` prints `[a, b, c]` and `write([a, b])` prints `[a, b]`. List syntax is kept (`f(a, b)`, `[1, 2]`). Logic variables are auto-dereferenced — bound vars print their value, unbound vars print `_N`.
+
+For human text — and for f-strings — use `write_text/1` / `writeln_text/1`, which print a string as its characters. Use `print_term/1` when you need to tell an atom from a string.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`write/1`)
@@ -2362,10 +2364,41 @@ Print `Term` to stdout without a trailing newline, **unquoted**: an atom prints 
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:writeq_1"
 ```
-Print `Term` to stdout **quoted**, without a trailing newline. An atom is quoted when its spelling is not a bare token (`'foo bar'`); a string prints in double quotes (`"abc"`); a list of characters prints as the string it is (`[a, b]` → `"ab"`). Operators and list syntax are kept, as in `write/1`. This is the writer to reach for when the atom/string distinction matters. `print_term/1` and `term_to_string/2` are the same family.
+Print `Term` to stdout **quoted**, without a trailing newline — ISO 8.14.2's `write_term(Term, [quoted(true), numbervars(true)])`. An atom is quoted when its spelling is not a bare token (`'foo bar'`); a STRING is the list of its characters, as in `write/1`, so `writeq("abc")` prints `[a, b, c]`. List syntax is kept, unlike `write_canonical/1`.
+
+`print_term/1` and `term_to_string/2` are the Clausal *display* form — `write_term(Term, [quoted(true), double_quotes(true)])` — which prints `"abc"`; reach for those when you need to tell an atom from a string at a glance.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`writeq/1`)
+    **Python tests:** `tests/test_writers_atoms_strings.py`
+
+---
+
+### `write_term/2`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:write_term_2"
+```
+Print `Term` to stdout under an ISO **write-option list** (ISO 8.14.2), without a trailing newline. Both Boolean options default to `false`, so `write_term(Term, [])` is the strict ISO display.
+
+| Option | Effect |
+|---|---|
+| `quoted(Bool)` | quote an atom that would not read back as itself (`'foo bar'`) |
+| `double_quotes(Bool)` | print a string — and the char list that *is* one — as `"abc"` rather than `[a, b, c]` |
+| `ignore_ops(Bool)` | accepted, inert: the write family here never prints operator forms |
+| `numbervars(Bool)` | accepted, inert: there is no `'$VAR'/1` convention here |
+
+| Call | Output |
+|---|---|
+| `write_term("abc", [])` | `[a, b, c]` |
+| `write_term("abc", [quoted(true)])` | `[a, b, c]` |
+| `write_term("abc", [quoted(true), double_quotes(true)])` | `"abc"` |
+| `write_term([a, b], [])` | `[a, b]` |
+| `write_term('a b', [quoted(true)])` | `'a b'` |
+
+`write_term(Term, [])` is exactly `write/1`, `write_term(Term, [quoted(true)])` is exactly `writeq/1`, and `write_term(Term, [quoted(true), double_quotes(true)])` is exactly `term_to_string/2`'s rendering. An unrecognised option raises `domain_error(write_option, Opt)`; a non-list `Options` raises `type_error(list, Options)`; an unbound `Options` raises `instantiation_error`. Streams are out of scope, so there is no `write_term/3`, and `max_depth(N)` is not supported. The engine's display spacing (`f(a, b)`) is kept, as in every writer but `write_canonical/1`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`write_term/2`)
     **Python tests:** `tests/test_writers_atoms_strings.py`
 
 ---
@@ -2396,10 +2429,36 @@ The cons form is a **view**, not the representation: a string stays a compact `s
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:writeln_1"
 ```
-Like `write/1` (unquoted) but appends a newline.
+Like `write/1` (ISO, unquoted) but appends a newline. Not an ISO name; `writeln_text/1` is the text form.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`writeln/1`)
+    **Python tests:** `tests/test_io.py`
+
+---
+
+### `write_text/1`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:write_text_1"
+```
+Print `Term` to stdout as **text**, without a trailing newline. A STRING prints as its characters and a char list as the text it spells (`write_text("abc")` → `abc`, `write_text([a, b])` → `ab`); an atom prints its bare spelling; every other term prints exactly as `write/1` prints it. `""` / `[]` print `[]`.
+
+This is Clausal's `~s`, and it is where f-strings go: `write_text(f"X is {X}")`. `write/1` is the ISO writer and spells a string out as `[a, b, c]`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`write_text/1`)
+    **Python tests:** `tests/test_io.py`
+
+---
+
+### `writeln_text/1`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:writeln_text_1"
+```
+Like `write_text/1` but appends a newline. `writeln_text(f"X is {X}")` is the idiomatic way to print an interpolated line.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`writeln_text/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2408,7 +2467,7 @@ Like `write/1` (unquoted) but appends a newline.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:print_term_1"
 ```
-Print the quoted (`writeq/1`) representation of `Term` — an atom quoted where it needs it, a string in double quotes, compounds as functor/args — followed by a newline. Useful for debugging, because it distinguishes an atom from a string.
+Print the Clausal **display** representation of `Term` — `write_term(Term, [quoted(true), double_quotes(true)])`: an atom quoted where it needs it, a string in double quotes, compounds as functor/args — followed by a newline. Useful for debugging, because it distinguishes an atom from a string.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`print_term/1`)
@@ -2444,10 +2503,22 @@ Print `N` spaces to stdout. `N` must be a bound non-negative integer.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:write_to_string_2"
 ```
-Unify `String` with the **unquoted** (`write/1`) rendering of `Term`, as a string. Does not print anything.
+Unify `String` with the **ISO** (`write/1`) rendering of `Term`, as a string — a string spells itself out as `[a, b, c]`. Does not print anything. `write_text_to_string/2` is the text form.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`write_to_string/2`)
+    **Python tests:** `tests/test_io.py`
+
+---
+
+### `write_text_to_string/2`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:write_text_to_string_2"
+```
+Unify `String` with the **text** (`write_text/1`) rendering of `Term`, as a string — a string passes through as its characters. Does not print anything. This is the one to build human-readable text with.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`write_text_to_string/2`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2456,7 +2527,7 @@ Unify `String` with the **unquoted** (`write/1`) rendering of `Term`, as a strin
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:term_to_string_2"
 ```
-Unify `String` with the **quoted** (`writeq/1`) rendering of `Term`, as a string. Does not print anything.
+Unify `String` with the Clausal **display** rendering of `Term` (`write_term(Term, [quoted(true), double_quotes(true)])`), as a string. Does not print anything.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`term_to_string/2`)

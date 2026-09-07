@@ -22,7 +22,7 @@ from clausal.logic.atoms import char_atom, mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Trail, Var, deref, unify
-from clausal.terms import term_canonical, term_str
+from clausal.terms import Compound, term_canonical, term_str
 
 
 def _load_inline_clausal(name: str, source: str):
@@ -199,7 +199,13 @@ def test_row_12_unpack_refuses_a_string_name(builtins_mod):
     assert formal.args[1] == "foo"
 
 
-def test_row_13_call_takes_an_atom_and_refuses_a_string():
+def test_row_13_call_takes_an_atom_and_a_string_goal_has_no_procedure():
+    """Task 15 item 3 (RULED 2026-09-07): a string goal is the compound
+    ``'.'(f, …)``, so it IS callable (§6.3) and the error is that no
+    procedure ``'.'/2`` exists — an ``existence_error``, not a
+    ``type_error(callable, …)``.  Scryer answers ``existence_error(procedure,
+    './3')`` for ``call("foo", X)``; a ``type_error(callable, …)`` beside a
+    true ``callable("foo")`` would contradict itself."""
     mod = _load_inline_clausal(
         "_flip_row13",
         "r13_foo(1),\n"
@@ -209,7 +215,31 @@ def test_row_13_call_takes_an_atom_and_refuses_a_string():
     assert _answers(("r13_call", mint("r13_foo"), X), mod, X) == [(1,)]
     with pytest.raises(LogicException) as exc:
         list(solve(("r13_call", "r13_foo", Var()), mod))
-    assert "callable" in str(exc.value)
+    formal = _formal(exc)
+    assert formal.functor == "existence_error"
+    assert formal.args[0] == mint("procedure")
+    # call/2 folds one extra argument onto the ``'.'/2`` goal, as Scryer does.
+    assert formal.args[1] == Compound("/", (mint("."), 3))
+
+
+def test_row_13b_a_string_goal_in_solve_has_no_procedure(builtins_mod):
+    with pytest.raises(LogicException) as exc:
+        list(solve("r13_nope", builtins_mod))
+    formal = _formal(exc)
+    assert formal.functor == "existence_error"
+    assert formal.args[0] == mint("procedure")
+    assert formal.args[1] == Compound("/", (mint("."), 2))
+    assert "solve/1" in exc.value.term.args[1]
+
+
+def test_row_13c_the_empty_string_goal_names_the_nil_atom(builtins_mod):
+    """``""`` is ``[]``, the ATOM ``'[]'``, so the missing procedure is
+    ``'[]'/0`` — Scryer's answer for ``call([])`` and ``call("")``."""
+    with pytest.raises(LogicException) as exc:
+        list(solve("", builtins_mod))
+    formal = _formal(exc)
+    assert formal.functor == "existence_error"
+    assert formal.args[1] == Compound("/", (mint("[]"), 0))
 
 
 # ── Rows 14-15: the chars family ────────────────────────────────────────────
@@ -234,11 +264,15 @@ def test_row_15_atom_length_refuses_a_string(builtins_mod):
 # ── Rows 16-17: standard order ──────────────────────────────────────────────
 
 
-def test_row_16_msort_orders_atom_before_string_before_compound(builtins_mod):
+def test_row_16_msort_orders_lists_and_strings_as_cons_compounds(builtins_mod):
+    """Task 15 item 1 (ISO 7.2.1, Scryer ``compare/3``): a list and a string
+    are the ``'.'/2`` compound, so they sort by ARITY among the compounds --
+    after the arity-1 ``foo(x)``, and among themselves by name ``.`` then by
+    elements."""
     L = Var()
     items = [mint("b"), "a", 1, ("foo", ("x",)), [mint("z")]]
     (ordered,), = _answers(("msort", items, L), builtins_mod, L)
-    assert ordered == [1, mint("b"), "a", [mint("z")], ("foo", ("x",))]
+    assert ordered == [1, mint("b"), ("foo", ("x",)), "a", [mint("z")]]
 
 
 def test_row_17_sort_dedups_a_string_against_its_char_list(builtins_mod):
@@ -289,21 +323,25 @@ def test_row_18c_construction_through_the_name_position_keeps_shapes(
 def test_row_18d_write_of_the_empty_string_prints_the_empty_list(capsys):
     """``write("")`` prints ``[]`` (spec §6.7's ``""``/``[]`` row; Scryer).
 
-    ``""`` and ``[]`` are one term, so the display family must not render
-    them differently: ``write("")`` printing nothing while ``write([])``
+    ``""`` and ``[]`` are one term, so no writer may render them
+    differently: ``write("")`` printing nothing while ``write([])``
     printed ``[]`` was the last place the ``str`` REPRESENTATION leaked
-    into an answer.  ``writeq("")`` already printed ``[]``.
+    into an answer.  Task 15 item 4 as amended adds the TEXT family to the
+    writers that have to agree.
     """
-    from clausal.logic.builtins.io import _format_term_for_io
+    from clausal.logic.builtins.io import _format_term_as_text
 
     assert term_str("", quoted=False) == "[]"
     assert term_str("", quoted=True) == "[]"
-    assert _format_term_for_io("") == "[]"
+    assert term_str("", double_quotes=False) == "[]"
+    assert _format_term_as_text("") == "[]"
 
     mod = _load_inline_clausal("_flip_row18d", "-double_quotes(chars)\n")
     list(solve(("write", ""), mod))
     list(solve(("write", []), mod))
-    assert capsys.readouterr().out == "[][]"
+    list(solve(("write_text", ""), mod))
+    list(solve(("writeq", ""), mod))
+    assert capsys.readouterr().out == "[][][][]"
 
 
 # ── The string/1 family answers for the TERM ────────────────────────────────
@@ -355,6 +393,74 @@ def test_must_be_string_agrees_with_the_string_builtin(builtins_mod):
     with pytest.raises(LogicException) as exc_info:
         list(solve(("must_be", mint("string"), [1, 2]), builtins_mod))
     assert _formal(exc_info).args[0] == mint("string")
+
+
+# ── Task 15 item 2: the ISO type table for [] and for lists (§6.3) ──────────
+
+
+def _holds(mod, pred, value):
+    return bool(list(solve((pred, value), mod)))
+
+
+class TestEmptyListIsTheAtomNil:
+    """``[]`` is the ATOM ``'[]'`` (ISO; Scryer 0.10.0 verified), and ``""``
+    and ``b""`` are the same term, so all three answer alike."""
+
+    def test_atom_and_atomic_hold_for_every_spelling_of_nil(self, builtins_mod):
+        for value in ([], "", b""):
+            assert _holds(builtins_mod, "atom", value), value
+            assert _holds(builtins_mod, "atomic", value), value
+
+    def test_nil_is_not_compound(self, builtins_mod):
+        for value in ([], "", b""):
+            assert not _holds(builtins_mod, "compound", value), value
+
+    def test_nil_is_callable(self, builtins_mod):
+        for value in ([], "", b""):
+            assert _holds(builtins_mod, "callable_", value), value
+
+    def test_must_be_agrees_with_the_builtins(self, builtins_mod):
+        assert list(solve(("must_be", mint("atom"), []), builtins_mod))
+        assert list(solve(("must_be", mint("callable"), []), builtins_mod))
+        with pytest.raises(LogicException):
+            list(solve(("must_be", mint("compound"), []), builtins_mod))
+
+    def test_nil_reads_its_spelling_as_the_two_bracket_characters(
+            self, builtins_mod):
+        """``atom_length([], 2)`` and ``atom_chars([], ['[', ']'])`` —
+        Scryer-verified."""
+        N = Var()
+        assert _answers(("atom_length", [], N), builtins_mod, N) == [(2,)]
+        assert _answers(("atom_length", "", N), builtins_mod, N) == [(2,)]
+        C = Var()
+        (chars,), = _answers(("atom_chars", [], C), builtins_mod, C)
+        # ``['[', ']']`` and ``"[]"`` are the same term; the builtin answers
+        # the explicit char list, and both spellings unify with it.
+        assert unify(chars, [char_atom("["), char_atom("]")], Trail())
+        assert unify(chars, "[]", Trail())
+
+
+class TestANonEmptyListIsACompound:
+    """A non-empty list is the ``'.'/2`` compound (ISO; Scryer 0.10.0
+    verified), so ``compound/1`` and ``callable/1`` hold for it — and for a
+    string and a code list, which ARE lists."""
+
+    def test_compound_holds_for_lists_strings_and_code_lists(self, builtins_mod):
+        for value in ([1, 2], "abc", b"ab", [mint("a")]):
+            assert _holds(builtins_mod, "compound", value), value
+
+    def test_callable_holds_for_lists_strings_and_code_lists(self, builtins_mod):
+        for value in ([1, 2], "abc", b"ab", [mint("a")]):
+            assert _holds(builtins_mod, "callable_", value), value
+
+    def test_a_non_empty_list_is_not_atomic_and_not_an_atom(self, builtins_mod):
+        for value in ([1, 2], "abc", b"ab"):
+            assert not _holds(builtins_mod, "atomic", value), value
+            assert not _holds(builtins_mod, "atom", value), value
+
+    def test_must_be_agrees_with_the_builtins(self, builtins_mod):
+        assert list(solve(("must_be", mint("compound"), "abc"), builtins_mod))
+        assert list(solve(("must_be", mint("callable"), [1, 2]), builtins_mod))
 
 
 # ── Rows 19-23: dicts, JSON, boundaries ─────────────────────────────────────
@@ -611,17 +717,18 @@ def test_the_atom_pool_is_compared_by_equality_not_identity():
 
 def test_dispatch_at_refuses_a_string_goal():
     """``predicate._dispatch_at`` accepted a bare ``str`` and built the
-    indicator from the spelling.  A string is not callable, and this funnel —
-    which the runtime meta-call paths reach — must give the same
-    ``type_error(callable, …)`` ``call/N`` and ``solve/1`` already give."""
+    indicator from the spelling.  A string names no predicate, and this
+    funnel — which the runtime meta-call paths reach — must give the same
+    refusal ``call/N`` and ``solve/1`` give: Task 15 item 3's
+    ``existence_error(procedure, '.'/N)``, not a read of the spelling."""
     from clausal.logic.predicate import _dispatch_at
 
     with pytest.raises(LogicException) as exc:
         _dispatch_at("t12_str_goal", 1)
     formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == mint("callable")
-    assert formal.args[1] == "t12_str_goal"
+    assert formal.functor == "existence_error"
+    assert formal.args[0] == mint("procedure")
+    assert formal.args[1] == Compound("/", (mint("."), 3))
     # The ATOM of the same spelling keeps its clean, positioned
     # existence_error — the arm this task leaves in place.
     with pytest.raises(LogicException) as exc:

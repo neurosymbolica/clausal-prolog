@@ -1,5 +1,7 @@
-"""I/O builtins (V2-15 + Phase 2): write/1, writeln/1, print_term/1, nl/0,
-tab/1, write_to_string/2, term_to_string/2, listing/1, portray_clause/1."""
+"""I/O builtins (V2-15 + Phase 2): write/1, writeln/1, writeq/1,
+write_canonical/1, write_term/2, write_text/1, writeln_text/1, print_term/1,
+nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2,
+listing/1, portray_clause/1."""
 
 from __future__ import annotations
 
@@ -21,17 +23,35 @@ from clausal.terms import (
 )
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
 from clausal.logic.exceptions import (
-    LogicException, type_error, existence_error, instantiation_error,
+    LogicException, type_error, domain_error, existence_error,
+    instantiation_error,
 )
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS, BuiltinPredicate
 
 
-def _format_term_for_io(val):
-    """Format a dereffed value for I/O output.
+# ── The three writer families (spec §6.7, Task 15 item 4 as amended) ─────────
+#
+# 1. ISO          write/1, writeq/1, write_canonical/1, write_term/2 --
+#                 a string is the LIST of its characters, so ``write("abc")``
+#                 prints ``[a, b, c]`` exactly as ISO/Scryer do.  ``writeln/1``
+#                 and ``write_to_string/2`` are not ISO NAMES but are
+#                 ``write/1``'s semantics (+ a newline / into a string).
+# 2. Clausal TEXT write_text/1, writeln_text/1, write_text_to_string/2 --
+#                 a string prints as its TEXT and a char list as the text it
+#                 spells.  This is the engine's ``~s`` and where f-strings go:
+#                 ``writeln_text(f"X is {X}")``.
+# 3. Clausal      print_term/1, term_to_string/2 -- the quoted, double-quoted
+#    DISPLAY      display form, i.e. ``write_term(T, [quoted(true),
+#                 double_quotes(true)])``; the form a reader recognises as the
+#                 term they wrote, and the one Scryer's TOPLEVEL uses.
+
+
+def _format_term_as_text(val):
+    """Format a dereffed value for the Clausal TEXT family.
 
     A STRING passes through as its text (supports f-strings naturally) --
-    ``write/1`` is the display family, so no quotes.  THE FLIP removed the
+    the text family is unquoted by definition.  THE FLIP removed the
     mangled-atom substitution from this branch: ``-hide`` mangling lives in
     an ATOM's spelling, and an atom is a cell, so it is the cell branch
     below (through ``term_str``) that demangles.  A ``str`` cannot carry
@@ -70,49 +90,125 @@ def _format_term_for_io(val):
         # to the ordinary ``str()`` rendering below, same as any other
         # non-str, non-``TUPLE_TAG`` slot 0.
         #
-        # ``quoted=False`` (spec §6.7): write/1 is the DISPLAY family, so an
-        # atom prints its bare spelling (``foo bar``, not ``'foo bar'``) --
-        # exactly what the str branch above already does for a str atom.
-        # ``writeq/1`` below is the quoted family.
+        # ``quoted=False``: the text family is unquoted, so an atom prints its
+        # bare spelling (``foo bar``, not ``'foo bar'``) -- exactly what the
+        # str branch above already does for the text of a string.
         return _term_str(val, quoted=False)
+    return str(val)
+
+
+def _format_term_iso(val, quoted: bool) -> str:
+    """Format a dereffed value for the ISO family (``write/1``/``writeq/1``).
+
+    ``double_quotes(false)``, ISO's default: a string is the LIST of its char
+    atoms, so ``write("abc")`` prints ``[a, b, c]`` and ``writeq("abc")``
+    prints the same (Scryer agrees, modulo this engine's display spacing --
+    only ``write_canonical/1`` is byte-comparable, spec §6.7).
+
+    Only the shapes ``term_str`` renders as TERMS are routed to it; every
+    other value keeps the exact ``str()`` rendering ``write/1`` has always
+    produced (a ``date`` prints ``2020-01-01``, not its ``repr``).
+    """
+    if isinstance(val, (str, list)):
+        return _term_str(val, quoted=quoted, double_quotes=False)
+    if type(val) is tuple and val and (type(val[0]) is str or val[0] is TUPLE_TAG):
+        # A CELL -- ``("pt", 1, 2)`` (or a tuple-DATA cell). Slot 0 read RAW,
+        # no deref: a slot-0-Var tuple is not a legal cell (see
+        # ``clausal/logic/cells.py``) and falls through to ``str()`` below.
+        return _term_str(val, quoted=quoted, double_quotes=False)
     return str(val)
 
 
 @_builtin("write", 1)
 def _write__1(term, trail, k):
-    """write(Term) — print dereffed term to stdout (no newline).
+    """write(Term) — print dereffed term to stdout (no newline), ISO 8.14.2.
 
-    Strings are printed without quotes.  Vars are auto-dereffed.
-    Works naturally with f-strings: write(f"X is {X_}").
+    ``write_term(Term, [numbervars(true)])``: atoms print their bare spelling
+    and a STRING prints as the list of characters it is —
+    ``write("abc")`` prints ``[a, b, c]``, ``write(['a','b'])`` prints
+    ``[a, b]``.  Vars are auto-dereffed.
+
+    For the TEXT rendering — a string as its characters, which is what an
+    f-string wants — use ``write_text/1`` / ``writeln_text/1`` (Task 15
+    item 4 as amended, 2026-09-07).
     """
     val = deref(term)
-    _sys.stdout.write(_format_term_for_io(val))
+    _sys.stdout.write(_format_term_iso(val, quoted=False))
     _sys.stdout.flush()
     yield None
 
 
 @_builtin("writeln", 1)
 def _writeln__1(term, trail, k):
-    """writeln(Term) — print dereffed term to stdout with newline.
+    """writeln(Term) — ``write/1`` plus a newline.
 
-    Strings are printed without quotes.  Vars are auto-dereffed.
-    Works naturally with f-strings: writeln(f"X is {X_}").
+    Not an ISO name, but ``write/1``'s semantics: a string prints as its char
+    list.  ``writeln_text/1`` is the text form.
     """
     val = deref(term)
-    print(_format_term_for_io(val))
+    print(_format_term_iso(val, quoted=False))
     yield None
+
+
+@_builtin("write_text", 1)
+def _write_text__1(term, trail, k):
+    """write_text(Term) — print dereffed term to stdout as TEXT (no newline).
+
+    The Clausal text family (Task 15 item 4 as amended, 2026-09-07): a STRING
+    prints as its characters and a char list as the text it spells, an atom
+    prints its bare spelling, and every other term prints as ``write/1``
+    would.  This is the engine's ``~s``, and it is where f-strings go:
+    ``write_text(f"X is {X_}")``.  ``write/1`` is the ISO writer and prints
+    a string as ``[a, b, c]``.
+    """
+    val = deref(term)
+    _sys.stdout.write(_format_term_as_text(val))
+    _sys.stdout.flush()
+    yield None
+
+
+@_builtin("writeln_text", 1)
+def _writeln_text__1(term, trail, k):
+    """writeln_text(Term) — ``write_text/1`` plus a newline.
+
+    Works naturally with f-strings: ``writeln_text(f"X is {X_}")``.
+    """
+    val = deref(term)
+    print(_format_term_as_text(val))
+    yield None
+
+
+@_builtin("write_text_to_string", 2)
+def _write_text_to_string__2(term, result, trail, k):
+    """write_text_to_string(Term, Result) — the ``write_text/1`` rendering of
+    Term, as a string.  Prints nothing.
+    """
+    val = deref(term)
+    s = _format_term_as_text(val)
+    mark = trail.mark()
+    if unify(result, s, trail):
+        yield None
+    trail.undo(mark)
 
 
 @_builtin("writeq", 1)
 def _writeq__1(term, trail, k):
     """writeq(Term) — write Term quoted so the reader reads it back (ISO 8.14.2).
 
-    The quoted member of the writer family (spec §6.7): an atom that would
-    not re-read as itself is single-quoted (``'foo bar'``); operators and
+    The quoted member of the ISO family (spec §6.7): an atom that would not
+    re-read as itself is single-quoted (``'foo bar'``); list syntax and
     display spacing are write/1's, unlike write_canonical/1 below.
+
+    Exactly ``write_term(Term, [quoted(true), numbervars(true)])`` (Task 15
+    item 4 as amended, 2026-09-07), so ``double_quotes`` is FALSE and a
+    string prints as the char list it is: ``writeq("abc")`` prints
+    ``[a, b, c]``.  ``print_term/1`` / ``term_to_string/2`` are the Clausal
+    DISPLAY form that prints ``"abc"``, and ``write_term/2`` reaches it by
+    option.
     """
     from clausal.logic.solve import _deref_walk
-    _sys.stdout.write(_term_str(_deref_walk(term), quoted=True))
+    _sys.stdout.write(_term_str(_deref_walk(term), quoted=True,
+                                double_quotes=False))
     _sys.stdout.flush()
     yield None
 
@@ -130,12 +226,127 @@ def _write_canonical__1(term, trail, k):
     yield None
 
 
+# ── write_term/2 (ISO 8.14.2) ────────────────────────────────────────────────
+#
+# Task 15 item 4 (ISO alignment, 2026-09-07).  The writers of this engine sit
+# on ``term_str``'s two switches, and ``write_term/2`` is the predicate that
+# exposes them by name:
+#
+#   write/1, writeln/1, write_to_string/2     quoted(false), double_quotes(false)
+#   writeq/1                                  quoted(true),  double_quotes(false)
+#   print_term/1, term_to_string/2            quoted(true),  double_quotes(true)
+#   write_text/1, writeln_text/1,             the TEXT family (not term_str's
+#     write_text_to_string/2                  switches -- ``_format_term_as_text``)
+#   write_canonical/1                         its own renderer (term_canonical)
+#
+# Streams are out of scope, so there is no ``write_term/3``.
+
+#: The write-options this engine knows.  Anything else is a
+#: ``domain_error(write_option, Opt)``, as ISO 8.14.2.3 g requires.
+#: ``ignore_ops`` and ``numbervars`` are accepted and INERT: this engine
+#: never prints operator forms in the write family (so ``ignore_ops(true)``
+#: is already what it does), and it has no ``'$VAR'/1`` convention to
+#: honour or suppress.
+_WRITE_OPTIONS = frozenset({
+    "quoted", "double_quotes", "ignore_ops", "numbervars",
+})
+
+
+def _write_option_bool(value, option):
+    """Read a write-option's Boolean argument.
+
+    Source ``quoted(true)`` folds ``true``/``false`` to Python ``True``/
+    ``False`` (spec §8), but a term built through ``functor/3`` or by a
+    Python caller carries the ATOM, so both spellings are read.  Anything
+    else is a ``domain_error(write_option, Opt)`` — the option as a whole is
+    what ISO reports.
+    """
+    value = deref(value)
+    if value is True or value is False:
+        return value
+    if _term_is_atom(value):
+        name = spelling(value)
+        if name == "true":
+            return True
+        if name == "false":
+            return False
+    raise LogicException(domain_error("write_option", option, "write_term/2"))
+
+
+def _write_term_options(options):
+    """``(quoted, double_quotes)`` for an ISO write-option list.
+
+    ISO 8.14.2's defaults are ``quoted(false)`` and ``double_quotes(false)``,
+    so ``write_term(T, [])`` prints a string as ``[a, b, c]`` — which is
+    exactly ``write/1``.  ``ignore_ops(Bool)`` and ``numbervars(Bool)`` are
+    accepted and inert (see ``_WRITE_OPTIONS``).
+    """
+    opts_val = deref(options)
+    if is_var(opts_val):
+        raise LogicException(instantiation_error("write_term/2"))
+    if isinstance(opts_val, str):
+        # A STRING is a list of char atoms, never a list of options — the
+        # same refusal a non-list gets, not a walk over its characters.
+        raise LogicException(type_error("list", opts_val, "write_term/2"))
+    if not isinstance(opts_val, list):
+        raise LogicException(type_error("list", opts_val, "write_term/2"))
+    quoted = False
+    double_quotes = False
+    for opt in opts_val:
+        opt = deref(opt)
+        if is_var(opt):
+            raise LogicException(instantiation_error("write_term/2"))
+        if not (type(opt) is tuple and len(opt) == 2 and type(opt[0]) is str):
+            raise LogicException(
+                domain_error("write_option", opt, "write_term/2"))
+        name = opt[0]
+        if name not in _WRITE_OPTIONS:
+            raise LogicException(
+                domain_error("write_option", opt, "write_term/2"))
+        value = _write_option_bool(opt[1], opt)
+        if name == "quoted":
+            quoted = value
+        elif name == "double_quotes":
+            double_quotes = value
+    return quoted, double_quotes
+
+
+@_builtin("write_term", 2)
+def _write_term__2(term, options, trail, k):
+    """write_term(Term, Options) — ISO 8.14.2's writer with an option list.
+
+    ``quoted(Bool)`` quotes atoms that would not re-read as themselves;
+    ``double_quotes(Bool)`` prints a string (and the char list that IS one)
+    as ``"abc"`` rather than as ``[a, b, c]``; ``ignore_ops(Bool)`` is
+    accepted and inert.  Both Boolean options default to FALSE, so
+    ``write_term(T, [])`` is the ISO display and
+    ``write_term(T, [quoted(true), double_quotes(true)])`` is exactly
+    ``writeq/1`` here.  An unrecognised option is
+    ``domain_error(write_option, Opt)``; a non-list *Options* is
+    ``type_error(list, Options)``.
+
+    Streams are out of scope, so there is no ``write_term/3``.  The engine's
+    display spacing (``f(a, b)``) is kept, as in every writer but
+    ``write_canonical/1`` — only that one is byte-comparable with Scryer.
+    """
+    from clausal.logic.solve import _deref_walk
+    quoted, double_quotes = _write_term_options(options)
+    _sys.stdout.write(_term_str(_deref_walk(term), quoted=quoted,
+                                double_quotes=double_quotes))
+    _sys.stdout.flush()
+    yield None
+
+
 @_builtin("print_term", 1)
 def _print_term__1(term, trail, k):
     """print_term(Term) — print structured term representation with newline.
 
     Uses term_str() for Prolog-style output showing term structure
     (e.g., functors, lists, operators).  Vars show as Var(_N).
+
+    The ``writeq/1`` family (spec §6.7): exactly
+    ``write_term(Term, [quoted(true), double_quotes(true)])``, plus the
+    newline — Scryer's TOPLEVEL display form.
     """
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
@@ -163,12 +374,14 @@ def _tab__1(n, trail, k):
 
 @_builtin("write_to_string", 2)
 def _write_to_string__2(term, result, trail, k):
-    """write_to_string(Term, Result) — unify Result with the string representation of Term.
+    """write_to_string(Term, Result) — unify Result with the ``write/1``
+    rendering of Term, as a string.  Prints nothing.
 
-    Vars are auto-dereffed.  Strings pass through as-is.
+    Not an ISO name, but ``write/1``'s semantics: a string renders as the
+    char list it is.  ``write_text_to_string/2`` is the text form.
     """
     val = deref(term)
-    s = _format_term_for_io(val)
+    s = _format_term_iso(val, quoted=False)
     mark = trail.mark()
     if unify(result, s, trail):
         yield None
@@ -177,7 +390,12 @@ def _write_to_string__2(term, result, trail, k):
 
 @_builtin("term_to_string", 2)
 def _term_to_string__2(term, result, trail, k):
-    """term_to_string(Term, Result) — unify Result with structured term_str representation."""
+    """term_to_string(Term, Result) — unify Result with structured term_str
+    representation.
+
+    The ``writeq/1`` family: exactly the text
+    ``write_term(Term, [quoted(true), double_quotes(true)])`` writes.
+    """
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
     s = _term_str(val)

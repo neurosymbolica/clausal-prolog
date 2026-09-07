@@ -9,9 +9,12 @@
 
 # ── write_to_string/2 ─────────────────────────────────────────────────────
 
-Test("write_to_string: plain string passthrough") <- (
-    write_to_string("hello", S),
-    S == "hello"
+# Task 15 item 4 as amended (2026-09-07): write_to_string/2 follows write/1,
+# which is ISO -- a STRING renders as the list of characters it is.  The
+# passthrough rendering moved to write_text_to_string/2, pinned below.
+Test("write_to_string: a string spells itself out") <- (
+    write_to_string("hi", S),
+    S == "[h, i]"
 )  # nv
 
 Test("write_to_string: integer to string") <- (
@@ -19,10 +22,28 @@ Test("write_to_string: integer to string") <- (
     S == "42"
 )  # nv
 
-Test("write_to_string: bound var passthrough") <- (
-    X is "world",
+Test("write_to_string: bound var spells itself out") <- (
+    X is "hi",
     write_to_string(X, S),
+    S == "[h, i]"
+)  # nv
+
+# ── write_text_to_string/2 (the Clausal TEXT family) ──────────────────────
+
+Test("write_text_to_string: plain string passthrough") <- (
+    write_text_to_string("hello", S),
+    S == "hello"
+)  # nv
+
+Test("write_text_to_string: bound var passthrough") <- (
+    X is "world",
+    write_text_to_string(X, S),
     S == "world"
+)  # nv
+
+Test("write_text_to_string: integer to string") <- (
+    write_text_to_string(42, S),
+    S == "42"
 )  # nv
 
 # ── term_to_string/2 ──────────────────────────────────────────────────────

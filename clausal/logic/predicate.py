@@ -1425,16 +1425,18 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     if isinstance(obj, PredicateMeta):
         return obj._get_dispatch(arity)
     if type(obj) is str:
-        # THE FLIP (spec §6.4): a ``str`` is a STRING, and a string is not
-        # callable.  The Stage A arm here also accepted a bare ``str`` and
-        # built the indicator out of its spelling, which silently read a
-        # string as a predicate NAME; it is deleted, and a string takes the
-        # ``type_error(callable, …)`` ``higher_order._resolve_named_goal``
-        # (``call/N``) and ``solve._term_to_goal`` (``solve/1``) already give.
+        # THE FLIP (spec §6.4): a ``str`` is a STRING.  The Stage A arm here
+        # also accepted a bare ``str`` and built the indicator out of its
+        # spelling, which silently read a string as a predicate NAME; it is
+        # deleted, and a string takes the same refusal
+        # ``higher_order._resolve_named_goal`` (``call/N``) and
+        # ``solve._term_to_goal`` (``solve/1``) give -- Task 15 item 3's
+        # ``existence_error(procedure, '.'/N)``: the string IS the compound
+        # ``'.'/2`` and so IS callable; the procedure is what does not exist.
         from clausal.logic.exceptions import (  # noqa: PLC0415
-            LogicException, type_error,
+            LogicException, string_goal_error,
         )
-        raise LogicException(type_error("callable", obj, "call/N"))
+        raise LogicException(string_goal_error(obj, arity, "call/N"))
     if type(obj) is tuple and len(obj) == 1 and type(obj[0]) is str:
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
         # through THE FLIP: a bare atom is the arity-0 CELL, reached here

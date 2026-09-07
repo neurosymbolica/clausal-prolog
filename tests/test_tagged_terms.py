@@ -2174,7 +2174,11 @@ class TestCellsAtTheBuiltinSurface:
         assert self._nsol(
             "compound", _python_minted("pt", ("a", "b"), 1, 2)) == 1
         # An atom and a 0-arity shape are still not compound.
-        assert self._nsol("compound", "pt") == 0
+        assert self._nsol("compound", mint("pt")) == 0
+        # Task 15 item 2 (ISO alignment): the STRING ``"pt"`` is the list of
+        # its characters, i.e. the ``'.'/2`` compound, so it IS compound --
+        # a different question from whether the CELL of that name is.
+        assert self._nsol("compound", "pt") == 1
 
     def test_write_1_renders_the_term_not_the_tuple(self, capsys):
         """``write(pt(1, 2))`` printed ``('pt', 1, 2)``: ``_format_term_for_io``

@@ -194,47 +194,31 @@ def test_F083_ground_blind_to_varseg_in_seglist():
     )
 
 
-def test_F084_callable_lax_on_arbitrary_strings():
-    """callable_/1 succeeds for any str, even strings that are not predicate names.
+def test_F084_callable_on_a_string_is_the_iso_answer():
+    """F084 CLOSED by ruling (Task 15 item 2, operator 2026-09-07).
 
-    callable_/1 succeeds whenever the dereffed term is a str (line 98:
-    isinstance(x_val, (str, Compound, KWTerm))). That includes arbitrary
-    strings like "this is not a predicate name" or even "". In Prolog
-    tradition callable/1 should succeed for "an atom or a compound" —
-    strings specifically should either be restricted to registered
-    predicate names or documented as lax.
+    The finding asked for ``callable_("abc")`` to fail or raise, on the
+    reading that a ``str`` was an atom whose spelling did not name a
+    predicate.  That premise is gone twice over: a ``str`` is a STRING now
+    (THE FLIP), and a string is the LIST of its characters, which ISO reads
+    as the compound ``'.'/2``.  ``callable/1`` is "an atom or a compound"
+    (ISO 3.24), so a non-empty string is callable BECAUSE it is a compound,
+    and ``""`` is callable because it is the atom ``'[]'``.  Scryer 0.10.0
+    answers true for both.
 
-    The audit flags this as a smell (not a bug) because SWI's callable/1
-    also says any atom is callable, even unknown ones. What the audit
-    wants to flag is the lack of documentation and overly permissive
-    behaviour.
-
-    Expected (desired fix): Either restrict to strings that resolve to
-    a registered predicate, or document the lax semantics. In any case,
-    callable_("") for the empty string and arbitrary non-predicate
-    strings is problematic.
-
-    Actual (smell): Any str trivially succeeds; the predicate is effectively
-    isinstance(x, (str, Compound, KWTerm, term-instance)). This is overly
-    permissive and the test asserts the EXPECTED desired behaviour
-    (should fail or raise for arbitrary/empty strings).
+    What the finding really objected to — reading a string's characters as
+    a predicate NAME — is what does not happen: calling one raises
+    ``existence_error(procedure, '.'/2)`` rather than running the predicate
+    the characters spell (Task 15 item 3, pinned in
+    ``tests/test_atoms_as_cells_flip.py``).
     """
     # Load an empty module to get access to the database and builtins.
     mod = load_inline_clausal("c13_f084", "").__dict__["$module"]
 
-    # The desired behaviour: callable_("abc") should fail or raise for
-    # an arbitrary unregistered string, not silently succeed.
-    result = _check(mod, "callable_", "abc")
-    assert result != "T", (
-        f"callable_(\"abc\") should fail or raise (arbitrary unregistered string), "
-        f"but it succeeds — this is the smell F084. "
-        f"Either restrict to registered predicates or document the lax semantics."
-    )
-
-    # Worse: callable_("") for empty string should definitely fail.
-    result = _check(mod, "callable_", "")
-    assert result != "T", (
-        f"callable_(\"\") should fail or raise (empty string is not callable), "
-        f"but it succeeds — this is the smell F084. "
-        f"The empty string is neither a registered predicate nor a valid atom."
-    )
+    # A non-empty string is the compound '.'/2 — callable.
+    assert _check(mod, "callable_", "abc") == "T"
+    assert _check(mod, "compound", "abc") == "T"
+    # "" is [] is the atom '[]' — callable, and NOT compound.
+    assert _check(mod, "callable_", "") == "T"
+    assert _check(mod, "compound", "") == "F"
+    assert _check(mod, "atom", "") == "T"

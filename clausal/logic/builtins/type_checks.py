@@ -16,7 +16,10 @@ from clausal.logic.atoms import (
 from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
-from clausal.logic.builtins._helpers import _arity, _is_compound, _is_ground
+from clausal.logic.builtins._helpers import (
+    NIL_SPELLING, _arity, _is_compound, _is_empty_list, _is_ground,
+    _is_non_empty_list,
+)
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
 
@@ -87,18 +90,32 @@ def _string__1(x, trail, k):
         yield None
 
 
+def _is_atom_term(x) -> bool:
+    """The one ``atom/1`` definition: an arity-0 cell, a declared-atom class,
+    or the empty list (the atom ``'[]'``).
+
+    Shared with ``_check_type``'s ``atom`` row so ``must_be(atom, X)`` and
+    ``atom(X)`` cannot drift apart.
+    """
+    return is_atom_value(x) or _is_empty_list(x)
+
+
 @_builtin("atom", 1)
 def _is_atom__1(x, trail, k):
-    """atom(X) — succeeds if X is the arity-0 cell ``("bar",)`` or a
-    zero-arity PredicateMeta (a declared atom).
+    """atom(X) — succeeds if X is the arity-0 cell ``("bar",)``, a
+    zero-arity PredicateMeta (a declared atom), or the empty list.
 
     THE FLIP (2026-09-06-atoms-as-cells-strings §6.3): a plain ``str`` is a
     STRING — the list of its char atoms — so ``atom("bar")`` is FALSE and
     ``string("bar")``/``is_list("bar")`` are true.  The two questions that
     were co-extensional under the pivot are now disjoint.
+
+    Task 15 item 2 (spec §14.1/§14.12, RULED 2026-09-07): ``[]`` is the
+    reserved atom ``'[]'``, so ``atom([])``, ``atom("")`` and ``atom(b"")``
+    hold — the ISO/Scryer answer.
     """
-    x_val = deref(x)
-    if not is_var(x_val) and is_atom_value(x_val):
+    x_val = normalize_seg_input(deref(x))
+    if not is_var(x_val) and _is_atom_term(x_val):
         yield None
 
 
@@ -132,9 +149,19 @@ def _float__1(x, trail, k):
 
 @_builtin("compound", 1)
 def _compound__1(x, trail, k):
-    """compound(X) — succeeds if X is a compound term with arity > 0."""
-    x_val = deref(x)
+    """compound(X) — succeeds if X is a compound term with arity > 0.
+
+    Task 15 item 2 (spec §14.12, RULED 2026-09-07): a non-empty LIST is the
+    ``'.'/2`` compound, so ``compound([1, 2])``, ``compound("abc")`` and
+    ``compound(b"ab")`` hold — the ISO/Scryer answer, and the one that makes
+    ``functor("hello", '.', 2)`` (§6.4, already true) coherent.  The empty
+    list is the atom ``'[]'`` and stays non-compound.
+    """
+    x_val = normalize_seg_input(deref(x))
     if is_var(x_val):
+        return
+    if _is_non_empty_list(x_val):
+        yield None
         return
     if isinstance(x_val, Compound) and len(x_val.args) > 0:
         yield None
@@ -163,12 +190,18 @@ def _compound__1(x, trail, k):
 def _atomic__1(x, trail, k):
     """atomic(X) — succeeds if X is a non-variable, non-compound term.
 
-    Accepts the arity-0 cell atom, ``int``, ``float``, ``bool``, ``bytes``,
-    ``None``, and zero-arity ``PredicateMeta`` classes. Rejects ``Var``,
-    ``Compound``, ``KWTerm``, term-instances, ``list``, ``SegList``,
-    ``SegString`` — and, since THE FLIP, a plain ``str``: a string is the
-    LIST of its char atoms (spec §6.3), so it is no more atomic than the
-    list it denotes.  ``""``/``[]`` stay non-atomic, today's answer (§4).
+    Accepts the arity-0 cell atom, the empty list, ``int``, ``float``,
+    ``bool``, ``None``, and zero-arity ``PredicateMeta`` classes. Rejects
+    ``Var``, ``Compound``, ``KWTerm``, term-instances, ``list``,
+    ``SegList``, ``SegString`` — and, since THE FLIP, a plain ``str``: a
+    string is the LIST of its char atoms (spec §6.3), so it is no more
+    atomic than the list it denotes.
+
+    Task 15 item 2 (spec §14.1/§14.12, RULED 2026-09-07): ``""``/``[]``/
+    ``b""`` ARE atomic — they are the atom ``'[]'`` — and a non-empty
+    ``bytes`` is NOT: a code list is a list (spec §5.4), so it is the
+    ``'.'/2`` compound that ``compound/1`` now answers for, and a term
+    cannot be both atomic and compound.
     """
     # F029 (A09): walk a ground Seg* to its concrete form first — a ground
     # SegString walks to a str (atomic) so is_str(X) no longer contradicts
@@ -176,9 +209,15 @@ def _atomic__1(x, trail, k):
     x_val = normalize_seg_input(deref(x))
     if is_var(x_val):
         return
+    # The empty list is the ATOM ``'[]'`` whichever way it is spelled, so it
+    # is decided BEFORE the compound-shape rejection below catches ``[]``.
+    if _is_empty_list(x_val):
+        yield None
+        return
     # Reject compound shapes explicitly so we don't accidentally accept
     # them via the "anything else" fallthrough.
-    if isinstance(x_val, (Compound, KWTerm, list, SegList, SegString, SegBytes)):
+    if isinstance(x_val, (Compound, KWTerm, list, bytes,
+                          SegList, SegString, SegBytes)):
         return
     if is_term_instance(x_val):
         return
@@ -190,9 +229,10 @@ def _atomic__1(x, trail, k):
         yield None
         return
     # Atomic primitives. ``bool`` is-a ``int`` in Python — that's fine
-    # for ``atomic``, but ``number/1`` continues to exclude it.  ``str`` is
-    # deliberately ABSENT: a string is a list of char atoms.
-    if x_val is None or isinstance(x_val, (bool, int, float, bytes)):
+    # for ``atomic``, but ``number/1`` continues to exclude it.  ``str`` and
+    # ``bytes`` are deliberately ABSENT: a string is a list of char atoms and
+    # a code list is a list of numbers (both rejected above).
+    if x_val is None or isinstance(x_val, (bool, int, float)):
         yield None
         return
     # Zero-arity PredicateMeta class — a declared atom.
@@ -211,8 +251,18 @@ def _callable__1_factory(db):
     """Factory for ``callable_/1`` — *db* is kept for the registry shape."""
 
     def callable___1(x, trail, k):
-        x_val = deref(x)
+        x_val = normalize_seg_input(deref(x))
         if is_var(x_val):
+            return
+        # Task 15 item 2 (spec §14.12, RULED 2026-09-07): callable = atom or
+        # compound (ISO 3.24).  A list is one or the other whichever way it
+        # is spelled — ``[]`` is the atom ``'[]'`` and ``[1, 2]``/``"abc"``/
+        # ``b"ab"`` are the ``'.'/2`` compound — so ``callable("foo")`` is
+        # TRUE, as Scryer answers.  That is why calling one is an
+        # existence_error for ``'.'/2`` and not a ``type_error(callable, …)``
+        # (item 3): the term IS callable, the procedure does not exist.
+        if _is_empty_list(x_val) or _is_non_empty_list(x_val):
+            yield None
             return
         if isinstance(x_val, (Compound, KWTerm)):
             yield None
@@ -243,13 +293,14 @@ def _callable__1_factory(db):
         if isinstance(x_val, type) and isinstance(x_val, PredicateMeta):
             yield None
             return
-        # THE FLIP (spec §6.3/§6.4): a plain ``str`` is a STRING, and a
-        # string is not callable — ``call("foo")`` is ``type_error(callable,
-        # "foo")``, not a call to ``foo/0``.  The old branch (and its
-        # ``_str_is_callable`` predicate-name lookup) is deleted with the
-        # representation that motivated it; a program that means the atom
-        # writes ``foo`` or mints one.
-        # Any other shape (int, float, str, list, SegList, …) — not callable.
+        # THE FLIP (spec §6.3/§6.4) deleted the old ``str`` branch (and its
+        # ``_str_is_callable`` predicate-name lookup) with the representation
+        # that motivated it: a ``str`` is a STRING, so it is callable as the
+        # LIST it is (the branch at the top), never as the predicate its
+        # characters spell.  A program that means the atom writes ``foo`` or
+        # mints one.
+        # Any other shape (int, float, dict, non-ground SegList, …) — not
+        # callable.
 
     return callable___1
 
@@ -336,10 +387,11 @@ def _check_type(type_name: str, term) -> bool:
     elif type_name == "number":
         return isinstance(term, (int, float)) and not isinstance(term, bool)
     elif type_name == "atom":
-        # THE FLIP: is_atom_value is the arity-0 cell (or a declared-atom
-        # class) and NOT a str — the same call the atom/1 builtin makes, so
+        # THE FLIP: an atom is the arity-0 cell (or a declared-atom class)
+        # and NOT a str; Task 15 item 2 adds the empty list, the atom
+        # ``'[]'``.  The same call the atom/1 builtin makes, so
         # ``must_be(atom, "x")`` and ``atom("x")`` cannot drift apart.
-        return is_atom_value(term)
+        return _is_atom_term(normalize_seg_input(term))
     elif type_name in ("string", "str"):
         # Task 14b: the same call the string/1 builtin makes, so
         # ``must_be(string, ['a','b'])`` and ``string(['a','b'])`` cannot
@@ -355,10 +407,14 @@ def _check_type(type_name: str, term) -> bool:
     elif type_name in ("boolean", "bool"):
         return isinstance(term, bool)
     elif type_name == "callable":
-        # THE FLIP: ``str`` is gone from this tuple — a string is not
-        # callable (§6.3), matching callable_/1.
+        # Task 15 item 2: callable = atom or compound (ISO 3.24), so a list
+        # — ``[]``, ``[1, 2]``, ``"abc"``, ``b"ab"`` — is callable, matching
+        # callable_/1.
+        walked = normalize_seg_input(term)
         return (
-            isinstance(term, (Compound, KWTerm))
+            _is_empty_list(walked)
+            or _is_non_empty_list(walked)
+            or isinstance(term, (Compound, KWTerm))
             or is_term_instance(term)
             or (isinstance(term, type) and hasattr(term, '_get_dispatch'))
             or hasattr(term, '_get_dispatch')
@@ -370,6 +426,10 @@ def _check_type(type_name: str, term) -> bool:
         from clausal.terms import DictTerm
         return isinstance(term, DictTerm)
     elif type_name == "compound":
+        # Task 15 item 2: a non-empty list is the ``'.'/2`` compound,
+        # matching the compound/1 builtin.
+        if _is_non_empty_list(normalize_seg_input(term)):
+            return True
         # Stage A: the funnel's shared definition — a cell counts as
         # compound only above arity 0, matching the compound/1 builtin's
         # own cell branch (P3-2 Task 2, THE FLIP).

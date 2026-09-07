@@ -17,7 +17,7 @@ needs_input(TERM) <- (
 --8<-- [start:reflect_predicate]
 describe_predicate(NAME, ARITY) <- (
     signature(NAME, ARITY, FIELD_NAMES),
-    writeln(f"Predicate {NAME}/{ARITY}"),
-    writeln(f"Fields: {FIELD_NAMES}")
+    writeln_text(f"Predicate {NAME}/{ARITY}"),
+    writeln_text(f"Fields: {FIELD_NAMES}")
 )
 --8<-- [end:reflect_predicate]

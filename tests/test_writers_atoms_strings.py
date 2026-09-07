@@ -185,3 +185,169 @@ def test_writer_helpers_are_exported():
     import clausal.terms as terms_mod
     for name in ("term_canonical", "atom_needs_quotes", "quote_atom", "quote_string"):
         assert name in terms_mod.__all__
+
+
+# ── Task 15 item 4: write_term/2 and the double_quotes switch ───────────────
+
+
+def _out(mod, goal):
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert len(list(solve(goal, mod))) == 1
+    return buf.getvalue()
+
+
+class TestTermStrDoubleQuotes:
+    """``term_str(..., double_quotes=False)`` prints a string as the LIST of
+    char atoms it is — the option ISO's ``write_term/2`` calls
+    ``double_quotes(false)``, and Scryer's default."""
+
+    def test_double_quotes_false_prints_the_char_list(self):
+        assert term_str("abc", double_quotes=False) == "[a, b, c]"
+        assert term_str([("a",), ("b",)], double_quotes=False) == "[a, b]"
+
+    def test_double_quotes_true_is_the_default_and_prints_a_string(self):
+        assert term_str("abc") == '"abc"'
+        assert term_str("abc", double_quotes=True) == '"abc"'
+        assert term_str("abc", quoted=False) == "abc"
+
+    def test_a_char_that_needs_quotes_follows_the_quoted_option(self):
+        assert term_str(" a", double_quotes=False) == "[' ', a]"
+        assert term_str(" a", double_quotes=False, quoted=False) == "[ , a]"
+
+    def test_the_empty_string_is_the_empty_list_in_both_modes(self):
+        assert term_str("", double_quotes=False) == "[]"
+        assert term_str("", double_quotes=True) == "[]"
+
+    def test_it_threads_into_arguments(self):
+        assert term_str(("f", ("a",), "bc"), double_quotes=False) == "f(a, [b, c])"
+
+
+class TestWriteTerm2:
+    """``write_term(Term, Options)`` — the ISO writer with the option list.
+    Every expected rendering below is Scryer 0.10.0's, EXCEPT the display
+    spacing: ``write_term/2`` is ``write/1``'s family, which keeps the
+    engine's ``f(a, b)`` spacing (spec §6.7); only ``write_canonical/1`` is
+    byte-comparable with Scryer."""
+
+    def test_quoted_alone_prints_a_string_as_its_char_list(self, mod):
+        assert _out(mod, ("write_term", "abc", [("quoted", True)])) == "[a, b, c]"
+
+    def test_quoted_and_double_quotes_print_the_toplevel_form(self, mod):
+        opts = [("quoted", True), ("double_quotes", True)]
+        assert _out(mod, ("write_term", "abc", opts)) == '"abc"'
+
+    def test_no_options_is_the_display_family(self, mod):
+        assert _out(mod, ("write_term", [("a",), ("b",)], [])) == "[a, b]"
+        assert _out(mod, ("write_term", ("a b",), [])) == "a b"
+
+    def test_quoted_quotes_an_atom(self, mod):
+        assert _out(mod, ("write_term", ("a b",), [("quoted", True)])) == "'a b'"
+
+    def test_ignore_ops_is_accepted(self, mod):
+        assert _out(mod, ("write_term", ("f", 1), [("ignore_ops", True)])) == "f(1)"
+
+    def test_an_unknown_option_is_a_domain_error(self, mod):
+        from clausal.logic.atoms import mint
+        from clausal.logic.exceptions import LogicException
+
+        with pytest.raises(LogicException) as exc:
+            list(solve(("write_term", ("a",), [("bogus", True)]), mod))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "domain_error"
+        assert formal.args[0] == mint("write_option")
+        assert formal.args[1] == ("bogus", True)
+
+    def test_a_non_list_option_argument_is_a_type_error(self, mod):
+        from clausal.logic.atoms import mint
+        from clausal.logic.exceptions import LogicException
+
+        with pytest.raises(LogicException) as exc:
+            list(solve(("write_term", ("a",), ("foo",)), mod))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("list")
+
+    def test_an_unbound_option_list_is_an_instantiation_error(self, mod):
+        from clausal.logic.atoms import mint
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.variables import Var
+
+        with pytest.raises(LogicException) as exc:
+            list(solve(("write_term", ("a",), Var()), mod))
+        assert exc.value.term.args[0] == mint("instantiation_error")
+
+    def test_the_atom_spellings_of_the_booleans_are_accepted(self, mod):
+        """Source ``quoted(true)`` folds ``true`` to Python ``True`` (spec
+        §8), but a term built by hand may carry the ATOM — both are read."""
+        from clausal.logic.atoms import mint
+        opts = [("quoted", mint("true")), ("double_quotes", mint("true"))]
+        assert _out(mod, ("write_term", "abc", opts)) == '"abc"'
+        assert _out(mod, ("write_term", ("a b",),
+                          [("quoted", mint("false"))])) == "a b"
+
+
+class TestTheThreeWriterFamilies:
+    """Task 15 item 4 as AMENDED (operator, 2026-09-07).  Three families:
+
+    * ISO — ``write/1``, ``writeq/1``, ``write_canonical/1``,
+      ``write_term/2``: a string is the LIST of its characters.
+      ``writeln/1`` and ``write_to_string/2`` are not ISO names but are
+      ``write/1``'s semantics.
+    * Clausal TEXT — ``write_text/1``, ``writeln_text/1``,
+      ``write_text_to_string/2``: a string prints as its text.  This is
+      where f-strings go.
+    * Clausal DISPLAY — ``print_term/1``, ``term_to_string/2``: exactly
+      ``write_term(T, [quoted(true), double_quotes(true)])``.
+    """
+
+    def test_write_is_iso_and_prints_a_string_as_its_char_list(self, mod):
+        assert _out(mod, ("write", "abc")) == "[a, b, c]"
+        assert _out(mod, ("write", [("a",), ("b",)])) == "[a, b]"
+        assert _out(mod, ("write", ("a b",))) == "a b"
+        assert _out(mod, ("write", "")) == "[]"
+        assert _out(mod, ("write", [1, 2])) == "[1, 2]"
+
+    def test_write_equals_the_option_free_write_term(self, mod):
+        for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
+                     ("a b",), [1, 2], ""):
+            assert (_out(mod, ("write", term))
+                    == _out(mod, ("write_term", term, []))), term
+
+    def test_writeq_is_iso_too_and_only_adds_quoting(self, mod):
+        assert _out(mod, ("writeq", "abc")) == "[a, b, c]"
+        assert _out(mod, ("writeq", ("a b",))) == "'a b'"
+        opts = [("quoted", True)]
+        for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
+                     ("a b",), [1, 2], ""):
+            assert (_out(mod, ("writeq", term))
+                    == _out(mod, ("write_term", term, opts))), term
+
+    def test_the_text_family_prints_a_string_as_its_text(self, mod):
+        assert _out(mod, ("write_text", "abc")) == "abc"
+        assert _out(mod, ("write_text", [("a",), ("b",)])) == "ab"
+        assert _out(mod, ("write_text", ("a b",))) == "a b"
+        assert _out(mod, ("write_text", "")) == "[]"
+        assert _out(mod, ("write_text", [1, 2])) == "[1, 2]"
+        assert _out(mod, ("writeln_text", "abc")) == "abc\n"
+
+    def test_write_text_to_string_answers_the_text(self, mod):
+        from clausal.logic.variables import Var, deref
+        S = Var()
+        got = [deref(S)
+               for _ in solve(("write_text_to_string", "abc", S), mod)]
+        assert got == ["abc"]
+        S2 = Var()
+        got2 = [deref(S2)
+                for _ in solve(("write_to_string", "abc", S2), mod)]
+        assert got2 == ["[a, b, c]"]
+
+    def test_print_term_and_term_to_string_are_the_display_form(self, mod):
+        opts = [("quoted", True), ("double_quotes", True)]
+        assert _out(mod, ("print_term", "abc")) == '"abc"\n'
+        from clausal.logic.variables import Var, deref
+        for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
+                     ("a b",), [1, 2], ""):
+            S = Var()
+            got = [deref(S) for _ in solve(("term_to_string", term, S), mod)]
+            assert got == [_out(mod, ("write_term", term, opts))], term

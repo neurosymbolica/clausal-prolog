@@ -25,24 +25,30 @@ Test("atom row") <- (
     not string(bar), not is_list(bar), not is_chars(bar), not compound(bar)
 )  # nv
 
+# Task 15 item 2 (ISO alignment, 2026-09-07): a non-empty string is the
+# LIST of its characters, and a non-empty list is the compound './2', so
+# compound/1 and callable_/1 answer TRUE for it -- as ISO and Scryer do.
 Test("string row") <- (
     string("bar"), is_str("bar"), is_list("bar"), is_chars("bar"),
-    ground("bar"),
-    not atom("bar"), not atomic("bar"), not callable_("bar"),
-    not compound("bar")
+    ground("bar"), callable_("bar"), compound("bar"),
+    not atom("bar"), not atomic("bar")
 )  # nv
 
+# "" is [] is the reserved ATOM '[]', so atom/1 and atomic/1 answer TRUE and
+# compound/1 answers FALSE (Task 15 item 2; Scryer agrees).
 Test("empty string row") <- (
     "" is [],
     string(""), is_list(""), is_chars(""),
-    not atom(""), not atomic("")
+    atom(""), atomic(""), callable_(""),
+    not compound("")
 )  # nv
 
 # "" and [] are one term, so string([]) is TRUE -- re-asserted in Task 14b,
 # where string/1 stopped keying on the `str` representation.
 Test("empty list row") <- (
     string([]), is_str([]), is_list([]), is_chars([]),
-    not atom([]), not atomic([])
+    atom([]), atomic([]), callable_([]),
+    not compound([])
 )  # nv
 
 # The other spelling of the same rule: a proper list of char atoms is the

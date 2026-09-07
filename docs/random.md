@@ -90,9 +90,9 @@ deterministic_test(X) <- (set_seed(42), float_0_to_1(X))
 `maybe(P)` — succeeds with probability P (float in [0.0, 1.0]).
 
 ```clausal
-maybe_print(X) <- (maybe(), writeln(X))
+maybe_print(X) <- (maybe(), writeln_text(X))
 
-risky_action(X) <- (maybe(0.1), writeln(X))
+risky_action(X) <- (maybe(0.1), writeln_text(X))
 ```
 
 ---
@@ -106,5 +106,5 @@ roll_die(N) <- integer_between(1, 6, N)
 
 pick_color(COLOR) <- choice(["red", "green", "blue"], COLOR)
 
-maybe_greet(NAME) <- (maybe(), writeln(f"Hello, {NAME}!"))
+maybe_greet(NAME) <- (maybe(), writeln_text(f"Hello, {NAME}!"))
 ```

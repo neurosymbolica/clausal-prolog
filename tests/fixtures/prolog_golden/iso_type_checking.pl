@@ -104,11 +104,17 @@ test("number: var fails") :-
 test("callable: declared atom succeeds") :-
     callable(hello).
 
-test("callable: registered predicate name as a string fails") :-
-    \+ callable("is_bound_number").
+test("callable: a string is callable as the list it is") :-
+    callable("is_bound_number").
 
-test("callable: arbitrary string fails") :-
-    \+ callable("hello").
+test("callable: an arbitrary string is callable too") :-
+    callable("hello").
+
+test("callable: the empty list is the atom '[]' and is callable") :-
+    callable([]).
+
+test("callable: a non-empty list is the compound './2'") :-
+    callable([1, 2]).
 
 test("callable: int fails") :-
     \+ callable(42).

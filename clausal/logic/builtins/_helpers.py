@@ -471,6 +471,38 @@ def _is_compound(term: Any) -> bool:
     return _is_compound_precell(term)
 
 
+# ── The list/nil shape (Task 15 item 2, ISO alignment) ───────────────────────
+#
+# ISO reads a list as ``'.'/2`` cons cells ending in the reserved ATOM
+# ``'[]'``, and Scryer 0.10.0 answers accordingly: ``atom([])``,
+# ``atomic([])``, ``callable([])`` true; ``compound([])`` false;
+# ``compound([1,2])``, ``compound("abc")``, ``callable("foo")`` true.  A
+# string and a code list ARE lists in this engine (spec §5.4), so all three
+# spellings answer alike.  ``_is_compound`` above stays the CELL funnel — it
+# deliberately answers False for a list — so the type checks ask these two
+# first and fall through to it.
+
+#: The spelling of the atom the empty list IS.  ``atom_length([], 2)`` and
+#: ``atom_chars([], ['[', ']'])`` read it (Scryer-verified).
+NIL_SPELLING = "[]"
+
+
+def _is_empty_list(term: Any) -> bool:
+    """True iff *term* is the EMPTY LIST — ``[]``, ``""``, ``b""`` or ``()``.
+
+    The empty list is the reserved atom ``'[]'``.  The empty ``tuple`` is
+    here because a plain (non-cell, non-``TUPLE_TAG``) tuple is treated as
+    the list it holds throughout this module.  A ``Seg*`` is walked by the
+    caller before this is asked.
+    """
+    return type(term) in (list, str, bytes, tuple) and len(term) == 0
+
+
+def _is_non_empty_list(term: Any) -> bool:
+    """True iff *term* is a NON-empty list, and so the ``'.'/2`` compound."""
+    return type(term) in (list, str, bytes) and len(term) > 0
+
+
 # ── Combined functor+arity probe ─────────────────────────────────────────────
 
 
@@ -556,8 +588,10 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
 # ``_standard_order_key`` replaces it with a structural key that recurses into
 # arguments, so a compound's arguments get exactly the comparison the same
 # values get when bare.  Ranks follow the ISO standard order of terms
-# (Var < Number < Atom < String < Compound); everything with no term shape of
-# its own keeps the old type-name grouping via ``_OpaqueOrder``.
+# (Var < Number < Atom < Compound, ISO 7.2.1 — a string and a list are both
+# the ``'.'/2`` compound, so there is no band between Atom and Compound);
+# everything with no term shape of its own keeps the old type-name grouping
+# via ``_OpaqueOrder``.
 #
 # Every key is a tuple whose first element is one of these rank ints, so keys
 # of different ranks decide on that int alone and the remaining elements are
@@ -568,12 +602,10 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
 _ORD_VAR = 0
 _ORD_NUM = 1
 _ORD_ATOM = 2
-_ORD_BYTES = 3
-_ORD_SEQ = 4
-_ORD_COMPOUND = 5
-_ORD_DICT = 6
-_ORD_SET = 7
-_ORD_OTHER = 8
+_ORD_COMPOUND = 3
+_ORD_DICT = 4
+_ORD_SET = 5
+_ORD_OTHER = 6
 
 # Flavours within _ORD_COMPOUND.  A generic ``Compound`` and a declared term
 # that render alike are *not* the same term (they do not unify — see
@@ -585,6 +617,29 @@ _ORD_OTHER = 8
 _CF_POSITIONAL = 0   # Compound
 _CF_KEYWORD = 1      # KWTerm (keyword-matched: fields sorted by name)
 _CF_DECLARED = 2     # declared term instance / dataclass
+
+# Task 15 item 1 (ISO alignment, Scryer-verified 2026-09-07).  There is no
+# "sequence" band any more: a non-empty list -- and a string and a code list,
+# which ARE lists (§5.4/§6.5) -- is the ``'.'/2`` COMPOUND it denotes, and
+# keys in the compound band arity-first like every other compound.  So
+# ``foo(x) < [z]`` (arity 1 before arity 2), ``[z] < f(a, b)`` (same arity,
+# ``.`` before ``f``), and ``[] < a`` (``'[]'`` is an atom).  The retired
+# bands ranked every sequence below every compound regardless of arity,
+# which ISO 7.2.1 does not.
+#
+# The argument payload is the tuple of ELEMENT keys rather than a nested
+# head/tail pair.  For a proper list the two comparisons agree: tuple-prefix
+# order puts the shorter list first, which is what cons comparison gives
+# because the shorter list's tail is the ATOM ``'[]'`` and atoms precede
+# compounds.  The flat tuple is one allocation per list instead of one per
+# cell.
+_ORD_EMPTY_LIST_KEY = (_ORD_ATOM, "[]")
+_ORD_CONS_NAME_KEY = (0, ".")
+
+
+def _cons_key(element_keys: tuple) -> tuple:
+    """The standard-order key of the ``'.'/2`` compound with these elements."""
+    return (_ORD_COMPOUND, 2, _ORD_CONS_NAME_KEY, _CF_POSITIONAL, element_keys)
 
 
 class _OpaqueOrder:
@@ -636,8 +691,10 @@ def _standard_order_key(term: Any) -> tuple:
     than as strings.  A cell (spec §5.1) is NOT a sequence: an arity-0 cell
     is an atom and keys with the atom band identically to its str spelling
     (§6.5); an arity>0 cell -- ``str``-tagged or ``TUPLE_TAG``-tagged --
-    keys in the compound band, arity first (ISO 7.2.1).  Lists and plain
-    ``tuple``s that are not cells still key in the sequence band.
+    keys in the compound band, arity first (ISO 7.2.1).  A list, a string
+    and a code list key as the ``'.'/2`` compound they denote (Task 15
+    item 1, :func:`_cons_key`); ``[]``/``""``/``b""`` key as the atom
+    ``'[]'``.
     """
     term = deref(term)
     if is_var(term):
@@ -650,11 +707,14 @@ def _standard_order_key(term: Any) -> tuple:
         return (_ORD_NUM, term)
     if isinstance(term, str):
         # THE FLIP (spec §6.5): a string keys as the LIST OF CHAR ATOMS it
-        # denotes, in the sequence band — so ``"ab"`` and
-        # ``[("a",), ("b",)]`` have EQUAL keys and ``""`` keys like ``[]``.
-        # That equality is what makes ``sort/2`` collapse the two spellings
-        # of one term (dedup below is by key, not by ``==``).
-        return (_ORD_SEQ, tuple((_ORD_ATOM, c) for c in term))
+        # denotes — so ``"ab"`` and ``[("a",), ("b",)]`` have EQUAL keys and
+        # ``""`` keys like ``[]``.  That equality is what makes ``sort/2``
+        # collapse the two spellings of one term (dedup below is by key, not
+        # by ``==``).  Task 15 item 1: that list is the ``'.'/2`` compound,
+        # and the empty one is the ATOM ``'[]'``.
+        if not term:
+            return _ORD_EMPTY_LIST_KEY
+        return _cons_key(tuple((_ORD_ATOM, c) for c in term))
     if is_zero_field_class(term):
         # P3-1 Task 4 (standard-order collapse), status corrected by the
         # Task 7 sweep: NOT a transient pre-pivot straggler after all. The
@@ -673,7 +733,12 @@ def _standard_order_key(term: Any) -> tuple:
         # ``"work"`` and a 0-arity predicate class named ``work``.
         return (_ORD_ATOM, term.__name__)
     if isinstance(term, bytes):
-        return (_ORD_BYTES, term)
+        # A code list (§5.4): the list of its code NUMBERS, so ``b"ab"`` and
+        # ``[97, 98]`` are one term in the order exactly as ``"ab"`` and its
+        # char list are, and ``b""`` is the empty list.
+        if not term:
+            return _ORD_EMPTY_LIST_KEY
+        return _cons_key(tuple((_ORD_NUM, c) for c in term))
     if type(term) is tuple and term and type(term[0]) is str:
         # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5) and keys in the
         # atom band by its spelling — the same key a 0-arity predicate class
@@ -688,7 +753,12 @@ def _standard_order_key(term: Any) -> tuple:
         return (_ORD_COMPOUND, len(term) - 1, (1, ""), _CF_POSITIONAL,
                 tuple(_standard_order_key(a) for a in term[1:]))
     if isinstance(term, (list, tuple)):
-        return (_ORD_SEQ, tuple(_standard_order_key(e) for e in term))
+        # A LIST — the ``'.'/2`` compound it denotes, or the atom ``'[]'``
+        # when empty (Task 15 item 1).  A plain ``tuple`` that is neither a
+        # cell nor tuple-data keeps the list treatment it has always shared.
+        if not term:
+            return _ORD_EMPTY_LIST_KEY
+        return _cons_key(tuple(_standard_order_key(e) for e in term))
     if isinstance(term, Compound):
         functor = deref(term.functor)
         # A Var functor has no name to order by; park all of them after the

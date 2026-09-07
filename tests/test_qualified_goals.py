@@ -218,16 +218,18 @@ class TestQualifiedCellGoal:
 
         THE FLIP (2026-09-06-atoms-as-cells-strings §6.4): the atom is the
         arity-0 cell.  A bare ``str`` inner goal was accepted here while a
-        ``str`` was an atom; it is a STRING now, and a string is not
-        callable, so it raises through the same route an unqualified string
-        goal does.
+        ``str`` was an atom; it is a STRING now, so it raises through the
+        same route an unqualified string goal does -- Task 15 item 3's
+        ``existence_error(procedure, '.'/2)``, the string being the
+        ``'.'/2`` compound whose procedure does not exist.
         """
         assert len(list(solve((":", EXPORTER, mint("ready")),
                               mods.importer))) == 1
         with pytest.raises(LogicException) as exc_info:
             list(solve((":", EXPORTER, "ready"), mods.importer))
         assert _error_term(exc_info.value)[0] == Compound(
-            "type_error", (mint("callable"), "ready"))
+            "existence_error", (mint("procedure"),
+                                Compound("/", (mint("."), 2))))
 
     def test_an_unresolvable_module_is_an_existence_error(self, mods):
         with pytest.raises(LogicException) as exc_info:

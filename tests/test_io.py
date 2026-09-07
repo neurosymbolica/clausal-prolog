@@ -157,10 +157,13 @@ class TestVarFormat:
 class TestWrite:
 
     def test_write_string(self):
+        """Task 15 item 4 as amended (2026-09-07): ``write/1`` is the ISO
+        writer, so a STRING prints as the list of characters it is.  The
+        TEXT rendering moved to ``write_text/1`` (pinned below)."""
         # nv
         t = Trail()
         out = _capture_stdout("write", 1, "hello", t)
-        assert out == "hello"
+        assert out == "[h, e, l, l, o]"
 
     def test_write_int(self):
         # nv
@@ -174,15 +177,17 @@ class TestWrite:
         t = Trail()
         unify(v, "world", t)
         out = _capture_stdout("write", 1, v, t)
-        assert out == "world"
+        assert out == "[w, o, r, l, d]"
 
     def test_write_fstring(self):
+        """An f-string is a STRING, so ``write/1`` spells it out; the family
+        an f-string wants is ``write_text/1`` (pinned in ``TestWriteText``)."""
         # nv
         x = Var()
         t = Trail()
         unify(x, 42, t)
-        out = _capture_stdout("write", 1, f"The answer is {x}", t)
-        assert out == "The answer is 42"
+        out = _capture_stdout("write", 1, f"hi {x}", t)
+        assert out == "[h, i,  , 4, 2]"
 
     def test_write_unbound_var(self):
         # nv
@@ -234,6 +239,70 @@ class TestWrite:
         assert len(results) >= 1
 
 
+# ── write_text/1, writeln_text/1, write_text_to_string/2 ─────────────────────
+#
+# Task 15 item 4 as amended (operator, 2026-09-07): the TEXT behaviour that
+# ``write/1``/``writeln/1``/``write_to_string/2`` used to have moved to these
+# three names unchanged, and the ISO behaviour took the old names.  Every
+# assertion in this class is one the old names carried before the move.
+
+class TestWriteText:
+
+    def test_write_text_string(self):
+        # nv
+        t = Trail()
+        assert _capture_stdout("write_text", 1, "hello", t) == "hello"
+
+    def test_write_text_char_list(self):
+        # nv
+        from clausal.logic.atoms import char_atom
+        t = Trail()
+        out = _capture_stdout(
+            "write_text", 1, [char_atom("h"), char_atom("i")], t)
+        assert out == "hi"
+
+    def test_write_text_var_bound(self):
+        # nv
+        v = Var()
+        t = Trail()
+        unify(v, "world", t)
+        assert _capture_stdout("write_text", 1, v, t) == "world"
+
+    def test_write_text_fstring(self):
+        # nv
+        x = Var()
+        t = Trail()
+        unify(x, 42, t)
+        out = _capture_stdout("write_text", 1, f"The answer is {x}", t)
+        assert out == "The answer is 42"
+
+    def test_write_text_int_and_list_are_unchanged(self):
+        # nv
+        t = Trail()
+        assert _capture_stdout("write_text", 1, 42, t) == "42"
+        assert _capture_stdout("write_text", 1, [1, 2], t) == "[1, 2]"
+
+    def test_write_text_empty_string_is_the_empty_list(self):
+        # nv
+        t = Trail()
+        assert _capture_stdout("write_text", 1, "", t) == "[]"
+
+    def test_writeln_text_appends_a_newline(self):
+        # nv
+        t = Trail()
+        assert _capture_stdout("writeln_text", 1, "hello", t) == "hello\n"
+
+    def test_write_text_to_string(self):
+        # nv
+        t = Trail()
+        out = Var()
+        dispatch = get_builtin_dispatch("write_text_to_string", 2, None)
+        vals = solutions(
+            StepGenerator(dispatch, None, None, None, "hello", out, t),
+            snapshot=lambda: deref(out))
+        assert vals == ["hello"]
+
+
 # ── writeln/1 ─────────────────────────────────────────────────────────────────
 
 class TestWriteln:
@@ -242,7 +311,7 @@ class TestWriteln:
         # nv
         t = Trail()
         out = _capture_stdout("writeln", 1, "hello", t)
-        assert out == "hello\n"
+        assert out == "[h, e, l, l, o]\n"
 
     def test_writeln_int(self):
         # nv
@@ -259,14 +328,18 @@ class TestWriteln:
         assert out == "[1, 2, 3]\n"
 
     def test_writeln_fstring(self):
+        """``writeln/1`` follows ``write/1``: an f-string is a STRING and
+        spells itself out.  ``writeln_text/1`` is where f-strings go."""
         # nv
         x = Var()
         y = Var()
         t = Trail()
         unify(x, "Alice", t)
         unify(y, 25, t)
-        out = _capture_stdout("writeln", 1, f"{x} is {y} years old", t)
+        out = _capture_stdout("writeln_text", 1, f"{x} is {y} years old", t)
         assert out == "Alice is 25 years old\n"
+        out2 = _capture_stdout("writeln", 1, f"{y}!", t)
+        assert out2 == "[2, 5, !]\n"
 
     def test_writeln_succeeds(self):
         # nv
@@ -384,14 +457,17 @@ class TestPrintTermEdgeCases:
 
 class TestWriteToString:
 
-    def test_string_passthrough(self):
+    def test_string_spells_itself_out(self):
+        """Task 15 item 4 as amended: ``write_to_string/2`` follows
+        ``write/1`` (ISO), so a string renders as its char list.
+        ``write_text_to_string/2`` is the passthrough."""
         # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, "hello", result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["hello"]
+        assert vals == ["[h, e, l, l, o]"]
 
     def test_int_to_string(self):
         # nv
@@ -411,31 +487,40 @@ class TestWriteToString:
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["world"]
+        assert vals == ["[w, o, r, l, d]"]
 
     def test_tuple_data_cell(self):
         """P3-2 Task 7: routed through the same ``TUPLE_TAG``-aware
-        ``_format_term_for_io`` branch ``write/1`` uses."""
+        branch ``write/1`` uses (``io._format_term_iso``)."""
         from clausal.logic.cells import TUPLE_TAG
 
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
         vals = solutions(
-            StepGenerator(dispatch, None, None, None, (TUPLE_TAG, "a", "b"), result, t),
+            StepGenerator(dispatch, None, None, None,
+                          (TUPLE_TAG, mint("a"), mint("b")), result, t),
             snapshot=lambda: deref(result))
         assert vals == ["(a, b)"]
 
     def test_fstring(self):
+        """An f-string is a STRING: ``write_to_string/2`` spells it out and
+        ``write_text_to_string/2`` passes the text through."""
         # nv
         x = Var()
         result = Var()
         t = Trail()
         unify(x, 42, t)
-        dispatch = get_builtin_dispatch("write_to_string", 2, None)
+        dispatch = get_builtin_dispatch("write_text_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, f"answer={x}", result, t),
                          snapshot=lambda: deref(result))
         assert vals == ["answer=42"]
+        result2 = Var()
+        dispatch2 = get_builtin_dispatch("write_to_string", 2, None)
+        vals2 = solutions(
+            StepGenerator(dispatch2, None, None, None, f"a{x}", result2, t),
+            snapshot=lambda: deref(result2))
+        assert vals2 == ["[a, 4, 2]"]
 
     def test_unbound_var(self):
         # nv
@@ -511,7 +596,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_test.clausal"
         src.write_text(
-            "Greet(_name) <- writeln(f\"Hello, {_name}!\")\n"
+            "Greet(_name) <- writeln_text(f\"Hello, {_name}!\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -532,7 +617,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_fstr.clausal"
         src.write_text(
-            "ShowPair(_a, _b) <- writeln(f\"{_a} and {_b}\")\n"
+            "ShowPair(_a, _b) <- writeln_text(f\"{_a} and {_b}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -553,7 +638,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_len.clausal"
         src.write_text(
-            "ShowLen(_l) <- writeln(f\"length is {len(_l)}\")\n"
+            "ShowLen(_l) <- writeln_text(f\"length is {len(_l)}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -574,7 +659,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_arith.clausal"
         src.write_text(
-            "ShowNext(_n) <- writeln(f\"next is {_n + 1}\")\n"
+            "ShowNext(_n) <- writeln_text(f\"next is {_n + 1}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -595,7 +680,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_upper.clausal"
         src.write_text(
-            "ShowUpper(_s) <- writeln(f\"{_s.upper()}\")\n"
+            "ShowUpper(_s) <- writeln_text(f\"{_s.upper()}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -640,7 +725,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_spec.clausal"
         src.write_text(
-            "ShowFloat(_x) <- writeln(f\"{_x:.2f}\")\n"
+            "ShowFloat(_x) <- writeln_text(f\"{_x:.2f}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -661,7 +746,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_novar.clausal"
         src.write_text(
-            "Hello() <- writeln(f\"hello world\")\n"
+            "Hello() <- writeln_text(f\"hello world\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module

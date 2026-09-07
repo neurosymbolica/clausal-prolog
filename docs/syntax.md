@@ -694,12 +694,12 @@ external system, say — use `atom_chars/2` on the text, or Python's
 Python f-strings work naturally in `.clausal` files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
 
 ```clausal
-greet(NAME) <- writeln(f"Hello, {NAME}!")
+greet(NAME) <- writeln_text(f"Hello, {NAME}!")
 
-show_pair(X, Y) <- writeln(f"{X} and {Y}")
+show_pair(X, Y) <- writeln_text(f"{X} and {Y}")
 
 # Format specs work too
-show_price(ITEM, PRICE) <- writeln(f"{ITEM}: ${PRICE:.2f}")
+show_price(ITEM, PRICE) <- writeln_text(f"{ITEM}: ${PRICE:.2f}")
 ```
 
 Under the hood, f-strings in `.clausal` files are compiled to deferred `PyThunk` lambdas during AST transformation. Logic variable names become lambda parameters; the compiler emits calls with `deref()`'d values at search time.

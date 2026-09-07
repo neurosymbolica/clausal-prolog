@@ -140,8 +140,14 @@ class TestStandardOrderShape:
         assert _key_sorted([f2, g1, f1]) == [f1, g1, f2]
 
     def test_numbers_before_atoms_before_compounds(self):
-        n, s, cmp_ = 3, "abc", _c("f", 1)
-        assert _key_sorted([cmp_, s, n]) == [n, s, cmp_]
+        n, a, cmp_ = 3, mint("abc"), _c("f", 1)
+        assert _key_sorted([cmp_, a, n]) == [n, a, cmp_]
+
+    def test_a_string_is_an_arity_two_compound(self):
+        """Task 15 item 1: ``"abc"`` is ``'.'(a, …)``, so it sorts after
+        every arity-1 compound and among the arity-2 ones."""
+        n, s, cmp1, cmp2 = 3, "abc", _c("f", 1), _c("f", 1, 1)
+        assert _key_sorted([s, cmp2, cmp1, n]) == [n, cmp1, s, cmp2]
 
     def test_unbound_vars_sort_first(self):
         v = Var()
@@ -198,11 +204,11 @@ class TestAtomKeyCollapse:
     def test_atom_key_shape_has_no_discriminator(self):
         assert _standard_order_key(mint("work")) == (_ORD_ATOM, "work")
 
-    def test_string_keys_in_the_sequence_band_as_its_char_list(self):
+    def test_string_keys_as_the_cons_compound_of_its_char_list(self):
         assert _standard_order_key("work") == _standard_order_key(
             [char_atom(c) for c in "work"]
         )
-        assert _standard_order_key("work")[0] != _ORD_ATOM
+        assert _standard_order_key("work")[0] == _ORD_COMPOUND
 
     def test_class_atom_key_matches_same_spelled_atom_key(self):
         from clausal.logic.predicate import make_predicate
@@ -221,12 +227,14 @@ class TestAtomKeyCollapse:
 
     def test_mixed_atoms_strings_numbers_compounds_key_shape(self):
         """A representative mixed list: each rank keeps its own key shape."""
-        items = [_c("f", 1), "zeta", "alpha", 3, Var(), 1.5]
+        items = [_c("f", 1), "zeta", mint("alpha"), 3, Var(), 1.5]
         ordered = _key_sorted(items)
         ranks = [_standard_order_key(x)[0] for x in ordered]
-        # Var < Number < Atom < ... < Compound, and stable within a rank.
+        # Var < Number < Atom < Compound, and stable within a rank.
         assert ranks == sorted(ranks)
-        assert ordered[-1] == _c("f", 1)
+        # Task 15 item 1: the STRING is an arity-2 ``'.'/2`` compound, so it
+        # is last -- after the arity-1 ``f(1)``.
+        assert ordered[-1] == "zeta"
 
 
 # ── Paths that were already correct must stay correct ────────────────────
@@ -312,10 +320,12 @@ class TestCellStandardOrder:
         k = _standard_order_key(("f", 1, 2))
         assert k[0] == _ORD_COMPOUND and k[1] == 2 and k[2] == (0, "f")
         assert _standard_order_key(("f", 1, 2)) < _standard_order_key(("a", 1, 2, 3))
+        # Task 15 item 1: ``[1, 2, 3]`` is the ``'.'/2`` compound ``'.'(1, …)``
+        # now, so arity 2 vs arity 2 is decided on the NAME -- ``.`` < ``f``.
         assert _standard_order_key(("f", 1, 2)) > _standard_order_key([1, 2, 3])
         assert _standard_order_key(("f", 1)) != _standard_order_key(["f", 1])
 
-    def test_msort_orders_number_atom_list_cell(self):   # §13 row 16 (Stage A form)
+    def test_msort_orders_number_atom_cell_list(self):   # §13 row 16 (Stage A form)
         # A cell goal requires a module (``_module_for_moduleless_solve``
         # raises ``existence_error`` for a moduleless cell goal) -- same
         # convention as ``tests/test_cell_goals.py``/``test_atoms_as_cells.py``:
@@ -331,7 +341,79 @@ class TestCellStandardOrder:
         answers = [deref(out)
                    for _ in solve(("msort", [("f", "x"), [1], ("b",), 1], out), lm)]
         assert len(answers) == 1
-        assert answers[0] == [1, ("b",), [1], ("f", "x")]
+        # Task 15 item 1 (ISO 7.2.1, Scryer-verified): a list is the ``'.'/2``
+        # compound, so it sorts among the ARITY-2 compounds -- AFTER the
+        # arity-1 cell ``f("x")``, not before every compound as the retired
+        # sequence band had it.
+        assert answers[0] == [1, ("b",), ("f", "x"), [1]]
+
+
+# ── Task 15 item 1: lists, strings and code lists key as ``'.'/2`` ───────
+
+
+class TestConsCompoundOrder:
+    """A non-empty list -- and a string, and a code list, which ARE lists --
+    keys as the ``'.'/2`` compound it denotes (ISO 7.2.1, arity first), and
+    ``[]``/``""``/``b""`` key as the ATOM ``'[]'``.
+
+    Every row below is measured against Scryer 0.10.0's ``compare/3``; see
+    ``implementation_plans/scryer-comparison-queries-2026-09-07.md`` row 1.
+    The one row Scryer gets wrong by its own list rule -- it answers
+    ``compare(>, [a], [a,b])`` for CHAR lists while answering
+    ``compare(<, [1], [1,2])`` for the same shape -- is pinned to the ISO
+    answer here, deliberately not copied.
+    """
+
+    def test_empty_sequences_key_as_the_atom_empty_list(self):
+        assert _standard_order_key([]) == (_ORD_ATOM, "[]")
+        assert _standard_order_key("") == (_ORD_ATOM, "[]")
+        assert _standard_order_key(b"") == (_ORD_ATOM, "[]")
+        assert _standard_order_key(()) == (_ORD_ATOM, "[]")
+        assert _standard_order_key([]) == _standard_order_key(mint("[]"))
+
+    def test_a_list_keys_as_a_cons_compound(self):
+        k = _standard_order_key([mint("z")])
+        assert k[0] == _ORD_COMPOUND and k[1] == 2 and k[2] == (0, ".")
+
+    def test_a_string_keys_as_the_cons_of_its_char_atoms(self):
+        assert _standard_order_key("ab") == _standard_order_key(
+            [char_atom("a"), char_atom("b")])
+        k = _standard_order_key("ab")
+        assert k[0] == _ORD_COMPOUND and k[1] == 2 and k[2] == (0, ".")
+
+    def test_a_code_list_keys_as_the_cons_of_its_numbers(self):
+        assert _standard_order_key(b"ab") == _standard_order_key([97, 98])
+
+    def test_scryer_rows(self):
+        lt = lambda a, b: _standard_order_key(a) < _standard_order_key(b)
+        # compare(<, foo(x), [z])   -- arity 1 before arity 2
+        assert lt(("foo", mint("x")), [mint("z")])
+        # compare(<, [z], f(a, b))  -- same arity, name '.' before 'f'
+        assert lt([mint("z")], ("f", mint("a"), mint("b")))
+        # compare(<, [1], [1,2])    -- shorter proper list first
+        assert lt([1], [1, 2])
+        # compare(<, [1,2], [1,3])
+        assert lt([1, 2], [1, 3])
+        # compare(<, [], a)         -- '[]' is an atom, and '[' < 'a'
+        assert lt([], mint("a"))
+        # compare(<, 1, [])         -- number before atom
+        assert lt(1, [])
+        # compare(<, a, [a])        -- atom before compound
+        assert lt(mint("a"), [mint("a")])
+
+    def test_char_lists_follow_iso_not_scryers_partial_string_bug(self):
+        """Scryer answers ``compare(>, [a], [a,b])`` (and ``>`` for
+        ``"a"``/``"ab"``) while answering ``<`` for ``[1]``/``[1,2]``: its
+        partial-string comparison contradicts its own list comparison.  ISO
+        7.2.1 says ``<`` and that is what the key gives."""
+        assert (_standard_order_key([char_atom("a")])
+                < _standard_order_key([char_atom("a"), char_atom("b")]))
+        assert _standard_order_key("a") < _standard_order_key("ab")
+
+    def test_msort_sorts_a_list_among_the_arity_two_compounds(self):
+        got = _run_list_builtin(
+            _msort__2, [_c("g", 1, 2), [mint("z")], _c("f", 1)])
+        assert got == [_c("f", 1), [mint("z")], _c("g", 1, 2)]
 
 
 # ── sort/2's dedup is linear, not quadratic ──────────────────────────────

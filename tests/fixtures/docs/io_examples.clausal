@@ -4,39 +4,33 @@
 # Doc snippet fixtures for docs/io.md.
 #
 # The three ISO writers (spec 2026-09-06-atoms-as-cells-strings §6.7):
-# write/1 is the unquoted family, writeq/1 the quoted one, and
+# write/1 is the unquoted one, writeq/1 the quoted one, and
 # write_canonical/1 prints every list -- a string included -- as the '.'/2
-# structure it denotes.  Each Test compares against write_to_string/2 or
-# term_to_string/2, which are the same two families in string form, so the
-# table in the doc is pinned by an assertion rather than by eyeball.
+# structure it denotes.  All three are ISO, so a STRING is the LIST of its
+# characters in all three.  Each Test compares against write_to_string/2 or
+# term_to_string/2, so the tables in the doc are pinned by an assertion
+# rather than by eyeball.
 
 # --8<-- [start:three_writers]
-# write/1: text comes out bare.
+# write/1: no quotes, and a string is the list of characters it is.
 Test("write is unquoted") <- (
     write_to_string(foo(bar, "baz"), S),
-    S == "foo(bar, baz)"
+    S == "foo(bar, [b, a, z])"
 )  # nv
 
-# writeq/1 (through term_to_string/2, its string form): an atom is quoted
-# when it needs quoting, and a string prints in double quotes -- so you can
-# tell the two kinds apart in the output.
-Test("writeq distinguishes atom from string") <- (
-    term_to_string(foo(bar, "baz"), S2),
-    S2 == "foo(bar, \"baz\")"
+Test("write spells a string out") <- (
+    write_to_string("ab", S1),
+    S1 == "[a, b]"
 )  # nv
 
+# writeq/1 adds quoting and nothing else: an atom that would not read back
+# as itself is single-quoted, and the string is still the char list.
 Test("writeq quotes an atom that needs it") <- (
-    term_to_string('foo bar', S3),
-    S3 == "'foo bar'"
+    write_to_string('foo bar', S3B), S3B == "foo bar",
+    term_to_string('foo bar', S3), S3 == "'foo bar'"
 )  # nv
 
-# A list of chars IS a string, so writeq prints it as one.
-Test("writeq prints a char list as a string") <- (
-    term_to_string(['a', 'b'], S4),
-    S4 == "\"ab\""
-)  # nv
-
-# "" and [] are one term, so BOTH families print them alike.
+# "" and [] are one term, so every writer prints them alike.
 Test("the empty string writes as the empty list") <- (
     write_to_string("", S5), S5 == "[]",
     write_to_string([], S6), S6 == "[]",
@@ -45,19 +39,24 @@ Test("the empty string writes as the empty list") <- (
 # --8<-- [end:three_writers]
 
 # --8<-- [start:write_family]
-# write/1 and writeln/1 are the UNQUOTED family: text comes out bare, and an
-# atom is indistinguishable from the string of the same spelling.
-Test("write/1 and writeln/1 are the unquoted family") <- (
-    write_to_string('a b', W1), W1 == "a b",
-    write_to_string("a b", W2), W2 == "a b",
-    write('a b'), write(" "), writeln("a b")
+# The Clausal TEXT family -- write_text/1, writeln_text/1,
+# write_text_to_string/2 -- prints a string as its TEXT and a char list as
+# the text it spells.  This is where f-strings go.
+Test("the text family prints a string as its text") <- (
+    write_text_to_string('a b', W1), W1 == "a b",
+    write_text_to_string("a b", W2), W2 == "a b",
+    write_text_to_string(['a', 'b'], W3), W3 == "ab",
+    write_text('a b'), write_text(" "), writeln_text("a b")
 )  # nv
 
-# writeq/1 and print_term/1 are the QUOTED family: the two kinds are
-# distinguishable again.
-Test("writeq/1 and print_term/1 are the quoted family") <- (
+# The Clausal DISPLAY family -- print_term/1 and term_to_string/2 -- is
+# write_term(T, [quoted(true), double_quotes(true)]): an atom is quoted
+# when it needs it, and a string prints in double quotes, so the two kinds
+# are distinguishable.  A list of chars IS a string, so it prints as one.
+Test("print_term/1 and term_to_string/2 are the display family") <- (
     term_to_string('a b', Q1), Q1 == "'a b'",
     term_to_string("a b", Q2), Q2 == "\"a b\"",
+    term_to_string(['a', 'b'], Q3), Q3 == "\"ab\"",
     writeq('a b'), nl(), print_term("a b")
 )  # nv
 
@@ -71,6 +70,26 @@ Test("write_canonical/1 spells the cons structure") <- (
     write_canonical([])
 )  # nv
 # --8<-- [end:write_family]
+
+# --8<-- [start:write_term]
+# write_term/2 is the ISO writer with the switches named.  Both Booleans
+# default to FALSE, so an option-free call is the strict ISO display: a
+# string prints as the LIST of char atoms it is.
+#
+#     write_term("abc", [])                              prints  [a, b, c]
+#     write_term("abc", [quoted(true)])                  prints  [a, b, c]
+#     write_term("abc", [quoted(true), double_quotes(true)])   prints  "abc"
+#     write_term('a b', [quoted(true)])                  prints  'a b'
+#
+# The two-option form is exactly writeq/1, so the assertion below pins it
+# through term_to_string/2 (writeq's string form) and then shows the call.
+Test("write_term with both options is writeq") <- (
+    term_to_string("abc", T1), T1 == "\"abc\"",
+    write_term("abc", [quoted(true), double_quotes(true)]), nl(),
+    write_term("abc", []), nl(),
+    write_term('a b', [quoted(true)])
+)  # nv
+# --8<-- [end:write_term]
 
 # Not part of the rendered snippet.  write_canonical/1 has no string form
 # (there is no write_canonical_to_string/2), so pinning its exact output text

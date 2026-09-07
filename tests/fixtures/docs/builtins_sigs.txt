@@ -887,6 +887,18 @@ writeq(+Term)
 write_canonical(+Term)
 --8<-- [end:write_canonical_1]
 
+--8<-- [start:write_term_2]
+write_term(+Term, +Options)
+--8<-- [end:write_term_2]
+
+--8<-- [start:write_text_1]
+write_text(+Term)
+--8<-- [end:write_text_1]
+
+--8<-- [start:writeln_text_1]
+writeln_text(+Term)
+--8<-- [end:writeln_text_1]
+
 --8<-- [start:print_term_1]
 print_term(+Term)
 --8<-- [end:print_term_1]
@@ -902,6 +914,10 @@ tab(+N)
 --8<-- [start:write_to_string_2]
 write_to_string(+Term, -String)
 --8<-- [end:write_to_string_2]
+
+--8<-- [start:write_text_to_string_2]
+write_text_to_string(+Term, -String)
+--8<-- [end:write_text_to_string_2]
 
 --8<-- [start:term_to_string_2]
 term_to_string(+Term, -String)

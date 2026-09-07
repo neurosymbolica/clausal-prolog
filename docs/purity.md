@@ -160,7 +160,7 @@ Test("greeting") <- greeting_text("world", "Hello, world!")
 # Emit it only at the boundary:
 greet(NAME) <- (
     greeting_text(NAME, TEXT),
-    writeln(TEXT)
+    writeln_text(TEXT)
 )
 ```
 
