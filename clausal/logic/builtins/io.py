@@ -19,8 +19,15 @@ from clausal.terms import (
     term_pformat as _term_pformat,
     quote_string as _quote_string,
     Compound,
+    DictTerm,
     Div,
+    KWTerm,
+    SegBytes,
+    SegList,
+    SegString,
+    SetTerm,
 )
+from clausal.logic.runtime._seg_helpers import normalize_seg_input
 from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
 from clausal.logic.exceptions import (
     LogicException, type_error, domain_error, existence_error,
@@ -34,7 +41,7 @@ from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS
 #
 # 1. ISO          write/1, writeq/1, write_canonical/1, write_term/2 --
 #                 a string is the LIST of its characters, so ``write("abc")``
-#                 prints ``[a, b, c]`` exactly as ISO/Scryer do.  ``writeln/1``
+#                 prints ``[a,b,c]`` exactly as ISO/Scryer do.  ``writeln/1``
 #                 and ``write_to_string/2`` are not ISO NAMES but are
 #                 ``write/1``'s semantics (+ a newline / into a string).
 # 2. Clausal TEXT write_text/1, writeln_text/1, write_text_to_string/2 --
@@ -42,9 +49,16 @@ from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS
 #                 spells.  This is the engine's ``~s`` and where f-strings go:
 #                 ``writeln_text(f"X is {X}")``.
 # 3. Clausal      print_term/1, term_to_string/2 -- the quoted, double-quoted
-#    DISPLAY      display form, i.e. ``write_term(T, [quoted(true),
-#                 double_quotes(true)])``; the form a reader recognises as the
-#                 term they wrote, and the one Scryer's TOPLEVEL uses.
+#    DISPLAY      display form: ``write_term(T, [quoted(true),
+#                 double_quotes(true)])``'s SPELLING of a string (the form a
+#                 reader recognises as the term they wrote, and the one
+#                 Scryer's TOPLEVEL uses) PLUS the display comma spacing.
+#
+# The ISO family prints NO whitespace after a comma -- ``[a,b,c]``,
+# ``f(a,b)``, ``{k:v}`` -- so its output is byte-comparable with Scryer's
+# (fix round 1, item 0, operator-ruled 2026-09-07).  The display family
+# keeps ``", "``.  Both come out of ``term_str``'s ``sep`` keyword;
+# ``write_canonical/1`` has its own renderer and is unaffected.
 
 
 def _format_term_as_text(val):
@@ -97,25 +111,51 @@ def _format_term_as_text(val):
     return str(val)
 
 
-def _format_term_iso(val, quoted: bool) -> str:
-    """Format a dereffed value for the ISO family (``write/1``/``writeq/1``).
+#: Term shapes ``term_str`` renders as TERMS rather than falling back to
+#: ``repr``.  Everything here goes through the ISO renderer; everything else
+#: (``date``, ``Quantity``, a ``PredicateMeta`` class, an opaque Python
+#: object, an unbound ``Var``) keeps the exact ``str()`` rendering ``write/1``
+#: has always produced -- a ``date`` prints ``2020-01-01``, not its ``repr``,
+#: and an unbound ``Var`` prints ``_N`` rather than the style's anonymous
+#: placeholder.
+_ISO_TERM_TYPES = (str, bytes, list, Compound, KWTerm, DictTerm, SetTerm)
 
-    ``double_quotes(false)``, ISO's default: a string is the LIST of its char
-    atoms, so ``write("abc")`` prints ``[a, b, c]`` and ``writeq("abc")``
-    prints the same (Scryer agrees, modulo this engine's display spacing --
-    only ``write_canonical/1`` is byte-comparable, spec §6.7).
 
-    Only the shapes ``term_str`` renders as TERMS are routed to it; every
-    other value keeps the exact ``str()`` rendering ``write/1`` has always
-    produced (a ``date`` prints ``2020-01-01``, not its ``repr``).
+#: What the ISO family puts between a compound's arguments and a list's
+#: elements: NOTHING after the comma, so the output is byte-comparable with
+#: Scryer (fix round 1, item 0).  ``term_str``'s own default, ``", "``, is
+#: the Clausal DISPLAY family's.
+ISO_SEP = ","
+
+
+def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
+    """Format a dereffed value for the ISO family (``write/1``/``writeq/1``/
+    ``write_term/2``).
+
+    ``double_quotes(false)`` and ``sep=","``, ISO's own defaults: a string is
+    the LIST of its char atoms, so ``write("abc")`` prints ``[a,b,c]`` and
+    ``writeq("abc")`` prints the same, byte-comparable with Scryer (fix
+    round 1, item 0).  A ``bytes`` is a code list and prints ``[97,98]``
+    (item 5).
+
+    Every shape ``term_str`` renders as a term is routed to it (item 1) --
+    ``Compound``, ``KWTerm``, ``DictTerm``, ``SetTerm`` and declared term
+    instances used to fall to ``str()``, which routes back through
+    ``term_str``'s DISPLAY defaults and so printed double-quoted strings and
+    Python reprs inside an ISO writer's output.
+
+    *double_quotes* is here only for ``write_term/2``'s option of that name;
+    every other caller in the family leaves it False.
     """
-    if isinstance(val, (str, list)):
-        return _term_str(val, quoted=quoted, double_quotes=False)
+    if isinstance(val, _ISO_TERM_TYPES) or is_term_instance(val):
+        return _term_str(val, quoted=quoted, double_quotes=double_quotes,
+                         sep=ISO_SEP)
     if type(val) is tuple and val and (type(val[0]) is str or val[0] is TUPLE_TAG):
         # A CELL -- ``("pt", 1, 2)`` (or a tuple-DATA cell). Slot 0 read RAW,
         # no deref: a slot-0-Var tuple is not a legal cell (see
         # ``clausal/logic/cells.py``) and falls through to ``str()`` below.
-        return _term_str(val, quoted=quoted, double_quotes=False)
+        return _term_str(val, quoted=quoted, double_quotes=double_quotes,
+                         sep=ISO_SEP)
     return str(val)
 
 
@@ -125,8 +165,8 @@ def _write__1(term, trail, k):
 
     ``write_term(Term, [numbervars(true)])``: atoms print their bare spelling
     and a STRING prints as the list of characters it is —
-    ``write("abc")`` prints ``[a, b, c]``, ``write(['a','b'])`` prints
-    ``[a, b]``.  Vars are auto-dereffed.
+    ``write("abc")`` prints ``[a,b,c]``, ``write(['a','b'])`` prints
+    ``[a,b]``.  Vars are auto-dereffed.
 
     For the TEXT rendering — a string as its characters, which is what an
     f-string wants — use ``write_text/1`` / ``writeln_text/1`` (Task 15
@@ -159,7 +199,7 @@ def _write_text__1(term, trail, k):
     prints its bare spelling, and every other term prints as ``write/1``
     would.  This is the engine's ``~s``, and it is where f-strings go:
     ``write_text(f"X is {X_}")``.  ``write/1`` is the ISO writer and prints
-    a string as ``[a, b, c]``.
+    a string as ``[a,b,c]``.
     """
     val = deref(term)
     _sys.stdout.write(_format_term_as_text(val))
@@ -196,19 +236,19 @@ def _writeq__1(term, trail, k):
     """writeq(Term) — write Term quoted so the reader reads it back (ISO 8.14.2).
 
     The quoted member of the ISO family (spec §6.7): an atom that would not
-    re-read as itself is single-quoted (``'foo bar'``); list syntax and
-    display spacing are write/1's, unlike write_canonical/1 below.
+    re-read as itself is single-quoted (``'foo bar'``); list syntax is
+    write/1's, unlike write_canonical/1 below, and so is the ISO comma
+    spacing -- there is none (fix round 1, item 0), so ``writeq(f(a, "b"))``
+    prints ``f(a,[b])`` byte-for-byte as Scryer does.
 
     Exactly ``write_term(Term, [quoted(true), numbervars(true)])`` (Task 15
     item 4 as amended, 2026-09-07), so ``double_quotes`` is FALSE and a
     string prints as the char list it is: ``writeq("abc")`` prints
-    ``[a, b, c]``.  ``print_term/1`` / ``term_to_string/2`` are the Clausal
-    DISPLAY form that prints ``"abc"``, and ``write_term/2`` reaches it by
-    option.
+    ``[a,b,c]``.  ``print_term/1`` / ``term_to_string/2`` are the Clausal
+    DISPLAY form, which prints ``"abc"`` and keeps ``", "``.
     """
     from clausal.logic.solve import _deref_walk
-    _sys.stdout.write(_term_str(_deref_walk(term), quoted=True,
-                                double_quotes=False))
+    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=True))
     _sys.stdout.flush()
     yield None
 
@@ -277,18 +317,25 @@ def _write_term_options(options):
     """``(quoted, double_quotes)`` for an ISO write-option list.
 
     ISO 8.14.2's defaults are ``quoted(false)`` and ``double_quotes(false)``,
-    so ``write_term(T, [])`` prints a string as ``[a, b, c]`` — which is
+    so ``write_term(T, [])`` prints a string as ``[a,b,c]`` — which is
     exactly ``write/1``.  ``ignore_ops(Bool)`` and ``numbervars(Bool)`` are
     accepted and inert (see ``_WRITE_OPTIONS``).
+
+    An unbound ``Options``, and a PARTIAL one (``[quoted(true) | _]``, which
+    reaches here as a non-ground ``Seg*``), are both
+    ``instantiation_error`` — ISO 8.14.2.3 a/b (fix round 1, item 7).  A
+    ground ``Seg*`` walks to the plain list it is and is read normally.
     """
-    opts_val = deref(options)
+    opts_val = normalize_seg_input(deref(options))
     if is_var(opts_val):
         raise LogicException(instantiation_error("write_term/2"))
-    if isinstance(opts_val, str):
-        # A STRING is a list of char atoms, never a list of options — the
-        # same refusal a non-list gets, not a walk over its characters.
-        raise LogicException(type_error("list", opts_val, "write_term/2"))
+    if isinstance(opts_val, (SegList, SegString, SegBytes)):
+        # Still a Seg* after the walk: a PARTIAL list, i.e. one whose tail is
+        # unbound.  ISO says instantiation_error, not type_error(list, …).
+        raise LogicException(instantiation_error("write_term/2"))
     if not isinstance(opts_val, list):
+        # A ``str`` lands here too, and gets the same refusal: a string is a
+        # list of char ATOMS, never a list of options.
         raise LogicException(type_error("list", opts_val, "write_term/2"))
     quoted = False
     double_quotes = False
@@ -317,22 +364,27 @@ def _write_term__2(term, options, trail, k):
 
     ``quoted(Bool)`` quotes atoms that would not re-read as themselves;
     ``double_quotes(Bool)`` prints a string (and the char list that IS one)
-    as ``"abc"`` rather than as ``[a, b, c]``; ``ignore_ops(Bool)`` is
-    accepted and inert.  Both Boolean options default to FALSE, so
-    ``write_term(T, [])`` is the ISO display and
-    ``write_term(T, [quoted(true), double_quotes(true)])`` is exactly
-    ``writeq/1`` here.  An unrecognised option is
-    ``domain_error(write_option, Opt)``; a non-list *Options* is
-    ``type_error(list, Options)``.
+    as ``"abc"`` rather than as ``[a,b,c]``; ``ignore_ops(Bool)`` and
+    ``numbervars(Bool)`` are accepted and inert.  Both Boolean options
+    default to FALSE, so ``write_term(T, [])`` is exactly ``write/1`` and
+    ``write_term(T, [quoted(true)])`` is exactly ``writeq/1``.
+    ``write_term(T, [quoted(true), double_quotes(true)])`` is the SPELLING
+    ``print_term/1`` / ``term_to_string/2`` give a string (fix round 1,
+    item 4) — those two additionally keep the display comma spacing, which
+    this writer, being ISO, does not.
 
-    Streams are out of scope, so there is no ``write_term/3``.  The engine's
-    display spacing (``f(a, b)``) is kept, as in every writer but
-    ``write_canonical/1`` — only that one is byte-comparable with Scryer.
+    An unrecognised option is ``domain_error(write_option, Opt)``; a
+    non-list *Options* is ``type_error(list, Options)``; an unbound or
+    partial one is ``instantiation_error``.
+
+    Streams are out of scope, so there is no ``write_term/3``.  Output uses
+    the ISO comma spacing — none — so it is byte-comparable with Scryer
+    (fix round 1, item 0).
     """
     from clausal.logic.solve import _deref_walk
     quoted, double_quotes = _write_term_options(options)
-    _sys.stdout.write(_term_str(_deref_walk(term), quoted=quoted,
-                                double_quotes=double_quotes))
+    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=quoted,
+                                       double_quotes=double_quotes))
     _sys.stdout.flush()
     yield None
 

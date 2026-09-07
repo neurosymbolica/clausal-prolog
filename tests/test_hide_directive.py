@@ -266,7 +266,7 @@ def test_end_to_end_solved_value_renders_human_form():
 #
 # P3-1 Task 6 fix round: the reflection/diagnostic renderers above are NOT
 # the only "writer" -- clausal/logic/builtins/io.py's write/1, writeln/1,
-# write_to_string/2 (via _format_term_for_io) and print_term/1,
+# write_to_string/2 (via _format_term_iso) and print_term/1,
 # term_to_string/2, listing/1, portray_clause/1 (via clausal.terms.term_str)
 # independently format terms for I/O.  Design doc section 1b promises "the
 # writer renders the human form" for ANY writer, not just reflection's --

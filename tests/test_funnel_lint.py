@@ -353,8 +353,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    new ``double_quotes`` keyword, threaded through every recursive call,
     #    and the ``_char_list_str`` helper added above it) -- a +34 shift of
     #    the region's end, no new site; see
-    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-15-report.md.
-    AllowEntry("clausal/terms.py", (2482, 2688),
+    #    .superpowers/sdd/2026-09-06-atoms-as-cells-strings/task-15-report.md),
+    #    then -> 2482-2717 by that task's fix round 1 (``term_str``'s third
+    #    keyword ``sep``, threaded like the other two, and the ``bytes``
+    #    branch that spells a code list out under ``double_quotes(false)``) --
+    #    a further +29 shift of the region's end, still no new site.
+    AllowEntry("clausal/terms.py", (2482, 2717),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),

@@ -422,8 +422,56 @@ class TestEmptyListIsTheAtomNil:
     def test_must_be_agrees_with_the_builtins(self, builtins_mod):
         assert list(solve(("must_be", mint("atom"), []), builtins_mod))
         assert list(solve(("must_be", mint("callable"), []), builtins_mod))
+        # Fix round 1, item 6: the ``atomic`` row the table was missing --
+        # ``must_be(atomic, [])`` used to be domain_error(type, atomic)
+        # while ``atomic([])`` succeeded.
+        assert list(solve(("must_be", mint("atomic"), []), builtins_mod))
+        assert list(solve(("must_be", mint("atomic"), mint("bar")),
+                          builtins_mod))
+        assert list(solve(("must_be", mint("atomic"), 42), builtins_mod))
+        for culprit in ("abc", [1, 2], b"ab", ("f", 1)):
+            with pytest.raises(LogicException) as exc:
+                list(solve(("must_be", mint("atomic"), culprit), builtins_mod))
+            assert _formal(exc).args[0] == mint("atomic"), culprit
         with pytest.raises(LogicException):
             list(solve(("must_be", mint("compound"), []), builtins_mod))
+
+    def test_the_nil_atom_canonicalises_to_the_empty_list(self, builtins_mod):
+        """Fix round 1, item 2 (operator-ruled): in ISO ``'[]'`` IS ``[]``,
+        and Scryer round-trips it -- ``atom_chars(X, ['[',']'])`` gives
+        ``X = []``, ``T =.. [[]]`` gives ``T = []``, ``functor(T, [], 0)``
+        gives ``T = []``, ``atom_concat('[', ']', X)`` gives ``X = []``.  So
+        ``mint("[]")`` is the empty list, not a ``("[]",)`` cell that would
+        compare unequal to the list it denotes."""
+        assert mint("[]") == []
+        X = Var()
+        assert _answers(("atom_chars", X, [char_atom("["), char_atom("]")]),
+                        builtins_mod, X) == [([],)]
+        T = Var()
+        assert _answers(("unpack", T, [[]]), builtins_mod, T) == [([],)]
+        F = Var()
+        assert _answers(("functor", F, [], 0), builtins_mod, F) == [([],)]
+        C = Var()
+        assert _answers(("atom_concat", char_atom("["), char_atom("]"), C),
+                        builtins_mod, C) == [([],)]
+        # …and above arity 0 the name is an ordinary functor spelled ``[]``:
+        # Scryer answers ``T =.. [[], a]`` with ``[](a)``.
+        T2 = Var()
+        assert _answers(("unpack", T2, [[], mint("a")]),
+                        builtins_mod, T2) == [(("[]", mint("a")),)]
+
+    def test_sort_keeps_one_element_for_nil_and_the_nil_atom(self, builtins_mod):
+        """The point of the canonicalisation: ``[]`` and ``'[]'`` are ONE
+        term, so ``sort/2`` legitimately keeps one element."""
+        L = Var()
+        assert _answers(("sort", [[], mint("[]")], L), builtins_mod, L) == [
+            ([[]],)
+        ]
+
+    def test_spelling_of_the_empty_list_is_the_two_brackets(self):
+        from clausal.logic.atoms import spelling
+        for nil in ([], "", b"", ()):
+            assert spelling(nil) == "[]", nil
 
     def test_nil_reads_its_spelling_as_the_two_bracket_characters(
             self, builtins_mod):
@@ -590,8 +638,11 @@ def test_row_28_the_reader_makes_atoms_and_strings():
 
 
 def test_row_29_the_bytecode_tag_invalidates_a_pre_flip_pyc():
+    """Bumped 9 -> 10 by fix round 1, item 2: a source-written ``'[]'``
+    compiles to a list DISPLAY now, so a tag-9 ``.pyc`` still carrying the
+    ``("[]",)`` cell must not be loaded against this runtime."""
     from clausal.import_hook import CLAUSAL_BYTECODE_TAG
-    assert CLAUSAL_BYTECODE_TAG == 9
+    assert CLAUSAL_BYTECODE_TAG == 10
 
 
 def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):

@@ -27,10 +27,10 @@ divergence to record — the last two columns say which.
 | 10 | `functor("hello", N, A).` | `N = '.'`, `A = 2` (§6.4) | HIGH. | **Match**: `functor("hello", '.', 2)`. |
 | 11 | `arg(2, "hello", T).` | `T = "ello"` | HIGH (Scryer shows a partial string). | **Match**: `arg(2, "hello", "ello")`. |
 | 12 | `functor("", N, A).` | `N = []`, `A = 0` | HIGH (`""` is `[]`). | **Match**: `functor([], [], 0)`. |
-| 13 | `write("abc"), nl.` | **RULED 2026-09-07** (Task 15 item 4, amended): prints `[a, b, c]` — `write/1` is ISO. Was `abc`. The text printing moved to the NEW `write_text/1`. | MEDIUM → resolved. Scryer's answer adopted. | Prints `[a,b,c]`. **Clausal now matches** (modulo the engine's display spacing after the comma, which only `write_canonical/1` drops). |
-| 14 | `writeq("abc"), nl.` | **RULED 2026-09-07**: prints `[a, b, c]` — `writeq/1` is ISO, i.e. `write_term(T, [quoted(true), numbervars(true)])`. Was `"abc"`. | HIGH → resolved. Scryer's answer adopted. | Prints `[a,b,c]`. The `"abc"` form is `write_term(T, [quoted(true), double_quotes(true)])`, Scryer's *toplevel* display; in Clausal that is `print_term/1` / `term_to_string/2` (non-ISO names) and `write_term/2`'s option. **Clausal now matches.** |
-| 15 | `writeq([a,b]), nl.` | **RULED 2026-09-07**: prints `[a, b]`. Was `"ab"`. | MEDIUM-HIGH → resolved. | Prints `[a,b]`. **Clausal now matches.** |
-| 16 | `write([a,b]), nl.` | **RULED 2026-09-07**: prints `[a, b]`. Was `ab`; `write_text([a,b])` prints `ab`. | MEDIUM → resolved. | Prints `[a,b]`. **Clausal now matches.** |
+| 13 | `write("abc"), nl.` | **RULED 2026-09-07** (Task 15 item 4, amended): prints `[a,b,c]` — `write/1` is ISO. Was `abc`. The text printing moved to the NEW `write_text/1`. | MEDIUM → resolved. Scryer's answer adopted. | Prints `[a,b,c]`. **Clausal now matches**, byte for byte (fix round 1, item 0 removed the comma spacing from the whole ISO family). |
+| 14 | `writeq("abc"), nl.` | **RULED 2026-09-07**: prints `[a,b,c]` — `writeq/1` is ISO, i.e. `write_term(T, [quoted(true), numbervars(true)])`. Was `"abc"`. | HIGH → resolved. Scryer's answer adopted. | Prints `[a,b,c]`. The `"abc"` form is `write_term(T, [quoted(true), double_quotes(true)])`, Scryer's *toplevel* display; in Clausal that is `print_term/1` / `term_to_string/2` (non-ISO names) and `write_term/2`'s option. **Clausal now matches.** |
+| 15 | `writeq([a,b]), nl.` | **RULED 2026-09-07**: prints `[a,b]`. Was `"ab"`. | MEDIUM-HIGH → resolved. | Prints `[a,b]`. **Clausal now matches.** |
+| 16 | `write([a,b]), nl.` | **RULED 2026-09-07**: prints `[a,b]`. Was `ab`; `write_text([a,b])` prints `ab`. | MEDIUM → resolved. | Prints `[a,b]`. **Clausal now matches.** |
 | 16b | `write_term("abc", [quoted(true), double_quotes(true)]).` etc. | NEW in Clausal (Task 15 item 4): `write_term/2` with `quoted`, `double_quotes`, `ignore_ops`, `numbervars`; unknown option → `domain_error(write_option, Opt)`; non-list → `type_error(list, Opts)`. | — | Measured: `write_term("abc",[quoted(true)])` → `[a,b,c]`; `+[double_quotes(true)]` → `"abc"`; `write_term([a,b],[])` → `[a,b]`; `write_term('a b',[quoted(true)])` → `'a b'`; `write_term(abc,[bogus(true)])` → `domain_error(write_option, bogus(true))`; `write_term(abc, foo)` → `type_error(list, foo)`. **Clausal matches** (context `write_term/2`, Scryer says `write_term/3`; no streams here). |
 | 17 | `write(""), nl.` / `write([]), nl.` | prints `[]` (both) | MEDIUM. | **Match**: `[]` (both). |
 | 18 | `write_canonical("hello"), nl.` | `'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))` | VERIFIED by the operator 2026-09-06. | **Match**, byte-for-byte. |
@@ -42,6 +42,7 @@ divergence to record — the last two columns say which.
 | 24 | `"" = [].` | true | HIGH. | **Match**: true. |
 | 25 | `"a" = a.` | false (§6.2) | HIGH. | **Match**: false. |
 | 26 | `atom([]).` / `atomic([]).` / `atomic("").` | **RULED 2026-09-07** (Task 15 item 2): true / true / true — `[]` is the reserved atom `'[]'`, and `""`/`b""` are the same term. Was false / false / false. Also `atom_length([], 2)` and `atom_chars([], ['[', ']'])`. | Was a KNOWN DIVERGENCE (spec §14.1); Scryer's answer adopted. | Confirmed: true / true / true; `atom_length([], 2)`; `atom_chars([], ['[',']'])`; `compound([])` false; `callable([])` true. **Clausal now matches.** |
+| 26b | `atom_chars(X, ['[',']']).` / `T =.. [[]].` / `functor(T, [], 0).` / `atom_concat('[', ']', X).` / `sort([[], '[]'], L).` / `T =.. [[], a].` | **RULED 2026-09-07** (fix round 1, item 2): `[]` in every case, and `L = [[]]`; above arity 0 the name is an ordinary functor spelled `[]`, so `T =.. [[], a]` is `[](a)`.  Was a `("[]",)` cell, unequal to the empty list. | The other direction of row 26 — the identity has to run both ways or `sort/2` keeps two elements. | Measured, all six: `[] iseq=yes` four times, `sort` → `[[]]`, `T =.. [[], a]` → `[](a)`. **Clausal now matches.** |
 | 27 | `is_list("abc").` / `length("abc", N).` | true / `N = 3` | HIGH. | `length/2` **matches**: `N = 3`. `is_list/1` has no Scryer equivalent — **not testable**. |
 | 28 | `append("ab", "cd", X).` | `X = "abcd"` | HIGH. | **Match**: `X = "abcd"`. |
 | 29 | `atom_codes(ab, C).` | `C = b"ab"` — the codes model: denotes `[97, 98]` | HIGH as a term; representation differs (bytes). | **Match** as a term: `C = [97,98]` (a plain code list; Clausal's `b"ab"` differs only in representation). |
@@ -67,13 +68,20 @@ now RULED, and in each case Scryer's answer was adopted: standard order
 (row 1, spec §14.9), the writers (rows 13–16, §14.10–11), and the type
 tests (rows 26/36, §14.1/§14.12), together with the string-goal error
 (row 36b) that the type-test ruling forced. Rows 1b (Scryer's own char-list
-comparison bug) and 16b (`write_term/2`) were added. Two DELIBERATE
-divergences remain and are documented in `docs/io.md` and
-`docs/builtins.md`: the engine's display spacing after a comma (`f(a, b)`,
-`[a, b, c]`) in every writer but `write_canonical/1`, and the Clausal-only
-`write_text/1` / `writeln_text/1` / `write_text_to_string/2` and
-`print_term/1` / `term_to_string/2` families — additions, not changes to an
-ISO name. Row 30 has a minor sibling divergence (`number_codes/2`
+comparison bug) and 16b (`write_term/2`) were added.
+
+**Fix round 1 (operator, same day)** closed the one divergence that survived
+that pass: the ISO family — `write/1`, `writeln/1`, `write_to_string/2`,
+`writeq/1`, `write_term/2` — now prints NO whitespace after a comma
+(`[a,b,c]`, `f(a,b)`, `{k:v}`), so rows 13–16 and 16b match Scryer byte for
+byte. It also ruled the nil atom the other way round (row 26b below) and
+routed every term shape through the ISO renderer, so a `Compound` argument
+no longer prints its DISPLAY form inside an ISO writer's output, and a
+`b"…"` code list spells out as `[97,98]` there. What remains is ADDITIVE,
+not divergent: the Clausal-only `write_text/1` / `writeln_text/1` /
+`write_text_to_string/2` and `print_term/1` / `term_to_string/2` families,
+which keep `", "` — extra names, not changes to an ISO one.
+Row 30 has a minor sibling divergence (`number_codes/2`
 leniency). Rows 27 and 39 aren't testable in Scryer (no `is_list/1` or
 `msort/2`); row 39's expected answer is unchanged by the order ruling
 (`["a", "ab", "b"]` — all three are `'.'/2` compounds, so elements decide).

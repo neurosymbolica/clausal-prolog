@@ -24,7 +24,9 @@ from clausal.logic.atoms import (
 from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, ConcreteSeg
 
 from clausal.logic.builtins._registry import _builtin
-from clausal.logic.builtins._helpers import _functor_name, _arity, _nth_arg, _args_list
+from clausal.logic.builtins._helpers import (
+    NIL_SPELLING, _functor_name, _arity, _nth_arg, _args_list, _is_empty_list,
+)
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
 
@@ -324,6 +326,14 @@ def _construct_named(name_val, args, who: str):
             return name_val(*args)
         # Arity disagrees → not this class; fall through as the bare name.
         name_val = mint(name_val.__name__)
+    if _is_empty_list(name_val):
+        # Fix round 1, item 2: the name is the reserved atom ``'[]'``, which
+        # IS the empty list.  At arity 0 the term is that list; above arity 0
+        # it is an ordinary compound whose functor spells ``[]`` — Scryer
+        # answers ``T =.. [[], a]`` with ``[](a)``.
+        if not args:
+            return []
+        return (NIL_SPELLING, *args)
     if _term_is_atom(name_val):
         # §5.4: ``'.'``/2 in the name position builds the engine's list shape.
         # This is checked BEFORE the generic cell arm because a
@@ -364,8 +374,13 @@ def _functor__3(term, name, arity, trail, k):
         # ``PredicateMeta`` stays in: a declared functor class is an atom
         # value (arity-0 declared atoms are the corpus's schema atoms) and
         # ``_construct_named`` resolves it for itself.
+        # Fix round 1, item 2: the EMPTY LIST is the reserved atom ``'[]'``,
+        # so it is an atomic name — ``functor(T, [], 0)`` gives ``T = []``
+        # (Scryer-verified).  ``b""``/``""`` are the same term.  A non-empty
+        # ``bytes`` is a code LIST and stays out (it is a compound).
         if not (
             _term_is_atom(name_val)
+            or _is_empty_list(name_val)
             or isinstance(name_val, (PredicateMeta, int, float, bool, bytes))
             or name_val is None
         ):
@@ -490,8 +505,12 @@ def _univ__2(term, lst, trail, k):
             # ``T =.. [N]`` — N must be ATOMIC (spec §6.4 / ISO 8.5.3.3 e);
             # a one-element list holding a list or any other compound shape
             # is not a term description.  Same admissions as ``functor/3``.
+            # Fix round 1, item 2: the EMPTY LIST is the reserved atom
+            # ``'[]'``, so ``T =.. [[]]`` gives ``T = []`` (Scryer-verified),
+            # where it used to be ``type_error(atomic, [])``.
             if not (
                 _term_is_atom(f_val)
+                or _is_empty_list(f_val)
                 or isinstance(f_val, (PredicateMeta, int, float, bool, bytes))
                 or f_val is None
             ):

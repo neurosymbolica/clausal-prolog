@@ -380,11 +380,25 @@ Test("term_to_string exists") <- (
     is_str(S)
 )  # nv
 
-# The two string forms are the two writer FAMILIES: write_to_string is
-# unquoted, term_to_string is quoted (docs/builtins.md, docs/io.md).
-Test("write_to_string is the unquoted family") <- (
+# The three string forms are the three writer FAMILIES (docs/builtins.md,
+# docs/io.md): write_to_string is ISO (unquoted, a string spells itself out
+# and there is no space after a comma), write_text_to_string is the Clausal
+# TEXT family, term_to_string is the Clausal DISPLAY family (quoted).
+Test("write_to_string is the ISO family") <- (
     write_to_string('a b', S),
     S == "a b"
+)  # nv
+
+Test("write_to_string spells a string out, with no comma spacing") <- (
+    write_to_string("ab", S),
+    S == "[a,b]",
+    write_to_string([1, 2], S2),
+    S2 == "[1,2]"
+)  # nv
+
+Test("write_text_to_string is the text family") <- (
+    write_text_to_string("ab", S),
+    S == "ab"
 )  # nv
 
 Test("term_to_string is the quoted family") <- (

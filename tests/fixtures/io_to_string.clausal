@@ -14,7 +14,7 @@
 # passthrough rendering moved to write_text_to_string/2, pinned below.
 Test("write_to_string: a string spells itself out") <- (
     write_to_string("hi", S),
-    S == "[h, i]"
+    S == "[h,i]"
 )  # nv
 
 Test("write_to_string: integer to string") <- (
@@ -25,7 +25,7 @@ Test("write_to_string: integer to string") <- (
 Test("write_to_string: bound var spells itself out") <- (
     X is "hi",
     write_to_string(X, S),
-    S == "[h, i]"
+    S == "[h,i]"
 )  # nv
 
 # ── write_text_to_string/2 (the Clausal TEXT family) ──────────────────────

@@ -163,7 +163,7 @@ class TestWrite:
         # nv
         t = Trail()
         out = _capture_stdout("write", 1, "hello", t)
-        assert out == "[h, e, l, l, o]"
+        assert out == "[h,e,l,l,o]"
 
     def test_write_int(self):
         # nv
@@ -177,7 +177,7 @@ class TestWrite:
         t = Trail()
         unify(v, "world", t)
         out = _capture_stdout("write", 1, v, t)
-        assert out == "[w, o, r, l, d]"
+        assert out == "[w,o,r,l,d]"
 
     def test_write_fstring(self):
         """An f-string is a STRING, so ``write/1`` spells it out; the family
@@ -187,7 +187,7 @@ class TestWrite:
         t = Trail()
         unify(x, 42, t)
         out = _capture_stdout("write", 1, f"hi {x}", t)
-        assert out == "[h, i,  , 4, 2]"
+        assert out == "[h,i, ,4,2]"
 
     def test_write_unbound_var(self):
         # nv
@@ -203,7 +203,7 @@ class TestWrite:
         assert "f" in out
 
     def test_write_tuple_data_cell(self):
-        """P3-2 Task 7: ``_format_term_for_io`` grew a ``TUPLE_TAG`` branch
+        """P3-2 Task 7: ``io._format_term_iso`` grew a ``TUPLE_TAG`` branch
         alongside the str-functor cell branch -- a tuple-DATA cell renders
         as the plain tuple it displays, not the Python tuple repr with the
         ``TUPLE_TAG`` marker leaked into slot 0."""
@@ -211,11 +211,11 @@ class TestWrite:
 
         t = Trail()
         out = _capture_stdout("write", 1, (TUPLE_TAG, 1, 2), t)
-        assert out == "(1, 2)"
+        assert out == "(1,2)"
 
     def test_write_does_not_treat_a_bound_var_functor_tuple_as_a_cell(self):
         """Task 5/Task 7 review ruling: cell recognition reads slot 0 RAW.
-        BEFORE this fix ``_format_term_for_io`` tested
+        BEFORE this fix ``io._format_term_iso`` tested
         ``isinstance(deref(val[0]), str)``, so a tuple whose slot 0 was a
         Var *bound* to a str routed through ``term_str`` and printed as a
         compound.  AFTER: it keeps the ordinary ``str()`` (Python tuple
@@ -311,7 +311,7 @@ class TestWriteln:
         # nv
         t = Trail()
         out = _capture_stdout("writeln", 1, "hello", t)
-        assert out == "[h, e, l, l, o]\n"
+        assert out == "[h,e,l,l,o]\n"
 
     def test_writeln_int(self):
         # nv
@@ -325,7 +325,7 @@ class TestWriteln:
         t = Trail()
         unify(v, [1, 2, 3], t)
         out = _capture_stdout("writeln", 1, v, t)
-        assert out == "[1, 2, 3]\n"
+        assert out == "[1,2,3]\n"
 
     def test_writeln_fstring(self):
         """``writeln/1`` follows ``write/1``: an f-string is a STRING and
@@ -339,7 +339,7 @@ class TestWriteln:
         out = _capture_stdout("writeln_text", 1, f"{x} is {y} years old", t)
         assert out == "Alice is 25 years old\n"
         out2 = _capture_stdout("writeln", 1, f"{y}!", t)
-        assert out2 == "[2, 5, !]\n"
+        assert out2 == "[2,5,!]\n"
 
     def test_writeln_succeeds(self):
         # nv
@@ -467,7 +467,7 @@ class TestWriteToString:
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, "hello", result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["[h, e, l, l, o]"]
+        assert vals == ["[h,e,l,l,o]"]
 
     def test_int_to_string(self):
         # nv
@@ -487,7 +487,7 @@ class TestWriteToString:
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["[w, o, r, l, d]"]
+        assert vals == ["[w,o,r,l,d]"]
 
     def test_tuple_data_cell(self):
         """P3-2 Task 7: routed through the same ``TUPLE_TAG``-aware
@@ -501,7 +501,7 @@ class TestWriteToString:
             StepGenerator(dispatch, None, None, None,
                           (TUPLE_TAG, mint("a"), mint("b")), result, t),
             snapshot=lambda: deref(result))
-        assert vals == ["(a, b)"]
+        assert vals == ["(a,b)"]
 
     def test_fstring(self):
         """An f-string is a STRING: ``write_to_string/2`` spells it out and
@@ -520,7 +520,7 @@ class TestWriteToString:
         vals2 = solutions(
             StepGenerator(dispatch2, None, None, None, f"a{x}", result2, t),
             snapshot=lambda: deref(result2))
-        assert vals2 == ["[a, 4, 2]"]
+        assert vals2 == ["[a,4,2]"]
 
     def test_unbound_var(self):
         # nv

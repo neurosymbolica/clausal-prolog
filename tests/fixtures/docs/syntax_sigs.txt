@@ -312,7 +312,7 @@ Call(GOAL, ARG1),                          # Call/2 (alias for call_goal/2)
 # F-strings — logic variables auto-deref at search time
 writeln_text(f"Hello, {NAME}!"),            # prints bound value of NAME
 writeln_text(f"{X:.2f}"),                   # format specs work
-write_to_string(f"{X} and {Y}", S),    # capture as string
+write_text_to_string(f"{X} and {Y}", S),    # capture as string
 
 # DCGs — >> defines grammar rules with difference lists
 greeting >> (["hello", "world"]),          # terminal sequence

@@ -2181,10 +2181,10 @@ class TestCellsAtTheBuiltinSurface:
         assert self._nsol("compound", "pt") == 1
 
     def test_write_1_renders_the_term_not_the_tuple(self, capsys):
-        """``write(pt(1, 2))`` printed ``('pt', 1, 2)``: ``_format_term_for_io``
+        """``write(pt(1, 2))`` printed ``('pt', 1, 2)``: ``io._format_term_iso``
         fell to ``str()``, which on a cell is the Python tuple repr."""
         list(call("write", ("pt", 1, 2), module=self._module()))
-        assert capsys.readouterr().out == "pt(1, 2)"
+        assert capsys.readouterr().out == "pt(1,2)"
 
     def test_term_str_renders_a_nested_cell(self):
         from clausal.terms import term_str
@@ -2196,7 +2196,7 @@ class TestCellsAtTheBuiltinSurface:
 
 
 class TestCellWriterSurfaceFixRound(TestCellsAtTheBuiltinSurface):
-    """P3-2 Task 7 fix-round additions: ``_format_term_for_io`` also gets a
+    """P3-2 Task 7 fix-round additions: ``io._format_term_iso`` also gets a
     ``TUPLE_TAG`` branch and the deref-removal Task 5/Task 7 review ruled in
     (slot 0 read RAW, no ``deref`` -- a bound-Var-functor tuple is not a
     legal cell any more, see ``clausal/logic/cells.py``'s module docstring).
@@ -2207,10 +2207,10 @@ class TestCellWriterSurfaceFixRound(TestCellsAtTheBuiltinSurface):
         from clausal.logic.cells import TUPLE_TAG
 
         list(call("write", (TUPLE_TAG, 1, 2), module=self._module()))
-        assert capsys.readouterr().out == "(1, 2)"
+        assert capsys.readouterr().out == "(1,2)"
 
     def test_write_1_does_not_treat_a_bound_var_functor_tuple_as_a_cell(self, capsys):
-        """BEFORE this fix ``_format_term_for_io`` tested
+        """BEFORE this fix ``io._format_term_iso`` tested
         ``isinstance(deref(val[0]), str)``, so a tuple whose slot 0 was a
         Var bound to a str routed through ``term_str`` and printed as a
         compound.  AFTER: slot 0 read raw, so it keeps ordinary ``str()``

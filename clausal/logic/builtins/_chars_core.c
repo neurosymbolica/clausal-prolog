@@ -52,6 +52,16 @@
  * same split from the other side. */
 static inline PyObject *atom_from_str(PyObject *s)
 {
+    /* Fix round 1, item 2 (operator-ruled 2026-09-07): the reserved atom
+     * ``'[]'`` IS the empty list, so it is never a cell.  ``atoms.mint``
+     * makes the same substitution on the Python side and the twins must
+     * agree -- ``atom_concat('[', ']', X)`` reaches THIS function on the
+     * accelerated path and its Python twin on the fallback, and Scryer
+     * answers ``X = []`` for it.  A FRESH list each time: a list is
+     * mutable, so no instance may be shared. */
+    if (PyUnicode_CompareWithASCIIString(s, "[]") == 0) {
+        return PyList_New(0);
+    }
     return PyTuple_Pack(1, s);
 }
 

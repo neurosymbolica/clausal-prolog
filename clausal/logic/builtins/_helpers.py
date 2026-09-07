@@ -17,7 +17,7 @@ from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
 from clausal.logic.cells import TUPLE_TAG
-from clausal.logic.atoms import char_atom
+from clausal.logic.atoms import char_atom, NIL_SPELLING as _NIL_SPELLING
 from clausal.terms import (
     Compound, KWTerm, DictTerm, SetTerm,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
@@ -483,12 +483,19 @@ def _is_compound(term: Any) -> bool:
 # first and fall through to it.
 
 #: The spelling of the atom the empty list IS.  ``atom_length([], 2)`` and
-#: ``atom_chars([], ['[', ']'])`` read it (Scryer-verified).
-NIL_SPELLING = "[]"
+#: ``atom_chars([], ['[', ']'])`` read it (Scryer-verified).  Re-exported
+#: from ``clausal.logic.atoms``, which owns it — ``mint(NIL_SPELLING)``
+#: answers ``[]`` (fix round 1, item 2), so the two must not drift.
+NIL_SPELLING = _NIL_SPELLING
 
 
 def _is_empty_list(term: Any) -> bool:
     """True iff *term* is the EMPTY LIST — ``[]``, ``""``, ``b""`` or ``()``.
+
+    The empty ``tuple`` is here and NOT in :func:`_is_non_empty_list`
+    deliberately: a non-empty tuple is a CELL (or tuple-data), which has its
+    own shape rules, while the empty one has no slot 0 and so is the list it
+    holds -- nothing.
 
     The empty list is the reserved atom ``'[]'``.  The empty ``tuple`` is
     here because a plain (non-cell, non-``TUPLE_TAG``) tuple is treated as
@@ -785,6 +792,14 @@ def _standard_order_key(term: Any) -> tuple:
         return (_ORD_DICT, tuple(sorted(pairs)))
     if isinstance(term, (set, frozenset, SetTerm)):
         return (_ORD_SET, tuple(sorted(_standard_order_key(e) for e in term)))
+    # DEFERRED (Task 15 fix round 1, ledger): a ``Seg*`` reaches here and
+    # keys in the OPAQUE band, while the type checks
+    # (``type_checks._is_atom_term`` and friends) walk it first with
+    # ``normalize_seg_input`` and answer for what it walks to.  So a ground
+    # ``SegString(["ab"])`` is ``string``/``compound`` but does not sort
+    # beside the equal ``"ab"``.  Filed as a todo rather than fixed here:
+    # walking inside the key changes the cost of every sort, and no in-tree
+    # caller sorts Seg* values.
     return (_ORD_OTHER, _OpaqueOrder(term))
 
 

@@ -159,8 +159,19 @@ def demangle_for_display(value) -> str:
 # ``mint`` interns slot 0 as an optimisation only (never rely on ``is``, not
 # even for the tuple: two ``mint`` calls return distinct, equal tuples).
 
+#: The spelling of the ONE atom that is not a cell: ISO's reserved ``'[]'``,
+#: which IS the empty list (fix round 1, item 2, operator-ruled 2026-09-07).
+#: Scryer round-trips it — ``atom_chars(X, ['[', ']'])`` gives ``X = []``,
+#: ``T =.. [[]]`` gives ``T = []``, ``functor(T, [], 0)`` gives ``T = []``,
+#: ``atom_concat('[', ']', X)`` gives ``X = []`` — so ``mint`` canonicalises
+#: it rather than minting a distinct ``("[]",)`` cell that would compare
+#: unequal to the empty list it denotes.
+NIL_SPELLING = "[]"
+
+
 def mint(spelling: str):
-    """Return the canonical atom for *spelling* — the cell ``(spelling,)``.
+    """Return the canonical atom for *spelling* — the cell ``(spelling,)``,
+    except for ``'[]'``, which IS the empty list and is returned as ``[]``.
 
     The spelling is ``sys.intern``ed so equality between two equal atoms hits
     the identity fast path on slot 0 (spec §5.2).  There is deliberately NO
@@ -187,6 +198,11 @@ def mint(spelling: str):
     """
     if type(spelling) is not str:
         raise TypeError(f"mint: spelling must be a str, got {type(spelling).__name__}")
+    if spelling == NIL_SPELLING:
+        # ISO 6.3.5 / the fix-round-1 ruling: ``'[]'`` IS the empty list, so
+        # there is no ``("[]",)`` cell to hand back.  A FRESH list every
+        # call -- a list is mutable, so no instance may be shared.
+        return []
     return (sys.intern(spelling),)
 
 
@@ -202,9 +218,19 @@ def is_atom(term) -> bool:
 
 
 def spelling(atom) -> str:
-    """The spelling of *atom*; ``TypeError`` for a non-atom."""
+    """The spelling of *atom*; ``TypeError`` for a non-atom.
+
+    The EMPTY LIST — ``[]``, ``""``, ``b""``, ``()`` — is the reserved atom
+    ``'[]'`` (fix round 1, item 2) and answers ``"[]"``, the two bracket
+    characters ``atom_length/2`` and ``atom_chars/2`` read.  ``is_atom``
+    above stays the arity-0-CELL shape test, so it answers False for it; the
+    TERM-level question "is this an atom?" is ``atom/1`` /
+    ``type_checks._is_atom_term``, which admits both.
+    """
     if type(atom) is tuple and len(atom) == 1 and type(atom[0]) is str:
         return atom[0]
+    if type(atom) in (list, str, bytes, tuple) and len(atom) == 0:
+        return NIL_SPELLING
     raise TypeError(f"not an atom: {atom!r}")
 
 
@@ -245,6 +271,7 @@ def is_char_atom(term) -> bool:
 
 
 __all__ = [
-    "HIDDEN_SEP", "mangle", "is_mangled", "demangle", "demangle_for_display",
-    "mint", "is_atom", "spelling", "char_atom", "is_char_atom",
+    "HIDDEN_SEP", "NIL_SPELLING", "mangle", "is_mangled", "demangle",
+    "demangle_for_display", "mint", "is_atom", "spelling", "char_atom",
+    "is_char_atom",
 ]

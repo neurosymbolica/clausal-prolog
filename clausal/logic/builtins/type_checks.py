@@ -186,12 +186,14 @@ def _compound__1(x, trail, k):
 # zero-arity ``PredicateMeta`` classes; rejects Var, Compound,
 # KWTerm, term-instance, list, dict, and SegList / SegString — every
 # Seg* shape is structurally compound. See [[F082]].
-@_builtin("atomic", 1)
-def _atomic__1(x, trail, k):
-    """atomic(X) — succeeds if X is a non-variable, non-compound term.
+def _is_atomic_term(x) -> bool:
+    """The one ``atomic/1`` definition, shared with ``_check_type``'s
+    ``atomic`` row (fix round 1, item 6) so ``must_be(atomic, X)`` and
+    ``atomic(X)`` cannot drift apart — the pattern the ``atom`` and
+    ``string`` rows already follow.
 
-    Accepts the arity-0 cell atom, the empty list, ``int``, ``float``,
-    ``bool``, ``None``, and zero-arity ``PredicateMeta`` classes. Rejects
+    True for the arity-0 cell atom, the empty list, ``int``, ``float``,
+    ``bool``, ``None``, and zero-arity ``PredicateMeta`` classes. False for
     ``Var``, ``Compound``, ``KWTerm``, term-instances, ``list``,
     ``SegList``, ``SegString`` — and, since THE FLIP, a plain ``str``: a
     string is the LIST of its char atoms (spec §6.3), so it is no more
@@ -202,41 +204,48 @@ def _atomic__1(x, trail, k):
     ``bytes`` is NOT: a code list is a list (spec §5.4), so it is the
     ``'.'/2`` compound that ``compound/1`` now answers for, and a term
     cannot be both atomic and compound.
+
+    *x* is expected already dereffed and Seg*-walked by the caller.
     """
-    # F029 (A09): walk a ground Seg* to its concrete form first — a ground
-    # SegString walks to a str (atomic) so is_str(X) no longer contradicts
-    # atomic(X). A non-ground Seg* stays a Seg* and is rejected below.
-    x_val = normalize_seg_input(deref(x))
-    if is_var(x_val):
-        return
+    if is_var(x):
+        return False
     # The empty list is the ATOM ``'[]'`` whichever way it is spelled, so it
     # is decided BEFORE the compound-shape rejection below catches ``[]``.
-    if _is_empty_list(x_val):
-        yield None
-        return
+    if _is_empty_list(x):
+        return True
     # Reject compound shapes explicitly so we don't accidentally accept
     # them via the "anything else" fallthrough.
-    if isinstance(x_val, (Compound, KWTerm, list, bytes,
-                          SegList, SegString, SegBytes)):
-        return
-    if is_term_instance(x_val):
-        return
+    if isinstance(x, (Compound, KWTerm, list, bytes,
+                      SegList, SegString, SegBytes)):
+        return False
+    if is_term_instance(x):
+        return False
     # THE FLIP (2026-09-06-atoms-as-cells-strings): the arity-0 cell atom
     # ("foo",) is the atomic term here — checked via the public atom API so
     # a plain data tuple like (1, 2) still falls off the end below
     # unrecognized.
-    if _term_is_atom(x_val):
-        yield None
-        return
+    if _term_is_atom(x):
+        return True
     # Atomic primitives. ``bool`` is-a ``int`` in Python — that's fine
     # for ``atomic``, but ``number/1`` continues to exclude it.  ``str`` and
     # ``bytes`` are deliberately ABSENT: a string is a list of char atoms and
     # a code list is a list of numbers (both rejected above).
-    if x_val is None or isinstance(x_val, (bool, int, float)):
-        yield None
-        return
+    if x is None or isinstance(x, (bool, int, float)):
+        return True
     # Zero-arity PredicateMeta class — a declared atom.
-    if is_zero_field_class(x_val):
+    return bool(is_zero_field_class(x))
+
+
+@_builtin("atomic", 1)
+def _atomic__1(x, trail, k):
+    """atomic(X) — succeeds if X is a non-variable, non-compound term.
+
+    See :func:`_is_atomic_term`, which ``must_be(atomic, X)`` shares.
+    """
+    # F029 (A09): walk a ground Seg* to its concrete form first — a ground
+    # SegString walks to a str (atomic) so is_str(X) no longer contradicts
+    # atomic(X). A non-ground Seg* stays a Seg* and is rejected below.
+    if _is_atomic_term(normalize_seg_input(deref(x))):
         yield None
 
 
@@ -373,8 +382,8 @@ def _ground__1(x, trail, k):
 # A09-F028: the set of type names must_be/can_be recognise. An unknown name
 # is a domain_error(type, Name) — the TYPE is wrong, not the term.
 _KNOWN_TYPES = frozenset({
-    "integer", "int", "float", "number", "atom", "string", "str", "list",
-    "boolean", "bool", "callable", "dict", "compound",
+    "integer", "int", "float", "number", "atom", "atomic", "string", "str",
+    "list", "boolean", "bool", "callable", "dict", "compound",
 })
 
 
@@ -392,6 +401,12 @@ def _check_type(type_name: str, term) -> bool:
         # ``'[]'``.  The same call the atom/1 builtin makes, so
         # ``must_be(atom, "x")`` and ``atom("x")`` cannot drift apart.
         return _is_atom_term(normalize_seg_input(term))
+    elif type_name == "atomic":
+        # Fix round 1, item 6: the row the table was missing, so
+        # ``must_be(atomic, [])`` raised ``domain_error(type, atomic)`` while
+        # ``atomic([])`` succeeded.  The same call the atomic/1 builtin
+        # makes, so the two cannot drift apart.
+        return _is_atomic_term(normalize_seg_input(term))
     elif type_name in ("string", "str"):
         # Task 14b: the same call the string/1 builtin makes, so
         # ``must_be(string, ['a','b'])`` and ``string(['a','b'])`` cannot

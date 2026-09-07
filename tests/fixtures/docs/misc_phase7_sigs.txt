@@ -111,7 +111,7 @@ phrase(digit(D), [5])    # D = 5
 # === files.md ===
 
 --8<-- [start:directory_listing]
-print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), writeln(ENTRY), fail)
+print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), writeln_text(ENTRY), fail)
 --8<-- [end:directory_listing]
 
 # === reified_ite.md ===

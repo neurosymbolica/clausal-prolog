@@ -225,21 +225,23 @@ class TestTermStrDoubleQuotes:
 
 class TestWriteTerm2:
     """``write_term(Term, Options)`` — the ISO writer with the option list.
-    Every expected rendering below is Scryer 0.10.0's, EXCEPT the display
-    spacing: ``write_term/2`` is ``write/1``'s family, which keeps the
-    engine's ``f(a, b)`` spacing (spec §6.7); only ``write_canonical/1`` is
-    byte-comparable with Scryer."""
+    Every expected rendering below is Scryer 0.10.0's, byte for byte: the
+    ISO family prints NO space after a comma (fix round 1, item 0)."""
 
     def test_quoted_alone_prints_a_string_as_its_char_list(self, mod):
-        assert _out(mod, ("write_term", "abc", [("quoted", True)])) == "[a, b, c]"
+        assert _out(mod, ("write_term", "abc", [("quoted", True)])) == "[a,b,c]"
 
-    def test_quoted_and_double_quotes_print_the_toplevel_form(self, mod):
+    def test_quoted_and_double_quotes_print_the_double_quoted_spelling(self, mod):
         opts = [("quoted", True), ("double_quotes", True)]
         assert _out(mod, ("write_term", "abc", opts)) == '"abc"'
+        # …and the ISO comma spacing is kept even then: this is the writer's
+        # SPELLING option, not a switch into the display family.
+        assert _out(mod, ("write_term", ("f", ("a",), "bc"), opts)) == 'f(a,"bc")'
 
-    def test_no_options_is_the_display_family(self, mod):
-        assert _out(mod, ("write_term", [("a",), ("b",)], [])) == "[a, b]"
+    def test_no_options_is_exactly_write_1(self, mod):
+        assert _out(mod, ("write_term", [("a",), ("b",)], [])) == "[a,b]"
         assert _out(mod, ("write_term", ("a b",), [])) == "a b"
+        assert _out(mod, ("write_term", [1, 2], [])) == "[1,2]"
 
     def test_quoted_quotes_an_atom(self, mod):
         assert _out(mod, ("write_term", ("a b",), [("quoted", True)])) == "'a b'"
@@ -277,6 +279,38 @@ class TestWriteTerm2:
             list(solve(("write_term", ("a",), Var()), mod))
         assert exc.value.term.args[0] == mint("instantiation_error")
 
+    def test_a_partial_option_list_is_an_instantiation_error(self, mod):
+        """Fix round 1, item 7: ``[quoted(true) | _]`` reaches the reader as
+        a non-ground ``Seg*``.  ISO 8.14.2.3 b says instantiation_error, not
+        ``type_error(list, …)``.
+
+        A ``Seg*`` cannot be compiled into a goal's argument list, so these
+        two go through ``call`` — the runtime entry the audit suite uses for
+        ``Seg*`` rows."""
+        from clausal.logic.atoms import mint
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var
+        from clausal.terms import ConcreteSeg, SegList, VarSeg
+
+        partial = SegList([ConcreteSeg([("quoted", True)]), VarSeg(Var())])
+        with pytest.raises(LogicException) as exc:
+            list(call("write_term", ("a",), partial, module=mod))
+        assert exc.value.term.args[0] == mint("instantiation_error")
+
+    def test_a_ground_seg_option_list_is_read_normally(self, mod):
+        """The other half of item 7: a GROUND ``Seg*`` walks to the plain
+        list it is and its options take effect."""
+        from clausal.logic.solve import call
+        from clausal.terms import ConcreteSeg, SegList
+
+        ground = SegList([ConcreteSeg([("quoted", True)])])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert len(list(call("write_term", ("a b",), ground,
+                                 module=mod))) == 1
+        assert buf.getvalue() == "'a b'"
+
     def test_the_atom_spellings_of_the_booleans_are_accepted(self, mod):
         """Source ``quoted(true)`` folds ``true`` to Python ``True`` (spec
         §8), but a term built by hand may carry the ATOM — both are read."""
@@ -297,31 +331,72 @@ class TestTheThreeWriterFamilies:
     * Clausal TEXT — ``write_text/1``, ``writeln_text/1``,
       ``write_text_to_string/2``: a string prints as its text.  This is
       where f-strings go.
-    * Clausal DISPLAY — ``print_term/1``, ``term_to_string/2``: exactly
-      ``write_term(T, [quoted(true), double_quotes(true)])``.
+    * Clausal DISPLAY — ``print_term/1``, ``term_to_string/2``: the
+      ``[quoted(true), double_quotes(true)])`` SPELLING, plus the display
+      comma spacing.
+
+    Fix round 1, item 0 (operator): the ISO family prints NO whitespace
+    after a comma, so its output is byte-comparable with Scryer; the
+    display family keeps ``", "``.
     """
 
     def test_write_is_iso_and_prints_a_string_as_its_char_list(self, mod):
-        assert _out(mod, ("write", "abc")) == "[a, b, c]"
-        assert _out(mod, ("write", [("a",), ("b",)])) == "[a, b]"
+        assert _out(mod, ("write", "abc")) == "[a,b,c]"
+        assert _out(mod, ("write", [("a",), ("b",)])) == "[a,b]"
         assert _out(mod, ("write", ("a b",))) == "a b"
         assert _out(mod, ("write", "")) == "[]"
-        assert _out(mod, ("write", [1, 2])) == "[1, 2]"
+        assert _out(mod, ("write", [1, 2])) == "[1,2]"
+
+    def test_the_iso_family_has_no_space_after_a_comma(self, mod):
+        """Scryer 0.10.0, byte for byte: ``write([1,2])`` → ``[1,2]``,
+        ``write(f(a,b))`` → ``f(a,b)``, ``writeq(f(a,"b"))`` → ``f(a,[b])``.
+        """
+        from clausal.terms import Compound, DictTerm
+
+        assert _out(mod, ("write", ("f", ("a",), ("b",)))) == "f(a,b)"
+        assert _out(mod, ("writeq", ("f", ("a",), "b"))) == "f(a,[b])"
+        assert _out(mod, ("write", Compound("f", (1, 2)))) == "f(1,2)"
+        assert _out(mod, ("write", DictTerm({("k",): ("v",)}))) == "{k:v}"
+        assert _out(mod, ("write_term", [1, 2], [])) == "[1,2]"
+
+    def test_the_iso_family_routes_every_term_shape_through_term_str(self, mod):
+        """Fix round 1, item 1: ``Compound``/``KWTerm``/``DictTerm`` used to
+        fall to ``str()``, which routes back through ``term_str``'s DISPLAY
+        defaults and so leaked double-quoted strings and Python reprs into an
+        ISO writer's output."""
+        from clausal.terms import Compound, DictTerm, KWTerm
+
+        assert _out(mod, ("write", Compound("f", (1, "ab")))) == "f(1,[a,b])"
+        assert _out(mod, ("write", KWTerm("p", a="ab"))) == "p(a=[a,b])"
+        assert _out(mod, ("write", DictTerm({("k",): "ab"}))) == "{k:[a,b]}"
 
     def test_write_equals_the_option_free_write_term(self, mod):
+        from clausal.terms import Compound, DictTerm, KWTerm
+
         for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
-                     ("a b",), [1, 2], ""):
+                     ("a b",), [1, 2], "",
+                     Compound("f", (1, "ab")), KWTerm("p", a="ab"),
+                     DictTerm({("k",): "ab"}), b"ab"):
             assert (_out(mod, ("write", term))
                     == _out(mod, ("write_term", term, []))), term
 
     def test_writeq_is_iso_too_and_only_adds_quoting(self, mod):
-        assert _out(mod, ("writeq", "abc")) == "[a, b, c]"
+        assert _out(mod, ("writeq", "abc")) == "[a,b,c]"
         assert _out(mod, ("writeq", ("a b",))) == "'a b'"
         opts = [("quoted", True)]
         for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
-                     ("a b",), [1, 2], ""):
+                     ("a b",), [1, 2], "", b"ab"):
             assert (_out(mod, ("writeq", term))
                     == _out(mod, ("write_term", term, opts))), term
+
+    def test_the_iso_family_prints_a_code_list_as_numbers(self, mod):
+        """Fix round 1, item 5: ``b"ab"`` is the code list ``[97,98]`` and
+        the ISO family spells it out; the TEXT family keeps ``b'ab'``."""
+        assert _out(mod, ("write", b"ab")) == "[97,98]"
+        assert _out(mod, ("writeq", b"ab")) == "[97,98]"
+        assert _out(mod, ("write_term", b"ab", [])) == "[97,98]"
+        assert _out(mod, ("write", b"")) == "[]"
+        assert _out(mod, ("write_text", b"ab")) == "b'ab'"
 
     def test_the_text_family_prints_a_string_as_its_text(self, mod):
         assert _out(mod, ("write_text", "abc")) == "abc"
@@ -340,14 +415,26 @@ class TestTheThreeWriterFamilies:
         S2 = Var()
         got2 = [deref(S2)
                 for _ in solve(("write_to_string", "abc", S2), mod)]
-        assert got2 == ["[a, b, c]"]
+        assert got2 == ["[a,b,c]"]
 
     def test_print_term_and_term_to_string_are_the_display_form(self, mod):
-        opts = [("quoted", True), ("double_quotes", True)]
-        assert _out(mod, ("print_term", "abc")) == '"abc"\n'
         from clausal.logic.variables import Var, deref
-        for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
-                     ("a b",), [1, 2], ""):
+
+        assert _out(mod, ("print_term", "abc")) == '"abc"\n'
+        expected = {
+            "abc": '"abc"',
+            "": "[]",
+            "a b": '"a b"',
+        }
+        for term, want in expected.items():
             S = Var()
             got = [deref(S) for _ in solve(("term_to_string", term, S), mod)]
-            assert got == [_out(mod, ("write_term", term, opts))], term
+            assert got == [want], term
+        # The display family keeps the ``", "`` the ISO family drops.
+        S2 = Var()
+        got2 = [deref(S2)
+                for _ in solve(("term_to_string", ("f", ("a",), "bc"), S2), mod)]
+        assert got2 == ['f(a, "bc")']
+        assert _out(mod, ("write_term", ("f", ("a",), "bc"),
+                          [("quoted", True), ("double_quotes", True)])) \
+            == 'f(a,"bc")'

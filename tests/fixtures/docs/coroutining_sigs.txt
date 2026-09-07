@@ -60,7 +60,7 @@ call_cleanup(Call, Cleanup)
 --8<-- [start:call_cleanup_2_ex2]
 SafeQuery(GOAL) <- call_cleanup(
     call_goal(GOAL),
-    writeln("query finished")
+    writeln_text("query finished")
 )
 --8<-- [end:call_cleanup_2_ex2]
 

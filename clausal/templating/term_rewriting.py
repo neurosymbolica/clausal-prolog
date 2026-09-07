@@ -31,7 +31,7 @@ from clausal.pythonic_ast.nodes import (
     TranslationsDirective as TranslationsItem,
 )
 
-from clausal.logic.atoms import mangle
+from clausal.logic.atoms import NIL_SPELLING, mangle
 # The module-namespace key the ``-module``/``-private`` rewrite emits a
 # functor-signature registry under.  Single source of truth lives with the
 # cell primitives that registry feeds.
@@ -1695,6 +1695,18 @@ class TermTransformer(NodeTransformer):
                 return constant
             if quote == '"' and transformer._double_quotes_mode == "chars":
                 return constant                     # a string
+            if value == NIL_SPELLING:
+                # Fix round 1, item 2 (operator-ruled 2026-09-07): a
+                # source-written ``'[]'`` IS the empty list, as it is in ISO
+                # and in Scryer.  ``atoms.mint`` makes the same substitution
+                # at runtime and the two must agree -- a ``("[]",)`` cell
+                # would compare unequal to the ``[]`` every other path
+                # produces, and ``sort([[], '[]'], L)`` would keep two
+                # elements.  A LIST cannot be a Python ``Constant`` (it is
+                # mutable and does not marshal into ``co_consts``), so this
+                # emits a list DISPLAY, which also gives a fresh list per
+                # evaluation -- what a mutable value requires.
+                return replace(List(elts=[], ctx=load), constant)
             return replace(Constant(value=(sys.intern(value),)), constant)
         return constant
 

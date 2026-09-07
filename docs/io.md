@@ -17,7 +17,7 @@ Test("greet") <- greet("Alice")
 
 `write_text/1` and `writeln_text/1` are the **text** writers — a string prints
 as its characters. `write/1` and `writeln/1` are the **ISO** writers and print
-a string as the list of characters it is (`[H, e, l, l, o]`). Pick by whether
+a string as the list of characters it is (`[H,e,l,l,o]`). Pick by whether
 you are producing human text or showing a term; the three families are laid
 out below.
 
@@ -31,11 +31,15 @@ Clausal has **three** groups of writing predicates. Which one you want depends
 on whether you are producing human text, spelling out a term the ISO way, or
 showing a term so a reader can tell an atom from a string.
 
-| Family | Predicates | A string prints as |
-|---|---|---|
-| **ISO** | `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2` (and `writeln/1`, `write_to_string/2`, which are `write/1`'s semantics under non-ISO names) | the LIST of its characters — `[a, b, c]` |
-| **Clausal text** | `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | its text — `abc` |
-| **Clausal display** | `print_term/1`, `term_to_string/2` | the double-quoted form — `"abc"` |
+| Family | Predicates | A string prints as | After a comma |
+|---|---|---|---|
+| **ISO** | `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2` (and `writeln/1`, `write_to_string/2`, which are `write/1`'s semantics under non-ISO names) | the LIST of its characters — `[a,b,c]` | nothing |
+| **Clausal text** | `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | its text — `abc` | a space |
+| **Clausal display** | `print_term/1`, `term_to_string/2` | the double-quoted form — `"abc"` | a space |
+
+The ISO family prints **no whitespace after a comma** — `[a,b,c]`, `f(a,b)`,
+`{k:v}` — so its output is byte-comparable with other ISO systems. The two
+Clausal families keep the engine's `", "` display spacing.
 
 #### The ISO writers: `write/1`, `writeq/1`, `write_canonical/1`
 
@@ -51,18 +55,20 @@ They differ in **how much of the term's structure they spell out**:
 |---|---|---|---|
 | atom `foo` | `foo` | `foo` | `foo` |
 | atom `'foo bar'` | `foo bar` | `'foo bar'` | `'foo bar'` |
-| string `"abc"` | `[a, b, c]` | `[a, b, c]` | `'.'(a,'.'(b,'.'(c,[])))` |
-| char list `[a, b]` | `[a, b]` | `[a, b]` | `'.'(a,'.'(b,[]))` |
-| `[1, 2]` | `[1, 2]` | `[1, 2]` | `'.'(1,'.'(2,[]))` |
-| `""` / `[]` | `[]` | `[]` | `[]` |
-| `foo(bar, "baz")` | `foo(bar, [b, a, z])` | `foo(bar, [b, a, z])` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
-| `1 + 2` | `+(1, 2)` | `+(1, 2)` | `+(1,2)` |
+| string `"abc"` | `[a,b,c]` | `[a,b,c]` | `'.'(a,'.'(b,'.'(c,[])))` |
+| char list `[a, b]` | `[a,b]` | `[a,b]` | `'.'(a,'.'(b,[]))` |
+| `[1, 2]` | `[1,2]` | `[1,2]` | `'.'(1,'.'(2,[]))` |
+| code list `b"ab"` | `[97,98]` | `[97,98]` | `'.'(97,'.'(98,[]))` |
+| `""` / `[]` / `b""` | `[]` | `[]` | `[]` |
+| `foo(bar, "baz")` | `foo(bar,[b,a,z])` | `foo(bar,[b,a,z])` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
+| `1 + 2` | `+(1,2)` | `+(1,2)` | `+(1,2)` |
 
-A string *is* the list of its characters, so all three spell it out; they only
-differ in quoting and in whether list syntax is used at all.
-`write_canonical/1` prints no space after commas and no operator forms, so its
-output is byte-comparable with other ISO systems; the string stays a compact
-`str` internally, the writer only *shows* the cons structure.
+A string *is* the list of its characters, so all three spell it out; a `b"…"`
+code list is the list of its code numbers and spells out the same way. The
+three differ in quoting and in whether list syntax is used at all.
+`write_canonical/1` additionally drops operator forms, so its output is the
+`'.'/2` structure itself; the string stays a compact `str` internally, the
+writer only *shows* the cons structure.
 
 ```clausal
 --8<-- "tests/fixtures/docs/io_examples.clausal:three_writers"
@@ -80,46 +86,53 @@ prints it. This is Clausal's `~s`, and it is where f-strings go:
 | char list `[a, b]` | `ab` |
 | atom `'foo bar'` | `foo bar` |
 | `[1, 2]` | `[1, 2]` |
+| code list `b"ab"` | `b'ab'` |
 | `""` / `[]` | `[]` |
 
 `writeln_text(f"X is {X}")` is the idiomatic way to print an interpolated line.
 
 #### The display writers: `print_term/1`, `term_to_string/2`
 
-Exactly `write_term(Term, [quoted(true), double_quotes(true)])` — a string
-prints in double quotes (`"abc"`), a char list as the string it is (`"ab"`),
-and an atom is quoted when it needs to be. Reach for these when you need to
-tell an atom from a string in the output; that is what Scryer's *toplevel*
-displays for the same term. `print_term/1` adds a newline.
+A string prints in double quotes (`"abc"`), a char list as the string it is
+(`"ab"`), and an atom is quoted when it needs to be. Reach for these when you
+need to tell an atom from a string in the output; the double-quoted spelling
+is what Scryer's *toplevel* displays for the same term, and it is the one
+`write_term/2`'s `double_quotes(true)` selects. These two keep the display
+comma spacing (`f(a, "bc")`) that the ISO family drops. `print_term/1` adds a
+newline.
 
 ### write_term/2
 
 `write_term(Term, Options)` is the ISO writer with its switches named. Both
-Boolean options default to **false**, so an option-free call is the strict
-ISO display.
+Boolean options default to **false**, so an option-free call is exactly
+`write/1`.
 
 | Option | Meaning |
 |---|---|
 | `quoted(Bool)` | quote an atom that would not read back as itself (`'foo bar'`) |
-| `double_quotes(Bool)` | print a string (and the char list that *is* one) as `"abc"` rather than as `[a, b, c]` |
+| `double_quotes(Bool)` | print a string (and the char list that *is* one) as `"abc"` rather than as `[a,b,c]` |
 | `ignore_ops(Bool)` | accepted and inert — the write family here never prints operator forms to begin with |
+| `numbervars(Bool)` | accepted and inert — there is no `'$VAR'/1` convention here |
 
 | Call | Output |
 |---|---|
-| `write_term("abc", [])` | `[a, b, c]` |
-| `write_term("abc", [quoted(true)])` | `[a, b, c]` |
+| `write_term("abc", [])` | `[a,b,c]` |
+| `write_term("abc", [quoted(true)])` | `[a,b,c]` |
 | `write_term("abc", [quoted(true), double_quotes(true)])` | `"abc"` |
-| `write_term([a, b], [])` | `[a, b]` |
+| `write_term([a, b], [])` | `[a,b]` |
+| `write_term([1, 2], [])` | `[1,2]` |
 | `write_term('a b', [quoted(true)])` | `'a b'` |
 
-`write_term(T, [quoted(true), double_quotes(true)])` is exactly `writeq/1`.
-An unrecognised option raises `domain_error(write_option, Opt)`; a non-list
-`Options` raises `type_error(list, Options)`. Streams are out of scope, so
-there is no `write_term/3`, and `max_depth(N)` is not supported.
+`write_term(T, [])` is exactly `write/1` and `write_term(T, [quoted(true)])`
+is exactly `writeq/1`. `write_term(T, [quoted(true), double_quotes(true)])`
+gives a string the *spelling* `print_term/1` and `term_to_string/2` give it —
+those two additionally keep the display comma spacing, which this writer,
+being ISO, does not.
 
-The engine's display spacing (`f(a, b)`, `[a, b, c]`) is kept here as it is in
-every writer but `write_canonical/1` — that one alone is byte-comparable with
-other ISO systems.
+An unrecognised option raises `domain_error(write_option, Opt)`; a non-list
+`Options` raises `type_error(list, Options)`; an unbound or partial one
+(`[quoted(true) | _]`) raises `instantiation_error`. Streams are out of
+scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 
 ```clausal
 --8<-- "tests/fixtures/docs/io_examples.clausal:write_term"
@@ -203,7 +216,7 @@ iso_form(X, S) <- write_to_string(X, S)
 
 Test("write to string is ISO") <- (
     iso_form("ab", S),
-    S == "[a, b]"
+    S == "[a,b]"
 )
 ```
 
@@ -229,7 +242,7 @@ Test("term to string keeps the quotes") <- (label("hello", S2), S2 == "\"hello\"
 | `42` | `"42"` | `"42"` | `"42"` |
 | the atom `hello` | `"hello"` | `"hello"` | `"hello"` |
 | the atom `'a b'` | `"a b"` | `"a b"` | `"'a b'"` |
-| the string `"hi"` | `"hi"` | `"[h, i]"` | `"\"hi\""` |
+| the string `"hi"` | `"hi"` | `"[h,i]"` | `"\"hi\""` |
 | `[1, 2]` | `"[1, 2]"` | `"[1, 2]"` | `"[1, 2]"` |
 
 Use `write_text_to_string` when building human-readable text. Use
@@ -441,7 +454,7 @@ print(f"Bound: {v}")     # hello
 
 ## Gotchas
 
-- **`write/1` prints a string as `[a, b, c]`, not as `abc`.** It is the ISO
+- **`write/1` prints a string as `[a,b,c]`, not as `abc`.** It is the ISO
   writer, and a string *is* a list of characters. For human text — and for
   f-strings — use `write_text/1` / `writeln_text/1`.
 - **`write/1` does NOT quote; `print_term/1` and `term_to_string/2` do.** If

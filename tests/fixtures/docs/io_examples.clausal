@@ -15,12 +15,12 @@
 # write/1: no quotes, and a string is the list of characters it is.
 Test("write is unquoted") <- (
     write_to_string(foo(bar, "baz"), S),
-    S == "foo(bar, [b, a, z])"
+    S == "foo(bar,[b,a,z])"
 )  # nv
 
 Test("write spells a string out") <- (
     write_to_string("ab", S1),
-    S1 == "[a, b]"
+    S1 == "[a,b]"
 )  # nv
 
 # writeq/1 adds quoting and nothing else: an atom that would not read back

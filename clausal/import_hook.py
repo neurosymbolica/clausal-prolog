@@ -431,7 +431,11 @@ def _preseed_py_submodules(module_items) -> None:
 # from inside generated code.
 # 8 -> 9 (atoms-as-cells Stage B): atom Constants are ("bar",) cells; a stale
 # .pyc binds foo = 'foo', a STRING.
-CLAUSAL_BYTECODE_TAG = 9
+# 9 -> 10 (Task 15 fix round 1, item 2): a source-written ``'[]'`` compiles to
+# a list DISPLAY, not the Constant ("[]",) -- the nil atom IS the empty list
+# (ISO; Scryer round-trips it).  A stale tag-9 .pyc still carries the cell,
+# which compares unequal to the ``[]`` every runtime path now produces.
+CLAUSAL_BYTECODE_TAG = 10
 
 
 # ── One source file → one compilation ────────────────────────────────────────

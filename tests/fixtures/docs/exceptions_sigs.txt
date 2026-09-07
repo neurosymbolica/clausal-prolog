@@ -64,7 +64,7 @@ safe_parse(S, R) <- (
 logged_op(X, Y, R) <- catch_recover(
     (R == X / Y),
     ERR,
-    (write(ERR), R is "error")
+    (write_text(ERR), R is "error")
 )
 --8<-- [end:logicexception_ex3]
 
@@ -72,7 +72,7 @@ logged_op(X, Y, R) <- catch_recover(
 logged_div(X, Y, R) <- catch(
     (R == X / Y),
     E,
-    (write(E), Throw(E))
+    (write_text(E), Throw(E))
 )
 --8<-- [end:logicexception_ex4]
 

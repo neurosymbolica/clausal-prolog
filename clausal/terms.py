@@ -2479,14 +2479,15 @@ def _quoted_atom_spelling(spelling: str) -> str:
     return quote_atom(spelling) if atom_needs_quotes(spelling) else spelling
 
 
-def _char_list_str(text: str, style: "TermStyle", _bd: int, quoted: bool) -> str:
+def _char_list_str(text: str, style: "TermStyle", _bd: int, quoted: bool,
+                   sep: str) -> str:
     """Render *text* as the bracketed LIST of char atoms it denotes.
 
     Task 15 item 4: what ``write_term(T, [])`` prints for a string, since
     ``double_quotes(false)`` is ISO's default.  Each character is an ATOM, so
-    it takes the atom quoting rule (``[' ', a]`` under ``quoted(true)``); the
-    engine's display spacing after the comma is kept, as it is for every
-    writer but ``write_canonical/1`` (spec §6.7).
+    it takes the atom quoting rule (``[' ', a]`` under ``quoted(true)``);
+    *sep* is ``","`` for the ISO family and ``", "`` for the Clausal display
+    family (fix round 1, item 0).
     """
     ob = _c('[', 'bracket', style, _bd)
     cb = _c(']', 'bracket', style, _bd)
@@ -2494,11 +2495,12 @@ def _char_list_str(text: str, style: "TermStyle", _bd: int, quoted: bool) -> str
     for ch in text:
         parts.append(_c(quote_atom(ch) if quoted and atom_needs_quotes(ch)
                         else ch, 'atom', style))
-    return ob + ", ".join(parts) + cb
+    return ob + sep.join(parts) + cb
 
 
 def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
-             *, quoted: bool = True, double_quotes: bool = True) -> str:
+             *, quoted: bool = True, double_quotes: bool = True,
+             sep: str = ", ") -> str:
     """Return a readable string representation of any term.
 
     *style* controls anonymous-variable display and optional ANSI colouring;
@@ -2515,9 +2517,20 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
     same name.  The default ``True`` prints a string — and the char list that
     IS a string — in its double-quoted form (``"abc"``), the form Scryer's
     TOPLEVEL displays and the one ``writeq/1`` uses here; ``False`` prints it
-    as the list of char atoms it denotes (``[a, b, c]``), each char rendered
+    as the list of char atoms it denotes (``[a, b, c]``, or ``[a,b,c]`` under the ISO *sep*), each char rendered
     per *quoted*, which is what ISO ``write_term(T, [])`` gives.  It threads
     through every recursive call alongside *quoted*.
+
+    *sep* (fix round 1, item 0) is what goes between a compound's arguments,
+    a list's elements and a dict's pairs.  The ISO family — ``write/1``,
+    ``writeln/1``, ``write_to_string/2``, ``writeq/1``, ``write_term/2`` —
+    passes ``","`` so its output is byte-comparable with Scryer
+    (``[a,b,c]``, ``f(a,b)``, ``{k:v}``); the Clausal display family
+    (``write_text/1``, ``print_term/1``, ``term_to_string/2``, and this
+    function's own default) keeps ``", "``.  A dict's key/value separator
+    follows it: ``": "`` when *sep* ends in a space, ``":"`` otherwise.
+    ``write_canonical/1`` does not come through here at all — it has its own
+    renderer (:func:`term_canonical`).
     """
     if style is None:
         style = _current_style
@@ -2548,10 +2561,22 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
             # ISO ``write_term(T, [])``: the string is the LIST of its char
             # atoms, so print it as that list, each char quoted per *quoted*
             # (Task 15 item 4; Scryer's own default).
-            return _char_list_str(t, style, _bd, quoted)
+            return _char_list_str(t, style, _bd, quoted, sep)
         return _c(quote_string(t) if quoted else t, 'string', style)
     if isinstance(t, bytes):
-        return repr(t)
+        # A CODE LIST (spec §5.4).  Under ``double_quotes(false)`` — the ISO
+        # family — it prints as the list of code NUMBERS it denotes, so
+        # ``write(b"ab")`` gives ``[97,98]`` and ``write(b"")`` gives ``[]``,
+        # matching what ISO prints for the equal ``[97, 98]`` (fix round 1,
+        # item 5).  The display family keeps the ``b'ab'`` spelling §6.7
+        # records as "as today".
+        if double_quotes:
+            return repr(t)
+        if not t:
+            return _c('[]', 'bracket', style, _bd)
+        ob = _c('[', 'bracket', style, _bd)
+        cb = _c(']', 'bracket', style, _bd)
+        return ob + sep.join(_c(repr(code), 'number', style) for code in t) + cb
     if isinstance(t, list):
         # A list of CHAR ATOMS *is* a string (spec §6.7's table row: Scryer
         # prints ``[a, b]`` as ``"ab"``), so it renders as one -- the same
@@ -2564,7 +2589,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
             return _c(quote_string(text) if quoted else text, 'string', style)
         ob = _c('[', 'bracket', style, _bd)
         cb = _c(']', 'bracket', style, _bd)
-        return ob + ", ".join(term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) for e in t) + cb
+        return ob + sep.join(term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in t) + cb
     if isinstance(t, Var):
         return _c(style.anon_var, 'var', style)
     if type(t) is tuple and t and type(t[0]) is str:
@@ -2605,8 +2630,8 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         functor_s = _c(_locale_name(display_functor, style, len(args)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        return functor_s + ob + ", ".join(
-            term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) for a in args) + cb
+        return functor_s + ob + sep.join(
+            term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for a in args) + cb
     if type(t) is tuple and t and t[0] is TUPLE_TAG:
         # A tuple-DATA cell -- ``(tuple, e1, e2)`` -- represents plain tuple
         # data, not a compound (P3-2 Task 5's ``TUPLE_TAG`` convention).  It
@@ -2616,34 +2641,38 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         elems = t[1:]
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        return ob + ", ".join(
-            term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) for e in elems) + cb
+        return ob + sep.join(
+            term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in elems) + cb
     if isinstance(t, Compound):
         functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
-        functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd, quoted=quoted, double_quotes=double_quotes)
+        functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep)
         functor_s = _c(functor_raw, 'atom', style) if isinstance(functor, str) else functor_raw
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        args_str = ", ".join(term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) for a in t.args)
+        args_str = sep.join(term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for a in t.args)
         return functor_s + ob + args_str + cb
     if isinstance(t, KWTerm):
         functor_s = _c(_locale_name(t.functor, style, len(t)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        args = ", ".join(f"{k}={term_str(v, style, _bd + 1, quoted=quoted, double_quotes=double_quotes)}" for k, v in t.items())
+        args = sep.join(f"{k}={term_str(v, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep)}" for k, v in t.items())
         return functor_s + ob + args + cb
     if isinstance(t, DictTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
-        inner = ", ".join(
-            f"{term_str(k, style, _bd + 1, quoted=quoted, double_quotes=double_quotes)}: {term_str(v, style, _bd + 1, quoted=quoted, double_quotes=double_quotes)}"
+        # The key/value separator follows *sep* (fix round 1, item 0): the
+        # ISO family prints ``{k:v}``, the display family ``{k: v}``.
+        kv = ": " if sep.endswith(" ") else ":"
+        inner = sep.join(
+            f"{term_str(k, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep)}{kv}"
+            f"{term_str(v, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep)}"
             for k, v in t.items()
         )
         return ob + inner + cb
     if isinstance(t, SetTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
-        inner = ", ".join(term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) for e in sorted(t.elements, key=repr))
+        inner = sep.join(term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in sorted(t.elements, key=repr))
         return ob + inner + cb
     cls = type(t)
     op = getattr(cls, "op", None)
@@ -2652,11 +2681,11 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
     if op is not None and hasattr(t, "left") and hasattr(t, "right"):
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        return ob + term_str(t.left, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) + f" {op} " + term_str(t.right, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) + cb
+        return ob + term_str(t.left, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) + f" {op} " + term_str(t.right, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) + cb
 
     # UnaryOp-style: op operand
     if op is not None and hasattr(t, "operand"):
-        operand_str = term_str(t.operand, style, _bd, quoted=quoted, double_quotes=double_quotes)
+        operand_str = term_str(t.operand, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep)
         if op.isalpha():
             return f"{op} {operand_str}"
         return f"{op}{operand_str}"
@@ -2664,12 +2693,12 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
     if isinstance(t, Call):
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
-        args_str = ", ".join(term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes) for a in t.args)
-        return term_str(t.func, style, _bd, quoted=quoted, double_quotes=double_quotes) + ob + args_str + cb
+        args_str = sep.join(term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for a in t.args)
+        return term_str(t.func, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep) + ob + args_str + cb
     if isinstance(t, LoadName):
         return _c(t.name, 'atom', style)
     if isinstance(t, Predicate):
-        return f"{term_str(t.head, style, _bd, quoted=quoted, double_quotes=double_quotes)} <- {term_str(t.body, style, _bd, quoted=quoted, double_quotes=double_quotes)}"
+        return f"{term_str(t.head, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep)} <- {term_str(t.body, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep)}"
 
     # PredicateMeta instances with locale translation.
     if style.locale is not None:
@@ -2681,7 +2710,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
             cls_name = _locale_name(type(t).__name__, style, len(term_field_names(t)))
             ob = _c('(', 'bracket', style, _bd)
             cb = _c(')', 'bracket', style, _bd)
-            parts = ", ".join(term_str(getattr(t, f), style, _bd + 1, quoted=quoted, double_quotes=double_quotes) for f in term_field_names(t))
+            parts = sep.join(term_str(getattr(t, f), style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for f in term_field_names(t))
             return _c(cls_name, 'atom', style) + ob + parts + cb
 
     return repr(t)

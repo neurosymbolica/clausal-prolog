@@ -321,6 +321,7 @@ a bare `str`; after this design they are cells end to end.
 | `T =.. L`, T unbound | `[N]` with `N` atomic → `T = N`; `[N \| Args]`, `N` an atom → the cell; `[S]` or `[S \| Args]` with `S` a string → `type_error(atomic, S)` / `type_error(atom, S)` respectively; `[N \| Args]` with `N` a number and `Args ≠ []` → `type_error(atom, N)`. |
 | `arg/3` | unchanged (arguments are terms). |
 | `'.'`/2 in name position | builds the engine list shape, never a cell — §5.4. |
+| `'[]'` in ANY position | **RULED 2026-09-07** (fix round 1, item 2): the reserved atom `'[]'` IS the empty list, so `mint("[]")` answers `[]` (a fresh list — a list is mutable) and no `("[]",)` cell is ever built. Every producer follows: the compiler's quoted-atom Constant becomes a list display (`term_rewriting.py`, bytecode tag 9 → 10), `_chars_core.c`'s `atom_from_str` and its Python twin `mint` both substitute, `_construct_named`/`functor/3`/`unpack/2` admit the empty list as an atomic NAME. Scryer round-trips it: `atom_chars(X, ['[',']'])` → `X = []`, `T =.. [[]]` → `T = []`, `functor(T, [], 0)` → `T = []`, `atom_concat('[', ']', X)` → `X = []`, and `sort([[], '[]'], L)` → `L = [[]]` (one element, legitimately — they are one term). Above arity 0 the name is an ordinary functor spelled `[]`: `T =.. [[], a]` → `[](a)`, the cell `("[]", a)`. `atoms.spelling([])` answers `"[]"`; `atoms.is_atom` stays the arity-0-CELL shape test and answers False for it — the TERM-level question is `atom/1` (§6.3). |
 | `call(G, A1, …)` | `G` an atom → `(spelling(G), A1, …)`; `G` a cell → fold; `G` a **string** → `existence_error(procedure, '.'/(2+N))` (Task 15 item 3, **RULED 2026-09-07**; `""` names `'[]'/N`). `_resolve_named_goal`'s plain-`str` branch (`higher_order.py:123–126`) is deleted, as are the `str`→`(s,)` wraps at `solve.py:211–219` and `cells.py:453–454`: a `str` goal is a string and raises. The refusal is built by `exceptions.string_goal_error`, shared by `higher_order._resolve_named_goal` (`call/N`), `solve._term_to_goal` (`solve/1`) and `predicate._dispatch_at`. It is an existence error, not `type_error(callable, …)`, because a string IS the compound `'.'/2` and so IS callable (§6.3): what is missing is the procedure. Scryer answers `existence_error(procedure, './3')` for `call("foo", X)`. `_ZERO_ARITY_CONTROL_GOALS` keys stay spellings (they are read from slot 0). |
 | `listing/1` | accepts an atom (name), `name/arity`, an imported predicate; a string → `type_error(predicate, …)` (the formal `listing/1` has always used) — the `isinstance(val, str)` branch at `io.py:388` becomes the atom branch. |
 | `abolish_table/2`, `global_atom/2`, `gensym/2`, `char_type/2` (Type), `resolve_module` designator, `(":", M, G)` | name/type/prefix arguments are atoms read by spelling; a string raises `type_error(atom, …)`. `global_atom/2` mints with `mint`; its guard mode compares with `==`. `resolve_module` keeps accepting a Python `str` from the **Python** API (`solve(goal, module="pkg.mod")`) — that is a Python argument, not a term. |
@@ -402,20 +403,29 @@ Task 15 item 4 (operator, **RULED 2026-09-07**, amended the same day,
 closing §14.10 and §14.11). There are **three families**, and the split is
 by *what a string looks like*:
 
-| Family | Predicates | A string prints as |
-|---|---|---|
-| **ISO** | `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2` — and `writeln/1`, `write_to_string/2`, which are not ISO names but are `write/1`'s semantics | the LIST of its characters |
-| **Clausal text** | `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | its text |
-| **Clausal display** | `print_term/1`, `term_to_string/2`, and `term_str`'s defaults | the double-quoted form `"abc"` |
+| Family | Predicates | A string prints as | After a comma |
+|---|---|---|---|
+| **ISO** | `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2` — and `writeln/1`, `write_to_string/2`, which are not ISO names but are `write/1`'s semantics | the LIST of its characters | nothing |
+| **Clausal text** | `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | its text | a space |
+| **Clausal display** | `print_term/1`, `term_to_string/2`, and `term_str`'s defaults | the double-quoted form `"abc"` | a space |
 
 `write/1` is exactly `write_term(T, [numbervars(true)])` and `writeq/1` is
 exactly `write_term(T, [quoted(true), numbervars(true)])` — ISO to the
-letter, so a string prints `[a, b, c]`. The TEXT behaviour those two used to
+letter, so a string prints `[a,b,c]`. The TEXT behaviour those two used to
 have moved, unchanged, to the `*_text` names; that is the engine's `~s` and
 where f-strings go (`writeln_text(f"X is {X}")`). `print_term/1` and
-`term_to_string/2` are `write_term(T, [quoted(true), double_quotes(true)])`,
-Scryer's *toplevel* display form — they exist to show structure, and are not
-ISO names, so they carry the form a reader recognises.
+`term_to_string/2` give a string the spelling
+`write_term(T, [quoted(true), double_quotes(true)])` gives it — Scryer's
+*toplevel* display form — and additionally keep the display comma spacing;
+they exist to show structure, and are not ISO names, so they carry the form
+a reader recognises.
+
+**Comma spacing** (fix round 1, item 0, operator-ruled 2026-09-07): the ISO
+family prints NO whitespace after a comma — `[a,b,c]`, `f(a,b)`, `{k:v}` —
+so its output is byte-comparable with Scryer's; the two Clausal families
+keep `", "`. Both come out of one `term_str` keyword, `sep`, threaded
+through every recursive call exactly as `quoted` and `double_quotes` are.
+`term_str`'s own default is the display `", "`.
 
 `write_canonical/1` is quoted, and ignores operators AND the `double_quotes`
 flag: every list — a string included — prints as the `'.'/2` structure it
@@ -430,14 +440,14 @@ the cons structure, exactly as the funnel already answers
 | `("foo",)` | `foo` | `foo` | `foo` | `foo` | `foo` |
 | `("foo bar",)` | `foo bar` | `'foo bar'` (ISO 6.4.2 quoting: bare iff a solo, graphic, or lowercase-initial identifier token) | `foo bar` | `'foo bar'` | `'foo bar'` |
 | `("m\x1fbar",)` | `m.bar` (demangled display, as today) | `m.bar` | `m.bar` | `m.bar` | `m.bar` |
-| `"abc"` | `[a, b, c]` | `[a, b, c]` | `abc` | `"abc"` | `'.'(a,'.'(b,'.'(c,[])))` |
-| `[("a",), ("b",)]` | `[a, b]` | `[a, b]` | `ab` | `"ab"` — a list of chars *is* a string | `'.'(a,'.'(b,[]))` |
-| `[1, 2]` | `[1, 2]` | `[1, 2]` | `[1, 2]` | `[1, 2]` | `'.'(1,'.'(2,[]))` |
-| `""` / `[]` | `[]` | `[]` | `[]` | `[]` | `[]` |
-| `("foo", ("bar",), "baz")` | `foo(bar, [b, a, z])` | `foo(bar, [b, a, z])` | `foo(bar, baz)` | `foo(bar, "baz")` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
-| `("+", 1, 2)` | `+(1, 2)` | `+(1, 2)` | `+(1, 2)` | `+(1, 2)` | `+(1,2)` |
+| `"abc"` | `[a,b,c]` | `[a,b,c]` | `abc` | `"abc"` | `'.'(a,'.'(b,'.'(c,[])))` |
+| `[("a",), ("b",)]` | `[a,b]` | `[a,b]` | `ab` | `"ab"` — a list of chars *is* a string | `'.'(a,'.'(b,[]))` |
+| `[1, 2]` | `[1,2]` | `[1,2]` | `[1, 2]` | `[1, 2]` | `'.'(1,'.'(2,[]))` |
+| `""` / `[]` / `b""` | `[]` | `[]` | `[]` | `[]` | `[]` |
+| `("foo", ("bar",), "baz")` | `foo(bar,[b,a,z])` | `foo(bar,[b,a,z])` | `foo(bar, baz)` | `foo(bar, "baz")` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
+| `("+", 1, 2)` | `+(1,2)` | `+(1,2)` | `+(1, 2)` | `+(1, 2)` | `+(1,2)` |
 | unbound `Var` | as today (`_N`) | as today | as today | as today | `_N` |
-| `b"ab"` | as today | as today | as today | as today | as today (codes model, out of scope) |
+| `b"ab"` | `[97,98]` (a code list is the `'.'/2` compound — fix round 1, item 5) | `[97,98]` | `b'ab'` (as today) | `b'ab'` (as today) | as today (codes model, out of scope) |
 
 `write_term/2` (ISO 8.14.2) is the writer with the switches named. Options:
 `quoted(Bool)`, `double_quotes(Bool)` (Scryer's extension — the switch that
@@ -445,23 +455,33 @@ picks the display family), `ignore_ops(Bool)` and `numbervars(Bool)` (both
 accepted and inert: this engine never prints operator forms in the write
 family and has no `'$VAR'/1` convention). Both Booleans default to FALSE, so
 `write_term(T, [])` ≡ `write/1` and `write_term(T, [quoted(true)])` ≡
-`writeq/1`. An unrecognised option is `domain_error(write_option, Opt)`; a
-non-list `Options` is `type_error(list, Options)`; an unbound one is
+`writeq/1`, and `write_term(T, [quoted(true), double_quotes(true)])` is the
+SPELLING `print_term/1`/`term_to_string/2` give a string (those two
+additionally keep the display comma spacing, which this writer, being ISO,
+does not). An unrecognised option is `domain_error(write_option, Opt)`; a
+non-list `Options` is `type_error(list, Options)`; an unbound one — and a
+PARTIAL one (`[quoted(true) | _]`, ISO 8.14.2.3 a/b) — is
 `instantiation_error`. Streams are out of scope: there is no `write_term/3`,
-and `max_depth(N)` is not supported. Implemented on `term_str`'s two
-keywords, `quoted` and `double_quotes`.
+and `max_depth(N)` is not supported. Implemented on `term_str`'s three
+keywords, `quoted`, `double_quotes` and `sep`.
 
 `format/2` is NOT part of this design (controller-filed todo).
 
 Rules:
 
-- `write_canonical/1` prints no space after commas and no operator forms
-  (`f(a,b)`, `'.'(1,[])`) so its output is byte-comparable with Scryer's;
-  every other writer keeps the engine's display spacing (`f(a, b)`,
-  `[a, b, c]`), which existing tests pin — so `write_term`'s output matches
-  Scryer's modulo that spacing. A partial list `[h, e | T]` prints as
-  `'.'(h,'.'(e,_N))`; a `SegString`/`SegList` is walked first and printed as
-  what it walks to.
+- `write_canonical/1` prints no operator forms (`f(a,b)`, `'.'(1,[])`) and,
+  like the rest of the ISO family, no space after a comma, so its output is
+  byte-comparable with Scryer's. The two Clausal families keep the engine's
+  display spacing (`f(a, b)`, `[1, 2]`), which existing tests pin. A partial
+  list `[h, e | T]` prints as `'.'(h,'.'(e,_N))`; a `SegString`/`SegList` is
+  walked first and printed as what it walks to.
+- Every shape `term_str` renders as a TERM goes through it in the ISO family
+  too (fix round 1, item 1): `Compound`, `KWTerm`, `DictTerm`, `SetTerm` and
+  declared term instances used to fall to `str()`, which routes back through
+  `term_str`'s DISPLAY defaults and so printed double-quoted strings and
+  Python reprs inside an ISO writer's output. Only values `term_str` would
+  `repr` — a `date`, a `Quantity`, an opaque object, an unbound `Var` — keep
+  the `str()` rendering `write/1` has always given them.
 - The cell branch of every renderer (`terms.py` `term_str` :2400–2424,
   `term_pformat` :2571–2584, `term_html` :2721–2730; `io._format_term_for_io`
   :20–47, `io._format_clause_term` :135–160; `reflection._ClauseRenderer.term`
@@ -775,7 +795,7 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
      old formal term stops matching. The remedy is unchanged: pass
      `mint("goal")` or the cell `("goal", Arg)`.
    - **Writers.** `write/1` and `writeq/1` are ISO to the letter now, so
-     `write("abc")` prints `[a, b, c]` and `write([a, b])` prints `[a, b]`.
+     `write("abc")` prints `[a,b,c]` and `write([a, b])` prints `[a,b]`.
      The TEXT printing they used to do moved, unchanged, to **new**
      predicates `write_text/1`, `writeln_text/1`, `write_text_to_string/2` —
      and that is where f-strings go: `writeln_text(f"X is {X}")`. Every
@@ -784,6 +804,20 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
      `print_term/1` / `term_to_string/2` are unchanged (the double-quoted
      display form). New: `write_term/2` with `quoted`, `double_quotes`,
      `ignore_ops`, `numbervars`. No `format/2`.
+   - **ISO comma spacing.** The ISO family prints **no whitespace after a
+     comma** — `write([1,2])` gives `[1,2]`, `write(f(a,b))` gives `f(a,b)`,
+     a dict gives `{k:v}` — so its output is byte-comparable with other ISO
+     systems. The two Clausal families keep `", "`. Any test that pinned
+     `write_to_string/2`'s output byte-for-byte has to be re-pinned. A
+     `b"…"` code list prints as its code numbers in the ISO family
+     (`[97,98]`) and keeps `b'ab'` in the text one, and `atomic(b"ab")` is
+     false accordingly.
+   - **The nil atom.** `'[]'` IS the empty list, so `mint("[]")`, a
+     source-written `'[]'`, `T =.. [[]]`, `functor(T, [], 0)` and
+     `atom_concat('[', ']', X)` all answer `[]` rather than a `("[]",)`
+     cell — and `sort([[], '[]'], L)` keeps one element. Python callers
+     comparing `mod.nil == ("[]",)` must compare to `[]`. The bytecode tag
+     moves 9 → 10, so every cached `.pyc` recompiles.
 
 The announcement names no downstream project, corpus domain, or battery
 size (information barrier).
@@ -832,8 +866,8 @@ following are pinned as tests in Plan 1:
 | 16 | `msort([b, "a", 1, foo(x), [z]], L)` | `L = [1, b, foo(x), "a", [z]]` (Task 15 item 1, RULED 2026-09-07: number < atom < compound, compounds arity-first, so the arity-1 `foo(x)` precedes the arity-2 `'.'/2` terms `"a"` and `[z]`; was `[1, b, "a", [z], foo(x)]`) |
 | 16b | `atom([])`, `atomic("")`, `compound("abc")`, `callable([1,2])` | all true (Task 15 item 2, RULED 2026-09-07); `compound([])` false; `atomic(b"ab")` false; `atom_length([], 2)`; `atom_chars([], ['[', ']'])` |
 | 17 | `sort(["ab", [a, b]], L)` | `L = ["ab"]` |
-| 18 | `write(foo(bar, "baz"))` | `foo(bar, [b, a, z])` (Task 15 item 4 as amended, RULED 2026-09-07: `write/1` is ISO); `writeq` → the same; `writeq('a b')` → `'a b'`; `writeq([a, b])` → `[a, b]`; `write_text(foo(bar, "baz"))` → `foo(bar, baz)`; `term_to_string` → `foo(bar, "baz")` and `"ab"` |
-| 18e | `write_term("abc", Opts)` | `[]` → `[a, b, c]`; `[quoted(true)]` → `[a, b, c]`; `[quoted(true), double_quotes(true)]` → `"abc"`; `[bogus(true)]` → `domain_error(write_option, bogus(true))`; non-list → `type_error(list, …)` |
+| 18 | `write(foo(bar, "baz"))` | `foo(bar,[b,a,z])` (Task 15 item 4 as amended, RULED 2026-09-07: `write/1` is ISO); `writeq` → the same; `writeq('a b')` → `'a b'`; `writeq([a, b])` → `[a,b]`; `write_text(foo(bar, "baz"))` → `foo(bar, baz)`; `term_to_string` → `foo(bar, "baz")` and `"ab"` |
+| 18e | `write_term("abc", Opts)` | `[]` → `[a,b,c]`; `[quoted(true)]` → `[a,b,c]`; `[quoted(true), double_quotes(true)]` → `"abc"`; `[bogus(true)]` → `domain_error(write_option, bogus(true))`; non-list → `type_error(list, …)` |
 | 18b | `write_canonical("hello")` | `'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))` (Scryer-verified); `write_canonical([1, 2])` → `'.'(1,'.'(2,[]))`; `write_canonical(foo(a, "b"))` → `foo(a,'.'(b,[]))`; `functor("hello", N, A)` → `N = '.'`, `A = 2`; `arg(2, "hello", T)` → `T = "ello"` |
 | 18c | `T =.. ['.', a, "bc"]` | `T = "abc"`, `string(T)`; `T2 =.. ['.', 1, [2]]` → `T2 = [1, 2]` (Python list); `functor(T3, '.', 2)` → `T3 = [_ \| _]` (SegList); no `(".", H, T)` cell is ever built (§5.4) |
 | 19 | `{foo: 1}.foo` | 1; `{"foo": 1}` (chars mode) has a string key; the two dicts do not unify |
@@ -856,8 +890,12 @@ following are pinned as tests in Plan 1:
    atom `'[]'`: `atom([])`, `atomic([])`, `callable([])` all true,
    `compound([])` false, and `_atom_to_str([])` is `"[]"` so
    `atom_length([], 2)` and `atom_chars([], ['[', ']'])`. §6.3 carries the
-   table. `T =.. [[]]` follows from the atom reading and is unchanged
-   otherwise.
+   table. **Extended by fix round 1, item 2** the same day: the identity
+   runs the other way too, so `mint("[]")`, a source-written `'[]'`,
+   `T =.. [[]]`, `functor(T, [], 0)` and `atom_concat('[', ']', X)` all
+   answer the empty LIST rather than a `("[]",)` cell — §6.4's `'[]'` row
+   has the full producer list. `sort([[], '[]'], L)` therefore keeps one
+   element legitimately.
 2. `compare/3`, `@</2` family, `keysort/2`, `predsort/3`: absent; the key of
    §6.5 makes them a small addition.
 3. `1 = 1.0` unifies (no numeric arm); ISO says no. Pre-existing.
@@ -900,13 +938,13 @@ following are pinned as tests in Plan 1:
    §6.5 carries the key shapes. Scryer's own char-list comparison bug
    (`compare(>, [a], [a,b])`) is recorded at sheet row 1, not copied.
 10. **RULED 2026-09-07** (operator, Task 15 item 4 as amended). `write/1`
-    of a string follows ISO exactly and prints the char list (`[a, b, c]`);
+    of a string follows ISO exactly and prints the char list (`[a,b,c]`);
     Clausal's text printing moves to the new `write_text/1` /
     `writeln_text/1` / `write_text_to_string/2`. §6.7 carries the three
     families.
 11. **RULED 2026-09-07** (operator, Task 15 item 4 as amended). `writeq/1`
     is ISO too — `write_term(T, [quoted(true), numbervars(true)])`, so a
-    string prints `[a, b, c]`, and a list of chars prints `[a, b]`. The
+    string prints `[a,b,c]`, and a list of chars prints `[a,b]`. The
     double-quoted *toplevel* display form is `print_term/1` /
     `term_to_string/2` (non-ISO names) and `write_term/2`'s
     `double_quotes(true)`. §6.7 carries the table.
