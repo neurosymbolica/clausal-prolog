@@ -19,7 +19,7 @@ divergence to record — the last two columns say which.
 | 3 | `atom_chars("hi", L).` | `type_error(atom, "hi")` (§6.6) | MEDIUM (same family as 2). | **Match**: `type_error(atom, "hi")`. |
 | 4 | `atom_chars(A, "hi").` | `A = hi` | HIGH. | **Match**: `A = hi`. |
 | 5 | `char_code("a", C).` | `type_error(character, "a")` (§6.6) | MEDIUM-HIGH (`"a"` is `[a]`, not a char). | **Match**: `type_error(character, "a")`. |
-| 6 | `atom_concat(1, 2, X).` | `X = '12'` (§6.6, ISO allows atomic) | MEDIUM. | `type_error(atom, 1)`. **Clausal diverged; fixed in this commit** — `atom_concat/3` now rejects a bound number up front for every argument position (`tests/test_chars.py::TestAtomConcat`). |
+| 6 | `atom_concat(1, 2, X).` | `X = '12'` (§6.6, ISO allows atomic) | MEDIUM. | `type_error(atom, 1)`. **Match** — the engine already rejected a bound number in every position (`chars.py` F031/F077 up-front check); only the spec sentence was wrong, corrected here, and three pins added (`tests/test_chars.py::TestAtomConcat`). |
 | 7 | `functor(T, "foo", 2).` | `type_error(atomic, "foo")` (§6.4, ISO 8.5.1.3 e) | MEDIUM. Scryer may print the culprit as `[f,o,o]`. | **Match**: `type_error(atomic, "foo")`. |
 | 8 | `T =.. ["foo", 1].` | `type_error(atom, "foo")` (§6.4, ISO 8.5.3.3) | MEDIUM. | **Match**: `type_error(atom, "foo")`. |
 | 9 | `T =.. ["foo"].` | `type_error(atomic, "foo")` | MEDIUM. | **Match**: `type_error(atomic, "foo")`. |
@@ -55,8 +55,8 @@ divergence to record — the last two columns say which.
 | 39 | `msort(["b", "a", "ab"], L).` | `L = ["a", "ab", "b"]` (keys as char lists) | HIGH (lexicographic by element). | No `msort/2` in Scryer — **not testable**. |
 | 40 | `X = 'hello world', writeq(X), nl.` | `'hello world'` | HIGH. | **Match**: prints `'hello world'`. |
 
-Measured against Scryer 0.10.0: row 6 was a real Clausal defect (numbers
-accepted by `atom_concat/3`); it is fixed in this commit. Rows 1, 13, 14, 15,
+Measured against Scryer 0.10.0: row 6 was a spec-text defect only (the engine already rejected numbers
+in `atom_concat/3`); corrected in this commit. Rows 1, 13, 14, 15,
 16, 26, and 36 are confirmed divergences awaiting a ruling — 1 and 26/36 are
 pre-existing and already parked (spec §14.1, §4), 13/14/15/16 are new and
 parked as spec §14 items 10–12. Row 30 has a minor sibling divergence
