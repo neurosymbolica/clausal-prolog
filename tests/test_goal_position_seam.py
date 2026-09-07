@@ -243,3 +243,25 @@ class TestFor:
             "    return IDS\n"
         ))
         assert mod.first(("large",)) == [("r1",)]
+
+    def test_a_statement_nested_seam_may_reuse_a_target_name(self):
+        # spec §4: statement-nested seams are independent -- `_seam_bound`
+        # only tracks a ``--`` nested inside a ``++`` of the SAME seam
+        # expression, which a statement (an inner ``for``'s whole clause) is
+        # never part of. Reusing ``S`` as both the outer and inner target is
+        # therefore not refused; it is an ordinary Python rebinding, exactly
+        # as reusing a loop variable name in nested ``for`` loops always is.
+        mod = _load_inline("_gp_for8", RULEBASE.format(name="_gp_for8") + (
+            "def nested(profile, profile2):\n"
+            "    out = []\n"
+            "    outer_ids = []\n"
+            "    for S, IDS in --decide(++profile, verdict(S, IDS)):\n"
+            "        outer_ids.append(IDS)\n"
+            "        for S in --decide(++profile2, verdict(S, _)):\n"
+            "            out.append(S)\n"
+            "    return out, outer_ids, S\n"
+        ))
+        out, outer_ids, last = mod.nested(("large",), ("small",))
+        assert out == [("permitted",), ("permitted",)]
+        assert outer_ids == [[("r1",)], [("r2",)]]
+        assert last == ("permitted",)
