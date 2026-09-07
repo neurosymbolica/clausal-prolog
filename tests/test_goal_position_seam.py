@@ -386,3 +386,68 @@ class TestBoundaries:
         src = RULEBASE.format(name="_gp_r") + "def f():\n    if --decide(small, V):\n        return V\n"
         dumped = "\n".join(repr(vars(i)) if hasattr(i, "__dict__") else repr(i) for i in reify_source(src))
         assert "PythonCode(kind='function', name='f'" in dumped and "$once_bind" not in dumped
+
+
+class TestQueryCache:
+    """A goal-position seam inside a loop compiles its query ONCE.
+
+    The node handed to ``solve()`` is rebuilt on every execution — fresh
+    ``Var`` objects, a fresh ``PyThunk`` closing over this iteration's Python
+    values — so nothing about the OBJECTS is stable.  What is stable is the
+    node's SHAPE, and that is what ``_goal_cache_key`` keys on (Task 7).
+    """
+
+    def _compile_count(self, fn):
+        """How many query compiles *fn()* triggers (instrumented, not timed)."""
+        import clausal.logic.compiler as comp
+        import clausal.logic.solve as solve_mod
+        calls = []
+        real = comp.compile_predicate_trampoline
+
+        def counting(*a, **k):
+            calls.append(1)
+            return real(*a, **k)
+
+        comp.compile_predicate_trampoline = counting
+        solve_mod._query_cache.clear()
+        try:
+            fn()
+        finally:
+            comp.compile_predicate_trampoline = real
+        return len(calls)
+
+    def test_a_goal_seam_in_a_loop_compiles_once(self):
+        mod = _load_inline("_gp_c1", RULEBASE.format(name="_gp_c1") + (
+            "def hits(profiles):\n"
+            "    n = 0\n"
+            "    for p in profiles:\n"
+            "        if --decide(++p, verdict(S, IDS)):\n"
+            "            n += 1\n"
+            "    return n\n"
+        ))
+        profiles = [("small",), ("large",), ("tiny",)] * 10
+        assert self._compile_count(lambda: mod.hits(profiles)) == 1
+        assert mod.hits(profiles) == 20
+
+    def test_a_thunk_is_re_evaluated_per_execution_not_captured(self):
+        mod = _load_inline("_gp_c2", RULEBASE.format(name="_gp_c2") + (
+            "def status(p):\n"
+            "    if --decide(++p, verdict(S, _)):\n"
+            "        return S\n"
+            "    return None\n"
+        ))
+        assert mod.status(("small",)) == ("permitted",)
+        assert mod.status(("large",)) == ("prohibited",)
+        assert mod.status(("small",)) == ("permitted",)
+
+    def test_a_unification_pattern_seam_compiles_once(self):
+        mod = _load_inline("_gp_c3", RULEBASE.format(name="_gp_c3") + (
+            "def parts(answers):\n"
+            "    out = []\n"
+            "    for a in answers:\n"
+            "        if --(verdict(S, IDS) is ++a):\n"
+            "            out.append(S)\n"
+            "    return out\n"
+        ))
+        answers = [("verdict", ("permitted",), []), ("verdict", ("prohibited",), [])] * 5
+        assert self._compile_count(lambda: mod.parts(answers)) == 1

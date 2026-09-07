@@ -39,6 +39,7 @@ from __future__ import annotations
 import datetime as _datetime
 import sys
 import types as _types
+from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -61,6 +62,8 @@ from clausal.terms import (
     LoadName as _ReifiedLoadName,
     LoadAttr as _ReifiedLoadAttr,
 )
+from clausal.terms import PyThunk as _PyThunk
+from clausal.pythonic_ast.nodes import Lambda as _Lambda, Node as _GoalNode
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -261,7 +264,7 @@ class _Uncacheable(Exception):
     """Raised internally when a goal contains a ground leaf we cannot key on."""
 
 
-def _structural_key(term: Any, var_index: dict) -> tuple:
+def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> tuple:
     """Recursively canonicalise a goal term into a hashable structural key.
 
     The compiled query bakes ground arguments into the generated code as literal
@@ -286,7 +289,12 @@ def _structural_key(term: Any, var_index: dict) -> tuple:
 
     Raises :class:`_Uncacheable` if a ground leaf is unhashable (e.g. a list,
     dict, or ndarray argument), in which case the caller skips caching entirely
-    rather than risk a stale or colliding entry.
+    rather than risk a stale or colliding entry.  A ``Lambda`` node raises it
+    too: its body's variables are out of the remap's reach (see the node
+    branch below).
+
+    *thunks*, when a list is passed, receives every ``PyThunk`` leaf in
+    traversal order — see ``_goal_cache_key``.
     """
     from clausal.logic.predicate import PredicateMeta
 
@@ -299,18 +307,54 @@ def _structural_key(term: Any, var_index: dict) -> tuple:
         return ("var", idx)
     if isinstance(type(t), PredicateMeta):
         return ("pred", type(t),
-                tuple(_structural_key(getattr(t, f), var_index)
+                tuple(_structural_key(getattr(t, f), var_index, thunks)
                       for f in term_field_names(t)))
     if isinstance(t, Compound):
         return ("cmp", t.functor,
-                tuple(_structural_key(a, var_index) for a in t.args))
+                tuple(_structural_key(a, var_index, thunks) for a in t.args))
+    if isinstance(t, _PyThunk):
+        # A ``++expr`` escape.  The thunk OBJECT is rebuilt on every execution
+        # of the hosting Python code (a fresh closure over this iteration's
+        # locals), so keying it by identity — what the ``hash(t)`` fallback
+        # below used to do — gave every execution its own compiled query.
+        # What is stable is the SITE: the lambda's code object is a constant
+        # of the enclosing function, so two thunks share compiled code exactly
+        # when they came from the same ``++``.  The closure itself is supplied
+        # per execution, like a Var, by rebinding the ``_pyt_<id>`` global the
+        # compiled code calls (see ``_compile_as_query``) — which is why the
+        # key deliberately says nothing about the values the thunk closes over.
+        code = getattr(t.fn, "__code__", None)
+        if code is None:
+            # Not a Python function (no code object to name the site with):
+            # nothing stable to key on, so this goal simply is not cached.
+            raise _Uncacheable()
+        if thunks is not None:
+            thunks.append(t)
+        return ("thunk", code,
+                _structural_key(t._position, var_index, thunks),
+                tuple(_structural_key(v, var_index, thunks)
+                      for v in t.var_objects))
     if isinstance(t, (list, tuple)):
         is_cell, functor = compound_cell_shape(t)
         if is_cell:
             return ("cell", functor,
-                    tuple(_structural_key(x, var_index) for x in t[1:]))
+                    tuple(_structural_key(x, var_index, thunks) for x in t[1:]))
         return ("seq", type(t),
-                tuple(_structural_key(x, var_index) for x in t))
+                tuple(_structural_key(x, var_index, thunks) for x in t))
+    if isinstance(t, _GoalNode) and _is_dataclass(t):
+        # A goal NODE — what the rewriter hands ``solve()`` for a
+        # goal-position ``--`` seam, rebuilt from scratch on every execution
+        # (Task 7).  It is a dataclass, so its shape is its fields; keyed
+        # field-by-field it is exactly as value-sensitive as a Compound.
+        # A ``Lambda`` is refused: its body's variables are deliberately NOT
+        # collected by ``_collect_vars``, so a cache hit could not rebind
+        # them and the cached code would keep the FIRST execution's Vars.
+        if isinstance(t, _Lambda):
+            raise _Uncacheable()
+        return ("node", type(t),
+                tuple((f.name, _structural_key(getattr(t, f.name),
+                                               var_index, thunks))
+                      for f in _dc_fields(t)))
     try:
         hash(t)
     except TypeError as e:
@@ -318,25 +362,39 @@ def _structural_key(term: Any, var_index: dict) -> tuple:
     return ("lit", type(t), t)
 
 
-def _goal_cache_key(goal: Any, module: Module):
+def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
     """Structural, value-sensitive cache key for a top-level query goal.
 
     Returns ``None`` (caching disabled for this goal) when the goal is neither a
-    predicate term, a Compound, nor a CELL, or when it contains an unhashable
-    ground leaf.
+    predicate term, a Compound, a CELL, nor a goal NODE, or when it contains an
+    unhashable ground leaf.
 
     Cells were previously in the "neither" bucket and so were uncached
     outright; they are hashable tuples with the same structural discipline as
     a Compound, and ``_structural_key`` gives them their own ``('cell', ...)``
     tag, so a cell goal caches like any other predicate call (P3-3 Task 5).
+
+    Goal NODES (``Call``/``Unify``/``And``/``TupleLiteral``, …) were the next
+    occupants of that bucket, and they are the shape a goal-position ``--``
+    seam hands ``solve()`` — rebuilt on every execution, so an uncached node
+    meant one compile per loop iteration (Task 7).  ``_structural_key`` keys
+    them field-by-field, which is what makes two executions of the same
+    ``if --goal:`` one compiled query.
+
+    *thunks*, when given, is filled with the ``PyThunk`` leaves in the order
+    ``_structural_key`` visits them — the order ``_compile_as_query`` needs to
+    rebind their per-execution closures on a cache hit.  Passing the SAME
+    traversal is the point: a second, separately-written walk could drift out
+    of step with the key's and silently rebind the wrong thunk.
     """
     from clausal.logic.predicate import PredicateMeta
     if not (isinstance(type(goal), PredicateMeta)
             or isinstance(goal, Compound)
+            or isinstance(goal, _GoalNode)
             or compound_cell_shape(goal)[0]):
         return None
     try:
-        return (_structural_key(goal, {}), id(module))
+        return (_structural_key(goal, {}, thunks), id(module))
     except _Uncacheable:
         return None
 
@@ -496,7 +554,10 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
 
     # Compute cache key before AST conversion (needs original term).  After
     # templatizing, ground args are Vars, so the key is value-independent.
-    cache_key = _goal_cache_key(goal, module)
+    # ``goal_thunks`` comes back filled by the SAME walk, in the order the
+    # compiled code's ``_pyt_<id>`` globals were named (Task 7).
+    goal_thunks: list = []
+    cache_key = _goal_cache_key(goal, module, goal_thunks)
 
     goal = _term_to_goal(goal)
     from clausal.logic.compiler import compile_predicate_trampoline
@@ -510,12 +571,33 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     # — term_to_ast_expr falls back to that reference instead of raising.
     vars_in_goal = _collect_vars(goal, include_bound=True)
 
-    if cache_key is not None and cache_key in _query_cache:
-        cached_fn, cached_code, cached_var_names = _query_cache[cache_key]
+    cached = _query_cache.get(cache_key) if cache_key is not None else None
+    if cached is not None:
+        cached_fn, cached_code, cached_var_names, cached_thunk_names = cached
+        # The two name lists ARE the parameter list of a cached query: the
+        # cached code says ``_v<id>`` / ``_pyt_<id>`` by the name it was
+        # compiled with, and every one of them has to be rebound to this
+        # execution's object.  A count mismatch means the key has conflated
+        # two goals the remap cannot bridge (a bound Var wrapper the key
+        # deref'd away but ``_collect_vars`` still collected, say) — so
+        # recompile rather than run the cached code with a stale object
+        # silently left in place.
+        if (len(cached_var_names) != len(vars_in_goal)
+                or len(cached_thunk_names) != len(goal_thunks)):
+            cached = None
+    if cached is not None:
         # Map new Var objects to the names the cached code expects
         new_globals = dict(cached_fn.__globals__)
         for old_name, new_var in zip(cached_var_names, vars_in_goal):
             new_globals[old_name] = new_var
+        # Same for the ``++`` escapes: the compiled code calls the thunk
+        # through a global, so handing it THIS execution's closure is what
+        # makes a cached query still read the caller's current Python values.
+        # (This is the thunk's parameter binding — a Var could not carry it:
+        # unifying a Var with the PyThunk OBJECT would put the thunk into the
+        # term instead of its value.)
+        for old_name, new_thunk in zip(cached_thunk_names, goal_thunks):
+            new_globals[old_name] = new_thunk.fn
         fn = _types.FunctionType(cached_code, new_globals, cached_fn.__name__)
         return fn, param_pairs
 
@@ -563,7 +645,9 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # (dicts preserve insertion order) once the cap is reached.
         if len(_query_cache) >= _QUERY_CACHE_MAX:
             _query_cache.pop(next(iter(_query_cache)), None)
-        _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__, cached_var_names)
+        cached_thunk_names = [f"_pyt_{id(t)}" for t in goal_thunks]
+        _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__,
+                                   cached_var_names, cached_thunk_names)
 
     return dispatch_fn, param_pairs
 
