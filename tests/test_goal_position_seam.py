@@ -133,3 +133,26 @@ class TestIf:
             "    return x[0], x[1]\n"
         ))
         assert mod.term()[0] == "decide" and mod.term()[1] == ("small",)
+
+    def test_a_goal_seam_if_nested_in_a_goal_seam_if_body(self):
+        mod = _load_inline("_gp_if6", RULEBASE.format(name="_gp_if6") + (
+            "def both(profile1, profile2):\n"
+            "    if --decide(++profile1, verdict(S, IDS)):\n"
+            "        if --decide(++profile2, verdict(S2, IDS2)):\n"
+            "            return S, IDS, S2, IDS2\n"
+            "    return None\n"
+        ))
+        assert mod.both(("small",), ("large",)) == (
+            ("permitted",), [("r1",), ("r2",)], ("prohibited",), [("r1",)])
+
+    def test_a_goal_seam_if_nested_in_a_goal_seam_if_else(self):
+        mod = _load_inline("_gp_if7", RULEBASE.format(name="_gp_if7") + (
+            "def either(profile1, profile2):\n"
+            "    if --decide(++profile1, verdict(prohibited, IDS0)):\n"
+            "        return 'first'\n"
+            "    else:\n"
+            "        if --decide(++profile2, verdict(S, IDS)):\n"
+            "            return S, IDS\n"
+            "    return None\n"
+        ))
+        assert mod.either(("small",), ("large",)) == (("prohibited",), [("r1",)])

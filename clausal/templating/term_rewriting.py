@@ -4614,6 +4614,17 @@ class EmbedTransformer(NodeTransformer):
     def _globals_call(transformer, anchor):
         return replace(Call(func=Name(id="globals", ctx=Load()), args=[], keywords=[]), anchor)
 
+    def _visit_stmts(transformer, stmts):
+        """Visit each statement, splicing in any LIST result (a nested
+        goal-seam ``if`` returns ``pre_stmts + [If]``) instead of nesting it
+        as a single body element -- ``compile()`` requires a flat list of
+        statements, not a list containing a list."""
+        out = []
+        for s in stmts:
+            r = transformer.visit(s)
+            out.extend(r if isinstance(r, list) else [r])
+        return out
+
     def visit_If(transformer, node):
         found = transformer._goal_operand(node.test)
         if found is None:
@@ -4629,13 +4640,9 @@ class EmbedTransformer(NodeTransformer):
         else:
             exports = transformer._export_stmts(fresh, node.test)
         node.test = test
-        node.body = exports + [transformer.visit(s) for s in node.body]
+        node.body = exports + transformer._visit_stmts(node.body)
         # ``elif`` is an If nested in orelse: visit it so it gets the same treatment.
-        new_orelse = []
-        for s in node.orelse:
-            r = transformer.visit(s)
-            new_orelse.extend(r if isinstance(r, list) else [r])
-        node.orelse = new_orelse
+        node.orelse = transformer._visit_stmts(node.orelse)
         fix_missing_locations(node)
         return pre + [node]
 
