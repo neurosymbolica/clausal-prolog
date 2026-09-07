@@ -265,3 +265,55 @@ class TestFor:
         assert out == [("permitted",), ("permitted",)]
         assert outer_ids == [[("r1",)], [("r2",)]]
         assert last == ("permitted",)
+
+
+class TestWhile:
+    def test_while_reruns_the_goal_each_iteration(self):
+        mod = _load_inline("_gp_while1", (
+            "-module(_gp_while1, [next(A, B), a, b, c])\n"
+            "-double_quotes(chars)\n"
+            "next(a, b),\n"
+            "next(b, c),\n"
+            "def walk(start):\n"
+            "    cur = start\n"
+            "    path = [cur]\n"
+            "    while --next(++cur, N):\n"
+            "        cur = N\n"
+            "        path.append(cur)\n"
+            "    return path\n"
+        ))
+        assert mod.walk(("a",)) == [("a",), ("b",), ("c",)]
+
+    def test_while_not_goal_loops_until_the_goal_succeeds(self):
+        # `while not --goal` runs the body for as long as the goal FAILS;
+        # nothing is exported (the loudness rule for negated tests), so the
+        # body advances a plain Python counter/cursor instead.
+        mod = _load_inline("_gp_while2", (
+            "-module(_gp_while2, [next(A, B), c, z])\n"
+            "-double_quotes(chars)\n"
+            "next(c, z),\n"
+            "def find(seq):\n"
+            "    cur = seq[0]\n"
+            "    i = 0\n"
+            "    while not --next(++cur, N):\n"
+            "        i += 1\n"
+            "        cur = seq[i]\n"
+            "    return cur, i\n"
+        ))
+        assert mod.find([("a",), ("b",), ("c",)]) == (("c",), 2)
+
+    def test_while_not_goal_does_not_export_the_fresh_variable(self):
+        mod = _load_inline("_gp_while3", (
+            "-module(_gp_while3, [next(A, B), c, z])\n"
+            "-double_quotes(chars)\n"
+            "next(c, z),\n"
+            "def find(seq):\n"
+            "    cur = seq[0]\n"
+            "    i = 0\n"
+            "    while not --next(++cur, N):\n"
+            "        i += 1\n"
+            "        cur = seq[i]\n"
+            "    return N\n"
+        ))
+        with pytest.raises((UnboundLocalError, NameError)):
+            mod.find([("a",), ("b",), ("c",)])

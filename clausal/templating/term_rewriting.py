@@ -4709,6 +4709,44 @@ class EmbedTransformer(NodeTransformer):
         fix_missing_locations(node)
         return pre + [declare, node]
 
+    def visit_While(transformer, node):
+        found = transformer._goal_operand(node.test)
+        if found is None:
+            return transformer.generic_visit(node)
+        expression, negated = found
+        # ``pre`` is unused on purpose: unlike ``if``/``for``, the fresh
+        # ``Var()`` binds must be re-created every iteration, so they are
+        # emitted INSIDE the loop test (as a bind-then-call tuple index)
+        # rather than once before the loop.
+        _pre, goal_ast, fresh = transformer._goal_seam(expression, node.test)
+        call = replace(Call(func=Name(id="$once_bind", ctx=Load()),
+                            args=[goal_ast, transformer._globals_call(node.test)],
+                            keywords=[]), node.test)
+        if fresh:
+            binds = [replace(NamedExpr(
+                target=replace(Name(id=f"$v_{n}", ctx=Store()), node.test),
+                value=replace(Call(func=replace(Name(id="Var", ctx=Load()), node.test),
+                                   args=[], keywords=[]), node.test)), node.test)
+                for n in fresh]
+            call = replace(Subscript(
+                value=replace(Tuple(elts=[*binds, call], ctx=Load()), node.test),
+                slice=replace(Constant(value=-1), node.test), ctx=Load()), node.test)
+        if negated:
+            node.test = replace(UnaryOp(op=Not(), operand=call), node.test)
+            # Loudness rule (as for negated ``if``): none of the fresh
+            # variables are exported, so declare them as locals without
+            # binding, so a stray read raises ``UnboundLocalError`` rather
+            # than falling through to a same-named module global.
+            declare = transformer._declare_locals(fresh, node.test)
+            exports = [declare]
+        else:
+            node.test = call
+            exports = transformer._export_stmts(fresh, node.test)
+        node.body = exports + transformer._visit_stmts(node.body)
+        node.orelse = transformer._visit_stmts(node.orelse)
+        fix_missing_locations(node)
+        return node
+
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
                                orig_kw_args, anchor, src_node, expr_stmt):
         """Build AST for a bodyless fact ``functor(args)`` (arity >= 0 via args).
