@@ -210,7 +210,11 @@ silent:
     `query_wfs` does not decompose one, so no delay set is read and the
     answer passes as true;
   * an UNTABLED WRAPPER — `if --p(a):` with `p(X) <- wins(X)` — is not a
-    tabled call, so the same thing happens.
+    tabled call, so the same thing happens;
+  * a TABLED CALL WITH `++` ARGUMENT — `if --wins(++x):` — is not judged
+    today either (the key is taken before the `++` runs); to get the
+    judgement, make the call ground with an atom or term written in the
+    goal, or use logic variables instead.
 
   The sugar inherits `query_wfs`'s judgement rather than growing a second
   one; widening it to composite goals is a filed follow-up

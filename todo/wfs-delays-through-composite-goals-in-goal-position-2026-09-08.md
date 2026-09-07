@@ -58,6 +58,17 @@ Pinned by `tests/test_goal_position_seam.py::TestSoundnessThroughTheRewriter`:
    `query_wfs` is unaffected: it calls `_tabled_entry_for_goal`, which is now
    a thin wrapper with its old behaviour.
 
+3. **A tabled call with a `++` argument.** `if --wins(++x):` is not judged
+   today either. `_normalize_for_key` has no `PyThunk` branch, so the
+   snapshot key holds the thunk object itself instead of the value it will
+   eventually hold, and the key never matches a table entry for the
+   ground-or-variables form of the call.
+
+   Fix options: evaluate the thunk's current value for the KEY only before
+   `solve()` (thunks without `var_objects`), or refuse to claim judgement
+   when any argument is a thunk (raise a clear error rather than return
+   true).
+
 ## The fix for (1), when it is in scope
 
 The judgement has to be per-CONJUNCT rather than per-goal: walk the

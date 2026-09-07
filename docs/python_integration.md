@@ -151,9 +151,12 @@ the definite one and raises when it reaches the other.
 What is not judged is a goal that is not a single tabled call: a conjunction
 (`if --(X is a, wins(X)):`) and an untabled wrapper (`if --p(a):` with
 `p(X) <- wins(X)`) both pass their conditional answers through as true,
-exactly as `query_wfs` does for the same two goals. The sugar inherits
-`query_wfs`'s judgement rather than inventing a second one; widening it to
-composite goals is filed as
+exactly as `query_wfs` does for the same two goals. A tabled call whose
+argument is a `++` value is not judged either (the key is taken before the
+`++` runs); until the follow-up lands, only a tabled call whose arguments are
+written directly in the goal, ground or with logic variables, is judged. The
+sugar inherits `query_wfs`'s judgement rather than inventing a second one;
+widening it to composite goals is filed as
 `todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`.
 Code that must be sure asks the tabled predicate directly, or asks
 `query_wfs`.

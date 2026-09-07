@@ -434,7 +434,7 @@ class TestSoundnessThroughTheRewriter:
         """PINS TODAY'S BEHAVIOUR, WHICH IS NOT THE STRICTNESS ONE WANTS.
 
         WFS strictness reaches only a goal that IS a single tabled-predicate
-        call: ``_tabled_entry_for_goal`` returns ``None`` for a conjunction
+        call: ``_tabled_call_site`` returns ``None`` for a conjunction
         and for an untabled wrapper, so ``_definite_answers`` has no table to
         read a delay set from and the conditional answer passes as true —
         exactly as ``query_wfs`` judges the same two goals ("Composite/
