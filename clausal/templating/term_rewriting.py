@@ -4634,13 +4634,24 @@ class EmbedTransformer(NodeTransformer):
         test = replace(Call(func=Name(id="$once_bind", ctx=Load()),
                             args=[goal_ast, transformer._globals_call(node.test)],
                             keywords=[]), node.test)
+        exports = transformer._export_stmts(fresh, node.test)
         if negated:
             test = replace(UnaryOp(op=Not(), operand=test), node.test)
-            exports = []
+            # In negated case, emit exports in unreachable ``if False:`` block
+            # so Python recognizes variables as local without binding them.
+            if_false = replace(
+                If(
+                    test=replace(Constant(value=False), node.test),
+                    body=exports if exports else [replace(Pass(), node.test)],
+                    orelse=[]
+                ),
+                node.test
+            )
+            body = [if_false] + transformer._visit_stmts(node.body)
         else:
-            exports = transformer._export_stmts(fresh, node.test)
+            body = exports + transformer._visit_stmts(node.body)
         node.test = test
-        node.body = exports + transformer._visit_stmts(node.body)
+        node.body = body
         # ``elif`` is an If nested in orelse: visit it so it gets the same treatment.
         node.orelse = transformer._visit_stmts(node.orelse)
         fix_missing_locations(node)

@@ -156,3 +156,20 @@ class TestIf:
             "    return None\n"
         ))
         assert mod.either(("small",), ("large",)) == (("prohibited",), [("r1",)])
+
+
+class TestNot:
+    def test_not_is_true_exactly_when_the_goal_fails_and_exports_nothing(self):
+        mod = _load_inline("_gp_not1", RULEBASE.format(name="_gp_not1") + (
+            "def absent(profile):\n"
+            "    if not --decide(++profile, verdict(S, _)):\n"
+            "        return 'absent'\n"
+            "    return 'present'\n"
+            "def leaks(profile):\n"
+            "    if not --decide(++profile, verdict(S, _)):\n"
+            "        return S\n"
+        ))
+        assert mod.absent(("tiny",)) == "absent"
+        assert mod.absent(("small",)) == "present"
+        with pytest.raises(UnboundLocalError):
+            mod.leaks(("tiny",))
