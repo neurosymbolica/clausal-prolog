@@ -213,8 +213,8 @@ def _write_text__1(term, trail, k):
     ``write_text(f"X is {X_}")``.  ``write/1`` is the ISO writer and prints
     a string as ``[a,b,c]``.
     """
-    val = deref(term)
-    _sys.stdout.write(_format_term_as_text(val))
+    from clausal.logic.solve import _deref_walk
+    _sys.stdout.write(_format_term_as_text(_deref_walk(term)))
     _sys.stdout.flush()
     yield None
 
@@ -225,8 +225,8 @@ def _writeln_text__1(term, trail, k):
 
     Works naturally with f-strings: ``writeln_text(f"X is {X_}")``.
     """
-    val = deref(term)
-    print(_format_term_as_text(val))
+    from clausal.logic.solve import _deref_walk
+    print(_format_term_as_text(_deref_walk(term)))
     yield None
 
 
@@ -235,8 +235,8 @@ def _write_text_to_string__2(term, result, trail, k):
     """write_text_to_string(Term, Result) — the ``write_text/1`` rendering of
     Term, as a string.  Prints nothing.
     """
-    val = deref(term)
-    s = _format_term_as_text(val)
+    from clausal.logic.solve import _deref_walk
+    s = _format_term_as_text(_deref_walk(term))
     mark = trail.mark()
     if unify(result, s, trail):
         yield None

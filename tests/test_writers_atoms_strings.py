@@ -406,6 +406,31 @@ class TestTheThreeWriterFamilies:
             assert out_call("write_term", term, []) == want, term
             assert out_call("writeln", term) == want + "\n", term
 
+    def test_the_text_family_walks_a_ground_seg_too(self, mod):
+        """Fix round 3, item 5: ``write_text``/``writeln_text``/
+        ``write_text_to_string`` used ``deref``, so a ground ``Seg*`` fell to
+        ``str()`` and printed a raw ``SegString([...])`` repr -- the same
+        hole the ISO trio had in round 2."""
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var, deref
+        from clausal.terms import ConcreteSeg, SegList, SegString
+
+        def out_call(name, *args):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                assert len(list(call(name, *args, module=mod))) == 1
+            return buf.getvalue()
+
+        assert out_call("write_text", SegString(["ab"])) == "ab"
+        assert out_call("write_text",
+                        SegList([ConcreteSeg([("a",), ("b",)])])) == "ab"
+        assert out_call("write_text", SegList([ConcreteSeg([1, 2])])) == "[1, 2]"
+        assert out_call("writeln_text", SegString(["ab"])) == "ab\n"
+        S = Var()
+        got = [deref(S) for _ in call("write_text_to_string",
+                                      SegString(["ab"]), S, module=mod)]
+        assert got == ["ab"]
+
     def test_the_nil_tuple_prints_as_the_empty_list_in_every_family(self, mod):
         """Fix round 2, item 5: ``()`` is the hashable spelling of nil, and
         both cell tests are FALSY on it, so it used to fall to ``str()`` and

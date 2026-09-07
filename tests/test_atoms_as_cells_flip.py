@@ -554,6 +554,115 @@ class TestTheNilAtomInAKeyPosition:
                for _ in call("get_attrs", V, D, module=builtins_mod)]
         assert len(got) == 1 and got[0][()] == 7
 
+    def test_every_raw_mapping_reader_folds_the_nil_key(self, builtins_mod):
+        """Fix round 3, item 1: ``dict_set``'s builtins, the subscript path
+        and ``py.json``'s ``get/3`` read ``.data`` directly instead of going
+        through ``DictTerm.__getitem__``, so they had to fold the nil
+        spellings themselves.  Before: ``dict_get('[]', D, V)`` raised a raw
+        ``TypeError`` (``[]`` is unhashable), ``dict_get("", …)`` and
+        ``(b"", …)`` missed, and only ``()`` hit."""
+        from clausal.logic.runtime.dict_ops import _subscript
+        from clausal.logic.solve import call
+        from clausal.terms import DictTerm
+
+        d = DictTerm({(): 1, mint("a"): 2})
+        for nil in ([], "", b"", ()):
+            V = Var()
+            got = [deref(V)
+                   for _ in call("dict_get", nil, d, V, module=builtins_mod)]
+            assert got == [1], nil
+            assert _subscript(d, nil) == 1, nil
+
+    def test_dict_put_stores_a_nil_key_in_its_canonical_form(self, builtins_mod):
+        from clausal.logic.solve import call
+        from clausal.terms import DictTerm
+
+        for nil in ([], "", b"", ()):
+            D2 = Var()
+            (built,) = [_deref_walk(D2)
+                        for _ in call("dict_put", nil, 9, DictTerm({}), D2,
+                                      module=builtins_mod)]
+            assert list(built.keys()) == [()], nil
+            assert built[[]] == 9, nil
+
+    def test_json_get_3_folds_the_nil_key(self):
+        mod = _load_inline_clausal(
+            "_fix3_json_get",
+            "-import_from(py.json, [parse, get])\n"
+            "j(S, D) <- parse(S, D),\n"
+            "g(D, K, V) <- get(D, K, V),\n",
+        )
+        D = Var()
+        (parsed,), = _answers(("j", '{"[]": 1}', D), mod, D)
+        for nil in ([], "", b"", ()):
+            V = Var()
+            assert _answers(("g", parsed, nil, V), mod, V) == [(1,)], nil
+
+    def test_a_constants_structured_dict_key_folds_nil(self):
+        """Fix round 3, item 2: a structured ``-constants`` RHS took its own
+        dict-key path, which built a plain ``str`` key ``"[]"`` for
+        ``{'[]': 1}`` and raised a raw ``TypeError`` for ``{[]: 1}``."""
+        mod = _load_inline_clausal(
+            "_fix3_constants_nil",
+            "-private([a])\n"
+            "-constants(_D_ = {'[]': 1, a: 2})\n"
+            "-constants(_E_ = {[]: 3})\n"
+            "c1(_D_),\n"
+            "c2(_E_),\n",
+        )
+        X = Var()
+        (d,), = _answers(("c1", X), mod, X)
+        assert list(d.keys()) == [(), mint("a")]
+        assert d[[]] == 1
+        Y = Var()
+        (e,), = _answers(("c2", Y), mod, Y)
+        assert list(e.keys()) == [()] and e[""] == 3
+
+    def test_an_empty_seg_unifies_with_every_nil_spelling(self):
+        """Fix round 3, item 3: the three ``Seg*`` ``__unify__``/``__eq__``
+        gates accept ``list``/``str``/``bytes`` only, so ``()`` was rejected
+        outright and the str/bytes cross pairs fell to the wrong arm."""
+        from clausal.terms import ConcreteSeg, SegBytes, SegList, SegString
+
+        # The six pairs the item names: each of the three empty ``Seg*``
+        # against ``()`` and against ``[]``.
+        empties = (SegList([ConcreteSeg([])]), SegString([""]),
+                   SegBytes([b""]))
+        for seg in empties:
+            for nil in ((), []):
+                assert unify(seg, nil, Trail()), (seg, nil)
+                assert seg == nil, (seg, nil)
+        # …and each still unifies with its OWN concrete spelling.
+        assert unify(SegList([ConcreteSeg([])]), "", Trail())
+        assert unify(SegString([""]), "", Trail())
+        assert unify(SegBytes([b""]), b"", Trail())
+        # A non-empty Seg is unaffected.
+        assert not unify(SegString(["ab"]), [], Trail())
+        assert unify(SegString(["ab"]), "ab", Trail())
+        # NOT widened past ``()``: rewriting ``""``/``b""`` too would move a
+        # same-type target off its own arm and change what a VarSeg binds to
+        # (``[*A] = ""`` binds ``A = ""``, pinned by
+        # tests/test_string_list_unification.py).  The two str/bytes CROSS
+        # pairs -- an empty ``SegString`` against ``b""``, an empty
+        # ``SegBytes`` against ``""`` -- are still False; pre-existing, and
+        # recorded in the fix-round-3 report.
+        assert not unify(SegString([""]), b"", Trail())
+        assert not unify(SegBytes([b""]), "", Trail())
+
+    def test_the_nil_goal_error_is_worded_for_nil(self, builtins_mod):
+        """Fix round 3, item 6: the shared context said "a string goal is the
+        list of its characters" for ``[]``, which has no characters."""
+        from clausal.logic.solve import call
+        with pytest.raises(LogicException) as exc:
+            list(call("call_goal", [], module=builtins_mod))
+        context = exc.value.term.args[1]
+        assert "the empty list is not a callable term" in context
+        assert "list of its characters" not in context
+        # …and a real string still gets the string wording.
+        with pytest.raises(LogicException) as exc:
+            list(call("call_goal", "foo", module=builtins_mod))
+        assert "list of its characters" in exc.value.term.args[1]
+
     def test_a_py_wrapper_option_table_survives_a_nil_name(self):
         """``modules/py/__init__.py``'s ``option``/``has_option`` looked the
         key up with ``mint(name)``."""

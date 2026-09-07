@@ -5917,6 +5917,22 @@ class EmbedTransformer(NodeTransformer):
                     args=[replace(Constant(value=key.id), key)],
                     keywords=[],
                 ), key)
+        # The NIL key (fix round 3, item 2), mirroring the clause-literal
+        # path in ``_visit_dict_key``: ``'[]'`` is the reserved atom ``'[]'``,
+        # which IS the empty list, and the canonical KEY form of that term is
+        # the hashable empty TUPLE (``atoms.NIL_KEY``).  Without this a
+        # structured ``-constants`` RHS built a plain ``str`` key ``"[]"``
+        # (a different key from the one every other path produces) and a bare
+        # ``{[]: 1}`` raised a raw ``TypeError`` -- a list cannot key a dict.
+        # A double-quoted key in ``chars`` mode is a STRING and keeps its own
+        # meaning, exactly as ``visit_Constant`` decides it.
+        if isinstance(key, List) and not key.elts:
+            return replace(Tuple(elts=[], ctx=load), key)
+        if isinstance(key, Constant) and key.value == NIL_SPELLING:
+            quote = _quote_of_positioned(transformer, key)
+            if not (quote == '"'
+                    and transformer._double_quotes_mode == "chars"):
+                return replace(Tuple(elts=[], ctx=load), key)
         return transformer._transform_constant_rhs(key, ident)
 
     def _handle_predspec_directive(transformer, method_name, args, expr_stmt):

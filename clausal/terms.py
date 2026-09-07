@@ -689,6 +689,16 @@ class SegList:
         surface all four splits.
         """
         from .logic.variables import unify, walk
+        # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
+        # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
+        # gate on ``list``/``str``/``bytes``, so ``()`` was rejected outright
+        # while ``[]`` succeeded -- one term, two answers.  Rewritten to
+        # ``[]``, the spelling every arm knows, and ONLY ``()``: rewriting
+        # ``""``/``b""`` as well would move a same-type target off its own
+        # arm and change what a VarSeg binds to (``[*A] = ""`` binds
+        # ``A = ""``, not ``A = []``).
+        if type(other) is tuple and not other:
+            other = []
         if isinstance(other, bytes):
             # Codes-model symmetry (A01-F007): the C layer unifies plain
             # int-lists with bytes, and SegBytes accepts list targets — so a
@@ -866,6 +876,10 @@ class SegList:
         return NotImplemented
 
     def __eq__(self, other):
+        # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
+        # arms below accept list/str/bytes only.
+        if type(other) is tuple and not other:
+            other = []
         if isinstance(other, SegList):
             return self._segments == other._segments
         if isinstance(other, list):
@@ -1188,6 +1202,16 @@ class SegString:
         delegate.
         """
         from .logic.variables import unify
+        # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
+        # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
+        # gate on ``list``/``str``/``bytes``, so ``()`` was rejected outright
+        # while ``[]`` succeeded -- one term, two answers.  Rewritten to
+        # ``[]``, the spelling every arm knows, and ONLY ``()``: rewriting
+        # ``""``/``b""`` as well would move a same-type target off its own
+        # arm and change what a VarSeg binds to (``[*A] = ""`` binds
+        # ``A = ""``, not ``A = []``).
+        if type(other) is tuple and not other:
+            other = []
         if isinstance(other, str):
             walked = self.__walk__()
             if isinstance(walked, str):
@@ -1336,6 +1360,10 @@ class SegString:
         return f"SegString({self._segments!r})"
 
     def __eq__(self, other):
+        # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
+        # arms below accept list/str/bytes only.
+        if type(other) is tuple and not other:
+            other = []
         if isinstance(other, SegString):
             return self._segments == other._segments
         if isinstance(other, str):
@@ -1537,6 +1565,16 @@ class SegBytes:
 
     def __unify__(self, other, trail):
         from .logic.variables import unify
+        # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
+        # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
+        # gate on ``list``/``str``/``bytes``, so ``()`` was rejected outright
+        # while ``[]`` succeeded -- one term, two answers.  Rewritten to
+        # ``[]``, the spelling every arm knows, and ONLY ``()``: rewriting
+        # ``""``/``b""`` as well would move a same-type target off its own
+        # arm and change what a VarSeg binds to (``[*A] = ""`` binds
+        # ``A = ""``, not ``A = []``).
+        if type(other) is tuple and not other:
+            other = []
         if isinstance(other, bytes):
             walked = self.__walk__()
             if isinstance(walked, bytes):
@@ -1624,6 +1662,10 @@ class SegBytes:
         return bytes(parts)[index]
 
     def __eq__(self, other):
+        # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
+        # arms below accept list/str/bytes only.
+        if type(other) is tuple and not other:
+            other = []
         if isinstance(other, SegBytes):
             return self._segments == other._segments
         if isinstance(other, bytes):
@@ -1709,10 +1751,41 @@ class DictTerm:
     __slots__ = ("_data", "_position")
 
     def __init__(self, data: dict, *, _position=None):
-        # Defensive copy AND nil-key normalisation in one pass.
-        items = data.items() if hasattr(data, "items") else data
-        self._data = {_as_dict_key(k): v for k, v in items}
+        # Defensive copy first, at C speed (fix round 3, item 4: the per-key
+        # comprehension this replaces cost ~18x on an 8-key dict, and this
+        # constructor is hot -- ``dict_put/4``, ``__walk__``, every dict
+        # literal).  Only then is nil-key normalisation considered, and only
+        # when a nil spelling is actually present:
+        #   * ``[]`` is unhashable, so it cannot be IN a built dict -- it
+        #     raises ``TypeError`` out of ``dict()`` and takes the slow arm;
+        #   * ``""``/``b""`` are hashable, so two O(1) membership tests find
+        #     them and the comprehension runs only then.
+        # ``()`` is already the canonical form and needs nothing.
+        try:
+            self._data = dict(data)
+        except TypeError:
+            items = data.items() if hasattr(data, "items") else data
+            self._data = {_as_dict_key(k): v for k, v in items}
+        else:
+            if "" in self._data or b"" in self._data:
+                self._data = {_as_dict_key(k): v
+                              for k, v in self._data.items()}
         self._position = _position  # Slice G
+
+    @staticmethod
+    def normalised_key(key):
+        """*key* in the canonical dict-key form this class stores.
+
+        The one entry point for code that reads the underlying mapping
+        directly (``.data``) instead of going through ``__getitem__``:
+        ``dict_set``'s builtins, ``runtime.dict_ops``'s subscript,
+        ``py.json``'s ``get/3``.  Every nil spelling -- ``[]``, ``""``,
+        ``b""``, ``()`` -- folds onto ``()``; everything else passes
+        through.  Same function as ``atoms.as_dict_key``, exposed here so a
+        caller holding a ``DictTerm`` need not reach for the atoms module
+        (fix round 3, item 1).
+        """
+        return _as_dict_key(key)
 
     @property
     def data(self) -> dict:

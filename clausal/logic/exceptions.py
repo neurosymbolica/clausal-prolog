@@ -255,18 +255,25 @@ def string_goal_error(goal: str, extra_arity: int = 0,
 
     *context* is the caller's position (``"call/N"``, ``"solve/1"``), kept so
     the diagnostic says where the string was written.
+
+    The two cases get DIFFERENT prose (fix round 3, item 6): a non-empty
+    string really is the list of its characters, but ``[]``/``""``/``()``/
+    ``b""`` is the reserved atom ``'[]'`` and has no characters to speak of,
+    so the "list of its characters" sentence read as nonsense for it.
     """
     if goal:
         name, arity = ".", 2 + extra_arity
+        why = (f"a string goal is the list of its characters — the compound "
+               f"{name!r}/{arity} — and no such procedure is defined")
     else:
         name, arity = "[]", extra_arity
+        why = (f"the empty list is not a callable term — it is the atom "
+               f"{name!r}, and no procedure {name!r}/{arity} is defined")
     indicator = Compound("/", (mint(name), arity))
     return existence_error(
         "procedure", indicator,
-        f"{context}: a string goal is the list of its characters — the "
-        f"compound {name!r}/{arity} — and no such procedure is defined; "
-        f"write the ATOM (a bare name, or mint(...) from Python) or a cell "
-        f"goal such as ('name', Arg)",
+        f"{context}: {why}; write the ATOM (a bare name, or mint(...) from "
+        f"Python) or a cell goal such as ('name', Arg)",
     )
 
 

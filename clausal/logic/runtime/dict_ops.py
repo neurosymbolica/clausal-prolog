@@ -54,6 +54,12 @@ def _subscript(obj: Any, key: Any) -> Any:
         data = obj
     else:
         raise LogicException(type_error("dict", obj, _SUBSCRIPT_CTX))
+    # Read ``.data`` only with a NORMALISED key (fix round 3, item 1): every
+    # spelling of nil is one key, and ``[]`` -- the spelling ``mint("[]")``
+    # answers -- is unhashable, so ``D.'[]'`` used to raise
+    # ``type_error(dict_key, [])`` out of the ``except TypeError`` arm below
+    # while ``D.()`` hit.
+    key = DictTerm.normalised_key(key)
     try:
         return data[key]
     except KeyError:
@@ -107,4 +113,8 @@ def _dict_key(key: Any) -> Any:
     key = deref(key)
     if is_var(key):
         raise LogicException(instantiation_error(_DICT_KEY_CTX))
-    return key
+    # A computed key that derefs to the nil atom must take its canonical
+    # KEY form (fix round 3, item 1): ``mint("[]")`` is the empty LIST,
+    # which is unhashable, so ``{K: V}`` with ``K = []`` built nothing but a
+    # raw ``TypeError``.
+    return DictTerm.normalised_key(key)

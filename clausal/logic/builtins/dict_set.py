@@ -37,6 +37,7 @@ from __future__ import annotations
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm, SetTerm
+from clausal.logic.atoms import as_dict_key as _norm_key
 from clausal.logic.exceptions import (
     LogicException, type_error, existence_error, instantiation_error,
 )
@@ -93,8 +94,16 @@ def _dict_input(v):
     returned mapping: for a plain dict it IS the caller's object.
     """
     if isinstance(v, DictTerm):
-        return v.data
+        return v.data                    # already nil-normalised
     if isinstance(v, dict):
+        # A plain Python dict has NOT been through ``DictTerm.__init__``, so
+        # a nil key may still be spelled ``""`` or ``b""`` (``[]`` cannot be
+        # in one at all -- it is unhashable).  Two O(1) membership tests, and
+        # a normalising copy only when one hits, so every lookup below can
+        # index with a normalised key and get the same answer either way
+        # (fix round 3, item 1).
+        if "" in v or b"" in v:
+            return {_norm_key(kk): vv for kk, vv in v.items()}
         return v
     return None
 
@@ -215,7 +224,7 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
 @_trampoline_builtin("dict_get", 3)
 def _dict_get__3(this_generator, _proceed, _fail, _catcher, key, d, value, trail):
     """dict_get(Key, Dict, Value) — semidet: Value is Dict[Key]."""
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     data = _dict_input(deref(d))
     if not is_var(key_val) and data is not None and key_val in data:
         mark = trail.mark()
@@ -232,7 +241,7 @@ def _dict_put_dr__4(this_generator, _proceed, _fail, _catcher, key, value, old_d
     internal ``_data`` dict in-place.  Falls back to the standard (copying)
     implementation otherwise.
     """
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     old_val = deref(old_dict)
     if (_HAS_REFCOUNT and not is_var(key_val) and isinstance(old_val, DictTerm)
             and _sys.getrefcount(old_val) <= 3):
@@ -250,7 +259,7 @@ def _dict_put_dr__4(this_generator, _proceed, _fail, _catcher, key, value, old_d
 @_trampoline_builtin("dict_put", 4)
 def _dict_put__4(this_generator, _proceed, _fail, _catcher, key, value, old_dict, new_dict, trail):
     """dict_put(Key, Value, OldDict, NewDict) — NewDict is OldDict with Key→Value."""
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     old_data = _dict_input(deref(old_dict))
     if not is_var(key_val) and old_data is not None:
         new_data = dict(old_data)
@@ -293,7 +302,7 @@ def _dict_put_pairs__3(this_generator, _proceed, _fail, _catcher, pairs, old_dic
 @_trampoline_builtin("dict_remove", 3)
 def _dict_remove__3(this_generator, _proceed, _fail, _catcher, key, old_dict, new_dict, trail):
     """dict_remove(Key, OldDict, NewDict) — NewDict is OldDict without Key."""
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     old_data = _dict_input(deref(old_dict))
     if not is_var(key_val) and old_data is not None and key_val in old_data:
         new_data = {k: v for k, v in old_data.items() if k != key_val}
@@ -383,7 +392,7 @@ def _get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail):
     half-accepted (subscript reads working, every ``get`` guard silently
     failing).
     """
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     d_val = deref(d)
     if (not is_var(key_val) and _is_hashable(key_val)
             and isinstance(d_val, (DictTerm, dict)) and key_val in d_val):
@@ -402,7 +411,7 @@ def _get__4(this_generator, _proceed, _fail, _catcher, d, key, value, default, t
     succeeds when ``Dict`` is a dict (``DictTerm`` or plain ``dict``) and
     ``Key`` is a ground hashable key.
     """
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     d_val = deref(d)
     if (not is_var(key_val) and _is_hashable(key_val)
             and isinstance(d_val, (DictTerm, dict))):
@@ -430,7 +439,7 @@ def _tri_get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail)
     succeeds).
     """
     from clausal.terms import Undefined  # noqa: PLC0415
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     d_val = deref(d)
     if (not is_var(key_val) and _is_hashable(key_val)
             and isinstance(d_val, (DictTerm, dict))):
@@ -452,7 +461,7 @@ def _delete__3(this_generator, _proceed, _fail, _catcher, d, key, new_dict, trai
     non-ground key; ``type_error`` for a non-dict object.  ``Dict`` is never
     mutated (the residual is constructed fresh).
     """
-    key_val = deref(key)
+    key_val = _norm_key(deref(key))
     d_val = deref(d)
     if is_var(key_val):
         raise LogicException(instantiation_error("delete/3"))

@@ -289,7 +289,11 @@ def _get_3(term, key, value, trail, k):
                 yield None
             trail.undo(mark)
     else:
-        # Direct lookup
+        # Direct lookup, with the key NORMALISED first (fix round 3, item 1):
+        # this reads ``.data`` rather than going through ``__getitem__``, so
+        # it has to fold the nil spellings itself or ``get(D, [], V)`` misses
+        # a key ``parse/2`` stored as ``()``.
+        key = DictTerm.normalised_key(key)
         if key not in term.data:
             return
         if unify(value, term.data[key], trail):
