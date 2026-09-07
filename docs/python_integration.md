@@ -142,15 +142,18 @@ still the term.
 `clausal.logic.seam`.
 
 **How far the strictness reaches.** A WFS-conditional (undefined) answer
-raises `UndefinedAnswer` (use `query_wfs` for truth values and delays) —
-but only when the WHOLE goal is a single tabled-predicate call asked with
-ground arguments, `if --wins(a):`. Every other shape is judged as
-`query_wfs` judges it, which is to say not at all: a conjunction
-(`if --(X is a, wins(X)):`), an untabled wrapper (`if --p(a):` with
-`p(X) <- wins(X)`), and a non-ground tabled call (`for X in --wins(X):`)
-all pass their conditional answers through as true. The sugar inherits
-`query_wfs`'s judgement rather than inventing a second one; widening it is
-filed as
+raises `UndefinedAnswer` (use `query_wfs` for truth values and delays)
+whenever the WHOLE goal is a single tabled-predicate call — ground or not,
+`if --wins(a):` and `for X in --wins(X):` alike — and each answer is judged
+on its own, so a goal with one definite and one conditional answer yields
+the definite one and raises when it reaches the other.
+
+What is not judged is a goal that is not a single tabled call: a conjunction
+(`if --(X is a, wins(X)):`) and an untabled wrapper (`if --p(a):` with
+`p(X) <- wins(X)`) both pass their conditional answers through as true,
+exactly as `query_wfs` does for the same two goals. The sugar inherits
+`query_wfs`'s judgement rather than inventing a second one; widening it to
+composite goals is filed as
 `todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`.
 Code that must be sure asks the tabled predicate directly, or asks
 `query_wfs`.

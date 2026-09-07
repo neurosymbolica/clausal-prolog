@@ -1242,9 +1242,23 @@ def query_wfs(
     return kept
 
 
-def _tabled_entry_for_goal(goal, module, trail):
-    """Return ``(TableEntry, goal_args)`` for a single tabled-predicate goal,
-    or ``(None, None)`` for a non-tabled or composite goal (A04-F004).
+def _tabled_call_site(goal, module, trail):
+    """Return ``(module, functor, arity, goal_args)`` for a single
+    tabled-predicate goal, or ``None`` for a non-tabled or composite goal.
+
+    This is ``_tabled_entry_for_goal`` minus the table-store lookup, split out
+    so a caller can take the SUBGOAL KEY at one moment and do the store lookup
+    at another.  ``clausal.logic.seam._definite_answers`` needs exactly that:
+    a table entry is stored under the key of the call AS WRITTEN, but the
+    entry does not exist until ``solve()`` has run, so the site (and its key)
+    are taken before the solve and the lookup is deferred to the first answer.
+    Deriving the key at the first answer instead reads the goal's arguments as
+    that answer has just bound them, which for an OPEN call
+    (``wins(X)`` → ``wins(d)``) names a different subgoal and misses.
+
+    Nothing here depends on the current bindings: the shape walk, the
+    signature normalization and ``is_tabled`` are all static, so the site is
+    the same before and after the solve.
 
     Handles every single-goal shape ``solve()`` accepts: term instances,
     ``Compound`` (checked FIRST — ``is_term_instance`` is also true for a
@@ -1266,7 +1280,7 @@ def _tabled_entry_for_goal(goal, module, trail):
     NOT converged here: the legacy walk stays pinned as R10 records, and
     the convergence is a filed follow-up."""
     if module is None:
-        return None, None
+        return None
     mod = _coerce_module(module)
     kwargs = []
     is_cell_goal, cell_functor = compound_cell_shape(goal)
@@ -1281,7 +1295,7 @@ def _tabled_entry_for_goal(goal, module, trail):
         try:
             mod, goal = resolve_qualified_goal_cell(goal, "query_wfs/2", mod)
         except LogicException:
-            return None, None
+            return None
         is_cell_goal, cell_functor = compound_cell_shape(goal)
     if is_cell_goal:
         functor = cell_functor
@@ -1289,7 +1303,7 @@ def _tabled_entry_for_goal(goal, module, trail):
     elif isinstance(goal, Compound):
         functor = deref(goal.functor)
         if not isinstance(functor, str):
-            return None, None
+            return None
         goal_args = list(goal.args)
     elif isinstance(goal, _ReifiedCall):
         func = goal.func
@@ -1308,12 +1322,12 @@ def _tabled_entry_for_goal(goal, module, trail):
                 segments.append(node.attr)
                 node = node.object
             if not isinstance(node, _ReifiedLoadName):
-                return None, None
+                return None
             segments.append(node.name)
             segments.reverse()
             md = mod.module_dict
             if md is None:
-                return None, None
+                return None
             owner = md.get(segments[0])
             if len(segments) > 1:
                 # The import hook does not bind submodules as parent-package
@@ -1325,34 +1339,34 @@ def _tabled_entry_for_goal(goal, module, trail):
                 else:
                     for seg in segments[1:]:
                         if owner is None:
-                            return None, None
+                            return None
                         owner = getattr(owner, seg, None)
             if owner is None:
-                return None, None
+                return None
             try:
                 mod = _coerce_module(owner)
             except (TypeError, AttributeError, KeyError):
-                return None, None
+                return None
         else:
-            return None, None
+            return None
         goal_args = list(goal.args)
         kwargs = list(goal.kwargs)
     elif is_term_instance(goal):
         functor = type(goal).__name__
         goal_args = [getattr(goal, f) for f in term_field_names(goal)]
     else:
-        return None, None
+        return None
     if kwargs:
         if any(kw.name is None for kw in kwargs):
-            return None, None  # **splat — positions unknowable here
+            return None  # **splat — positions unknowable here
         sig = mod.db.signature_for(functor, len(goal_args) + len(kwargs))
         if sig is None:
-            return None, None
+            return None
         kw_map = {kw.name: kw.value for kw in kwargs}
         merged = list(goal_args)
         for field in sig[len(goal_args):]:
             if field not in kw_map:
-                return None, None
+                return None
             merged.append(kw_map[field])
         goal_args = merged
     arity = len(goal_args)
@@ -1365,14 +1379,31 @@ def _tabled_entry_for_goal(goal, module, trail):
         owner_name = getattr(pred_cls, "__module__", None)
         owner = sys.modules.get(owner_name) if owner_name else None
         if owner is None:
-            return None, None
+            return None
         try:
             owner_mod = _coerce_module(owner)
         except (TypeError, AttributeError, KeyError):
-            return None, None
+            return None
         if owner_mod.db is mod.db or not owner_mod.db.is_tabled(functor, arity):
-            return None, None
+            return None
         mod = owner_mod
+    return mod, functor, arity, goal_args
+
+
+def _tabled_entry_for_goal(goal, module, trail):
+    """Return ``(TableEntry, goal_args)`` for a single tabled-predicate goal,
+    or ``(None, None)`` for a non-tabled or composite goal (A04-F004).
+
+    The site walk lives in ``_tabled_call_site`` (see there for the shapes
+    handled); this is that plus the store lookup, keyed on the goal's
+    arguments as they stand NOW.  ``query_wfs`` calls it after its solve has
+    finished and the bindings are undone, so "now" is the call as written —
+    which is the key the entry is stored under.
+    """
+    site = _tabled_call_site(goal, module, trail)
+    if site is None:
+        return None, None
+    mod, functor, arity, goal_args = site
     from clausal.logic.tabling import make_subgoal_key
     key = make_subgoal_key(goal_args, trail or Trail())
     return mod.db.table_store.get((functor, arity, key)), goal_args

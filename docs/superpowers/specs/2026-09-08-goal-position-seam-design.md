@@ -193,23 +193,27 @@ silent:
   not skipped, not taken as true. The helpers run through the delay-aware
   machinery `query_wfs` uses, not through `once`/`query`.
 
-  **The limit, precisely.** That judgement is delivered only when the WHOLE
-  goal is a single tabled-predicate call asked with GROUND arguments —
-  `if --wins(a):`. Everything else is judged exactly as `query_wfs` judges
-  it, which is to say not at all:
+  **The limit, precisely.** That judgement is delivered when the WHOLE goal
+  is a single tabled-predicate call — GROUND OR NOT. `if --wins(a):` and
+  `for X in --wins(X):` are both judged, and each ANSWER is judged on its
+  own: a table holding one definite and one conditional answer exports the
+  definite one and raises on the conditional one when the search reaches it.
+  (The helper takes the call's subgoal key BEFORE the solve, so an open call
+  finds its own table entry rather than the entry of whichever answer came
+  back first; the entry lookup itself still waits for the first answer,
+  because the table does not exist until SLG has run.)
+
+  What is NOT judged is a goal that is not a single tabled call. Those are
+  judged exactly as `query_wfs` judges them, which is to say not at all:
 
   * a CONJUNCTION — `if --(X is a, wins(X)):` — is a composite goal;
     `query_wfs` does not decompose one, so no delay set is read and the
     answer passes as true;
   * an UNTABLED WRAPPER — `if --p(a):` with `p(X) <- wins(X)` — is not a
-    tabled call, so the same thing happens;
-  * a NON-GROUND tabled call — `for X in --wins(X):` — has a table, but the
-    entry lookup is deferred to the first answer and keyed on the arguments
-    as bound BY that answer, so it misses the open call's entry and every
-    answer, conditional or not, is yielded.
+    tabled call, so the same thing happens.
 
   The sugar inherits `query_wfs`'s judgement rather than growing a second
-  one; widening it is a filed follow-up
+  one; widening it to composite goals is a filed follow-up
   (`todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`),
   and until it lands, code that must be sure asks the tabled predicate
   directly, or asks `query_wfs`.

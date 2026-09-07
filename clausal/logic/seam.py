@@ -292,28 +292,49 @@ def _definite_answers(goal: Any, module) -> "Iterator[None]":
     """Yield once per UNCONDITIONAL answer of *goal*; raise UndefinedAnswer
     on a conditional one.
 
-    A single tabled-predicate goal can only be judged once SLG has
-    completed for it — and that completion happens INSIDE ``solve()``,
-    before its first answer streams out, not before ``solve()`` is asked
-    to start: the table entry ``_tabled_entry_for_goal`` looks up does not
-    exist yet on a goal's first-ever call, so looking it up before the
-    ``solve()`` loop starts would misread a genuinely tabled goal as
-    untabled. The lookup is deferred to the first answer instead (and
-    reused after that — the entry, once found, is stable for the rest of
-    this call); every other goal shape streams with no lookup at all.
+    Two moments, and they are deliberately different ones:
+
+    * The CALL SITE — which predicate, in which module, with which argument
+      objects, and therefore which subgoal key — is taken BEFORE ``solve()``
+      starts. That key names the call AS WRITTEN, unbound variables and all,
+      which is the key its table entry is stored under. Taking it later
+      instead would read the arguments as the answer in hand has just bound
+      them, so an OPEN call (``wins(X)``) would go looking for ``wins(d)``'s
+      entry and miss — every answer, conditional ones included, then streamed
+      out unjudged. Nothing in the site walk depends on the bindings, so
+      taking it early costs only the walk.
+    * The table ENTRY is still looked up at the FIRST ANSWER. A tabled goal
+      can only be judged once SLG has completed for it, and that completion
+      happens INSIDE ``solve()``, before its first answer streams out — the
+      entry does not exist yet on a goal's first-ever call, so a lookup before
+      the loop starts would misread a genuinely tabled goal as untabled. Once
+      found the entry is stable for the rest of this call, and a goal with no
+      tabled site does no lookup at all.
+
+    Each ANSWER is then judged on its own: the per-answer key of the
+    now-bound arguments picks that answer's row out of the entry's index, so
+    a table holding one definite and one conditional answer exports the first
+    and refuses the second.
     """
-    from clausal.logic.solve import solve, _tabled_entry_for_goal
+    from clausal.logic.solve import solve, _tabled_call_site
     from clausal.logic.tabling import make_subgoal_key
     from clausal.logic.variables import Trail, deref
     from clausal.terms import Undefined
     trail = Trail()
-    entry = None
+    site = _tabled_call_site(goal, module, trail)
+    call_key = None
     goal_args = None
+    if site is not None:
+        _mod, _functor, _arity, goal_args = site
+        call_key = make_subgoal_key(goal_args, trail)
+    entry = None
     checked = False
     for _ in solve(goal, module, trail):
         if not checked:
-            entry, goal_args = _tabled_entry_for_goal(goal, module, trail)
             checked = True
+            if site is not None:
+                tmod, functor, arity, _ = site
+                entry = tmod.db.table_store.get((functor, arity, call_key))
         if entry is not None:
             cand = [deref(a) for a in goal_args]
             idx = entry._answer_index.get(make_subgoal_key(cand, None))

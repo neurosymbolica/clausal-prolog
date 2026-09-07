@@ -477,20 +477,14 @@ class TestSoundnessThroughTheRewriter:
 
     def test_mixed_conditional_and_unconditional_answers_from_one_tabled_goal(self):
         """One tabled predicate, one DEFINITE answer and three conditional
-        ones: the definite one is exported normally and each conditional one
-        raises ``UndefinedAnswer`` when it is asked for — but only when the
-        call is asked with GROUND arguments.
+        ones, judged ANSWER BY ANSWER — and the call need not be ground.
 
-        PINS TODAY'S BEHAVIOUR for the open call as well: ``for X in
-        --wins(X):`` yields all four answers and raises NOTHING.  The cause is
-        a second, distinct hole in the same lookup —
-        ``_definite_answers`` defers ``_tabled_entry_for_goal`` to the first
-        answer (the entry does not exist before ``solve()`` runs), and by then
-        the goal's argument is BOUND to that answer, so the subgoal key it
-        computes is ``wins(d)``'s, not the open call's, and the store lookup
-        misses.  ``query_wfs`` does the same lookup AFTER solve has finished
-        and the bindings are undone, so it reports all four correctly.
-        Recorded in the same todo as the conjunction case above.
+        The observed answer order is ``d, a, b, c``: ``for X in --wins(X):``
+        yields the definite ``d`` and then RAISES when it reaches ``a``, the
+        first conditional one (it raises on reaching it, not before yielding
+        anything — the assertion below records the partial sequence).  The
+        same open call under ``if`` is once-semantics, so it stops at the
+        first answer, which is the definite one, and is simply true.
         """
         from clausal.logic.seam import UndefinedAnswer
         src = (
@@ -510,19 +504,62 @@ class TestSoundnessThroughTheRewriter:
             "    if --wins(a):\n"
             "        return 'true'\n"
             "    return 'false'\n"
-            "def every():\n"
-            "    got = []\n"
+            "def every(out):\n"
             "    for X in --wins(X):\n"
-            "        got.append(X)\n"
-            "    return got\n"
+            "        out.append(X)\n"
+            "    return out\n"
+            "def any_win():\n"
+            "    if --wins(X):\n"
+            "        return X\n"
+            "    return None\n"
         )
         mod = _load_inline("_gp_s4", src.format(n="_gp_s4"))
         assert mod.definite() == "true"          # empty delay set: exported
         with pytest.raises(UndefinedAnswer):     # non-empty delay set: refused
             mod.conditional()
-        # The open call, in a fresh module so the two do not share a table:
+        # The open call, in a fresh module so the two do not share a table.
         mod2 = _load_inline("_gp_s5", src.format(n="_gp_s5"))
-        assert mod2.every() == [("d",), ("a",), ("b",), ("c",)]
+        out = []
+        with pytest.raises(UndefinedAnswer):
+            mod2.every(out)
+        assert out == [("d",)]                   # the definite one, yielded
+        # Once-semantics stops at the first answer, which is definite.
+        mod3 = _load_inline("_gp_s6", src.format(n="_gp_s6"))
+        assert mod3.any_win() == ("d",)
+
+    def test_a_non_ground_tabled_call_is_judged_too(self):
+        """A tabled call with an UNBOUND argument is judged like a ground one.
+
+        The entry is stored under the subgoal key of the call as WRITTEN, so
+        ``_definite_answers`` snapshots that key before ``solve()`` runs; a key
+        derived at the first answer would name the answer's own bindings
+        (``wins(a)``) and miss the open call's table entirely.  Here every
+        answer is conditional, so the very first one raises.
+        """
+        from clausal.logic.seam import UndefinedAnswer
+        mod = _load_inline("_gp_s7", (
+            "-module(_gp_s7, [move(A, B), wins(X), a, b, c])\n"
+            "-double_quotes(chars)\n"
+            "-table(wins/1)\n"
+            "move(a, b),\n"
+            "move(b, c),\n"
+            "move(c, a),\n"
+            "wins(X) <- (move(X, Y), not wins(Y))\n"
+            "def any_win():\n"
+            "    if --wins(X):\n"
+            "        return X\n"
+            "    return None\n"
+            "def every(out):\n"
+            "    for X in --wins(X):\n"
+            "        out.append(X)\n"
+            "    return out\n"
+        ))
+        with pytest.raises(UndefinedAnswer):
+            mod.any_win()
+        out = []
+        with pytest.raises(UndefinedAnswer):
+            mod.every(out)
+        assert out == []
 
     def test_an_attributed_unbound_export_raises_in_a_for(self):
         from clausal.logic.seam import ResidualConstraints
