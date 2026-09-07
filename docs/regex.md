@@ -2,11 +2,20 @@
 
 The `regex` standard library module provides regular expression predicates for `.clausal` files. It wraps Python's `re` module with a relational interface, including auto-binding of named capture groups to logic variables.
 
+Everything on this page is **text**: a pattern is text, a subject is text, and
+a captured group comes back as a **string** — never an atom. Every example
+below therefore opens with [`-double_quotes(chars)`](directives.md), so its
+`"…"` literals *are* strings and compare equal to what the predicates answer.
+Without that directive a module's `"2026"` is the atom `'2026'`, which will
+not unify with the string a group binds; see
+[Type Checking](type_checking.md#the-atom--string--list-table).
+
 ---
 
 ## Quick Example
 
 ```clausal
+-double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: the second occurrence of YEAR/MONTH lives
 # inside the pattern STRING, invisible to the singleton counter's
@@ -49,6 +58,7 @@ Or via [module import](import.md):
 `match(Pattern, String)` — succeeds if Pattern matches String (anchored at start):
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [match])
 
 Test("match digits") <- match(r"\d+", "123")
@@ -61,6 +71,7 @@ Test("match anchored") <- (not match(r"\d+$", "123abc"))
 `match(Pattern, String, Groups)` — unifies Groups with a dict of named groups (or tuple of positional groups):
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [match])
 
 Test("named groups") <- (
@@ -92,6 +103,7 @@ group added under its 1-based positional index (an integer key). For
 Like match but unanchored — finds the pattern anywhere in the string:
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [search])
 
 Test("search found") <- search(r"\d+", "abc123def")
@@ -111,6 +123,7 @@ Test("search groups") <- (
 `replace(Pattern, Replacement, String, Result)` — regex substitution:
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [replace])
 
 Test("collapse spaces") <- (replace(r"\s+", " ", "a  b   c", R), R == "a b c")
@@ -122,6 +135,7 @@ Test("remove digits") <- (replace(r"\d+", "", "a1b2c3", R), R == "abc")
 `split(Pattern, String, Fragments)` — split string by pattern:
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [split])
 
 Test("split csv") <- (split(r",\s*", "a, b, c", F), F == ["a", "b", "c"])
@@ -133,6 +147,7 @@ Test("split whitespace") <- (split(r"\s+", "x y z", F), F == ["x", "y", "z"])
 `findall(Pattern, String, match)` — nondeterministic; succeeds once for each non-overlapping match:
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [findall])
 
 Test("findall first") <- (findall(r"\d+", "a1b23c456", D), D == "1")
@@ -144,8 +159,12 @@ group's bare string when it has exactly one group, and a tuple of group
 strings when it has two or more:
 
 ```clausal
-Test("findall single group is a string") <-
-    (findall(r"(\d)x", "1x2x", D), D == "1")
+-double_quotes(chars)
+-import_from(regex, [findall])
+
+Test("findall single group is a string") <- (
+    findall(r"(\d)x", "1x2x", D), D == "1"
+)
 ```
 
 ---
@@ -157,6 +176,7 @@ Named groups using ALLCAPS or leading-underscore names are automatically bound t
 ### ALLCAPS Groups
 
 ```clausal
+-double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: the head params' second occurrence lives
 # inside the pattern STRING, invisible to the singleton counter.
@@ -176,6 +196,7 @@ Test("parse email") <- (
 ### Leading-Underscore Groups
 
 ```clausal
+-double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: _port's second occurrence lives inside the
 # pattern STRING, invisible to the singleton counter.
@@ -208,6 +229,7 @@ You never see the expanded form — just use the variable names in your pattern.
 ### Log Parsing
 
 ```clausal
+-double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: LEVEL/MESSAGE's second occurrence lives inside
 # the pattern STRING, invisible to the singleton counter.
@@ -231,6 +253,7 @@ Test("not error") <- (not IsError("INFO ok"))
 ### CSV Field Extraction
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [split])
 
 ParseCsv(LINE, FIELDS) <- split(r",\s*", LINE, FIELDS)
@@ -244,6 +267,7 @@ Test("parse csv") <- (
 ### URL Routing
 
 ```clausal
+-double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: USER_ID's second occurrence lives inside the
 # pattern STRING, invisible to the singleton counter.
@@ -263,6 +287,7 @@ Test("not api") <- (not RouteApi("/users/1"))
 ### Data Validation
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [match])
 
 ValidEmail(S) <- match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", S)
@@ -278,6 +303,7 @@ Test("valid ipv4") <- ValidIpv4("192.168.1.1")
 Use the [`findall` meta-predicate](meta_predicates.md) to collect all regex matches into a list:
 
 ```clausal
+-double_quotes(chars)
 -import_module(regex)
 
 AllNumbers(TEXT, NUMBERS) <- (
@@ -307,6 +333,7 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) detects string-liter
 Patterns can be variables or f-strings — they are compiled at runtime:
 
 ```clausal
+-double_quotes(chars)
 -import_from(regex, [match])
 
 MatchPrefix(PREFIX, TEXT) <- (
@@ -330,6 +357,7 @@ is a binding candidate, so a non-participating group leaves the variable
 unbound rather than clobbering it with `None`.
 
 ```clausal
+-double_quotes(chars)
 -allow_singletons
 # Dynamic-pattern auto-bind: YEAR's binding happens at runtime from the
 # pattern's group name, which isn't visible to the singleton counter

@@ -332,3 +332,54 @@ class TestCellStandardOrder:
                    for _ in solve(("msort", [("f", "x"), [1], ("b",), 1], out), lm)]
         assert len(answers) == 1
         assert answers[0] == [1, ("b",), [1], ("f", "x")]
+
+
+# ── sort/2's dedup is linear, not quadratic ──────────────────────────────
+
+class TestSortDedupCost:
+    """``sort/2`` deduped by scanning a LIST of standard-order keys, which is
+    O(n^2) tuple comparisons.  The keys are hashable in every band but
+    ``_ORD_OTHER``, so the seen-set is a set and only the unhashable keys
+    (``_OpaqueOrder``) pay the scan."""
+
+    def test_many_distinct_strings_sort_in_linear_time(self):
+        """The bound has to be able to FAIL: at 2000 elements the old list
+        scan cost 0.13 s, which no generous bound separates from the 0.004 s
+        the set costs.  At 20000 the quadratic scan alone is ~11.8 s against
+        0.045 s, so a 2 s bound is 5x under the old cost and 40x over the
+        new one — discriminating and still loose enough not to flake."""
+        # nv
+        import time
+
+        items = [f"s{i:06d}" for i in range(20000)]
+        start = time.perf_counter()
+        got = _run_list_builtin(_sort__2, list(items))
+        elapsed = time.perf_counter() - start
+        assert got == sorted(items)
+        assert elapsed < 2.0, f"sort/2 over {len(items)} strings took {elapsed:.2f}s"
+
+    def test_unhashable_keys_still_dedup(self):
+        """A ``date`` keys through ``_OpaqueOrder``, which has ``__eq__`` and
+        no ``__hash__`` — the list fallback must still remove the duplicate."""
+        # nv
+        import datetime
+
+        d1, d2 = datetime.date(2026, 1, 2), datetime.date(2026, 1, 15)
+        got = _run_list_builtin(_sort__2, [d2, d1, d2, d1])
+        assert got == [d1, d2]
+
+    def test_mixed_hashable_and_unhashable_keys_dedup_independently(self):
+        # nv
+        import datetime
+
+        d = datetime.date(2026, 1, 2)
+        got = _run_list_builtin(_sort__2, [3, d, 3, "ab", d, "ab"])
+        assert len(got) == 3
+        assert 3 in got and d in got and "ab" in got
+
+    def test_a_string_and_its_char_list_are_one_term(self):
+        """The property the dedup exists for (spec §6.5) survives the set."""
+        # nv
+        got = _run_list_builtin(
+            _sort__2, ["ab", [char_atom("a"), char_atom("b")], "ab"])
+        assert len(got) == 1

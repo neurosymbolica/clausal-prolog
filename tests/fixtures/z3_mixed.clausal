@@ -1,6 +1,10 @@
--double_quotes(chars)
 # Z3 mixed theory tests — exercises multiple theories on the same trail,
 # solver configuration.
+#
+# DEFAULT-mode source (no -double_quotes(chars)): "QF_LIA" and "timeout" are
+# NAMES, so they are atoms, which is what z3.set_logic/1 and z3.set_option/2
+# read (§6.4) and how docs/z3.md writes them.  The Test/1 labels are the same
+# atoms every other fixture in this directory uses.
 
 # ── Integer + all_different (N-Queens style) ────────────────────────────────
 
@@ -37,4 +41,12 @@ Test("set option timeout") <- (
     z3.set_option("timeout", 5000),
     z3.integer((1 <= X <= 10)),
     z3.check(),
+)  # nv
+
+# ── Algebraic datatypes ────────────────────────────────────────────────────
+# The datatype, constructor and field names are all NAMES, so this whole call
+# is written with atoms; it used to raise a raw z3 ArgumentError from source.
+
+Test("declare an enum datatype") <- (
+    z3.declare_datatype("Color9", [("red9", []), ("green9", []), ("blue9", [])]),
 )  # nv

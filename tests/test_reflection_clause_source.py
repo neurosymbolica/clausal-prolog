@@ -25,8 +25,12 @@ def _clear_query_cache():
     yield
 
 
+# DEFAULT-mode source (no ``-double_quotes(chars)``): the ``"GtE"``/``"Gt"``
+# literals are class NAMES and must be atoms (§6.4).  The one genuinely TEXT
+# position here — the rendered source a ``clause_source/2`` answer is compared
+# against — is passed in from Python as a ``str`` instead of being written as a
+# literal, because a text literal cannot be written in this mode.
 _MATCHERS = """\
--double_quotes(chars)
 -import_from(reflection, [
     reified_item, reified_clause, reified_subterm,
     op_node, replace_subterm, clause_source,
@@ -53,9 +57,9 @@ SwappedSource(SRC, TEXT) <- (
 Unbound(TEXT) <- clause_source(_, TEXT)
 
 # a rendered text that does not match a bound TEXT -> clean failure
-Mismatch(SRC) <- (
+Mismatch(SRC, TEXT) <- (
     reified_clause(SRC, CLAUSE),
-    clause_source(CLAUSE, "not the source")
+    clause_source(CLAUSE, TEXT)
 )
 """
 
@@ -104,8 +108,18 @@ def test_unbound_term_raises_instantiation_error(matchers):
 
 
 def test_bound_text_mismatch_fails_cleanly(matchers):
-    sols = _solutions("Mismatch", "Edge(1, 2),\n", module=matchers)
+    # TEXT is a genuine STRING (what render_source answers), so the mismatching
+    # value is a Python ``str`` — it must not unify with the rendered text.
+    sols = _solutions(
+        "Mismatch", "Edge(1, 2),\n", "not the source", module=matchers)
     assert sols == []
+
+
+def test_bound_text_match_succeeds(matchers):
+    # The other side of the same position: the rendered STRING unifies with an
+    # equal ``str``.  Without this the mismatch row above passes vacuously.
+    sols = _solutions("Mismatch", "Edge(1, 2),\n", "Edge(1, 2),", module=matchers)
+    assert len(sols) == 1
 
 
 def test_rendered_text_re_reifies(matchers):

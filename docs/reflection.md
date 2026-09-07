@@ -48,7 +48,7 @@ Inside clauses:
 
 | Term | Meaning |
 |---|---|
-| `Goal(NAME, ARGS, KWARGS)` | A predicate call *and* any compound term — heads, body goals, and structured arguments share this shape. `NAME` is a string (dotted for qualified calls, e.g. `"mod.Pred"`); `KWARGS` is a list of `[name, value]` pairs. |
+| `Goal(NAME, ARGS, KWARGS)` | A predicate call *and* any compound term — heads, body goals, and structured arguments share this shape. `NAME` is the functor's spelling as a **string** (dotted for qualified calls, e.g. `"mod.Pred"`); `KWARGS` is a list of `[name, value]` pairs. Note the asymmetry: this raw field is a string, while `goal_functor/3` — the accessor — answers the name as an **atom**, because that is a name position. Pick one and stay with it inside a matcher. |
 | `Variable(NAME)` | A logic variable, as a *ground* term — matchers inspect structure without binding anything. Anonymous variables are numbered `_1`, `_2`, … per clause. |
 | `Atom(NAME)` | A bare lowercase name. |
 | `Escape(CODE, VARS, POSITION)` | A `++` Python escape. `CODE` is the escaped expression's source text; it is never evaluated. |
@@ -121,10 +121,16 @@ binding it, and a non-`Clause` term simply fails. The enumeration builtins
 
 ### goal_functor/3 — Name and Arity
 
-`goal_functor(GOAL, NAME, ARITY)` — `NAME` is the functor string, `ARITY`
-counts positional plus keyword arguments. Fails on non-`Goal` terms (raw
-operator nodes, literals), which conveniently skips them in call-graph
-sweeps.
+`goal_functor(GOAL, NAME, ARITY)` — `NAME` is the functor name as an **atom**
+(a name position), `ARITY` counts positional plus keyword arguments. Fails on
+non-`Goal` terms (raw operator nodes, literals), which conveniently skips them
+in call-graph sweeps.
+
+Because `NAME` is an atom, a matcher can write it as a literal in ordinary
+(`-double_quotes(atom)`) source — `goal_functor(GOAL, "Edge", _)` matches an
+`Edge/…` call. Destructuring `Goal(NAME, _, _)` directly gives you the raw
+spelling *string* instead; the two do not unify with each other, so a matcher
+should use one form throughout.
 
 ### reified_subterm/2 — Recursive Walk
 
@@ -182,6 +188,12 @@ ShapeXY(SRC) <- reified_clause(SRC,
            [Goal("Goalx", [A], []), Goal("Goaly", [B], [])]))
 ```
 
+(The expansion is built by the compiler, so its `"MyPred"` is the raw
+spelling *string* the reified `Goal.name` field holds, whatever
+`-double_quotes` mode the matcher's module is in. Writing that vocabulary
+form by hand under the default `atom` mode would give you atoms and match
+nothing — use the arrow sugar, or `goal_functor/3`.)
+
 Semantics:
 
 - **Pattern variables are the matcher's own variables.** They *capture*
@@ -229,8 +241,10 @@ CalledPredicate(SRC, NAME, ARITY) <- (
 )
 
 DefinedName(SRC, NAME) <- (
-    reified_clause(SRC, Clause(Goal(NAME, _, _), _, _))
-)  # head name is a variable — vocabulary form, not arrow sugar
+    reified_clause(SRC, CLAUSE),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _)
+)  # goal_functor on both sides, so both NAMEs are atoms
 
 UndefinedCall(SRC, NAME) <- (
     CalledPredicate(SRC, NAME, _),
@@ -247,7 +261,7 @@ A clause body is a plain list of goals, so [DCGs](dcg.md) match goal
 `Edge/2` call":
 
 ```clausal
-edge_goal >> ([Goal("Edge", _, _)])
+edge_goal >> ([GOAL], {goal_functor(GOAL, "Edge", _)})
 any_goal >> ([_])
 any_goals >> ([])
 any_goals >> (any_goal, any_goals)

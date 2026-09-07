@@ -141,7 +141,11 @@ class ClausalConsole(code.InteractiveConsole):
 
         from clausal.import_hook import _FreshEmbedTransformer
         try:
-            transformed = _FreshEmbedTransformer().visit(tree)
+            # The source lines are what the quote map is built from (spec §7);
+            # without them -double_quotes(chars) is silently ignored and the
+            # REPL disagrees with a file that carries the same directive.
+            transformed = _FreshEmbedTransformer(
+                source.splitlines(keepends=True)).visit(tree)
             ast.fix_missing_locations(transformed)
         except Exception:
             self.showtraceback()
@@ -187,8 +191,11 @@ def _make_clausal_compile(repl):
         tree = ast.parse(code, "<stdin>", mode)
 
         # Apply Clausal transformers.  Errors fall back to the original tree.
+        # The source lines carry the quote characters ``ast`` erased, so
+        # ``-double_quotes(chars)`` means the same thing here as in a file.
         try:
-            transformed = _FreshEmbedTransformer().visit(tree)
+            transformed = _FreshEmbedTransformer(
+                code.splitlines(keepends=True)).visit(tree)
             ast.fix_missing_locations(transformed)
         except Exception:
             transformed = tree

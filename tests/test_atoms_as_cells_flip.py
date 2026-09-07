@@ -981,6 +981,41 @@ def test_a_string_attribute_key_is_refused(builtins_mod):
         assert formal.args[1] == "t12b_str_key"
 
 
+def _ground_segstring(text):
+    """A ground ``SegString`` that walks to *text* — the OTHER string shape.
+
+    A partial string that has since been completed is still a ``SegString``
+    object, so a funnel that tests ``type(x) is str`` never sees it.
+    """
+    from clausal.terms import SegString, VarSeg
+
+    hole = Var()
+    seg = SegString([text[:1], VarSeg(hole)])
+    unify(hole, text[1:], Trail())
+    assert seg.__walk__() == text
+    return seg
+
+
+def test_both_string_shapes_are_refused_the_same_way_in_a_name_position():
+    """A ground ``SegString`` is a STRING, so it must raise where a plain
+    ``str`` raises — it used to fall past the ``type(x) is str`` test and
+    fail SILENTLY, which is the reporting hole these funnels exist to close.
+    ``put_attr/3``'s Key and ``sum_/3``'s Op are the two funnels that read a
+    value a partial string can reach."""
+    from clausal.logic.builtins.attributes import _storage_key
+    from clausal.logic.clpfd import _op_spelling
+
+    for funnel, text, context in ((_storage_key, "segkey", "put_attr/3"),
+                                  (_op_spelling, "#=", "sum_/3")):
+        for value in (text, _ground_segstring(text)):
+            with pytest.raises(LogicException) as exc:
+                funnel(value, context)
+            formal = exc.value.term.args[0]
+            assert formal.functor == "type_error"
+            assert formal.args[0] == mint("atom")
+            assert formal.args[1] == text
+
+
 def test_bulk_attributes_round_trip_through_atom_keys():
     """``get_attrs/2`` hands the key half of each pair back, so it mints —
     otherwise ``get_attrs(V, D), put_attrs(W, D)`` would build a dict

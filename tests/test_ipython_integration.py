@@ -20,9 +20,14 @@ from clausal.templating.term_rewriting import EmbedTransformer
 
 
 def run_cell(source):
-    """Simulate an IPython cell: transform AST, fix locations, exec."""
+    """Simulate an IPython cell: transform AST, fix locations, exec.
+
+    The source lines go in with the tree, as both real REPL call sites now do
+    (``python_repl``) — they are what the quote map is built from.
+    """
     tree = ast.parse(source)
-    transformed = _FreshEmbedTransformer().visit(tree)
+    transformed = _FreshEmbedTransformer(
+        source.splitlines(keepends=True)).visit(tree)
     ast.fix_missing_locations(transformed)
     ns = dict(_simple_ast_builtins)
     exec(compile(transformed, "<cell>", "exec"), ns)
@@ -267,3 +272,58 @@ def test_sentinel_multi_goal_compiles():
     tree = _StarQueryTransformer().visit(tree)
     ast.fix_missing_locations(tree)
     compile(tree, "<cell>", "exec")
+
+
+# ── -double_quotes(chars) works in a cell, as it does in a file ──────────────
+# ``ast`` erases the quote character, so the mode can only be honoured if the
+# cell's TEXT reaches EmbedTransformer.  Neither REPL call site passed it, so
+# the quote map was empty and every ``"…"`` compiled to an atom regardless of
+# the directive: a cell and a file that said the same thing disagreed.
+
+def test_chars_mode_in_a_cell_makes_a_double_quoted_literal_a_string():
+    # nv
+    ns = run_cell('-double_quotes(chars)\nresult = --"foo"\n')
+    assert ns["result"] == "foo"
+    assert type(ns["result"]) is str
+
+
+def test_chars_mode_leaves_single_quoted_literals_atoms():
+    # nv
+    ns = run_cell("-double_quotes(chars)\nresult = --'bar'\n")
+    assert ns["result"] == mint("bar")
+
+
+def test_default_mode_in_a_cell_still_makes_an_atom():
+    # nv
+    ns = run_cell('result = --"foo"\n')
+    assert ns["result"] == mint("foo")
+
+
+def test_ipython_path_reads_the_lines_the_input_transformer_recorded():
+    """IPython hands an AST transformer only a tree, so the cell's text
+    arrives through ``_star_query_input_transformer``."""
+    # nv
+    source = '-double_quotes(chars)\nresult = --"foo"\n'
+    lines = _star_query_input_transformer(source.splitlines(keepends=True))
+    tree = ast.parse("".join(lines))
+    transformed = _FreshEmbedTransformer().visit(tree)   # no explicit lines
+    ast.fix_missing_locations(transformed)
+    ns = dict(_simple_ast_builtins)
+    exec(compile(transformed, "<cell>", "exec"), ns)
+    assert ns["result"] == "foo"
+    assert type(ns["result"]) is str
+
+
+def test_recorded_lines_are_consumed_not_left_for_the_next_tree():
+    """A stale cell's columns must not be read against a later tree."""
+    # nv
+    source = '-double_quotes(chars)\nresult = --"foo"\n'
+    _star_query_input_transformer(source.splitlines(keepends=True))
+    _FreshEmbedTransformer().visit(ast.parse("".join([source])))
+    # second tree, no directive and no recorded lines -> the default mode
+    tree = ast.parse('result = --"foo"\n')
+    transformed = _FreshEmbedTransformer().visit(tree)
+    ast.fix_missing_locations(transformed)
+    ns = dict(_simple_ast_builtins)
+    exec(compile(transformed, "<cell>", "exec"), ns)
+    assert ns["result"] == mint("foo")

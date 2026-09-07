@@ -33,15 +33,23 @@
  *
  * Deliberately does NOT intern, unlike ``clausal.logic.atoms.mint`` — this
  * is the twin of ``atoms.char_atom`` in that respect, and for the same
- * reason (see that function's docstring).  Every caller here is an
- * ENUMERATOR: char_type/2 over the Unicode alphabet, sub_atom/5's
+ * reason (see that function's docstring).  Every RUNTIME caller here is an
+ * enumerator: char_type/2 over the Unicode alphabet, sub_atom/5's
  * substrings, atom_concat/3's splits.  Interning is permanent on CPython,
  * so interning an enumerated spelling pins it for the life of the process —
  * exactly the "enumeration garbage must not be pinned" rule spec §5.2 gives
  * for the atom table.  Equality is unaffected: two atoms of the same
  * spelling compare equal by tuple ``==`` whether or not slot 0 is shared.
- * The two pre-built tables below hold interned literals already (they are
- * built with PyUnicode_InternFromString at module init). */
+ * The two pre-built tables below are the exception, and a bounded one: they
+ * are built here at module init from spellings already interned with
+ * PyUnicode_InternFromString.
+ *
+ * The PYTHON twins of sub_atom/5 and atom_concat/3 (``builtins/chars.py``)
+ * do mint, so they DO pin their substrings and split halves.  That is a
+ * deliberate divergence, not an oversight: interning is an optimisation with
+ * no semantic weight (equality is by ``==``), and the fallback paths run only
+ * when this extension is unavailable.  ``atoms.mint``'s docstring records the
+ * same split from the other side. */
 static inline PyObject *atom_from_str(PyObject *s)
 {
     return PyTuple_Pack(1, s);

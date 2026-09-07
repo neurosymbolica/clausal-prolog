@@ -9,6 +9,7 @@ import pytest
 
 z3 = pytest.importorskip("z3")
 
+from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.clpz3 import (
     get_z3_state, z3_check,
@@ -424,10 +425,10 @@ class TestAlgebraicDatatypes:
         """Declare a Color enum: red, green, blue."""
         # nv
         trail = Trail()
-        sort = z3_declare_datatype("Color3", [
-            ("red3",   []),
-            ("green3", []),
-            ("blue3",  []),
+        sort = z3_declare_datatype(mint("Color3"), [
+            (mint("red3"),   []),
+            (mint("green3"), []),
+            (mint("blue3"),  []),
         ], trail)
         assert sort is not None
         state = get_z3_state(trail)
@@ -437,8 +438,9 @@ class TestAlgebraicDatatypes:
         """Declare Pair(first: Int, second: Int)."""
         # nv
         trail = Trail()
-        sort = z3_declare_datatype("Pair2", [
-            ("pair2", [("first2", z3.IntSort()), ("second2", z3.IntSort())]),
+        sort = z3_declare_datatype(mint("Pair2"), [
+            (mint("pair2"), [(mint("first2"), z3.IntSort()),
+                             (mint("second2"), z3.IntSort())]),
         ], trail)
         assert sort is not None
 
@@ -446,8 +448,9 @@ class TestAlgebraicDatatypes:
         """A variable of an enum sort is satisfiable."""
         # nv
         trail = Trail()
-        sort = z3_declare_datatype("Dir", [
-            ("north", []), ("south", []), ("east", []), ("west", []),
+        sort = z3_declare_datatype(mint("Dir"), [
+            (mint("north"), []), (mint("south"), []),
+            (mint("east"), []), (mint("west"), []),
         ], trail)
         state = get_z3_state(trail)
         d = z3.Const("d", sort)
@@ -458,9 +461,10 @@ class TestAlgebraicDatatypes:
         """Declare a singly-linked list: nil | cons(head: Int, tail: IntList2)."""
         # nv
         trail = Trail()
-        sort = z3_declare_datatype("IntList2", [
-            ("nil2",  []),
-            ("cons2", [("head2", z3.IntSort()), ("tail2", "IntList2")]),
+        sort = z3_declare_datatype(mint("IntList2"), [
+            (mint("nil2"),  []),
+            (mint("cons2"), [(mint("head2"), z3.IntSort()),
+                             (mint("tail2"), mint("IntList2"))]),
         ], trail)
         assert sort is not None
         state = get_z3_state(trail)

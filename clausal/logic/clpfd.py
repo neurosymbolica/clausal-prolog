@@ -2301,7 +2301,17 @@ def _op_spelling(op, context):
       a silent failure is exactly what hid this bug;
     - anything else (an unbound Var, a number, a compound) → ``None``, and
       the caller fails as it has always failed on a malformed operator.
+
+    A string has two shapes — a plain ``str`` and a ground ``SegString`` that
+    walks to one — and both must answer the same way, so the operator is
+    walked first.  Without the walk a ``SegString`` operator fell through to
+    ``None`` and failed silently instead of raising, exactly the reporting
+    hole this funnel exists to close.
     """
+    from clausal.logic.runtime._seg_helpers import (  # noqa: PLC0415
+        normalize_seg_input,
+    )
+    op = normalize_seg_input(op)
     if is_atom(op):
         return spelling(op)
     if type(op) is str:

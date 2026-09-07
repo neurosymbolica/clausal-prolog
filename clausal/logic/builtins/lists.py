@@ -521,17 +521,36 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     ``==``-based dedup would leave both in a sorted set that is supposed to
     hold each term once.  The FIRST occurrence survives, as it did before.
     ``msort/2`` keeps every element and is unaffected.
+
+    The seen-set is a SET of keys, not a list: a standard-order key is a
+    tuple of hashables in every band but ``_ORD_OTHER``, so ``sort/2`` is
+    linear rather than the quadratic scan a list of keys costs (2000
+    distinct elements is 2 million tuple comparisons).  The one exception is
+    ``_helpers._OpaqueOrder`` — it defines ``__eq__`` and no ``__hash__``, so
+    a key holding one is unhashable; those keys, and only those, fall back to
+    the list.  The two pools never have to be compared against each other:
+    ``_OpaqueOrder`` answers ``NotImplemented`` to anything that is not an
+    ``_OpaqueOrder``, and its band tag differs from every other band's, so an
+    unhashable key can only ever equal another unhashable key.
     """
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
         items = [deref(x) for x in items]
         seen: list = []
-        seen_keys: list = []
+        hashable_keys: set = set()
+        opaque_keys: list = []
         for x in items:
             key = _standard_order_key(x)
-            if key not in seen_keys:
-                seen_keys.append(key)
+            try:
+                duplicate = key in hashable_keys
+                if not duplicate:
+                    hashable_keys.add(key)
+            except TypeError:
+                duplicate = key in opaque_keys
+                if not duplicate:
+                    opaque_keys.append(key)
+            if not duplicate:
                 seen.append(x)
         result = _standard_order_sorted(seen)
         out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))

@@ -29,8 +29,8 @@ Builtins
 - ``reified_clause(SOURCE, CLAUSE)`` — clauses only.
 - ``reified_file_item(PATH, ITEM)`` — like ``reified_item`` over a file path.
 - ``clause_head(CLAUSE, HEAD)`` / ``clause_body(CLAUSE, GOALS)`` — accessors.
-- ``goal_functor(GOAL, NAME, ARITY)`` — functor name (string) and arity of a
-  ``Goal`` term (arity counts positional plus keyword arguments).
+- ``goal_functor(GOAL, NAME, ARITY)`` — functor name (an ATOM, §6.4) and arity
+  of a ``Goal`` term (arity counts positional plus keyword arguments).
 - ``reified_subterm(TERM, SUB)`` — enumerate every subterm, depth-first,
   starting with ``TERM`` itself; recurses through vocabulary terms, raw
   operator nodes, lists, tuples, and dict values.
@@ -48,12 +48,13 @@ import dataclasses
 import functools
 import os
 
+from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.builtins._helpers import _functor_name
 from clausal.logic.predicate import is_term_instance, term_field_names
-from clausal.logic.exceptions import LogicException, instantiation_error
+from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import deref, is_var, unify
-from clausal.modules.py import ModulePredicate, simple_to_trampoline
+from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal.terms import Compound, KWTerm
 from clausal.reflection import (
@@ -100,12 +101,51 @@ def _yield_matches(candidates, pattern, _proceed, _fail, trail):
     yield (_fail, DONE)
 
 
+def _class_name_spelling(name, context):
+    """The SPELLING of a reified NAME argument, which is an ATOM (§6.4), or None.
+
+    The ``clpfd._op_spelling`` shape, for ``op_node/3``'s CLASS_NAME in
+    construct mode.  Before THE FLIP (2026-09-06-atoms-as-cells-strings) the
+    gate was ``isinstance(name, str)``, which after the flip matches a STRING
+    and nothing a source program can write: in the default
+    ``-double_quotes(atom)`` mode ``op_node(NEW, "Gt", ARGS)`` — the form
+    ``docs/reflection.md`` documents — hands over the atom ``("Gt",)``, so
+    every documented call silently built nothing.
+
+    - an atom → its spelling, which ``_OP_NODE_CLASSES`` keys on;
+    - a plain ``str`` → ``type_error(atom, …)``: a string is not a name, and a
+      silent failure is exactly what hid this;
+    - anything else (an unbound Var, a number, a compound) → ``None``, and the
+      caller fails cleanly as it always has on an unknown class name.
+    """
+    if is_atom(name):
+        return spelling(name)
+    if type(name) is str:
+        raise LogicException(type_error("atom", name, context))
+    return None
+
+
+def _source_text(value):
+    """The ``str`` a reflection builtin's SOURCE/PATH argument denotes, or None.
+
+    A source text or a file path is a TEXT position (§9.4): an atom and a
+    string both denote the same ``str``, so this is ``to_text`` and not an
+    ``isinstance(source, str)`` gate.  Under the default
+    ``-double_quotes(atom)`` mode a source-written ``"Edge(1, 2),"`` is the
+    atom ``("Edge(1, 2),",)``, and the old gate made every such call fail
+    silently — the builtin simply had no solutions.  A non-text bound
+    argument still fails cleanly (``None``), as it always has.
+    """
+    return to_text(value)
+
+
 def _reified_item_2(this_generator, _proceed, _fail, _catcher,
                     source, item, trail):
     source = deref(source)
     if is_var(source):
         raise LogicException(instantiation_error("reified_item/2"))
-    if not isinstance(source, str):
+    source = _source_text(source)
+    if source is None:
         yield (_fail, DONE)
         return
     yield from _yield_matches(
@@ -117,7 +157,8 @@ def _reified_clause_2(this_generator, _proceed, _fail, _catcher,
     source = deref(source)
     if is_var(source):
         raise LogicException(instantiation_error("reified_clause/2"))
-    if not isinstance(source, str):
+    source = _source_text(source)
+    if source is None:
         yield (_fail, DONE)
         return
     clauses = [
@@ -132,7 +173,8 @@ def _reified_file_item_2(this_generator, _proceed, _fail, _catcher,
     path = deref(path)
     if is_var(path):
         raise LogicException(instantiation_error("reified_file_item/2"))
-    if not isinstance(path, str) or not os.path.exists(path):
+    path = _source_text(path)
+    if path is None or not os.path.exists(path):
         yield (_fail, DONE)
         return
     candidates = _items_from_file(path, os.path.getmtime(path))
@@ -214,8 +256,16 @@ def _goal_functor_3(goal, name, arity, trail, k):
     kwargs = deref(goal.kwargs)
     count = len(args) if isinstance(args, list) else 0
     count += len(kwargs) if isinstance(kwargs, list) else 0
+    # NAME is a NAME position (§6.4): the accessor answers an ATOM, so
+    # ``goal_functor(HEAD, NAME, _), not DefinedName(SRC, NAME)`` compares
+    # atoms and a matcher can write the name as a source literal.  The
+    # reified ``Goal.name`` FIELD stays the raw spelling ``str`` — a pattern
+    # that destructures ``Goal(NAME, _, _)`` directly still sees that.
+    goal_name = deref(goal.name)
+    if type(goal_name) is str:
+        goal_name = mint(goal_name)
     mark = trail.mark()
-    if unify(name, deref(goal.name), trail) and unify(arity, count, trail):
+    if unify(name, goal_name, trail) and unify(arity, count, trail):
         yield None
     else:
         trail.undo(mark)
@@ -255,9 +305,12 @@ def _op_node_3(node, class_name, args, trail, k):
     for ``simple_ast`` operator nodes.
 
     - **decompose** (NODE bound to an operator node): unify CLASS_NAME with its
-      ``simple_ast`` class name (a string) and ARGS with its operand list.
+      ``simple_ast`` class name as an ATOM (``("GtE",)``, §6.4) and ARGS with
+      its operand list.
     - **construct** (NODE unbound, CLASS_NAME + ARGS bound): build the named
-      operator node from the operands and unify it with NODE.
+      operator node from the operands and unify it with NODE.  CLASS_NAME is
+      read by spelling, so the atom decompose answers goes straight back in;
+      a STRING there is ``type_error(atom, …)`` (``_class_name_spelling``).
 
     A bound NODE that is not a renderable operator node, or an unknown/unbound
     CLASS_NAME in construct mode, fails cleanly (no solution).  Both NODE and
@@ -271,8 +324,8 @@ def _op_node_3(node, class_name, args, trail, k):
     node = deref(node)
     if is_var(node):
         # construct mode: class name + operands -> a fresh operator node
-        name = deref(class_name)
-        cls = _OP_NODE_CLASSES.get(name) if isinstance(name, str) else None
+        name = _class_name_spelling(deref(class_name), "op_node/3")
+        cls = _OP_NODE_CLASSES.get(name) if name is not None else None
         if cls is None:
             return  # unbound or unknown class name -> fail cleanly
         operands = deref(args)
@@ -294,7 +347,10 @@ def _op_node_3(node, class_name, args, trail, k):
         return  # not a renderable operator node -> fail cleanly
     operands = [getattr(node, field) for field in _op_operand_fields(cls)]
     mark = trail.mark()
-    if unify(class_name, cls.__name__, trail) and unify(args, operands, trail):
+    # CLASS_NAME is a NAME position (§6.4) on both sides: decompose answers the
+    # ATOM ``("GtE",)``, which is what a source-written ``op_node(SUB, "GtE",
+    # ARGS)`` hands construct back in the default ``-double_quotes(atom)`` mode.
+    if unify(class_name, mint(cls.__name__), trail) and unify(args, operands, trail):
         yield None
     else:
         trail.undo(mark)

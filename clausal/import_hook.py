@@ -952,6 +952,13 @@ _simple_ast_builtins["_run_ipython_goal"] = _run_ipython_goal
 
 _STAR_QUERY_SENTINEL = "_clausal_star_query_"
 
+# The text of the cell IPython is about to parse, recorded by
+# ``_star_query_input_transformer`` and consumed by ``_FreshEmbedTransformer``.
+# IPython hands an AST transformer only a tree, but the quote map (spec §7)
+# has to be built from the token stream — this is the one place the two paths
+# can meet.  ``None`` between cells; a consumer clears it after reading.
+_LAST_CELL_LINES: list[str] | None = None
+
 
 def _star_query_input_transformer(lines: list[str]) -> list[str]:
     """IPython input transformer: rewrite ``*(...)`` to a valid Python call.
@@ -963,7 +970,16 @@ def _star_query_input_transformer(lines: list[str]) -> list[str]:
     ``_clausal_star_query_(...)``, the source becomes a normal function call
     that survives parsing and compilation.  ``_StarQueryTransformer`` then
     detects the sentinel call at the AST level.
+
+    It also records the lines it returns in ``_LAST_CELL_LINES``.  Being the
+    LAST ``input_transformers_post`` entry Clausal registers, what it returns
+    is (barring another extension appending after it) exactly the text
+    ``ast.parse`` sees, so the columns line up with the tree
+    ``_FreshEmbedTransformer`` is then handed.  If they ever do not, the map
+    simply misses and every literal falls back to the module default — the
+    pre-strings behaviour, never a wrong answer.
     """
+    global _LAST_CELL_LINES
     out = []
     for line in lines:
         stripped = line.lstrip()
@@ -972,6 +988,7 @@ def _star_query_input_transformer(lines: list[str]) -> list[str]:
             out.append(indent + _STAR_QUERY_SENTINEL + stripped[1:])
         else:
             out.append(line)
+    _LAST_CELL_LINES = list(out)
     return out
 
 
@@ -1066,11 +1083,33 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
 
     Exceptions are caught and printed rather than propagated, so IPython
     does not unregister this transformer on a bad cell.
+
+    *source_lines* is the cell's text, ``splitlines(keepends=True)``.  It is
+    what ``EmbedTransformer`` tokenizes to recover each string literal's
+    QUOTE CHARACTER (spec §7): ``ast`` erases it, so without the lines the
+    quote map is empty, every ``"…"`` looks like ``'…'``, and
+    ``-double_quotes(chars)`` is silently ignored — a cell would disagree
+    with a file that says the same thing.  The two ``python_repl`` call
+    sites pass it directly; under IPython the AST transformer is handed only
+    a tree, so the lines come from ``_star_query_input_transformer``, the
+    last input transformer to touch the text before it is parsed.
     """
 
+    def __init__(self, source_lines=None):
+        self._source_lines = source_lines
+
     def visit(self, tree):
+        global _LAST_CELL_LINES
+        source_lines = self._source_lines
+        if source_lines is None:
+            # The IPython path: consume the lines the input transformer
+            # recorded for THIS cell, and clear them, so a later tree built
+            # programmatically is never read against a stale cell's columns.
+            source_lines, _LAST_CELL_LINES = _LAST_CELL_LINES, None
         try:
-            tree = EmbedTransformer(implicit_atoms_default=True, interactive=True).visit(tree)
+            tree = EmbedTransformer(source_lines=source_lines,
+                                    implicit_atoms_default=True,
+                                    interactive=True).visit(tree)
             tree = _StarQueryTransformer().visit(tree)
             ast.fix_missing_locations(tree)
             return tree

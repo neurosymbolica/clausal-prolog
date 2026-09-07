@@ -9,14 +9,15 @@ import pytest
 
 z3 = pytest.importorskip("z3")
 
-from clausal.logic.atoms import mint
+from clausal.logic.atoms import is_atom, mint
+from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.clpz3 import (
     in_z3, z3_eq, z3_le, z3_ge, z3_check, label_z3,
     z3_named, z3_unsat_core, z3_minimal_unsat_core,
     z3_is_sat, z3_disentailed, z3_model, z3_simplify,
     z3_assertions, z3_stats, z3_set_option, z3_set_logic,
-    entailed_z3, get_z3_state,
+    z3_declare_datatype, entailed_z3, get_z3_state,
 )
 from clausal.pythonic_ast.nodes import ArithEq, Lt, LtE, Gt, GtE, Add
 
@@ -403,14 +404,14 @@ class TestSolverConfig:
     def test_set_timeout(self):
         # nv
         trail = Trail()
-        assert z3_set_option("timeout", 5000, trail)
+        assert z3_set_option(mint("timeout"), 5000, trail)
 
     def test_set_logic_qf_lia(self):
         # nv
         trail = Trail()
         x = Var()
         in_z3(x, 1, 10, trail)
-        assert z3_set_logic("QF_LIA", trail)
+        assert z3_set_logic(mint("QF_LIA"), trail)
         assert z3_check(trail)
 
     def test_set_logic_preserves_constraints(self):
@@ -419,7 +420,7 @@ class TestSolverConfig:
         x = Var()
         in_z3(x, 1, 10, trail)
         z3_eq(x, 5, trail)
-        z3_set_logic("QF_LIA", trail)
+        z3_set_logic(mint("QF_LIA"), trail)
         sols = []
         for _ in label_z3([x], trail):
             sols.append(deref(x))
@@ -431,8 +432,79 @@ class TestSolverConfig:
         x = Var()
         in_z3(x, 1, 5, trail)
         z3_eq(x, 10, trail)
-        z3_set_logic("QF_LIA", trail)
+        z3_set_logic(mint("QF_LIA"), trail)
         assert not z3_check(trail)
+
+
+def _formal_type(exc_info):
+    """The TYPE argument of a raised ``error(type_error(Type, X), Context)``."""
+    return exc_info.value.term.args[0].args[0]
+
+
+class TestNamePositionsAreAtoms:
+    """Every NAME this module hands to Z3 is an atom (§6.4).
+
+    Each of these positions used to pass the term straight through, so the
+    cell a source-written ``"QF_LIA"``/``"timeout"``/``"IntList"`` produces in
+    the default ``-double_quotes(atom)`` mode reached the z3 C bindings and
+    came back as a bare ``ArgumentError``/``Z3Exception`` — not a logic error
+    a program can catch.  A STRING is now the same ``type_error(atom, …)``
+    ``z3_named/2`` has always given, and an unbound name fails.
+    """
+
+    def test_string_logic_is_a_type_error(self):
+        # nv
+        trail = Trail()
+        with pytest.raises(LogicException) as exc:
+            z3_set_logic("QF_LIA", trail)
+        assert _formal_type(exc) == mint("atom")
+
+    def test_string_option_key_is_a_type_error(self):
+        # nv
+        trail = Trail()
+        with pytest.raises(LogicException) as exc:
+            z3_set_option("timeout", 5000, trail)
+        assert _formal_type(exc) == mint("atom")
+
+    def test_string_datatype_name_is_a_type_error(self):
+        # nv
+        trail = Trail()
+        with pytest.raises(LogicException) as exc:
+            z3_declare_datatype("Shade", [(mint("pale"), [])], trail)
+        assert _formal_type(exc) == mint("atom")
+
+    def test_string_constructor_name_is_a_type_error(self):
+        # nv
+        trail = Trail()
+        with pytest.raises(LogicException) as exc:
+            z3_declare_datatype(mint("Shade2"), [("pale2", [])], trail)
+        assert _formal_type(exc) == mint("atom")
+
+    def test_unbound_logic_fails_rather_than_raising(self):
+        # nv
+        trail = Trail()
+        assert z3_set_logic(Var(), trail) is False
+
+    def test_datatype_registers_under_its_spelling(self):
+        # nv
+        trail = Trail()
+        sort = z3_declare_datatype(
+            mint("Shade3"), [(mint("pale3"), []), (mint("deep3"), [])], trail)
+        assert sort is not None
+        # slot 0 stays a plain str, so the registry key is the SPELLING
+        assert "Shade3" in get_z3_state(trail).datatypes
+
+    def test_model_answers_atom_names_and_plain_values(self):
+        # nv
+        trail = Trail()
+        x = Var()
+        in_z3(x, 1, 3, trail)
+        z3_eq(x, 2, trail)
+        vals = Var()
+        assert z3_model([x], vals, trail)
+        name, value = deref(vals)[0]
+        assert is_atom(name)      # a Z3 constant NAME is a name position
+        assert value == 2         # the VALUE stays a value
 
 
 # ══════════════════════════════════════════════════════════════════════════════

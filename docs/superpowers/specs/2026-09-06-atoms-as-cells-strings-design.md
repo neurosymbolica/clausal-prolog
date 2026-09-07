@@ -272,16 +272,16 @@ Consequences pinned:
 
 ### 6.3 Type checks (`builtins/type_checks.py`)
 
-| Predicate | `("bar",)` | `"bar"` | `""` / `[]` | `("f", 1)` | number |
-|---|---|---|---|---|---|
-| `atom/1` | true | **false** | false | false | false |
-| `string/1`, `is_str/1` | false | true (`str` or ground `SegString`) | true | false | false |
-| `atomic/1` | **true** | false (it is a list) | false (today's answer, §4) | false | true |
-| `compound/1` | false (arity 0) | false (a list is not compound today; unchanged) | false | true | false |
-| `callable/1` | true | **false** | false | true | false |
-| `is_list/1` | false | true | true | false | false |
-| `is_chars/1` | false | true | true | false | false |
-| `ground/1` | true | true | true | per args | true |
+| Predicate | `("bar",)` | `"bar"` | `""` / `[]` | `[("a",), ("b",)]` | `("f", 1)` | number |
+|---|---|---|---|---|---|---|
+| `atom/1` | true | **false** | false | false | false | false |
+| `string/1`, `is_str/1` | false | true (`str` or ground `SegString`) | true | **true** (it IS the string `"ab"`) | false | false |
+| `atomic/1` | **true** | false (it is a list) | false (today's answer, §4) | false (it is a list) | false | true |
+| `compound/1` | false (arity 0) | false (a list is not compound today; unchanged) | false | false (a list is not compound today; unchanged) | true | false |
+| `callable/1` | true | **false** | false | false | true | false |
+| `is_list/1` | false | true | true | true | false | false |
+| `is_chars/1` | false | true | true | true | false | false |
+| `ground/1` | true | true | true | true | per args | true |
 
 `must_be/2`, `can_be/2`: the Type argument is an atom (it arrives as
 `("atom",)` from source); `_check_type` reads its spelling. The
@@ -403,9 +403,15 @@ Rules:
   that guessed which `str`s were atoms so they would print unquoted — are
   retired; the shape says so now.
 - The reified-source renderer emits an atom as a bare name when it is a
-  declared identifier, else as `'…'`; a string as `"…"`; and the module it
-  writes carries `-double_quotes(chars)` while the engine default is still
-  `atom` (§7), so its output re-reads as the terms it rendered.
+  declared identifier, else as `'…'`; a string as `"…"`. It prepends **no**
+  header: `render_source` renders a CLAUSE (or a subterm), not a module, so
+  a `-double_quotes(chars)` line would be a syntax error in most of the
+  places its output goes — a quoted clause in a lint message, a rewritten
+  clause spliced back beside others. `'…'` is an atom in every mode, so the
+  atom half re-reads correctly wherever the text lands; the STRING half is
+  what depends on the mode, and it is the **caller assembling a module** that
+  must add `-double_quotes(chars)` to the file it builds when the rendered
+  text contained a string.
 
 ### 6.8 Dicts and sets
 
@@ -628,7 +634,12 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
 1. Plan 0: `from clausal.logic.atoms import mint, is_atom, spelling` — write
    new Python-side atom handling against these; they survive the flip.
 2. Plan 1 lands: `mod.bar` is `("bar",)`; a Python callee reached through
-   `py.*` or `++` receives the spelling `str`; a Python `str` coming back is
+   `py.*` receives the spelling `str` for an atom **anywhere** in its
+   arguments (the deep `to_python`), while a `++`/f-string argument unwraps
+   a **top-level** atom only — the §9.1 perf fallback — so a nested atom
+   (inside a list, a tuple, a dict value) crosses as the cell `("bar",)`;
+   call `to_python` yourself when you need the deep conversion there.
+   A Python `str` coming back is
    a string; JSON keys are atoms, values strings, `atoms(...)` option to
    mint; `'x'` is always an atom in `.clausal` source; `"x"` follows the
    module's `-double_quotes` mode (default still `atom`); `"foo"(1)` is a
@@ -638,6 +649,12 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
    `Compound` before — an `isinstance(x, Compound)` on a constructed term
    must become a cell-shape test; tests that
    compared an atom result to a bare `str` compare to `mint(...)`.
+   **A Python-API break:** a GOAL named by a bare string is no longer
+   callable — `solve("goal", mod)` raises `type_error(callable, "goal")`,
+   because a `str` is a string (§6.4). Out-of-tree callers pass
+   `mint("goal")`, or the cell `("goal", Arg)`. `call(name, *args)` is
+   unaffected: its first parameter is a predicate NAME in the Python
+   signature, not a term, so `call("goal", X, module=m)` keeps working.
 3. Request: insert `-double_quotes(atom)` in every module (kit first, then
    the repos that consume it); report when a grep shows every module carries
    it. Plan 2 waits on that report.

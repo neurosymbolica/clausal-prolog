@@ -1828,28 +1828,54 @@ def z3_exists(var_sorts: list, body_fn, trail: Trail) -> bool:
 
 # ── Algebraic datatypes ───────────────────────────────────────────────────────
 
-def z3_declare_datatype(name: str, constructors: list, trail: Trail) -> Any:
+def z3_declare_datatype(name: Any, constructors: list, trail: Trail) -> Any:
     """Declare a Z3 algebraic datatype and store it in Z3State.datatypes.
 
     constructors: list of (ctor_name, [(field_name, sort_or_typename), ...])
-                  Use the datatype name string for self-referential fields.
+                  Use the datatype's own NAME for self-referential fields.
+
+    The datatype name, every constructor name and every field name are NAME
+    positions (§6.4): each is an ATOM, read by spelling through
+    :func:`_constraint_name`, and a STRING there is ``type_error(atom, …)``.
+    Before that funnel the term went straight to ``_z3.Datatype(...)`` /
+    ``dt.declare(...)``, so a source-written ``"IntList"`` — a cell in the
+    default ``-double_quotes(atom)`` mode — surfaced as a raw z3
+    ``ArgumentError`` from the C bindings.  An unbound name answers ``None``
+    and the caller fails, as everywhere else in this module.
 
     Returns the created Z3 sort object. Also registers the sort under
-    state.datatypes[name] for later use.
+    state.datatypes[spelling] for later use.
 
-    Example (linked list):
-        z3_declare_datatype("IntList", [
-            ("nil",  []),
-            ("cons", [("head", z3.IntSort()), ("tail", "IntList")]),
+    Example (linked list)::
+
+        z3_declare_datatype(mint("IntList"), [
+            (mint("nil"),  []),
+            (mint("cons"), [(mint("head"), z3.IntSort()),
+                            (mint("tail"), mint("IntList"))]),
         ], trail)
     """
+    context = "z3.declare_datatype/2"
     state = get_z3_state(trail)
+    name = _constraint_name(name, context)
+    if name is None:
+        return None
     dt = _z3.Datatype(name)
     for ctor_name, fields in constructors:
+        ctor_name = _constraint_name(ctor_name, context)
+        if ctor_name is None:
+            return None
         processed: list = []
         for fname, fsort in fields:
-            if isinstance(fsort, str):
-                processed.append((fname, dt))  # self-reference
+            fname = _constraint_name(fname, context)
+            if fname is None:
+                return None
+            fsort = deref(fsort)
+            # A NAME in the sort slot means "the datatype being declared" —
+            # the self-reference form.  It goes through the same funnel, so a
+            # STRING there is the same type_error as everywhere else.
+            if is_atom(fsort) or type(fsort) is str:
+                _constraint_name(fsort, context)
+                processed.append((fname, dt))
             else:
                 processed.append((fname, fsort))
         dt.declare(ctor_name, *processed)
@@ -1865,8 +1891,8 @@ def z3_declare_datatype(name: str, constructors: list, trail: Trail) -> Any:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def _constraint_name(name: Any) -> str | None:
-    """The SPELLING of a named constraint's Name, which is an ATOM (§6.4).
+def _constraint_name(name: Any, context: str = "z3_named/2") -> str | None:
+    """The SPELLING of a NAME this library hands to Z3, which is an ATOM (§6.4).
 
     Before THE FLIP (2026-09-06-atoms-as-cells-strings) this was
     ``name = str(name)``, and ``str(("x_big",))`` is the Python tuple REPR
@@ -1879,6 +1905,16 @@ def _constraint_name(name: Any) -> str | None:
     ``attributes._storage_key``): a variable here is a mode signal, not a
     type fault — the term is the right sort, only the binding is missing.
     Every other non-atom, a STRING included, is ``type_error(atom, …)``.
+
+    The one funnel for every name position in this module: the constraint
+    name, an option key, a logic name, a datatype/constructor/field name.
+    The sites that lacked it passed the raw term to Z3 and got a bare
+    ``ArgumentError``/``Z3Exception`` out of the C bindings for the atom a
+    source program writes — ``z3_set_option("timeout", 5000)`` and
+    ``z3_set_logic("QF_LIA")`` are the documented spellings, and in the
+    default ``-double_quotes(atom)`` mode both arrive as cells.
+
+    *context* is the predicate indicator that appears in the ``type_error``.
     """
     name = deref(name)
     if is_atom(name):
@@ -1888,7 +1924,7 @@ def _constraint_name(name: Any) -> str | None:
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, type_error,
     )
-    raise LogicException(type_error("atom", name, "z3_named/2"))
+    raise LogicException(type_error("atom", name, context))
 
 
 def z3_named(constraint_expr: Any, name: Any, trail: Trail) -> bool:
@@ -2017,7 +2053,10 @@ def z3_disentailed(constraint_expr: Any, trail: Trail) -> bool:
 def z3_model(vars_list: Any, values_var: Any, trail: Trail) -> bool:
     """Get the current model without binding Clausal variables.
 
-    Unifies *values_var* with a list of ``[name_str, value]`` pairs.
+    Unifies *values_var* with a list of ``[Name, Value]`` pairs.  ``Name`` is
+    the Z3 constant's NAME, so it is answered as an ATOM (§6.4) — the same
+    position ``z3_named/2`` reads and ``z3_unsat_core`` answers.  ``Value`` is
+    a VALUE (an int, a rational, a bool from ``z3_to_python``) and stays one.
     """
     state = get_z3_state(trail)
     vars_list = _as_list(deref(vars_list))
@@ -2033,7 +2072,7 @@ def z3_model(vars_list: Any, values_var: Any, trail: Trail) -> bool:
             z3_v = state.var_map.get(id(v))
             if z3_v is not None:
                 val = z3_to_python(m.eval(z3_v, model_completion=True))
-                pairs.append([str(z3_v), val])
+                pairs.append([mint(str(z3_v)), val])
     return unify(values_var, pairs, trail)
 
 
@@ -2072,21 +2111,40 @@ def z3_stats(stats_var: Any, trail: Trail) -> bool:
 
 
 def z3_set_option(key: Any, value: Any, trail: Trail) -> bool:
-    """Set a Z3 solver option (e.g. ``("timeout", 30000)``)."""
+    """Set a Z3 solver option (``z3.set_option("timeout", 5000)``).
+
+    KEY is a NAME position (§6.4) — an atom, read by spelling; a STRING is
+    ``type_error(atom, …)`` and an unbound key fails.  A VALUE that is an
+    atom (``memory_high_watermark``-style symbolic settings) crosses as its
+    spelling; numbers and booleans cross as themselves.  Both used to go to
+    ``solver.set`` raw, so the cell a source-written literal produces in the
+    default ``-double_quotes(atom)`` mode raised a bare z3 ``Z3Exception``.
+    """
     state = get_z3_state(trail)
-    key = deref(key)
+    key = _constraint_name(key, "z3.set_option/2")
+    if key is None:
+        return False
     value = deref(value)
+    if is_atom(value):
+        value = spelling(value)
     state.solver.set(key, value)
     return True
 
 
 def z3_set_logic(logic: Any, trail: Trail) -> bool:
-    """Switch to a logic-specific solver (e.g. ``"QF_LIA"``).
+    """Switch to a logic-specific solver (``z3.set_logic("QF_LIA")``).
+
+    LOGIC is a NAME position (§6.4): an atom read by spelling, a STRING is
+    ``type_error(atom, …)``, an unbound logic fails.  It used to reach
+    ``_z3.SolverFor`` raw, which answered a source-written atom with a z3
+    ``Z3Exception``.
 
     Replaces the solver, copying all existing assertions.
     """
     state = get_z3_state(trail)
-    logic = deref(logic)
+    logic = _constraint_name(logic, "z3.set_logic/1")
+    if logic is None:
+        return False
     old_assertions = list(state.solver.assertions())
     state.solver = _z3.SolverFor(logic)
     for a in old_assertions:

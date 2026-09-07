@@ -176,8 +176,14 @@ def mint(spelling: str):
     ``atom_from_str``) build the cell WITHOUT interning, because
     ``char_type/2`` alone visits ~49,000 characters and each interned
     spelling would be pinned forever (see ``char_atom``'s docstring and spec
-    §5.2).  ``sub_atom/5``/``atom_concat/3`` still reach ``mint`` per
-    enumerated substring; that residual pinning is recorded in §5.2.
+    §5.2).  ``sub_atom/5``/``atom_concat/3`` are split between the two: their
+    **Python** paths (``builtins/chars.py``) mint every substring and split
+    half, so those pin; their C-accelerated paths
+    (``_chars_core.atom_concat_split_find``/``sub_atom_search``/
+    ``sub_atom_enum``) build the cell through ``atom_from_str``, which does
+    not intern.  So the residual pinning §5.2 records is real, but only on
+    the fallback paths — the twins deliberately differ here, and the
+    difference is invisible to a program because equality is by ``==``.
     """
     if type(spelling) is not str:
         raise TypeError(f"mint: spelling must be a str, got {type(spelling).__name__}")

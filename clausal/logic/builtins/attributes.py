@@ -18,6 +18,7 @@ from clausal.terms import (
 
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.runtime._seg_helpers import normalize_seg_input
 
 
 # ── The Key funnel ─────────────────────────────────────────────────────────
@@ -52,7 +53,15 @@ def _storage_key(key, context):
     signal these predicates have always given.  A STRING key raises
     ``type_error(atom, …)``: a string is not a name (§6.4), and a silent
     failure is precisely what hid this bug.
+
+    A string has two shapes — a plain ``str`` and a ground ``SegString`` that
+    walks to one — and they must give the SAME answer, so the value is walked
+    (``normalize_seg_input``) before the ``str`` test.  Without the walk a
+    ``SegString`` key fell through to the trailing ``None`` and failed
+    silently, which is the very reporting hole this funnel was built to
+    close.
     """
+    key = normalize_seg_input(key)
     if is_atom(key):
         return spelling(key)
     if is_var(key):

@@ -12,6 +12,7 @@ than Python.  See ``todo/done/op-node-reflection-decompose-construct.md``.
 import pytest
 
 from clausal.import_hook import _load_module
+from clausal.logic.atoms import mint
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal import reflection as R
@@ -26,8 +27,10 @@ def _clear_query_cache():
     yield
 
 
+# DEFAULT-mode source (no ``-double_quotes(chars)``): every ``"…"`` below is a
+# class NAME, so it must be an ATOM — that is the position ``op_node/3`` reads
+# and answers (§6.4), and it is how ``docs/reflection.md`` writes the calls.
 _MATCHERS = """\
--double_quotes(chars)
 -import_from(reflection, [
     reified_clause, reified_subterm, op_node,
 ])
@@ -115,19 +118,19 @@ class TestDecompose:
     def test_names_a_relational_node(self, matchers):
         name = Var()
         sols = _solutions("OpName", "Small(X) <- (X >= 1)\n", name, module=matchers)
-        assert [n for (n,) in sols] == ["GtE"]
+        assert [n for (n,) in sols] == [mint("GtE")]
 
     def test_names_arithmetic_and_relational_nodes(self, matchers):
         name = Var()
         sols = _solutions("OpName", "Big(X) <- (X + 1 >= 10)\n", name, module=matchers)
-        assert {n for (n,) in sols} == {"GtE", "Add"}
+        assert {n for (n,) in sols} == {mint("GtE"), mint("Add")}
 
     def test_captures_operands_in_field_order(self, matchers):
         name, args = Var(), Var()
         sols = _solutions("OpParts", "Small(X) <- (X >= 1)\n", name, args, module=matchers)
         assert len(sols) == 1
         nm, operands = sols[0]
-        assert nm == "GtE"
+        assert nm == mint("GtE")
         assert isinstance(operands, list) and len(operands) == 2
         # field order is [left, right]; right is the integer literal 1
         assert deref(operands[1]) == 1
@@ -157,7 +160,7 @@ class TestDecompose:
         # `X is -Y` reifies as Unify(left=X, right=Negate(operand=Y))
         name = Var()
         sols = _solutions("OpName", "Neg(X, Y) <- (X is -Y)\n", name, module=matchers)
-        assert [n for (n,) in sols] == ["Unify", "Negate"]
+        assert [n for (n,) in sols] == [mint("Unify"), mint("Negate")]
 
     def test_compare_chain_excluded_but_its_inner_nodes_named(self, matchers):
         # `1 < X < 10` reifies as a CompareChain, which the renderer handles but
@@ -167,8 +170,8 @@ class TestDecompose:
         name = Var()
         sols = _solutions("OpName", "Mid(X) <- (1 < X < 10)\n", name, module=matchers)
         names = [n for (n,) in sols]
-        assert "CompareChain" not in names
-        assert names == ["Lt", "Lt"]
+        assert mint("CompareChain") not in names
+        assert names == [mint("Lt"), mint("Lt")]
 
     def test_foreign_object_sharing_a_name_fails_cleanly(self):
         """A non-``simple_ast`` object whose class merely shares an operator's
@@ -209,16 +212,16 @@ class TestConstruct:
     def test_wrong_arity_operand_list_fails_cleanly(self, matchers):
         new = Var()
         # Gt is binary; a one-element operand list cannot build it
-        assert list(call("BuildNode", new, "Gt", [1], module=matchers)) == []
+        assert list(call("BuildNode", new, mint("Gt"), [1], module=matchers)) == []
 
     def test_non_list_operands_fail_cleanly(self, matchers):
         new = Var()
-        assert list(call("BuildNode", new, "Gt", 5, module=matchers)) == []
+        assert list(call("BuildNode", new, mint("Gt"), 5, module=matchers)) == []
 
     def test_builds_a_unary_node(self, matchers):
         new = Var()
         rendered = []
-        for _ in call("BuildNode", new, "Negate", [5], module=matchers):
+        for _ in call("BuildNode", new, mint("Negate"), [5], module=matchers):
             node = deref(new)
             assert isinstance(node, simple_ast.Negate)
             assert node.operand == 5
@@ -251,7 +254,7 @@ class TestConstruct:
 
         built = []
         new = Var()
-        for _ in call(refl.op_node, new, "And", [1, 2]):
+        for _ in call(refl.op_node, new, mint("And"), [1, 2]):
             built.append(deref(new))
         assert len(built) == 1 and isinstance(built[0], simple_ast.And)
         # decompose it back
@@ -259,7 +262,7 @@ class TestConstruct:
         got = []
         for _ in call(refl.op_node, built[0], name, args):
             got.append((deref(name), [deref(a) for a in deref(args)]))
-        assert got == [("And", [1, 2])]
+        assert got == [(mint("And"), [1, 2])]
 
     def test_constructed_node_round_trips_through_renderer(self, matchers):
         import ast as _ast

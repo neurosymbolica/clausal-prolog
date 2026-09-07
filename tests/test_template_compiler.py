@@ -851,3 +851,43 @@ class TestStmtsToFunction:
         body = make_body("x")
         f = stmts_to_function(body, "double", _args("x"))
         assert f(5) == 10
+
+
+# ======================================================================
+# ISO 6.3.3 inside a template body (spec §7)
+# ======================================================================
+
+class TestDoubleQuotedFunctorInTemplateBody:
+    """A template body is source too, so ``"foo"(1)`` is refused there.
+
+    The refusal lives in ``ASTBuilder._build_Call`` and needs the owning
+    file's quote map, which only the real path threads
+    (``EmbedTransformer`` -> ``compile_template_func(node, quote_map)``);
+    ``transform_module_ast`` builds no map, so these go through
+    ``EmbedTransformer`` with the source lines, as a load does.
+    """
+
+    @staticmethod
+    def _embed(source: str):
+        from clausal.templating.term_rewriting import EmbedTransformer
+        return EmbedTransformer(
+            source_lines=source.splitlines(keepends=True)
+        ).visit(ast.parse(source))
+
+    def test_double_quoted_functor_is_a_syntax_error(self):
+        # nv
+        with pytest.raises(SyntaxError,
+                           match="double-quoted literal cannot be a functor"):
+            self._embed('@{}\ndef t(X):\n    "foo"(1)\n')
+
+    def test_single_quoted_functor_is_accepted(self):
+        # nv — ``'foo'`` is an atom in every -double_quotes mode
+        self._embed("@{}\ndef t(X):\n    'foo'(1)\n")
+
+    def test_double_quoted_functor_refused_under_chars_mode_too(self):
+        # nv — the rule is ISO 6.3.3, not a mode: a "..." literal is never a
+        # functor, whichever way the module reads its double quotes.
+        with pytest.raises(SyntaxError,
+                           match="double-quoted literal cannot be a functor"):
+            self._embed(
+                '-double_quotes(chars)\n@{}\ndef t(X):\n    "foo"(1)\n')
