@@ -80,9 +80,15 @@ shape as `if` (nested in the `else` branch — `visit_If` visits it too).
 
 ```python
 $v_S = Var(); $v_IDS = Var()
-for S, IDS in $each(('decide', profile, ('verdict', $v_S, $v_IDS, [])), ($v_S, $v_IDS), globals()):
+for S, IDS in $each(
+        Call(LoadName('decide'), [PyThunk(lambda: profile, []),
+                                  Call(LoadName('verdict'), [$v_S, $v_IDS])]),
+        ($v_S, $v_IDS), globals()):
     use(S, IDS)
 ```
+
+`$each` receives the same reified goal NODE `$once_bind` does — not a cell;
+the shapes shown here are abbreviated (`position=` keywords elided).
 
 `$each(goal, vars, globals)` is `query` projected onto `vars`: it yields one
 tuple of walked values per solution. The loop target is Python's own, so
@@ -111,7 +117,9 @@ statements of the body, exactly as for `if`/`for`.
 `not`:
 
 ```python
-if not $once_bind(Call(decide, profile, Var()), globals()):
+if not $once_bind(
+        Call(LoadName('decide'), [PyThunk(lambda: profile, []), Var()]),
+        globals()):
 ```
 
 No variables are created for a negated goal beyond the fresh ones the goal
@@ -125,11 +133,18 @@ needs; nothing is exported.
   that is not a target is bound per solution but not exported. `_` and `_x`
   names are never exported.
 - **Scope is Python's.** On success the names are ordinary locals of the
-  enclosing function (or module globals at module level) and survive the
+  enclosing function — or module globals at module level, with the caveat
+  below — and survive the
   block, like any assignment. A `for` leaves the last iteration's values,
   like any Python `for`. On failure nothing is assigned, so a later read
   raises `UnboundLocalError`: loud, and the same as a Python name assigned
-  only inside an `if`.
+  only inside an `if`. The module-level case carries one caveat: a seam over
+  a predicate defined in the SAME module fails during that module's load
+  (`NotImplementedError: Predicate fact/1 has no compiled dispatch
+  function`), because a `.clausal` module's Python body is EXECUTED before
+  its own clauses are compiled — exactly what a module-level `once()` over a
+  same-module predicate does, for the same reason. A module-level seam over
+  an IMPORTED predicate works: that module is already loaded and compiled.
 - **Rebinding** an existing Python local of the same name is an ordinary
   overwrite. The rewriter does not warn; it is an assignment.
 - **No sharing across seams.** Two `--` in one function that both mention
@@ -167,16 +182,37 @@ needs; nothing is exported.
 The plain query path is not sound enough to sit under the sugar: `query`,
 `call` and `solve` yield WFS-conditional (undefined) answers alongside true
 ones with no annotation (docs/wfs.md), and an unbound variable carrying
-constraint attributes comes back as the variable itself, whose attributes
-§4's trail undo would strip. The sugar is strict by default and never
+constraint attributes comes back as the variable itself, carrying a store
+§4 discards along with the seam's own variables. The sugar is strict by default and never
 silent:
 
-- **Unconditional answers only.** `if --goal` is true, and `for ... in
-  --goal` yields, only for answers with an empty delay set. A conditional
-  answer raises `UndefinedAnswer` (naming the goal, pointing to
-  `query_wfs`) at the point it is produced — not skipped, not taken as
-  true. The helpers therefore run through the delay-aware machinery that
-  `query_wfs` uses, not through `once`/`query` as written today.
+- **Unconditional answers only, for the goal shape that can be judged.**
+  `if --goal` is true, and `for ... in --goal` yields, only for answers
+  with an empty delay set. A conditional answer raises `UndefinedAnswer`
+  (naming the goal, pointing to `query_wfs`) at the point it is produced —
+  not skipped, not taken as true. The helpers run through the delay-aware
+  machinery `query_wfs` uses, not through `once`/`query`.
+
+  **The limit, precisely.** That judgement is delivered only when the WHOLE
+  goal is a single tabled-predicate call asked with GROUND arguments —
+  `if --wins(a):`. Everything else is judged exactly as `query_wfs` judges
+  it, which is to say not at all:
+
+  * a CONJUNCTION — `if --(X is a, wins(X)):` — is a composite goal;
+    `query_wfs` does not decompose one, so no delay set is read and the
+    answer passes as true;
+  * an UNTABLED WRAPPER — `if --p(a):` with `p(X) <- wins(X)` — is not a
+    tabled call, so the same thing happens;
+  * a NON-GROUND tabled call — `for X in --wins(X):` — has a table, but the
+    entry lookup is deferred to the first answer and keyed on the arguments
+    as bound BY that answer, so it misses the open call's entry and every
+    answer, conditional or not, is yielded.
+
+  The sugar inherits `query_wfs`'s judgement rather than growing a second
+  one; widening it is a filed follow-up
+  (`todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`),
+  and until it lands, code that must be sure asks the tabled predicate
+  directly, or asks `query_wfs`.
 - **No residual constraints on an export.** If an exported variable is
   still unbound AND attributed at export time, the helper raises
   `ResidualConstraints` naming the variable. A free unbound export is fine
@@ -241,10 +277,15 @@ silent:
 - `while --goal` re-runs per iteration.
 - Term positions unchanged: `x = --goal` is still the cell; `f(--t)` too.
 - `_`/`_x` never exported; ALL-CAPS not in a `for` target not exported.
-- Values are copies: mutating a solution's list does not affect the next;
-  after a seam its own variables are unbound again (trail undone); an
-  unbound export handed to an inner seam through `++` binds there without
-  touching the outer seam.
+- Values are copies: mutating a solution's list does not affect the next,
+  and does not reach the clause database either; after a seam its own
+  variables are discarded with their bindings (§3/§4) — nothing undoes a
+  trail on the caller's behalf; an unbound export handed to an inner seam
+  through `++` binds there without touching the outer seam. (An unbound
+  export is the LIVE variable object, so binding it in the inner seam is
+  visible through the Python name that holds it; an ALL-CAPS name written
+  inside the inner seam's `++` is that seam's OWN variable, per §4's "no
+  sharing across seams", not the outer's.)
 - Clause bodies and reflection untouched.
 - REPL cell form works.
 - A WFS-conditional answer raises `UndefinedAnswer`; an unconditional one

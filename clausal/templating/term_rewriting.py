@@ -4580,6 +4580,19 @@ class EmbedTransformer(NodeTransformer):
                 if node.id in rename and isinstance(node.ctx, Load):
                     return replace(Name(id=rename[node.id], ctx=Load()), node)
                 return node
+
+            def visit_Lambda(self, node):
+                # A ``++expr`` / f-string escape lowers to
+                # ``PyThunk(lambda IDS: len(IDS), [IDS], ...)``: the lambda
+                # takes the DEREFERENCED value of each captured variable as a
+                # parameter of the SAME name, and only the ``var_objects``
+                # list beside it (still visited — it is a sibling argument of
+                # the ``PyThunk`` call, not part of the lambda) holds the
+                # seam's variable objects.  Renaming the body's ``IDS`` too
+                # would leave the parameter shadowed and hand the escape the
+                # variable itself (``len()`` of an AttVar).  So: do not
+                # descend.
+                return node
         goal_ast = _Rename().visit(term_ast)
         pre = [
             replace(Assign(

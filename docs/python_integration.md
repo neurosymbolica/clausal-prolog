@@ -133,11 +133,31 @@ Exported names are ordinary locals: on success they survive the block; on
 failure nothing is assigned (a later read is an `UnboundLocalError`). A
 `for` exports exactly its target names, which must be variables of the goal.
 Values are copies; two seams never share a variable — goals that must share
-one go in one seam as a conjunction. The sugar is strict: a WFS-conditional
-answer raises `UndefinedAnswer` (use `query_wfs`), and an export that is
-unbound and constrained raises `ResidualConstraints` (keep the store with an
-explicit `Trail`, or ask for the residue inside the goal). Everywhere else
-`--` is still the term.
+one go in one seam as a conjunction. An export that is unbound and
+constrained raises `ResidualConstraints` (keep the store with an explicit
+`Trail`, or ask for the residue inside the goal). Everywhere else `--` is
+still the term.
+
+`UndefinedAnswer` and `ResidualConstraints` are both importable from
+`clausal.logic.seam`.
+
+**How far the strictness reaches.** A WFS-conditional (undefined) answer
+raises `UndefinedAnswer` (use `query_wfs` for truth values and delays) —
+but only when the WHOLE goal is a single tabled-predicate call asked with
+ground arguments, `if --wins(a):`. Every other shape is judged as
+`query_wfs` judges it, which is to say not at all: a conjunction
+(`if --(X is a, wins(X)):`), an untabled wrapper (`if --p(a):` with
+`p(X) <- wins(X)`), and a non-ground tabled call (`for X in --wins(X):`)
+all pass their conditional answers through as true. The sugar inherits
+`query_wfs`'s judgement rather than inventing a second one; widening it is
+filed as
+`todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`.
+Code that must be sure asks the tabled predicate directly, or asks
+`query_wfs`.
+
+A module-level `--goal:` over a predicate defined in the same file fails
+during that file's load — the Python body runs before the file's own
+clauses are compiled. Over an imported predicate it works.
 
 ## Crossing the boundary: atoms out, strings back
 

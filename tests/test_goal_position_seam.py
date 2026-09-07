@@ -126,6 +126,91 @@ class TestIf:
         assert mod.which(("large",)) == ("no", [("r1",)])
         assert mod.which(("tiny",)) == "none"
 
+    def test_a_thunk_over_a_goal_variable_reads_its_bound_value(self):
+        # ``++len(IDS)`` is lowered to ``PyThunk(lambda IDS: len(IDS), [IDS])``:
+        # the lambda takes the DEREFERENCED value as a parameter of the same
+        # name, so only the ``var_objects`` list OUTSIDE the lambda is the
+        # seam's variable and only it may be renamed to ``$v_IDS``.  Renaming
+        # the body's ``IDS`` too handed ``len()`` the AttVar itself.
+        mod = _load_inline("_gp_if8", RULEBASE.format(name="_gp_if8") + (
+            "def count(profile):\n"
+            "    if --(decide(++profile, verdict(S, IDS)), N is ++len(IDS)):\n"
+            "        return S, IDS, N\n"
+            "    return None\n"
+        ))
+        assert mod.count(("small",)) == (
+            ("permitted",), [("r1",), ("r2",)], 2)
+        assert mod.count(("large",)) == (("prohibited",), [("r1",)], 1)
+
+    def test_an_fstring_over_a_goal_variable_reads_its_bound_value(self):
+        # Same shape as the ``++`` thunk above: ``visit_JoinedStr`` builds the
+        # same ``PyThunk(lambda S: ..., [S])``, so the same rename rule has to
+        # hold for an f-string interpolating a goal variable.
+        mod = _load_inline("_gp_if9", RULEBASE.format(name="_gp_if9") + (
+            "def label(profile):\n"
+            "    if --(decide(++profile, verdict(S, _)), S2 is f\"v={S}\"):\n"
+            "        return S, S2\n"
+            "    return None\n"
+        ))
+        assert mod.label(("small",)) == (("permitted",), "v=permitted")
+
+    def test_an_unbound_export_handed_to_an_inner_seam_binds_the_live_object(self):
+        # spec §7: "an unbound export handed to an inner seam through ``++``
+        # binds there without touching the outer seam".  The outer seam is
+        # over by then — what it hands out is the LIVE variable object (an
+        # unbound, unattributed export is the variable itself, see
+        # ``TestHelpersDirectly.test_export_refuses_an_attributed_unbound_variable``),
+        # so the inner seam's binding is visible through the Python name that
+        # holds it, and the outer seam's OTHER exports are untouched.  The
+        # handle is a lowercase Python local on purpose: an ALL-CAPS name
+        # inside ``++`` is a variable of the INNER seam (next test).
+        mod = _load_inline("_gp_if10", (
+            "-module(_gp_if10, [edge(A, B, C), a, b, seen])\n"
+            "-double_quotes(chars)\n"
+            "edge(a, _, seen)\n"
+            "def probe():\n"
+            "    if --edge(a, B, C):\n"
+            "        held = B\n"
+            "        if --(++held is b):\n"
+            "            inner = 'bound'\n"
+            "        else:\n"
+            "            inner = 'failed'\n"
+            "        return held is B, B, C, inner\n"
+            "    return None\n"
+        ))
+        from clausal.logic.variables import deref
+        same, B, C, inner = mod.probe()
+        assert inner == "bound"
+        assert same is True                  # one live object, not a copy
+        assert deref(B) == ("b",)            # the inner seam bound it
+        assert C == ("seen",)                # the outer seam's other export
+
+    def test_an_all_caps_name_inside_an_inner_seams_escape_is_that_seams_variable(self):
+        # spec §4, "no sharing across seams": two ``--`` in one function that
+        # both mention ``B`` bind two unrelated fresh variables — including
+        # when the second mentions it inside a ``++``.  So ``++B`` in the
+        # inner seam reads the INNER ``$v_B``, and the outer seam's export
+        # (saved first) is left exactly as it was: unbound, same object.
+        mod = _load_inline("_gp_if11", (
+            "-module(_gp_if11, [edge(A, B), a, b])\n"
+            "-double_quotes(chars)\n"
+            "edge(a, _)\n"
+            "def probe():\n"
+            "    if --edge(a, B):\n"
+            "        before = B\n"
+            "        if --(++B is b):\n"
+            "            inner = 'true'\n"
+            "        else:\n"
+            "            inner = 'false'\n"
+            "        return before, before is B, inner\n"
+            "    return None\n"
+        ))
+        from clausal.logic.variables import deref, is_var
+        before, same, inner = mod.probe()
+        assert inner == "true"
+        assert same is False                 # the inner seam exported its own B
+        assert is_var(before) and deref(before) is before   # outer's untouched
+
     def test_term_positions_are_unchanged(self):
         mod = _load_inline("_gp_if5", RULEBASE.format(name="_gp_if5") + (
             "def term():\n"
@@ -225,6 +310,12 @@ class TestFor:
             ))
 
     def test_values_are_copies_per_solution(self):
+        # Two things, and the SECOND is what proves copying: within one run
+        # each solution's list starts at its stored length (so the append to
+        # solution 1 did not reach solution 2), and a SECOND run over the same
+        # loaded module sees the stored lists unmutated (so the append did not
+        # reach the clause database either).  Without copying the second run
+        # would read 3s.
         mod = _load_inline("_gp_for6", RULEBASE.format(name="_gp_for6") + (
             "def mutate(profile):\n"
             "    out = []\n"
@@ -233,6 +324,7 @@ class TestFor:
             "        out.append(len(IDS))\n"
             "    return out\n"
         ))
+        assert mod.mutate(("large",)) == [2, 2]
         assert mod.mutate(("large",)) == [2, 2]
 
     def test_break_stops_the_search(self):
@@ -337,6 +429,100 @@ class TestSoundnessThroughTheRewriter:
         ))
         with pytest.raises(UndefinedAnswer):
             mod.check()
+
+    def test_a_conditional_answer_is_not_judged_through_a_conjunction(self):
+        """PINS TODAY'S BEHAVIOUR, WHICH IS NOT THE STRICTNESS ONE WANTS.
+
+        WFS strictness reaches only a goal that IS a single tabled-predicate
+        call: ``_tabled_entry_for_goal`` returns ``None`` for a conjunction
+        and for an untabled wrapper, so ``_definite_answers`` has no table to
+        read a delay set from and the conditional answer passes as true —
+        exactly as ``query_wfs`` judges the same two goals ("Composite/
+        conjunctive goals are not decomposed here and keep True").  The bare
+        call in the test above DOES raise, from the same program.
+
+        Follow-up:
+        ``todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md``.
+        """
+        from clausal.logic.seam import UndefinedAnswer
+        mod = _load_inline("_gp_s3", (
+            "-module(_gp_s3, [move(A, B), wins(X), p(X), a, b, c])\n"
+            "-double_quotes(chars)\n"
+            "-table(wins/1)\n"
+            "move(a, b),\n"
+            "move(b, c),\n"
+            "move(c, a),\n"
+            "wins(X) <- (move(X, Y), not wins(Y))\n"
+            "p(X) <- wins(X)\n"
+            "def conjunction():\n"
+            "    if --(X is a, wins(X)):\n"
+            "        return 'true'\n"
+            "    return 'false'\n"
+            "def wrapper():\n"
+            "    if --p(a):\n"
+            "        return 'true'\n"
+            "    return 'false'\n"
+            "def bare():\n"
+            "    if --wins(a):\n"
+            "        return 'true'\n"
+            "    return 'false'\n"
+        ))
+        # NOT the desired answer: `wins(a)` is WFS-undefined, so both of
+        # these should raise. They do not — see the todo above.
+        assert mod.conjunction() == "true"
+        assert mod.wrapper() == "true"
+        # The same undefined answer, asked as a bare tabled call, IS judged.
+        with pytest.raises(UndefinedAnswer):
+            mod.bare()
+
+    def test_mixed_conditional_and_unconditional_answers_from_one_tabled_goal(self):
+        """One tabled predicate, one DEFINITE answer and three conditional
+        ones: the definite one is exported normally and each conditional one
+        raises ``UndefinedAnswer`` when it is asked for — but only when the
+        call is asked with GROUND arguments.
+
+        PINS TODAY'S BEHAVIOUR for the open call as well: ``for X in
+        --wins(X):`` yields all four answers and raises NOTHING.  The cause is
+        a second, distinct hole in the same lookup —
+        ``_definite_answers`` defers ``_tabled_entry_for_goal`` to the first
+        answer (the entry does not exist before ``solve()`` runs), and by then
+        the goal's argument is BOUND to that answer, so the subgoal key it
+        computes is ``wins(d)``'s, not the open call's, and the store lookup
+        misses.  ``query_wfs`` does the same lookup AFTER solve has finished
+        and the bindings are undone, so it reports all four correctly.
+        Recorded in the same todo as the conjunction case above.
+        """
+        from clausal.logic.seam import UndefinedAnswer
+        src = (
+            "-module({n}, [move(A, B), wins(X), a, b, c, d, e])\n"
+            "-double_quotes(chars)\n"
+            "-table(wins/1)\n"
+            "move(a, b),\n"
+            "move(b, c),\n"
+            "move(c, a),\n"
+            "move(d, e),\n"            # d wins outright: e has no move
+            "wins(X) <- (move(X, Y), not wins(Y))\n"
+            "def definite():\n"
+            "    if --wins(d):\n"
+            "        return 'true'\n"
+            "    return 'false'\n"
+            "def conditional():\n"
+            "    if --wins(a):\n"
+            "        return 'true'\n"
+            "    return 'false'\n"
+            "def every():\n"
+            "    got = []\n"
+            "    for X in --wins(X):\n"
+            "        got.append(X)\n"
+            "    return got\n"
+        )
+        mod = _load_inline("_gp_s4", src.format(n="_gp_s4"))
+        assert mod.definite() == "true"          # empty delay set: exported
+        with pytest.raises(UndefinedAnswer):     # non-empty delay set: refused
+            mod.conditional()
+        # The open call, in a fresh module so the two do not share a table:
+        mod2 = _load_inline("_gp_s5", src.format(n="_gp_s5"))
+        assert mod2.every() == [("d",), ("a",), ("b",), ("c",)]
 
     def test_an_attributed_unbound_export_raises_in_a_for(self):
         from clausal.logic.seam import ResidualConstraints
@@ -452,6 +638,40 @@ class TestQueryCache:
         answers = [("verdict", ("permitted",), []), ("verdict", ("prohibited",), [])] * 5
         assert self._compile_count(lambda: mod.parts(answers)) == 1
         assert mod.parts(answers) == [("permitted",), ("prohibited",)] * 5
+
+    def test_a_thunk_over_a_goal_variable_is_correct_but_uncached(self):
+        """A ``++`` over a GOAL variable still reads the bound value, and the
+        goal holding it is refused the cache today.
+
+        ``_structural_key`` refuses a ``PyThunk`` with ``var_objects``
+        (``_collect_vars`` never reaches them, so a cache hit could not rebind
+        them), so this goal recompiles once per execution — the measured cost
+        of the refusal recorded in
+        ``todo/goal-position-seam-thunk-var-objects-cache-2026-09-08.md``.
+        The same goal WITHOUT the var-taking thunk compiles once, so the
+        refusal is what separates the two, not the shape of the seam.
+        """
+        mod = _load_inline("_gp_c5", RULEBASE.format(name="_gp_c5") + (
+            "def sized(profiles):\n"
+            "    out = []\n"
+            "    for p in profiles:\n"
+            "        if --(decide(++p, verdict(S, IDS)), N is ++len(IDS)):\n"
+            "            out.append((S, N))\n"
+            "    return out\n"
+            "def plain(profiles):\n"
+            "    out = []\n"
+            "    for p in profiles:\n"
+            "        if --decide(++p, verdict(S, IDS)):\n"
+            "            out.append((S, len(IDS)))\n"
+            "    return out\n"
+        ))
+        profiles = [("small",), ("large",)] * 5
+        expected = [(("permitted",), 2), (("prohibited",), 1)] * 5
+        assert mod.sized(profiles) == expected
+        assert self._compile_count(lambda: mod.sized(profiles)) == len(profiles)
+        # The cacheable twin: same loop, no var-taking thunk, one compile.
+        assert mod.plain(profiles) == expected
+        assert self._compile_count(lambda: mod.plain(profiles)) == 1
 
     def test_a_reentrant_seam_site_keeps_each_execution_its_own_thunks(self):
         """The SAME seam site, running again while its own generator is

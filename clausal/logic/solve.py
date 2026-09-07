@@ -339,11 +339,20 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
             # and the count guard cannot detect; keying them by arity alone
             # would go the other way and CONFLATE goals that lower to
             # different code (``f(X, X)`` and ``f(X, Y)`` are one arity but
-            # two programs).  So: no cache.  Nothing loses by it today — a
-            # probe over the whole suite found not one cacheable goal with a
-            # var-taking thunk, and the goal-position surface cannot build a
-            # working one — and when ``_collect_vars`` learns to descend into
-            # ``var_objects``, this refusal is the single line to lift.
+            # two programs).  So: no cache.
+            #
+            # This DOES cost something, and the earlier note here that "the
+            # goal-position surface cannot build a working one" was wrong: a
+            # ``++`` (or an f-string) over a variable the same seam binds —
+            # ``if --(decide(++p, verdict(S, IDS)), N is ++len(IDS)):`` — is
+            # exactly such a thunk, it runs correctly, and it is refused the
+            # cache, so it recompiles once per execution (measured
+            # 2026-09-08: 2000 executions of that loop take 1.6s against
+            # 0.16s for the same loop without the var-taking thunk).  The
+            # refusal is the single line to lift once ``_collect_vars``
+            # descends into ``var_objects`` and the key gives them ``('var',
+            # i)`` slots — see
+            # ``todo/goal-position-seam-thunk-var-objects-cache-2026-09-08.md``.
             raise _Uncacheable()
         if thunks is not None:
             thunks.append(t)
@@ -375,6 +384,26 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
     except TypeError as e:
         raise _Uncacheable() from e
     return ("lit", type(t), t)
+
+
+def _code_names(code) -> set:
+    """Every global name *code* reads, its nested code objects included.
+
+    ``co_names`` is per code object, and a compiled query's body can live in a
+    nested one (the step generator), so a flat ``co_names`` check would call a
+    perfectly good ``_pyt_<id>`` reference missing.
+    """
+    names = set(code.co_names)
+    for const in code.co_consts:
+        if isinstance(const, type(code)):
+            names |= _code_names(const)
+    return names
+
+
+def _thunk_names_not_called(code, names) -> list:
+    """The recorded ``_pyt_<id>`` names *code* never reads — empty is correct."""
+    called = _code_names(code)
+    return [n for n in names if n not in called]
 
 
 def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
@@ -666,6 +695,17 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # places — the rewriter builds a fresh ``PyThunk`` per ``++`` site per
         # execution, so two slots are always two objects.
         cached_thunk_names = [f"_pyt_{id(t)}" for t in goal_thunks]
+        # And the compiled code must actually CALL each of them.  The key's
+        # walk and ``term_to_ast_expr``'s walk are two separate traversals of
+        # the same goal; if they ever disagree about which thunks are in it,
+        # the hit path would rebind a global the code never reads and quietly
+        # serve the FIRST execution's ``++`` values.  Make that loud here,
+        # where the two lists are side by side, instead of at the answer.
+        assert not _thunk_names_not_called(
+            dispatch_fn.__code__, cached_thunk_names), (
+            "thunk names recorded for the cache but never called by the "
+            "compiled query: " + repr(_thunk_names_not_called(
+                dispatch_fn.__code__, cached_thunk_names)))
         _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__,
                                    cached_var_names, cached_thunk_names)
 

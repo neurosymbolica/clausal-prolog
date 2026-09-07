@@ -327,9 +327,25 @@ def _definite_answers(goal: Any, module) -> "Iterator[None]":
 def once_bind(goal: Any, module_globals: dict) -> bool:
     """True on the first unconditional answer, leaving the goal's variables
     bound for the caller's ``$export`` lines; False if the goal fails."""
-    for _ in _definite_answers(goal, _module_of(module_globals)):
-        return True
-    return False
+    gen = _definite_answers(goal, _module_of(module_globals))
+    try:
+        next(gen)
+    except StopIteration:
+        return False
+    finally:
+        # Close the abandoned search explicitly rather than leaving it to the
+        # frame's refcount: on a success we walk away from a generator that
+        # still holds a suspended ``solve()``, and CPython's prompt
+        # finalization is an implementation detail, not a promise.
+        #
+        # Closing does NOT undo the trail — ``_definite_answers`` owns a
+        # private ``Trail`` and nothing in the close path rewinds it — which
+        # is exactly what the two ``$export`` lines the rewriter emits right
+        # after this call depend on: the goal's variables are still bound when
+        # they run.  (Spec §4: the seam's own variables are discarded WITH
+        # their bindings; nothing undoes a trail on the caller's behalf.)
+        gen.close()
+    return True
 
 
 def each(goal: Any, variables: tuple, module_globals: dict):
