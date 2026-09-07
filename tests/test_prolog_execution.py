@@ -62,6 +62,7 @@ import pytest
 import clausal.import_hook  # noqa: F401  -- installs the .clausal finder/loader
 from clausal import solve
 from clausal.import_hook import _load_module
+from clausal.logic.atoms import mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
@@ -346,13 +347,22 @@ class TestDateOrderingWitness:
         import datetime
 
         mod = _load_clausal(tmp_path, "date1", _DATE_SOURCE)
+        # THE FLIP (spec §11): text crossing in from Python is a STRING; the
+        # clause head carries the ATOM the atom-mode literal denotes, so the
+        # Python caller must pass the atom (`mint`), not a str.
         clausal = _run_clausal(
-            lambda: mod.service_in_force("virtual_asset", datetime.date(2026, 9, 2))
+            lambda: mod.service_in_force(mint("virtual_asset"),
+                                         datetime.date(2026, 9, 2))
         )
         scryer = _run_scryer(
             tmp_path,
             _DATE_PL,
-            'service_in_force("virtual_asset", date(2026,9,2)).',
+            # The category literal migrated with the emission: a Clausal str
+            # literal denotes an ATOM, so the head this query must match is
+            # `status_commencement(virtual_asset, ...)`, not a char list. With
+            # the old spelling the query fails at the HEAD and never reaches
+            # the `=<` whose divergence this test exists to pin.
+            'service_in_force(virtual_asset, date(2026,9,2)).',
             strip_companion_import=True,
         )
         assert clausal == ("succeeds", ())
@@ -385,3 +395,167 @@ class TestKnownCorrectLoweringControl:
         clausal = _run_clausal(lambda: mod.Same(5, 6))
         scryer = _run_scryer(tmp_path, _SAME_PL, "same(5, 6).")
         assert_agreement(clausal, scryer, case="same(5, 6)")
+
+
+# ── THE MONEY PIN: a str literal must unify with a same-spelling atom ──────────
+#
+# AUTHORITY (user-ratified, R2 family; see the block comment in
+# tests/test_prolog_emit.py for the full citation): under the current Python
+# surface a Clausal ``str`` literal DENOTES AN ATOM. Verified against the live
+# engine before this pin was written -- an atom imported from another module
+# derefs to a plain ``str``, and ``atom == "spelling"`` is True.
+#
+# This is the ai_act ``what_if`` shape: a profile KEY is written as a bare atom
+# in the module that declares the key surface, and reached as a str literal by
+# the module that asks the hypothetical. On the Clausal engine that unifies --
+# they are the same value. Before the literal migration the translator lowered
+# the str to a Prolog double-quoted char list, so the emitted program FAILED
+# where the engine SUCCEEDED: a silent wrong answer, not a loud error.
+#
+# RED before the migration (re-derived this session against real Scryer and the
+# real engine):  Clausal = ('succeeds', ('exception_f',))  /  Scryer = 'fails'.
+
+_KEYS_CLAUSAL = """-module(keys, [profile_key(K), exception_f, harm])
+profile_key(exception_f),
+profile_key(harm),
+"""
+
+_ASKER_CLAUSAL = """-import_from(keys, [profile_key])
+Hit(K) <- (K is "exception_f", profile_key(K))
+"""
+
+
+def _run_scryer_multifile(tmp_path, files: dict, query: str):
+    """Consult a MULTI-MODULE emitted program in real Scryer.
+
+    ``files`` maps file name -> Prolog text; ``harness.pl`` is the entry point
+    Scryer is pointed at, and the others sit beside it so its ``use_module``
+    directives resolve by relative path -- exactly how the exporter stages a
+    domain on disk. Same output classification as :func:`_run_scryer`.
+    """
+    for name, text in files.items():
+        (tmp_path / name).write_text(text)
+    proc = subprocess.run(
+        [SCRYER, "harness.pl"],
+        cwd=tmp_path, input=query + "\n",
+        capture_output=True, text=True, timeout=15,
+    )
+    line = proc.stdout.strip()
+    if line == "true.":
+        return ("succeeds", None)
+    if line == "false.":
+        return ("fails", None)
+    if line.startswith("error("):
+        return ("raises", line)
+    raise AssertionError(
+        f"unparsed Scryer output for query {query!r}: "
+        f"stdout={proc.stdout!r} stderr={proc.stderr!r} rc={proc.returncode}"
+    )
+
+
+class TestStrLiteralUnifiesWithImportedAtom:
+    """The cross-module literal/atom identity pin."""
+
+    def test_str_literal_reaches_an_imported_atom(self, tmp_path):
+        from clausal.tools.clausal_to_prolog import (
+            clausal_source_to_prolog_ast, module_export_signature,
+        )
+
+        # --- Clausal engine: the ground truth -------------------------------
+        (tmp_path / "keys.clausal").write_text(_KEYS_CLAUSAL)
+        import sys
+        sys.path.insert(0, str(tmp_path))
+        try:
+            asker = _load_clausal(tmp_path, "asker", _ASKER_CLAUSAL)
+            var = Var()
+            clausal = _run_clausal(lambda: asker.Hit(var), var)
+        finally:
+            sys.path.remove(str(tmp_path))
+
+        # The engine must actually REACH the fact -- a pin whose ground truth
+        # is "fails" would go green on a translator that emits nothing.
+        # The binding comes back as the engine's atom cell (THE FLIP, §11:
+        # an atom is the 1-tuple `("exception_f",)`), i.e. `mint(...)`.
+        assert clausal == ("succeeds", (mint("exception_f"),)), clausal
+
+        # --- The emitted program, in real Scryer ----------------------------
+        # Signatures are supplied because that is how the real exporter runs:
+        # without them an import list carries no arity and Scryer rejects the
+        # module declaration before reaching the predicate under test.
+        sigs = {"keys": module_export_signature(
+            clausal_source_to_prolog_ast(_KEYS_CLAUSAL))}
+        scryer = _run_scryer_multifile(tmp_path, {
+            "keys.pl": _translate(_KEYS_CLAUSAL),
+            "harness.pl": clausal_source_to_prolog(
+                _ASKER_CLAUSAL, module_path="asker", module_signatures=sigs),
+        }, "hit(_).")
+
+        assert_agreement(clausal, scryer, case='Hit(K), K is "exception_f"')
+
+
+# ── Class G: a str literal containing newlines must still consult ─────────────
+#
+# 16 corpus domains failed G2 on error(syntax_error(missing_quote)) -- e.g.
+# us/tax/irc_s1_income_tax_brackets/parameters.pl, whose `verbatim` parameter is
+# a multi-KB statutory table carrying real newlines. The root cause is the
+# EMITTER: `emit_term`'s PString branch escaped only backslash and `"`, so an
+# embedded newline was written raw and the double-quoted string ran off the end
+# of its line. The literal migration routes those values through `_quote_atom`,
+# which escapes newlines (and every other control char) per ISO 6.4.2.
+
+_VERBATIM_PROSE = (
+    "TABLE 1 - Section 1(j)(2)(A) –Married Individuals Filing Joint Returns\n"
+    "If Taxable Income Is: The Tax Is:\n"
+    "Not over $23,850 10% of the taxable income\n"
+    "Over $23,850 but $2,385 plus 12% of\n"
+    "not over $96,950 the excess over $23,850\n"
+) * 40  # ~9 KB, the multi-KB scale the citations/verbatim parameters really hit
+
+
+class TestNewlineBearingLiteralConsults:
+
+    def test_multiline_verbatim_literal_consults_in_scryer(self, tmp_path):
+        source = "Verbatim(%r),\n" % _VERBATIM_PROSE
+        pl = _translate(source)
+        assert len(_VERBATIM_PROSE) > 8000, "witness must be multi-KB"
+        # The emitted clause is ONE line: no raw newline escaped from the atom.
+        assert "\n" not in pl.strip().rstrip("."), pl[:200]
+        outcome = _run_scryer_multifile(
+            tmp_path, {"harness.pl": pl}, "verbatim(_).")
+        assert outcome == ("succeeds", None), outcome
+
+
+# ── `"[]"`: the collapse onto ISO's one `[]` is FAITHFUL under the flip ────────
+#
+# ISO has exactly one `[]` and it is an atom (6.3.5; Scryer: `atom([])` and
+# `[] == '[]'` are both true). f47e1a8e pinned a DIVERGENCE here: the
+# pre-flip engine distinguished the atom `"[]"` from the empty list, so
+# `K is "[]", empty_list(K)` failed on the engine while the emitted
+# `K = [], empty_list(K)` succeeded -- a false positive in the export.
+#
+# THE FLIP (2026-09-06-atoms-as-cells-strings §11) made the engine agree
+# with ISO: the atom `[]` IS the empty list (`atom([])` true, written `[]`).
+# Under atom mode `"[]"` denotes that atom, so the engine now SUCCEEDS
+# exactly as the emitted program does, and the translator's warning for
+# this literal is gone (item J, 2026-09-07). This pin records the
+# agreement and goes RED the day the two sides part again.
+
+_NIL_SOURCE = """empty_list([]),
+Hit(K) <- (K is "[]", empty_list(K))
+"""
+
+
+class TestBracketAtomLiteralAgrees:
+
+    def test_bracket_atom_literal_agrees(self, tmp_path):
+        mod = _load_clausal(tmp_path, "nil1", _NIL_SOURCE)
+        var = Var()
+        clausal = _run_clausal(lambda: mod.Hit(var), var)
+        # The engine's own answer: the atom `[]` is the empty list.
+        assert clausal == ("succeeds", ([],)), clausal
+
+        scryer = _run_scryer_multifile(
+            tmp_path, {"harness.pl": _translate(_NIL_SOURCE)}, "hit(_).")
+        assert scryer == ("succeeds", None), scryer
+
+        assert_agreement(clausal, scryer, case='Hit(K), K is "[]", empty_list(K)')

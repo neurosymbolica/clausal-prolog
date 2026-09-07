@@ -93,8 +93,15 @@ class TestTranslationSyntax:
         # nv
         import re
         golden = golden_path.read_text(encoding="utf-8")
-        # Strip quoted strings before checking for Python keywords
-        stripped = re.sub(r'"[^"]*"', '""', golden)
+        # Strip COMMENTS first. The subject of this test is emitted Prolog
+        # CODE; a `/* ... */` block is prose -- the translator's own warning
+        # channel -- and English prose may legitimately contain the word
+        # "and". Without this the check false-positives on any warning that
+        # happens to use it (the `"[]"` literal warning does).
+        stripped = re.sub(r"/\*.*?\*/", "", golden, flags=re.DOTALL)
+        stripped = re.sub(r"(?m)%.*$", "", stripped)
+        # Then strip quoted strings before checking for Python keywords
+        stripped = re.sub(r'"[^"]*"', '""', stripped)
         stripped = re.sub(r"'[^']*'", "''", stripped)
         assert "<-" not in stripped, "Clausal arrow '<-' found in Prolog output"
         assert " and " not in stripped, "Clausal 'and' found in Prolog output"
@@ -235,7 +242,10 @@ class TestUntranslatable:
         # nv
         result = clausal_source_to_prolog('Test() <- (_x is {"a": 1})')
         assert "WARNING" not in result
-        assert 'attribute("a", 1)' in result
+        # The dict KEY is a str literal, so it lowers to an atom like any
+        # other (R2). Both sides of a profile_get/tri_get/attrs_put
+        # comparison migrate together, so lookups still match.
+        assert "attribute(a, 1)" in result
 
     def test_dict_splat_iso_warning(self):
         """Dict splat not in first position still emits a warning in ISO

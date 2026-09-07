@@ -1,4 +1,4 @@
-:- double_quotes(chars).
+:- set_prolog_flag(double_quotes, chars).
 
 :- module(iso_type_checking, [test/1]).
 
@@ -110,10 +110,10 @@ test("callable: a string is callable as the list it is") :-
 test("callable: an arbitrary string is callable too") :-
     callable("hello").
 
-test("callable: the empty list is the atom '[]' and is callable") :-
+test("callable: the empty list is the atom \'[]\' and is callable") :-
     callable([]).
 
-test("callable: a non-empty list is the compound './2'") :-
+test("callable: a non-empty list is the compound \'./2\'") :-
     callable([1, 2]).
 
 test("callable: int fails") :-

@@ -31,114 +31,114 @@ safe_max(X, Y, X) :-
 safe_max(X, Y, Y) :-
     Y > X.
 
-test("conjunction binds two vars") :-
+test('conjunction binds two vars') :-
     X = 1,
     Y = 2,
     X == 1,
     Y == 2.
 
-test("conjunction fails if first fails") :-
+test('conjunction fails if first fails') :-
     \+ (a = b, _X_UNUSED = 1).
 
-test("conjunction fails if second fails") :-
+test('conjunction fails if second fails') :-
     \+ (_X_UNUSED = 1, a = b).
 
-test("triple conjunction") :-
+test('triple conjunction') :-
     X = 1,
     Y = 2,
     Z = 3,
     X + Y + Z =:= 6.
 
-test("disjunction first succeeds") :-
+test('disjunction first succeeds') :-
     X = 1 ; X = 2.
 
-test("disjunction first fails, second succeeds") :-
+test('disjunction first fails, second succeeds') :-
     a = b ; _X_UNUSED = 1.
 
-test("disjunction both fail") :-
+test('disjunction both fail') :-
     \+ (a = b ; c = d).
 
-test("not: failed unification succeeds") :-
+test('not: failed unification succeeds') :-
     \+ 1 = 2.
 
-test("not: successful unification fails") :-
+test('not: successful unification fails') :-
     \+ \+ 1 = 1.
 
-test("not: member absent") :-
+test('not: member absent') :-
     \+ member(d, [a, b, c]).
 
-test("not: member present fails") :-
+test('not: member present fails') :-
     \+ \+ member(b, [a, b, c]).
 
-test("double negation: not not (1=1)") :-
+test('double negation: not not (1=1)') :-
     \+ \+ 1 = 1.
 
-test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") :-
+test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') :-
     X = 1, Y = a ; X = 2, Y = b.
 
-test("not + member: d not in list") :-
+test('not + member: d not in list') :-
     \+ member(d, [a, b, c]).
 
-test("conjunction + negation") :-
+test('conjunction + negation') :-
     X = 5,
     \+ X = 3,
     X == 5.
 
-test("choose picks first") :-
+test('choose picks first') :-
     choose(1, 2, 1).
 
-test("choose picks second") :-
+test('choose picks second') :-
     choose(1, 2, 2).
 
-test("choose with atoms") :-
+test('choose with atoms') :-
     choose(a, b, a).
 
-test("safe_max: first is larger") :-
+test('safe_max: first is larger') :-
     safe_max(5, 3, M),
     M == 5.
 
-test("safe_max: second is larger") :-
+test('safe_max: second is larger') :-
     safe_max(2, 7, M),
     M == 7.
 
-test("safe_max: equal") :-
+test('safe_max: equal') :-
     safe_max(4, 4, M),
     M == 4.
 
-test("true succeeds (1 == 1)") :-
+test('true succeeds (1 == 1)') :-
     1 == 1.
 
-test("fail fails: not False") :-
+test('fail fails: not False') :-
     \+ false.
 
-test("conjunction backtracks: 2x2 = 4 solutions") :-
+test('conjunction backtracks: 2x2 = 4 solutions') :-
     findall([X, Y], (member(X, [1, 2]), member(Y, [a, b])), L),
     length(L, 4),
     member([1, a], L),
     member([2, b], L).
 
-test("disjunction yields 2 solutions") :-
+test('disjunction yields 2 solutions') :-
     findall(X, (X = 1 ; X = 2), L),
     L == [1, 2].
 
-test("disjunction with conjunction: 2 solutions") :-
+test('disjunction with conjunction: 2 solutions') :-
     findall([X, Y], (X = 1, Y = a ; X = 2, Y = b), L),
     L == [[1, a], [2, b]].
 
-test("naf does not bind: not(X is a) fails") :-
+test('naf does not bind: not(X is a) fails') :-
     \+ \+ _X_UNUSED = a.
 
-test("color enumerates three") :-
+test('color enumerates three') :-
     findall(X, color(X), L),
     L == [red, green, blue].
 
-test("ancestor: direct parent") :-
+test('ancestor: direct parent') :-
     ancestor(a, b).
 
-test("ancestor: transitive") :-
+test('ancestor: transitive') :-
     ancestor(a, d).
 
-test("ancestor of a yields all descendants") :-
+test('ancestor of a yields all descendants') :-
     findall(D, ancestor(a, D), L),
     sort(L, S),
     S == [b, c, d, e].

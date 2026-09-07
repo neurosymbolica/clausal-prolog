@@ -1,44 +1,44 @@
 :- module(iso_term_manipulation, [test/1]).
 
-test("construct atom: functor(T, a, 0)") :-
+test('construct atom: functor(T, a, 0)') :-
     functor(T, a, 0),
     T == a.
 
-test("decompose atom: functor('Hello', Name, Arity)") :-
+test('decompose atom: functor(\'Hello\', Name, Arity)') :-
     functor(hello, N, A),
     N == hello,
     A == 0.
 
-test("decompose empty atom") :-
-    functor("", N, A),
-    N = "",
+test('decompose empty atom') :-
+    functor('', N, A),
+    N = '',
     A == 0.
 
-test("decompose empty list") :-
+test('decompose empty list') :-
     functor([], N2, A2),
-    N2 = "[]",
+    N2 = [],
     A2 == 0.
 
-test("construct atom from list: T =.. ['a']") :-
+test('construct atom from list: T =.. [\'a\']') :-
     unpack(T, [a]),
     T == a.
 
-test("decompose atom: 'a' =.. X") :-
+test('decompose atom: \'a\' =.. X') :-
     unpack(a, X),
     X == [a].
 
-test("decompose string: 'Hello' =.. X") :-
+test('decompose string: \'Hello\' =.. X') :-
     unpack(hello, X),
     X == [hello].
 
-test("decompose int: functor(1, N, A)") :-
+test('decompose int: functor(1, N, A)') :-
     functor(1, _N_UNUSED, A),
     A == 0.
 
-test("decompose float: functor(1.0, N, A)") :-
+test('decompose float: functor(1.0, N, A)') :-
     functor(1.0, _N_UNUSED, A),
     A == 0.
 
-test("unpack int: 1 =.. X gives [1]") :-
+test('unpack int: 1 =.. X gives [1]') :-
     unpack(1, X),
     X == [1].

@@ -1,4 +1,3 @@
--double_quotes(chars)
 -private([a, b, blue, c, d, e, green, red])
 
 -module(iso_control, [Test/1])
@@ -29,64 +28,64 @@ SafeMax(X, Y, X) <- (X >= Y)
 
 SafeMax(X, Y, Y) <- (Y > X)
 
-Test("conjunction binds two vars") <- (X is 1, Y is 2, X == 1, Y == 2)
+Test('conjunction binds two vars') <- (X is 1, Y is 2, X == 1, Y == 2)
 
-Test("conjunction fails if first fails") <- (not (a is b, _x_unused is 1))
+Test('conjunction fails if first fails') <- (not (a is b, _x_unused is 1))
 
-Test("conjunction fails if second fails") <- (not (_x_unused is 1, a is b))
+Test('conjunction fails if second fails') <- (not (_x_unused is 1, a is b))
 
-Test("triple conjunction") <- (X is 1, Y is 2, Z is 3, X + Y + Z == 6)
+Test('triple conjunction') <- (X is 1, Y is 2, Z is 3, X + Y + Z == 6)
 
-Test("disjunction first succeeds") <- ((X is 1 or X is 2))
+Test('disjunction first succeeds') <- ((X is 1 or X is 2))
 
-Test("disjunction first fails, second succeeds") <- ((a is b or _x_unused is 1))
+Test('disjunction first fails, second succeeds') <- ((a is b or _x_unused is 1))
 
-Test("disjunction both fail") <- (not (a is b or c is d))
+Test('disjunction both fail') <- (not (a is b or c is d))
 
-Test("not: failed unification succeeds") <- (not 1 is 2)
+Test('not: failed unification succeeds') <- (not 1 is 2)
 
-Test("not: successful unification fails") <- (not not 1 is 1)
+Test('not: successful unification fails') <- (not not 1 is 1)
 
-Test("not: member absent") <- (not d in [a, b, c])
+Test('not: member absent') <- (not d in [a, b, c])
 
-Test("not: member present fails") <- (not not b in [a, b, c])
+Test('not: member present fails') <- (not not b in [a, b, c])
 
-Test("double negation: not not (1=1)") <- (not not 1 is 1)
+Test('double negation: not not (1=1)') <- (not not 1 is 1)
 
-Test("and + or: (X=1 and Y=a) or (X=2 and Y=b)") <- (((X is 1, Y is a) or (X is 2, Y is b)))
+Test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') <- (((X is 1, Y is a) or (X is 2, Y is b)))
 
-Test("not + member: d not in list") <- (not d in [a, b, c])
+Test('not + member: d not in list') <- (not d in [a, b, c])
 
-Test("conjunction + negation") <- (X is 5, not X is 3, X == 5)
+Test('conjunction + negation') <- (X is 5, not X is 3, X == 5)
 
-Test("choose picks first") <- (Choose(1, 2, 1))
+Test('choose picks first') <- (Choose(1, 2, 1))
 
-Test("choose picks second") <- (Choose(1, 2, 2))
+Test('choose picks second') <- (Choose(1, 2, 2))
 
-Test("choose with atoms") <- (Choose(a, b, a))
+Test('choose with atoms') <- (Choose(a, b, a))
 
-Test("safe_max: first is larger") <- (SafeMax(5, 3, M), M == 5)
+Test('safe_max: first is larger') <- (SafeMax(5, 3, M), M == 5)
 
-Test("safe_max: second is larger") <- (SafeMax(2, 7, M), M == 7)
+Test('safe_max: second is larger') <- (SafeMax(2, 7, M), M == 7)
 
-Test("safe_max: equal") <- (SafeMax(4, 4, M), M == 4)
+Test('safe_max: equal') <- (SafeMax(4, 4, M), M == 4)
 
-Test("true succeeds (1 == 1)") <- (1 == 1)
+Test('true succeeds (1 == 1)') <- (1 == 1)
 
-Test("fail fails: not False") <- (not False)
+Test('fail fails: not False') <- (not False)
 
-Test("conjunction backtracks: 2x2 = 4 solutions") <- (findall([X, Y], (in_(X, [1, 2]), in_(Y, [a, b])), L), length(L, 4), [1, a] in L, [2, b] in L)
+Test('conjunction backtracks: 2x2 = 4 solutions') <- (findall([X, Y], (in_(X, [1, 2]), in_(Y, [a, b])), L), length(L, 4), [1, a] in L, [2, b] in L)
 
-Test("disjunction yields 2 solutions") <- (findall(X, X is 1 or X is 2, L), L == [1, 2])
+Test('disjunction yields 2 solutions') <- (findall(X, X is 1 or X is 2, L), L == [1, 2])
 
-Test("disjunction with conjunction: 2 solutions") <- (findall([X, Y], (X is 1, Y is a) or (X is 2, Y is b), L), L == [[1, a], [2, b]])
+Test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], (X is 1, Y is a) or (X is 2, Y is b), L), L == [[1, a], [2, b]])
 
-Test("naf does not bind: not(X is a) fails") <- (not not _x_unused is a)
+Test('naf does not bind: not(X is a) fails') <- (not not _x_unused is a)
 
-Test("color enumerates three") <- (findall(X, Color(X), L), L == [red, green, blue])
+Test('color enumerates three') <- (findall(X, Color(X), L), L == [red, green, blue])
 
-Test("ancestor: direct parent") <- (Ancestor(a, b))
+Test('ancestor: direct parent') <- (Ancestor(a, b))
 
-Test("ancestor: transitive") <- (Ancestor(a, d))
+Test('ancestor: transitive') <- (Ancestor(a, d))
 
-Test("ancestor of a yields all descendants") <- (findall(D, Ancestor(a, D), L), sort(L, S), S == [b, c, d, e])
+Test('ancestor of a yields all descendants') <- (findall(D, Ancestor(a, D), L), sort(L, S), S == [b, c, d, e])

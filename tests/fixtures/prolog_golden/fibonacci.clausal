@@ -1,15 +1,13 @@
--double_quotes(chars)
-
 Fib(0, 0),
 
 Fib(1, 1),
 
 Fib(N, _result) <- (N > 1, _n1 == N - 1, _n2 == N - 2, Fib(_n1, _first), Fib(_n2, _second), _result == _first + _second)
 
-Test("fib 0") <- (Fib(0, 0))
+Test('fib 0') <- (Fib(0, 0))
 
-Test("fib 1") <- (Fib(1, 1))
+Test('fib 1') <- (Fib(1, 1))
 
-Test("fib 5") <- (Fib(5, _result), _result == 5)
+Test('fib 5') <- (Fib(5, _result), _result == 5)
 
-Test("fib 10") <- (Fib(10, _result), _result == 55)
+Test('fib 10') <- (Fib(10, _result), _result == 55)

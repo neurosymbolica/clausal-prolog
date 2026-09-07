@@ -21,12 +21,12 @@ safe_from(Queen, [Head|Tail], Distance) :-
     Next_distance =:= Distance + 1,
     safe_from(Queen, Tail, Next_distance).
 
-test("queens 1") :-
+test('queens 1') :-
     length(Queens, 1),
     safe_queens(1, Queens),
     length(Queens, 1).
 
-test("queens 4 valid") :-
+test('queens 4 valid') :-
     length(Queens, 4),
     safe_queens(4, Queens),
     length(Queens, 4).

@@ -17,6 +17,7 @@ import posixpath
 import re
 from typing import Iterator
 
+from clausal.templating.quote_map import build_quote_map, quote_of
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
     PClause, PDCGRule, PDirective, PComment, PModule,
@@ -77,21 +78,61 @@ _LIBRARY_REMAP = {
 _INFIX_NO_SPACE = frozenset()  # all infix operators get spaces
 
 
+# ISO 6.4.2 graphic chars — the characters a "graphic token" (symbolic atom
+# such as ``-``, ``-->``, ``=..``) is built from. Two adjacent graphic chars
+# always lex as ONE token, which is why _terminate_clause below cannot let a
+# symbolic atom sit flush against the clause-terminating ``.``.
+_GRAPHIC_CHARS = frozenset("#$&*+-./:<=>?@^~\\")
+
+# Atoms that are their own token and need no quotes. ``,`` is deliberately
+# NOT here: a bare ``,`` in argument position is the argument separator, so
+# ``p(,)`` is a syntax error (Scryer: syntax_error(incomplete_reduction)).
+_SOLO_UNQUOTED_ATOMS = frozenset(("[]", "{}", "!", ";"))
+
+_ASCII_LOWER = frozenset("abcdefghijklmnopqrstuvwxyz")
+_ASCII_ALNUM_UNDERSCORE = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+
+
 def _needs_quoting(name: str) -> bool:
-    """True if an atom name needs single-quoting in Prolog."""
+    """True if an atom name needs single-quoting in Prolog.
+
+    Three unquoted atom shapes exist in ISO 6.4.2, and nothing else:
+
+    * a **name token** — a lowercase ASCII letter followed by ASCII letters,
+      digits and underscores. ``str.isalnum()`` cannot be the test here: it is
+      true of characters no ISO reader accepts unquoted (``a²``, and letters
+      outside ASCII), and the migrated literals are arbitrary author text, so
+      the check is written against the ASCII repertoire explicitly.
+    * a **graphic token** — all chars drawn from :data:`_GRAPHIC_CHARS`, with
+      two exclusions. A solitary ``.`` is indistinguishable from the end
+      token, so ``X = .`` reads as an unterminated clause; ``'.'`` is accepted
+      everywhere, so a lone dot is always quoted. And a token may not BEGIN
+      with the comment-open sequence ``/*`` (ISO 6.4.2): at the start of a
+      token ``/*`` opens a comment, so ``t(/*).`` swallows the rest of the
+      file and the reader reports ``syntax_error(incomplete_reduction)``.
+      The rule is LEADING-position only -- tokenization is maximal munch, so
+      once inside a graphic token ``/*`` is just more graphic characters and
+      ``*/*``, ``//*``, ``-/*`` and ``+/*+`` all consult fine (verified in
+      Scryer; ``/*``, ``/*/`` and ``/**/`` are the ones that break).
+    * the **solo tokens** in :data:`_SOLO_UNQUOTED_ATOMS`.
+
+    Every case is verified against real Scryer by
+    ``tests/test_prolog_emit.py::TestAtomQuotingIsIsoSafe``.
+    """
     if not name:
         return True
-    # Alphanumeric atoms starting with lowercase don't need quoting
-    if name[0].islower() and name.replace("_", "a").isalnum():
+    if (name[0] in _ASCII_LOWER
+            and all(c in _ASCII_ALNUM_UNDERSCORE for c in name)):
         return False
-    # Pure operator-char atoms don't need quoting
-    _OP_CHARS = set("+-*/\\^<>=~:.?@#&")
-    if all(c in _OP_CHARS for c in name):
+    if (name != "."
+            and not name.startswith("/*")
+            and all(c in _GRAPHIC_CHARS for c in name)):
         return False
-    # Special atoms
-    if name in ("[]", "{}", "!", ",", ";"):
+    if name in _SOLO_UNQUOTED_ATOMS:
         return False
     return True
+
 
 
 # ISO 6.4.2 control escape sequences (emitter leg of F034 — the tokenizer
@@ -111,15 +152,20 @@ _ATOM_ESCAPES = {
 }
 
 
-def _quote_atom(name: str) -> str:
-    """Single-quote an atom, escaping quotes and control characters.
+def _escape_body(text: str, quote_char: str) -> str:
+    """Escape *text* for the inside of a quoted token delimited by
+    *quote_char*, per ISO 6.4.2: backslash, the delimiter itself, the named
+    control escapes, and ``\\xHH\\`` for every other control character.
 
-    Control characters without a named ISO escape are emitted with the
-    ISO hex form ``\\xHH\\`` — raw control chars inside a quoted atom are
-    not valid ISO Prolog text (F034).
+    A RAW newline inside a quoted token terminates the token's line and the
+    reader reports ``syntax_error(missing_quote)`` -- the class-G defect that
+    failed 16 corpus domains at G2.
     """
     out: list[str] = []
-    for ch in name:
+    for ch in text:
+        if ch == quote_char:
+            out.append("\\" + ch)
+            continue
         esc = _ATOM_ESCAPES.get(ch)
         if esc is not None:
             out.append(esc)
@@ -127,20 +173,56 @@ def _quote_atom(name: str) -> str:
             out.append(f"\\x{ord(ch):x}\\")
         else:
             out.append(ch)
-    return "'" + "".join(out) + "'"
+    return "".join(out)
+
+
+def _escape_string_body(text: str) -> str:
+    """Escape *text* for the inside of a Prolog double-quoted token."""
+    return _escape_body(text, '"')
+
+
+def _quote_atom(name: str) -> str:
+    """Single-quote an atom, escaping quotes and control characters.
+
+    Control characters without a named ISO escape are emitted with the
+    ISO hex form ``\\xHH\\`` — raw control chars inside a quoted atom are
+    not valid ISO Prolog text (F034).
+    """
+    return "'" + _escape_body(name, "'") + "'"
+
+
+def _is_operator_atom(name: str, op_table: OperatorTable) -> bool:
+    """True if *name* is declared as an operator in *op_table* (any fixity)."""
+    return (op_table.lookup_infix(name) is not None
+            or op_table.lookup_prefix(name) is not None
+            or op_table.lookup_postfix(name) is not None)
 
 
 def emit_term(term: PTerm, op_table: OperatorTable, *,
-              context_prec: int = 1201, context_assoc: str = "") -> str:
+              context_prec: int = 1201, context_assoc: str = "",
+              operand_of_op: bool = False) -> str:
     """Render a Prolog AST term as text.
 
     *context_prec* and *context_assoc* control parenthesization based
     on the enclosing operator's precedence and associativity.
+
+    *operand_of_op* says this term is the immediate operand of an operator
+    (rather than a compound argument or a list element). ISO 6.3.1.3 forbids
+    an atom that is itself an operator from standing there unbracketed, so
+    ``X = -`` must be emitted ``X = (-)``. QUOTING DOES NOT SUBSTITUTE: the
+    rule is about the atom's declared PRIORITY, not its spelling, and Scryer
+    rejects ``X = '-'`` exactly as it rejects ``X = -`` (both verified). An
+    operator atom in a compound argument (``f(-, a)``) or a list element
+    (``[-, a]``) is fine unbracketed and is left alone.
     """
     if isinstance(term, PAtom):
         if term.quoted or _needs_quoting(term.name):
-            return _quote_atom(term.name)
-        return term.name
+            text = _quote_atom(term.name)
+        else:
+            text = term.name
+        if operand_of_op and _is_operator_atom(term.name, op_table):
+            return "(" + text + ")"
+        return text
     if isinstance(term, PVar):
         return term.name
     if isinstance(term, PNumber):
@@ -148,7 +230,7 @@ def emit_term(term: PTerm, op_table: OperatorTable, *,
             return repr(term.value)
         return str(term.value)
     if isinstance(term, PString):
-        return '"' + term.value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        return '"' + _escape_string_body(term.value) + '"'
     if isinstance(term, PList):
         return _emit_list(term, op_table)
     if isinstance(term, PCurly):
@@ -222,9 +304,11 @@ def _emit_infix(term: PCompound, entry, op_table: OperatorTable,
     right_assoc = spec if spec.endswith("y") else ""
 
     left_str = emit_term(term.args[0], op_table,
-                         context_prec=left_prec, context_assoc=left_assoc)
+                         context_prec=left_prec, context_assoc=left_assoc,
+                         operand_of_op=True)
     right_str = emit_term(term.args[1], op_table,
-                          context_prec=right_prec, context_assoc=right_assoc)
+                          context_prec=right_prec, context_assoc=right_assoc,
+                          operand_of_op=True)
 
     # Comma is special: "a, b" not "a , b"
     # Slash in predicate indicators: "f/2" not "f / 2"
@@ -254,7 +338,8 @@ def _emit_prefix(term: PCompound, entry, op_table: OperatorTable,
     spec = entry.specifier  # fx or fy
 
     arg_prec = prec if spec == "fy" else prec - 1
-    arg_str = emit_term(term.args[0], op_table, context_prec=arg_prec)
+    arg_str = emit_term(term.args[0], op_table, context_prec=arg_prec,
+                        operand_of_op=True)
 
     result = term.functor + " " + arg_str
 
@@ -270,7 +355,8 @@ def _emit_postfix(term: PCompound, entry, op_table: OperatorTable,
     spec = entry.specifier  # xf or yf
 
     arg_prec = prec if spec == "yf" else prec - 1
-    arg_str = emit_term(term.args[0], op_table, context_prec=arg_prec)
+    arg_str = emit_term(term.args[0], op_table, context_prec=arg_prec,
+                        operand_of_op=True)
 
     result = arg_str + " " + term.functor
 
@@ -281,21 +367,37 @@ def _emit_postfix(term: PCompound, entry, op_table: OperatorTable,
 
 # ── Item emission ────────────────────────────────────────────────────
 
+def _terminate(text: str) -> str:
+    """Append the clause-terminating ``.`` without letting it MERGE into the
+    token before it.
+
+    Two adjacent graphic characters lex as one token, so a clause whose last
+    token is a symbolic atom would otherwise be corrupted: ``X = ..`` plus the
+    terminator reads as ``X = ...`` and the reader reports
+    ``syntax_error(incomplete_reduction)`` (verified in Scryer). A single
+    space is enough to end the graphic token. Clauses ending in ``)``, ``]``
+    or an alphanumeric -- i.e. essentially all of them -- are unaffected.
+    """
+    if text and text[-1] in _GRAPHIC_CHARS:
+        return text + " .\n"
+    return text + ".\n"
+
+
 def emit_item(item: PItem, op_table: OperatorTable) -> str:
     """Render a single PItem (clause, DCG rule, directive) as Prolog text."""
     if isinstance(item, PClause):
         head_str = emit_term(item.head, op_table)
         if item.body is None:
-            return head_str + ".\n"
+            return _terminate(head_str)
         body_str = _emit_body(item.body, op_table)
-        return head_str + " :-\n    " + body_str + ".\n"
+        return _terminate(head_str + " :-\n    " + body_str)
     if isinstance(item, PDCGRule):
         head_str = emit_term(item.head, op_table)
         body_str = _emit_dcg_body(item.body, op_table)
-        return head_str + " -->\n    " + body_str + ".\n"
+        return _terminate(head_str + " -->\n    " + body_str)
     if isinstance(item, PDirective):
         body_str = emit_term(item.body, op_table)
-        return ":- " + body_str + ".\n"
+        return _terminate(":- " + body_str)
     if isinstance(item, PComment):
         if item.text.startswith("%"):
             # Already written as Prolog line comment(s) — emit verbatim so a
@@ -304,7 +406,7 @@ def emit_item(item: PItem, op_table: OperatorTable) -> str:
         return "/* " + item.text + " */\n"
     # PQuery
     body_str = emit_term(item.body, op_table)
-    return "?- " + body_str + ".\n"
+    return _terminate("?- " + body_str)
 
 
 def _emit_body(body: PTerm, op_table: OperatorTable) -> str:
@@ -416,6 +518,18 @@ class _ClausalToProlog:
         # AST programmatically; the arrow-lambda refusal then cannot fire (the
         # engine's own fallback heuristic is used, matching clause-level).
         self._source_lines = source_lines
+        # Item J (2026-09-07): the literal rule. A str literal lowers by the
+        # MODULE's -double_quotes mode and by its own quote character, exactly
+        # as the compiler decides the literal's runtime value
+        # (term_rewriting.visit_Constant + _handle_double_quotes_directive),
+        # so translator and runtime agree by construction. `ast` erases the
+        # quote character; the compiler's quote map rebuilds it from the
+        # token stream, keyed by position. Empty when the caller built the
+        # AST programmatically: every lookup then answers None and the mode
+        # alone decides. Position-sensitive like the compiler's: the mode
+        # governs the literals BELOW the directive, so it is walk state.
+        self._quote_map = build_quote_map(source_lines) if source_lines else {}
+        self._double_quotes = "atom"
         # Dotted path of the module being translated. When set, use_module
         # file paths are emitted relative to this module's package directory
         # (Scryer resolves a consulted path against the consulting file).
@@ -817,6 +931,8 @@ class _ClausalToProlog:
         if name == "private":
             # Private is not emitted in Prolog (module exports handle visibility)
             return None
+        if name == "double_quotes":
+            return self._convert_double_quotes_directive(call)
         if name == "constants":
             raise NotImplementedError(
                 "clausal_to_prolog: -constants files are not translatable "
@@ -827,6 +943,39 @@ class _ClausalToProlog:
         # Generic directive
         args = tuple(self._convert_expr(a) for a in call.args)
         return PDirective(PCompound(name, args))
+
+    def _convert_double_quotes_directive(self, call: python_ast.Call) -> PDirective | None:
+        """``-double_quotes(atom|chars)`` -- the strings-migration RATCHET
+        (todo/strings-lost-in-the-atom-pivot-...md, ruling R-S4), mirrored
+        from the compiler's ``_handle_double_quotes_directive``: it sets the
+        mode for every literal BELOW it (see ``_convert_str_literal``).
+
+        Emission: ``chars`` becomes ``:- set_prolog_flag(double_quotes,
+        chars).`` -- the ISO spelling (7.11.2.5). NOT ``:- double_quotes(chars).``:
+        Scryer refuses that at load (``domain_error(directive,
+        double_quotes/1)``) and Trealla warns, so under G2's warnings-as-errors
+        consult every chars-mode module would fail on both engines (measured
+        2026-09-07). Both engines already default to chars, so the flag is a
+        statement of the module's dependency rather than a change of state.
+        ``atom`` emits nothing: every literal below it is emitted as an atom,
+        so the target engine has no string to misread. ``codes`` is refused
+        exactly as the compiler refuses it (codes are spelled ``b"..."``).
+        """
+        args = call.args
+        if len(args) != 1 or not isinstance(args[0], python_ast.Name):
+            raise SyntaxError(
+                "-double_quotes takes exactly one bare argument: "
+                "-double_quotes(atom) or -double_quotes(chars)")
+        mode = args[0].id
+        if mode not in ("atom", "chars"):
+            raise SyntaxError(
+                f"-double_quotes({mode}) is not a clausal mode: use atom or "
+                f"chars (codes are spelled b\"...\")")
+        self._double_quotes = mode
+        if mode == "atom":
+            return None
+        return PDirective(PCompound("set_prolog_flag",
+                                    (PAtom("double_quotes"), PAtom("chars"))))
 
     def _convert_module_directive(self, call: python_ast.Call) -> PDirective:
         """Convert -module(name, [exports])."""
@@ -1101,7 +1250,7 @@ class _ClausalToProlog:
         dict-splat → ``attrs_put/3`` rewrite) — see `_convert_compare`.
         """
         if isinstance(node, python_ast.Constant):
-            return self._convert_constant(node.value)
+            return self._convert_constant(node.value, node)
 
         if isinstance(node, python_ast.Name):
             return self._convert_name(node.id)
@@ -1178,8 +1327,14 @@ class _ClausalToProlog:
         self._add_warning(f"unsupported expression: {python_ast.unparse(node)}")
         return PAtom("???")
 
-    def _convert_constant(self, value) -> PTerm:
-        """Convert a Python constant to a Prolog term."""
+    def _convert_constant(self, value, node=None) -> PTerm:
+        """Convert a Python constant to a Prolog term.
+
+        *node* is the ``ast.Constant`` the value came from, when the caller
+        has one: a str literal's quote character is recovered from it (see
+        ``_quote_map`` in ``__init__``). Callers that synthesize a value pass
+        no node, and the module's -double_quotes mode alone decides.
+        """
         if isinstance(value, bool):
             return PAtom("true" if value else "false")
         if isinstance(value, int):
@@ -1187,10 +1342,39 @@ class _ClausalToProlog:
         if isinstance(value, float):
             return PNumber(value)
         if isinstance(value, str):
-            return PString(value)
+            return self._convert_str_literal(value, node)
         if value is None:
             return PAtom("none")
         return PAtom(str(value))
+
+    def _convert_str_literal(self, value: str, node) -> PTerm:
+        """THE LITERAL RULE (item J of the strings todo; operator go
+        2026-09-07), the compiler's own rule mirrored:
+
+        * ``'...'`` is an ATOM in every mode (ISO 6.4.2 quoted token);
+        * ``"..."`` is an ATOM under ``-double_quotes(atom)`` -- the engine
+          default -- and a STRING (a Prolog double-quoted token; both target
+          engines default to ``double_quotes=chars``) under
+          ``-double_quotes(chars)``.
+
+        Before this rule the translator lowered every str literal one way
+        regardless of mode: to a string (the flip) or to an atom (bda6b039).
+        Either is a SILENT WRONG ANSWER for the modules in the other mode --
+        an atom in the engine becomes a char list in the export, or vice
+        versa -- pinned both ways by tests/test_prolog_literal_rule.py and
+        the execution harness (tests/test_prolog_execution.py).
+        """
+        quote = quote_of(self._quote_map, node) if node is not None else None
+        if quote == "'" or self._double_quotes == "atom":
+            # `"[]"` / `"{}"` need no special case any more: under THE FLIP
+            # (2026-09-06-atoms-as-cells-strings §11) the atom `[]` IS the
+            # empty list in the engine too (`atom([])` is true, exactly as in
+            # ISO 6.3.5), so the emitted `[]` matches on both sides and the
+            # collapse f47e1a8e warned about is now faithful -- pinned as an
+            # AGREEMENT by tests/test_prolog_execution.py::
+            # TestBracketAtomLiteralAgrees.
+            return PAtom(value)
+        return PString(value)
 
     def _convert_name(self, name: str) -> PTerm:
         """Convert a Python name to PVar or PAtom."""

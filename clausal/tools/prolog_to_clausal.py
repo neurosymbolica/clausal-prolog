@@ -257,6 +257,46 @@ def load_operator_mapping(path: str | Path) -> dict[str, dict]:
 # ── Emitter ──────────────────────────────────────────────────────────
 
 
+def _collect_predicate_names(pmodule: PModule) -> set[str]:
+    """Every name *pmodule* uses as a predicate: clause/DCG head functors
+    (including 0-arity atom heads) and the functor of every compound term.
+
+    BREADTH IS DELIBERATE. Compound functors are swept from EVERY position --
+    goal, nested argument, list element, curly body -- not just goal position.
+    A name used as a functor anywhere is a predicate or a term constructor,
+    and either way the bare Clausal name for it is already spoken for, so
+    declaring the same spelling as a `-private` data atom would shadow it.
+    Erring wide costs only a str literal (`'x'` denotes the same atom as bare
+    `x`, R2); erring narrow silently breaks every call to the shadowed
+    predicate, which is the failure this function exists to prevent.
+    """
+    names: set[str] = set()
+
+    def walk(term) -> None:
+        if isinstance(term, PCompound):
+            names.add(term.functor)
+            for a in term.args:
+                walk(a)
+        elif isinstance(term, PList):
+            for e in term.elements:
+                walk(e)
+            if term.tail is not None:
+                walk(term.tail)
+        elif isinstance(term, PCurly):
+            walk(term.body)
+
+    for item in pmodule.items:
+        head = getattr(item, "head", None)
+        if isinstance(head, PAtom):
+            names.add(head.name)
+        elif head is not None:
+            walk(head)
+        body = getattr(item, "body", None)
+        if body is not None:
+            walk(body)
+    return names
+
+
 class _PrologToClausal:
     """Translates Prolog AST → clausal source text."""
 
@@ -272,6 +312,9 @@ class _PrologToClausal:
         # emitted, so a translated module that has no strings keeps the
         # engine default and no directive it does not need.
         self._emitted_string = False
+        # Names this module uses as a PREDICATE (clause-head or goal
+        # functor). Populated by emit_module before the emission pass.
+        self._predicate_names: set[str] = set()
         # Per-clause variable rename table (reset in _emit_item). Prolog var
         # names are scoped per clause; prolog_var_to_clausal is non-injective
         # (Foo and FOO both → _foo), so without disambiguation a satisfiable
@@ -298,6 +341,7 @@ class _PrologToClausal:
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
+        self._predicate_names = _collect_predicate_names(pmodule)
         lines: list[str] = []
         for item in pmodule.items:
             text = self._emit_item(item)
@@ -557,6 +601,14 @@ class _PrologToClausal:
         # -- a predicate-shaped directive nothing reads -- next to a second,
         # auto-generated ``-double_quotes(chars)``, and ``chars`` was
         # additionally collected as a data atom into ``-private([chars])``.
+        # ``:- set_prolog_flag(double_quotes, Mode)`` is the ISO spelling
+        # (7.11.2.5) and the one the forward translator emits (item J,
+        # 2026-09-07: Scryer refuses ``:- double_quotes(chars).`` at load).
+        # Both spellings carry the same mode across.
+        if (isinstance(body, PCompound) and body.functor == "set_prolog_flag"
+                and len(body.args) == 2 and isinstance(body.args[0], PAtom)
+                and body.args[0].name == "double_quotes"):
+            body = PCompound("double_quotes", (body.args[1],))
         if (isinstance(body, PCompound) and body.functor == "double_quotes"
                 and len(body.args) == 1):
             mode = body.args[0]
@@ -716,6 +768,20 @@ class _PrologToClausal:
             # spelling holds an apostrophe would come out DOUBLE-quoted and,
             # under the ``-double_quotes(chars)`` header this emitter may
             # write, would re-read as a string.
+            return _quote_atom(name)
+        # A bare name that this module also uses as a PREDICATE cannot be
+        # declared `-private` as well: in Clausal one module-level name is
+        # either the atom or the predicate, never both, so `-private([subtract])`
+        # shadows `subtract/3` and every call to it stops being a goal
+        # ("terms_to_goalop: goal shape not yet supported"). A quoted literal
+        # denotes the same atom and carries no declaration, so it is the
+        # faithful spelling here -- the same escape hatch F025 already uses for
+        # names that cannot be bare. SINGLE-quoted (item J re-land, 2026-09-07):
+        # ``'...'`` is an atom in every -double_quotes mode, where ``repr``
+        # could pick double quotes and re-read as a string under chars.
+        # Reachable since Prolog test names became atoms:
+        # `test(subtract) :- subtract(...)`.
+        if name in self._predicate_names:
             return _quote_atom(name)
         # Register as a data atom (will be declared via -private).
         self._data_atoms.add(name)

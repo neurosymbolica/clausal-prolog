@@ -17,255 +17,255 @@ is_permutation(Xs, Ys) :-
     sort(Xs, S),
     sort(Ys, S).
 
-test("in: found") :-
+test('in: found') :-
     member(b, [a, b, c]).
 
-test("in: not found") :-
+test('in: not found') :-
     \+ member(d, [a, b, c]).
 
-test("in: empty list fails") :-
+test('in: empty list fails') :-
     \+ member(x, []).
 
-test("in: integer") :-
+test('in: integer') :-
     member(2, [1, 2, 3]).
 
-test("not in: absent") :-
+test('not in: absent') :-
     \+ member(d, [a, b, c]).
 
-test("not in: present fails") :-
+test('not in: present fails') :-
     \+ \+ member(b, [a, b, c]).
 
-test("not in: empty list") :-
+test('not in: empty list') :-
     \+ member(x, []).
 
-test("member: found") :-
+test('member: found') :-
     member(b, [a, b, c]).
 
-test("member: not found") :-
+test('member: not found') :-
     \+ member(d, [a, b, c]).
 
-test("member: empty fails") :-
+test('member: empty fails') :-
     \+ member(x, []).
 
-test("memberchk: found") :-
+test('memberchk: found') :-
     memberchk(b, [a, b, c]).
 
-test("memberchk: not found") :-
+test('memberchk: not found') :-
     \+ memberchk(d, [a, b, c]).
 
-test("append two lists") :-
+test('append two lists') :-
     append([1, 2], [3, 4], [1, 2, 3, 4]).
 
-test("append empty left") :-
+test('append empty left') :-
     append([], [1, 2], [1, 2]).
 
-test("append empty right") :-
+test('append empty right') :-
     append([1, 2], [], [1, 2]).
 
-test("append both empty") :-
+test('append both empty') :-
     append([], [], []).
 
-test("append binds result") :-
+test('append binds result') :-
     append([1], [2], R),
     R == [1, 2].
 
-test("length of 3") :-
+test('length of 3') :-
     length([a, b, c], 3).
 
-test("length empty") :-
+test('length empty') :-
     length([], 0).
 
-test("length one") :-
+test('length one') :-
     length([42], 1).
 
-test("length binds") :-
+test('length binds') :-
     length([1, 2, 3], N),
     N == 3.
 
-test("last element") :-
+test('last element') :-
     last([1, 2, 3], 3).
 
-test("last singleton") :-
+test('last singleton') :-
     last([42], 42).
 
-test("last empty fails") :-
+test('last empty fails') :-
     \+ last([], _).
 
-test("reverse list") :-
+test('reverse list') :-
     reverse([1, 2, 3], [3, 2, 1]).
 
-test("reverse empty") :-
+test('reverse empty') :-
     reverse([], []).
 
-test("reverse singleton") :-
+test('reverse singleton') :-
     reverse([42], [42]).
 
-test("reverse involution") :-
+test('reverse involution') :-
     reverse([1, 2, 3], R),
     reverse(R, Rr),
     Rr == [1, 2, 3].
 
-test("nth0 first") :-
+test('nth0 first') :-
     nth0(0, [a, b, c], a).
 
-test("nth0 last") :-
+test('nth0 last') :-
     nth0(2, [a, b, c], c).
 
-test("nth1 first") :-
+test('nth1 first') :-
     nth0(0, [a, b, c], a).
 
-test("nth1 last") :-
+test('nth1 last') :-
     nth0(2, [a, b, c], c).
 
-test("nth0 out of range") :-
+test('nth0 out of range') :-
     \+ nth0(5, [a, b], _).
 
-test("nth1 zero fails") :-
+test('nth1 zero fails') :-
     \+ nth0(-1, [a, b], _).
 
-test("sort removes dups") :-
+test('sort removes dups') :-
     sort([3, 1, 2, 1], [1, 2, 3]).
 
-test("sort already sorted") :-
+test('sort already sorted') :-
     sort([1, 2, 3], [1, 2, 3]).
 
-test("sort empty") :-
+test('sort empty') :-
     sort([], []).
 
-test("msort preserves dups") :-
+test('msort preserves dups') :-
     msort([3, 1, 2, 1], [1, 1, 2, 3]).
 
-test("sort strings") :-
+test('sort strings') :-
     sort([c, a, b], [a, b, c]).
 
-test("flatten nested") :-
+test('flatten nested') :-
     flatten([1, [2, [3]], 4], [1, 2, 3, 4]).
 
-test("flatten already flat") :-
+test('flatten already flat') :-
     flatten([1, 2, 3], [1, 2, 3]).
 
-test("flatten empty") :-
+test('flatten empty') :-
     flatten([], []).
 
-test("select element") :-
+test('select element') :-
     select(2, [1, 2, 3], [1, 3]).
 
-test("select first") :-
+test('select first') :-
     select(1, [1, 2, 3], [2, 3]).
 
-test("select not found") :-
+test('select not found') :-
     \+ select(9, [1, 2, 3], _).
 
-test("subtract") :-
+test(subtract) :-
     subtract([1, 2, 3, 4], [2, 4], [1, 3]).
 
-test("intersection") :-
+test(intersection) :-
     intersection([1, 2, 3], [2, 3, 4], [2, 3]).
 
-test("union") :-
+test(union) :-
     union([1, 2], [2, 3], [1, 2, 3]).
 
-test("list_to_set") :-
+test(list_to_set) :-
     list_to_set([1, 2, 1, 3, 2], [1, 2, 3]).
 
-test("sum_list") :-
+test(sum_list) :-
     sum_list([1, 2, 3, 4], 10).
 
-test("sum_list empty") :-
+test('sum_list empty') :-
     sum_list([], 0).
 
-test("max_list") :-
+test(max_list) :-
     max_list([3, 1, 4, 1, 5], 5).
 
-test("min_list") :-
+test(min_list) :-
     min_list([3, 1, 4, 1, 5], 1).
 
-test("max_list singleton") :-
+test('max_list singleton') :-
     max_list([42], 42).
 
-test("palindrome: empty") :-
+test('palindrome: empty') :-
     palindrome([]).
 
-test("palindrome: single") :-
+test('palindrome: single') :-
     palindrome([1]).
 
-test("palindrome: aba") :-
+test('palindrome: aba') :-
     palindrome([1, 2, 1]).
 
-test("palindrome: abba") :-
+test('palindrome: abba') :-
     palindrome([1, 2, 2, 1]).
 
-test("not palindrome: ab") :-
+test('not palindrome: ab') :-
     \+ palindrome([1, 2]).
 
-test("sorted_asc: empty") :-
+test('sorted_asc: empty') :-
     sorted_asc([]).
 
-test("sorted_asc: single") :-
+test('sorted_asc: single') :-
     sorted_asc([1]).
 
-test("sorted_asc: ascending") :-
+test('sorted_asc: ascending') :-
     sorted_asc([1, 2, 3]).
 
-test("sorted_asc: not descending") :-
+test('sorted_asc: not descending') :-
     \+ sorted_asc([3, 2, 1]).
 
-test("sorted_asc: equal elements") :-
+test('sorted_asc: equal elements') :-
     sorted_asc([2, 2, 2]).
 
-test("is_permutation: same list") :-
+test('is_permutation: same list') :-
     is_permutation([1, 2, 3], [1, 2, 3]).
 
-test("is_permutation: reordered") :-
+test('is_permutation: reordered') :-
     is_permutation([3, 1, 2], [1, 2, 3]).
 
-test("not permutation: different lengths") :-
+test('not permutation: different lengths') :-
     \+ is_permutation([1, 2], [1, 2, 3]).
 
-test("is_permutation: empty") :-
+test('is_permutation: empty') :-
     is_permutation([], []).
 
-test("in_ enumerates [1,2,3]") :-
+test('in_ enumerates [1,2,3]') :-
     findall(X, member(X, [1, 2, 3]), L),
     L == [1, 2, 3].
 
-test("in_ with duplicates [a,b,a]") :-
+test('in_ with duplicates [a,b,a]') :-
     findall(X, member(X, [a, b, a]), L),
     L == [a, b, a].
 
-test("in enumerates [1,2,3]") :-
+test('in enumerates [1,2,3]') :-
     findall(X, member(X, [1, 2, 3]), L),
     L == [1, 2, 3].
 
-test("append split mode") :-
+test('append split mode') :-
     findall([X, Y], append(X, Y, [1, 2, 3]), L),
     L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]].
 
-test("list_item second element") :-
+test('list_item second element') :-
     nth0(1, [a, b, c], b).
 
-test("last empty yields no solutions") :-
+test('last empty yields no solutions') :-
     findall(X, last([], X), L),
     L == [].
 
-test("permutation of [1,2,3] yields 6") :-
+test('permutation of [1,2,3] yields 6') :-
     findall(P, permutation([1, 2, 3], P), L),
     length(L, 6),
     member([1, 2, 3], L),
     member([3, 2, 1], L).
 
-test("permutation of [] is [[]]") :-
+test('permutation of [] is [[]]') :-
     findall(P, permutation([], P), L),
     L == [[]].
 
-test("permutation of [42] is [[42]]") :-
+test('permutation of [42] is [[42]]') :-
     findall(P, permutation([42], P), L),
     L == [[42]].
 
-test("select(2,[1,2,3],[1,3])") :-
+test('select(2,[1,2,3],[1,3])') :-
     select(2, [1, 2, 3], R),
     R == [1, 3].
 
-test("select(1,[1,2,3],[2,3])") :-
+test('select(1,[1,2,3],[2,3])') :-
     select(1, [1, 2, 3], R),
     R == [2, 3].

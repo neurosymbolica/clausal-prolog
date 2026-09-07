@@ -446,3 +446,38 @@ class TestCatchArity:
         # the reverse leg must keep round-tripping it.
         out = prolog_to_clausal("p(G, E) :- catch(G, E).\n")
         assert "catch_error(G, E)" in out, out
+
+
+class TestPredicateCollidingAtomIsNotDeclaredPrivate:
+    """A bare Prolog atom whose spelling is ALSO a predicate in the same module
+    must not be declared ``-private``.
+
+    In Clausal one module-level name is either the atom or the predicate, never
+    both, so ``-private([subtract])`` shadows ``subtract/3`` and every call to
+    it stops being a goal ("terms_to_goalop: goal shape not yet supported").
+    A str literal denotes the SAME atom (R2) and carries no declaration, so it
+    is the faithful spelling -- the escape hatch F025 already uses for names
+    that cannot be bare.
+
+    Reachable since a Clausal str literal became an atom: a test file now
+    emits ``test(subtract) :- subtract(...)``.
+    """
+
+    def test_colliding_atom_becomes_a_str_literal(self):
+        out = prolog_to_clausal(
+            "test(subtract) :-\n    subtract([1,2],[2],[1]).\n")
+        assert "-private([subtract])" not in out, out
+        assert "Test('subtract')" in out, out
+
+    def test_non_colliding_atom_still_declared_private(self):
+        # The gate must say YES too: an atom that shadows nothing is
+        # untouched, so this is not a blanket disabling of -private.
+        out = prolog_to_clausal("test(red) :-\n    colour(red).\n")
+        assert "-private([red])" in out, out
+        assert "Test(red)" in out, out
+
+    def test_functor_in_a_nested_argument_also_counts(self):
+        # The sweep is every position, not just goal position.
+        out = prolog_to_clausal("p(foo) :-\n    q(r(foo(1))).\n")
+        assert "-private([foo])" not in out, out
+        assert "P('foo')" in out, out

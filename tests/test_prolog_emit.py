@@ -8,6 +8,8 @@ from clausal.tools.prolog_ast import (
 )
 from clausal.tools.prolog_operators import OperatorTable
 from clausal.tools.clausal_to_prolog import (
+    UntranslatableConstructError,
+    _quote_atom as _quote_atom_ref,
     emit_term, emit_item, emit_module,
     clausal_source_to_prolog, clausal_source_to_prolog_ast,
     pascal_to_snake, snake_to_pascal,
@@ -380,10 +382,13 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
         assert "bar(X, Head, Result)" in result
 
     def test_string_literals(self):
-        # nv
+        # nv -- a str literal DENOTES AN ATOM (R2); "hello world" needs
+        # quoting only because of the space, and is a QUOTED ATOM, not a
+        # double-quoted char list. See TestStrLiteralIsAtom below.
         source = 'Test("hello world"),\n'
         result = clausal_source_to_prolog(source)
-        assert '"hello world"' in result
+        assert "'hello world'" in result
+        assert '"hello world"' not in result
 
     def test_integer_literals(self):
         # nv
@@ -533,3 +538,160 @@ class TestEvalBuiltinExport:
         out = clausal_source_to_prolog("AddOne(X, Y) <- eval_(X + 1, Y)\n")
         assert "Y is X + 1" in out, out
         assert "eval_" not in out, out
+
+
+# ── Literal mapping: a Clausal str literal DENOTES AN ATOM ───────────
+#
+# AUTHORITY (user-ratified, R2 family): under the current Python surface a
+# Clausal ``str`` literal denotes an ATOM. Atoms are global strs by spelling;
+# there is no separate string value, so ``'x'``/``"x"`` in source IS the atom
+# ``x`` and unifies with a same-spelling imported atom because they are the
+# SAME Python object. Text:
+# ``/workspace/clausal-bug-fix/implementation_plans/tagged-tuple-term-representation.md``
+# line 231, "Surface literal rulings" (user 2026-09-04, re-confirmed P3-2).
+#
+# Verified against the live engine before this change was written: an atom
+# imported from another module derefs to a plain ``str`` and
+# ``atom == "spelling"`` / ``atom is sys.intern("spelling")`` are both True
+# (see ``compiler_v2._process_bare_atom_refs``: ``module_dict[name] =
+# predicate_builtins.setdefault(name, name)`` -- "no class is minted (R2)").
+#
+# The ISO-reader rules in that same section (single quotes = quoted atom,
+# double quotes = char list) govern the FUTURE surface, not what this
+# translator reads today: today's input is Python, where ``'x'`` and ``"x"``
+# are one and the same ``str``.
+#
+# The previous mapping (str -> PString -> Prolog double-quoted char list) was
+# faithful to the RETIRED pre-P3-1 semantics, in which ``str`` was Clausal's
+# string type.
+
+class TestStrLiteralIsAtom:
+    """`_convert_constant`'s str branch emits an ATOM, not a char list."""
+
+    def test_plain_str_literal_emits_bare_atom(self):
+        out = clausal_source_to_prolog('Ok(X) <- (X is "hello")\n')
+        assert "X = hello." in out, out
+        assert '"hello"' not in out, out
+
+    def test_str_literal_is_a_patom_in_the_ast(self):
+        pmod = clausal_source_to_prolog_ast('Ok(X) <- (X is "hello")\n')
+        rhs = pmod.items[0].body.args[1]
+        assert isinstance(rhs, PAtom), rhs
+        assert rhs.name == "hello"
+
+    def test_str_literal_needing_quotes_is_quoted(self):
+        out = clausal_source_to_prolog('Ok(X) <- (X is "a b")\n')
+        assert "X = 'a b'." in out, out
+
+    def test_str_literal_in_argument_position(self):
+        out = clausal_source_to_prolog('Fact(X) <- p("k", X)\n')
+        assert "p(k, X)" in out, out
+
+    def test_test_clause_head_name_becomes_quoted_atom(self):
+        # The G3 driver addresses test clauses BY NAME; head and generated
+        # name list come from one emission source, so they move together.
+        out = clausal_source_to_prolog('Test("fib 0") <- fib(0, 0)\n')
+        assert "test('fib 0')" in out, out
+
+    def test_dict_key_and_value_both_become_atoms(self):
+        out = clausal_source_to_prolog('Ok(X) <- (X is {"label": "hi there"})\n')
+        assert "attribute(label, 'hi there')" in out, out
+
+    def test_dcg_terminal_list_of_str_becomes_atoms(self):
+        out = clausal_source_to_prolog('Greeting() >> (["hello", "world"])\n')
+        assert "[hello, world]" in out, out
+
+
+class TestAtomQuotingIsIsoSafe:
+    """`_quote_atom`/`_needs_quoting` are the emitter for every migrated
+    literal -- each case below was verified by consulting the emitted text in
+    real Scryer and reading the atom back with ``atom_codes/2``."""
+
+    OP = OperatorTable.iso_default()
+
+    def _emit(self, name):
+        return emit_term(PAtom(name), self.OP)
+
+    @pytest.mark.parametrize("name,expected", [
+        ("hello", "hello"),
+        ("a b", "'a b'"),
+        ("it's", r"'it\'s'"),
+        ('say "hi"', "'say \"hi\"'"),
+        ("line1\nline2", r"'line1\nline2'"),   # class G: the newline defect
+        ("a\tb", r"'a\tb'"),
+        ("a\\b", r"'a\\b'"),
+        ("", "''"),
+        ("Foo", "'Foo'"),
+        ("_foo", "'_foo'"),
+        ("1abc", "'1abc'"),
+    ])
+    def test_quoting_shapes(self, name, expected):
+        assert self._emit(name) == expected
+
+    def test_comma_atom_must_be_quoted(self):
+        # RED before this change: `_needs_quoting` listed "," as a special
+        # atom needing no quotes, so a `,` literal emitted `p(,)` --
+        # Scryer: error(syntax_error(incomplete_reduction)). Verified.
+        assert self._emit(",") == "','"
+
+    def test_solitary_dot_atom_must_be_quoted(self):
+        # Bare `.` collides with the end token: `X = .` + the clause
+        # terminator reads as `..`. Scryer rejects it; `'.'` is accepted.
+        assert self._emit(".") == "'.'"
+
+    @pytest.mark.parametrize("name", ["/*", "/*/", "/**/"])
+    def test_graphic_atom_beginning_with_comment_open_is_quoted(self, name):
+        # ISO 6.4.2: a graphic token may not BEGIN with `/*`. Unquoted,
+        # `t(/*).` opens a comment that swallows the rest of the file and
+        # Scryer reports syntax_error(incomplete_reduction). Verified.
+        assert self._emit(name) == _quote_atom_ref(name)
+
+    @pytest.mark.parametrize("name", ["*/*", "//*", "-/*", "+/*+", "*/"])
+    def test_comment_open_inside_a_graphic_atom_is_harmless(self, name):
+        # The rule is LEADING-position only: tokenization is maximal munch, so
+        # once inside a graphic token `/*` is just more graphic characters.
+        # Each of these consults unquoted in Scryer -- verified -- so quoting
+        # them would be needless churn.
+        assert self._emit(name) == name
+
+    def test_non_ascii_alphanumeric_is_not_treated_as_plain(self):
+        # str.isalnum() is true for characters no ISO reader accepts in an
+        # unquoted atom (superscripts, etc.), so it cannot be the test.
+        assert self._emit("a²") == "'a²'"
+
+
+class TestBytesLiteralUnchanged:
+    """`b"..."` is PARKED, not migrated.
+
+    Whether Python ``bytes`` keeps unifying with an int list once ``b"..."``
+    denotes a code list is a SURFACE-phase question the rulings explicitly
+    park ("same shape as the retired str~list bridge, NOT a Phase 3 concern",
+    tagged-tuple-term-representation.md:~248). So the literal migration must
+    leave it exactly as it was: it still falls through ``_convert_constant``'s
+    final ``PAtom(str(value))``, which stringifies the Python repr. Verified
+    byte-identical against the pre-migration translator.
+    """
+
+    def test_bytes_literal_emission_is_untouched(self):
+        out = clausal_source_to_prolog('Ok(X) <- (X is b"abc")')
+        assert out.strip() == "ok(X) :-\n    X = 'b\\'abc\\''."
+
+
+class TestBracketAtomLiteralIsFaithful:
+    """`"[]"` / `"{}"` used to be the one literal the atom mapping could not
+    render faithfully (f47e1a8e warned, and refused under strict). THE FLIP
+    (2026-09-06-atoms-as-cells-strings §11) made the engine agree with ISO
+    6.3.5 -- the atom `[]` IS the empty list on both sides -- so the collapse
+    is faithful and the warning is gone (item J, 2026-09-07); see
+    tests/test_prolog_execution.py::TestBracketAtomLiteralAgrees.
+    """
+
+    @pytest.mark.parametrize("literal", ["[]", "{}"])
+    def test_emitted_bare_with_no_warning(self, literal):
+        out = clausal_source_to_prolog('Ok(K) <- (K is %r)' % literal)
+        assert "WARNING" not in out, out
+        assert f"K = {literal}" in out, out
+
+    def test_strict_mode_accepts_it(self):
+        out = clausal_source_to_prolog('Ok(K) <- (K is "[]")', strict=True)
+        assert "K = []" in out, out
