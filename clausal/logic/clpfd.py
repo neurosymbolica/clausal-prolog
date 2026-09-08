@@ -1680,6 +1680,55 @@ def _resolve(x):
     return x
 
 
+_TEXT_SPELLINGS: tuple = ()
+_LIST_SPELLINGS: tuple = ()
+
+
+def _ensure_text_list_imports() -> None:
+    """Bind the two spelling families a text term can wear (lazy: ``terms``
+    imports back into this module)."""
+    global _TEXT_SPELLINGS, _LIST_SPELLINGS
+    if _TEXT_SPELLINGS:
+        return
+    from clausal.terms import SegList, SegString  # noqa: PLC0415
+    _TEXT_SPELLINGS = (str, SegString)
+    _LIST_SPELLINGS = (list, SegList)
+
+
+def _text_list_eq(l, r):
+    """Chars-model equality for the two spellings of ONE text term.
+
+    Under ``-double_quotes(chars)`` a ``str`` IS the list of its 1-char atoms:
+    ``"ab"`` and ``[('a',), ('b',)]`` are the same term, and ground
+    unification and ``length/2`` already say so.  The ground fallback of
+    ``==`` / ``!=`` is Python's own equality, and ``str.__eq__`` answers
+    ``False`` to a list on sight — so ``"ab" == [a, b]`` failed where ISO
+    says true, and the two operations disagreed about one term.
+
+    Answers ``True``/``False`` when the pair is a text spelling against a list
+    spelling, and ``None`` when the rule does not apply, leaving every other
+    ground pair on Python equality (notably ``1 == 1.0``, which is arithmetic
+    truth and NOT term identity).  The decision itself is delegated to
+    ``structural_eq`` — the unifier is the one authority on which terms are
+    the same term, so ``==`` cannot drift from ``is``.
+
+    A char atom against a 1-char str stays UNEQUAL: ``"a"`` is the one-element
+    list ``[a]``, not the cell ``a``, and a tuple is neither spelling here.
+    """
+    if not _TEXT_SPELLINGS:
+        _ensure_text_list_imports()
+    if isinstance(l, _TEXT_SPELLINGS):
+        if not isinstance(r, _LIST_SPELLINGS):
+            return None
+    elif isinstance(l, _LIST_SPELLINGS):
+        if not isinstance(r, _TEXT_SPELLINGS):
+            return None
+    else:
+        return None
+    from clausal.logic.constraints import structural_eq  # noqa: PLC0415
+    return structural_eq(l, r)
+
+
 def _both_ground(l, r) -> bool:
     """True if both sides are concrete values with no unbound Vars or expression trees."""
     if is_var(l) or is_var(r):
@@ -1861,7 +1910,8 @@ def fd_eq(l, r, trail: Trail) -> bool:
             return _post_constraint(ScalarProductConstraint(coeffs_tuple, vars_tuple, value), trail)
         # Non-linear: fall through to EqConstraint
     if _both_ground(l, r):
-        return l == r
+        _eq = _text_list_eq(l, r)
+        return (l == r) if _eq is None else _eq
     # At least one Var — use CLP(FD)
     if is_var(l):
         _ensure_fd(l, trail)
@@ -1896,7 +1946,8 @@ def fd_ne(l, r, trail: Trail) -> bool:
         from clausal.logic.clpr import real_ne
         return real_ne(l, r, trail)
     if _both_ground(l, r):
-        return l != r
+        _eq = _text_list_eq(l, r)
+        return (l != r) if _eq is None else (not _eq)
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -3224,11 +3275,20 @@ if _USE_C_PROPAGATE:
         # A12-F002: the C fd_eq does not type-check operands, so guard here
         # (cheap: only touches the two derefs) before delegating.
         _reject_nonnumeric_eq(l, r)
+        # The C impl's ground fallback is Python equality, same as the Python
+        # twin's — so the chars-model arm has to sit in front of it here too,
+        # or `==` answers differently depending on which impl is loaded.
+        _eq = _text_list_eq(deref(l), deref(r))
+        if _eq is not None:
+            return _eq
         return _c_impl(l, r, trail)
 
     def fd_ne(l, r, trail, _c_impl=_c_fd_ne):
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
         _reject_nonnumeric_eq(l, r, "(!=)/2")
+        _eq = _text_list_eq(deref(l), deref(r))
+        if _eq is not None:
+            return not _eq
         return _c_impl(l, r, trail)
 
     def fd_lt(l, r, trail, _c_impl=_c_fd_lt):
