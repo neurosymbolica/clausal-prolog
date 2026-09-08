@@ -547,6 +547,16 @@ class _ClausalToProlog:
         self.meta_modes = meta_modes
         self._items: list[PItem] = []
         self._warnings: list[str] = []
+        #: Lossy-but-successful lowerings (units discarded). NOT warnings: a
+        #: warning marks a construct as untranslatable and makes strict mode
+        #: raise, whereas these DID translate — with documented information
+        #: loss. Kept separate so a lossy file still counts as clean.
+        #: Unit atoms seen in Quantity literals, collected by a pre-pass over
+        #: the module before any statement is converted -- the import that
+        #: names a unit is EARLIER in the file than the use that reveals it.
+        self._unit_atoms: set[str] = set()
+        self._lossy: list[str] = []
+        self._all_lossy: list[str] = []
         self._all_warnings: list[str] = []
         # Per-clause variable rename table (reset per top-level item).
         # clausal_var_to_prolog is non-injective (_result and RESULT both →
@@ -636,8 +646,74 @@ class _ClausalToProlog:
         self._warnings.append(construct)
         self._all_warnings.append(construct)
 
+    def _add_lossy(self, construct: str) -> None:
+        """Record a lowering that SUCCEEDED but dropped information."""
+        self._lossy.append(construct)
+        self._all_lossy.append(construct)
+
+    def _try_quantity(self, node: python_ast.Call):
+        """Clausal Quantity literal -> its bare magnitude, unit DISCARDED.
+
+        ``5000(euro)``, ``0(baht)``, ``DEPOSIT(baht)`` are Quantity literals:
+        a magnitude applied to a unit atom. They are NOT terms — a quantity is
+        a value with a unit, represented at the Python level — and ISO Prolog
+        cannot represent one: a number may not be a functor, and evaluable
+        functors are a closed set, so a term-shaped money value could not use
+        ``is/2`` even if it parsed (Scryer: ``type_error(evaluable, euro/1)``).
+
+        Carrying units into ISO would mean a quantity class plus our own
+        arithmetic on every site that might touch one, which loses CLP(Z) and
+        every other facility defined over ordinary numbers. So the export drops
+        the unit and keeps the magnitude. Dimensional analysis stays where it
+        works: the Clausal runtime. Operator ruling 2026-09-08.
+
+        THE TRANSLATION IS THEREFORE LOSSY. Recorded via _add_lossy, not
+        _add_warning: these lower cleanly and must not make strict mode raise.
+        """
+        if node.keywords or len(node.args) != 1:
+            return None
+        unit = node.args[0]
+        if not isinstance(unit, python_ast.Name) or _is_logic_var_name(unit.id):
+            return None            # a unit is a lowercase atom, never a variable
+        func = node.func
+        if isinstance(func, python_ast.Constant) and isinstance(
+                func.value, (int, float)) and not isinstance(func.value, bool):
+            self._add_lossy(f"unit discarded: {func.value}({unit.id}) -> {func.value}")
+            return self._convert_expr(func)
+        if isinstance(func, python_ast.Name) and _is_logic_var_name(func.id):
+            self._add_lossy(f"unit discarded: {func.id}({unit.id}) -> {func.id}")
+            return self._convert_expr(func)
+        return None
+
+    def _collect_unit_atoms(self, tree: python_ast.Module) -> None:
+        """Pre-pass: every unit atom named by a Quantity literal in this module.
+
+        Needed because -import_from(european_union, [euro]) is converted BEFORE
+        the clause that reveals `euro` is a unit rather than a predicate. Once
+        the unit is discarded from every use site, that import names a symbol
+        the emitted program never mentions, in a module the export never stages
+        -- so it must go too, or the file trades an "unsupported call target"
+        refusal for an "unresolvable use_module target" one.
+        """
+        for node in python_ast.walk(tree):
+            if not isinstance(node, python_ast.Call):
+                continue
+            if node.keywords or len(node.args) != 1:
+                continue
+            unit = node.args[0]
+            if not isinstance(unit, python_ast.Name) or _is_logic_var_name(unit.id):
+                continue
+            func = node.func
+            if (isinstance(func, python_ast.Constant)
+                    and isinstance(func.value, (int, float))
+                    and not isinstance(func.value, bool)):
+                self._unit_atoms.add(unit.id)
+            elif isinstance(func, python_ast.Name) and _is_logic_var_name(func.id):
+                self._unit_atoms.add(unit.id)
+
     def convert_module(self, tree: python_ast.Module) -> PModule:
         """Convert a full Python AST Module to a PModule."""
+        self._collect_unit_atoms(tree)
         for stmt in tree.body:
             self._warnings.clear()
             # Variable names are scoped per top-level item (F022).
@@ -1110,6 +1186,23 @@ class _ClausalToProlog:
         elts = (call.args[1].elts
                 if len(call.args) > 1 and isinstance(call.args[1], python_ast.List)
                 else [])
+        # Drop names that are UNITS: the export discards units at every use
+        # site, so importing one leaves a symbol the emitted program never
+        # mentions -- and the unit's home is an engine module the export does
+        # not stage, so the directive would not resolve at all.
+        kept = [e for e in elts
+                if not (isinstance(e, python_ast.Name) and e.id in self._unit_atoms)]
+        if len(kept) != len(elts):
+            dropped = sorted({e.id for e in elts
+                              if isinstance(e, python_ast.Name)
+                              and e.id in self._unit_atoms})
+            self._add_lossy(
+                f"unit import dropped: -import_from({mod_path}, {dropped})")
+            if not kept:
+                return PComment(
+                    f"% skipped: {mod_path} imported only units "
+                    f"({', '.join(dropped)}) -- units are discarded on export")
+        elts = kept
         imports = self._import_list(mod_path, elts)
 
         if imports is None:
@@ -1410,6 +1503,9 @@ class _ClausalToProlog:
 
     def _convert_call(self, node: python_ast.Call) -> PTerm:
         """Convert a function call to a PCompound."""
+        quantity = self._try_quantity(node)
+        if quantity is not None:
+            return quantity
         if isinstance(node.func, python_ast.Name):
             # Clausal has no cut: a Cut() goal in source is a call to an
             # undefined predicate, and exporting it (as `cut` or as `!`)
