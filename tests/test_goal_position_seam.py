@@ -1032,7 +1032,7 @@ class TestDelaysAreChargedToTheRightAnswer:
         "-module({n}, [move(A, B), wins(X), ok(X), both(X), p(X), r(X), t(X), "
         "u(X), f(X), g(X), beats(A, B), agg(L), cnt(N), start, "
         "allwins(L), sorted_wins(L), bagged(L), twoway(X), impossible(X), "
-        "coldcnt(N), tb(X), zz(X), pair_bag(L), naf_bag(L), "
+        "coldcnt(N), tb(X), zz(X), pair_bag(L), naf_bag(L), nest(X), "
         "ok, none, "
         "a, b, c, d, e, one, two])\n"
         "-double_quotes(chars)\n"
@@ -1072,6 +1072,9 @@ class TestDelaysAreChargedToTheRightAnswer:
         "zz(X) <- (not zz(X))\n"
         "pair_bag(L) <- (findall(X, (wins(X), tb(X)), L))\n"
         "naf_bag(L) <- (findall(X, (wins(X), not zz(X)), L))\n"
+        "-table(nest/1)\n"
+        "nest(one),\n"
+        "nest(two),\n"
         "def both_answers(out):\n"
         "    for X in --both(X):\n"
         "        out.append(X)\n"
@@ -1114,6 +1117,13 @@ class TestDelaysAreChargedToTheRightAnswer:
         "    if --bagged(L):\n"
         "        return ('true', L)\n"
         "    return 'false'\n"
+        "def nested_same_table(out):\n"
+        "    for X in --nest(X):\n"
+        "        inner = []\n"
+        "        for Y in --nest(Y):\n"
+        "            inner.append(Y)\n"
+        "        out.append((X, inner))\n"
+        "    return out\n"
         "def cold_counted():\n"
         "    if --coldcnt(N):\n"
         "        return ('true', N)\n"
@@ -1271,4 +1281,19 @@ class TestDelaysAreChargedToTheRightAnswer:
         mod = self._mod("_gp_e3")
         with pytest.raises(UndefinedAnswer):
             mod.naf_after_stream()
+        assert self._stack() == []
+
+    def test_a_nested_judged_goal_on_the_SAME_table_keeps_the_outer_answers(self):
+        """A ``--`` loop whose body runs another ``--`` over the SAME tabled
+        predicate.  The outer loop must still deliver every answer.
+
+        Detaching the judging leader's frames across a yield (which is what
+        stops two judged goals charging each other) hid the outer's table from
+        the inner call, so the inner re-LED it, drove it to completion, and the
+        outer's own answers were deduped away as already-known when it resumed
+        -- silently losing solutions, with no error.  The inner loop sees the
+        answers known when it runs, exactly as a tabled consumer does."""
+        mod = self._mod("_gp_e4")
+        out = mod.nested_same_table([])
+        assert [x for x, _inner in out] == [("one",), ("two",)]
         assert self._stack() == []

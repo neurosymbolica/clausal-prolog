@@ -447,10 +447,17 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
             if stack[i] is leader:
                 seg = stack[i:]
                 del stack[i:]
+                # Still LEADING, just not running: a nested call on a table we
+                # are parked inside must consume it, not re-lead it.
+                _leader_ctx.detached.append(seg)
                 return seg
         return []
 
     def reattach(seg):
+        for i in range(len(_leader_ctx.detached) - 1, -1, -1):
+            if _leader_ctx.detached[i] is seg:
+                del _leader_ctx.detached[i]
+                break
         stack.extend(seg)
         _leader_ctx.driven_stores.append(driven)
 

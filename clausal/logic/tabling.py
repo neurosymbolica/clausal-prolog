@@ -111,6 +111,12 @@ class _LeaderContext(threading.local):
         # delays happen to name (a cross-module tabled call whose conditions
         # nobody carried up would otherwise never be resolved).
         self.driven_stores: list[list] = []
+        # Leader segments lifted off `stack` by a judging generator that is
+        # SUSPENDED at a yield (seam.judged_answers' detach/reattach).  They
+        # are still actively leading -- the generator is alive and will resume
+        # into them -- so cycle detection has to keep seeing them, even though
+        # they must not be the attribution target while another goal runs.
+        self.detached: list[list] = []
 
 _leader_ctx = _LeaderContext()
 
@@ -151,8 +157,17 @@ def current_leader() -> TableEntry | None:
 
 
 def _on_leader_stack(entry: TableEntry) -> bool:
-    """True if *entry* is an actively-leading ancestor (A04-F001 SCC)."""
-    return any(e is entry for e in _leader_ctx.stack)
+    """True if *entry* is an actively-leading ancestor (A04-F001 SCC).
+
+    Includes segments DETACHED by a suspended judging generator.  Those frames
+    are still leading: the generator holds a live `solve()` parked inside them
+    and will resume into it.  Missing them makes a nested call on the same
+    table take the LEADER path and re-drive a table someone else is mid-way
+    through -- and the original leader's own answers are then deduped away as
+    already-known when it resumes, losing solutions silently."""
+    if any(e is entry for e in _leader_ctx.stack):
+        return True
+    return any(e is entry for seg in _leader_ctx.detached for e in seg)
 
 
 # ── Drive-episode tracking (A04-F007) ────────────────────────────────────
