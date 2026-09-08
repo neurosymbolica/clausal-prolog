@@ -198,18 +198,6 @@ def _is_operator_atom(name: str, op_table: OperatorTable) -> bool:
             or op_table.lookup_postfix(name) is not None)
 
 
-def _unit_note(term) -> str:
-    """`/* euro */` for a term whose Clausal unit the export discarded.
-
-    A BLOCK comment, not `%`: a quantity is usually mid-expression
-    (`X =:= 5000 + 3000`), and `%` runs to end of line, so it would comment out
-    the rest of the clause. `/* ... */` is ISO and nests nowhere, so it is safe
-    between operands. The unit is an atom, so it can never contain `*/`.
-    """
-    unit = getattr(term, "unit", None)
-    return f" /* {unit} */" if unit else ""
-
-
 def emit_term(term: PTerm, op_table: OperatorTable, *,
               context_prec: int = 1201, context_assoc: str = "",
               operand_of_op: bool = False) -> str:
@@ -236,11 +224,11 @@ def emit_term(term: PTerm, op_table: OperatorTable, *,
             return "(" + text + ")"
         return text
     if isinstance(term, PVar):
-        return term.name + _unit_note(term)
+        return term.name
     if isinstance(term, PNumber):
-        text = (repr(term.value) if isinstance(term.value, float)
-                else str(term.value))
-        return text + _unit_note(term)
+        if isinstance(term.value, float):
+            return repr(term.value)
+        return str(term.value)
     if isinstance(term, PString):
         return '"' + _escape_string_body(term.value) + '"'
     if isinstance(term, PList):
@@ -703,6 +691,10 @@ class _ClausalToProlog:
 
         THE TRANSLATION IS THEREFORE LOSSY. Recorded via _add_lossy, not
         _add_warning: these lower cleanly and must not make strict mode raise.
+        Each discard is echoed as a `%` LINE comment above the clause, so a
+        reader can still see what Clausal treated the value as. Line, not
+        block: `%` is the portable comment form, and it cannot sit inline
+        because it would swallow the rest of the clause.
 
         PRECONDITION -- the export is sound only for DIMENSIONALLY VALID
         sources. Discarding units loses a safety property, not just detail:
@@ -725,12 +717,10 @@ class _ClausalToProlog:
         if isinstance(func, python_ast.Constant) and isinstance(
                 func.value, (int, float)) and not isinstance(func.value, bool):
             self._add_lossy(f"unit discarded: {func.value}({unit.id}) -> {func.value}")
-            return PNumber(func.value, unit=unit.id)
+            return self._convert_expr(func)
         if isinstance(func, python_ast.Name) and _is_logic_var_name(func.id):
             self._add_lossy(f"unit discarded: {func.id}({unit.id}) -> {func.id}")
-            lowered = self._convert_expr(func)
-            return (PVar(lowered.name, unit=unit.id)
-                    if isinstance(lowered, PVar) else lowered)
+            return self._convert_expr(func)
         return None
 
     def _collect_unit_atoms(self, tree: python_ast.Module) -> None:
@@ -810,6 +800,7 @@ class _ClausalToProlog:
         self._collect_unit_atoms(tree)
         for stmt in tree.body:
             self._warnings.clear()
+            self._lossy.clear()
             self._check_unit_mixing(stmt)
             # Variable names are scoped per top-level item (F022).
             self._var_map = {}
@@ -823,6 +814,16 @@ class _ClausalToProlog:
                     f"WARNING: untranslatable clausal construct: {w}\n"
                     f"   Replace with Prolog equivalent manually."
                 ))
+            # A LINE comment, above the clause: `%` is the portable comment in
+            # every Prolog, and a quantity is usually mid-expression where a
+            # `%` would swallow the rest of the clause. So the note goes above
+            # rather than inline, and the reader still sees what Clausal
+            # treated each value as.
+            if self._lossy:
+                self._items.append(PComment(
+                    "% units discarded on export (Clausal quantities; "
+                    "dimensional checking stays in Clausal):\n"
+                    + "\n".join(f"%   {note}" for note in self._lossy)))
             if item is not None:
                 if isinstance(item, list):
                     self._items.extend(_prefix_singletons(i) for i in item)
@@ -1726,10 +1727,7 @@ class _ClausalToProlog:
         if isinstance(node.op, python_ast.USub):
             inner = self._convert_expr(node.operand)
             if isinstance(inner, PNumber):
-                # keep any discarded-unit note across the fold: `-3(s)` is
-                # USub over the quantity, so folding here would otherwise
-                # silently drop the /* s */ the reader is meant to see
-                return PNumber(-inner.value, unit=inner.unit)
+                return PNumber(-inner.value)
             return PCompound("-", (inner,))
         if isinstance(node.op, python_ast.UAdd):
             # ++expr is Python interop escape — untranslatable
@@ -2407,9 +2405,7 @@ def _prefix_singletons(item: PItem) -> PItem:
     class _Renamer(PrologTransformer):
         def visit_PVar(self, node):
             if node.name in singletons and not node.name.startswith("_"):
-                # carry the discarded-unit note across the rename, or a
-                # quantity with a variable magnitude loses its /* unit */
-                return PVar("_" + node.name, unit=node.unit)
+                return PVar("_" + node.name)
             return node
 
     return _Renamer().visit(item)

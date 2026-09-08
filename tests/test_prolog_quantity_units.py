@@ -52,7 +52,7 @@ def test_literal_quantity_keeps_magnitude_drops_unit():
 def test_quantity_inside_arithmetic_stays_arithmetic():
     """The whole point of dropping the unit: ordinary ISO arithmetic survives."""
     out = _tr("p(X) <- ( X == 5000(euro) + 3000(euro) )")
-    assert "5000 /* euro */ + 3000 /* euro */" in out
+    assert "5000 + 3000" in out
     assert "euro" not in _code(out)
 
 
@@ -123,28 +123,38 @@ def test_two_argument_call_on_a_number_is_still_unsupported():
 
 # --- the unit is VISIBLE in the output, though not semantic -------------------
 
-def test_discarded_unit_is_annotated_inline():
-    """The reader can still see what Clausal treated the value as.
-
-    A BLOCK comment, not `%`: a quantity is usually mid-expression, and `%`
-    runs to end of line, so it would comment out the rest of the clause.
-    """
+def test_discarded_unit_is_noted_above_the_clause():
+    """The reader can still see what Clausal treated each value as."""
     out = _tr("p(X) <- ( X == 5000(euro) + 3000(euro) )")
-    assert "5000 /* euro */" in out
-    assert "3000 /* euro */" in out
+    assert "units discarded on export" in out
+    assert "%   unit discarded: 5000(euro) -> 5000" in out
+    assert "%   unit discarded: 3000(euro) -> 3000" in out
+    # and the note is ABOVE the clause it describes
+    assert out.index("units discarded") < out.index("p(X) :-")
 
 
-def test_variable_magnitude_is_annotated_too():
-    """Survives the singleton rename, which rebuilds the PVar."""
+def test_variable_magnitude_is_noted_too():
     out = _tr("p(X) <- ( X == DEPOSIT(baht) )")
-    assert "/* baht */" in out
+    assert "%   unit discarded: DEPOSIT(baht) -> DEPOSIT" in out
 
 
-def test_annotation_does_not_change_term_identity():
-    """The note is provenance, not identity: an annotated 5000 equals a plain
-    one, so it cannot perturb equality-based passes."""
-    from clausal.tools.prolog_ast import PNumber
-    assert PNumber(5000, unit="euro") == PNumber(5000)
+def test_notes_are_LINE_comments_never_block_comments():
+    """ISO portability: `%` is the comment form to rely on, and a `%` cannot
+    sit inline because it would swallow the rest of the clause -- which is why
+    the note goes above rather than beside the value."""
+    out = _tr("p(X) <- ( X == 5000(euro) + 3000(euro) )")
+    assert "/*" not in out and "*/" not in out
+    for line in out.splitlines():
+        if "unit discarded" in line:
+            assert line.lstrip().startswith("%")
+
+
+def test_note_is_per_clause_not_per_file():
+    """Two clauses, two notes -- a reader should not have to guess which
+    clause a file-level summary was about."""
+    out = _tr("p(X) <- ( X == 5000(euro) )\nq(Y) <- ( Y == 7(baht) )",
+              decl="p(X), q(Y)")
+    assert out.count("units discarded on export") == 2
 
 
 # --- the SAFETY property, not just the detail --------------------------------
@@ -162,7 +172,7 @@ def test_mixed_units_in_one_expression_are_refused():
 def test_same_unit_arithmetic_is_accepted():
     """NEGATIVE CONTROL for the guard: it must not fire on valid input."""
     out = _tr("p(X) <- ( X == 5000(euro) + 3000(euro) )", strict=True)
-    assert "5000 /* euro */ + 3000 /* euro */" in out
+    assert "5000 + 3000" in out
 
 
 def test_subtraction_is_guarded_too():
@@ -184,12 +194,10 @@ def test_compound_unit_expression_refused_with_a_real_diagnosis(expr):
 def test_negative_magnitude_lowers():
     """`-3(s)` is USub wrapping the Call, so the quantity still lowers."""
     out = _tr("p(X) <- ( X == -3(s) )", strict=True)
-    assert "-3 /* s */" in out
-    # the quantity form itself is gone (a bare "s" also occurs in the
-    # module header, so assert the SHAPE, not the letter)
-    assert "(s)" not in _code(out)
+    assert "-3" in _code(out)
+    assert "unit discarded: -3(s) -> -3" in out or "unit discarded: 3(s) -> 3" in out
 
 
 def test_float_magnitude_lowers():
     out = _tr("p(X) <- ( X == 9.8(newton) )", strict=True)
-    assert "9.8 /* newton */" in out
+    assert "9.8" in _code(out) and "newton" not in _code(out)
