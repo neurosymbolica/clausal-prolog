@@ -1,16 +1,50 @@
+"""Engine + oracle coverage for the ISO canonical comparison builtins.
+
+EVERY test here comes in one of two shapes, and the split is load-bearing:
+
+  * an ENGINE test, which asks only `run_clausal` and therefore runs on any
+    box, oracle or no oracle;
+  * an ORACLE test, which asks only `scryer` and records what the binding
+    reference answers for the same row.
+
+They used to be one function each, and 42 of the 52 tests requested the
+`scryer` fixture, which skipped on a missing binary — taking the engine
+assertions down with it, so breaking `'=<'` into `ge` on a box without Scryer
+left the suite green. `tests/iso/conftest.py` now FAILS on a missing oracle
+unless `CLAUSAL_ISO_ALLOW_NO_SCRYER` is set; the split is what makes that
+opt-out safe to use, because the engine half still runs.
+"""
 import operator as _op
 
 import pytest
 
 
-def test_harness_agrees_with_scryer_on_iso_is(scryer, run_clausal):
-    """The oracle itself, proved against a predicate that ALREADY works, so a
+_YES = repr(("yes",))
+_NO = repr(("no",))
+
+
+def _yesno_src(goal, extra_atoms=()):
+    """A one-clause module whose `p(R)` answers `yes`/`no` for *goal*."""
+    atoms = ", ".join(("p(R)", "yes", "no") + tuple(extra_atoms))
+    return (f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
+            f"p(R) <- if_({goal}, R is yes, R is no)\n")
+
+
+def _engine_yesno(run_clausal, goal, extra_atoms=()):
+    return run_clausal(_yesno_src(goal, extra_atoms), ("p",))
+
+
+def test_harness_engine_side(run_clausal):
+    """The harness itself, proved against a construct that ALREADY works, so a
     failure here means the harness is broken rather than the builtins."""
-    assert scryer("X is 3 + 4, write(X), nl, halt.") == "7"
     got = run_clausal(
         "-module(_h1, [p(X)])\n-double_quotes(chars)\np(X) <- (X == 3 + 4)\n",
         ("p",))
     assert got == ["7"], "bare == already evaluates-and-binds; see the eq measurement"
+
+
+def test_harness_oracle_side(scryer):
+    assert scryer("X is 3 + 4, write(X), nl, halt.") == "7"
 
 
 # ---------------------------------------------------------------------------
@@ -21,11 +55,9 @@ def test_harness_agrees_with_scryer_on_iso_is(scryer, run_clausal):
 # is a machine-checked property every operator's row set must satisfy — no
 # OTHER function in {eq, ne, lt, gt, le, ge} may agree with it across all its
 # rows. The rows beyond the original engine-vs-Scryer set were found by a
-# greedy search against that same property (fix round 2 on this task; see
-# the task report for the derivation and a proof the check can actually
-# fail). Notably that search found '>' still tied with 'ne' even after fix
-# round 1's two rows — hand-picking a third row would likely have repeated
-# the mistake.
+# greedy search against that same property. Notably that search found '>'
+# still tied with 'ne' even after the first two added rows — hand-picking a
+# third row would likely have repeated the mistake.
 # ---------------------------------------------------------------------------
 
 _FUNCS = {"eq": _op.eq, "ne": _op.ne, "lt": _op.lt,
@@ -59,11 +91,14 @@ def _scryer_call(sym, a, b):
     return f"{a} {sym} {b}"
 
 
-# The engine-vs-Scryer rows are DERIVED from ROWS_BY_OPERATOR, the same data
-# the discrimination property checks, so the two can never drift apart.
-ARITH_ROWS = [(_clausal_call(sym, a, b), _scryer_call(sym, a, b), expected)
+# The engine and oracle rows are both DERIVED from ROWS_BY_OPERATOR, the same
+# data the discrimination property checks, so the three can never drift apart.
+ARITH_ROWS = [(sym, _clausal_call(sym, a, b), _scryer_call(sym, a, b), expected)
               for sym, rows in ROWS_BY_OPERATOR.items()
               for a, b, expected in rows]
+
+_ARITH_IDS = [f"{sym} {a} {b}" for sym, rows in ROWS_BY_OPERATOR.items()
+              for a, b, _ in rows]
 
 
 def test_the_matrix_discriminates_every_operator():
@@ -82,13 +117,17 @@ def test_the_matrix_discriminates_every_operator():
                 f"{op_name} rows cannot be distinguished from {cand_name}")
 
 
-@pytest.mark.parametrize("clausal_goal, scryer_goal, expected", ARITH_ROWS)
-def test_arithmetic_comparison_matches_scryer(scryer, run_clausal,
-                                              clausal_goal, scryer_goal, expected):
-    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           f"p(R) <- if_({clausal_goal}, R is yes, R is no)\n")
-    got = run_clausal(src, ("p",))
-    assert got == [repr(("yes",) if expected else ("no",))]
+@pytest.mark.parametrize("sym, clausal_goal, scryer_goal, expected",
+                         ARITH_ROWS, ids=_ARITH_IDS)
+def test_arithmetic_comparison_engine(run_clausal, sym, clausal_goal,
+                                      scryer_goal, expected):
+    assert _engine_yesno(run_clausal, clausal_goal) == [_YES if expected else _NO]
+
+
+@pytest.mark.parametrize("sym, clausal_goal, scryer_goal, expected",
+                         ARITH_ROWS, ids=_ARITH_IDS)
+def test_arithmetic_comparison_oracle(scryer, sym, clausal_goal,
+                                      scryer_goal, expected):
     ref = scryer(f"({scryer_goal} -> write(yes) ; write(no)), nl, halt.")
     assert ref == ("yes" if expected else "no"), "Scryer disagrees; Scryer is right"
 
@@ -98,47 +137,44 @@ def test_arithmetic_comparison_matches_scryer(scryer, run_clausal,
 # ---------------------------------------------------------------------------
 
 
-def test_iso_is_evaluates_and_binds(scryer, run_clausal):
+def test_iso_is_evaluates_and_binds(run_clausal):
     """NOT the same as Clausal's infix `is`, which is unification: measured,
     `X is 3 + 4` in a clause body yields the TERM Add(3, 4). The canonical
     form is ISO's evaluate-and-bind."""
     got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
                       "p(X) <- 'is'(X, 3 + 4)\n", ("p",))
     assert got == ["7"]
+
+
+def test_iso_is_evaluates_and_binds_oracle(scryer):
     assert scryer("X is 3 + 4, write(X), nl, halt.") == "7"
 
 
-def test_structural_identity_distinguishes_int_from_float(scryer, run_clausal):
-    """ISO's ==/2 distinguishes 1 from 1.0 (different types); Scryer says
-    'no' (spec §3.1, "structural identity, `1 == 1.0` is false"). Restored
-    to the brief's original (correct) assertion per fix round 1: `'=='`/2
-    does NOT delegate straight to `structural_eq`/2 (which itself DOES
-    conflate 1 and 1.0 — a separate, deliberately PARKED decision,
-    A05-D001/A01-D001, governing `structural_eq`'s existing callers, and NOT
-    touched by this fix). `'=='`/2 is a brand new predicate with no existing
-    callers, so `_iso_identical` in iso_compare.py adds a stricter,
-    type-aware check on top of `structural_eq` — see its docstring, and
-    task-4-report.md, for the derivation and the before/after evidence."""
-    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('=='(1, 1.0), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("no",))]
+def test_structural_identity_distinguishes_int_from_float(run_clausal):
+    """ISO's ==/2 distinguishes 1 from 1.0 (different types).
+
+    `'=='`/2 does NOT delegate straight to `structural_eq`/2, which DOES
+    conflate 1 and 1.0 — a separate, deliberately PARKED decision
+    (A05-D001/A01-D001) governing `structural_eq`'s existing callers and NOT
+    touched here. `'=='`/2 is a brand new predicate with no existing callers,
+    so `_iso_identical` in iso_compare.py adds a narrow, numbers-only strict
+    check on top of `structural_eq`."""
+    assert _engine_yesno(run_clausal, "'=='(1, 1.0)") == [_NO]
+
+
+def test_structural_identity_distinguishes_int_from_float_oracle(scryer):
     assert scryer("(1 == 1.0 -> write(yes) ; write(no)), nl, halt.") == "no"
 
 
-def test_structural_identity_still_holds_for_same_type_and_shape(
-        scryer, run_clausal):
-    """The other direction of the fix-round-1 ruling (item 3): tightening
-    '==' for cross-type numerics must not make it reject same-type numbers
-    or identical compound-shaped terms. `1 == 1` and two independently
-    built, identical `[1, 2]` structures must both still read 'yes'."""
-    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('=='(1, 1), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("yes",))]
-    assert scryer("(1 == 1 -> write(yes) ; write(no)), nl, halt.") == "yes"
+def test_structural_identity_still_holds_for_same_type_and_shape(run_clausal):
+    """Tightening '==' for cross-type numerics must not make it reject
+    same-type numbers or identical compound-shaped terms."""
+    assert _engine_yesno(run_clausal, "'=='(1, 1)") == [_YES]
+    assert _engine_yesno(run_clausal, "'=='([1, 2], [1, 2])") == [_YES]
 
-    src2 = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-            "p(R) <- if_('=='([1, 2], [1, 2]), R is yes, R is no)\n")
-    assert run_clausal(src2, ("p",)) == [repr(("yes",))]
+
+def test_structural_identity_still_holds_for_same_type_and_shape_oracle(scryer):
+    assert scryer("(1 == 1 -> write(yes) ; write(no)), nl, halt.") == "yes"
     assert scryer("([1, 2] == [1, 2] -> write(yes) ; write(no)), "
                   "nl, halt.") == "yes"
 
@@ -149,28 +185,27 @@ def test_iso_unify_binds(run_clausal):
     assert got == ["42"]
 
 
-def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence(
-        scryer, run_clausal):
-    """OPEN, UNFIXED divergence from ISO — reported per fix round 1 item 4,
-    not fixed this round.
+def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence(run_clausal):
+    """OPEN, UNFIXED divergence from ISO. Documents, does not bless.
 
     ISO unification of `1` and `1.0` FAILS (different types are never
-    unifiable): measured directly, Scryer answers 'no' for `1 = 1.0`.
-    Clausal's `'='`/2 is `clausal.logic.variables.unify` verbatim (per the
-    brief), and `unify` — unlike `'=='`/2 above — was NOT given a
-    type-strict wrapper this round: `unify` has a huge number of existing
-    callers throughout the engine (every clause-head match, every `is`-as-
-    unification site, `'\\='`/2's own trial-unify, …), so narrowing its
-    cross-type numeric behavior is a much larger-blast-radius change than
-    `'=='`/2's brand-new-predicate fix was, and is explicitly OUT OF SCOPE
-    for this round (see task-4-report.md, "Finding on '='"). This test
-    pins the CURRENT (ISO-diverging) behavior so a future change is a
-    visible, deliberate decision rather than a silent regression in
-    either direction."""
-    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('='(1, 1.0), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("yes",))], \
+    unifiable): measured directly, Scryer answers 'no' for `1 = 1.0` (see the
+    oracle half below). Clausal's `'='`/2 is
+    `clausal.logic.variables.unify` verbatim, and `unify` — unlike `'=='`/2
+    — was NOT given a type-strict wrapper: it has a huge number of existing
+    callers throughout the engine (every clause-head match, every
+    `is`-as-unification site, `'\\='`/2's own trial-unify, …), so narrowing
+    its cross-type numeric behaviour is an engine-wide change and is the
+    operator's call, not this branch's.
+
+    Deferred deliberately; the durable record is
+    todo/iso-unify-conflates-int-and-float-2026-09-09.md, which covers this
+    pin AND its `'is'` twin below."""
+    assert _engine_yesno(run_clausal, "'='(1, 1.0)") == [_YES], \
         "current (diverging) Clausal behavior: '='(1, 1.0) succeeds"
+
+
+def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence_oracle(scryer):
     assert scryer("(1 = 1.0 -> write(yes) ; write(no)), nl, halt.") == "no", \
         "ISO/Scryer: 1 = 1.0 fails"
 
@@ -178,22 +213,24 @@ def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence(
 def test_iso_not_unifiable(run_clausal):
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
            "p(R) <- if_('\\\\='(1, 2), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+    assert run_clausal(src, ("p",)) == [_YES]
 
 
 def test_iso_not_unifiable_fails_when_unifiable(run_clausal):
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
            "p(R) <- if_('\\\\='(X, X), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("no",))]
+    assert run_clausal(src, ("p",)) == [_NO]
 
 
-def test_iso_structural_ne(scryer, run_clausal):
-    """'\\==' distinguishes 1 from 1.0 too — it's the direct negation of
-    '==', which was fixed in fix round 1 to be ISO-correct on cross-type
-    numerics (see test_structural_identity_distinguishes_int_from_float)."""
+def test_iso_structural_ne(run_clausal):
+    """'\\==' distinguishes 1 from 1.0 too — it is the direct negation of
+    '=='."""
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
            "p(R) <- if_('\\\\=='(1, 1.0), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+    assert run_clausal(src, ("p",)) == [_YES]
+
+
+def test_iso_structural_ne_oracle(scryer):
     assert scryer("(1 \\== 1.0 -> write(yes) ; write(no)), nl, halt.") == "yes"
 
 
@@ -227,7 +264,7 @@ def test_infix_eqeq_still_evaluates_and_binds(run_clausal):
 # ---------------------------------------------------------------------------
 
 
-def test_hash_eq_is_valid_in_every_mode(scryer, run_clausal):
+def test_hash_eq_is_valid_in_every_mode(run_clausal):
     """The 33 FORCED sites from the eq measurement take {BIND, TEST}: the same
     site binds on one call and tests on another. `#=` is the only spelling
     valid in both, which is why it is in the spec at all."""
@@ -235,6 +272,9 @@ def test_hash_eq_is_valid_in_every_mode(scryer, run_clausal):
     got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
                       "p(X) <- '#='(X, 2 + 1)\n", ("p",))
     assert got == ["3"]
+
+
+def test_hash_eq_is_valid_in_every_mode_oracle(scryer):
     assert scryer("X #= 2 + 1, write(X), nl, halt.",
                   ":- use_module(library(clpz)).\n") == "3"
 
@@ -242,41 +282,30 @@ def test_hash_eq_is_valid_in_every_mode(scryer, run_clausal):
 def test_hash_eq_also_TESTS_two_ground_values(run_clausal):
     """The other half of the {BIND, TEST} pair. Both must work through the
     SAME spelling or `#=` does not solve the forced sites."""
-    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('#='(3, 2 + 1), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("yes",))]
-    src_f = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-             "p(R) <- if_('#='(4, 2 + 1), R is yes, R is no)\n")
-    assert run_clausal(src_f, ("p",)) == [repr(("no",))]
+    assert _engine_yesno(run_clausal, "'#='(3, 2 + 1)") == [_YES]
+    assert _engine_yesno(run_clausal, "'#='(4, 2 + 1)") == [_NO]
 
 
-def test_hash_eq_int_float_OPEN_iso_divergence(scryer, run_clausal):
-    """OPEN, UNFIXED divergence from ISO/Scryer's clpz — found by review during
-    Task 5 fix round 1 (the reviewer probed the engine live: `'#='(1, 1.0)`
-    succeeds, while `1 #= 1.0` is a Scryer clpz domain_error), PINNED not
-    fixed, per the operator's ruling.
+def test_hash_eq_int_float_OPEN_iso_divergence(run_clausal):
+    """OPEN, UNFIXED divergence from ISO/Scryer's clpz. Documents, does not
+    bless.
 
     Clausal's CLP spans both R and Z: `fd_eq` (clausal/logic/clpfd.py) routes
     a float operand to CLP(R) rather than rejecting it, so `'#='(1, 1.0)`
     succeeds — and this is the SAME `fd_eq` that Clausal's own infix `==`
     already compiles to (nodes.ArithEq), so making `'#='` reject floats would
     make it disagree with infix `==` on identical inputs, which is worse
-    than `'#='` being broader than Scryer's clpz. This is the same reasoning
-    that deferred `'='(1, 1.0)` in Task 4 — see
-    test_iso_unify_conflates_int_and_float_OPEN_iso_divergence above for the
-    precedent this follows, and task-5-report.md's fix-round-1 section for
-    the ruling in full.
+    than `'#='` being broader than Scryer's clpz. Same reasoning that
+    deferred `'='(1, 1.0)` above.
 
     Scryer's clpz is INTEGER-only: `1 #= 1.0` is not merely false, it is a
-    domain error — `domain_error(clpz_expression, 1.0)` — because 1.0 is not
-    a valid clpz expression at all. This test pins BOTH sides of the
-    divergence directly (engine succeeds; Scryer errors) so a future change
-    to either side is a visible, deliberate decision rather than a silent
-    regression."""
-    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('#='(1, 1.0), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("yes",))], \
+    domain error (see the oracle half) because 1.0 is not a valid clpz
+    expression at all."""
+    assert _engine_yesno(run_clausal, "'#='(1, 1.0)") == [_YES], \
         "current (diverging) Clausal behavior: '#='(1, 1.0) succeeds via CLP(R)"
+
+
+def test_hash_eq_int_float_OPEN_iso_divergence_oracle(scryer):
     ref = scryer("(1 #= 1.0 -> write(yes) ; write(no)), nl, halt.",
                  ":- use_module(library(clpz)).\n")
     assert ref == "error(domain_error(clpz_expression,1.0),unknown(1.0)-1).", \
@@ -287,20 +316,23 @@ def test_hash_eq_int_float_OPEN_iso_divergence(scryer, run_clausal):
 # their own discriminating matrix, on the same machine-checked property as
 # the arithmetic-comparison matrix above (test_the_matrix_discriminates_
 # every_operator): no OTHER comparison function may reproduce an operator's
-# result vector across its own rows. The row VALUES are reused verbatim from
+# result vector across its own rows. The row VALUES are COPIED from
 # ROWS_BY_OPERATOR where possible -- ground-integer '#=' etc. reduce to the
 # same fast-path Python comparison as '=:=' et al. (clausal/logic/clpfd.py's
 # `type(l) is int and type(r) is int` fast path), so the discrimination
-# already proven for those rows carries over. This is a separate structure
-# (not a merge into ROWS_BY_OPERATOR/ARITH_ROWS) for two reasons: the
-# constraint family needs `library(clpz)` loaded in Scryer, unlike plain
-# '=:=' et al.; and clpz is INTEGER-only, while the ENGINE is not -- probed
-# directly, `1 #= 1.0` raises `domain_error(clpz_expression, 1.0)` in Scryer
-# but SUCCEEDS in Clausal (`fd_eq` routes the float operand to CLP(R)). That
-# is a real, PINNED engine/Scryer divergence, not merely an invalid-for-clpz
-# row — see test_hash_eq_int_float_OPEN_iso_divergence above for the
-# characterization test and task-5-report.md's fix-round-1 section for the
-# ruling. Here it just means '=:='s float row `(1, 1.0, True)` can't be
+# already proven for those rows carries over. They are COPIES, not aliases:
+# sharing the list objects meant adding a float row for '<' would silently
+# propagate into '#<', where a float is a clpz domain error rather than a
+# comparison.
+#
+# This is a separate structure (not a merge into ROWS_BY_OPERATOR/ARITH_ROWS)
+# for two reasons: the constraint family needs `library(clpz)` loaded in
+# Scryer, unlike plain '=:=' et al.; and clpz is INTEGER-only, while the
+# ENGINE is not -- probed directly, `1 #= 1.0` raises
+# `domain_error(clpz_expression, 1.0)` in Scryer but SUCCEEDS in Clausal
+# (`fd_eq` routes the float operand to CLP(R)). That is a real, PINNED
+# engine/Scryer divergence -- see test_hash_eq_int_float_OPEN_iso_divergence
+# above. Here it just means '=:='s float row `(1, 1.0, True)` can't be
 # reused for a Scryer-comparison row (Scryer errors, it doesn't answer
 # yes/no), so this matrix's '#=' row is swapped for an all-integer row with
 # the same boolean shape (T, F, F), which the discrimination proof only
@@ -313,16 +345,28 @@ _CLPZ_PROGRAM = ":- use_module(library(clpz)).\n"
 
 HASH_ROWS_BY_OPERATOR = {
     "#=":   [(1, 1, True), (1, 2, False), (2, 1, False)],
-    "#\\=": ROWS_BY_OPERATOR["=\\="],
-    "#<":   ROWS_BY_OPERATOR["<"],
-    "#>":   ROWS_BY_OPERATOR[">"],
-    "#=<":  ROWS_BY_OPERATOR["=<"],
-    "#>=":  ROWS_BY_OPERATOR[">="],
+    "#\\=": list(ROWS_BY_OPERATOR["=\\="]),
+    "#<":   list(ROWS_BY_OPERATOR["<"]),
+    "#>":   list(ROWS_BY_OPERATOR[">"]),
+    "#=<":  list(ROWS_BY_OPERATOR["=<"]),
+    "#>=":  list(ROWS_BY_OPERATOR[">="]),
 }
 
-HASH_ROWS = [(_clausal_call(sym, a, b), _scryer_call(sym, a, b), expected)
+HASH_ROWS = [(sym, _clausal_call(sym, a, b), _scryer_call(sym, a, b), expected)
              for sym, rows in HASH_ROWS_BY_OPERATOR.items()
              for a, b, expected in rows]
+
+_HASH_IDS = [f"{sym} {a} {b}" for sym, rows in HASH_ROWS_BY_OPERATOR.items()
+             for a, b, _ in rows]
+
+
+def test_the_hash_row_lists_are_copies_not_aliases():
+    """The two matrices must not share list objects: a float row added for
+    '<' would otherwise appear under '#<', where a float is a clpz domain
+    error rather than a comparison."""
+    for hash_sym, plain_sym in (("#\\=", "=\\="), ("#<", "<"), ("#>", ">"),
+                                ("#=<", "=<"), ("#>=", ">=")):
+        assert HASH_ROWS_BY_OPERATOR[hash_sym] is not ROWS_BY_OPERATOR[plain_sym]
 
 
 def test_the_hash_matrix_discriminates_every_operator():
@@ -339,13 +383,18 @@ def test_the_hash_matrix_discriminates_every_operator():
                 f"{op_name} rows cannot be distinguished from {cand_name}")
 
 
-@pytest.mark.parametrize("clausal_goal, scryer_goal, expected", HASH_ROWS)
-def test_hash_constraint_matches_scryer_clpz(scryer, run_clausal,
-                                             clausal_goal, scryer_goal, expected):
-    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           f"p(R) <- if_({clausal_goal}, R is yes, R is no)\n")
-    got = run_clausal(src, ("p",))
-    assert got == [repr(("yes",) if expected else ("no",))]
+@pytest.mark.parametrize("sym, clausal_goal, scryer_goal, expected",
+                         HASH_ROWS, ids=_HASH_IDS)
+def test_hash_constraint_engine(run_clausal, sym, clausal_goal,
+                                scryer_goal, expected):
+    assert _engine_yesno(run_clausal, clausal_goal) == [_YES if expected else _NO]
+
+
+@pytest.mark.parametrize("sym, clausal_goal, scryer_goal, expected",
+                         HASH_ROWS, ids=_HASH_IDS)
+def test_hash_constraint_oracle(scryer, sym, clausal_goal,
+                                scryer_goal, expected):
     ref = scryer(f"({scryer_goal} -> write(yes) ; write(no)), nl, halt.",
                  _CLPZ_PROGRAM)
     assert ref == ("yes" if expected else "no"), "Scryer disagrees; Scryer is right"
+

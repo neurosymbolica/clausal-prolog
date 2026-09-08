@@ -1,18 +1,28 @@
-import os, re, subprocess, sys, tempfile
+import os, re, subprocess, tempfile
 import pytest
 
 SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 
-# Word-bounded so a near-miss token (e.g. a variable literally spelled `_h10`,
-# or an atom containing `path_hN`) is left alone rather than silently corrupted.
-_H1_PLACEHOLDER = re.compile(r"\b_h1\b")
-_HN_PLACEHOLDER = re.compile(r"\b_hN\b")
+# Scryer is the BINDING oracle for this suite, so its absence is a FAILURE,
+# not a skip: 42 of the original 52 tests requested this fixture and every one
+# of them carried its engine assertions in the same function, so a box without
+# the binary skipped the engine coverage too and a broken `'=<'` still read
+# green. The engine assertions now live in their own oracle-free tests (see
+# tests/iso/test_iso_compare_scryer.py), and a run with no oracle at all has
+# to say so out loud. Set CLAUSAL_ISO_ALLOW_NO_SCRYER=1 to opt out
+# deliberately — that is the only way this turns back into a skip.
+_ALLOW_NO_SCRYER = "CLAUSAL_ISO_ALLOW_NO_SCRYER"
 
 
 @pytest.fixture
 def scryer():
     if not os.path.exists(SCRYER):
-        pytest.skip(f"scryer not built at {SCRYER}")
+        if os.environ.get(_ALLOW_NO_SCRYER):
+            pytest.skip(f"scryer not built at {SCRYER}; {_ALLOW_NO_SCRYER} is set")
+        pytest.fail(
+            f"the Scryer oracle is not built at {SCRYER}. It is the binding "
+            f"reference for this suite, so its absence fails rather than "
+            f"skips; set {_ALLOW_NO_SCRYER}=1 to run engine-only.")
 
     def run(goal: str, program: str = "") -> str:
         d = tempfile.mkdtemp()
@@ -23,6 +33,12 @@ def scryer():
                               capture_output=True, text=True, timeout=30)
         return proc.stdout.strip().splitlines()[-1].strip() if proc.stdout.strip() else ""
     return run
+
+
+# Word-bounded so a near-miss token (e.g. a variable literally spelled `_h10`,
+# or an atom containing `path_hN`) is left alone rather than silently corrupted.
+_H1_PLACEHOLDER = re.compile(r"\b_h1\b")
+_HN_PLACEHOLDER = re.compile(r"\b_hN\b")
 
 
 @pytest.fixture
