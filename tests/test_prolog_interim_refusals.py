@@ -21,10 +21,6 @@ from clausal.tools.clausal_to_prolog import (
     UntranslatableConstructError,
 )
 
-KIT_QUERY_COMBINATORS = pathlib.Path(
-    "/workspace/clausify-executor-train/kit/query_combinators.clausal"
-)
-
 
 def _refusals(src):
     """Return the refusal messages for *src*, or [] when it translates."""
@@ -262,13 +258,11 @@ class TestKitWitness:
     76afe6d, "kit: hand-lift the last 10 class-(c) `<-` closures"). Two
     tests, two different responses to that drift:
 
-    * ``test_kit_query_combinators_is_strict_clean`` (previously
-      ``test_kit_query_combinators_refuses_under_strict`` — renamed
-      because asserting refusal under a name that now means "asserts no
-      refusal" would be self-contradictory) re-points at the LIVE file
-      and pins its NEW status: strict-clean. This is a real, current
-      cross-repo fact worth pinning — if kit's query_combinators.clausal
-      ever regresses to refusing again, this goes red.
+    * the live-file pin (``test_kit_query_combinators_is_strict_clean``)
+      was RELOCATED 2026-09-08 to the repository that ships the kit
+      library, and is pinned there: reading a sibling repository by
+      absolute path fails on any other machine and tied this open tree
+      to source it does not ship.
     * ``test_kit_witness_names_the_construct`` needs an actual refusal to
       assert the construct-naming shape against, which the live file no
       longer has. Re-pointed at a FROZEN in-repo fixture (a vendored
@@ -278,16 +272,6 @@ class TestKitWitness:
       from a sibling repo has its pass/fail depend on that repo's
       current state, not on anything this translator controls.
     """
-
-    def test_kit_query_combinators_is_strict_clean(self):
-        src = KIT_QUERY_COMBINATORS.read_text()
-        assert _refusals(src) == [], (
-            "kit/query_combinators.clausal is expected to be "
-            "strict-translate clean as of clausify-executor-train "
-            "commit 76afe6d -- if this fails, either the live file "
-            "regressed or the translator broke something that used "
-            "to translate"
-        )
 
     def test_kit_witness_names_the_construct(self):
         """Frozen fixture, not the live file (see class docstring) — pins
