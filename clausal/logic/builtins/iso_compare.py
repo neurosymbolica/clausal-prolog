@@ -95,10 +95,24 @@ def _iso_eval(term, context: str):
 
 
 def _arith_cmp(name, op):
-    @_builtin(name, 2)
-    def _cmp(a, b, trail, k, _op=op, _name=name):
-        if _op(_iso_eval(a, "is/2"), _iso_eval(b, "is/2")):
+    # `fields` is passed EXPLICITLY rather than inferred. `_registry.
+    # _extract_fields_simple` computes a builtin's term fields as
+    # `params[:-2]` (strip `trail, k`), so any extra parameter here — the
+    # closure-capture defaults `_op=op, _name=name` this function used to
+    # carry — pushes `trail`/`k` back into the field tuple and REGISTERS THE
+    # TERM CLASS AT ARITY 4. Measured 2026-09-09 before the fix:
+    # `_BUILTIN_FIELDS[('=:=', 2)] == ('a', 'b', 'trail', 'k')`,
+    # `get_builtin_class('=:=')` -> `<Predicate =:=/4 …>`, and
+    # `functor('=:='(1, 2), N, A)` gave `A = 4` (controls: `'#='` -> 2,
+    # `structural_eq` -> 2). The class IS the term constructor, so the
+    # translator, the seam and the reified-term tooling all saw arity 4 with
+    # two junk unbound variables. `op` is captured by CLOSURE, which is
+    # already correct — each `_arith_cmp` call has its own binding.
+    @_builtin(name, 2, fields=("a", "b"))
+    def _cmp(a, b, trail, k):
+        if op(_iso_eval(a, "is/2"), _iso_eval(b, "is/2")):
             yield None
+    _cmp.__name__ = f"_iso_cmp_{name}"
     return _cmp
 
 
