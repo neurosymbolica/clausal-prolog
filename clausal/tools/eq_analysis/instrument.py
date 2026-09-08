@@ -22,8 +22,22 @@ respelling and must become ``#=``:
 
     {"file": "<abs .clausal path>", "line": 42, "path": "BIND"}
 
-``file`` is ``null`` when ``$fd_eq`` is reached from a frame with no
+``file`` is ``null`` when a wrapped entry is reached from a frame with no
 ``__file__`` (a REPL or an exec'd string); consumers must tolerate it.
+
+TWO LIMITS THE CONSUMER SHOULD KNOW:
+
+* A REIFIED execution (``if_(X == Y, ...)``) can only report a decided/ground
+  path -- TEST or STRUCTURAL, never BIND/CONSTRAINT/FAILED -- because the
+  undetermined branch returns None and posts ``$fd_eq`` instead, which is
+  recorded separately. A reified site therefore looks ground even where the
+  same source construct elsewhere would bind.
+* A reified ``!=`` uses ``$fd_eq`` as its FALSE-branch entry
+  (``_lower_goalop_shared._FD_REIFY``: ``"fd_ne": ("ne", "$fd_ne", "$fd_eq")``),
+  so an undetermined reified ``!=`` produces a ``==`` record at a line whose
+  source contains no ``==``. The wrapper cannot tell the two apart -- it sees
+  only ``(l, r, trail)`` -- and separating them needs a lowering change, which
+  is out of scope for an analysis tool. Pinned in the tests as a known limit.
 
 ORDERING IS A CONTRACT: :func:`install` must run BEFORE the modules under
 analysis are imported. The compiler captures ``$fd_eq`` into each predicate's
@@ -167,14 +181,30 @@ def install() -> None:
         posts $fd_eq/$fd_ne. So a ground reified comparison recorded NOTHING,
         which reads as "no `==` here". Only `op == "eq"` is a `==` site; the
         ordering ops are a different source construct.
+
+        The decided case is classified with the SAME numeric test the $fd_eq
+        wrapper uses. `reify_fd` decides any GROUND pair, not just numeric
+        ones -- `_both_ground` only rejects unbound Vars and trees, and
+        `_REIFY_OPS["eq"]` is plain `operator.eq` -- so `if_(A == lo, ...)`
+        with A bound to the atom `lo` is a STRUCTURAL comparison. Hardcoding
+        TEST here made one source construct STRUCTURAL or TEST purely by
+        whether it sat inside `if_/3`, and TEST is the catastrophic direction:
+        a structural site respelled `=:=` raises type_error(evaluable, ...) on
+        input that works today.
+
+        A reified execution can only ever be a decided/ground path -- never
+        BIND, CONSTRAINT or FAILED, since the undetermined branch returns None
+        and posts $fd_eq instead.
         """
         def _instrumented(op, x, y, trail):
             if not _ENABLED:
                 return orig(op, x, y, trail)
             result = orig(op, x, y, trail)
             if op == "eq" and result is not None:
+                path = TEST if (_is_numeric(x) and _is_numeric(y)) \
+                    else STRUCTURAL
                 file, line = _site()
-                _RECORDS.append({"file": file, "line": line, "path": TEST})
+                _RECORDS.append({"file": file, "line": line, "path": path})
             return result
         return _instrumented
 
@@ -191,16 +221,20 @@ def install() -> None:
     # `zcompare()`, neither of which is a `==` site, and wrapping it attributed
     # records to engine frames inside clpfd.py rather than to any .clausal
     # source line.
+    # Keyed by (module, name) so restore targets whatever was wrapped: an
+    # earlier revision wrapped an entry on `clpfd`, and a bare-name key would
+    # have restored it onto `predicate` with no error.
     _ORIGINAL = {
-        "_fd_eq_fn": predicate._fd_eq_fn,
-        "_fd_eq_fn_s": predicate._fd_eq_fn_s,
-        "_reify_fd_fn": predicate._reify_fd_fn,
-        "_reify_fd_fn_s": predicate._reify_fd_fn_s,
+        (predicate, "_fd_eq_fn"): predicate._fd_eq_fn,
+        (predicate, "_fd_eq_fn_s"): predicate._fd_eq_fn_s,
+        (predicate, "_reify_fd_fn"): predicate._reify_fd_fn,
+        (predicate, "_reify_fd_fn_s"): predicate._reify_fd_fn_s,
     }
-    predicate._fd_eq_fn = _wrap(_ORIGINAL["_fd_eq_fn"])
-    predicate._fd_eq_fn_s = _wrap(_ORIGINAL["_fd_eq_fn_s"])
-    predicate._reify_fd_fn = _wrap_reify(_ORIGINAL["_reify_fd_fn"])
-    predicate._reify_fd_fn_s = _wrap_reify(_ORIGINAL["_reify_fd_fn_s"])
+    predicate._fd_eq_fn = _wrap(_ORIGINAL[(predicate, "_fd_eq_fn")])
+    predicate._fd_eq_fn_s = _wrap(_ORIGINAL[(predicate, "_fd_eq_fn_s")])
+    predicate._reify_fd_fn = _wrap_reify(_ORIGINAL[(predicate, "_reify_fd_fn")])
+    predicate._reify_fd_fn_s = _wrap_reify(
+        _ORIGINAL[(predicate, "_reify_fd_fn_s")])
     _ENABLED = True
 
 
@@ -215,9 +249,8 @@ def uninstall() -> None:
     _ENABLED = False
     if _ORIGINAL is None:
         return
-    import clausal.logic.compiler.predicate as predicate
-    for name, orig in _ORIGINAL.items():
-        setattr(predicate, name, orig)
+    for (module, name), orig in _ORIGINAL.items():
+        setattr(module, name, orig)
     _ORIGINAL = None
 
 

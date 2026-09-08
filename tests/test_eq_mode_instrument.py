@@ -7,7 +7,6 @@ shape of silent-success failure this repo keeps re-learning.
 """
 import json
 import os
-import tempfile
 
 import pytest
 
@@ -38,6 +37,7 @@ def _module_tmpdir(tmp_path_factory):
 
 
 def _load(src, name):
+    assert _TMP is not None, "_load needs the module-scoped tmpdir fixture"
     path = os.path.join(str(_TMP), f"{name}.clausal")
     with open(path, "w") as fh:
         fh.write(src)
@@ -293,3 +293,37 @@ def test_a_REIFIED_comparison_is_recorded(inst):
     _run(mod, ("p", 3, Var()))
     assert inst.records(), "a ground reified == must be recorded, not silent"
     assert {r["path"] for r in inst.records()} == {instrument.TEST}
+
+
+def test_a_reified_NON_NUMERIC_comparison_is_STRUCTURAL_not_TEST(inst):
+    """`reify_fd` decides any GROUND pair, not just numeric ones, so
+    `if_(A == lo, ...)` with A bound to an atom is a structural comparison.
+    Hardcoding TEST for reified decisions made ONE source construct
+    STRUCTURAL or TEST purely by whether it sat inside `if_/3` — and TEST is
+    the catastrophic direction: respelling a structural site `=:=` raises
+    type_error(evaluable, ...) on input that works today."""
+    src = ("-module(_eiF, [p(A, R), lo, yes, no])\n-double_quotes(chars)\n"
+           "p(A, R) <- if_(A == lo, R is yes, R is no)\n")
+    mod, _ = _load(src, "_eiF")
+    _run(mod, ("p", ("lo",), Var()))
+    assert [r["path"] for r in inst.records()] == [instrument.STRUCTURAL]
+
+
+def test_a_reified_NE_produces_a_phantom_eq_record_KNOWN_LIMIT(inst):
+    """DOCUMENTS A LIMIT, NOT A FEATURE.
+
+    A reified `!=` uses `$fd_eq` as its FALSE-branch entry
+    (`_lower_goalop_shared._FD_REIFY`), so an undetermined reified `!=`
+    produces a `==` record at a line whose source contains no `==`. The
+    wrapper sees only `(l, r, trail)` and cannot tell them apart; separating
+    them needs a lowering change, out of scope for an analysis tool.
+
+    Consumers must not treat every record as a `==` site without checking the
+    source line. If this ever starts failing because the lowering gained a
+    distinct entry, that is an improvement — delete the test and say so."""
+    src = ("-module(_eiG, [p(X, Y, R), yes, no])\n-double_quotes(chars)\n"
+           "p(X, Y, R) <- if_(X != Y, R is yes, R is no)\n")
+    mod, _ = _load(src, "_eiG")
+    _run(mod, ("p", Var(), Var(), Var()))
+    # The source line has no `==`, yet records appear against it.
+    assert inst.records(), "the limit is that records DO appear here"
