@@ -179,6 +179,75 @@ def test_structural_identity_still_holds_for_same_type_and_shape_oracle(scryer):
                   "nl, halt.") == "yes"
 
 
+# ---------------------------------------------------------------------------
+# A string and its char list are ONE term, so `'=='` must say so.
+#
+# Every other `'=='` row in this file writes the SAME literal syntax on both
+# sides, which is why a whole-term key comparison inside `_iso_identical`
+# could reject a difference of pure REPRESENTATION without any test noticing.
+# These rows write the two sides differently on purpose.
+# ---------------------------------------------------------------------------
+
+
+def test_structural_identity_of_a_string_and_its_char_list(run_clausal):
+    """Under `-double_quotes(chars)` a string IS its char list — one term.
+
+    Spec §3.3, verbatim: "under `-double_quotes(chars)` a string IS its char
+    list, one term, so `'=='("ab", [a, b])` is true". Three authorities agree
+    on yes: the spec, Scryer (see the oracle test below) and Clausal's own
+    `'='`/2 and `structural_eq`/2, both of which already answer yes for this
+    pair. `'=='` disagreeing with `'='` on a GROUND pair is impossible in ISO
+    — for ground terms `=` and `==` coincide.
+
+    Measured 2026-09-09 BEFORE the fix, with `_iso_identical`'s second
+    conjunct still a whole-term `_normalize_for_key(_deref_walk(…))` key
+    comparison (`_deref_walk` does not materialize a `str` into its char
+    list, so the keys were `'ab'` against `[('a',), ('b',)]`):
+
+        '=='("ab", [a, b])        Clausal: no    Scryer: YES
+        '\\=='("ab", [a, b])      Clausal: yes   Scryer: no
+        '='("ab", [a, b])         Clausal: yes   Scryer: yes
+        structural_eq("ab", [a, b])  Clausal: yes (pre-existing)
+    """
+    assert _engine_yesno(run_clausal, "'=='(\"ab\", [a, b])", ("a", "b")) == [_YES]
+    assert _engine_yesno(run_clausal, "'\\\\=='(\"ab\", [a, b])", ("a", "b")) == [_NO]
+
+
+def test_structural_identity_of_a_string_and_its_char_list_agrees_with_unify(
+        run_clausal):
+    """The consistency half: `'='` and `'=='` may not disagree on a ground
+    pair, and `structural_eq`/2 (untouched by this branch, parked decision
+    A05-D001) is the third witness."""
+    assert _engine_yesno(run_clausal, "'='(\"ab\", [a, b])", ("a", "b")) == [_YES]
+    assert _engine_yesno(run_clausal, "structural_eq(\"ab\", [a, b])",
+                         ("a", "b")) == [_YES]
+
+
+def test_structural_identity_of_a_string_and_its_char_list_oracle(scryer):
+    chars = ":- set_prolog_flag(double_quotes, chars).\n"
+    assert scryer('("ab" == [a, b] -> write(yes) ; write(no)), nl, halt.',
+                  chars) == "yes"
+    assert scryer('("ab" \\== [a, b] -> write(yes) ; write(no)), nl, halt.',
+                  chars) == "no"
+    assert scryer('("ab" = [a, b] -> write(yes) ; write(no)), nl, halt.',
+                  chars) == "yes"
+
+
+def test_structural_identity_is_still_strict_inside_a_compound(run_clausal):
+    """The narrow numeric check must survive nesting: `[1]` and `[1.0]` are
+    not identical, and neither are two same-shaped terms differing only in an
+    inner number's type. This is what a blunt "both sides are numbers" gate
+    would have lost."""
+    assert _engine_yesno(run_clausal, "'=='([1], [1.0])") == [_NO]
+    assert _engine_yesno(run_clausal, "'=='([1, 2], [1, 2.0])") == [_NO]
+
+
+def test_structural_identity_is_still_strict_inside_a_compound_oracle(scryer):
+    assert scryer("([1] == [1.0] -> write(yes) ; write(no)), nl, halt.") == "no"
+    assert scryer("([1, 2] == [1, 2.0] -> write(yes) ; write(no)), "
+                  "nl, halt.") == "no"
+
+
 def test_iso_unify_binds(run_clausal):
     got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
                       "p(X) <- '='(X, 42)\n", ("p",))
@@ -398,3 +467,53 @@ def test_hash_constraint_oracle(scryer, sym, clausal_goal,
                  _CLPZ_PROGRAM)
     assert ref == ("yes" if expected else "no"), "Scryer disagrees; Scryer is right"
 
+
+# ---------------------------------------------------------------------------
+# `_iso_identical` at the Python level: the full representation table.
+#
+# The `.clausal` tests above cover what a source file can spell. This table
+# covers the shapes only Python can build, and states the design property of
+# `_numeric_types_agree` directly: it objects ONLY to a pair of corresponding
+# tagged numbers of different type, never to a difference of representation
+# that `structural_eq` blesses. Each row also carries `structural_eq`'s own
+# answer, so a change to `structural_eq` (a PARKED decision this branch does
+# not touch) shows up here as a failure rather than as a silent shift.
+# ---------------------------------------------------------------------------
+
+
+def _identity_table():
+    from decimal import Decimal
+    from clausal.terms import Compound
+    return [
+        # (a, b, structural_eq, iso '==')
+        (1, 1.0, True, False),                 # the ISO case
+        (1, 1, True, True),
+        (1.0, 1.0, True, True),
+        (True, 1, True, False),                # bool is type-distinguished
+        ([1], [1.0], True, False),             # strictness survives nesting
+        ([1, 2], [1, 2], True, True),
+        ((1, 2), (1, 2.0), True, False),
+        (Compound("f", (1,)), Compound("f", (1.0,)), True, False),
+        ({"a": 1}, {"a": 1.0}, True, False),
+        ({1}, {1.0}, True, False),
+        # Representation, not type: these must stay identical.
+        ("ab", [("a",), ("b",)], True, True),  # a string IS its char list
+        (b"ab", [97, 98], True, True),         # bytes IS the code list
+        # Decimal is NOT tagged, here or in `_normalize_for_key` (a
+        # documented residual under A01-D001), so this branch opens no new
+        # front on the decimal-currency values.
+        (Decimal(1), 1, True, True),
+    ]
+
+
+def test_iso_identical_representation_table():
+    from clausal.logic.builtins.iso_compare import _iso_identical
+    from clausal.logic.constraints import structural_eq
+
+    rows = _identity_table()
+    assert rows, "an empty table would make this test vacuous"
+    for a, b, expect_structural, expect_iso in rows:
+        assert structural_eq(a, b) is expect_structural, (a, b)
+        assert _iso_identical(a, b) is expect_iso, (a, b)
+        # `'\=='` is the exact negation, in both directions.
+        assert _iso_identical(b, a) is expect_iso, ("symmetry", a, b)

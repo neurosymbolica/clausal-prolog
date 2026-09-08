@@ -7,8 +7,9 @@ Reachable from `.clausal` ONLY through the quoted canonical form —
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
+from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
-from clausal.terms import Compound
+from clausal.terms import Compound, DictTerm, SetTerm
 
 
 def _clpfd_leaf_culprit(exc: LogicException):
@@ -142,6 +143,115 @@ def _iso_not_unifiable(a, b, trail, k):
         yield None
 
 
+def _numeric_tag(x):
+    """The numeric type tag of *x*, or None if *x* is not a tagged number.
+
+    Deliberately mirrors `clausal/logic/tabling.py::_normalize_for_key_py`:
+    exact `int` is canonical, `bool`/`float`/`complex` are
+    type-distinguished, and `Decimal`/`Fraction` are NOT tagged (they
+    conflate with `int` there too — a documented residual under A01-D001).
+    Keeping the same set means this check opens no second front on the
+    decimal-currency values.
+    """
+    if type(x) is int:
+        return int
+    if isinstance(x, (bool, float, complex)):
+        return type(x)
+    return None
+
+
+def _numeric_types_agree(a, b) -> bool:
+    """False ONLY when *a* and *b* have CORRESPONDING numeric leaves whose
+    types differ; True for everything else.
+
+    That one-way property is the whole design. This runs as a second
+    conjunct after `structural_eq` has already said "equal", so its only job
+    is to answer the cross-type NUMERIC question ISO cares about (`1 == 1.0`
+    is false) — and it must never answer "different" for a difference of
+    REPRESENTATION that `structural_eq` deliberately blesses.
+
+    The previous implementation (`_normalize_for_key(_deref_walk(a)) ==
+    _normalize_for_key(_deref_walk(b))`) was a whole-term key comparison, so
+    every representational difference read as "different" too. Measured
+    2026-09-09 under `-double_quotes(chars)`, that made
+
+        '=='("ab", [a, b])    ->  no      (Scryer: YES; spec §3.3: true)
+        '\\=='("ab", [a, b])  ->  yes     (Scryer: no)
+
+    while `'='("ab", [a, b])` stayed yes — `'='` and `'=='` disagreeing on a
+    GROUND pair, which ISO does not permit. `_deref_walk` does not
+    materialize a `str` into its char list, so the keys compared were `'ab'`
+    against `[('a',), ('b',)]`.
+
+    Descent therefore happens ONLY through shapes that line up on both sides
+    (same Python type, same length/functor/fields). Any mismatch — a `str`
+    against a list of char atoms, a `SegList` against a plain list, an
+    unrecognised shape — stops with True, i.e. "no numeric objection", which
+    falls back exactly onto `structural_eq`'s own answer. Being incomplete is
+    therefore SAFE by construction: it can only ever fail to tighten, never
+    wrongly reject.
+    """
+    a = deref(a)
+    b = deref(b)
+    ta = _numeric_tag(a)
+    tb = _numeric_tag(b)
+    if ta is not None or tb is not None:
+        # Only a PAIR of tagged numbers raises the cross-type question. A
+        # tagged number against an UNTAGGED one — `Decimal`/`Fraction`, which
+        # `_normalize_for_key` also leaves untagged, so `Decimal('1')` and `1`
+        # already read as identical today — is not this check's business and
+        # gets no objection.
+        return ta is None or tb is None or ta is tb
+    if type(a) is not type(b):
+        return True
+    if isinstance(a, (list, tuple)):
+        if len(a) != len(b):
+            return True
+        return all(_numeric_types_agree(x, y) for x, y in zip(a, b))
+    if isinstance(a, Compound):
+        if a.functor != b.functor or len(a.args) != len(b.args):
+            return True
+        return all(_numeric_types_agree(x, y) for x, y in zip(a.args, b.args))
+    if isinstance(a, DictTerm):
+        return _dict_numeric_types_agree(a.data, b.data)
+    if isinstance(a, dict):
+        return _dict_numeric_types_agree(a, b)
+    if isinstance(a, SetTerm):
+        return _set_numeric_types_agree(a.elements, b.elements)
+    if isinstance(a, (set, frozenset)):
+        return _set_numeric_types_agree(a, b)
+    if is_term_instance(a):
+        fields = term_field_names(a)
+        if fields != term_field_names(b):
+            return True
+        return all(_numeric_types_agree(getattr(a, f), getattr(b, f))
+                   for f in fields)
+    return True
+
+
+def _dict_numeric_types_agree(a, b) -> bool:
+    """Values under matching keys; a key set that does not line up is not a
+    numeric objection."""
+    if len(a) != len(b):
+        return True
+    for key, value in a.items():
+        if key not in b:
+            return True
+        if not _numeric_types_agree(value, b[key]):
+            return False
+    return True
+
+
+def _set_numeric_types_agree(a, b) -> bool:
+    """Set elements cannot be paired up positionally, so compare the MULTISET
+    of numeric element types — enough to separate `{1}` from `{1.0}` without
+    inventing a pairing."""
+    def tags(elements):
+        return sorted(t.__name__ for t in map(_numeric_tag, elements)
+                      if t is not None)
+    return tags(a) == tags(b)
+
+
 def _iso_identical(a, b) -> bool:
     """ISO's `==`/2: structurally identical, WITHOUT the int/float (etc.)
     cross-type numeric conflation `structural_eq`/2 carries for its existing
@@ -157,30 +267,19 @@ def _iso_identical(a, b) -> bool:
     Scryer measures `1 == 1.0` as false (spec §3.1, "structural identity,
     `1 == 1.0` is false").
 
-    Approach: `structural_eq` already gets everything else right — shape,
-    container equivalences (str/char-list, ground SegList/list, …), and var
-    identity (two distinct unbound vars are never `==`, matching the ISO
-    rule; see its own docstring) — so this only ADDS a stricter requirement,
-    never loosens one: given `structural_eq(a, b)` already holds, additionally
-    require that fully-grounded `a` and `b` (`_deref_walk`, which also
-    materializes any Seg*/String forms into plain containers so comparison
-    is representation-independent) produce the same `_normalize_for_key`
-    key (A04-F006's existing int/float/bool/complex type-tagging walker —
-    reused rather than duplicating a second general-purpose term walker).
-    Because this is a conjunction with `structural_eq`, a mismatch this
-    second check finds can only turn a True into a False; it can never turn
-    a False into a True, so it cannot introduce a new false positive beyond
-    tightening the known numeric gap. Measured directly (see task-4-report.md):
-    the var-collapsing `_normalize_for_key` does on its own (it maps every
-    unbound var to one shared sentinel) never fires here, because whenever
-    two terms disagree only on distinct-variable identity, `structural_eq`
-    has already returned False and short-circuits the `and` below.
+    `structural_eq` already gets everything else right — shape, the container
+    equivalences (str↔char-list, ground SegList↔list, DictTerm↔dict,
+    SetTerm↔set) and var identity — so the only thing added on top is the
+    cross-type NUMERIC objection of `_numeric_types_agree`, which by
+    construction can only tighten and never reject a difference of mere
+    representation. Measured 2026-09-09 under `-double_quotes(chars)`, all
+    three of Clausal `'='`, Scryer `==` and spec §3.3 agree that
+    `'=='("ab", [a, b])` is TRUE, and this conjunction keeps it true while
+    still answering no to `'=='(1, 1.0)`.
     """
     if not _structural_eq(a, b):
         return False
-    from clausal.logic.solve import _deref_walk
-    from clausal.logic.tabling import _normalize_for_key
-    return _normalize_for_key(_deref_walk(a)) == _normalize_for_key(_deref_walk(b))
+    return _numeric_types_agree(a, b)
 
 
 @_builtin("==", 2)
