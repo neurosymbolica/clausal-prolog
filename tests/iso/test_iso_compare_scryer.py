@@ -506,7 +506,7 @@ def test_hash_constraint_oracle(scryer, sym, clausal_goal,
 
 def _identity_table():
     from decimal import Decimal
-    from clausal.terms import Compound
+    from clausal.terms import Compound, SegList
     return [
         # (a, b, structural_eq, iso '==')
         (1, 1.0, True, False),                 # the ISO case
@@ -526,6 +526,24 @@ def _identity_table():
         # documented residual under A01-D001), so this branch opens no new
         # front on the decimal-currency values.
         (Decimal(1), 1, True, True),
+        # --- Recorded HOLES, not endorsements. -----------------------------
+        # `_numeric_types_agree` descends only through shapes that line up on
+        # BOTH sides and answers "no numeric objection" on any mismatch, so
+        # its strictness is representation-dependent. Measured 2026-09-09:
+        # each row below is a pair that the plain-list/plain-set control two
+        # blocks up DOES tighten (`{1}` vs `{1.0}` is False, `[1]` vs `[1.0]`
+        # is False) and that these shapes do NOT. They sit on the safe side of
+        # the one-way property — failing to tighten, never wrongly rejecting —
+        # and I could not reach any of them from ordinary `.clausal` source
+        # (`[1, *T], T = []` resolves to a plain list and answers False
+        # correctly). They are pinned so the gap is a checked fact rather than
+        # a claim in a report. A future change that TIGHTENS any of them will
+        # fail here: that is the alert, and the fix is to update the row.
+        (b"\x01", [1.0], True, True),          # bytes vs float code list
+        ({1, 2.0}, {1.0, 2}, True, True),      # sets compare as a MULTISET of
+                                               # numeric types; elements cannot
+                                               # be paired positionally
+        (SegList([1]), SegList([1.0]), True, True),  # segmented-list pair
     ]
 
 
