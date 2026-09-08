@@ -143,37 +143,64 @@ def install() -> None:
         raise RuntimeError(
             "eq_analysis.instrument.install() called twice; a second wrap "
             "would double-count every execution")
-    import clausal.logic.clpfd as clpfd
     import clausal.logic.compiler.predicate as predicate
     global _ENABLED
 
     def _wrap(orig):
         def _instrumented(l, r, trail):
+            if not _ENABLED:         # already-compiled predicates keep calling
+                return orig(l, r, trail)   # this forever; pay nothing for them
             was_var_l, was_var_r = _varish(l), _varish(r)
             before = len(trail)
             result = orig(l, r, trail)   # exceptions propagate unrecorded
-            if _ENABLED:
-                path = _classify(l, r, was_var_l, was_var_r,
-                                 len(trail) > before)
-                file, line = _site()
-                _RECORDS.append({"file": file, "line": line, "path": path})
+            path = _classify(l, r, was_var_l, was_var_r, len(trail) > before)
+            file, line = _site()
+            _RECORDS.append({"file": file, "line": line, "path": path})
             return result
         return _instrumented
 
-    # THREE bindings, not one. `$fd_eq` is captured into a predicate's globals
-    # at COMPILE time from `_fd_eq_fn` (trampoline) or `_fd_eq_fn_s`
-    # (shallow); `reify_fd` bypasses both and calls `clpfd.fd_eq` directly.
-    # Wrapping only the first left every `-shallow` predicate and every
-    # reified comparison recording NOTHING -- which reads as "no `==` here",
-    # the fail-open this module was written to prevent.
+    def _wrap_reify(orig):
+        """A reified `==` decided on GROUND operands never reaches $fd_eq.
+
+        `reify_fd(op, x, y, trail)` returns True/False when both sides are
+        ground and None when undetermined -- and only the undetermined branch
+        posts $fd_eq/$fd_ne. So a ground reified comparison recorded NOTHING,
+        which reads as "no `==` here". Only `op == "eq"` is a `==` site; the
+        ordering ops are a different source construct.
+        """
+        def _instrumented(op, x, y, trail):
+            if not _ENABLED:
+                return orig(op, x, y, trail)
+            result = orig(op, x, y, trail)
+            if op == "eq" and result is not None:
+                file, line = _site()
+                _RECORDS.append({"file": file, "line": line, "path": TEST})
+            return result
+        return _instrumented
+
+    # FOUR bindings. A runtime entry is captured into a predicate's globals at
+    # COMPILE time, and there are two compile paths (trampoline `_fn`, shallow
+    # `_fn_s`) times two entries (`$fd_eq` for a plain comparison, `$reify_fd`
+    # for a reified one). Wrapping only `_fd_eq_fn` left every `-shallow`
+    # predicate and every ground reified `==` recording NOTHING -- which reads
+    # as "no `==` here", the fail-open this module exists to prevent.
+    #
+    # NOT wrapped: `clpfd.fd_eq` itself. An earlier revision did, on the
+    # mistaken belief that `reify_fd` called it -- it does not, it dispatches
+    # through `_REIFY_OPS`. The only module-global callers are `chain()` and
+    # `zcompare()`, neither of which is a `==` site, and wrapping it attributed
+    # records to engine frames inside clpfd.py rather than to any .clausal
+    # source line.
     _ORIGINAL = {
-        ("predicate", "_fd_eq_fn"): predicate._fd_eq_fn,
-        ("predicate", "_fd_eq_fn_s"): predicate._fd_eq_fn_s,
-        ("clpfd", "fd_eq"): clpfd.fd_eq,
+        "_fd_eq_fn": predicate._fd_eq_fn,
+        "_fd_eq_fn_s": predicate._fd_eq_fn_s,
+        "_reify_fd_fn": predicate._reify_fd_fn,
+        "_reify_fd_fn_s": predicate._reify_fd_fn_s,
     }
-    predicate._fd_eq_fn = _wrap(_ORIGINAL[("predicate", "_fd_eq_fn")])
-    predicate._fd_eq_fn_s = _wrap(_ORIGINAL[("predicate", "_fd_eq_fn_s")])
-    clpfd.fd_eq = _wrap(_ORIGINAL[("clpfd", "fd_eq")])
+    predicate._fd_eq_fn = _wrap(_ORIGINAL["_fd_eq_fn"])
+    predicate._fd_eq_fn_s = _wrap(_ORIGINAL["_fd_eq_fn_s"])
+    predicate._reify_fd_fn = _wrap_reify(_ORIGINAL["_reify_fd_fn"])
+    predicate._reify_fd_fn_s = _wrap_reify(_ORIGINAL["_reify_fd_fn_s"])
     _ENABLED = True
 
 
@@ -188,11 +215,9 @@ def uninstall() -> None:
     _ENABLED = False
     if _ORIGINAL is None:
         return
-    import clausal.logic.clpfd as clpfd
     import clausal.logic.compiler.predicate as predicate
-    predicate._fd_eq_fn = _ORIGINAL[("predicate", "_fd_eq_fn")]
-    predicate._fd_eq_fn_s = _ORIGINAL[("predicate", "_fd_eq_fn_s")]
-    clpfd.fd_eq = _ORIGINAL[("clpfd", "fd_eq")]
+    for name, orig in _ORIGINAL.items():
+        setattr(predicate, name, orig)
     _ORIGINAL = None
 
 

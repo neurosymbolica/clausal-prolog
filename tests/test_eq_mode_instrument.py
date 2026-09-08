@@ -26,9 +26,19 @@ def inst():
     instrument.reset()
 
 
-def _load(src, name, tmp_path=None):
-    d = str(tmp_path) if tmp_path is not None else tempfile.mkdtemp()
-    path = os.path.join(d, f"{name}.clausal")
+_TMP = None
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _module_tmpdir(tmp_path_factory):
+    """One directory for the whole file, cleaned by pytest. `_load` is called
+    15 times; `tempfile.mkdtemp()` per call leaked one directory each."""
+    global _TMP
+    _TMP = tmp_path_factory.mktemp("eq_mode")
+
+
+def _load(src, name):
+    path = os.path.join(str(_TMP), f"{name}.clausal")
     with open(path, "w") as fh:
         fh.write(src)
     return _load_module(name, path), path
@@ -227,6 +237,13 @@ def test_a_shallow_compiled_predicate_is_recorded(inst):
            "-shallow(p/1)\n"
            "p(X) <- (X == 3 + 4)\n")
     mod, _ = _load(src, "_eiC")
+    # Without this the test cannot fail for its stated reason: `_fd_eq_fn_s`
+    # is a plain ALIAS of `_fd_eq_fn`, so the trampoline wrap alone satisfies
+    # the record assertion. If `-shallow` silently failed to apply, or the
+    # `_fd_eq_fn_s` wrap were reverted, this would still have been green — a
+    # positive control that verifies nothing.
+    db = mod.__dict__["$module"].db
+    assert db.is_shallow("p", 1), "-shallow did not apply; the pin is vacuous"
     _run(mod, ("p", Var()))
     assert [r["path"] for r in inst.records()] == [instrument.BIND]
 
@@ -242,4 +259,37 @@ def test_the_full_arithmetic_operator_set_is_numeric(inst):
     mod, _ = _load(src, "_eiD")
     for g in ("d", "m", "pw"):
         _run(mod, (g,))
+    assert {r["path"] for r in inst.records()} == {instrument.TEST}
+
+
+def test_ground_Fraction_and_float_operands_are_numeric(inst):
+    """The `numbers.Real` widening, which the operator-set pin above does NOT
+    cover — those are all TREES and pass on the tree tuple alone. The engine
+    routes Fraction to CLP(Q) and float to CLP(R); classifying either
+    STRUCTURAL would migrate an arithmetic site to `==`."""
+    from fractions import Fraction
+    from clausal.logic.variables import Trail
+    from clausal.tools.eq_analysis import instrument as I
+    import clausal.logic.compiler.predicate as predicate
+    for a, b in ((Fraction(1, 2), Fraction(1, 2)), (1.5, 1.5)):
+        predicate._fd_eq_fn(a, b, Trail())
+    assert {r["path"] for r in inst.records()} == {I.TEST}
+
+
+def test_a_REIFIED_comparison_is_recorded(inst):
+    """An if/else over `==` lowers to `$reify_fd`, NOT `$fd_eq`: with ground
+    operands `reify_fd` decides the whole thing itself and returns True/False,
+    and only the undetermined branch ever posts `$fd_eq`. So a ground reified
+    `==` recorded NOTHING and the site landed in NOT_EXERCISED.
+
+    An earlier revision wrapped `clpfd.fd_eq` believing `reify_fd` called it.
+    It does not — it dispatches through `_REIFY_OPS` — so that wrapper closed
+    no hole, attributed records to engine frames inside clpfd.py, and left a
+    comment claiming the hole was fixed. Wrong assurance in the code is worse
+    than the open hole; this pin is what would have caught it."""
+    src = ("-module(_eiE, [p(X, R), yes, no])\n-double_quotes(chars)\n"
+           "p(X, R) <- if_(X == 3, R is yes, R is no)\n")
+    mod, _ = _load(src, "_eiE")
+    _run(mod, ("p", 3, Var()))
+    assert inst.records(), "a ground reified == must be recorded, not silent"
     assert {r["path"] for r in inst.records()} == {instrument.TEST}
