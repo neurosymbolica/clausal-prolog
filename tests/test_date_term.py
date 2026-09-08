@@ -75,6 +75,19 @@ class TestConstruct:
         d = date(2024, 2, 29)
         assert isinstance(d, dt.date) and d.isoformat() == "2024-02-29"
 
+    def test_the_century_rule_both_ways(self):
+        """2024 and 2025 prove the four-year rule and nothing else. The century
+        rule has its own two branches: a year divisible by 100 is NOT a leap
+        year (2100-02-29 does not exist) unless it is divisible by 400
+        (2000-02-29 does). A leap-day test that picks an ordinary leap year
+        reads as coverage of the recovery path and never reaches it — found
+        the hard way in a corpus clamp rule on 2026-09-08."""
+        with pytest.raises(LogicException) as exc:
+            date(2100, 2, 29)          # century, not a leap year
+        assert "domain_error" in repr(exc.value.args[0])
+        d = date(2000, 2, 29)          # century divisible by 400: a leap year
+        assert isinstance(d, dt.date) and d.isoformat() == "2000-02-29"
+
     def test_a_float_is_rejected_in_every_component_not_just_the_year(self):
         """Audit finding F015: a float component must be REJECTED, never
         int()-truncated, or 2020.9 silently becomes 2020. The existing test
