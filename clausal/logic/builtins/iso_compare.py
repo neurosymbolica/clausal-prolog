@@ -108,3 +108,47 @@ _arith_cmp("<", _o.lt)
 _arith_cmp(">", _o.gt)
 _arith_cmp("=<", _o.le)     # ISO spells it =<, never <=
 _arith_cmp(">=", _o.ge)
+
+
+from clausal.logic.constraints import structural_eq as _structural_eq
+from clausal.logic.variables import unify as _unify
+
+
+@_builtin("is", 2)
+def _iso_is(result, expr, trail, k):
+    """ISO is/2: evaluate Expr, unify with Result.
+
+    NOT Clausal's infix `is`, which is unification (nodes.Unify) and leaves
+    `X is 3 + 4` as the term Add(3, 4). Both spellings coexist: Python has no
+    infix syntax for `'is'(X, E)`, so they never collide. See
+    todo/is-and-eq-are-swapped-relative-to-iso-2026-09-09.md
+    """
+    if _unify(result, _iso_eval(expr, "is/2"), trail):
+        yield None
+
+
+@_builtin("=", 2)
+def _iso_unify(a, b, trail, k):
+    if _unify(a, b, trail):
+        yield None
+
+
+@_builtin("\\=", 2)
+def _iso_not_unifiable(a, b, trail, k):
+    mark = trail.mark()
+    ok = _unify(a, b, trail)
+    trail.undo(mark)
+    if not ok:
+        yield None
+
+
+@_builtin("==", 2)
+def _iso_structural_eq(a, b, trail, k):
+    if _structural_eq(a, b):
+        yield None
+
+
+@_builtin("\\==", 2)
+def _iso_structural_ne(a, b, trail, k):
+    if not _structural_eq(a, b):
+        yield None

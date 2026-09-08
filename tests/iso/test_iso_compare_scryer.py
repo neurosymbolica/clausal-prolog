@@ -91,3 +91,81 @@ def test_arithmetic_comparison_matches_scryer(scryer, run_clausal,
     assert got == [repr(("yes",) if expected else ("no",))]
     ref = scryer(f"({scryer_goal} -> write(yes) ; write(no)), nl, halt.")
     assert ref == ("yes" if expected else "no"), "Scryer disagrees; Scryer is right"
+
+
+# ---------------------------------------------------------------------------
+# 'is'/2, '='/2, '\='/2, '=='/2, '\=='/2 under their ISO names.
+# ---------------------------------------------------------------------------
+
+
+def test_iso_is_evaluates_and_binds(scryer, run_clausal):
+    """NOT the same as Clausal's infix `is`, which is unification: measured,
+    `X is 3 + 4` in a clause body yields the TERM Add(3, 4). The canonical
+    form is ISO's evaluate-and-bind."""
+    got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
+                      "p(X) <- 'is'(X, 3 + 4)\n", ("p",))
+    assert got == ["7"]
+    assert scryer("X is 3 + 4, write(X), nl, halt.") == "7"
+
+
+def test_structural_identity_conflates_int_and_float_parked_iso_divergence(
+        scryer, run_clausal):
+    """ISO's ==/2 distinguishes 1 from 1.0 (different types) — Scryer says
+    'no'. Clausal's `structural_eq`, which '==' /2 reuses unchanged per this
+    task's brief, deliberately does NOT: cross-type numeric structural
+    equality is PARKED
+    (todo/audit-2026-07-05/done/fix-A05-structural-eq-asymmetry-consistency.md,
+    A05-D001/A01-D001 — "do not change direction here, only keep it
+    consistent with whatever unify does"). So `'=='(1, 1.0)` is 'yes' here,
+    diverging from ISO. Recorded as a known gap, not silently papered over —
+    see task-4-report.md concerns. This replaces the brief's Step-1 draft of
+    this test, which assumed ISO's answer without checking the parked
+    decision."""
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('=='(1, 1.0), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+    assert scryer("(1 == 1.0 -> write(yes) ; write(no)), nl, halt.") == "no"
+
+
+def test_iso_unify_binds(run_clausal):
+    got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
+                      "p(X) <- '='(X, 42)\n", ("p",))
+    assert got == ["42"]
+
+
+def test_iso_not_unifiable(run_clausal):
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('\\\\='(1, 2), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+
+
+def test_iso_not_unifiable_fails_when_unifiable(run_clausal):
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('\\\\='(X, X), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("no",))]
+
+
+def test_iso_structural_ne(run_clausal):
+    """'\\==' is the negation of '==': since '=='(1, 1.0) is 'yes' here (see
+    test_structural_identity_conflates_int_and_float_parked_iso_divergence),
+    '\\=='(1, 1.0) would be 'no' — not a useful positive-case row. A plain
+    unequal integer pair exercises the true branch instead."""
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('\\\\=='(1, 2), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+
+
+def test_infix_is_still_means_unification(run_clausal):
+    """Global constraint: this plan must not change Clausal's infix `is`."""
+    got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
+                      "p(X) <- (X is 3 + 4)\n", ("p",))
+    assert got == ["Add(left=3, right=4)"]
+
+
+def test_infix_eqeq_still_evaluates_and_binds(run_clausal):
+    """Global constraint: this plan must not change Clausal's infix `==`,
+    which compiles to nodes.ArithEq (a CLP arithmetic constraint), not a
+    predicate call."""
+    got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
+                      "p(X) <- (X == 3 + 4)\n", ("p",))
+    assert got == ["7"]
