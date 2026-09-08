@@ -11,6 +11,14 @@ every yield and re-appends it on resume (so two judged goals alive at once do
 not charge each other), which means a stack position is no longer stable
 across a judged yield.
 
+CORRECTION 2026-09-08: the companion claim in the goal-position todo that a
+3-node mutual-recursion probe "never reached the shape" rests on a probe that
+imported CANONICAL clausal rather than the worktree under test (the sys.path
+trap in [[running-tests-in-bug-fix-clone]]), so it tested a tree with neither
+the `_sources` channel nor the edge forwarding. That result is WITHDRAWN as
+inconclusive, not disproven. Rebuild it with
+`sys.path.insert(0, os.getcwd())` before drawing any conclusion.
+
 Why it may well be unreachable as written: a spawn drive is synchronous, and
 everything SUSPENDED is now detached, so the stack depth below a live boundary
 is the same at the yield and at the resume. The shape to try is a `--` goal

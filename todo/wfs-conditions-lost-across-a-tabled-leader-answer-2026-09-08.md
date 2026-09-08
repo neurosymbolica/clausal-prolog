@@ -1,10 +1,8 @@
 # A tabled leader charges a clause-prefix delay to its FIRST answer only
 
 Found by the opus review of `fix/wfs-goal-leader-2026-09-08` (2026-09-08,
-finding 2) and **verified as PRE-EXISTING**: the same program behaves
-identically on `a6baeaf1` and on the branch, so this is not fallout from the
-condition trailing — it is the older accumulate-and-clear approximation that
-trailing was expected to retire, and does not.
+finding 2). PRE-EXISTING: identical on `a6baeaf1` and on canonical before the
+WFS work.
 
 ## Witness
 
@@ -18,39 +16,53 @@ pp(X) <- (not u(one), r(X))
 ```
 
 `u(one)` is WFS-undefined, so BOTH answers of `pp/1` stand on the same delayed
-`not u(one)` and both should be Undefined. Measured, on both trees:
+`not u(one)` and both should be Undefined. Measured:
 
 ```
-pp truth= True       X= ('two',)
+pp truth= True       X= ('two',)      <-- wrong: unconditionally true off an
+pp truth= Undefined  X= ('one',)          undefined premise
+```
+
+## The fix, and a CORRECTION to what this file said before
+
+**Dropping the per-answer `entry._current_delays.clear()` in
+`make_tabled_wrapper_trampoline` DOES fix it** (keep the end-of-pass one):
+
+```
 pp truth= Undefined  X= ('one',)
+pp truth= Undefined  X= ('two',)
 ```
 
-`pp(two)` is reported unconditionally true off an undefined premise — the
-unsound direction.
+An earlier revision of this todo said the opposite — that the fix had been
+implemented, "measured NOT to fix it", and reverted. **That measurement was
+invalid and the claim is withdrawn.** The probe was run as
+`cd <worktree> && venv/bin/python /abs/path/scratchpad/probe.py`, which puts the
+SCRIPT's directory on `sys.path[0]`, so it imported the editable-installed
+CANONICAL `clausal` and never executed the edited worktree at all. Markers
+inserted at both wrapper factories' hot paths never fired, which is what
+exposed it. A Fable design review reached the correct result because its
+monkeypatch (`exec` into the imported module's dict) hit whatever module was
+actually loaded. Diagnosis in that review — the bucket is cleared after the
+first answer while `r(X)`'s choice point is the only one, so the clause prefix
+never re-runs and the second answer sees an empty bucket — matches the trace.
 
-## What was tried, and did NOT fix it
+The spawn-boundary suspicion the earlier revision raised is NOT the cause.
 
-The review's proposed fix was to drop the per-answer
-`entry._current_delays.clear()` in both leader fixpoint loops
-(`make_tabled_wrapper_simple`, `make_tabled_wrapper_trampoline`), on the
-grounds that every addition is now trailed (`tabling._charge_delays`) and the
-pass already ends with `trail.undo(mark)`. That was implemented and MEASURED:
-the witness above is unchanged. So the delay is being lost somewhere other
-than the `clear()` — the next step is to instrument `_charge_delays` and find
-which undo retracts it, rather than to remove the clears again. (The change
-was reverted: an unwitnessed edit to the tabling core is not worth its blast
-radius.)
+## What still needs doing before this lands
 
-Suspicion worth checking first: `not u(one)` is a TABLED negation, so it runs
-through `_naf_tabled`'s spawn drive, and `_spawn_ctx` deliberately suppresses
-some attribution across the spawn boundary (`_streaming_consumer_leader`
-returns None at a boundary). The delay may be charged inside the spawn and
-retracted with it, in which case the first answer keeps it only by accident of
-ordering.
+- The one-line removal, with the witness above as a pin (it is currently
+  unpinned in either direction).
+- A full-suite name-set diff: this is the tabling core, on the hot path for
+  every tabled predicate, so the 0-NEW gate is the bar. The Fable review
+  reports 224/224 on the four WFS/tabling files and an identical full-suite
+  failure set, but that was measured through a runtime monkeypatch, not the
+  source edit — re-measure as a source change.
+- `make_tabled_wrapper_simple` carries the same clear. `ensure_tabled_wrapper`
+  only ever builds the trampoline wrapper, so it is unreachable today; decide
+  whether to change it for symmetry or leave it.
 
 ## Related
 
-- `clausal/logic/tabling.py::_charge_delays`, `::_delay_negation`,
-  `::make_tabled_wrapper_simple`, `::make_tabled_wrapper_trampoline`
-- `todo/done/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`
-  (the judging leader's own copy of this defect IS fixed — it does not clear)
+- `clausal/logic/tabling.py::make_tabled_wrapper_trampoline`, `::_charge_delays`
+- [[running-tests-in-bug-fix-clone]] — the sys.path trap that produced the
+  false negative
