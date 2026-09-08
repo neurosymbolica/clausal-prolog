@@ -10,8 +10,9 @@ IS a single tabled-predicate call, and for nothing else. The docs say so
 precisely (spec §4a, `docs/python_integration.md` "Goal position"); this todo
 is the engine follow-up for the rest.
 
-**Cause (2) below is FIXED** (2026-09-08, same branch): a non-ground tabled
-call is now judged like a ground one. Cause (1) — composite goals and
+**Causes (2) and (3) below are FIXED** (2026-09-08): a non-ground tabled
+call is judged like a ground one, and a call's arguments are keyed as the
+query makes them (compounds, `++` values). Cause (1) — composite goals and
 untabled wrappers — is what remains.
 
 ## What is judged, and what is not
@@ -58,16 +59,24 @@ Pinned by `tests/test_goal_position_seam.py::TestSoundnessThroughTheRewriter`:
    `query_wfs` is unaffected: it calls `_tabled_entry_for_goal`, which is now
    a thin wrapper with its old behaviour.
 
-3. **A tabled call with a `++` argument.** `if --wins(++x):` is not judged
-   today either. `_normalize_for_key` has no `PyThunk` branch, so the
-   snapshot key holds the thunk object itself instead of the value it will
-   eventually hold, and the key never matches a table entry for the
-   ground-or-variables form of the call.
-
-   Fix options: evaluate the thunk's current value for the KEY only before
-   `solve()` (thunks without `var_objects`), or refuse to claim judgement
-   when any argument is a thunk (raise a clear error rather than return
-   true).
+3. ~~**A tabled call with a `++` argument.**~~ **FIXED 2026-09-08 (second
+   wave), together with a wider gap found on the way:** not only `++x` but
+   ANY non-atomic argument written in the goal — `if --wins(pair(a)):` — went
+   unjudged, because the key was taken from the reified NODE's arguments
+   (a `Call`, a `PyThunk`) while the entry is stored under the key of the
+   call as the compiled query MAKES it (a cell, a value). `_definite_answers`
+   now lowers the arguments through `seam_term` first (`_lower_call_args`),
+   so compounds, `++` values and `++` inside compounds all match; a `++`
+   that reads a variable of the same goal is refused with a `SyntaxError`.
+   Pinned in `tests/test_goal_position_seam.py::TestJudgementThroughLoweredArguments`
+   and `::TestJudgementAtTheSeamQueryBoundary` (an omitted signature slot is
+   judged conservatively over every row of that shape; an argument the seam
+   cannot build leaves the call unjudged with `UnjudgedTabledCallWarning`).
+   Cost: a `++` in a judged tabled call is evaluated twice (key + query).
+   Known unjudged-but-warned or harmless edges (review 2026-09-08): ground
+   arithmetic in an argument keys as its value while the query keeps it
+   structural (such a goal fails anyway); a dotted PREDICATE functor as an
+   argument lowers differently on the two sides (unjudged, exotic).
 
 ## The fix for (1), when it is in scope
 

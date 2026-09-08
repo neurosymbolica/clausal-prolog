@@ -211,10 +211,12 @@ silent:
     answer passes as true;
   * an UNTABLED WRAPPER — `if --p(a):` with `p(X) <- wins(X)` — is not a
     tabled call, so the same thing happens;
-  * a TABLED CALL WITH `++` ARGUMENT — `if --wins(++x):` — is not judged
-    today either (the key is taken before the `++` runs); to get the
-    judgement, make the call ground with an atom or term written in the
-    goal, or use logic variables instead.
+  * (RESOLVED 2026-09-08, second fix wave) a TABLED CALL WITH a `++`
+    ARGUMENT or a COMPOUND argument — `if --wins(++x):`, `if --wins(pair(a)):`
+    — IS judged: the arguments are lowered through the seam builder before
+    the key is taken, so the key is the one the compiled query stores the
+    entry under. A `++` that reads a variable of the same goal is refused
+    with a `SyntaxError` (no value before the search).
 
   The sugar inherits `query_wfs`'s judgement rather than growing a second
   one; widening it to composite goals is a filed follow-up

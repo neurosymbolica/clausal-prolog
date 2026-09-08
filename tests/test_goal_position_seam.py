@@ -748,3 +748,170 @@ class TestQueryCache:
             (0, ("x",), ("a",), ("c",)),
             (1, ("y",), ("c",), ("e",)),
         ]
+
+
+class TestJudgementThroughLoweredArguments:
+    """A tabled call is judged whatever SHAPE its arguments are written in.
+
+    The table entry is stored under the key of the call as the compiled query
+    makes it — cells, atoms, ``++`` values.  ``_definite_answers`` used to take
+    its key from the reified NODE's arguments instead, so a compound
+    (``wins(pair(a))``), a ``++`` value (``wins(++x)``) or a ``++`` inside a
+    compound never matched an entry and the conditional answer passed as
+    true.  Now the arguments are lowered through the seam's own builder first
+    (``seam_term``), so the key is the one the entry is under.  Fixes cause
+    (3) of ``todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md``
+    and the compound-argument gap found alongside it.
+    """
+
+    SRC = (
+        "-module({n}, [move(A, B), wins(X), beats(A, B), pair(A), a, b, c, d, e])\n"
+        "-double_quotes(chars)\n"
+        "-table(wins/1)\n"
+        "-table(beats/2)\n"
+        "move(pair(a), pair(b)),\n"
+        "move(pair(b), pair(c)),\n"
+        "move(pair(c), pair(a)),\n"
+        "move(pair(d), pair(e)),\n"          # pair(d) wins outright
+        "wins(X) <- (move(X, Y), not wins(Y))\n"
+        "beats(X, Y) <- (move(X, Y), not wins(Y))\n"
+        "ground_a = ('pair', ('a',))\n"
+        "ground_d = ('pair', ('d',))\n"
+        "def compound_conditional():\n"
+        "    if --wins(pair(a)):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def compound_definite():\n"
+        "    if --wins(pair(d)):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def thunk_conditional():\n"
+        "    if --wins(++ground_a):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def thunk_definite():\n"
+        "    if --wins(++ground_d):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def nested_thunk_conditional():\n"
+        "    x = ('a',)\n"
+        "    if --wins(pair(++x)):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def nested_thunk_definite():\n"
+        "    x = ('d',)\n"
+        "    if --wins(pair(++x)):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def every_thunk(out, start):\n"
+        "    for Y in --beats(++start, Y):\n"
+        "        out.append(Y)\n"
+        "    return out\n"
+        "def var_thunk():\n"
+        "    if --wins(++len(X)):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+    )
+
+    def _mod(self, n):
+        return _load_inline(n, self.SRC.format(n=n))
+
+    def test_a_compound_argument_is_judged(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_l1")
+        assert mod.compound_definite() == "true"
+        with pytest.raises(UndefinedAnswer):
+            mod.compound_conditional()
+
+    def test_a_thunk_argument_is_judged(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_l2")
+        assert mod.thunk_definite() == "true"
+        with pytest.raises(UndefinedAnswer):
+            mod.thunk_conditional()
+
+    def test_a_thunk_inside_a_compound_is_judged(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_l3")
+        assert mod.nested_thunk_definite() == "true"
+        with pytest.raises(UndefinedAnswer):
+            mod.nested_thunk_conditional()
+
+    def test_for_over_a_thunk_argument_judges_each_answer(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_l4")
+        # pair(d) beats pair(e) outright: wins(pair(e)) is false, so the
+        # negation is definite and the answer is exported.
+        assert mod.every_thunk([], ("pair", ("d",))) == [("pair", ("e",))]
+        # pair(a) beats pair(b) only if wins(pair(b)) is false, which is
+        # undefined in the 3-cycle: the one answer is conditional.
+        out = []
+        with pytest.raises(UndefinedAnswer):
+            mod.every_thunk(out, ("pair", ("a",)))
+        assert out == []
+
+    def test_a_thunk_over_a_goal_variable_in_a_tabled_call_is_refused_loudly(self):
+        """``wins(++len(X))`` with ``X`` a variable of the same goal has no
+        value to key on before the search, and the compiled query would hand
+        the lambda an unbound Var anyway.  It is refused with a clear message
+        rather than silently unjudged."""
+        mod = self._mod("_gp_l5")
+        with pytest.raises(SyntaxError, match=r"\+\+ over a goal variable"):
+            mod.var_thunk()
+
+
+class TestJudgementAtTheSeamQueryBoundary:
+    """Where the seam's term-position rules and the compiled query's
+    goal-argument rules disagree, judgement must stay SOUND and the goal's
+    compilation must not depend on whether the callee is tabled.  Found by
+    the review of the argument-lowering fix."""
+
+    SRC = (
+        "-module({n}, [move(A, B), wins(X), num(N), pair(A, B), a, b, c, d, e, z])\n"
+        "-double_quotes(chars)\n"
+        "-table(wins/1)\n"
+        "-table(num/1)\n"
+        "move(pair(a, z), pair(b, z)),\n"
+        "move(pair(b, z), pair(c, z)),\n"
+        "move(pair(c, z), pair(a, z)),\n"
+        "move(pair(d, z), pair(e, z)),\n"
+        "wins(X) <- (move(X, Y), not wins(Y))\n"
+        "num(3),\n"
+        "def partial_conditional():\n"
+        "    if --wins(pair(a)):\n"          # slot B omitted: the query fills a Var
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def partial_definite():\n"
+        "    if --wins(pair(d)):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def arith_over_var():\n"
+        "    if --num(N + 1):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+    )
+
+    def _mod(self, n):
+        return _load_inline(n, self.SRC.format(n=n))
+
+    def test_an_omitted_signature_slot_is_judged_conservatively(self):
+        """The seam backfills the omitted slot with a Var the query never
+        binds, so the answer's row cannot be named exactly.  The judgement
+        then covers every row of that shape: refuse if ANY is conditional,
+        export only when all are definite."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_b1")
+        assert mod.partial_definite() == "true"
+        with pytest.raises(UndefinedAnswer):
+            mod.partial_conditional()
+
+    def test_a_lowering_the_seam_refuses_does_not_change_the_goal(self):
+        """``num(N + 1)`` is arithmetic over an unbound variable: the seam
+        refuses to build it as a term, but the compiled query accepts the
+        goal (structurally; it simply fails).  Tabling-ness must not decide
+        whether the goal compiles: the call runs, unjudged, with a warning
+        saying so."""
+        from clausal.logic.seam import UnjudgedTabledCallWarning
+        mod = self._mod("_gp_b2")
+        with pytest.warns(UnjudgedTabledCallWarning):
+            assert mod.arith_over_var() == "false"

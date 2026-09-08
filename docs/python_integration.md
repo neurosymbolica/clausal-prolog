@@ -151,11 +151,23 @@ the definite one and raises when it reaches the other.
 What is not judged is a goal that is not a single tabled call: a conjunction
 (`if --(X is a, wins(X)):`) and an untabled wrapper (`if --p(a):` with
 `p(X) <- wins(X)`) both pass their conditional answers through as true,
-exactly as `query_wfs` does for the same two goals. A tabled call whose
-argument is a `++` value is not judged either (the key is taken before the
-`++` runs); until the follow-up lands, only a tabled call whose arguments are
-written directly in the goal, ground or with logic variables, is judged. The
-sugar inherits `query_wfs`'s judgement rather than inventing a second one;
+exactly as `query_wfs` does for the same two goals. The ARGUMENTS of a
+single tabled call may take any shape the seam builds: an atom, a logic
+variable, a compound (`if --wins(pair(a)):`), a `++` value (`if --wins(++x):`,
+`for Y in --beats(++x, Y):`) or a `++` inside a compound — the call is keyed
+as the compiled query makes it, so every one of those is judged. The one
+refusal is a `++` that reads a variable of the same goal in a tabled call
+(`if --wins(++len(X)):`): it has no value before the search and raises a
+`SyntaxError` rather than passing unjudged. A `++` in such a call is
+evaluated once for the key and once by the query; `++` is eager by contract.
+Two edges: a signature slot the goal omits (`wins(pair(a))` for a declared
+`pair(A, B)`) is judged conservatively — refused if ANY answer of that shape
+is conditional, exported only when all are definite — because the seam
+cannot name the exact answer row; and an argument the seam cannot build as a
+term at all (arithmetic over an unbound variable, `foo()`) leaves the call
+running exactly as before but UNJUDGED, with an `UnjudgedTabledCallWarning`
+saying so.
+The sugar inherits `query_wfs`'s judgement rather than inventing a second one;
 widening it to composite goals is filed as
 `todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`.
 Code that must be sure asks the tabled predicate directly, or asks

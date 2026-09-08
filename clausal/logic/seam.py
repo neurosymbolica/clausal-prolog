@@ -288,7 +288,153 @@ def _module_of(module_globals: dict):
             ".clausal file") from None
 
 
-def _definite_answers(goal: Any, module) -> "Iterator[None]":
+class UnjudgedTabledCallWarning(RuntimeWarning):
+    """A tabled call in goal position ran WITHOUT its WFS judgement: its
+    arguments could not be lowered to the key its table entry is under, so
+    a conditional answer would pass as true.  The goal itself is unaffected
+    (the compiled query decides its fate); only the strictness is missing."""
+
+
+_ANY = object()   # per-answer key wildcard for a slot the seam had to mint
+
+
+def _has_var_thunk(term: Any) -> bool:
+    """True if *term* holds a ``++`` thunk that reads a logic variable."""
+    import dataclasses
+    from clausal.terms import Compound
+    if isinstance(term, PyThunk):
+        return bool(term.var_objects)
+    if isinstance(term, Node) and dataclasses.is_dataclass(term):
+        return any(_has_var_thunk(getattr(term, f.name))
+                   for f in dataclasses.fields(term))
+    if isinstance(term, Compound):
+        return any(_has_var_thunk(a) for a in term.args)
+    if isinstance(term, (list, tuple)):
+        return any(_has_var_thunk(e) for e in term)
+    if isinstance(term, dict):
+        return any(_has_var_thunk(k) or _has_var_thunk(v)
+                   for k, v in term.items())
+    return False
+
+
+def _var_ids(term: Any, out: set) -> set:
+    """Collect ``id()`` of every Var object reachable in *term* (unbound
+    identity only; no deref -- the question is WHICH objects, not values)."""
+    import dataclasses
+    from clausal.terms import Compound
+    if isinstance(term, Var):
+        out.add(id(term))
+    elif isinstance(term, PyThunk):
+        pass
+    elif isinstance(term, Node) and dataclasses.is_dataclass(term):
+        for f in dataclasses.fields(term):
+            _var_ids(getattr(term, f.name), out)
+    elif isinstance(term, Compound):
+        for a in term.args:
+            _var_ids(a, out)
+    elif isinstance(term, (list, tuple)):
+        for e in term:
+            _var_ids(e, out)
+    elif isinstance(term, dict):
+        for k, v in term.items():
+            _var_ids(k, out)
+            _var_ids(v, out)
+    return out
+
+
+def _wildcard(term: Any, minted: set) -> Any:
+    """*term* with every seam-minted Var replaced by the ``_ANY`` wildcard
+    (they are never bound: the compiled query has its own Var in that slot)."""
+    from clausal.terms import Compound
+    if isinstance(term, Var):
+        return _ANY if id(term) in minted else term
+    if isinstance(term, Compound):
+        return Compound(term.functor,
+                        tuple(_wildcard(a, minted) for a in term.args))
+    if isinstance(term, tuple):
+        return tuple(_wildcard(e, minted) for e in term)
+    if isinstance(term, list):
+        return [_wildcard(e, minted) for e in term]
+    if isinstance(term, dict):
+        return {k: _wildcard(v, minted) for k, v in term.items()}
+    return term
+
+
+def _key_matches(pattern: Any, key: Any) -> bool:
+    """Structural match of a normalised per-answer key against an entry's
+    row key, ``_ANY`` matching anything in its slot."""
+    if pattern is _ANY:
+        return True
+    if isinstance(pattern, tuple) and isinstance(key, tuple):
+        return (len(pattern) == len(key)
+                and all(_key_matches(p, k) for p, k in zip(pattern, key)))
+    return pattern == key
+
+
+def _lower_call_args(goal_args: list, module_globals: dict, goal: Any) -> list:
+    """The tabled call's arguments AS THE COMPILED QUERY WILL MAKE THEM.
+
+    A goal reaches ``_definite_answers`` as the reified NODE the rewriter
+    handed over, so its arguments are nodes too: ``pair(a)`` is a ``Call``,
+    ``++x`` a ``PyThunk``.  The table entry, though, is stored under the key
+    of the call as the compiled query MAKES it -- the cell ``('pair', ('a',))``,
+    the thunk's VALUE -- so a key taken from the raw nodes matched only the
+    two shapes that are their own lowering (a bare atom, a ``Var``) and every
+    other tabled call went unjudged.  Lowering the arguments here through
+    the seam's own builder (:func:`seam_term`, the same rules the compiler
+    uses for a term in term position) gives the key the entry is under.
+
+    A ``++`` that reads a variable of the same goal has no value before the
+    search (and the compiled query would hand the lambda an unbound ``Var``
+    anyway), so it is refused loudly rather than left silently unjudged.
+    A ``++`` without variables is evaluated once here for the key and again
+    by the compiled query -- ``++`` is eager by contract, and a value that
+    differs between two evaluations was never a stable key.
+
+    Two places where the seam's TERM-position rules and the query's
+    GOAL-argument rules part company, and what happens there:
+
+    * An argument the seam refuses to build (arithmetic over an unbound
+      variable, ``foo()``, a starred list) but the compiled query accepts:
+      tabling-ness must not decide whether a goal compiles, so the call runs
+      as before, UNJUDGED, and :class:`UnjudgedTabledCallWarning` says so.
+      Returns ``None`` for that case.
+    * A signature slot the goal omits (``pair(a)`` for a declared
+      ``pair(A, B)``): the seam backfills a fresh Var, and so does the query
+      -- a DIFFERENT Var, which the answers bind and ours never is.  The
+      call key still matches (both are variables); the per-answer row
+      cannot be named exactly, so the caller judges CONSERVATIVELY over every
+      row of that shape.  The ids of the Vars the seam minted are returned
+      for that purpose.
+
+    Returns ``(lowered_args, minted_var_ids)`` or ``None``.
+    """
+    import warnings
+    if any(_has_var_thunk(a) for a in goal_args):
+        raise SyntaxError(
+            f"--: {goal!r}: a ++ over a goal variable in a tabled call has no "
+            f"value to judge the call by; bind it in Python first or write "
+            f"the term in the goal")
+    try:
+        lowered = [seam_term(a, module_globals) for a in goal_args]
+    except (SyntaxError, NameError, TypeError) as exc:
+        warnings.warn(
+            f"--: {goal!r}: tabled call NOT judged for WFS delays (its "
+            f"arguments do not lower to a table key: {exc}); a conditional "
+            f"answer passes as true here", UnjudgedTabledCallWarning,
+            stacklevel=4)
+        return None
+    written: set = set()
+    for a in goal_args:
+        _var_ids(a, written)
+    produced: set = set()
+    for a in lowered:
+        _var_ids(a, produced)
+    return lowered, produced - written
+
+
+def _definite_answers(goal: Any, module,
+                      module_globals: "dict | None" = None) -> "Iterator[None]":
     """Yield once per UNCONDITIONAL answer of *goal*; raise UndefinedAnswer
     on a conditional one.
 
@@ -297,7 +443,10 @@ def _definite_answers(goal: Any, module) -> "Iterator[None]":
     * The CALL SITE — which predicate, in which module, with which argument
       objects, and therefore which subgoal key — is taken BEFORE ``solve()``
       starts. That key names the call AS WRITTEN, unbound variables and all,
-      which is the key its table entry is stored under. Taking it later
+      which is the key its table entry is stored under. The arguments are
+      LOWERED first (:func:`_lower_call_args`, when *module_globals* is
+      given): a reified node's ``pair(a)`` or ``++x`` is keyed as the cell or
+      value the compiled query makes of it, not as the node object. Taking it later
       instead would read the arguments as the answer in hand has just bound
       them, so an OPEN call (``wins(X)``) would go looking for ``wins(d)``'s
       entry and miss — every answer, conditional ones included, then streamed
@@ -324,8 +473,13 @@ def _definite_answers(goal: Any, module) -> "Iterator[None]":
     site = _tabled_call_site(goal, module, trail)
     call_key = None
     goal_args = None
+    minted: set = set()
     if site is not None:
         _mod, _functor, _arity, goal_args = site
+        if module_globals is not None:
+            lowered = _lower_call_args(goal_args, module_globals, goal)
+            if lowered is not None:
+                goal_args, minted = lowered
         call_key = make_subgoal_key(goal_args, trail)
     entry = None
     checked = False
@@ -337,8 +491,19 @@ def _definite_answers(goal: Any, module) -> "Iterator[None]":
                 entry = tmod.db.table_store.get((functor, arity, call_key))
         if entry is not None:
             cand = [deref(a) for a in goal_args]
-            idx = entry._answer_index.get(make_subgoal_key(cand, None))
-            if idx is not None and entry.truth_value(idx) is Undefined:
+            if minted:
+                # A slot the seam minted is a wildcard: judge every row of
+                # this shape, and refuse if any of them is conditional --
+                # "only answers with an empty delay set" read strictly when
+                # the exact row cannot be named.
+                pattern = make_subgoal_key(
+                    [_wildcard(a, minted) for a in cand], None)
+                rows = [i for k, i in entry._answer_index.items()
+                        if _key_matches(pattern, k)]
+            else:
+                idx = entry._answer_index.get(make_subgoal_key(cand, None))
+                rows = [] if idx is None else [idx]
+            if any(entry.truth_value(i) is Undefined for i in rows):
                 raise UndefinedAnswer(
                     f"--: {goal!r} has a conditional (undefined) answer; use "
                     f"clausal.query_wfs for truth values and delays")
@@ -348,7 +513,7 @@ def _definite_answers(goal: Any, module) -> "Iterator[None]":
 def once_bind(goal: Any, module_globals: dict) -> bool:
     """True on the first unconditional answer, leaving the goal's variables
     bound for the caller's ``$export`` lines; False if the goal fails."""
-    gen = _definite_answers(goal, _module_of(module_globals))
+    gen = _definite_answers(goal, _module_of(module_globals), module_globals)
     try:
         next(gen)
     except StopIteration:
@@ -373,7 +538,7 @@ def each(goal: Any, variables: tuple, module_globals: dict):
     """Yield the exported values of *variables* once per unconditional answer:
     the bare value for one variable, else a tuple in *variables* order."""
     single = len(variables) == 1
-    for _ in _definite_answers(goal, _module_of(module_globals)):
+    for _ in _definite_answers(goal, _module_of(module_globals), module_globals):
         if single:
             yield export(variables[0])
         else:
