@@ -559,3 +559,37 @@ class TestBracketAtomLiteralAgrees:
         assert scryer == ("succeeds", None), scryer
 
         assert_agreement(clausal, scryer, case='Hit(K), K is "[]", empty_list(K)')
+
+
+# ── chars mode: a string IS its char list, on both sides ─────────────────────
+#
+# Requested by the engine lane on landing e686ef5c ("a string is its char
+# list in =="): the corpus suites' answer idiom is `X == "..."`, and under
+# -double_quotes(chars) the ISO side reads "ab" as [a,b] by definition (Scryer:
+# `"ab" == [a,b]` is true). Before e686ef5c the engine unified the two but `==`
+# said no (measured on 9246f385) -- an answer-level disagreement the export
+# would have silently inherited. This pin keeps both sides agreeing.
+
+_STRING_EQ_SOURCE = """-double_quotes(chars)
+-private([a, b])
+Hit(X) <- (X is "ab", X == [a, b])
+Hit2(X) <- (X is [a, b], X == "ab")
+"""
+
+
+class TestStringIsItsCharListInEquality:
+
+    def test_string_equals_its_char_list_both_directions(self, tmp_path):
+        mod = _load_clausal(tmp_path, "streq1", _STRING_EQ_SOURCE)
+        for pred, case in ((mod.Hit, 'Hit(X), X is "ab", X == [a, b]'),
+                           (mod.Hit2, 'Hit2(X), X is [a, b], X == "ab"')):
+            var = Var()
+            clausal = _run_clausal(lambda: pred(var), var)
+            assert clausal[0] == "succeeds", (case, clausal)
+
+        pl = _translate(_STRING_EQ_SOURCE)
+        assert ":- set_prolog_flag(double_quotes, chars)." in pl
+        for query, case in (("hit(_).", 'Hit(X), X is "ab", X == [a, b]'),
+                            ("hit2(_).", 'Hit2(X), X is [a, b], X == "ab"')):
+            scryer = _run_scryer_multifile(tmp_path, {"harness.pl": pl}, query)
+            assert scryer == ("succeeds", None), (case, scryer)
