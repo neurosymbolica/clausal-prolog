@@ -299,6 +299,7 @@ from clausal.logic.constants import (  # noqa: E402
 from clausal.logic.seam import (
     seam_term as _seam_term,
     text_of as _text_of,
+    text_value as _text_value,
     once_bind as _once_bind,
     each as _each,
     export as _export,
@@ -363,8 +364,11 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$mint": _mint,
     # THE SEAM: ``--term`` in Python-hosted code (clausal.logic.seam).
     "$seam": _seam_term,
-    # Explicit text crossings in Python-hosted code: str(x), f"{x}".
+    # Explicit text crossings in Python-hosted code: str(x), f"{x!s}" spell
+    # an atom and str() the rest; a bare f-string ``{x}`` spells an atom and
+    # passes anything else UNCHANGED so its format spec meets the value.
     "$text": _text_of,
+    "$text_value": _text_value,
     # Goal-position `--`: if/for/while/not run the goal (clausal.logic.seam).
     "$once_bind": _once_bind,
     "$each": _each,

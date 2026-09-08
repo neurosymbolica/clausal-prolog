@@ -211,6 +211,23 @@ def text_of(value: Any) -> str:
     return str(value)
 
 
+def text_value(value: Any) -> Any:
+    """The value an f-string's bare ``{x}`` hands to ``format()``.
+
+    An ATOM crosses as its spelling; anything else crosses UNCHANGED, so a
+    format spec still meets the original value -- ``f"{n:02d}"`` on an int
+    is ``"06"`` in a hosted file exactly as in a plain one.  (Spelling
+    first and formatting the string, as this crossing once did, raised
+    ``Unknown format code 'd' for object of type 'str'`` for every spec that
+    is not valid for ``str``.)  ``{x!s}`` keeps Python's meaning -- ``str``
+    first, then the spec -- through :func:`text_of` instead.
+    """
+    from clausal.logic.atoms import is_atom, spelling
+    if is_atom(value):
+        return spelling(value)
+    return value
+
+
 def _contains_var(term: Any) -> bool:
     from clausal.logic.variables import is_var
     if is_var(term):

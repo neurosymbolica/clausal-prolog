@@ -86,3 +86,48 @@ class TestBoundaries:
         dumped = "\n".join(repr(vars(i)) if hasattr(i, "__dict__") else repr(i) for i in items)
         assert "PythonCode(kind='function', name='text'" in dumped
         assert "$text" not in dumped
+
+
+class TestFormatSpecsInAnFString:
+    """A format spec applies to the VALUE, not to its spelling.
+
+    ``f"{n:02d}"`` on a plain int must give ``"06"`` in a hosted file exactly
+    as in a plain ``.py`` file.  The crossing used to spell the value first
+    and hand the string to ``format()``, so every spec that is not valid for
+    ``str`` (``d``, ``b``, ``f``, ``,``) raised at scoring time.  Now a bare
+    ``{x}`` routes through a helper that spells an ATOM and returns anything
+    else unchanged, and Python's own ``format()`` applies the spec.  ``{x!s}``
+    keeps its meaning (``str`` first, then the spec), as in Python.
+    """
+
+    def test_numeric_specs_on_plain_values(self):
+        mod = _load_inline("_txt_spec", (
+            "-module(_txt_spec, [])\n"
+            "-double_quotes(chars)\n"
+            "def text():\n"
+            "    n = 6\n"
+            "    mask = 5\n"
+            "    x = 2.5\n"
+            "    big = 1234567\n"
+            "    return f\"{n:02d}|{mask:03b}|{x:.2f}|{big:,}|{n}\"\n"
+        ))
+        assert mod.text() == "06|101|2.50|1,234,567|6"
+
+    def test_an_atom_with_an_alignment_spec_is_spelled_then_aligned(self):
+        mod = _load_inline("_txt_spec_atom", (
+            "-module(_txt_spec_atom, [ok])\n"
+            "-double_quotes(chars)\n"
+            "def text():\n"
+            "    return f\"[{ok:>4}] [{ok:<4}] [{ok!s:^6}]\"\n"
+        ))
+        assert mod.text() == "[  ok] [ok  ] [  ok  ]"
+
+    def test_explicit_str_conversion_keeps_python_semantics(self):
+        mod = _load_inline("_txt_spec_s", (
+            "-module(_txt_spec_s, [])\n"
+            "-double_quotes(chars)\n"
+            "def text():\n"
+            "    n = 6\n"
+            "    return f\"{n!s:>3}\"\n"
+        ))
+        assert mod.text() == "  6"

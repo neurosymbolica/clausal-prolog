@@ -98,7 +98,11 @@ names are Python names. `~~expr` is unrelated: it yields Python `ast` nodes.
 Going the other way — an engine answer reaching Python **text** — the two
 places Python makes text explicitly are rewritten to an atom-aware helper:
 `str(x)` and an f-string's `{x}` (also `{x!s}`, with or without a format
-spec) give an atom's **spelling**, and plain `str` for anything else. Without
+spec) give an atom's **spelling**, and plain `str` for anything else. A
+format spec applies to the **value**: `f"{n:02d}"` on an int is `"06"` in a
+hosted file exactly as in a plain one (a bare `{x}` spells an atom and passes
+anything else unchanged to `format()`; `{x!s}` keeps Python's meaning, `str`
+first, then the spec). Without
 this, `str(answer)` on the atom `('ok',)` is the tuple repr `"('ok',)"`, and a
 comparison against text scores a wrong answer with no error. The rewrite is
 skipped in a file that binds `str` itself. It covers only those explicit

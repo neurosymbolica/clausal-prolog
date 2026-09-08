@@ -4988,12 +4988,20 @@ class EmbedTransformer(NodeTransformer):
         # f-string ``{x}`` / ``{x!s}`` (with or without a format spec) in
         # Python-hosted code: interpolate the atom-aware text.  ``!r`` and
         # ``!a`` are left alone -- they ask for the repr on purpose.
+        #
+        # A bare ``{x}`` goes through ``$text_value`` (spell an atom, pass
+        # anything else unchanged) so a format spec still meets the VALUE:
+        # ``f"{n:02d}"`` must give ``"06"``, not raise because ``format()``
+        # was handed the string ``"6"``.  An explicit ``{x!s}`` keeps
+        # Python's own meaning -- ``str`` first, then the spec -- through
+        # ``$text``.
         if getattr(transformer, "_str_shadowed", False):
             return joined
         for part in joined.values:
             if isinstance(part, FormattedValue) and part.conversion in (-1, 115):
+                helper = "$text" if part.conversion == 115 else "$text_value"
                 part.value = replace(
-                    Call(func=replace(Name(id="$text", ctx=Load()), part.value),
+                    Call(func=replace(Name(id=helper, ctx=Load()), part.value),
                          args=[part.value], keywords=[]),
                     part.value,
                 )
