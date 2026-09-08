@@ -16,7 +16,14 @@ ARITH_ROWS = [("'=:='(1, 1.0)", "1 =:= 1.0", True),
               ("'=\\\\='(1, 2)", "1 =\\= 2",  True),
               ("'<'(1, 2)",     "1 < 2",     True),
               ("'=<'(2, 2)",    "2 =< 2",    True),
-              ("'>='(2, 3)",    "2 >= 3",    False)]
+              ("'>='(2, 3)",    "2 >= 3",    False),
+              # '>' had zero direct coverage (fix round 1, Important finding): the
+              # >= row above happens to read False for a `>` call on the same
+              # operands too, so it can't catch a `>` mis-wiring on its own.
+              # Equal operands is the DISCRIMINATING row: >= would answer True
+              # there, so only a correctly-wired > passes both of these.
+              ("'>'(2, 2)",     "2 > 2",     False),
+              ("'>'(3, 2)",     "3 > 2",     True)]
 
 
 @pytest.mark.parametrize("clausal_goal, scryer_goal, expected", ARITH_ROWS)
