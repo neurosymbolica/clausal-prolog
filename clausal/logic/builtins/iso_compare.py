@@ -193,3 +193,84 @@ def _iso_structural_eq(a, b, trail, k):
 def _iso_structural_ne(a, b, trail, k):
     if not _iso_identical(a, b):
         yield None
+
+
+# ---------------------------------------------------------------------------
+# The CLP constraint family: '#=', '#\=', '#<', '#>', '#=<', '#>='.
+#
+# `==` (this module's own `_iso_structural_eq` above is a DIFFERENT builtin —
+# ISO's structural `==`/2) is not what powers Clausal's infix `==`: infix
+# `==` compiles to `nodes.ArithEq`, a CLP(FD) arithmetic constraint that
+# BINDS and PROPAGATES rather than merely testing. A runtime measurement over
+# 1933 corpus call sites (430,945 executions) found 33 sites that take TWO
+# arithmetic modes — the same site BINDS on one call and TESTS on another.
+# For those, no other ISO spelling works: `'=:='` raises instantiation_error
+# on the binding call, and `'is'` is wrong for the testing one. `#=` is the
+# only spelling valid in every mode, which is why it is in the spec at all;
+# registering it under its own name just gives that existing behaviour a
+# callable, ISO-recognisable spelling. The other five members of the family
+# (`#\=`, `#<`, `#>`, `#=<`, `#>=`) are their natural CLP(FD) counterparts,
+# named the same way for symmetry.
+#
+# Each target function is imported INSIDE its builtin body, not at module
+# import time: `clausal/logic/clpfd.py` swaps in C-accelerated versions of
+# these functions further down its own module (clpfd.py:3274+), so a
+# top-level `from clausal.logic.clpfd import fd_eq` would capture the
+# pure-Python definition and silently test a different function than
+# production actually dispatches to.
+# ---------------------------------------------------------------------------
+
+
+@_builtin("#=", 2)
+def _clp_eq(a, b, trail, k):
+    """CLP arithmetic constraint — binds, propagates, valid in every mode.
+
+    This is what infix `==` ALREADY does: `==` compiles to nodes.ArithEq, a
+    CLP(FD) equality constraint. Registering `#=` names an existing
+    behaviour rather than adding one. Required by the eq measurement: 33
+    corpus sites take two arithmetic modes and `#=` is the only spelling
+    correct for all of them.
+    """
+    from clausal.logic.clpfd import fd_eq
+    if fd_eq(a, b, trail):
+        yield None
+
+
+@_builtin("#\\=", 2)
+def _clp_ne(a, b, trail, k):
+    """CLP(FD) disequality constraint — the negation of `#=`."""
+    from clausal.logic.clpfd import fd_ne
+    if fd_ne(a, b, trail):
+        yield None
+
+
+@_builtin("#<", 2)
+def _clp_lt(a, b, trail, k):
+    """CLP(FD)/CLP(R) strictly-less-than constraint."""
+    from clausal.logic.clpfd import fd_lt
+    if fd_lt(a, b, trail):
+        yield None
+
+
+@_builtin("#>", 2)
+def _clp_gt(a, b, trail, k):
+    """CLP(FD)/CLP(R) strictly-greater-than constraint."""
+    from clausal.logic.clpfd import fd_gt
+    if fd_gt(a, b, trail):
+        yield None
+
+
+@_builtin("#=<", 2)
+def _clp_le(a, b, trail, k):
+    """CLP(FD)/CLP(R) less-than-or-equal constraint."""
+    from clausal.logic.clpfd import fd_le
+    if fd_le(a, b, trail):
+        yield None
+
+
+@_builtin("#>=", 2)
+def _clp_ge(a, b, trail, k):
+    """CLP(FD)/CLP(R) greater-than-or-equal constraint."""
+    from clausal.logic.clpfd import fd_ge
+    if fd_ge(a, b, trail):
+        yield None

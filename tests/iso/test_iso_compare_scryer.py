@@ -211,3 +211,102 @@ def test_infix_eqeq_still_evaluates_and_binds(run_clausal):
     got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
                       "p(X) <- (X == 3 + 4)\n", ("p",))
     assert got == ["7"]
+
+
+# ---------------------------------------------------------------------------
+# The CLP constraint family: '#=', '#\=', '#<', '#>', '#=<', '#>='.
+#
+# `#=` is why this plan exists at all: infix `==` already compiles to
+# nodes.ArithEq, a CLP arithmetic constraint that BINDS and PROPAGATES. A
+# runtime measurement over 1933 corpus call sites (430,945 executions) found
+# 33 sites that take TWO arithmetic modes — the same site binds on one call
+# and tests on another. `'=:='` raises instantiation_error on the binding
+# call; `'is'` is wrong for the testing one. `#=` is the only spelling valid
+# in EVERY mode. The two tests below prove BOTH modes work through the SAME
+# spelling — one-mode coverage does not discharge the requirement.
+# ---------------------------------------------------------------------------
+
+
+def test_hash_eq_is_valid_in_every_mode(scryer, run_clausal):
+    """The 33 FORCED sites from the eq measurement take {BIND, TEST}: the same
+    site binds on one call and tests on another. `#=` is the only spelling
+    valid in both, which is why it is in the spec at all."""
+    # BIND mode: the right side is ground, so X is bound.
+    got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
+                      "p(X) <- '#='(X, 2 + 1)\n", ("p",))
+    assert got == ["3"]
+    assert scryer("X #= 2 + 1, write(X), nl, halt.",
+                  ":- use_module(library(clpz)).\n") == "3"
+
+
+def test_hash_eq_also_TESTS_two_ground_values(run_clausal):
+    """The other half of the {BIND, TEST} pair. Both must work through the
+    SAME spelling or `#=` does not solve the forced sites."""
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('#='(3, 2 + 1), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+    src_f = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+             "p(R) <- if_('#='(4, 2 + 1), R is yes, R is no)\n")
+    assert run_clausal(src_f, ("p",)) == [repr(("no",))]
+
+
+# The remaining five family members ('#\=', '#<', '#>', '#=<', '#>=') get
+# their own discriminating matrix, on the same machine-checked property as
+# the arithmetic-comparison matrix above (test_the_matrix_discriminates_
+# every_operator): no OTHER comparison function may reproduce an operator's
+# result vector across its own rows. The row VALUES are reused verbatim from
+# ROWS_BY_OPERATOR where possible -- ground-integer '#=' etc. reduce to the
+# same fast-path Python comparison as '=:=' et al. (clausal/logic/clpfd.py's
+# `type(l) is int and type(r) is int` fast path), so the discrimination
+# already proven for those rows carries over. This is a separate structure
+# (not a merge into ROWS_BY_OPERATOR/ARITH_ROWS) for two reasons: the
+# constraint family needs `library(clpz)` loaded in Scryer, unlike plain
+# '=:=' et al.; and clpz is INTEGER-only -- probed directly, `1 #= 1.0` in
+# Scryer raises `domain_error(clpz_expression, 1.0)`, not a yes/no answer --
+# so '=:='s float row `(1, 1.0, True)` cannot be reused for '#=' and is
+# swapped for an all-integer row with the same boolean shape (T, F, F),
+# which the discrimination proof only ever depended on.
+
+_HASH_INTENDED = {"#=": "eq", "#\\=": "ne", "#<": "lt",
+                  "#>": "gt", "#=<": "le", "#>=": "ge"}
+
+_CLPZ_PROGRAM = ":- use_module(library(clpz)).\n"
+
+HASH_ROWS_BY_OPERATOR = {
+    "#=":   [(1, 1, True), (1, 2, False), (2, 1, False)],
+    "#\\=": ROWS_BY_OPERATOR["=\\="],
+    "#<":   ROWS_BY_OPERATOR["<"],
+    "#>":   ROWS_BY_OPERATOR[">"],
+    "#=<":  ROWS_BY_OPERATOR["=<"],
+    "#>=":  ROWS_BY_OPERATOR[">="],
+}
+
+HASH_ROWS = [(_clausal_call(sym, a, b), _scryer_call(sym, a, b), expected)
+             for sym, rows in HASH_ROWS_BY_OPERATOR.items()
+             for a, b, expected in rows]
+
+
+def test_the_hash_matrix_discriminates_every_operator():
+    """Same property as test_the_matrix_discriminates_every_operator, run
+    against the CLP constraint family's own row set — added rows must
+    discriminate, and this is how that gets checked rather than assumed."""
+    for op_name, rows in HASH_ROWS_BY_OPERATOR.items():
+        mine = [expected for _, _, expected in rows]
+        for cand_name, cand in _FUNCS.items():
+            if cand_name == _HASH_INTENDED[op_name]:
+                continue
+            theirs = [cand(a, b) for a, b, _ in rows]
+            assert mine != theirs, (
+                f"{op_name} rows cannot be distinguished from {cand_name}")
+
+
+@pytest.mark.parametrize("clausal_goal, scryer_goal, expected", HASH_ROWS)
+def test_hash_constraint_matches_scryer_clpz(scryer, run_clausal,
+                                             clausal_goal, scryer_goal, expected):
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           f"p(R) <- if_({clausal_goal}, R is yes, R is no)\n")
+    got = run_clausal(src, ("p",))
+    assert got == [repr(("yes",) if expected else ("no",))]
+    ref = scryer(f"({scryer_goal} -> write(yes) ; write(no)), nl, halt.",
+                 _CLPZ_PROGRAM)
+    assert ref == ("yes" if expected else "no"), "Scryer disagrees; Scryer is right"
