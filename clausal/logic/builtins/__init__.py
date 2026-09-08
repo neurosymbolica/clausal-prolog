@@ -66,6 +66,7 @@ from clausal.logic.builtins import control           # noqa: F401
 from clausal.logic.builtins import chars             # noqa: F401
 from clausal.logic.builtins import attributes        # noqa: F401
 from clausal.logic.builtins import translations_builtin  # noqa: F401
+from clausal.logic.builtins import iso_compare       # noqa: F401  (registers by import)
 
 # Import units_constraint to register has_units/2 before _build_all_builtin_classes runs.
 import clausal.logic.units_constraint               # noqa: F401
