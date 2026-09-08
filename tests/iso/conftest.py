@@ -1,7 +1,12 @@
-import os, subprocess, sys, tempfile
+import os, re, subprocess, sys, tempfile
 import pytest
 
 SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
+
+# Word-bounded so a near-miss token (e.g. a variable literally spelled `_h10`,
+# or an atom containing `path_hN`) is left alone rather than silently corrupted.
+_H1_PLACEHOLDER = re.compile(r"\b_h1\b")
+_HN_PLACEHOLDER = re.compile(r"\b_hN\b")
 
 
 @pytest.fixture
@@ -35,7 +40,9 @@ def run_clausal(tmp_path):
         counter[0] += 1
         name = f"_iso{counter[0]}"
         path = tmp_path / f"{name}.clausal"
-        path.write_text(src.replace("_h1", name).replace("_hN", name))
+        substituted = _H1_PLACEHOLDER.sub(name, src)
+        substituted = _HN_PLACEHOLDER.sub(name, substituted)
+        path.write_text(substituted)
         mod = _load_module(name, str(path))
         v = Var()
         args = (v,) + tuple(Var() for _ in range(nargs - 1))
