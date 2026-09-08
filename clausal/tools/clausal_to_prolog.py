@@ -198,6 +198,18 @@ def _is_operator_atom(name: str, op_table: OperatorTable) -> bool:
             or op_table.lookup_postfix(name) is not None)
 
 
+def _unit_note(term) -> str:
+    """`/* euro */` for a term whose Clausal unit the export discarded.
+
+    A BLOCK comment, not `%`: a quantity is usually mid-expression
+    (`X =:= 5000 + 3000`), and `%` runs to end of line, so it would comment out
+    the rest of the clause. `/* ... */` is ISO and nests nowhere, so it is safe
+    between operands. The unit is an atom, so it can never contain `*/`.
+    """
+    unit = getattr(term, "unit", None)
+    return f" /* {unit} */" if unit else ""
+
+
 def emit_term(term: PTerm, op_table: OperatorTable, *,
               context_prec: int = 1201, context_assoc: str = "",
               operand_of_op: bool = False) -> str:
@@ -224,11 +236,11 @@ def emit_term(term: PTerm, op_table: OperatorTable, *,
             return "(" + text + ")"
         return text
     if isinstance(term, PVar):
-        return term.name
+        return term.name + _unit_note(term)
     if isinstance(term, PNumber):
-        if isinstance(term.value, float):
-            return repr(term.value)
-        return str(term.value)
+        text = (repr(term.value) if isinstance(term.value, float)
+                else str(term.value))
+        return text + _unit_note(term)
     if isinstance(term, PString):
         return '"' + _escape_string_body(term.value) + '"'
     if isinstance(term, PList):
@@ -651,6 +663,28 @@ class _ClausalToProlog:
         self._lossy.append(construct)
         self._all_lossy.append(construct)
 
+    @staticmethod
+    def _call_target_diagnosis(node: python_ast.Call) -> str:
+        """Name the COMPOUND UNIT case instead of the generic refusal.
+
+        ``5(m/s)`` and ``10(m**2)`` are a documented Clausal surface form
+        (docs/units.md, "Two syntactic styles") whose argument is a BinOp
+        rather than a bare unit atom, so the quantity lowering does not accept
+        them. They fail SAFE -- refused, never mis-lowered -- but the generic
+        "unsupported call target: 5" sends a reader hunting for a bug in a
+        number. Say what it actually is.
+        """
+        func = node.func
+        if (isinstance(func, python_ast.Constant)
+                and isinstance(func.value, (int, float))
+                and not isinstance(func.value, bool)
+                and len(node.args) == 1 and not node.keywords):
+            return ("compound unit expression: "
+                    f"{python_ast.unparse(node)} -- only a bare unit atom is "
+                    "lowered (the magnitude is kept, the unit discarded); a "
+                    "unit built with operators is not")
+        return f"unsupported call target: {python_ast.unparse(func)}"
+
     def _try_quantity(self, node: python_ast.Call):
         """Clausal Quantity literal -> its bare magnitude, unit DISCARDED.
 
@@ -669,6 +703,18 @@ class _ClausalToProlog:
 
         THE TRANSLATION IS THEREFORE LOSSY. Recorded via _add_lossy, not
         _add_warning: these lower cleanly and must not make strict mode raise.
+
+        PRECONDITION -- the export is sound only for DIMENSIONALLY VALID
+        sources. Discarding units loses a safety property, not just detail:
+        ``5000(euro) + 3000(baht)`` is a UnitsMismatch in Clausal but exports
+        as ``5000 + 3000`` and yields 8000. The export does NOT re-check
+        dimensions; run the source under Clausal first. _check_unit_mixing is
+        a cheap syntactic guard over the obvious case, not a replacement for
+        that check.
+
+        SCOPE -- only the arity-1 shape whose argument is a bare unit atom.
+        ``5(m/s)`` and ``10(m**2)`` (compound units) are refused with a
+        specific diagnosis; ``5(THING)`` and ``5(euro, baht)`` are refused too.
         """
         if node.keywords or len(node.args) != 1:
             return None
@@ -679,10 +725,12 @@ class _ClausalToProlog:
         if isinstance(func, python_ast.Constant) and isinstance(
                 func.value, (int, float)) and not isinstance(func.value, bool):
             self._add_lossy(f"unit discarded: {func.value}({unit.id}) -> {func.value}")
-            return self._convert_expr(func)
+            return PNumber(func.value, unit=unit.id)
         if isinstance(func, python_ast.Name) and _is_logic_var_name(func.id):
             self._add_lossy(f"unit discarded: {func.id}({unit.id}) -> {func.id}")
-            return self._convert_expr(func)
+            lowered = self._convert_expr(func)
+            return (PVar(lowered.name, unit=unit.id)
+                    if isinstance(lowered, PVar) else lowered)
         return None
 
     def _collect_unit_atoms(self, tree: python_ast.Module) -> None:
@@ -711,11 +759,58 @@ class _ClausalToProlog:
             elif isinstance(func, python_ast.Name) and _is_logic_var_name(func.id):
                 self._unit_atoms.add(unit.id)
 
+    @staticmethod
+    def _quantity_unit(node) -> str | None:
+        """The unit atom of a Quantity literal, else None."""
+        if not isinstance(node, python_ast.Call) or node.keywords \
+                or len(node.args) != 1:
+            return None
+        unit = node.args[0]
+        if not isinstance(unit, python_ast.Name) or _is_logic_var_name(unit.id):
+            return None
+        func = node.func
+        if (isinstance(func, python_ast.Constant)
+                and isinstance(func.value, (int, float))
+                and not isinstance(func.value, bool)):
+            return unit.id
+        if isinstance(func, python_ast.Name) and _is_logic_var_name(func.id):
+            return unit.id
+        return None
+
+    def _check_unit_mixing(self, stmt) -> None:
+        """Refuse an arithmetic expression mixing two DIFFERENT units.
+
+        Discarding units does not merely lose detail, it loses a SAFETY
+        PROPERTY: ``5000(euro) + 3000(baht)`` is a UnitsMismatch in Clausal but
+        would export as ``5000 + 3000`` and quietly yield 8000 -- a dimensional
+        error becoming a silent wrong answer in a program that runs clean.
+
+        The export is therefore sound only for DIMENSIONALLY VALID sources; it
+        does not re-derive Clausal's unit checking. This guard is the cheap
+        syntactic half of that precondition: it catches the obvious case and
+        cannot fire on input Clausal itself would accept, because Clausal
+        rejects mixed units in one arithmetic expression too.
+        """
+        for node in python_ast.walk(stmt):
+            if not isinstance(node, python_ast.BinOp):
+                continue
+            if not isinstance(node.op, (python_ast.Add, python_ast.Sub)):
+                continue          # only +/- require matching dimensions
+            units = {u for side in (node.left, node.right)
+                     if (u := self._quantity_unit(side)) is not None}
+            if len(units) > 1:
+                self._add_warning(
+                    "mixed units in one arithmetic expression: "
+                    + " vs ".join(sorted(units))
+                    + " -- units are discarded on export, so this would become "
+                      "a silent wrong answer instead of a dimensional error")
+
     def convert_module(self, tree: python_ast.Module) -> PModule:
         """Convert a full Python AST Module to a PModule."""
         self._collect_unit_atoms(tree)
         for stmt in tree.body:
             self._warnings.clear()
+            self._check_unit_mixing(stmt)
             # Variable names are scoped per top-level item (F022).
             self._var_map = {}
             self._var_used = set()
@@ -1539,7 +1634,7 @@ class _ClausalToProlog:
             # Qualified call: mod.pred(...)
             functor = self._qualified_name(node.func)
         else:
-            self._add_warning(f"unsupported call target: {python_ast.unparse(node.func)}")
+            self._add_warning(self._call_target_diagnosis(node))
             functor = "???"
 
         args = [self._convert_expr(a) for a in node.args]
@@ -1631,7 +1726,10 @@ class _ClausalToProlog:
         if isinstance(node.op, python_ast.USub):
             inner = self._convert_expr(node.operand)
             if isinstance(inner, PNumber):
-                return PNumber(-inner.value)
+                # keep any discarded-unit note across the fold: `-3(s)` is
+                # USub over the quantity, so folding here would otherwise
+                # silently drop the /* s */ the reader is meant to see
+                return PNumber(-inner.value, unit=inner.unit)
             return PCompound("-", (inner,))
         if isinstance(node.op, python_ast.UAdd):
             # ++expr is Python interop escape — untranslatable
@@ -2309,7 +2407,9 @@ def _prefix_singletons(item: PItem) -> PItem:
     class _Renamer(PrologTransformer):
         def visit_PVar(self, node):
             if node.name in singletons and not node.name.startswith("_"):
-                return PVar("_" + node.name)
+                # carry the discarded-unit note across the rename, or a
+                # quantity with a variable magnitude loses its /* unit */
+                return PVar("_" + node.name, unit=node.unit)
             return node
 
     return _Renamer().visit(item)
