@@ -1160,6 +1160,15 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 mark = trail.mark()
                 for _ in original_dispatch(*args, trail, None):
                     answer = freeze_args(args, trail)
+                    # KNOWINGLY divergent from the trampoline wrapper, which
+                    # dropped this per-answer clear (see its note): there a
+                    # clause-prefix delay covers every answer, here it is still
+                    # charged to the first one only.  `ensure_tabled_wrapper`
+                    # never builds this factory, so nothing in the engine takes
+                    # this path -- but it IS live API, constructed directly by
+                    # tests/test_tabling.py, so the divergence is recorded
+                    # rather than silently left.  Anyone re-wiring simple mode
+                    # should drop this clear too.
                     delay_set = frozenset(entry._current_delays)
                     entry._current_delays.clear()
                     if entry.add_answer(answer, delay_set) is not None:
@@ -1351,8 +1360,17 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 _st = yield (_gen, None)
                 while _st is not DONE:
                     answer = freeze_args(args, trail)
+                    # NOT cleared per answer.  Charges are trailed now
+                    # (``_charge_delays``), so a branch that delayed and then
+                    # failed has already had them retracted -- while a delay
+                    # incurred in the clause-body PREFIX still stands for every
+                    # answer the suffix produces, because the prefix does not
+                    # re-run.  Clearing here charged it to the FIRST answer
+                    # only and reported the rest unconditionally true off an
+                    # undefined premise.  The end-of-pass clear below stays: it
+                    # covers callers that reach ``_charge_delays`` with no
+                    # trail to record on.
                     delay_set = frozenset(entry._current_delays)
-                    entry._current_delays.clear()
                     new_idx = entry.add_answer(answer, delay_set)
                     if new_idx is not None:
                         # New tuple OR a revived _FAILED row — both change the

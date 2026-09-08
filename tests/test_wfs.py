@@ -1328,3 +1328,59 @@ class TestQueryWfsJudgesCompositeGoals:
         truths = [r["_truth"] for r in rows]
         assert truths.count(True) == 1
         assert truths.count(Undefined) == 3
+
+
+class TestAClausePrefixDelayCoversEveryAnswer:
+    """A delay incurred in a clause-body PREFIX stands for every answer the
+    rest of the body produces, not just the first.
+
+    The tabled leader snapshots its in-progress delay set per answer and then
+    CLEARS it, but the prefix does not re-run: the only choice point is in the
+    suffix, so answers after the first saw an empty set and were reported
+    unconditionally true off an undefined premise.  Conditions are trailed now,
+    so backtracking retracts what a failed branch incurred and the clear is
+    both unnecessary and lossy.
+    """
+
+    SRC = (
+        "-module({n}, [u(X), r(X), pp(X), one, two, three])\n"
+        "-double_quotes(chars)\n"
+        "-table(u/1)\n"
+        "-table(pp/1)\n"
+        "u(X) <- (not u(X))\n"
+        "r(one),\n"
+        "r(two),\n"
+        "pp(X) <- (not u(one), r(X))\n"
+        "pp(three),\n"
+    )
+
+    def _mod(self, tmp_path, name):
+        path = tmp_path / f"{name}.clausal"
+        path.write_text(self.SRC.format(n=name))
+        from clausal.import_hook import _load_module
+        return _load_module(name, str(path))
+
+    def test_both_answers_are_undefined_not_just_the_first(self, tmp_path):
+        from clausal.logic.solve import query_wfs
+        from clausal.logic.variables import Var
+        from clausal.terms import Undefined
+        mod = self._mod(tmp_path, "_cp1")
+        X = Var()
+        rows = {r["X"]: r for r in query_wfs(("pp", X), {"X": X}, module=mod)}
+        assert set(rows) == {("one",), ("two",), ("three",)}
+        assert rows[("one",)]["_truth"] is Undefined
+        assert rows[("two",)]["_truth"] is Undefined, (
+            "the second answer stands on the same delayed `not u(one)` as the "
+            "first; reporting it True is unsound in the direction a caller "
+            "cannot work around")
+        # ...and undefined for the RIGHT reason.  Making the bucket persist
+        # across answers risks the opposite error -- charging a condition to an
+        # answer that never stood on it -- so pin which delay each row carries,
+        # not merely that it has one.
+        for k in (("one",), ("two",)):
+            assert any(dn.functor == "u" and dn.arity == 1
+                       for dn in rows[k]["_delays"]), rows[k]["_delays"]
+        # The fact clause has no prefix at all: it must come back plain true
+        # with NOTHING charged to it, which is the non-leak direction.
+        assert rows[("three",)]["_truth"] is True
+        assert rows[("three",)]["_delays"] == frozenset()
