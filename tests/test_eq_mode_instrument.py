@@ -26,8 +26,8 @@ def inst():
     instrument.reset()
 
 
-def _load(src, name):
-    d = tempfile.mkdtemp()
+def _load(src, name, tmp_path=None):
+    d = str(tmp_path) if tmp_path is not None else tempfile.mkdtemp()
     path = os.path.join(d, f"{name}.clausal")
     with open(path, "w") as fh:
         fh.write(src)
@@ -109,15 +109,41 @@ def test_install_twice_refuses_rather_than_double_counting(inst):
 
 
 def test_uninstall_restores_and_stops_recording():
+    """try/finally, not bare calls: if an assertion here failed with the
+    globals still wrapped, EVERY later install() would raise "called twice"
+    and one real failure would cascade into a false failure set across the
+    whole file -- the hardest kind of signal to triage."""
     import clausal.logic.compiler.predicate as predicate
     before = predicate._fd_eq_fn
     instrument.reset()
     instrument.install()
-    assert predicate._fd_eq_fn is not before
-    instrument.uninstall()
+    try:
+        assert predicate._fd_eq_fn is not before
+    finally:
+        instrument.uninstall()
+        instrument.reset()
     assert predicate._fd_eq_fn is before
     mod, _ = _load(SRC.format(n="_ei5"), "_ei5")
     _run(mod, ("test_ground",))
+    assert instrument.records() == []
+
+
+def test_uninstall_stops_recording_for_ALREADY_COMPILED_predicates():
+    """The residual case the previous test cannot reach. A predicate compiled
+    WHILE installed captured the wrapper into its own globals permanently, so
+    restoring the module bindings does not unhook it. Recording is gated on a
+    flag instead; without that, an install -> run -> uninstall -> run-more
+    caller silently blends the second run's data into the record set."""
+    instrument.reset()
+    instrument.install()
+    try:
+        mod, _ = _load(SRC.format(n="_eiA"), "_eiA")   # compiled while wrapped
+        _run(mod, ("test_ground",))
+        assert instrument.records(), "positive control: it must record first"
+    finally:
+        instrument.uninstall()
+    instrument.reset()
+    _run(mod, ("test_ground",))                        # same, already-compiled
     assert instrument.records() == []
 
 
@@ -127,7 +153,8 @@ def test_an_exception_propagates_and_is_not_recorded_as_a_path(inst):
     src = ("-module(_ei6, [bad(X), lo])\n-double_quotes(chars)\n"
            "bad(X) <- (X == lo)\n")
     mod, _ = _load(src, "_ei6")
-    with pytest.raises(Exception):
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException, match="type_error"):
         _run(mod, ("bad", Var()))
     assert inst.records() == []
 
@@ -171,3 +198,48 @@ def test_FAILED_does_not_displace_a_real_mode_at_the_same_site(inst):
     paths = [r["path"] for r in inst.records()]
     assert instrument.BIND in paths
     assert instrument.FAILED not in paths
+
+
+def test_a_var_INSIDE_an_expression_tree_is_not_mistaken_for_ground(inst):
+    """`X + 1 == 5` derefs to an Add node, so a bare `is_var(deref(x))` check
+    calls it ground and records TEST -- while the engine linearises it and
+    BINDS X. Recording that as TEST is the catastrophic direction: respelling
+    such a site `=:=` raises instantiation_error on input that works today."""
+    src = ("-module(_eiB, [bind_in_tree(X), constrain_in_tree(X, Y)])\n"
+           "-double_quotes(chars)\n"
+           "bind_in_tree(X) <- (X + 1 == 5)\n"
+           "constrain_in_tree(X, Y) <- (X + 1 == Y + 2)\n")
+    mod, _ = _load(src, "_eiB")
+    _run(mod, ("bind_in_tree", Var()))
+    _run(mod, ("constrain_in_tree", Var(), Var()))
+    by_line = {r["line"]: r["path"] for r in inst.records()}
+    assert by_line[3] == instrument.BIND
+    assert by_line[4] == instrument.CONSTRAINT
+
+
+def test_a_shallow_compiled_predicate_is_recorded(inst):
+    """`$fd_eq` is captured into a predicate's globals at COMPILE time, from
+    `_fd_eq_fn` (trampoline) OR `_fd_eq_fn_s` (shallow). Wrapping only the
+    first left every `-shallow` predicate recording NOTHING -- which reads as
+    "no `==` here" and lands the site in NOT_EXERCISED. Fails open, so it
+    needs a positive control."""
+    src = ("-module(_eiC, [p(X)])\n-double_quotes(chars)\n"
+           "-shallow(p/1)\n"
+           "p(X) <- (X == 3 + 4)\n")
+    mod, _ = _load(src, "_eiC")
+    _run(mod, ("p", Var()))
+    assert [r["path"] for r in inst.records()] == [instrument.BIND]
+
+
+def test_the_full_arithmetic_operator_set_is_numeric(inst):
+    """The numeric set must track the engine's, not a short list: `6 / 2 == 3`
+    and `2 ** 3 == 8` are arithmetic, and calling them STRUCTURAL would
+    migrate them to `==`, changing semantics."""
+    src = ("-module(_eiD, [d, m, pw])\n-double_quotes(chars)\n"
+           "d <- (6 / 2 == 3)\n"
+           "m <- (7 % 3 == 1)\n"
+           "pw <- (2 ** 3 == 8)\n")
+    mod, _ = _load(src, "_eiD")
+    for g in ("d", "m", "pw"):
+        _run(mod, (g,))
+    assert {r["path"] for r in inst.records()} == {instrument.TEST}
