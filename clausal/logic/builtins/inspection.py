@@ -658,7 +658,15 @@ def _global_atom__2(name, atom, trail, k):
 
     if name_bound:
         if not _term_is_atom(name_val):
-            return
+            # A bound Name that is not an atom is a TYPE error, not a
+            # failure.  Under ``-double_quotes(chars)`` the old spelling
+            # ``global_atom("date", A)`` hands over a CHAR LIST, and a silent
+            # failure there took a whole clause -- and five suites -- down
+            # with it before anyone saw why (corpus, 2026-09-08).  Write the
+            # atom quoted (``global_atom('date', A)``, or simply ``'date'``),
+            # or come from text through ``atom_chars/2``.
+            from clausal.logic.exceptions import LogicException, type_error
+            raise LogicException(type_error("atom", name_val, "global_atom/2"))
         key = spelling(name_val)
         if atom_bound:
             # Guard mode: succeed iff atom_val EQUALS the registered global.

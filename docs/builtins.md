@@ -575,12 +575,14 @@ Generate a unique atom by appending a monotonically increasing counter to `Prefi
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:global_atom_2"
 ```
-Reflect on the process-wide global atom dict — the registry that backs global atom identity (see [Atoms](syntax.md#atoms)). Four modes:
+Reflect on the process-wide global atom dict — the registry that backs global atom identity (see [Atoms](syntax.md#atoms)). `Name` is an **atom**, read by its spelling; a bound `Name` that is not an atom (a string, a char list under `-double_quotes(chars)`, a number) raises `type_error(atom, Name)` rather than failing. Four modes:
 
-- **`(+Name, -Atom)` — mint on demand.** Look `Name` up in the global dict; if absent, create a fresh `make_predicate(Name, [])` and install it. Idempotent: a second call with the same `Name` unifies `Atom` with the same class object. This is the only sanctioned way to **reach** the global class for a name from a module that has shadowed it via `-import_from` or a local declaration.
-- **`(+Name, +Atom)` — guard.** Succeeds iff `Atom` is the global class registered under `Name` (Python identity). Useful for asserting in a clause body that a given `PredicateMeta` came from the global dict and not a module-local namesake.
-- **`(-Name, +Atom)` — reverse lookup.** Succeeds iff `Atom` is genuinely a global atom (a `PredicateMeta` of arity 0 whose `__name__` resolves back to itself in the global dict). Unifies `Name` with the class's `__name__`. Fails for module-local classes with the same spelling.
-- **`(-Name, -Atom)` — enumerate.** Yields one solution per (name, class) pair in the global dict where the value is a `PredicateMeta` of arity 0. Ordering is **not guaranteed** (depends on Python dict insertion order, which depends on the order of first reference at compile/run time across all loaded modules).
+- **`(+Name, -Atom)` — mint on demand.** Look `Name`'s spelling up in the global dict; if absent, install `mint(spelling)`. Idempotent: a second call with the same spelling unifies `Atom` with the same atom. This is the sanctioned way to **reach** the global atom for a name from a module that has shadowed it via `-import_from` or a local declaration — though a quoted literal (`'date'`) already denotes the atom in any mode and needs no declaration.
+- **`(+Name, +Atom)` — guard.** Succeeds iff `Atom` **equals** the atom registered under `Name`'s spelling (equality, never identity: two atoms of one spelling are one atom).
+- **`(-Name, +Atom)` — reverse lookup.** Succeeds iff `Atom` is genuinely the registered global atom for its spelling (not a module-local namesake). Unifies `Name` with that atom.
+- **`(-Name, -Atom)` — enumerate.** Yields one solution per registered atom. The registry holds only atoms that reached it (through this builtin's mint mode, or a manual install), not every atom a program mentions; it can be empty. Ordering is **not guaranteed**.
+
+To obtain an atom from **text** (a string or char list), use `atom_chars/2` or `atom_codes/2`.
 
 `global_atom/2` is the reflection escape hatch for reaching a global atom by
 name when a module-local declaration or an import shadows it — and the sanctioned

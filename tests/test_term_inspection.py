@@ -806,6 +806,20 @@ class TestGlobalAtom:
             # same name by an unrelated test.
             del predicate_builtins[name]
 
+    def test_a_non_atom_name_is_a_type_error_not_a_failure(self):
+        """A string / char list / number in the Name position raises
+        type_error(atom, Name), never fails silently: under
+        ``-double_quotes(chars)`` the old ``global_atom("date", A)`` spelling
+        hands over a CHAR LIST, and a silent failure there took five corpus
+        suites down before anyone saw why (2026-09-08)."""
+        import pytest
+        from clausal.logic.exceptions import LogicException
+        for bad in ("date", ["d", "a", "t", "e"], 42):
+            with pytest.raises(LogicException) as info:
+                list(_global_atom_call(bad, Var()))
+            shown = repr(info.value.term)
+            assert "type_error" in shown and "atom" in shown, shown
+
     def test_guard_succeeds_when_atom_matches(self):
         """(+name, +atom) — succeeds iff atom IS the global class."""
         # nv
