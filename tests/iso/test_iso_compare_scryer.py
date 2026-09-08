@@ -250,6 +250,39 @@ def test_hash_eq_also_TESTS_two_ground_values(run_clausal):
     assert run_clausal(src_f, ("p",)) == [repr(("no",))]
 
 
+def test_hash_eq_int_float_OPEN_iso_divergence(scryer, run_clausal):
+    """OPEN, UNFIXED divergence from ISO/Scryer's clpz — found by review during
+    Task 5 fix round 1 (the reviewer probed the engine live: `'#='(1, 1.0)`
+    succeeds, while `1 #= 1.0` is a Scryer clpz domain_error), PINNED not
+    fixed, per the operator's ruling.
+
+    Clausal's CLP spans both R and Z: `fd_eq` (clausal/logic/clpfd.py) routes
+    a float operand to CLP(R) rather than rejecting it, so `'#='(1, 1.0)`
+    succeeds — and this is the SAME `fd_eq` that Clausal's own infix `==`
+    already compiles to (nodes.ArithEq), so making `'#='` reject floats would
+    make it disagree with infix `==` on identical inputs, which is worse
+    than `'#='` being broader than Scryer's clpz. This is the same reasoning
+    that deferred `'='(1, 1.0)` in Task 4 — see
+    test_iso_unify_conflates_int_and_float_OPEN_iso_divergence above for the
+    precedent this follows, and task-5-report.md's fix-round-1 section for
+    the ruling in full.
+
+    Scryer's clpz is INTEGER-only: `1 #= 1.0` is not merely false, it is a
+    domain error — `domain_error(clpz_expression, 1.0)` — because 1.0 is not
+    a valid clpz expression at all. This test pins BOTH sides of the
+    divergence directly (engine succeeds; Scryer errors) so a future change
+    to either side is a visible, deliberate decision rather than a silent
+    regression."""
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('#='(1, 1.0), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("yes",))], \
+        "current (diverging) Clausal behavior: '#='(1, 1.0) succeeds via CLP(R)"
+    ref = scryer("(1 #= 1.0 -> write(yes) ; write(no)), nl, halt.",
+                 ":- use_module(library(clpz)).\n")
+    assert ref == "error(domain_error(clpz_expression,1.0),unknown(1.0)-1).", \
+        f"ISO/Scryer clpz: 1 #= 1.0 is a domain error, not yes/no; got {ref!r}"
+
+
 # The remaining five family members ('#\=', '#<', '#>', '#=<', '#>=') get
 # their own discriminating matrix, on the same machine-checked property as
 # the arithmetic-comparison matrix above (test_the_matrix_discriminates_
@@ -261,11 +294,17 @@ def test_hash_eq_also_TESTS_two_ground_values(run_clausal):
 # already proven for those rows carries over. This is a separate structure
 # (not a merge into ROWS_BY_OPERATOR/ARITH_ROWS) for two reasons: the
 # constraint family needs `library(clpz)` loaded in Scryer, unlike plain
-# '=:=' et al.; and clpz is INTEGER-only -- probed directly, `1 #= 1.0` in
-# Scryer raises `domain_error(clpz_expression, 1.0)`, not a yes/no answer --
-# so '=:='s float row `(1, 1.0, True)` cannot be reused for '#=' and is
-# swapped for an all-integer row with the same boolean shape (T, F, F),
-# which the discrimination proof only ever depended on.
+# '=:=' et al.; and clpz is INTEGER-only, while the ENGINE is not -- probed
+# directly, `1 #= 1.0` raises `domain_error(clpz_expression, 1.0)` in Scryer
+# but SUCCEEDS in Clausal (`fd_eq` routes the float operand to CLP(R)). That
+# is a real, PINNED engine/Scryer divergence, not merely an invalid-for-clpz
+# row — see test_hash_eq_int_float_OPEN_iso_divergence above for the
+# characterization test and task-5-report.md's fix-round-1 section for the
+# ruling. Here it just means '=:='s float row `(1, 1.0, True)` can't be
+# reused for a Scryer-comparison row (Scryer errors, it doesn't answer
+# yes/no), so this matrix's '#=' row is swapped for an all-integer row with
+# the same boolean shape (T, F, F), which the discrimination proof only
+# ever depended on.
 
 _HASH_INTENDED = {"#=": "eq", "#\\=": "ne", "#<": "lt",
                   "#>": "gt", "#=<": "le", "#>=": "ge"}
