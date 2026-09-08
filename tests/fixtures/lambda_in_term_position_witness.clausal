@@ -1,0 +1,21 @@
+# clausal: no-collect
+# SYNTHETIC WITNESS for tests/test_prolog_interim_refusals.py::TestKitWitness.
+#
+# Three `<-` lambdas in TERM position -- the shapes the strict translator
+# refuses (class-b/c, operator decision 2026-09-03): a filter closure over a
+# param named D (so the message carries "D < -"), a membership-negation
+# closure, and a two-parameter projection closure. Written for this test;
+# it vendors NOTHING: the earlier fixture here was a verbatim snapshot of a
+# closed-side kit file (c7f29564) and is replaced by this (operator ruling
+# 2026-09-08, "synthetic witness"). Fact clauses end in a comma (fixture trap
+# noted in the class docstring).
+-private([met, unmet])
+changed(DELTAS, CHANGED) <- (
+    include((D <- (D is delta(_, met, unmet(_)))), DELTAS, CHANGED)
+)
+without_id(CANDIDATE, ID, WITHOUT) <- (
+    include((X <- (X is not ID)), CANDIDATE, WITHOUT)
+)
+latest(ENTRIES, VALUE) <- (
+    max_by(((E, K) <- (E is entry(K, _))), ENTRIES, entry(_, VALUE))
+)

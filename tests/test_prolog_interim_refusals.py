@@ -245,9 +245,14 @@ class TestArrowSpacingDiscrimination:
 
 # ── The kit witness: the RED fixture named by the decision ─────────────
 
+# The witness is SYNTHETIC (tests/fixtures/lambda_in_term_position_witness.clausal):
+# three `<-` lambdas in term position written for this test. Its predecessor was
+# a verbatim 706-line snapshot of a closed-side kit file (c7f29564); closed-side
+# source does not enter this tree, so it was replaced (operator ruling
+# 2026-09-08). The shapes are the same three the class docstring names.
 KIT_QUERY_COMBINATORS_PRE_MIGRATION = (
     pathlib.Path(__file__).parent / "fixtures"
-    / "kit_query_combinators_pre_migration.clausal"
+    / "lambda_in_term_position_witness.clausal"
 )
 
 
