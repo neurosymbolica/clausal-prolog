@@ -780,6 +780,22 @@ class _ClausalToProlog:
         syntactic half of that precondition: it catches the obvious case and
         cannot fire on input Clausal itself would accept, because Clausal
         rejects mixed units in one arithmetic expression too.
+
+        KNOWN LIMIT -- IT IS NOT A DIMENSIONAL CHECK. It reads the DIRECT
+        operands of a +/- node, so a unit nested under another operator is
+        invisible to it:
+
+            5000(euro) + 3000(baht)       refused
+            5000(euro) + 3000(baht) * 2   NOT refused -- exports as 5000 + 3000 * 2
+
+        Catching that needs the unit of each operand SUBTREE, i.e. real
+        dimension inference, which is deliberately out of scope: `*` and `/`
+        legitimately combine different units (m/s), so a naive "all units in
+        this expression must agree" rule would reject valid input. Deciding
+        which of those is which is exactly the job Clausal's runtime already
+        does, and the reason the precondition above exists. Pinned in
+        tests/test_prolog_quantity_units.py so nobody reads this guard as a
+        complete check.
         """
         for node in python_ast.walk(stmt):
             if not isinstance(node, python_ast.BinOp):

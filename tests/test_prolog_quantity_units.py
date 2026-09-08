@@ -201,3 +201,36 @@ def test_negative_magnitude_lowers():
 def test_float_magnitude_lowers():
     out = _tr("p(X) <- ( X == 9.8(newton) )", strict=True)
     assert "9.8" in _code(out) and "newton" not in _code(out)
+
+
+# --- the guard's KNOWN LIMIT, pinned so nobody mistakes it for a real check ---
+
+@pytest.mark.parametrize("expr", [
+    "5000(euro) + 3000(baht) * 2",
+    "5000(euro) + 3000(baht) / 2",
+    "5000(euro) * 1 + 3000(baht) * 2",
+])
+def test_mixed_units_NESTED_under_another_operator_are_NOT_caught(expr):
+    """DOCUMENTS A LIMIT, NOT A FEATURE.
+
+    _check_unit_mixing reads the DIRECT operands of a +/- node, so a unit
+    nested under `*` or `/` is invisible to it and this mixed-unit expression
+    translates. Catching it would need the unit of each operand SUBTREE — real
+    dimension inference — which is out of scope precisely because `*` and `/`
+    legitimately combine different units (m/s), so a blanket "units must agree"
+    rule would reject valid input.
+
+    The guard is the cheap syntactic half of a PRECONDITION: the export is
+    sound only for dimensionally valid sources. Clausal's runtime is the
+    complete check. If this test ever starts failing because someone taught the
+    guard to descend, that is an improvement — delete the test and say so.
+    """
+    out = _tr(f"p(X) <- ( X == {expr} )", strict=True)
+    assert "euro" not in _code(out) and "baht" not in _code(out)
+
+
+def test_the_guard_still_catches_the_direct_case():
+    """Companion to the limit above: the case it DOES catch, so the pair reads
+    as a boundary rather than as a broken guard."""
+    with pytest.raises(UntranslatableConstructError):
+        _tr("p(X) <- ( X == 5000(euro) + 3000(baht) )", strict=True)
