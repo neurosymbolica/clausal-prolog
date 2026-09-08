@@ -130,6 +130,43 @@ the engine when the last module drops it, and pin a test that REFUSES the
 directive afterwards. Support for string-bearing Prologs is a
 translation-layer concern, never an engine flag.
 
+**R-S3′ (2026-09-06, later the same day — SUPERSEDES R-S3's mechanism).
+Atoms are arity-0 cells; plain `str` is a string.** An atom is the 1-tuple
+`("bar",)` — the shape P3-2 gave every compound, at arity 0. Functor slot
+0 of a cell stays the plain spelling `str`; a plain `str` anywhere else is
+a string. `foo(bar, "baz")` is `("foo", ("bar",), "baz")`. Ruled "D" by
+Mike on the design note
+`implementation_plans/strings-representation-options-2026-09-06.md`
+(clausal-bug-fix, `feat/double-quotes-ratchet`, `0a1881f8`/`bec5ab4f`),
+which measured four options (A = R-S3's C0 tag, B = atoms as `bytes`,
+C = class-tag the strings, D = this). What R-S3 was *for* is unchanged:
+plain `str` = string restores the mature machinery, foreign text is a
+string, `mint`/`is_atom`/`spelling` live in `atoms.py`. What changes:
+- No tag character, so §7 Q1 is moot: no reader refusal rule, no forging
+  path. §7 Q2 is answered by construction (slot 0 = spelling, atom = the
+  1-tuple, `functor/3` and `=..` convert at the edge).
+- `atom ≠ string` comes from the existing tuple-vs-str guard in the C
+  unifier; §4's `_list_unify.c` str arms become CORRECT (plain `str` is a
+  char sequence) instead of needing the fix; the retired `str↔list` cons
+  rule returns for plain `str` with chars as interned 1-tuples `("h",)`.
+- The arg-index key of an atom is `(name, 0)`, i.e. what the cell branch
+  already computes — the `(name, 0)`-vs-resolved-value bug class of
+  `d0f2bad5` dissolves.
+- Measured on the tree: a `("qux",)` head argument already compiles and
+  solves; unify 73 ns vs 75 ns for `str`; dict lookup 21.7 vs 21.1 ns
+  (29.5 ns for a non-canonical equal tuple — interning discipline is the
+  one load-bearing requirement; `mint()` returns the canonical object and
+  the loader canonicalises literal 1-tuples in bytecode constants).
+- Cost profile: item B's atom sweep stands (every minting site →
+  `mint`, every spelling consumer → `[0]`, atoms unwrap at the Python
+  wrappers; strings pass unchanged). `mod.atom` module attributes change
+  type from `"bar"` to `("bar",)` — a loud downstream break to be
+  announced with the flip. JSON needs the atom codec item H already lists.
+  Downstream migration profile is exactly R-S3's.
+- Design note §5 has the plan shape; §7 there has the per-boundary
+  table (bytecode cache, Python callees, JSON, dict keys, threads,
+  subinterpreters, ISO translator).
+
 ## 4. Facts the implementer needs (all measured 2026-09-06)
 
 - **Corpus census** (`/workspace/clausify-domains`, comments stripped):
@@ -253,9 +290,12 @@ L. **Docs:** fold the two stale-doc todos; user docs for `'…'` vs `"…"`,
 
 ## 7. OPEN QUESTIONS (need a ruling from Mike or the implementer's proposal)
 
-1. Tag character: RS 0x1E proposed (§3 R-S3). Confirm or pick.
-2. Tagged-tuple functor slot 0: tagged (functor IS an atom; predicate
-   tables re-key) or untagged with `functor/3`/`=..` tagging at the edge?
+1. ~~Tag character: RS 0x1E proposed (§3 R-S3). Confirm or pick.~~ MOOT
+   under R-S3′ (no tag).
+2. ~~Tagged-tuple functor slot 0: tagged or untagged with
+   `functor/3`/`=..` tagging at the edge?~~ ANSWERED by R-S3′: slot 0 is
+   the plain spelling; the atom is `(name,)`; `functor/3`/`=..` convert at
+   the edge.
 3. `write/1` of a string: Scryer prints `[h,e,l,l,o]`; SWI prints text.
    Which does Clausal's `write/1` do? (`writeq`/`write_canonical` are not
    in question.)
