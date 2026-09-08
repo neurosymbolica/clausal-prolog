@@ -1269,3 +1269,62 @@ class TestCrossModuleTabledNaf:
         naf_goal = TermCall(func=LoadName(name="Win"), args=[Var()], kwargs=[])
         assert _is_tabled_naf(naf_goal, lib.db) is True   # home db: unchanged
         assert _is_tabled_naf(naf_goal, use.db) is True   # importer db: the fix
+
+
+class TestQueryWfsJudgesCompositeGoals:
+    """query_wfs used to annotate only a goal that IS a single tabled call;
+    a conjunction or an untabled wrapper kept ``_truth=True`` with empty
+    delays.  Since the throwaway-leader judgement (2026-09-08) every shape
+    is annotated by the delays its derivation incurred."""
+
+    def _mod(self, tmp_path, name):
+        src = (
+            f"-module({name}, [move(A, B), wins(X), p(X), a, b, c, d, e])\n"
+            "-double_quotes(chars)\n"
+            "-table(wins/1)\n"
+            "move(a, b),\n"
+            "move(b, c),\n"
+            "move(c, a),\n"
+            "move(d, e),\n"
+            "wins(X) <- (move(X, Y), not wins(Y))\n"
+            "p(X) <- wins(X)\n"
+        )
+        path = tmp_path / f"{name}.clausal"
+        path.write_text(src)
+        from clausal.import_hook import _load_module
+        return _load_module(name, str(path))
+
+    def test_untabled_wrapper_and_conjunction_are_annotated(self, tmp_path):
+        from clausal.logic.solve import query_wfs
+        from clausal.logic.variables import Var
+        from clausal.terms import Undefined
+        mod = self._mod(tmp_path, "_qw_c1")
+        X = Var()
+        rows = query_wfs(("p", X), {"X": X}, module=mod)
+        by = {r["X"]: r for r in rows}
+        assert set(by) == {("a",), ("b",), ("c",), ("d",)}
+        assert by[("d",)]["_truth"] is True and by[("d",)]["_delays"] == frozenset()
+        for k in (("a",), ("b",), ("c",)):
+            assert by[k]["_truth"] is Undefined
+            assert any(dn.functor == "wins" and dn.arity == 1 for dn in by[k]["_delays"])
+        # (a conjunction CELL is not callable at the solve surface yet --
+        # cells.refuse_control_construct_cell -- so the conjunction case is
+        # pinned through goal position in tests/test_goal_position_seam.py.)
+        # definite answers come first, conditional ones after resolution
+        Z = Var()
+        rows = query_wfs(("p", Z), {"Z": Z}, module=mod)
+        assert rows[0]["Z"] == ("d",) and rows[0]["_truth"] is True
+
+    def test_rows_are_not_collapsed_when_no_variables_are_exported(self, tmp_path):
+        """Dedup of deferred answers is over the goal's OWN variables; the
+        exported projection only decides what each row SHOWS.  Asking for no
+        variables must not merge four answers into one row."""
+        from clausal.logic.solve import query_wfs
+        from clausal.logic.variables import Var
+        from clausal.terms import Undefined
+        mod = self._mod(tmp_path, "_qw_c3")
+        X = Var()
+        rows = query_wfs(("p", X), {}, module=mod)
+        truths = [r["_truth"] for r in rows]
+        assert truths.count(True) == 1
+        assert truths.count(Undefined) == 3

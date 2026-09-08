@@ -203,26 +203,15 @@ silent:
   back first; the entry lookup itself still waits for the first answer,
   because the table does not exist until SLG has run.)
 
-  What is NOT judged is a goal that is not a single tabled call. Those are
-  judged exactly as `query_wfs` judges them, which is to say not at all:
-
-  * a CONJUNCTION — `if --(X is a, wins(X)):` — is a composite goal;
-    `query_wfs` does not decompose one, so no delay set is read and the
-    answer passes as true;
-  * an UNTABLED WRAPPER — `if --p(a):` with `p(X) <- wins(X)` — is not a
-    tabled call, so the same thing happens;
-  * (RESOLVED 2026-09-08, second fix wave) a TABLED CALL WITH a `++`
-    ARGUMENT or a COMPOUND argument — `if --wins(++x):`, `if --wins(pair(a)):`
-    — IS judged: the arguments are lowered through the seam builder before
-    the key is taken, so the key is the one the compiled query stores the
-    entry under. A `++` that reads a variable of the same goal is refused
-    with a `SyntaxError` (no value before the search).
-
-  The sugar inherits `query_wfs`'s judgement rather than growing a second
-  one; widening it to composite goals is a filed follow-up
-  (`todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`),
-  and until it lands, code that must be sure asks the tabled predicate
-  directly, or asks `query_wfs`.
+  (SUPERSEDED 2026-09-08, second fix wave: EVERY goal shape is judged.)  The
+  paragraphs below recorded the first implementation's limitation — a goal that
+  was not a single tabled call was judged as `query_wfs` judged it, i.e. not at
+  all.  Since the throwaway-leader judgement (`docs/superpowers/plans/
+  2026-09-08-wfs-goal-leader.md`) the whole goal-position solve runs under one
+  tabling leader of its own, so a conjunction, an untabled wrapper, a `++`-fed
+  call and a tabled call with any argument shape are all judged by the delays
+  their derivation incurred; conditional answers are delivered after global
+  resolution, as a tabled root delivers them; `query_wfs` shares the core.
 - **No residual constraints on an export.** If an exported variable is
   still unbound AND attributed at export time, the helper raises
   `ResidualConstraints` naming the variable. A free unbound export is fine

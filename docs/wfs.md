@@ -94,7 +94,32 @@ something is undefined.
 The annotation is independent of how the goal is asked: the same atom reports
 the same truth value whether the goal is a reified `Call`, a `Compound`, a
 term instance, and whether the query is ground or unbound — and answer sets
-are stable across query order (see the implementation overview below).
+are stable across query order (see the implementation overview below). It is
+also independent of the goal's SHAPE: an untabled wrapper over a tabled
+predicate, a conjunction (through goal position), a call fed through `++` —
+the whole solve runs under a throwaway tabling leader, so `_truth`/`_delays`
+are the delays the answer's own derivation incurred. Definite answers come in
+derivation order; conditional ones are delivered after global resolution; a
+WFS-false answer never appears.
+
+The judgement is per ANSWER, not per solve, in three ways worth naming. A
+branch that delayed and then FAILED does not leave its conditions behind for
+the next answer: conditions are trailed, so the backtracking that undoes the
+branch's bindings retracts them too (`p(X) <- (wins(X), ok(X))` with `ok(d)`
+the only fact reports `d` as plain true, however many branches delayed before
+it). A condition consumed FROM a table is remembered as the row it came from,
+so a later delay-free re-derivation of that row — which nothing re-streams,
+because the answer tuple is already known — still makes the answer true.  And
+a definite derivation of bindings already deferred as conditional collapses
+them to unconditional, because WFS truth is a disjunction over derivations:
+`r(a) <- wins(a)` alongside the fact `r(a)` gives one true answer, not a true
+one and an undefined one.
+
+A bag carries its conditions. `findall`/`bagof`/`setof` and `count_all`
+collect over their own trail mark and unwind it, but the bag (or the count)
+outlives the unwind, so the conditions its rows were derived under are charged
+to the derivation that receives it: a goal reading a list built entirely out of
+undefined answers is itself undefined, not true.
 
 ---
 

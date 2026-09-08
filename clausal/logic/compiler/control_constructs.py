@@ -96,6 +96,30 @@ def _lower_inner_trampoline(
     return lower_python_trampoline.lower(ir, ctx, k_stmts)
 
 
+def _leader_stmt(leader_name: str) -> ast.stmt:
+    """``leader = $current_leader()`` -- bind the condition target ONCE, at the
+    collecting construct's entry.  Resolving it per solution would read the
+    stack TOP, which is the streaming table's own entry while a tabled goal
+    beneath is yielding, not the leader its conditions are credited to."""
+    return _assign(leader_name, _call(_name("$current_leader")))
+
+
+def _harvest_stmt(leader_name: str, bag_name: str) -> ast.stmt:
+    """``$harvest_conditions(leader, bag)`` -- accumulate the WFS conditions
+    this solution stands on, for a construct whose RESULT outlives it."""
+    return ast.Expr(value=_call(
+        _name("$harvest_conditions"), _name(leader_name), _name(bag_name)))
+
+
+def _charge_stmt(trail_name: str, leader_name: str, bag_name: str) -> ast.stmt:
+    """``$charge_conditions(trail, leader, bag)`` -- put the accumulated
+    conditions back on that same leader once the construct has unwound its own
+    mark, so they are retracted only by backtracking OVER the construct."""
+    return ast.Expr(value=_call(
+        _name("$charge_conditions"), _name(trail_name),
+        _name(leader_name), _name(bag_name)))
+
+
 def _compile_arith_cmp(
     ctx: CompilationContext,
     l: Any,
@@ -251,6 +275,8 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
     mark_var = ctx.fresh("_ca_m")
     gen_name = ctx.fresh("_ca_gen")
     unify_mark = ctx.fresh("_ca_um")
+    cond_bag = ctx.fresh("_ca_cond")
+    cond_leader = ctx.fresh("_ca_cl")
 
     count_expr = term_to_ast_expr(count_arg, var_context, eval_arith=False)
 
@@ -278,7 +304,9 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
     goal_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(gen_name)),
-        body=[count_incr],
+        # A counted derivation may stand on WFS delays, and the count
+        # survives the undo below: keep its conditions with it.
+        body=[count_incr, _harvest_stmt(cond_leader, cond_bag)],
         orelse=[],
     )
 
@@ -290,10 +318,13 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
 
     return [
         _assign(n_var, ast.Constant(value=0)),
+        _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
+        _leader_stmt(cond_leader),
         _assign_mark(mark_var, trail_name),
         gen_fn,
         goal_loop,
         _undo_stmt(mark_var, trail_name),
+        _charge_stmt(trail_name, cond_leader, cond_bag),
         _assign_mark(unify_mark, trail_name),
         unify_check,
         _undo_stmt(unify_mark, trail_name),
@@ -566,6 +597,8 @@ def _compile_find_all_core(
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     results_var = ctx.fresh("_fa_results")
+    cond_bag = ctx.fresh("_fa_cond")
+    cond_leader = ctx.fresh("_fa_cl")
     mark_var = ctx.fresh("_fa_m")
     gen_name = ctx.fresh("_fa_gen")
     unify_mark = ctx.fresh("_fa_um")
@@ -599,7 +632,9 @@ def _compile_find_all_core(
     collect_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(gen_name)),
-        body=[append_call],
+        # A collected row may stand on WFS delays, and the bag survives the
+        # undo below: keep its conditions with it.
+        body=[append_call, _harvest_stmt(cond_leader, cond_bag)],
         orelse=[],
     )
 
@@ -615,10 +650,13 @@ def _compile_find_all_core(
 
     stmts: list[ast.stmt] = [
         _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
+        _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
+        _leader_stmt(cond_leader),
         _assign_mark(mark_var, trail_name),
         gen_fn,
         collect_loop,
         _undo_stmt(mark_var, trail_name),
+        _charge_stmt(trail_name, cond_leader, cond_bag),
     ]
 
     if dedup:

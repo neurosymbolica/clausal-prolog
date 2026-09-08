@@ -97,12 +97,27 @@ class DelayedNegation:
 class _LeaderContext(threading.local):
     def __init__(self):
         self.stack: list[TableEntry] = []
+        # Monotonic count of pushes.  A throwaway leader (seam.judged_answers)
+        # compares it before and after its solve to learn whether any REAL
+        # table was driven beneath it -- if none was, there is nothing to
+        # resolve at its exit and the goal pays nothing.
+        self.pushes: int = 0
+        # One list per JUDGING leader currently on the stack, collecting the
+        # table stores actually driven beneath it.  A real ROOT leader runs
+        # the global resolution pass over its own store when it exits on an
+        # empty stack; under a judging leader no inner leader is ever the
+        # root, so the judging leader runs the pass itself -- and it must run
+        # it over every store the drive TOUCHED, not only the ones its own
+        # delays happen to name (a cross-module tabled call whose conditions
+        # nobody carried up would otherwise never be resolved).
+        self.driven_stores: list[list] = []
 
 _leader_ctx = _LeaderContext()
 
 
 def push_leader(entry: TableEntry) -> None:
     _leader_ctx.stack.append(entry)
+    _leader_ctx.pushes += 1
 
 
 def pop_leader(entry: TableEntry | None = None) -> TableEntry | None:
@@ -122,6 +137,13 @@ def pop_leader(entry: TableEntry | None = None) -> TableEntry | None:
                 return entry
         return None
     return stack.pop() if stack else None
+
+
+def _note_driven_store(table_store) -> None:
+    """Tell every judging leader on the stack that *table_store* was driven."""
+    for driven in _leader_ctx.driven_stores:
+        if all(table_store is not st for st in driven):
+            driven.append(table_store)
 
 
 def current_leader() -> TableEntry | None:
@@ -288,7 +310,8 @@ def _simplify_disjuncts(disjuncts: frozenset) -> frozenset:
 class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "_answer_index",
-                 "suspended", "conditions", "_current_delays", "scc_deps")
+                 "suspended", "conditions", "_current_delays", "scc_deps",
+                 "_sources")
 
     def __init__(self):
         self.status: str = "evaluating"       # "evaluating" | "complete"
@@ -307,6 +330,11 @@ class TableEntry:
         # ANCESTOR (mutual recursion). While any dep is still evaluating this
         # entry is an SCC member and must not complete on its own.
         self.scc_deps: set = set()            # set[TableEntry]
+        # Opt-in LATE binding of positive conditions (``_credit_consumer``):
+        # ``None`` for every real table, a ``{(entry, index): store}`` dict
+        # for a judging leader that wants the consumed ROW rather than the
+        # delay set that row happened to hold at the moment of consumption.
+        self._sources: dict | None = None
 
     def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> int | None:
         """Add a frozen answer tuple.  Returns its INDEX if the tuple was new.
@@ -535,7 +563,121 @@ def _scan_complete_answers(entry, args):
     return False, has_conditional
 
 
-def _propagate_answer_delays(entry, i) -> None:
+def _charge_delays(leader, delays, trail) -> None:
+    """Add *delays* to *leader*'s in-progress set, UNDOABLY.
+
+    The in-progress set is one mutable bucket that is read (and snapshotted)
+    when an answer arrives, so a delay incurred by a branch that then FAILED
+    used to be charged to whatever answer came next — turning a WFS-true
+    answer Undefined, the direction a caller cannot work around.  Every
+    addition is therefore recorded on the trail: the same backtracking that
+    undoes the branch's bindings retracts the conditions it incurred.
+
+    Only the delays this call actually ADDS are recorded, and only once: a
+    later re-addition of a delay already present records nothing, so undoing
+    to a mark between the two leaves it in place (the earlier, still-live
+    addition owns it) and undoing past both removes it."""
+    new = frozenset(delays) - leader._current_delays
+    if not new:
+        return
+    leader._current_delays |= new
+    if trail is not None:
+        trail.record(
+            lambda l=leader, n=new: l._current_delays.difference_update(n))
+
+
+def _credit_consumer(consumer, entry, i, store, trail, delays=None) -> None:
+    """Charge *consumer*'s in-progress derivation with the condition of
+    *entry*'s i-th answer (positive delay propagation, below).
+
+    A leader that opted in to LATE binding (``_sources`` is a dict — the
+    seam's throwaway judging leader) records the ROW rather than the delay
+    set that row holds right now.  A re-derivation can still make the row
+    unconditional AFTER we consumed it — ``add_answer`` returns ``None`` for
+    it, so nothing re-streams and the row is the only place the improvement
+    is written down — and reading the row at the end gets the answer the
+    table finally settled on.  Every other leader takes the flat union it
+    always took.  Both channels are trailed (see :func:`_charge_delays`)."""
+    if consumer._sources is not None:
+        key = (entry, i)
+        if key not in consumer._sources:
+            consumer._sources[key] = store
+            if trail is not None:
+                trail.record(
+                    lambda d=consumer._sources, k=key: d.pop(k, None))
+        return
+    if delays is None:
+        delays = entry.delays_for(i)
+    if delays:
+        _charge_delays(consumer, delays, trail)
+
+
+def harvest_conditions(leader, bag: list) -> None:
+    """Accumulate into *bag* the conditions *leader* is standing on right now.
+
+    Called by a COLLECTING construct (``findall``/``bagof``/``setof``,
+    ``count_all``) once per solution it keeps.  The construct backtracks
+    between solutions and unwinds its own mark at the end, and condition
+    charges are trailed (:func:`_charge_delays`), so by the time the bag is
+    handed on, every condition its rows were derived under has been retracted.
+    The bag survives the undo; its conditions must too.
+
+    *leader* is bound ONCE, at the construct's entry, and passed in -- it is
+    NOT ``current_leader()`` at the moment of the harvest.  While a tabled
+    goal beneath us is streaming its answers, the top of the leader stack is
+    that table's own entry (which is why ``_streaming_consumer_leader``
+    exists): the credit for a conditional row lands on the leader BELOW it --
+    ours -- and a harvest that resolved the stack top would look at the
+    table's empty bucket and collect nothing.
+
+    Accumulating (rather than snapshotting a copy per solution) keeps this
+    linear in the conditions actually incurred: the live sets shrink again on
+    the backtracking between solutions, so the per-solution cost is the
+    solution's own conditions, not the running total.
+
+    BAG LAYOUT, shared with :func:`charge_conditions` and minted empty by the
+    codegen: ``[]`` while nothing has been harvested, and
+    ``[delays_set, sources_dict]`` once anything has -- two slots, positional,
+    never appended to beyond them.  Emptiness doubles as "nothing to charge"."""
+    if leader is None:
+        return
+    delays = leader._current_delays
+    sources = leader._sources
+    if not delays and not sources:
+        return
+    if not bag:
+        bag.append(set())
+        bag.append({})
+    if delays:
+        bag[0] |= delays
+    if sources:
+        bag[1].update(sources)
+
+
+def charge_conditions(trail, leader, bag: list) -> None:
+    """Charge everything :func:`harvest_conditions` accumulated onto *leader*,
+    after the collecting construct has unwound its own mark.
+
+    The charge lands AT that mark, so backtracking over the whole construct
+    -- discarding the bag itself -- retracts the conditions again, while
+    backtracking WITHIN the collection no longer does.
+
+    *bag* is ``[]`` or ``[delays_set, sources_dict]`` -- see
+    :func:`harvest_conditions` for the layout both halves maintain."""
+    if not bag:
+        return
+    if leader is None:
+        bag.clear()
+        return
+    delays, sources = bag[0], bag[1]
+    if delays:
+        _charge_delays(leader, delays, trail)
+    for (entry, i), store in sources.items():
+        _credit_consumer(leader, entry, i, store, trail)
+    bag.clear()
+
+
+def _propagate_answer_delays(entry, i, store=None, trail=None) -> None:
     """POSITIVE delay propagation (A04-F003 follow-up): a derivation that
     consumes a CONDITIONAL answer is itself conditional on the same delayed
     literals — WFS answer clauses carry delay lists through positive joins,
@@ -545,21 +687,18 @@ def _propagate_answer_delays(entry, i) -> None:
 
     Approximation, deliberately matching the existing negative-delay
     bookkeeping: the FLAT union of the answer's live disjuncts is added to
-    the innermost active leader's in-progress delay set. Per-disjunct
-    precision (and exact leader attribution when the consuming continuation
-    is resumed under an unrelated mid-stream leader) is future work; the
-    union direction errs toward Undefined, and the disjunction-of-
-    derivations model keeps a genuinely unconditional derivation True
-    regardless."""
+    the innermost active leader's in-progress delay set (per-disjunct
+    precision is future work; the union direction errs toward Undefined, and
+    the disjunction-of-derivations model keeps a genuinely unconditional
+    derivation True regardless).  A leader that asked for late binding gets
+    the row instead — :func:`_credit_consumer`."""
     c = entry.conditions[i]
     if c is _FAILED or c is _UNCONDITIONAL:
         return  # the overwhelmingly common rows — one identity test each
     leader = current_leader()
     if leader is None:
         return
-    delays = entry.delays_for(i)
-    if delays:
-        leader._current_delays |= delays
+    _credit_consumer(leader, entry, i, store, trail)
 
 
 def _streaming_consumer_leader(entry):
@@ -597,7 +736,7 @@ def _delay_negation(functor, arity, key, args, trail, store=None):
     dn = DelayedNegation(functor, arity, key, frozen, store=store)
     leader = current_leader()
     if leader is not None:
-        leader._current_delays.add(dn)
+        _charge_delays(leader, (dn,), trail)
 
 
 def _key_has_var(k) -> bool:
@@ -975,7 +1114,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
-                    _propagate_answer_delays(entry, i)
+                    _propagate_answer_delays(entry, i, table_store, trail)
                     yield None
                 trail.undo(mark)
             return
@@ -987,7 +1126,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 if entry.conditions[i] is not _FAILED:
                     mark = trail.mark()
                     if _unify_answer(args, entry.answers[i], trail):
-                        _propagate_answer_delays(entry, i)
+                        _propagate_answer_delays(entry, i, table_store, trail)
                         yield None
                     trail.undo(mark)
                 i += 1
@@ -996,6 +1135,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
         # ── LEADER: fixpoint loop ──
         entry = TableEntry()
         table_store[store_key] = entry
+        _note_driven_store(table_store)
         push_leader(entry)
 
         try:
@@ -1035,7 +1175,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
                 continue
             mark = trail.mark()
             if _unify_answer(args, stored, trail):
-                _propagate_answer_delays(entry, i)
+                _propagate_answer_delays(entry, i, table_store, trail)
                 yield None
             trail.undo(mark)
 
@@ -1068,7 +1208,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
-                    _propagate_answer_delays(entry, i)
+                    _propagate_answer_delays(entry, i, table_store, trail)
                     yield (_proceed, None)
                 trail.undo(mark)
             yield (_fail, DONE)
@@ -1092,7 +1232,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     continue
                 mark = trail.mark()
                 if _unify_answer(args, stored, trail):
-                    _propagate_answer_delays(entry, i)
+                    _propagate_answer_delays(entry, i, table_store, trail)
                     yield (_proceed, None)
                 trail.undo(mark)
 
@@ -1154,6 +1294,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         # harmless, the yields are discarded either way.
         root_lead = not _leader_ctx.stack
         deferred: set[int] = set()   # answer indices withheld from the root
+        _note_driven_store(table_store)
         push_leader(entry)
 
         try:
@@ -1173,7 +1314,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                             # Same streaming-site attribution as above.
                             consumer = _streaming_consumer_leader(entry)
                             if consumer is not None:
-                                consumer._current_delays |= replay_delays
+                                _credit_consumer(consumer, entry, i,
+                                                 table_store, trail,
+                                                 replay_delays)
                     yield (_proceed, None)
                 trail.undo(mark)
             # A04-F001: drive the dispatch to a FIXPOINT by re-running it until
@@ -1217,7 +1360,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                                 # a spawn-discard root propagates to nobody.
                                 consumer = _streaming_consumer_leader(entry)
                                 if consumer is not None:
-                                    consumer._current_delays |= delay_set
+                                    _credit_consumer(consumer, entry, new_idx,
+                                                     table_store, trail,
+                                                     delay_set)
                             yield (_proceed, None)  # new answer to caller (incremental)
                     _st = yield (_gen, None)
                 entry._current_delays.clear()

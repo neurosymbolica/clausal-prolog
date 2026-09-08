@@ -145,37 +145,31 @@ still the term.
 `UndefinedAnswer` and `ResidualConstraints` are both importable from
 `clausal.logic.seam`.
 
-**How far the strictness reaches.** A WFS-conditional (undefined) answer
-raises `UndefinedAnswer` (use `query_wfs` for truth values and delays)
-whenever the WHOLE goal is a single tabled-predicate call — ground or not,
-`if --wins(a):` and `for X in --wins(X):` alike — and each answer is judged
-on its own, so a goal with one definite and one conditional answer yields
-the definite one and raises when it reaches the other.
+**How far the strictness reaches.** Everywhere. A WFS-conditional (undefined)
+answer raises `UndefinedAnswer` (use `query_wfs` for truth values and delays)
+whatever the goal's shape: a bare tabled call (`if --wins(a):`, `for X in
+--wins(X):`), a conjunction (`if --(X is a, wins(X)):`), an untabled wrapper
+(`if --p(a):` with `p(X) <- wins(X)`), a call fed through `++`
+(`if --decide(++profile, verdict(S, X)):`), a negation delayed inside any clause
+body on the way. The whole goal-position solve runs under one throwaway tabling
+leader, so the judgement is exactly the delays the answer's own derivation
+incurred, never reconstructed from a table key afterwards. Each answer is judged
+on its own: a definite one is exported as soon as it is found; a conditional one
+is held back until the search is exhausted and global resolution has run, then
+raised (still undefined), exported (resolved true) or dropped (resolved false) —
+the order a tabled root already delivers in. `query_wfs` judges by the same
+core, so a composite goal now reports real `_truth`/`_delays` there too. The one
+refusal: a `++` that reads a variable of the same goal in a single tabled call
+(`if --wins(++len(X)):`) has no value before the search and raises a
+`SyntaxError`. A `++` value is evaluated by the query exactly once.
 
-What is not judged is a goal that is not a single tabled call: a conjunction
-(`if --(X is a, wins(X)):`) and an untabled wrapper (`if --p(a):` with
-`p(X) <- wins(X)`) both pass their conditional answers through as true,
-exactly as `query_wfs` does for the same two goals. The ARGUMENTS of a
-single tabled call may take any shape the seam builds: an atom, a logic
-variable, a compound (`if --wins(pair(a)):`), a `++` value (`if --wins(++x):`,
-`for Y in --beats(++x, Y):`) or a `++` inside a compound — the call is keyed
-as the compiled query makes it, so every one of those is judged. The one
-refusal is a `++` that reads a variable of the same goal in a tabled call
-(`if --wins(++len(X)):`): it has no value before the search and raises a
-`SyntaxError` rather than passing unjudged. A `++` in such a call is
-evaluated once for the key and once by the query; `++` is eager by contract.
-Two edges: a signature slot the goal omits (`wins(pair(a))` for a declared
-`pair(A, B)`) is judged conservatively — refused if ANY answer of that shape
-is conditional, exported only when all are definite — because the seam
-cannot name the exact answer row; and an argument the seam cannot build as a
-term at all (arithmetic over an unbound variable, `foo()`) leaves the call
-running exactly as before but UNJUDGED, with an `UnjudgedTabledCallWarning`
-saying so.
-The sugar inherits `query_wfs`'s judgement rather than inventing a second one;
-widening it to composite goals is filed as
-`todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md`.
-Code that must be sure asks the tabled predicate directly, or asks
-`query_wfs`.
+"Each answer on its own" is meant strictly, and cuts BOTH ways: a branch that
+delayed and then failed does not make the next answer undefined (conditions
+are trailed and retracted with the branch's bindings), and an answer that has
+ANY delay-free derivation is true — a definite clause alongside a conditional
+one, or a table row that a later re-derivation settled unconditionally. Two
+`--` loops alive at the same time keep their conditions apart: a suspended
+judged goal holds no place on the tabling leader stack. See `docs/wfs.md`.
 
 A module-level `--goal:` over a predicate defined in the same file fails
 during that file's load — the Python body runs before the file's own

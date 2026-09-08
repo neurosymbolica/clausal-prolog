@@ -243,6 +243,9 @@ _install_when_condition_fn_s = _install_when_condition_fn
 from clausal.logic.tabling import (  # noqa: F401
     _naf_tabled as _naf_tabled_fn,
     _TABLING_SUSPEND,
+    harvest_conditions as _harvest_conditions,
+    current_leader as _current_leader_fn,
+    charge_conditions as _charge_conditions,
 )
 _naf_tabled_fn_s = _naf_tabled_fn
 
@@ -930,6 +933,9 @@ def _compile_predicate_trampoline_impl(
         "$findall_copy": _findall_copy_row,
         "$set_of_dedup": _set_of_dedup,
         "$set_of_sort_dedup": _set_of_sort_dedup,
+        "$harvest_conditions": _harvest_conditions,
+        "$current_leader": _current_leader_fn,
+        "$charge_conditions": _charge_conditions,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn,
         "$catch_match": _catch_match_fn,
@@ -1750,6 +1756,9 @@ def _compile_predicate_shallow_impl(
         "$findall_copy": _findall_copy_row,
         "$set_of_dedup": _set_of_dedup,
         "$set_of_sort_dedup": _set_of_sort_dedup,
+        "$harvest_conditions": _harvest_conditions,
+        "$current_leader": _current_leader_fn,
+        "$charge_conditions": _charge_conditions,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn_s,
         "$catch_match": _catch_match_fn_s,

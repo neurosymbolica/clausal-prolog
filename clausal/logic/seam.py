@@ -305,16 +305,6 @@ def _module_of(module_globals: dict):
             ".clausal file") from None
 
 
-class UnjudgedTabledCallWarning(RuntimeWarning):
-    """A tabled call in goal position ran WITHOUT its WFS judgement: its
-    arguments could not be lowered to the key its table entry is under, so
-    a conditional answer would pass as true.  The goal itself is unaffected
-    (the compiled query decides its fate); only the strictness is missing."""
-
-
-_ANY = object()   # per-answer key wildcard for a slot the seam had to mint
-
-
 def _has_var_thunk(term: Any) -> bool:
     """True if *term* holds a ``++`` thunk that reads a logic variable."""
     import dataclasses
@@ -334,196 +324,264 @@ def _has_var_thunk(term: Any) -> bool:
     return False
 
 
-def _var_ids(term: Any, out: set) -> set:
-    """Collect ``id()`` of every Var object reachable in *term* (unbound
-    identity only; no deref -- the question is WHICH objects, not values)."""
+def _goal_vars(goal: Any) -> list:
+    """Every Var object reachable in *goal*, first occurrence first, each
+    once.  These are the variables an answer binds and a deferred answer
+    must be frozen by and re-bound from."""
     import dataclasses
     from clausal.terms import Compound
-    if isinstance(term, Var):
-        out.add(id(term))
-    elif isinstance(term, PyThunk):
-        pass
-    elif isinstance(term, Node) and dataclasses.is_dataclass(term):
-        for f in dataclasses.fields(term):
-            _var_ids(getattr(term, f.name), out)
-    elif isinstance(term, Compound):
-        for a in term.args:
-            _var_ids(a, out)
-    elif isinstance(term, (list, tuple)):
-        for e in term:
-            _var_ids(e, out)
-    elif isinstance(term, dict):
-        for k, v in term.items():
-            _var_ids(k, out)
-            _var_ids(v, out)
+    seen: set = set()
+    out: list = []
+    def walk(t):
+        if isinstance(t, Var):
+            if id(t) not in seen:
+                seen.add(id(t))
+                out.append(t)
+        elif isinstance(t, PyThunk):
+            for v in t.var_objects:
+                walk(v)
+        elif isinstance(t, Node) and dataclasses.is_dataclass(t):
+            for f in dataclasses.fields(t):
+                walk(getattr(t, f.name))
+        elif isinstance(t, Compound):
+            for a in t.args:
+                walk(a)
+        elif isinstance(t, (list, tuple)):
+            for e in t:
+                walk(e)
+        elif isinstance(t, dict):
+            for k, v in t.items():
+                walk(k)
+                walk(v)
+    walk(goal)
     return out
 
 
-def _wildcard(term: Any, minted: set) -> Any:
-    """*term* with every seam-minted Var replaced by the ``_ANY`` wildcard
-    (they are never bound: the compiled query has its own Var in that slot)."""
-    from clausal.terms import Compound
-    if isinstance(term, Var):
-        return _ANY if id(term) in minted else term
-    if isinstance(term, Compound):
-        return Compound(term.functor,
-                        tuple(_wildcard(a, minted) for a in term.args))
-    if isinstance(term, tuple):
-        return tuple(_wildcard(e, minted) for e in term)
-    if isinstance(term, list):
-        return [_wildcard(e, minted) for e in term]
-    if isinstance(term, dict):
-        return {k: _wildcard(v, minted) for k, v in term.items()}
-    return term
+def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]":
+    """Solve *goal* and yield ``(truth, delays)`` per WFS-surviving answer,
+    with the answer's bindings live on *trail* at the yield.  ``truth`` is
+    ``True`` or ``Undefined``; an answer that resolution makes WFS-false is
+    never yielded.
 
+    HOW: a fresh, never-stored ``TableEntry`` is pushed as the tabling
+    LEADER for the whole solve.  Every condition the derivation incurs -- a
+    ``not tabled(...)`` that had to be delayed, from any clause body, tabled
+    or not; a conditional answer consumed from a complete table; a streaming
+    conditional answer from a tabled call that is no longer the root because
+    we are beneath it -- lands on that entry through the bookkeeping tabling
+    already does for real leaders.  So a conjunction, an untabled wrapper, a
+    ``++``-fed call, a nested predicate chain are all judged by exactly the
+    conditions THEIR derivation carried, and nothing is reconstructed from a
+    table key.
 
-def _key_matches(pattern: Any, key: Any) -> bool:
-    """Structural match of a normalised per-answer key against an entry's
-    row key, ``_ANY`` matching anything in its slot."""
-    if pattern is _ANY:
-        return True
-    if isinstance(pattern, tuple) and isinstance(key, tuple):
-        return (len(pattern) == len(key)
-                and all(_key_matches(p, k) for p, k in zip(pattern, key)))
-    return pattern == key
+    Three things make the judgement per-ANSWER rather than per-solve:
 
+    * the conditions are TRAILED (``tabling._charge_delays``), so a branch
+      that delayed and then FAILED does not leave its delays behind for the
+      next answer to inherit -- and a delay incurred before a choice point
+      still covers every answer beyond it;
+    * a condition consumed from a table is recorded as the ROW it came from
+      (``_sources``), not as the delay set that row held at that moment: a
+      later delay-free re-derivation makes the row unconditional and nothing
+      re-streams it, so only the row itself knows how the table settled.
+      The rows are read back HERE, after resolution;
+    * DEFINITE answers go into the same entry as everything else, so a
+      definite derivation of bindings already deferred as conditional
+      collapses them to unconditional (WFS truth is a disjunction OVER
+      derivations).  They still stream the moment they are found; the
+      collapsed row is skipped at delivery rather than delivered twice.
 
-def _lower_call_args(goal_args: list, module_globals: dict, goal: Any) -> list:
-    """The tabled call's arguments AS THE COMPILED QUERY WILL MAKE THEM.
+    Conditional answers are delivered LAST: after the solve is exhausted --
+    and only if a real table was driven -- global resolution runs over every
+    store the derivation touched, the entry's own rows are resolved against
+    them, and the survivors are re-bound from their frozen rows: True ones
+    as answers, Undefined ones with their delays, WFS-false ones not at all.
+    This is the order a tabled root already delivers in.
 
-    A goal reaches ``_definite_answers`` as the reified NODE the rewriter
-    handed over, so its arguments are nodes too: ``pair(a)`` is a ``Call``,
-    ``++x`` a ``PyThunk``.  The table entry, though, is stored under the key
-    of the call as the compiled query MAKES it -- the cell ``('pair', ('a',))``,
-    the thunk's VALUE -- so a key taken from the raw nodes matched only the
-    two shapes that are their own lowering (a bare atom, a ``Var``) and every
-    other tabled call went unjudged.  Lowering the arguments here through
-    the seam's own builder (:func:`seam_term`, the same rules the compiler
-    uses for a term in term position) gives the key the entry is under.
+    While this generator is SUSPENDED at a yield it holds no place on the
+    leader stack: its own leader (and any tabled frame parked above it) is
+    detached at the yield and restored on resume.  Two judged goals alive at
+    once -- a caller interleaving two ``--`` loops -- would otherwise charge
+    the one that resumed to the leader of the one that pushed last.
 
-    A ``++`` that reads a variable of the same goal has no value before the
-    search (and the compiled query would hand the lambda an unbound ``Var``
-    anyway), so it is refused loudly rather than left silently unjudged.
-    A ``++`` without variables is evaluated once here for the key and again
-    by the compiled query -- ``++`` is eager by contract, and a value that
-    differs between two evaluations was never a stable key.
-
-    Two places where the seam's TERM-position rules and the query's
-    GOAL-argument rules part company, and what happens there:
-
-    * An argument the seam refuses to build (arithmetic over an unbound
-      variable, ``foo()``, a starred list) but the compiled query accepts:
-      tabling-ness must not decide whether a goal compiles, so the call runs
-      as before, UNJUDGED, and :class:`UnjudgedTabledCallWarning` says so.
-      Returns ``None`` for that case.
-    * A signature slot the goal omits (``pair(a)`` for a declared
-      ``pair(A, B)``): the seam backfills a fresh Var, and so does the query
-      -- a DIFFERENT Var, which the answers bind and ours never is.  The
-      call key still matches (both are variables); the per-answer row
-      cannot be named exactly, so the caller judges CONSERVATIVELY over every
-      row of that shape.  The ids of the Vars the seam minted are returned
-      for that purpose.
-
-    Returns ``(lowered_args, minted_var_ids)`` or ``None``.
+    A caller that stops early (``once``/``break``) simply abandons the
+    generator: ``finally`` pops the leader by identity; the store's own
+    drive-episode repair never sees an entry it did not create.
     """
-    import warnings
-    if any(_has_var_thunk(a) for a in goal_args):
-        raise SyntaxError(
-            f"--: {goal!r}: a ++ over a goal variable in a tabled call has no "
-            f"value to judge the call by; bind it in Python first or write "
-            f"the term in the goal")
+    from clausal.logic.solve import solve
+    from clausal.logic.tabling import (
+        _FAILED, TableEntry, _leader_ctx, _resolve_all_conditions,
+        _resolve_conditions, _unify_answer, current_leader, freeze_args,
+        make_subgoal_key, pop_leader, push_leader,
+    )
+    from clausal.terms import Undefined
+    # Judge, freeze and re-bind over the goal's OWN variables -- deduplicating
+    # deferred answers over what the caller asked to EXPORT would merge two
+    # answers into one row when it asked for nothing.  The caller's variables
+    # are added for the goal shapes ``_goal_vars`` cannot walk (a
+    # ``ModulePredicate`` call object holds its arguments privately), where
+    # they are all there is to go on.
+    judge_vars = _goal_vars(goal)
+    seen = {id(v) for v in judge_vars}
+    for v in exported_vars or ():
+        if isinstance(v, Var) and id(v) not in seen:
+            seen.add(id(v))
+            judge_vars.append(v)
+    leader = TableEntry()
+    leader._sources = {}          # opt in to late-bound positive conditions
+    stack = _leader_ctx.stack
+
+    def detach():
+        """Lift our leader -- and any tabled frame parked above it, which is
+        ours too -- off the stack for the duration of a yield, and stop
+        collecting driven stores while we are not running.  Both are the same
+        mistake otherwise: a table another judged goal drives while we are
+        suspended is not ours, and resolving its store at our exit would run
+        the global fixpoint over a store we never touched."""
+        registry = _leader_ctx.driven_stores
+        for i in range(len(registry) - 1, -1, -1):
+            if registry[i] is driven:
+                del registry[i]
+                break
+        for i in range(len(stack) - 1, -1, -1):
+            if stack[i] is leader:
+                seg = stack[i:]
+                del stack[i:]
+                return seg
+        return []
+
+    def reattach(seg):
+        stack.extend(seg)
+        _leader_ctx.driven_stores.append(driven)
+
+    # One entry per CONDITIONAL derivation, in derivation order: (frozen
+    # answer, the delays it incurred directly, the table rows it consumed).
+    # The rows are only read at the end, so the entry is built after the
+    # solve.  A definite derivation needs nothing kept: it streams at once,
+    # and its key in ``streamed`` is enough to skip whatever row the
+    # conditional derivations of the same bindings later build (a delay-free
+    # derivation makes the answer WFS-true whatever else it has).
+    derivations: list = []
+    streamed: set = set()         # canonical keys already delivered as definite
+    driven: list = []             # every table store driven beneath us
+    _leader_ctx.driven_stores.append(driven)
+    push_leader(leader)
     try:
-        lowered = [seam_term(a, module_globals) for a in goal_args]
-    except (SyntaxError, NameError, TypeError) as exc:
-        warnings.warn(
-            f"--: {goal!r}: tabled call NOT judged for WFS delays (its "
-            f"arguments do not lower to a table key: {exc}); a conditional "
-            f"answer passes as true here", UnjudgedTabledCallWarning,
-            stacklevel=4)
-        return None
-    written: set = set()
-    for a in goal_args:
-        _var_ids(a, written)
-    produced: set = set()
-    for a in lowered:
-        _var_ids(a, produced)
-    return lowered, produced - written
+        for _ in solve(goal, module, trail):
+            # Both channels are usually empty (an unconditional derivation),
+            # and the emptiness test is what keeps this off the hot path:
+            # copying the accumulated source map per answer would be
+            # quadratic in a long conjunction.
+            conditional = bool(leader._current_delays) or bool(leader._sources)
+            answer = freeze_args(judge_vars, trail)
+            if not conditional:
+                streamed.add(make_subgoal_key(answer, None))
+                seg = detach()
+                try:
+                    yield True, frozenset()
+                finally:
+                    reattach(seg)
+                continue
+            derivations.append((answer,
+                                frozenset(leader._current_delays),
+                                tuple(leader._sources.items())))
+
+        store = module.db.table_store
+        stores = [store]
+        for st in driven:
+            if all(st is not known for known in stores):
+                stores.append(st)
+        for _answer, direct, sources in derivations:
+            # A condition can name a store we never drove: a table another
+            # query completed, consumed here off the COMPLETE path.
+            for dn in direct:
+                if dn.store is not None and all(
+                        dn.store is not st for st in stores):
+                    stores.append(dn.store)
+            for _row, src_store in sources:
+                if src_store is not None and all(
+                        src_store is not st for st in stores):
+                    stores.append(src_store)
+        # Resolve only if there is something to resolve.  (The leader
+        # context's push COUNTER cannot answer that: it is thread-global, so
+        # a table another judged goal drove while we were suspended would
+        # make us run the global fixpoint over stores we never touched.)
+        if driven or derivations:
+            for st in stores:
+                _resolve_all_conditions(st)
+
+        # Now every table the derivation touched has settled: read the rows
+        # back and give the entry each derivation's FINAL condition.
+        for answer, direct, sources in derivations:
+            delays = set(direct)
+            dead = False
+            for (src_entry, i), _src_store in sources:
+                if src_entry.conditions[i] is _FAILED:
+                    dead = True   # the premise turned out WFS-false
+                    break
+                delays |= src_entry.delays_for(i)
+            if not dead:
+                leader.add_answer(answer, frozenset(delays))
+        if leader.answers:
+            _resolve_conditions(leader, store)
+
+        for i in range(len(leader.answers)):
+            truth = leader.truth_value(i)
+            if truth is False:
+                continue
+            if make_subgoal_key(leader.answers[i], None) in streamed:
+                continue          # a definite derivation already delivered it
+            mark = trail.mark()
+            if _unify_answer(judge_vars, leader.answers[i], trail):
+                seg = detach()
+                try:
+                    if truth is Undefined:
+                        yield Undefined, leader.delays_for(i)
+                    else:
+                        yield True, frozenset()
+                finally:
+                    reattach(seg)
+            trail.undo(mark)
+    finally:
+        pop_leader(leader)
+        for i in range(len(_leader_ctx.driven_stores) - 1, -1, -1):
+            if _leader_ctx.driven_stores[i] is driven:
+                del _leader_ctx.driven_stores[i]
+                break
+        # A04-F001: an SCC edge recorded against US belongs to the derivation
+        # that CALLED us -- a judged goal reached from inside a tabled clause
+        # body consumed an evaluating ancestor on ITS behalf.  Dropping the
+        # edge with the throwaway would let that leader complete mid-fixpoint.
+        if leader.scc_deps:
+            below = current_leader()
+            if below is not None:
+                below.scc_deps |= {d for d in leader.scc_deps if d is not below}
 
 
 def _definite_answers(goal: Any, module,
                       module_globals: "dict | None" = None) -> "Iterator[None]":
     """Yield once per UNCONDITIONAL answer of *goal*; raise UndefinedAnswer
-    on a conditional one.
-
-    Two moments, and they are deliberately different ones:
-
-    * The CALL SITE — which predicate, in which module, with which argument
-      objects, and therefore which subgoal key — is taken BEFORE ``solve()``
-      starts. That key names the call AS WRITTEN, unbound variables and all,
-      which is the key its table entry is stored under. The arguments are
-      LOWERED first (:func:`_lower_call_args`, when *module_globals* is
-      given): a reified node's ``pair(a)`` or ``++x`` is keyed as the cell or
-      value the compiled query makes of it, not as the node object. Taking it later
-      instead would read the arguments as the answer in hand has just bound
-      them, so an OPEN call (``wins(X)``) would go looking for ``wins(d)``'s
-      entry and miss — every answer, conditional ones included, then streamed
-      out unjudged. Nothing in the site walk depends on the bindings, so
-      taking it early costs only the walk.
-    * The table ENTRY is still looked up at the FIRST ANSWER. A tabled goal
-      can only be judged once SLG has completed for it, and that completion
-      happens INSIDE ``solve()``, before its first answer streams out — the
-      entry does not exist yet on a goal's first-ever call, so a lookup before
-      the loop starts would misread a genuinely tabled goal as untabled. Once
-      found the entry is stable for the rest of this call, and a goal with no
-      tabled site does no lookup at all.
-
-    Each ANSWER is then judged on its own: the per-answer key of the
-    now-bound arguments picks that answer's row out of the entry's index, so
-    a table holding one definite and one conditional answer exports the first
-    and refuses the second.
-    """
-    from clausal.logic.solve import solve, _tabled_call_site
-    from clausal.logic.tabling import make_subgoal_key
-    from clausal.logic.variables import Trail, deref
+    on a conditional one.  All the judgement is :func:`judged_answers`;
+    this adds the goal-position contract on top (raise, never export, a
+    conditional answer) and one refusal that predates it: a ``++`` that
+    reads a variable of the same goal in a single tabled call has no value
+    before the search, and the compiled query would hand the lambda an
+    unbound Var -- refuse loudly rather than run garbage."""
+    from clausal.logic.solve import _tabled_call_site
+    from clausal.logic.variables import Trail
     from clausal.terms import Undefined
     trail = Trail()
     site = _tabled_call_site(goal, module, trail)
-    call_key = None
-    goal_args = None
-    minted: set = set()
-    if site is not None:
-        _mod, _functor, _arity, goal_args = site
-        if module_globals is not None:
-            lowered = _lower_call_args(goal_args, module_globals, goal)
-            if lowered is not None:
-                goal_args, minted = lowered
-        call_key = make_subgoal_key(goal_args, trail)
-    entry = None
-    checked = False
-    for _ in solve(goal, module, trail):
-        if not checked:
-            checked = True
-            if site is not None:
-                tmod, functor, arity, _ = site
-                entry = tmod.db.table_store.get((functor, arity, call_key))
-        if entry is not None:
-            cand = [deref(a) for a in goal_args]
-            if minted:
-                # A slot the seam minted is a wildcard: judge every row of
-                # this shape, and refuse if any of them is conditional --
-                # "only answers with an empty delay set" read strictly when
-                # the exact row cannot be named.
-                pattern = make_subgoal_key(
-                    [_wildcard(a, minted) for a in cand], None)
-                rows = [i for k, i in entry._answer_index.items()
-                        if _key_matches(pattern, k)]
-            else:
-                idx = entry._answer_index.get(make_subgoal_key(cand, None))
-                rows = [] if idx is None else [idx]
-            if any(entry.truth_value(i) is Undefined for i in rows):
-                raise UndefinedAnswer(
-                    f"--: {goal!r} has a conditional (undefined) answer; use "
-                    f"clausal.query_wfs for truth values and delays")
+    if site is not None and any(_has_var_thunk(a) for a in site[3]):
+        raise SyntaxError(
+            f"--: {goal!r}: a ++ over a goal variable in a tabled call has no "
+            f"value to judge the call by; bind it in Python first or write "
+            f"the term in the goal")
+    for truth, _delays in judged_answers(goal, module, (), trail):
+        if truth is Undefined:
+            raise UndefinedAnswer(
+                f"--: {goal!r} has a conditional (undefined) answer; use "
+                f"clausal.query_wfs for truth values and delays")
         yield
 
 

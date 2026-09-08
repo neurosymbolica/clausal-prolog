@@ -1193,53 +1193,28 @@ def query_wfs(
     # turned every Undefined answer of a qualified goal into True.
     goal, module = _resolved_goal_and_module(goal, module, "query_wfs/3")
 
+    # The judgement is the seam's ``judged_answers`` (a throwaway tabling
+    # leader for the whole solve, 2026-09-08): EVERY goal shape is judged by
+    # the delays its own derivation incurred -- a single tabled call, a
+    # conjunction, an untabled wrapper, a ``++``-fed call -- so the old
+    # "composite goals keep True" limitation is gone.  Definite answers
+    # stream in derivation order; conditional ones are delivered after
+    # global resolution (as a tabled root already delivered them), and a
+    # WFS-false answer never surfaces.  Deferred answers are deduplicated
+    # over the GOAL's own variables, not over *variables*: asking for none of
+    # them must not merge four answers into one row.  Lazy import: seam
+    # imports solve.
+    from clausal.logic.seam import judged_answers  # noqa: PLC0415
+    if trail is None:
+        trail = Trail()
     results = []
-    for _ in solve(goal, module, trail):
-        results.append({name: _deref_walk(var) for name, var in variables.items()})
-
-    # A04-F004: annotate each result with its REAL WFS truth value read from the
-    # tabled entry's conditions, instead of hardcoding True. A single tabled-goal
-    # query maps each result to a stored answer (by normalized value) and uses
-    # TableEntry.truth_value(i) → True | Undefined. Non-tabled goals stay True
-    # (documented). Composite/conjunctive goals are not decomposed here and keep
-    # True (a min-truth semantics over tabled conjuncts is future work).
-    entry, goal_args = _tabled_entry_for_goal(goal, module, trail)
-    if entry is None:
-        for r in results:
-            r["_truth"] = True
-            r["_delays"] = frozenset()
-        return results
-
-    from clausal.logic.tabling import make_subgoal_key
-    var_to_name = {id(v): name for name, v in variables.items()}
-    kept = []
-    for r in results:
-        cand = []
-        for a in goal_args:
-            da = deref(a)
-            cand.append(r[var_to_name[id(da)]] if id(da) in var_to_name else da)
-        # The entry's own answer index is keyed by exactly this
-        # normalization (make_subgoal_key IS tuple-of-_normalize_for_key),
-        # so answer lookup is one dict get instead of an O(answers) scan
-        # per result.
-        idx = entry._answer_index.get(make_subgoal_key(cand, None))
-        truth = True
-        delays = frozenset()
-        if idx is not None:
-            truth = entry.truth_value(idx)
-            if truth is Undefined:
-                delays = entry.delays_for(idx)
-        if truth is False:
-            # The stored row was invalidated (WFS-false) AFTER solve()
-            # streamed it — resolution can outrun the incremental yields.
-            # A definite-false answer must not surface at all (a rerun of
-            # the same query yields nothing for it), and it must certainly
-            # not default to _truth=True.
-            continue
+    for truth, delays in judged_answers(
+            goal, module, list(variables.values()), trail):
+        r = {name: _deref_walk(var) for name, var in variables.items()}
         r["_truth"] = truth
         r["_delays"] = delays
-        kept.append(r)
-    return kept
+        results.append(r)
+    return results
 
 
 def _tabled_call_site(goal, module, trail):

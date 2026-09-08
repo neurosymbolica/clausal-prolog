@@ -430,20 +430,11 @@ class TestSoundnessThroughTheRewriter:
         with pytest.raises(UndefinedAnswer):
             mod.check()
 
-    def test_a_conditional_answer_is_not_judged_through_a_conjunction(self):
-        """PINS TODAY'S BEHAVIOUR, WHICH IS NOT THE STRICTNESS ONE WANTS.
-
-        WFS strictness reaches only a goal that IS a single tabled-predicate
-        call: ``_tabled_call_site`` returns ``None`` for a conjunction
-        and for an untabled wrapper, so ``_definite_answers`` has no table to
-        read a delay set from and the conditional answer passes as true —
-        exactly as ``query_wfs`` judges the same two goals ("Composite/
-        conjunctive goals are not decomposed here and keep True").  The bare
-        call in the test above DOES raise, from the same program.
-
-        Follow-up:
-        ``todo/wfs-delays-through-composite-goals-in-goal-position-2026-09-08.md``.
-        """
+    def test_a_conditional_answer_is_judged_through_a_conjunction_and_a_wrapper(self):
+        """WFS strictness reaches EVERY goal shape, not only a bare tabled
+        call: a conjunction and an untabled wrapper over a tabled predicate
+        both raise on the conditional answer (throwaway-leader judgement,
+        2026-09-08 — the pin that used to record the opposite is gone)."""
         from clausal.logic.seam import UndefinedAnswer
         mod = _load_inline("_gp_s3", (
             "-module(_gp_s3, [move(A, B), wins(X), p(X), a, b, c])\n"
@@ -467,11 +458,10 @@ class TestSoundnessThroughTheRewriter:
             "        return 'true'\n"
             "    return 'false'\n"
         ))
-        # NOT the desired answer: `wins(a)` is WFS-undefined, so both of
-        # these should raise. They do not — see the todo above.
-        assert mod.conjunction() == "true"
-        assert mod.wrapper() == "true"
-        # The same undefined answer, asked as a bare tabled call, IS judged.
+        with pytest.raises(UndefinedAnswer):
+            mod.conjunction()
+        with pytest.raises(UndefinedAnswer):
+            mod.wrapper()
         with pytest.raises(UndefinedAnswer):
             mod.bare()
 
@@ -895,23 +885,390 @@ class TestJudgementAtTheSeamQueryBoundary:
         return _load_inline(n, self.SRC.format(n=n))
 
     def test_an_omitted_signature_slot_is_judged_conservatively(self):
-        """The seam backfills the omitted slot with a Var the query never
-        binds, so the answer's row cannot be named exactly.  The judgement
-        then covers every row of that shape: refuse if ANY is conditional,
-        export only when all are definite."""
+        """The omitted slot is filled by the query with its own Var; the
+        answer is judged by the delays its derivation incurred, not by a key,
+        so it is exact: the definite one exports, the conditional one raises."""
         from clausal.logic.seam import UndefinedAnswer
         mod = self._mod("_gp_b1")
         assert mod.partial_definite() == "true"
         with pytest.raises(UndefinedAnswer):
             mod.partial_conditional()
 
-    def test_a_lowering_the_seam_refuses_does_not_change_the_goal(self):
-        """``num(N + 1)`` is arithmetic over an unbound variable: the seam
-        refuses to build it as a term, but the compiled query accepts the
-        goal (structurally; it simply fails).  Tabling-ness must not decide
-        whether the goal compiles: the call runs, unjudged, with a warning
-        saying so."""
-        from clausal.logic.seam import UnjudgedTabledCallWarning
+    def test_an_argument_the_seam_cannot_build_still_runs_and_is_judged(self):
+        """``num(N + 1)`` is arithmetic over an unbound variable: the compiled
+        query accepts the goal (structurally; it simply fails).  Judgement no
+        longer depends on lowering the arguments to a key, so nothing here
+        warns or refuses: the call runs and is judged like any other."""
+        import warnings
         mod = self._mod("_gp_b2")
-        with pytest.warns(UnjudgedTabledCallWarning):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             assert mod.arith_over_var() == "false"
+
+
+class TestJudgementThroughCompositeGoals:
+    """Every goal shape is judged: the derivation reports its delays to a
+    throwaway leader pushed for the whole goal-position solve, so a
+    conjunction, an untabled wrapper, a ``++``-fed call through a wrapper —
+    the oracle shape — and nested predicates are all covered.  Conditional
+    answers are delivered LAST (after global resolution), as a tabled root
+    already delivers them; definite ones stream as they are found."""
+
+    SRC = (
+        "-module({n}, [move(A, B), wins(X), decide(P, V), verdict(S, X), "
+        "beats(A, B), p(X), a, b, c, d, e, ok, start])\n"
+        "-double_quotes(chars)\n"
+        "-table(wins/1)\n"
+        "move(a, b),\n"
+        "move(b, c),\n"
+        "move(c, a),\n"
+        "move(d, e),\n"
+        "wins(X) <- (move(X, Y), not wins(Y))\n"
+        "p(X) <- wins(X)\n"
+        "beats(X, Y) <- (move(X, Y), not wins(Y))\n"
+        "decide(P, verdict(ok, X)) <- (X is P, wins(X))\n"
+        "def decide_definite():\n"
+        "    profile = d\n"
+        "    if --decide(++profile, verdict(S, X)):\n"
+        "        return (S, X)\n"
+        "    return None\n"
+        "def decide_conditional():\n"
+        "    profile = a\n"
+        "    if --decide(++profile, verdict(S, X)):\n"
+        "        return (S, X)\n"
+        "    return None\n"
+        "def every_beats(out, first):\n"
+        "    for Y in --beats(++first, Y):\n"
+        "        out.append(Y)\n"
+        "    return out\n"
+        "def every_wrapped(out):\n"
+        "    for X in --p(X):\n"
+        "        out.append(X)\n"
+        "    return out\n"
+        "def first_wrapped():\n"
+        "    for X in --p(X):\n"
+        "        return X\n"
+        "    return None\n"
+        "def nested(out):\n"
+        "    for X in --p(X):\n"
+        "        if --wins(d):\n"
+        "            out.append((X, 'd-wins'))\n"
+        "    return out\n"
+        "def body_raises():\n"
+        "    for X in --p(X):\n"
+        "        raise RuntimeError('body')\n"
+    )
+
+    def _mod(self, n):
+        return _load_inline(n, self.SRC.format(n=n))
+
+    def _stack(self):
+        from clausal.logic.tabling import _leader_ctx
+        return list(_leader_ctx.stack)
+
+    def test_the_oracle_shape_profile_through_a_wrapper(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_c1")
+        assert mod.decide_definite() == (("ok",), ("d",))
+        with pytest.raises(UndefinedAnswer):
+            mod.decide_conditional()
+        assert self._stack() == []
+
+    def test_negation_inside_an_untabled_body_is_judged(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_c2")
+        assert mod.every_beats([], ("d",)) == [("e",)]
+        out = []
+        with pytest.raises(UndefinedAnswer):
+            mod.every_beats(out, ("a",))
+        assert out == []
+
+    def test_definite_answers_stream_first_then_the_conditional_raises(self):
+        """The open wrapped call has one definite answer (d) and three
+        conditional ones (a, b, c): the definite one is exported as it is
+        found; the conditional ones are deferred to the end and the first of
+        them raises."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_c3")
+        out = []
+        with pytest.raises(UndefinedAnswer):
+            mod.every_wrapped(out)
+        assert out == [("d",)]
+
+    def test_break_after_the_first_answer_leaves_no_leader_behind(self):
+        mod = self._mod("_gp_c4")
+        assert mod.first_wrapped() == ("d",)
+        assert self._stack() == []
+        assert mod.first_wrapped() == ("d",)
+
+    def test_a_body_exception_leaves_no_leader_behind(self):
+        mod = self._mod("_gp_c5")
+        with pytest.raises(RuntimeError, match="body"):
+            mod.body_raises()
+        assert self._stack() == []
+
+    def test_a_nested_seam_inside_a_judged_body(self):
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_c6")
+        out = []
+        with pytest.raises(UndefinedAnswer):
+            mod.nested(out)
+        assert out == [(("d",), "d-wins")]
+        assert self._stack() == []
+
+
+class TestDelaysAreChargedToTheRightAnswer:
+    """Review of the throwaway leader (2026-09-08).  The leader's in-progress
+    delay set is ONE mutable bucket, so a delay a branch incurred before it
+    FAILED — or one a DIFFERENT judged goal incurred while running above this
+    one — was charged to whatever answer arrived next.  And a delay-free
+    re-derivation of an already-deferred answer never rescued it, neither
+    through the table's own row (tabled) nor through a definite clause
+    (untabled).  Every case turns a WFS-TRUE answer into a raised
+    ``UndefinedAnswer``: the direction a caller cannot work around.
+    """
+
+    SRC = (
+        "-module({n}, [move(A, B), wins(X), ok(X), both(X), p(X), r(X), t(X), "
+        "u(X), f(X), g(X), beats(A, B), agg(L), cnt(N), start, "
+        "allwins(L), sorted_wins(L), bagged(L), twoway(X), impossible(X), "
+        "coldcnt(N), tb(X), zz(X), pair_bag(L), naf_bag(L), "
+        "ok, none, "
+        "a, b, c, d, e, one, two])\n"
+        "-double_quotes(chars)\n"
+        "-table(wins/1)\n"
+        "-table(t/1)\n"
+        "-table(u/1)\n"
+        "move(a, b),\n"
+        "move(b, c),\n"
+        "move(c, a),\n"
+        "move(d, e),\n"
+        "wins(X) <- (move(X, Y), not wins(Y))\n"
+        "ok(d),\n"
+        "both(X) <- (wins(X), ok(X))\n"
+        "p(X) <- wins(X)\n"
+        "u(X) <- (not u(X))\n"
+        "t(a) <- (not u(a))\n"
+        "t(a),\n"
+        "r(a) <- wins(a)\n"
+        "r(a),\n"
+        "f(one),\n"
+        "f(two),\n"
+        "g(start),\n"
+        "g(X) <- (move(X, Y), not wins(Y))\n"
+        "beats(X, Y) <- (move(X, Y), not wins(Y))\n"
+        "agg(L) <- (findall(Y, beats(a, Y), L))\n"
+        "cnt(N) <- (count_all(beats(a, Y), N))\n"
+        "allwins(L) <- (findall(X, wins(X), L))\n"
+        "sorted_wins(L) <- (setof(X, wins(X), L))\n"
+        "bagged(L) <- (bagof(X, wins(X), L))\n"
+        "impossible(none),\n"
+        "twoway(X) <- (findall(Y, wins(Y), L), impossible(L))\n"
+        "twoway(ok),\n"
+        "coldcnt(N) <- (count_all(wins(X), N))\n"
+        "-table(tb/1)\n"
+        "-table(zz/1)\n"
+        "tb(X) <- (move(X, Y), not tb(Y))\n"
+        "zz(X) <- (not zz(X))\n"
+        "pair_bag(L) <- (findall(X, (wins(X), tb(X)), L))\n"
+        "naf_bag(L) <- (findall(X, (wins(X), not zz(X)), L))\n"
+        "def both_answers(out):\n"
+        "    for X in --both(X):\n"
+        "        out.append(X)\n"
+        "    return out\n"
+        "def t_is_true():\n"
+        "    if --t(a):\n"
+        "        return 'true'\n"
+        "    return 'false'\n"
+        "def r_answers(out):\n"
+        "    for X in --r(X):\n"
+        "        out.append(X)\n"
+        "    return out\n"
+        "def stream_f():\n"
+        "    for X in --f(X):\n"
+        "        yield X\n"
+        "def stream_g():\n"
+        "    for X in --g(X):\n"
+        "        yield X\n"
+        "def warm(out):\n"
+        "    for Y in --beats(d, Y):\n"
+        "        out.append(Y)\n"
+        "    return out\n"
+        "def bag():\n"
+        "    if --agg(L):\n"
+        "        return ('true', L)\n"
+        "    return 'false'\n"
+        "def counted():\n"
+        "    if --cnt(N):\n"
+        "        return ('true', N)\n"
+        "    return 'false'\n"
+        "def cold_bag():\n"
+        "    if --allwins(L):\n"
+        "        return ('true', L)\n"
+        "    return 'false'\n"
+        "def cold_set():\n"
+        "    if --sorted_wins(L):\n"
+        "        return ('true', L)\n"
+        "    return 'false'\n"
+        "def cold_bagof():\n"
+        "    if --bagged(L):\n"
+        "        return ('true', L)\n"
+        "    return 'false'\n"
+        "def cold_counted():\n"
+        "    if --coldcnt(N):\n"
+        "        return ('true', N)\n"
+        "    return 'false'\n"
+        "def two_tables():\n"
+        "    if --pair_bag(L):\n"
+        "        return ('true', L)\n"
+        "    return 'false'\n"
+        "def naf_after_stream():\n"
+        "    if --naf_bag(L):\n"
+        "        return ('true', L)\n"
+        "    return 'false'\n"
+        "def after_the_bag():\n"
+        "    if --twoway(X):\n"
+        "        return X\n"
+        "    return None\n"
+    )
+
+    def _mod(self, n):
+        return _load_inline(n, self.SRC.format(n=n))
+
+    def _stack(self):
+        from clausal.logic.tabling import _leader_ctx
+        return list(_leader_ctx.stack)
+
+    def test_a_failed_branch_does_not_charge_its_delays_to_the_next_answer(self):
+        """``both(X) <- (wins(X), ok(X))`` with ``ok(d)`` the only fact: the
+        a/b/c branches each delay ``not wins(...)`` and then FAIL at ``ok``,
+        so their delays belong to no answer at all.  ``d``, derived
+        delay-free, is WFS-true and must export."""
+        mod = self._mod("_gp_d1")
+        assert mod.both_answers([]) == [("d",)]
+        assert self._stack() == []
+
+    def test_a_tabled_answer_rederived_without_delays_is_true(self):
+        """``t(a) <- not u(a)`` (u(a) is undefined) and the fact ``t(a)``:
+        the table's own row ends UNCONDITIONAL — a disjunction of derivations
+        with one delay-free disjunct is True — so the goal is true."""
+        mod = self._mod("_gp_d2")
+        assert mod.t_is_true() == "true"
+        assert self._stack() == []
+
+    def test_a_definite_clause_rescues_a_deferred_answer_from_a_wrapper(self):
+        """Untabled ``r``: the first clause derives ``r(a)`` conditionally
+        through ``wins(a)``, the second is the FACT ``r(a)``.  One WFS-true
+        answer, exported once — not exported and then raised on."""
+        mod = self._mod("_gp_d3")
+        assert mod.r_answers([]) == [("a",)]
+        assert self._stack() == []
+
+    def test_a_second_judged_goal_does_not_inherit_the_first_s_delays(self):
+        """Two judged generators alive at once.  ``g`` yields its fact
+        (``start``), then
+        ``f`` (two facts, NO negation anywhere) starts and yields, then ``g``
+        resumes and delays inside its untabled body: those delays are ``g``'s,
+        and ``f`` must still deliver both of its answers."""
+        mod = self._mod("_gp_d4")
+        gg, gf = mod.stream_g(), mod.stream_f()
+        try:
+            assert next(gg) == ("start",)   # g's own fact, no conditions
+            assert next(gf) == ("one",)
+            # g resumes and DELAYS on the a/b/c branches before reaching its
+            # second definite answer -- a distinct atom, so this pins that the
+            # delaying branches really ran.
+            assert next(gg) == ("d",)
+            assert next(gf) == ("two",)
+        finally:
+            gg.close()
+            gf.close()
+        assert self._stack() == []
+
+    def test_a_collected_bag_keeps_the_conditions_its_rows_stand_on(self):
+        """``findall``/``count_all`` collect over a private trail mark and
+        unwind it; the BAG survives that unwind, so the conditions its rows
+        were derived under have to survive with it.  Trailing the conditions
+        (defect 1 above) would otherwise retract them on the way out and
+        report a bag built from undefined answers as definitely true."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_d5")
+        assert mod.warm([]) == [("e",)]     # drives wins/1 to completion
+        with pytest.raises(UndefinedAnswer):
+            mod.bag()
+        with pytest.raises(UndefinedAnswer):
+            mod.counted()
+        assert self._stack() == []
+
+    def test_a_bag_collected_off_a_LIVE_drive_keeps_its_conditions_too(self):
+        """The pin above warms ``wins/1`` first, so it only covers the
+        COMPLETE-table path.  On a cold table the answers arrive by STREAMING,
+        and there the top of the leader stack is the table's own entry -- the
+        conditions are credited to the leader BELOW it.  A harvest that read
+        the stack top would collect nothing and the bag would come back
+        unconditionally true.
+
+        The bag here is also a MIXED one -- ``wins/1`` gives the definite
+        ``d`` alongside the undefined ``a``/``b``/``c`` -- so it pins that one
+        undefined row is enough to make the whole bag's reader undefined."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_d6")          # NOTHING drives wins/1 first
+        with pytest.raises(UndefinedAnswer):
+            mod.cold_bag()
+        assert self._stack() == []
+
+    def test_setof_and_bagof_keep_their_conditions(self):
+        """``setof``/``bagof`` reorder the statements around the charge
+        (sort/dedup, fail-on-empty); they carry conditions like ``findall``."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_d7")
+        with pytest.raises(UndefinedAnswer):
+            mod.cold_set()
+        assert self._stack() == []
+        mod = self._mod("_gp_d8")
+        with pytest.raises(UndefinedAnswer):
+            mod.cold_bagof()
+        assert self._stack() == []
+
+    def test_backtracking_over_a_bag_retracts_the_conditions_it_charged(self):
+        """The charge lands AT the construct's own mark, so failing PAST the
+        whole ``findall`` retracts it: the next clause's answer is a plain
+        fact and must be exported as definitely true, not raised on."""
+        mod = self._mod("_gp_d9")
+        assert mod.after_the_bag() == ("ok",)
+        assert self._stack() == []
+
+    def test_count_all_keeps_its_conditions_off_a_live_drive_too(self):
+        """``count_all``'s lowering changed identically to ``findall``'s, but
+        the warm pin above reaches its delays through ``_delay_negation``
+        behind an untabled goal -- not through the STREAMING credit path this
+        repaired.  Cold, over a tabled goal directly, it does."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_e1")
+        with pytest.raises(UndefinedAnswer):
+            mod.cold_counted()
+        assert self._stack() == []
+
+    def test_a_bag_over_two_tabled_goals_keeps_their_conditions(self):
+        """The collecting leader is bound at the construct's ENTRY, while the
+        credit for a conditional row is stack-RELATIVE (the leader below the
+        streaming table).  With a second table parked between them the two
+        rules address different frames, and the condition reaches the bag
+        only because the inner table folds it into its own answers, which
+        credit the leader below on streaming.  Measured, both before and
+        after the entry-time binding -- this pins the transitive path."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_e2")
+        with pytest.raises(UndefinedAnswer):
+            mod.two_tables()
+        assert self._stack() == []
+
+    def test_a_negation_after_a_streaming_tabled_goal_in_a_bag(self):
+        """``not zz(X)`` charges the stack TOP, which during ``wins``'s stream
+        is ``wins``'s own entry, not the collecting leader.  The condition
+        still reaches the bag; this pins that it does."""
+        from clausal.logic.seam import UndefinedAnswer
+        mod = self._mod("_gp_e3")
+        with pytest.raises(UndefinedAnswer):
+            mod.naf_after_stream()
+        assert self._stack() == []
