@@ -37,12 +37,20 @@ class PVar:
     """Variable: X, _Y, _"""
     name: str  # "_" for anonymous
     span: tuple | None = field(default=None, compare=False)
+    #: Unit DISCARDED from a Clausal Quantity (`DEPOSIT(baht)` -> `_Deposit`),
+    #: reported in the line's trailing `% Clausal units:` comment. Non-comparing
+    #: — provenance, not identity.
+    unit: str | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PNumber:
     """Integer or float literal."""
     value: int | float
     span: tuple | None = field(default=None, compare=False)
+    #: Unit DISCARDED from a Clausal Quantity (`5000(euro)` -> `5000`),
+    #: reported in the line's trailing `% Clausal units:` comment. Non-comparing
+    #: — provenance, not identity, so an annotated 5000 equals a plain one.
+    unit: str | None = field(default=None, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PString:

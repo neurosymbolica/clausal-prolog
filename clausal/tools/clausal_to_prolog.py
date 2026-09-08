@@ -198,6 +198,44 @@ def _is_operator_atom(name: str, op_table: OperatorTable) -> bool:
             or op_table.lookup_postfix(name) is not None)
 
 
+#: Internal sentinel wrapping a discarded unit while a term is being rendered.
+#: Stripped by _attach_unit_notes before any text leaves emit_item, so it can
+#: never reach a .pl file. U+0001 cannot occur in Clausal source.
+_UNIT_MARK = "\x01"
+#: value + marked unit. The value class must EXCLUDE the marker itself, or a
+#: greedy match runs straight through one pair into the next.
+_UNIT_RE = re.compile(
+    r"([^\s(,)" + _UNIT_MARK + r"]+)" + _UNIT_MARK
+    + r"([^" + _UNIT_MARK + r"]+)" + _UNIT_MARK)
+
+
+def _unit_marker(term) -> str:
+    unit = getattr(term, "unit", None)
+    return f"{_UNIT_MARK}{unit}{_UNIT_MARK}" if unit else ""
+
+
+def _attach_unit_notes(text: str) -> str:
+    """Move each line's discarded units into ONE trailing `%` comment.
+
+    `X =:= 5000 + 3000.` -> `X =:= 5000 + 3000.  % Clausal units: 5000 (euro), 3000 (euro)`
+
+    Trailing rather than above: a `%` runs to end of line, which is harmless
+    once the line's code is complete, and it costs no extra lines. Per LINE
+    rather than per clause so the note sits next to the values it describes;
+    a line normally carries one or two.
+    """
+    out = []
+    for line in text.split("\n"):
+        if _UNIT_MARK not in line:
+            out.append(line)
+            continue
+        pairs = [(m.group(1), m.group(2)) for m in _UNIT_RE.finditer(line)]
+        clean = _UNIT_RE.sub(r"\1", line)
+        note = ", ".join(f"{value} ({unit})" for value, unit in pairs)
+        out.append(f"{clean}  % Clausal units: {note}")
+    return "\n".join(out)
+
+
 def emit_term(term: PTerm, op_table: OperatorTable, *,
               context_prec: int = 1201, context_assoc: str = "",
               operand_of_op: bool = False) -> str:
@@ -224,11 +262,11 @@ def emit_term(term: PTerm, op_table: OperatorTable, *,
             return "(" + text + ")"
         return text
     if isinstance(term, PVar):
-        return term.name
+        return term.name + _unit_marker(term)
     if isinstance(term, PNumber):
-        if isinstance(term.value, float):
-            return repr(term.value)
-        return str(term.value)
+        text = (repr(term.value) if isinstance(term.value, float)
+                else str(term.value))
+        return text + _unit_marker(term)
     if isinstance(term, PString):
         return '"' + _escape_string_body(term.value) + '"'
     if isinstance(term, PList):
@@ -384,6 +422,10 @@ def _terminate(text: str) -> str:
 
 
 def emit_item(item: PItem, op_table: OperatorTable) -> str:
+    return _attach_unit_notes(_emit_item(item, op_table))
+
+
+def _emit_item(item: PItem, op_table: OperatorTable) -> str:
     """Render a single PItem (clause, DCG rule, directive) as Prolog text."""
     if isinstance(item, PClause):
         head_str = emit_term(item.head, op_table)
@@ -438,12 +480,19 @@ def _flatten_conjunction(term: PTerm) -> list[PTerm]:
 
 # ── Module emission ──────────────────────────────────────────────────
 
+#: Said ONCE at the top of any file that lost a unit, so a reader meets the
+#: caveat before the code rather than inferring it from scattered notes.
+_LOSSY_HEADER = ("% Clausal to Prolog translation has removed units from some "
+                 "numbers. See comments below.")
+
+
 def emit_module(pmodule: PModule, op_table: OperatorTable) -> str:
     """Render a full PModule as Prolog source text."""
-    parts = []
-    for item in pmodule.items:
-        parts.append(emit_item(item, op_table))
-    return "\n".join(parts)
+    parts = [emit_item(item, op_table) for item in pmodule.items]
+    body = "\n".join(parts)
+    if "% Clausal units:" in body:
+        body = _LOSSY_HEADER + "\n\n" + body
+    return body
 
 
 # ── Clausal source → Prolog AST conversion ───────────────────────────
@@ -717,10 +766,12 @@ class _ClausalToProlog:
         if isinstance(func, python_ast.Constant) and isinstance(
                 func.value, (int, float)) and not isinstance(func.value, bool):
             self._add_lossy(f"unit discarded: {func.value}({unit.id}) -> {func.value}")
-            return self._convert_expr(func)
+            return PNumber(func.value, unit=unit.id)
         if isinstance(func, python_ast.Name) and _is_logic_var_name(func.id):
             self._add_lossy(f"unit discarded: {func.id}({unit.id}) -> {func.id}")
-            return self._convert_expr(func)
+            lowered = self._convert_expr(func)
+            return (PVar(lowered.name, unit=unit.id)
+                    if isinstance(lowered, PVar) else lowered)
         return None
 
     def _collect_unit_atoms(self, tree: python_ast.Module) -> None:
@@ -830,16 +881,6 @@ class _ClausalToProlog:
                     f"WARNING: untranslatable clausal construct: {w}\n"
                     f"   Replace with Prolog equivalent manually."
                 ))
-            # A LINE comment, above the clause: `%` is the portable comment in
-            # every Prolog, and a quantity is usually mid-expression where a
-            # `%` would swallow the rest of the clause. So the note goes above
-            # rather than inline, and the reader still sees what Clausal
-            # treated each value as.
-            if self._lossy:
-                self._items.append(PComment(
-                    "% units discarded on export (Clausal quantities; "
-                    "dimensional checking stays in Clausal):\n"
-                    + "\n".join(f"%   {note}" for note in self._lossy)))
             if item is not None:
                 if isinstance(item, list):
                     self._items.extend(_prefix_singletons(i) for i in item)
@@ -1743,7 +1784,7 @@ class _ClausalToProlog:
         if isinstance(node.op, python_ast.USub):
             inner = self._convert_expr(node.operand)
             if isinstance(inner, PNumber):
-                return PNumber(-inner.value)
+                return PNumber(-inner.value, unit=inner.unit)
             return PCompound("-", (inner,))
         if isinstance(node.op, python_ast.UAdd):
             # ++expr is Python interop escape — untranslatable
@@ -2421,7 +2462,7 @@ def _prefix_singletons(item: PItem) -> PItem:
     class _Renamer(PrologTransformer):
         def visit_PVar(self, node):
             if node.name in singletons and not node.name.startswith("_"):
-                return PVar("_" + node.name)
+                return PVar("_" + node.name, unit=node.unit)
             return node
 
     return _Renamer().visit(item)

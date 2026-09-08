@@ -32,15 +32,20 @@ def _tr(body, decl="p(X)", imports="", **kw):
 
 
 def _code(out):
-    """The emitted program with comments removed.
+    """The emitted program with ALL comments removed — whole-line and trailing.
 
-    The discarded unit is deliberately ECHOED in a /* unit */ note, so
-    "the unit is gone" has to be asserted against the CODE, not the text --
-    otherwise the annotation would make these tests fail while the program is
-    perfectly correct.
+    The discarded unit is deliberately echoed in a trailing `% Clausal units:`
+    note, so "the unit is gone from the program" has to be asserted against the
+    CODE. Stripping only whole comment LINES is not enough now that the notes
+    ride on code lines; that gap made twelve of these tests fail for the wrong
+    reason when the format changed.
     """
-    out = re.sub(r"/\*.*?\*/", "", out, flags=re.S)
-    return "\n".join(l for l in out.splitlines() if not l.lstrip().startswith("%"))
+    lines = []
+    for line in out.splitlines():
+        if line.lstrip().startswith("%"):
+            continue
+        lines.append(line.split("%", 1)[0].rstrip())
+    return "\n".join(lines)
 
 
 def test_literal_quantity_keeps_magnitude_drops_unit():
@@ -67,7 +72,8 @@ def test_variable_magnitude_quantity():
     # the magnitude survives as a variable (renamed by the usual singleton
     # mapping -- DEPOSIT occurs once, so it emits as _Deposit)
     assert "eposit" in out
-    assert "(" not in out.split("X == ")[1].split("\n")[0]  # no VARIABLE functor
+    # no VARIABLE functor in the CODE (the note legitimately says "(baht)")
+    assert "(" not in _code(out).split("X == ")[1].split("\n")[0]
 
 
 def test_zero_quantity_is_not_mistaken_for_something_else():
@@ -123,39 +129,65 @@ def test_two_argument_call_on_a_number_is_still_unsupported():
 
 # --- the unit is VISIBLE in the output, though not semantic -------------------
 
-def test_discarded_unit_is_noted_above_the_clause():
-    """The reader can still see what Clausal treated each value as."""
+def test_discarded_units_ride_a_TRAILING_comment_on_their_own_line():
+    """One comment per LINE, listing that line's values and units.
+
+    Trailing, not above: a `%` runs to end of line, which is harmless once the
+    line's code is complete, and it costs NO EXTRA LINES. On the corpus this
+    took the note overhead from 78 added lines (9.7% of output) to 16 (2.3%),
+    and the 16 are the one-per-file header.
+    """
     out = _tr("p(X) <- ( X == 5000(euro) + 3000(euro) )")
-    assert "units discarded on export" in out
-    assert "%   unit discarded: 5000(euro) -> 5000" in out
-    assert "%   unit discarded: 3000(euro) -> 3000" in out
-    # and the note is ABOVE the clause it describes
-    assert out.index("units discarded") < out.index("p(X) :-")
+    assert "X =:= 5000 + 3000.  % Clausal units: 5000 (euro), 3000 (euro)" in out
 
 
 def test_variable_magnitude_is_noted_too():
     out = _tr("p(X) <- ( X == DEPOSIT(baht) )")
-    assert "%   unit discarded: DEPOSIT(baht) -> DEPOSIT" in out
+    assert "% Clausal units: _Deposit (baht)" in out
+
+
+def test_negative_magnitude_keeps_its_sign_in_the_note():
+    out = _tr("p(X) <- ( X == -3(second) )")
+    assert "% Clausal units: -3 (second)" in out
+
+
+def test_header_says_it_once_per_file():
+    out = _tr("p(X) <- ( X == 5000(euro) )\nq(Y) <- ( Y == 7(baht) )",
+              decl="p(X), q(Y)")
+    assert out.count(
+        "% Clausal to Prolog translation has removed units from some numbers."
+    ) == 1
+    assert out.startswith("% Clausal to Prolog translation has removed units")
+    # ...but each line still carries its own note
+    assert out.count("% Clausal units:") == 2
+
+
+def test_no_header_when_nothing_was_discarded():
+    """NEGATIVE CONTROL: a file that loses no unit must not carry the caveat."""
+    out = _tr("p(X) <- ( X == 42 )")
+    assert "Clausal to Prolog translation has removed units" not in out
+    assert "% Clausal units:" not in out
 
 
 def test_notes_are_LINE_comments_never_block_comments():
-    """ISO portability: `%` is the comment form to rely on, and a `%` cannot
-    sit inline because it would swallow the rest of the clause -- which is why
-    the note goes above rather than beside the value."""
+    """ISO portability: `%` is the comment form to rely on."""
     out = _tr("p(X) <- ( X == 5000(euro) + 3000(euro) )")
     assert "/*" not in out and "*/" not in out
-    for line in out.splitlines():
-        if "unit discarded" in line:
-            assert line.lstrip().startswith("%")
 
 
-def test_note_is_per_clause_not_per_file():
-    """Two clauses, two notes -- a reader should not have to guess which
-    clause a file-level summary was about."""
-    out = _tr("p(X) <- ( X == 5000(euro) )\nq(Y) <- ( Y == 7(baht) )",
+def test_internal_marker_never_reaches_the_output():
+    """The unit rides an internal sentinel between emit_term and the line
+    rewrite. If it ever leaked it would be a U+0001 in a .pl file, which no
+    reader would diagnose — so pin it, on every shape at once."""
+    out = _tr("p(X) <- ( X == 5000(euro) + DEPOSIT(baht) - 2.5(m) )")
+    assert "\x01" not in out
+
+
+def test_a_line_with_no_units_gets_no_comment():
+    out = _tr("p(X) <- ( X == 5000(euro) )\nq(Y) <- ( Y == 42 )",
               decl="p(X), q(Y)")
-    assert out.count("units discarded on export") == 2
-
+    q_line = [l for l in out.splitlines() if "Y ==" in l or "Y =:=" in l][0]
+    assert "%" not in q_line
 
 # --- the SAFETY property, not just the detail --------------------------------
 
@@ -195,7 +227,7 @@ def test_negative_magnitude_lowers():
     """`-3(s)` is USub wrapping the Call, so the quantity still lowers."""
     out = _tr("p(X) <- ( X == -3(s) )", strict=True)
     assert "-3" in _code(out)
-    assert "unit discarded: -3(s) -> -3" in out or "unit discarded: 3(s) -> 3" in out
+    assert "% Clausal units: -3 (s)" in out
 
 
 def test_float_magnitude_lowers():
