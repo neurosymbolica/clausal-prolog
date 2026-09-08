@@ -3,8 +3,8 @@
 **Status: OPEN.** Severity: high (silent) — the two silent classes the P3-1/P3-2
 reviews promised were fail-loud both show up here.
 
-Found 2026-09-05 while probing the clausify peer's N3 question (keyword-field matching
-after the cell flip — that WORKS; see /workspace/clausify/ATOM-FINDINGS-FOR-clausal-c3.md).
+Found 2026-09-05 while probing a downstream peer's question (keyword-field matching
+after the cell flip — that WORKS; see the peer's findings note).
 Observed on `feat/p33-state-reloc` @ `0b8c2937` = clone main `d0f2bad5` + P3-3 T1/T2
 (neither task touches this path). Almost certainly a P3-1 artifact: before the pivot a
 `-private` atom was a class and applying it raised; now it is a `str`, and the compiler
