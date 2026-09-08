@@ -289,10 +289,15 @@ def test_a_REIFIED_comparison_is_recorded(inst):
     than the open hole; this pin is what would have caught it."""
     src = ("-module(_eiE, [p(X, R), yes, no])\n-double_quotes(chars)\n"
            "p(X, R) <- if_(X == 3, R is yes, R is no)\n")
-    mod, _ = _load(src, "_eiE")
+    mod, path = _load(src, "_eiE")
     _run(mod, ("p", 3, Var()))
     assert inst.records(), "a ground reified == must be recorded, not silent"
-    assert {r["path"] for r in inst.records()} == {instrument.TEST}
+    # Pin ATTRIBUTION too, not just the path: nothing else in the reify tests
+    # checks that `_getframe(2)` in `_wrap_reify` resolves to the .clausal
+    # clause frame, which is exactly what the deleted `clpfd.fd_eq` wrapper
+    # got wrong (records attributed to engine frames inside clpfd.py).
+    assert inst.records() == [
+        {"file": os.path.abspath(path), "line": 3, "path": instrument.TEST}]
 
 
 def test_a_reified_NON_NUMERIC_comparison_is_STRUCTURAL_not_TEST(inst):
@@ -323,7 +328,27 @@ def test_a_reified_NE_produces_a_phantom_eq_record_KNOWN_LIMIT(inst):
     distinct entry, that is an improvement — delete the test and say so."""
     src = ("-module(_eiG, [p(X, Y, R), yes, no])\n-double_quotes(chars)\n"
            "p(X, Y, R) <- if_(X != Y, R is yes, R is no)\n")
-    mod, _ = _load(src, "_eiG")
+    mod, path = _load(src, "_eiG")
     _run(mod, ("p", Var(), Var(), Var()))
-    # The source line has no `==`, yet records appear against it.
-    assert inst.records(), "the limit is that records DO appear here"
+    # The source line has no `==`, yet a fully-attributed record appears
+    # against it. Pin the whole shape: asserting only non-emptiness would stay
+    # green if `_site()` started misattributing to an engine frame.
+    assert inst.records() == [
+        {"file": os.path.abspath(path), "line": 3,
+         "path": instrument.CONSTRAINT}]
+
+
+def test_a_reified_site_DOES_report_BIND_when_undetermined(inst):
+    """The docstring limit is on the `$reify_fd` RECORD, not on the reified
+    SITE. When `reify_fd` cannot decide it returns None and the lowering posts
+    `$fd_eq` inline in the same clause frame, so the site reports BIND at
+    exactly the same file:line. An earlier docstring said a reified site
+    "looks ground even where the same source construct elsewhere would bind",
+    which is false — and a consumer believing it would conclude every
+    BIND/CONSTRAINT record came from a non-reified site."""
+    src = ("-module(_eiH, [p(X, R), yes, no])\n-double_quotes(chars)\n"
+           "p(X, R) <- if_(X == 3, R is yes, R is no)\n")
+    mod, path = _load(src, "_eiH")
+    _run(mod, ("p", Var(), Var()))
+    assert inst.records() == [
+        {"file": os.path.abspath(path), "line": 3, "path": instrument.BIND}]

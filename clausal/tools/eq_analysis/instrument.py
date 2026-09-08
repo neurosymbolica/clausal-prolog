@@ -27,11 +27,15 @@ respelling and must become ``#=``:
 
 TWO LIMITS THE CONSUMER SHOULD KNOW:
 
-* A REIFIED execution (``if_(X == Y, ...)``) can only report a decided/ground
-  path -- TEST or STRUCTURAL, never BIND/CONSTRAINT/FAILED -- because the
-  undetermined branch returns None and posts ``$fd_eq`` instead, which is
-  recorded separately. A reified site therefore looks ground even where the
-  same source construct elsewhere would bind.
+* A DECIDED reified execution -- the ``$reify_fd`` call itself, when both
+  operands are ground -- reports only TEST or STRUCTURAL, never
+  BIND/CONSTRAINT/FAILED, because ``reify_fd`` returns None rather than
+  deciding when it cannot. That is a limit on the ``$reify_fd`` RECORD, NOT on
+  the reified SITE: when undetermined, the lowering posts ``$fd_eq`` inline in
+  the same clause frame, so the site reports BIND or CONSTRAINT at exactly the
+  same file:line. Measured: ``p(X, R) <- if_(X == 3, ...)`` gives BIND with X
+  unbound and TEST with X ground, both at the ``if_`` line. A consumer must
+  NOT infer that a BIND/CONSTRAINT record came from a non-reified site.
 * A reified ``!=`` uses ``$fd_eq`` as its FALSE-branch entry
   (``_lower_goalop_shared._FD_REIFY``: ``"fd_ne": ("ne", "$fd_ne", "$fd_eq")``),
   so an undetermined reified ``!=`` produces a ``==`` record at a line whose
