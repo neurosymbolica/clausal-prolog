@@ -36,6 +36,12 @@ def _err(run_clausal, goal, extra_atoms=()):
     return str(e.value)
 
 
+def _err_term(run_clausal, goal, extra_atoms=()):
+    with pytest.raises(LogicException) as e:
+        run_clausal(_src(goal, extra_atoms), ("p",))
+    return e.value.term
+
+
 def test_unbound_operand_is_instantiation_error(run_clausal):
     got = _err(run_clausal, "'=:='(X_UNUSED, 1)")
     assert got, "the error text must be non-empty, or this assertion can never fail"
@@ -68,3 +74,125 @@ def test_non_evaluable_operand_is_never_the_clpfd_integer_shape(run_clausal):
     got = _err(run_clausal, "'=:='(1, foo)", extra_atoms=("foo",))
     assert "clpfd expression" not in got
     assert "type_error(integer" not in got.replace(" ", "")
+
+
+def _evaluable_culprit_of(term):
+    """The culprit out of `error(type_error(evaluable, Culprit), Context)`."""
+    assert isinstance(term, Compound) and term.functor == "error", term
+    inner = term.args[0]
+    assert isinstance(inner, Compound) and inner.functor == "type_error", inner
+    assert spelling(inner.args[0]) == "evaluable", inner
+    return inner.args[1]
+
+
+def test_compound_evaluable_culprit_is_a_name_arity_indicator_OPEN_iso_divergence(
+        run_clausal):
+    """ISO's `type_error(evaluable, …)` culprit is a Name/Arity INDICATOR.
+
+    A COMPOUND operand used to leak the raw term instead. Measured
+    2026-09-09 before the fix:
+
+        '=:='(1, foo(bar))
+            Clausal: error(type_error(evaluable, foo(bar)), 'is/2')
+            Scryer:  error(type_error(evaluable, bar/0), (is)/2)
+
+    `_evaluable_culprit`'s `isinstance(leaf, Compound)` branch was DEAD: an
+    engine compound reaching it from `.clausal` source is a cell tuple
+    (`('foo', ('bar',))`), not a `clausal.terms.Compound`, so the term fell
+    through the branch untouched.
+
+    This test pins the INDICATOR SHAPE, which is now correct, and RECORDS
+    that the indicator's IDENTITY still diverges: Scryer evaluates arguments
+    first and names the innermost non-evaluable leaf (`bar/0`), while
+    `clpfd._eval_ground` reports the whole offending subterm, so Clausal
+    names `foo/1`. Reproducing Scryer's descent would mean re-deriving its
+    evaluation order from measurements, i.e. guessing, so it is NOT
+    attempted — the divergence is documented here, not blessed. The Scryer
+    rows are in the oracle test below."""
+    culprit = _evaluable_culprit_of(
+        _err_term(run_clausal, "'=:='(1, foo(bar))",
+                  extra_atoms=("foo(a)", "bar")))
+    assert isinstance(culprit, Compound) and culprit.functor == "/", culprit
+    name, arity = culprit.args
+    assert is_atom(name) and spelling(name) == "foo", culprit
+    assert arity == 1, culprit
+
+
+def test_compound_evaluable_culprit_OPEN_iso_divergence_oracle(scryer):
+    """Scryer's rule, measured: evaluate the arguments first, so the culprit
+    is the innermost non-evaluable leaf. Four rows, because one row does not
+    show a rule."""
+    def culprit(goal):
+        return scryer(f"catch({goal}, E, (write(E), nl)), halt.")
+
+    assert culprit("1 =:= foo(bar)") == "error(type_error(evaluable,bar/0),(is)/2)"
+    assert culprit("1 =:= f(g(h))") == "error(type_error(evaluable,h/0),(is)/2)"
+    assert culprit("1 =:= foo(1)") == "error(type_error(evaluable,foo/1),(is)/2)"
+    assert culprit("1 =:= foo") == "error(type_error(evaluable,foo/0),(is)/2)"
+
+
+# ---------------------------------------------------------------------------
+# The '#…' family's error surface.
+#
+# `#=` NAMES AN EXISTING BEHAVIOUR — infix `==` compiles to nodes.ArithEq and
+# `'#='` dispatches to the very same `fd_eq` — so its error surface is infix
+# `==`'s error surface, and changing it would change infix `==`, which this
+# branch may not do. It is therefore PINNED here, not fixed: three different
+# behaviours across one family, none of them Scryer's.
+# ---------------------------------------------------------------------------
+
+
+def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
+    """Four rows with a non-numeric ground operand, measured 2026-09-09.
+    Documents, does not bless.
+
+        '#='(1, foo)    Clausal: FAILS SILENTLY
+        '#\\='(1, foo)  Clausal: SUCCEEDS
+        '#<'(1, foo)    Clausal: type_error(orderable, foo), context '(<)/2'
+        '#='(X, foo)    Clausal: type_error(evaluable, foo), context '(==)/2'
+
+    Scryer's clpz answers ONE thing for all four:
+    `error(domain_error(clpz_expression,foo),unknown(foo)-1)` (see the oracle
+    test below).
+
+    Two warts are pinned deliberately rather than fixed. First, the family is
+    not internally consistent: `'#='` fails where `'#\\='` succeeds where
+    `'#<'` raises. Second, the last row's error CONTEXT names `(==)/2` for a
+    goal written `'#='` — the context string comes from the shared ArithEq
+    implementation, which knows only its Clausal spelling. Both follow from
+    `#=` being a NAME for `==`'s existing behaviour; correcting either means
+    changing infix `==`."""
+    yes = repr(("yes",))
+    no = repr(("no",))
+
+    def yesno(goal, extra_atoms=("foo",)):
+        atoms = ", ".join(("p(R)", "yes", "no") + tuple(extra_atoms))
+        src = (f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
+               f"p(R) <- if_({goal}, R is yes, R is no)\n")
+        return run_clausal(src, ("p",))
+
+    assert yesno("'#='(1, foo)") == [no], "'#='(1, foo) fails silently"
+    assert yesno("'#\\\\='(1, foo)") == [yes], "'#\\\\='(1, foo) succeeds"
+
+    lt = _err_term(run_clausal, "'#<'(1, foo)", extra_atoms=("foo",))
+    assert isinstance(lt, Compound) and lt.functor == "error", lt
+    assert spelling(lt.args[0].args[0]) == "orderable", lt
+    assert spelling(lt.args[0].args[1]) == "foo", lt
+    assert lt.args[1] == "(<)/2", lt
+
+    eq = _err_term(run_clausal, "'#='(X_UNUSED, foo)", extra_atoms=("foo",))
+    assert isinstance(eq, Compound) and eq.functor == "error", eq
+    assert spelling(eq.args[0].args[0]) == "evaluable", eq
+    assert spelling(eq.args[0].args[1]) == "foo", eq
+    # The wart: a '#=' call reports its context as (==)/2.
+    assert eq.args[1] == "(==)/2", eq
+
+
+def test_hash_family_error_surface_OPEN_iso_divergence_oracle(scryer):
+    program = ":- use_module(library(clpz)).\n"
+    expected = "error(domain_error(clpz_expression,foo),unknown(foo)-1)"
+    for goal in ("1 #= foo", "1 #\\= foo", "1 #< foo", "X #= foo"):
+        ref = scryer(
+            f"catch(({goal} -> write(yes) ; write(no)), E, (write(E), nl)), halt.",
+            program)
+        assert ref == expected, f"{goal}: {ref!r}"

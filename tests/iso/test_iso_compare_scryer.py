@@ -279,6 +279,29 @@ def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence_oracle(scryer):
         "ISO/Scryer: 1 = 1.0 fails"
 
 
+def test_iso_is_conflates_int_and_float_OPEN_iso_divergence(run_clausal):
+    """The SAME open divergence as `'='`/2 above, through the hotter
+    spelling. Documents, does not bless.
+
+    `'is'`/2 ends in the same `unify`, so it inherits the same int/float
+    conflation: measured 2026-09-09, `'is'(7.0, 3 + 4)` SUCCEEDS in Clausal
+    while Scryer answers no (oracle half below). Spec §2 records that the
+    `'is'` role is where ~826 corpus goal positions are heading, against a
+    handful for `'='` — so this, not the `'='` pin, is the instance that
+    will actually be hit. Same deferral and same record:
+    todo/iso-unify-conflates-int-and-float-2026-09-09.md."""
+    assert _engine_yesno(run_clausal, "'is'(7.0, 3 + 4)") == [_YES], \
+        "current (diverging) Clausal behavior: 'is'(7.0, 3 + 4) succeeds"
+    # The int spelling is not in dispute in either engine.
+    assert _engine_yesno(run_clausal, "'is'(7, 3 + 4)") == [_YES]
+
+
+def test_iso_is_conflates_int_and_float_OPEN_iso_divergence_oracle(scryer):
+    assert scryer("(7.0 is 3 + 4 -> write(yes) ; write(no)), nl, halt.") == "no", \
+        "ISO/Scryer: 7.0 is 3 + 4 fails"
+    assert scryer("(7 is 3 + 4 -> write(yes) ; write(no)), nl, halt.") == "yes"
+
+
 def test_iso_not_unifiable(run_clausal):
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
            "p(R) <- if_('\\\\='(1, 2), R is yes, R is no)\n")

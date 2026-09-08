@@ -4,11 +4,17 @@ Reachable from `.clausal` ONLY through the quoted canonical form —
 `'=:='(A, B)` — because Python has no infix syntax for these; natively in
 `.pl`. Spec: docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md
 """
+import operator as _o
+
 from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.builtins._helpers import _arity as _term_arity
+from clausal.logic.builtins._helpers import _functor_name as _term_functor_name
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.constraints import structural_eq as _structural_eq
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
+from clausal.logic.variables import unify as _unify
 from clausal.terms import Compound, DictTerm, SetTerm
 
 
@@ -43,19 +49,53 @@ def _clpfd_leaf_culprit(exc: LogicException):
 def _evaluable_culprit(leaf):
     """*leaf* as ISO's `Name/Arity` culprit for `type_error(evaluable, …)`.
 
-    An atom is arity 0 (`foo` -> `foo/0`, matching Scryer's
-    `type_error(evaluable,foo/0)` for `_ is foo + 1`); a compound is its own
-    functor/arity. `_eval_ground`'s leaf fallthrough only ever hands back a
-    non-numeric, non-Var, non-expression-node term — atoms and compounds are
-    the two shapes that occur in practice, so anything else is passed
-    through unchanged rather than guessed at.
+    ISO's culprit for `type_error(evaluable, …)` is a `Name/Arity` INDICATOR,
+    never the offending term itself, so this maps whatever `_eval_ground`
+    handed back onto that shape with the engine's own functor/arity
+    accessors — the same `_helpers._functor_name` / `_helpers._arity` pair
+    `functor/3` uses, so an atom, a cell, a `Compound`, a term instance and a
+    list all answer consistently. Measured directly: `_ is foo + 1` gives
+    Scryer `error(type_error(evaluable,foo/0),(is)/2)`, and this yields
+    `foo/0`.
+
+    Previously this tested `isinstance(leaf, Compound)`, which is DEAD for a
+    compound reaching here from `.clausal` source. Measured 2026-09-09:
+    `'=:='(1, foo(bar))` hands this function the cell tuple
+    `('foo', ('bar',))`, NOT a `clausal.terms.Compound`, so the branch never
+    fired and the raw term leaked out as the culprit —
+    `type_error(evaluable, foo(bar))`, which is not a legal ISO indicator at
+    all.
+
+    Matching Scryer's culprit IDENTITY for a compound is a separate,
+    still-OPEN question and is deliberately not attempted here. Scryer
+    evaluates arguments first, so its culprit is the innermost non-evaluable
+    leaf; measured 2026-09-09 against
+    /workspace/scryer-prolog/target/release/scryer-prolog:
+
+        1 =:= foo(bar)     error(type_error(evaluable,bar/0),(is)/2)
+        1 =:= f(g(h))      error(type_error(evaluable,h/0),(is)/2)
+        1 =:= foo(bar,baz) error(type_error(evaluable,bar/0),(is)/2)
+        1 =:= foo(1)       error(type_error(evaluable,foo/1),(is)/2)
+        1 =:= [1,2]        error(type_error(evaluable,[]/0),(is)/2)
+
+    `clpfd._eval_ground` reports the whole offending SUBTERM as its leaf
+    instead of descending, so this yields `foo/1` where Scryer yields
+    `bar/0`. Reproducing Scryer's answer would mean re-deriving its
+    evaluation order here from four data points, i.e. guessing; the
+    divergence is PINNED instead — see
+    `test_compound_evaluable_culprit_OPEN_iso_divergence` in
+    tests/iso/test_iso_compare_errors.py.
+
+    A shape with no functor/arity at all is passed through unchanged rather
+    than guessed at.
     """
-    if is_atom(leaf):
-        return Compound("/", (leaf, 0))
-    if isinstance(leaf, Compound):
-        name = leaf.functor if is_atom(leaf.functor) else mint(str(leaf.functor))
-        return Compound("/", (name, len(leaf.args)))
-    return leaf
+    arity = _term_arity(leaf)
+    if arity is None:
+        return leaf
+    name = _term_functor_name(leaf)
+    if isinstance(name, str):
+        name = mint(name)
+    return Compound("/", (name, arity))
 
 
 def _iso_eval(term, context: str):
@@ -68,7 +108,7 @@ def _iso_eval(term, context: str):
 
     `_eval_ground`'s own leaf error is `type_error(integer, Leaf, "clpfd
     expression")` — a CLP(FD)-flavoured shape, not ISO's `type_error(evaluable,
-    Name/Arity)` for `is/2`. Measured directly against Scryer (task-3-brief):
+    Name/Arity)` for `is/2`. Measured directly against Scryer:
     `_ is foo + 1` -> `error(type_error(evaluable,foo/0),(is)/2)`. Reconciled
     here, at the call site, rather than in `_eval_ground` itself — that
     function is shared by every other CLP(FD) caller in the engine and its
@@ -88,7 +128,11 @@ def _iso_eval(term, context: str):
         raise LogicException(
             type_error("evaluable", _evaluable_culprit(leaf), context)) from None
     except Exception:
-        raise LogicException(type_error("evaluable", t, context)) from None
+        # Same culprit shape as the reconciled branch above: an ISO
+        # `type_error(evaluable, …)` culprit is a Name/Arity indicator, so
+        # this fallback must not hand back a raw term either.
+        raise LogicException(
+            type_error("evaluable", _evaluable_culprit(t), context)) from None
     if value is None:
         raise LogicException(instantiation_error(context))
     return value
@@ -116,17 +160,12 @@ def _arith_cmp(name, op):
     return _cmp
 
 
-import operator as _o
 _arith_cmp("=:=", _o.eq)
 _arith_cmp("=\\=", _o.ne)
 _arith_cmp("<", _o.lt)
 _arith_cmp(">", _o.gt)
 _arith_cmp("=<", _o.le)     # ISO spells it =<, never <=
 _arith_cmp(">=", _o.ge)
-
-
-from clausal.logic.constraints import structural_eq as _structural_eq
-from clausal.logic.variables import unify as _unify
 
 
 @_builtin("is", 2)
@@ -137,6 +176,12 @@ def _iso_is(result, expr, trail, k):
     `X is 3 + 4` as the term Add(3, 4). Both spellings coexist: Python has no
     infix syntax for `'is'(X, E)`, so they never collide. See
     todo/is-and-eq-are-swapped-relative-to-iso-2026-09-09.md
+
+    The unification at the end is the engine's `unify`, which conflates int
+    and float, so `'is'(7.0, 3 + 4)` SUCCEEDS here where Scryer says no.
+    That is an OPEN, deliberately deferred divergence shared with `'='`/2 —
+    see todo/iso-unify-conflates-int-and-float-2026-09-09.md and the two
+    `*_OPEN_iso_divergence` pins in tests/iso/test_iso_compare_scryer.py.
     """
     if _unify(result, _iso_eval(expr, "is/2"), trail):
         yield None
@@ -144,6 +189,12 @@ def _iso_is(result, expr, trail, k):
 
 @_builtin("=", 2)
 def _iso_unify(a, b, trail, k):
+    """ISO =/2: unification.
+
+    Clausal's `unify` conflates int and float, so `'='(1, 1.0)` succeeds
+    where Scryer says no — OPEN and deferred, see
+    todo/iso-unify-conflates-int-and-float-2026-09-09.md.
+    """
     if _unify(a, b, trail):
         yield None
 
@@ -324,6 +375,22 @@ def _iso_structural_ne(a, b, trail, k):
 # callable, ISO-recognisable spelling. The other five members of the family
 # (`#\=`, `#<`, `#>`, `#=<`, `#>=`) are their natural CLP(FD) counterparts,
 # named the same way for symmetry.
+#
+# BECAUSE these name an EXISTING behaviour, they inherit its error surface
+# unchanged, and that surface is neither uniform nor Scryer's. Measured
+# 2026-09-09 with a non-numeric ground operand, against Scryer's clpz, which
+# answers `error(domain_error(clpz_expression,foo),unknown(foo)-1)` for
+# every one of these four goals:
+#
+#     '#='(1, foo)    fails silently
+#     '#\='(1, foo)   succeeds
+#     '#<'(1, foo)    type_error(orderable, foo)   context '(<)/2'
+#     '#='(X, foo)    type_error(evaluable, foo)   context '(==)/2'
+#
+# Three behaviours across one family, and the last one names `(==)/2` in a
+# `'#='` call. All four are PINNED, not changed, in
+# tests/iso/test_iso_compare_errors.py — changing them would change infix
+# `==`, which this plan may not do.
 #
 # Each target function is imported INSIDE its builtin body, not at module
 # import time: `clausal/logic/clpfd.py` swaps in C-accelerated versions of
