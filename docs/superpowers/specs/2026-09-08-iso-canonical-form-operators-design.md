@@ -58,6 +58,31 @@ form in `.clausal` files (Python syntax has no infix for them) and natively in `
 | `'='(A, B)`, `'\\='(A, B)` | unify / not unifiable | aliases of unification and `dif`-free negation-of-unify |
 | `'=..'(T, L)` | univ | new (or alias if a `univ` exists under another name — verify) |
 | `'is'(R, E)` | ISO `is/2`: evaluate `E`, unify with `R` | alias of `eval_/2` with ISO argument order |
+| `'#='(A, B)`, `'#\\='(A, B)`, `'#<'`, `'#=<'`, `'#>'`, `'#>='` | CLP arithmetic CONSTRAINT: binds an unbound side, propagates, valid in every mode | **what `==` already is** — `nodes.ArithEq` IS a CLP(FD) equality constraint; alias it under its established name |
+
+**`#=` is not ISO, and is in this design anyway.** It is not an addition: it is the
+correct name for what `==` does today. `==` compiles to `nodes.ArithEq`, a CLP(FD)
+equality constraint that binds and propagates, which is precisely what `#=` has meant
+since CHIP. Registering it is naming an existing behaviour, not inventing one, and using
+`#=` for a genuine arithmetic constraint is the CLP tradition used correctly rather than
+overloaded (contrast: overloading it for dimensioned quantities, which was considered and
+declined 2026-09-09).
+
+It is REQUIRED by the measurement. `clausal/tools/eq_analysis/instrument.py` recorded
+430,945 executions over 1933 corpus+kit sites (log: trunk
+`docs/eq-measurement-2026-09-09-f5ad9a5d.log`). **33 sites take two arithmetic modes** —
+every one `{BIND, TEST}`, the same site binding on one call and testing on another. For
+those no single ISO spelling is correct: `'is'` errors when both sides are ground under
+some paths, `'=:='` raises `instantiation_error` on the binding call. `#=` is the only
+spelling valid in every mode, so without this row those 33 sites have nowhere to go.
+Static analysis called 28 of them `ARITH_SHAPE`, indistinguishable from single-mode — a
+shape-based migration writes `=:=` there and ships `instantiation_error` into working
+code, silently.
+
+CONSEQUENCE FOR THE TRANSLATOR (Task 4): a `'#='` site emits `#=` into `.pl`, which is
+`library(clpz)` in Scryer, not ISO. The exported file therefore needs its `use_module`,
+and a domain using one is no longer pure-ISO. That is a real narrowing of the export
+claim and belongs in the export lane's documentation, not silently in a header.
 
 Everything else ISO defines by an operator (`\\+`, `->`, `;`, `,`) is OUT of scope: those
 already have Clausal spellings (`not`, if/else, `or`, conjunction) and the translator maps
@@ -126,6 +151,16 @@ error shape (the eq-mode note §1.3 shows the invocation form).
 - Changing bare `==`'s meaning, now or on a flag. The lint plus the canonical spelling is
   the migration; a semantic flip would silently re-score the ratchet (eq-mode note §4.5).
 - `\\+`, `->`, `;` canonical forms — already spelled in Clausal.
+- **Python's `is`, `is not`, `in`, `not in`.** Untouched, in either context, and this
+  design cannot reach them: the ONLY entry point it adds is the quoted canonical form,
+  and Python has no syntax for writing `'is'(X, E)` as an infix operator. Measured
+  2026-09-09 inside a `.clausal` file: in HOST Python code (`def` blocks) `a is b`,
+  `a is not c`, `2 in [1, 2]`, `9 not in [1, 2]` all behave exactly as Python; in a
+  CLAUSE BODY `X is 3 + 4` is unification and gives the term `Add(3, 4)`. Those two
+  meanings for `is` are pre-existing and are NOT changed here — registering `'is'` as
+  ISO `is/2` adds a third construct that is syntactically distinct from both. The
+  clause-body/Python divergence is its own question, filed separately in
+  `todo/is-and-eq-are-swapped-relative-to-iso-2026-09-09.md`.
 
 ## 6. Risks
 
