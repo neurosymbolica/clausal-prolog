@@ -142,13 +142,54 @@ def _iso_not_unifiable(a, b, trail, k):
         yield None
 
 
+def _iso_identical(a, b) -> bool:
+    """ISO's `==`/2: structurally identical, WITHOUT the int/float (etc.)
+    cross-type numeric conflation `structural_eq`/2 carries for its existing
+    callers (dif/2, setof/2, …).
+
+    `structural_eq` treats `1` and `1.0` as equal — a deliberately PARKED
+    decision (A05-D001/A01-D001,
+    todo/audit-2026-07-05/done/fix-A05-structural-eq-asymmetry-consistency.md:
+    "do not change direction here, only keep it consistent with whatever
+    unify does") that this function must not disturb, because `structural_eq`
+    has existing callers depending on it. `'=='`/2 is a BRAND NEW predicate
+    with zero existing callers, so it is free to be ISO-correct on its own:
+    Scryer measures `1 == 1.0` as false (spec §3.1, "structural identity,
+    `1 == 1.0` is false").
+
+    Approach: `structural_eq` already gets everything else right — shape,
+    container equivalences (str/char-list, ground SegList/list, …), and var
+    identity (two distinct unbound vars are never `==`, matching the ISO
+    rule; see its own docstring) — so this only ADDS a stricter requirement,
+    never loosens one: given `structural_eq(a, b)` already holds, additionally
+    require that fully-grounded `a` and `b` (`_deref_walk`, which also
+    materializes any Seg*/String forms into plain containers so comparison
+    is representation-independent) produce the same `_normalize_for_key`
+    key (A04-F006's existing int/float/bool/complex type-tagging walker —
+    reused rather than duplicating a second general-purpose term walker).
+    Because this is a conjunction with `structural_eq`, a mismatch this
+    second check finds can only turn a True into a False; it can never turn
+    a False into a True, so it cannot introduce a new false positive beyond
+    tightening the known numeric gap. Measured directly (see task-4-report.md):
+    the var-collapsing `_normalize_for_key` does on its own (it maps every
+    unbound var to one shared sentinel) never fires here, because whenever
+    two terms disagree only on distinct-variable identity, `structural_eq`
+    has already returned False and short-circuits the `and` below.
+    """
+    if not _structural_eq(a, b):
+        return False
+    from clausal.logic.solve import _deref_walk
+    from clausal.logic.tabling import _normalize_for_key
+    return _normalize_for_key(_deref_walk(a)) == _normalize_for_key(_deref_walk(b))
+
+
 @_builtin("==", 2)
 def _iso_structural_eq(a, b, trail, k):
-    if _structural_eq(a, b):
+    if _iso_identical(a, b):
         yield None
 
 
 @_builtin("\\==", 2)
 def _iso_structural_ne(a, b, trail, k):
-    if not _structural_eq(a, b):
+    if not _iso_identical(a, b):
         yield None

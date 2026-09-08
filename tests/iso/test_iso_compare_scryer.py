@@ -108,29 +108,71 @@ def test_iso_is_evaluates_and_binds(scryer, run_clausal):
     assert scryer("X is 3 + 4, write(X), nl, halt.") == "7"
 
 
-def test_structural_identity_conflates_int_and_float_parked_iso_divergence(
-        scryer, run_clausal):
-    """ISO's ==/2 distinguishes 1 from 1.0 (different types) — Scryer says
-    'no'. Clausal's `structural_eq`, which '==' /2 reuses unchanged per this
-    task's brief, deliberately does NOT: cross-type numeric structural
-    equality is PARKED
-    (todo/audit-2026-07-05/done/fix-A05-structural-eq-asymmetry-consistency.md,
-    A05-D001/A01-D001 — "do not change direction here, only keep it
-    consistent with whatever unify does"). So `'=='(1, 1.0)` is 'yes' here,
-    diverging from ISO. Recorded as a known gap, not silently papered over —
-    see task-4-report.md concerns. This replaces the brief's Step-1 draft of
-    this test, which assumed ISO's answer without checking the parked
-    decision."""
+def test_structural_identity_distinguishes_int_from_float(scryer, run_clausal):
+    """ISO's ==/2 distinguishes 1 from 1.0 (different types); Scryer says
+    'no' (spec §3.1, "structural identity, `1 == 1.0` is false"). Restored
+    to the brief's original (correct) assertion per fix round 1: `'=='`/2
+    does NOT delegate straight to `structural_eq`/2 (which itself DOES
+    conflate 1 and 1.0 — a separate, deliberately PARKED decision,
+    A05-D001/A01-D001, governing `structural_eq`'s existing callers, and NOT
+    touched by this fix). `'=='`/2 is a brand new predicate with no existing
+    callers, so `_iso_identical` in iso_compare.py adds a stricter,
+    type-aware check on top of `structural_eq` — see its docstring, and
+    task-4-report.md, for the derivation and the before/after evidence."""
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
            "p(R) <- if_('=='(1, 1.0), R is yes, R is no)\n")
-    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+    assert run_clausal(src, ("p",)) == [repr(("no",))]
     assert scryer("(1 == 1.0 -> write(yes) ; write(no)), nl, halt.") == "no"
+
+
+def test_structural_identity_still_holds_for_same_type_and_shape(
+        scryer, run_clausal):
+    """The other direction of the fix-round-1 ruling (item 3): tightening
+    '==' for cross-type numerics must not make it reject same-type numbers
+    or identical compound-shaped terms. `1 == 1` and two independently
+    built, identical `[1, 2]` structures must both still read 'yes'."""
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('=='(1, 1), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("yes",))]
+    assert scryer("(1 == 1 -> write(yes) ; write(no)), nl, halt.") == "yes"
+
+    src2 = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+            "p(R) <- if_('=='([1, 2], [1, 2]), R is yes, R is no)\n")
+    assert run_clausal(src2, ("p",)) == [repr(("yes",))]
+    assert scryer("([1, 2] == [1, 2] -> write(yes) ; write(no)), "
+                  "nl, halt.") == "yes"
 
 
 def test_iso_unify_binds(run_clausal):
     got = run_clausal("-module(_hN, [p(X)])\n-double_quotes(chars)\n"
                       "p(X) <- '='(X, 42)\n", ("p",))
     assert got == ["42"]
+
+
+def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence(
+        scryer, run_clausal):
+    """OPEN, UNFIXED divergence from ISO — reported per fix round 1 item 4,
+    not fixed this round.
+
+    ISO unification of `1` and `1.0` FAILS (different types are never
+    unifiable): measured directly, Scryer answers 'no' for `1 = 1.0`.
+    Clausal's `'='`/2 is `clausal.logic.variables.unify` verbatim (per the
+    brief), and `unify` — unlike `'=='`/2 above — was NOT given a
+    type-strict wrapper this round: `unify` has a huge number of existing
+    callers throughout the engine (every clause-head match, every `is`-as-
+    unification site, `'\\='`/2's own trial-unify, …), so narrowing its
+    cross-type numeric behavior is a much larger-blast-radius change than
+    `'=='`/2's brand-new-predicate fix was, and is explicitly OUT OF SCOPE
+    for this round (see task-4-report.md, "Finding on '='"). This test
+    pins the CURRENT (ISO-diverging) behavior so a future change is a
+    visible, deliberate decision rather than a silent regression in
+    either direction."""
+    src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
+           "p(R) <- if_('='(1, 1.0), R is yes, R is no)\n")
+    assert run_clausal(src, ("p",)) == [repr(("yes",))], \
+        "current (diverging) Clausal behavior: '='(1, 1.0) succeeds"
+    assert scryer("(1 = 1.0 -> write(yes) ; write(no)), nl, halt.") == "no", \
+        "ISO/Scryer: 1 = 1.0 fails"
 
 
 def test_iso_not_unifiable(run_clausal):
@@ -145,14 +187,14 @@ def test_iso_not_unifiable_fails_when_unifiable(run_clausal):
     assert run_clausal(src, ("p",)) == [repr(("no",))]
 
 
-def test_iso_structural_ne(run_clausal):
-    """'\\==' is the negation of '==': since '=='(1, 1.0) is 'yes' here (see
-    test_structural_identity_conflates_int_and_float_parked_iso_divergence),
-    '\\=='(1, 1.0) would be 'no' — not a useful positive-case row. A plain
-    unequal integer pair exercises the true branch instead."""
+def test_iso_structural_ne(scryer, run_clausal):
+    """'\\==' distinguishes 1 from 1.0 too — it's the direct negation of
+    '==', which was fixed in fix round 1 to be ISO-correct on cross-type
+    numerics (see test_structural_identity_distinguishes_int_from_float)."""
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('\\\\=='(1, 2), R is yes, R is no)\n")
+           "p(R) <- if_('\\\\=='(1, 1.0), R is yes, R is no)\n")
     assert run_clausal(src, ("p",)) == [repr(("yes",))]
+    assert scryer("(1 \\== 1.0 -> write(yes) ; write(no)), nl, halt.") == "yes"
 
 
 def test_infix_is_still_means_unification(run_clausal):
