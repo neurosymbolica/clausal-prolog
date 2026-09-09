@@ -53,6 +53,7 @@ from .logic.atoms import (
     spelling as _atom_spelling,
 )
 from .terms import Compound, KWTerm, DictTerm, SetTerm
+from .logic.generated_names import with_dollar_twins
 
 
 def _spelling_or_self(value):
@@ -273,7 +274,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
 #
 # ``runtime_builtins`` — the compilation-support namespace every generated
 #   module needs bound in its own exec-time namespace (EmbedTransformer's
-#   rewrite emits bare ``Predicate(head=…, body=…)`` calls, for example) or
+#   rewrite emits ``$Predicate(head=…, body=…)`` calls, for example) or
 #   at query-compile time (``INJECTED_RUNTIME_BUILTINS``, below).  NOT an
 #   atom vocabulary — never consulted by the strictness check.
 #
@@ -304,7 +305,13 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
 # declare that spelling as its own atom still gets it correctly:
 # ``_process_declarations`` runs AFTER this seeding and unconditionally
 # rebinds its own declared names, regardless of what seeding left there.
-runtime_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all__}
+# 2026-09-09 ruling: generated code references each node class through its
+# ``$`` twin (``$Predicate``, ``$Call``, ``$Add``, ...) so a user predicate
+# spelled like one can never shadow it; the bare aliases stay bound for the
+# deprecation window.  ONE table -- ``clausal/logic/generated_names.py``.
+runtime_builtins = with_dollar_twins(
+    {name: getattr(simple_ast, name) for name in simple_ast.__all__}
+)
 
 # '$'-prefixed names cannot be typed as normal Python identifiers, so user code
 # cannot accidentally shadow them.  Do not remove the '$' prefix.
@@ -331,7 +338,7 @@ runtime_builtins = {name: getattr(simple_ast, name) for name in simple_ast.__all
 # third truth value, a real binding (not a minted atom) so it resolves in every
 # module including ``-strict_atoms`` ones with process-wide identity.
 from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
-runtime_builtins.update(INJECTED_RUNTIME_BUILTINS)
+runtime_builtins.update(INJECTED_RUNTIME_BUILTINS)  # already twinned
 runtime_builtins["$unterminated_fact_error"] = _unterminated_fact_error
 
 # Task 8 fix round 1 (RULING, reviewer-caught): the strictness check's

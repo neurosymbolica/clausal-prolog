@@ -311,13 +311,18 @@ from clausal.logic.seam import (
 from clausal.logic.compiler.terms_to_ast import (  # noqa: E402
     ARITH_RUNTIME_NAMES as _ARITH_RUNTIME_NAMES,
 )
+from clausal.logic.generated_names import (
+    register_generated_names as _register_generated_names,
+)
 
 
 
 INJECTED_RUNTIME_BUILTINS: dict = {
-    # Term-constructor helpers and runtime types emitted as bare Names by
-    # term_to_ast_expr.  ``$``-prefixed engine internals below can never be
-    # shadowed by user identifiers (``$`` is not a legal identifier char).
+    # Term-constructor helpers and runtime types term_to_ast_expr emits --
+    # referenced through their ``$`` twins (``$Var``, ``$Quantity``, ...; the
+    # bare spellings stay bound for the deprecation window).  ``$``-prefixed
+    # names can never be shadowed by user identifiers (``$`` is not a legal
+    # identifier char).
     "PredicateMeta": PredicateMeta,
     "Var": Var,
     "Compound": Compound,
@@ -405,6 +410,11 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # present" guard now degrades to the wildcard on strictly fewer paths.
     _CELLS_NAMESPACE_KEY: _cells_module,
 }
+# 2026-09-09 ruling: generated code reaches every bare TitleCase entry above
+# through its ``$`` twin (``$Var``, ``$Quantity``, ...); the bare aliases
+# stay bound for the deprecation window.  ONE table -- see
+# ``clausal/logic/generated_names.py``.
+INJECTED_RUNTIME_BUILTINS = _register_generated_names(INJECTED_RUNTIME_BUILTINS)
 
 
 def _sweep_tro_eligible(
