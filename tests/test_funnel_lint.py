@@ -270,9 +270,9 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # in the file (mechanical line-count shifts, not semantic changes -- see
     # task-4-report.md/task-6-report.md and
     # .superpowers/sdd/p32-cell-default-flip/task-2-report.md).
-    # Range shifted 2188-2300 -> 2245-2357 by the test/1 + Test/1 union
+    # Range shifted 2188-2300 -> 2274-2386 by the test/1 + Test/1 union
     # collection added above the site (a mechanical line-count shift).
-    AllowEntry("clausal/testing.py", (2245, 2357),
+    AllowEntry("clausal/testing.py", (2274, 2386),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -595,14 +595,12 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2290 has a real ``getattr(clause.head, "functor",
+    """clausal/testing.py:2319 has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
-    testing.py (2245-2357, shifted from 2188-2300 by the test/1 + Test/1
-    union collection, from 2241-2355 by P3-2 task-2's
-    cell-aware diagnostic additions, itself shifted from 2196-2310 by
-    task-6's -hide additions and from 2046-2160 by task-4's) is doing real
-    exemption work, not sitting on an already-invisible site."""
+    testing.py (currently 2274-2386; the entry's own comment records how it
+    has moved as code above the site grew) is doing real exemption work,
+    not sitting on an already-invisible site."""
     entries_without_testing = tuple(
         e for e in ALLOWLIST if e.path != "clausal/testing.py"
     )
@@ -616,7 +614,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2290
+        v.pattern == "functor_fallback" and v.line == 2319
         for v in testing_violations
     ), testing_violations
 

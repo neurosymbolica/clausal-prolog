@@ -325,8 +325,37 @@ def collect_tests(mod: object) -> list[str]:
     logic_module = mod.__dict__.get("$module")
     if logic_module is None:
         return []
-    return [_test_description_name(_test_description_term(clause.head))
-            for _functor, clause in _test_clauses(logic_module)]
+    entries = _test_clauses(logic_module)
+    names = [_test_description_name(_test_description_term(clause.head))
+             for _functor, clause in entries]
+    _warn_description_under_both_spellings(mod, entries, names)
+    return names
+
+
+def _warn_description_under_both_spellings(mod, entries, names) -> None:
+    """Warn when one description is a ``test/1`` AND a ``Test/1`` clause.
+
+    Both names are collected, but a name resolves to its FIRST clause, so
+    the second clause is reported under a result it never produced.  That
+    is invisible from the report, so say so once per collection, naming
+    the file and the descriptions, so the author renames one of them.
+    """
+    spelled: dict[str, set[str]] = {}
+    for (functor, _clause), name in zip(entries, names):
+        spelled.setdefault(name, set()).add(functor)
+    doubled = [name for name, functors in spelled.items() if len(functors) > 1]
+    if not doubled:
+        return
+    import warnings  # noqa: PLC0415
+    where = getattr(mod, "__file__", None) or getattr(mod, "__name__", "<module>")
+    listed = ", ".join(repr(name) for name in doubled)
+    warnings.warn(
+        f"{where}: test description(s) {listed} defined under both "
+        f"{TEST_NAME}/1 and {TEST_DEPRECATED_NAME}/1; each name runs its "
+        f"first clause only, so rename the {TEST_DEPRECATED_NAME}/1 clause "
+        f"to {TEST_NAME}/1 or give it its own description",
+        stacklevel=3,
+    )
 
 
 def run_test(

@@ -160,3 +160,24 @@ def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
     help_text = capsys.readouterr().out
     assert "test/1" in help_text
     assert "Test(...)" not in help_text
+
+
+def test_same_description_under_both_spellings_warns(tmp_path):
+    """# nv"""
+    p = tmp_path / "dup.clausal"
+    p.write_text(
+        'test("same") <- (1 == 1)\n'
+        'Test("same") <- (1 == 2)\n'
+        'test("other") <- (1 == 1)\n'
+    )
+    mod, _spelling = _load_recording(p)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        names = collect_tests(mod)
+    dups = [w for w in caught if "both test/1 and Test/1" in str(w.message)]
+    assert len(dups) == 1, [str(w.message) for w in caught]
+    message = str(dups[0].message)
+    assert "dup.clausal" in message
+    assert "'same'" in message
+    assert "'other'" not in message
+    assert names == ["same", "same", "other"]
