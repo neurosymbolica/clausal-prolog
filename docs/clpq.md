@@ -43,9 +43,9 @@ Clausal's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The
 
 Mixing `Fraction` (CLP(Q)) and `float` (CLP(R)) operands in the same constraint raises a `TypeError`. Convert explicitly if you need to cross domains.
 
-### `int/int` produces `Fraction`
+### `int/int` produces an exact rational
 
-In Clausal, **integer division always produces an exact rational**:
+In Clausal, **integer division always produces an exact rational**, presented as an `int` when the quotient is integral:
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction"
@@ -53,7 +53,9 @@ In Clausal, **integer division always produces an exact rational**:
 
 This is a deliberate language design choice. In a logic programming language, exactness is the natural default. If you want IEEE float division, use a float literal on either side: `1.0/3` or `7/2.0`.
 
-Because `int/int` produces `Fraction`, rational constraints arise naturally:
+A quotient that IS an integer is that integer: `4/2` evaluates to `2`, not `Fraction(2, 1)`. The two compare equal in Python but are different terms in the standard order (`==`, `compare/3`), so every binder — `is/2`, the arithmetic comparisons, `between/3`, CLP(Q) equalities and optima — presents an integral rational as `int`. Only non-integral results are `Fraction`.
+
+Because `int/int` is exact, rational constraints arise naturally:
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction_ex2"
@@ -557,7 +559,7 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 | Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)** |
 | Non-linear | Deferred | Deferred | — | **Rejected (TypeError)** |
 | Syntax | `{X + Y =< 8}` | Same | — | **`X + Y <= 8`** (unified) |
-| int/int | Stays integer | Stays integer | — | **Produces Fraction** |
+| int/int | Stays integer | Stays integer | — | **Exact rational; `int` when integral** |
 
 ### Historical context
 
