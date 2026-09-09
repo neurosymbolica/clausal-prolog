@@ -1654,6 +1654,11 @@ class _ClausalToProlog:
         ("prolog", "Rem"):      "rem",
     }
 
+    # CLP(FD) constraint names. Written as canonical forms in Clausal source
+    # (`'#='(A, B)`) because Python has no `#=` operator, but they have no ISO
+    # Prolog meaning and must not be lowered to arithmetic look-alikes.
+    _CLPFD_CANONICAL = frozenset({"#=", "#\\=", "#<", "#>", "#=<", "#>="})
+
     def _convert_call(self, node: python_ast.Call) -> PTerm:
         """Convert a function call to a PCompound."""
         quantity = self._try_quantity(node)
@@ -1683,6 +1688,36 @@ class _ClausalToProlog:
                 result = self._convert_expr(node.args[1])
                 return PCompound("is", (result, expr))
             functor = resolve_name(node.func.id, self.dialect)
+        elif (isinstance(node.func, python_ast.Constant)
+                and isinstance(node.func.value, str)
+                and node.func.value):
+            # THE ISO CANONICAL FORM (spec 2026-09-08 §3.2). `'@<'(X, Y)` is
+            # Python for a string literal CALLED, so it arrives as a Constant
+            # target rather than a Name, and every one of these was refused
+            # with "unsupported call target" until now. The engine registered
+            # the names in d4f4c486, so a site migrated to a canonical form
+            # ran correctly and then failed to EXPORT — turning a G3 red
+            # (exports, fails in Scryer) into a G1 red (does not export),
+            # which is strictly worse while looking like progress.
+            #
+            # For `@<` and friends there is no alternative spelling to fall
+            # back on: `X @< Y` is not valid Python.
+            #
+            # Emission already does the rest. `PCompound("@<", (X, Y))` emits
+            # `X @< Y` through the operator table, and a functor with no
+            # operator entry (compare/3) emits as an ordinary compound, so
+            # nothing here needs to know which names are infix.
+            functor = node.func.value
+            if functor in self._CLPFD_CANONICAL:
+                # CLP(FD) constraints have NO ISO meaning. Lowering `'#='` to
+                # `X #= Y` would emit a file that errors in any target without
+                # clpz loaded, and lowering it to `=:=` or `=` would silently
+                # change the semantics from a constraint to a test. Refuse
+                # loudly; targeting a clpz-capable dialect is a separate
+                # decision. See todo/clp-domain-spans-reals-while-clpz-is-integers-2026-09-09.md
+                self._add_warning(
+                    f"CLP(FD) constraint has no ISO form: {functor}")
+                functor = "???"
         elif isinstance(node.func, python_ast.Attribute):
             # Check for qualified operator calls (e.g. prolog.TruncDiv)
             # that should be emitted as infix operators.
