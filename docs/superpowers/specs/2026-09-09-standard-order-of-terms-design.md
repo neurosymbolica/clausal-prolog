@@ -70,21 +70,48 @@ Clausal breaks this today: `key(1) == key(1.0)`, so `compare/3` would answer `=`
 `'=='(1, 1.0)` answers false (landed in `46712278`). Scryer: `compare(O, 1, 1.0)` gives
 `>`, and `sort([1, 1.0], L)` gives `[1.0, 1]` — both kept.
 
-`type_rank` restores it. **It MUST be derived from `_numeric_tag`, the same function
-`_iso_identical` uses**, so the identity holds by construction rather than because a
-hand-written table happens to be right:
+`type_rank` restores it — but only after a defect found during spec review is fixed.
 
-- terms `_numeric_tag` treats as the same kind share a rank and stay ONE term
-  (`Decimal(1)` and `1` are `==`-identical today — a documented residual under A01-D001 —
-  and MUST remain one term here);
-- terms it distinguishes get distinct ranks: float before int (ISO), and `Quantity`
-  after both (an extension never interleaves between two ISO terms, per §2).
+### 4a. `'=='` is not transitive today, and must be before any of this works
+
+Measured 2026-09-09 on main `46712278`:
+
+    1.0 == Decimal(1)   ->  True
+    Decimal(1) == 1     ->  True
+    1.0 == 1            ->  False      <- transitivity requires True
+
+`_numeric_tag` leaves `Decimal`/`Fraction` UNTAGGED (the A01-D001 residual), so they read
+as identical to both `int` and `float`, which are not identical to each other. Before
+`46712278` the relation was transitive-but-non-ISO; making `1.0 == 1` false without
+touching `Decimal` produced a relation that is not an equivalence at all.
+
+Order-equality is necessarily transitive, so NO ranking function can satisfy the ISO
+identity while this holds. **Fix first:** `_numeric_tag` returns `type(x)` for `Decimal`
+and `Fraction` as it already does for `float`, making every numeric type its own kind.
+This is a two-line change to a function that returns a TYPE OBJECT — nothing is wrapped,
+no term representation changes, and arithmetic never sees it.
+
+**Scope ruling (operator, 2026-09-09):** the COMPARISON site only.
+`clausal/logic/tabling.py::_normalize_for_key_py` and its C twin
+`_tabling_core.c::do_normalize` share the same residual and are deliberately NOT touched —
+a C rebuild and P52 lock-step do not belong in a branch about term ordering. The resulting
+inconsistency (tabled answer dedup still collapses `Decimal(1)` with `1` while `'=='` now
+distinguishes them) is filed as `todo/a01-d001-tabling-half-2026-09-09.md`.
+
+### 4b. The ranking
+
+With every numeric type its own kind, `type_rank` is total and the ISO identity holds for
+ALL numeric types, not a subset:
+
+- float before int, per ISO 7.2.1;
+- `Decimal`, `Fraction` after those, each its own rank;
+- `Quantity` last — an extension never interleaves between two ISO terms (§2).
 
 A dimensionless `Quantity` therefore sorts ADJACENT to its plain-number twin, not equal to
-it — `'=='(Quantity(5000, {}), 5000)` is false (measured 2026-09-09), so `compare/3` must
-not answer `=`.
+it: `'=='(Quantity(5000, {}), 5000)` is false (measured), so `compare/3` must not answer `=`.
 
-**Blast radius, and it is real:** `sort/2` stops collapsing `1` and `1.0` into one element.
+**Blast radius, and it is real:** `sort/2` stops collapsing `1` and `1.0` into one element, and stops collapsing
+`Decimal(1)` with `1`.
 This requires a full-corpus gate BEFORE landing, with the diff reported rather than
 summarised. Backing out is a one-line revert of `type_rank`, independent of §3 and §5.
 
@@ -164,6 +191,7 @@ Follows what worked on the predecessor branch, including its failures:
 - The `Seg*` opaque-band inconsistency (a ground `SegString(["ab"])` does not sort beside
   the equal `"ab"`). Pre-existing, already filed, and walking inside the key changes the
   cost of every sort.
-- The `Decimal`/int identity residual (A01-D001). §4 PRESERVES it deliberately.
+- The TABLING half of A01-D001 (`_normalize_for_key_py` and the C twin `do_normalize`).
+  §4a fixes the comparison site only; the tabling half is filed as a todo.
 - Narrowing engine-wide `unify` (`todo/iso-unify-conflates-int-and-float-2026-09-09.md`).
 - The `#` family's error behaviour (`todo/clp-domain-spans-reals-while-clpz-is-integers-2026-09-09.md`).
