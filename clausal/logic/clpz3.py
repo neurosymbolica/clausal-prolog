@@ -347,7 +347,7 @@ def z3_to_python(z3_val: Any) -> int | float | Fraction | str:
     if _z3.is_rational_value(z3_val):
         # Z3 answers a Real-sorted value as a rational even when it is whole.
         # An integral rational presents as int, as every other binder in the
-        # engine does (``clpq._present``): ``Fraction(5, 1)`` is not the term
+        # engine does (``present_number``): ``Fraction(5, 1)`` is not the term
         # ``5`` in the standard order.
         return present_number(
             Fraction(z3_val.numerator_as_long(), z3_val.denominator_as_long()))

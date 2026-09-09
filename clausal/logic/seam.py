@@ -166,14 +166,14 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             # body is 3), so it is evaluated here exactly as the compiler
             # would emit it — provided it is ground; a variable inside
             # arithmetic has no value to give.
-            from clausal.logic.compiler.terms_to_ast import arith_to_ast_expr
+            from clausal.logic.compiler.terms_to_ast import (
+                ARITH_RUNTIME_NAMES, arith_to_ast_expr)
             for name in _load_names(term):
                 lookup(name)        # the seam's own NameError for an unbound atom
             if _contains_var(term):
                 raise SyntaxError(
                     f"--: arithmetic over an unbound variable has no value; "
                     f"bind it first or pass the term through ++(...)")
-            from clausal.logic.compiler.predicate import _exact_div, _present_number
             expr = _ast.Call(func=_ast.Name(id="$present", ctx=_ast.Load()),
                              args=[arith_to_ast_expr(term, {})], keywords=[])
             code = compile(_ast.fix_missing_locations(_ast.Expression(body=expr)),
@@ -181,11 +181,11 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             # The two ``$``-runtime names the value emitter can produce for
             # GROUND arithmetic are not in a module's globals (a literal
             # ``4 / 2`` here raised NameError on ``$Fraction``); they are
-            # supplied as eval locals, without copying the module. Only
-            # these two: a non-scalar operand can still make the term
-            # emitter reach for other ``$``-names, which stay unresolved.
-            runtime = {"$exact_div": _exact_div, "$present": _present_number}
-            result = eval(code, module_globals, runtime)  # noqa: S307 — the module's own arithmetic
+            # supplied as eval locals (ARITH_RUNTIME_NAMES, owned by the
+            # emitter), without copying the module. Only those: a non-scalar
+            # operand can still make the term emitter reach for other
+            # ``$``-names, which stay unresolved.
+            result = eval(code, module_globals, ARITH_RUNTIME_NAMES)  # noqa: S307 — the module's own arithmetic
             import numbers
             if not (isinstance(result, numbers.Number)
                     or type(result).__name__ in ("Decimal", "Quantity")):

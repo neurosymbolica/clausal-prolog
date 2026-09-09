@@ -18,7 +18,7 @@ import ast
 import warnings
 from typing import Any, Callable
 
-from clausal.logic.variables import Var, is_var, deref, unify, present_number
+from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yield
 from clausal.logic import cells as _cells_module
 from clausal.logic.cells import CELLS_NAMESPACE_KEY as _CELLS_NAMESPACE_KEY
@@ -308,20 +308,10 @@ from clausal.logic.seam import (
     each as _each,
     export as _export,
 )
+from clausal.logic.compiler.terms_to_ast import (  # noqa: E402
+    ARITH_RUNTIME_NAMES as _ARITH_RUNTIME_NAMES,
+)
 
-
-def _exact_div(l, r):
-    """``$exact_div``: a literal int/int Div in compiled arithmetic — exact
-    (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int."""
-    return _present_number(Fraction(l, r))
-
-
-def _present_number(x):
-    """``$present``: the value a compiled arithmetic expression hands to
-    unify. The rule is ``clausal.logic.variables.present_number``; this is
-    the compiler's runtime name for it, so ``eval_((1/2) + (1/2), X)``
-    binds ``1`` exactly as the interpreted evaluator and CLP(Q) do."""
-    return present_number(x)
 
 
 INJECTED_RUNTIME_BUILTINS: dict = {
@@ -978,8 +968,7 @@ def _compile_predicate_trampoline_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
-        "$exact_div": _exact_div,
-        "$present": _present_number,
+        **_ARITH_RUNTIME_NAMES,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn
@@ -1803,8 +1792,7 @@ def _compile_predicate_shallow_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
-        "$exact_div": _exact_div,
-        "$present": _present_number,
+        **_ARITH_RUNTIME_NAMES,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn_s

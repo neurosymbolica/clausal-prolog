@@ -30,7 +30,7 @@ from clausal.logic.variables import Trail, Var, deref
 from clausal.logic.variables._variables import (
     unify, unify_census, unify_census_start, unify_census_stop,
 )
-from clausal.terms import Add, Div, Mult, Sub
+from clausal.terms import Add, Div, FloorDiv, Mod, Mult, Pow, Sub
 from clausal.testing import load_clausal_module
 
 
@@ -273,6 +273,34 @@ class TestEvalGround:
     def test_bool_is_not_a_number_here(self):
         from clausal.logic.clpfd import _eval_ground
         assert _eval_ground(True) is None
+
+    @pytest.mark.parametrize("node, want", [
+        # Pow: (1/2) ** -1 is the integer 2
+        (Pow(left=Div(left=1, right=2), right=-1), 2),
+        # FloorDiv over Fraction operands: (9/2) // (3/2) is 3
+        (FloorDiv(left=Div(left=9, right=2), right=Div(left=3, right=2)), 3),
+        (FloorDiv(left=Div(left=7, right=2), right=1), 3),
+        # Mod over Fraction operands with an integral result: (9/2) % (3/2) is 0
+        (Mod(left=Div(left=9, right=2), right=Div(left=3, right=2)), 0),
+        (Mod(left=Div(left=7, right=2), right=Div(left=1, right=2)), 0),
+    ], ids=["pow", "floordiv", "floordiv-int-divisor", "mod", "mod-halves"])
+    def test_other_operators_present_an_integral_result_as_int(self, node, want):
+        """The tail of ``_eval_ground`` is the exit for EVERY operator node,
+        not only Div — Pow, FloorDiv and Mod over Fraction operands included."""
+        from clausal.logic.clpfd import _eval_ground
+        got = _eval_ground(node)
+        assert got == want and type(got) is int, (node, got)
+
+    @pytest.mark.parametrize("node, want", [
+        (Pow(left=Div(left=1, right=2), right=2), Fraction(1, 4)),
+        (Mod(left=Div(left=7, right=2), right=Div(left=3, right=2)), Fraction(1, 2)),
+        # FloorDiv has no non-integral control: floor division is an integer
+        # by definition (Python's Fraction // Fraction returns int).
+    ], ids=["pow", "mod"])
+    def test_other_operators_keep_a_non_integral_result_exact(self, node, want):
+        from clausal.logic.clpfd import _eval_ground
+        got = _eval_ground(node)
+        assert got == want and type(got) is Fraction, (node, got)
 
 
 class TestZ3Conversion:

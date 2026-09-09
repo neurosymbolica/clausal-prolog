@@ -1,7 +1,9 @@
 # Unify census: add a second counter, "integral Fraction bound to a fresh variable"
 
-Context: fix/normalise-integral-rationals-2026-09-09, review round 2. Not implemented
-this round (no C change was made in that round; do it in its own change with a rebuild).
+Context: fix/normalise-integral-rationals-2026-09-09, review round 2. Not implemented on
+that branch. (The branch DOES change `_variables.c` once — the unordered census key —
+so its census tests need a rebuilt extension; this second counter is a further C change
+and gets its own change with a rebuild.)
 
 The existing census in `clausal/logic/variables/_variables.c` (`unify_census_start` /
 `unify_census_stop` / `unify_census`) counts one thing: a SUCCESSFUL

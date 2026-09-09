@@ -5,6 +5,11 @@ different Python types — the population a type-strict ``unify`` would start
 rejecting. It is a measuring instrument, so every test here starts with a
 positive control: ``unify(1, 1.0)`` must count exactly one, or the instrument
 is dark and the rest of the test proves nothing.
+
+The C extension must be REBUILT for these tests (``python setup.py build_ext
+--inplace``): the unordered key is in ``_variables.c``. Against a stale build
+``unify(1.0, 1)`` is keyed ``float/int`` and the two order-insensitivity tests
+fail — that is the stale ``.so`` talking, not the engine.
 """
 from fractions import Fraction
 

@@ -23,7 +23,7 @@ from contextlib import contextmanager
 from fractions import Fraction
 from typing import Any
 
-from clausal.logic.variables import Var, is_var, deref  # noqa: F401
+from clausal.logic.variables import Var, is_var, deref, present_number
 from clausal.terms import (
     Compound,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
@@ -1284,6 +1284,23 @@ _ARITH_BINOP_MAP: list[tuple[type, ast.operator]] = [
     (Mod,      ast.Mod()),
     (Pow,      ast.Pow()),
 ]
+
+
+def exact_div(l, r):
+    """``$exact_div``: a literal int/int Div in compiled arithmetic — exact
+    (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int."""
+    return present_number(Fraction(l, r))
+
+
+# The ``$``-runtime names ``arith_to_ast_expr`` can emit, bound to their
+# implementations. The ONE place this set lives: the compiler's base
+# namespaces (predicate.py) and the seam's value arithmetic (seam.py) both
+# spread it in, so a new name added here reaches every evaluator of the
+# emitted code. ``$present`` IS ``clausal.logic.variables.present_number``.
+ARITH_RUNTIME_NAMES: dict = {
+    "$exact_div": exact_div,
+    "$present": present_number,
+}
 
 
 def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
