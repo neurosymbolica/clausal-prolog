@@ -315,22 +315,34 @@ ORDER_ROWS = [
 
 @pytest.mark.parametrize("goal,expected", ORDER_ROWS)
 def test_order_operators_against_the_engine(goal, expected, run_clausal):
-    assert run_clausal(goal) == expected
+    assert _yesno(run_clausal, goal) == expected
 
 @pytest.mark.parametrize("goal,expected", ORDER_ROWS)
 def test_order_operators_against_scryer(goal, expected, scryer):
-    assert scryer(goal) == expected
+    assert scryer(f"({goal} -> write(yes) ; write(no)), nl, halt.") == expected
 
 def test_no_two_order_operators_agree_on_every_row(run_clausal):
     """The predecessor branch shipped six comparison operators that were
     indistinguishable from one another for three review rounds."""
     ops = ["@<", "@>", "@=<", "@>="]
     pairs = [(1, 1), (1, 2), (2, 1)]
-    sigs = {op: tuple(run_clausal(f"'{op}'({a}, {b})") for a, b in pairs) for op in ops}
+    sigs = {op: tuple(_yesno(run_clausal, f"'{op}'({a}, {b})") for a, b in pairs)
+            for op in ops}
     assert len({*sigs.values()}) == len(ops), sigs
 ```
 
-Reuse the `run_clausal` and `scryer` fixtures from `tests/iso/conftest.py`; keep the engine test and the oracle test SEPARATE so a missing binary cannot retire engine coverage.
+**Fixture signatures — do NOT guess these, they are not what they look like:**
+
+```python
+run_clausal(src: str, goal_head: tuple, nargs: int = 1) -> list[str]
+    # src is a WHOLE .clausal module. `_hN` in it is substituted with a unique
+    # module name. Returns one repr per solution, so a success is
+    # [repr(("yes",))], not the string "yes".
+scryer(goal: str, program: str = "") -> str
+    # goal goes on STDIN with NO `?- ` prefix; returns the LAST stdout line.
+```
+
+Import the `_yesno` / `_yesno_src` helpers from `tests/iso/test_iso_compare_scryer.py` rather than rebuilding them — they already wrap `run_clausal` into the yes/no shape these rows use. Keep the engine test and the oracle test SEPARATE so a missing binary cannot retire engine coverage.
 
 - [ ] **Step 2: Run and record the failures**
 
@@ -420,11 +432,14 @@ UNIV_ROWS = [("'=..'(f(1,2), L), write(L)", "[f,1,2]"),
 
 @pytest.mark.parametrize("goal,expected", UNIV_ROWS)
 def test_univ_against_the_engine(goal, expected, run_clausal):
-    assert run_clausal(goal) == expected
+    got = run_clausal(
+        "-module(_hN, [p(X)])\n"
+        f"p(X) <- ({goal})\n", ("p",))
+    assert got == [repr(expected)]
 
 @pytest.mark.parametrize("goal,expected", UNIV_ROWS)
 def test_univ_against_scryer(goal, expected, scryer):
-    assert scryer(goal) == expected
+    assert scryer(f"{goal}, nl, halt.") == expected
 ```
 
 - [ ] **Step 2: Run and record the failure**
@@ -508,7 +523,17 @@ Compare the NAME SET against the same extraction run on the branch point. `0 NEW
 
 - [ ] **Step 5: Corpus gate**
 
-Tasks 2 and 3 change `sort/2` output. Run the corpus, diff against the branch point, and write `implementation_plans/standard-order-corpus-gate-2026-09-09.md` with: every changed result, whether the change is the intended tiebreak or something else, and a recommendation. Report the diff rather than summarising it. If the fallout is wide, backing out is a one-line revert of `_NUMERIC_RANK` — independent of Tasks 3-5.
+Tasks 2 and 3 change `sort/2` output, so a corpus gate is REQUIRED before landing.
+
+**The corpus is not in this repository** — `find /workspace/clausal -name '*.clausal' -path '*corpus*'` returns nothing, and the domain files live on the other side of the information barrier. This step therefore CANNOT be executed here, and must not be reported as done.
+
+Instead: write `implementation_plans/standard-order-corpus-gate-2026-09-09.md` stating what needs measuring, and request the run from a lane that holds the corpus (iso-export-lane or corpus-lane). The request must name:
+
+- the two commits to compare (branch point and this branch's tip);
+- what to look for — any site whose `sort/2` or `msort/2` output changes, split into (a) equal-value int/float no longer collapsing, (b) `Decimal(1)` no longer collapsing with `1`, (c) anything else, which is a BUG not an intended change;
+- that category (c) blocks landing outright, while (a) and (b) are the intended tiebreak and need a count, not a veto.
+
+If the fallout in (a)/(b) is wide, backing out is a one-line revert of `_NUMERIC_RANK` — independent of Tasks 3-5. **Do not land on a green full-suite gate alone**: the suite does not contain the corpus, so it cannot see this class of change.
 
 - [ ] **Step 6: Commit**
 
