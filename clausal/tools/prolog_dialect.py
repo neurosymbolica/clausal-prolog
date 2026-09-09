@@ -313,6 +313,10 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "sqrt_":         {"iso": "sqrt"},
     "min_":          {"iso": "min"},
     "max_":          {"iso": "max"},
+    # The test runner's predicate (clausal.testing).  Mapped to itself so a
+    # Prolog ``test/1`` clause stays ``test/1`` across the seam in both
+    # directions instead of being PascalCased into the deprecated ``Test/1``.
+    "test":          {"iso": "test"},
 }
 
 

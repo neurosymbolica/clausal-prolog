@@ -502,3 +502,43 @@ class TestGoldenPrologImport:
 
         # At least some tests must pass (all golden files have passing tests).
         assert passed, f"no tests passed out of {len(descs)}"
+
+
+# ── test/1 keeps its spelling across the .pl seam ─────────────────────────────
+
+
+class TestPrologTestClauseSpelling:
+    """A ``.pl`` file's ``test/1`` clauses are the runner's ``test/1``.
+
+    Predicate names cross the seam through ``snake_to_pascal`` unless they
+    are mapped; ``test`` is mapped to itself so the generated source says
+    ``test(...)``, not the deprecated ``Test(...)``, and importing a Prolog
+    file never warns the author about a spelling they did not write.
+    """
+
+    PL = (
+        "test('one is one') :- 1 =:= 1.\n"
+        "test('two is two') :- 2 =:= 2.\n"
+    )
+
+    def test_translation_keeps_test_lowercase(self):
+        # nv
+        from clausal.tools.prolog_to_clausal import prolog_to_clausal
+        out = prolog_to_clausal(self.PL)
+        assert "test('one is one')" in out, out
+        assert "Test(" not in out, out
+
+    def test_import_collects_without_spelling_warning(self, tmp_path):
+        # nv
+        import warnings
+        from clausal.templating.term_rewriting import (
+            ClausalDeprecatedSpellingWarning)
+        path = tmp_path / "spelled.pl"
+        path.write_text(self.PL)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            mod = _load_prolog_module("_pl_test_spelling", str(path))
+        assert [w for w in caught
+                if issubclass(w.category, ClausalDeprecatedSpellingWarning)] == []
+        assert collect_tests(mod) == ["one is one", "two is two"]
+        assert all(run_test(mod, d).passed for d in collect_tests(mod))

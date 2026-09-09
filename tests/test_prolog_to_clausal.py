@@ -467,14 +467,14 @@ class TestPredicateCollidingAtomIsNotDeclaredPrivate:
         out = prolog_to_clausal(
             "test(subtract) :-\n    subtract([1,2],[2],[1]).\n")
         assert "-private([subtract])" not in out, out
-        assert "Test('subtract')" in out, out
+        assert "test('subtract')" in out, out
 
     def test_non_colliding_atom_still_declared_private(self):
         # The gate must say YES too: an atom that shadows nothing is
         # untouched, so this is not a blanket disabling of -private.
         out = prolog_to_clausal("test(red) :-\n    colour(red).\n")
         assert "-private([red])" in out, out
-        assert "Test(red)" in out, out
+        assert "test(red)" in out, out
 
     def test_functor_in_a_nested_argument_also_counts(self):
         # The sweep is every position, not just goal position.

@@ -26,12 +26,12 @@ ValidSentence(_sentence) <- (phrase('sentence', _sentence))
 
 ExprDcg(_expression) >> ([_expression], {_expression is _expression + 0})
 
-Test('valid sentence') <- (ValidSentence([the, dog, chases, the, cat]))
+test('valid sentence') <- (ValidSentence([the, dog, chases, the, cat]))
 
-Test('greeting') <- (phrase('greeting', [hello, world]))
+test('greeting') <- (phrase('greeting', [hello, world]))
 
-Test('noun phrase dog') <- (phrase('noun_phrase', [the, dog]))
+test('noun phrase dog') <- (phrase('noun_phrase', [the, dog]))
 
-Test('verb phrase chases') <- (phrase('verb_phrase', [chases]))
+test('verb phrase chases') <- (phrase('verb_phrase', [chases]))
 
-Test('digit 3') <- (phrase(Digit(3), [3]))
+test('digit 3') <- (phrase(Digit(3), [3]))
