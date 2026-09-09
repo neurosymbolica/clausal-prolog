@@ -1,4 +1,4 @@
-# module: tests.fixtures.deep_index  predicates: MyAppend, MyLast, MyLen, MyMax, MyMaxOf, MyMember, MyNthOf, MyPrefix, MyProduct, MySumList, Test
+# module: tests.fixtures.deep_index  predicates: MyAppend, MyLast, MyLen, MyMax, MyMaxOf, MyMember, MyNthOf, MyPrefix, MyProduct, MySumList, test
 def MyAppend__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
@@ -481,7 +481,7 @@ def MySumList__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1376,7 +1376,7 @@ def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1391,7 +1391,7 @@ def Test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1406,7 +1406,7 @@ def Test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1421,7 +1421,7 @@ def Test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1436,7 +1436,7 @@ def Test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1453,7 +1453,7 @@ def Test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b5__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b5__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1468,7 +1468,7 @@ def Test__p0_b5__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1483,7 +1483,7 @@ def Test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b7__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b7__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1498,7 +1498,7 @@ def Test__p0_b7__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b8__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b8__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1513,7 +1513,7 @@ def Test__p0_b8__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b9__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b9__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1528,7 +1528,7 @@ def Test__p0_b9__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b10__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b10__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1545,7 +1545,7 @@ def Test__p0_b10__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b11__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b11__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1560,7 +1560,7 @@ def Test__p0_b11__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b12__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b12__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1572,7 +1572,7 @@ def Test__p0_b12__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b13__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b13__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1584,7 +1584,7 @@ def Test__p0_b13__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b14__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b14__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1596,7 +1596,7 @@ def Test__p0_b14__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b15__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b15__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1608,7 +1608,7 @@ def Test__p0_b15__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b16__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b16__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1630,7 +1630,7 @@ def Test__p0_b16__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1660,7 +1660,7 @@ def Test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1690,7 +1690,7 @@ def Test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b19__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b19__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1705,7 +1705,7 @@ def Test__p0_b19__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b20__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b20__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1720,7 +1720,7 @@ def Test__p0_b20__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b21__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b21__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1735,7 +1735,7 @@ def Test__p0_b21__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b22__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b22__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1750,7 +1750,7 @@ def Test__p0_b22__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b23__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b23__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1765,7 +1765,7 @@ def Test__p0_b23__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b24__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b24__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1780,7 +1780,7 @@ def Test__p0_b24__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b25__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b25__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1795,7 +1795,7 @@ def Test__p0_b25__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b26__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b26__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1810,7 +1810,7 @@ def Test__p0_b26__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b27__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b27__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1825,7 +1825,7 @@ def Test__p0_b27__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b28__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b28__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1840,7 +1840,7 @@ def Test__p0_b28__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b29__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b29__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1855,7 +1855,7 @@ def Test__p0_b29__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b30__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b30__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1870,7 +1870,7 @@ def Test__p0_b30__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b31__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b31__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1885,7 +1885,7 @@ def Test__p0_b31__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b32__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b32__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1900,7 +1900,7 @@ def Test__p0_b32__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b33__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b33__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1915,7 +1915,7 @@ def Test__p0_b33__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b34__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b34__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1930,7 +1930,7 @@ def Test__p0_b34__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b35__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b35__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1945,7 +1945,7 @@ def Test__p0_b35__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b36__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b36__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1960,7 +1960,7 @@ def Test__p0_b36__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b37__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b37__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1975,7 +1975,7 @@ def Test__p0_b37__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b38__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b38__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -1990,7 +1990,7 @@ def Test__p0_b38__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b39__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b39__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -2005,7 +2005,7 @@ def Test__p0_b39__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b40__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b40__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -2020,7 +2020,7 @@ def Test__p0_b40__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b41__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b41__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -2032,7 +2032,7 @@ def Test__p0_b41__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b42__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b42__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -2044,7 +2044,7 @@ def Test__p0_b42__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b43__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b43__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -2056,7 +2056,7 @@ def Test__p0_b43__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_acap0]:
@@ -2086,6 +2086,6 @@ def Test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 
 # ----
 
-def Test__p0_dflt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__p0_dflt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     return None
     yield None

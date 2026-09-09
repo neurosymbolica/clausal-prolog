@@ -1,315 +1,20 @@
-# module: tests.fixtures.head_list_compound  predicates: Test, echo2, ev_bare, ev_deep, ev_plain, mkpair, prov
-def Test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('bare head compound, body-bound inner var ground',), trail):
-                    _v0 = Var()
-                    _gen0 = StepGenerator($dispatch_at(ev_bare, 1), this_generator, this_generator, this_generator, ('item2', _v0), trail)
-                    _st0 = (yield (_gen0, None))
-                    while _st0 is not $DONE:
-                        _gen1 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v0, trail)
-                        _st1 = (yield (_gen1, None))
-                        while _st1 is not $DONE:
-                            if $fd_eq(_v0, ('met',), trail):
-                                yield (_proceed, None)
-                            _st1 = (yield (_gen1, None))
-                        _st0 = (yield (_gen0, None))
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('list head compound, plain body-bound inner var ground',), trail):
-                    _v1 = Var()
-                    _gen2 = StepGenerator($dispatch_at(ev_plain, 1), this_generator, this_generator, this_generator, [('item2', _v1)], trail)
-                    _st2 = (yield (_gen2, None))
-                    while _st2 is not $DONE:
-                        _gen3 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v1, trail)
-                        _st3 = (yield (_gen3, None))
-                        while _st3 is not $DONE:
-                            if $fd_eq(_v1, ('met',), trail):
-                                yield (_proceed, None)
-                            _st3 = (yield (_gen3, None))
-                        _st2 = (yield (_gen2, None))
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('list multi-arg compound, body-bound inner var ground',), trail):
-                    _v2 = Var()
-                    _v3 = Var()
-                    _gen4 = StepGenerator($dispatch_at(mkpair, 1), this_generator, this_generator, this_generator, [('pair', _v2, _v3)], trail)
-                    _st4 = (yield (_gen4, None))
-                    while _st4 is not $DONE:
-                        _gen5 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v3, trail)
-                        _st5 = (yield (_gen5, None))
-                        while _st5 is not $DONE:
-                            if $fd_eq(_v3, ('met',), trail):
-                                yield (_proceed, None)
-                            _st5 = (yield (_gen5, None))
-                        _st4 = (yield (_gen4, None))
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('deeply nested list compound output mode',), trail):
-                    _v4 = Var()
-                    _gen6 = StepGenerator($dispatch_at(ev_deep, 1), this_generator, this_generator, this_generator, [('c', ('d', _v4))], trail)
-                    _st6 = (yield (_gen6, None))
-                    while _st6 is not $DONE:
-                        _gen7 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v4, trail)
-                        _st7 = (yield (_gen7, None))
-                        while _st7 is not $DONE:
-                            if $fd_eq(_v4, ('met',), trail):
-                                yield (_proceed, None)
-                            _st7 = (yield (_gen7, None))
-                        _st6 = (yield (_gen6, None))
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('list compound input mode succeeds',), trail):
-                    _gen8 = StepGenerator($dispatch_at(ev_deep, 1), _proceed, this_generator, this_generator, [('c', ('d', ('met',)))], trail)
-                    _st8 = (yield (_gen8, None))
-                    while _st8 is not $DONE:
-                        _st8 = (yield (_gen8, None))
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('list compound input mode rejects mismatch',), trail):
-
-                    def _naf_gen_fn75(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
-                        _gen9 = StepGenerator($dispatch_at(ev_deep, 1), _naf_self, _naf_self, _naf_self, [('c', ('d', ('no',)))], trail)
-                        _st9 = (yield (_gen9, None))
-                        while _st9 is not $DONE:
-                            yield (_naf_proceed, None)
-                            _st9 = (yield (_gen9, None))
-                        yield (_naf_fail, $DONE)
-                    _m0 = trail.mark()
-                    _naf_sg77 = StepGenerator(_naf_gen_fn75, None, None, None, trail)
-                    _naf76 = not $naf_has_solution(_naf_sg77)
-                    trail.undo(_m0)
-                    if _naf76:
-                        yield (_proceed, None)
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-    match (_d0,):
-        case [_acap0]:
-            _mark = trail.mark()
-            _mark_cl = False
-            try:
-                if $unify(_acap0, ('plain list-of-vars head still unifies',), trail):
-                    _v5 = Var()
-                    _v6 = Var()
-                    _gen10 = StepGenerator($dispatch_at(echo2, 3), this_generator, this_generator, this_generator, [_v5, _v6], 7, 8, trail)
-                    _st10 = (yield (_gen10, None))
-                    while _st10 is not $DONE:
-                        if $fd_eq(_v5, 7, trail):
-                            if $fd_eq(_v6, 8, trail):
-                                yield (_proceed, None)
-                        _st10 = (yield (_gen10, None))
-            except GeneratorExit:
-                _mark_cl = True
-                raise
-            finally:
-                if not _mark_cl:
-                    trail.undo(_mark)
-
-# ----
-
-def Test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('bare head compound, body-bound inner var ground',), trail):
-                _v0 = Var()
-                _gen11 = StepGenerator($dispatch_at(ev_bare, 1), this_generator, this_generator, this_generator, ('item2', _v0), trail)
-                _st11 = (yield (_gen11, None))
-                while _st11 is not $DONE:
-                    _gen12 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v0, trail)
-                    _st12 = (yield (_gen12, None))
-                    while _st12 is not $DONE:
-                        if $fd_eq(_v0, ('met',), trail):
-                            yield (_proceed, None)
-                        _st12 = (yield (_gen12, None))
-                    _st11 = (yield (_gen11, None))
-
-# ----
-
-def Test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('list head compound, plain body-bound inner var ground',), trail):
-                _v1 = Var()
-                _gen13 = StepGenerator($dispatch_at(ev_plain, 1), this_generator, this_generator, this_generator, [('item2', _v1)], trail)
-                _st13 = (yield (_gen13, None))
-                while _st13 is not $DONE:
-                    _gen14 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v1, trail)
-                    _st14 = (yield (_gen14, None))
-                    while _st14 is not $DONE:
-                        if $fd_eq(_v1, ('met',), trail):
-                            yield (_proceed, None)
-                        _st14 = (yield (_gen14, None))
-                    _st13 = (yield (_gen13, None))
-
-# ----
-
-def Test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('list multi-arg compound, body-bound inner var ground',), trail):
-                _v2 = Var()
-                _v3 = Var()
-                _gen15 = StepGenerator($dispatch_at(mkpair, 1), this_generator, this_generator, this_generator, [('pair', _v2, _v3)], trail)
-                _st15 = (yield (_gen15, None))
-                while _st15 is not $DONE:
-                    _gen16 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v3, trail)
-                    _st16 = (yield (_gen16, None))
-                    while _st16 is not $DONE:
-                        if $fd_eq(_v3, ('met',), trail):
-                            yield (_proceed, None)
-                        _st16 = (yield (_gen16, None))
-                    _st15 = (yield (_gen15, None))
-
-# ----
-
-def Test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('deeply nested list compound output mode',), trail):
-                _v4 = Var()
-                _gen17 = StepGenerator($dispatch_at(ev_deep, 1), this_generator, this_generator, this_generator, [('c', ('d', _v4))], trail)
-                _st17 = (yield (_gen17, None))
-                while _st17 is not $DONE:
-                    _gen18 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v4, trail)
-                    _st18 = (yield (_gen18, None))
-                    while _st18 is not $DONE:
-                        if $fd_eq(_v4, ('met',), trail):
-                            yield (_proceed, None)
-                        _st18 = (yield (_gen18, None))
-                    _st17 = (yield (_gen17, None))
-
-# ----
-
-def Test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('list compound input mode succeeds',), trail):
-                _gen19 = StepGenerator($dispatch_at(ev_deep, 1), _proceed, this_generator, this_generator, [('c', ('d', ('met',)))], trail)
-                _st19 = (yield (_gen19, None))
-                while _st19 is not $DONE:
-                    _st19 = (yield (_gen19, None))
-
-# ----
-
-def Test__p0_b5__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('list compound input mode rejects mismatch',), trail):
-
-                def _naf_gen_fn103(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
-                    _gen20 = StepGenerator($dispatch_at(ev_deep, 1), _naf_self, _naf_self, _naf_self, [('c', ('d', ('no',)))], trail)
-                    _st20 = (yield (_gen20, None))
-                    while _st20 is not $DONE:
-                        yield (_naf_proceed, None)
-                        _st20 = (yield (_gen20, None))
-                    yield (_naf_fail, $DONE)
-                _m1 = trail.mark()
-                _naf_sg105 = StepGenerator(_naf_gen_fn103, None, None, None, trail)
-                _naf104 = not $naf_has_solution(_naf_sg105)
-                trail.undo(_m1)
-                if _naf104:
-                    yield (_proceed, None)
-
-# ----
-
-def Test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    _d0 = $deref(arg0)
-    match (_d0,):
-        case [_acap0]:
-            if $unify(_acap0, ('plain list-of-vars head still unifies',), trail):
-                _v5 = Var()
-                _v6 = Var()
-                _gen21 = StepGenerator($dispatch_at(echo2, 3), this_generator, this_generator, this_generator, [_v5, _v6], 7, 8, trail)
-                _st21 = (yield (_gen21, None))
-                while _st21 is not $DONE:
-                    if $fd_eq(_v5, 7, trail):
-                        if $fd_eq(_v6, 8, trail):
-                            yield (_proceed, None)
-                    _st21 = (yield (_gen21, None))
-
-# ----
-
-def Test__p0_dflt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
-    return None
-    yield None
-
-# ----
-
+# module: tests.fixtures.head_list_compound  predicates: echo2, ev_bare, ev_deep, ev_plain, mkpair, prov, test
 def echo2__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     _d2 = $deref(arg2)
     match (_d0, _d1, _d2):
-        case [_lcap0, _v7__dup0, _v8__dup1]:
+        case [_lcap0, _v0__dup0, _v1__dup1]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _v7 = Var()
-                _v8 = Var()
-                _lr0 = $head_list_unify_input(_lcap0, [_v7, _v8], None, [], trail)
+                _v0 = Var()
+                _v1 = Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v0, _v1], None, [], trail)
                 if _lr0 is not False:
-                    if $unify(_v7, _v7__dup0, trail):
-                        if $unify(_v8, _v8__dup1, trail):
-                            if _lr0 is not None or $head_list_unify_output(_lcap0, [_v7, _v8], None, [], trail):
+                    if $unify(_v0, _v0__dup0, trail):
+                        if $unify(_v1, _v1__dup1, trail):
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [_v0, _v1], None, [], trail):
                                 yield (_proceed, None)
             except GeneratorExit:
                 _mark_cl = True
@@ -324,18 +29,18 @@ def echo2__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail)
 def ev_bare__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
-        case [_v9]:
+        case [_v2]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _v10 = Var()
-                _m2 = trail.mark()
-                if $unify(_v9, ('item2', _v10), trail):
-                    _gen22 = StepGenerator($dispatch_at(prov, 2), _proceed, this_generator, this_generator, ('x',), _v10, trail)
-                    _st22 = (yield (_gen22, None))
-                    while _st22 is not $DONE:
-                        _st22 = (yield (_gen22, None))
-                trail.undo(_m2)
+                _v3 = Var()
+                _m0 = trail.mark()
+                if $unify(_v2, ('item2', _v3), trail):
+                    _gen0 = StepGenerator($dispatch_at(prov, 2), _proceed, this_generator, this_generator, ('x',), _v3, trail)
+                    _st0 = (yield (_gen0, None))
+                    while _st0 is not $DONE:
+                        _st0 = (yield (_gen0, None))
+                trail.undo(_m0)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -349,18 +54,18 @@ def ev_bare__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 def ev_deep__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
-        case [_v11]:
+        case [_v4]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _v12 = Var()
-                _m2 = trail.mark()
-                if $unify(_v11, [('c', ('d', _v12))], trail):
-                    _gen22 = StepGenerator($dispatch_at(prov, 2), _proceed, this_generator, this_generator, ('x',), _v12, trail)
-                    _st22 = (yield (_gen22, None))
-                    while _st22 is not $DONE:
-                        _st22 = (yield (_gen22, None))
-                trail.undo(_m2)
+                _v5 = Var()
+                _m0 = trail.mark()
+                if $unify(_v4, [('c', ('d', _v5))], trail):
+                    _gen0 = StepGenerator($dispatch_at(prov, 2), _proceed, this_generator, this_generator, ('x',), _v5, trail)
+                    _st0 = (yield (_gen0, None))
+                    while _st0 is not $DONE:
+                        _st0 = (yield (_gen0, None))
+                trail.undo(_m0)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -374,18 +79,18 @@ def ev_deep__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 def ev_plain__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
-        case [_v13]:
+        case [_v6]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _v14 = Var()
-                _m2 = trail.mark()
-                if $unify(_v13, [('item2', _v14)], trail):
-                    _gen22 = StepGenerator($dispatch_at(prov, 2), _proceed, this_generator, this_generator, ('x',), _v14, trail)
-                    _st22 = (yield (_gen22, None))
-                    while _st22 is not $DONE:
-                        _st22 = (yield (_gen22, None))
-                trail.undo(_m2)
+                _v7 = Var()
+                _m0 = trail.mark()
+                if $unify(_v6, [('item2', _v7)], trail):
+                    _gen0 = StepGenerator($dispatch_at(prov, 2), _proceed, this_generator, this_generator, ('x',), _v7, trail)
+                    _st0 = (yield (_gen0, None))
+                    while _st0 is not $DONE:
+                        _st0 = (yield (_gen0, None))
+                trail.undo(_m0)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -399,28 +104,28 @@ def ev_plain__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
 def mkpair__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
-        case [_v15]:
+        case [_v8]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _v16 = Var()
-                _v17 = Var()
-                _m3 = trail.mark()
-                if $unify(_v15, [('pair', _v16, _v17)], trail):
-                    _m4 = trail.mark()
-                    if $unify(_v16, ('k',), trail):
+                _v9 = Var()
+                _v10 = Var()
+                _m1 = trail.mark()
+                if $unify(_v8, [('pair', _v9, _v10)], trail):
+                    _m2 = trail.mark()
+                    if $unify(_v9, ('k',), trail):
 
                         def _lambda6(K, V, trail, k):
                             for _ in $tramp_call($dispatch_at(prov, 2), (K, V), trail):
                                 yield None
                             return None
                             yield None
-                        _gen23 = StepGenerator($dispatch_at(call_goal, 3), _proceed, this_generator, this_generator, _lambda6, ('x',), _v17, trail)
-                        _st23 = (yield (_gen23, None))
-                        while _st23 is not $DONE:
-                            _st23 = (yield (_gen23, None))
-                    trail.undo(_m4)
-                trail.undo(_m3)
+                        _gen1 = StepGenerator($dispatch_at(call_goal, 3), _proceed, this_generator, this_generator, _lambda6, ('x',), _v10, trail)
+                        _st1 = (yield (_gen1, None))
+                        while _st1 is not $DONE:
+                            _st1 = (yield (_gen1, None))
+                    trail.undo(_m2)
+                trail.undo(_m1)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -435,17 +140,17 @@ def prov__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [_v18, _v19]:
+        case [_v11, _v12]:
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _m5 = trail.mark()
-                if $unify(_v18, ('x',), trail):
-                    _m6 = trail.mark()
-                    if $unify(_v19, ('met',), trail):
+                _m3 = trail.mark()
+                if $unify(_v11, ('x',), trail):
+                    _m4 = trail.mark()
+                    if $unify(_v12, ('met',), trail):
                         yield (_proceed, None)
-                    trail.undo(_m6)
-                trail.undo(_m5)
+                    trail.undo(_m4)
+                trail.undo(_m3)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -453,3 +158,298 @@ def prov__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 if not _mark_cl:
                     trail.undo(_mark)
     yield (_fail, $DONE)
+
+# ----
+
+def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, ('bare head compound, body-bound inner var ground',), trail):
+                    _v13 = Var()
+                    _gen2 = StepGenerator($dispatch_at(ev_bare, 1), this_generator, this_generator, this_generator, ('item2', _v13), trail)
+                    _st2 = (yield (_gen2, None))
+                    while _st2 is not $DONE:
+                        _gen3 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v13, trail)
+                        _st3 = (yield (_gen3, None))
+                        while _st3 is not $DONE:
+                            if $fd_eq(_v13, ('met',), trail):
+                                yield (_proceed, None)
+                            _st3 = (yield (_gen3, None))
+                        _st2 = (yield (_gen2, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_acap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, ('list head compound, plain body-bound inner var ground',), trail):
+                    _v14 = Var()
+                    _gen4 = StepGenerator($dispatch_at(ev_plain, 1), this_generator, this_generator, this_generator, [('item2', _v14)], trail)
+                    _st4 = (yield (_gen4, None))
+                    while _st4 is not $DONE:
+                        _gen5 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v14, trail)
+                        _st5 = (yield (_gen5, None))
+                        while _st5 is not $DONE:
+                            if $fd_eq(_v14, ('met',), trail):
+                                yield (_proceed, None)
+                            _st5 = (yield (_gen5, None))
+                        _st4 = (yield (_gen4, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_acap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, ('list multi-arg compound, body-bound inner var ground',), trail):
+                    _v15 = Var()
+                    _v16 = Var()
+                    _gen6 = StepGenerator($dispatch_at(mkpair, 1), this_generator, this_generator, this_generator, [('pair', _v15, _v16)], trail)
+                    _st6 = (yield (_gen6, None))
+                    while _st6 is not $DONE:
+                        _gen7 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v16, trail)
+                        _st7 = (yield (_gen7, None))
+                        while _st7 is not $DONE:
+                            if $fd_eq(_v16, ('met',), trail):
+                                yield (_proceed, None)
+                            _st7 = (yield (_gen7, None))
+                        _st6 = (yield (_gen6, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_acap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, ('deeply nested list compound output mode',), trail):
+                    _v17 = Var()
+                    _gen8 = StepGenerator($dispatch_at(ev_deep, 1), this_generator, this_generator, this_generator, [('c', ('d', _v17))], trail)
+                    _st8 = (yield (_gen8, None))
+                    while _st8 is not $DONE:
+                        _gen9 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v17, trail)
+                        _st9 = (yield (_gen9, None))
+                        while _st9 is not $DONE:
+                            if $fd_eq(_v17, ('met',), trail):
+                                yield (_proceed, None)
+                            _st9 = (yield (_gen9, None))
+                        _st8 = (yield (_gen8, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_acap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, ('list compound input mode succeeds',), trail):
+                    _gen10 = StepGenerator($dispatch_at(ev_deep, 1), _proceed, this_generator, this_generator, [('c', ('d', ('met',)))], trail)
+                    _st10 = (yield (_gen10, None))
+                    while _st10 is not $DONE:
+                        _st10 = (yield (_gen10, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_acap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, ('list compound input mode rejects mismatch',), trail):
+
+                    def _naf_gen_fn75(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
+                        _gen11 = StepGenerator($dispatch_at(ev_deep, 1), _naf_self, _naf_self, _naf_self, [('c', ('d', ('no',)))], trail)
+                        _st11 = (yield (_gen11, None))
+                        while _st11 is not $DONE:
+                            yield (_naf_proceed, None)
+                            _st11 = (yield (_gen11, None))
+                        yield (_naf_fail, $DONE)
+                    _m5 = trail.mark()
+                    _naf_sg77 = StepGenerator(_naf_gen_fn75, None, None, None, trail)
+                    _naf76 = not $naf_has_solution(_naf_sg77)
+                    trail.undo(_m5)
+                    if _naf76:
+                        yield (_proceed, None)
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_acap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, ('plain list-of-vars head still unifies',), trail):
+                    _v18 = Var()
+                    _v19 = Var()
+                    _gen12 = StepGenerator($dispatch_at(echo2, 3), this_generator, this_generator, this_generator, [_v18, _v19], 7, 8, trail)
+                    _st12 = (yield (_gen12, None))
+                    while _st12 is not $DONE:
+                        if $fd_eq(_v18, 7, trail):
+                            if $fd_eq(_v19, 8, trail):
+                                yield (_proceed, None)
+                        _st12 = (yield (_gen12, None))
+            except GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+
+# ----
+
+def test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            if $unify(_acap0, ('bare head compound, body-bound inner var ground',), trail):
+                _v13 = Var()
+                _gen13 = StepGenerator($dispatch_at(ev_bare, 1), this_generator, this_generator, this_generator, ('item2', _v13), trail)
+                _st13 = (yield (_gen13, None))
+                while _st13 is not $DONE:
+                    _gen14 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v13, trail)
+                    _st14 = (yield (_gen14, None))
+                    while _st14 is not $DONE:
+                        if $fd_eq(_v13, ('met',), trail):
+                            yield (_proceed, None)
+                        _st14 = (yield (_gen14, None))
+                    _st13 = (yield (_gen13, None))
+
+# ----
+
+def test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            if $unify(_acap0, ('list head compound, plain body-bound inner var ground',), trail):
+                _v14 = Var()
+                _gen15 = StepGenerator($dispatch_at(ev_plain, 1), this_generator, this_generator, this_generator, [('item2', _v14)], trail)
+                _st15 = (yield (_gen15, None))
+                while _st15 is not $DONE:
+                    _gen16 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v14, trail)
+                    _st16 = (yield (_gen16, None))
+                    while _st16 is not $DONE:
+                        if $fd_eq(_v14, ('met',), trail):
+                            yield (_proceed, None)
+                        _st16 = (yield (_gen16, None))
+                    _st15 = (yield (_gen15, None))
+
+# ----
+
+def test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            if $unify(_acap0, ('list multi-arg compound, body-bound inner var ground',), trail):
+                _v15 = Var()
+                _v16 = Var()
+                _gen17 = StepGenerator($dispatch_at(mkpair, 1), this_generator, this_generator, this_generator, [('pair', _v15, _v16)], trail)
+                _st17 = (yield (_gen17, None))
+                while _st17 is not $DONE:
+                    _gen18 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v16, trail)
+                    _st18 = (yield (_gen18, None))
+                    while _st18 is not $DONE:
+                        if $fd_eq(_v16, ('met',), trail):
+                            yield (_proceed, None)
+                        _st18 = (yield (_gen18, None))
+                    _st17 = (yield (_gen17, None))
+
+# ----
+
+def test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            if $unify(_acap0, ('deeply nested list compound output mode',), trail):
+                _v17 = Var()
+                _gen19 = StepGenerator($dispatch_at(ev_deep, 1), this_generator, this_generator, this_generator, [('c', ('d', _v17))], trail)
+                _st19 = (yield (_gen19, None))
+                while _st19 is not $DONE:
+                    _gen20 = StepGenerator($dispatch_at(ground, 1), this_generator, this_generator, this_generator, _v17, trail)
+                    _st20 = (yield (_gen20, None))
+                    while _st20 is not $DONE:
+                        if $fd_eq(_v17, ('met',), trail):
+                            yield (_proceed, None)
+                        _st20 = (yield (_gen20, None))
+                    _st19 = (yield (_gen19, None))
+
+# ----
+
+def test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            if $unify(_acap0, ('list compound input mode succeeds',), trail):
+                _gen21 = StepGenerator($dispatch_at(ev_deep, 1), _proceed, this_generator, this_generator, [('c', ('d', ('met',)))], trail)
+                _st21 = (yield (_gen21, None))
+                while _st21 is not $DONE:
+                    _st21 = (yield (_gen21, None))
+
+# ----
+
+def test__p0_b5__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            if $unify(_acap0, ('list compound input mode rejects mismatch',), trail):
+
+                def _naf_gen_fn103(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
+                    _gen22 = StepGenerator($dispatch_at(ev_deep, 1), _naf_self, _naf_self, _naf_self, [('c', ('d', ('no',)))], trail)
+                    _st22 = (yield (_gen22, None))
+                    while _st22 is not $DONE:
+                        yield (_naf_proceed, None)
+                        _st22 = (yield (_gen22, None))
+                    yield (_naf_fail, $DONE)
+                _m6 = trail.mark()
+                _naf_sg105 = StepGenerator(_naf_gen_fn103, None, None, None, trail)
+                _naf104 = not $naf_has_solution(_naf_sg105)
+                trail.undo(_m6)
+                if _naf104:
+                    yield (_proceed, None)
+
+# ----
+
+def test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_acap0]:
+            if $unify(_acap0, ('plain list-of-vars head still unifies',), trail):
+                _v18 = Var()
+                _v19 = Var()
+                _gen23 = StepGenerator($dispatch_at(echo2, 3), this_generator, this_generator, this_generator, [_v18, _v19], 7, 8, trail)
+                _st23 = (yield (_gen23, None))
+                while _st23 is not $DONE:
+                    if $fd_eq(_v18, 7, trail):
+                        if $fd_eq(_v19, 8, trail):
+                            yield (_proceed, None)
+                    _st23 = (yield (_gen23, None))
+
+# ----
+
+def test__p0_dflt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    return None
+    yield None

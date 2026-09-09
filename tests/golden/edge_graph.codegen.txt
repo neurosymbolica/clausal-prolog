@@ -1,4 +1,4 @@
-# module: tests.fixtures.edge_graph  predicates: Edge, Reach, Test
+# module: tests.fixtures.edge_graph  predicates: Edge, Reach, test
 def Edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
@@ -102,7 +102,7 @@ def Reach__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def Test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+def test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     _d0 = $deref(arg0)
     match (_d0,):
         case [_scap0]:
