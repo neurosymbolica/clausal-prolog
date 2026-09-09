@@ -39,3 +39,20 @@ class ClausalDeprecatedSpellingWarning(ClausalLintWarning):
     this warning exists to avoid.  Suppress it the way the other lints are
     suppressed — ``warnings.filterwarnings`` on this class.
     """
+
+
+class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
+    """A TitleCase identifier (``Foo``, ``FooBar``) in Clausal code.
+
+    Clausal identifiers are lowercase (predicates, atoms, functors) or
+    ALL_CAPS / underscore-led (logic variables); TitleCase has no role — a
+    Python class is reached as ``++ClassName``.  Emitted once per (file,
+    identifier) by ``EmbedTransformer._lint_titlecase``, which reads only
+    CLAUSAL positions — clause heads and bodies, bodyless facts, directive
+    arguments and ``--`` seams.  Hosted Python in the same file (module-level
+    assignments, imports, ``def``/``class`` bodies, plain calls) is where a
+    TitleCase class belongs and where ``++`` is Python's double unary plus,
+    so it is never read.  The severity is ``TITLECASE_IDENTIFIER_SEVERITY``
+    (``"warn"`` today; set it to ``"error"`` and the same sites raise a
+    load-time ``SyntaxError``).
+    """

@@ -639,7 +639,9 @@ def _suggest_non_var_name(identifier: str) -> str:
 # reached through the ``++ClassName`` escape, and a functor is lowercase like
 # every other predicate, so a TitleCase name in Clausal code is a spelling
 # left over from an older convention and the lint says so once per file per
-# identifier.  ``_warn_titlecase_identifiers`` is the walk.
+# identifier.  ``EmbedTransformer._lint_titlecase`` is the walk; it is run
+# on each CLAUSAL subtree as ``visit_Expr`` (and the ``--`` seam visitors)
+# recognise it, never on the hosted Python around them.
 
 #: Severity of the TitleCase-identifier lint: ``"warn"`` emits one
 #: ``ClausalTitleCaseIdentifierWarning`` per (file, identifier); ``"error"``
@@ -1100,19 +1102,8 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalSingletonWarning,
     ClausalSeamLiteralWarning,
     ClausalDeprecatedSpellingWarning,
+    ClausalTitleCaseIdentifierWarning,
 )
-
-
-class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
-    """A TitleCase identifier (``Foo``, ``FooBar``) in Clausal code.
-
-    Clausal identifiers are lowercase (predicates, atoms, functors) or
-    ALL_CAPS / underscore-led (logic variables); TitleCase has no role — a
-    Python class is reached as ``++ClassName``.  Emitted once per (file,
-    identifier) by ``EmbedTransformer._warn_titlecase_identifiers``.  The
-    severity is ``TITLECASE_IDENTIFIER_SEVERITY`` (``"warn"`` today; set it
-    to ``"error"`` and the same sites raise a load-time ``SyntaxError``).
-    """
 
 
 def _node_has_var_or_wildcard(node) -> bool:
@@ -4099,6 +4090,14 @@ class EmbedTransformer(NodeTransformer):
     def __init__(transformer, source_lines=None, implicit_atoms_default=False,
                  filename=None, interactive=False, reify=False):
         transformer._scope_depth = 0
+        # TitleCase-identifier lint state (see ``_lint_titlecase``): the
+        # identifiers already reported (once per file), the names an
+        # ``-import_from`` list binds (exempt), and the TitleCase names the
+        # file's hosted Python binds itself (their remedy is the ``++``
+        # escape, like an injected runtime class).
+        transformer._titlecase_seen: set[str] = set()
+        transformer._titlecase_imported: set[str] = set()
+        transformer._titlecase_python_bound: set[str] = set()
         # Reflection models MORE than compiles — see TermTransformer._reify.
         transformer._reify = reify
         # Source file being rewritten, used only to attribute compile-time
@@ -4804,6 +4803,7 @@ class EmbedTransformer(NodeTransformer):
         if found is None:
             return transformer.generic_visit(node)
         expression, negated = found
+        transformer._lint_titlecase(expression)
         pre, goal_ast, fresh = transformer._goal_seam(expression, node.test)
         test = replace(Call(func=Name(id="$once_bind", ctx=Load()),
                             args=[goal_ast, transformer._globals_call(node.test)],
@@ -4830,6 +4830,7 @@ class EmbedTransformer(NodeTransformer):
             # ``for x in not --goal`` is not a goal position: leave it to Python.
             return transformer.generic_visit(node)
         expression, _ = found
+        transformer._lint_titlecase(expression)
         # Targets: a Name, or a Tuple of Names, each a variable of the goal.
         if isinstance(node.target, Name):
             targets = [node.target.id]
@@ -4872,6 +4873,7 @@ class EmbedTransformer(NodeTransformer):
         if found is None:
             return transformer.generic_visit(node)
         expression, negated = found
+        transformer._lint_titlecase(expression)
         # ``pre`` is unused on purpose: unlike ``if``/``for``, the fresh
         # ``Var()`` binds must be re-created every iteration, so they are
         # emitted INSIDE the loop test (as a bind-then-call tuple index)
@@ -5091,25 +5093,61 @@ class EmbedTransformer(NodeTransformer):
         )
         return replace(guard, expr_stmt)
 
-    def _warn_titlecase_identifiers(transformer, module):
-        """Lint every TitleCase ``Name`` in *module* (see
-        ClausalTitleCaseIdentifierWarning), once per identifier.
+    def _titlecase_prepass(transformer, module):
+        """Collect, from the RAW module, the two name sets ``_lint_titlecase``
+        consults: the names an ``-import_from`` list binds (exempt at every
+        use — a name the file imports is the exporter's to spell), and the
+        TitleCase names the file's hosted Python binds itself (``from
+        fractions import Fraction``, ``class Helper``), which ARE Python
+        classes here, so a Clausal-position use of one is told to reach it
+        as ``++Name`` rather than to rename it."""
+        for stmt in module.body:
+            if (isinstance(stmt, Expr) and isinstance(stmt.value, UnaryOp)
+                    and isinstance(stmt.value.op, USub)
+                    and isinstance(stmt.value.operand, Call)
+                    and isinstance(stmt.value.operand.func, Name)
+                    and stmt.value.operand.func.id == "import_from"):
+                call = stmt.value.operand
+                if len(call.args) == 2 and isinstance(call.args[1], List):
+                    for item in call.args[1].elts:
+                        if isinstance(item, Name):
+                            transformer._titlecase_imported.add(item.id)
+                        elif isinstance(item, Call):
+                            for arg in item.args:
+                                if isinstance(arg, Name):
+                                    transformer._titlecase_imported.add(arg.id)
+        for node in walk(module):
+            if isinstance(node, alias):
+                bound = node.asname or node.name.split(".")[0]
+            elif isinstance(node, ClassDef):
+                bound = node.name
+            else:
+                continue
+            if _is_titlecase_identifier(bound):
+                transformer._titlecase_python_bound.add(bound)
 
-        Runs on the RAW parse tree, before any rewriting, so it sees the
-        author's spelling at every position — clause heads, body goals, term
-        functors, declaration lists, constant values — with one walk and no
-        per-visitor bookkeeping.  What it does NOT read, and why:
+    def _lint_titlecase(transformer, *nodes):
+        """Lint every TitleCase ``Name`` in the CLAUSAL subtrees *nodes*
+        (see ClausalTitleCaseIdentifierWarning), once per (file, identifier).
+
+        Called from each point where the transformer recognises a Clausal
+        position in the raw parse tree — a clause (``head <- body``, a DCG
+        rule), a bodyless fact (trailing comma, or the comma-optional form
+        of a DECLARED predicate), a query, the arguments of a ``-directive``,
+        and the operand of a ``--`` seam — with the raw nodes, before any
+        rewriting, so it sees the author's spelling.  Nothing else in the
+        file is read: module-level Python (assignments, imports, ``raise``,
+        ``try``, an undeclared bare call such as ``isinstance(...)``) and
+        ``def``/``class`` bodies are hosted Python, where a TitleCase class
+        is legitimate and ``++X`` is Python's own double unary plus — the
+        ``++`` remedy would be wrong advice there.  Within a Clausal subtree
+        it does NOT read:
 
         * a ``++`` Python escape (adjacent double ``UAdd``): Python code by
           definition, the very place a TitleCase class name belongs;
         * string literals and f-strings: text, not identifiers;
-        * ``def``/``class`` blocks: Python-hosted code, the same reasoning
-          as the escape;
-        * the name of a ``-directive`` and the whole of ``-import_module``/
-          ``-import_from``: module paths are Python, and a name the file
-          imports is the exporter's to spell — so a name bound by an
-          ``-import_from`` list (or its ``alias(...)`` local name) is exempt
-          at every later use as well;
+        * a name bound by an ``-import_from`` list (or its ``alias(...)``
+          local name) — see ``_titlecase_prepass``;
         * ``_TITLECASE_EXEMPT_NAMES`` (``Undefined``).
 
         Python's ``True``/``False``/``None`` arrive as ``Constant`` nodes and
@@ -5119,67 +5157,36 @@ class EmbedTransformer(NodeTransformer):
 
         A name that IS a Python class in the module's namespace
         (``_python_class_names``: injected runtime names, AST node classes,
-        Python builtins) still warns, but the remedy it names is the ``++``
-        escape rather than a snake_case rename.
+        Python builtins — or one the file's own hosted Python binds,
+        ``_titlecase_python_bound``) still warns, but the remedy it names is
+        the ``++`` escape rather than a snake_case rename.
 
         Severity is ``TITLECASE_IDENTIFIER_SEVERITY``: ``"warn"`` emits the
         warning at the identifier's first site, ``"error"`` raises there.
         """
         import warnings  # noqa: PLC0415
-        imported: set[str] = set()
-        first_site: dict[str, Name] = {}
 
         def _is_escape(node):
             return (isinstance(node, UnaryOp) and isinstance(node.op, UAdd)
                     and isinstance(node.operand, UnaryOp)
                     and isinstance(node.operand.op, UAdd))
 
-        def walk(node):
+        def walk_(node):
             if isinstance(node, (Constant, JoinedStr)) or _is_escape(node):
-                return
-            if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
                 return
             if isinstance(node, Name):
                 ident = node.id
-                if (ident not in first_site
+                if (ident not in transformer._titlecase_seen
                         and ident not in _TITLECASE_EXEMPT_NAMES
                         and _is_titlecase_identifier(ident)):
-                    first_site[ident] = node
+                    transformer._titlecase_seen.add(ident)
+                    if ident not in transformer._titlecase_imported:
+                        report(ident, node)
                 return
             for child in iter_child_nodes(node):
-                walk(child)
+                walk_(child)
 
-        for stmt in module.body:
-            call = None
-            if (isinstance(stmt, Expr) and isinstance(stmt.value, UnaryOp)
-                    and isinstance(stmt.value.op, USub)
-                    and isinstance(stmt.value.operand, Call)
-                    and isinstance(stmt.value.operand.func, Name)):
-                call = stmt.value.operand
-            if call is None:
-                walk(stmt)
-                continue
-            directive = call.func.id
-            if directive == "import_module":
-                continue
-            if directive == "import_from":
-                if len(call.args) == 2 and isinstance(call.args[1], List):
-                    for item in call.args[1].elts:
-                        if isinstance(item, Name):
-                            imported.add(item.id)
-                        elif isinstance(item, Call):
-                            for arg in item.args:
-                                if isinstance(arg, Name):
-                                    imported.add(arg.id)
-                continue
-            for arg in call.args:
-                walk(arg)
-            for kw in call.keywords:
-                walk(kw.value)
-
-        for ident, node in first_site.items():
-            if ident in imported:
-                continue
+        def report(ident, node):
             lineno = getattr(node, "lineno", None)
             where = transformer._site(lineno) if lineno else "unknown site"
             snippet = transformer._source_snippet(lineno) if lineno else ""
@@ -5190,7 +5197,8 @@ class EmbedTransformer(NodeTransformer):
                 "functors) or ALL_CAPS / underscore-led (logic variables); "
                 "TitleCase has no role"
             )
-            if ident in _python_class_names():
+            if (ident in _python_class_names()
+                    or ident in transformer._titlecase_python_bound):
                 msg = (
                     f"{where}{snippet}: `{ident}` is TitleCase: `{ident}` is "
                     f"a Python class; reach it as `++{ident}`. {convention}"
@@ -5208,6 +5216,10 @@ class EmbedTransformer(NodeTransformer):
             warnings.warn(msg, ClausalTitleCaseIdentifierWarning,
                           stacklevel=2)
 
+        for node in nodes:
+            if node is not None:
+                walk_(node)
+
     def visit_Module(transformer, module):
         """Visit the module body, then emit a final ``BareAtomRefs`` item
         carrying every bare reference the per-clause transformers saw.
@@ -5223,7 +5235,7 @@ class EmbedTransformer(NodeTransformer):
         # route through ``$text`` -- unless the file binds ``str`` itself, in
         # which case its own binding wins and nothing is rewritten.
         transformer._str_shadowed = _binds_name(module, "str")
-        transformer._warn_titlecase_identifiers(module)
+        transformer._titlecase_prepass(module)
         result = transformer.generic_visit(module)
         transformer._check_var_shaped_predicate_names()
         transformer._settle_atom_functor_sites()
@@ -5339,6 +5351,7 @@ class EmbedTransformer(NodeTransformer):
                     # written later in the same term still finds it, and an
                     # inner seam (inside that ``++``) reuses the variables an
                     # enclosing seam already bound rather than shadowing them.
+                    transformer._lint_titlecase(expression)
                     term_ast, fresh = transformer._seam_term_ast(expression, unary_op)
                     if fresh:
                         # term position: bind the fresh variables inline
@@ -5435,6 +5448,15 @@ class EmbedTransformer(NodeTransformer):
                 and neg.col_offset == neg.operand.col_offset - 1
                 and neg.lineno == neg.operand.lineno
             ):
+                # The directive's arguments are Clausal (export lists,
+                # ``pred/arity`` specs, ``-private([...])`` heads); its NAME
+                # is not an identifier of the program, and the whole of an
+                # ``-import_*`` is a module path plus names that are the
+                # exporter's to spell.
+                if directive_name not in ("import_module", "import_from"):
+                    transformer._lint_titlecase(
+                        *directive_args,
+                        *(kw.value for kw in neg.operand.keywords))
                 return transformer._handle_directive(
                     directive_name, directive_args, expr_stmt
                 )
@@ -5458,6 +5480,7 @@ class EmbedTransformer(NodeTransformer):
                 and transformer._scope_depth == 0
             ):
                 # Trailing-comma fact: ``edge(1, 2),`` — build via shared helper.
+                transformer._lint_titlecase(single_element)
                 return transformer._build_fact_statements(
                     single_element.func.id,
                     single_element.args,
@@ -5471,6 +5494,7 @@ class EmbedTransformer(NodeTransformer):
                 and not _is_logic_var_name(functor_name)
             ):
                 # A10-F011: zero-arity trailing-comma fact ``flag,`` — shared helper.
+                transformer._lint_titlecase(name_node)
                 return transformer._build_zero_arity_fact_statements(
                     functor_name, name_node, expr_stmt,
                 )
@@ -5479,6 +5503,7 @@ class EmbedTransformer(NodeTransformer):
             ):
                 # DCG / EDCG rule: head >> (body)
                 # Parse LHS for pushback: (head, [pushback]) >> (body)
+                transformer._lint_titlecase(expr_stmt.value)
                 pushback = None
                 if isinstance(lhs, Tuple) and len(lhs.elts) == 2:
                     head_part, pb_part = lhs.elts
@@ -5552,6 +5577,7 @@ class EmbedTransformer(NodeTransformer):
                 and (arrow := _detect_arrow(left, ops, comparators, transformer._source_lines)) is not None
             ):
                 # Module-level predicate definition: functor_call<-body
+                transformer._lint_titlecase(expr_stmt.value)
                 _, body_expr = arrow
                 # Extract functor name and positional/keyword field names from the
                 # original (pre-transformation) head Python AST.
@@ -5659,11 +5685,13 @@ class EmbedTransformer(NodeTransformer):
                 # to the inner expression.  Returning expr_stmt unchanged prevents
                 # EmbedTransformer.visit_Name (X → X.value) from mangling the
                 # names that TermTransformer needs to see as plain Name nodes.
+                transformer._lint_titlecase(expr_stmt.value)
                 return expr_stmt
             case Call(func=Name(id="_clausal_star_query_")):
                 # Sentinel form of *(…) after text-level input transformer
                 # rewrites it for Python ≥ 3.14 compatibility.  Same treatment
                 # as Starred(): leave untouched for _StarQueryTransformer.
+                transformer._lint_titlecase(*expr_stmt.value.args)
                 return expr_stmt
             case Call(func=Name(id=functor_name)) if (
                 transformer._scope_depth == 0
@@ -5671,7 +5699,10 @@ class EmbedTransformer(NodeTransformer):
             ):
                 if functor_name in transformer._seen_functors:
                     # Comma-optional bodyless fact for a DECLARED predicate.
+                    # (An UNDECLARED bare call below is hosted Python — an
+                    # ``isinstance(...)``, a macro — and is not linted.)
                     src = expr_stmt.value
+                    transformer._lint_titlecase(src)
                     return transformer._build_fact_statements(
                         functor_name, src.args, src.keywords, src.func, src,
                         expr_stmt,
@@ -5696,6 +5727,7 @@ class EmbedTransformer(NodeTransformer):
                     # so no error either) and the fact was never asserted.
                     or functor_name in transformer._atoms
                 ):
+                    transformer._lint_titlecase(expr_stmt.value)
                     return transformer._build_zero_arity_fact_statements(
                         functor_name, expr_stmt.value, expr_stmt,
                     )
@@ -7473,6 +7505,9 @@ class EmbedTransformer(NodeTransformer):
 
         if _is_double(USub):
             # with --{} as target: — block form of --; produces simple_ast terms.
+            transformer._lint_titlecase(
+                *(stmt.value for stmt in with_statement.body
+                  if isinstance(stmt, Expr)))
             term_transformer = transformer._make_term_transformer()
             elements = [
                 term_transformer.visit(stmt.value)

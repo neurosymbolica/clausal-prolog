@@ -158,3 +158,124 @@ def test_user_name_still_suggests_snake_case(tmp_path):
     ws = _titlecase_warnings(tmp_path, "o", "FooBar(1),\n")
     assert _named(ws) == ["FooBar"]
     assert "Rename `FooBar` -> `foo_bar`" in str(ws[0].message)
+
+
+# --- Hosted Python positions are not linted -------------------------------
+#
+# A ``.clausal`` file is Python syntax with clause statements embedded.  The
+# ruling ("TitleCase has no role in Clausal code; a Python class is reached
+# as ``++ClassName``") applies to CLAUSAL positions only: clause heads,
+# clause bodies, bodyless facts, directive arguments and ``--`` seams —
+# the places where a bare ``Foo(...)`` really is rewritten and ``++`` is
+# the escape.  Everywhere else the file is plain Python, where TitleCase
+# classes are legitimate and ``++X`` is Python's double unary plus (which
+# fails on a ``Var``), so the lint's remedy would be wrong advice.
+
+_HOSTED_PYTHON_MODULE = """
+from fractions import Fraction
+from clausal import Var
+A = Var()
+HALF = Fraction(1, 2)
+if False:
+    raise SystemExit(1)
+try:
+    pass
+except AssertionError:
+    pass
+isinstance(1, Fraction)
+class Helper:
+    pass
+def mk():
+    return Fraction(3, 4)
+p(X) <- (X is 1)
+"""
+
+
+def test_hosted_python_at_module_level_does_not_warn(tmp_path):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        mod = _load(tmp_path, "hp", _HOSTED_PYTHON_MODULE)
+    assert [w for w in rec
+            if issubclass(w.category, ClausalTitleCaseIdentifierWarning)] == []
+    assert mod.HALF == mod.Fraction(1, 2)
+    assert mod.mk() == mod.Fraction(3, 4)
+
+
+def test_double_plus_in_hosted_python_is_a_type_error_not_a_lint(tmp_path):
+    """The lint used to name ``Var`` here and advise ``++Var`` — advice that
+    is wrong in hosted Python, where ``++`` is two unary pluses.  Pin both
+    facts: no lint, and the TypeError the advice would lead to."""
+    text = """
+    from fractions import Fraction
+    from clausal import Var
+    A = ++Var()
+    HALF = Fraction(1, 2)
+    p(X) <- (X is 1)
+    q(X) <- (X is HALF)
+    """
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        with pytest.raises(TypeError, match="unary \\+"):
+            _load(tmp_path, "hq", text)
+    assert [w for w in rec
+            if issubclass(w.category, ClausalTitleCaseIdentifierWarning)] == []
+
+
+def test_clausal_body_position_still_warns_naming_the_escape(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "cb",
+        "from fractions import Fraction\nq(X) <- (X is Fraction(1, 3))\n")
+    assert _named(ws) == ["Fraction"]
+    assert "reach it as `++Fraction`" in str(ws[0].message)
+
+
+def test_clausal_head_position_still_warns_with_rename(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "ch", "bar(1),\nFoo(X) <- (bar(X))\n")
+    assert _named(ws) == ["Foo"]
+    assert "Rename `Foo` -> `foo`" in str(ws[0].message)
+
+
+def test_trailing_comma_fact_still_warns(tmp_path):
+    assert _named(_titlecase_warnings(tmp_path, "cf", "Foo(1),\n")) == ["Foo"]
+
+
+def test_private_directive_argument_still_warns(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "cp",
+        "-private([PrivHelper(X)])\nPrivHelper(1),\n")
+    assert _named(ws) == ["PrivHelper"]
+    assert "cp.clausal:1" in str(ws[0].message)
+
+
+def test_escaped_body_call_is_silent(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "ce",
+        "from fractions import Fraction\nq(X) <- (X is ++Fraction(1, 3))\n")
+    assert ws == []
+
+
+def test_def_body_with_clausal_looking_call_is_hosted(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "cd",
+        "class Foo:\n    pass\ndef helper():\n    return Foo(1)\n"
+        "p(X) <- (X is 1)\n")
+    assert ws == []
+
+
+def test_comma_optional_fact_of_declared_predicate_still_warns(tmp_path):
+    """``foo(Point(1, 2))`` with no trailing comma is a fact once ``foo``
+    is declared — a Clausal position — but an undeclared bare call
+    (``isinstance(1, Fraction)``) is hosted Python."""
+    ws = _titlecase_warnings(
+        tmp_path, "co",
+        "foo(0),\nfoo(Point(1, 2))\n")
+    assert _named(ws) == ["Point"]
+
+
+def test_goal_seam_operand_still_warns(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "cs",
+        "foo(1),\ndef run():\n    if --Bar(X):\n        return X\n"
+        "    return None\n")
+    assert _named(ws) == ["Bar"]
