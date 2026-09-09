@@ -173,10 +173,16 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 raise SyntaxError(
                     f"--: arithmetic over an unbound variable has no value; "
                     f"bind it first or pass the term through ++(...)")
-            expr = arith_to_ast_expr(term, {})
+            from clausal.logic.compiler.predicate import _exact_div, _present_number
+            expr = _ast.Call(func=_ast.Name(id="$present", ctx=_ast.Load()),
+                             args=[arith_to_ast_expr(term, {})], keywords=[])
             code = compile(_ast.fix_missing_locations(_ast.Expression(body=expr)),
                            "<seam>", "eval")
-            result = eval(code, module_globals)  # noqa: S307 — the module's own arithmetic
+            # The emitter's ``$``-runtime names are not in a module's globals
+            # (a literal ``4 / 2`` here raised NameError on ``$Fraction``);
+            # they are supplied as eval locals, without copying the module.
+            runtime = {"$exact_div": _exact_div, "$present": _present_number}
+            result = eval(code, module_globals, runtime)  # noqa: S307 — the module's own arithmetic
             import numbers
             if not (isinstance(result, numbers.Number)
                     or type(result).__name__ in ("Decimal", "Quantity")):

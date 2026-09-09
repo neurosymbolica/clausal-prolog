@@ -443,7 +443,9 @@ def _lower_shared_body(
         case ArithEval(target=l, expr=r):
             mark = ctx.fresh(_MARK_PREFIX)
             l_expr = term_to_ast_expr(l, var_context)
-            r_expr = arith_to_ast_expr(r, var_context)
+            # ``$present``: an integral Fraction produced anywhere in the
+            # compiled tree is handed to unify as an int (predicate.py).
+            r_expr = _call(_name("$present"), arith_to_ast_expr(r, var_context))
             return [
                 _assign_mark(mark, trail_name),
                 _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), k_stmts),

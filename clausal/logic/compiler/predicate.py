@@ -155,6 +155,32 @@ from .goal_trampoline import (
 # them here so the bulk-copy hack could be retired.
 
 from fractions import Fraction  # noqa: F401 — referenced as _Fraction
+
+
+def _exact_div(l, r):
+    """``$exact_div``: a literal int/int Div in compiled arithmetic.
+
+    Exact (``3/2`` is ``Fraction(3, 2)``), and an integral quotient is the
+    int ``2``, never ``Fraction(2, 1)`` — see ``$present``.
+    """
+    return _present_number(Fraction(l, r))
+
+
+def _present_number(x):
+    """``$present``: the value a compiled arithmetic expression hands to unify.
+
+    An integral ``Fraction`` presents as its int. ``Fraction(2, 1)`` is not
+    the term ``2`` — the standard order (``'=='``, ``compare/3``) tags every
+    numeric type as its own kind while ``unify`` compares by ``==`` — so a
+    compiled ``eval_((1/2) + (1/2), X)`` must bind ``1`` exactly as the
+    interpreted evaluator (``clpfd._eval_ground``) and CLP(Q)
+    (``clpq._present``, of which this is a twin: the compiler does not import
+    clpq) do. ``type(...) is Fraction`` keeps the int hot path at one
+    pointer compare.
+    """
+    if type(x) is Fraction and x.denominator == 1:
+        return x.numerator
+    return x
 import sys as _sys  # noqa: F401
 import warnings  # noqa: F401
 from collections import defaultdict  # noqa: F401
@@ -962,6 +988,8 @@ def _compile_predicate_trampoline_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
+        "$exact_div": _exact_div,
+        "$present": _present_number,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn
@@ -1785,6 +1813,8 @@ def _compile_predicate_shallow_impl(
         "VarSeg": VarSeg,
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
+        "$exact_div": _exact_div,
+        "$present": _present_number,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn_s

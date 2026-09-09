@@ -972,7 +972,9 @@ def term_to_ast_expr(
     # operators so they evaluate at runtime.  when False (e.g. predicate call
     # arguments), keep them as structural term constructors.
     if eval_arith and isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
-        return arith_to_ast_expr(term, var_context)
+        # ``$present``: whatever the tree produced, an integral Fraction
+        # (e.g. (1/2) + (1/2)) reaches unify as an int.
+        return _call(_name("$present"), arith_to_ast_expr(term, var_context))
 
     # Call nodes with LoadName/LoadAttr func: compile as direct function call so
     # that e.g. phrase(count_leaves(T_), ...) constructs a count_leaves instance,
@@ -1302,14 +1304,15 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
     if isinstance(term, (int, float, Fraction)) and not isinstance(term, bool):
         return ast.Constant(value=term)
 
-    # int / int → Fraction(n, d) for exact rational arithmetic
+    # int / int → an exact rational; ``$exact_div`` presents an integral
+    # quotient as int (4/2 is 2, not Fraction(2, 1)).
     if isinstance(term, Div):
         left_t = deref(term.left)
         right_t = deref(term.right)
         if (isinstance(left_t, int) and not isinstance(left_t, bool)
                 and isinstance(right_t, int) and not isinstance(right_t, bool)):
             return ast.Call(
-                func=_name("$Fraction"),
+                func=_name("$exact_div"),
                 args=[ast.Constant(value=left_t), ast.Constant(value=right_t)],
                 keywords=[],
             )

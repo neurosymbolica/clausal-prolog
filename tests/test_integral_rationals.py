@@ -286,3 +286,157 @@ class TestZ3Conversion:
         assert got == 5 and type(got) is int
         got = z3_to_python(z3.RealVal("3/7"))
         assert got == Fraction(3, 7) and type(got) is Fraction
+
+
+# ── the compiled binder (eval_/2 -> ArithEval -> $unify) and the seam ──────
+
+
+class TestCompiledArithmetic:
+    """``eval_(E, X)`` never touches ``_eval_ground``: the compiler emits a
+    native Python expression (``$Fraction(l, r)`` for a literal int/int Div)
+    whose value goes straight to ``$unify``. The seam's value arithmetic
+    reuses the same emitter. Both must present an integral rational as int."""
+
+    @pytest.mark.parametrize("expr, want", [
+        ("4 / 2", 2),
+        ("(1 / 2) + (1 / 2)", 1),
+        ("(4 / 2) * 3", 6),
+    ])
+    def test_eval_integral_result_is_int(self, tmp_path, expr, want):
+        got = _bind(tmp_path, f"eval_({expr}, X)")
+        assert got == want
+        assert type(got) is int, (expr, got)
+
+    def test_eval_non_integral_result_stays_exact(self, tmp_path):
+        got = _bind(tmp_path, "eval_(3 / 2, X)")
+        assert got == Fraction(3, 2) and type(got) is Fraction
+
+    def test_eval_float_division_is_untouched(self, tmp_path):
+        got = _bind(tmp_path, "eval_(4.0 / 2, X)")
+        assert got == 2.0 and type(got) is float
+
+    def test_seam_value_arithmetic(self, tmp_path):
+        from clausal.import_hook import _load_module
+        path = tmp_path / "_seam_integral.clausal"
+        path.write_text(
+            "-module(_seam_integral, [verdict(A, B, C)])\n"
+            "-double_quotes(chars)\n"
+            "def build():\n"
+            "    return --verdict(4 / 2, (1 / 2) + (1 / 2), 3 / 2)\n")
+        mod = _load_module("_seam_integral", str(path))
+        got = mod.build()
+        assert got == ("verdict", 2, 1, Fraction(3, 2))
+        assert type(got[1]) is int and type(got[2]) is int, got
+        assert type(got[3]) is Fraction, got
+
+
+# ── ABSENCE: no path binds an integral Fraction at the unify boundary ──────
+#
+# The presence tests above each pin one producer we know about. This test
+# drives a SPREAD of paths through one assertion — every value a logic
+# variable ends up bound to is an int — so a producer nobody enumerated
+# fails here instead of escaping. Each runner reads its values INSIDE the
+# solve loop (draining the generator undoes the trail) and returns them.
+#
+# The unify census is enabled around every runner with a positive control
+# first (unify(1, 1.0) must count exactly one), and the query must add
+# nothing. The census sees ground-vs-ground compares only — a Fraction bound
+# to a FRESH variable is invisible to it, which is why the type assertion,
+# not the census, is the load-bearing check here (see the census-counter
+# todo).
+
+
+def _clausal_runner(src, name, nargs, ground=()):
+    def run(tmp_path):
+        mod = _module(tmp_path, src)
+        outs = tuple(Var() for _ in range(nargs))
+        for _ in call(name, *ground, *outs, module=mod):
+            return [deref(v) for v in outs]
+        pytest.fail(f"{name} had no solution")
+    return run
+
+
+def _seam_runner(tmp_path):
+    from clausal.import_hook import _load_module
+    path = tmp_path / "_seam_absence.clausal"
+    path.write_text(
+        "-module(_seam_absence, [verdict(A, B)])\n"
+        "-double_quotes(chars)\n"
+        "def build():\n"
+        "    return --verdict(4 / 2, (1 / 2) + (1 / 2))\n")
+    mod = _load_module("_seam_absence", str(path))
+    _, a, b = mod.build()
+    # and across the unify boundary, as a clause would consume them
+    trail, x, y = Trail(), Var(), Var()
+    assert unify(x, a, trail) and unify(y, b, trail)
+    return [deref(x), deref(y)]
+
+
+def _q_eq_fast_path_runner(tmp_path):
+    from clausal.logic.clpq import q_eq, _tableaux, _last_snapshot
+    _tableaux.clear(); _last_snapshot.clear()
+    try:
+        trail, w = Trail(), Var()
+        assert q_eq(w, Fraction(6, 3), trail)
+        return [deref(w)]
+    finally:
+        _tableaux.clear(); _last_snapshot.clear()
+
+
+def _z3_runner(tmp_path):
+    z3 = pytest.importorskip("z3")
+    from clausal.logic.clpz3 import z3_to_python
+    s = z3.Solver()
+    r = z3.Real("r")
+    s.add(r * 2 == 10)
+    assert s.check() == z3.sat
+    val = z3_to_python(s.model().eval(r, model_completion=True))
+    trail, x = Trail(), Var()
+    assert unify(x, val, trail)
+    return [deref(x)]
+
+
+ABSENCE_PATHS = {
+    "quoted is/2": (_clausal_runner(
+        "p(X) <- 'is'(X, 4 / 2)\n", "p", 1), [2]),
+    "== through fd_eq/q_eq": (_clausal_runner(
+        "p(X) <- (X == 4 / 2)\n", "p", 1), [2]),
+    "== with a runtime operand": (_clausal_runner(
+        "p(T, X) <- (X == T / 4)\n", "p", 1, ground=(700000,)), [175000]),
+    "eval_ literal": (_clausal_runner(
+        "p(X) <- eval_(4 / 2, X)\n", "p", 1), [2]),
+    "eval_ sum of halves": (_clausal_runner(
+        "p(X) <- eval_((1 / 2) + (1 / 2), X)\n", "p", 1), [1]),
+    "seam value arithmetic": (_seam_runner, [2, 1]),
+    "rational then ==": (_clausal_runner(
+        "p(X) <- (rational(X), X == 4 / 2)\n", "p", 1), [2]),
+    "solver-decided": (_clausal_runner(
+        "p(X, Y) <- (rational([X, Y]), X + Y == 10, X - Y == 4)\n", "p", 2),
+        [7, 3]),
+    "sup/inf on a bounded rational": (_clausal_runner(
+        "p(S, I) <- (rational(X), 0 <= X, X <= 4, sup(X, S), inf(X, I))\n",
+        "p", 2), [4, 0]),
+    "between with a quotient bound": (_clausal_runner(
+        "p(X) <- between(2, 4 / 2, X)\n", "p", 1), [2]),
+    "q_eq fast path (Python API)": (_q_eq_fast_path_runner, [2]),
+    "z3 whole Real": (_z3_runner, [5]),
+}
+
+
+@pytest.mark.parametrize("path", list(ABSENCE_PATHS), ids=list(ABSENCE_PATHS))
+def test_no_path_binds_an_integral_fraction(tmp_path, path):
+    runner, want = ABSENCE_PATHS[path]
+    unify_census_start()
+    try:
+        assert unify(1, 1.0, Trail())
+        control = unify_census()
+        assert control["conflations"] == 1, control       # the census is live
+        assert control["by_type_pair"] == {"int/float": 1}, control
+        got = runner(tmp_path)
+        report = unify_census()
+    finally:
+        unify_census_stop()
+    assert got == want, (path, got)
+    assert all(type(v) is int for v in got), (path, got)
+    assert report["conflations"] == 1, (path, report)     # the control only
+    assert report["by_type_pair"] == {"int/float": 1}, (path, report)
