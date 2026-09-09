@@ -25,6 +25,7 @@ the one name that gets no twin.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 #: Names that stay bare-only: no ``$`` twin is minted for them.
@@ -123,9 +124,30 @@ def dollar_ref(cls: Any) -> str:
     module by the user's own clauses, is the user's to reach bare.
     """
     name = cls.__name__
-    if _TWIN_OBJECTS.get(name) is cls:
+    registered = _TWIN_OBJECTS.get(name)
+    if registered is cls:
+        return dollar_name(name)
+    if name in _TWIN_NAMES:
+        # Same NAME as a twinned class but not the registered object (a
+        # subclass spelled identically, a reloaded module): the bare
+        # spelling would resolve only while the deprecation-window alias
+        # exists, so emit the twin -- and say so, because the twin resolves
+        # to the REGISTERED class, not to this one.
+        warnings.warn(
+            f"dollar_ref: {cls!r} is spelled like the twinned runtime name "
+            f"{name!r} but is not the registered {registered!r}; emitting "
+            f"{dollar_name(name)}, which resolves to the registered class",
+            RuntimeWarning, stacklevel=2,
+        )
         return dollar_name(name)
     return name
+
+
+def has_twin(name: str) -> bool:
+    """Whether the bare *name* is one the seeding namespaces bind under a
+    ``$`` twin -- what the class-minting template asks before it emits the
+    deprecation-window guard for a head."""
+    return name in _TWIN_NAMES
 
 
 def bare_name_of(name: str) -> str:
@@ -141,5 +163,5 @@ def bare_name_of(name: str) -> str:
 __all__ = [
     "BARE_ONLY", "INJECTED_TITLECASE_NAMES", "dollar_name",
     "with_dollar_twins", "register_generated_names", "dollar_ref",
-    "bare_name_of",
+    "has_twin", "bare_name_of",
 ]

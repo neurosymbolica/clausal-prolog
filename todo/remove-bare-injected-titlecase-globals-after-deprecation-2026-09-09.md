@@ -68,6 +68,18 @@ legitimate ways to reach a name; extend the `NameError` wrapper in
 ++Var` -- the message must name `++Name`, never the `$` twin (the twin is
 engine plumbing, not a user surface).
 
+## Identity requirement (keep after removal)
+
+`generated_names.dollar_ref` decides by OBJECT identity: a class gets the
+twin when it IS the registered object for its name.  A same-named class
+that is not (a subclass spelled `Add`, a reloaded `clausal.terms`) is
+emitted as the twin with a `RuntimeWarning`, and the twin resolves to the
+REGISTERED class, not to that one.  After the aliases go, that fallback is
+the only thing standing between such a class and a `NameError`; the
+warning names the mismatch so the owner can register or rename.  Do not
+turn the fallback into silence, and do not turn it into an error without
+first checking that no test or downstream tree triggers it.
+
 ## Non-goals
 
 - `Undefined` stays bare (ruling).

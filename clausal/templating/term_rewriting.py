@@ -38,7 +38,7 @@ from clausal.logic.atoms import NIL_SPELLING, mangle
 # functor-signature registry under.  Single source of truth lives with the
 # cell primitives that registry feeds.
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
-from clausal.logic.generated_names import dollar_name
+from clausal.logic.generated_names import dollar_name, has_twin
 
 load = Load()
 store = Store()
@@ -2961,9 +2961,14 @@ def _make_functor_class_ast(functor_name, field_names, source):
         # "user-bound, leave alone" -- the binding is the runtime alias, the
         # identical object its ``$`` twin holds -- so it mints normally and
         # the user's predicate takes the bare name; generated code reaches
-        # the class through the twin, so nothing else changes hands.
-        f"    if {functor_name} is globals().get({dollar_name(functor_name)!r}):",
-        "        raise NameError",
+        # the class through the twin, so nothing else changes hands.  The
+        # guard is emitted ONLY for a twinned spelling: for any other head
+        # ``globals().get('$name')`` is None, and a user's own ``name =
+        # None`` would otherwise read as the alias and be minted over.
+        *([
+            f"    if {functor_name} is globals().get({dollar_name(functor_name)!r}):",
+            "        raise NameError",
+        ] if has_twin(functor_name) else []),
         f"    if isinstance({functor_name}, {_PM_PLACEHOLDER}) and getattr(",
         f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",

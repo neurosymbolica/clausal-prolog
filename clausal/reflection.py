@@ -46,6 +46,7 @@ nodes keep their own (compare-neutral) ``position`` attribute.
 from __future__ import annotations
 
 import ast
+import copy
 import dataclasses
 import warnings
 
@@ -135,6 +136,17 @@ def _const_value(node):
     ):
         return -node.operand.value
     raise ReifyError(f"not a literal: {ast.unparse(node)}")
+
+
+def _bare_names(node):
+    """A copy of *node* with every ``$``-twin ``Name`` re-spelled bare."""
+    class _Bare(ast.NodeTransformer):
+        def visit_Name(self, name):
+            bare = bare_name_of(name.id)
+            if bare != name.id:
+                return ast.copy_location(ast.Name(id=bare, ctx=name.ctx), name)
+            return name
+    return _Bare().visit(copy.deepcopy(node))
 
 
 def _dotted_name(node):
@@ -299,7 +311,7 @@ class _ClauseReifier:
             # runtime reference (defensively treated as an atom).
             if node.id in self._vars:
                 return self._vars[node.id]
-            return Atom(node.id)
+            return Atom(bare_name_of(node.id))
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
             return _const_value(node)
         if isinstance(node, ast.Call):
@@ -417,7 +429,12 @@ class _ClauseReifier:
         The first positional argument is a lambda whose body is the escaped
         Python expression; it is unparsed, never called."""
         lambda_node, var_list = node.args[0], node.args[1]
-        code = ast.unparse(lambda_node.body)
+        # The body is generated Python that may name a runtime class through
+        # its twin (the unit sugar ``5(m)`` is ``$Quantity(5, m)``); the
+        # escape's CODE is the user-facing spelling, so twins read back
+        # bare -- ``++Quantity(5, m)`` renders and re-parses, ``$Quantity``
+        # would not.
+        code = ast.unparse(_bare_names(lambda_node.body))
         variables = [self.term(elt) for elt in var_list.elts]
         position = self._position_of(kwargs)
         cls = Escape if kind == "PyThunk" else FormatString

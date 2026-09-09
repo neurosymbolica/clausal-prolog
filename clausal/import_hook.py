@@ -1051,7 +1051,7 @@ class _StarQueryTransformer(ast.NodeTransformer):
         → ``Solutions(_run_ipython_goal(Goal((X:=Var())), {'X': X}, globals()))``
 
     ``*(A(X), B(X, Y))``
-        → ``Solutions(_run_ipython_goal(And(left=A((X:=Var())), right=B(X, (Y:=Var()))), {'X': X, 'Y': Y}, globals()))``
+        → ``Solutions(_run_ipython_goal($And(left=A((X:=$Var())), right=B(X, (Y:=$Var()))), {'X': X, 'Y': Y}, globals()))``
 
     The ``*(…)`` form is rewritten at the source level by
     ``_star_query_input_transformer`` into ``_clausal_star_query_(…)`` so that
@@ -1092,7 +1092,7 @@ class _StarQueryTransformer(ast.NodeTransformer):
             for elt in elts[1:]:
                 goal_ast = ast.fix_missing_locations(ast.copy_location(
                     ast.Call(
-                        func=ast.Name(id='And', ctx=ast.Load()),
+                        func=ast.Name(id='$And', ctx=ast.Load()),
                         args=[],
                         keywords=[
                             ast.keyword(arg='left', value=goal_ast),

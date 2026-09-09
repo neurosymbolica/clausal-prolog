@@ -154,7 +154,7 @@ class TestDollarTwinsAreBound:
 _EMIT_SOURCE = (
     "-allow_singletons\n"
     "-module(dollar_emit_probe, [Speed(V), Fresh(L), Esc(X, Y), Dct(D), "
-    "Sett(S), Fs(X, S), Arith(X, Y), Go(Y)])\n"
+    "Sett(S), Fs(X, S), Arith(X, Y), Go(Y), Lam(F), Lam0(F)])\n"
     "-import_from(py.units, [m])\n"
     "Speed(V) <- (V == 5(m))\n"
     "Fresh(L) <- (L == [A, B])\n"
@@ -164,6 +164,8 @@ _EMIT_SOURCE = (
     "Fs(X, S) <- (S == f\"v={X}\")\n"
     "Arith(X, Y) <- (Y is X + 1)\n"
     "Go(Y) <- (Arith(1, Y))\n"
+    "Lam(F) <- (F is ((X) <- (X + 1)))\n"
+    "Lam0(F) <- (F is (() <- (42)))\n"
 )
 
 
@@ -372,3 +374,97 @@ class TestUserPredicateNamedPredicateMeta:
         assert "metaclass=$PredicateMeta" in src
         assert "isinstance(PredicateMeta, $PredicateMeta)" in src
         assert "class PredicateMeta(" in src
+
+
+
+# ── closing review (2026-09-09, third round) ────────────────────────────────
+
+class TestMintingGuardOnlyForTwinnedHeads:
+    def test_user_none_binding_under_an_untwinned_head_behaves_as_before(self):
+        """A module-level ``foo = None`` followed by ``foo(...)`` clauses: the
+        name is user-bound, so the minting block leaves it alone and the
+        clause head calls None -- the same loud TypeError the baseline
+        raises.  The deprecation-window guard must not read ``None`` (the
+        absent ``$foo``) as "bound to the runtime alias" and mint over it."""
+        with pytest.raises(TypeError, match="'NoneType' object is not callable"):
+            _load_inline(
+                "_dollar_guard_none_binding",
+                "-module(dollar_guard_none_binding, [Go(Y)])\n"
+                "foo = None\nfoo(4),\nGo(Y) <- (foo(Y))\n",
+            )
+
+    def test_guard_is_emitted_for_a_twinned_head_only(self):
+        src = _transformed_source(
+            "-allow_singletons\n-module(dollar_guard_probe, [Node(X), Speed(V)])\n"
+            "Node(1),\nSpeed(2),\n"
+        )
+        assert "Node is globals().get('$Node')" in src
+        assert "Speed is globals().get('$Speed')" not in src
+        assert "globals().get('$Speed')" not in src
+
+
+class TestReplGoalPathEmitsDollarNames:
+    def test_multi_goal_star_query_conjunction_is_dollar_and(self):
+        from clausal.import_hook import _StarQueryTransformer, _STAR_QUERY_SENTINEL
+        tree = ast.parse(f"{_STAR_QUERY_SENTINEL}(foo(X), bar(X, Y))")
+        out = ast.unparse(_StarQueryTransformer().visit(tree))
+        names = _generated_names(out)
+        assert "$And" in names, out
+        assert "And" not in names, out
+
+
+class TestReifierReadsEveryDollarSpellingBack:
+    def test_bare_dollar_name_reifies_by_its_class_name(self):
+        from clausal.reflection import _ClauseReifier, Atom
+        assert _ClauseReifier().term(ast.Name(id="$Params", ctx=ast.Load())) == Atom("Params")
+
+    def test_lambda_clauses_round_trip_without_a_dollar(self):
+        from clausal.reflection import reify_source, render_source
+        clauses = [it for it in reify_source(_EMIT_SOURCE)
+                   if type(it).__name__ == "Clause"]
+        rendered = {c.head.name: render_source(c) for c in clauses}
+        assert "$" not in repr(clauses)
+        # The unit sugar is a PyThunk whose body names $Quantity; the
+        # escape's CODE reads back bare, exactly as before the twins.
+        speed = next(c for c in clauses if c.head.name == "Speed")
+        assert speed.goals[0].right.code == "Quantity(5, m)"
+        assert rendered["Speed"] == "Speed(V) <- (V == ++Quantity(5, m))"
+        assert rendered["Lam"] == "Lam(F) <- (F is ((X,) <-(X + 1)))"
+        assert rendered["Lam0"] == "Lam0(F) <- (F is (() <-(42)))"
+        assert not any("$" in r for r in rendered.values()), rendered
+
+
+class TestDollarRefFallsBackToTheTwinByName:
+    def test_same_named_subclass_gets_the_twin_with_a_warning(self):
+        from clausal.logic.generated_names import dollar_ref
+
+        class Add(simple_ast.Add):
+            pass
+
+        with pytest.warns(RuntimeWarning, match="Add"):
+            assert dollar_ref(Add) == "$Add"
+
+    def test_the_registered_class_gets_the_twin_silently(self):
+        from clausal.logic.generated_names import dollar_ref
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert dollar_ref(simple_ast.Add) == "$Add"
+
+    def test_a_user_class_keeps_its_bare_name(self):
+        from clausal.logic.generated_names import dollar_ref
+        from clausal.logic.predicate import make_predicate
+        cls = make_predicate("MyOwnPred", ["a"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert dollar_ref(cls) == "MyOwnPred"
+
+    def test_a_subclass_of_var_compiles_through_the_twin(self):
+        from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
+        from clausal.terms import Compound
+
+        class MyVar(Var):
+            pass
+
+        src = ast.unparse(term_to_ast_expr(Compound("f", (MyVar(), 1)), {}))
+        assert "$Var()" in src, src
+        assert "MyVar" not in src, src
