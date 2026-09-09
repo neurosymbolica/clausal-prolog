@@ -146,8 +146,18 @@ elementwise. The guard is therefore a membership test against a set of types who
 - Membership is a POSITIVE claim needing measurement; absence costs only speed. `tuple` is
   excluded because it is proven wrong; `list` is excluded because it is NOT proven right.
 - This removes the old `try/except TypeError` fallback, which discovered incomparability by
-  catching a failure — and so never fired for `Quantity` across dimensions, which returned
-  nonsense instead of raising. A fail-open instrument; the type gate closes it.
+  catching a failure. `Quantity.__lt__` raises `UnitsMismatch`, which is NOT a `TypeError`
+  (measured 2026-09-09), so the fallback never fires and the exception ESCAPES TO THE CALLER:
+
+      _standard_order_sorted([3, Quantity(5, {"m": 1}), 4])   -> raises UnitsMismatch
+      _standard_order_sorted([Quantity(5, {"m": 1}), Quantity(2, {"kg": 1})]) -> raises
+
+  So `sort/2` and `msort/2` CRASH TODAY on any list mixing dimensions, or mixing quantities
+  with plain numbers, while the key handles all of them (`sorted(..., key=...)` gives
+  `[3, 4, 5 m]`). Task 3 is therefore a live bug fix, not only a correctness prerequisite:
+  the type gate sends every such list to the key path. Corrected 2026-09-09 — an earlier
+  draft of this section said the path "returned nonsense instead of raising", which was
+  reasoned rather than measured, and wrong.
 
 If measurement shows the scan costs more than the keys it saves, DELETE the fast path
 instead. That decision is the implementer's, on evidence, and must be recorded.

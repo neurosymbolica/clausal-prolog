@@ -763,8 +763,13 @@ def test_F022_group_pairs_unhashable_split(fix):
     assert len(_dw(G)) == 1  # actual: 2 groups
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F022: sort dedups 1/1.0/True "
-                   "into one element")
+# A09-F022 CLOSED 2026-09-09. `sort/2` deduped 1/1.0/True into one element
+# because `_standard_order_key` gave equal-value numbers of different types the
+# same key. The ISO 7.2.1 tiebreak (float before int, then the other numeric
+# kinds) makes them distinct terms, so all three survive. The xfail marker is
+# REMOVED rather than left at strict=False: a stale non-strict xfail would let
+# a regression back to deduping pass silently.
+# Spec: docs/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §4
 def test_F022_sort_cross_type_dedup(fix):
     _, m = fix
     S = Var()

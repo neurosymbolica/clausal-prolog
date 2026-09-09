@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
 from clausal.terms import (
-    Compound, KWTerm, DictTerm, SetTerm,
+    Compound, KWTerm, DictTerm, SetTerm, Quantity,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
 )
 
@@ -620,6 +620,17 @@ _ORD_DICT = 4
 _ORD_SET = 5
 _ORD_OTHER = 6
 
+# Within the number band, at EQUAL value and dimension, the term's numeric
+# TYPE decides. float before int is ISO 7.2.1; the rest are Clausal extensions
+# and follow it, each its own kind. The ranks must agree with
+# `iso_compare._numeric_tag` — two terms share a rank exactly when `'=='`
+# calls them identical — because that is what makes
+# `compare(=, X, Y) <=> X == Y` hold by construction rather than by luck.
+# Spec §4b. An extension never interleaves between two ISO terms (§2), which
+# is why Quantity ranks after every ISO numeric type rather than beside them.
+_NUMERIC_RANK = {float: 0, int: 1, bool: 2, _Decimal: 3, _Fraction: 4}
+_NUMERIC_RANK_QUANTITY = 5
+
 # Flavours within _ORD_COMPOUND.  A generic ``Compound`` and a declared term
 # that render alike are *not* the same term (they do not unify — see
 # ``todo/a-generic-compound-renders-identically-to-a-declared-term.md``), so
@@ -648,6 +659,20 @@ _CF_DECLARED = 2     # declared term instance / dataclass
 # cell.
 _ORD_EMPTY_LIST_KEY = (_ORD_ATOM, "[]")
 _ORD_CONS_NAME_KEY = (0, ".")
+
+
+def _number_key(x) -> tuple:
+    """The number-band key of a plain (undimensioned) number.
+
+    Shared deliberately: a code list is a list of number TERMS, so the bytes
+    branch must build element keys with EXACTLY this shape. When the scalar
+    branch grew a dimension signature and a type rank and this did not, the
+    two drifted and `b"ab"` stopped keying as `[97, 98]` — breaking both the
+    "bytes IS the code list" invariant and the totality of the order, since a
+    2-tuple key and a 4-tuple key compare int against tuple. Caught by
+    tests/test_standard_order.py; one constructor prevents the recurrence.
+    """
+    return (_ORD_NUM, (), x, _NUMERIC_RANK.get(type(x), 90))
 
 
 def _cons_key(element_keys: tuple) -> tuple:
@@ -716,8 +741,19 @@ def _standard_order_key(term: Any) -> tuple:
         return (_ORD_VAR, id(term))
     # The concrete types first (fast), then the ABC for anything registered
     # into the numeric tower.  ``Decimal`` is a ``Number`` but not a ``Real``.
+    if isinstance(term, Quantity):
+        # A dimensioned number is a NUMBER: under the strict_units directive
+        # every number in a program is a Quantity, and keying them in the
+        # opaque band would sort every number after every atom and compound.
+        # The dimension signature is sorted, so it is total and stable and
+        # cross-dimension comparison neither raises nor falls back to repr —
+        # which the opaque band did, via a `<` that rejects its own type.
+        return (_ORD_NUM, tuple(sorted(term.dims.items())), term.value,
+                _NUMERIC_RANK_QUANTITY)
     if isinstance(term, (bool, int, float, _Fraction, _Decimal, _Real)):
-        return (_ORD_NUM, term)
+        # Plain numbers carry the EMPTY dimension signature, so a dimensionless
+        # `Quantity` sorts among them by magnitude instead of after them.
+        return _number_key(term)
     if isinstance(term, str):
         # THE FLIP (spec §6.5): a string keys as the LIST OF CHAR ATOMS it
         # denotes — so ``"ab"`` and ``[("a",), ("b",)]`` have EQUAL keys and
@@ -751,7 +787,7 @@ def _standard_order_key(term: Any) -> tuple:
         # char list are, and ``b""`` is the empty list.
         if not term:
             return _ORD_EMPTY_LIST_KEY
-        return _cons_key(tuple((_ORD_NUM, c) for c in term))
+        return _cons_key(tuple(_number_key(c) for c in term))
     if type(term) is tuple and term and type(term[0]) is str:
         # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5) and keys in the
         # atom band by its spelling — the same key a 0-arity predicate class
