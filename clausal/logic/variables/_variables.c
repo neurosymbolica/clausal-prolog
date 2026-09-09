@@ -1037,6 +1037,14 @@ static inline int is_nil_spelling(PyObject *t)
 }
 
 
+/* ---- numeric-type census state (default OFF) ----
+ * Declared here rather than beside its accessors because do_unify() below is
+ * the only writer and C needs the declaration first.
+ */
+static int unify_census_on = 0;
+static unsigned long long unify_census_count = 0;
+static PyObject *unify_census_sites = NULL;   /* {"int/float": n, ...} */
+
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 {
@@ -1426,6 +1434,38 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 
     int cmp = PyObject_RichCompareBool(t1, t2, Py_EQ);
     if (cmp < 0) return -1;
+
+    /* ---- numeric-type census (spec: todo/iso-unify-conflates-int-and-float) ----
+     *
+     * ISO says 1 and 1.0 are DISTINCT terms; `PyObject_RichCompareBool` says
+     * they are equal, so unification conflates them. Before changing that on
+     * the hottest path in the engine, count how often it actually happens.
+     *
+     * Cost when disabled: one load of a global int and a predictable
+     * not-taken branch, on the FALLBACK path only — reached solely for two
+     * dereferenced, non-variable, non-container ground terms. Variable
+     * binding and structure walking never arrive here.
+     *
+     * Counted: the comparison SUCCEEDED but the two terms have different
+     * Python types and both are numbers. That is exactly the population a
+     * type-strict unify would start rejecting.
+     */
+    if (unify_census_on && cmp == 1 && Py_TYPE(t1) != Py_TYPE(t2)
+            && PyNumber_Check(t1) && PyNumber_Check(t2)) {
+        unify_census_count++;
+        if (unify_census_sites) {
+            PyObject *key = PyUnicode_FromFormat(
+                "%s/%s", Py_TYPE(t1)->tp_name, Py_TYPE(t2)->tp_name);
+            if (key) {
+                PyObject *cur = PyDict_GetItemWithError(unify_census_sites, key);
+                long n = (cur && PyLong_Check(cur)) ? PyLong_AsLong(cur) : 0;
+                PyObject *nv = PyLong_FromLong(n + 1);
+                if (nv) { PyDict_SetItem(unify_census_sites, key, nv); Py_DECREF(nv); }
+                Py_DECREF(key);
+            }
+            PyErr_Clear();   /* census must never perturb the caller */
+        }
+    }
     return cmp;
 }
 
@@ -3553,7 +3593,64 @@ static VariablesCAPI capi_table;
  * Module definition
  * ================================================================ */
 
+static PyObject *
+py_unify_census_start(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    Py_XDECREF(unify_census_sites);
+    unify_census_sites = PyDict_New();
+    if (!unify_census_sites) return NULL;
+    unify_census_count = 0;
+    unify_census_on = 1;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+py_unify_census_stop(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    unify_census_on = 0;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+py_unify_census(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *d = PyDict_New();
+    if (!d) return NULL;
+    PyObject *n = PyLong_FromUnsignedLongLong(unify_census_count);
+    if (!n) { Py_DECREF(d); return NULL; }
+    if (PyDict_SetItemString(d, "conflations", n) < 0) {
+        Py_DECREF(n); Py_DECREF(d); return NULL;
+    }
+    Py_DECREF(n);
+    PyObject *by = unify_census_sites ? unify_census_sites : PyDict_New();
+    if (!by) { Py_DECREF(d); return NULL; }
+    if (unify_census_sites) Py_INCREF(by);
+    if (PyDict_SetItemString(d, "by_type_pair", by) < 0) {
+        Py_DECREF(by); Py_DECREF(d); return NULL;
+    }
+    Py_DECREF(by);
+    PyObject *on = PyBool_FromLong(unify_census_on);
+    if (!on) { Py_DECREF(d); return NULL; }
+    if (PyDict_SetItemString(d, "enabled", on) < 0) {
+        Py_DECREF(on); Py_DECREF(d); return NULL;
+    }
+    Py_DECREF(on);
+    return d;
+}
+
 static PyMethodDef module_methods[] = {
+    {"unify_census_start", py_unify_census_start, METH_NOARGS,
+     "unify_census_start() -> None\n\n"
+     "Begin counting unifications that succeed ONLY because two numbers of\n"
+     "different Python types compare equal (1 vs 1.0, Decimal(1) vs 1).\n"
+     "ISO treats those as distinct terms. Resets any previous count.\n"
+     "Off by default; costs a not-taken branch on the fallback path."},
+    {"unify_census_stop", py_unify_census_stop, METH_NOARGS,
+     "unify_census_stop() -> None\n\nStop counting. Results are retained."},
+    {"unify_census", py_unify_census, METH_NOARGS,
+     "unify_census() -> dict\n\n"
+     "{'conflations': int, 'by_type_pair': {'int/float': n, ...},\n"
+     " 'enabled': bool}"},
     {"unify", py_unify, METH_VARARGS,
      "unify(t1, t2, trail) -> bool\n"
      "\n"
