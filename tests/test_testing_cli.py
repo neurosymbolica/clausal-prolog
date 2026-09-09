@@ -57,3 +57,106 @@ def test_failing_file_still_fails(capsys, tmp_path):
     rc = main([str(p)])
     assert rc == 1
     assert "[FAILED]" in capsys.readouterr().out
+
+
+# ── test/1 is the predicate; Test/1 is its deprecated spelling ───────────────
+#
+# Predicates are lowercase (docs/syntax.md), so the test-clause predicate is
+# ``test/1``.  ``Test/1`` still runs but warns once per file at load time,
+# the way ``If`` -> ``if_`` does.  A file may hold both spellings during a
+# rename, and the runner reports the UNION in source order.
+
+import warnings
+
+import pytest
+
+from clausal.templating.term_rewriting import ClausalDeprecatedSpellingWarning
+from clausal.testing import collect_tests, load_clausal_module, run_file
+
+
+def _spelling_warnings(caught):
+    return [w for w in caught
+            if issubclass(w.category, ClausalDeprecatedSpellingWarning)]
+
+
+def _load_recording(path):
+    """Load *path* and return (module, spelling warnings raised by the load)."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        mod = load_clausal_module(path)
+    return mod, _spelling_warnings(caught)
+
+
+LOWER = (
+    'test("zeta") <- (1 == 1)\n'
+    'test("alpha") <- (2 == 2)\n'
+    'test("mid") <- (3 == 3)\n'
+)
+UPPER = LOWER.replace("test(", "Test(")
+
+
+def test_lowercase_only_file_runs_all_silently(tmp_path):
+    """# nv"""
+    p = tmp_path / "lower.clausal"
+    p.write_text(LOWER)
+    mod, spelling = _load_recording(p)
+    assert spelling == []
+    # File order, not sorted: the canonical spelling keeps today's order rule.
+    assert collect_tests(mod) == ["zeta", "alpha", "mid"]
+    results = run_file(p)
+    assert [(r.name, r.passed) for r in results.results] == [
+        ("zeta", True), ("alpha", True), ("mid", True)]
+
+
+def test_uppercase_only_file_runs_all_and_warns_once(tmp_path):
+    """# nv"""
+    p = tmp_path / "upper.clausal"
+    p.write_text(UPPER)
+    mod, spelling = _load_recording(p)
+    assert len(spelling) == 1, [str(w.message) for w in spelling]
+    message = str(spelling[0].message)
+    assert "`Test` -> `test`" in message
+    assert "test/1" in message
+    assert "upper.clausal:1" in message  # the first offending site
+    assert collect_tests(mod) == ["zeta", "alpha", "mid"]
+    assert [(r.name, r.passed) for r in run_file(p).results] == [
+        ("zeta", True), ("alpha", True), ("mid", True)]
+
+
+def test_mixed_file_runs_the_union_in_source_order(tmp_path):
+    """# nv"""
+    p = tmp_path / "mixed.clausal"
+    p.write_text(
+        'test("a") <- (1 == 1)\n'
+        'Test("b") <- (1 == 1)\n'
+        'test("c") <- (1 == 1)\n'
+        'Test("d") <- (1 == 2)\n'   # a failing legacy clause: FAIL, not error
+        'test("e") <- (1 == 2)\n'   # a failing canonical clause
+    )
+    mod, spelling = _load_recording(p)
+    assert len(spelling) == 1
+    assert collect_tests(mod) == ["a", "b", "c", "d", "e"]
+    results = run_file(p)
+    assert [(r.name, r.passed, r.error) for r in results.results] == [
+        ("a", True, None), ("b", True, None), ("c", True, None),
+        ("d", False, None), ("e", False, None)]
+    # Each failure was diagnosed against ITS OWN clause, whichever spelling.
+    for r in results.results[3:]:
+        assert r.diagnostic is not None
+        assert not any("could not locate" in n for n in r.diagnostic.notes)
+        assert r.line is not None
+
+
+def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
+    """# nv"""
+    p = tmp_path / "notests.clausal"
+    p.write_text("foo(1),\n")
+    assert main([str(p)]) == 0
+    out = capsys.readouterr().out
+    assert "no test/1 clauses found" in out
+    assert "Test(" not in out
+    with pytest.raises(SystemExit):
+        main(["--help"])
+    help_text = capsys.readouterr().out
+    assert "test/1" in help_text
+    assert "Test(...)" not in help_text

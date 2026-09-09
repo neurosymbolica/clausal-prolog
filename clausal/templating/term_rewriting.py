@@ -399,6 +399,12 @@ ITE_NAME = "if_"
 ITE_DEPRECATED_NAME = "If"
 _ITE_NAMES = frozenset({ITE_NAME, ITE_DEPRECATED_NAME})
 
+#: The test-clause predicate (``clausal.testing``): predicates are lowercase,
+#: so it is ``test/1``.  ``Test/1`` is the superseded spelling — still
+#: collected and run, but linted once per file at load time like ``If``.
+TEST_NAME = "test"
+TEST_DEPRECATED_NAME = "Test"
+
 
 def _reserved_truth_decl_name(item) -> str | None:
     """The truth-value spelling *item* tries to declare, or ``None``.
@@ -3968,6 +3974,9 @@ class EmbedTransformer(NodeTransformer):
         # test that imports the package — the same trap the -module directive
         # error hit.
         transformer._filename = filename
+        # ``Test/1`` (deprecated spelling of ``test/1``) is linted once per
+        # file, at its first clause — see _warn_deprecated_test_spelling.
+        transformer._warned_test_spelling = False
         transformer._seen_functors: dict[str, list[str]] = {}
         # Functors whose _seen_functors entry was minted by a -dynamic
         # directive with PLACEHOLDER arg_i field names (A12-F005). The first
@@ -4760,6 +4769,40 @@ class EmbedTransformer(NodeTransformer):
         fix_missing_locations(node)
         return node
 
+    def _warn_deprecated_test_spelling(transformer, functor_name, arity, node):
+        """Lint a ``Test(...)`` clause head (see ClausalDeprecatedSpellingWarning).
+
+        The counterpart of ``_warn_deprecated_ite_spelling`` for the
+        test-clause predicate: ``test/1`` is the spelling, ``Test/1`` the
+        old one.  A test file holds many such clauses, so — unlike the
+        per-site ``If`` lint — this fires ONCE per file, at the first
+        clause, so the rename is named without drowning the load in one
+        warning per test.  Message shape follows ``EmbedTransformer._site``.
+        """
+        if (functor_name != TEST_DEPRECATED_NAME or arity != 1
+                or transformer._warned_test_spelling):
+            return
+        transformer._warned_test_spelling = True
+        import warnings  # noqa: PLC0415
+        lineno = getattr(node, "lineno", None)
+        if transformer._filename:
+            where = f"{transformer._filename}:{lineno or '?'}"
+        else:
+            where = f"line {lineno}" if lineno else "unknown site"
+        snippet = ""
+        lines = transformer._source_lines
+        if lines and lineno and 1 <= lineno <= len(lines):
+            snippet = " — " + lines[lineno - 1].strip()
+        warnings.warn(
+            f"{where}{snippet}: `{TEST_DEPRECATED_NAME}` is the old spelling of "
+            f"the test-clause predicate {TEST_NAME}/1. Rename "
+            f"`{TEST_DEPRECATED_NAME}` -> `{TEST_NAME}` "
+            f"({TEST_NAME}(DESCRIPTION) <- BODY); the old spelling still works "
+            f"but will be removed in a future release",
+            ClausalDeprecatedSpellingWarning,
+            stacklevel=2,
+        )
+
     def _build_fact_statements(transformer, functor_name, orig_pos_args,
                                orig_kw_args, anchor, src_node, expr_stmt):
         """Build AST for a bodyless fact ``functor(args)`` (arity >= 0 via args).
@@ -4770,6 +4813,8 @@ class EmbedTransformer(NodeTransformer):
         """
         _warn_cons_bar_head(orig_pos_args, orig_kw_args, src_node,
                             transformer._source_lines)
+        transformer._warn_deprecated_test_spelling(
+            functor_name, len(orig_pos_args) + len(orig_kw_args), src_node)
         arg_field_names = _derive_field_names(orig_pos_args)
         kwarg_field_names = [kw.arg for kw in orig_kw_args]
         all_field_names = arg_field_names + kwarg_field_names
@@ -5269,6 +5314,9 @@ class EmbedTransformer(NodeTransformer):
 
                 _warn_cons_bar_head(orig_pos_args, orig_kw_args, expr_stmt,
                                     transformer._source_lines)
+                transformer._warn_deprecated_test_spelling(
+                    functor_name, len(orig_pos_args) + len(orig_kw_args),
+                    expr_stmt)
                 arg_field_names = _derive_field_names(orig_pos_args)
                 kwarg_field_names = [kw.arg for kw in orig_kw_args]
                 all_field_names = arg_field_names + kwarg_field_names

@@ -63,7 +63,7 @@ def _sections_in_file(path: Path) -> set[str]:
 
 
 def _has_test_clause(path: Path) -> bool:
-    return bool(re.search(r"Test\s*\(", path.read_text()))
+    return bool(re.search(r"\b[Tt]est\s*\(", path.read_text()))
 
 
 def check_files_exist(
@@ -101,7 +101,7 @@ def check_sections_exist(
 def check_clausal_fixtures_have_tests(
     refs: list[SnippetRef], project_root: Path
 ) -> list[str]:
-    """Every referenced .clausal fixture must contain at least one Test clause."""
+    """Every referenced .clausal fixture must contain at least one test/1 clause."""
     seen: set[str] = set()
     untested = []
     for ref in refs:
@@ -125,7 +125,7 @@ def _is_snippet(content: str) -> bool:
 
 
 def _has_test(content: str) -> bool:
-    return bool(re.search(r"Test\s*\(", content))
+    return bool(re.search(r"\b[Tt]est\s*\(", content))
 
 
 def check_no_skip_blocks(docs_dir: Path) -> list[str]:
@@ -145,7 +145,7 @@ def check_no_raw_untested_blocks(
     *,
     known_uncompilable: set[tuple[str, int]] | None = None,
 ) -> list[str]:
-    """Every ```clausal block must be a --8<-- ref, contain a Test, or compile.
+    """Every ```clausal block must be a --8<-- ref, contain a test/1 clause, or compile.
 
     ``known_uncompilable`` is an allowlist of ``(filename, line_number)`` pairs
     for legacy display fragments that don't compile standalone (partial

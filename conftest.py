@@ -6,7 +6,7 @@ pytest test item:
     clausal/examples/fibonacci.clausal::fib(5) = 5
 
 Also collects ```clausal blocks in docs/*.md files and reports each
-Test/1 clause (or a compile-check for blocks without tests) as an item:
+test/1 clause (or a compile-check for blocks without tests) as an item:
 
     docs/tutorial.md::L52: sum [1,2,3,4] = 10
     docs/tutorial.md::L87 [compile]
@@ -343,12 +343,12 @@ class DocItem(pytest.Item):
             if result.error:
                 raise DocTestFailure(
                     _with_diagnosis(
-                        f"Test({self._desc!r}) raised: {result.error}", result
+                        f"test({self._desc!r}) raised: {result.error}", result
                     )
                 ) from result.error
             raise DocTestFailure(
                 _with_diagnosis(
-                    f"Test({self._desc!r}) has no solutions", result
+                    f"test({self._desc!r}) has no solutions", result
                 )
             )
 

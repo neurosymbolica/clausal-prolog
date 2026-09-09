@@ -243,8 +243,53 @@ def load_clausal_module(path: str | Path) -> object:
     return mod
 
 
+#: The test-clause predicate and its deprecated spelling.  Predicates are
+#: lowercase, so it is ``test/1``; ``Test/1`` clauses are still collected and
+#: run (a file may hold both while it is being renamed) and the loader warns
+#: once per file — see ``term_rewriting._warn_deprecated_test_spelling``.
+TEST_NAME = "test"
+TEST_DEPRECATED_NAME = "Test"
+
+
+def _test_clauses(logic_module) -> list[tuple[str, object]]:
+    """``(functor, clause)`` for every ``test/1`` and ``Test/1`` clause.
+
+    Order is the order a reader sees: each predicate's clauses in the order
+    they were asserted (source order for a loaded file), and the two
+    predicates merged by source line so a mixed file runs top to bottom.
+    The merge never reorders WITHIN a predicate: it only chooses which
+    predicate's next clause comes first (a clause without a source position,
+    e.g. from ``assertz``, is taken as if it came last).  A single-spelling
+    file — the common case — is exactly the ``clauses_for`` order.
+    """
+    canonical = [(TEST_NAME, c) for c in logic_module.db.clauses_for(TEST_NAME, 1)]
+    legacy = [(TEST_DEPRECATED_NAME, c)
+              for c in logic_module.db.clauses_for(TEST_DEPRECATED_NAME, 1)]
+    if not legacy:
+        return canonical
+    if not canonical:
+        return legacy
+
+    def line(entry):
+        position = entry[1].position
+        return position[0] if position else float("inf")
+
+    merged: list[tuple[str, object]] = []
+    i = j = 0
+    while i < len(canonical) and j < len(legacy):
+        if line(canonical[i]) <= line(legacy[j]):
+            merged.append(canonical[i])
+            i += 1
+        else:
+            merged.append(legacy[j])
+            j += 1
+    merged.extend(canonical[i:])
+    merged.extend(legacy[j:])
+    return merged
+
+
 def _test_description_term(head):
-    """The description ARGUMENT of a ``Test/1`` clause head."""
+    """The description ARGUMENT of a ``test/1`` clause head."""
     if hasattr(head, "args"):
         return head.args[0]
     from clausal.logic.predicate import term_field_names
@@ -256,7 +301,7 @@ def _test_description_name(desc) -> str:
     """The display NAME of a test description term.
 
     A description is human text, so the name is that text: the SPELLING of
-    an atom (the common case — an unquoted ``Test("...")`` literal compiles
+    an atom (the common case — an unquoted ``test("...")`` literal compiles
     to an atom under the engine's default ``-double_quotes(atom)`` mode) or
     the string itself under ``-double_quotes(chars)``.  Both spellings of
     one description therefore name the same test, which is what a reader,
@@ -280,9 +325,8 @@ def collect_tests(mod: object) -> list[str]:
     logic_module = mod.__dict__.get("$module")
     if logic_module is None:
         return []
-    clauses = logic_module.db.clauses_for("Test", 1)
     return [_test_description_name(_test_description_term(clause.head))
-            for clause in clauses]
+            for _functor, clause in _test_clauses(logic_module)]
 
 
 def run_test(
@@ -306,11 +350,12 @@ def run_test(
     try:
         # *description* is the display NAME (what ``collect_tests`` returns);
         # the goal is called with the clause's own description TERM, which is
-        # an ATOM for an ordinary ``Test("...")`` clause and a string under
+        # an ATOM for an ordinary ``test("...")`` clause and a string under
         # ``-double_quotes(chars)``.  Calling with the name would pass a
-        # ``str`` — a different term from the atom, matching nothing.
-        goal_desc = _test_description_for_name(logic_module, description)
-        solutions = list(call("Test", goal_desc, module=logic_module))
+        # ``str`` — a different term from the atom, matching nothing.  The
+        # functor is the clause's own: ``test`` or the deprecated ``Test``.
+        functor, goal_desc = _test_goal_for_name(logic_module, description)
+        solutions = list(call(functor, goal_desc, module=logic_module))
         passed = len(solutions) > 0
         result = TestResult(name=description, passed=passed,
                             duration=time.perf_counter() - t0)
@@ -349,7 +394,7 @@ def diagnose_failure(
     path: str | Path | None = None,
     error: BaseException | None = None,
 ) -> GoalDiagnostic:
-    """Explain *why* a already-failed ``Test(description)`` clause failed.
+    """Explain *why* a already-failed ``test(description)`` clause failed.
 
     Locates the clause, walks its body conjuncts and re-executes cumulative
     prefixes until one yields no solution (or raises); that conjunct is the
@@ -445,7 +490,7 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
     logic_module = mod.__dict__["$module"]
     clause = _test_clause(logic_module, description)
     if clause is None:
-        diag.notes.append("could not locate the Test/1 clause to analyse")
+        diag.notes.append("could not locate the test/1 clause to analyse")
         return
     if clause.position:
         diag.line = clause.position[0]
@@ -529,25 +574,37 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
 # ── Locating the clause and its source text ──────────────────────────────────
 
 
-def _test_clause(logic_module, description):
-    for clause in logic_module.db.clauses_for("Test", 1):
+def _test_entry(logic_module, description):
+    """The ``(functor, clause)`` whose description names *description*."""
+    for functor, clause in _test_clauses(logic_module):
         desc = _test_description_term(clause.head)
         if _test_description_name(desc) == description:
-            return clause
+            return functor, clause
     return None
 
 
-def _test_description_for_name(logic_module, description):
-    """The description TERM whose display name is *description*.
+def _test_clause(logic_module, description):
+    entry = _test_entry(logic_module, description)
+    return None if entry is None else entry[1]
+
+
+def _test_goal_for_name(logic_module, description):
+    """The ``(functor, description TERM)`` whose display name is *description*.
 
     Falls back to *description* itself when no clause matches, so an
     embedder calling ``run_test`` with a term it built rather than with a
-    collected name still reaches its own clause.
+    collected name still reaches its own clause — under ``test/1``, or under
+    ``Test/1`` when that is the only spelling the module defines.
     """
-    clause = _test_clause(logic_module, description)
-    if clause is None:
-        return description
-    return _test_description_term(clause.head)
+    entry = _test_entry(logic_module, description)
+    if entry is None:
+        db = logic_module.db
+        if (db.is_defined(TEST_DEPRECATED_NAME, 1)
+                and not db.is_defined(TEST_NAME, 1)):
+            return TEST_DEPRECATED_NAME, description
+        return TEST_NAME, description
+    functor, clause = entry
+    return functor, _test_description_term(clause.head)
 
 
 #: Reifying a file is the same work for every failing test in it, so cache —
@@ -2515,7 +2572,7 @@ def main(args: list[str] | None = None) -> int:
                         help="Show individual test results")
     parser.add_argument("--strict", "--fail-on-empty", dest="strict",
                         action="store_true",
-                        help="Exit non-zero when no Test(...) clauses are collected")
+                        help="Exit non-zero when no test/1 clauses are collected")
     parsed = parser.parse_args(args)
 
     # Validate paths up front so a mistyped path or wrong cwd is an error, not a
@@ -2569,13 +2626,13 @@ def main(args: list[str] | None = None) -> int:
     total = total_passed + total_failed
 
     # Distinguish "nothing to run" from "everything passed": files that exist but
-    # contain no Test(...) clauses (or roots with no .clausal files at all) would
+    # contain no test/1 clauses (or roots with no .clausal files at all) would
     # otherwise print a misleading [PASSED].
     if total == 0:
         if files_seen == 0:
             print("no .clausal files found")
         else:
-            print(f"{files_seen} file(s) collected, but no Test(...) clauses found")
+            print(f"{files_seen} file(s) collected, but no test/1 clauses found")
         if parsed.strict:
             print("0 tests [NO TESTS]")
             return 1
