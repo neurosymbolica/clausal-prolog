@@ -54,33 +54,33 @@ class TestDecimalArithmeticCoercion:
         assert r.value == Decimal("0.2")
 
     def test_mixed_value_quantities_same_dims_add(self):
-        from clausal.modules.py.units import Metre
-        a = Quantity(Decimal("1.5"), {Metre: 1})
-        b = Quantity(0.25, {Metre: 1})  # float-valued, same dims
+        from clausal.modules.py.units import metre
+        a = Quantity(Decimal("1.5"), {metre: 1})
+        b = Quantity(0.25, {metre: 1})  # float-valued, same dims
         r = a + b
         assert r.value == Decimal("1.75")
 
 
 class TestNoRegressionFloatQuantities:
     def test_float_quantity_arithmetic_unchanged(self):
-        from clausal.modules.py.units import Metre, Second
-        d = Quantity(20.0, {Metre: 1})
-        t = Quantity(2.0, {Second: 1})
+        from clausal.modules.py.units import metre, second
+        d = Quantity(20.0, {metre: 1})
+        t = Quantity(2.0, {second: 1})
         v = d / t
         assert v.value == 10.0
-        assert v.dims == {Metre: 1, Second: -1}
+        assert v.dims == {metre: 1, second: -1}
 
     def test_dimension_mismatch_still_raises(self):
         from clausal.terms import UnitsMismatch
-        from clausal.modules.py.units import Metre, Second
+        from clausal.modules.py.units import metre, second
         with pytest.raises(UnitsMismatch):
-            _ = Quantity(1.0, {Metre: 1}) + Quantity(1.0, {Second: 1})
+            _ = Quantity(1.0, {metre: 1}) + Quantity(1.0, {second: 1})
 
     def test_dimensioned_plus_plain_number_still_raises(self):
         from clausal.terms import UnitsMismatch
-        from clausal.modules.py.units import Metre
+        from clausal.modules.py.units import metre
         with pytest.raises(UnitsMismatch):
-            _ = Quantity(1.0, {Metre: 1}) + 5
+            _ = Quantity(1.0, {metre: 1}) + 5
 
 
 class TestDecimalScalarConsistency:
@@ -102,12 +102,12 @@ class TestDecimalScalarConsistency:
 
     def test_dimensioned_plus_bare_decimal_still_raises(self):
         from clausal.terms import UnitsMismatch
-        from clausal.modules.py.units import Metre
+        from clausal.modules.py.units import metre
         with pytest.raises(UnitsMismatch):
-            _ = Quantity(Decimal("1"), {Metre: 1}) + Decimal("1")
+            _ = Quantity(Decimal("1"), {metre: 1}) + Decimal("1")
 
     def test_constructor_scaled_unit_with_decimal_magnitude(self):
-        from clausal.modules.py.units import Centimeter, Metre
-        q = Quantity(Decimal("5"), Centimeter)  # Centimeter == Quantity(1e-2, {Metre:1})
+        from clausal.modules.py.units import centimeter, metre
+        q = Quantity(Decimal("5"), centimeter)  # centimeter == Quantity(1e-2, {metre:1})
         assert q.value == Decimal("0.05")
-        assert q.dims == {Metre: 1}
+        assert q.dims == {metre: 1}

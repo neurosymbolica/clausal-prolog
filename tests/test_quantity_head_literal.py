@@ -17,7 +17,7 @@ from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from clausal.modules.py.units import Metre
+from clausal.modules.py.units import metre
 from clausal.terms import Quantity
 
 
@@ -51,7 +51,7 @@ class TestQuantityHeadLiteral:
         assert len(sols) == 1
         (q,) = sols[0]
         assert isinstance(q, Quantity)
-        assert q == Quantity(5, {Metre: 1})
+        assert q == Quantity(5, {metre: 1})
 
     def test_input_mode_selects_among_clauses(self, mod):
         N = Var()
@@ -62,9 +62,9 @@ class TestQuantityHeadLiteral:
         sols = _collect("Sel", [A, N], A, N, module=mod)
         quantities = [q for q, _ in sols]
         assert quantities == [
-            Quantity(2, {Metre: 1}),
-            Quantity(5, {Metre: 1}),
-            Quantity(50, {Metre: 1}),
+            Quantity(2, {metre: 1}),
+            Quantity(5, {metre: 1}),
+            Quantity(50, {metre: 1}),
         ]
 
     def test_quantity_nested_in_head_list(self, mod):

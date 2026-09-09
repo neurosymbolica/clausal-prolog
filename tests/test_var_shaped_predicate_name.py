@@ -147,11 +147,11 @@ class TestNotNarrowed:
         assert (deref(x), deref(y), deref(obj)) == (1, 2, 3)
 
     def test_var_unit_quantity_sugar_still_constructs(self, tmp_path):
-        """``N(Metre)`` is the documented ``VAR(Unit)`` sugar.  ``N`` is a
+        """``N(metre)`` is the documented ``VAR(Unit)`` sugar.  ``N`` is a
         variable, not a clause head, so the two sets never meet."""
         module = _load(tmp_path, "unitsugar", """
-            -import_from(py.units, [Metre])
-            Test <- (N == 5, eval_(N(Metre), D), D == 5(Metre))
+            -import_from(py.units, [metre])
+            Test <- (N == 5, eval_(N(metre), D), D == 5(metre))
         """)
         assert any(True for _ in call("Test", module=module.__dict__["$module"]))
 

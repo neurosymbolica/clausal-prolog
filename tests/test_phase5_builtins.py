@@ -191,8 +191,8 @@ class TestArithmeticQuantity:
 
     def _q(self, value, **dims):
         """Shorthand for Quantity with named dims."""
-        from clausal.modules.py.units import Metre, Second, Kilogram
-        dim_map = {"m": Metre, "s": Second, "kg": Kilogram}
+        from clausal.modules.py.units import metre, second, kilogram
+        dim_map = {"m": metre, "s": second, "kg": kilogram}
         return Quantity(value, {dim_map[k]: v for k, v in dims.items() if v != 0})
 
     def _simple(self, fn, *args):

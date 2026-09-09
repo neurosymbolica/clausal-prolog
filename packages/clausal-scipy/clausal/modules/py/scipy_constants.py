@@ -13,7 +13,7 @@ Use them in expressions exactly like the constants from ``py.units``::
 
     C is SpeedOfLight
     E is ++(ElectronMass * SpeedOfLight ** 2)
-    has_units(BoltzmannConstant, Joule / Kelvin)
+    has_units(BoltzmannConstant, joule / kelvin)
 
 Numeric values come from the installed scipy CODATA release.
 
@@ -170,17 +170,17 @@ def _init_quantities():
     def q(attr, unit):
         return Quantity(float(getattr(sc, attr)), unit)
 
-    mod.SpeedOfLight          = q("c",    u.Metre / u.Second)
-    mod.PlanckConstant        = q("h",    u.Joule * u.Second)
-    mod.ReducedPlanckConstant = q("hbar", u.Joule * u.Second)
-    mod.GravitationalConstant = q("G",    u.Metre**3 / u.Kilogram / u.Second**2)
-    mod.AvogadroConstant      = q("N_A",  u.Mole**-1)
-    mod.BoltzmannConstant     = q("k",    u.Joule / u.Kelvin)
-    mod.ElementaryCharge      = q("e",    u.Coulomb)
-    mod.ElectronMass          = q("m_e",  u.Kilogram)
-    mod.ProtonMass            = q("m_p",  u.Kilogram)
-    mod.ElectronVolt          = q("eV",   u.Joule)
-    mod.StandardAtmosphere    = q("atm",  u.Pascal)
+    mod.SpeedOfLight          = q("c",    u.metre / u.second)
+    mod.PlanckConstant        = q("h",    u.joule * u.second)
+    mod.ReducedPlanckConstant = q("hbar", u.joule * u.second)
+    mod.GravitationalConstant = q("G",    u.metre**3 / u.kilogram / u.second**2)
+    mod.AvogadroConstant      = q("N_A",  u.mole**-1)
+    mod.BoltzmannConstant     = q("k",    u.joule / u.kelvin)
+    mod.ElementaryCharge      = q("e",    u.coulomb)
+    mod.ElectronMass          = q("m_e",  u.kilogram)
+    mod.ProtonMass            = q("m_p",  u.kilogram)
+    mod.ElectronVolt          = q("eV",   u.joule)
+    mod.StandardAtmosphere    = q("atm",  u.pascal)
 
     mod.Pi = float(sc.pi)
 

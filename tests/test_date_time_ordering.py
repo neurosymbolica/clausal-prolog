@@ -196,9 +196,9 @@ class TestVarVsNonNumericOperand:
 
     def test_var_lt_quantity(self):
         from clausal.terms import Quantity
-        from clausal.modules.units import Metre
+        from clausal.modules.units import metre
         with pytest.raises(LogicException) as ei:
-            fd_lt(Var(), Quantity(5, {Metre: 1}), Trail())
+            fd_lt(Var(), Quantity(5, {metre: 1}), Trail())
         _assert_orderable_error(ei, "(<)/2")
 
     def test_var_lt_decimal(self):

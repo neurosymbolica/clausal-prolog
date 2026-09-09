@@ -394,7 +394,7 @@ class TestCellTermStr:
     """P3-2 Task 7: cells (the tagged-tuple compound representation,
     ``clausal/logic/cells.py``) rendered by ``term_str``.
 
-    Byte-parity requirement (the plan): ``term_str(("point", 1, 2))`` must
+    byte-parity requirement (the plan): ``term_str(("point", 1, 2))`` must
     equal the class-era rendering byte-for-byte with styling OFF -- the
     literal recorded string from ``TestTermStr::test_compound`` above,
     ``"foo(1, 2)"``'s sibling for a ``point`` functor.

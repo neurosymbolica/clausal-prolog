@@ -1,3 +1,7 @@
+# Deliberately kept on the deprecated TitleCase unit spelling (Metre, Second,
+# Newton): it exercises the alias path in -import_from and the once-per-file
+# lint.  Every other fixture uses the lowercase names.  Remove together with
+# the aliases — see todo/remove-deprecated-TitleCase-unit-names-after-migration-2026-09-09.md.
 -import_from(py.units, [Metre, Second, Newton])
 
 # [1,2,3](Metre) - list with unit annotation

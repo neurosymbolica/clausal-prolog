@@ -325,12 +325,12 @@ class TestClausalFixture:
 # ── Quantity / dimensional analysis ──────────────────────────────────────
 
 from clausal.terms import Quantity, UnitsMismatch
-from clausal.modules.py.units import Metre, Second, Newton, Kilogram
+from clausal.modules.py.units import metre, second, newton, kilogram
 
 
 def _NpM():
-    """Newton-per-Metre unit predicate."""
-    return Newton / Metre
+    """newton-per-metre unit predicate."""
+    return newton / metre
 
 
 class TestDerivativeUnits:
@@ -341,33 +341,33 @@ class TestDerivativeUnits:
         # nv
         k = Quantity(9.8, _NpM())
         f = lambda x: x * k
-        result = _drive(Derivative, f, Quantity(1.0, {Metre: 1}))
+        result = _drive(Derivative, f, Quantity(1.0, {metre: 1}))
         assert result is not None
         df = result["df"]
         assert isinstance(df, Quantity), f"Expected Quantity, got {type(df)}"
         assert df.value == pytest.approx(9.8, rel=1e-6)
-        # dims should be Newton/Metre = {Kilogram: 1, Second: -2}
+        # dims should be newton/metre = {kilogram: 1, second: -2}
         expected_dims = dict((_NpM())._dims)
         assert dict(df.dims) == expected_dims
 
     def test_derivative_x_has_input_units(self):
-        """Result 'x' field should preserve input Metre units."""
+        """Result 'x' field should preserve input metre units."""
         # nv
         k = Quantity(2.0, _NpM())
         f = lambda x: x * k
-        result = _drive(Derivative, f, Quantity(3.0, {Metre: 1}))
+        result = _drive(Derivative, f, Quantity(3.0, {metre: 1}))
         assert result is not None
         x = result["x"]
         assert isinstance(x, Quantity), f"Expected Quantity, got {type(x)}"
         assert x.value == pytest.approx(3.0)
-        assert dict(x.dims) == {Metre: 1}
+        assert dict(x.dims) == {metre: 1}
 
     def test_derivative_error_has_df_units(self):
         """Error estimate has same units as df."""
         # nv
         k = Quantity(2.0, _NpM())
         f = lambda x: x * k
-        result = _drive(Derivative, f, Quantity(3.0, {Metre: 1}))
+        result = _drive(Derivative, f, Quantity(3.0, {metre: 1}))
         assert result is not None
         err = result["error"]
         assert isinstance(err, Quantity), f"Expected Quantity, got {type(err)}"
@@ -379,7 +379,7 @@ class TestDerivativeUnits:
         # f strips .value manually → returns float
         # nv
         f = lambda x: x.value ** 2
-        result = _drive(Derivative, f, Quantity(3.0, {Metre: 1}))
+        result = _drive(Derivative, f, Quantity(3.0, {metre: 1}))
         assert result is not None
         df = result["df"]
         assert not isinstance(df, Quantity), f"Expected plain, got Quantity"
@@ -395,7 +395,7 @@ class TestDerivativeUnits:
         assert float(df) == pytest.approx(6.0, abs=1e-8)
 
     def test_derivative_dimensionless_quantity(self):
-        """Dimensionless Quantity (dims={}) → x is still wrapped, df depends on f."""
+        """dimensionless Quantity (dims={}) → x is still wrapped, df depends on f."""
         # nv
         f = lambda x: x ** 2  # returns plain float (since Quantity**2 works)
         result = _drive(Derivative, f, Quantity(3.0, {}))
@@ -408,12 +408,12 @@ class TestJacobianUnits:
     """Phase 3 — Jacobian with Quantity inputs."""
 
     def test_jacobian_linear_map(self):
-        """f: R^n(Metre) → R^n(Newton), Jacobian has dims Newton/Metre."""
+        """f: R^n(metre) → R^n(newton), Jacobian has dims newton/metre."""
         # nv
         k = Quantity(9.8, _NpM())
         # Jacobian requires array input → array output
         f = lambda x: x * k
-        x0 = Quantity(np.array([1.0, 2.0]), {Metre: 1})
+        x0 = Quantity(np.array([1.0, 2.0]), {metre: 1})
         result = _drive(Jacobian, f, x0)
         assert result is not None
         df = result["df"]
@@ -438,7 +438,7 @@ class TestHessianUnits:
         # x in the result dict should still be wrapped with input dims.
         # nv
         f = lambda x: x[0] ** 2 + x[1] ** 2
-        x0 = Quantity(np.array([1.0, 2.0]), {Metre: 1})
+        x0 = Quantity(np.array([1.0, 2.0]), {metre: 1})
         result = _drive(Hessian, f, x0)
         assert result is not None
         # ddf is plain (f doesn't propagate units)

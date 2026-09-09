@@ -78,7 +78,7 @@ class TestEvalBuiltin:
         """The case CLP ``==`` cannot do: Quantity / Quantity division."""
         # nv
         mod = _load(tmp_path, "eval_units",
-                    "-import_from(py.units, [Metre, Second])\n"
-                    "Test <- (eval_(20(Metre), D), eval_(2(Second), T), "
+                    "-import_from(py.units, [metre, second])\n"
+                    "Test <- (eval_(20(metre), D), eval_(2(second), T), "
                     "eval_(D / T, V), ++(V.value) == 10.0)\n")
         assert _succeeds(mod)

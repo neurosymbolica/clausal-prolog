@@ -840,7 +840,7 @@ class TestBBInf:
 
 class TestCoefficientGrowth:
     def test_newton_sqrt2(self):
-        """Newton's method for sqrt(2), 5 iterations → exact large fraction."""
+        """newton's method for sqrt(2), 5 iterations → exact large fraction."""
         # nv
         s = F(1)
         for _ in range(5):

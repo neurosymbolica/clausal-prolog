@@ -202,6 +202,6 @@ class TestCurrencyFormat:
         assert format(amt, "plain,half_up") == "3.35"
 
     def test_non_currency_quantity_unchanged(self):
-        from clausal.modules.py.units import Metre
-        q = Quantity(5.0, {Metre: 1})
+        from clausal.modules.py.units import metre
+        q = Quantity(5.0, {metre: 1})
         assert format(q, "") == str(q)

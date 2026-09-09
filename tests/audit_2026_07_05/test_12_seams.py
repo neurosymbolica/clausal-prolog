@@ -271,10 +271,10 @@ class TestF002EqNonRealOperand:
     def test_eq_quantity_operand_raises_catchable_type_error(self):
         from clausal.logic.exceptions import LogicException
         from clausal.terms import Quantity
-        from clausal.modules.units import Metre
+        from clausal.modules.units import metre
         with pytest.raises(LogicException) as ei:
-            fd_eq(Var(), Quantity(5, {Metre: 1}), Trail())
-        self._assert_evaluable_error(ei, Quantity(5, {Metre: 1}))
+            fd_eq(Var(), Quantity(5, {metre: 1}), Trail())
+        self._assert_evaluable_error(ei, Quantity(5, {metre: 1}))
 
     def test_eq_decimal_operand_raises_catchable_type_error(self):
         from decimal import Decimal
@@ -334,10 +334,10 @@ class TestF002EqNonRealOperand:
 
     def test_eq_both_ground_quantities_still_python_equality(self):
         from clausal.terms import Quantity
-        from clausal.modules.units import Metre
+        from clausal.modules.units import metre
         tr = Trail()
-        assert fd_eq(Quantity(5, {Metre: 1}), Quantity(5, {Metre: 1}), tr) is True
-        assert fd_eq(Quantity(5, {Metre: 1}), Quantity(3, {Metre: 1}), tr) is False
+        assert fd_eq(Quantity(5, {metre: 1}), Quantity(5, {metre: 1}), tr) is True
+        assert fd_eq(Quantity(5, {metre: 1}), Quantity(3, {metre: 1}), tr) is False
 
 
 class TestF002NeNonRealOperand:
@@ -383,9 +383,9 @@ class TestF002NeNonRealOperand:
     def test_ne_quantity_operand_raises_catchable_type_error(self):
         from clausal.logic.exceptions import LogicException
         from clausal.terms import Quantity
-        from clausal.modules.units import Metre
+        from clausal.modules.units import metre
         with pytest.raises(LogicException):
-            fd_ne(Var(), Quantity(5, {Metre: 1}), Trail())
+            fd_ne(Var(), Quantity(5, {metre: 1}), Trail())
 
     def test_ne_compiled_repro_raises_instead_of_losing_solution(self, load):
         # The silent-loss shape: X != "banana", X is "apple" had 0 solutions.
@@ -615,8 +615,8 @@ class TestNonNumericLeafInsideExprTree:
     def test_quantity_leaf_raises(self):
         from clausal.logic.exceptions import LogicException
         from clausal.terms import Quantity
-        from clausal.modules.units import Metre
-        q = Quantity(2, {Metre: 1})
+        from clausal.modules.units import metre
+        q = Quantity(2, {metre: 1})
         with pytest.raises(LogicException) as ei:
             fd_eq(self._add(Var(), q), 5, Trail())
         self._assert_integer_leaf_error(ei, q)
@@ -629,8 +629,8 @@ class TestNonNumericLeafInsideExprTree:
         # error points users at ``is``, where Quantity.__mul__ works.
         from clausal.logic.exceptions import LogicException
         from clausal.terms import Mult, Quantity
-        from clausal.modules.units import Metre
-        q = Quantity(2, {Metre: 1})
+        from clausal.modules.units import metre
+        q = Quantity(2, {metre: 1})
         with pytest.raises(LogicException):
             fd_eq(Var(), Mult(left=q, right=2), Trail())
 

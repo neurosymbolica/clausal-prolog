@@ -6,31 +6,31 @@
     Pi, Kilo, Mega, Giga])
 
 -import_from(py.units, [
-    Metre, Kilogram, Second, Ampere, Kelvin, Mole,
-    Joule, Pascal, Coulomb, Newton])
+    metre, kilogram, second, ampere, kelvin, mole,
+    joule, pascal, coulomb, newton])
 
 # ── Speed of light ────────────────────────────────────────────────────────
 
-Test("speed of light exact value") <- (SpeedOfLight == 299792458(Metre/Second))  # nv
+Test("speed of light exact value") <- (SpeedOfLight == 299792458(metre/second))  # nv
 
-Test("speed of light units") <- has_units(SpeedOfLight, Metre/Second)  # nv
+Test("speed of light units") <- has_units(SpeedOfLight, metre/second)  # nv
 
 # ── Planck constant ───────────────────────────────────────────────────────
 
-Test("planck constant units") <- has_units(PlanckConstant, Joule * Second)  # nv
+Test("planck constant units") <- has_units(PlanckConstant, joule * second)  # nv
 
 Test("planck constant magnitude") <- (
-    PlanckConstant > 6.626e-34(Joule * Second),
-    PlanckConstant < 6.627e-34(Joule * Second)
+    PlanckConstant > 6.626e-34(joule * second),
+    PlanckConstant < 6.627e-34(joule * second)
 )  # nv
 
 # ── Reduced Planck constant ───────────────────────────────────────────────
 
-Test("reduced planck constant units") <- has_units(ReducedPlanckConstant, Joule * Second)  # nv
+Test("reduced planck constant units") <- has_units(ReducedPlanckConstant, joule * second)  # nv
 
 Test("reduced planck constant magnitude") <- (
-    ReducedPlanckConstant > 1.054e-34(Joule * Second),
-    ReducedPlanckConstant < 1.055e-34(Joule * Second)
+    ReducedPlanckConstant > 1.054e-34(joule * second),
+    ReducedPlanckConstant < 1.055e-34(joule * second)
 )  # nv
 
 Test("hbar equals h over two pi") <- (
@@ -40,50 +40,50 @@ Test("hbar equals h over two pi") <- (
 
 # ── Gravitational constant ────────────────────────────────────────────────
 
-Test("gravitational constant units") <- (has_units(GravitationalConstant, Newton * Metre**2 / Kilogram**2))  # nv
+Test("gravitational constant units") <- (has_units(GravitationalConstant, newton * metre**2 / kilogram**2))  # nv
 
 Test("gravitational constant magnitude") <- (
-    GravitationalConstant > 6.674e-11(Newton * Metre**2 / Kilogram**2),
-    GravitationalConstant < 6.675e-11(Newton * Metre**2 / Kilogram**2)
+    GravitationalConstant > 6.674e-11(newton * metre**2 / kilogram**2),
+    GravitationalConstant < 6.675e-11(newton * metre**2 / kilogram**2)
 )  # nv
 
 # ── Avogadro constant ─────────────────────────────────────────────────────
 
-Test("avogadro constant units") <- (has_units(AvogadroConstant, Mole**-1))  # nv
+Test("avogadro constant units") <- (has_units(AvogadroConstant, mole**-1))  # nv
 
 Test("avogadro constant magnitude") <- (
-    AvogadroConstant > 6.022e23(Mole**-1),
-    AvogadroConstant < 6.023e23(Mole**-1)
+    AvogadroConstant > 6.022e23(mole**-1),
+    AvogadroConstant < 6.023e23(mole**-1)
 )  # nv
 
 # ── Boltzmann constant ────────────────────────────────────────────────────
 
-Test("boltzmann constant units") <- has_units(BoltzmannConstant, Joule / Kelvin)  # nv
+Test("boltzmann constant units") <- has_units(BoltzmannConstant, joule / kelvin)  # nv
 
 Test("boltzmann constant magnitude") <- (
-    BoltzmannConstant > 1.380e-23(Joule / Kelvin),
-    BoltzmannConstant < 1.381e-23(Joule / Kelvin)
+    BoltzmannConstant > 1.380e-23(joule / kelvin),
+    BoltzmannConstant < 1.381e-23(joule / kelvin)
 )  # nv
 
 # ── Elementary charge ─────────────────────────────────────────────────────
 
-Test("elementary charge units") <- has_units(ElementaryCharge, Coulomb)  # nv
+Test("elementary charge units") <- has_units(ElementaryCharge, coulomb)  # nv
 
 Test("elementary charge magnitude") <- (
-    ElementaryCharge > 1.602e-19(Coulomb),
-    ElementaryCharge < 1.603e-19(Coulomb)
+    ElementaryCharge > 1.602e-19(coulomb),
+    ElementaryCharge < 1.603e-19(coulomb)
 )  # nv
 
 # ── Electron and proton masses ────────────────────────────────────────────
 
-Test("electron mass units") <- has_units(ElectronMass, Kilogram)  # nv
+Test("electron mass units") <- has_units(ElectronMass, kilogram)  # nv
 
 Test("electron mass magnitude") <- (
-    ElectronMass > 9.109e-31(Kilogram),
-    ElectronMass < 9.110e-31(Kilogram)
+    ElectronMass > 9.109e-31(kilogram),
+    ElectronMass < 9.110e-31(kilogram)
 )  # nv
 
-Test("proton mass units") <- has_units(ProtonMass, Kilogram)  # nv
+Test("proton mass units") <- has_units(ProtonMass, kilogram)  # nv
 
 Test("proton heavier than electron") <- (
     eval_(ProtonMass / ElectronMass, RATIO),
@@ -92,18 +92,18 @@ Test("proton heavier than electron") <- (
 
 # ── Electron volt ─────────────────────────────────────────────────────────
 
-Test("electron volt units") <- has_units(ElectronVolt, Joule)  # nv
+Test("electron volt units") <- has_units(ElectronVolt, joule)  # nv
 
 Test("electron volt magnitude") <- (
-    ElectronVolt > 1.602e-19(Joule),
-    ElectronVolt < 1.603e-19(Joule)
+    ElectronVolt > 1.602e-19(joule),
+    ElectronVolt < 1.603e-19(joule)
 )  # nv
 
 # ── Standard atmosphere ───────────────────────────────────────────────────
 
-Test("standard atmosphere units") <- has_units(StandardAtmosphere, Pascal)  # nv
+Test("standard atmosphere units") <- has_units(StandardAtmosphere, pascal)  # nv
 
-Test("standard atmosphere exact value") <- (StandardAtmosphere == 101325(Pascal))  # nv
+Test("standard atmosphere exact value") <- (StandardAtmosphere == 101325(pascal))  # nv
 
 # ── SI prefix factors (dimensionless) ─────────────────────────────────────
 

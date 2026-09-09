@@ -6,7 +6,7 @@ correctly threads a ``bytes`` input through a DCG grammar that matches
 integer-code terminals.
 
 Grammar syntax note: this project uses ``>>`` (not ``-->``) for DCG rules.
-Byte values are represented as their integer codes in terminal lists
+byte values are represented as their integer codes in terminal lists
 (e.g., ``[71, 69, 84, 32]`` for ``b"GET "``). The assertions on bytes
 *preservation* (remainder bound as ``bytes``, ``type(...) is bytes``) are
 the real contract; the grammar uses int-code terminals.
@@ -168,7 +168,7 @@ class TestSequenceBytesMode:
 class TestPhraseBytesGrammar:
     """phrase over a bytes subject, using a DCG rule with int-code terminals.
 
-    Grammar syntax: the project uses ``>>`` (not ``-->``). Byte values in
+    Grammar syntax: the project uses ``>>`` (not ``-->``). byte values in
     terminals are written as their int codes: ``[71, 69, 84, 32]`` = b"GET ".
     """
 

@@ -845,8 +845,8 @@ def test_guard_graphs_classic_dijkstra_and_mst():
 def test_F047_negative_unit_literal_in_is(tmp_path):
     # A11-F047 (fixed): -n(Unit) folds negation into the sugar constant.
     mod = _load(tmp_path, '''
-        -import_from(py.units, [Second, strip_units])
-        T(V) <- (Q is -3(Second), strip_units(Q, V))
+        -import_from(py.units, [second, strip_units])
+        T(V) <- (Q is -3(second), strip_units(Q, V))
     ''', "f047")
     v = Var()
     assert [deref(v) for _ in call("T", v, module=_logic(mod))] == [-3]
@@ -855,22 +855,22 @@ def test_F047_negative_unit_literal_in_is(tmp_path):
 def test_F047_guard_negative_unit_literal_in_assign(tmp_path):
     """The eval_ position of the same literal works (the documented example)."""
     mod = _load(tmp_path, '''
-        -import_from(py.units, [Second, strip_units])
-        T(V) <- (eval_(-3(Second), Q), strip_units(Q, V))
+        -import_from(py.units, [second, strip_units])
+        T(V) <- (eval_(-3(second), Q), strip_units(Q, V))
     ''', "f047g")
     v = Var()
     assert [deref(v) for _ in call("T", v, module=_logic(mod))] == [-3]
 
 
 def test_F048_byte_call_style_from_docs():
-    # A11-F048 (fixed): Quantity.__call__ scales (Byte(1) == 1*Byte).
-    from clausal.modules.units import Byte, mebi
-    assert (1 * mebi * Byte(1)).value == 8 * 2 ** 20
+    # A11-F048 (fixed): Quantity.__call__ scales (byte(1) == 1*byte).
+    from clausal.modules.units import byte, mebi
+    assert (1 * mebi * byte(1)).value == 8 * 2 ** 20
 
 
 def test_F048_guard_byte_noncall_style():
-    from clausal.modules.units import Byte, mebi
-    assert (1 * mebi * Byte).value == 8 * 2 ** 20
+    from clausal.modules.units import byte, mebi
+    assert (1 * mebi * byte).value == 8 * 2 ** 20
 
 
 def test_F055_psi_consistent_with_lbf_per_sq_inch():
@@ -901,9 +901,9 @@ def test_F056_prefix_in_unit_parens_clean_error():
 
 def test_F057_unit_pred_pow_integer_only():
     # A11-F057 (fixed): float exponents rejected.
-    from clausal.modules.units import Metre
+    from clausal.modules.units import metre
     with pytest.raises(Exception):
-        Metre ** 0.5
+        metre ** 0.5
 
 
 def test_F059_docs_quickstart_import_line(tmp_path):
@@ -911,7 +911,7 @@ def test_F059_docs_quickstart_import_line(tmp_path):
     # through the imported name (the first registration wrapped a builtin-
     # style fn with a k-less trampoline, so every call raised).
     mod = _load(tmp_path, '''
-        -import_from(py.units, [m, kg, s, Newton, kilo, has_units, strip_units])
+        -import_from(py.units, [m, kg, s, newton, kilo, has_units, strip_units])
         T(V) <- strip_units(5(m), V)
         Hu(R) <- (has_units(5(m), m), R is "yes")
         HuBad(R) <- (has_units(5(m), s), R is "never")
@@ -925,8 +925,8 @@ def test_F059_docs_quickstart_import_line(tmp_path):
 def test_guard_units_mismatch_catchable(tmp_path):
     mod = _load(tmp_path, '''
         -private([caught])
-        -import_from(py.units, [Metre, Second])
-        T(R) <- catch(eval_(3(Metre) + 2(Second), Q), UnitsMismatch(_), (R is caught))
+        -import_from(py.units, [metre, second])
+        T(R) <- catch(eval_(3(metre) + 2(second), Q), UnitsMismatch(_), (R is caught))
     ''', "unitsm")
     r = Var()
     out = [deref(r) for _ in call("T", r, module=_logic(mod))]
