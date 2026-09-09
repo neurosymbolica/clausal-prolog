@@ -5,6 +5,6 @@
 # all.  The sibling `private_import_consumer` imports both by name; that import
 # is expected to succeed and to bind THESE classes.
 
--private([privimp_tag, PrivImpHelper(X)])
+-private([privimp_tag, priv_imp_helper(X)])
 
-PrivImpHelper(privimp_tag),
+priv_imp_helper(privimp_tag),

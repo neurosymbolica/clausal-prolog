@@ -369,21 +369,21 @@ def test_private_names_are_importable_and_share_identity():
     assert owner.privimp_tag == predicate_builtins.get("privimp_tag")
 
     # The private *predicate* crossed the boundary too.
-    assert consumer.PrivImpHelper is owner.PrivImpHelper
+    assert consumer.priv_imp_helper is owner.priv_imp_helper
 
     # Shared identity is the point: the query actually solves.
-    assert list(consumer.PrivImpUse(Var())) != []
+    assert list(consumer.priv_imp_use(Var())) != []
 
     # No warning: importing a private name is a supported pattern, not a
     # smell.  A `ClausalPrivateAtomImportWarning`-style diagnostic would
     # fire on the legitimate anonymous-fixture pattern, so it is
     # deliberately absent.
     # Case-insensitive on purpose: the fixture's names are ``privimp_tag``
-    # but also ``PrivImpHelper``/``PrivImpUse``, and a warning that named only
-    # the *predicate* would not contain the lowercase spelling — so a
-    # case-sensitive filter would let an Option-3 build slip through the pin
-    # for the predicate case.  Matching every warning is not the alternative:
-    # loading a fixture can legitimately emit unrelated ones.
+    # but also ``priv_imp_helper``/``priv_imp_use``, and a warning that
+    # renders a predicate name in some other case would slip through a
+    # case-sensitive filter — so the pin matches the ``privimp`` stem however
+    # it is cased.  Matching every warning is not the alternative: loading a
+    # fixture can legitimately emit unrelated ones.
     private_warnings = [
         w for w in caught if "privimp" in str(w.message).lower()
     ]

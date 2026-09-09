@@ -1,8 +1,8 @@
 # Pinning fixture: imports a bare atom and a predicate that the owning module
 # declares `-private` and does not export.  `-private` marks a name as "not
 # part of my public surface"; it does not make the name unreachable, so this
-# import binds the owner's classes and `PrivImpUse/1` solves.
+# import binds the owner's classes and `priv_imp_use/1` solves.
 
--import_from(tests.fixtures.private_import_owner, [PrivImpHelper, privimp_tag])
+-import_from(tests.fixtures.private_import_owner, [priv_imp_helper, privimp_tag])
 
-PrivImpUse(X) <- PrivImpHelper(X)
+priv_imp_use(X) <- priv_imp_helper(X)
