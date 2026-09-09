@@ -1,6 +1,7 @@
 """SI unit names are lowercase identifiers: ``metre``, ``second``, ``newton``.
 
-The TitleCase spellings (``Metre``, ``Second``, ``Newton``, …) are superseded:
+The TitleCase spellings (``Metre``, ``Second``, ``Newton``, ``SpeedOfLight``)
+and the American length family (``kilometer``) are superseded:
 still accepted everywhere the lowercase name is, but they warn — once per
 file from a ``-import_from(py.units, [...])`` list, once per process per
 name from Python attribute access — and nothing in the library emits them
@@ -61,28 +62,21 @@ class TestLowercaseNames:
         assert units.newton(9.8) == Quantity(
             9.8, {units.kilogram: 1, units.metre: 1, units.second: -2})
 
-    def test_every_unit_is_lowercase(self):
-        """No TitleCase unit predicate or unit-vector constant is defined.
-
-        The physical constants (``SpeedOfLight``, …) and the ``SI_*`` unit
-        vectors are Quantity values too, but they are not unit names; their
-        spelling is a separate question and they are pinned here as-is so
-        this test shrinks, not grows, when that is settled.
-        """
+    def test_no_titlecase_exports(self):
+        """No TitleCase unit predicate, unit vector or physical constant."""
         # nv
-        parked = {
-            "SpeedOfLight", "PlanckConstant", "ReducedPlanck",
-            "BoltzmannConstant", "AvogadroConstant", "ElementaryCharge",
-            "StandardGravity", "GravitationalConstant", "AtomicMassUnit",
-            "ElectronMass", "ProtonMass", "VacuumPermeability",
-            "VacuumPermittivity", "StefanBoltzmann",
-        }
         titlecase = {
             n for n, v in vars(units).items()
             if isinstance(v, (units._UnitsPredicate, Quantity))
             and n[:1].isupper() and not n.startswith("SI_")
         }
-        assert titlecase == parked
+        assert titlecase == set()
+
+    def test_no_american_metre_exports(self):
+        """The length family is spelled like ``metre``: ``kilometre``."""
+        # nv
+        american = {n for n in vars(units) if n.endswith("meter")}
+        assert american == set()
 
     def test_sugar_builds_the_same_quantity(self, tmp_path):
         """5(metre) is the Quantity Metre(5) used to build."""
@@ -103,7 +97,7 @@ class TestLowercaseNames:
     def test_does_not_warn(self, tmp_path):
         """# nv"""
         _, warned = _load_recording("lc_quiet", (
-            "-import_from(py.units, [metre, second, byte, kilometer])\n"
+            "-import_from(py.units, [metre, second, byte, kilometre])\n"
             "q(D) <- eval_(5(metre), D)\n"), tmp_path)
         assert warned == []
 
@@ -118,7 +112,7 @@ class TestLowercaseNames:
         assert units.m is units.metre
         assert units.kg is units.kilogram
         assert units.s is units.second
-        assert units.km is units.kilometer
+        assert units.km is units.kilometre
         assert units.min is units.minute
         assert units.hr is units.hour
 
@@ -171,8 +165,8 @@ class TestTitleCaseAliases:
         # nv
         table = units._DEPRECATED_UNIT_NAMES
         for old, new in table.items():
-            assert old[:1].isupper(), old
-            assert new == new.lower(), new
+            assert old != new and new == new.lower(), (old, new)
+            assert old not in vars(units), old      # resolved only by alias
             assert getattr(units, new) is not None
         lower_units = {
             n for n, v in vars(units).items()
@@ -216,7 +210,7 @@ class TestTitleCaseAliases:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ClausalDeprecatedSpellingWarning)
             assert units.Metre(5) == units.metre(5)
-            assert units.Kilometer is units.kilometer
+            assert units.Kilometer is units.kilometre
             assert units.Byte is units.byte
 
     def test_sugar_still_works(self, tmp_path):
@@ -268,3 +262,120 @@ class TestTitleCaseAliases:
             "-import_from(otherunits, [Metre])\n"
             "q(1),\n"), tmp_path)
         assert [w for w in warned if "metre" in str(w.message)] == []
+
+
+# ── Physical constants: snake_case ───────────────────────────────────────────
+
+
+class TestPhysicalConstants:
+    def test_snake_case_names(self):
+        """# nv"""
+        assert units.speed_of_light.value == 299_792_458
+        assert units.speed_of_light.dims == units.SI_Velocity.dims
+        assert units.planck_constant.dims == (units.SI_Energy * units.second(1)).dims
+        for name in ("reduced_planck", "boltzmann_constant", "avogadro_constant",
+                     "elementary_charge", "standard_gravity",
+                     "gravitational_constant", "atomic_mass_unit",
+                     "electron_mass", "proton_mass", "vacuum_permeability",
+                     "vacuum_permittivity", "stefan_boltzmann"):
+            assert isinstance(getattr(units, name), Quantity), name
+
+    def test_python_alias_warns_once(self, fresh_python_warnings):
+        """# nv"""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            first = units.SpeedOfLight
+            second = units.SpeedOfLight
+        assert first is units.speed_of_light and second is units.speed_of_light
+        hits = [w for w in caught
+                if issubclass(w.category, ClausalDeprecatedSpellingWarning)]
+        assert len(hits) == 1
+        assert "`SpeedOfLight` -> `speed_of_light`" in str(hits[0].message)
+
+    def test_clausal_import_new_name(self, tmp_path):
+        """# nv"""
+        mod, warned = _load_recording("pc_new", (
+            "-import_from(py.units, [speed_of_light, standard_gravity])\n"
+            "q(V) <- (V is ++(speed_of_light))\n"
+            "g(A) <- (A is ++(2 * standard_gravity))\n"), tmp_path)
+        assert warned == []
+        assert _one(mod, "q") == units.speed_of_light
+        assert _one(mod, "g") == 2 * units.standard_gravity
+
+    def test_clausal_import_old_name_warns_once(self, tmp_path):
+        """# nv"""
+        mod, warned = _load_recording("pc_old", (
+            "-import_from(py.units, [SpeedOfLight, StandardGravity])\n"
+            "q(V) <- (V is ++(SpeedOfLight))\n"
+            "g(A) <- (A is ++(StandardGravity))\n"), tmp_path)
+        assert len(warned) == 1
+        msg = str(warned[0].message)
+        assert "`SpeedOfLight` -> `speed_of_light`" in msg
+        assert "`StandardGravity` -> `standard_gravity`" in msg
+        assert _one(mod, "q") == units.speed_of_light
+        assert _one(mod, "g") == units.standard_gravity
+
+
+# ── The length family is spelled like metre ──────────────────────────────────
+
+
+class TestBritishSpelling:
+    def test_metre_family(self):
+        """# nv"""
+        assert units.kilometre == Quantity(1_000, {units.metre: 1})
+        assert units.centimetre == Quantity(1e-2, {units.metre: 1})
+        assert units.millimetre == Quantity(1e-3, {units.metre: 1})
+        assert units.micrometre == Quantity(1e-6, {units.metre: 1})
+        assert units.nanometre == Quantity(1e-9, {units.metre: 1})
+        assert units.km is units.kilometre
+        assert units.cm is units.centimetre
+        assert units.mm is units.millimetre
+        assert units.um is units.micrometre
+        assert units.nm is units.nanometre
+
+    def test_printed_label_is_the_base_unit(self):
+        """A scaled length carries no label of its own: it prints in metre."""
+        # nv
+        assert str(5 * units.kilometre) == "5000 metre"
+
+    def test_american_python_alias_warns_once(self, fresh_python_warnings):
+        """# nv"""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            a = units.kilometer
+            b = units.kilometer
+        assert a is units.kilometre and b is units.kilometre
+        hits = [w for w in caught
+                if issubclass(w.category, ClausalDeprecatedSpellingWarning)]
+        assert len(hits) == 1
+        assert "`kilometer` -> `kilometre`" in str(hits[0].message)
+
+    def test_titlecase_american_resolves_to_british(self, fresh_python_warnings):
+        """# nv"""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ClausalDeprecatedSpellingWarning)
+            assert units.Kilometer is units.kilometre
+            assert units.Nanometer is units.nanometre
+
+    def test_clausal_import_british(self, tmp_path):
+        """# nv"""
+        mod, warned = _load_recording("br_new", (
+            "-import_from(py.units, [kilometre, centimetre])\n"
+            "q(D) <- eval_(5(kilometre), D)\n"
+            "c(D) <- eval_(200(centimetre), D)\n"), tmp_path)
+        assert warned == []
+        assert _one(mod, "q") == Quantity(5000, {units.metre: 1})
+        assert _one(mod, "c") == 200 * units.centimetre
+
+    def test_clausal_import_american_warns_once(self, tmp_path):
+        """# nv"""
+        mod, warned = _load_recording("br_old", (
+            "-import_from(py.units, [kilometer, Centimeter])\n"
+            "q(D) <- eval_(5(kilometer), D)\n"
+            "c(D) <- eval_(200(Centimeter), D)\n"), tmp_path)
+        assert len(warned) == 1
+        msg = str(warned[0].message)
+        assert "`kilometer` -> `kilometre`" in msg
+        assert "`Centimeter` -> `centimetre`" in msg
+        assert _one(mod, "q") == Quantity(5000, {units.metre: 1})
+        assert _one(mod, "c") == 200 * units.centimetre

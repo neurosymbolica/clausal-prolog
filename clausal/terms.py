@@ -2121,8 +2121,8 @@ class Quantity:
 
     def __init__(self, value, dims) -> None:
         if isinstance(dims, Quantity):
-            # dims is a Quantity constant (e.g. kilometer) — multiply:
-            # Quantity(5, kilometer) → Quantity(5 * 1000, {metre: 1})
+            # dims is a Quantity constant (e.g. kilometre) — multiply:
+            # Quantity(5, kilometre) → Quantity(5 * 1000, {metre: 1})
             a, b = self._num_pair(value, dims._value)
             self._value = a * b
             self._dims = dims._dims

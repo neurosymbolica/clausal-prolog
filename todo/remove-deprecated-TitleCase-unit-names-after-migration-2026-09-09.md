@@ -7,8 +7,9 @@ TitleCase spellings (`Metre`, `Second`, `Newton`, …) are kept as deprecated al
 warn ("will be removed in a future release"), the same pattern as `Test/1` -> `test/1`. A
 deprecation without an exit criterion becomes noise everyone filters.
 
-**What the aliases are:** `_DEPRECATED_UNIT_NAMES` in `clausal/modules/units.py` (64
-names) plus the module `__getattr__` that resolves them (warns once per process per name),
+**What the aliases are:** `_DEPRECATED_UNIT_NAMES` in `clausal/modules/units.py` (83
+names: 64 TitleCase units, 14 TitleCase physical constants -> snake_case, 5 American
+`kilometer`-family spellings -> `kilometre`) plus the module `__getattr__` that resolves them (warns once per process per name),
 the forwarding `__getattr__` in `clausal/modules/py/units.py`, and the units-module branch
 of `_handle_import_from_directive` in `clausal/templating/term_rewriting.py` that rewrites
 `-import_from(py.units, [Metre])` to `from py.units import metre as Metre` and warns once
@@ -28,6 +29,5 @@ ImportError naming the rename, which the units-module branch can raise instead o
 aliasing), and `units.Metre` should raise `AttributeError` — not silently resolve to
 nothing. The removal date is the operator's call.
 
-**Not in scope of the alias table** (still TitleCase, parked separately): the physical
-constants (`SpeedOfLight`, `PlanckConstant`, …) and the `SI_*` unit vectors — see
-`todo/lowercase-physical-constant-names-2026-09-09.md`.
+**Not in scope:** the scipy package's own `scipy_constants` exports — see
+`todo/scipy-constants-module-titlecase-exports-2026-09-09.md`.

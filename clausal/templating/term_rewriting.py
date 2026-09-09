@@ -408,9 +408,10 @@ TEST_NAME = "test"
 TEST_DEPRECATED_NAME = "Test"
 
 # Every spelling under which a ``.clausal`` file reaches the units module.
-# Its TitleCase unit names (``metre``) are deprecated aliases of the lowercase
-# ones (``metre``); an ``-import_from`` naming one is rewritten to import the
-# lowercase unit under the old local name and linted once per file.
+# Its old names — TitleCase ``Metre``/``SpeedOfLight``, American
+# ``kilometer`` — are deprecated aliases of ``metre``/``speed_of_light``/
+# ``kilometre``; an ``-import_from`` naming one is rewritten to import the
+# current name under the old local name and linted once per file.
 _UNITS_MODULE_PATHS = frozenset({
     "units", "py.units", "clausal.modules.units", "clausal.modules.py.units",
 })
@@ -6645,7 +6646,7 @@ class EmbedTransformer(NodeTransformer):
         return statements if len(statements) > 1 else statements[0]
 
     def _warn_deprecated_unit_spelling(transformer, renames, node):
-        """Lint the TitleCase unit names of one ``-import_from(py.units, …)``.
+        """Lint the old unit spellings of one ``-import_from(py.units, …)``.
 
         The counterpart of ``_warn_deprecated_test_spelling`` for the units
         module: ``metre`` is the spelling, ``metre`` the old one.  A file
@@ -6672,9 +6673,9 @@ class EmbedTransformer(NodeTransformer):
         listed = ", ".join(f"`{old}` -> `{new}`" for old, new in fresh)
         noun = "spellings" if len(fresh) > 1 else "spelling"
         warnings.warn(
-            f"{where}{snippet}: TitleCase unit names are the old {noun}; "
-            f"unit names are lowercase. Rename {listed}; the old spelling "
-            f"still works but will be removed in a future release",
+            f"{where}{snippet}: old unit {noun} in this import. Rename "
+            f"{listed}; the old spelling still works but will be removed in "
+            f"a future release",
             ClausalDeprecatedSpellingWarning,
             stacklevel=2,
         )

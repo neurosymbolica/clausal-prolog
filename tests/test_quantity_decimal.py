@@ -107,7 +107,7 @@ class TestDecimalScalarConsistency:
             _ = Quantity(Decimal("1"), {metre: 1}) + Decimal("1")
 
     def test_constructor_scaled_unit_with_decimal_magnitude(self):
-        from clausal.modules.py.units import centimeter, metre
-        q = Quantity(Decimal("5"), centimeter)  # centimeter == Quantity(1e-2, {metre:1})
+        from clausal.modules.py.units import centimetre, metre
+        q = Quantity(Decimal("5"), centimetre)  # centimetre == Quantity(1e-2, {metre:1})
         assert q.value == Decimal("0.05")
         assert q.dims == {metre: 1}

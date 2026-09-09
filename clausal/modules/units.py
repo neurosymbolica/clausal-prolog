@@ -16,10 +16,11 @@ The argument to the parentheses *must* be an SI unit predicate (or a compound
 expression of them).  SI prefix names are plain numbers — they are **not**
 predicates and cannot appear inside the ``n(Unit)`` parentheses.
 
-Unit names are lowercase identifiers — ``metre``, ``newton``, ``kilometer`` —
-like the currency names and the symbol forms (``m``, ``s``).  The TitleCase
-spellings (``Metre``, ``Newton``) are deprecated aliases; see the end of
-this module.
+Unit names are lowercase identifiers — ``metre``, ``newton``, ``kilometre`` —
+like the currency names and the symbol forms (``m``, ``s``); the physical
+constants are snake_case (``speed_of_light``).  The TitleCase spellings
+(``Metre``, ``Newton``, ``SpeedOfLight``) and the American ``kilometer``
+family are deprecated aliases; see the end of this module.
 
 **SI prefix constants** — plain Python numbers, multiply against unit vectors::
 
@@ -83,7 +84,7 @@ class _UnitsPredicate(ModulePredicate):
     ``Quantity(5, {'kg': 1})`` directly, for use in Python arithmetic
     expressions via the ``++`` escape in .clausal files::
 
-        E is ++(kilogram(1) * SpeedOfLight ** 2)
+        E is ++(kilogram(1) * speed_of_light ** 2)
     """
 
     __slots__ = ("_dims",)
@@ -241,17 +242,17 @@ exbi = 2**60
 # Scaled SI unit constants  (plain Quantity values in SI base units)
 # ═════════════════════════════════════════════════════════════════════════════
 # These are Quantity constants, not predicates.  Multiply by a scalar:
-#     ++(5 * kilometer)    → Quantity(5000, {metre: 1})
+#     ++(5 * kilometre)    → Quantity(5000, {metre: 1})
 #     ++(200 * gram)       → Quantity(0.2,  {kilogram: 1})
-# Or use unit annotation sugar:  5(kilometer), 200(gram)
+# Or use unit annotation sugar:  5(kilometre), 200(gram)
 
 # ── Scaled length (store as metres) ──────────────────────────────────────────
 
-kilometer    = Quantity(1_000,   {metre: 1})
-centimeter   = Quantity(1e-2,    {metre: 1})
-millimeter   = Quantity(1e-3,    {metre: 1})
-micrometer   = Quantity(1e-6,    {metre: 1})
-nanometer    = Quantity(1e-9,    {metre: 1})
+kilometre    = Quantity(1_000,   {metre: 1})
+centimetre   = Quantity(1e-2,    {metre: 1})
+millimetre   = Quantity(1e-3,    {metre: 1})
+micrometre   = Quantity(1e-6,    {metre: 1})
+nanometre    = Quantity(1e-9,    {metre: 1})
 
 # ── Scaled mass (store as kilograms) ─────────────────────────────────────────
 
@@ -357,11 +358,11 @@ cd  = candela
 # ── Scaled SI unit abbreviations ─────────────────────────────────────────────
 # Quantity constants — multiply by a scalar: ++(5 * km)
 
-km  = kilometer
-cm  = centimeter
-mm  = millimeter
-um  = micrometer    # μm — μ is not a valid identifier
-nm  = nanometer
+km  = kilometre
+cm  = centimetre
+mm  = millimetre
+um  = micrometre    # μm — μ is not a valid identifier
+nm  = nanometre
 
 mg  = milligram
 ug  = microgram     # μg
@@ -424,22 +425,22 @@ SI_Acceleration = metre(1) / second(1)**2
 # These are plain Quantity values, not predicates.  Use them in Python
 # expressions via the ++ escape::
 #
-#     E is ++(kilogram(1) * SpeedOfLight ** 2)
+#     E is ++(kilogram(1) * speed_of_light ** 2)
 
-SpeedOfLight          = 299_792_458       * SI_Velocity
-PlanckConstant        = 6.62607015e-34    * SI_Energy * second(1)
-ReducedPlanck         = 1.054571817e-34   * SI_Energy * second(1)
-BoltzmannConstant     = 1.380649e-23      * SI_Energy / kelvin(1)
-AvogadroConstant      = 6.02214076e23     / mole(1)
-ElementaryCharge      = 1.602176634e-19   * SI_Charge
-StandardGravity       = 9.80665           * SI_Acceleration
-GravitationalConstant = 6.67430e-11       * metre(1)**3 / kilogram(1) / second(1)**2
-AtomicMassUnit        = 1.66053906660e-27 * kilogram(1)
-ElectronMass          = 9.1093837015e-31  * kilogram(1)
-ProtonMass            = 1.67262192369e-27 * kilogram(1)
-VacuumPermeability    = 1.25663706212e-6  * kilogram(1) * metre(1) / second(1)**2 / ampere(1)**2
-VacuumPermittivity    = 8.8541878128e-12  * second(1)**4 / kilogram(1) / metre(1)**3 * ampere(1)**2
-StefanBoltzmann       = 5.670374419e-8    * SI_Power / metre(1)**2 / kelvin(1)**4
+speed_of_light          = 299_792_458       * SI_Velocity
+planck_constant        = 6.62607015e-34    * SI_Energy * second(1)
+reduced_planck         = 1.054571817e-34   * SI_Energy * second(1)
+boltzmann_constant     = 1.380649e-23      * SI_Energy / kelvin(1)
+avogadro_constant      = 6.02214076e23     / mole(1)
+elementary_charge      = 1.602176634e-19   * SI_Charge
+standard_gravity       = 9.80665           * SI_Acceleration
+gravitational_constant = 6.67430e-11       * metre(1)**3 / kilogram(1) / second(1)**2
+atomic_mass_unit        = 1.66053906660e-27 * kilogram(1)
+electron_mass          = 9.1093837015e-31  * kilogram(1)
+proton_mass            = 1.67262192369e-27 * kilogram(1)
+vacuum_permeability    = 1.25663706212e-6  * kilogram(1) * metre(1) / second(1)**2 / ampere(1)**2
+vacuum_permittivity    = 8.8541878128e-12  * second(1)**4 / kilogram(1) / metre(1)**3 * ampere(1)**2
+stefan_boltzmann       = 5.670374419e-8    * SI_Power / metre(1)**2 / kelvin(1)**4
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -519,12 +520,14 @@ has_units._register(2, simple_to_trampoline(_units_constraint._has_units))
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Deprecated TitleCase spellings
+# Deprecated spellings
 # ═════════════════════════════════════════════════════════════════════════════
 # Unit names are lowercase identifiers (``metre``, ``newton``), like the
-# currency names (``euro``) and the symbol forms (``m``, ``s``).  The
-# TitleCase spellings they replaced still resolve — through this table — but
-# warn: once per process per name from Python attribute access (the module
+# currency names (``euro``) and the symbol forms (``m``, ``s``); the length
+# family is spelled like ``metre`` (``kilometre``); the physical constants
+# are snake_case (``speed_of_light``).  The spellings they replaced — the
+# TitleCase names and the American ``kilometer`` family — still resolve,
+# through this table, but warn: once per process per name from Python attribute access (the module
 # ``__getattr__`` below), once per file from a ``-import_from(py.units, …)``
 # list (the seam rewrites the import to the lowercase name; see
 # ``_handle_import_from_directive`` in clausal/templating/term_rewriting.py).
@@ -542,9 +545,9 @@ _DEPRECATED_UNIT_NAMES: dict[str, str] = {
     "Weber": "weber", "Tesla": "tesla", "Henry": "henry", "Lumen": "lumen",
     "Lux": "lux", "Katal": "katal",
     # Scaled unit constants
-    "Kilometer": "kilometer", "Centimeter": "centimeter",
-    "Millimeter": "millimeter", "Micrometer": "micrometer",
-    "Nanometer": "nanometer",
+    "Kilometer": "kilometre", "Centimeter": "centimetre",
+    "Millimeter": "millimetre", "Micrometer": "micrometre",
+    "Nanometer": "nanometre",
     "Gram": "gram", "Milligram": "milligram", "Microgram": "microgram",
     "Tonne": "tonne",
     "Millisecond": "millisecond", "Microsecond": "microsecond",
@@ -558,6 +561,22 @@ _DEPRECATED_UNIT_NAMES: dict[str, str] = {
     "Kibibit": "kibibit", "Mebibit": "mebibit", "Gibibit": "gibibit",
     "Bar": "bar", "Millibar": "millibar", "Atmosphere": "atmosphere",
     "Electronvolt": "electronvolt", "Kilowatt": "kilowatt",
+    # American spellings of the length family (the family follows ``metre``)
+    "kilometer": "kilometre", "centimeter": "centimetre",
+    "millimeter": "millimetre", "micrometer": "micrometre",
+    "nanometer": "nanometre",
+    # Physical constants (snake_case)
+    "SpeedOfLight": "speed_of_light", "PlanckConstant": "planck_constant",
+    "ReducedPlanck": "reduced_planck",
+    "BoltzmannConstant": "boltzmann_constant",
+    "AvogadroConstant": "avogadro_constant",
+    "ElementaryCharge": "elementary_charge",
+    "StandardGravity": "standard_gravity",
+    "GravitationalConstant": "gravitational_constant",
+    "AtomicMassUnit": "atomic_mass_unit", "ElectronMass": "electron_mass",
+    "ProtonMass": "proton_mass", "VacuumPermeability": "vacuum_permeability",
+    "VacuumPermittivity": "vacuum_permittivity",
+    "StefanBoltzmann": "stefan_boltzmann",
 }
 
 for _old, _new in _DEPRECATED_UNIT_NAMES.items():
@@ -580,7 +599,7 @@ def __getattr__(name: str):
             ClausalDeprecatedSpellingWarning,
         )
         warnings.warn(
-            f"units.{name} is the old spelling of the unit {new}. Rename "
+            f"units.{name} is the old spelling of units.{new}. Rename "
             f"`{name}` -> `{new}`; the old spelling still works but will be "
             f"removed in a future release",
             ClausalDeprecatedSpellingWarning,

@@ -485,15 +485,15 @@ class TestScaledUnits:
 
     def test_kilometer(self):
         # nv
-        from clausal.modules.py.units import kilometer
-        result = 1 * kilometer
+        from clausal.modules.py.units import kilometre
+        result = 1 * kilometre
         assert result.dims == {metre: 1}
         assert pytest.approx(result.value) == 1000.0
 
     def test_centimeter(self):
         # nv
-        from clausal.modules.py.units import centimeter
-        result = 100 * centimeter
+        from clausal.modules.py.units import centimetre
+        result = 100 * centimetre
         assert result.dims == {metre: 1}
         assert pytest.approx(result.value) == 1.0
 
@@ -852,21 +852,21 @@ class TestUnitPredicateCall:
 
     def test_kilometer_multiply(self):
         # nv
-        from clausal.modules.py.units import kilometer
-        assert 1 * kilometer == d(1000, m=1)
+        from clausal.modules.py.units import kilometre
+        assert 1 * kilometre == d(1000, m=1)
 
     def test_expression_e_mc2(self):
         """E = mc² via Python expression syntax."""
         # nv
-        from clausal.modules.py.units import kilogram, SpeedOfLight
-        e = kilogram(1) * SpeedOfLight ** 2
+        from clausal.modules.py.units import kilogram, speed_of_light
+        e = kilogram(1) * speed_of_light ** 2
         assert e.dims == {kilogram: 1, metre: 2, second: -2}
         assert pytest.approx(e.value) == 8.987551787368176e16
 
     def test_expression_weight(self):
         # nv
-        from clausal.modules.py.units import kilogram, StandardGravity
-        w = kilogram(70) * StandardGravity
+        from clausal.modules.py.units import kilogram, standard_gravity
+        w = kilogram(70) * standard_gravity
         assert w.dims == {kilogram: 1, metre: 1, second: -2}
         assert pytest.approx(w.value) == 686.4655
 
@@ -948,33 +948,33 @@ class TestUnitPredicateArithmetic:
 class TestPhysicalConstants:
     def test_speed_of_light_dims(self):
         # nv
-        from clausal.modules.py.units import SpeedOfLight
-        assert SpeedOfLight.dims == {metre: 1, second: -1}
+        from clausal.modules.py.units import speed_of_light
+        assert speed_of_light.dims == {metre: 1, second: -1}
 
     def test_planck_constant_dims(self):
         # nv
-        from clausal.modules.py.units import PlanckConstant
-        assert PlanckConstant.dims == {kilogram: 1, metre: 2, second: -1}
+        from clausal.modules.py.units import planck_constant
+        assert planck_constant.dims == {kilogram: 1, metre: 2, second: -1}
 
     def test_boltzmann_constant_dims(self):
         # nv
-        from clausal.modules.py.units import BoltzmannConstant
-        assert BoltzmannConstant.dims == {kilogram: 1, metre: 2, second: -2, kelvin: -1}
+        from clausal.modules.py.units import boltzmann_constant
+        assert boltzmann_constant.dims == {kilogram: 1, metre: 2, second: -2, kelvin: -1}
 
     def test_standard_gravity_dims(self):
         # nv
-        from clausal.modules.py.units import StandardGravity
-        assert StandardGravity.dims == {metre: 1, second: -2}
+        from clausal.modules.py.units import standard_gravity
+        assert standard_gravity.dims == {metre: 1, second: -2}
 
     def test_elementary_charge_dims(self):
         # nv
-        from clausal.modules.py.units import ElementaryCharge
-        assert ElementaryCharge.dims == {ampere: 1, second: 1}
+        from clausal.modules.py.units import elementary_charge
+        assert elementary_charge.dims == {ampere: 1, second: 1}
 
     def test_gravitational_constant_dims(self):
         # nv
-        from clausal.modules.py.units import GravitationalConstant
-        assert GravitationalConstant.dims == {metre: 3, kilogram: -1, second: -2}
+        from clausal.modules.py.units import gravitational_constant
+        assert gravitational_constant.dims == {metre: 3, kilogram: -1, second: -2}
 
 
 # ── Sugar tests ───────────────────────────────────────────────────────────────

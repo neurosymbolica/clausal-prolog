@@ -35,19 +35,25 @@ strip_units(9.8(newton), V)      # V = 9.8
 ## Naming
 
 Unit names are lowercase identifiers — `metre`, `kilogram`, `newton`,
-`kilometer`, `byte` — like the currency names (`euro`) and the symbol forms
-(`m`, `kg`, `s`).  Multi-word names use an underscore (`julian_year`).  The
-printed label of a `Quantity` follows the identifier: `str(5(metre))` is
-`5 metre`, and `9.8(newton)` prints in base units as
-`9.8 kilogram·metre·second^-2`.
+`kilometre`, `byte` — like the currency names (`euro`) and the symbol forms
+(`m`, `kg`, `s`).  Multi-word names use an underscore (`julian_year`), and
+the physical constants are snake_case (`speed_of_light`, `planck_constant`).
+The length family is spelled like `metre` throughout: `kilometre`,
+`centimetre`, `millimetre`, `micrometre`, `nanometre`.  The printed label of
+a `Quantity` follows the identifier: `str(5(metre))` is `5 metre`, and
+`9.8(newton)` prints in base units as `9.8 kilogram·metre·second^-2` (a
+scaled unit such as `kilometre` has no label of its own — `5(kilometre)`
+prints as `5000 metre`).
 
-The TitleCase spellings these replaced (`Metre`, `Second`, `Newton`, …) are
+The spellings these replaced — TitleCase `Metre`, `Second`, `Newton`,
+`SpeedOfLight`, … and the American `kilometer`, `centimeter`, … — are
 deprecated aliases.  They still resolve — `-import_from(py.units, [Metre])`
 imports `metre` under the old name, and `units.Metre` in Python returns
 `units.metre` — but each warns with a `ClausalDeprecatedSpellingWarning`:
 once per file from the `-import_from` list (naming every rename in it), once
-per process per name from Python attribute access.  Rename `Metre` -> `metre`;
-the old spelling will be removed in a future release.
+per process per name from Python attribute access.  Rename `Metre` -> `metre`,
+`kilometer` -> `kilometre`, `SpeedOfLight` -> `speed_of_light`; the old
+spellings will be removed in a future release.
 
 ---
 
@@ -217,8 +223,8 @@ These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 
 #### length (stored as metres)
 
-`kilometer` (`km`), `centimeter` (`cm`), `millimeter` (`mm`),
-`micrometer` (`um`), `nanometer` (`nm`)
+`kilometre` (`km`), `centimetre` (`cm`), `millimetre` (`mm`),
+`micrometre` (`um`), `nanometre` (`nm`)
 
 #### Mass (stored as kilograms)
 
@@ -497,12 +503,12 @@ Explicit dimension check/constraint predicate. Succeeds if `D` is a ground
 
 | Name                    | Value (SI)                     | Dims |
 |-------------------------|--------------------------------|------|
-| `SpeedOfLight`          | 2.998 × 10⁸ m/s               | `{m:1, s:-1}` |
-| `PlanckConstant`        | 6.626 × 10⁻³⁴ J·s             | `{kg:1, m:2, s:-1}` |
-| `BoltzmannConstant`     | 1.381 × 10⁻²³ J/K             | `{kg:1, m:2, s:-2, K:-1}` |
-| `StandardGravity`       | 9.806 65 m/s²                  | `{m:1, s:-2}` |
-| `ElementaryCharge`      | 1.602 × 10⁻¹⁹ C               | `{A:1, s:1}` |
-| `GravitationalConstant` | 6.674 × 10⁻¹¹ m³/(kg·s²)     | `{m:3, kg:-1, s:-2}` |
+| `speed_of_light`          | 2.998 × 10⁸ m/s               | `{m:1, s:-1}` |
+| `planck_constant`        | 6.626 × 10⁻³⁴ J·s             | `{kg:1, m:2, s:-1}` |
+| `boltzmann_constant`     | 1.381 × 10⁻²³ J/K             | `{kg:1, m:2, s:-2, K:-1}` |
+| `standard_gravity`       | 9.806 65 m/s²                  | `{m:1, s:-2}` |
+| `elementary_charge`      | 1.602 × 10⁻¹⁹ C               | `{A:1, s:1}` |
+| `gravitational_constant` | 6.674 × 10⁻¹¹ m³/(kg·s²)     | `{m:3, kg:-1, s:-2}` |
 
 ---
 
