@@ -136,3 +136,25 @@ def test_severity_flips_to_error(tmp_path, monkeypatch):
 ])
 def test_rename_suggestion(ident, expected):
     assert term_rewriting._titlecase_to_snake(ident) == expected
+
+
+def test_injected_runtime_class_suggests_the_escape(tmp_path):
+    ws = _titlecase_warnings(tmp_path, "m", "foo(V) <- (V is Var())\n")
+    assert _named(ws) == ["Var"]
+    msg = str(ws[0].message)
+    assert "`Var` is a Python class; reach it as `++Var`" in msg
+    assert "Rename" not in msg
+
+
+def test_python_builtin_exception_suggests_the_escape(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "n",
+        "-implicit_atoms\nbar(1),\nfoo(X) <- catch(bar(X), ValueError, true)\n")
+    assert _named(ws) == ["ValueError"]
+    assert "reach it as `++ValueError`" in str(ws[0].message)
+
+
+def test_user_name_still_suggests_snake_case(tmp_path):
+    ws = _titlecase_warnings(tmp_path, "o", "FooBar(1),\n")
+    assert _named(ws) == ["FooBar"]
+    assert "Rename `FooBar` -> `foo_bar`" in str(ws[0].message)

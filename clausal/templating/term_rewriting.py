@@ -643,6 +643,32 @@ def _is_titlecase_identifier(identifier: str) -> bool:
             and not _is_logic_var_name(identifier))
 
 
+_PYTHON_CLASS_NAMES: frozenset | None = None
+
+
+def _python_class_names() -> frozenset:
+    """TitleCase names that reach a ``.clausal`` module as real Python
+    classes, so the lint's remedy for them is the ``++`` escape rather than
+    a snake_case rename: the engine-injected runtime names
+    (``INJECTED_RUNTIME_BUILTINS`` — ``Var``, ``Compound``, ``PyThunk``,
+    …), the AST node classes seeded into every module namespace
+    (``pythonic_ast.nodes.__all__``), and Python's own builtins
+    (``ValueError``, ``AssertionError``, …).  Resolved lazily — the
+    runtime modules import this one."""
+    global _PYTHON_CLASS_NAMES
+    if _PYTHON_CLASS_NAMES is None:
+        import builtins  # noqa: PLC0415
+        from clausal.logic.compiler.predicate import (  # noqa: PLC0415
+            INJECTED_RUNTIME_BUILTINS)
+        from clausal.pythonic_ast import nodes as simple_ast  # noqa: PLC0415
+        node_names = getattr(simple_ast, "__all__", None) or [
+            n for n in dir(simple_ast) if isinstance(getattr(simple_ast, n), type)]
+        _PYTHON_CLASS_NAMES = frozenset(
+            set(INJECTED_RUNTIME_BUILTINS) | set(node_names)
+            | {n for n in dir(builtins) if n[:1].isupper()})
+    return _PYTHON_CLASS_NAMES
+
+
 def _titlecase_to_snake(identifier: str) -> str:
     """The lowercase spelling a rename message suggests: ``FooBar`` ->
     ``foo_bar``, ``Foo`` -> ``foo``, ``HTTPServer`` -> ``http_server``.
@@ -5045,6 +5071,11 @@ class EmbedTransformer(NodeTransformer):
         argument names (``foo(Key=1)``) are not ``Name`` nodes and are not
         linted either.
 
+        A name that IS a Python class in the module's namespace
+        (``_python_class_names``: injected runtime names, AST node classes,
+        Python builtins) still warns, but the remedy it names is the ``++``
+        escape rather than a snake_case rename.
+
         Severity is ``TITLECASE_IDENTIFIER_SEVERITY``: ``"warn"`` emits the
         warning at the identifier's first site, ``"error"`` raises there.
         """
@@ -5108,13 +5139,22 @@ class EmbedTransformer(NodeTransformer):
             snippet = transformer._source_snippet(lineno) if lineno else ""
             if snippet:
                 snippet = " — " + snippet
-            msg = (
-                f"{where}{snippet}: `{ident}` is TitleCase. Clausal "
-                f"identifiers are lowercase (predicates, atoms, functors) or "
-                f"ALL_CAPS / underscore-led (logic variables); TitleCase has "
-                f"no role — a Python class is reached as `++{ident}`. Rename "
-                f"`{ident}` -> `{_titlecase_to_snake(ident)}`"
+            convention = (
+                "Clausal identifiers are lowercase (predicates, atoms, "
+                "functors) or ALL_CAPS / underscore-led (logic variables); "
+                "TitleCase has no role"
             )
+            if ident in _python_class_names():
+                msg = (
+                    f"{where}{snippet}: `{ident}` is TitleCase: `{ident}` is "
+                    f"a Python class; reach it as `++{ident}`. {convention}"
+                )
+            else:
+                msg = (
+                    f"{where}{snippet}: `{ident}` is TitleCase. {convention} "
+                    f"— a Python class is reached as `++{ident}`. Rename "
+                    f"`{ident}` -> `{_titlecase_to_snake(ident)}`"
+                )
             if TITLECASE_IDENTIFIER_SEVERITY == "error":
                 _raise_located_syntax_error(
                     msg, node, transformer._source_lines,
