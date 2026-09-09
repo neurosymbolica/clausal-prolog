@@ -81,7 +81,7 @@ class TestHeadEmission:
             "-import_from(other, [f])\n"
             "f(A, B) <- g(A, B)\n"
         )
-        assert "head=f((A := Var()), (B := Var()))" in out
+        assert "head=f((A := $Var()), (B := $Var()))" in out
         assert "STATUS=" not in out
         assert "CITATIONS=" not in out
 

@@ -83,7 +83,7 @@ def Reach__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _v10 = Var()
+                _v10 = $Var()
                 _gen1 = StepGenerator($dispatch_at(Edge, 2), this_generator, this_generator, this_generator, _v8, _v10, trail)
                 _st1 = (yield (_gen1, None))
                 while _st1 is not $DONE:

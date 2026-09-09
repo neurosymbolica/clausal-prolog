@@ -350,7 +350,7 @@ class TestCellEmission:
             "p(pt(X=1)),\n",
         )
         src = capture_predicate_codegen("_tt_kw", ["p"])
-        assert "('pt', 1, Var())" in src
+        assert "('pt', 1, $Var())" in src
         assert "pt(X=1)" not in src
 
     def test_a_dynamic_declaration_is_not_a_data_functor(self):
@@ -412,12 +412,12 @@ class TestSignatureConstruction:
         fresh Var's id is not a meaningful thing to pin."""
         self._compile("_tt_sig_partial", "point(1)")
         src = capture_predicate_codegen("_tt_sig_partial", ["p"])
-        assert "('point', 1, Var())" in src
+        assert "('point', 1, $Var())" in src
 
     def test_empty_construction_backfills_both_slots(self):
         self._compile("_tt_sig_empty", "point()")
         src = capture_predicate_codegen("_tt_sig_empty", ["p"])
-        assert "('point', Var(), Var())" in src
+        assert "('point', $Var(), $Var())" in src
 
     def test_over_arity_raises_naming_the_functor(self):
         with pytest.raises(SyntaxError, match=r"point/2"):

@@ -280,7 +280,7 @@ class TestQuasiQuotation:
         # Result should be a Python AST Call that constructs simple_ast.Call
         assert isinstance(result, ast.Call)
         assert isinstance(result.func, ast.Name)
-        assert result.func.id == "Call"
+        assert result.func.id == "$Call"
         kw_names = {kw.arg for kw in result.keywords}
         assert "func" in kw_names
         assert "args" in kw_names

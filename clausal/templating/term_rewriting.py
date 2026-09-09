@@ -38,6 +38,7 @@ from clausal.logic.atoms import NIL_SPELLING, mangle
 # functor-signature registry under.  Single source of truth lives with the
 # cell primitives that registry feeds.
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
+from clausal.logic.generated_names import dollar_name
 
 load = Load()
 store = Store()
@@ -58,6 +59,14 @@ def replace(new, start, end=None):
 
 def load_name_ast(name, source):
     return replace(Name(id=name, ctx=load), source)
+
+
+def runtime_name_ast(name, source):
+    """A reference to a runtime-table class (a ``simple_ast`` node class, an
+    injected runtime type) -- spelled through its ``$`` twin, so a user
+    predicate of the same spelling can never shadow it (2026-09-09 ruling;
+    see ``clausal/logic/generated_names.py``)."""
+    return replace(Name(id=dollar_name(name), ctx=load), source)
 
 
 def make_keyword_node(arg, value, source):
@@ -95,7 +104,7 @@ def node_ast(classname, source, end=None, **fields):
     ]
     keywords.append(make_keyword_node("position", pos_ast(source, end), source))
     return replace(
-        Call(func=load_name_ast(classname, source), args=[], keywords=keywords), source
+        Call(func=runtime_name_ast(classname, source), args=[], keywords=keywords), source
     )
 
 
@@ -1288,7 +1297,7 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
                     target=replace(Name(id=name, ctx=store), node),
                     value=replace(
                         Call(
-                            func=replace(Name(id="Var", ctx=load), node),
+                            func=replace(Name(id="$Var", ctx=load), node),
                             args=[], keywords=[],
                         ),
                         node,
@@ -1301,7 +1310,7 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
 
     return replace(
         Call(
-            func=replace(Name(id=thunk_cls, ctx=load), node),
+            func=replace(Name(id=dollar_name(thunk_cls), ctx=load), node),
             args=[
                 lambda_node,
                 replace(List(elts=var_ref_asts, ctx=load), node),
@@ -1689,7 +1698,7 @@ class TermTransformer(NodeTransformer):
         ):
             # n() — dimensionless sugar: 42() → ++(Quantity(42, {}))
             inner = Call(
-                func=replace(Name(id="Quantity", ctx=load), call),
+                func=replace(Name(id="$Quantity", ctx=load), call),
                 args=[call.func, replace(Dict(keys=[], values=[]), call)],
                 keywords=[],
             )
@@ -1709,7 +1718,7 @@ class TermTransformer(NodeTransformer):
             raw_unit = call.args[0]
             var_names = _collect_logic_var_names(call.func)
             inner = Call(
-                func=replace(Name(id="Quantity", ctx=load), call),
+                func=replace(Name(id="$Quantity", ctx=load), call),
                 args=[call.func, raw_unit],
                 keywords=[],
             )
@@ -1956,7 +1965,7 @@ class TermTransformer(NodeTransformer):
         )
         return replace(
             Call(
-                func=replace(Name(id="DictTerm", ctx=load), dict_expr),
+                func=replace(Name(id="$DictTerm", ctx=load), dict_expr),
                 args=[dict_arg],
                 keywords=[make_keyword_node("_position", pos_ast(dict_expr), dict_expr)],
             ),
@@ -2050,7 +2059,7 @@ class TermTransformer(NodeTransformer):
             param_nodes = [
                 replace(
                     Call(
-                        func=load_name_ast("PosOrKwParam", source),
+                        func=runtime_name_ast("PosOrKwParam", source),
                         args=[],
                         keywords=[
                             make_keyword_node(
@@ -2066,7 +2075,7 @@ class TermTransformer(NodeTransformer):
             ]
             params = replace(
                 Call(
-                    func=load_name_ast("Params", source),
+                    func=runtime_name_ast("Params", source),
                     args=[],
                     keywords=[
                         make_keyword_node(
@@ -2081,7 +2090,7 @@ class TermTransformer(NodeTransformer):
         else:
             params = replace(
                 Call(
-                    func=load_name_ast("Params", source),
+                    func=runtime_name_ast("Params", source),
                     args=[],
                     keywords=[
                         make_keyword_node(
@@ -2140,7 +2149,7 @@ class TermTransformer(NodeTransformer):
         if identifier == "_":
             return replace(
                 Call(
-                    func=replace(Name(id="Var", ctx=load), name),
+                    func=replace(Name(id="$Var", ctx=load), name),
                     args=[],
                     keywords=[],
                 ),
@@ -2170,7 +2179,7 @@ class TermTransformer(NodeTransformer):
                     target=replace(Name(id=identifier, ctx=store), name),
                     value=replace(
                         Call(
-                            func=replace(Name(id="Var", ctx=load), name),
+                            func=replace(Name(id="$Var", ctx=load), name),
                             args=[],
                             keywords=[],
                         ),
@@ -2544,7 +2553,7 @@ class TermTransformer(NodeTransformer):
             param_nodes.append(
                 replace(
                     Call(
-                        func=load_name_ast("PosOnlyParam", argument),
+                        func=runtime_name_ast("PosOnlyParam", argument),
                         args=[],
                         keywords=keywords,
                     ),
@@ -2561,7 +2570,7 @@ class TermTransformer(NodeTransformer):
             param_nodes.append(
                 replace(
                     Call(
-                        func=load_name_ast("PosOrKwParam", argument),
+                        func=runtime_name_ast("PosOrKwParam", argument),
                         args=[],
                         keywords=keywords,
                     ),
@@ -2587,7 +2596,7 @@ class TermTransformer(NodeTransformer):
                 ]
                 param_nodes[offset + index] = replace(
                     Call(
-                        func=load_name_ast(param_class, argument),
+                        func=runtime_name_ast(param_class, argument),
                         args=[],
                         keywords=updated_keywords,
                     ),
@@ -2604,7 +2613,7 @@ class TermTransformer(NodeTransformer):
             param_nodes.append(
                 replace(
                     Call(
-                        func=load_name_ast("VarPositional", argument),
+                        func=runtime_name_ast("VarPositional", argument),
                         args=[],
                         keywords=keywords,
                     ),
@@ -2628,7 +2637,7 @@ class TermTransformer(NodeTransformer):
             param_nodes.append(
                 replace(
                     Call(
-                        func=load_name_ast("KwOnlyParam", argument),
+                        func=runtime_name_ast("KwOnlyParam", argument),
                         args=[],
                         keywords=keywords,
                     ),
@@ -2646,7 +2655,7 @@ class TermTransformer(NodeTransformer):
             param_nodes.append(
                 replace(
                     Call(
-                        func=load_name_ast("VarKeyword", argument),
+                        func=runtime_name_ast("VarKeyword", argument),
                         args=[],
                         keywords=keywords,
                     ),
@@ -2667,14 +2676,14 @@ class TermTransformer(NodeTransformer):
             params_list = list_ast(param_nodes, source)
             return replace(
                 Call(
-                    func=load_name_ast("Params", source),
+                    func=runtime_name_ast("Params", source),
                     args=[],
                     keywords=[make_keyword_node("params", params_list, source)],
                 ),
                 source,
             )
         # No parameters at all
-        return load_name_ast("Params", parameter_spec)
+        return runtime_name_ast("Params", parameter_spec)
 
 
 # ─── Functor class generator ──────────────────────────────────────────────────
@@ -2877,6 +2886,19 @@ def _parse_pred_arity_args(args, directive_name):
     return specs
 
 
+def _dollar_runtime_refs(block, *names):
+    """Re-spell every bare ``Name`` in *names* inside *block* as its ``$``
+    twin.  The class-minting / atom-binding statements are built as Python
+    SOURCE and parsed, and a ``$`` name cannot be spelled in source, so the
+    runtime reference is swapped in after ``parse`` (the same mechanism
+    ``_make_atom_str_assign_ast`` uses for ``$mint``)."""
+    wanted = set(names)
+    for node in walk(block):
+        if isinstance(node, Name) and node.id in wanted:
+            node.id = dollar_name(node.id)
+    return block
+
+
 def _make_functor_class_ast(functor_name, field_names, source):
     """Generate a guarded block that defines a Predicate class.
 
@@ -2945,6 +2967,15 @@ def _make_functor_class_ast(functor_name, field_names, source):
         "try:",
         f"    if {functor_name!r} not in globals():",
         "        raise NameError",
+        # 2026-09-09 ruling: the module namespace also carries the BARE
+        # aliases of the runtime-table classes (``Sub``, ``Node``, ``Var``,
+        # ...) for the deprecation window.  A head spelled like one is not
+        # "user-bound, leave alone" -- the binding is the runtime alias, the
+        # identical object its ``$`` twin holds -- so it mints normally and
+        # the user's predicate takes the bare name; generated code reaches
+        # the class through the twin, so nothing else changes hands.
+        f"    if {functor_name} is globals().get({dollar_name(functor_name)!r}):",
+        "        raise NameError",
         f"    if isinstance({functor_name}, PredicateMeta) and getattr(",
         f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",
@@ -2962,6 +2993,7 @@ def _make_functor_class_ast(functor_name, field_names, source):
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
+    _dollar_runtime_refs(block, "PredicateMeta")
     # Position the WHOLE block, not just the try: the nodes come from parsing a
     # fresh snippet, so without this the inner ``class`` statement keeps the
     # snippet's own line 7 and any traceback through it (notably the
@@ -3031,6 +3063,7 @@ def _make_atom_str_assign_ast(atom_name, source, value=None):
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
+    _dollar_runtime_refs(block, "PredicateMeta")
     assign = block.body[0]
     assign.value = Call(
         func=Name(id="$mint", ctx=load),
@@ -4654,7 +4687,7 @@ class EmbedTransformer(NodeTransformer):
         """``(NAME := Var())`` — the term-position binding of one variable."""
         return replace(NamedExpr(
             target=replace(Name(id=name, ctx=Store()), anchor),
-            value=replace(Call(func=replace(Name(id="Var", ctx=Load()), anchor),
+            value=replace(Call(func=replace(Name(id="$Var", ctx=Load()), anchor),
                                args=[], keywords=[]), anchor),
         ), anchor)
 
@@ -4716,7 +4749,7 @@ class EmbedTransformer(NodeTransformer):
         pre = [
             replace(Assign(
                 targets=[replace(Name(id=rename[n], ctx=Store()), anchor)],
-                value=replace(Call(func=replace(Name(id="Var", ctx=Load()), anchor),
+                value=replace(Call(func=replace(Name(id="$Var", ctx=Load()), anchor),
                                    args=[], keywords=[]), anchor),
             ), anchor)
             for n in fresh
@@ -4857,7 +4890,7 @@ class EmbedTransformer(NodeTransformer):
         if fresh:
             binds = [replace(NamedExpr(
                 target=replace(Name(id=f"$v_{n}", ctx=Store()), node.test),
-                value=replace(Call(func=replace(Name(id="Var", ctx=Load()), node.test),
+                value=replace(Call(func=replace(Name(id="$Var", ctx=Load()), node.test),
                                    args=[], keywords=[]), node.test)), node.test)
                 for n in fresh]
             call = replace(Subscript(
@@ -6450,7 +6483,7 @@ class EmbedTransformer(NodeTransformer):
                        for e in node.elts]
             return replace(
                 Call(
-                    func=replace(Name(id="SetTerm", ctx=load), node),
+                    func=replace(Name(id="$SetTerm", ctx=load), node),
                     args=[replace(List(elts=elements, ctx=load), node)],
                     keywords=[],
                 ), node)
@@ -6467,7 +6500,7 @@ class EmbedTransformer(NodeTransformer):
             dict_ast = replace(Dict(keys=keys, values=values), node)
             return replace(
                 Call(
-                    func=replace(Name(id="DictTerm", ctx=load), node),
+                    func=replace(Name(id="$DictTerm", ctx=load), node),
                     args=[dict_ast],
                     keywords=[make_keyword_node(
                         "_position", pos_ast(node), node)],

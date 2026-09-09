@@ -190,7 +190,7 @@ class TestHeadToMatchPattern:
         p = head_to_match_pattern(term, ctx)
         assert isinstance(p, ast.MatchClass)
         assert isinstance(p.cls, ast.Name)
-        assert p.cls.id == "Compound"
+        assert p.cls.id == "$Compound"
         assert p.kwd_attrs == ["functor", "args"]
         assert len(p.kwd_patterns) == 2
         # functor pattern

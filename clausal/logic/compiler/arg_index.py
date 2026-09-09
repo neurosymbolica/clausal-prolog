@@ -16,6 +16,7 @@ import ast
 from collections import defaultdict
 from typing import Any, Callable
 
+from clausal.logic.generated_names import bare_name_of
 from clausal.logic.variables import Var, is_var, deref  # noqa: F401
 from clausal.logic.trampoline import DONE, StepGenerator  # noqa: F401
 from clausal.terms import (
@@ -457,7 +458,9 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
         func = arg_expr.func
         if isinstance(func, ast.Name):
             n_args = len(arg_expr.args) + len(arg_expr.keywords)
-            return (func.id, n_args)
+            # A runtime-table class is constructed through its ``$`` twin
+            # (``$BoolEq(...)``); the head side keys on ``cls.__name__``.
+            return (bare_name_of(func.id), n_args)
         if isinstance(func, ast.Attribute):
             n_args = len(arg_expr.args) + len(arg_expr.keywords)
             # Cls._clausal_new(...) (Phase 0 construction fast path,

@@ -19,6 +19,7 @@ from clausal.templating.term_rewriting import (
 )
 from clausal.logic.variables import Var as RealVar
 from clausal.terms import DictTerm, SetTerm
+from clausal.logic.generated_names import with_dollar_twins
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -29,7 +30,8 @@ def _ns():
     ns['Var'] = lambda: '<Var>'   # mock; returns a sentinel string
     ns['DictTerm'] = DictTerm
     ns['SetTerm'] = SetTerm
-    return ns
+    # Generated code reaches these through their ``$`` twins.
+    return with_dollar_twins(ns)
 
 
 def term_eval(src: str, expected_type: type):
@@ -672,7 +674,7 @@ def test_embed_trailing_comma_defines_fact():
     predicates = []
     ns = _ns()
     ns['Var'] = lambda: '<Var>'
-    ns['PredicateMeta'] = PredicateMeta
+    ns['PredicateMeta'] = ns['$PredicateMeta'] = PredicateMeta
     module = type('MockModule', (), {'define_predicate': lambda self, p: predicates.append(p)})()
     ns['$define_predicate'] = lambda pred, mod: mod.define_predicate(pred)
     ns['$module'] = module
@@ -759,7 +761,7 @@ def _make_functor_class(functor_name: str, *field_names: str):
     module = ast.fix_missing_locations(
         ast.Module(body=[class_ast], type_ignores=[])
     )
-    ns = {"Var": RealVar, "PredicateMeta": PredicateMeta}
+    ns = with_dollar_twins({"Var": RealVar, "PredicateMeta": PredicateMeta})
     exec(compile(module, "<test>", "exec"), ns)
     return ns[functor_name]
 
@@ -801,7 +803,7 @@ def test_partial_term_fresh_vars_each_call():
 def test_anon_var_is_var():
     """Bare _ in predicate context → fresh Var(), not LoadName."""
     # nv
-    ns = {"Var": RealVar}
+    ns = with_dollar_twins({"Var": RealVar})
     tree = ast.parse("_", mode="eval")
     ast.fix_missing_locations(tree)
     transformed = TermTransformer().visit(tree.body)
@@ -813,14 +815,14 @@ def test_anon_var_is_var():
 def test_anon_var_fresh_each_occurrence():
     """Two _ in the same expression yield distinct Var objects."""
     # nv
-    ns = {"Var": RealVar}
+    ns = with_dollar_twins({"Var": RealVar})
     # Eval _ == _ — both sides should be different Var objects
     tree = ast.parse("(_ == _)", mode="eval")
     ast.fix_missing_locations(tree)
     transformed = TermTransformer().visit(tree.body)
     expr = ast.fix_missing_locations(ast.Expression(body=transformed))
     from clausal.pythonic_ast import nodes as sa
-    result = eval(compile(expr, "<test>", "eval"), {**{n: getattr(sa, n) for n in sa.__all__}, "Var": RealVar})
+    result = eval(compile(expr, "<test>", "eval"), with_dollar_twins({**{n: getattr(sa, n) for n in sa.__all__}, "Var": RealVar}))
     assert isinstance(result, sa.ArithEq)
     assert isinstance(result.left, RealVar)
     assert isinstance(result.right, RealVar)
@@ -830,22 +832,22 @@ def test_anon_var_fresh_each_occurrence():
 def test_anon_var_not_reused_like_named_var():
     """Named vars (X) are reused; _ is always fresh."""
     # nv
-    ns = {"Var": RealVar}
+    ns = with_dollar_twins({"Var": RealVar})
     from clausal.pythonic_ast import nodes as sa
-    sa_ns = {n: getattr(sa, n) for n in sa.__all__}
+    sa_ns = with_dollar_twins({n: getattr(sa, n) for n in sa.__all__})
     # Named var reuse: X == X produces same Var
     tree = ast.parse("X == X", mode="eval")
     ast.fix_missing_locations(tree)
     transformed = TermTransformer().visit(tree.body)
     expr = ast.fix_missing_locations(ast.Expression(body=transformed))
-    named_result = eval(compile(expr, "<test>", "eval"), {**sa_ns, "Var": RealVar})
+    named_result = eval(compile(expr, "<test>", "eval"), {**sa_ns, "Var": RealVar, "$Var": RealVar})
     assert named_result.left is named_result.right
     # Anonymous var: _ == _ produces distinct Vars
     tree2 = ast.parse("_ == _", mode="eval")
     ast.fix_missing_locations(tree2)
     transformed2 = TermTransformer().visit(tree2.body)
     expr2 = ast.fix_missing_locations(ast.Expression(body=transformed2))
-    anon_result = eval(compile(expr2, "<test>", "eval"), {**sa_ns, "Var": RealVar})
+    anon_result = eval(compile(expr2, "<test>", "eval"), {**sa_ns, "Var": RealVar, "$Var": RealVar})
     assert anon_result.left is not anon_result.right
 
 

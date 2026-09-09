@@ -49,6 +49,7 @@ import ast
 import dataclasses
 import warnings
 
+from clausal.logic.generated_names import bare_name_of
 from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG
 from clausal.logic.predicate import make_predicate
 from clausal.logic.variables import deref, is_var
@@ -140,9 +141,10 @@ def _dotted_name(node):
     """Extract a (possibly dotted) name from LoadName/LoadAttr constructor code."""
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         kwargs = {kw.arg: kw.value for kw in node.keywords}
-        if node.func.id == "LoadName":
+        ctor = bare_name_of(node.func.id)
+        if ctor == "LoadName":
             return _const_value(kwargs["name"])
-        if node.func.id == "LoadAttr":
+        if ctor == "LoadAttr":
             return f"{_dotted_name(kwargs['object'])}.{_const_value(kwargs['attr'])}"
     raise ReifyError(f"cannot extract functor name from {ast.unparse(node)}")
 
@@ -204,7 +206,7 @@ class _ClauseReifier:
     def goal(self, node):
         """Reify in goal context: conjunctions become lists."""
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            name = node.func.id
+            name = bare_name_of(node.func.id)
             kwargs = {kw.arg: kw.value for kw in node.keywords}
             if name == "TupleLiteral":
                 flat = []
@@ -286,7 +288,7 @@ class _ClauseReifier:
             if (
                 isinstance(node.value, ast.Call)
                 and isinstance(node.value.func, ast.Name)
-                and node.value.func.id == "Var"
+                and bare_name_of(node.value.func.id) == "Var"
             ):
                 return self._named_var(name)
             term = self.term(node.value)
@@ -332,7 +334,9 @@ class _ClauseReifier:
     def _call(self, node):
         if not isinstance(node.func, ast.Name):
             raise ReifyError(f"cannot reify call: {ast.unparse(node)}")
-        name = node.func.id
+        # Generated code spells a runtime class ``$``-prefixed (``$Var``,
+        # ``$PyThunk``, ``$Call``, ...); reify by the bare class name.
+        name = bare_name_of(node.func.id)
         kwargs = {kw.arg: kw.value for kw in node.keywords}
 
         if name == "Var":

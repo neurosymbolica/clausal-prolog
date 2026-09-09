@@ -148,7 +148,7 @@ class TestEmitterFastPathUnit:
         assert "_clausal_new" not in src
         assert isinstance(expr, ast.Call)
         assert isinstance(expr.func, ast.Name)
-        assert expr.func.id == "BinOp"
+        assert expr.func.id == "$BinOp"
         assert expr.keywords != []
 
     def test_position_field_class_keeps_keyword_emission(self):

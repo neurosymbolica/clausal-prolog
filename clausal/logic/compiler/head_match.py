@@ -38,6 +38,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape
 from clausal.logic.atoms import is_atom as _term_is_atom
+from clausal.logic.generated_names import dollar_ref
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -619,7 +620,7 @@ def head_to_match_pattern(
             return ast.MatchAs(pattern=None, name=None)
         sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_) for a in term.args]
         return ast.MatchClass(
-            cls=_name("Compound"),
+            cls=_name("$Compound"),
             patterns=[],
             kwd_attrs=["functor", "args"],
             kwd_patterns=[
@@ -857,7 +858,9 @@ def head_to_match_pattern(
     # Unify back into the head.  Fields unification ignores are excluded, so the
     # lifted pattern decides the match the same way the Unify would have.
     if is_term_instance(term):
-        cls_name = type(term).__name__
+        # The same spelling the construction side emits (``dollar_ref``): a
+        # ``$``-twin for a runtime-table class, bare for a user's own.
+        cls_name = dollar_ref(type(term))
         fields = _matched_field_names(term)
         # A live INSTANCE always matches as a class -- the matching half of
         # ``term_to_ast_expr``'s instance branch, which always CONSTRUCTS one
@@ -1535,7 +1538,7 @@ def compile_head_to_match_case(
                     vname = _vc[val._id]
                     if vname not in _ds_alloc_seen:
                         _ds_alloc_seen.add(vname)
-                        dict_set_stmts.append(_assign(vname, _call(_name("Var"))))
+                        dict_set_stmts.append(_assign(vname, _call(_name("$Var"))))
 
         for _, cap_name, dt, vc in dict_guards:
             # Build DictTerm({k: var_or_const, ...}) expression
@@ -1549,7 +1552,7 @@ def compile_head_to_match_case(
                 else:
                     dict_vals_ast.append(term_to_ast_expr(val, vc))
             expected_expr = _call(
-                _name("DictTerm"),
+                _name("$DictTerm"),
                 ast.Dict(keys=dict_keys_ast, values=dict_vals_ast),
             )
             inner = [ast.If(
@@ -1566,7 +1569,7 @@ def compile_head_to_match_case(
                 # SetLiteral (AST node): elements are term values, convert via term_to_ast_expr
                 elts = [term_to_ast_expr(e, var_context) for e in st.elements]
             expected_expr = _call(
-                _name("SetTerm"),
+                _name("$SetTerm"),
                 ast.List(elts=elts, ctx=ast.Load()),
             )
             inner = [ast.If(
@@ -1747,7 +1750,7 @@ def compile_head_to_match_case(
                     vname = _vc[elem._id]
                     if vname not in _alloc_seen:
                         _alloc_seen.add(vname)
-                        list_var_allocs.append(_assign(vname, _call(_name("Var"))))
+                        list_var_allocs.append(_assign(vname, _call(_name("$Var"))))
 
         # ── Single-star guards (existing path) ────────────────────────────
         if single_star_guards:

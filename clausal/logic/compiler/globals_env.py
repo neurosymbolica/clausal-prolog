@@ -16,6 +16,7 @@ import ast
 import sys as _sys
 from typing import Any
 
+from clausal.logic.generated_names import dollar_ref
 from clausal.logic.variables import deref
 from clausal.terms import (
     Compound,
@@ -167,7 +168,7 @@ class _GlobalsDb:
 
 
 def _record_term_type(types: dict[str, type], term: Any) -> type:
-    """Record *term*'s class under its ``__name__`` key and return that class.
+    """Record *term*'s class under its generated-code spelling and return it.
 
     Shared body for the four near-identical collector walkers below: each
     guards with ``is_term_instance(term)`` first, then wants ``type(term)``
@@ -180,7 +181,9 @@ def _record_term_type(types: dict[str, type], term: Any) -> type:
     sites that implement it.
     """
     cls = type(term)
-    types[cls.__name__] = cls
+    # Bound under the spelling the emitter uses for this class: the ``$``
+    # twin for a runtime-table class (``$Add``), bare for a user's own.
+    types[dollar_ref(cls)] = cls
     return cls
 
 
@@ -663,5 +666,5 @@ def _preallocate_body_vars(
             if var._id not in var_context:
                 name = _var_python_name(var)
                 var_context[var._id] = name
-                stmts.append(_assign(name, _call(_name("Var"))))
+                stmts.append(_assign(name, _call(_name("$Var"))))
     return stmts

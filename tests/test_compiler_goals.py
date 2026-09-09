@@ -76,7 +76,7 @@ class TestTermToAstExpr:
         # right-hand side should be a Var() call
         assert isinstance(expr.value, ast.Call)
         assert isinstance(expr.value.func, ast.Name)
-        assert expr.value.func.id == "Var"
+        assert expr.value.func.id == "$Var"
         # var registered in context
         assert v._id in vc
 
@@ -146,7 +146,7 @@ class TestTermToAstExpr:
         expr = term_to_ast_expr(term, {})
         assert isinstance(expr, ast.Call)
         assert isinstance(expr.func, ast.Name)
-        assert expr.func.id == "Compound"
+        assert expr.func.id == "$Compound"
         # first arg is the functor string constant
         assert isinstance(expr.args[0], ast.Constant)
         assert expr.args[0].value == "foo"

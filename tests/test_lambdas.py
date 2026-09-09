@@ -12,6 +12,7 @@ import dataclasses
 
 import pytest
 
+from clausal.logic.generated_names import with_dollar_twins
 from clausal.logic.atoms import mint
 from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import TermTransformer, _is_logic_var_name
@@ -40,7 +41,8 @@ def _ns():
     """Namespace with all simple_ast names + real Var constructor."""
     ns = {name: getattr(sa, name) for name in sa.__all__}
     ns["Var"] = Var
-    return ns
+    # Generated code reaches these through their ``$`` twins.
+    return with_dollar_twins(ns)
 
 
 def term_eval(src: str, expected_type: type = None):

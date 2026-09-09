@@ -49,6 +49,7 @@ from clausal.logic.atoms import (
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
 
+from clausal.logic.generated_names import dollar_ref
 from ._ast_helpers import _name, _call, _attr
 from ._vars import _var_python_name
 
@@ -649,7 +650,7 @@ def term_to_ast_expr(
         var_context[vid] = vname
         return ast.NamedExpr(
             target=ast.Name(id=vname, ctx=ast.Store()),
-            value=_call(_name("Var")),
+            value=_call(_name("$Var")),
         )
 
     if isinstance(term, LoadName):
@@ -866,7 +867,7 @@ def term_to_ast_expr(
         # _freeze_dict_term), which patches ``._data`` after construction.
         if isinstance(term.data, _FrozenDict):
             return _call(_name("$FrozenDictTerm"), dict_arg)
-        return _call(_name("DictTerm"), dict_arg)
+        return _call(_name("$DictTerm"), dict_arg)
 
     if isinstance(term, SetTerm):
         # Recurse per element (mirrors the SetLiteral branch just below):
@@ -879,7 +880,7 @@ def term_to_ast_expr(
         # term position gets.
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
         return _call(
-            _name("SetTerm"),
+            _name("$SetTerm"),
             ast.List(
                 elts=[_rec(e) for e in sorted(term.elements, key=repr)],
                 ctx=ast.Load(),
@@ -904,7 +905,7 @@ def term_to_ast_expr(
     # SetLiteral (AST node from visit_Set): emit SetTerm([elem, ...]) constructor
     if isinstance(term, _SetLiteral_t):
         return _call(
-            _name("SetTerm"),
+            _name("$SetTerm"),
             ast.List(
                 elts=[term_to_ast_expr(e, var_context, eval_arith=eval_arith) for e in term.elements],
                 ctx=ast.Load(),
@@ -945,7 +946,7 @@ def term_to_ast_expr(
                 py_keys.append(_key(k))
                 py_vals.append(_rec(v))
         return _call(
-            _name("DictTerm"),
+            _name("$DictTerm"),
             ast.Dict(keys=py_keys, values=py_vals),
         )
 
@@ -958,12 +959,12 @@ def term_to_ast_expr(
         f_expr: ast.expr
         if is_var(f):
             vid = f._id
-            f_expr = _name(var_context[vid]) if vid in var_context else _call(_name("Var"))
+            f_expr = _name(var_context[vid]) if vid in var_context else _call(_name("$Var"))
         else:
             f_expr = ast.Constant(value=f)
         args_elts = [term_to_ast_expr(a, var_context, eval_arith=eval_arith) for a in term.args]
         return _call(
-            _name("Compound"),
+            _name("$Compound"),
             f_expr,
             ast.Tuple(elts=args_elts, ctx=ast.Load()),
         )
@@ -1032,7 +1033,7 @@ def term_to_ast_expr(
                 arg_exprs,
                 [(kw.arg, kw.value) for kw in kw_exprs],
                 functor=_functor,
-                missing=lambda: _call(_name("Var")),
+                missing=lambda: _call(_name("$Var")),
             )
             return cell_literal_ast(_functor, _placed)
         if _owa and "." not in fname:
@@ -1094,7 +1095,10 @@ def term_to_ast_expr(
 
     if is_term_instance(term):
         cls = type(term)
-        cls_name = cls.__name__
+        # ``$``-twin for a class the runtime table binds (a simple_ast node
+        # such as ``Add``, an injected class such as ``BoolEq``), bare for
+        # a user's own predicate class -- see ``generated_names.dollar_ref``.
+        cls_name = dollar_ref(cls)
         fields = term_field_names(term)
         # A live term INSTANCE ALWAYS keeps class emission (P3-2 Task 2,
         # controller ruling on the gate asymmetry).  Cell-vs-class is decided
@@ -1185,7 +1189,7 @@ def term_to_ast_expr(
             for k, v in term.items()
         ]
         return ast.Call(
-            func=_name("KWTerm"),
+            func=_name("$KWTerm"),
             args=[ast.Constant(value=term.functor)],
             keywords=keywords,
         )
@@ -1223,7 +1227,7 @@ def term_to_ast_expr(
                     _name("$unwrap_atom"),
                     ast.NamedExpr(
                         target=ast.Name(id=vname, ctx=ast.Store()),
-                        value=_call(_name("Var")),
+                        value=_call(_name("$Var")),
                     ),
                 ))
         return ast.Call(
