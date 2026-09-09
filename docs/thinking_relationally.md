@@ -59,15 +59,15 @@ arguments, it produces a result. A relation has no such restriction.
 Consider `append/3`, which relates three [lists](lists.md):
 
 ```clausal
-Test("concatenate") <- append([1, 2], [3, 4], [1, 2, 3, 4])
+test("concatenate") <- append([1, 2], [3, 4], [1, 2, 3, 4])
 
-Test("split") <- (
+test("split") <- (
     append(LEFT, RIGHT, [1, 2, 3]),
     LEFT == [1],
     RIGHT == [2, 3]
 )
 
-Test("suffix") <- (
+test("suffix") <- (
     append([1, 2], REST, [1, 2, 3, 4, 5]),
     REST == [3, 4, 5]
 )
@@ -235,8 +235,8 @@ hold. No mock objects, no test harnesses, no elaborate setup. A [test](testing.m
 fact about the relation:
 
 ```clausal
-Test("sum of [1,2,3] is 6") <- list_sum([1, 2, 3], 6)
-Test("sum of [] is 0") <- list_sum([], 0)
+test("sum of [1,2,3] is 6") <- list_sum([1, 2, 3], 6)
+test("sum of [] is 0") <- list_sum([], 0)
 ```
 
 ### Working with reasoning, not against it

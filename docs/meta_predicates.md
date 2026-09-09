@@ -46,7 +46,7 @@ age("carol", 30),
 
 all_people(PEOPLE) <- bagof(NAME, age(NAME, _), PEOPLE)
 
-Test("bag of people") <- (
+test("bag of people") <- (
     all_people(PEOPLE),
     length(PEOPLE, 3)
 )
@@ -73,13 +73,13 @@ Both produce sorted, deduplicated results. The differences:
 | Use when | You want failure on empty | You always want a list |
 
 ```clausal
-Test("setof unique") <- (
+test("setof unique") <- (
     setof(X, in_(X, [3, 1, 2, 1, 3]), XS),
     length(XS, 3)
 )
 
 # setof fails if no solutions; findall always succeeds (returns []):
-Test("findall empty ok") <- (
+test("findall empty ok") <- (
     findall(X, (in_(X, []), X > 0), BAG),
     BAG == []
 )

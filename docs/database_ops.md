@@ -84,7 +84,7 @@ predicate.
 `abolish_all_tables()` — clear all tabling caches at once.
 
 ```clausal
-Test("clear all") <- abolish_all_tables()
+test("clear all") <- abolish_all_tables()
 ```
 
 ---

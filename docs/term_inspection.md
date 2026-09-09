@@ -11,14 +11,14 @@ writing predicates that operate on other predicates.
 ```clausal
 # The name position speaks ATOMS. `'hello'` is single-quoted, so it is the
 # atom in every -double_quotes mode and needs no -private declaration.
-Test("decompose atom") <- (
+test("decompose atom") <- (
     functor('hello', NAME_, ARITY_),
     NAME_ is 'hello',
     atom(NAME_),
     ARITY_ == 0
 )
 
-Test("unpack atom") <- unpack('hello', ['hello'])
+test("unpack atom") <- unpack('hello', ['hello'])
 ```
 
 ---
@@ -33,7 +33,7 @@ name and arity, or construct a term from a name and arity.
 **Decompose mode** (Term bound):
 
 ```clausal
-Test("atom") <- functor('hello', 'hello', 0)
+test("atom") <- functor('hello', 'hello', 0)
 ```
 
 **Decompose a compound term** — define the predicate first so it is a known term:
@@ -41,7 +41,7 @@ Test("atom") <- functor('hello', 'hello', 0)
 ```clausal
 point(1, 2, 3),
 
-Test("decompose compound") <- (
+test("decompose compound") <- (
     functor(point(1, 2, 3), NAME_, ARITY_),
     NAME_ is 'point',
     ARITY_ == 3
@@ -55,7 +55,7 @@ to, not a `Compound` object:
 ```clausal
 -implicit_functors
 
-Test("construct") <- (
+test("construct") <- (
     functor(TERM_, 'pair', 2),
     TERM_ is pair(A_UNUSED, B_UNUSED)
 )
@@ -69,9 +69,9 @@ Define the predicate first so its terms are recognized:
 ```clausal
 point(10, 20, 30),
 
-Test("first arg") <- arg(1, point(10, 20, 30), 10)
-Test("second arg") <- arg(2, point(10, 20, 30), 20)
-Test("third arg") <- arg(3, point(10, 20, 30), 30)
+test("first arg") <- arg(1, point(10, 20, 30), 10)
+test("second arg") <- arg(2, point(10, 20, 30), 20)
+test("third arg") <- arg(3, point(10, 20, 30), 30)
 ```
 
 Fails if N is out of range or Term is atomic. With `N` unbound, `arg/3`
@@ -81,8 +81,8 @@ is semidet when `Value` is given:
 ```clausal
 kv(10, 20),
 
-Test("enumerates args") <- findall([N, V], arg(N, kv(10, 20), V), [[1, 10], [2, 20]])
-Test("finds the index") <- arg(N2, kv(10, 20), 20)
+test("enumerates args") <- findall([N, V], arg(N, kv(10, 20), V), [[1, 10], [2, 20]])
+test("finds the index") <- arg(N2, kv(10, 20), 20)
 ```
 
 ### unpack/2
@@ -95,8 +95,8 @@ term and a list `[functor | Args]`.
 ```clausal
 foo(1, 2, 3),
 
-Test("unpack") <- unpack(foo(1, 2, 3), ['foo', 1, 2, 3])
-Test("atom") <- unpack('hello', ['hello'])
+test("unpack") <- unpack(foo(1, 2, 3), ['foo', 1, 2, 3])
+test("atom") <- unpack('hello', ['hello'])
 ```
 
 **Construct mode**:
@@ -104,7 +104,7 @@ Test("atom") <- unpack('hello', ['hello'])
 ```clausal
 -implicit_functors
 
-Test("construct") <- (
+test("construct") <- (
     unpack(TERM_, ['point', 10, 20]),
     TERM_ is point(10, 20),   # the same cell a source-written point(10, 20) is
     arg(1, TERM_, 10),
@@ -134,7 +134,7 @@ copy.
 -allow_singletons
 # X_ stands for "some unbound variable" — its identity is never used
 # again, only that copy_term/2 gives it a fresh one in COPY_.
-Test("copy list") <- (
+test("copy list") <- (
     copy_term([1, X_, 3], COPY_),
     length(COPY_, 3)
 )
@@ -153,12 +153,12 @@ list, in left-to-right order, with duplicates removed (by identity).
 -allow_singletons
 # X_, Y_, Z_ each stand for "some unbound variable" — the point is that
 # term_variables/2 collects three of them, not what they're named.
-Test("collect vars") <- (
+test("collect vars") <- (
     term_variables([X_, 1, Y_, Z_], VARS_),
     length(VARS_, 3)
 )
 
-Test("ground term") <- term_variables([1, 2, 3], [])
+test("ground term") <- term_variables([1, 2, 3], [])
 ```
 
 ### numbervars/3
@@ -171,7 +171,7 @@ next available number.
 -allow_singletons
 # X_, Y_, Z_ each stand for "some unbound variable" — numbervars/3 binds
 # them to $VAR(0..2); their names are never referenced again.
-Test("number vars") <- (
+test("number vars") <- (
     numbervars([X_, Y_, Z_], 0, END_),
     END_ == 3
 )
@@ -211,7 +211,7 @@ Transform all arguments of any term by applying a goal (using [maplist](higher_o
 var_count(TERM_, N_) <- (term_variables(TERM_, VARS_), length(VARS_, N_))
 
 # X_, Y_, Z_ each stand for "some unbound variable" fed into var_count/2.
-Test("count") <- var_count([X_, 1, Y_, Z_], 3)
+test("count") <- var_count([X_, 1, Y_, Z_], 3)
 ```
 
 ### Clone a predicate call with different arguments

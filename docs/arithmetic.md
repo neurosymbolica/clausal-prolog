@@ -16,7 +16,7 @@ factorial(N, F) <- (
     F == N * F1
 )
 
-Test("fact 5") <- factorial(5, 120)
+test("fact 5") <- factorial(5, 120)
 ```
 
 ---
@@ -28,7 +28,7 @@ Test("fact 5") <- factorial(5, 120)
 `==` posts an arithmetic constraint ([CLP(ℤ)](constraints.md) or [CLP(ℝ)](clpr.md)) that works in all directions:
 
 ```clausal
-Test("eval") <- (X == 3 + 4 * 2, X == 11)
+test("eval") <- (X == 3 + 4 * 2, X == 11)
 ```
 
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
@@ -40,7 +40,7 @@ Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
 unifies the value with `RESULT` (Prolog's `is/2`):
 
 ```clausal
-Test("eval") <- (eval_(6 * 7, X), X == 42)
+test("eval") <- (eval_(6 * 7, X), X == 42)
 ```
 
 Prefer `==` for ordinary relational arithmetic — it works in all directions.
@@ -66,7 +66,7 @@ Choosing an arithmetic idiom:
 ### Comparison operators
 
 ```clausal
-Test("compare") <- (3 < 5, 5 >= 5, 10 != 7)
+test("compare") <- (3 < 5, 5 >= 5, 10 != 7)
 ```
 
 Both sides must be ground (bound to numbers) at evaluation time.
@@ -92,9 +92,9 @@ computed.
 `plus(X, Y, Z)` — `Z = X + Y`. Any two arguments determine the third.
 
 ```clausal
-Test("plus forward") <- plus(3, 4, 7)
-Test("plus subtract") <- (plus(3, Y, 7), Y == 4)
-Test("plus other") <- (plus(X, 4, 7), X == 3)
+test("plus forward") <- plus(3, 4, 7)
+test("plus subtract") <- (plus(3, Y, 7), Y == 4)
+test("plus other") <- (plus(X, 4, 7), X == 3)
 ```
 
 ### succ/2
@@ -102,8 +102,8 @@ Test("plus other") <- (plus(X, 4, 7), X == 3)
 `succ(X, Y)` — `Y = X + 1` for non-negative integers. Bidirectional.
 
 ```clausal
-Test("succ forward") <- succ(4, 5)
-Test("succ backward") <- (succ(X, 5), X == 4)
+test("succ forward") <- succ(4, 5)
+test("succ backward") <- (succ(X, 5), X == 4)
 ```
 
 ---
@@ -115,8 +115,8 @@ Test("succ backward") <- (succ(X, 5), X == 4)
 `between(Low, High, X)` — generate or test integers in a range (inclusive).
 
 ```clausal
-Test("generate") <- (between(1, 5, X), X == 3)
-Test("check") <- between(1, 10, 7)
+test("generate") <- (between(1, 5, X), X == 3)
+test("check") <- between(1, 10, 7)
 ```
 
 `between` is nondeterministic in generate mode — it yields each integer on
@@ -131,7 +131,7 @@ backtracking.
 `abs_(X, Y)` — `Y` is the absolute value of `X`.
 
 ```clausal
-Test("abs") <- abs_(-7, 7)
+test("abs") <- abs_(-7, 7)
 ```
 
 ### sign/2
@@ -139,9 +139,9 @@ Test("abs") <- abs_(-7, 7)
 `sign(X, S)` — `S` is `-1`, `0`, or `1` depending on the sign of `X`.
 
 ```clausal
-Test("sign negative") <- sign(-42, -1)
-Test("sign zero") <- sign(0, 0)
-Test("sign positive") <- sign(99, 1)
+test("sign negative") <- sign(-42, -1)
+test("sign zero") <- sign(0, 0)
+test("sign positive") <- sign(99, 1)
 ```
 
 ### max_/3, min_/3
@@ -149,8 +149,8 @@ Test("sign positive") <- sign(99, 1)
 `max_(X, Y, Z)` / `min_(X, Y, Z)` — `Z` is the maximum/minimum of `X` and `Y`.
 
 ```clausal
-Test("max") <- max_(3, 7, 7)
-Test("min") <- min_(3, 7, 3)
+test("max") <- max_(3, 7, 7)
+test("min") <- min_(3, 7, 3)
 ```
 
 ### gcd/3
@@ -158,8 +158,8 @@ Test("min") <- min_(3, 7, 3)
 `gcd(X, Y, G)` — `G` is the greatest common divisor of `X` and `Y`.
 
 ```clausal
-Test("gcd") <- gcd(12, 8, 4)
-Test("coprime") <- gcd(7, 13, 1)
+test("gcd") <- gcd(12, 8, 4)
+test("coprime") <- gcd(7, 13, 1)
 ```
 
 ### divmod_/4
@@ -167,7 +167,7 @@ Test("coprime") <- gcd(7, 13, 1)
 `divmod_(X, Y, Quotient, Remainder)` — integer division and modulo in one step.
 
 ```clausal
-Test("divmod") <- divmod_(17, 5, 3, 2)
+test("divmod") <- divmod_(17, 5, 3, 2)
 ```
 
 ---
@@ -186,7 +186,7 @@ fib_acc(N, A, B, F) <- (
     fib_acc(N1, B, C, F)
 )
 
-Test("fib 10") <- fib(10, 55)
+test("fib 10") <- fib(10, 55)
 ```
 
 ### Collatz sequence length
@@ -210,7 +210,7 @@ collatz(N, STEPS) <- (
     STEPS == S + 1
 )
 
-Test("collatz 6") <- collatz(6, 8)
+test("collatz 6") <- collatz(6, 8)
 ```
 
 ### sum_ of digits
@@ -224,7 +224,7 @@ digit_sum(N, SUM) <- (
     SUM == S + DIGIT
 )
 
-Test("digit sum") <- digit_sum(123, 6)
+test("digit sum") <- digit_sum(123, 6)
 ```
 
 ---

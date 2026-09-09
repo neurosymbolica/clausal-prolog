@@ -224,7 +224,7 @@ Inbound is deliberately **not** symmetric: a Python `str` coming back is a
 
 round_trip(X, Y) <- (Y is ++X)
 
-Test("an atom crosses out as text and comes back as a string") <- (
+test("an atom crosses out as text and comes back as a string") <- (
     round_trip(bar, Y),
     string(Y),
     Y is "bar",

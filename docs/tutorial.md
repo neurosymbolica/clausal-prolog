@@ -328,7 +328,7 @@ For constraint-based "not equal" on partially-instantiated terms, use `dif/2`
 
 ## Testing your code
 
-Clausal has a lightweight convention for inline tests. Define `Test/1` predicates:
+Clausal has a lightweight convention for inline tests. Define `test/1` predicates:
 
 ```clausal
 sum_list([], 0),
@@ -337,12 +337,12 @@ sum_list([HEAD, *TAIL], TOTAL) <- (
     TOTAL == SUBTOTAL + HEAD
 )
 
-Test("sum [1,2,3,4] = 10") <- (
+test("sum [1,2,3,4] = 10") <- (
     sum_list([1, 2, 3, 4], TOTAL),
     TOTAL == 10
 )
 
-Test("sum [] = 0") <- (
+test("sum [] = 0") <- (
     sum_list([], TOTAL),
     TOTAL == 0
 )
@@ -361,10 +361,10 @@ A typical Python test wrapper looks like:
 
 ```python
 from clausal import once
-from mymodule import Test
+from mymodule import test
 
 def test_sum():
-    assert once(Test("sum [1,2,3,4] = 10")) is not None
+    assert once(test("sum [1,2,3,4] = 10")) is not None
 ```
 
 See [Testing](testing.md) for the full testing guide, including how to use fixtures

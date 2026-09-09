@@ -253,7 +253,7 @@ Natnum(succ(succ(0)))
 
     Full source: `clausal/examples/metainterpreters.clausal`
 
-    The file contains 30 `Test` clauses covering all five interpreters across the natural number and graph programs, including the iterative deepening completeness test on the cyclic graph.
+    The file contains 30 `test` clauses covering all five interpreters across the natural number and graph programs, including the iterative deepening completeness test on the cyclic graph.
 
 *See also: [Tabling](tabling.md) — built-in memoisation for left-recursive predicates.*
 *See also: [Meta-Predicates](meta_predicates.md) — findall, bagof, setof, forall.*

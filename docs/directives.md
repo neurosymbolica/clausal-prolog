@@ -303,7 +303,7 @@ them at runtime. But some programs need to add or remove facts during execution
 
 color("red"),
 
-Test("add at runtime") <- (
+test("add at runtime") <- (
     assertz(color("blue")),
     color("blue")
 )
@@ -328,8 +328,8 @@ edge(3, 1),
 path(X, Y) <- edge(X, Y)
 path(X, Y) <- (edge(X, Z), path(Z, Y))
 
-Test("path 1 3") <- path(1, 3)
-Test("path 2 1") <- path(2, 1)
+test("path 1 3") <- path(1, 3)
+test("path 2 1") <- path(2, 1)
 ```
 
 Without `-table`, `path/2` would loop forever on the cycle `1→2→3→1`. With
@@ -358,16 +358,16 @@ See [Tabling](tabling.md) for details.
 in the source file. Sometimes it's clearer to interleave related predicates.
 
 ```clausal
--discontiguous(Test/1)
+-discontiguous(test/1)
 
 helper(X, Y) <- (Y == X + 1)
-Test("first") <- helper(1, 2)
+test("first") <- helper(1, 2)
 
 other_helper(X, Y) <- (Y == X * 2)
-Test("second") <- other_helper(3, 6)
+test("second") <- other_helper(3, 6)
 ```
 
-Without `-discontiguous`, the `Test` clauses being separated by `other_helper`
+Without `-discontiguous`, the `test` clauses being separated by `other_helper`
 would trigger a warning or error.
 
 ### -meta_predicate
@@ -397,8 +397,8 @@ lookup("a", 1),
 lookup("b", 2),
 lookup("c", 3),
 
-Test("lookup a") <- (lookup("a", V), V == 1)
-Test("lookup c") <- (lookup("c", V), V == 3)
+test("lookup a") <- (lookup("a", V), V == 1)
+test("lookup c") <- (lookup("c", V), V == 3)
 ```
 
 `-shallow` compiles in simple mode (direct generator calls) instead of
@@ -421,7 +421,7 @@ R**2`); Clausal gives constants their own lexical class instead.
 
 area(R, AREA) <- (AREA == _PI_ * R**2)
 
-Test("area of radius 2") <- (
+test("area of radius 2") <- (
     area(2, AREA),
     AREA == 12.56636
 )
@@ -482,7 +482,7 @@ page of "most general query" examples where an unbound variable is the whole poi
 ```clausal
 -allow_singletons
 
-Test("most general query") <- var(SOME_UNBOUND_VAR)
+test("most general query") <- var(SOME_UNBOUND_VAR)
 ```
 
 `-allow_singletons` is a **file-level opt-out marker** that takes no arguments (bare

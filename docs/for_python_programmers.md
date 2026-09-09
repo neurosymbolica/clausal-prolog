@@ -259,7 +259,7 @@ square_of_even(N, SQ) <- (
     SQ == N * N
 )
 
-Test("squares") <- (
+test("squares") <- (
     findall(SQ, square_of_even(_, SQ), SQUARES),
     SQUARES == [0, 4, 16, 36, 64]
 )

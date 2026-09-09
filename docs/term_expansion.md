@@ -163,7 +163,7 @@ The goal expansion for regex auto-binding shows both systems working together. w
 # pattern STRING, invisible to the singleton counter's AST-Name check.
 -import_from(regex, [match])
 
-Test("auto-bind year") <- (
+test("auto-bind year") <- (
     match(r"(?P<YEAR>\d{4})-\d{2}", "2026-03"),
     YEAR == "2026"
 )

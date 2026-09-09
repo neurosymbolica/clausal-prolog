@@ -20,8 +20,8 @@ succeed or fail — they never bind variables.
 `var(X)` — succeeds if `X` is an unbound logic variable.
 
 ```clausal
-Test("unbound") <- var(_)
-Test("bound fails") <- (not var(42))
+test("unbound") <- var(_)
+test("bound fails") <- (not var(42))
 ```
 
 ### nonvar/1
@@ -30,10 +30,10 @@ Test("bound fails") <- (not var(42))
 `var`.
 
 ```clausal
-Test("number") <- nonvar(42)
-Test("string") <- nonvar("hello")
-Test("list") <- nonvar([1, 2])
-Test("unbound") <- (not nonvar(_))
+test("number") <- nonvar(42)
+test("string") <- nonvar("hello")
+test("list") <- nonvar([1, 2])
+test("unbound") <- (not nonvar(_))
 ```
 
 ---
@@ -82,10 +82,10 @@ single-quoted spelling such as `'hello world'`. Bare atoms must be declared
 -private([red, blue])
 -double_quotes(chars)
 
-Test("bare atom") <- atom(red)
-Test("quoted atom") <- atom('hello world')
-Test("string is not atom") <- (not atom("hello"))
-Test("int is not atom") <- (not atom(42))
+test("bare atom") <- atom(red)
+test("quoted atom") <- atom('hello world')
+test("string is not atom") <- (not atom("hello"))
+test("int is not atom") <- (not atom(42))
 ```
 
 ### string/1 and is_str/1
@@ -100,14 +100,14 @@ match atoms, and it does not match a list with a non-character element.
 -private([red])
 -double_quotes(chars)
 
-Test("str") <- is_str("hello")
-Test("string") <- string("hello")
-Test("empty string") <- string("")
-Test("empty list") <- string([])
-Test("char list") <- string(['h', 'i'])
-Test("not str") <- (not is_str(42))
-Test("list with a non-char") <- (not string([1, 2]))
-Test("atom is not a string") <- (not string(red))
+test("str") <- is_str("hello")
+test("string") <- string("hello")
+test("empty string") <- string("")
+test("empty list") <- string([])
+test("char list") <- string(['h', 'i'])
+test("not str") <- (not is_str(42))
+test("list with a non-char") <- (not string([1, 2]))
+test("atom is not a string") <- (not string(red))
 ```
 
 ### atomic/1
@@ -119,9 +119,9 @@ It is **false for a string**, which is a list.
 -private([red])
 -double_quotes(chars)
 
-Test("atom is atomic") <- atomic(red)
-Test("number is atomic") <- atomic(42)
-Test("string is not atomic") <- (not atomic("red"))
+test("atom is atomic") <- atomic(red)
+test("number is atomic") <- atomic(42)
+test("string is not atomic") <- (not atomic("red"))
 ```
 
 ### integer/1
@@ -130,9 +130,9 @@ Test("string is not atomic") <- (not atomic("red"))
 Python's `bool` is a subclass of `int`).
 
 ```clausal
-Test("int") <- integer(42)
-Test("not float") <- (not integer(3.14))
-Test("not bool") <- (not integer(True))
+test("int") <- integer(42)
+test("not float") <- (not integer(3.14))
+test("not bool") <- (not integer(True))
 ```
 
 ### float_/1
@@ -140,8 +140,8 @@ Test("not bool") <- (not integer(True))
 `float_(X)` — succeeds if `X` is a float.
 
 ```clausal
-Test("float") <- float_(3.14)
-Test("not int") <- (not float_(42))
+test("float") <- float_(3.14)
+test("not int") <- (not float_(42))
 ```
 
 ### number/1
@@ -149,10 +149,10 @@ Test("not int") <- (not float_(42))
 `number(X)` — succeeds if `X` is an int or float (but not bool).
 
 ```clausal
-Test("int") <- number(42)
-Test("float") <- number(3.14)
-Test("not bool") <- (not number(True))
-Test("not str") <- (not number("42"))
+test("int") <- number(42)
+test("float") <- number(3.14)
+test("not bool") <- (not number(True))
+test("not str") <- (not number("42"))
 ```
 
 ---
@@ -170,8 +170,8 @@ is not compound**: it is the arity-0 cell, and arity 0 is not `> 0`.
 
 point(1, 2, 3),
 
-Test("compound") <- compound(point(1, 2, 3))
-Test("atom is not compound") <- (not compound(red))
+test("compound") <- compound(point(1, 2, 3))
+test("atom is not compound") <- (not compound(red))
 ```
 
 ### callable_/1
@@ -186,10 +186,10 @@ that could appear as a goal. A string is not callable — `call("foo")` raises
 
 point(1, 2, 3),
 
-Test("atom") <- callable_(red)
-Test("compound") <- callable_(point(1, 2, 3))
-Test("not string") <- (not callable_("hello"))
-Test("not int") <- (not callable_(42))
+test("atom") <- callable_(red)
+test("compound") <- callable_(point(1, 2, 3))
+test("not string") <- (not callable_("hello"))
+test("not int") <- (not callable_(42))
 ```
 
 ### is_list/1
@@ -203,11 +203,11 @@ a test for the Python `str` representation (see below).
 ```clausal
 -double_quotes(chars)
 
-Test("list") <- is_list([1, 2, 3])
-Test("empty") <- is_list([])
-Test("string is a list") <- is_list("hello")
-Test("empty string is a list") <- is_list("")
-Test("not int") <- (not is_list(42))
+test("list") <- is_list([1, 2, 3])
+test("empty") <- is_list([])
+test("string is a list") <- is_list("hello")
+test("empty string is a list") <- is_list("")
+test("not int") <- (not is_list(42))
 ```
 
 ### is_chars/1
@@ -218,9 +218,9 @@ list. Use this when you want to accept both spellings uniformly.
 ```clausal
 -double_quotes(chars)
 
-Test("string") <- is_chars("hello")
-Test("list") <- is_chars([1, 2, 3])
-Test("not int") <- (not is_chars(42))
+test("string") <- is_chars("hello")
+test("list") <- is_chars([1, 2, 3])
+test("not int") <- (not is_chars(42))
 ```
 
 | Predicate | `"hello"` | `['h','i']` | `[]` | `[1, 2]` | Purpose |
@@ -251,9 +251,9 @@ in its structure. Recursively checks lists, compound terms, and predicate
 fields.
 
 ```clausal
-Test("ground int") <- ground(42)
-Test("ground list") <- ground([1, 2, 3])
-Test("unbound fails") <- (not ground([1, _, 3]))
+test("ground int") <- ground(42)
+test("ground list") <- ground([1, 2, 3])
+test("unbound fails") <- (not ground([1, _, 3]))
 ```
 
 This is useful as a guard before [arithmetic](arithmetic.md) or [I/O](io.md) operations that require all
@@ -280,12 +280,12 @@ process(X, R) <- (nonvar(X), integer(X),     R == X * 2)
 process(X, R) <- (nonvar(X), is_str(X),      R is f"got: {X}")
 process(X, R) <- (nonvar(X), is_list(X),     length(X, R))
 
-Test("dispatch on string") <- (process("ab", R1), R1 == "got: ab")
-Test("dispatch on list") <- (process([1, 2], R2), R2 == 2)
+test("dispatch on string") <- (process("ab", R1), R1 == "got: ab")
+test("dispatch on list") <- (process([1, 2], R2), R2 == 2)
 # `[]` and a char list ARE strings, so they reach the is_str/1 clause and come
 # back with a text answer, not a length.
-Test("dispatch on empty") <- (process([], R3), is_str(R3))
-Test("dispatch on char list") <- (process(['a'], R4), is_str(R4))
+test("dispatch on empty") <- (process([], R3), is_str(R3))
+test("dispatch on char list") <- (process(['a'], R4), is_str(R4))
 ```
 
 Adding `not is_str(X)` to the list clause is a **different** filter, and

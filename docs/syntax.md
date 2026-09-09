@@ -81,7 +81,7 @@ A named variable that occurs exactly once in its clause binds nothing — almost
 in **both** variable styles:
 
 ```python
-Test("bug: wrong var name") <- (
+test("bug: wrong var name") <- (
     length([1, 2, 3], N),
     N1 == N + 1     # meant N, typo'd N1 — N1 is a singleton
 )
@@ -122,7 +122,7 @@ example — use [`-allow_singletons`](directives.md#-allow_singletons):
 ```clausal
 -allow_singletons
 
-Test("most general query") <- var(SOME_UNBOUND_VAR)
+test("most general query") <- var(SOME_UNBOUND_VAR)
 ```
 
 !!! note "Chained comparisons count their middle operand twice"
@@ -167,7 +167,7 @@ style.
 
 area(R, AREA) <- (AREA == _PI_ * R**2)
 
-Test("area of radius 2") <- (
+test("area of radius 2") <- (
     area(2, AREA),
     AREA == 12.56636
 )
@@ -416,7 +416,7 @@ the walrus operator:
 -allow_singletons
 # VALUE is named to demonstrate the inline-naming feature itself — that
 # it *can* be named is the point, not any further use of it here.
-Test("name a term inline") <- (
+test("name a term inline") <- (
     D is {"k": [1, 2]},
     VALUE is [1, X] is D["k"],
     X == 2

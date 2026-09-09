@@ -158,8 +158,8 @@ digit >> ([D], {char_type(D, 'digit')})
 digits >> (digit)
 digits >> (digit, digits)
 
-Test("parse string") <- phrase(digits, "123")
-Test("partial") <- (phrase(digits, "12ab", REST), REST is ['a', 'b'])
+test("parse string") <- phrase(digits, "123")
+test("partial") <- (phrase(digits, "12ab", REST), REST is ['a', 'b'])
 ```
 
 No `atom_chars` conversion is needed. See [Strings as Lists](strings_as_lists.md)

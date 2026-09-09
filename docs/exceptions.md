@@ -187,7 +187,7 @@ window_days_used(REF_YMD, _DAYS_UNUSED) <- (
 )
 window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
 
-Test("malformed input raises, not a silent empty findall") <- (
+test("malformed input raises, not a silent empty findall") <- (
     catch(
         findall(D, window_days_used("2020-01-01", D), _DAYS_UNUSED),
         wf_bad_shape(_MSG_UNUSED, CULPRIT),
@@ -218,7 +218,7 @@ window_days_used(REF_YMD, _DAYS_UNUSED) <- (
 )
 window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
 
-Test("iso type_error term raises from a guard") <- (
+test("iso type_error term raises from a guard") <- (
     catch(
         findall(D, window_days_used("2020-01-01", D), _DAYS_UNUSED),
         error(type_error(_T_UNUSED, CULPRIT), _CTX_UNUSED),

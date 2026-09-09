@@ -61,13 +61,13 @@ program by adding and removing goals:
 # stay unbound in the first two Tests on purpose — that's what makes
 # them "the most general query" (see for_prolog_programmers.md).
 # The most general query — all lists and their lengths
-Test("general") <- list_length(LIST, N)
+test("general") <- list_length(LIST, N)
 
 # More specific — only lists of length 3
-Test("specific") <- (list_length(LIST, N), N == 3)
+test("specific") <- (list_length(LIST, N), N == 3)
 
 # Even more specific — only the list [1,2,3] of length 3
-Test("most specific") <- list_length([1, 2, 3], 3)
+test("most specific") <- list_length([1, 2, 3], 3)
 ```
 
 Each additional constraint can only reduce the set of solutions. This is
@@ -155,7 +155,7 @@ greeting_text(NAME, TEXT) <- (
 )
 
 # Test it without side effects:
-Test("greeting") <- greeting_text("world", "Hello, world!")
+test("greeting") <- greeting_text("world", "Hello, world!")
 
 # Emit it only at the boundary:
 greet(NAME) <- (
@@ -270,7 +270,7 @@ n_queens(N, QUEENS) <- (
 )
 
 # Control: choose how to search
-Test("8 queens") <- (
+test("8 queens") <- (
     n_queens(8, QUEENS),
     labeling([ff], QUEENS)
 )

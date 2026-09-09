@@ -17,8 +17,8 @@ Python's native list syntax — no cons cells, no special notation.
 ```clausal
 palindrome(XS) <- (reverse(XS, XS))
 
-Test("palindrome") <- palindrome([1, 2, 1])
-Test("not palindrome") <- (not palindrome([1, 2, 3]))
+test("palindrome") <- palindrome([1, 2, 1])
+test("not palindrome") <- (not palindrome([1, 2, 3]))
 ```
 
 ---
@@ -50,8 +50,8 @@ list_sum([X, *XS], TOTAL) <- (
 on backtracking.
 
 ```clausal
-Test("member") <- in_(2, [1, 2, 3])
-Test("generate") <- (in_(X, ["a", "b", "c"]), X == "b")
+test("member") <- in_(2, [1, 2, 3])
+test("generate") <- (in_(X, ["a", "b", "c"]), X == "b")
 ```
 
 ### in_check/2
@@ -61,7 +61,7 @@ unifying element only). Use when you need to confirm membership without
 enumerating alternatives.
 
 ```clausal
-Test("check") <- in_check("b", ["a", "b", "c"])
+test("check") <- in_check("b", ["a", "b", "c"])
 ```
 
 ---
@@ -78,17 +78,17 @@ unbound — is not supported.)
 
 ```clausal
 # Concatenate
-Test("concat") <- append([1, 2], [3, 4], [1, 2, 3, 4])
+test("concat") <- append([1, 2], [3, 4], [1, 2, 3, 4])
 
 # Split — enumerate all ways to split a list
-Test("split") <- (
+test("split") <- (
     append(LEFT, RIGHT, [1, 2, 3]),
     LEFT == [1],
     RIGHT == [2, 3]
 )
 
 # Suffix extraction
-Test("suffix") <- (
+test("suffix") <- (
     append([1, 2], REST, [1, 2, 3, 4, 5]),
     REST == [3, 4, 5]
 )
@@ -99,7 +99,7 @@ Test("suffix") <- (
 `replicate(N, Elem, List)` — `List` is `N` copies of `Elem`.
 
 ```clausal
-Test("replicate") <- replicate(3, "x", ["x", "x", "x"])
+test("replicate") <- replicate(3, "x", ["x", "x", "x"])
 ```
 
 ### zip_/3
@@ -108,7 +108,7 @@ Test("replicate") <- replicate(3, "x", ["x", "x", "x"])
 list.
 
 ```clausal
-Test("zip") <- zip_([1, 2, 3], ["a", "b", "c"], [[1, "a"], [2, "b"], [3, "c"]])
+test("zip") <- zip_([1, 2, 3], ["a", "b", "c"], [[1, "a"], [2, "b"], [3, "c"]])
 ```
 
 ---
@@ -121,7 +121,7 @@ Test("zip") <- zip_([1, 2, 3], ["a", "b", "c"], [[1, "a"], [2, "b"], [3, "c"]])
 `N` fresh variables.
 
 ```clausal
-Test("length") <- length([10, 20, 30], 3)
+test("length") <- length([10, 20, 30], 3)
 ```
 
 ### list_item/3
@@ -129,8 +129,8 @@ Test("length") <- length([10, 20, 30], 3)
 `list_item(N, List, Elem)` — relates a 0-based index, a list, and an element.
 
 ```clausal
-Test("get") <- list_item(1, ["a", "b", "c"], "b")
-Test("enumerate") <- (list_item(I, [10, 20, 30], 20), I == 1)
+test("get") <- list_item(1, ["a", "b", "c"], "b")
+test("enumerate") <- (list_item(I, [10, 20, 30], 20), I == 1)
 ```
 
 ### last/2
@@ -138,7 +138,7 @@ Test("enumerate") <- (list_item(I, [10, 20, 30], 20), I == 1)
 `last(List, Elem)` — the last element.
 
 ```clausal
-Test("last") <- last([1, 2, 3], 3)
+test("last") <- last([1, 2, 3], 3)
 ```
 
 ### take/3
@@ -146,7 +146,7 @@ Test("last") <- last([1, 2, 3], 3)
 `take(N, List, Taken)` — first `N` elements.
 
 ```clausal
-Test("take") <- take(2, [1, 2, 3, 4], [1, 2])
+test("take") <- take(2, [1, 2, 3, 4], [1, 2])
 ```
 
 ### drop/3
@@ -154,7 +154,7 @@ Test("take") <- take(2, [1, 2, 3, 4], [1, 2])
 `drop(N, List, Rest)` — everything after the first `N` elements.
 
 ```clausal
-Test("drop") <- drop(2, [1, 2, 3, 4], [3, 4])
+test("drop") <- drop(2, [1, 2, 3, 4], [3, 4])
 ```
 
 ### split_at/4
@@ -162,7 +162,7 @@ Test("drop") <- drop(2, [1, 2, 3, 4], [3, 4])
 `split_at(N, List, Left, Right)` — split at index `N`.
 
 ```clausal
-Test("split_at") <- split_at(2, [1, 2, 3, 4], [1, 2], [3, 4])
+test("split_at") <- split_at(2, [1, 2, 3, 4], [1, 2], [3, 4])
 ```
 
 ---
@@ -174,7 +174,7 @@ Test("split_at") <- split_at(2, [1, 2, 3, 4], [1, 2], [3, 4])
 `reverse(List, Rev)` — reverse a list.
 
 ```clausal
-Test("reverse") <- reverse([1, 2, 3], [3, 2, 1])
+test("reverse") <- reverse([1, 2, 3], [3, 2, 1])
 ```
 
 ### sort/2
@@ -182,7 +182,7 @@ Test("reverse") <- reverse([1, 2, 3], [3, 2, 1])
 `sort(List, Sorted)` — sort and remove duplicates.
 
 ```clausal
-Test("sort") <- sort([3, 1, 2, 1], [1, 2, 3])
+test("sort") <- sort([3, 1, 2, 1], [1, 2, 3])
 ```
 
 ### msort/2
@@ -190,7 +190,7 @@ Test("sort") <- sort([3, 1, 2, 1], [1, 2, 3])
 `msort(List, Sorted)` — sort preserving duplicates.
 
 ```clausal
-Test("msort") <- msort([3, 1, 2, 1], [1, 1, 2, 3])
+test("msort") <- msort([3, 1, 2, 1], [1, 1, 2, 3])
 ```
 
 ### permutation/2
@@ -199,7 +199,7 @@ Test("msort") <- msort([3, 1, 2, 1], [1, 1, 2, 3])
 permutation of `List` on backtracking.
 
 ```clausal
-Test("perm") <- permutation([1, 2, 3], [3, 1, 2])
+test("perm") <- permutation([1, 2, 3], [3, 1, 2])
 ```
 
 ### flatten/2
@@ -207,7 +207,7 @@ Test("perm") <- permutation([1, 2, 3], [3, 1, 2])
 `flatten(List, Flat)` — recursively flatten nested lists.
 
 ```clausal
-Test("flatten") <- flatten([[1, [2]], [3, 4]], [1, 2, 3, 4])
+test("flatten") <- flatten([[1, [2]], [3, 4]], [1, 2, 3, 4])
 ```
 
 ---
@@ -220,7 +220,7 @@ Test("flatten") <- flatten([[1, [2]], [3, 4]], [1, 2, 3, 4])
 the list without it. Holds for each element on backtracking.
 
 ```clausal
-Test("select") <- select(2, [1, 2, 3], [1, 3])
+test("select") <- select(2, [1, 2, 3], [1, 3])
 ```
 
 This is useful for constraint-style problems where you need to choose from a
@@ -242,7 +242,7 @@ with a separator.
 
 ```clausal
 # Split mode
-Test("split_with") <- split_with(0, [1, 2, 0, 3, 4, 0, 5], [[1, 2], [3, 4], [5]])
+test("split_with") <- split_with(0, [1, 2, 0, 3, 4, 0, 5], [[1, 2], [3, 4], [5]])
 ```
 
 ---
@@ -256,7 +256,7 @@ These operate on plain lists, treating them as sets.
 `list_to_set(List, Set)` — remove duplicates, preserving order.
 
 ```clausal
-Test("to_set") <- list_to_set([1, 2, 1, 3, 2], [1, 2, 3])
+test("to_set") <- list_to_set([1, 2, 1, 3, 2], [1, 2, 3])
 ```
 
 ### union/3
@@ -267,7 +267,7 @@ in `S1` (SWI-consistent). `S1`'s own duplicates are preserved
 set.
 
 ```clausal
-Test("union") <- union([1, 2, 3], [2, 3, 4], [1, 2, 3, 4])
+test("union") <- union([1, 2, 3], [2, 3, 4], [1, 2, 3, 4])
 ```
 
 ### intersection/3
@@ -275,7 +275,7 @@ Test("union") <- union([1, 2, 3], [2, 3, 4], [1, 2, 3, 4])
 `intersection(S1, S2, Result)` — elements in both sets.
 
 ```clausal
-Test("intersection") <- intersection([1, 2, 3], [2, 3, 4], [2, 3])
+test("intersection") <- intersection([1, 2, 3], [2, 3, 4], [2, 3])
 ```
 
 ### subtract/3
@@ -283,7 +283,7 @@ Test("intersection") <- intersection([1, 2, 3], [2, 3, 4], [2, 3])
 `subtract(S1, S2, Result)` — elements in `S1` but not in `S2`.
 
 ```clausal
-Test("subtract") <- subtract([1, 2, 3, 4], [2, 4], [1, 3])
+test("subtract") <- subtract([1, 2, 3, 4], [2, 4], [1, 3])
 ```
 
 ---
@@ -295,7 +295,7 @@ Test("subtract") <- subtract([1, 2, 3, 4], [2, 4], [1, 3])
 `sum_list(List, Total)` — sum all numbers in a list.
 
 ```clausal
-Test("sum") <- sum_list([1, 2, 3, 4], 10)
+test("sum") <- sum_list([1, 2, 3, 4], 10)
 ```
 
 ### max_list/2
@@ -303,7 +303,7 @@ Test("sum") <- sum_list([1, 2, 3, 4], 10)
 `max_list(List, max_)` — maximum element.
 
 ```clausal
-Test("max") <- max_list([3, 1, 4, 1, 5], 5)
+test("max") <- max_list([3, 1, 4, 1, 5], 5)
 ```
 
 ### min_list/2
@@ -311,7 +311,7 @@ Test("max") <- max_list([3, 1, 4, 1, 5], 5)
 `min_list(List, min_)` — minimum element.
 
 ```clausal
-Test("min") <- min_list([3, 1, 4, 1, 5], 1)
+test("min") <- min_list([3, 1, 4, 1, 5], 1)
 ```
 
 ---

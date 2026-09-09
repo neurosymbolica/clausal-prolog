@@ -229,7 +229,7 @@ compile_module()
 └─ Step 7: lock non-dynamic
 ```
 
-Pre-registration at Step 1c creates an empty `PredicateMeta` class so that later clauses (e.g. `Test` predicates) can reference the specialized predicate during compilation.
+Pre-registration at Step 1c creates an empty `PredicateMeta` class so that later clauses (e.g. `test` predicates) can reference the specialized predicate during compilation.
 
 ---
 

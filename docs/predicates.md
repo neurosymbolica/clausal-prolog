@@ -102,8 +102,8 @@ when multiple clause heads unify with the goal, Clausal explores them in source 
 maximum(X, Y, X) <- (X >= Y)
 maximum(X, Y, Y) <- (X < Y)
 
-Test("max 3 5") <- (maximum(3, 5, R), R == 5)
-Test("max 7 2") <- (maximum(7, 2, R), R == 7)
+test("max 3 5") <- (maximum(3, 5, R), R == 5)
+test("max 7 2") <- (maximum(7, 2, R), R == 7)
 ```
 
 For `maximum(3, 5, R)`: the first clause's condition `3 >= 5` does not hold, so Clausal explores the second clause, which holds with `R = 5`.
@@ -162,8 +162,8 @@ length([_, *REST], N) <- (
     N == N1 + 1
 )
 
-Test("length 0") <- length([], 0)
-Test("length 3") <- (length([1, 2, 3], N), N == 3)
+test("length 0") <- length([], 0)
+test("length 3") <- (length([1, 2, 3], N), N == 3)
 ```
 
 For [list](lists.md) relations, the base clause typically holds for the empty list `[]`, and the recursive clause relates a non-empty list `[HEAD, *TAIL]` to its parts (Clausal uses `*` for the tail, like Python).

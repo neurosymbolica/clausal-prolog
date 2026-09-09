@@ -41,8 +41,8 @@ list_length([_, *REST], N) <- (
 )
 
 # Tests are just queries that should hold
-Test("empty") <- list_length([], 0)
-Test("three") <- list_length([1, 2, 3], 3)
+test("empty") <- list_length([], 0)
+test("three") <- list_length([1, 2, 3], 3)
 ```
 
 ### Fewer ways to be wrong

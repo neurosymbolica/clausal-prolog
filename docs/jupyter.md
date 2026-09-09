@@ -102,8 +102,8 @@ grandparent(GP, GC) <- (
     parent(MID, GC)
 )
 
-Test("alice is grandparent of dave") <- (grandparent("alice", "dave"))
-Test("alice is grandparent of eve") <- (grandparent("alice", "eve"))
+test("alice is grandparent of dave") <- (grandparent("alice", "dave"))
+test("alice is grandparent of eve") <- (grandparent("alice", "eve"))
 ```
 
 In a notebook you would query this as:
@@ -122,8 +122,8 @@ member(X, [_, *REST]) <- member(X, REST)
 my_append([], YS, YS),
 my_append([H, *XS], YS, [H, *ZS]) <- my_append(XS, YS, ZS)
 
-Test("member finds element") <- (member(2, [1, 2, 3]))
-Test("append two lists") <- (my_append([1, 2], [3, 4], [1, 2, 3, 4]))
+test("member finds element") <- (member(2, [1, 2, 3]))
+test("append two lists") <- (my_append([1, 2], [3, 4], [1, 2, 3, 4]))
 ```
 
 ### Recursive length
@@ -135,8 +135,8 @@ my_len([_, *T], N) <- (
     N == N1 + 1
 )
 
-Test("length of empty list") <- (my_len([], 0))
-Test("length of three-element list") <- (my_len(["a", "b", "c"], 3))
+test("length of empty list") <- (my_len([], 0))
+test("length of three-element list") <- (my_len(["a", "b", "c"], 3))
 ```
 
 ### Accumulator pattern
@@ -148,11 +148,11 @@ sum_list([H, *T], S) <- (
     S == S1 + H
 )
 
-Test("sum of 1..4 is 10") <- (
+test("sum of 1..4 is 10") <- (
     sum_list([1, 2, 3, 4], S),
     S == 10
 )
-Test("sum of empty is 0") <- (
+test("sum of empty is 0") <- (
     sum_list([], S),
     S == 0
 )
@@ -172,9 +172,9 @@ fib(N, F) <- (
     F == F1 + F2
 )
 
-Test("fib(0) = 0") <- (fib(0, 0))
-Test("fib(5) = 5") <- (fib(5, 5))
-Test("fib(8) = 21") <- (fib(8, 21))
+test("fib(0) = 0") <- (fib(0, 0))
+test("fib(5) = 5") <- (fib(5, 5))
+test("fib(8) = 21") <- (fib(8, 21))
 ```
 
 ---

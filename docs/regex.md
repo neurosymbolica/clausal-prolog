@@ -26,7 +26,7 @@ ParseDate(DATE, YEAR, MONTH) <- (
     match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", DATE)
 )
 
-Test("parse date") <- (
+test("parse date") <- (
     ParseDate("2026-03", YEAR, MONTH),
     YEAR == "2026",
     MONTH == "03"
@@ -61,9 +61,9 @@ Or via [module import](import.md):
 -double_quotes(chars)
 -import_from(regex, [match])
 
-Test("match digits") <- match(r"\d+", "123")
-Test("match fails") <- (not match(r"\d+", "abc"))
-Test("match anchored") <- (not match(r"\d+$", "123abc"))
+test("match digits") <- match(r"\d+", "123")
+test("match fails") <- (not match(r"\d+", "abc"))
+test("match anchored") <- (not match(r"\d+$", "123abc"))
 ```
 
 ### match/3 — Group Extraction
@@ -74,7 +74,7 @@ Test("match anchored") <- (not match(r"\d+$", "123abc"))
 -double_quotes(chars)
 -import_from(regex, [match])
 
-Test("named groups") <- (
+test("named groups") <- (
     match(r"(?P<year>\d{4})-(?P<month>\d{2})", "2026-03", G),
     YEAR is ++G["year"],
     MONTH is ++G["month"],
@@ -82,7 +82,7 @@ Test("named groups") <- (
     MONTH == "03"
 )
 
-Test("positional groups") <- (
+test("positional groups") <- (
     match(r"(\d+)-(\d+)", "42-99", G),
     G == ("42", "99")
 )
@@ -106,10 +106,10 @@ Like match but unanchored — finds the pattern anywhere in the string:
 -double_quotes(chars)
 -import_from(regex, [search])
 
-Test("search found") <- search(r"\d+", "abc123def")
-Test("search not found") <- (not search(r"\d+", "abcdef"))
+test("search found") <- search(r"\d+", "abc123def")
+test("search not found") <- (not search(r"\d+", "abcdef"))
 
-Test("search groups") <- (
+test("search groups") <- (
     search(r"(?P<key>\w+)=(?P<val>\w+)", "foo bar=baz", G),
     KEY is ++G["key"],
     VAL is ++G["val"],
@@ -126,8 +126,8 @@ Test("search groups") <- (
 -double_quotes(chars)
 -import_from(regex, [replace])
 
-Test("collapse spaces") <- (replace(r"\s+", " ", "a  b   c", R), R == "a b c")
-Test("remove digits") <- (replace(r"\d+", "", "a1b2c3", R), R == "abc")
+test("collapse spaces") <- (replace(r"\s+", " ", "a  b   c", R), R == "a b c")
+test("remove digits") <- (replace(r"\d+", "", "a1b2c3", R), R == "abc")
 ```
 
 ### split/3
@@ -138,8 +138,8 @@ Test("remove digits") <- (replace(r"\d+", "", "a1b2c3", R), R == "abc")
 -double_quotes(chars)
 -import_from(regex, [split])
 
-Test("split csv") <- (split(r",\s*", "a, b, c", F), F == ["a", "b", "c"])
-Test("split whitespace") <- (split(r"\s+", "x y z", F), F == ["x", "y", "z"])
+test("split csv") <- (split(r",\s*", "a, b, c", F), F == ["a", "b", "c"])
+test("split whitespace") <- (split(r"\s+", "x y z", F), F == ["x", "y", "z"])
 ```
 
 ### findall/3 (Regex)
@@ -150,7 +150,7 @@ Test("split whitespace") <- (split(r"\s+", "x y z", F), F == ["x", "y", "z"])
 -double_quotes(chars)
 -import_from(regex, [findall])
 
-Test("findall first") <- (findall(r"\d+", "a1b23c456", D), D == "1")
+test("findall first") <- (findall(r"\d+", "a1b23c456", D), D == "1")
 ```
 
 Fails if no matches are found. Following the `re.findall` oracle, the match
@@ -162,7 +162,7 @@ strings when it has two or more:
 -double_quotes(chars)
 -import_from(regex, [findall])
 
-Test("findall single group is a string") <- (
+test("findall single group is a string") <- (
     findall(r"(\d)x", "1x2x", D), D == "1"
 )
 ```
@@ -186,7 +186,7 @@ ParseEmail(EMAIL, USER, DOMAIN) <- (
     match(r"(?P<USER>[^@]+)@(?P<DOMAIN>.+)", EMAIL)
 )
 
-Test("parse email") <- (
+test("parse email") <- (
     ParseEmail("alice@example.com", USER, DOMAIN),
     USER == "alice",
     DOMAIN == "example.com"
@@ -206,7 +206,7 @@ ExtractPort(URL, _port) <- (
     search(r":(?P<_port>\d+)", URL)
 )
 
-Test("extract port") <- (
+test("extract port") <- (
     ExtractPort("http://localhost:8080/api", PORT),
     PORT == "8080"
 )
@@ -241,13 +241,13 @@ ParseLogLine(LINE, LEVEL, MESSAGE) <- (
 
 IsError(LINE) <- match(r"^ERROR", LINE)
 
-Test("parse log info") <- (
+test("parse log info") <- (
     ParseLogLine("INFO system started", LEVEL, MSG),
     LEVEL == "INFO",
     MSG == "system started"
 )
-Test("is error") <- IsError("ERROR disk full")
-Test("not error") <- (not IsError("INFO ok"))
+test("is error") <- IsError("ERROR disk full")
+test("not error") <- (not IsError("INFO ok"))
 ```
 
 ### CSV Field Extraction
@@ -258,7 +258,7 @@ Test("not error") <- (not IsError("INFO ok"))
 
 ParseCsv(LINE, FIELDS) <- split(r",\s*", LINE, FIELDS)
 
-Test("parse csv") <- (
+test("parse csv") <- (
     ParseCsv("a, b, c", FIELDS),
     FIELDS == ["a", "b", "c"]
 )
@@ -279,9 +279,9 @@ RouteUser(PATH, USER_ID) <- (
 
 RouteApi(PATH) <- match(r"^/api/v\d+/", PATH)
 
-Test("route user") <- (RouteUser("/users/42", UID), UID == "42")
-Test("route api") <- RouteApi("/api/v2/data")
-Test("not api") <- (not RouteApi("/users/1"))
+test("route user") <- (RouteUser("/users/42", UID), UID == "42")
+test("route api") <- RouteApi("/api/v2/data")
+test("not api") <- (not RouteApi("/users/1"))
 ```
 
 ### Data Validation
@@ -293,9 +293,9 @@ Test("not api") <- (not RouteApi("/users/1"))
 ValidEmail(S) <- match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", S)
 ValidIpv4(S) <- match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", S)
 
-Test("valid email") <- ValidEmail("alice@example.com")
-Test("invalid email") <- (not ValidEmail("not-an-email"))
-Test("valid ipv4") <- ValidIpv4("192.168.1.1")
+test("valid email") <- ValidEmail("alice@example.com")
+test("invalid email") <- (not ValidEmail("not-an-email"))
+test("valid ipv4") <- ValidIpv4("192.168.1.1")
 ```
 
 ### Combining Regex with findall (Meta-Predicate)
@@ -314,7 +314,7 @@ AllNumbers(TEXT, NUMBERS) <- (
     )
 )
 
-Test("all numbers") <- (
+test("all numbers") <- (
     AllNumbers("a1b23c456", NUMS),
     NUMS == ["1", "23", "456"]
 )
@@ -341,8 +341,8 @@ MatchPrefix(PREFIX, TEXT) <- (
     match(PAT, TEXT)
 )
 
-Test("dynamic prefix") <- MatchPrefix("hello", "hello world")
-Test("dynamic prefix fail") <- (not MatchPrefix("bye", "hello world"))
+test("dynamic prefix") <- MatchPrefix("hello", "hello world")
+test("dynamic prefix fail") <- (not MatchPrefix("bye", "hello world"))
 ```
 
 Dynamic patterns are compiled at runtime (no precompilation). Named-group
@@ -366,7 +366,7 @@ unbound rather than clobbering it with `None`.
 
 FindYear(PAT, S, YEAR) <- match(PAT, S)
 
-Test("dynamic autobind") <- FindYear(r"(?P<YEAR>\d+)", "2026", "2026")
+test("dynamic autobind") <- FindYear(r"(?P<YEAR>\d+)", "2026", "2026")
 ```
 
 ---

@@ -152,7 +152,7 @@ move("a", "c"),
 
 wins(X) <- (move(X, Y), not wins(Y))
 
-Test("a wins") <- wins("a")
+test("a wins") <- wins("a")
 ```
 
 Now:

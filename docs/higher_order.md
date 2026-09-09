@@ -11,11 +11,11 @@ Clausal a functional programming feel.
 ```clausal
 double(X, Y) <- (Y == X * 2)
 
-Test("double all") <- (
+test("double all") <- (
     maplist(double, [1, 2, 3], [2, 4, 6])
 )
 
-Test("keep evens") <- (
+test("keep evens") <- (
     include((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], [2, 4, 6])
 )
 ```
@@ -30,9 +30,9 @@ Test("keep evens") <- (
 `call_goal` is an alias.
 
 ```clausal
-Test("call/1") <- Call((X <- (X == 42)), 42)
+test("call/1") <- Call((X <- (X == 42)), 42)
 
-Test("call/2") <- (
+test("call/2") <- (
     Call(((X, Y) <- (Y == X * 2)), 5, 10)
 )
 ```
@@ -51,7 +51,7 @@ goal succeeds for all elements.
 ```clausal
 positive(X) <- (X > 0)
 
-Test("all positive") <- maplist(positive, [1, 2, 3])
+test("all positive") <- maplist(positive, [1, 2, 3])
 ```
 
 ### maplist/3
@@ -61,7 +61,7 @@ Test("all positive") <- maplist(positive, [1, 2, 3])
 ```clausal
 square(X, Y) <- (Y == X ** 2)
 
-Test("squares") <- (
+test("squares") <- (
     maplist(square, [1, 2, 3, 4], [1, 4, 9, 16])
 )
 ```
@@ -69,7 +69,7 @@ Test("squares") <- (
 With an inline lambda:
 
 ```clausal
-Test("squares inline") <- (
+test("squares inline") <- (
     maplist(((X, Y) <- (Y == X ** 2)), [1, 2, 3, 4], [1, 4, 9, 16])
 )
 ```
@@ -83,7 +83,7 @@ Test("squares inline") <- (
 `include(Goal, List, Included)` — keep elements where `Goal(Elem)` succeeds.
 
 ```clausal
-Test("filter") <- include((X <- (X > 3)), [1, 5, 2, 8, 3], [5, 8])
+test("filter") <- include((X <- (X > 3)), [1, 5, 2, 8, 3], [5, 8])
 ```
 
 ### exclude/3
@@ -92,7 +92,7 @@ Test("filter") <- include((X <- (X > 3)), [1, 5, 2, 8, 3], [5, 8])
 The inverse of include.
 
 ```clausal
-Test("exclude") <- exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
+test("exclude") <- exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
 ```
 
 ### filter_map/3
@@ -103,7 +103,7 @@ value when `Goal(Elem, Out)` succeeds; skip elements where it fails.
 ```clausal
 safe_sqrt(X, Y) <- (X >= 0, Y == X ** 0.5)
 
-Test("filtermap") <- filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
+test("filtermap") <- filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
 ```
 
 ---
@@ -118,7 +118,7 @@ across the list, threading an accumulator from `V0` to `V`.
 ```clausal
 add_step(X, ACC, OUT) <- (OUT == ACC + X)
 
-Test("sum") <- (
+test("sum") <- (
     foldl(add_step, [1, 2, 3, 4], 0, 10)
 )
 ```
@@ -126,7 +126,7 @@ Test("sum") <- (
 With an inline lambda:
 
 ```clausal
-Test("sum inline") <- (
+test("sum inline") <- (
     foldl(((X, ACC, OUT) <- (OUT == ACC + X)), [1, 2, 3, 4], 0, 10)
 )
 ```
@@ -140,7 +140,7 @@ Test("sum inline") <- (
 `take_while(Goal, List, Prefix)` — longest prefix where `Goal(Elem)` succeeds.
 
 ```clausal
-Test("takewhile") <- take_while((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3])
+test("takewhile") <- take_while((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3])
 ```
 
 ### drop_while/3
@@ -148,7 +148,7 @@ Test("takewhile") <- take_while((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3])
 `drop_while(Goal, List, Suffix)` — drop the prefix where `Goal(Elem)` succeeds.
 
 ```clausal
-Test("dropwhile") <- drop_while((X <- (X < 5)), [1, 3, 7, 2, 4], [7, 2, 4])
+test("dropwhile") <- drop_while((X <- (X < 5)), [1, 3, 7, 2, 4], [7, 2, 4])
 ```
 
 ### span/4
@@ -156,7 +156,7 @@ Test("dropwhile") <- drop_while((X <- (X < 5)), [1, 3, 7, 2, 4], [7, 2, 4])
 `span(Goal, List, Yes, No)` — take_while + drop_while in one pass.
 
 ```clausal
-Test("span") <- (
+test("span") <- (
     span((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3], [7, 2, 4])
 )
 ```
@@ -173,7 +173,7 @@ Test("span") <- (
 ```clausal
 first_char(S, C) <- (C is ++S[0])
 
-Test("group by first char") <- (
+test("group by first char") <- (
     group_by(first_char, ["apple", "avocado", "banana", "blueberry", "cherry"], [["apple", "avocado"], ["banana", "blueberry"], ["cherry"]])
 )
 ```
@@ -188,7 +188,7 @@ global groups.
 ```clausal
 abs_key(X, K) <- (abs_(X, K))
 
-Test("sort by abs") <- (
+test("sort by abs") <- (
     sort_by(abs_key, [3, -1, -4, 2], [-1, 2, 3, -4])
 )
 ```
@@ -201,7 +201,7 @@ largest/smallest projected key.
 ```clausal
 str_len(S, K) <- (K is ++len(S))    # see [Python interop](python_integration.md)
 
-Test("longest") <- (
+test("longest") <- (
     max_by(str_len, ["hi", "hello", "hey"], "hello")
 )
 ```
@@ -215,7 +215,7 @@ Test("longest") <- (
 ```clausal
 sq(X, Y) <- (Y == X * X)
 
-Test("pipeline") <- (
+test("pipeline") <- (
     maplist(sq, [1, 2, 3, 4, 5], SQUARES),
     include((X <- (X > 10)), SQUARES, BIG),
     BIG == [16, 25]
@@ -225,7 +225,7 @@ Test("pipeline") <- (
 ### flatten via foldl
 
 ```clausal
-Test("flat") <- (
+test("flat") <- (
     foldl(((CHUNK, ACC, OUT) <- append(ACC, CHUNK, OUT)),
         [[1, 2], [3], [4, 5]],
         [],
@@ -241,7 +241,7 @@ count(PRED, LIST, N) <- (
     length(MATCHED, N)
 )
 
-Test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
+test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
 ```
 
 ---

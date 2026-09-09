@@ -128,11 +128,11 @@ Squares(Ns, Squares) <- (
 
 ## Testing
 
-`.clausal` files can include inline tests as `Test/1` clauses:
+`.clausal` files can include inline tests as `test/1` clauses:
 
 ```prolog
-Test("fib(5) = 5") <- Fib(5, 5)
-Test("tom's grandchildren") <- (
+test("fib(5) = 5") <- Fib(5, 5)
+test("tom's grandchildren") <- (
     Grandparent(tom, ann),
     Grandparent(tom, pat)
 )

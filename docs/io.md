@@ -12,7 +12,7 @@ greet(NAME) <- (
     writeln_text(NAME)
 )
 
-Test("greet") <- greet("Alice")
+test("greet") <- greet("Alice")
 ```
 
 `write_text/1` and `writeln_text/1` are the **text** writers — a string prints
@@ -167,7 +167,7 @@ scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 write a newline character:
 
 ```clausal
-Test("newline") <- (nl(), nl())
+test("newline") <- (nl(), nl())
 ```
 
 ### tab/1
@@ -177,7 +177,7 @@ write N spaces:
 ```clausal
 indented(X) <- (tab(4), writeln_text(X))
 
-Test("indented") <- indented("hello")
+test("indented") <- indented("hello")
 ```
 
 ---
@@ -197,7 +197,7 @@ human-readable text with.
 
 format_pair(K, V, S) <- write_text_to_string(K - V, S)
 
-Test("write text to string") <- (
+test("write text to string") <- (
     format_pair("name", "alice", S),
     S == "name - alice"
 )
@@ -214,7 +214,7 @@ the char list it is.
 
 iso_form(X, S) <- write_to_string(X, S)
 
-Test("write to string is ISO") <- (
+test("write to string is ISO") <- (
     iso_form("ab", S),
     S == "[a,b]"
 )
@@ -231,8 +231,8 @@ quoted, so an atom is distinguishable from a string.
 
 label(X, S) <- term_to_string(X, S)
 
-Test("term to string int") <- (label(42, S), S == "42")
-Test("term to string keeps the quotes") <- (label("hello", S2), S2 == "\"hello\"")
+test("term to string int") <- (label(42, S), S == "42")
+test("term to string keeps the quotes") <- (label("hello", S2), S2 == "\"hello\"")
 ```
 
 **The three string forms side by side:**
@@ -263,7 +263,7 @@ describe(NAME, AGE, S) <- (
     S is f"Name: {NAME}, Age: {AGE}"
 )
 
-Test("describe") <- (
+test("describe") <- (
     describe("Alice", 30, S),
     S == "Name: Alice, Age: 30"
 )
@@ -281,7 +281,7 @@ summarize(XS, S) <- (
     S is f"List has {N} element(s)"
 )
 
-Test("summarize") <- (
+test("summarize") <- (
     summarize([1, 2, 3], S),
     S == "List has 3 element(s)"
 )
@@ -298,7 +298,7 @@ full_name(FIRST, LAST, S) <- (
     S is f"{FIRST} {LAST}"
 )
 
-Test("full name") <- (
+test("full name") <- (
     full_name("Alice", "Smith", S),
     S == "Alice Smith"
 )
@@ -320,7 +320,7 @@ describe_color(S) <- (
     S is f"The color is {C}"
 )
 
-Test("deferred f-string") <- (
+test("deferred f-string") <- (
     describe_color(S),
     S == "The color is red"
 )
@@ -338,7 +338,7 @@ show_all(XS) <- (
     writeln_text(X)
 )
 
-Test("show all") <- show_all([1, 2, 3])
+test("show all") <- show_all([1, 2, 3])
 ```
 
 ### String Building with term_to_string
@@ -348,7 +348,7 @@ Test("show all") <- show_all([1, 2, 3])
 
 format_item(X, S) <- term_to_string(X, S)
 
-Test("format item") <- (
+test("format item") <- (
     format_item(42, S),
     S == "42"
 )
@@ -371,7 +371,7 @@ concat_all(XS, RESULT) <- (
     )
 )
 
-Test("concat all") <- (
+test("concat all") <- (
     concat_all(["a", "b", "c"], R),
     R is "abc"
 )

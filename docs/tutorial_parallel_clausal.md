@@ -160,7 +160,7 @@ def worker():
 
 You can write `.clausal` tests that exercise predicate logic, and then
 test concurrent execution from Python. The [`.clausal` test format](testing.md)
-(`Test("name") <- goal`) runs sequentially in the test runner, which is
+(`test("name") <- goal`) runs sequentially in the test runner, which is
 the right place to test correctness. Thread-safety stress tests belong
 in Python test files (`tests/test_free_threading.py`).
 

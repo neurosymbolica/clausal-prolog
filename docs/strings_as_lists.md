@@ -136,8 +136,8 @@ digit >> ([D], {char_type(D, 'digit')})
 digits >> (digit)
 digits >> (digit, digits)
 
-Test("parse digits") <- phrase(digits, "123")
-Test("partial parse") <- (
+test("parse digits") <- phrase(digits, "123")
+test("partial parse") <- (
     phrase(digits, "12ab", REST),
     REST is ['a', 'b'],   # the leftover is the string "ab"
     string(REST)
@@ -162,7 +162,7 @@ word >> (letter, word)
 words >> (word)
 words >> (word, space, words)
 
-Test("parse words") <- phrase(words, "hello world")
+test("parse words") <- phrase(words, "hello world")
 ```
 
 ---
@@ -338,9 +338,9 @@ byte-stream unification and binary-protocol DCGs.
 
 palindrome(XS) <- reverse(XS, XS)
 
-Test("list palindrome") <- palindrome([1, 2, 1])
-Test("string palindrome") <- palindrome("racecar")
-Test("not palindrome") <- (not palindrome("hello"))
+test("list palindrome") <- palindrome([1, 2, 1])
+test("string palindrome") <- palindrome("racecar")
+test("not palindrome") <- (not palindrome("hello"))
 ```
 
 ### Character frequency
@@ -357,8 +357,8 @@ char_count(STR, CHAR, COUNT) <- (
 
 # The Char argument is a CHARACTER — a one-character atom, written 'l'.
 # "l" would be the one-element string ['l'], which is not an element.
-Test("count l") <- char_count("hello", 'l', 2)
-Test("count z") <- char_count("hello", 'z', 0)
+test("count l") <- char_count("hello", 'l', 2)
+test("count z") <- char_count("hello", 'z', 0)
 ```
 
 ### Simple tokenizer with DCGs
@@ -380,6 +380,6 @@ digits >> (digit, digits)
 token('word') >> (alphas)
 token('number') >> (digits)
 
-Test("word token") <- phrase(token('word'), "hello")
-Test("number token") <- phrase(token('number'), "42")
+test("word token") <- phrase(token('word'), "hello")
+test("number token") <- phrase(token('number'), "42")
 ```

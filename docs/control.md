@@ -14,7 +14,7 @@ performance, and controlling search. For delayed execution, see
 backtracking into the goal.
 
 ```clausal
-Test("first only") <- (
+test("first only") <- (
     once(in_(X, [1, 2, 3])),
     X == 1
 )
@@ -26,7 +26,7 @@ want the first:
 ```clausal
 any_member(ELEM, LIST) <- once(in_(ELEM, LIST))
 
-Test("any") <- (any_member(X, [10, 20, 30]), X == 10)
+test("any") <- (any_member(X, [10, 20, 30]), X == 10)
 ```
 
 ---
@@ -72,7 +72,7 @@ wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 Prevent a test predicate from generating multiple successes:
 
 ```clausal
-Test("exactly one solution") <- once(
+test("exactly one solution") <- once(
     permutation([1, 2, 3], [3, 2, 1])
 )
 ```
