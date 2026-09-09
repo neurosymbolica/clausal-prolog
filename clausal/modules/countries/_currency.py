@@ -1,6 +1,6 @@
 """Currency predicate type and factory.
 
-A currency is a units *base dimension* (self-keyed, like Metre) carrying
+A currency is a units *base dimension* (self-keyed, like metre) carrying
 per-currency display metadata: minor-unit scale, ISO-4217 code, and symbol.
 Dimension safety (no cross-currency addition, no coercion, scale-by-
 dimensionless-only) is inherited unchanged from Quantity/units.

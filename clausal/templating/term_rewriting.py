@@ -407,6 +407,22 @@ _ITE_NAMES = frozenset({ITE_NAME, ITE_DEPRECATED_NAME})
 TEST_NAME = "test"
 TEST_DEPRECATED_NAME = "Test"
 
+# Every spelling under which a ``.clausal`` file reaches the units module.
+# Its TitleCase unit names (``metre``) are deprecated aliases of the lowercase
+# ones (``metre``); an ``-import_from`` naming one is rewritten to import the
+# lowercase unit under the old local name and linted once per file.
+_UNITS_MODULE_PATHS = frozenset({
+    "units", "py.units", "clausal.modules.units", "clausal.modules.py.units",
+})
+
+
+def _deprecated_unit_renames(module_path: str) -> dict[str, str]:
+    """``{OldName: new_name}`` when *module_path* is the units module, else ``{}``."""
+    if module_path not in _UNITS_MODULE_PATHS:
+        return {}
+    from clausal.modules.units import _DEPRECATED_UNIT_NAMES  # noqa: PLC0415
+    return _DEPRECATED_UNIT_NAMES
+
 
 def _reserved_truth_decl_name(item) -> str | None:
     """The truth-value spelling *item* tries to declare, or ``None``.
@@ -969,9 +985,9 @@ def _lower_dict_reads(head_ast, body_ast):
 def _is_unit_expr(node) -> bool:
     """True for AST nodes that form a valid unit-type expression.
 
-    Accepts plain Names (e.g. ``Metre``) and compound expressions built from
+    Accepts plain Names (e.g. ``metre``) and compound expressions built from
     ``*``, ``/``, ``**`` with Names and numeric Constants as leaves — e.g.
-    ``Metre**2``, ``Metre/Second``, ``Kilogram*Metre/Second**2``.
+    ``metre**2``, ``metre/second``, ``kilogram*metre/second**2``.
     """
     if isinstance(node, Name):
         return True
@@ -1686,8 +1702,8 @@ class TermTransformer(NodeTransformer):
         ):
             # <expr>(Unit) — unit annotation sugar.
             # Any expression that is not a predicate/functor name or attribute
-            # access can be annotated with a unit: 5(Metre), X(Newton),
-            # [1,2,3](Metre), (A + B)(Metre/Second), etc.
+            # access can be annotated with a unit: 5(metre), X(newton),
+            # [1,2,3](metre), (A + B)(metre/second), etc.
             # Transforms to: ++(Quantity(<expr>, Unit))
             raw_unit = call.args[0]
             var_names = _collect_logic_var_names(call.func)
@@ -2418,7 +2434,7 @@ class TermTransformer(NodeTransformer):
         # -n(Unit) / -n(): fold the USub into the numeric callee so the
         # unit-sugar transform sees (-n)(Unit) and yields ++(Quantity(-n, Unit))
         # rather than Negate(++thunk), which term unification never evaluates —
-        # so -3(Second) works in `is`/argument position, not only after `:=`
+        # so -3(second) works in `is`/argument position, not only after `:=`
         # (F047).
         if (
             isinstance(unary_op.op, USub)
@@ -4067,6 +4083,9 @@ class EmbedTransformer(NodeTransformer):
         # ``Test/1`` (deprecated spelling of ``test/1``) is linted once per
         # file, at its first clause — see _warn_deprecated_test_spelling.
         transformer._warned_test_spelling = False
+        # TitleCase unit names in an ``-import_from(py.units, …)`` list are
+        # linted once per file per name — see _warn_deprecated_unit_spelling.
+        transformer._warned_unit_spellings: set[str] = set()
         transformer._seen_functors: dict[str, list[str]] = {}
         # Functors whose _seen_functors entry was minted by a -dynamic
         # directive with PLACEHOLDER arg_i field names (A12-F005). The first
@@ -4476,7 +4495,7 @@ class EmbedTransformer(NodeTransformer):
         own file work today and are used as shorthand throughout this repo's
         test snippets (``A(X) <- B(X)``, ``LP(X, Y, OBJ) <- …``); rejecting
         those would be a rename campaign for no defect.  It also leaves the
-        ``VAR(Unit)`` quantity sugar (``eval_(N(Metre), D)``) untouched: ``N``
+        ``VAR(Unit)`` quantity sugar (``eval_(N(metre), D)``) untouched: ``N``
         there is a variable, not a clause head, so the sets do not meet.
         """
         clashes = sorted(
@@ -6625,8 +6644,48 @@ class EmbedTransformer(NodeTransformer):
             statements.append(call_node)
         return statements if len(statements) > 1 else statements[0]
 
+    def _warn_deprecated_unit_spelling(transformer, renames, node):
+        """Lint the TitleCase unit names of one ``-import_from(py.units, …)``.
+
+        The counterpart of ``_warn_deprecated_test_spelling`` for the units
+        module: ``metre`` is the spelling, ``metre`` the old one.  A file
+        imports its units in one list, so this fires ONCE per file for that
+        list — naming every rename in it — rather than once per use site.
+        A name already warned about in this file is not repeated.  Message
+        shape follows ``EmbedTransformer._site``.
+        """
+        fresh = [(old, new) for old, new in renames
+                 if old not in transformer._warned_unit_spellings]
+        if not fresh:
+            return
+        transformer._warned_unit_spellings.update(old for old, _ in fresh)
+        import warnings  # noqa: PLC0415
+        lineno = getattr(node, "lineno", None)
+        if transformer._filename:
+            where = f"{transformer._filename}:{lineno or '?'}"
+        else:
+            where = f"line {lineno}" if lineno else "unknown site"
+        snippet = ""
+        lines = transformer._source_lines
+        if lines and lineno and 1 <= lineno <= len(lines):
+            snippet = " — " + lines[lineno - 1].strip()
+        listed = ", ".join(f"`{old}` -> `{new}`" for old, new in fresh)
+        noun = "spellings" if len(fresh) > 1 else "spelling"
+        warnings.warn(
+            f"{where}{snippet}: TitleCase unit names are the old {noun}; "
+            f"unit names are lowercase. Rename {listed}; the old spelling "
+            f"still works but will be removed in a future release",
+            ClausalDeprecatedSpellingWarning,
+            stacklevel=2,
+        )
+
     def _handle_import_from_directive(transformer, args, expr_stmt):
         """Process ``-import_from(dotted.module, [Pred1, alias(Pred2, Local)])`` directive.
+
+        A deprecated TitleCase unit name in a units import (``metre``) is
+        imported as its lowercase unit under the old local name (``from
+        py.units import metre as metre``) and linted once per file, so the
+        file keeps working while the load names the rename.
 
         Emits a Python ``from dotted.module import Pred1, Pred2 as Local``
         statement.  The imported names land in module globals where the
@@ -6653,6 +6712,8 @@ class EmbedTransformer(NodeTransformer):
                 f"-import_from: second argument must be a list of names, "
                 f"got {dump(args[1])}"
             )
+        unit_renames = _deprecated_unit_renames(module_path)
+        renamed_units: list[tuple[str, str]] = []
         aliases = []
         for item in args[1].elts:
             if isinstance(item, Name):
@@ -6690,6 +6751,14 @@ class EmbedTransformer(NodeTransformer):
                         f"alias({local_name}, "
                         f"{_suggest_non_var_name(local_name)})"
                     )
+                unit_name = unit_renames.get(local_name)
+                if unit_name is not None:
+                    renamed_units.append((local_name, unit_name))
+                    dotted_key = f"{module_path}.{unit_name}"
+                    transformer._import_remap[local_name] = dotted_key
+                    transformer._imported_functors.add(local_name)
+                    aliases.append(alias(name=unit_name, asname=local_name))
+                    continue
                 dotted_key = f"{module_path}.{local_name}"
                 transformer._import_remap[local_name] = dotted_key
                 transformer._imported_functors.add(local_name)
@@ -6734,6 +6803,10 @@ class EmbedTransformer(NodeTransformer):
                         f"alias({orig_name}, "
                         f"{_suggest_non_var_name(local_name)})"
                     )
+                unit_name = unit_renames.get(orig_name)
+                if unit_name is not None:
+                    renamed_units.append((orig_name, unit_name))
+                    orig_name = unit_name
                 dotted_key = f"{module_path}.{orig_name}"
                 transformer._import_remap[local_name] = dotted_key
                 # The ALIAS is what this file binds; the original spelling
@@ -6745,6 +6818,8 @@ class EmbedTransformer(NodeTransformer):
                     f"-import_from: import list items must be names or "
                     f"alias(OrigName, LocalName), got {dump(item)}"
                 )
+        if renamed_units:
+            transformer._warn_deprecated_unit_spelling(renamed_units, expr_stmt)
         # Accumulate import info for pipeline-split ModuleAST.
         import_names = []
         for a in aliases:

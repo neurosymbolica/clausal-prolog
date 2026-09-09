@@ -2098,7 +2098,7 @@ class Quantity:
     ``dims`` maps dimension keys (unit predicate objects) to integer exponents.
     Zero-valued exponents are removed automatically.  The empty dict means
     dimensionless.  Internally all values are stored in SI base units; named-unit
-    predicates (``Metre``, ``Newton``, ``Watt``, …) in ``clausal.modules.units``
+    predicates (``metre``, ``newton``, ``watt``, …) in ``clausal.modules.units``
     handle scaling on the way in/out.
 
     Arithmetic:
@@ -2121,8 +2121,8 @@ class Quantity:
 
     def __init__(self, value, dims) -> None:
         if isinstance(dims, Quantity):
-            # dims is a Quantity constant (e.g. Kilometer) — multiply:
-            # Quantity(5, Kilometer) → Quantity(5 * 1000, {Metre: 1})
+            # dims is a Quantity constant (e.g. kilometer) — multiply:
+            # Quantity(5, kilometer) → Quantity(5 * 1000, {metre: 1})
             a, b = self._num_pair(value, dims._value)
             self._value = a * b
             self._dims = dims._dims
@@ -2153,9 +2153,9 @@ class Quantity:
             _check_currency_precision(self._value, dims)
 
     def __call__(self, value):
-        """Scale this quantity by *value* — ``Byte(4)`` is ``4 * Byte`` (F048).
+        """Scale this quantity by *value* — ``byte(4)`` is ``4 * byte`` (F048).
 
-        Lets a scaled-unit constant (e.g. ``Byte``, ``mebi``) be used in the
+        Lets a scaled-unit constant (e.g. ``byte``, ``mebi``) be used in the
         published ``n(Unit)`` call style, mirroring ``_UnitsPredicate.__call__``.
         """
         return Quantity(value, self)
@@ -2274,7 +2274,7 @@ class Quantity:
                     f"Exponent must be an integer constant for dimensional "
                     f"quantities, got {exp!r}"
                 )
-            # Dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
+            # dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
             return Quantity(self._value ** exp, {})
         new_dims = {k: v * exp for k, v in self._dims.items() if v * exp != 0}
         return Quantity(self._value ** exp, new_dims)

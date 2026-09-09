@@ -8,19 +8,24 @@ Two distinct styles are provided:
 
 **SI unit predicates** — used with the ``n(Unit)`` sugar in ``.clausal`` files::
 
-    eval_(5(Metre), D)          # Quantity(5,   {Metre: 1})
-    eval_(9.8(Newton), F)       # Quantity(9.8, {kg:1, m:1, s:-2})
-    eval_(10(m/s), V)           # Quantity(10,  {Metre:1, Second:-1})
+    eval_(5(metre), D)          # Quantity(5,   {metre: 1})
+    eval_(9.8(newton), F)       # Quantity(9.8, {kg:1, m:1, s:-2})
+    eval_(10(m/s), V)           # Quantity(10,  {metre:1, second:-1})
 
 The argument to the parentheses *must* be an SI unit predicate (or a compound
 expression of them).  SI prefix names are plain numbers — they are **not**
 predicates and cannot appear inside the ``n(Unit)`` parentheses.
 
+Unit names are lowercase identifiers — ``metre``, ``newton``, ``kilometer`` —
+like the currency names and the symbol forms (``m``, ``s``).  The TitleCase
+spellings (``Metre``, ``Newton``) are deprecated aliases; see the end of
+this module.
+
 **SI prefix constants** — plain Python numbers, multiply against unit vectors::
 
-    5 * kilo * Newton(1)        # 5 kN  →  Quantity(5000, {kg:1, m:1, s:-2})
-    100 * nano * Second(1)      # 100 ns →  Quantity(1e-7, {Second:1})
-    1 * mega * Hertz(1)         # 1 MHz  →  Quantity(1e6, {Second:-1})
+    5 * kilo * newton(1)        # 5 kN  →  Quantity(5000, {kg:1, m:1, s:-2})
+    100 * nano * second(1)      # 100 ns →  Quantity(1e-7, {second:1})
+    1 * mega * hertz(1)         # 1 MHz  →  Quantity(1e6, {second:-1})
 
 Imperial and non-SI unit vectors live in ``imperial``::
 
@@ -28,11 +33,11 @@ Imperial and non-SI unit vectors live in ``imperial``::
 
 Usage in .clausal files::
 
-    -import_from(py.units, [Metre, Newton, Watt, kilo, strip_units])
+    -import_from(py.units, [metre, newton, watt, kilo, strip_units])
 
-    eval_(5(Metre), D)                   # SI sugar
-    eval_(9.8(Newton), F)                # SI sugar
-    BIG is ++(5 * kilo * Newton(1))      # prefix via ++
+    eval_(5(metre), D)                   # SI sugar
+    eval_(9.8(newton), F)                # SI sugar
+    BIG is ++(5 * kilo * newton(1))      # prefix via ++
     strip_units(D, V)                     # extract numeric value
 """
 
@@ -74,11 +79,11 @@ class _UnitsPredicate(ModulePredicate):
     """Adapter providing ``_get_dispatch()`` for a units predicate.
 
     Extends ModulePredicate with dimensional algebra: callable as a Python
-    expression when ``_dims`` is set, e.g. ``Kilogram(5)`` returns
+    expression when ``_dims`` is set, e.g. ``kilogram(5)`` returns
     ``Quantity(5, {'kg': 1})`` directly, for use in Python arithmetic
     expressions via the ``++`` escape in .clausal files::
 
-        E is ++(Kilogram(1) * SpeedOfLight ** 2)
+        E is ++(kilogram(1) * SpeedOfLight ** 2)
     """
 
     __slots__ = ("_dims",)
@@ -132,7 +137,7 @@ def _make_unit_pred_base(name: str) -> _UnitsPredicate:
     """Create a base SI unit predicate that uses itself as the dimension key.
 
     We construct the pred object first so it can appear as its own key in the
-    ``dims`` dict — e.g. ``{Metre: 1}`` — without a circular-definition problem.
+    ``dims`` dict — e.g. ``{metre: 1}`` — without a circular-definition problem.
     """
     pred = _UnitsPredicate(name)
     frozen_dims = {pred: 1}   # pred already exists; self-referential key is fine
@@ -146,8 +151,8 @@ def _make_unit_pred(name: str, dims: dict) -> _UnitsPredicate:
     ``Unit(value)`` returns ``Quantity(value, dims)`` directly, for use in
     Python arithmetic expressions via the ``++`` escape::
 
-        D is ++(Metre(5))          # explicit form
-        eval_(5(Metre), D)         # n(Unit) sugar, equivalent
+        D is ++(metre(5))          # explicit form
+        eval_(5(metre), D)         # n(Unit) sugar, equivalent
     """
     frozen_dims = {k: v for k, v in dims.items() if v != 0}
     pred = _UnitsPredicate(name)
@@ -159,36 +164,36 @@ def _make_unit_pred(name: str, dims: dict) -> _UnitsPredicate:
 # ═════════════════════════════════════════════════════════════════════════════
 # SI base unit predicates
 # ═════════════════════════════════════════════════════════════════════════════
-# Each base unit uses itself as the dimension key: Metre gives {Metre: 1}.
+# Each base unit uses itself as the dimension key: metre gives {metre: 1}.
 # This avoids stringly-typed dimension dicts.
 
 # Length
-Metre        = _make_unit_pred_base("Metre")
+metre        = _make_unit_pred_base("metre")
 # Mass
-Kilogram     = _make_unit_pred_base("Kilogram")
+kilogram     = _make_unit_pred_base("kilogram")
 # Time
-Second       = _make_unit_pred_base("Second")
+second       = _make_unit_pred_base("second")
 # Electric current
-Ampere       = _make_unit_pred_base("Ampere")
+ampere       = _make_unit_pred_base("ampere")
 # Thermodynamic temperature (ratio scale only — no Celsius/Fahrenheit)
-Kelvin       = _make_unit_pred_base("Kelvin")
+kelvin       = _make_unit_pred_base("kelvin")
 # Amount of substance
-Mole         = _make_unit_pred_base("Mole")
+mole         = _make_unit_pred_base("mole")
 # Luminous intensity
-Candela      = _make_unit_pred_base("Candela")
-# Dimensionless (empty dims) — wraps a plain number as Quantity({})
-Dimensionless = _make_unit_pred("Dimensionless", {})
+candela      = _make_unit_pred_base("candela")
+# dimensionless (empty dims) — wraps a plain number as Quantity({})
+dimensionless = _make_unit_pred("dimensionless", {})
 # Digital information (IEC 80000-13)
-Bit          = _make_unit_pred_base("Bit")
+bit          = _make_unit_pred_base("bit")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SI prefix constants
 # ═════════════════════════════════════════════════════════════════════════════
 # Plain numbers — multiply against unit vectors in ++ expressions:
 #
-#     ++(5 * kilo * Newton(1))       # 5 kN
-#     ++(100 * nano * Second(1))     # 100 ns
-#     ++(2.4 * giga * Hertz(1))      # 2.4 GHz
+#     ++(5 * kilo * newton(1))       # 5 kN
+#     ++(100 * nano * second(1))     # 100 ns
+#     ++(2.4 * giga * hertz(1))      # 2.4 GHz
 #
 # These are NOT predicates and cannot appear inside n(Unit) parentheses.
 # The standard SI symbols for ×10^3…×10^24 are uppercase letters (k is the
@@ -220,8 +225,8 @@ yocto = 1e-24
 # ── IEC binary prefix constants (powers of 1024) ──────────────────────────────
 # Plain numbers — multiply against unit vectors in ++ expressions:
 #
-#     ++(4 * gibi * Byte(1))        # 4 GiB  →  Quantity(4_294_967_296 * 8, {Bit: 1})
-#     ++(100 * mebi * Byte(1))      # 100 MiB
+#     ++(4 * gibi * byte(1))        # 4 GiB  →  Quantity(4_294_967_296 * 8, {bit: 1})
+#     ++(100 * mebi * byte(1))      # 100 MiB
 #
 # These are NOT predicates and cannot appear inside n(Unit) parentheses.
 
@@ -236,101 +241,101 @@ exbi = 2**60
 # Scaled SI unit constants  (plain Quantity values in SI base units)
 # ═════════════════════════════════════════════════════════════════════════════
 # These are Quantity constants, not predicates.  Multiply by a scalar:
-#     ++(5 * Kilometer)    → Quantity(5000, {Metre: 1})
-#     ++(200 * Gram)       → Quantity(0.2,  {Kilogram: 1})
-# Or use unit annotation sugar:  5(Kilometer), 200(Gram)
+#     ++(5 * kilometer)    → Quantity(5000, {metre: 1})
+#     ++(200 * gram)       → Quantity(0.2,  {kilogram: 1})
+# Or use unit annotation sugar:  5(kilometer), 200(gram)
 
 # ── Scaled length (store as metres) ──────────────────────────────────────────
 
-Kilometer    = Quantity(1_000,   {Metre: 1})
-Centimeter   = Quantity(1e-2,    {Metre: 1})
-Millimeter   = Quantity(1e-3,    {Metre: 1})
-Micrometer   = Quantity(1e-6,    {Metre: 1})
-Nanometer    = Quantity(1e-9,    {Metre: 1})
+kilometer    = Quantity(1_000,   {metre: 1})
+centimeter   = Quantity(1e-2,    {metre: 1})
+millimeter   = Quantity(1e-3,    {metre: 1})
+micrometer   = Quantity(1e-6,    {metre: 1})
+nanometer    = Quantity(1e-9,    {metre: 1})
 
 # ── Scaled mass (store as kilograms) ─────────────────────────────────────────
 
-Gram         = Quantity(1e-3,    {Kilogram: 1})
-Milligram    = Quantity(1e-6,    {Kilogram: 1})
-Microgram    = Quantity(1e-9,    {Kilogram: 1})
-Tonne        = Quantity(1_000,   {Kilogram: 1})
+gram         = Quantity(1e-3,    {kilogram: 1})
+milligram    = Quantity(1e-6,    {kilogram: 1})
+microgram    = Quantity(1e-9,    {kilogram: 1})
+tonne        = Quantity(1_000,   {kilogram: 1})
 
 # ── Scaled time (store as seconds) ───────────────────────────────────────────
 
-Millisecond  = Quantity(1e-3,    {Second: 1})
-Microsecond  = Quantity(1e-6,    {Second: 1})
-Nanosecond   = Quantity(1e-9,    {Second: 1})
-Minute       = Quantity(60,      {Second: 1})
-Hour         = Quantity(3_600,   {Second: 1})
-Day          = Quantity(86_400,  {Second: 1})
-Week         = Quantity(604_800, {Second: 1})
-JulianYear   = Quantity(31_557_600, {Second: 1})
+millisecond  = Quantity(1e-3,    {second: 1})
+microsecond  = Quantity(1e-6,    {second: 1})
+nanosecond   = Quantity(1e-9,    {second: 1})
+minute       = Quantity(60,      {second: 1})
+hour         = Quantity(3_600,   {second: 1})
+day          = Quantity(86_400,  {second: 1})
+week         = Quantity(604_800, {second: 1})
+julian_year   = Quantity(31_557_600, {second: 1})
 
 # ── Information (stored as bits) ──────────────────────────────────────────────
-# Bit is the IEC 80000-13 base unit; all values are normalised to bits.
+# bit is the IEC 80000-13 base unit; all values are normalised to bits.
 
-Byte         = Quantity(8,       {Bit: 1})
+byte         = Quantity(8,       {bit: 1})
 
 # Decimal (SI-prefixed) multiples
-Kilobyte     = Quantity(8_000,           {Bit: 1})
-Megabyte     = Quantity(8_000_000,       {Bit: 1})
-Gigabyte     = Quantity(8_000_000_000,   {Bit: 1})
-Terabyte     = Quantity(8_000_000_000_000, {Bit: 1})
+kilobyte     = Quantity(8_000,           {bit: 1})
+megabyte     = Quantity(8_000_000,       {bit: 1})
+gigabyte     = Quantity(8_000_000_000,   {bit: 1})
+terabyte     = Quantity(8_000_000_000_000, {bit: 1})
 
-Kilobit      = Quantity(1_000,           {Bit: 1})
-Megabit      = Quantity(1_000_000,       {Bit: 1})
-Gigabit      = Quantity(1_000_000_000,   {Bit: 1})
+kilobit      = Quantity(1_000,           {bit: 1})
+megabit      = Quantity(1_000_000,       {bit: 1})
+gigabit      = Quantity(1_000_000_000,   {bit: 1})
 
 # Binary (IEC-prefixed) multiples
-Kibibyte     = Quantity(8 * 2**10,  {Bit: 1})
-Mebibyte     = Quantity(8 * 2**20,  {Bit: 1})
-Gibibyte     = Quantity(8 * 2**30,  {Bit: 1})
-Tebibyte     = Quantity(8 * 2**40,  {Bit: 1})
+kibibyte     = Quantity(8 * 2**10,  {bit: 1})
+mebibyte     = Quantity(8 * 2**20,  {bit: 1})
+gibibyte     = Quantity(8 * 2**30,  {bit: 1})
+tebibyte     = Quantity(8 * 2**40,  {bit: 1})
 
-Kibibit      = Quantity(2**10,  {Bit: 1})
-Mebibit      = Quantity(2**20,  {Bit: 1})
-Gibibit      = Quantity(2**30,  {Bit: 1})
+kibibit      = Quantity(2**10,  {bit: 1})
+mebibit      = Quantity(2**20,  {bit: 1})
+gibibit      = Quantity(2**30,  {bit: 1})
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Named derived SI unit predicates
 # ═════════════════════════════════════════════════════════════════════════════
 
 # Mechanics
-Newton   = _make_unit_pred("Newton",   {Kilogram: 1, Metre: 1, Second: -2})          # N  = kg·m/s²
-Joule    = _make_unit_pred("Joule",    {Kilogram: 1, Metre: 2, Second: -2})          # J  = N·m
-Watt     = _make_unit_pred("Watt",     {Kilogram: 1, Metre: 2, Second: -3})          # W  = J/s
-Pascal   = _make_unit_pred("Pascal",   {Kilogram: 1, Metre: -1, Second: -2})         # Pa = N/m²
-Hertz    = _make_unit_pred("Hertz",    {Second: -1})                                 # Hz = 1/s
-Gray     = _make_unit_pred("Gray",     {Metre: 2, Second: -2})                       # Gy = J/kg
-Sievert  = _make_unit_pred("Sievert",  {Metre: 2, Second: -2})                       # Sv = J/kg
+newton   = _make_unit_pred("newton",   {kilogram: 1, metre: 1, second: -2})          # N  = kg·m/s²
+joule    = _make_unit_pred("joule",    {kilogram: 1, metre: 2, second: -2})          # J  = N·m
+watt     = _make_unit_pred("watt",     {kilogram: 1, metre: 2, second: -3})          # W  = J/s
+pascal   = _make_unit_pred("pascal",   {kilogram: 1, metre: -1, second: -2})         # Pa = N/m²
+hertz    = _make_unit_pred("hertz",    {second: -1})                                 # Hz = 1/s
+gray     = _make_unit_pred("gray",     {metre: 2, second: -2})                       # Gy = J/kg
+sievert  = _make_unit_pred("sievert",  {metre: 2, second: -2})                       # Sv = J/kg
 
 # Electromagnetism
-Volt     = _make_unit_pred("Volt",     {Kilogram: 1, Metre: 2, Second: -3, Ampere: -1})  # V  = W/A
-Coulomb  = _make_unit_pred("Coulomb",  {Ampere: 1, Second: 1})                           # C  = A·s
-Farad    = _make_unit_pred("Farad",    {Kilogram: -1, Metre: -2, Second: 4, Ampere: 2})  # F  = C/V
-Ohm      = _make_unit_pred("Ohm",      {Kilogram: 1, Metre: 2, Second: -3, Ampere: -2}) # Ω  = V/A
-Siemens  = _make_unit_pred("Siemens",  {Kilogram: -1, Metre: -2, Second: 3, Ampere: 2}) # S  = 1/Ω
-Weber    = _make_unit_pred("Weber",    {Kilogram: 1, Metre: 2, Second: -2, Ampere: -1}) # Wb = V·s
-Tesla    = _make_unit_pred("Tesla",    {Kilogram: 1, Second: -2, Ampere: -1})            # T  = Wb/m²
-Henry    = _make_unit_pred("Henry",    {Kilogram: 1, Metre: 2, Second: -2, Ampere: -2}) # H  = Wb/A
+volt     = _make_unit_pred("volt",     {kilogram: 1, metre: 2, second: -3, ampere: -1})  # V  = W/A
+coulomb  = _make_unit_pred("coulomb",  {ampere: 1, second: 1})                           # C  = A·s
+farad    = _make_unit_pred("farad",    {kilogram: -1, metre: -2, second: 4, ampere: 2})  # F  = C/V
+ohm      = _make_unit_pred("ohm",      {kilogram: 1, metre: 2, second: -3, ampere: -2}) # Ω  = V/A
+siemens  = _make_unit_pred("siemens",  {kilogram: -1, metre: -2, second: 3, ampere: 2}) # S  = 1/Ω
+weber    = _make_unit_pred("weber",    {kilogram: 1, metre: 2, second: -2, ampere: -1}) # Wb = V·s
+tesla    = _make_unit_pred("tesla",    {kilogram: 1, second: -2, ampere: -1})            # T  = Wb/m²
+henry    = _make_unit_pred("henry",    {kilogram: 1, metre: 2, second: -2, ampere: -2}) # H  = Wb/A
 
 # Photometry
-Lumen    = _make_unit_pred("Lumen",    {Candela: 1})                                # lm = cd·sr (sr dimensionless)
-Lux      = _make_unit_pred("Lux",      {Candela: 1, Metre: -2})                     # lx = lm/m²
+lumen    = _make_unit_pred("lumen",    {candela: 1})                                # lm = cd·sr (sr dimensionless)
+lux      = _make_unit_pred("lux",      {candela: 1, metre: -2})                     # lx = lm/m²
 
 # Chemistry / thermodynamics
-Katal    = _make_unit_pred("Katal",    {Mole: 1, Second: -1})                       # kat = mol/s
+katal    = _make_unit_pred("katal",    {mole: 1, second: -1})                       # kat = mol/s
 
-# Scaled SI pressure (stored as Pascal)
-Bar        = Quantity(1e5,              {Kilogram: 1, Metre: -1, Second: -2})
-Millibar   = Quantity(100,             {Kilogram: 1, Metre: -1, Second: -2})
-Atmosphere = Quantity(101_325,         {Kilogram: 1, Metre: -1, Second: -2})
+# Scaled SI pressure (stored as pascal)
+bar        = Quantity(1e5,              {kilogram: 1, metre: -1, second: -2})
+millibar   = Quantity(100,             {kilogram: 1, metre: -1, second: -2})
+atmosphere = Quantity(101_325,         {kilogram: 1, metre: -1, second: -2})
 
-# Scaled SI energy (stored as Joule)
-Electronvolt = Quantity(1.602176634e-19, {Kilogram: 1, Metre: 2, Second: -2})
+# Scaled SI energy (stored as joule)
+electronvolt = Quantity(1.602176634e-19, {kilogram: 1, metre: 2, second: -2})
 
-# Scaled SI power (stored as Watt)
-Kilowatt     = Quantity(1_000,         {Kilogram: 1, Metre: 2, Second: -3})
+# Scaled SI power (stored as watt)
+kilowatt     = Quantity(1_000,         {kilogram: 1, metre: 2, second: -3})
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SI standard abbreviation aliases
@@ -340,32 +345,32 @@ Kilowatt     = Quantity(1_000,         {Kilogram: 1, Metre: 2, Second: -3})
 # as logic variables).
 #
 # Safe to alias:  m, kg, s, mol, cd
-# Not aliased:    A (Ampere) and K (Kelvin) — single uppercase letters are
+# Not aliased:    A (ampere) and K (kelvin) — single uppercase letters are
 #                 logic variables in Clausal; use the full names instead.
 
-m   = Metre
-kg  = Kilogram
-s   = Second
-mol = Mole
-cd  = Candela
+m   = metre
+kg  = kilogram
+s   = second
+mol = mole
+cd  = candela
 
 # ── Scaled SI unit abbreviations ─────────────────────────────────────────────
 # Quantity constants — multiply by a scalar: ++(5 * km)
 
-km  = Kilometer
-cm  = Centimeter
-mm  = Millimeter
-um  = Micrometer    # μm — μ is not a valid identifier
-nm  = Nanometer
+km  = kilometer
+cm  = centimeter
+mm  = millimeter
+um  = micrometer    # μm — μ is not a valid identifier
+nm  = nanometer
 
-mg  = Milligram
-ug  = Microgram     # μg
+mg  = milligram
+ug  = microgram     # μg
 
-ms  = Millisecond
-us  = Microsecond   # μs
-ns  = Nanosecond
-min = Minute        # shadows Python builtin; import explicitly if needed
-hr  = Hour
+ms  = millisecond
+us  = microsecond   # μs
+ns  = nanosecond
+min = minute        # shadows Python builtin; import explicitly if needed
+hr  = hour
 
 # ── SI prefix abbreviations ───────────────────────────────────────────────────
 # Plain numbers — same as the full names above.
@@ -377,7 +382,7 @@ h  = hecto   # 1e2
 da = deca    # 1e1   (two-char: safe)
 d  = deci    # 1e-1
 c  = centi   # 1e-2
-# milli's SI symbol 'm' clashes with Metre — use 'milli' or 'ms'/'mg'/'mm'
+# milli's SI symbol 'm' clashes with metre — use 'milli' or 'ms'/'mg'/'mm'
 n  = nano    # 1e-9
 p  = pico    # 1e-12
 f  = femto   # 1e-15
@@ -389,27 +394,27 @@ a  = atto    # 1e-18
 # ═════════════════════════════════════════════════════════════════════════════
 
 # Named derived SI units aliased to their Quantity unit vector
-SI_Frequency            = Hertz(1)
-SI_Force                = Newton(1)
-SI_Energy               = Joule(1)
-SI_Power                = Watt(1)
-SI_Pressure             = Pascal(1)
-SI_Voltage              = Volt(1)
-SI_Charge               = Coulomb(1)
-SI_Capacitance          = Farad(1)
-SI_Resistance           = Ohm(1)
-SI_Conductance          = Siemens(1)
-SI_MagneticFlux         = Weber(1)
-SI_MagneticFluxDensity  = Tesla(1)
-SI_Inductance           = Henry(1)
-SI_LuminousFlux         = Lumen(1)
-SI_Illuminance          = Lux(1)
+SI_Frequency            = hertz(1)
+SI_Force                = newton(1)
+SI_Energy               = joule(1)
+SI_Power                = watt(1)
+SI_Pressure             = pascal(1)
+SI_Voltage              = volt(1)
+SI_Charge               = coulomb(1)
+SI_Capacitance          = farad(1)
+SI_Resistance           = ohm(1)
+SI_Conductance          = siemens(1)
+SI_MagneticFlux         = weber(1)
+SI_MagneticFluxDensity  = tesla(1)
+SI_Inductance           = henry(1)
+SI_LuminousFlux         = lumen(1)
+SI_Illuminance          = lux(1)
 
 # Unnamed compound SI dimensions
-SI_Area         = Metre(1)**2
-SI_Volume       = Metre(1)**3
-SI_Velocity     = Metre(1) / Second(1)
-SI_Acceleration = Metre(1) / Second(1)**2
+SI_Area         = metre(1)**2
+SI_Volume       = metre(1)**3
+SI_Velocity     = metre(1) / second(1)
+SI_Acceleration = metre(1) / second(1)**2
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -419,22 +424,22 @@ SI_Acceleration = Metre(1) / Second(1)**2
 # These are plain Quantity values, not predicates.  Use them in Python
 # expressions via the ++ escape::
 #
-#     E is ++(Kilogram(1) * SpeedOfLight ** 2)
+#     E is ++(kilogram(1) * SpeedOfLight ** 2)
 
 SpeedOfLight          = 299_792_458       * SI_Velocity
-PlanckConstant        = 6.62607015e-34    * SI_Energy * Second(1)
-ReducedPlanck         = 1.054571817e-34   * SI_Energy * Second(1)
-BoltzmannConstant     = 1.380649e-23      * SI_Energy / Kelvin(1)
-AvogadroConstant      = 6.02214076e23     / Mole(1)
+PlanckConstant        = 6.62607015e-34    * SI_Energy * second(1)
+ReducedPlanck         = 1.054571817e-34   * SI_Energy * second(1)
+BoltzmannConstant     = 1.380649e-23      * SI_Energy / kelvin(1)
+AvogadroConstant      = 6.02214076e23     / mole(1)
 ElementaryCharge      = 1.602176634e-19   * SI_Charge
 StandardGravity       = 9.80665           * SI_Acceleration
-GravitationalConstant = 6.67430e-11       * Metre(1)**3 / Kilogram(1) / Second(1)**2
-AtomicMassUnit        = 1.66053906660e-27 * Kilogram(1)
-ElectronMass          = 9.1093837015e-31  * Kilogram(1)
-ProtonMass            = 1.67262192369e-27 * Kilogram(1)
-VacuumPermeability    = 1.25663706212e-6  * Kilogram(1) * Metre(1) / Second(1)**2 / Ampere(1)**2
-VacuumPermittivity    = 8.8541878128e-12  * Second(1)**4 / Kilogram(1) / Metre(1)**3 * Ampere(1)**2
-StefanBoltzmann       = 5.670374419e-8    * SI_Power / Metre(1)**2 / Kelvin(1)**4
+GravitationalConstant = 6.67430e-11       * metre(1)**3 / kilogram(1) / second(1)**2
+AtomicMassUnit        = 1.66053906660e-27 * kilogram(1)
+ElectronMass          = 9.1093837015e-31  * kilogram(1)
+ProtonMass            = 1.67262192369e-27 * kilogram(1)
+VacuumPermeability    = 1.25663706212e-6  * kilogram(1) * metre(1) / second(1)**2 / ampere(1)**2
+VacuumPermittivity    = 8.8541878128e-12  * second(1)**4 / kilogram(1) / metre(1)**3 * ampere(1)**2
+StefanBoltzmann       = 5.670374419e-8    * SI_Power / metre(1)**2 / kelvin(1)**4
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -511,3 +516,74 @@ import clausal.logic.units_constraint as _units_constraint  # noqa: F401
 # call through the imported name raising a missing-argument error.
 has_units = _UnitsPredicate("has_units")
 has_units._register(2, simple_to_trampoline(_units_constraint._has_units))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Deprecated TitleCase spellings
+# ═════════════════════════════════════════════════════════════════════════════
+# Unit names are lowercase identifiers (``metre``, ``newton``), like the
+# currency names (``euro``) and the symbol forms (``m``, ``s``).  The
+# TitleCase spellings they replaced still resolve — through this table — but
+# warn: once per process per name from Python attribute access (the module
+# ``__getattr__`` below), once per file from a ``-import_from(py.units, …)``
+# list (the seam rewrites the import to the lowercase name; see
+# ``_handle_import_from_directive`` in clausal/templating/term_rewriting.py).
+# Both will be removed in a future release.
+
+_DEPRECATED_UNIT_NAMES: dict[str, str] = {
+    # SI base units
+    "Metre": "metre", "Kilogram": "kilogram", "Second": "second",
+    "Ampere": "ampere", "Kelvin": "kelvin", "Mole": "mole",
+    "Candela": "candela", "Bit": "bit", "Dimensionless": "dimensionless",
+    # Named derived SI units
+    "Newton": "newton", "Joule": "joule", "Watt": "watt", "Pascal": "pascal",
+    "Hertz": "hertz", "Gray": "gray", "Sievert": "sievert", "Volt": "volt",
+    "Coulomb": "coulomb", "Farad": "farad", "Ohm": "ohm", "Siemens": "siemens",
+    "Weber": "weber", "Tesla": "tesla", "Henry": "henry", "Lumen": "lumen",
+    "Lux": "lux", "Katal": "katal",
+    # Scaled unit constants
+    "Kilometer": "kilometer", "Centimeter": "centimeter",
+    "Millimeter": "millimeter", "Micrometer": "micrometer",
+    "Nanometer": "nanometer",
+    "Gram": "gram", "Milligram": "milligram", "Microgram": "microgram",
+    "Tonne": "tonne",
+    "Millisecond": "millisecond", "Microsecond": "microsecond",
+    "Nanosecond": "nanosecond", "Minute": "minute", "Hour": "hour",
+    "Day": "day", "Week": "week", "JulianYear": "julian_year",
+    "Byte": "byte", "Kilobyte": "kilobyte", "Megabyte": "megabyte",
+    "Gigabyte": "gigabyte", "Terabyte": "terabyte",
+    "Kilobit": "kilobit", "Megabit": "megabit", "Gigabit": "gigabit",
+    "Kibibyte": "kibibyte", "Mebibyte": "mebibyte", "Gibibyte": "gibibyte",
+    "Tebibyte": "tebibyte",
+    "Kibibit": "kibibit", "Mebibit": "mebibit", "Gibibit": "gibibit",
+    "Bar": "bar", "Millibar": "millibar", "Atmosphere": "atmosphere",
+    "Electronvolt": "electronvolt", "Kilowatt": "kilowatt",
+}
+
+for _old, _new in _DEPRECATED_UNIT_NAMES.items():
+    assert _new in globals(), f"deprecated alias {_old} -> {_new}: no such unit"
+del _old, _new
+
+# Names already warned about through ``__getattr__`` — once per process per
+# name, so a Python caller reading ``units.Metre`` in a loop is told once.
+_warned_deprecated_unit_names: set[str] = set()
+
+
+def __getattr__(name: str):
+    new = _DEPRECATED_UNIT_NAMES.get(name)
+    if new is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    if name not in _warned_deprecated_unit_names:
+        _warned_deprecated_unit_names.add(name)
+        import warnings  # noqa: PLC0415
+        from clausal.templating.term_rewriting import (  # noqa: PLC0415
+            ClausalDeprecatedSpellingWarning,
+        )
+        warnings.warn(
+            f"units.{name} is the old spelling of the unit {new}. Rename "
+            f"`{name}` -> `{new}`; the old spelling still works but will be "
+            f"removed in a future release",
+            ClausalDeprecatedSpellingWarning,
+            stacklevel=2,
+        )
+    return globals()[new]
