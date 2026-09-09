@@ -275,3 +275,100 @@ class TestUserPredicateNamedLikeARuntimeClass:
             "sub(X, Y) <- (Y == X - 1)\ngo(Y) <- (sub(5, Y))\n",
         )
         assert len(list(solve(mod.go(Var()), mod))) == 1
+
+
+# ── review fixes (2026-09-09, second round) ─────────────────────────────────
+
+_REIFY_PROBE = r'''
+import sys
+import clausal
+from clausal.reflection import reify_source
+src = (
+    "-module(probe, [P(X, Y), Q(D, S, W)])\n"
+    "P(X, Y) <- (Y is [A, ++(X + 1), f\"v={X}\"])\n"
+    "Q(D, S, W) <- (D is {'a': 1}, S is {1, 2}, W is 5())\n"
+)
+assert "clausal.logic.compiler.predicate" not in sys.modules, "probe is void: compiler imported"
+# The exact shape that failed review: a PyThunk in a body, nothing else loaded.
+reify_source("-double_quotes(chars)\np(X) <- (X is ++(1 + 2))\n")
+assert "clausal.logic.compiler.predicate" not in sys.modules, "probe is void: compiler imported"
+items = reify_source(src)
+assert "clausal.import_hook" not in sys.modules, "probe is void: import hook imported"
+clauses = [it for it in items if type(it).__name__ == "Clause"]
+assert len(clauses) == 2, items
+print("REIFIED", len(clauses))
+'''
+
+
+class TestReificationNeverNeedsTheCompiler:
+    def test_reify_in_a_subprocess_that_never_imports_the_compiler(self):
+        """The reifier reads ``$Var``/``$PyThunk``/``$FStringThunk``/
+        ``$DictTerm``/``$Quantity`` back by NAME.  The names must be known
+        to ``generated_names`` statically -- not learned as a side effect
+        of importing the compiler, which a pure reflection process never
+        does."""
+        import subprocess
+        proc = subprocess.run(
+            [sys.executable, "-c", _REIFY_PROBE],
+            capture_output=True, text=True, cwd=os.getcwd(),
+        )
+        assert proc.returncode == 0, proc.stderr[-2000:]
+        assert "REIFIED 2" in proc.stdout, proc.stdout
+
+    def test_static_injected_list_matches_the_runtime_table(self):
+        from clausal.logic.generated_names import INJECTED_TITLECASE_NAMES, BARE_ONLY
+        bare = {n for n in INJECTED_RUNTIME_BUILTINS
+                if not n.startswith("$") and n not in BARE_ONLY}
+        assert bare == set(INJECTED_TITLECASE_NAMES)
+
+    def test_register_is_loud_on_drift(self):
+        from clausal.logic.generated_names import register_generated_names
+        with pytest.raises(RuntimeError, match="NotInTheStaticList"):
+            register_generated_names({"NotInTheStaticList": object()})
+
+    def test_bare_name_of_knows_every_twin_without_the_compiler(self):
+        from clausal.logic.generated_names import bare_name_of
+        for name in _INJECTED_BARE + list(simple_ast.__all__):
+            assert bare_name_of(f"${name}") == name
+        assert bare_name_of("$unify") == "$unify"
+        assert bare_name_of("$Undefined") == "$Undefined"
+
+
+class TestWithDollarTwinsIsLoudOnConflict:
+    def test_conflicting_existing_twin_raises(self):
+        from clausal.logic.generated_names import with_dollar_twins
+        with pytest.raises(ValueError, match=r"\$Var"):
+            with_dollar_twins({"Var": object(), "$Var": object()})
+
+    def test_identical_existing_twin_is_fine(self):
+        from clausal.logic.generated_names import with_dollar_twins
+        v = object()
+        out = with_dollar_twins({"Var": v, "$Var": v})
+        assert out["$Var"] is v
+
+
+class TestUserPredicateNamedPredicateMeta:
+    def test_loads_and_runs(self):
+        """The class-minting template names the metaclass; only THAT
+        reference may be re-spelled ``$PredicateMeta`` -- a user head spelled
+        ``PredicateMeta`` keeps its own name everywhere else in the block."""
+        mod = _load_inline(
+            "_dollar_collide_PredicateMeta",
+            "-module(dollar_collide_PredicateMeta, [PredicateMeta(X), Go(Y)])\n"
+            "PredicateMeta(4),\nGo(Y) <- (PredicateMeta(Y))\n",
+        )
+        from clausal.logic.variables import deref
+        from clausal.logic.predicate import PredicateMeta as RealMeta
+        assert isinstance(mod.PredicateMeta, RealMeta)  # the user's predicate
+        assert vars(mod)["$PredicateMeta"] is RealMeta  # the engine's twin
+        Y = Var()
+        assert [deref(Y) for _ in solve(mod.Go(Y), mod)] == [4]
+
+    def test_template_rewrites_only_the_metaclass_reference(self):
+        from clausal.templating.term_rewriting import _make_functor_class_ast
+        anchor = ast.parse("x = 1").body[0]
+        block = _make_functor_class_ast("PredicateMeta", ["X"], anchor)
+        src = ast.unparse(block)
+        assert "metaclass=$PredicateMeta" in src
+        assert "isinstance(PredicateMeta, $PredicateMeta)" in src
+        assert "class PredicateMeta(" in src
