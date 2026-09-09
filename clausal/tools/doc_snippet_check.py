@@ -62,8 +62,15 @@ def _sections_in_file(path: Path) -> set[str]:
     return starts & ends
 
 
+#: A test clause HEAD: ``test("...")`` (or the deprecated ``Test("...")``)
+#: at the start of a line with a quoted description.  Anchored so a block
+#: that merely calls, or defines, some other predicate named ``test`` does
+#: not count as tested.
+_TEST_CLAUSE_RE = re.compile(r"^\s*[Tt]est\s*\(\s*[\"']", re.MULTILINE)
+
+
 def _has_test_clause(path: Path) -> bool:
-    return bool(re.search(r"\b[Tt]est\s*\(", path.read_text()))
+    return bool(_TEST_CLAUSE_RE.search(path.read_text()))
 
 
 def check_files_exist(
@@ -125,7 +132,7 @@ def _is_snippet(content: str) -> bool:
 
 
 def _has_test(content: str) -> bool:
-    return bool(re.search(r"\b[Tt]est\s*\(", content))
+    return bool(_TEST_CLAUSE_RE.search(content))
 
 
 def check_no_skip_blocks(docs_dir: Path) -> list[str]:
