@@ -128,3 +128,11 @@ def test_severity_flips_to_error(tmp_path, monkeypatch):
         term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "error")
     with pytest.raises(SyntaxError, match="`Foo` is TitleCase"):
         _load(tmp_path, "l", "Foo(1),\n")
+
+
+@pytest.mark.parametrize("ident, expected", [
+    ("Foo", "foo"), ("FooBar", "foo_bar"), ("HTTPServer", "http_server"),
+    ("Len", "len"), ("If", "if_"), ("Not", "not_"),
+])
+def test_rename_suggestion(ident, expected):
+    assert term_rewriting._titlecase_to_snake(ident) == expected

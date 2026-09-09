@@ -1,6 +1,7 @@
 from ast import *
 from collections import Counter
 from copy import deepcopy
+import keyword as _keyword_module  # `keyword` is ast.keyword here
 import re
 import sys
 
@@ -644,10 +645,14 @@ def _is_titlecase_identifier(identifier: str) -> bool:
 
 def _titlecase_to_snake(identifier: str) -> str:
     """The lowercase spelling a rename message suggests: ``FooBar`` ->
-    ``foo_bar``, ``Foo`` -> ``foo``, ``HTTPServer`` -> ``http_server``."""
+    ``foo_bar``, ``Foo`` -> ``foo``, ``HTTPServer`` -> ``http_server``.
+    A Python keyword gets the trailing underscore the language uses for
+    the same collision (``If`` -> ``if_``, ``Not`` -> ``not_``)."""
     out = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_",
-                 identifier)
-    return out.lower()
+                 identifier).lower()
+    if _keyword_module.iskeyword(out):
+        out += "_"
+    return out
 
 
 # ``P.key`` sugar recognition and expansion live in ``.desugar`` — the single,
