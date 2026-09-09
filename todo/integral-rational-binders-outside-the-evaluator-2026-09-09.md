@@ -12,8 +12,15 @@ integral Fraction, and no binder hands one to a logic variable":
   fast paths (which re-wrapped the value as `Fraction(r)` and were the real-world
   site for `Q == TOTAL / 4`), `_post_q_domain`'s pinched interval, the tableau's
   `check_implied_bindings`, `_bind_optimal`, `sup`/`inf`/`maximize`/`minimize` and
-  `int_minimize`'s result. Tableau arithmetic itself stays Fraction.
+  `bb_inf`'s result. Tableau arithmetic itself stays Fraction.
 - `clpz3.z3_to_python` returns int for a whole Real.
+- The COMPILED binder (review round 2): `eval_(E, X)` lowers to `ArithEval`, whose
+  native Python expression went straight to `$unify` — `eval_(4/2, X)` bound
+  `Fraction(2, 1)` after the evaluator fix. `arith_to_ast_expr` now emits
+  `$exact_div(l, r)` for a literal int/int Div, and the `ArithEval` result, the
+  `eval_arith` term path and the seam's value arithmetic are wrapped in `$present`
+  before they reach `unify`. (`$present` in `compiler/predicate.py` is a twin of
+  `clpq._present`; the compiler module does not import clpq.)
 
 Out of scope, decide later:
 

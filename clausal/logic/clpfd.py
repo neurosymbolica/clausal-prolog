@@ -1460,9 +1460,11 @@ def _eval_ground(expr):
     # ``2``: ``'=='``/``compare/3`` tag every numeric type as its own kind in
     # the standard order while ``unify`` compares by ``==``, so an integral
     # Fraction made ``'is'(X, 4/2), '=='(X, 2)`` false and ``'='(X, 2)``
-    # true at once. ``type(...) is Fraction`` keeps the int hot path at one
-    # pointer compare (a Fraction can only arise from a Div or a Fraction
-    # leaf, and both are normalised, so the check never needs isinstance).
+    # true at once. This tail is the single exit for EVERY operator node, so
+    # a Fraction reached by any route — Div, a Fraction leaf, ``Fraction(1,
+    # 2) ** -1`` under Pow, Mod/FloorDiv over Fraction operands — is
+    # presented here. ``type(...) is Fraction`` (not isinstance) is a
+    # hot-path choice: one pointer compare per node for the int case.
     if type(result) is Fraction and result.denominator == 1:
         return result.numerator
     return result
