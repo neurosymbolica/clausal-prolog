@@ -1,6 +1,7 @@
 from ast import *
 from collections import Counter
 from copy import deepcopy
+import re
 import sys
 
 from .parser import is_template_func
@@ -603,6 +604,52 @@ def _suggest_non_var_name(identifier: str) -> str:
     return candidate
 
 
+# ─── TitleCase identifier lint ────────────────────────────────────────────────
+#
+# Clausal identifiers come in exactly two shapes: lowercase (predicates,
+# atoms, functors) and ALL_CAPS / underscore-led (logic variables).
+# TitleCase — ``Foo``, ``FooBar``, ``Len`` — is neither.  A Python class is
+# reached through the ``++ClassName`` escape, and a functor is lowercase like
+# every other predicate, so a TitleCase name in Clausal code is a spelling
+# left over from an older convention and the lint says so once per file per
+# identifier.  ``_warn_titlecase_identifiers`` is the walk.
+
+#: Severity of the TitleCase-identifier lint: ``"warn"`` emits one
+#: ``ClausalTitleCaseIdentifierWarning`` per (file, identifier); ``"error"``
+#: raises a located ``SyntaxError`` at the identifier's first site.  Flip
+#: this one constant to promote the lint.
+TITLECASE_IDENTIFIER_SEVERITY = "warn"
+
+#: TitleCase spellings the lint deliberately leaves alone.  ``Undefined`` is
+#: the canonical spelling of the third truth value — an injected runtime
+#: binding, sibling of the Python literals ``True``/``False`` (which reach the
+#: transformer as ``Constant`` nodes and never meet the lint).  Its
+#: ISO/XSB alias ``undefined`` folds INTO it (``_TRUTH_ALIASES``), so
+#: warning on it would name a rename the language itself does not perform.
+_TITLECASE_EXEMPT_NAMES = frozenset({"Undefined"})
+
+
+def _is_titlecase_identifier(identifier: str) -> bool:
+    """True iff *identifier* is TitleCase in the sense of the lint.
+
+    An initial capital, at least one lowercase letter somewhere, and not a
+    logic variable by ``_is_logic_var_name`` (an ALL-CAPS name has no
+    lowercase letter, so the last test is belt-and-braces: it keeps the
+    predicate honest if the variable rule ever widens).
+    """
+    return (identifier[:1].isupper()
+            and any(c.islower() for c in identifier)
+            and not _is_logic_var_name(identifier))
+
+
+def _titlecase_to_snake(identifier: str) -> str:
+    """The lowercase spelling a rename message suggests: ``FooBar`` ->
+    ``foo_bar``, ``Foo`` -> ``foo``, ``HTTPServer`` -> ``http_server``."""
+    out = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_",
+                 identifier)
+    return out.lower()
+
+
 # ``P.key`` sugar recognition and expansion live in ``.desugar`` — the single,
 # syntax-only implementation the SMT prover shares.  Re-exported under the
 # module-private names this file has always used.
@@ -1017,6 +1064,18 @@ class ClausalDeprecatedSpellingWarning(ClausalLintWarning):
     ``__main__``, and a load-time lint that nobody sees is the silent alias
     this warning exists to avoid.  Suppress it the way the other lints are
     suppressed — ``warnings.filterwarnings`` on this class.
+    """
+
+
+class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
+    """A TitleCase identifier (``Foo``, ``FooBar``) in Clausal code.
+
+    Clausal identifiers are lowercase (predicates, atoms, functors) or
+    ALL_CAPS / underscore-led (logic variables); TitleCase has no role — a
+    Python class is reached as ``++ClassName``.  Emitted once per (file,
+    identifier) by ``EmbedTransformer._warn_titlecase_identifiers``.  The
+    severity is ``TITLECASE_IDENTIFIER_SEVERITY`` (``"warn"`` today; set it
+    to ``"error"`` and the same sites raise a load-time ``SyntaxError``).
     """
 
 
@@ -4955,6 +5014,109 @@ class EmbedTransformer(NodeTransformer):
         )
         return replace(guard, expr_stmt)
 
+    def _warn_titlecase_identifiers(transformer, module):
+        """Lint every TitleCase ``Name`` in *module* (see
+        ClausalTitleCaseIdentifierWarning), once per identifier.
+
+        Runs on the RAW parse tree, before any rewriting, so it sees the
+        author's spelling at every position — clause heads, body goals, term
+        functors, declaration lists, constant values — with one walk and no
+        per-visitor bookkeeping.  What it does NOT read, and why:
+
+        * a ``++`` Python escape (adjacent double ``UAdd``): Python code by
+          definition, the very place a TitleCase class name belongs;
+        * string literals and f-strings: text, not identifiers;
+        * ``def``/``class`` blocks: Python-hosted code, the same reasoning
+          as the escape;
+        * the name of a ``-directive`` and the whole of ``-import_module``/
+          ``-import_from``: module paths are Python, and a name the file
+          imports is the exporter's to spell — so a name bound by an
+          ``-import_from`` list (or its ``alias(...)`` local name) is exempt
+          at every later use as well;
+        * ``_TITLECASE_EXEMPT_NAMES`` (``Undefined``).
+
+        Python's ``True``/``False``/``None`` arrive as ``Constant`` nodes and
+        never reach the walk.  Attribute names (``X.Foo``) and keyword
+        argument names (``foo(Key=1)``) are not ``Name`` nodes and are not
+        linted either.
+
+        Severity is ``TITLECASE_IDENTIFIER_SEVERITY``: ``"warn"`` emits the
+        warning at the identifier's first site, ``"error"`` raises there.
+        """
+        import warnings  # noqa: PLC0415
+        imported: set[str] = set()
+        first_site: dict[str, Name] = {}
+
+        def _is_escape(node):
+            return (isinstance(node, UnaryOp) and isinstance(node.op, UAdd)
+                    and isinstance(node.operand, UnaryOp)
+                    and isinstance(node.operand.op, UAdd))
+
+        def walk(node):
+            if isinstance(node, (Constant, JoinedStr)) or _is_escape(node):
+                return
+            if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+                return
+            if isinstance(node, Name):
+                ident = node.id
+                if (ident not in first_site
+                        and ident not in _TITLECASE_EXEMPT_NAMES
+                        and _is_titlecase_identifier(ident)):
+                    first_site[ident] = node
+                return
+            for child in iter_child_nodes(node):
+                walk(child)
+
+        for stmt in module.body:
+            call = None
+            if (isinstance(stmt, Expr) and isinstance(stmt.value, UnaryOp)
+                    and isinstance(stmt.value.op, USub)
+                    and isinstance(stmt.value.operand, Call)
+                    and isinstance(stmt.value.operand.func, Name)):
+                call = stmt.value.operand
+            if call is None:
+                walk(stmt)
+                continue
+            directive = call.func.id
+            if directive == "import_module":
+                continue
+            if directive == "import_from":
+                if len(call.args) == 2 and isinstance(call.args[1], List):
+                    for item in call.args[1].elts:
+                        if isinstance(item, Name):
+                            imported.add(item.id)
+                        elif isinstance(item, Call):
+                            for arg in item.args:
+                                if isinstance(arg, Name):
+                                    imported.add(arg.id)
+                continue
+            for arg in call.args:
+                walk(arg)
+            for kw in call.keywords:
+                walk(kw.value)
+
+        for ident, node in first_site.items():
+            if ident in imported:
+                continue
+            lineno = getattr(node, "lineno", None)
+            where = transformer._site(lineno) if lineno else "unknown site"
+            snippet = transformer._source_snippet(lineno) if lineno else ""
+            if snippet:
+                snippet = " — " + snippet
+            msg = (
+                f"{where}{snippet}: `{ident}` is TitleCase. Clausal "
+                f"identifiers are lowercase (predicates, atoms, functors) or "
+                f"ALL_CAPS / underscore-led (logic variables); TitleCase has "
+                f"no role — a Python class is reached as `++{ident}`. Rename "
+                f"`{ident}` -> `{_titlecase_to_snake(ident)}`"
+            )
+            if TITLECASE_IDENTIFIER_SEVERITY == "error":
+                _raise_located_syntax_error(
+                    msg, node, transformer._source_lines,
+                    transformer._filename)
+            warnings.warn(msg, ClausalTitleCaseIdentifierWarning,
+                          stacklevel=2)
+
     def visit_Module(transformer, module):
         """Visit the module body, then emit a final ``BareAtomRefs`` item
         carrying every bare reference the per-clause transformers saw.
@@ -4970,6 +5132,7 @@ class EmbedTransformer(NodeTransformer):
         # route through ``$text`` -- unless the file binds ``str`` itself, in
         # which case its own binding wins and nothing is rewritten.
         transformer._str_shadowed = _binds_name(module, "str")
+        transformer._warn_titlecase_identifiers(module)
         result = transformer.generic_visit(module)
         transformer._check_var_shaped_predicate_names()
         transformer._settle_atom_functor_sites()
