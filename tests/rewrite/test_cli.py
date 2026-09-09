@@ -103,3 +103,27 @@ def test_test_assets_are_not_shipped_rules(tmp_path):
 
     assert "head_fold" in default_rule_names()
     assert not [name for name in default_rule_names() if name.startswith("_")]
+
+
+# ── ``.seam`` is an alias extension for ``.clausal`` ─────────────────────────
+
+
+def test_seam_file_is_rewritten(tmp_path):
+    path = tmp_path / "a.seam"
+    path.write_text(FOLDABLE)
+    assert _run("--check", str(path)).returncode == 1
+    assert "a.seam" in _run("--check", str(path)).stdout
+    result = _run(str(path))
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == FOLDED
+
+
+def test_seam_files_are_found_under_a_directory(tmp_path):
+    (tmp_path / "sub").mkdir()
+    path = tmp_path / "sub" / "b.seam"
+    path.write_text(FOLDABLE)
+    (tmp_path / "sub" / "notes.txt").write_text(FOLDABLE)
+    result = _run(str(tmp_path))
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == FOLDED
+    assert (tmp_path / "sub" / "notes.txt").read_text() == FOLDABLE

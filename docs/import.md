@@ -2,7 +2,7 @@
 
 ## Overview
 
-Clausal predicate files use the `.clausal` extension. Importing one with a normal Python `import` statement is enough to load and compile all predicates in that file. The `clausal.import_hook` module installs a `sys.meta_path` finder that intercepts these imports before Python's standard machinery runs.
+Clausal predicate files use the `.clausal` extension. `.seam` is an accepted alias: a `.seam` file carries exactly the same syntax and is found, loaded and cached the same way (where both `name.clausal` and `name.seam` exist in one directory, `.clausal` wins). Importing one with a normal Python `import` statement is enough to load and compile all predicates in that file. The `clausal.import_hook` module installs a `sys.meta_path` finder that intercepts these imports before Python's standard machinery runs.
 
 ```python
 import clausal  # installs the import hook as a side effect

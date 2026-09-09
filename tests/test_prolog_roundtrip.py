@@ -498,3 +498,32 @@ class TestDirectivePreservation:
         clausal = prolog_to_clausal(src)
         assert "module" in clausal.lower()
         assert "mymod" in clausal
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ``.seam`` is an alias extension for ``.clausal``
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestSeamAliasDirection:
+    """A ``.seam`` input is the clausal → Prolog direction, like ``.clausal``."""
+
+    def test_detect_direction_seam(self):
+        # nv
+        from clausal.tools.translate import _detect_direction
+        assert _detect_direction("x.seam", None) == "clausal_to_prolog"
+        assert _detect_direction("x.SEAM", None) == "clausal_to_prolog"
+        assert _detect_direction("x.clausal", None) == "clausal_to_prolog"
+        assert _detect_direction("x.pl", None) == "prolog_to_clausal"
+
+    def test_translate_seam_to_prolog_autodetect(self, tmp_path):
+        # nv
+        from clausal.tools.translate import main
+        src = tmp_path / "edge_graph.seam"
+        src.write_text((FIXTURES / "edge_graph.clausal").read_text())
+        outfile = tmp_path / "out.pl"
+        code = main([str(src), "-o", str(outfile)])
+        assert code == 0
+        content = outfile.read_text()
+        assert "edge" in content
+        assert "reach" in content

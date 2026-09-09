@@ -1,6 +1,9 @@
 """``clausal-fmt`` -- format ``.clausal`` files in place, or check them.
 
-    clausal-fmt src/                 rewrite every .clausal file under src/
+``.seam`` is an alias extension for the same syntax; a directory walk picks
+up both.  A file named on the command line is formatted whatever its name.
+
+    clausal-fmt src/                 rewrite every .clausal/.seam file under src/
     clausal-fmt --check src/         exit 1 if any file would change
     clausal-fmt --diff  src/         print what would change, write nothing
 
@@ -15,20 +18,23 @@ import argparse
 import sys
 from pathlib import Path
 
+from clausal._suffixes import CLAUSAL_SUFFIXES
 from clausal.fmt.comments import CommentLeakError
 from clausal.fmt.emit import format_source
 from clausal.fmt.verify import unified_diff
 
-SUFFIX = ".clausal"
+SUFFIXES = CLAUSAL_SUFFIXES
 
 
 def clausal_files(paths: list[str]) -> list[Path]:
-    """Every ``.clausal`` file named, or found under a named directory."""
+    """Every file named, or every ``.clausal``/``.seam`` file under a named directory."""
     found: list[Path] = []
     for raw in paths:
         path = Path(raw)
         if path.is_dir():
-            found.extend(sorted(path.rglob(f"*{SUFFIX}")))
+            found.extend(sorted(
+                p for p in path.rglob("*") if p.suffix in SUFFIXES
+            ))
         else:
             found.append(path)
     return found
@@ -36,7 +42,7 @@ def clausal_files(paths: list[str]) -> list[Path]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="clausal-fmt", description="Format .clausal source."
+        prog="clausal-fmt", description="Format .clausal (or .seam) source."
     )
     parser.add_argument("paths", nargs="+", help="files or directories")
     parser.add_argument(

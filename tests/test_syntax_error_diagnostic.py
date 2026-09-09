@@ -359,3 +359,14 @@ def test_enclosing_clause_head_is_shown(tmp_path):
 def test_report_has_a_remedy_line(tmp_path):
     exc = load_error(tmp_path, "m.clausal", M_SRC)
     assert any(ln.strip().startswith("->") for ln in str(exc).splitlines())
+
+
+# ── ``.seam`` is an alias extension for ``.clausal`` ─────────────────────────
+
+
+def test_seam_file_gets_the_same_report(tmp_path):
+    """The report is gated on the file's extension; the alias must pass it."""
+    exc = load_error(tmp_path, "m.seam", M_SRC)
+    assert str(exc).splitlines()[0] == "invalid syntax (m.seam, line 6)"
+    assert "`is` has no right-hand side" in str(exc)
+    assert (5, "    Y is") in source_rows(str(exc))

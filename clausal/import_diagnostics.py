@@ -47,6 +47,8 @@ import sys
 import textwrap
 from typing import NamedTuple
 
+from clausal._suffixes import SOURCE_SUFFIXES
+
 # Display cap for the export list.
 #
 # Justification: the point of the list is to be *read* — an author (human or
@@ -344,7 +346,7 @@ def _describe_missing_name(exc, missing, dotted, mod, loader):
 
 
 #: Extensions an entry on the search path can be imported under.
-_SOURCE_SUFFIXES = (".clausal", ".pl", ".py")
+_SOURCE_SUFFIXES = (*SOURCE_SUFFIXES, ".py")
 
 
 class _MisnamedEntry(NamedTuple):

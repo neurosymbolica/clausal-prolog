@@ -25,6 +25,8 @@ import sys
 import textwrap
 from typing import Any, Callable
 
+from clausal._suffixes import CLAUSAL_SUFFIXES
+
 
 _MISSING = object()  # sentinel for "field not provided"
 
@@ -142,7 +144,7 @@ def _source_site(depth: int) -> tuple[str, int] | None:
         if frame is None:
             return None
         filename = frame.f_code.co_filename
-        if filename.endswith(".clausal") or not filename.startswith(
+        if filename.endswith(CLAUSAL_SUFFIXES) or not filename.startswith(
             _CLAUSAL_PKG_DIR
         ):
             return (filename, frame.f_lineno)

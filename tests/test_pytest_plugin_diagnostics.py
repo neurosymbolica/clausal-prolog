@@ -42,12 +42,12 @@ pytest_collect_file = _plugin.pytest_collect_file
 """
 
 
-def run_plugin(tmp_path: Path, source: str) -> str:
+def run_plugin(tmp_path: Path, source: str, filename: str = "case.clausal") -> str:
     """Run *source* as a .clausal file through the real conftest plugin."""
     (tmp_path / "conftest.py").write_text(
         _SHIM.format(path=str(REPO_ROOT / "conftest.py"))
     )
-    (tmp_path / "case.clausal").write_text(textwrap.dedent(source).lstrip())
+    (tmp_path / filename).write_text(textwrap.dedent(source).lstrip())
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", str(tmp_path), "-q",
          "-p", "no:cacheprovider"],
@@ -153,3 +153,15 @@ def test_passing_test_computes_no_diagnostic_at_all(tmp_path):
     result = run_test(mod, "passes", path=str(src), diagnose=True)
     assert result.passed
     assert result.diagnostic is None
+
+
+def test_seam_file_is_collected_by_the_plugin(tmp_path):
+    """``.seam`` is an alias extension for ``.clausal``: the plugin collects it."""
+    out = run_plugin(tmp_path, PASSING_SRC, filename="case.seam")
+    assert "1 passed" in out, out
+
+
+def test_txt_file_is_not_collected_by_the_plugin(tmp_path):
+    """Negative control: only the two predicate-module extensions are collected."""
+    out = run_plugin(tmp_path, PASSING_SRC, filename="case.txt")
+    assert "no tests ran" in out, out

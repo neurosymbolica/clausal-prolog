@@ -5,6 +5,8 @@ import os
 import sys
 import threading
 
+from clausal._suffixes import SOURCE_SUFFIXES
+
 
 class _LazyHookFinder(MetaPathFinder):
     """Sits on sys.meta_path; replaces itself with the real finders on first hit."""
@@ -60,12 +62,12 @@ class _LazyHookFinder(MetaPathFinder):
             if found:
                 return self._activate_and_retry(fullname, path, target)
 
-        # Condition 3: .clausal or .pl file on sys.path
+        # Condition 3: .clausal (or .seam), or .pl, file on sys.path
         tail = fullname.rsplit(".", 1)[-1]
         search_dirs = path if path else sys.path
         for d in search_dirs:
-            if (os.path.isfile(os.path.join(d, tail + ".clausal"))
-                    or os.path.isfile(os.path.join(d, tail + ".pl"))):
+            if any(os.path.isfile(os.path.join(d, tail + suffix))
+                   for suffix in SOURCE_SUFFIXES):
                 return self._activate_and_retry(fullname, path, target)
 
         return None

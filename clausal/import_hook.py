@@ -1,6 +1,7 @@
 """import_hook.py — Import hook for ``.clausal`` predicate modules.
 
-Files with the ``.clausal`` extension are intercepted by this hook, which:
+Files with the ``.clausal`` extension (or its alias ``.seam``, which carries
+exactly the same syntax) are intercepted by this hook, which:
 
   1. Injects predicate builtins (all simple_ast names, Var, Compound, unify,
      deref, Trail, walk) plus the hidden globals ``$module``,
@@ -33,6 +34,7 @@ import ast
 import os
 import warnings
 
+from ._suffixes import CLAUSAL_SUFFIXES, PROLOG_SUFFIX
 from .pythonic_ast import nodes as simple_ast
 from .atom_diagnostics import truth_literal_hint_lines
 from .import_diagnostics import exec_with_import_diagnostics
@@ -742,9 +744,20 @@ class _AliasLoader:
 
 
 class _ExtensionFinder(MetaPathFinder):
-    """Base finder that searches sys.path for files with a given extension."""
+    """Base finder that searches sys.path for files with given extensions.
+
+    ``_extensions`` lists the suffixes this finder claims, in priority order:
+    within one ``sys.path`` entry the first suffix that names an existing
+    file (or ``__init__`` package file) wins.  ``_extension`` is the single-
+    suffix spelling older subclasses use; it is honoured when ``_extensions``
+    is left empty.
+    """
     _extension: str = ""
+    _extensions: tuple[str, ...] = ()
     _loader_cls: type = None
+
+    def _suffixes(self) -> tuple[str, ...]:
+        return self._extensions or (self._extension,)
 
     def _spec_for(self, fullname, source_path, pkg_dir=None):
         """Build the spec for ``fullname``, deduplicating by source path.
@@ -771,18 +784,32 @@ class _ExtensionFinder(MetaPathFinder):
     def find_spec(self, fullname, path, target=None):
         tail = fullname.rsplit(".", 1)[-1]
         search_dirs = path if path else sys.path
+        suffixes = self._suffixes()
         for dir_entry in search_dirs:
             # Flat-file form: ``dir_entry/tail.clausal`` → module ``tail``.
-            file_candidate = os.path.join(dir_entry, tail + self._extension)
-            is_file = os.path.isfile(file_candidate)
+            # The first suffix with a file behind it wins, so ``tail.clausal``
+            # beats ``tail.seam`` in the same directory.
+            file_candidate = next(
+                (c for c in (os.path.join(dir_entry, tail + s) for s in suffixes)
+                 if os.path.isfile(c)),
+                None,
+            )
+            is_file = file_candidate is not None
             # Package form: ``dir_entry/tail/__init__.clausal`` → package ``tail``.
             # Reuses Python's __init__ package mechanism so submodule files
             # (``tail/sub.clausal``) then resolve as ``fullname.sub``.  A bare
             # directory *without* an __init__ is left to PathFinder as a PEP-420
             # namespace package (return nothing here), so this must not fire.
             pkg_dir = os.path.join(dir_entry, tail)
-            init_candidate = os.path.join(pkg_dir, "__init__" + self._extension)
-            is_pkg = os.path.isdir(pkg_dir) and os.path.isfile(init_candidate)
+            init_candidate = None
+            if os.path.isdir(pkg_dir):
+                init_candidate = next(
+                    (c for c in (os.path.join(pkg_dir, "__init__" + s)
+                                 for s in suffixes)
+                     if os.path.isfile(c)),
+                    None,
+                )
+            is_pkg = init_candidate is not None
 
             if not (is_file or is_pkg):
                 continue
@@ -817,18 +844,18 @@ class _ExtensionFinder(MetaPathFinder):
 
 
 class PredicateFinder(_ExtensionFinder):
-    """Find .clausal files and load them via PredicateLoader."""
-    _extension = ".clausal"
+    """Find .clausal (or its alias .seam) files and load them via PredicateLoader."""
+    _extensions = CLAUSAL_SUFFIXES
     _loader_cls = PredicateLoader
 
 
 class PrologFinder(_ExtensionFinder):
     """Find .pl Prolog files and load them via PrologLoader.
 
-    Registered after PredicateFinder so that .clausal files take priority
-    over .pl files when both exist for the same module name.
+    Registered after PredicateFinder so that .clausal/.seam files take
+    priority over .pl files when both exist for the same module name.
     """
-    _extension = ".pl"
+    _extensions = (PROLOG_SUFFIX,)
     _loader_cls = PrologLoader
 
 

@@ -418,3 +418,96 @@ def test_call_unknown_predicate_raises():
 
     with pytest.raises(KeyError):
         list(call("no_such_predicate", 1, module=logic_mod))
+
+
+# ── ``.seam`` is an alias extension for ``.clausal`` ─────────────────────────
+#
+# Both extensions carry the same syntax and go through the same loader, so a
+# file saved as ``.seam`` must import exactly like the same content saved as
+# ``.clausal``: same finder, same predicates, same answers.  ``.txt`` is the
+# negative control -- the finder must not have become "any extension".
+
+
+SEAM_ALIAS_SRC = """\
+p(1),
+p(2),
+q(X) <- (p(X), X > 1),
+"""
+
+
+def _answers(pred, *args):
+    """Every solution's argument bindings, in solution order."""
+    from clausal.logic.variables import deref
+    return [tuple(deref(a) for a in args) for _ in pred(*args)]
+
+
+@pytest.fixture
+def alias_dir(tmp_path):
+    """A directory on ``sys.path`` holding the probe under three extensions."""
+    import importlib
+    d = tmp_path / "seam_alias"
+    d.mkdir()
+    for name in ("seam_probe_seam.seam", "seam_probe_clausal.clausal",
+                 "seam_probe_txt.txt"):
+        (d / name).write_text(SEAM_ALIAS_SRC)
+    sys.path.insert(0, str(d))
+    importlib.invalidate_caches()
+    try:
+        yield d
+    finally:
+        sys.path.remove(str(d))
+        for name in ("seam_probe_seam", "seam_probe_clausal", "seam_probe_txt",
+                     "seampkg", "seampkg.sub"):
+            sys.modules.pop(name, None)
+
+
+def test_seam_file_imports_like_clausal(alias_dir):
+    """The same content under ``.seam`` and ``.clausal`` gives the same module."""
+    import importlib
+    from clausal.logic.variables import Var
+    from clausal.import_hook import PredicateLoader
+
+    seam = importlib.import_module("seam_probe_seam")
+    clausal_ = importlib.import_module("seam_probe_clausal")
+
+    assert isinstance(seam.__loader__, PredicateLoader)
+    assert type(seam.__loader__) is type(clausal_.__loader__)
+    assert seam.__file__ == str(alias_dir / "seam_probe_seam.seam")
+
+    for mod in (seam, clausal_):
+        lm = mod.__dict__["$module"]
+        assert len(lm.db.clauses_for("p", 1)) == 2
+        assert len(lm.db.clauses_for("q", 1)) == 1
+
+    assert _answers(seam.p, Var()) == _answers(clausal_.p, Var()) == [(1,), (2,)]
+    assert _answers(seam.q, Var()) == _answers(clausal_.q, Var()) == [(2,)]
+
+
+def test_seam_package_init_and_submodule(alias_dir):
+    """``pkg/__init__.seam`` + ``pkg/sub.seam`` resolve as a package, like ``.clausal``."""
+    import importlib
+    from clausal.logic.variables import Var
+
+    pkg = alias_dir / "seampkg"
+    pkg.mkdir()
+    (pkg / "__init__.seam").write_text("top(1),\n")
+    (pkg / "sub.seam").write_text(SEAM_ALIAS_SRC)
+    importlib.invalidate_caches()
+
+    top = importlib.import_module("seampkg")
+    sub = importlib.import_module("seampkg.sub")
+    assert _answers(top.top, Var()) == [(1,)]
+    assert _answers(sub.q, Var()) == [(2,)]
+
+
+def test_txt_file_with_the_same_content_is_not_importable(alias_dir):
+    """Negative control: the alias is ``.seam`` specifically, not any suffix."""
+    import importlib
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("seam_probe_txt")
+
+
+def test_finder_lists_both_clausal_extensions():
+    """The ``.clausal`` finder is the ``.seam`` finder: one class, two suffixes."""
+    from clausal.import_hook import PredicateFinder
+    assert tuple(PredicateFinder._extensions) == (".clausal", ".seam")

@@ -18,7 +18,8 @@ CLI usage
     python -m clausal.tools.dump_transformed FILE [FILE ...]
     python -m clausal.tools.dump_transformed tests/clausal_modules/
 
-If given a directory, all ``.clausal`` files in it (non-recursive) are dumped.
+If given a directory, all ``.clausal`` (and ``.seam``) files in it
+(non-recursive) are dumped.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ import ast
 import os
 import sys
 import warnings
+
+from clausal._suffixes import CLAUSAL_SUFFIXES
 
 
 def dump_source(path: str) -> str:
@@ -116,7 +119,7 @@ def main(argv: list[str] | None = None) -> None:
     for arg in args:
         if os.path.isdir(arg):
             for entry in sorted(os.listdir(arg)):
-                if entry.endswith(".clausal"):
+                if entry.endswith(CLAUSAL_SUFFIXES):
                     paths.append(os.path.join(arg, entry))
         elif os.path.isfile(arg):
             paths.append(arg)
@@ -124,7 +127,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"warning: {arg!r} not found, skipping", file=sys.stderr)
 
     if not paths:
-        print("No .clausal files found.", file=sys.stderr)
+        print("No .clausal (or .seam) files found.", file=sys.stderr)
         sys.exit(1)
 
     for path in paths:

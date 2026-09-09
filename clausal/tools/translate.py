@@ -24,6 +24,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from clausal._suffixes import CLAUSAL_SUFFIXES, PROLOG_SUFFIX
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect
 from clausal.tools.prolog_to_clausal import prolog_to_clausal
@@ -48,9 +49,9 @@ def _detect_direction(path: str | None, to_flag: str | None) -> str:
 
     if path:
         ext = Path(path).suffix.lower()
-        if ext == ".pl":
+        if ext == PROLOG_SUFFIX:
             return "prolog_to_clausal"
-        if ext in (".clausal",):
+        if ext in CLAUSAL_SUFFIXES:
             return "clausal_to_prolog"
 
     # Default: treat as clausal → prolog (ISO)
@@ -88,7 +89,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "input", nargs="?", default=None,
-        help="Input file (.clausal or .pl); reads stdin if omitted.",
+        help="Input file (.clausal, its alias .seam, or .pl); reads stdin if omitted.",
     )
     parser.add_argument(
         "-o", "--output", default=None,

@@ -48,6 +48,7 @@ import sys
 import textwrap
 import types
 
+from clausal._suffixes import SOURCE_SUFFIXES
 from clausal.import_diagnostics import (
     _INDENT,
     _WIDTH,
@@ -68,7 +69,7 @@ _MAX_SIBLING_FILES = 60
 #: suggestion and starts being a search result.
 _MAX_HITS = 3
 
-_SOURCE_SUFFIXES = (".clausal", ".pl")
+_SOURCE_SUFFIXES = SOURCE_SUFFIXES
 
 
 # ── the exception ────────────────────────────────────────────────────────────

@@ -33,7 +33,8 @@ author always knows *which* clause is broken.  That is the same principle as
 
 Everything here runs on the error path only.
 
-Scope: ``.clausal`` files exclusively.  A syntax error in a genuine ``.py``
+Scope: ``.clausal`` files (and their ``.seam`` alias) exclusively.  A syntax
+error in a genuine ``.py``
 file is CPython's to report and is left untouched, and a ``.pl`` file is not
 enriched either — its line numbers belong to the *translated* Clausal text, not
 to anything the author wrote.
@@ -43,6 +44,8 @@ from __future__ import annotations
 
 import re
 import textwrap
+
+from clausal._suffixes import CLAUSAL_SUFFIXES
 
 # How many lines above the reported line are shown.
 #
@@ -69,7 +72,7 @@ _INDENT = "  "
 
 _ENRICHED_FLAG = "_clausal_syntax_diagnostic"
 
-_CLAUSAL_SUFFIX = ".clausal"
+_CLAUSAL_SUFFIXES = CLAUSAL_SUFFIXES
 
 
 # ── source utilities ─────────────────────────────────────────────────────────
@@ -394,7 +397,7 @@ def enrich_syntax_error(exc, source, filename):
     """
     if getattr(exc, _ENRICHED_FLAG, False):
         return None
-    if not isinstance(filename, str) or not filename.endswith(_CLAUSAL_SUFFIX):
+    if not isinstance(filename, str) or not filename.endswith(_CLAUSAL_SUFFIXES):
         return None
     # An error raised while parsing some *other* file (an embedded import, a
     # nested compile) is not ours to re-render.

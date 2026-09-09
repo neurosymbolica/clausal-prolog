@@ -184,3 +184,26 @@ def test_probe_failure_does_not_leak_the_in_flight_marker(monkeypatch):
             finder.find_spec("boomname", None)
     assert probed == ["clausal.modules.boomname"] * 2
     assert not finder._in_flight()
+
+
+@pytest.mark.timeout(120)
+def test_seam_source_module_activates_hook(tmp_path):
+    """Condition 3 recognises the ``.seam`` alias extension, not only ``.clausal``.
+
+    Before the real finders are installed the stub is the only thing on
+    ``sys.meta_path`` that knows about predicate modules; if it declines a
+    ``.seam`` file the import fails with ModuleNotFoundError before the real
+    finders ever get a look.
+    """
+    moddir = tmp_path / "lazyseam"
+    moddir.mkdir()
+    (moddir / "lazyhook_seam_facts.seam").write_text("p(1),\np(2),\n")
+    r = _run(f"""
+        sys.path.insert(0, {str(moddir)!r})
+        import lazyhook_seam_facts as m
+        lm = m.__dict__["$module"]
+        real = any(type(f).__name__ == "PredicateFinder" for f in sys.meta_path)
+        print(len(lm.db.clauses_for("p", 1)), real)
+    """)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "2 True", r.stdout + r.stderr

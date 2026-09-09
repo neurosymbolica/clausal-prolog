@@ -1,6 +1,7 @@
 """clausal.testing — test runner for .clausal predicate modules.
 
-Discovers test/1 clauses in .clausal files and runs them. Each test clause
+Discovers test/1 clauses in .clausal files (and their ``.seam`` alias) and
+runs them. Each test clause
 is a rule of the form:
 
     test("description") <- goal1, goal2, ...
@@ -50,6 +51,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
+
+from clausal._suffixes import CLAUSAL_SUFFIXES, strip_clausal_suffix
 
 
 # ── Diagnostic bounds ─────────────────────────────────────────────────────────
@@ -228,7 +231,7 @@ def load_clausal_module(path: str | Path) -> object:
     from clausal.import_hook import _load_module
 
     path = str(path)
-    mod_name = f"_clausal_test_{os.path.basename(path).removesuffix('.clausal')}"
+    mod_name = f"_clausal_test_{strip_clausal_suffix(os.path.basename(path))}"
 
     # _load_module handles sys.modules eviction internally.
     old = sys.modules.get(mod_name)
@@ -2577,13 +2580,20 @@ def _diagnostic_repeats(result: TestResult, rest: list[str]) -> bool:
 
 
 def discover_clausal_files(roots: list[str | Path]) -> Iterator[Path]:
-    """Yield all .clausal files under the given roots."""
+    """Yield all .clausal (and .seam) files under the given roots.
+
+    Both extensions are walked as one population, in path order, so a
+    directory holding files under both spellings reports them interleaved
+    rather than one extension after the other.
+    """
     for root in roots:
         root = Path(root)
-        if root.is_file() and root.suffix == ".clausal":
+        if root.is_file() and root.suffix in CLAUSAL_SUFFIXES:
             yield root
         elif root.is_dir():
-            yield from sorted(root.rglob("*.clausal"))
+            yield from sorted(
+                p for p in root.rglob("*") if p.suffix in CLAUSAL_SUFFIXES
+            )
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -2594,9 +2604,10 @@ def main(args: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Run test/1 clauses in .clausal files",
+        description="Run test/1 clauses in .clausal (or .seam) files",
     )
-    parser.add_argument("paths", nargs="+", help=".clausal files or directories")
+    parser.add_argument("paths", nargs="+",
+                        help=".clausal (or .seam) files or directories")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Show individual test results")
     parser.add_argument("--strict", "--fail-on-empty", dest="strict",
@@ -2606,14 +2617,14 @@ def main(args: list[str] | None = None) -> int:
 
     # Validate paths up front so a mistyped path or wrong cwd is an error, not a
     # silently-green run.  A non-existent path, or a file that exists but is not a
-    # .clausal/.pl file, is reported and forces a non-zero exit.
+    # .clausal/.seam file, is reported and forces a non-zero exit.
     bad_paths: list[str] = []
     for path in parsed.paths:
         p = Path(path)
         if not p.exists():
             bad_paths.append(f"no such file or directory: {path}")
-        elif p.is_file() and p.suffix != ".clausal":
-            bad_paths.append(f"not a .clausal file: {path}")
+        elif p.is_file() and p.suffix not in CLAUSAL_SUFFIXES:
+            bad_paths.append(f"not a .clausal file (or .seam alias): {path}")
     if bad_paths:
         for msg in bad_paths:
             print(f"error: {msg}", file=sys.stderr)
@@ -2655,11 +2666,11 @@ def main(args: list[str] | None = None) -> int:
     total = total_passed + total_failed
 
     # Distinguish "nothing to run" from "everything passed": files that exist but
-    # contain no test/1 clauses (or roots with no .clausal files at all) would
-    # otherwise print a misleading [PASSED].
+    # contain no test/1 clauses (or roots with no .clausal/.seam files at all)
+    # would otherwise print a misleading [PASSED].
     if total == 0:
         if files_seen == 0:
-            print("no .clausal files found")
+            print("no .clausal (or .seam) files found")
         else:
             print(f"{files_seen} file(s) collected, but no test/1 clauses found")
         if parsed.strict:

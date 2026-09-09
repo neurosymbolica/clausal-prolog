@@ -1,6 +1,7 @@
 """Pytest plugin for .clausal test discovery and docs code-block testing.
 
-Collects .clausal files and reports each test/1 clause as an individual
+Collects .clausal files (and their ``.seam`` alias) and reports each test/1
+clause as an individual
 pytest test item:
 
     clausal/examples/fibonacci.clausal::fib(5) = 5
@@ -23,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from clausal._suffixes import CLAUSAL_SUFFIXES
 from clausal.testing import load_clausal_module, collect_tests, run_test
 from clausal.tools.clear_pycache import clear_pycache
 
@@ -89,7 +91,7 @@ def _opts_out_of_collection(path: Path) -> bool:
 
 
 def pytest_collect_file(parent, file_path: Path):
-    if file_path.suffix == ".clausal":
+    if file_path.suffix in CLAUSAL_SUFFIXES:
         if _opts_out_of_collection(file_path):
             return None
         return ClausalFile.from_parent(parent, path=file_path)

@@ -19,6 +19,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from clausal._suffixes import CLAUSAL_SUFFIXES
+
 # Matches --8<-- "path/to/file" or --8<-- "path/to/file:section".
 _SNIPPET_REF_RE = re.compile(r'--8<--\s+"([^"]+)"')
 
@@ -112,7 +114,7 @@ def check_clausal_fixtures_have_tests(
     seen: set[str] = set()
     untested = []
     for ref in refs:
-        if ref.file_ref in seen or not ref.file_ref.endswith(".clausal"):
+        if ref.file_ref in seen or not ref.file_ref.endswith(CLAUSAL_SUFFIXES):
             continue
         seen.add(ref.file_ref)
         target = project_root / ref.file_ref

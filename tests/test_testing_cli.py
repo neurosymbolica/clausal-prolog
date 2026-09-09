@@ -181,3 +181,45 @@ def test_same_description_under_both_spellings_warns(tmp_path):
     assert "'same'" in message
     assert "'other'" not in message
     assert names == ["same", "same", "other"]
+
+
+# ── ``.seam`` is an alias extension for ``.clausal`` ─────────────────────────
+
+
+def test_seam_file_is_run(capsys, tmp_path):
+    p = tmp_path / "ok.seam"
+    p.write_text('test("one is one") <- (1 == 1)\n')
+    rc = main([str(p)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "1 passed, 0 failed [PASSED]" in out
+
+
+def test_seam_files_are_discovered_under_a_directory(capsys, tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "a.seam").write_text('test("seam") <- (1 == 1)\n')
+    (tmp_path / "sub" / "b.clausal").write_text('test("clausal") <- (1 == 1)\n')
+    (tmp_path / "sub" / "c.txt").write_text('test("txt") <- (1 == 1)\n')
+    rc = main(["-v", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "a.seam::seam" in out
+    assert "b.clausal::clausal" in out
+    assert "txt" not in out
+    assert "2 passed, 0 failed [PASSED]" in out
+
+
+def test_discover_clausal_files_orders_both_extensions_together(tmp_path):
+    from clausal.testing import discover_clausal_files
+    for name in ("b.seam", "a.clausal", "c.clausal", "d.txt"):
+        (tmp_path / name).write_text("")
+    found = [p.name for p in discover_clausal_files([tmp_path])]
+    assert found == ["a.clausal", "b.seam", "c.clausal"]
+
+
+def test_seam_load_module_name_drops_the_suffix(tmp_path):
+    from clausal.testing import load_clausal_module
+    p = tmp_path / "named.seam"
+    p.write_text("foo(1),\n")
+    mod = load_clausal_module(p)
+    assert mod.__name__ == "_clausal_test_named"

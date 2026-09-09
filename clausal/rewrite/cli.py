@@ -1,6 +1,6 @@
 """``clausal-rewrite`` -- apply Clausal rewrite rules, then format.
 
-    clausal-rewrite src/                    rewrite every .clausal file under src/
+    clausal-rewrite src/                    rewrite every .clausal/.seam file under src/
     clausal-rewrite --check src/            exit 1 if any file would change
     clausal-rewrite --diff src/             print what would change, write nothing
     clausal-rewrite --rules head_fold f     apply only the named rule classes
@@ -62,7 +62,8 @@ def rule_paths(names: list[str]) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="clausal-rewrite",
-        description="Apply Clausal rewrite rules to .clausal source, then format it.",
+        description="Apply Clausal rewrite rules to .clausal (or .seam) source, "
+                    "then format it.",
     )
     parser.add_argument("paths", nargs="+", help="files or directories")
     parser.add_argument(

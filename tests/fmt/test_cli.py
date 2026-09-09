@@ -59,3 +59,25 @@ def test_cli_leaves_already_formatted_files_untouched(tmp_path):
     before = f.stat().st_mtime_ns
     assert _fmt(str(f)).returncode == 0
     assert f.stat().st_mtime_ns == before
+
+
+# ── ``.seam`` is an alias extension for ``.clausal`` ─────────────────────────
+
+
+def test_cli_formats_a_seam_file(tmp_path):
+    f = tmp_path / "x.seam"
+    f.write_text(UNFORMATTED)
+    assert _fmt("--check", str(f)).returncode == 1  # would change
+    assert _fmt(str(f)).returncode == 0
+    assert f.read_text() == FORMATTED
+
+
+def test_cli_directory_walk_finds_seam_files(tmp_path):
+    (tmp_path / "sub").mkdir()
+    seam = tmp_path / "sub" / "y.seam"
+    seam.write_text(UNFORMATTED)
+    other = tmp_path / "sub" / "z.txt"
+    other.write_text(UNFORMATTED)
+    assert _fmt(str(tmp_path)).returncode == 0
+    assert seam.read_text() == FORMATTED
+    assert other.read_text() == UNFORMATTED
