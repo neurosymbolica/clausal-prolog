@@ -244,17 +244,42 @@ class TestDif2RegistrationAndCellParity:
 
 
 class TestUnivIsRegisteredAsUnpackAndCellParity:
-    """ISO ``=..`` has no registered spelling of its own: ``unpack/2`` is
-    the Python-callable form that implements it (its own docstring floats
-    ``univ/2`` as a rename candidate that was never taken — see
-    ``clausal/logic/builtins/inspection.py::_univ__2``). This probe asserts
-    that fact explicitly, then drives the name that IS registered."""
+    """``unpack/2`` is the Python-callable form of ISO ``=..``.
 
-    def test_bare_iso_spelling_is_not_registered(self):
-        from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+    UPDATED 2026-09-09. This probe used to assert that ISO ``=..`` had no
+    registered spelling of its own. It does now — spec
+    docs/superpowers/specs/2026-09-09-standard-order-of-terms-design.md §6
+    registers the canonical quoted form so corpus code has an ISO spelling to
+    migrate to. The assertion is replaced rather than deleted, and made
+    STRONGER: the two names must resolve to the SAME function object, because
+    ``'=..'`` is registered as an alias and not as a second implementation.
+    If someone later gives it logic of its own, this fails."""
 
-        assert ("=..", 2) not in _BUILTINS
-        assert ("=..", 2) not in _DB_BUILTINS
+    def test_iso_spelling_is_registered_as_an_alias_of_unpack(self):
+        """Both names must wrap the SAME implementation function.
+
+        Not the same REGISTRY entry: `_builtin` puts simple-mode functions
+        through `_simple_to_trampoline`, which builds a fresh wrapper per
+        registration, so the two entries are necessarily distinct objects.
+        What must hold is that both wrappers close over one implementation —
+        that is what makes `'=..'` an alias rather than a second copy that
+        could drift.
+        """
+        from clausal.logic.builtins._registry import _BUILTINS
+        from clausal.logic.builtins.inspection import _univ__2
+
+        assert ("=..", 2) in _BUILTINS
+
+        def closed_over(fn):
+            return {id(c.cell_contents) for c in (fn.__closure__ or ())}
+
+        iso = closed_over(_BUILTINS[("=..", 2)])
+        unpack = closed_over(_BUILTINS[("unpack", 2)])
+        assert id(_univ__2) in iso, "'=..' does not wrap _univ__2"
+        assert id(_univ__2) in unpack, "unpack/2 does not wrap _univ__2"
+        assert iso == unpack, (
+            "'=..' and unpack/2 wrap different things — one has grown "
+            "logic of its own")
 
     def test_unpack_2_is_registered(self):
         _assert_registered("unpack", 2)

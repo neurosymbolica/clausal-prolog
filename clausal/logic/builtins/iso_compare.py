@@ -13,6 +13,7 @@ from clausal.logic.builtins._helpers import _arity as _term_arity
 from clausal.logic.builtins._helpers import _functor_name as _term_functor_name
 from clausal.logic.builtins._helpers import _standard_order_key
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.builtins.inspection import _univ__2 as _iso_univ_impl
 from clausal.logic.constraints import structural_eq as _structural_eq
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.predicate import is_term_instance, term_field_names
@@ -531,3 +532,13 @@ def _iso_compare(order, a, b, trail, k):
     atom = _ORD_LT if got == "<" else (_ORD_EQ if got == "=" else _ORD_GT)
     if _unify(order, atom, trail):
         yield None
+
+
+# ── '=..' (univ) ─────────────────────────────────────────────────────────────
+#
+# The canonical ISO spelling of the existing `unpack/2`. Registered as the
+# SAME function object rather than a wrapper that forwards to it: there is no
+# second implementation, so the two spellings cannot drift apart, and no call
+# layer to pay for. §6.4 already applies unchanged — the head of the univ list
+# is an ATOM, not a bare spelling.
+_builtin("=..", 2, fields=("term", "lst"))(_iso_univ_impl)

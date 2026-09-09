@@ -10,7 +10,7 @@ import pytest
 
 from tests.iso.test_iso_compare_scryer import _engine_yesno, _YES, _NO
 
-_ATOMS = ("a", "b", "f(X)", "g(X)")
+_ATOMS = ("a", "b", "f(X)", "g(X)", "h(X, Y)")
 
 # (engine goal — quoted canonical form, scryer goal — native infix, expected)
 ORDER_ROWS = [
@@ -85,3 +85,51 @@ def test_order_predicates_register_term_classes_of_the_right_arity():
     for name, arity in (("@<", 2), ("@>", 2), ("@=<", 2), ("@>=", 2),
                         ("compare", 3)):
         assert len(_BUILTIN_FIELDS[(name, arity)]) == arity, name
+
+
+# --- '=..' (univ) -----------------------------------------------------------
+#
+# The canonical spelling over the EXISTING `unpack/2`, so the two cannot drift
+# apart. §6.4: the head of the univ list is an ATOM, not a bare spelling.
+
+UNIV_DECON = [
+    # (engine term, engine repr, scryer goal, scryer output)
+    ("h(1, 2)", "[('h',), 1, 2]", "h(1, 2) =.. L", "[h,1,2]"),
+    ("a",       "[('a',)]",       "a =.. L",       "[a]"),
+]
+
+
+@pytest.mark.parametrize("term,expected,_sg,_so", UNIV_DECON)
+def test_univ_deconstructs_engine(term, expected, _sg, _so, run_clausal):
+    atoms = ", ".join(("p(R)",) + _ATOMS)
+    src = (f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
+           f"p(R) <- ('=..'({term}, R))\n")
+    assert run_clausal(src, ("p",)) == [expected]
+
+
+@pytest.mark.parametrize("_term,_expected,scryer_goal,scryer_out", UNIV_DECON)
+def test_univ_deconstructs_scryer(_term, _expected, scryer_goal, scryer_out, scryer):
+    assert scryer(f"{scryer_goal}, write(L), nl, halt.") == scryer_out
+
+
+def test_univ_constructs_engine(run_clausal):
+    """The other direction: build the term from the list."""
+    atoms = ", ".join(("p(R)",) + _ATOMS)
+    src = (f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
+           f"p(R) <- ('=..'(R, [h, 1, 2]))\n")
+    assert run_clausal(src, ("p",)) == [repr(("h", 1, 2))]
+
+
+def test_univ_constructs_scryer(scryer):
+    assert scryer("T =.. [h, 1, 2], write(T), nl, halt.") == "h(1,2)"
+
+
+def test_univ_matches_the_existing_unpack_spelling(run_clausal):
+    """`'=..'` is an ALIAS, not a reimplementation: if the two ever disagree,
+    one of them has grown logic of its own."""
+    atoms = ", ".join(("p(R)",) + _ATOMS)
+    a = run_clausal(f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
+                    f"p(R) <- ('=..'(h(1, 2), R))\n", ("p",))
+    b = run_clausal(f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
+                    f"p(R) <- (unpack(h(1, 2), R))\n", ("p",))
+    assert a == b and a != []
