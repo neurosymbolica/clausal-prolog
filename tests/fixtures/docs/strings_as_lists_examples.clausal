@@ -8,15 +8,15 @@
 # back, and the doc these snippets illustrate is true again.  This module
 # reads "..." as a string (-double_quotes(chars) above); the list elements
 # are char atoms, which is what a string's elements are.
-Test("string equals its char list") <- ("abc" is ['a', 'b', 'c'])  # nv
-Test("with vars unifies") <- ("abc" is [X_UNUSED, Y_UNUSED, Z_UNUSED])  # nv
-Test("partial unifies") <- ("hello" is ['h', 'e', X_UNUSED, Y_UNUSED, 'o'])  # nv
+test("string equals its char list") <- ("abc" is ['a', 'b', 'c'])  # nv
+test("with vars unifies") <- ("abc" is [X_UNUSED, Y_UNUSED, Z_UNUSED])  # nv
+test("partial unifies") <- ("hello" is ['h', 'e', X_UNUSED, Y_UNUSED, 'o'])  # nv
 # --8<-- [end:unification]
 
 # --8<-- [start:empty_string]
 # THE FLIP: "" and [] are one term again (spec §5.1) — the empty string is
 # the empty list.
-Test("empty unifies") <- ("" is [])  # nv
+test("empty unifies") <- ("" is [])  # nv
 # --8<-- [end:empty_string]
 
 # --8<-- [start:pattern_matching]
@@ -24,58 +24,58 @@ starts_with([*PREFIX, *_], PREFIX),
 ends_with([*_, *SUFFIX], SUFFIX),
 contains([*_, X, *_], X),
 
-Test("prefix") <- starts_with("hello", "hel")  # nv
-Test("suffix") <- ends_with("hello", "lo")  # nv
+test("prefix") <- starts_with("hello", "hel")  # nv
+test("suffix") <- ends_with("hello", "lo")  # nv
 # ``contains(S, X)`` picks one ELEMENT out of the sequence, and an element
 # of a string is a CHAR ATOM — ``'l'``, not the one-element string "l".
-Test("contains l") <- contains("hello", 'l')  # nv
+test("contains l") <- contains("hello", 'l')  # nv
 # --8<-- [end:pattern_matching]
 
 # --8<-- [start:append_examples]
-Test("concat") <- append("hel", "lo", "hello")  # nv
-Test("prefix match") <- (append("hel", X, "hello"), X == "lo")  # nv
-Test("suffix match") <- (append(X, "lo", "hello"), X == "hel")  # nv
+test("concat") <- append("hel", "lo", "hello")  # nv
+test("prefix match") <- (append("hel", X, "hello"), X == "lo")  # nv
+test("suffix match") <- (append(X, "lo", "hello"), X == "hel")  # nv
 # --8<-- [end:append_examples]
 
 # --8<-- [start:length_example]
-Test("length") <- length("hello", 5)  # nv
+test("length") <- length("hello", 5)  # nv
 # --8<-- [end:length_example]
 
 # --8<-- [start:member_examples]
-Test("member") <- in_('e', "hello")  # nv
-Test("enumerate") <- (
+test("member") <- in_('e', "hello")  # nv
+test("enumerate") <- (
     findall(C, in_(C, "abc"), CHARS),
     CHARS is ['a', 'b', 'c']
 )  # nv
 # --8<-- [end:member_examples]
 
 # --8<-- [start:reverse_example]
-Test("reverse") <- reverse("hello", "olleh")  # nv
+test("reverse") <- reverse("hello", "olleh")  # nv
 # --8<-- [end:reverse_example]
 
 # --8<-- [start:take_drop_split]
-Test("take") <- take(3, "hello", "hel")  # nv
-Test("drop") <- drop(3, "hello", "lo")  # nv
-Test("split") <- split_at(3, "hello", "hel", "lo")  # nv
+test("take") <- take(3, "hello", "hel")  # nv
+test("drop") <- drop(3, "hello", "lo")  # nv
+test("split") <- split_at(3, "hello", "hel", "lo")  # nv
 # --8<-- [end:take_drop_split]
 
 # --8<-- [start:list_item_example]
-Test("index") <- (list_item(1, "hello", C), C is 'e')  # nv
+test("index") <- (list_item(1, "hello", C), C is 'e')  # nv
 # --8<-- [end:list_item_example]
 
 # --8<-- [start:type_checking]
-Test("is_chars string") <- is_chars("hello")  # nv
-Test("is_chars list") <- is_chars([1, 2, 3])  # nv
+test("is_chars string") <- is_chars("hello")  # nv
+test("is_chars list") <- is_chars([1, 2, 3])  # nv
 # Audit 2026-05-25 (F080): is_list/1 is now polymorphic over list
 # and str — a str is a character sequence, so is_list("hello")
 # agrees with maplist/length/append/reverse/member/take/drop/etc.
-Test("is_list string succeeds") <- is_list("hello")  # nv
-Test("is_str list fails") <- (not is_str([1, 2, 3]))  # nv
+test("is_list string succeeds") <- is_list("hello")  # nv
+test("is_str list fails") <- (not is_str([1, 2, 3]))  # nv
 # is_str/1 answers for the TERM: a proper list of char atoms IS the string
 # it is equal to, and [] is "".  is_chars/1 is the wider union test, so it
 # also takes [1, 2, 3] above.
-Test("is_str char list succeeds") <- is_str(['h', 'i'])  # nv
-Test("is_str empty list succeeds") <- is_str([])  # nv
+test("is_str char list succeeds") <- is_str(['h', 'i'])  # nv
+test("is_str empty list succeeds") <- is_str([])  # nv
 # --8<-- [end:type_checking]
 
 # --8<-- [start:atom_family]
@@ -83,13 +83,13 @@ Test("is_str empty list succeeds") <- is_str([])  # nv
 # the snippet needs no -private declaration) and answers with atoms; a STRING
 # there raises type_error(atom, …).  atom_chars/2 is the bridge between the
 # two kinds: it relates an atom to the string of its spelling.
-Test("atom to text") <- (atom_chars('hello', S), S is "hello")  # nv
-Test("text to atom") <- (atom_chars(A, "hello"), A is 'hello', atom(A))  # nv
-Test("length of an atom") <- atom_length('hello', 5)  # nv
-Test("concat gives an atom") <- (atom_concat('he', 'llo', X), X is 'hello')  # nv
-Test("upcase gives an atom") <- (upcase_atom('hello', U), U is 'HELLO')  # nv
-Test("char_type takes a char atom") <- char_type('a', 'alpha')  # nv
-Test("a string is not an atom here") <- catch(
+test("atom to text") <- (atom_chars('hello', S), S is "hello")  # nv
+test("text to atom") <- (atom_chars(A, "hello"), A is 'hello', atom(A))  # nv
+test("length of an atom") <- atom_length('hello', 5)  # nv
+test("concat gives an atom") <- (atom_concat('he', 'llo', X), X is 'hello')  # nv
+test("upcase gives an atom") <- (upcase_atom('hello', U), U is 'HELLO')  # nv
+test("char_type takes a char atom") <- char_type('a', 'alpha')  # nv
+test("a string is not an atom here") <- catch(
     atom_length("hello", _),
     error(type_error('atom', "hello"), _),
     (1 == 1)

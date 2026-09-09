@@ -11,10 +11,10 @@ Path(X, Y) <- (
 )
 
 
-Test("left recursive path all from 1") <- (findall(TARGET, Path(1, TARGET), TARGETS), sort(TARGETS, [2, 3, 4]))  # nv
-Test("left recursive path 3 to 4") <- Path(3, 4)  # nv
-Test("path multi-hop 1 to 4") <- Path(1, 4)  # nv
-Test("path no backward 4 to 1 fails") <- (not Path(4, 1))  # nv
+test("left recursive path all from 1") <- (findall(TARGET, Path(1, TARGET), TARGETS), sort(TARGETS, [2, 3, 4]))  # nv
+test("left recursive path 3 to 4") <- Path(3, 4)  # nv
+test("path multi-hop 1 to 4") <- Path(1, 4)  # nv
+test("path no backward 4 to 1 fails") <- (not Path(4, 1))  # nv
 # Note: `findall([X,Y], Path(X,Y), L)` with both args unbound observes
 # stale tabled-dispatch (V2-2/V2-4b interaction); coverage of the
 # all-pairs case stays in tests/test_slg_termination.py for now.

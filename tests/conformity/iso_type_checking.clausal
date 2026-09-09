@@ -17,7 +17,7 @@
 #     Tests needing negative int args must use Python test file.
 #   - Complex Python types (bool, complex) can't be tested directly.
 
--module(iso_type_checking, [Test(DESC)])
+-module(iso_type_checking, [test(DESC)])
 
 -private([
     is_bound_number(X),
@@ -32,64 +32,64 @@ is_bound_number(X) <- (
 
 # ── var/1 ────────────────────────────────────────────────────────────────────
 
-Test("var: unbound var succeeds") <- var(_x_UNUSED)  # nv
-Test("var: integer fails") <- (not var(42))  # nv
-Test("var: atom fails") <- (not var(Hello))  # nv
-Test("var: bound var fails") <- (
+test("var: unbound var succeeds") <- var(_x_UNUSED)  # nv
+test("var: integer fails") <- (not var(42))  # nv
+test("var: atom fails") <- (not var(Hello))  # nv
+test("var: bound var fails") <- (
     _x is 1,
     not var(_x)
 )  # nv
 
 # ── nonvar/1 ─────────────────────────────────────────────────────────────────
 
-Test("nonvar: integer succeeds") <- nonvar(42)  # nv
-Test("nonvar: atom succeeds") <- nonvar(Hello)  # nv
-Test("nonvar: unbound var fails") <- (not nonvar(_x_UNUSED))  # nv
-Test("nonvar: bound var succeeds") <- (
+test("nonvar: integer succeeds") <- nonvar(42)  # nv
+test("nonvar: atom succeeds") <- nonvar(Hello)  # nv
+test("nonvar: unbound var fails") <- (not nonvar(_x_UNUSED))  # nv
+test("nonvar: bound var succeeds") <- (
     _x is 1,
     nonvar(_x)
 )  # nv
-Test("nonvar: list succeeds") <- nonvar([1, 2])  # nv
+test("nonvar: list succeeds") <- nonvar([1, 2])  # nv
 
 # ── atom/1 ──────────────────────────────────────────────────────────────────
 
-Test("atom: declared atom succeeds") <- atom(Hello)  # nv
-Test("atom: declared atom Abc") <- atom(Abc)  # nv
+test("atom: declared atom succeeds") <- atom(Hello)  # nv
+test("atom: declared atom Abc") <- atom(Abc)  # nv
 # THE FLIP (2026-09-06-atoms-as-cells-strings §6.3) restored ISO's answer:
 # a STRING is not an atom.  R2 (the P3-1 pivot) had made atom/1 true for
 # every str because a str WAS an atom; a str is the list of its char atoms
 # now, and this module reads "..." as one (-double_quotes(chars) above).
-Test("atom: string fails") <- (not atom("hello"))  # nv
+test("atom: string fails") <- (not atom("hello"))  # nv
 # This module is in `-double_quotes(chars)` mode, so `"h"` would be a
 # one-element STRING, not a char — the char atoms are spelled `'h'` (an atom
 # in every mode, spec §7).
-Test("atom: char list fails") <- (not atom(['h', 'e', 'l', 'l', 'o']))  # nv
-Test("atom: integer fails") <- (not atom(1))  # nv
-Test("atom: unbound var fails") <- (not atom(_x_UNUSED))  # nv
+test("atom: char list fails") <- (not atom(['h', 'e', 'l', 'l', 'o']))  # nv
+test("atom: integer fails") <- (not atom(1))  # nv
+test("atom: unbound var fails") <- (not atom(_x_UNUSED))  # nv
 
 # ── is_str/1 ───────────────────────────────────────────────────────────────────
 
-Test("str: plain string succeeds") <- is_str("hello")  # nv
-Test("str: empty string succeeds") <- is_str("")  # nv
+test("str: plain string succeeds") <- is_str("hello")  # nv
+test("str: empty string succeeds") <- is_str("")  # nv
 # THE FLIP: a declared atom is the arity-0 CELL, not a str, so is_str/1
 # fails on it again — the pre-pivot answer, reached by a different route.
-Test("str: declared atom fails") <- (not is_str(Hello))  # nv
-Test("str: integer fails") <- (not is_str(1))  # nv
-Test("str: unbound var fails") <- (not is_str(_x_UNUSED))  # nv
+test("str: declared atom fails") <- (not is_str(Hello))  # nv
+test("str: integer fails") <- (not is_str(1))  # nv
+test("str: unbound var fails") <- (not is_str(_x_UNUSED))  # nv
 # Task 14b: is_str/1 answers for the TERM, so the empty list -- which IS the
 # empty string -- succeeds, and only a list with a NON-char element fails.
 # (The char-list row lives in the docs fixture, not here: it translates to
 # `atom(['h','i'])`, which an ISO system answers false.)
-Test("str: empty list succeeds") <- is_str([])  # nv
-Test("str: non-char list fails") <- (not is_str([1, 2]))  # nv
+test("str: empty list succeeds") <- is_str([])  # nv
+test("str: non-char list fails") <- (not is_str([1, 2]))  # nv
 
 # ── integer/1 ────────────────────────────────────────────────────────────────────
 
-Test("integer: positive") <- integer(1)  # nv
-Test("integer: zero") <- integer(0)  # nv
-Test("integer: large") <- integer(100000000000000000000)  # nv
-Test("integer: string fails") <- (not integer("1"))  # nv
-Test("integer: var fails") <- (not integer(_x_UNUSED))  # nv
+test("integer: positive") <- integer(1)  # nv
+test("integer: zero") <- integer(0)  # nv
+test("integer: large") <- integer(100000000000000000000)  # nv
+test("integer: string fails") <- (not integer("1"))  # nv
+test("integer: var fails") <- (not integer(_x_UNUSED))  # nv
 # Note: integer(-1), integer(True/False) tested in Python test file
 
 # ── float_/1 ─────────────────────────────────────────────────────────────────
@@ -97,10 +97,10 @@ Test("integer: var fails") <- (not integer(_x_UNUSED))  # nv
 
 # ── number/1 ─────────────────────────────────────────────────────────────────
 
-Test("number: integer") <- number(42)  # nv
-Test("number: float") <- number(3.14)  # nv
-Test("number: string fails") <- (not number("42"))  # nv
-Test("number: var fails") <- (not number(_x_UNUSED))  # nv
+test("number: integer") <- number(42)  # nv
+test("number: float") <- number(3.14)  # nv
+test("number: string fails") <- (not number("42"))  # nv
+test("number: var fails") <- (not number(_x_UNUSED))  # nv
 
 # ── callable_/1 (declared atoms) ─────────────────────────────────────────────
 # Audit 2026-05-25 (F084): callable_/1 was tightened. A bare ``str``
@@ -118,68 +118,68 @@ Test("number: var fails") <- (not number(_x_UNUSED))  # nv
 # the compound '.'/2 and "" is callable because it is the atom '[]'.  That
 # is NOT a read of the characters as a predicate name: calling one raises
 # existence_error(procedure, '.'/2).
-Test("callable: declared atom succeeds") <- callable_(Hello)  # nv
-Test("callable: a string is callable as the list it is") <- callable_("is_bound_number")  # nv
-Test("callable: an arbitrary string is callable too") <- callable_("hello")  # nv
-Test("callable: the empty list is the atom '[]' and is callable") <- callable_([])  # nv
-Test("callable: a non-empty list is the compound './2'") <- callable_([1, 2])  # nv
-Test("callable: int fails") <- (not callable_(42))  # nv
-Test("callable: var fails") <- (not callable_(_x_UNUSED))  # nv
+test("callable: declared atom succeeds") <- callable_(Hello)  # nv
+test("callable: a string is callable as the list it is") <- callable_("is_bound_number")  # nv
+test("callable: an arbitrary string is callable too") <- callable_("hello")  # nv
+test("callable: the empty list is the atom '[]' and is callable") <- callable_([])  # nv
+test("callable: a non-empty list is the compound './2'") <- callable_([1, 2])  # nv
+test("callable: int fails") <- (not callable_(42))  # nv
+test("callable: var fails") <- (not callable_(_x_UNUSED))  # nv
 
 # ── is_list/1 ────────────────────────────────────────────────────────────────────
 
-Test("is_list: list") <- is_list([1, 2, 3])  # nv
-Test("is_list: empty") <- is_list([])  # nv
-Test("is_list: nested") <- is_list([[1], [2]])  # nv
+test("is_list: list") <- is_list([1, 2, 3])  # nv
+test("is_list: empty") <- is_list([])  # nv
+test("is_list: nested") <- is_list([[1], [2]])  # nv
 # THE FLIP: a declared atom is a CELL, not a str, so it is not a list —
 # the pre-pivot answer again.
-Test("is_list: declared atom fails") <- (not is_list(Hello))  # nv
-Test("is_list: int fails") <- (not is_list(42))  # nv
-Test("is_list: var fails") <- (not is_list(_x_UNUSED))  # nv
+test("is_list: declared atom fails") <- (not is_list(Hello))  # nv
+test("is_list: int fails") <- (not is_list(42))  # nv
+test("is_list: var fails") <- (not is_list(_x_UNUSED))  # nv
 
 # ── ground/1 ─────────────────────────────────────────────────────────────────
 
-Test("ground: integer") <- ground(42)  # nv
-Test("ground: declared atom") <- ground(Abc)  # nv
-Test("ground: ground list") <- ground([1, 2, 3])  # nv
-Test("ground: empty list") <- ground([])  # nv
-Test("ground: var fails") <- (not ground(_x_UNUSED))  # nv
+test("ground: integer") <- ground(42)  # nv
+test("ground: declared atom") <- ground(Abc)  # nv
+test("ground: ground list") <- ground([1, 2, 3])  # nv
+test("ground: empty list") <- ground([])  # nv
+test("ground: var fails") <- (not ground(_x_UNUSED))  # nv
 
 # ── is_bound_number/1 (private helper) ───────────────────────────────────────
 
-Test("is_bound_number: integer") <- is_bound_number(42)  # nv
-Test("is_bound_number: float") <- is_bound_number(3.14)  # nv
-Test("is_bound_number: string fails") <- (not is_bound_number("42"))  # nv
-Test("is_bound_number: unbound fails") <- (not is_bound_number(_x_UNUSED))  # nv
+test("is_bound_number: integer") <- is_bound_number(42)  # nv
+test("is_bound_number: float") <- is_bound_number(3.14)  # nv
+test("is_bound_number: string fails") <- (not is_bound_number("42"))  # nv
+test("is_bound_number: unbound fails") <- (not is_bound_number(_x_UNUSED))  # nv
 
 # ── additional ground-literal cases migrated from test_iso_type_checking.py ──
 
 # atom/is_str
-Test("is_str: float fails") <- (not is_str(1.0))  # nv
+test("is_str: float fails") <- (not is_str(1.0))  # nv
 
 # integer
-Test("integer: float fails") <- (not integer(1.0))  # nv
-Test("integer: hex literal 0x1") <- integer(0x1)  # nv
-Test("integer: octal literal 0o1") <- integer(0o1)  # nv
-Test("integer: binary literal 0b1") <- integer(0b1)  # nv
+test("integer: float fails") <- (not integer(1.0))  # nv
+test("integer: hex literal 0x1") <- integer(0x1)  # nv
+test("integer: octal literal 0o1") <- integer(0o1)  # nv
+test("integer: binary literal 0b1") <- integer(0b1)  # nv
 
 # float_
-Test("float_: 1.0 succeeds") <- float_(1.0)  # nv
-Test("float_: 0.0 succeeds") <- float_(0.0)  # nv
-Test("float_: scientific 1e9") <- float_(1e9)  # nv
-Test("float_: int fails") <- (not float_(1))  # nv
-Test("float_: string fails") <- (not float_("1.0"))  # nv
-Test("float_: var fails") <- (not float_(_x_UNUSED))  # nv
+test("float_: 1.0 succeeds") <- float_(1.0)  # nv
+test("float_: 0.0 succeeds") <- float_(0.0)  # nv
+test("float_: scientific 1e9") <- float_(1e9)  # nv
+test("float_: int fails") <- (not float_(1))  # nv
+test("float_: string fails") <- (not float_("1.0"))  # nv
+test("float_: var fails") <- (not float_(_x_UNUSED))  # nv
 
 # number
-Test("number: large int (via eval)") <- (X == 10 ** 100, number(X))  # nv
+test("number: large int (via eval)") <- (X == 10 ** 100, number(X))  # nv
 
 # callable_
 # (compound-arg variant stays in Python — needs Compound() construction.)
 
 # is_list
-Test("is_list: list of mixed types") <- is_list([1, "a", [2]])  # nv
+test("is_list: list of mixed types") <- is_list([1, "a", [2]])  # nv
 
 # ground
-Test("ground: nested ground") <- ground([[1, 2], [3, 4]])  # nv
-Test("ground: list containing var fails") <- (not ground([1, _x_UNUSED, 3]))  # nv
+test("ground: nested ground") <- ground([[1, 2], [3, 4]])  # nv
+test("ground: list containing var fails") <- (not ground([1, _x_UNUSED, 3]))  # nv

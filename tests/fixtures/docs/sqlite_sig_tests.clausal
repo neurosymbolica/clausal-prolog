@@ -7,14 +7,14 @@
 
 # ── Connection ───────────────────────────────────────────────────────────────
 
-Test("connect") <- (
+test("connect") <- (
     connect(":memory:", "doc_test_conn"),
     current_connection("doc_test_conn")
 )  # nv
 
 # ── Exec and Query ───────────────────────────────────────────────────────────
 
-Test("exec and query") <- (
+test("exec and query") <- (
     connect(":memory:", "doc_test_eq"),
     exec("doc_test_eq", "CREATE TABLE t1 (x INTEGER)"),
     exec("doc_test_eq", "INSERT INTO t1 VALUES (?)", [42]),
@@ -22,7 +22,7 @@ Test("exec and query") <- (
     V == 42
 )  # nv
 
-Test("query params") <- (
+test("query params") <- (
     connect(":memory:", "doc_test_qp"),
     exec("doc_test_qp", "CREATE TABLE t2 (x INTEGER)"),
     exec("doc_test_qp", "INSERT INTO t2 VALUES (1)"),
@@ -33,7 +33,7 @@ Test("query params") <- (
 
 # ── Row count ────────────────────────────────────────────────────────────────
 
-Test("row count") <- (
+test("row count") <- (
     connect(":memory:", "doc_test_rc"),
     exec("doc_test_rc", "CREATE TABLE t3 (x INTEGER)"),
     exec("doc_test_rc", "INSERT INTO t3 VALUES (1)"),
@@ -44,13 +44,13 @@ Test("row count") <- (
 
 # ── Schema introspection ─────────────────────────────────────────────────────
 
-Test("table exists") <- (
+test("table exists") <- (
     connect(":memory:", "doc_test_tbl"),
     exec("doc_test_tbl", "CREATE TABLE users (name TEXT, age INTEGER)"),
     table("doc_test_tbl", "users")
 )  # nv
 
-Test("column info") <- (
+test("column info") <- (
     connect(":memory:", "doc_test_col"),
     exec("doc_test_col", "CREATE TABLE items (id INTEGER, name TEXT)"),
     column("doc_test_col", "items", "id", _)

@@ -7,6 +7,6 @@ Double(3, 6),
 
 Helper(X, Y) <- Double(X, Y)
 
-Test("double 0") <- Double(0, 0)  # nv
-Test("double 2 is 4") <- Double(2, 4)  # nv
-Test("helper delegates") <- (Helper(2, Y), Y == 4)  # nv
+test("double 0") <- Double(0, 0)  # nv
+test("double 2 is 4") <- Double(2, 4)  # nv
+test("helper delegates") <- (Helper(2, Y), Y == 4)  # nv

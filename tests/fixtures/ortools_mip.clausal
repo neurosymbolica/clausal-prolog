@@ -1,6 +1,6 @@
 # OR-Tools MIP integration tests (CBC solver)
 
-Test("cbc integer maximize 3x+5y s.t. x+y<=10") <- (
+test("cbc integer maximize 3x+5y s.t. x+y<=10") <- (
     ortools.lp.int_var(X, 0, 100),
     ortools.lp.int_var(Y, 0, 100),
     ortools.cbc(X + Y <= 10),

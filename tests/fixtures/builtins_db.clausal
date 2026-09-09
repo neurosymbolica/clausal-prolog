@@ -25,12 +25,12 @@ retract_red <- (
 )
 
 
-Test("colour red") <- colour("red")  # v
-Test("colour green") <- colour("green")  # v
-Test("colour blue") <- colour("blue")  # v
+test("colour red") <- colour("red")  # v
+test("colour green") <- colour("green")  # v
+test("colour blue") <- colour("blue")  # v
 # Todo: need tests for asserting, prepending (check order), retracting
 
-Test("three colors") <- (
+test("three colors") <- (
     findall(COLOUR, colour(COLOUR), COLOURS),
     length(COLOURS, 3),
 )  # v

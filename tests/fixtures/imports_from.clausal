@@ -3,6 +3,6 @@
 UseHelper(X, Y) <- Helper(X, Y)
 UseDouble(X, RESULT) <- Double(X, RESULT)
 
-Test("use helper 2") <- (UseHelper(2, Y), Y == 4)  # nv
-Test("use double 3") <- (UseDouble(3, RESULT), RESULT == 6)  # nv
-Test("use helper 0") <- (UseHelper(0, Y), Y == 0)  # nv
+test("use helper 2") <- (UseHelper(2, Y), Y == 4)  # nv
+test("use double 3") <- (UseDouble(3, RESULT), RESULT == 6)  # nv
+test("use helper 0") <- (UseHelper(0, Y), Y == 0)  # nv

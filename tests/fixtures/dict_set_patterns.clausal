@@ -33,56 +33,56 @@ primary({"red", "green", "blue"}),
 # ── Tests ──
 
 # --- Test: ground dict matching ---
-Test("origin") <- (point_type({"x": 0, "y": 0}, TYPE), TYPE is "origin")  # nv
-Test("x_axis") <- (point_type({"x": 1, "y": 0}, TYPE), TYPE is "x_axis")  # nv
+test("origin") <- (point_type({"x": 0, "y": 0}, TYPE), TYPE is "origin")  # nv
+test("x_axis") <- (point_type({"x": 1, "y": 0}, TYPE), TYPE is "x_axis")  # nv
 
 # --- Test: dict value extraction ---
-Test("get_x") <- (get_x({"x": 42, "y": 99}, X), X is 42)  # nv
-Test("get_y") <- (get_y({"x": 10, "y": 20}, Y), Y is 20)  # nv
+test("get_x") <- (get_x({"x": 42, "y": 99}, X), X is 42)  # nv
+test("get_y") <- (get_y({"x": 10, "y": 20}, Y), Y is 20)  # nv
 
 # --- Test: nested dict ---
-Test("nested city") <- (
+test("nested city") <- (
     get_city({"address": {"city": "London"}}, C),
     C is "London",
 )  # nv
 
 # --- Test: dict construction in body ---
-Test("make_point") <- (
+test("make_point") <- (
     make_point(3, 4, P),
     get_x(P, X), X is 3,
     get_y(P, Y), Y is 4,
 )  # nv
 
 # --- Test: dict unification in body ---
-Test("dict unify") <- (
+test("dict unify") <- (
     D is {"a": 1, "b": 2},
     D is {"a": X, "b": Y},
     X is 1, Y is 2,
 )  # nv
 
 # --- Test: dict fails on key mismatch ---
-Test("dict key mismatch fails") <- (
+test("dict key mismatch fails") <- (
     not ({"a": 1} is {"b": 1})
 )  # nv
 
 # --- Test: set ground matching ---
-Test("set match") <- (colors(S), S is {1, 2, 3})  # nv
+test("set match") <- (colors(S), S is {1, 2, 3})  # nv
 
 # --- Test: set primary ---
-Test("set primary") <- (primary(S), S is {"red", "green", "blue"})  # nv
+test("set primary") <- (primary(S), S is {"red", "green", "blue"})  # nv
 
 # --- Test: set mismatch fails ---
-Test("set mismatch fails") <- (not ({1, 2} is {1, 2, 3}))  # nv
+test("set mismatch fails") <- (not ({1, 2} is {1, 2, 3}))  # nv
 
 # --- Test: dict var unifies ---
-Test("var binds dict") <- (
+test("var binds dict") <- (
     X is {"key": "val"},
     X is {"key": Y},
     Y is "val",
 )  # nv
 
 # --- Test: empty dict ---
-Test("empty dict") <- ({} is {})  # nv
+test("empty dict") <- ({} is {})  # nv
 
 # ── Dict subscript read: V is P[key] (dict-native-profile-api item 1) ──
 
@@ -91,24 +91,24 @@ Test("empty dict") <- ({} is {})  # nv
 subscript_get(P, K, V) <- (V is P[K])
 
 # --- Test: subscript read binds the stored value (string key) ---
-Test("subscript str key a") <- (V is {"a": 1, "b": 2}["a"], V is 1)  # nv
-Test("subscript str key b") <- (V is {"a": 1, "b": 2}["b"], V is 2)  # nv
+test("subscript str key a") <- (V is {"a": 1, "b": 2}["a"], V is 1)  # nv
+test("subscript str key b") <- (V is {"a": 1, "b": 2}["b"], V is 2)  # nv
 
 # --- Test: subscript read with integer key ---
-Test("subscript int key") <- (V is {1: "one", 2: "two"}[2], V is "two")  # nv
+test("subscript int key") <- (V is {1: "one", 2: "two"}[2], V is "two")  # nv
 
 # --- Test: subscript over a bound dict variable ---
-Test("subscript via var") <- (P is {"x": 10, "y": 20}, V is P["y"], V is 20)  # nv
+test("subscript via var") <- (P is {"x": 10, "y": 20}, V is P["y"], V is 20)  # nv
 
 # --- Test: value-var flows through subscript, then unifies ---
-Test("subscript value var") <- (
+test("subscript value var") <- (
     X is {"a": V}["a"],
     V is 7,
     X is 7,
 )  # nv
 
 # --- Test: missing key throws a catchable existence_error carrying the key ---
-Test("subscript missing throws") <- (
+test("subscript missing throws") <- (
     catch(
         (_ is {"a": 1}["z"]),
         error(existence_error(_, KEY), _),
@@ -117,7 +117,7 @@ Test("subscript missing throws") <- (
 )  # nv
 
 # --- Test: non-ground key index throws a catchable instantiation_error ---
-Test("subscript nonground errors") <- (
+test("subscript nonground errors") <- (
     catch(
         (_ is {"a": 1}[K_UNUSED]),
         error(ETYPE, _),
@@ -127,46 +127,46 @@ Test("subscript nonground errors") <- (
 
 # ── Key membership `KEY in P` (item 2) ──
 
-Test("in present key") <- ("a" in {"a": 1, "b": 2})  # nv
-Test("in absent key fails") <- (not ("z" in {"a": 1}))  # nv
-Test("in is key not value") <- (not (1 in {"a": 1}))  # nv
-Test("in enumerates keys") <- (
+test("in present key") <- ("a" in {"a": 1, "b": 2})  # nv
+test("in absent key fails") <- (not ("z" in {"a": 1}))  # nv
+test("in is key not value") <- (not (1 in {"a": 1}))  # nv
+test("in enumerates keys") <- (
     findall(K, K in {"a": 1, "b": 2}, KS),
     KS is ++(sorted(["a", "b"])),
 )  # nv
-Test("in pair mode") <- (
+test("in pair mode") <- (
     findall([K, V], (K, V) in {"a": 1, "b": 2}, PS),
     PS is ++(sorted([["a", 1], ["b", 2]])),
 )  # nv
 
 # ── Soft/defaulted read: get/3, get/4 (item 3) ──
 
-Test("get present") <- (get({"a": 1, "b": 2}, "a", V), V is 1)  # nv
-Test("get absent fails") <- (not get({"a": 1}, "z", _))  # nv
-Test("get value var") <- (get({"a": V}, "a", 7), V is 7)  # nv
-Test("get4 present") <- (get({"a": 1}, "a", V, 9), V is 1)  # nv
-Test("get4 default") <- (get({"a": 1}, "z", V, 9), V is 9)  # nv
+test("get present") <- (get({"a": 1, "b": 2}, "a", V), V is 1)  # nv
+test("get absent fails") <- (not get({"a": 1}, "z", _))  # nv
+test("get value var") <- (get({"a": V}, "a", 7), V is 7)  # nv
+test("get4 present") <- (get({"a": 1}, "a", V, 9), V is 1)  # nv
+test("get4 default") <- (get({"a": 1}, "z", V, 9), V is 9)  # nv
 
 # ── Splat/merge functional set (item 4) ──
 
-Test("merge override") <- (P2 is {**{"a": 1, "b": 2}, "b": 9}, P2 is {"a": 1, "b": 9})  # nv
-Test("merge default order") <- (P2 is {"b": 9, **{"a": 1, "b": 2}}, P2 is {"a": 1, "b": 2})  # nv
-Test("merge addkey") <- (P2 is {**{"a": 1}, "c": 3}, P2 is {"a": 1, "c": 3})  # nv
-Test("merge value var") <- (P2 is {**{"a": 1}, "b": V}, V is 2, P2 is {"a": 1, "b": 2})  # nv
-Test("merge multi splat") <- (
+test("merge override") <- (P2 is {**{"a": 1, "b": 2}, "b": 9}, P2 is {"a": 1, "b": 9})  # nv
+test("merge default order") <- (P2 is {"b": 9, **{"a": 1, "b": 2}}, P2 is {"a": 1, "b": 2})  # nv
+test("merge addkey") <- (P2 is {**{"a": 1}, "c": 3}, P2 is {"a": 1, "c": 3})  # nv
+test("merge value var") <- (P2 is {**{"a": 1}, "b": V}, V is 2, P2 is {"a": 1, "b": 2})  # nv
+test("merge multi splat") <- (
     P2 is {**{"a": 1, "b": 2}, **{"b": 3, "c": 4}},
     P2 is {"a": 1, "b": 3, "c": 4},
 )  # nv
 
 # ── Functional delete/3 (item 5) ──
 
-Test("delete removes key") <- (delete({"a": 1, "b": 2}, "a", P2), P2 is {"b": 2})  # nv
-Test("delete keeps original") <- (
+test("delete removes key") <- (delete({"a": 1, "b": 2}, "a", P2), P2 is {"b": 2})  # nv
+test("delete keeps original") <- (
     P is {"a": 1, "b": 2},
     delete(P, "a", _),
     P is {"a": 1, "b": 2},
 )  # nv
-Test("delete absent throws") <- (
+test("delete absent throws") <- (
     catch(
         delete({"a": 1}, "z", _),
         error(existence_error(_, KEY), _),
@@ -176,22 +176,22 @@ Test("delete absent throws") <- (
 
 # ── Hardening: object/source type guards ──
 
-Test("subscript nondict object errors") <- (
+test("subscript nondict object errors") <- (
     catch(
         (_ is 5["a"]),
         error(type_error(TY, _), _),
         TY is 'dict',
     )
 )  # nv
-Test("get nondict fails") <- (not get(5, "a", _))  # nv
-Test("splat unbound source errors") <- (
+test("get nondict fails") <- (not get(5, "a", _))  # nv
+test("splat unbound source errors") <- (
     catch(
         (_ is {**P_UNUSED, "b": 9}),
         error(ETYPE, _),
         ETYPE is 'instantiation_error',
     )
 )  # nv
-Test("splat nondict source errors") <- (
+test("splat nondict source errors") <- (
     catch(
         (_ is {**5, "b": 9}),
         error(type_error(TY, _), _),
@@ -200,9 +200,9 @@ Test("splat nondict source errors") <- (
 )  # nv
 
 # --- unhashable ground key: soft ops fail, strict ops throw (no raw TypeError) ---
-Test("get unhashable key fails") <- (not get({"a": 1}, [1, 2], _))  # nv
-Test("get4 unhashable key fails") <- (not get({"a": 1}, [1, 2], _, 9))  # nv
-Test("delete unhashable key throws") <- (
+test("get unhashable key fails") <- (not get({"a": 1}, [1, 2], _))  # nv
+test("get4 unhashable key fails") <- (not get({"a": 1}, [1, 2], _, 9))  # nv
+test("delete unhashable key throws") <- (
     catch(
         delete({"a": 1}, [1, 2], _),
         error(type_error(TY, _), _),
@@ -212,13 +212,13 @@ Test("delete unhashable key throws") <- (
 
 # ── Atom-key dict literals (the ergonomic profile surface) ──
 
-Test("atom key subscript") <- (V is {foo: 1, bar: 2}[foo], V is 1)  # nv
-Test("atom key subscript bar") <- (V is {foo: 1, bar: 2}[bar], V is 2)  # nv
-Test("atom key get") <- (get({foo: 1}, foo, V), V is 1)  # nv
-Test("atom key in") <- (foo in {foo: 1, bar: 2})  # nv
-Test("atom key unify") <- ({foo: 1, bar: 2} is {foo: 1, bar: 2})  # nv
-Test("atom key merge") <- (P2 is {**{foo: 1}, bar: 2}, P2 is {foo: 1, bar: 2})  # nv
-Test("atom key delete") <- (delete({foo: 1, bar: 2}, foo, P2), P2 is {bar: 2})  # nv
+test("atom key subscript") <- (V is {foo: 1, bar: 2}[foo], V is 1)  # nv
+test("atom key subscript bar") <- (V is {foo: 1, bar: 2}[bar], V is 2)  # nv
+test("atom key get") <- (get({foo: 1}, foo, V), V is 1)  # nv
+test("atom key in") <- (foo in {foo: 1, bar: 2})  # nv
+test("atom key unify") <- ({foo: 1, bar: 2} is {foo: 1, bar: 2})  # nv
+test("atom key merge") <- (P2 is {**{foo: 1}, bar: 2}, P2 is {foo: 1, bar: 2})  # nv
+test("atom key delete") <- (delete({foo: 1, bar: 2}, foo, P2), P2 is {bar: 2})  # nv
 # P3-1 atom pivot (§1b/R2): atom(X) collapses onto every str -- an atom key
 # `foo` and a string key "foo" are now the SAME key (R2's atom/string
 # collapse, not a dict-specific rule). Inverted from the pre-pivot pin that
@@ -230,7 +230,7 @@ Test("atom key delete") <- (delete({foo: 1, bar: 2}, foo, P2), P2 is {bar: 2})  
 # literal were both the same str, so the dict had one key either way).  In
 # this -double_quotes(chars) module "foo" is the string, foo is the atom, and
 # a dict keyed by the atom does not answer for the string.
-Test("atom key is not the string key") <- (
+test("atom key is not the string key") <- (
     D is {foo: 1},
     not get(D, "foo", _),
     get(D, foo, V2), V2 is 1,
@@ -244,10 +244,10 @@ Test("atom key is not the string key") <- (
 chk_one(1),
 
 # --- Test: atom key ---
-Test("dot atom key") <- (P is {foo: 1, bar: 2}, V is P.foo, V is 1)  # nv
+test("dot atom key") <- (P is {foo: 1, bar: 2}, V is P.foo, V is 1)  # nv
 
 # --- Test: the two spellings agree ---
-Test("dot equals bracket") <- (
+test("dot equals bracket") <- (
     P is {foo: 1, bar: 2},
     V is P.bar,
     W is P[bar],
@@ -256,7 +256,7 @@ Test("dot equals bracket") <- (
 )  # nv
 
 # --- Test: variable key ---
-Test("dot variable key") <- (
+test("dot variable key") <- (
     P is {foo: 1, bar: 2},
     KEYV is bar,
     V is P.KEYV,
@@ -264,8 +264,8 @@ Test("dot variable key") <- (
 )  # nv
 
 # --- Test: chained read P.a.b ≡ P[a][b] ---
-Test("dot chained") <- (P is {foo: {bar: 5}}, V is P.foo.bar, V is 5)  # nv
-Test("dot chained equals bracket") <- (
+test("dot chained") <- (P is {foo: {bar: 5}}, V is P.foo.bar, V is 5)  # nv
+test("dot chained equals bracket") <- (
     P is {inner: {num: 9}},
     V is P.inner.num,
     W is P[inner][num],
@@ -273,16 +273,16 @@ Test("dot chained equals bracket") <- (
 )  # nv
 
 # --- Test: argument position ---
-Test("dot in argument position") <- (P is {foo: 1}, chk_one(P.foo))  # nv
+test("dot in argument position") <- (P is {foo: 1}, chk_one(P.foo))  # nv
 
 # --- Test: comparison position ---
-Test("dot in comparison") <- (P is {num: 7}, P.num > 3)  # nv
+test("dot in comparison") <- (P is {num: 7}, P.num > 3)  # nv
 
 # --- Test: under negation ---
-Test("dot under not") <- (P is {foo: 1}, not (P.foo is 2))  # nv
+test("dot under not") <- (P is {foo: 1}, not (P.foo is 2))  # nv
 
 # --- Test: a Var-valued key aliases through the read ---
-Test("dot value var aliases") <- (
+test("dot value var aliases") <- (
     P is {foo: V},
     X is P.foo,
     V is 7,
@@ -290,7 +290,7 @@ Test("dot value var aliases") <- (
 )  # nv
 
 # --- Test: missing key throws existence_error carrying the key ---
-Test("dot missing key throws") <- (
+test("dot missing key throws") <- (
     P is {foo: 1},
     catch(
         (_ is P.bar),
@@ -300,7 +300,7 @@ Test("dot missing key throws") <- (
 )  # nv
 
 # --- Test: non-dict base throws type_error(dict, _) ---
-Test("dot nondict throws") <- (
+test("dot nondict throws") <- (
     P is 5,
     catch(
         (_ is P.foo),
@@ -310,14 +310,14 @@ Test("dot nondict throws") <- (
 )  # nv
 
 # --- Test: unbound base throws instantiation_error (both spellings) ---
-Test("dot unbound base throws") <- (
+test("dot unbound base throws") <- (
     catch(
         (_ is P_UNUSED.foo),
         error(ETYPE, _),
         ETYPE is 'instantiation_error',
     )
 )  # nv
-Test("bracket unbound base throws") <- (
+test("bracket unbound base throws") <- (
     catch(
         (_ is P_UNUSED[foo]),
         error(ETYPE, _),
@@ -326,13 +326,13 @@ Test("bracket unbound base throws") <- (
 )  # nv
 
 # --- Test: no `./2` term is observable — functor/3 and unpack/2 see the value ---
-Test("dot has no dot functor") <- (
+test("dot has no dot functor") <- (
     P is {foo: 1},
     V is P.foo,
     functor(V, F, A), F is 1, A is 0,
     unpack(V, L), L is [1],
 )  # nv
-Test("dot does not unify with a dot compound") <- (
+test("dot does not unify with a dot compound") <- (
     P is {foo: 1},
     functor(DOTTERM, '.', 2),
     not (DOTTERM is P.foo),
@@ -343,7 +343,7 @@ Test("dot does not unify with a dot compound") <- (
 # the findall (ROW would be unbound → instantiation_error).
 dict_row({foo: 1}),
 dict_row({foo: 2}),
-Test("dot inside findall") <- (
+test("dot inside findall") <- (
     findall(V, (dict_row(ROW), V is ROW.foo), L),
     L is [1, 2],
 )  # nv

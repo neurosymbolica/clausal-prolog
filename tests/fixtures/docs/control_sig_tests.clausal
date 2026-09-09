@@ -1,8 +1,8 @@
 # Companion tests for docs/control.md display snippets.
 
-Test("time_goal 1 exists") <- time_goal(append([1, 2], [3, 4], _))  # nv
+test("time_goal 1 exists") <- time_goal(append([1, 2], [3, 4], _))  # nv
 
-Test("time_goal 2 measure") <- (
+test("time_goal 2 measure") <- (
     time_goal(length([1, 2, 3], _), SECS),
     number(SECS)
 )  # nv

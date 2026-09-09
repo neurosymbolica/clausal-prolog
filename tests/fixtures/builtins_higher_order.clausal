@@ -27,8 +27,8 @@ drop_negatives(LIST, RESULT) <- exclude(is_negative, LIST, RESULT)
 sum_fold(LIST, SUM) <- foldl(add_step, LIST, 0, SUM)
 
 
-Test("all positive") <- all_positive([1, 2, 3])  # nv
-Test("doubled list") <- (doubled([1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
-Test("keep positives") <- (keep_positives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
-Test("drop negatives") <- (drop_negatives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
-Test("sum fold") <- (sum_fold([1, 2, 3, 4], SUM), SUM == 10)  # nv
+test("all positive") <- all_positive([1, 2, 3])  # nv
+test("doubled list") <- (doubled([1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
+test("keep positives") <- (keep_positives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
+test("drop negatives") <- (drop_negatives([1, -2, 3, -4], RESULT), RESULT == [1, 3])  # nv
+test("sum fold") <- (sum_fold([1, 2, 3, 4], SUM), SUM == 10)  # nv

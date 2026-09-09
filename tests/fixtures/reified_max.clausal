@@ -3,6 +3,6 @@
 Classify(X, LABEL) <- if_(X >= 0, LABEL is "positive", LABEL is "negative")
 
 
-Test("classify positive") <- (Classify(5, LABEL), LABEL == "positive")  # nv
-Test("classify negative") <- (Classify(-3, LABEL), LABEL == "negative")  # nv
-Test("classify zero") <- (Classify(0, LABEL), LABEL == "positive")  # nv
+test("classify positive") <- (Classify(5, LABEL), LABEL == "positive")  # nv
+test("classify negative") <- (Classify(-3, LABEL), LABEL == "negative")  # nv
+test("classify zero") <- (Classify(0, LABEL), LABEL == "positive")  # nv

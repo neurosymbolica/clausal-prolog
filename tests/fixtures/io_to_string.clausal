@@ -5,24 +5,24 @@
 # clausal unification, so they can live in .clausal.  Tests that observe
 # stdout side-effects remain in tests/test_io.py.
 
--module(io_to_string, [Test(DESC)])
+-module(io_to_string, [test(DESC)])
 
 # ── write_to_string/2 ─────────────────────────────────────────────────────
 
 # Task 15 item 4 as amended (2026-09-07): write_to_string/2 follows write/1,
 # which is ISO -- a STRING renders as the list of characters it is.  The
 # passthrough rendering moved to write_text_to_string/2, pinned below.
-Test("write_to_string: a string spells itself out") <- (
+test("write_to_string: a string spells itself out") <- (
     write_to_string("hi", S),
     S == "[h,i]"
 )  # nv
 
-Test("write_to_string: integer to string") <- (
+test("write_to_string: integer to string") <- (
     write_to_string(42, S),
     S == "42"
 )  # nv
 
-Test("write_to_string: bound var spells itself out") <- (
+test("write_to_string: bound var spells itself out") <- (
     X is "hi",
     write_to_string(X, S),
     S == "[h,i]"
@@ -30,25 +30,25 @@ Test("write_to_string: bound var spells itself out") <- (
 
 # ── write_text_to_string/2 (the Clausal TEXT family) ──────────────────────
 
-Test("write_text_to_string: plain string passthrough") <- (
+test("write_text_to_string: plain string passthrough") <- (
     write_text_to_string("hello", S),
     S == "hello"
 )  # nv
 
-Test("write_text_to_string: bound var passthrough") <- (
+test("write_text_to_string: bound var passthrough") <- (
     X is "world",
     write_text_to_string(X, S),
     S == "world"
 )  # nv
 
-Test("write_text_to_string: integer to string") <- (
+test("write_text_to_string: integer to string") <- (
     write_text_to_string(42, S),
     S == "42"
 )  # nv
 
 # ── term_to_string/2 ──────────────────────────────────────────────────────
 
-Test("term_to_string: integer") <- (
+test("term_to_string: integer") <- (
     term_to_string(42, S),
     S == "42"
 )  # nv
@@ -56,12 +56,12 @@ Test("term_to_string: integer") <- (
 # THE FLIP (spec §6.7): the quoted writer family spells a STRING with
 # DOUBLE quotes (a single-quoted token is an atom), so the rendering of
 # "hello" is the six-character text "hello" wrapped in quotes.
-Test("term_to_string: string gets quoted") <- (
+test("term_to_string: string gets quoted") <- (
     term_to_string("hello", S),
     S is ['"', 'h', 'e', 'l', 'l', 'o', '"']
 )  # nv
 
-Test("term_to_string: list") <- (
+test("term_to_string: list") <- (
     term_to_string([1, 2], S),
     S == "[1, 2]"
 )  # nv

@@ -24,7 +24,7 @@ PAIR_SRC = """
 pairx("a", 1),
 pairx("b", 2),
 
-Test("both arguments differ") <- (
+test("both arguments differ") <- (
     pairx("c", 3)
 ),
 """
@@ -48,7 +48,7 @@ chk_range(PCT) <- (
     PCT <= 100
 ),
 
-Test("contradictory guards") <- (
+test("contradictory guards") <- (
     chk_range(50)
 ),
 """
@@ -75,7 +75,7 @@ TWO_ROUTES_SRC = """
 classify(X, small) <- (X < 10, X < 0, X > 100),
 classify(X, big) <- (X > 10, X < 0),
 
-Test("two routes both fail") <- (
+test("two routes both fail") <- (
     classify(5, _KIND)
 ),
 """
@@ -93,7 +93,7 @@ def test_each_clause_route_gets_a_leaf(capsys, tmp_path):
 DYN_SRC = """
 -dynamic(dynp/1)
 
-Test("zero-clause predicate") <- (
+test("zero-clause predicate") <- (
     dynp(1)
 ),
 """
@@ -118,7 +118,7 @@ NESTED_SRC = """
 inner_rule(N) <- (N > 100, N < 0),
 outer_rule(N) <- (inner_rule(N)),
 
-Test("nested failure") <- (
+test("nested failure") <- (
     outer_rule(5)
 ),
 """
@@ -144,7 +144,7 @@ def test_cross_module_descent(capsys, tmp_path, monkeypatch):
     p = write(tmp_path, "use.clausal", """
         -import_from(descent_lib, [lib_check])
 
-        Test("cross-module") <- (
+        test("cross-module") <- (
             lib_check(5)
         ),
     """)
@@ -169,7 +169,7 @@ lvl3(N) <- (N > 100, N < 0),
 lvl2(N) <- (lvl3(N)),
 lvl1(N) <- (lvl2(N)),
 
-Test("three levels") <- (
+test("three levels") <- (
     lvl1(5)
 ),
 """
@@ -207,7 +207,7 @@ wk_totals([MINS, STATUS] | REST, TOTAL) <- (
     1 > 2
 ),
 
-Test("cons head never matches") <- (
+test("cons head never matches") <- (
     wk_totals([[2880, work]], 2880)
 ),
 """
@@ -241,7 +241,7 @@ wkn_check(WEEKS) <- (
     wkn_totals(WEEKS, _TOTAL)
 ),
 
-Test("nested cons head") <- (
+test("nested cons head") <- (
     wkn_check([[2880, work]])
 ),
 """
@@ -277,7 +277,7 @@ sixway(N, r4) <- (N > 100, N < 0),
 sixway(N, r5) <- (N > 100, N < 0),
 sixway(N, r6) <- (N > 100, N < 0),
 
-Test("six clauses") <- (
+test("six clauses") <- (
     sixway(5, _R)
 ),
 """
@@ -316,7 +316,7 @@ fanout(N, b) <- (inner(N)),
 fanout(N, c) <- (inner(N)),
 fanout(N, d) <- (inner(N)),
 
-Test("fan out") <- (
+test("fan out") <- (
     fanout(5, _R)
 ),
 """
@@ -350,7 +350,7 @@ sixhead(d, N) <- (1 > 2),
 sixhead(e, N) <- (1 > 2),
 sixhead(f, N) <- (1 > 2),
 
-Test("six clause heads all mismatch") <- (
+test("six clause heads all mismatch") <- (
     sixhead(zzz, 5)
 ),
 """
@@ -391,7 +391,7 @@ wtq_totals([WORKED_MINUTES, STATUS] | REST_WEEKS, TOTAL, N) <- (
     N == N0 + 1
 ),
 
-Test("totals over one week, pinned") <- (
+test("totals over one week, pinned") <- (
     wtq_totals([[2880, work]], 2880, 1)
 ),
 """
@@ -418,7 +418,7 @@ LONE_BOUND_SRC = """
 classify(X, "small") <- (X < 10, X < 0),
 classify(X, "big") <- (X > 10, X < 0),
 
-Test("lone one-sided bounds") <- (
+test("lone one-sided bounds") <- (
     classify(5, _KIND)
 ),
 """
@@ -450,7 +450,7 @@ wto_totals([WORKED_MINUTES, STATUS] | REST_WEEKS, TOTAL, N) <- (
     N == N0 + 1
 ),
 
-Test("totals over one week, outputs free") <- (
+test("totals over one week, outputs free") <- (
     wto_totals([[2880, work]], TOTAL, N),
     TOTAL == 2880
 ),
@@ -471,7 +471,7 @@ def test_ground_fact_near_miss_keeps_rung_1(capsys, tmp_path):
         gpair("a", 1),
         gpair("b", 2),
 
-        Test("one argument differs") <- (
+        test("one argument differs") <- (
             gpair("c", 1)
         ),
     """)
@@ -489,7 +489,7 @@ def test_ground_fact_near_miss_keeps_rung_1(capsys, tmp_path):
 COUPLED_FACT_SRC = """
 pairq(A, B, A, B),
 
-Test("both couplings differ") <- (
+test("both couplings differ") <- (
     pairq(1, 2, 3, 4)
 ),
 """
@@ -529,7 +529,7 @@ MIXED_SLOTS_SRC = """
 mixf(A | B, 7),
 mixf([1, 2], 8),
 
-Test("later concrete slot wins") <- (
+test("later concrete slot wins") <- (
     mixf([1, 2], 7)
 ),
 """
@@ -551,7 +551,7 @@ def test_concrete_near_miss_in_a_later_slot_wins_over_degenerate(
 KWARG_DEG_SRC = """
 kdeg(R=A | B),
 
-Test("kwarg degenerate") <- (
+test("kwarg degenerate") <- (
     kdeg(R=[1, 2])
 ),
 """
@@ -595,7 +595,7 @@ positivep(2),
 positivep(4),
 positivep(5),
 
-Test("all positive") <- (
+test("all positive") <- (
     forall(SUBJECT in [1, 2, 3, 4, 5], positivep(SUBJECT))
 ),
 """
@@ -616,7 +616,7 @@ FORALL_MANY_SRC = """
 positivem(2),
 positivem(4),
 
-Test("all positive, several fail") <- (
+test("all positive, several fail") <- (
     forall(SUBJECT in [1, 2, 3, 4, 5], positivem(SUBJECT))
 ),
 """
@@ -639,7 +639,7 @@ def test_forall_names_every_failing_element_within_the_bound(capsys, tmp_path):
 FORALL_LONG_SRC = """
 noneofthem(_X) <- (1 > 2),
 
-Test("long list, all fail") <- (
+test("long list, all fail") <- (
     forall(N in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], noneofthem(N))
 ),
 """
@@ -666,7 +666,7 @@ def test_forall_bounds_the_number_of_named_elements(capsys, tmp_path):
 # measured incident's shape: ``forall(SUBJECT in LIST, (...))``); the headline
 # still identifies the culprit element rather than the whole list.
 FORALL_CONJ_SRC = """
-Test("all in range") <- (
+test("all in range") <- (
     forall(V in [0, 1, 7, 2], (V >= 0, V <= 3))
 ),
 """
@@ -719,7 +719,7 @@ max_list_or_zero([H, *T], M) <- (
     max_list([H, *T], M)
 ),
 
-Test("max additional days is 90") <- (
+test("max additional days is 90") <- (
     max_additional_days(MAX),
     MAX == 90
 ),
@@ -767,7 +767,7 @@ max_list_or_zero([H, *T], M) <- (
     max_list([H, *T], M)
 ),
 
-Test("score is 90") <- (
+test("score is 90") <- (
     score(MAX),
     MAX == 90
 ),
@@ -801,7 +801,7 @@ max_list_or_zero([H, *T], M) <- (
     max_list([H, *T], M)
 ),
 
-Test("good max is 90") <- (
+test("good max is 90") <- (
     good_max(MAX),
     MAX == 90
 ),
@@ -833,7 +833,7 @@ FORALL_COLLAPSED_FINDALL_SRC = """
 cand(9),
 big(X) <- (X > 10),
 
-Test("forall over collapsed findall") <- (
+test("forall over collapsed findall") <- (
     forall(K in [1, 2], (
         findall(A, (cand(A), big(A)), XS),
         XS == [K]
@@ -880,7 +880,7 @@ maxdays(MAX) <- (
     max_list(LS, MAX)
 ),
 
-Test("maxdays is 3") <- (
+test("maxdays is 3") <- (
     maxdays(MAX),
     MAX == 3
 ),
@@ -929,7 +929,7 @@ def test_dotted_atom_comparison_reaches_producer(capsys, tmp_path, monkeypatch):
     p = write(tmp_path, "dotted.clausal", """
         -import_from(verdict_lib, [eligible, assess])
 
-        Test("dotted atom comparison") <- (
+        test("dotted atom comparison") <- (
             assess("subject", STATUS),
             STATUS is eligible
         ),
@@ -964,7 +964,7 @@ w3(M) <- (maxdays2(M)),
 w2(M) <- (w3(M)),
 w1(M) <- (w2(M)),
 
-Test("deep wrapper chain") <- (
+test("deep wrapper chain") <- (
     w1(MAX),
     MAX == 3
 ),
@@ -998,7 +998,7 @@ v3(M) <- (v4(M)),
 v2(M) <- (v3(M)),
 v1(M) <- (v2(M)),
 
-Test("overdeep wrapper chain") <- (
+test("overdeep wrapper chain") <- (
     v1(MAX),
     MAX == 3
 ),

@@ -42,33 +42,33 @@ IntToPeano(I, [N]) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-Test("zero is nat") <- Nat([])
-Test("one is nat") <- Nat([[]])
-Test("two is nat") <- Nat([[[]]])
-Test("peano [] = 0") <- PeanoToInt([], 0)
-Test("peano [[]] = 1") <- PeanoToInt([[]], 1)
-Test("peano [[[]]] = 2") <- PeanoToInt([[[]]], 2)
-Test("peano [[[[]]]] = 3") <- PeanoToInt([[[[]]]], 3)
-Test("int 0 = []") <- IntToPeano(0, [])
-Test("int 1 = [[]]") <- IntToPeano(1, [[]])
-Test("int 2 = [[[]]]") <- IntToPeano(2, [[[]]])
-Test("0 + 0 = 0") <- PeanoAdd([], [], [])
-Test("0 + 1 = 1") <- PeanoAdd([], [[]], [[]])
-Test("1 + 1 = 2") <- PeanoAdd([[]], [[]], [[[]]])
-Test("1 + 2 = 3") <- (
+test("zero is nat") <- Nat([])
+test("one is nat") <- Nat([[]])
+test("two is nat") <- Nat([[[]]])
+test("peano [] = 0") <- PeanoToInt([], 0)
+test("peano [[]] = 1") <- PeanoToInt([[]], 1)
+test("peano [[[]]] = 2") <- PeanoToInt([[[]]], 2)
+test("peano [[[[]]]] = 3") <- PeanoToInt([[[[]]]], 3)
+test("int 0 = []") <- IntToPeano(0, [])
+test("int 1 = [[]]") <- IntToPeano(1, [[]])
+test("int 2 = [[[]]]") <- IntToPeano(2, [[[]]])
+test("0 + 0 = 0") <- PeanoAdd([], [], [])
+test("0 + 1 = 1") <- PeanoAdd([], [[]], [[]])
+test("1 + 1 = 2") <- PeanoAdd([[]], [[]], [[[]]])
+test("1 + 2 = 3") <- (
     IntToPeano(1, ONE),
     IntToPeano(2, TWO),
     IntToPeano(3, THREE),
     PeanoAdd(ONE, TWO, THREE)
 )
-Test("0 * 1 = 0") <- PeanoMul([], [[]], [])
-Test("1 * 1 = 1") <- PeanoMul([[]], [[]], [[]])
-Test("2 * 2 = 4") <- (
+test("0 * 1 = 0") <- PeanoMul([], [[]], [])
+test("1 * 1 = 1") <- PeanoMul([[]], [[]], [[]])
+test("2 * 2 = 4") <- (
     IntToPeano(2, TWO),
     IntToPeano(4, FOUR),
     PeanoMul(TWO, TWO, FOUR)
 )
-Test("0 <= 0") <- Leq([], [])
-Test("0 <= 1") <- Leq([], [[]])
-Test("1 <= 2") <- Leq([[]], [[[]]])
-Test("not 2 <= 1") <- (not Leq([[[]]], [[]]))
+test("0 <= 0") <- Leq([], [])
+test("0 <= 1") <- Leq([], [[]])
+test("1 <= 2") <- Leq([[]], [[[]]])
+test("not 2 <= 1") <- (not Leq([[[]]], [[]]))

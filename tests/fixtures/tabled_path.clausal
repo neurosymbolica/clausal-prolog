@@ -11,6 +11,6 @@ Path(X, Y) <- (
 )
 
 
-Test("path 1 to 2") <- Path(1, 2)  # nv
-Test("path 1 to 3") <- Path(1, 3)  # nv
-Test("path cyclic 2 to 1") <- Path(2, 1)  # nv
+test("path 1 to 2") <- Path(1, 2)  # nv
+test("path 1 to 3") <- Path(1, 3)  # nv
+test("path cyclic 2 to 1") <- Path(2, 1)  # nv

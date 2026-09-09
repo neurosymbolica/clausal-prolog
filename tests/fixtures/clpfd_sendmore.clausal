@@ -12,11 +12,11 @@ Sendmoney(S, E, N, D, M, O, R, Y) <- (
     label([S, E, N, D, M, O, R, Y]),
 )
 
-Test("SEND+MORE=MONEY solution is 9567+1085=10652") <- (
+test("SEND+MORE=MONEY solution is 9567+1085=10652") <- (
     Sendmoney(9, 5, 6, 7, 1, 0, 8, 2)
 )  # nv
 
-Test("SEND+MORE=MONEY has exactly one solution") <- (
+test("SEND+MORE=MONEY has exactly one solution") <- (
     findall([S, E, N, D, M, O, R, Y], Sendmoney(S, E, N, D, M, O, R, Y), SOLUTIONS),
     length(SOLUTIONS, 1)
 )  # nv

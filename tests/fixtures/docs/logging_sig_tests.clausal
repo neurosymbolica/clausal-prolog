@@ -10,18 +10,18 @@
 
 # ── Logger management ────────────────────────────────────────────────────────
 
-Test("get logger named") <- get_logger("test.doc.named", _)  # nv
+test("get logger named") <- get_logger("test.doc.named", _)  # nv
 
-Test("get logger default") <- get_logger(_)  # nv
+test("get logger default") <- get_logger(_)  # nv
 
-Test("set and get level") <- (
+test("set and get level") <- (
     get_logger("test.doc.level", L),
     set_level(L, "debug"),
     get_level(L, LEVEL),
     LEVEL == "DEBUG"
 )  # nv
 
-Test("is enabled for") <- (
+test("is enabled for") <- (
     get_logger("test.doc.enabled", L),
     set_level(L, "debug"),
     is_enabled_for(L, "debug")
@@ -29,50 +29,50 @@ Test("is enabled for") <- (
 
 # ── Logging predicates ───────────────────────────────────────────────────────
 
-Test("debug succeeds") <- (
+test("debug succeeds") <- (
     get_logger("test.doc.debug", L),
     set_level(L, "debug"),
     debug(L, "test message")
 )  # nv
 
-Test("info succeeds") <- (
+test("info succeeds") <- (
     get_logger("test.doc.info", L),
     info(L, "test message")
 )  # nv
 
-Test("warning succeeds") <- (
+test("warning succeeds") <- (
     get_logger("test.doc.warn", L),
     warning(L, "test message")
 )  # nv
 
-Test("error succeeds") <- (
+test("error succeeds") <- (
     get_logger("test.doc.err", L),
     error(L, "test message")
 )  # nv
 
-Test("critical succeeds") <- (
+test("critical succeeds") <- (
     get_logger("test.doc.crit", L),
     critical(L, "test message")
 )  # nv
 
-Test("log at level") <- (
+test("log at level") <- (
     get_logger("test.doc.log", L),
     log(L, "info", "test message")
 )  # nv
 
 # ── Handler management ───────────────────────────────────────────────────────
 
-Test("stream handler") <- (
+test("stream handler") <- (
     stream_handler("stderr", H),
     nonvar(H)
 )  # nv
 
-Test("set formatter") <- (
+test("set formatter") <- (
     stream_handler("stderr", H),
     set_formatter(H, "%(message)s")
 )  # nv
 
-Test("add and remove handler") <- (
+test("add and remove handler") <- (
     get_logger("test.doc.handler", L),
     stream_handler("stderr", H),
     add_handler(L, H),

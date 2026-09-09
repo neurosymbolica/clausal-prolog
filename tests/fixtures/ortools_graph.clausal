@@ -4,19 +4,19 @@
 
 # ── Max flow ──────────────────────────────────────────────────────────────
 
-Test("max flow single arc") <- (
+test("max flow single arc") <- (
     ortools.graph.max_flow([[0, 1, 42]], 0, 1, FLOW),
     FLOW == 42
 )  # nv
 
-Test("max flow bottleneck") <- (
+test("max flow bottleneck") <- (
     ortools.graph.max_flow(
         [[0, 1, 100], [1, 2, 5], [2, 3, 100]],
         0, 3, FLOW),
     FLOW == 5
 )  # nv
 
-Test("max flow diamond network") <- (
+test("max flow diamond network") <- (
     ortools.graph.max_flow(
         [[0, 1, 20], [0, 2, 30], [1, 2, 10], [1, 3, 30], [2, 3, 20]],
         0, 3, FLOW),
@@ -25,7 +25,7 @@ Test("max flow diamond network") <- (
 
 # ── Min cost flow ─────────────────────────────────────────────────────────
 
-Test("min cost flow single arc") <- (
+test("min cost flow single arc") <- (
     ortools.graph.min_cost_flow(
         [[0, 1, 10, 5]],
         [[0, 7], [1, -7]],
@@ -33,7 +33,7 @@ Test("min cost flow single arc") <- (
     COST == 35
 )  # nv
 
-Test("min cost flow cheaper path") <- (
+test("min cost flow cheaper path") <- (
     ortools.graph.min_cost_flow(
         [[0, 1, 10, 1], [0, 2, 10, 5], [1, 3, 10, 0], [2, 3, 10, 0]],
         [[0, 5], [3, -5]],
@@ -43,7 +43,7 @@ Test("min cost flow cheaper path") <- (
 
 # ── Assignment ─────────────────────────────────────────────────────────────
 
-Test("assignment 3x3 optimal") <- (
+test("assignment 3x3 optimal") <- (
     ortools.graph.assignment(
         [[90, 80, 75], [35, 85, 55], [125, 45, 110]],
         ASSIGN, COST),
@@ -51,14 +51,14 @@ Test("assignment 3x3 optimal") <- (
     ASSIGN == [2, 0, 1]
 )  # nv
 
-Test("assignment 2x2") <- (
+test("assignment 2x2") <- (
     ortools.graph.assignment([[1, 2], [3, 4]], ASSIGN_UNUSED, COST),
     COST == 5
 )  # nv
 
 # ── Knapsack ──────────────────────────────────────────────────────────────
 
-Test("knapsack 0-1 classic") <- (
+test("knapsack 0-1 classic") <- (
     ortools.knapsack(
         [60, 100, 120],
         [[10, 20, 30]],
@@ -68,13 +68,13 @@ Test("knapsack 0-1 classic") <- (
     SEL == [0, 1, 1]
 )  # nv
 
-Test("knapsack single item fits") <- (
+test("knapsack single item fits") <- (
     ortools.knapsack([42], [[10]], [10], SEL, TOTAL),
     TOTAL == 42,
     SEL == [1]
 )  # nv
 
-Test("knapsack multidimensional positive") <- (
+test("knapsack multidimensional positive") <- (
     ortools.knapsack(
         [10, 20, 30],
         [[5, 10, 15], [3, 6, 9]],

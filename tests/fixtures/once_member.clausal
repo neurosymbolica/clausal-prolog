@@ -3,5 +3,5 @@
 FirstMember(X, LIST) <- once(X in LIST)
 
 
-Test("first member") <- (FirstMember(X, [1, 2, 3]), X == 1)  # nv
-Test("first member string") <- (FirstMember(X, ["a", "b"]), X == "a")  # nv
+test("first member") <- (FirstMember(X, [1, 2, 3]), X == 1)  # nv
+test("first member string") <- (FirstMember(X, ["a", "b"]), X == "a")  # nv

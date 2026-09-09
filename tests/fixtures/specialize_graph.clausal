@@ -23,22 +23,22 @@ GraphProgram(PROGRAM) <- (
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-Test("specialized edge(a,b)") <- (
+test("specialized edge(a,b)") <- (
     SolveGraph([["edge", "a", "b"]])
 )  # nv
 
-Test("specialized path(a,b) direct") <- (
+test("specialized path(a,b) direct") <- (
     SolveGraph([["path", "a", "b"]])
 )  # nv
 
-Test("specialized path(a,c) transitive") <- (
+test("specialized path(a,c) transitive") <- (
     SolveGraph([["path", "a", "c"]])
 )  # nv
 
-Test("specialized path(a,d) transitive") <- (
+test("specialized path(a,d) transitive") <- (
     SolveGraph([["path", "a", "d"]])
 )  # nv
 
-Test("specialized no path(c,a)") <- (
+test("specialized no path(c,a)") <- (
     not SolveGraph([["path", "c", "a"]])
 )  # nv

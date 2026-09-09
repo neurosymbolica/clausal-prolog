@@ -1,11 +1,11 @@
 # Display snippets for docs/control.md
 
 --8<-- [start:time_goal_1]
-Test("time") <- time_goal(append([1, 2], [3, 4], _))
+test("time") <- time_goal(append([1, 2], [3, 4], _))
 --8<-- [end:time_goal_1]
 
 --8<-- [start:time_goal_2]
-Test("measure") <- (
+test("measure") <- (
     time_goal(length(LIST, 1000), SECS),
     SECS < 1.0
 )

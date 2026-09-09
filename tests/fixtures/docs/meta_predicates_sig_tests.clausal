@@ -1,16 +1,16 @@
 # Companion tests for docs/meta_predicates.md display snippets.
 
-Test("filter_map exists") <- (
+test("filter_map exists") <- (
     filter_map(((X, Y) <- (X > 0, Y == X * 2)), [3, -1, 5], RS),
     RS == [6, 10]
 )  # nv
 
-Test("findall inline") <- (
+test("findall inline") <- (
     findall(SQ, (in_(X, [1, 2, 3]), SQ == X * X), SQS),
     SQS == [1, 4, 9]
 )  # nv
 
-Test("include with lambda") <- (
+test("include with lambda") <- (
     include((X <- (X > 0)), [-1, 2, -3, 4], PS),
     PS == [2, 4]
 )  # nv

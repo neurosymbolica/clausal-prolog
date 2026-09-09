@@ -39,24 +39,24 @@ GPath(X, Y) <- (GEdge(X, Z) and GPath(Z, Y))
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 # List operations
-Test("append nil-nil") <- (MyAppend([], [], R) and R is [])  # nv
-Test("append nil-list") <- (MyAppend([], [1, 2], R) and R is [1, 2])  # nv
-Test("append list-list") <- (MyAppend([1, 2], [3, 4], R) and R is [1, 2, 3, 4])  # nv
-Test("length empty") <- (MyLength([], N) and N == 0)  # nv
-Test("length three") <- (MyLength([1, 2, 3], N) and N == 3)  # nv
-Test("member first") <- MyMember(1, [1, 2, 3])  # nv
-Test("member last") <- MyMember(3, [1, 2, 3])  # nv
-Test("member all") <- (
+test("append nil-nil") <- (MyAppend([], [], R) and R is [])  # nv
+test("append nil-list") <- (MyAppend([], [1, 2], R) and R is [1, 2])  # nv
+test("append list-list") <- (MyAppend([1, 2], [3, 4], R) and R is [1, 2, 3, 4])  # nv
+test("length empty") <- (MyLength([], N) and N == 0)  # nv
+test("length three") <- (MyLength([1, 2, 3], N) and N == 3)  # nv
+test("member first") <- MyMember(1, [1, 2, 3])  # nv
+test("member last") <- MyMember(3, [1, 2, 3])  # nv
+test("member all") <- (
     findall(X, MyMember(X, [10, 20, 30]), BAG) and BAG is [10, 20, 30]
 )  # nv
 
 # Arithmetic
-Test("factorial 0") <- (MyFact(0, F) and F == 1)  # nv
-Test("factorial 5") <- (MyFact(5, F) and F == 120)  # nv
-Test("factorial 10") <- (MyFact(10, F) and F == 3628800)  # nv
+test("factorial 0") <- (MyFact(0, F) and F == 1)  # nv
+test("factorial 5") <- (MyFact(5, F) and F == 120)  # nv
+test("factorial 10") <- (MyFact(10, F) and F == 3628800)  # nv
 
 # Graph
-Test("direct edge") <- GPath("a", "b")  # nv
-Test("transitive path") <- GPath("a", "d")  # nv
-Test("reachable b from a") <- GPath("a", "b")  # nv
-Test("reachable c from a") <- GPath("a", "c")  # nv
+test("direct edge") <- GPath("a", "b")  # nv
+test("transitive path") <- GPath("a", "d")  # nv
+test("reachable b from a") <- GPath("a", "b")  # nv
+test("reachable c from a") <- GPath("a", "c")  # nv

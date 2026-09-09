@@ -6,6 +6,6 @@ foo("a"),
 foo("b"),
 foo("c"),
 
-Test("foo a") <- foo("a")  # nv
-Test("foo b") <- foo("b")  # nv
-Test("foo c") <- foo("c")  # nv
+test("foo a") <- foo("a")  # nv
+test("foo b") <- foo("b")  # nv
+test("foo c") <- foo("c")  # nv

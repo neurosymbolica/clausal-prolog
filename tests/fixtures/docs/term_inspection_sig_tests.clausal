@@ -1,6 +1,6 @@
 # Companion tests for docs/term_inspection.md display snippets.
 
-Test("gensym generates unique") <- (
+test("gensym generates unique") <- (
     gensym("test_doc_", A1),
     gensym("test_doc_", A2),
     dif(A1, A2)
@@ -10,9 +10,9 @@ Test("gensym generates unique") <- (
 # non-empty str is its own atom (arity 0), so unpack gives [self]
 # (formerly ISO cons-cell on str: F088/F089, audit 2026-06-13, decomposing
 # as [".", head, tail]).
-Test("unpack decompose") <- unpack("hello", ["hello"])  # nv
+test("unpack decompose") <- unpack("hello", ["hello"])  # nv
 
-Test("numbervars") <- (
+test("numbervars") <- (
     numbervars([X_UNUSED, Y_UNUSED, Z_UNUSED], 0, END),
     END == 3
 )  # nv

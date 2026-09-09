@@ -81,43 +81,43 @@ BagPositives(NS, POS) <- (
 
 # ── Test clauses (migrated from test_clausal_modules.py::TestMeta*) ──────
 
-Test("squares basic") <- (Squares([1, 2, 3], R), R == [1, 4, 9])  # nv
-Test("squares empty") <- (Squares([], R), R == [])  # nv
-Test("squares single") <- (Squares([5], R), R == [25])  # nv
-Test("squares negative") <- (Squares([-2, 3], R), R == [4, 9])  # nv
+test("squares basic") <- (Squares([1, 2, 3], R), R == [1, 4, 9])  # nv
+test("squares empty") <- (Squares([], R), R == [])  # nv
+test("squares single") <- (Squares([5], R), R == [25])  # nv
+test("squares negative") <- (Squares([-2, 3], R), R == [4, 9])  # nv
 
-Test("positives mixed") <- (Positives([-1, 2, -3, 4], R), R == [2, 4])  # nv
-Test("positives all negative") <- (Positives([-1, -2, -3], R), R == [])  # nv
-Test("positives all positive") <- (Positives([1, 2, 3], R), R == [1, 2, 3])  # nv
-Test("positives with zero") <- (Positives([0, 1, -1], R), R == [1])  # nv
+test("positives mixed") <- (Positives([-1, 2, -3, 4], R), R == [2, 4])  # nv
+test("positives all negative") <- (Positives([-1, -2, -3], R), R == [])  # nv
+test("positives all positive") <- (Positives([1, 2, 3], R), R == [1, 2, 3])  # nv
+test("positives with zero") <- (Positives([0, 1, -1], R), R == [1])  # nv
 
-Test("unique dedup") <- (UniqueMembers([1, 2, 1, 3, 2], R), R == [1, 2, 3])  # nv
-Test("unique already unique") <- (UniqueMembers([5, 10, 15], R), R == [5, 10, 15])  # nv
-Test("unique single") <- (UniqueMembers([7, 7, 7], R), R == [7])  # nv
+test("unique dedup") <- (UniqueMembers([1, 2, 1, 3, 2], R), R == [1, 2, 3])  # nv
+test("unique already unique") <- (UniqueMembers([5, 10, 15], R), R == [5, 10, 15])  # nv
+test("unique single") <- (UniqueMembers([7, 7, 7], R), R == [7])  # nv
 
-Test("all_positive succeeds") <- AllPositive([1, 2, 3])  # nv
-Test("all_positive fails") <- (not AllPositive([1, -2, 3]))  # nv
-Test("all_positive empty (vacuously true)") <- AllPositive([])  # nv
+test("all_positive succeeds") <- AllPositive([1, 2, 3])  # nv
+test("all_positive fails") <- (not AllPositive([1, -2, 3]))  # nv
+test("all_positive empty (vacuously true)") <- AllPositive([])  # nv
 
-Test("sum_squares 1..3 = 14") <- (SumSquares([1, 2, 3], R), R == 14)  # nv
-Test("sum_squares empty = 0") <- (SumSquares([], R), R == 0)  # nv
+test("sum_squares 1..3 = 14") <- (SumSquares([1, 2, 3], R), R == 14)  # nv
+test("sum_squares empty = 0") <- (SumSquares([], R), R == 0)  # nv
 
-Test("evens 1..6") <- (Evens([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
-Test("evens none") <- (Evens([1, 3, 5], R), R == [])  # nv
+test("evens 1..6") <- (Evens([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
+test("evens none") <- (Evens([1, 3, 5], R), R == [])  # nv
 
-Test("count_solutions 3") <- (CountSolutions([10, 20, 30], R), R == 3)  # nv
-Test("count_solutions empty = 0") <- (CountSolutions([], R), R == 0)  # nv
+test("count_solutions 3") <- (CountSolutions([10, 20, 30], R), R == 3)  # nv
+test("count_solutions empty = 0") <- (CountSolutions([], R), R == 0)  # nv
 
-Test("pairs cartesian") <- (
+test("pairs cartesian") <- (
     Pairs(["a", "b"], [1, 2], R),
     R == [["a", 1], ["a", 2], ["b", 1], ["b", 2]]
 )  # nv
-Test("pairs empty first") <- (Pairs([], [1, 2], R), R == [])  # nv
-Test("pairs empty second") <- (Pairs(["a"], [], R), R == [])  # nv
+test("pairs empty first") <- (Pairs([], [1, 2], R), R == [])  # nv
+test("pairs empty second") <- (Pairs(["a"], [], R), R == [])  # nv
 
-Test("all_members subset") <- AllMembers([1, 2], [1, 2, 3])  # nv
-Test("all_members not subset") <- (not AllMembers([1, 4], [1, 2, 3]))  # nv
-Test("all_members empty sub") <- AllMembers([], [1, 2, 3])  # nv
+test("all_members subset") <- AllMembers([1, 2], [1, 2, 3])  # nv
+test("all_members not subset") <- (not AllMembers([1, 4], [1, 2, 3]))  # nv
+test("all_members empty sub") <- AllMembers([], [1, 2, 3])  # nv
 
-Test("bag_positives present") <- (BagPositives([-1, 2, -3, 4], R), R == [2, 4])  # nv
-Test("bag_positives fails on none") <- (not BagPositives([-1, -2, -3], _))  # nv
+test("bag_positives present") <- (BagPositives([-1, 2, -3, 4], R), R == [2, 4])  # nv
+test("bag_positives fails on none") <- (not BagPositives([-1, -2, -3], _))  # nv

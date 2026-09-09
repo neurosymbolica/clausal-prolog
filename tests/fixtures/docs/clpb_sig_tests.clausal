@@ -1,7 +1,7 @@
 # Companion tests for docs/clpb.md signature blocks.
 
-Test("sat exists") <- sat(X | ~X)  # nv
+test("sat exists") <- sat(X | ~X)  # nv
 
-Test("taut exists") <- taut(X | ~X, T_UNUSED)  # nv
+test("taut exists") <- taut(X | ~X, T_UNUSED)  # nv
 
-Test("sat_count exists") <- sat_count(X | ~X, N_UNUSED)  # nv
+test("sat_count exists") <- sat_count(X | ~X, N_UNUSED)  # nv

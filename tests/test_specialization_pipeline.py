@@ -110,9 +110,9 @@ class TestSpecializeCountNatnum:
         assert 3 in results
 
     def test_clausal_inline_tests(self, specialize_natnum):
-        """All Test(...) predicates in the fixture should have passed."""
+        """All test(...) predicates in the fixture should have passed."""
         # nv
-        assert hasattr(specialize_natnum, "Test")
+        assert hasattr(specialize_natnum, "test")
 
 
 # ── Solve specialization tests (graph) ──────────────────────────────────────
@@ -598,10 +598,10 @@ class TestCpdPipeline:
         )) == 1
 
     def test_cpd_inline_tests(self, cpd_module):
-        """All inline Test predicates in the fixture should pass."""
+        """All inline test/1 clauses in the fixture should pass."""
         # nv
         from clausal.logic.solve import call
-        results = list(call(cpd_module.Test, mint("cpd natnum(0)")))
+        results = list(call(cpd_module.test, mint("cpd natnum(0)")))
         assert len(results) == 1
 
     def test_cpd_directive_parsing(self):

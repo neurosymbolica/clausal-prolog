@@ -5,19 +5,19 @@
 point(x=1, y=2, z=3),
 
 # --8<-- [start:quick_example]
-Test("vary") <- (
+test("vary") <- (
     vary({"y": 99}, point(1, 2, 3), RESULT),
     RESULT == point(1, 99, 3)
 )  # nv
 # --8<-- [end:quick_example]
 
 # --8<-- [start:vary_examples]
-Test("change one field") <- (
+test("change one field") <- (
     vary({"x": 100}, point(1, 2, 3), R),
     R == point(100, 2, 3)
 )  # nv
 
-Test("change multiple") <- (
+test("change multiple") <- (
     vary({"x": 10, "z": 30}, point(1, 2, 3), R),
     R == point(10, 2, 30)
 )  # nv
@@ -26,19 +26,19 @@ Test("change multiple") <- (
 # --8<-- [start:unbound_keys_examples]
 # A field name is an ATOM (spec §6.4), so the keys are `y`/`z`, not the
 # strings "y"/"z" — this file is in `-double_quotes(chars)` mode.
-Test("unbound") <- (
+test("unbound") <- (
     unbound_keys(point(1, Y_UNUSED, Z_UNUSED), KEYS),
     in_('y', KEYS),
     in_('z', KEYS),
     length(KEYS, 2)
 )  # nv
 
-Test("fully bound") <- unbound_keys(point(1, 2, 3), [])  # nv
+test("fully bound") <- unbound_keys(point(1, 2, 3), [])  # nv
 # --8<-- [end:unbound_keys_examples]
 
 # --8<-- [start:signature_example]
 # The name position speaks atoms in AND out (spec §6.4).
-Test("signature") <- (
+test("signature") <- (
     signature('point', 3, NAMES),
     NAMES == ['x', 'y', 'z']
 )  # nv

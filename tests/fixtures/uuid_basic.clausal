@@ -3,17 +3,17 @@
 
 # ── Generation ──────────────────────────────────────────────────────
 
-Test("uuid4 generates") <- (
+test("uuid4 generates") <- (
     uuid_v4(U),
     is_uuid(U)
 )  # nv
 
-Test("uuid1 generates") <- (
+test("uuid1 generates") <- (
     uuid_v1(U),
     is_uuid(U)
 )  # nv
 
-Test("uuid3 deterministic") <- (
+test("uuid3 deterministic") <- (
     uuid_v3("dns", "example.com", U1),
     uuid_v3("dns", "example.com", U2),
     uuid_str(U1, S1),
@@ -21,7 +21,7 @@ Test("uuid3 deterministic") <- (
     S1 == S2
 )  # nv
 
-Test("uuid5 deterministic") <- (
+test("uuid5 deterministic") <- (
     uuid_v5("url", "https://example.com", U1),
     uuid_v5("url", "https://example.com", U2),
     uuid_str(U1, S1),
@@ -31,7 +31,7 @@ Test("uuid5 deterministic") <- (
 
 # ── Conversion roundtrips ──────────────────────────────────────────
 
-Test("uuid str roundtrip") <- (
+test("uuid str roundtrip") <- (
     uuid_v4(U),
     uuid_str(U, S),
     uuid_str(U2, S),
@@ -39,7 +39,7 @@ Test("uuid str roundtrip") <- (
     S == S2
 )  # nv
 
-Test("uuid hex roundtrip") <- (
+test("uuid hex roundtrip") <- (
     uuid_v4(U),
     uuid_hex(U, HEX),
     uuid_hex(U2, HEX),
@@ -47,7 +47,7 @@ Test("uuid hex roundtrip") <- (
     HEX == HEX2
 )  # nv
 
-Test("uuid int roundtrip") <- (
+test("uuid int roundtrip") <- (
     uuid_v4(U),
     uuid_int(U, N),
     uuid_int(U2, N),
@@ -57,22 +57,22 @@ Test("uuid int roundtrip") <- (
 
 # ── Inspection ─────────────────────────────────────────────────────
 
-Test("uuid4 version is 4") <- (
+test("uuid4 version is 4") <- (
     uuid_v4(U),
     uuid_version(U, 4)
 )  # nv
 
-Test("uuid3 version is 3") <- (
+test("uuid3 version is 3") <- (
     uuid_v3("dns", "test", U),
     uuid_version(U, 3)
 )  # nv
 
-Test("uuid5 version is 5") <- (
+test("uuid5 version is 5") <- (
     uuid_v5("dns", "test", U),
     uuid_version(U, 5)
 )  # nv
 
-Test("uuid fields decompose") <- (
+test("uuid fields decompose") <- (
     uuid_v4(U),
     uuid_fields(U, TIME_LOW_UNUSED, TIME_MID_UNUSED, TIME_HI_UNUSED, CLOCK_SEQ_HI_UNUSED, CLOCK_SEQ_LOW_UNUSED, NODE_UNUSED),
     is_uuid(U)

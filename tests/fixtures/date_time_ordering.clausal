@@ -4,12 +4,12 @@
 
 -import_from(date_time, [date, datetime, time])
 
-Test("date lt") <- (A is date(2020, 1, 1), B is date(2021, 1, 1), A < B)  # nv
-Test("date gt") <- (A is date(2022, 1, 1), B is date(2021, 1, 1), A > B)  # nv
-Test("date le equal") <- (A is date(2021, 1, 1), B is date(2021, 1, 1), A <= B)  # nv
-Test("date ge equal") <- (A is date(2021, 1, 1), B is date(2021, 1, 1), A >= B)  # nv
-Test("datetime lt") <- (datetime(2020,1,1,10,0,0,A), datetime(2020,1,1,11,0,0,B), A < B)  # nv
-Test("time lt") <- (time(9,0,0,A), time(17,0,0,B), A < B)  # nv
-Test("min_list earliest") <- (A is date(2021, 1, 1), B is date(2019, 5, 5), min_list([A,B], M), M == B)  # nv
-Test("max_list latest") <- (A is date(2021, 1, 1), B is date(2019, 5, 5), max_list([A,B], M), M == A)  # nv
-Test("catch incomparable") <- catch((A is date(2020, 1, 1), datetime(2020,1,1,0,0,0,B), A < B), _E_UNUSED, writeln_text("caught"))  # nv
+test("date lt") <- (A is date(2020, 1, 1), B is date(2021, 1, 1), A < B)  # nv
+test("date gt") <- (A is date(2022, 1, 1), B is date(2021, 1, 1), A > B)  # nv
+test("date le equal") <- (A is date(2021, 1, 1), B is date(2021, 1, 1), A <= B)  # nv
+test("date ge equal") <- (A is date(2021, 1, 1), B is date(2021, 1, 1), A >= B)  # nv
+test("datetime lt") <- (datetime(2020,1,1,10,0,0,A), datetime(2020,1,1,11,0,0,B), A < B)  # nv
+test("time lt") <- (time(9,0,0,A), time(17,0,0,B), A < B)  # nv
+test("min_list earliest") <- (A is date(2021, 1, 1), B is date(2019, 5, 5), min_list([A,B], M), M == B)  # nv
+test("max_list latest") <- (A is date(2021, 1, 1), B is date(2019, 5, 5), max_list([A,B], M), M == A)  # nv
+test("catch incomparable") <- catch((A is date(2020, 1, 1), datetime(2020,1,1,0,0,0,B), A < B), _E_UNUSED, writeln_text("caught"))  # nv

@@ -15,14 +15,14 @@ Hanoi(N, FROM, TO, VIA, MOVES) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-Test("0 disks = no moves") <- Hanoi(0, Left, Right, Center, [])
-Test("1 disk") <- Hanoi(1, Left, Right, Center, [[Left, Right]])
-Test("2 disks") <- Hanoi(2, Left, Right, Center, [
+test("0 disks = no moves") <- Hanoi(0, Left, Right, Center, [])
+test("1 disk") <- Hanoi(1, Left, Right, Center, [[Left, Right]])
+test("2 disks") <- Hanoi(2, Left, Right, Center, [
     [Left, Center],
     [Left, Right],
     [Center, Right]
 ])
-Test("3 disks") <- Hanoi(3, Left, Right, Center, [
+test("3 disks") <- Hanoi(3, Left, Right, Center, [
     [Left, Right],
     [Left, Center],
     [Right, Center],

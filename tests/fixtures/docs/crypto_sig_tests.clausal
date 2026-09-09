@@ -8,17 +8,17 @@
 
 # ── hash ─────────────────────────────────────────────────────────────────────
 
-Test("hash sha256") <- (
+test("hash sha256") <- (
     hash("sha256", "abc", HEX),
     HEX == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 )  # nv
 
-Test("hash md5 empty") <- (
+test("hash md5 empty") <- (
     hash("md5", "", HEX),
     HEX == "d41d8cd98f00b204e9800998ecf8427e"
 )  # nv
 
-Test("hash bytes sha256") <- (
+test("hash bytes sha256") <- (
     hash_bytes("sha256", "abc", RAW),
     LEN is ++len(RAW),
     LEN == 32
@@ -26,25 +26,25 @@ Test("hash bytes sha256") <- (
 
 # ── HMAC ─────────────────────────────────────────────────────────────────────
 
-Test("hmac sign and verify") <- (
+test("hmac sign and verify") <- (
     sign("secret-key", "message", SIG),
     verify("secret-key", "message", SIG)
 )  # nv
 
-Test("hmac sha512") <- (
+test("hmac sha512") <- (
     sign("sha512", "key", "data", SIG),
     is_str(SIG)
 )  # nv
 
 # ── PBKDF2 ───────────────────────────────────────────────────────────────────
 
-Test("pbkdf2 derive") <- (
+test("pbkdf2 derive") <- (
     derive("password", "salt", 100000, HASH),
     LEN is ++len(HASH),
     LEN == 64
 )  # nv
 
-Test("pbkdf2 derive custom length") <- (
+test("pbkdf2 derive custom length") <- (
     derive("password", "salt", 100000, 64, HASH),
     LEN is ++len(HASH),
     LEN == 128

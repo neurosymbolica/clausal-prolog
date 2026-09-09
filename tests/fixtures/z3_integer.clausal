@@ -14,10 +14,10 @@ Solve(X, Y) <- (
     z3.label([X, Y]),
 )
 
-Test("integer solve x+y=4") <- (Solve(X, Y), X == 1, Y == 3)  # nv
-Test("integer solve x+y=4 second") <- (Solve(X, Y), X == 2, Y == 2)  # nv
-Test("integer solve x+y=4 third") <- (Solve(X, Y), X == 3, Y == 1)  # nv
-Test("integer solve count") <- (count_all(Solve(_, _), N), N == 3)  # nv
+test("integer solve x+y=4") <- (Solve(X, Y), X == 1, Y == 3)  # nv
+test("integer solve x+y=4 second") <- (Solve(X, Y), X == 2, Y == 2)  # nv
+test("integer solve x+y=4 third") <- (Solve(X, Y), X == 3, Y == 1)  # nv
+test("integer solve count") <- (count_all(Solve(_, _), N), N == 3)  # nv
 
 # ── Chained comparison domain ───────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ Domain(X) <- (
     z3.label([X]),
 )
 
-Test("integer domain 0..4") <- (count_all(Domain(_), N), N == 5)  # nv
+test("integer domain 0..4") <- (count_all(Domain(_), N), N == 5)  # nv
 
 # ── Inequality ──────────────────────────────────────────────────────────────
 
@@ -38,8 +38,8 @@ NotTwo(X) <- (
     z3.label([X]),
 )
 
-Test("integer neq") <- (count_all(NotTwo(_), N), N == 3)  # nv
-Test("integer neq excludes 2") <- (not(NotTwo(2)))  # nv
+test("integer neq") <- (count_all(NotTwo(_), N), N == 3)  # nv
+test("integer neq excludes 2") <- (not(NotTwo(2)))  # nv
 
 # ── Arithmetic expression ───────────────────────────────────────────────────
 
@@ -51,7 +51,7 @@ DoubleIs4(X) <- (
     z3.label([X]),
 )
 
-Test("integer 2x=4") <- (DoubleIs4(X), X == 2)  # nv
+test("integer 2x=4") <- (DoubleIs4(X), X == 2)  # nv
 
 # ── All different ───────────────────────────────────────────────────────────
 
@@ -65,16 +65,16 @@ AllDiff(X, Y, Z) <- (
     z3.label([X, Y, Z]),
 )
 
-Test("all_different 6 solutions") <- (count_all(AllDiff(_, _, _), N), N == 6)  # nv
+test("all_different 6 solutions") <- (count_all(AllDiff(_, _, _), N), N == 6)  # nv
 
 # ── Satisfiability check ───────────────────────────────────────────────────
 
-Test("z3 check sat") <- (
+test("z3 check sat") <- (
     z3.integer((1 <= X <= 10)),
     z3.check(),
 )  # nv
 
-Test("z3 check unsat") <- (
+test("z3 check unsat") <- (
     z3.integer((
         X >= 10,
         X <= 5,
@@ -84,7 +84,7 @@ Test("z3 check unsat") <- (
 
 # ── Maximize / minimize ────────────────────────────────────────────────────
 
-Test("z3 maximize") <- (
+test("z3 maximize") <- (
     z3.integer((
         0 <= X <= 10,
         0 <= Y <= 10,
@@ -94,7 +94,7 @@ Test("z3 maximize") <- (
     COST == 10,
 )  # nv
 
-Test("z3 minimize") <- (
+test("z3 minimize") <- (
     z3.integer((0 <= X <= 10)),
     z3.minimize(X, COST),
     COST == 0,
@@ -113,4 +113,4 @@ Schedule(T1, T2, T3, COST) <- (
     z3.optimize_label([T1, T2, T3], T3, COST, "minimize"),
 )
 
-Test("schedule minimize") <- (Schedule(T1, T2, T3, COST), T1 == 0, T2 == 5, T3 == 8, COST == 8)  # nv
+test("schedule minimize") <- (Schedule(T1, T2, T3, COST), T1 == 0, T2 == 5, T3 == 8, COST == 8)  # nv

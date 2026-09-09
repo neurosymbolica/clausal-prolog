@@ -3,7 +3,7 @@
 # === metainterpreters.md ===
 
 --8<-- [start:metainterp_graph_test]
-Test("tree path(a,c) transitive") <- (
+test("tree path(a,c) transitive") <- (
     GraphProgram(P),
     TreeSolve(P, path("a", "c")),
     TREE is solve_tree(P, path("a", "c")),
@@ -40,7 +40,7 @@ wins(X) <- (move(X, Y), (not wins(Y)))
 # === testing.md ===
 
 --8<-- [start:test_syntax]
-Test("description") <- goal1, goal2, ...
+test("description") <- goal1, goal2, ...
 --8<-- [end:test_syntax]
 
 --8<-- [start:test_output]
@@ -58,7 +58,7 @@ Fib(N, F) <- (N > 1, F is Fib(N - 1) + Fib(N - 2))
 
 --8<-- [start:fib_test]
 # in_ your .clausal file
-Test("fib 10") <- Fib(10, 55)
+test("fib 10") <- Fib(10, 55)
 --8<-- [end:fib_test]
 
 # === architecture.md ===
@@ -125,5 +125,5 @@ if_(condition, then_goal, else_goal)
 --8<-- [start:python_escape_example]
 Item(1), Item(2), Item(3),
 Doubled(R) <- (Item(X), R is ++(X * 2))
-Test("doubled") <- Doubled(4)
+test("doubled") <- Doubled(4)
 --8<-- [end:python_escape_example]

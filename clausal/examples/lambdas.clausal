@@ -64,25 +64,25 @@ AllColors(COLORS) <- (
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 # Basic
-Test("apply_val 42") <- ApplyVal(42, 42)
-Test("apply_val string") <- ApplyVal("hello", "hello")
-Test("add_one 5") <- AddOne(5, 6)
-Test("add_one -1") <- AddOne(-1, 0)
-Test("double_val 5") <- DoubleVal(5, 10)
-Test("zero_arg 42") <- ZeroArg(42)
+test("apply_val 42") <- ApplyVal(42, 42)
+test("apply_val string") <- ApplyVal("hello", "hello")
+test("add_one 5") <- AddOne(5, 6)
+test("add_one -1") <- AddOne(-1, 0)
+test("double_val 5") <- DoubleVal(5, 10)
+test("zero_arg 42") <- ZeroArg(42)
 
 # Capture
-Test("add_z 3+10") <- AddZ(3, 10, 13)
-Test("add_z 0+7") <- AddZ(0, 7, 7)
-Test("capture_two 10+20+5") <- CaptureTwo(10, 20, 5, 35)
+test("add_z 3+10") <- AddZ(3, 10, 13)
+test("add_z 0+7") <- AddZ(0, 7, 7)
+test("capture_two 10+20+5") <- CaptureTwo(10, 20, 5, 35)
 
 # Conjunction
-Test("transform 5 -> 12") <- Transform(5, 12)
-Test("transform 0 -> 2") <- Transform(0, 2)
+test("transform 5 -> 12") <- Transform(5, 12)
+test("transform 0 -> 2") <- Transform(0, 2)
 
 # Predicate call
-Test("apply_pred 3 -> 30") <- ApplyPred(3, 30)
-Test("apply_pred 0 -> 0") <- ApplyPred(0, 0)
+test("apply_pred 3 -> 30") <- ApplyPred(3, 30)
+test("apply_pred 0 -> 0") <- ApplyPred(0, 0)
 
 # Multi-solution
-Test("all_colors") <- AllColors(["red", "green", "blue"])
+test("all_colors") <- AllColors(["red", "green", "blue"])

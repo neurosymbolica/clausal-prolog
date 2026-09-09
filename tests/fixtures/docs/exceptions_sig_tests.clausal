@@ -1,6 +1,6 @@
 # Companion tests for docs/exceptions.md signature blocks.
 
-Test("throw/catch exist") <- (
+test("throw/catch exist") <- (
     catch(
         throw("test_error"),
         ERR,
@@ -8,7 +8,7 @@ Test("throw/catch exist") <- (
     )
 )  # nv
 
-Test("catch_recover exists") <- (
+test("catch_recover exists") <- (
     catch_recover(
         throw("err"),
         _,

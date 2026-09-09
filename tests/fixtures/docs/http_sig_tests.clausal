@@ -4,22 +4,22 @@
 
 -import_from(py.url, [encode, decode, parse, join])
 
-Test("url encode") <- (
+test("url encode") <- (
     encode("hello world", E),
     E == "hello%20world"
 )  # nv
 
-Test("url decode") <- (
+test("url decode") <- (
     decode("hello%20world", S),
     S == "hello world"
 )  # nv
 
-Test("url parse") <- (
+test("url parse") <- (
     parse("https://example.com:8080/path?q=1#frag", PARTS),
     nonvar(PARTS)
 )  # nv
 
-Test("url join") <- (
+test("url join") <- (
     join({"scheme": "https", "host": "example.com", "path": "/api"}, URL),
     is_str(URL)
 )  # nv

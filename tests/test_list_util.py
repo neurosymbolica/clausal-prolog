@@ -445,5 +445,5 @@ class TestListUtilFixture:
     ])
     def test_fixture(self, name):
         # nv — the fixture keeps the engine-default ``-double_quotes(atom)``
-        # mode, so a ``Test("...")`` description is an ATOM (THE FLIP).
-        assert _succeeds("Test", mint(name), module=self.mod)
+        # mode, so a ``test("...")`` description is an ATOM (THE FLIP).
+        assert _succeeds("test", mint(name), module=self.mod)

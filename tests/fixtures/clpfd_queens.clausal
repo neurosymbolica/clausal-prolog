@@ -25,5 +25,5 @@ SafeFrom(QUEEN, [HEAD, *TAIL], DISTANCE) <- (
 )
 
 
-Test("queens 1") <- (length(QUEENS, 1), SafeQueens(1, QUEENS), length(QUEENS, 1))  # nv
-Test("queens 4 valid") <- (length(QUEENS, 4), SafeQueens(4, QUEENS), length(QUEENS, 4))  # nv
+test("queens 1") <- (length(QUEENS, 1), SafeQueens(1, QUEENS), length(QUEENS, 1))  # nv
+test("queens 4 valid") <- (length(QUEENS, 4), SafeQueens(4, QUEENS), length(QUEENS, 4))  # nv

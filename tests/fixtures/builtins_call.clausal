@@ -25,16 +25,16 @@ mapped_doubles(LIST, RESULT) <- maplist(
 )
 
 
-Test("unmapped double via call") <- (
+test("unmapped double via call") <- (
     double_via_call(3, Y),
     Y == 6
 )  # v
-Test("mapped doubles") <- (
+test("mapped doubles") <- (
     mapped_doubles([1, 2, 3], RESULT),
     RESULT == [2, 4, 6]
 )  # v
-Test("apply binary double") <- (
+test("apply binary double") <- (
     apply_binary(double_via_call, 5, RESULT),
     RESULT == 10
 )  # v
-Test("run goal lambda") <- run_goal(() <- True)  # v
+test("run goal lambda") <- run_goal(() <- True)  # v

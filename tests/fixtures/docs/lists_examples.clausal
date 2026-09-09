@@ -16,13 +16,13 @@ Partition([X, *XS], PRED, YES, [X, *NO]) <- (
 HeadTail([HEAD, *TAIL], HEAD, TAIL) <- True
 FirstTwo([A, B, *REST], A, B, REST) <- True
 
-Test("head/tail destructuring") <- (
+test("head/tail destructuring") <- (
     HeadTail([1, 2, 3], HEAD, TAIL),
     HEAD == 1,
     TAIL == [2, 3]
 )  # nv
 
-Test("first two + rest") <- (
+test("first two + rest") <- (
     FirstTwo([10, 20, 30, 40], A, B, REST),
     A == 10,
     B == 20,
@@ -32,7 +32,7 @@ Test("first two + rest") <- (
 # Validates the partition example
 IsPositive(X) <- (X > 0)
 
-Test("partition positives") <- (
+test("partition positives") <- (
     Partition([-1, 2, -3, 4], IsPositive, YES, NO),
     YES == [2, 4],
     NO == [-1, -3]

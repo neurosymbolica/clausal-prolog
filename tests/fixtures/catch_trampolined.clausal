@@ -111,17 +111,17 @@ catch_from_callee_via_lambda(E) <- (call_goal((() <- catch_from_callee(E)))),
 recovery_raises(R) <- (catch(raise_value_error(_X), _E, R is ++(int("also_nope")))),
 outer_catches_a_raising_recovery(E) <- (catch(recovery_raises(_R), E, true)),
 
-Test("an inner catch/3 absorbs it; the outer recovery does not run") <- (
+test("an inner catch/3 absorbs it; the outer recovery does not run") <- (
     inner_catches(R),
     R == "inner",
 )
 
-Test("an inner catch/3 that declines hands it to the outer one") <- (
+test("an inner catch/3 that declines hands it to the outer one") <- (
     outer_catches(R),
     R == "outer",
 )
 
-Test("catch/3 around a many-solution callee still yields every solution") <- (
+test("catch/3 around a many-solution callee still yields every solution") <- (
     findall(N, catch_multi(N), NS),
     NS == [1, 2, 3],
 )

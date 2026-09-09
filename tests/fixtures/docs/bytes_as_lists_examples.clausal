@@ -1,58 +1,58 @@
 # Doc snippet fixtures for docs/bytes_as_lists.md
-# Every Test/1 clause here is executed by the test suite, so the examples in
+# Every test/1 clause here is executed by the test suite, so the examples in
 # the documentation are guaranteed to stay correct (the codes model: a byte is
 # an int in [0, 255]).
 
 # --8<-- [start:unification]
-Test("bytes is code list") <- (b"abc" is [97, 98, 99])  # nv
-Test("with vars") <- (b"abc" is [X, Y, Z], X == 97, Y == 98, Z == 99)  # nv
-Test("partial") <- (b"GET" is [71, E, 84], E == 69)  # nv
+test("bytes is code list") <- (b"abc" is [97, 98, 99])  # nv
+test("with vars") <- (b"abc" is [X, Y, Z], X == 97, Y == 98, Z == 99)  # nv
+test("partial") <- (b"GET" is [71, E, 84], E == 69)  # nv
 # --8<-- [end:unification]
 
 # --8<-- [start:empty_bytes]
-Test("empty bytes is empty list") <- (b"" is [])  # nv
+test("empty bytes is empty list") <- (b"" is [])  # nv
 # --8<-- [end:empty_bytes]
 
 # --8<-- [start:no_fixed_point]
 # A byte has no fixed point: it decomposes to an int, not to a 1-byte bytes.
-Test("byte decomposes to int") <- (b"a" is [97])  # nv
-Test("byte is not a 1-byte bytes") <- (not (b"a" is [b"a"]))  # nv
+test("byte decomposes to int") <- (b"a" is [97])  # nv
+test("byte is not a 1-byte bytes") <- (not (b"a" is [b"a"]))  # nv
 # --8<-- [end:no_fixed_point]
 
 # --8<-- [start:promiscuity]
 # Because byte codes are ordinary ints, any in-range int list unifies with the
 # matching bytes — this is intentional (the codes contract is promiscuous).
-Test("int list unifies with bytes") <- (b"\x01\x02\x03" is [1, 2, 3])  # nv
+test("int list unifies with bytes") <- (b"\x01\x02\x03" is [1, 2, 3])  # nv
 # --8<-- [end:promiscuity]
 
 # --8<-- [start:out_of_scope]
 # str and bytes are distinct domains and never cross-unify.
-Test("str does not unify with bytes") <- (not (b"abc" is "abc"))  # nv
-Test("char list does not unify with bytes") <- (not (b"abc" is ["a", "b", "c"]))  # nv
+test("str does not unify with bytes") <- (not (b"abc" is "abc"))  # nv
+test("char list does not unify with bytes") <- (not (b"abc" is ["a", "b", "c"]))  # nv
 # An int out of [0, 255] simply fails to unify (it is not an error).
-Test("out of range fails") <- (not (b"a" is [256]))  # nv
+test("out of range fails") <- (not (b"a" is [256]))  # nv
 # --8<-- [end:out_of_scope]
 
 # --8<-- [start:inspection]
 # Term inspection follows the codes-model cons cell: int head, bytes tail.
-Test("functor") <- functor(b"abc", '.', 2)  # nv
-Test("arg head is int") <- arg(1, b"abc", 97)  # nv
-Test("arg tail is bytes") <- arg(2, b"abc", b"bc")  # nv
-Test("univ") <- unpack(b"ab", ['.', 97, b"b"])  # nv
+test("functor") <- functor(b"abc", '.', 2)  # nv
+test("arg head is int") <- arg(1, b"abc", 97)  # nv
+test("arg tail is bytes") <- arg(2, b"abc", b"bc")  # nv
+test("univ") <- unpack(b"ab", ['.', 97, b"b"])  # nv
 # --8<-- [end:inspection]
 
 # --8<-- [start:list_predicates]
-Test("append codes -> bytes") <- (append(b"GET", b" /", X), X == b"GET /")  # nv
-Test("member code") <- in_(71, b"GET")  # nv
-Test("length") <- length(b"GET", 3)  # nv
-Test("reverse -> bytes") <- (reverse(b"abc", R), R == b"cba")  # nv
-Test("take -> bytes") <- (take(2, b"hello", T), T == b"he")  # nv
+test("append codes -> bytes") <- (append(b"GET", b" /", X), X == b"GET /")  # nv
+test("member code") <- in_(71, b"GET")  # nv
+test("length") <- length(b"GET", 3)  # nv
+test("reverse -> bytes") <- (reverse(b"abc", R), R == b"cba")  # nv
+test("take -> bytes") <- (take(2, b"hello", T), T == b"he")  # nv
 # --8<-- [end:list_predicates]
 
 # --8<-- [start:type_checks]
-Test("is_list bytes") <- is_list(b"abc")  # nv
-Test("is_codes bytes") <- is_codes(b"abc")  # nv
-Test("is_codes int-list") <- is_codes([97, 98, 99])  # nv
-Test("bytes is not a str") <- (not is_str(b"abc"))  # nv
-Test("bytes is not chars") <- (not is_chars(b"abc"))  # nv
+test("is_list bytes") <- is_list(b"abc")  # nv
+test("is_codes bytes") <- is_codes(b"abc")  # nv
+test("is_codes int-list") <- is_codes([97, 98, 99])  # nv
+test("bytes is not a str") <- (not is_str(b"abc"))  # nv
+test("bytes is not chars") <- (not is_chars(b"abc"))  # nv
 # --8<-- [end:type_checks]

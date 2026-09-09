@@ -5,5 +5,5 @@
 color("red"),
 color("green"),
 
-Test("color red") <- color("red")  # nv
-Test("color green") <- color("green")  # nv
+test("color red") <- color("red")  # nv
+test("color green") <- color("green")  # nv

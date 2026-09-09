@@ -5,4 +5,4 @@
 
 UseImported(X, Y) <- Helper(X, Y)
 
-Test("import_from works") <- (UseImported(2, Y), Y == 4)  # nv
+test("import_from works") <- (UseImported(2, Y), Y == 4)  # nv

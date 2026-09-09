@@ -6,7 +6,7 @@
 # `double_quotes` snippet's claims: "…" is a string here, '…' is an atom in
 # either mode, and b"…" is codes in either mode.
 
-Test("import_from works") <- (
+test("import_from works") <- (
     length([1, 2, 3], N),
     N == 3
 )  # nv
@@ -15,25 +15,25 @@ greeting("hello"),
 tag('hello'),
 raw(b"hello"),
 
-Test("chars mode: a double-quoted literal is a string") <- (
+test("chars mode: a double-quoted literal is a string") <- (
     greeting(G),
     string(G),
     not atom(G),
     G is ['h', 'e', 'l', 'l', 'o']
 )  # nv
 
-Test("single quotes are an atom in either mode") <- (
+test("single quotes are an atom in either mode") <- (
     tag(T),
     atom(T),
     not string(T)
 )  # nv
 
-Test("b-literals are codes in either mode") <- (
+test("b-literals are codes in either mode") <- (
     raw(R),
     R is [104, 101, 108, 108, 111]
 )  # nv
 
-Test("the two kinds do not unify") <- (
+test("the two kinds do not unify") <- (
     greeting(G2), tag(T2),
     not (G2 is T2)
 )  # nv

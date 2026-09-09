@@ -9,7 +9,7 @@
 #   sort/2 removes duplicates (like ISO sort/2)
 #   msort/2 preserves duplicates
 
--module(iso_list_operations, [Test(DESC)])
+-module(iso_list_operations, [test(DESC)])
 
 -private([
     palindrome(XS),
@@ -39,55 +39,55 @@ is_permutation(XS, YS) <- (
 
 # ── in / not in (membership) ─────────────────────────────────────────────────
 
-Test("in: found") <- (b in [a, b, c])  # nv
-Test("in: not found") <- (not (d in [a, b, c]))  # nv
-Test("in: empty list fails") <- (not (x in []))  # nv
-Test("in: integer") <- (2 in [1, 2, 3])  # nv
-Test("not in: absent") <- (d not in [a, b, c])  # nv
-Test("not in: present fails") <- (not (b not in [a, b, c]))  # nv
-Test("not in: empty list") <- (x not in [])  # nv
+test("in: found") <- (b in [a, b, c])  # nv
+test("in: not found") <- (not (d in [a, b, c]))  # nv
+test("in: empty list fails") <- (not (x in []))  # nv
+test("in: integer") <- (2 in [1, 2, 3])  # nv
+test("not in: absent") <- (d not in [a, b, c])  # nv
+test("not in: present fails") <- (not (b not in [a, b, c]))  # nv
+test("not in: empty list") <- (x not in [])  # nv
 
 # ── in_/2 (callable builtin) ──────────────────────────────────────────────────
 
-Test("member: found") <- in_(b, [a, b, c])  # nv
-Test("member: not found") <- (not in_(d, [a, b, c]))  # nv
-Test("member: empty fails") <- (not in_(x, []))  # nv
-Test("memberchk: found") <- in_check(b, [a, b, c])  # nv
-Test("memberchk: not found") <- (not in_check(d, [a, b, c]))  # nv
+test("member: found") <- in_(b, [a, b, c])  # nv
+test("member: not found") <- (not in_(d, [a, b, c]))  # nv
+test("member: empty fails") <- (not in_(x, []))  # nv
+test("memberchk: found") <- in_check(b, [a, b, c])  # nv
+test("memberchk: not found") <- (not in_check(d, [a, b, c]))  # nv
 
 # ── append/3 ──────────────────────────────────────────────────────────────────
 
-Test("append two lists") <- append([1, 2], [3, 4], [1, 2, 3, 4])  # nv
-Test("append empty left") <- append([], [1, 2], [1, 2])  # nv
-Test("append empty right") <- append([1, 2], [], [1, 2])  # nv
-Test("append both empty") <- append([], [], [])  # nv
-Test("append binds result") <- (
+test("append two lists") <- append([1, 2], [3, 4], [1, 2, 3, 4])  # nv
+test("append empty left") <- append([], [1, 2], [1, 2])  # nv
+test("append empty right") <- append([1, 2], [], [1, 2])  # nv
+test("append both empty") <- append([], [], [])  # nv
+test("append binds result") <- (
     append([1], [2], _r),
     _r == [1, 2]
 )  # nv
 
 # ── length/2 ──────────────────────────────────────────────────────────────────
 
-Test("length of 3") <- length([a, b, c], 3)  # nv
-Test("length empty") <- length([], 0)  # nv
-Test("length one") <- length([42], 1)  # nv
-Test("length binds") <- (
+test("length of 3") <- length([a, b, c], 3)  # nv
+test("length empty") <- length([], 0)  # nv
+test("length one") <- length([42], 1)  # nv
+test("length binds") <- (
     length([1, 2, 3], _n),
     _n == 3
 )  # nv
 
 # ── last/2 ────────────────────────────────────────────────────────────────────
 
-Test("last element") <- last([1, 2, 3], 3)  # nv
-Test("last singleton") <- last([42], 42)  # nv
-Test("last empty fails") <- (not last([], _))  # nv
+test("last element") <- last([1, 2, 3], 3)  # nv
+test("last singleton") <- last([42], 42)  # nv
+test("last empty fails") <- (not last([], _))  # nv
 
 # ── reverse/2 ────────────────────────────────────────────────────────────────
 
-Test("reverse list") <- reverse([1, 2, 3], [3, 2, 1])  # nv
-Test("reverse empty") <- reverse([], [])  # nv
-Test("reverse singleton") <- reverse([42], [42])  # nv
-Test("reverse involution") <- (
+test("reverse list") <- reverse([1, 2, 3], [3, 2, 1])  # nv
+test("reverse empty") <- reverse([], [])  # nv
+test("reverse singleton") <- reverse([42], [42])  # nv
+test("reverse involution") <- (
     reverse([1, 2, 3], _r),
     reverse(_r, _rr),
     _rr == [1, 2, 3]
@@ -95,119 +95,119 @@ Test("reverse involution") <- (
 
 # ── list_item/3 (0-based) ────────────────────────────────────────────────────────
 
-Test("nth0 first") <- list_item(0, [a, b, c], a)  # nv
-Test("nth0 last") <- list_item(2, [a, b, c], c)  # nv
-Test("nth1 first") <- list_item(0, [a, b, c], a)  # nv
-Test("nth1 last") <- list_item(2, [a, b, c], c)  # nv
-Test("nth0 out of range") <- (not list_item(5, [a, b], _))  # nv
-Test("nth1 zero fails") <- (not list_item(-1, [a, b], _))  # nv
+test("nth0 first") <- list_item(0, [a, b, c], a)  # nv
+test("nth0 last") <- list_item(2, [a, b, c], c)  # nv
+test("nth1 first") <- list_item(0, [a, b, c], a)  # nv
+test("nth1 last") <- list_item(2, [a, b, c], c)  # nv
+test("nth0 out of range") <- (not list_item(5, [a, b], _))  # nv
+test("nth1 zero fails") <- (not list_item(-1, [a, b], _))  # nv
 
 # ── sort/2 and msort/2 ───────────────────────────────────────────────────
 
-Test("sort removes dups") <- sort([3, 1, 2, 1], [1, 2, 3])  # nv
-Test("sort already sorted") <- sort([1, 2, 3], [1, 2, 3])  # nv
-Test("sort empty") <- sort([], [])  # nv
-Test("msort preserves dups") <- msort([3, 1, 2, 1], [1, 1, 2, 3])  # nv
-Test("sort strings") <- sort([c, a, b], [a, b, c])  # nv
+test("sort removes dups") <- sort([3, 1, 2, 1], [1, 2, 3])  # nv
+test("sort already sorted") <- sort([1, 2, 3], [1, 2, 3])  # nv
+test("sort empty") <- sort([], [])  # nv
+test("msort preserves dups") <- msort([3, 1, 2, 1], [1, 1, 2, 3])  # nv
+test("sort strings") <- sort([c, a, b], [a, b, c])  # nv
 
 # ── flatten/2 ────────────────────────────────────────────────────────────────
 
-Test("flatten nested") <- flatten([1, [2, [3]], 4], [1, 2, 3, 4])  # nv
-Test("flatten already flat") <- flatten([1, 2, 3], [1, 2, 3])  # nv
-Test("flatten empty") <- flatten([], [])  # nv
+test("flatten nested") <- flatten([1, [2, [3]], 4], [1, 2, 3, 4])  # nv
+test("flatten already flat") <- flatten([1, 2, 3], [1, 2, 3])  # nv
+test("flatten empty") <- flatten([], [])  # nv
 
 # ── select/3 ─────────────────────────────────────────────────────────────────
 
-Test("select element") <- select(2, [1, 2, 3], [1, 3])  # nv
-Test("select first") <- select(1, [1, 2, 3], [2, 3])  # nv
-Test("select not found") <- (not select(9, [1, 2, 3], _))  # nv
+test("select element") <- select(2, [1, 2, 3], [1, 3])  # nv
+test("select first") <- select(1, [1, 2, 3], [2, 3])  # nv
+test("select not found") <- (not select(9, [1, 2, 3], _))  # nv
 
 # ── set operations ───────────────────────────────────────────────────────────
 
-Test("subtract") <- subtract([1, 2, 3, 4], [2, 4], [1, 3])  # nv
-Test("intersection") <- intersection([1, 2, 3], [2, 3, 4], [2, 3])  # nv
-Test("union") <- union([1, 2], [2, 3], [1, 2, 3])  # nv
-Test("list_to_set") <- list_to_set([1, 2, 1, 3, 2], [1, 2, 3])  # nv
+test("subtract") <- subtract([1, 2, 3, 4], [2, 4], [1, 3])  # nv
+test("intersection") <- intersection([1, 2, 3], [2, 3, 4], [2, 3])  # nv
+test("union") <- union([1, 2], [2, 3], [1, 2, 3])  # nv
+test("list_to_set") <- list_to_set([1, 2, 1, 3, 2], [1, 2, 3])  # nv
 
 # ── aggregates ───────────────────────────────────────────────────────────────
 
-Test("sum_list") <- sum_list([1, 2, 3, 4], 10)  # nv
-Test("sum_list empty") <- sum_list([], 0)  # nv
-Test("max_list") <- max_list([3, 1, 4, 1, 5], 5)  # nv
-Test("min_list") <- min_list([3, 1, 4, 1, 5], 1)  # nv
-Test("max_list singleton") <- max_list([42], 42)  # nv
+test("sum_list") <- sum_list([1, 2, 3, 4], 10)  # nv
+test("sum_list empty") <- sum_list([], 0)  # nv
+test("max_list") <- max_list([3, 1, 4, 1, 5], 5)  # nv
+test("min_list") <- min_list([3, 1, 4, 1, 5], 1)  # nv
+test("max_list singleton") <- max_list([42], 42)  # nv
 
 # ── palindrome/1 (private helper) ──────────────────────────────────────────
 
-Test("palindrome: empty") <- palindrome([])  # nv
-Test("palindrome: single") <- palindrome([1])  # nv
-Test("palindrome: aba") <- palindrome([1, 2, 1])  # nv
-Test("palindrome: abba") <- palindrome([1, 2, 2, 1])  # nv
-Test("not palindrome: ab") <- (not palindrome([1, 2]))  # nv
+test("palindrome: empty") <- palindrome([])  # nv
+test("palindrome: single") <- palindrome([1])  # nv
+test("palindrome: aba") <- palindrome([1, 2, 1])  # nv
+test("palindrome: abba") <- palindrome([1, 2, 2, 1])  # nv
+test("not palindrome: ab") <- (not palindrome([1, 2]))  # nv
 
 # ── sorted_asc/1 (private helper) ──────────────────────────────────────────
 
-Test("sorted_asc: empty") <- sorted_asc([])  # nv
-Test("sorted_asc: single") <- sorted_asc([1])  # nv
-Test("sorted_asc: ascending") <- sorted_asc([1, 2, 3])  # nv
-Test("sorted_asc: not descending") <- (not sorted_asc([3, 2, 1]))  # nv
-Test("sorted_asc: equal elements") <- sorted_asc([2, 2, 2])  # nv
+test("sorted_asc: empty") <- sorted_asc([])  # nv
+test("sorted_asc: single") <- sorted_asc([1])  # nv
+test("sorted_asc: ascending") <- sorted_asc([1, 2, 3])  # nv
+test("sorted_asc: not descending") <- (not sorted_asc([3, 2, 1]))  # nv
+test("sorted_asc: equal elements") <- sorted_asc([2, 2, 2])  # nv
 
 # ── is_permutation/2 (private helper) ──────────────────────────────────────
 
-Test("is_permutation: same list") <- is_permutation([1, 2, 3], [1, 2, 3])  # nv
-Test("is_permutation: reordered") <- is_permutation([3, 1, 2], [1, 2, 3])  # nv
-Test("not permutation: different lengths") <- (not is_permutation([1, 2], [1, 2, 3]))  # nv
-Test("is_permutation: empty") <- is_permutation([], [])  # nv
+test("is_permutation: same list") <- is_permutation([1, 2, 3], [1, 2, 3])  # nv
+test("is_permutation: reordered") <- is_permutation([3, 1, 2], [1, 2, 3])  # nv
+test("not permutation: different lengths") <- (not is_permutation([1, 2], [1, 2, 3]))  # nv
+test("is_permutation: empty") <- is_permutation([], [])  # nv
 
 # ── enumeration cases (migrated from test_iso_list_operations.py) ──────────
 
-Test("in_ enumerates [1,2,3]") <- (
+test("in_ enumerates [1,2,3]") <- (
     findall(X, in_(X, [1, 2, 3]), L),
     L == [1, 2, 3]
 )  # nv
-Test("in_ with duplicates [a,b,a]") <- (
+test("in_ with duplicates [a,b,a]") <- (
     findall(X, in_(X, [a, b, a]), L),
     L == [a, b, a]
 )  # nv
-Test("in enumerates [1,2,3]") <- (
+test("in enumerates [1,2,3]") <- (
     findall(X, X in [1, 2, 3], L),
     L == [1, 2, 3]
 )  # nv
-Test("append split mode") <- (
+test("append split mode") <- (
     findall([X, Y], append(X, Y, [1, 2, 3]), L),
     L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]]
 )  # nv
-Test("list_item second element") <- list_item(1, [a, b, c], b)  # nv
-Test("last empty yields no solutions") <- (
+test("list_item second element") <- list_item(1, [a, b, c], b)  # nv
+test("last empty yields no solutions") <- (
     findall(X, last([], X), L),
     L == []
 )  # nv
 
 # ── permutation/2 ──────────────────────────────────────────────────────────
 
-Test("permutation of [1,2,3] yields 6") <- (
+test("permutation of [1,2,3] yields 6") <- (
     findall(P, permutation([1, 2, 3], P), L),
     length(L, 6),
     [1, 2, 3] in L,
     [3, 2, 1] in L
 )  # nv
-Test("permutation of [] is [[]]") <- (
+test("permutation of [] is [[]]") <- (
     findall(P, permutation([], P), L),
     L == [[]]
 )  # nv
-Test("permutation of [42] is [[42]]") <- (
+test("permutation of [42] is [[42]]") <- (
     findall(P, permutation([42], P), L),
     L == [[42]]
 )  # nv
 
 # ── select/3 success shapes ────────────────────────────────────────────────
 
-Test("select(2,[1,2,3],[1,3])") <- (
+test("select(2,[1,2,3],[1,3])") <- (
     select(2, [1, 2, 3], R),
     R == [1, 3]
 )  # nv
-Test("select(1,[1,2,3],[2,3])") <- (
+test("select(1,[1,2,3],[2,3])") <- (
     select(1, [1, 2, 3], R),
     R == [2, 3]
 )  # nv

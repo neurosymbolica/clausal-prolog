@@ -30,16 +30,16 @@ NatnumProgram(PROGRAM) <- (
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 # Shallow baseline tests.
-Test("shallow natnum(0)") <- ShallowNatnum([["natnum", 0]])  # nv
-Test("shallow natnum(s(0))") <- ShallowNatnum([["natnum", ["s", 0]]])  # nv
-Test("shallow natnum(s(s(0)))") <- ShallowNatnum([["natnum", ["s", ["s", 0]]]])  # nv
+test("shallow natnum(0)") <- ShallowNatnum([["natnum", 0]])  # nv
+test("shallow natnum(s(0))") <- ShallowNatnum([["natnum", ["s", 0]]])  # nv
+test("shallow natnum(s(s(0)))") <- ShallowNatnum([["natnum", ["s", ["s", 0]]]])  # nv
 
 # Deep unfolding tests — should produce identical results.
-Test("deep natnum(0)") <- DeepNatnum([["natnum", 0]])  # nv
-Test("deep natnum(s(0))") <- DeepNatnum([["natnum", ["s", 0]]])  # nv
-Test("deep natnum(s(s(0)))") <- DeepNatnum([["natnum", ["s", ["s", 0]]]])  # nv
+test("deep natnum(0)") <- DeepNatnum([["natnum", 0]])  # nv
+test("deep natnum(s(0))") <- DeepNatnum([["natnum", ["s", 0]]])  # nv
+test("deep natnum(s(s(0)))") <- DeepNatnum([["natnum", ["s", ["s", 0]]]])  # nv
 
 # Deep counting — verify counts are preserved.
-Test("deep count natnum(0) = 1") <- DeepCountNatnum([["natnum", 0]], 1)  # nv
-Test("deep count natnum(s(0)) = 2") <- DeepCountNatnum([["natnum", ["s", 0]]], 2)  # nv
-Test("deep count natnum(s(s(0))) = 3") <- DeepCountNatnum([["natnum", ["s", ["s", 0]]]], 3)  # nv
+test("deep count natnum(0) = 1") <- DeepCountNatnum([["natnum", 0]], 1)  # nv
+test("deep count natnum(s(0)) = 2") <- DeepCountNatnum([["natnum", ["s", 0]]], 2)  # nv
+test("deep count natnum(s(s(0))) = 3") <- DeepCountNatnum([["natnum", ["s", ["s", 0]]]], 3)  # nv

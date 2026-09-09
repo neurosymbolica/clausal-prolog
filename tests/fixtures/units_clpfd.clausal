@@ -12,7 +12,7 @@
 
 # Find an integer force value in 1..20 that equals 12,
 # then verify it wraps to a force dimension.
-Test("clpfd label as newton") <- (
+test("clpfd label as newton") <- (
     in_domain([F_INT], 1, 20),
     label([F_INT]),
     F_INT == 12,
@@ -23,7 +23,7 @@ Test("clpfd label as newton") <- (
 
 # Find two distinct integers whose product is 12,
 # treat them as side lengths in metres, verify area.
-Test("clpfd rectangle area") <- (
+test("clpfd rectangle area") <- (
     in_domain([W, H], 1, 6),
     all_different([W, H]),
     label([W, H]),
@@ -37,7 +37,7 @@ Test("clpfd rectangle area") <- (
 
 # Find integer voltage and current (1..20) with V/I = 4,
 # wrap as Volt/Ampere, compute resistance, verify resistance.
-Test("clpfd ohms law integer") <- (
+test("clpfd ohms law integer") <- (
     in_domain([V_INT, I_INT], 1, 20),
     label([V_INT, I_INT]),
     eval_(V_INT // I_INT, R_INT),
@@ -52,7 +52,7 @@ Test("clpfd ohms law integer") <- (
 # Find integer mass (1..5 kg) and speed (1..5 m/s) where mass * speed^2 == 50,
 # compute kinetic energy, verify energy.
 # m=2, v=5: 2*KE = 2 * 5^2 = 50 -> KE = 25 J
-Test("clpfd kinetic energy") <- (
+test("clpfd kinetic energy") <- (
     in_domain([M_INT, V_INT], 1, 5),
     label([M_INT, V_INT]),
     eval_(M_INT * V_INT ** 2, TWICE_KE),
@@ -69,7 +69,7 @@ Test("clpfd kinetic energy") <- (
 
 # Generate integer power values, filter those divisible by 3,
 # wrap as Watt and verify power.
-Test("clpfd power multiple of 3") <- (
+test("clpfd power multiple of 3") <- (
     in_domain([P_INT], 1, 30),
     label([P_INT]),
     eval_(P_INT % 3, MOD),
@@ -80,7 +80,7 @@ Test("clpfd power multiple of 3") <- (
 
 # Force F = m * a: find integer mass 1..5 and acceleration 1..5 giving F = 20 N.
 # Then wrap each as a Quantity and recompute to verify.
-Test("clpfd force equals mass times accel") <- (
+test("clpfd force equals mass times accel") <- (
     in_domain([M_INT, A_INT], 1, 5),
     label([M_INT, A_INT]),
     eval_(M_INT * A_INT, F_INT),
@@ -92,7 +92,7 @@ Test("clpfd force equals mass times accel") <- (
 
 # Power = V^2 / R: find integers V in 1..12, R in 1..6 where V^2 / R = 12.
 # V=6, R=3: 36/3 = 12.
-Test("clpfd power from voltage squared") <- (
+test("clpfd power from voltage squared") <- (
     in_domain([V_INT, R_INT], 1, 12),
     label([V_INT, R_INT]),
     eval_(V_INT ** 2, VSQUARED),
@@ -108,7 +108,7 @@ Test("clpfd power from voltage squared") <- (
 # Dimensionless ratio: find integer numerator and denominator (1..10) where
 # the ratio num/den equals 2, then verify it is dimensionless.
 # Wrap as Metre/Metre so units cancel.
-Test("clpfd dimensionless ratio") <- (
+test("clpfd dimensionless ratio") <- (
     in_domain([NUM, DEN], 1, 10),
     label([NUM, DEN]),
     eval_(NUM // DEN, PROD),
@@ -123,7 +123,7 @@ Test("clpfd dimensionless ratio") <- (
 # Unit-mismatch guard via constraint: label F and T from the same domain,
 # verify that wrapping as Newton and assigning to a Second-constrained slot
 # fails (no solution), confirming constraint rejection is CLP(FD)-compatible.
-Test("clpfd constraint rejects wrong unit") <- (
+test("clpfd constraint rejects wrong unit") <- (
     not (
         in_domain([F_INT], 1, 5),
         label([F_INT]),

@@ -8,7 +8,7 @@ OrSolve(A, B) <- (
     z3.label([A, B]),
 )
 
-Test("boolean or has 3 solutions") <- (count_all(OrSolve(_, _), N), N == 3)  # nv
+test("boolean or has 3 solutions") <- (count_all(OrSolve(_, _), N), N == 3)  # nv
 
 # ── At most / at least / exactly ────────────────────────────────────────────
 
@@ -18,18 +18,18 @@ AtMostTwo(A, B, C) <- (
     z3.label([A, B, C]),
 )
 
-Test("at_most 2 of 3") <- (count_all(AtMostTwo(_, _, _), N), N == 6)  # nv
+test("at_most 2 of 3") <- (count_all(AtMostTwo(_, _, _), N), N == 6)  # nv
 
 ExactlyOne(A, B, C) <- (
     z3.exactly([A, B, C], 1),
     z3.label([A, B, C]),
 )
 
-Test("exactly 1 of 3") <- (count_all(ExactlyOne(_, _, _), N), N == 3)  # nv
+test("exactly 1 of 3") <- (count_all(ExactlyOne(_, _, _), N), N == 3)  # nv
 
 AtLeastTwo(A, B, C) <- (
     z3.at_least([A, B, C], 2),
     z3.label([A, B, C]),
 )
 
-Test("at_least 2 of 3") <- (count_all(AtLeastTwo(_, _, _), N), N == 4)  # nv
+test("at_least 2 of 3") <- (count_all(AtLeastTwo(_, _, _), N), N == 4)  # nv

@@ -15,7 +15,7 @@ GroundLast() <- BucketCat(5, "e")
 GroundMiss() <- BucketCat(2, "a")
 GroundTail(N) <- BucketSteps(N, "even")
 
-Test("imported ground, first clause") <- BucketCat(1, "a")  # nv
-Test("imported ground, middle clause") <- BucketCat(3, "c")  # nv
-Test("imported ground, last clause") <- BucketCat(5, "e")  # nv
-Test("imported ground, tail-call re-dispatch") <- BucketSteps(6, "even")  # nv
+test("imported ground, first clause") <- BucketCat(1, "a")  # nv
+test("imported ground, middle clause") <- BucketCat(3, "c")  # nv
+test("imported ground, last clause") <- BucketCat(5, "e")  # nv
+test("imported ground, tail-call re-dispatch") <- BucketSteps(6, "even")  # nv

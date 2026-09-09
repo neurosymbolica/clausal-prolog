@@ -2,9 +2,9 @@
 -private([bar])
 # Companion tests for docs/type_checking.md display snippets.
 
-Test("var check") <- var(_)  # nv
-Test("integer check") <- integer(42)  # nv
-Test("is_str check") <- is_str("hello")  # nv
+test("var check") <- var(_)  # nv
+test("integer check") <- integer(42)  # nv
+test("is_str check") <- is_str("hello")  # nv
 
 # The `describe_example` snippet, run: the answer is a single-quoted ATOM,
 # which needs no -private declaration and means the same in every
@@ -15,12 +15,12 @@ describe(X, 'string')    <- (nonvar(X), is_str(X)),
 describe(X, 'compound')  <- (nonvar(X), compound(X)),
 describe(X, 'other')     <- nonvar(X)
 
-Test("describe var") <- describe(_, 'variable')  # nv
-Test("describe integer") <- describe(42, 'integer')  # nv
-Test("describe string") <- describe("hi", 'string')  # nv
+test("describe var") <- describe(_, 'variable')  # nv
+test("describe integer") <- describe(42, 'integer')  # nv
+test("describe string") <- describe("hi", 'string')  # nv
 
 # The `atom_vs_string` snippet, row by row (spec §6.3).
-Test("atom row") <- (
+test("atom row") <- (
     atom(bar), atomic(bar), callable_(bar), ground(bar),
     not string(bar), not is_list(bar), not is_chars(bar), not compound(bar)
 )  # nv
@@ -28,7 +28,7 @@ Test("atom row") <- (
 # Task 15 item 2 (ISO alignment, 2026-09-07): a non-empty string is the
 # LIST of its characters, and a non-empty list is the compound './2', so
 # compound/1 and callable_/1 answer TRUE for it -- as ISO and Scryer do.
-Test("string row") <- (
+test("string row") <- (
     string("bar"), is_str("bar"), is_list("bar"), is_chars("bar"),
     ground("bar"), callable_("bar"), compound("bar"),
     not atom("bar"), not atomic("bar")
@@ -36,7 +36,7 @@ Test("string row") <- (
 
 # "" is [] is the reserved ATOM '[]', so atom/1 and atomic/1 answer TRUE and
 # compound/1 answers FALSE (Task 15 item 2; Scryer agrees).
-Test("empty string row") <- (
+test("empty string row") <- (
     "" is [],
     string(""), is_list(""), is_chars(""),
     atom(""), atomic(""), callable_(""),
@@ -45,7 +45,7 @@ Test("empty string row") <- (
 
 # "" and [] are one term, so string([]) is TRUE -- re-asserted in Task 14b,
 # where string/1 stopped keying on the `str` representation.
-Test("empty list row") <- (
+test("empty list row") <- (
     string([]), is_str([]), is_list([]), is_chars([]),
     atom([]), atomic([]), callable_([]),
     not compound([])
@@ -53,17 +53,17 @@ Test("empty list row") <- (
 
 # The other spelling of the same rule: a proper list of char atoms is the
 # string it is equal to (spec §6.3).
-Test("char list row") <- (
+test("char list row") <- (
     string(['a', 'b']), is_str(['a', 'b']),
     not string([1, 2]), not string(['ab'])
 )  # nv
 
-Test("compound row") <- (
+test("compound row") <- (
     compound(pair(1, 2)), callable_(pair(1, 2)),
     not atom(pair(1, 2)), not atomic(pair(1, 2)), not is_list(pair(1, 2))
 )  # nv
 
-Test("number row") <- (
+test("number row") <- (
     atomic(42), ground(42),
     not atom(42), not string(42), not is_list(42), not compound(42)
 )  # nv

@@ -755,7 +755,7 @@ class TestRegexBasicFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod)
+        assert _succeeds("test", name, module=self.mod)
 
 
 class TestRegexAutoBindFixture:
@@ -786,4 +786,4 @@ class TestRegexAutoBindFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod)
+        assert _succeeds("test", name, module=self.mod)

@@ -15,7 +15,7 @@
 # via direct membership queries, which is a more faithful mirror of what
 # the Python test suite was asserting anyway.
 
--module(iso_database, [Test(DESC)])
+-module(iso_database, [test(DESC)])
 
 -dynamic(color/1)
 -dynamic(item/1)
@@ -39,19 +39,19 @@ greet("__seed__"),
 
 # ── assertz/1 — add then observe ───────────────────────────────────────────
 
-Test("assertz adds and is visible") <- (
+test("assertz adds and is visible") <- (
     assertz(color("blue")),
     color("blue"),
     retract(color("blue"))
 )  # nv
 
-Test("assertz on fresh predicate") <- (
+test("assertz on fresh predicate") <- (
     assertz(greet("hello")),
     greet("hello"),
     retract(greet("hello"))
 )  # nv
 
-Test("assertz multiple then query each") <- (
+test("assertz multiple then query each") <- (
     assertz(greet("one")),
     assertz(greet("two")),
     assertz(greet("three")),
@@ -65,7 +65,7 @@ Test("assertz multiple then query each") <- (
 
 # ── asserta/1 — prepended clause is reachable ─────────────────────────────
 
-Test("asserta adds and is visible") <- (
+test("asserta adds and is visible") <- (
     asserta(item("a")),
     item("a"),
     retract(item("a"))
@@ -73,7 +73,7 @@ Test("asserta adds and is visible") <- (
 
 # ── retract/1 — removes a clause ──────────────────────────────────────────
 
-Test("retract removes matching clause") <- (
+test("retract removes matching clause") <- (
     retract(letter("b")),
     not letter("b"),
     letter("a"),
@@ -81,7 +81,7 @@ Test("retract removes matching clause") <- (
     assertz(letter("b"))
 )  # nv
 
-Test("retract first clause") <- (
+test("retract first clause") <- (
     retract(letter("a")),
     not letter("a"),
     letter("b"),
@@ -89,13 +89,13 @@ Test("retract first clause") <- (
     asserta(letter("a"))
 )  # nv
 
-Test("retract only clause leaves predicate empty") <- (
+test("retract only clause leaves predicate empty") <- (
     retract(single(42)),
     not single(42),
     assertz(single(42))
 )  # nv
 
-Test("retract then re-assert restores fact") <- (
+test("retract then re-assert restores fact") <- (
     color("red"),
     retract(color("red")),
     not color("red"),

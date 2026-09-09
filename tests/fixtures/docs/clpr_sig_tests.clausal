@@ -1,11 +1,11 @@
 # Companion tests for docs/clpr.md signature blocks.
 
-Test("clpr real equality") <- (
+test("clpr real equality") <- (
     clpr.real(X == 3.0),
     clpr.label([X])
 )  # nv
 
-Test("clpr real bounds") <- (
+test("clpr real bounds") <- (
     clpr.real((
         0.0 <= X,
         X <= 10.0,

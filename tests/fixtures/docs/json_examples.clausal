@@ -10,7 +10,7 @@
 
 # --8<-- [start:parse_atoms]
 # Keys are atoms; string values are strings.
-Test("keys are atoms, values are strings") <- (
+test("keys are atoms, values are strings") <- (
     parse("{\"colour\": \"red\", \"note\": \"hi\"}", D),
     V is D.colour,
     string(V),
@@ -20,7 +20,7 @@ Test("keys are atoms, values are strings") <- (
 # 'atoms'(["red"]) promotes just that value to the atom red.  The option
 # term is data, so the module carries -implicit_functors (or declares
 # atoms/1 in -private).
-Test("the atoms option mints a vocabulary") <- (
+test("the atoms option mints a vocabulary") <- (
     parse("{\"colour\": \"red\", \"note\": \"red flag\"}", D2, ['atoms'(["red"])]),
     C is D2.colour,
     atom(C),
@@ -32,7 +32,7 @@ Test("the atoms option mints a vocabulary") <- (
 
 # --8<-- [start:generate_kinds]
 # Generating is the mirror: an atom becomes the JSON string of its spelling.
-Test("an atom generates as a JSON string") <- (
+test("an atom generates as a JSON string") <- (
     generate({colour: red}, S),
     S == "{\"colour\": \"red\"}"
 )  # nv

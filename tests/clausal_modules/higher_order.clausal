@@ -43,42 +43,42 @@ MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (
 
 # ── Test clauses (migrated from test_clausal_modules.py::TestHigherOrder*) ─
 
-Test("doubles 1..3") <- (Doubles([1, 2, 3], R), R == [2, 4, 6])  # nv
-Test("doubles empty") <- (Doubles([], R), R == [])  # nv
-Test("doubles negative") <- (Doubles([-1, 0, 5], R), R == [-2, 0, 10])  # nv
+test("doubles 1..3") <- (Doubles([1, 2, 3], R), R == [2, 4, 6])  # nv
+test("doubles empty") <- (Doubles([], R), R == [])  # nv
+test("doubles negative") <- (Doubles([-1, 0, 5], R), R == [-2, 0, 10])  # nv
 
-Test("HO all_positive succeeds") <- AllPositive([1, 2, 3])  # nv
-Test("HO all_positive fails") <- (not AllPositive([1, -2, 3]))  # nv
-Test("HO all_positive empty (vacuously true)") <- AllPositive([])  # nv
+test("HO all_positive succeeds") <- AllPositive([1, 2, 3])  # nv
+test("HO all_positive fails") <- (not AllPositive([1, -2, 3]))  # nv
+test("HO all_positive empty (vacuously true)") <- AllPositive([])  # nv
 
-Test("keep_positive mixed") <- (KeepPositive([1, -2, 3, -4], R), R == [1, 3])  # nv
-Test("keep_positive none") <- (KeepPositive([-1, -2], R), R == [])  # nv
-Test("keep_positive all") <- (KeepPositive([5, 10], R), R == [5, 10])  # nv
+test("keep_positive mixed") <- (KeepPositive([1, -2, 3, -4], R), R == [1, 3])  # nv
+test("keep_positive none") <- (KeepPositive([-1, -2], R), R == [])  # nv
+test("keep_positive all") <- (KeepPositive([5, 10], R), R == [5, 10])  # nv
 
-Test("remove_negative mixed") <- (RemoveNegative([1, -2, 3, -4], R), R == [1, 3])  # nv
-Test("remove_negative none") <- (RemoveNegative([1, 2, 3], R), R == [1, 2, 3])  # nv
+test("remove_negative mixed") <- (RemoveNegative([1, -2, 3, -4], R), R == [1, 3])  # nv
+test("remove_negative none") <- (RemoveNegative([1, 2, 3], R), R == [1, 2, 3])  # nv
 
-Test("sum_list_fold 1..3 = 6") <- (SumListFold([1, 2, 3], R), R == 6)  # nv
-Test("sum_list_fold empty = 0") <- (SumListFold([], R), R == 0)  # nv
-Test("sum_list_fold single = 42") <- (SumListFold([42], R), R == 42)  # nv
+test("sum_list_fold 1..3 = 6") <- (SumListFold([1, 2, 3], R), R == 6)  # nv
+test("sum_list_fold empty = 0") <- (SumListFold([], R), R == 0)  # nv
+test("sum_list_fold single = 42") <- (SumListFold([42], R), R == 42)  # nv
 
-Test("product_list 2 3 4 = 24") <- (ProductList([2, 3, 4], R), R == 24)  # nv
-Test("product_list empty = 1") <- (ProductList([], R), R == 1)  # nv
-Test("product_list with zero = 0") <- (ProductList([5, 0, 3], R), R == 0)  # nv
+test("product_list 2 3 4 = 24") <- (ProductList([2, 3, 4], R), R == 24)  # nv
+test("product_list empty = 1") <- (ProductList([], R), R == 1)  # nv
+test("product_list with zero = 0") <- (ProductList([5, 0, 3], R), R == 0)  # nv
 
-Test("HO squares") <- (Squares([1, 2, 3, 4], R), R == [1, 4, 9, 16])  # nv
+test("HO squares") <- (Squares([1, 2, 3, 4], R), R == [1, 4, 9, 16])  # nv
 
-Test("keep_even") <- (KeepEven([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
-Test("keep_even none") <- (KeepEven([1, 3, 5], R), R == [])  # nv
+test("keep_even") <- (KeepEven([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
+test("keep_even none") <- (KeepEven([1, 3, 5], R), R == [])  # nv
 
-Test("remove_even") <- (RemoveEven([1, 2, 3, 4, 5], R), R == [1, 3, 5])  # nv
+test("remove_even") <- (RemoveEven([1, 2, 3, 4, 5], R), R == [1, 3, 5])  # nv
 
-Test("negate_list") <- (NegateList([1, -2, 3], R), R == [-1, 2, -3])  # nv
-Test("negate_list empty") <- (NegateList([], R), R == [])  # nv
+test("negate_list") <- (NegateList([1, -2, 3], R), R == [-1, 2, -3])  # nv
+test("negate_list empty") <- (NegateList([], R), R == [])  # nv
 
-Test("count_fold 4") <- (CountFold([10, 20, 30, 40], R), R == 4)  # nv
-Test("count_fold empty = 0") <- (CountFold([], R), R == 0)  # nv
+test("count_fold 4") <- (CountFold([10, 20, 30, 40], R), R == 4)  # nv
+test("count_fold empty = 0") <- (CountFold([], R), R == 0)  # nv
 
-Test("max_fold 9") <- (MaxFold([3, 7, 2, 9, 1], 0, R), R == 9)  # nv
-Test("max_fold single") <- (MaxFold([5], 0, R), R == 5)  # nv
-Test("max_fold init wins") <- (MaxFold([1, 2], 100, R), R == 100)  # nv
+test("max_fold 9") <- (MaxFold([3, 7, 2, 9, 1], 0, R), R == 9)  # nv
+test("max_fold single") <- (MaxFold([5], 0, R), R == 5)  # nv
+test("max_fold init wins") <- (MaxFold([1, 2], 100, R), R == 100)  # nv

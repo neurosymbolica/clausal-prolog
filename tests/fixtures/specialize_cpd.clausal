@@ -33,30 +33,30 @@ GraphProgram(PROGRAM) <- (
 
 # ── Natnum Tests ─────────────────────────────────────────────────────────────
 
-Test("cpd natnum(0)") <- CpdNatnum([["natnum", 0]])  # nv
+test("cpd natnum(0)") <- CpdNatnum([["natnum", 0]])  # nv
 
-Test("cpd natnum(s(0))") <- CpdNatnum([["natnum", ["s", 0]]])  # nv
+test("cpd natnum(s(0))") <- CpdNatnum([["natnum", ["s", 0]]])  # nv
 
-Test("cpd natnum(s(s(s(0))))") <- CpdNatnum([["natnum", ["s", ["s", ["s", 0]]]]])  # nv
+test("cpd natnum(s(s(s(0))))") <- CpdNatnum([["natnum", ["s", ["s", ["s", 0]]]]])  # nv
 
 # ── Graph Tests ──────────────────────────────────────────────────────────────
 
-Test("cpd path(a,b)") <- CpdGraph([["path", "a", "b"]])  # nv
+test("cpd path(a,b)") <- CpdGraph([["path", "a", "b"]])  # nv
 
-Test("cpd path(a,c)") <- CpdGraph([["path", "a", "c"]])  # nv
+test("cpd path(a,c)") <- CpdGraph([["path", "a", "c"]])  # nv
 
-Test("cpd path(a,d)") <- CpdGraph([["path", "a", "d"]])  # nv
+test("cpd path(a,d)") <- CpdGraph([["path", "a", "d"]])  # nv
 
-Test("cpd edge(b,c)") <- CpdGraph([["edge", "b", "c"]])  # nv
+test("cpd edge(b,c)") <- CpdGraph([["edge", "b", "c"]])  # nv
 
 # ── Count Tests ──────────────────────────────────────────────────────────────
 
-Test("cpd count natnum(0) = 1") <- CpdCountNatnum([["natnum", 0]], 1)  # nv
+test("cpd count natnum(0) = 1") <- CpdCountNatnum([["natnum", 0]], 1)  # nv
 
-Test("cpd count natnum(s(0)) = 2") <- CpdCountNatnum([["natnum", ["s", 0]]], 2)  # nv
+test("cpd count natnum(s(0)) = 2") <- CpdCountNatnum([["natnum", ["s", 0]]], 2)  # nv
 
-Test("cpd count natnum(s(s(0))) = 3") <- CpdCountNatnum([["natnum", ["s", ["s", 0]]]], 3)  # nv
+test("cpd count natnum(s(s(0))) = 3") <- CpdCountNatnum([["natnum", ["s", ["s", 0]]]], 3)  # nv
 
 # ── Limit Tests ──────────────────────────────────────────────────────────────
 
-Test("cpd limit natnum(s(s(0))) max=10") <- CpdLimitNatnum([["natnum", ["s", ["s", 0]]]], 10)  # nv
+test("cpd limit natnum(s(s(0))) max=10") <- CpdLimitNatnum([["natnum", ["s", ["s", 0]]]], 10)  # nv

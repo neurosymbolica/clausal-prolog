@@ -16,25 +16,25 @@ KeepInts(XS, INTS) <- (
     include(integer, XS, INTS)
 )
 
-Test("filter keeps numbers") <- (
+test("filter keeps numbers") <- (
     KeepNumbers([1, "a", 2, "b", 3.0], RESULT),
     RESULT == [1, 2, 3.0],
 )  # nv
 
-Test("map succ") <- (
+test("map succ") <- (
     Incremented([0, 1, 2], RESULT),
     RESULT == [1, 2, 3],
 )  # nv
 
-Test("map check all numbers") <- (
+test("map check all numbers") <- (
     AllNumbers([1, 2, 3])
 )  # nv
 
-Test("map check not all numbers fails") <- (
+test("map check not all numbers fails") <- (
     not AllNumbers([1, "a", 3])
 )  # nv
 
-Test("filter ints from mixed") <- (
+test("filter ints from mixed") <- (
     KeepInts([1, 2.5, 3, "x"], RESULT),
     RESULT == [1, 3],
 )  # nv

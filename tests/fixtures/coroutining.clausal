@@ -1,30 +1,30 @@
 # Phase 1: Coroutining & Resource Control integration tests
 
 # call_nth: get the 3rd member of a list
-Test("call_nth basic") <- (
+test("call_nth basic") <- (
     call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
     X is 30
 )  # nv
 
 # call_nth: N exceeds available solutions - fail
-Test("call_nth too few") <- (
+test("call_nth too few") <- (
     not call_nth(in_(X_UNUSED, [1, 2]), 5)
 )  # nv
 
 # count_all: count members
-Test("count_all basic") <- (
+test("count_all basic") <- (
     count_all(in_(X_UNUSED, ["a", "b", "c", "d"]), COUNT),
     COUNT is 4
 )  # nv
 
 # count_all: no solutions - 0
-Test("count_all empty") <- (
+test("count_all empty") <- (
     count_all(in_(X_UNUSED, []), COUNT),
     COUNT is 0
 )  # nv
 
 # setup_call_cleanup: basic success
-Test("scc success") <- (
+test("scc success") <- (
     setup_call_cleanup(
         SETUP_UNUSED is 1,
         RESULT_UNUSED is 2,
@@ -33,7 +33,7 @@ Test("scc success") <- (
 )  # nv
 
 # setup_call_cleanup: call fails - cleanup still runs, overall fails
-Test("scc call fails") <- (
+test("scc call fails") <- (
     not setup_call_cleanup(
         SETUP_UNUSED is 1,
         in_(X_UNUSED, []),
@@ -42,7 +42,7 @@ Test("scc call fails") <- (
 )  # nv
 
 # call_cleanup: sugar for SCC
-Test("call_cleanup basic") <- (
+test("call_cleanup basic") <- (
     call_cleanup(
         RESULT_UNUSED is 42,
         CLEANUP_UNUSED is 99,
@@ -50,33 +50,33 @@ Test("call_cleanup basic") <- (
 )  # nv
 
 # freeze: already bound - immediate
-Test("freeze already bound") <- (
+test("freeze already bound") <- (
     X is 5,
     freeze(X, X > 0)
 )  # nv
 
 # freeze: deferred until bound
-Test("freeze deferred") <- (
+test("freeze deferred") <- (
     freeze(X, Y is X),
     X is "hello",
     Y is "hello"
 )  # nv
 
 # freeze: goal failure rejects unification
-Test("freeze rejects") <- (
+test("freeze rejects") <- (
     freeze(X, X > 100),
     not (X is 5)
 )  # nv
 
 # when: nonvar condition
-Test("when is_bound") <- (
+test("when is_bound") <- (
     when(nonvar(X), Y is X),
     X is 42,
     Y is 42
 )  # nv
 
 # when: conjunction
-Test("when conjunction") <- (
+test("when conjunction") <- (
     when((nonvar(X), nonvar(Y)), RESULT is "done"),
     X is 1,
     Y is 2,
@@ -86,19 +86,19 @@ Test("when conjunction") <- (
 # ── Nesting inside other meta-predicates ──
 
 # findall wrapping call_nth
-Test("findall+callnth") <- (
+test("findall+callnth") <- (
     findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
     BAG is [20]
 )  # nv
 
 # once wrapping count_all
-Test("once+countall") <- (
+test("once+countall") <- (
     once(count_all(in_(X_UNUSED, [1, 2, 3, 4, 5]), COUNT)),
     COUNT is 5
 )  # nv
 
 # catch wrapping call_nth with bad N
-Test("catch+callnth error") <- (
+test("catch+callnth error") <- (
     catch(
         call_nth(in_(X_UNUSED, [1, 2, 3]), 0),
         _,
@@ -108,7 +108,7 @@ Test("catch+callnth error") <- (
 )  # nv
 
 # freeze inside findall
-Test("findall+freeze") <- (
+test("findall+freeze") <- (
     findall(
         Y,
         (freeze(X, Y is X), X is 99),
@@ -118,7 +118,7 @@ Test("findall+freeze") <- (
 )  # nv
 
 # setup_call_cleanup inside once
-Test("once+scc") <- (
+test("once+scc") <- (
     once(setup_call_cleanup(
         SETUP_UNUSED is 1,
         in_(X, ["a", "b", "c"]),
@@ -128,14 +128,14 @@ Test("once+scc") <- (
 )  # nv
 
 # call_nth inside freeze
-Test("freeze+callnth") <- (
+test("freeze+callnth") <- (
     freeze(X, call_nth(in_(Y, [X]), 1)),
     X is 42,
     Y is 42
 )  # nv
 
 # count_all inside findall
-Test("findall+countall") <- (
+test("findall+countall") <- (
     findall(
         COUNT,
         count_all(in_(X_UNUSED, ["a", "b", "c"]), COUNT),
@@ -145,7 +145,7 @@ Test("findall+countall") <- (
 )  # nv
 
 # call_cleanup inside once
-Test("once+callcleanup") <- (
+test("once+callcleanup") <- (
     once(call_cleanup(in_(X, [10, 20, 30]), RESULT_UNUSED is "cleaned")),
     X is 10
 )  # nv
@@ -153,29 +153,29 @@ Test("once+callcleanup") <- (
 # ── Additional coverage migrated from test_coroutining.py ──────────────────
 
 # call_nth: pick first / last / with fail goal
-Test("call_nth first: N=1") <- (call_nth(in_(X, [10, 20, 30]), 1), X is 10)  # nv
-Test("call_nth last: N=3") <- (call_nth(in_(X, [10, 20, 30]), 3), X is 30)  # nv
-Test("call_nth fail goal") <- (not call_nth(False, 1))  # nv
+test("call_nth first: N=1") <- (call_nth(in_(X, [10, 20, 30]), 1), X is 10)  # nv
+test("call_nth last: N=3") <- (call_nth(in_(X, [10, 20, 30]), 3), X is 30)  # nv
+test("call_nth fail goal") <- (not call_nth(False, 1))  # nv
 
 # call_nth: error-case behaviors via catch
-Test("call_nth zero raises") <- catch(call_nth(in_(X_UNUSED, [1]), 0), _, True)  # nv
-Test("call_nth negative raises") <- catch(call_nth(in_(X_UNUSED, [1]), -1), _, True)  # nv
+test("call_nth zero raises") <- catch(call_nth(in_(X_UNUSED, [1]), 0), _, True)  # nv
+test("call_nth negative raises") <- catch(call_nth(in_(X_UNUSED, [1]), -1), _, True)  # nv
 
 # count_all: bound-N modes
-Test("count_all N bound correct") <- count_all(in_(X_UNUSED, [1, 2, 3]), 3)  # nv
-Test("count_all N bound wrong fails") <- (not count_all(in_(X_UNUSED, [1, 2, 3]), 7))  # nv
-Test("count_all with filter") <- (
+test("count_all N bound correct") <- count_all(in_(X_UNUSED, [1, 2, 3]), 3)  # nv
+test("count_all N bound wrong fails") <- (not count_all(in_(X_UNUSED, [1, 2, 3]), 7))  # nv
+test("count_all with filter") <- (
     count_all((in_(X, [1, 2, 3, 4, 5]), X > 2), COUNT),
     COUNT is 3
 )  # nv
-Test("count_all no side effects") <- (
+test("count_all no side effects") <- (
     X is 99,
     count_all(in_(Y_UNUSED, [1, 2, 3]), _),
     X == 99
 )  # nv
 
 # setup_call_cleanup: cleanup runs after call throws (observed via catch)
-Test("scc cleanup runs on throw") <- (
+test("scc cleanup runs on throw") <- (
     catch(
         setup_call_cleanup(True, throw("call_err"), True),
         E,
@@ -184,9 +184,9 @@ Test("scc cleanup runs on throw") <- (
 )  # nv
 
 # call_cleanup: call fails / call throws
-Test("call_cleanup: call fails, cleanup still runs") <- (
+test("call_cleanup: call fails, cleanup still runs") <- (
     not call_cleanup(in_(X_UNUSED, []), True)
 )  # nv
-Test("call_cleanup: call throws propagates") <- (
+test("call_cleanup: call throws propagates") <- (
     catch(call_cleanup(throw("cc_err"), True), E, E == "cc_err")
 )  # nv

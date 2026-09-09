@@ -566,8 +566,8 @@ class TestFixtureIntegration:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.module), \
-            f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.module), \
+            f"test({name!r}) failed"
 
 
 # ── Task 12b: atoms in the text positions (spec §9.4) ────────────────────

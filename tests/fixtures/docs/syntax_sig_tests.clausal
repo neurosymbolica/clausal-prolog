@@ -8,36 +8,36 @@
 # by the same rules they document (spec 2026-09-06-atoms-as-cells-strings
 # §5-§7).  Atoms are written bare or single-quoted, which is mode-independent.
 
-Test("clause with body") <- (1 == 1)  # nv
+test("clause with body") <- (1 == 1)  # nv
 
-Test("list pattern") <- (
+test("list pattern") <- (
     [H, *T] is [1, 2, 3],
     H == 1,
     T == [2, 3]
 )  # nv
 
-Test("between constraint") <- (
+test("between constraint") <- (
     in_domain(X, 1, 9),
     label([X]),
     X == 1
 )  # nv
 
-Test("maplist higher order") <- maplist(number, [1, 2, 3])  # nv
+test("maplist higher order") <- maplist(number, [1, 2, 3])  # nv
 
 # ── Strings (docs/syntax.md "Strings") ───────────────────────────────────
 
-Test("string is its char list") <- ("abc" is ['a', 'b', 'c'])  # nv
+test("string is its char list") <- ("abc" is ['a', 'b', 'c'])  # nv
 
-Test("empty string is the empty list") <- ("" is [])  # nv
+test("empty string is the empty list") <- ("" is [])  # nv
 
-Test("string head/tail keeps the tail a string") <- (
+test("string head/tail keeps the tail a string") <- (
     "abc" is [H2, *T2],
     H2 is 'a',
     T2 == "bc",
     string(T2)
 )  # nv
 
-Test("list predicates apply to strings") <- (
+test("list predicates apply to strings") <- (
     append("hel", "lo", "hello"),
     length("hello", 5),
     reverse("ab", "ba")
@@ -45,13 +45,13 @@ Test("list predicates apply to strings") <- (
 
 # ── Atoms vs strings (docs/syntax.md "Atoms vs strings") ─────────────────
 
-Test("bare and single-quoted spell the same atom") <- (red is 'red')  # nv
+test("bare and single-quoted spell the same atom") <- (red is 'red')  # nv
 
-Test("an atom is not a string") <- (not (red is "red"))  # nv
+test("an atom is not a string") <- (not (red is "red"))  # nv
 
-Test("a one-char string is not a char atom") <- (not ("a" is 'a'))  # nv
+test("a one-char string is not a char atom") <- (not ("a" is 'a'))  # nv
 
-Test("type tests split the two kinds") <- (
+test("type tests split the two kinds") <- (
     atom(red), atomic(red), callable_(red), not compound(red),
     not atom("red"),
     string("red"), is_str("red"), is_list("red"),
@@ -62,7 +62,7 @@ Test("type tests split the two kinds") <- (
     compound("red"), callable_("red")
 )  # nv
 
-Test("quoted atoms carry any spelling") <- (
+test("quoted atoms carry any spelling") <- (
     atom('hello world'),
     atom_length('hello world', 11)
 )  # nv

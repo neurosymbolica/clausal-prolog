@@ -3,7 +3,7 @@
 #
 # DEFAULT-mode source (no -double_quotes(chars)): "QF_LIA" and "timeout" are
 # NAMES, so they are atoms, which is what z3.set_logic/1 and z3.set_option/2
-# read (§6.4) and how docs/z3.md writes them.  The Test/1 labels are the same
+# read (§6.4) and how docs/z3.md writes them.  The test/1 labels are the same
 # atoms every other fixture in this directory uses.
 
 # ── Integer + all_different (N-Queens style) ────────────────────────────────
@@ -25,19 +25,19 @@ FourQueens(Q1, Q2, Q3, Q4) <- (
     z3.label([Q1, Q2, Q3, Q4]),
 )
 
-Test("4-queens has 2 solutions") <- (count_all(FourQueens(_, _, _, _), N), N == 2)  # nv
-Test("4-queens solution 1") <- FourQueens(2, 4, 1, 3)  # nv
-Test("4-queens solution 2") <- FourQueens(3, 1, 4, 2)  # nv
+test("4-queens has 2 solutions") <- (count_all(FourQueens(_, _, _, _), N), N == 2)  # nv
+test("4-queens solution 1") <- FourQueens(2, 4, 1, 3)  # nv
+test("4-queens solution 2") <- FourQueens(3, 1, 4, 2)  # nv
 
 # ── Solver configuration ───────────────────────────────────────────────────
 
-Test("set logic QF_LIA") <- (
+test("set logic QF_LIA") <- (
     z3.integer((1 <= X <= 10)),
     z3.set_logic("QF_LIA"),
     z3.check(),
 )  # nv
 
-Test("set option timeout") <- (
+test("set option timeout") <- (
     z3.set_option("timeout", 5000),
     z3.integer((1 <= X <= 10)),
     z3.check(),
@@ -47,6 +47,6 @@ Test("set option timeout") <- (
 # The datatype, constructor and field names are all NAMES, so this whole call
 # is written with atoms; it used to raise a raw z3 ArgumentError from source.
 
-Test("declare an enum datatype") <- (
+test("declare an enum datatype") <- (
     z3.declare_datatype("Color9", [("red9", []), ("green9", []), ("blue9", [])]),
 )  # nv

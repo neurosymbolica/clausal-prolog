@@ -20,11 +20,11 @@ same_or_diff(X, Y, "same") <- eq(X, Y, True)
 same_or_diff(X, Y, "different") <- eq(X, Y, False)
 
 
-Test("not equal") <- not_equal(1, 2)  # nv
-Test("pick different") <- (pick_different(1, [1, 2, 3], PICKED), PICKED == 2)  # nv
+test("not equal") <- not_equal(1, 2)  # nv
+test("pick different") <- (pick_different(1, [1, 2, 3], PICKED), PICKED == 2)  # nv
 # Can the TRUTH == ... be put into the reified_... goal? Then make it a single goal body (no enclosing ()).
-Test("reified eq true") <- (reified_eq(1, 1, TRUTH), TRUTH == True)  # nv
-Test("reified eq false") <- (reified_eq(1, 2, TRUTH), TRUTH == False)  # nv
-Test("reified dif true") <- (reified_dif(1, 2, TRUTH), TRUTH == True)  # nv
-Test("same or diff same") <- same_or_diff(1, 1, "same")  # nv
-Test("same or diff different") <- same_or_diff(1, 2, "different")  # nv
+test("reified eq true") <- (reified_eq(1, 1, TRUTH), TRUTH == True)  # nv
+test("reified eq false") <- (reified_eq(1, 2, TRUTH), TRUTH == False)  # nv
+test("reified dif true") <- (reified_dif(1, 2, TRUTH), TRUTH == True)  # nv
+test("same or diff same") <- same_or_diff(1, 1, "same")  # nv
+test("same or diff different") <- same_or_diff(1, 2, "different")  # nv

@@ -15,8 +15,8 @@ Sg(X, Y) <- (
 )
 
 
-Test("sg same") <- Sg(1, 1)  # nv
-Test("sg cousins of 4") <- (
+test("sg same") <- Sg(1, 1)  # nv
+test("sg cousins of 4") <- (
     findall(TARGET, Sg(4, TARGET), TARGETS),
     sort(TARGETS, SORTED),
     in_(5, SORTED),
@@ -24,17 +24,17 @@ Test("sg cousins of 4") <- (
 )  # nv
 
 # ── Reflexive Sg(X,X) for all 6 nodes ─────────────────────────────────────
-Test("sg reflexive 2") <- Sg(2, 2)  # nv
-Test("sg reflexive 3") <- Sg(3, 3)  # nv
-Test("sg reflexive 4") <- Sg(4, 4)  # nv
-Test("sg reflexive 5") <- Sg(5, 5)  # nv
-Test("sg reflexive 6") <- Sg(6, 6)  # nv
+test("sg reflexive 2") <- Sg(2, 2)  # nv
+test("sg reflexive 3") <- Sg(3, 3)  # nv
+test("sg reflexive 4") <- Sg(4, 4)  # nv
+test("sg reflexive 5") <- Sg(5, 5)  # nv
+test("sg reflexive 6") <- Sg(6, 6)  # nv
 
 # ── Cross-pair same-generation ────────────────────────────────────────────
-Test("sg siblings 2 and 3") <- Sg(2, 3)  # nv
-Test("sg cousins 4 and 6") <- Sg(4, 6)  # nv
-Test("sg shared-parent 4 and 5") <- Sg(4, 5)  # nv
+test("sg siblings 2 and 3") <- Sg(2, 3)  # nv
+test("sg cousins 4 and 6") <- Sg(4, 6)  # nv
+test("sg shared-parent 4 and 5") <- Sg(4, 5)  # nv
 
 # ── Different generations ─────────────────────────────────────────────────
-Test("sg root vs grandchild fails: 1,4") <- (not Sg(1, 4))  # nv
-Test("sg parent vs child fails: 2,4") <- (not Sg(2, 4))  # nv
+test("sg root vs grandchild fails: 1,4") <- (not Sg(1, 4))  # nv
+test("sg parent vs child fails: 2,4") <- (not Sg(2, 4))  # nv

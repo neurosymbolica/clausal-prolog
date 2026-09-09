@@ -2,14 +2,14 @@
 
 # --8<-- [start:supported_conditions]
 # equivalent to freeze(X, Goal)
-Test("when isbound") <- (
+test("when isbound") <- (
     when(nonvar(X), Y is X),
     X is 42,
     Y is 42
 )  # nv
 
 # Conjunction: fire when both X and Y are bound
-Test("when conjunction") <- (
+test("when conjunction") <- (
     when((nonvar(X), nonvar(Y)), R is "done"),
     X is 1,
     Y is 2,
@@ -17,7 +17,7 @@ Test("when conjunction") <- (
 )  # nv
 
 # ground: fire when term is fully ground
-Test("when ground") <- (
+test("when ground") <- (
     when(ground([X, Y]), R is "all ground"),
     X is 1,
     Y is 2,
@@ -34,7 +34,7 @@ ProcessFile(PATH, RESULT) <- setup_call_cleanup(
 )
 
 # Call fails — Cleanup still runs, overall fails
-Test("scc call fails") <- (
+test("scc call fails") <- (
     not setup_call_cleanup(
         S_UNUSED is 1,
         in_(X_UNUSED, []),
@@ -45,32 +45,32 @@ Test("scc call fails") <- (
 
 # --8<-- [start:call_nth_2_ex2]
 # Get the 3rd member
-Test("third") <- (
+test("third") <- (
     call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
     X is 30
 )  # nv
 
 # N exceeds available solutions — fails
-Test("too few") <- (
+test("too few") <- (
     not call_nth(in_(X_UNUSED, [1, 2]), 5)
 )  # nv
 # --8<-- [end:call_nth_2_ex2]
 
 # --8<-- [start:count_all_2_ex2]
 # Count members
-Test("count") <- (
+test("count") <- (
     count_all(in_(X_UNUSED, ["a", "b", "c", "d"]), N),
     N is 4
 )  # nv
 
 # No solutions — 0
-Test("empty") <- (
+test("empty") <- (
     count_all(in_(X_UNUSED, []), N),
     N is 0
 )  # nv
 
 # With filter
-Test("filtered") <- (
+test("filtered") <- (
     count_all((in_(X, [1, 2, 3, 4, 5]), X > 3), N),
     N is 2
 )  # nv
@@ -78,13 +78,13 @@ Test("filtered") <- (
 
 # --8<-- [start:nesting_inside_meta_predicates]
 # findall wrapping call_nth
-Test("findall+callnth") <- (
+test("findall+callnth") <- (
     findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
     BAG is [20]
 )  # nv
 
 # catch wrapping call_nth with bad N
-Test("catch+callnth") <- (
+test("catch+callnth") <- (
     catch(
         call_nth(in_(X_UNUSED, [1, 2, 3]), 0),
         _,
@@ -94,7 +94,7 @@ Test("catch+callnth") <- (
 )  # nv
 
 # freeze inside findall
-Test("findall+freeze") <- (
+test("findall+freeze") <- (
     findall(
         Y,
         (freeze(X, Y is X), X is 99),
@@ -104,7 +104,7 @@ Test("findall+freeze") <- (
 )  # nv
 
 # count_all inside findall
-Test("findall+countall") <- (
+test("findall+countall") <- (
     findall(
         N,
         count_all(in_(X_UNUSED, ["a", "b", "c"]), N),

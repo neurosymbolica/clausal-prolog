@@ -141,7 +141,7 @@ class TestDictSetFixture:
         # atom keys), so a description is the STRING it is written as.
         result = Var()
         sols = [deref(result)
-                for _ in call("Test", test_name, module=logic_mod)]
+                for _ in call("test", test_name, module=logic_mod)]
         return sols
 
     def test_origin(self, mod, logic_mod):

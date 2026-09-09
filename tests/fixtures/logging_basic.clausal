@@ -10,41 +10,41 @@
 
 # ── get_logger ────────────────────────────────────────────────────────────────
 
-Test("get_logger named") <- get_logger("test.fixture.named", LOGGER_UNUSED)  # nv
-Test("get_logger same name") <- (
+test("get_logger named") <- get_logger("test.fixture.named", LOGGER_UNUSED)  # nv
+test("get_logger same name") <- (
     get_logger("test.fixture.same", LOGGER1),
     get_logger("test.fixture.same", LOGGER2),
     LOGGER1 == LOGGER2
 )  # nv
-Test("get_logger default") <- get_logger(LOGGER_UNUSED)  # nv
+test("get_logger default") <- get_logger(LOGGER_UNUSED)  # nv
 
 # ── set_level / get_level ──────────────────────────────────────────────────────
 
-Test("set_level debug") <- (
+test("set_level debug") <- (
     get_logger("test.fixture.lvl1", LOGGER),
     set_level(LOGGER, "debug"),
     get_level(LOGGER, LEVEL),
     LEVEL == "DEBUG"
 )  # nv
-Test("set_level warning") <- (
+test("set_level warning") <- (
     get_logger("test.fixture.lvl2", LOGGER),
     set_level(LOGGER, "warning"),
     get_level(LOGGER, LEVEL),
     LEVEL == "WARNING"
 )  # nv
-Test("set_level error") <- (
+test("set_level error") <- (
     get_logger("test.fixture.lvl3", LOGGER),
     set_level(LOGGER, "error"),
     get_level(LOGGER, LEVEL),
     LEVEL == "ERROR"
 )  # nv
-Test("set_level critical") <- (
+test("set_level critical") <- (
     get_logger("test.fixture.lvl4", LOGGER),
     set_level(LOGGER, "critical"),
     get_level(LOGGER, LEVEL),
     LEVEL == "CRITICAL"
 )  # nv
-Test("set_level info") <- (
+test("set_level info") <- (
     get_logger("test.fixture.lvl5", LOGGER),
     set_level(LOGGER, "info"),
     get_level(LOGGER, LEVEL),
@@ -53,17 +53,17 @@ Test("set_level info") <- (
 
 # ── is_enabled_for ─────────────────────────────────────────────────────────────
 
-Test("enabled_for yes") <- (
+test("enabled_for yes") <- (
     get_logger("test.fixture.en1", LOGGER),
     set_level(LOGGER, "debug"),
     is_enabled_for(LOGGER, "info")
 )  # nv
-Test("enabled_for no") <- (
+test("enabled_for no") <- (
     get_logger("test.fixture.en2", LOGGER),
     set_level(LOGGER, "error"),
     not is_enabled_for(LOGGER, "debug")
 )  # nv
-Test("enabled_for same level") <- (
+test("enabled_for same level") <- (
     get_logger("test.fixture.en3", LOGGER),
     set_level(LOGGER, "warning"),
     is_enabled_for(LOGGER, "warning")
@@ -71,51 +71,51 @@ Test("enabled_for same level") <- (
 
 # ── Logging predicates always succeed ────────────────────────────────────────
 
-Test("debug succeeds") <- (
+test("debug succeeds") <- (
     get_logger("test.fixture.d", LOGGER),
     debug(LOGGER, "debug msg")
 )  # nv
-Test("info succeeds") <- (
+test("info succeeds") <- (
     get_logger("test.fixture.i", LOGGER),
     info(LOGGER, "info msg")
 )  # nv
-Test("warning succeeds") <- (
+test("warning succeeds") <- (
     get_logger("test.fixture.w", LOGGER),
     warning(LOGGER, "warning msg")
 )  # nv
-Test("error succeeds") <- (
+test("error succeeds") <- (
     get_logger("test.fixture.e", LOGGER),
     error(LOGGER, "error msg")
 )  # nv
-Test("critical succeeds") <- (
+test("critical succeeds") <- (
     get_logger("test.fixture.c", LOGGER),
     critical(LOGGER, "critical msg")
 )  # nv
 
 # ── log/3 ────────────────────────────────────────────────────────────────────
 
-Test("log at info") <- (
+test("log at info") <- (
     get_logger("test.fixture.log3", LOGGER),
     log(LOGGER, "info", "generic")
 )  # nv
-Test("log at debug") <- (
+test("log at debug") <- (
     get_logger("test.fixture.log3d", LOGGER),
     log(LOGGER, "debug", "dbg")
 )  # nv
 
 # ── Arity-1 shorthand ───────────────────────────────────────────────────────
 
-Test("debug arity 1") <- debug("default debug")  # nv
-Test("info arity 1") <- info("default info")  # nv
-Test("warning arity 1") <- warning("default warning")  # nv
-Test("error arity 1") <- error("default error")  # nv
-Test("critical arity 1") <- critical("default critical")  # nv
+test("debug arity 1") <- debug("default debug")  # nv
+test("info arity 1") <- info("default info")  # nv
+test("warning arity 1") <- warning("default warning")  # nv
+test("error arity 1") <- error("default error")  # nv
+test("critical arity 1") <- critical("default critical")  # nv
 
 # ── stream_handler / add_handler ───────────────────────────────────────────────
 
-Test("stream_handler stdout") <- stream_handler("stdout", HANDLER_UNUSED)  # nv
-Test("stream_handler stderr") <- stream_handler("stderr", HANDLER_UNUSED)  # nv
-Test("add_handler") <- (
+test("stream_handler stdout") <- stream_handler("stdout", HANDLER_UNUSED)  # nv
+test("stream_handler stderr") <- stream_handler("stderr", HANDLER_UNUSED)  # nv
+test("add_handler") <- (
     get_logger("test.fixture.ah", LOGGER),
     stream_handler("stderr", HANDLER),
     add_handler(LOGGER, HANDLER),
@@ -124,14 +124,14 @@ Test("add_handler") <- (
 
 # ── set_formatter ─────────────────────────────────────────────────────────────
 
-Test("set_formatter") <- (
+test("set_formatter") <- (
     stream_handler("stderr", HANDLER),
     set_formatter(HANDLER, "%(levelname)s: %(message)s")
 )  # nv
 
 # ── Logger hierarchy ────────────────────────────────────────────────────────
 
-Test("logger hierarchy") <- (
+test("logger hierarchy") <- (
     get_logger("test.fixture.parent", PARENT),
     get_logger("test.fixture.parent.child", CHILD),
     get_level(PARENT, PARENT_LEVEL_UNUSED),

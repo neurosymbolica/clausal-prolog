@@ -137,151 +137,151 @@ SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
 
 # -- Vanilla MI: natural numbers --
 
-Test("solve natnum(0)") <- (
+test("solve natnum(0)") <- (
     NatnumProgram(P),
     Solve([Natnum(0)], P),
 )
 
-Test("solve natnum(s(0))") <- (
+test("solve natnum(s(0))") <- (
     NatnumProgram(P),
     Solve([Natnum(succ(0))], P),
 )
 
-Test("solve natnum(s(s(0)))") <- (
+test("solve natnum(s(s(0)))") <- (
     NatnumProgram(P),
     Solve([Natnum(succ(succ(0)))], P),
 )
 
 # -- Vanilla MI: graph reachability --
 
-Test("solve edge(a,b)") <- (
+test("solve edge(a,b)") <- (
     GraphProgram(P),
     Solve([Edge("a", "b")], P),
 )
 
-Test("solve path(a,b) direct") <- (
+test("solve path(a,b) direct") <- (
     GraphProgram(P),
     Solve([Path("a", "b")], P),
 )
 
-Test("solve path(a,c) transitive") <- (
+test("solve path(a,c) transitive") <- (
     GraphProgram(P),
     Solve([Path("a", "c")], P),
 )
 
-Test("solve path(a,d) transitive") <- (
+test("solve path(a,d) transitive") <- (
     GraphProgram(P),
     Solve([Path("a", "d")], P),
 )
 
-Test("solve no path(c,a)") <- (
+test("solve no path(c,a)") <- (
     GraphProgram(P),
     not Solve([Path("c", "a")], P),
 )
 
 # -- Inference counting --
 
-Test("count natnum(0) = 1 step") <- (
+test("count natnum(0) = 1 step") <- (
     NatnumProgram(P),
     SolveCount([Natnum(0)], P, 1),
 )
 
-Test("count natnum(s(0)) = 2 steps") <- (
+test("count natnum(s(0)) = 2 steps") <- (
     NatnumProgram(P),
     SolveCount([Natnum(succ(0))], P, 2),
 )
 
-Test("count natnum(s(s(0))) = 3 steps") <- (
+test("count natnum(s(s(0))) = 3 steps") <- (
     NatnumProgram(P),
     SolveCount([Natnum(succ(succ(0)))], P, 3),
 )
 
-Test("count edge(a,b) = 1 step") <- (
+test("count edge(a,b) = 1 step") <- (
     GraphProgram(P),
     SolveCount([Edge("a", "b")], P, 1),
 )
 
-Test("count path(a,b) direct = 2 steps") <- (
+test("count path(a,b) direct = 2 steps") <- (
     GraphProgram(P),
     SolveCount([Path("a", "b")], P, 2),
 )
 
-Test("count path(a,c) = 4 steps") <- (
+test("count path(a,c) = 4 steps") <- (
     GraphProgram(P),
     SolveCount([Path("a", "c")], P, 4),
 )
 
 # -- Depth-limited MI --
 
-Test("limit natnum(s(0)) depth 1 fails") <- (
+test("limit natnum(s(0)) depth 1 fails") <- (
     NatnumProgram(P),
     not SolveLimit([Natnum(succ(0))], P, 1),
 )
 
-Test("limit natnum(s(0)) depth 2 succeeds") <- (
+test("limit natnum(s(0)) depth 2 succeeds") <- (
     NatnumProgram(P),
     SolveLimit([Natnum(succ(0))], P, 2),
 )
 
-Test("limit natnum(s(s(0))) depth 2 fails") <- (
+test("limit natnum(s(s(0))) depth 2 fails") <- (
     NatnumProgram(P),
     not SolveLimit([Natnum(succ(succ(0)))], P, 2),
 )
 
-Test("limit natnum(s(s(0))) depth 3 succeeds") <- (
+test("limit natnum(s(s(0))) depth 3 succeeds") <- (
     NatnumProgram(P),
     SolveLimit([Natnum(succ(succ(0)))], P, 3),
 )
 
-Test("limit path(a,c) depth 3 fails") <- (
+test("limit path(a,c) depth 3 fails") <- (
     GraphProgram(P),
     not SolveLimit([Path("a", "c")], P, 3),
 )
 
-Test("limit path(a,c) depth 4 succeeds") <- (
+test("limit path(a,c) depth 4 succeeds") <- (
     GraphProgram(P),
     SolveLimit([Path("a", "c")], P, 4),
 )
 
 # -- Iterative deepening: completes where naive DFS would loop --
 
-Test("iterative deepening on cyclic graph") <- (
+test("iterative deepening on cyclic graph") <- (
     CyclicProgram(P),
     SolveIterativeDeepening([Path("a", "b")], P),
 )
 
-Test("iterative deepening path(a,c) acyclic") <- (
+test("iterative deepening path(a,c) acyclic") <- (
     GraphProgram(P),
     SolveIterativeDeepening([Path("a", "c")], P),
 )
 
 # -- Proof tree MI --
 
-Test("tree natnum(0)") <- (
+test("tree natnum(0)") <- (
     NatnumProgram(P),
     SolveTree([Natnum(0)], P, TREE),
     TREE is [[Natnum(0), []]],
 )
 
-Test("tree natnum(s(0)) has nested proof") <- (
+test("tree natnum(s(0)) has nested proof") <- (
     NatnumProgram(P),
     SolveTree([Natnum(succ(0))], P, TREE),
     TREE is [[Natnum(succ(0)), [[Natnum(0), []]]]],
 )
 
-Test("tree edge(a,b) is leaf") <- (
+test("tree edge(a,b) is leaf") <- (
     GraphProgram(P),
     SolveTree([Edge("a", "b")], P, TREE),
     TREE is [[Edge("a", "b"), []]],
 )
 
-Test("tree path(a,b) direct") <- (
+test("tree path(a,b) direct") <- (
     GraphProgram(P),
     SolveTree([Path("a", "b")], P, TREE),
     TREE is [[Path("a", "b"), [[Edge("a", "b"), []]]]],
 )
 
-Test("tree path(a,c) transitive") <- (
+test("tree path(a,c) transitive") <- (
     GraphProgram(P),
     SolveTree([Path("a", "c")], P, TREE),
     TREE is [
@@ -294,7 +294,7 @@ Test("tree path(a,c) transitive") <- (
     ],
 )
 
-Test("tree natnum(s(s(0))) depth 2") <- (
+test("tree natnum(s(s(0))) depth 2") <- (
     NatnumProgram(P),
     SolveTree([Natnum(succ(succ(0)))], P, TREE),
     TREE is [

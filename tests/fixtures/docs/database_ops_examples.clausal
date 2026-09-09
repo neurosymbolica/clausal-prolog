@@ -6,7 +6,7 @@
 Color("red"),
 Color("blue"),
 
-Test("assert and query") <- (
+test("assert and query") <- (
     assertz(Color("green")),
     Color("green")
 )  # nv
@@ -22,7 +22,7 @@ Test("assert and query") <- (
 
 Fact("init"),
 
-Test("assert") <- (
+test("assert") <- (
     assertz(Fact(42)),
     Fact(42)
 )  # nv
@@ -33,7 +33,7 @@ Test("assert") <- (
 
 Priority("low"),
 
-Test("assert first") <- (
+test("assert first") <- (
     asserta(Priority("high")),
     Priority("high")
 )  # nv
@@ -46,7 +46,7 @@ Item("a"),
 Item("b"),
 Item("c"),
 
-Test("retract") <- (
+test("retract") <- (
     retract(Item("b")),
     (not Item("b")),
     Item("a"),
@@ -61,7 +61,7 @@ Pair("x", 1),
 Pair("y", 2),
 Pair("z", 3),
 
-Test("retract by pattern") <- (
+test("retract by pattern") <- (
     retract(Pair("y", _)),
     (not Pair("y", 2))
 )  # nv
@@ -73,5 +73,5 @@ Test("retract by pattern") <- (
 MemoFib(0, 0),
 MemoFib(1, 1),
 
-Test("clear") <- abolish_table("MemoFib", 2)  # nv
+test("clear") <- abolish_table("MemoFib", 2)  # nv
 # --8<-- [end:abolish_table_example]

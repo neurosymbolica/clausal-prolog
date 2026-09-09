@@ -3,7 +3,7 @@
 
 -import_from(regex, [match, search, replace, split])
 
-Test("match exists") <- match(r"\d+", "123")  # nv
-Test("search exists") <- search(r"\d+", "abc123")  # nv
-Test("replace exists") <- (replace(r"\s+", " ", "a  b", R), R == "a b")  # nv
-Test("split exists") <- (split(r",", "a,b,c", F), F == ["a", "b", "c"])  # nv
+test("match exists") <- match(r"\d+", "123")  # nv
+test("search exists") <- search(r"\d+", "abc123")  # nv
+test("replace exists") <- (replace(r"\s+", " ", "a  b", R), R == "a b")  # nv
+test("split exists") <- (split(r",", "a,b,c", F), F == ["a", "b", "c"])  # nv

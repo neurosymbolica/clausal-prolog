@@ -15,25 +15,25 @@
 # write/1: no quotes, a string is the list of characters it is, and there
 # is no space after a comma -- the ISO family is byte-comparable with other
 # ISO systems.
-Test("write is unquoted") <- (
+test("write is unquoted") <- (
     write_to_string(foo(bar, "baz"), S),
     S == "foo(bar,[b,a,z])"
 )  # nv
 
-Test("write spells a string out") <- (
+test("write spells a string out") <- (
     write_to_string("ab", S1),
     S1 == "[a,b]"
 )  # nv
 
 # writeq/1 adds quoting and nothing else: an atom that would not read back
 # as itself is single-quoted, and the string is still the char list.
-Test("writeq quotes an atom that needs it") <- (
+test("writeq quotes an atom that needs it") <- (
     write_to_string('foo bar', S3B), S3B == "foo bar",
     term_to_string('foo bar', S3), S3 == "'foo bar'"
 )  # nv
 
 # "", [] and b"" are one term, so every writer prints them alike.
-Test("the empty string writes as the empty list") <- (
+test("the empty string writes as the empty list") <- (
     write_to_string("", S5), S5 == "[]",
     write_to_string([], S6), S6 == "[]",
     term_to_string("", S7), S7 == "[]",
@@ -45,7 +45,7 @@ Test("the empty string writes as the empty list") <- (
 # The Clausal TEXT family -- write_text/1, writeln_text/1,
 # write_text_to_string/2 -- prints a string as its TEXT and a char list as
 # the text it spells.  This is where f-strings go.
-Test("the text family prints a string as its text") <- (
+test("the text family prints a string as its text") <- (
     write_text_to_string('a b', W1), W1 == "a b",
     write_text_to_string("a b", W2), W2 == "a b",
     write_text_to_string(['a', 'b'], W3), W3 == "ab",
@@ -58,7 +58,7 @@ Test("the text family prints a string as its text") <- (
 # family drops.  An atom is quoted when it needs it and a string prints in
 # double quotes, so the two kinds are distinguishable.  A list of chars IS a
 # string, so it prints as one.
-Test("print_term/1 and term_to_string/2 are the display family") <- (
+test("print_term/1 and term_to_string/2 are the display family") <- (
     term_to_string('a b', Q1), Q1 == "'a b'",
     term_to_string("a b", Q2), Q2 == "\"a b\"",
     term_to_string(['a', 'b'], Q3), Q3 == "\"ab\"",
@@ -69,7 +69,7 @@ Test("print_term/1 and term_to_string/2 are the display family") <- (
 #     write_canonical("hi")   prints   '.'(h,'.'(i,[]))
 #     write_canonical([1, 2]) prints   '.'(1,'.'(2,[]))
 #     write_canonical([])     prints   []
-Test("write_canonical/1 spells the cons structure") <- (
+test("write_canonical/1 spells the cons structure") <- (
     write_canonical("hi"), nl(),
     write_canonical([1, 2]), nl(),
     write_canonical([])
@@ -90,7 +90,7 @@ Test("write_canonical/1 spells the cons structure") <- (
 # The two-option form gives a string the SPELLING term_to_string/2 gives it
 # -- pinned below through term_to_string/2, which additionally keeps the
 # display comma spacing -- and then the calls are shown.
-Test("write_term option forms") <- (
+test("write_term option forms") <- (
     term_to_string("abc", T1), T1 == "\"abc\"",
     write_to_string("abc", T2), T2 == "[a,b,c]",
     write_term("abc", [quoted(true), double_quotes(true)]), nl(),
@@ -116,17 +116,17 @@ canonical_text(TERM, TEXT) <- (
     ).term_canonical(TERM)
 )
 
-Test("write_canonical text: a string") <- (
+test("write_canonical text: a string") <- (
     canonical_text("hi", C1),
     C1 == "'.'(h,'.'(i,[]))"
 )  # nv
 
-Test("write_canonical text: a list") <- (
+test("write_canonical text: a list") <- (
     canonical_text([1, 2], C2),
     C2 == "'.'(1,'.'(2,[]))"
 )  # nv
 
-Test("write_canonical text: the empty list") <- (
+test("write_canonical text: the empty list") <- (
     canonical_text([], C3),
     C3 == "[]"
 )  # nv

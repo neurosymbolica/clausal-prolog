@@ -13,12 +13,12 @@
 Greeting(hello, "world"),
 Greeting("Mike", "hi"),
 
-Test("translate produces string") <- (
+test("translate produces string") <- (
     translate(th, Greeting(hello, "world"), STRING),
     is_str(STRING)
 )  # nv
 
-Test("translate produces nonempty") <- (
+test("translate produces nonempty") <- (
     translate(th, Greeting(hello, "world"), STRING),
     length(STRING, LENGTH),
     LENGTH > 0

@@ -43,13 +43,13 @@ Diff(E ** N, X, N * E**N1 * DE) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-Test("dx/dx = 1") <- Diff(Vx, Vx, 1)
-Test("d(5)/dx = 0") <- Diff(5, Vx, 0)
-Test("d(3)/dy = 0") <- Diff(3, Vy, 0)
-Test("d(y)/dx = 0") <- Diff(Vy, Vx, 0)
-Test("d(x+x)/dx") <- Diff(Vx + Vx, Vx, 1 + 1)
-Test("d(x+5)/dx") <- Diff(Vx + 5, Vx, 1 + 0)
-Test("d(x*x)/dx") <- Diff(Vx * Vx, Vx, Vx*1 + Vx*1)
-Test("d(x^2)/dx") <- Diff(Vx**2, Vx, 2 * Vx**1 * 1)
-Test("d(x^3)/dx") <- Diff(Vx**3, Vx, 3 * Vx**2 * 1)
-Test("d(3*x)/dx") <- Diff(3 * Vx, Vx, 3*1 + Vx*0)
+test("dx/dx = 1") <- Diff(Vx, Vx, 1)
+test("d(5)/dx = 0") <- Diff(5, Vx, 0)
+test("d(3)/dy = 0") <- Diff(3, Vy, 0)
+test("d(y)/dx = 0") <- Diff(Vy, Vx, 0)
+test("d(x+x)/dx") <- Diff(Vx + Vx, Vx, 1 + 1)
+test("d(x+5)/dx") <- Diff(Vx + 5, Vx, 1 + 0)
+test("d(x*x)/dx") <- Diff(Vx * Vx, Vx, Vx*1 + Vx*1)
+test("d(x^2)/dx") <- Diff(Vx**2, Vx, 2 * Vx**1 * 1)
+test("d(x^3)/dx") <- Diff(Vx**3, Vx, 3 * Vx**2 * 1)
+test("d(3*x)/dx") <- Diff(3 * Vx, Vx, 3*1 + Vx*0)

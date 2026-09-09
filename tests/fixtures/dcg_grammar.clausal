@@ -31,8 +31,8 @@ valid_sentence(SENTENCE) <- phrase(sentence, SENTENCE)
 # Expression parser with inline goal
 expr_dcg(EXPRESSION) >> ([EXPRESSION], {EXPRESSION is EXPRESSION + 0})
 
-Test("valid sentence") <- valid_sentence(["the", "dog", "chases", "the", "cat"])  # nv
-Test("greeting") <- phrase(greeting, ["hello", "world"])  # nv
-Test("noun phrase dog") <- phrase(noun_phrase, ["the", "dog"])  # nv
-Test("verb phrase chases") <- phrase(verb_phrase, ["chases"])  # nv
-Test("digit 3") <- phrase(digit(3), [3])  # nv
+test("valid sentence") <- valid_sentence(["the", "dog", "chases", "the", "cat"])  # nv
+test("greeting") <- phrase(greeting, ["hello", "world"])  # nv
+test("noun phrase dog") <- phrase(noun_phrase, ["the", "dog"])  # nv
+test("verb phrase chases") <- phrase(verb_phrase, ["chases"])  # nv
+test("digit 3") <- phrase(digit(3), [3])  # nv

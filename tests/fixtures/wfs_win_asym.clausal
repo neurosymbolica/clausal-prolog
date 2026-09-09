@@ -7,6 +7,6 @@ Move("a", "c"),
 Win(X) <- (Move(X, Y), not Win(Y))
 
 
-Test("move a to b") <- Move("a", "b")  # nv
-Test("move b to a") <- Move("b", "a")  # nv
-Test("win a") <- Win("a")  # nv
+test("move a to b") <- Move("a", "b")  # nv
+test("move b to a") <- Move("b", "a")  # nv
+test("win a") <- Win("a")  # nv

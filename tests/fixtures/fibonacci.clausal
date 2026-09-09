@@ -21,7 +21,7 @@ Fib(N, RESULT) <- (
 )
 
 
-Test("fib 0") <- Fib(0, 0)  # nv
-Test("fib 1") <- Fib(1, 1)  # nv
-Test("fib 5") <- (Fib(5, RESULT), RESULT == 5)  # nv
-Test("fib 10") <- (Fib(10, RESULT), RESULT == 55)  # nv
+test("fib 0") <- Fib(0, 0)  # nv
+test("fib 1") <- Fib(1, 1)  # nv
+test("fib 5") <- (Fib(5, RESULT), RESULT == 5)  # nv
+test("fib 10") <- (Fib(10, RESULT), RESULT == 55)  # nv

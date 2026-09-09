@@ -29,7 +29,7 @@ run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS) <- (
                  _edcg_scale=SCALE_FACTOR)
 )
 
-Test("scaled count 3 items") <- (
+test("scaled count 3 items") <- (
     run_scaled(['a', 'b', 'c'], 10, COUNT, ITEMS),
     COUNT == 30,
     # THE FLIP (spec §6.2): the accumulated items are single-char ATOMS,
@@ -41,7 +41,7 @@ Test("scaled count 3 items") <- (
     # cells now, so two char atoms can no longer coalesce by accident.)
     ITEMS is ['c', 'b', 'a']
 )  # nv
-Test("scaled count empty") <- (
+test("scaled count empty") <- (
     run_scaled([], 5, COUNT, ITEMS),
     COUNT == 0,
     ITEMS == []

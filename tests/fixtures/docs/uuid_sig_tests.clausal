@@ -6,37 +6,37 @@
 
 # ── Generation ───────────────────────────────────────────────────────────────
 
-Test("uuid3 generation") <- uuid_v3("dns", "example.com", _)  # nv
+test("uuid3 generation") <- uuid_v3("dns", "example.com", _)  # nv
 
-Test("uuid5 generation") <- uuid_v5("url", "https://example.com", _)  # nv
+test("uuid5 generation") <- uuid_v5("url", "https://example.com", _)  # nv
 
 # ── Conversion ───────────────────────────────────────────────────────────────
 
-Test("uuid4 to string") <- (
+test("uuid4 to string") <- (
     uuid_v4(U),
     uuid_str(U, S),
     is_str(S)
 )  # nv
 
-Test("uuid from string") <- uuid_str(_, "550e8400-e29b-41d4-a716-446655440000")  # nv
+test("uuid from string") <- uuid_str(_, "550e8400-e29b-41d4-a716-446655440000")  # nv
 
-Test("uuid from hex") <- uuid_hex(_, "550e8400e29b41d4a716446655440000")  # nv
+test("uuid from hex") <- uuid_hex(_, "550e8400e29b41d4a716446655440000")  # nv
 
 # ── Inspection ───────────────────────────────────────────────────────────────
 
-Test("uuid4 version check") <- (
+test("uuid4 version check") <- (
     uuid_v4(U),
     uuid_version(U, 4)
 )  # nv
 
-Test("is_uuid check") <- (
+test("is_uuid check") <- (
     uuid_v4(U),
     is_uuid(U)
 )  # nv
 
 # ── Session tokens example ───────────────────────────────────────────────────
 
-Test("session token pattern") <- (
+test("session token pattern") <- (
     uuid_v4(U),
     uuid_str(U, TOKEN),
     is_str(TOKEN)
@@ -44,7 +44,7 @@ Test("session token pattern") <- (
 
 # ── Deterministic IDs example ────────────────────────────────────────────────
 
-Test("deterministic id pattern") <- (
+test("deterministic id pattern") <- (
     uuid_v5("url", "https://example.com", U),
     uuid_str(U, ID),
     is_str(ID)

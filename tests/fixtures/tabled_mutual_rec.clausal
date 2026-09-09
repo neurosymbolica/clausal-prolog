@@ -19,26 +19,26 @@ ReachB(X, Y) <- (
 )
 
 
-Test("reach a 1 2") <- ReachA(1, 2)  # nv
-Test("reach b 2 3") <- ReachB(2, 3)  # nv
-Test("reach a transitive 1 4") <- ReachA(1, 4)  # nv
-Test("reach b transitive 2 1") <- ReachB(2, 1)  # nv
+test("reach a 1 2") <- ReachA(1, 2)  # nv
+test("reach b 2 3") <- ReachB(2, 3)  # nv
+test("reach a transitive 1 4") <- ReachA(1, 4)  # nv
+test("reach b transitive 2 1") <- ReachB(2, 1)  # nv
 
 # ── Migrated from test_slg_termination.py::TestMutualRecursion ────────────
 
-Test("reach_a from 1 yields {2, 4}") <- (
+test("reach_a from 1 yields {2, 4}") <- (
     findall(Y, ReachA(1, Y), L),
     sort(L, S),
     S == [2, 4]
 )  # nv
-Test("reach_b from 2 yields {1, 3}") <- (
+test("reach_b from 2 yields {1, 3}") <- (
     findall(Y, ReachB(2, Y), L),
     sort(L, S),
     S == [1, 3]
 )  # nv
-Test("reach_a from 3 yields {2, 4}") <- (
+test("reach_a from 3 yields {2, 4}") <- (
     findall(Y, ReachA(3, Y), L),
     sort(L, S),
     S == [2, 4]
 )  # nv
-Test("mutual cycle terminates") <- ReachA(1, _)  # nv
+test("mutual cycle terminates") <- ReachA(1, _)  # nv

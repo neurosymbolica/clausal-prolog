@@ -8,15 +8,15 @@
 
 # ── now/today ────────────────────────────────────────────────────────────────
 
-Test("now") <- now(_)  # nv
-Test("now utc") <- now_utc(_)  # nv
-Test("today") <- today(_)  # nv
+test("now") <- now(_)  # nv
+test("now utc") <- now_utc(_)  # nv
+test("today") <- today(_)  # nv
 
 # ── date ─────────────────────────────────────────────────────────────────────
 
-Test("date construct") <- (_D_UNUSED is date(2026, 3, 16))  # nv
+test("date construct") <- (_D_UNUSED is date(2026, 3, 16))  # nv
 
-Test("date decompose") <- (
+test("date decompose") <- (
     D is date(2026, 3, 16),
     date(Y, M, DAY) is D,
     Y == 2026,
@@ -26,9 +26,9 @@ Test("date decompose") <- (
 
 # ── time ─────────────────────────────────────────────────────────────────────
 
-Test("time construct") <- time(14, 30, 0, _)  # nv
+test("time construct") <- time(14, 30, 0, _)  # nv
 
-Test("time decompose") <- (
+test("time decompose") <- (
     time(14, 30, 0, T),
     time(H, M, S, T),
     H == 14,
@@ -38,29 +38,29 @@ Test("time decompose") <- (
 
 # ── datetime ─────────────────────────────────────────────────────────────────
 
-Test("datetime construct") <- datetime(2026, 3, 16, 14, 30, 0, _)  # nv
+test("datetime construct") <- datetime(2026, 3, 16, 14, 30, 0, _)  # nv
 
 # ── timedelta ────────────────────────────────────────────────────────────────
 
-Test("timedelta construct") <- timedelta(7, 0, _)  # nv
+test("timedelta construct") <- timedelta(7, 0, _)  # nv
 
 # ── Arithmetic ───────────────────────────────────────────────────────────────
 
-Test("date add") <- (
+test("date add") <- (
     D is date(2026, 3, 16),
     timedelta(7, 0, TD),
     date_add(D, TD, R),
     R is date(2026, 3, 23)
 )  # nv
 
-Test("date sub") <- (
+test("date sub") <- (
     D is date(2026, 3, 23),
     timedelta(7, 0, TD),
     date_sub(D, TD, R),
     R is date(2026, 3, 16)
 )  # nv
 
-Test("date diff") <- (
+test("date diff") <- (
     D1 is date(2026, 3, 23),
     D2 is date(2026, 3, 16),
     date_diff(D1, D2, TD),
@@ -69,26 +69,26 @@ Test("date diff") <- (
 
 # ── datetime_string ───────────────────────────────────────────────────────────
 
-Test("format date") <- (
+test("format date") <- (
     D is date(2026, 3, 16),
     datetime_string(D, S, "%Y-%m-%d"),
     S == "2026-03-16"
 )  # nv
 
-Test("parse date") <- (
+test("parse date") <- (
     datetime_string(DT, "2026-03-16", "%Y-%m-%d"),
     nonvar(DT)
 )  # vn
 
 # ── date_of (datetime → date, no ++DT.date()) ─────────────────────────────────
 
-Test("date of datetime") <- (
+test("date of datetime") <- (
     datetime(2026, 3, 16, 14, 30, 0, DT),
     date_of(DT, D),
     D is date(2026, 3, 16)
 )  # nv
 
-Test("date of inverse midnight") <- (
+test("date of inverse midnight") <- (
     D is date(2026, 3, 16),
     date_of(DT, D),
     datetime(2026, 3, 16, 0, 0, 0, DT)
@@ -96,7 +96,7 @@ Test("date of inverse midnight") <- (
 
 # ── days_between (direct integer day count) ───────────────────────────────────
 
-Test("days between") <- (
+test("days between") <- (
     A is date(2026, 3, 23),
     B is date(2026, 3, 16),
     days_between(A, B, N),
@@ -104,7 +104,7 @@ Test("days between") <- (
 )  # nnv
 
 # Rolling-window-style "parse ISO → date → diff" with no ++ Python escapes.
-Test("parse iso to date diff no escapes") <- (
+test("parse iso to date diff no escapes") <- (
     datetime_string(DT_A, "2026-03-23", "%Y-%m-%d"),
     datetime_string(DT_B, "2026-03-16", "%Y-%m-%d"),
     date_of(DT_A, A),
@@ -115,7 +115,7 @@ Test("parse iso to date diff no escapes") <- (
 
 # ── weekday ──────────────────────────────────────────────────────────────────
 
-Test("day of week") <- (
+test("day of week") <- (
     D is date(2026, 3, 16),
     weekday(D, DOW),
     number(DOW)
@@ -123,7 +123,7 @@ Test("day of week") <- (
 
 # ── timestamp ─────────────────────────────────────────────────────────────────
 
-Test("timestamp roundtrip") <- (
+test("timestamp roundtrip") <- (
     datetime(2026, 3, 16, 12, 0, 0, DT),
     timestamp(DT, TS),
     timestamp(DT2, TS),
@@ -132,14 +132,14 @@ Test("timestamp roundtrip") <- (
 
 # ── ISO-8601 helpers ──────────────────────────────────────────────────────────
 
-Test("datetime iso roundtrip") <- (
+test("datetime iso roundtrip") <- (
     datetime(2026, 3, 16, 14, 30, 0, DT),
     datetime_string_iso(DT, S),
     datetime_string_iso(DT2, S),
     DT == DT2
 )  # nv
 
-Test("date iso roundtrip") <- (
+test("date iso roundtrip") <- (
     D is date(2026, 3, 16),
     date_string_iso(D, S),
     date_string_iso(D2, S),

@@ -66,6 +66,6 @@ Solve(Input, Output) <- (
 
 # --8<-- [start:correctness_tests]
 # Verify the predicate works correctly (sequential)
-Test("append nil") <- (MyAppend([], [1, 2], R) and R is [1, 2])
-Test("append cons") <- (MyAppend([1], [2, 3], R) and R is [1, 2, 3])
+test("append nil") <- (MyAppend([], [1, 2], R) and R is [1, 2])
+test("append cons") <- (MyAppend([1], [2, 3], R) and R is [1, 2, 3])
 # --8<-- [end:correctness_tests]

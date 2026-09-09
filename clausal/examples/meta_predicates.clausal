@@ -85,35 +85,35 @@ SumSquares(NS, TOTAL) <- (
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 # findall
-Test("squares [1,2,3]") <- Squares([1, 2, 3], [1, 4, 9])
-Test("squares empty") <- Squares([], [])
-Test("squares negative") <- Squares([-2, 3], [4, 9])
-Test("positives mixed") <- Positives([-1, 2, -3, 4], [2, 4])
-Test("positives all negative") <- Positives([-1, -2], [])
-Test("positives with zero") <- Positives([0, 1, -1], [1])
-Test("evens") <- Evens([1, 2, 3, 4, 5, 6], [2, 4, 6])
-Test("evens none") <- Evens([1, 3, 5], [])
-Test("pairs cartesian") <- Pairs(["a", "b"], [1, 2], [["a", 1], ["a", 2], ["b", 1], ["b", 2]])
-Test("pairs empty first") <- Pairs([], [1, 2], [])
-Test("pairs empty second") <- Pairs(["a"], [], [])
+test("squares [1,2,3]") <- Squares([1, 2, 3], [1, 4, 9])
+test("squares empty") <- Squares([], [])
+test("squares negative") <- Squares([-2, 3], [4, 9])
+test("positives mixed") <- Positives([-1, 2, -3, 4], [2, 4])
+test("positives all negative") <- Positives([-1, -2], [])
+test("positives with zero") <- Positives([0, 1, -1], [1])
+test("evens") <- Evens([1, 2, 3, 4, 5, 6], [2, 4, 6])
+test("evens none") <- Evens([1, 3, 5], [])
+test("pairs cartesian") <- Pairs(["a", "b"], [1, 2], [["a", 1], ["a", 2], ["b", 1], ["b", 2]])
+test("pairs empty first") <- Pairs([], [1, 2], [])
+test("pairs empty second") <- Pairs(["a"], [], [])
 
 # setof
-Test("unique dedup") <- UniqueMembers([1, 2, 1, 3, 2], [1, 2, 3])
-Test("unique already unique") <- UniqueMembers([5, 10], [5, 10])
-Test("unique all same") <- UniqueMembers([7, 7, 7], [7])
+test("unique dedup") <- UniqueMembers([1, 2, 1, 3, 2], [1, 2, 3])
+test("unique already unique") <- UniqueMembers([5, 10], [5, 10])
+test("unique all same") <- UniqueMembers([7, 7, 7], [7])
 
 # bagof
-Test("bag positives") <- BagPositives([-1, 2, -3, 4], [2, 4])
-Test("bag positives fails on none") <- (not BagPositives([-1, -2], _))
+test("bag positives") <- BagPositives([-1, 2, -3, 4], [2, 4])
+test("bag positives fails on none") <- (not BagPositives([-1, -2], _))
 
 # forall
-Test("all positive pass") <- AllPositive([1, 2, 3])
-Test("all positive fail") <- (not AllPositive([1, -2, 3]))
-Test("all positive empty") <- AllPositive([])
-Test("all members subset") <- AllMembers([1, 2], [1, 2, 3])
-Test("all members not subset") <- (not AllMembers([1, 4], [1, 2, 3]))
-Test("all members empty sub") <- AllMembers([], [1, 2])
+test("all positive pass") <- AllPositive([1, 2, 3])
+test("all positive fail") <- (not AllPositive([1, -2, 3]))
+test("all positive empty") <- AllPositive([])
+test("all members subset") <- AllMembers([1, 2], [1, 2, 3])
+test("all members not subset") <- (not AllMembers([1, 4], [1, 2, 3]))
+test("all members empty sub") <- AllMembers([], [1, 2])
 
 # composed
-Test("sum squares [1,2,3]") <- SumSquares([1, 2, 3], 14)
-Test("sum squares empty") <- SumSquares([], 0)
+test("sum squares [1,2,3]") <- SumSquares([1, 2, 3], 14)
+test("sum squares empty") <- SumSquares([], 0)

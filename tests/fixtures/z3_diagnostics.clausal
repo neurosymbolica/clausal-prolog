@@ -8,7 +8,7 @@
 # single-quoted here because this file is in `-double_quotes(chars)` mode,
 # where "x_high" would be a STRING and z3.named/2 refuses it.  The core comes
 # back as the same atoms.
-Test("unsat core finds conflict") <- (
+test("unsat core finds conflict") <- (
     z3.integer((1 <= X <= 10)),
     z3.named(X > 8, 'x_high'),
     z3.named(X < 3, 'x_low'),
@@ -17,7 +17,7 @@ Test("unsat core finds conflict") <- (
     in_('x_low', CORE),
 )  # nv
 
-Test("sat has no core") <- (
+test("sat has no core") <- (
     z3.integer((1 <= X <= 10)),
     z3.named(X > 5, 'x_big'),
     not(z3.unsatisfiable_core(_)),
@@ -28,19 +28,19 @@ Test("sat has no core") <- (
 # THE FLIP (spec §6.4): the status is a NAME, so it is an ATOM — single-quoted
 # for the same reason as the constraint names above.
 
-Test("satisfiability sat") <- (
+test("satisfiability sat") <- (
     z3.integer(1 <= X <= 10),
     z3.satisfiability('sat'),
 )  # nv
 
-Test("satisfiability unsat") <- (
+test("satisfiability unsat") <- (
     z3.integer((X >= 10, X <= 5)),
     z3.satisfiability('unsat'),
 )  # nv
 
 # ── Model inspection ────────────────────────────────────────────────────────
 
-Test("model without binding") <- (
+test("model without binding") <- (
     z3.integer(X == 7),
     z3.model([X], [[NAME_UNUSED, VAL]]),
     VAL == 7,
@@ -48,14 +48,14 @@ Test("model without binding") <- (
 
 # ── Simplify ────────────────────────────────────────────────────────────────
 
-Test("simplify constant") <- (
+test("simplify constant") <- (
     z3.simplify(2 + 3, R),
     R == 5,
 )  # nv
 
 # ── Assertions dump ─────────────────────────────────────────────────────────
 
-Test("assertions non-empty") <- (
+test("assertions non-empty") <- (
     z3.integer((1 <= X <= 10)),
     z3.assertions(A),
     length(A, N),

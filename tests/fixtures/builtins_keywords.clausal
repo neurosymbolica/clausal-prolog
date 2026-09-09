@@ -20,9 +20,9 @@ vec(x=3, y=4),
 # THE FLIP (spec §6.4): the name positions of signature/3 and
 # unbound_keys/2 speak ATOMS, so the literals here are atoms — this file
 # is in the default `-double_quotes(atom)` mode on purpose.
-Test("signature vec fields") <- (pred_params("vec", 2, PARAMS), PARAMS == ["x", "y"])  # nv
-Test("free fields unbound y") <- (free_fields(vec(x=1), KEYS), "y" in KEYS)  # nv
-Test("vary vec x") <- (
+test("signature vec fields") <- (pred_params("vec", 2, PARAMS), PARAMS == ["x", "y"])  # nv
+test("free fields unbound y") <- (free_fields(vec(x=1), KEYS), "y" in KEYS)  # nv
+test("vary vec x") <- (
     update_x(vec(x=1, y=2), 99, UPDATED),
     UPDATED == vec(x=99, y=2)
 )  # nv

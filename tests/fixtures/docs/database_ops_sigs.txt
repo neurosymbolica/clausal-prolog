@@ -27,7 +27,7 @@ Increment(NEW) <- (
     assertz(Ctr(NEW))
 )
 
-Test("counter") <- (
+test("counter") <- (
     Increment(1),
     Increment(2),
     Ctr(2)

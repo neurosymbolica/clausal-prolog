@@ -33,14 +33,14 @@ window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
 # passed through a findall.  Without the guard this findall would collapse to
 # [] and MAX would silently default; with the guard the throw propagates out
 # of the findall and this Test lands on the RAISED path.
-Test("guard raises through findall on malformed REF_YMD") <- (
+test("guard raises through findall on malformed REF_YMD") <- (
     findall(D, window_days_used("2020-01-01", D), DAYS),
     max_list(DAYS, MAX),
     MAX == 90
 )
 
 # Control: a well-formed REF_YMD does not raise; the findall collects normally.
-Test("wellformed REF_YMD does not raise") <- (
+test("wellformed REF_YMD does not raise") <- (
     findall(D, window_days_used([2020, 1, 1], D), DAYS),
     DAYS == [7]
 ),

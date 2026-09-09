@@ -2,12 +2,12 @@
 
 # ── Basic real constraints ──────────────────────────────────────────────────
 
-Test("clpr real equality") <- (
+test("clpr real equality") <- (
     clpr.real(X == 3.0),
     clpr.label([X]),
 )  # nv
 
-Test("clpr real bounds") <- (
+test("clpr real bounds") <- (
     clpr.real((
         0 <= X <= 10,
         X == 5.0,
@@ -17,13 +17,13 @@ Test("clpr real bounds") <- (
 
 # ── Infeasibility ───────────────────────────────────────────────────────────
 
-Test("clpr infeasible") <- (
+test("clpr infeasible") <- (
     not(clpr.real((X >= 10, X <= 5)))
 )  # nv
 
 # ── Arithmetic ──────────────────────────────────────────────────────────────
 
-Test("clpr arithmetic") <- (
+test("clpr arithmetic") <- (
     clpr.real((
         0 <= X <= 10,
         X * 2 == 6.0,

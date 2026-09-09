@@ -27,13 +27,13 @@ Classify(X, "list") <- is_list(X)
 Classify(X, "compound") <- compound(X)
 
 
-Test("is var") <- CheckVar(X_UNUSED)  # nv
-Test("is bound") <- CheckNonvar(42)  # nv
-Test("is atom") <- CheckAtom("hello")  # nv
-Test("is number") <- CheckNumber(42)  # nv
-Test("is integer") <- CheckInteger(5)  # nv
-Test("is list") <- CheckList([1, 2, 3])  # nv
-Test("is ground") <- CheckGround(42)  # nv
-Test("classify integer") <- Classify(42, "integer")  # nv
-Test("classify atom") <- Classify("hi", "atom")  # nv
-Test("classify list") <- Classify([1, 2], "list")  # nv
+test("is var") <- CheckVar(X_UNUSED)  # nv
+test("is bound") <- CheckNonvar(42)  # nv
+test("is atom") <- CheckAtom("hello")  # nv
+test("is number") <- CheckNumber(42)  # nv
+test("is integer") <- CheckInteger(5)  # nv
+test("is list") <- CheckList([1, 2, 3])  # nv
+test("is ground") <- CheckGround(42)  # nv
+test("classify integer") <- Classify(42, "integer")  # nv
+test("classify atom") <- Classify("hi", "atom")  # nv
+test("classify list") <- Classify([1, 2], "list")  # nv

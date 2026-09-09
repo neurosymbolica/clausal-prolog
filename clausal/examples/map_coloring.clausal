@@ -56,23 +56,23 @@ Colorable(COLORING) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-Test("red is a color") <- Color(Red)
-Test("green is a color") <- Color(Green)
-Test("blue is a color") <- Color(Blue)
-Test("yellow is a color") <- Color(Yellow)
-Test("purple is not a color") <- (not Color("purple"))
-Test("wa adjacent to nt") <- Adjacent(WesternAustralia, NorthernTerritory)
-Test("wa adjacent to sa") <- Adjacent(WesternAustralia, SouthAustralia)
-Test("nsw adjacent to vic") <- Adjacent(NewSouthWales, Victoria)
-Test("a coloring exists") <- Colorable(_)
-Test("coloring has 7 regions") <- (Colorable(COLORING), length(COLORING, 7))
-Test("wa and nt get different colors") <- (
+test("red is a color") <- Color(Red)
+test("green is a color") <- Color(Green)
+test("blue is a color") <- Color(Blue)
+test("yellow is a color") <- Color(Yellow)
+test("purple is not a color") <- (not Color("purple"))
+test("wa adjacent to nt") <- Adjacent(WesternAustralia, NorthernTerritory)
+test("wa adjacent to sa") <- Adjacent(WesternAustralia, SouthAustralia)
+test("nsw adjacent to vic") <- Adjacent(NewSouthWales, Victoria)
+test("a coloring exists") <- Colorable(_)
+test("coloring has 7 regions") <- (Colorable(COLORING), length(COLORING, 7))
+test("wa and nt get different colors") <- (
     Colorable(COLORING),
     in_([WesternAustralia, WA_COLOR], COLORING),
     in_([NorthernTerritory, NT_COLOR], COLORING),
     WA_COLOR is not NT_COLOR
 )
-Test("sa and qld get different colors") <- (
+test("sa and qld get different colors") <- (
     Colorable(COLORING),
     in_([SouthAustralia, SA_COLOR], COLORING),
     in_([Queensland, QLD_COLOR], COLORING),

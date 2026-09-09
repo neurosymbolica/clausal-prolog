@@ -4,12 +4,12 @@
 
 -import_from(py.tcp, [connect, listen, accept, send, receive, close, set_timeout])
 
-Test("listen on ephemeral port") <- (
+test("listen on ephemeral port") <- (
     listen("127.0.0.1", 0, SERVER),
     close(SERVER)
 )  # nv
 
-Test("set timeout") <- (
+test("set timeout") <- (
     listen("127.0.0.1", 0, SERVER),
     set_timeout(SERVER, 1.0),
     close(SERVER)
