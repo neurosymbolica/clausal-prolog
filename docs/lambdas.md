@@ -15,7 +15,7 @@ Arrow lambdas use `head <- body` — the same syntax as clause definitions, maki
 apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
 # Two-arg lambda with arithmetic
-test(R) <- call_goal(((X, Y) <- (Y == X + 1)), 5, R)
+succ_of(R) <- call_goal(((X, Y) <- (Y == X + 1)), 5, R)
 
 # Zero-arg lambda
 run_goal(RESULT) <- call_goal((() <- (RESULT is 42)))
@@ -80,7 +80,7 @@ If a lambda parameter has the same name as an enclosing variable, the parameter 
 
 ```clausal
 # X in the lambda body refers to the parameter, not the clause-head X
-test(X) <- call_goal((X <- (X is 42)), _)
+shadowed(X) <- call_goal((X <- (X is 42)), _)
 ```
 
 ---

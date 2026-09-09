@@ -135,7 +135,7 @@ apply2(GOAL, X, Y) <- Call(GOAL, X, Y)
 These are primarily used with [lambdas](lambdas.md):
 
 ```clausal
-test(R) <- Call((X <- (R == X + 1)), 5)
+plus_one(R) <- Call((X <- (R == X + 1)), 5)
 ```
 
 ---
