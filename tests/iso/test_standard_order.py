@@ -128,3 +128,43 @@ def test_homogeneous_safe_types_still_take_the_native_path():
 
 def test_an_empty_list_sorts_without_reaching_the_membership_test():
     assert S([]) == []
+
+
+# --- the ISO identity (spec §7 item 2) --------------------------------------
+
+def test_compare_equals_iff_iso_identical():
+    """ISO guarantees `compare(=, X, Y)` holds exactly when `X == Y`.
+
+    This is the PRIMARY instrument for this work: it is what makes the
+    ordering and the identity one design rather than two that happen to agree
+    today. It is what the `1`/`1.0` contradiction would have failed —
+    `'=='` said different while the order said equal — and what forced the
+    transitivity fix in Task 1, since order-equality is necessarily transitive
+    and `'=='` was not.
+    """
+    from clausal.logic.builtins.iso_compare import _iso_identical, _order_atom
+
+    terms = [1, 1.0, True, Decimal(1), Fraction(1),
+             Quantity(1, {}), Quantity(1, {"m": 1}), Quantity(2, {"m": 1}),
+             2, 2.0, ("a",), ("b",), ("f", 1), ("f", 1, 2), ("g", 1),
+             [], [1], [1, 2], "ab", b"ab"]
+    for a in terms:
+        for b in terms:
+            assert (_order_atom(a, b) == "=") == bool(_iso_identical(a, b)), (
+                f"compare says {_order_atom(a, b)!r} but '==' says "
+                f"{_iso_identical(a, b)!r} for {a!r} and {b!r}")
+
+
+def test_the_order_is_total_over_every_pair():
+    """No pair may raise, and exactly one of <, =, > must hold each way."""
+    from clausal.logic.builtins.iso_compare import _order_atom
+
+    terms = [Var(), 1, 1.0, Decimal(1), Quantity(1, {"m": 1}), Quantity(1, {"s": 1}),
+             ("a",), ("f", 1), [], [1], "ab", b"ab", {"a": 1}, {1, 2}]
+    for a in terms:
+        for b in terms:
+            ab, ba = _order_atom(a, b), _order_atom(b, a)
+            assert ab in ("<", "=", ">")
+            assert (ab == "=") == (ba == "="), (a, b, ab, ba)
+            if ab != "=":
+                assert ab != ba, (a, b, ab, ba)
