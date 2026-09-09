@@ -30,25 +30,34 @@ from typing import Any
 #: Names that stay bare-only: no ``$`` twin is minted for them.
 BARE_ONLY: frozenset[str] = frozenset({"Undefined"})
 
-# Every bare name that has been given a twin, with the object it binds --
-# the registry :func:`dollar_ref` and :func:`bare_name_of` consult.  Filled
-# by :func:`with_dollar_twins`; both seeding namespaces run through it at
-# import time, so the registry is complete before any clause compiles.
-_TWINNED: dict[str, Any] = {}
+#: The bare TitleCase keys of ``INJECTED_RUNTIME_BUILTINS`` -- owned HERE,
+#: statically, so a process that never imports the compiler (the reifier
+#: reading ``$Var()``/``$PyThunk(...)`` back, a standalone formatter) still
+#: knows every twin by name.  :func:`register_generated_names` asserts the
+#: runtime table matches this list, so drift between the two is loud.
+INJECTED_TITLECASE_NAMES: frozenset[str] = frozenset({
+    "PredicateMeta", "Var", "Compound", "DictTerm", "SetTerm", "KWTerm",
+    "Trail", "PyThunk", "FStringThunk", "Quantity", "BoolEq", "BoolImpl",
+})
 
-
-def _register(table: dict) -> None:
-    for name, value in table.items():
-        if not name.startswith("$") and name not in BARE_ONLY:
-            _TWINNED[name] = value
-
-
-# The node classes are known here, up front, so :func:`dollar_ref` answers
-# the same spelling whether or not the import hook has been loaded yet (a
-# compiler entered directly from Python compiles the same ``$Add``).
 from clausal.pythonic_ast import nodes as _simple_ast  # noqa: E402
 
-_register({name: getattr(_simple_ast, name) for name in _simple_ast.__all__})
+#: Every bare name that HAS a twin -- complete at import, no compiler needed.
+#: This is what :func:`bare_name_of` (the readers) consults.
+_TWIN_NAMES: frozenset[str] = (
+    frozenset(_simple_ast.__all__) | INJECTED_TITLECASE_NAMES
+) - BARE_ONLY
+
+# The OBJECT each twinned name binds -- what :func:`dollar_ref` (the
+# emitters) consults to decide whether a class IS the runtime binding for
+# its own name.  The node classes are entered here, up front; the injected
+# runtime types are entered by :func:`register_generated_names` when the
+# compiler's table is built (the emitters live in the compiler, so they
+# never run before that).
+_TWIN_OBJECTS: dict[str, Any] = {
+    name: getattr(_simple_ast, name) for name in _simple_ast.__all__
+    if name not in BARE_ONLY
+}
 
 
 def dollar_name(name: str) -> str:
@@ -68,17 +77,40 @@ def with_dollar_twins(table: dict) -> dict:
     for name, value in table.items():
         if name.startswith("$") or name in BARE_ONLY:
             continue
-        twinned[dollar_name(name)] = value
+        twin = dollar_name(name)
+        if twin in table and table[twin] is not value:
+            raise ValueError(
+                f"{twin} is already bound to a different object than {name}; "
+                f"a twin is an alias of its bare name, never a second binding"
+            )
+        twinned[twin] = value
     return twinned
 
 
 def register_generated_names(table: dict) -> dict:
-    """Enter *table*'s bare names into the registry :func:`dollar_ref` /
-    :func:`bare_name_of` consult, and return the twinned table.  Called by
-    the ONE engine table of injected runtime names
-    (``INJECTED_RUNTIME_BUILTINS``); the node classes are registered at
-    import above."""
-    _register(table)
+    """Enter the injected runtime types' OBJECTS into the registry
+    :func:`dollar_ref` consults, and return *table* twinned.
+
+    Called by the ONE engine table of injected runtime names
+    (``INJECTED_RUNTIME_BUILTINS``).  Its bare TitleCase keys must be
+    exactly :data:`INJECTED_TITLECASE_NAMES` -- the static list the readers
+    already trust -- so an addition to one without the other fails HERE, at
+    import, naming the drift, rather than as a reifier that silently stops
+    recognising a new ``$Name(...)``.
+    """
+    bare = {
+        name for name in table
+        if not name.startswith("$") and name not in BARE_ONLY
+    }
+    if bare != INJECTED_TITLECASE_NAMES:
+        raise RuntimeError(
+            "INJECTED_RUNTIME_BUILTINS drifted from "
+            "generated_names.INJECTED_TITLECASE_NAMES: "
+            f"unexpected {sorted(bare - INJECTED_TITLECASE_NAMES)}, "
+            f"missing {sorted(INJECTED_TITLECASE_NAMES - bare)}"
+        )
+    for name in bare:
+        _TWIN_OBJECTS[name] = table[name]
     return with_dollar_twins(table)
 
 
@@ -91,7 +123,7 @@ def dollar_ref(cls: Any) -> str:
     module by the user's own clauses, is the user's to reach bare.
     """
     name = cls.__name__
-    if _TWINNED.get(name) is cls:
+    if _TWIN_OBJECTS.get(name) is cls:
         return dollar_name(name)
     return name
 
@@ -101,12 +133,13 @@ def bare_name_of(name: str) -> str:
     back (the reifier, the call-site index key): ``$Var`` -> ``Var``.  A
     ``$`` name that is not a twin (``$unify``, ``$define_predicate``) is
     returned unchanged."""
-    if name.startswith("$") and name[1:] in _TWINNED:
+    if name.startswith("$") and name[1:] in _TWIN_NAMES:
         return name[1:]
     return name
 
 
 __all__ = [
-    "BARE_ONLY", "dollar_name", "with_dollar_twins",
-    "register_generated_names", "dollar_ref", "bare_name_of",
+    "BARE_ONLY", "INJECTED_TITLECASE_NAMES", "dollar_name",
+    "with_dollar_twins", "register_generated_names", "dollar_ref",
+    "bare_name_of",
 ]

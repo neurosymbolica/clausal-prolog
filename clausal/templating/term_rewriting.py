@@ -2886,16 +2886,25 @@ def _parse_pred_arity_args(args, directive_name):
     return specs
 
 
-def _dollar_runtime_refs(block, *names):
-    """Re-spell every bare ``Name`` in *names* inside *block* as its ``$``
-    twin.  The class-minting / atom-binding statements are built as Python
-    SOURCE and parsed, and a ``$`` name cannot be spelled in source, so the
-    runtime reference is swapped in after ``parse`` (the same mechanism
-    ``_make_atom_str_assign_ast`` uses for ``$mint``)."""
-    wanted = set(names)
+# The metaclass reference inside the parsed class-minting / atom-binding
+# templates.  A ``$`` name cannot be spelled in Python source, so the
+# templates name this PLACEHOLDER and ``_swap_placeholder`` re-spells it
+# ``$PredicateMeta`` after ``parse`` (the same mechanism
+# ``_make_atom_str_assign_ast`` uses for ``$mint``).  A placeholder, not the
+# bare ``PredicateMeta``: the user's own head may be spelled
+# ``PredicateMeta``, and that name must stay the user's everywhere else in
+# the block (``class PredicateMeta(metaclass=$PredicateMeta)``).
+_PM_PLACEHOLDER = "__CLAUSAL_PM__"
+
+
+def _swap_placeholder(block, placeholder=_PM_PLACEHOLDER,
+                      runtime_name="PredicateMeta"):
+    """Re-spell every ``Name`` *placeholder* in *block* as the ``$`` twin of
+    *runtime_name*; no other name in the block is touched."""
+    twin = dollar_name(runtime_name)
     for node in walk(block):
-        if isinstance(node, Name) and node.id in wanted:
-            node.id = dollar_name(node.id)
+        if isinstance(node, Name) and node.id == placeholder:
+            node.id = twin
     return block
 
 
@@ -2976,7 +2985,7 @@ def _make_functor_class_ast(functor_name, field_names, source):
         # the class through the twin, so nothing else changes hands.
         f"    if {functor_name} is globals().get({dollar_name(functor_name)!r}):",
         "        raise NameError",
-        f"    if isinstance({functor_name}, PredicateMeta) and getattr(",
+        f"    if isinstance({functor_name}, {_PM_PLACEHOLDER}) and getattr(",
         f"            {functor_name}, '_fields', None) != {fields_tuple}:",
         "        raise NameError",
         # The seeded-pool ATOM placeholder.  ``type(...) is tuple`` FIRST:
@@ -2988,12 +2997,12 @@ def _make_functor_class_ast(functor_name, field_names, source):
         f"{functor_name} == {(functor_name,)!r}:",
         "        raise NameError",
         "except NameError:",
-        f"    class {functor_name}(metaclass=PredicateMeta):",
+        f"    class {functor_name}(metaclass={_PM_PLACEHOLDER}):",
         f"        _fields = {fields_tuple}",
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
-    _dollar_runtime_refs(block, "PredicateMeta")
+    _swap_placeholder(block)
     # Position the WHOLE block, not just the try: the nodes come from parsing a
     # fresh snippet, so without this the inner ``class`` statement keeps the
     # snippet's own line 7 and any traceback through it (notably the
@@ -3058,12 +3067,12 @@ def _make_atom_str_assign_ast(atom_name, source, value=None):
     if value is None:
         value = atom_name
     lines = [
-        f"if not isinstance(globals().get({atom_name!r}), PredicateMeta):",
+        f"if not isinstance(globals().get({atom_name!r}), {_PM_PLACEHOLDER}):",
         f"    {atom_name} = None",
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
-    _dollar_runtime_refs(block, "PredicateMeta")
+    _swap_placeholder(block)
     assign = block.body[0]
     assign.value = Call(
         func=Name(id="$mint", ctx=load),
