@@ -506,6 +506,7 @@ def test_hash_constraint_oracle(scryer, sym, clausal_goal,
 
 def _identity_table():
     from decimal import Decimal
+    from fractions import Fraction
     from clausal.terms import Compound, SegList
     return [
         # (a, b, structural_eq, iso '==')
@@ -522,10 +523,12 @@ def _identity_table():
         # Representation, not type: these must stay identical.
         ("ab", [("a",), ("b",)], True, True),  # a string IS its char list
         (b"ab", [97, 98], True, True),         # bytes IS the code list
-        # Decimal is NOT tagged, here or in `_normalize_for_key` (a
-        # documented residual under A01-D001), so this branch opens no new
-        # front on the decimal-currency values.
-        (Decimal(1), 1, True, True),
+        # Decimal IS tagged now (spec §4a): leaving it untagged made `==`
+        # non-transitive once `1.0 == 1` correctly became false, and
+        # order-equality is necessarily transitive. `structural_eq` still says
+        # True — it is the numeric-kind conjunct that separates them.
+        (Decimal(1), 1, True, False),
+        (Fraction(1), 1, True, False),
         # --- Recorded HOLES, not endorsements. -----------------------------
         # `_numeric_types_agree` descends only through shapes that line up on
         # BOTH sides and answers "no numeric objection" on any mismatch, so
@@ -558,3 +561,31 @@ def test_iso_identical_representation_table():
         assert _iso_identical(a, b) is expect_iso, (a, b)
         # `'\=='` is the exact negation, in both directions.
         assert _iso_identical(b, a) is expect_iso, ("symmetry", a, b)
+
+
+def test_iso_identical_is_transitive_over_numeric_types():
+    """`==` must be an EQUIVALENCE relation, and today it is not.
+
+    Order-equality is necessarily transitive, so `compare(=, X, Y) <=> X == Y`
+    — the identity ISO guarantees, and the instrument the standard-order work
+    rests on — is impossible while this fails. Measured 2026-09-09 BEFORE the
+    fix: `1.0 == Decimal(1)` and `Decimal(1) == 1` were both true while
+    `1.0 == 1` was false, because `_numeric_tag` left `Decimal`/`Fraction`
+    untagged (the A01-D001 residual) so they read as identical to BOTH `int`
+    and `float`, which are not identical to each other.
+
+    Note this became a defect only when `1.0 == 1` correctly became false: the
+    relation used to be transitive-but-non-ISO. Making it ISO-correct at one
+    numeric type and not the others is what broke the algebra.
+    """
+    from decimal import Decimal
+    from fractions import Fraction
+    from clausal.logic.builtins.iso_compare import _iso_identical
+
+    values = [1, 1.0, True, Decimal(1), Fraction(1)]
+    for a in values:
+        for b in values:
+            for c in values:
+                if _iso_identical(a, b) and _iso_identical(b, c):
+                    assert _iso_identical(a, c), (
+                        f"{a!r} == {b!r} and {b!r} == {c!r} but {a!r} != {c!r}")

@@ -5,6 +5,8 @@ Reachable from `.clausal` ONLY through the quoted canonical form —
 `.pl`. Spec: docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md
 """
 import operator as _o
+from decimal import Decimal as _Decimal
+from fractions import Fraction as _Fraction
 
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.builtins._helpers import _arity as _term_arity
@@ -211,16 +213,27 @@ def _iso_not_unifiable(a, b, trail, k):
 def _numeric_tag(x):
     """The numeric type tag of *x*, or None if *x* is not a tagged number.
 
-    Deliberately mirrors `clausal/logic/tabling.py::_normalize_for_key_py`:
-    exact `int` is canonical, `bool`/`float`/`complex` are
-    type-distinguished, and `Decimal`/`Fraction` are NOT tagged (they
-    conflate with `int` there too — a documented residual under A01-D001).
-    Keeping the same set means this check opens no second front on the
-    decimal-currency values.
+    EVERY numeric type is its own kind, so `==` is an equivalence relation
+    and `compare(=, X, Y) <=> X == Y` — the identity ISO guarantees — can hold
+    by construction. Returns a TYPE OBJECT: nothing is wrapped, no term
+    representation changes, and arithmetic never sees this.
+
+    `Decimal`/`Fraction` used to be left untagged to mirror
+    `clausal/logic/tabling.py::_normalize_for_key_py` (the A01-D001 residual).
+    That was harmless while `1.0 == 1` was also true, but once that correctly
+    became false the relation stopped being transitive: measured 2026-09-09,
+    `1.0 == Decimal(1)` and `Decimal(1) == 1` were both true while
+    `1.0 == 1` was false.
+
+    This is the COMPARISON site ONLY. `_normalize_for_key_py` and its C twin
+    `do_normalize` keep the residual deliberately — a C rebuild and P52
+    lock-step do not belong here — so tabled answer dedup still collapses
+    `Decimal(1)` with `1` while this says they differ. Filed as
+    todo/a01-d001-tabling-half-2026-09-09.md. Spec §4a.
     """
     if type(x) is int:
         return int
-    if isinstance(x, (bool, float, complex)):
+    if isinstance(x, (bool, float, complex, _Decimal, _Fraction)):
         return type(x)
     return None
 
