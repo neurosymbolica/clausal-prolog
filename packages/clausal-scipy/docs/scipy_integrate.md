@@ -215,21 +215,21 @@ design work (see `SCIPY_UNITS_PLAN.md` Phase 4c).
 
 ```
 -import_from(scipy_integrate, [Trapezoid, Quad, ResultGet])
--import_from(py.units, [Metre, Second, Newton, has_units])
+-import_from(py.units, [metre, second, newton, has_units])
 
 % Velocity (m/s) integrated over time (s) gives displacement (m)
 Test("trapezoid velocity times time") <- (
-    Trapezoid(++(numpy.array([0.0(Metre/Second), 10.0(Metre/Second), 20.0(Metre/Second)])),
-              ++(numpy.array([0.0(Second), 1.0(Second), 2.0(Second)])),
+    Trapezoid(++(numpy.array([0.0(metre/second), 10.0(metre/second), 20.0(metre/second)])),
+              ++(numpy.array([0.0(second), 1.0(second), 2.0(second)])),
               R),
-    has_units(R, Metre))
+    has_units(R, metre))
 
 % Quad with quantity-aware function
 Test("quad with units") <- (
-    Quad(++(lambda x: x * 1.0(Newton/Metre)),
-         0.0(Metre), 1.0(Metre), RESULT),
+    Quad(++(lambda x: x * 1.0(newton/metre)),
+         0.0(metre), 1.0(metre), RESULT),
     ResultGet(RESULT, 'value', V),
-    has_units(V, Newton))
+    has_units(V, newton))
 ```
 
 ---

@@ -46,7 +46,7 @@ test("eval") <- (eval_(6 * 7, X), X == 42)
 Prefer `==` for ordinary relational arithmetic — it works in all directions.
 Reach for `eval_/2` when you specifically need *eager Python evaluation*:
 
-- **Unit-carrying values** — `eval_(20(Metre), D)`, `eval_(D / T, V)`; CLP
+- **Unit-carrying values** — `eval_(20(metre), D)`, `eval_(D / T, V)`; CLP
   constraints don't operate on [`Quantity`](units.md) objects.
 - **Catchable exceptions** — `catch(eval_(X // Y, R), _, ...)` sees the
   `ZeroDivisionError`; a constraint would not raise it.

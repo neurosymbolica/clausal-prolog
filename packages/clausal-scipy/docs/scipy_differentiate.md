@@ -183,19 +183,19 @@ directly with **zero additional overhead**.
 
 ```
 -import_from(scipy_differentiate, [Derivative, ResultGet])
--import_from(py.units, [Metre, Newton, has_units])
+-import_from(py.units, [metre, newton, has_units])
 
-% f: Metre -> Newton (linear), so df/dx has units Newton/Metre
+% f: metre -> newton (linear), so df/dx has units newton/metre
 Test("derivative units") <- (
     K is ++(
         __import__('clausal.terms', fromlist=['Quantity']).Quantity(
             9.8,
-            __import__('clausal.modules.py.units', fromlist=['Newton','Metre']).Newton
-            / __import__('clausal.modules.py.units', fromlist=['Newton','Metre']).Metre
+            __import__('clausal.modules.py.units', fromlist=['newton','metre']).newton
+            / __import__('clausal.modules.py.units', fromlist=['newton','metre']).metre
         )),
-    Derivative(++(lambda x, k=K: x * k), 1.0(Metre), R),
+    Derivative(++(lambda x, k=K: x * k), 1.0(metre), R),
     ResultGet(R, 'df', DF),
-    has_units(DF, Newton/Metre))
+    has_units(DF, newton/metre))
 ```
 
 ### Limitations

@@ -275,17 +275,17 @@ the dims.  when no `Quantity` inputs are present, `x_dims` and `y_dims` are
 
 ```
 -import_from(scipy_interpolate, [MakeSpline, EvalSpline, SplineIntegral, Free])
--import_from(py.units, [Metre, Second, has_units])
+-import_from(py.units, [metre, second, has_units])
 
 % Position (m) as a function of time (s)
 Test("spline with units") <- (
-    MakeSpline(++(numpy.array([0.0(Second), 1.0(Second), 2.0(Second)])),
-               ++(numpy.array([0.0(Metre), 5.0(Metre), 20.0(Metre)])),
+    MakeSpline(++(numpy.array([0.0(second), 1.0(second), 2.0(second)])),
+               ++(numpy.array([0.0(metre), 5.0(metre), 20.0(metre)])),
                H),
-    EvalSpline(H, 1.0(Second), Y),
-    has_units(Y, Metre),
-    SplineIntegral(H, 0.0(Second), 2.0(Second), AREA),
-    has_units(AREA, Metre*Second),
+    EvalSpline(H, 1.0(second), Y),
+    has_units(Y, metre),
+    SplineIntegral(H, 0.0(second), 2.0(second), AREA),
+    has_units(AREA, metre*second),
     Free(H))
 ```
 
