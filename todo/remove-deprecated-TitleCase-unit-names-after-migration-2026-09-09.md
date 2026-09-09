@@ -1,11 +1,14 @@
 # Remove the deprecated TitleCase unit spellings once nothing depends on them
 
 Filed 2026-09-09 with the change that made the SI unit names lowercase identifiers
-(`metre`, `second`, `newton`, `kilometer`, `byte`, …) under the ruling that Clausal
+(`metre`, `second`, `newton`, `kilometre`, `byte`, …) under the ruling that Clausal
 identifiers are lowercase or ALL_CAPS/underscore-led and TitleCase has no role. The
 TitleCase spellings (`Metre`, `Second`, `Newton`, …) are kept as deprecated aliases that
 warn ("will be removed in a future release"), the same pattern as `Test/1` -> `test/1`. A
 deprecation without an exit criterion becomes noise everyone filters.
+Note that the PRINTED labels (`str()`, `write/1`, `UnitsMismatch` text, predicate `repr`)
+changed to the lowercase names in the same change with no alias path — a behaviour change,
+recorded in docs/units.md ("Printed labels changed").
 
 **What the aliases are:** `_DEPRECATED_UNIT_NAMES` in `clausal/modules/units.py` (83
 names: 64 TitleCase units, 14 TitleCase physical constants -> snake_case, 5 American

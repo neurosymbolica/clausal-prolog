@@ -55,6 +55,16 @@ per process per name from Python attribute access.  Rename `Metre` -> `metre`,
 `kilometer` -> `kilometre`, `SpeedOfLight` -> `speed_of_light`; the old
 spellings will be removed in a future release.
 
+**Printed labels changed with the rename, and there is no alias for a
+label.** A `Quantity` prints its dimension keys by their unit name, so text
+that came out of `write/1`, `str()`, a `UnitsMismatch` message or the
+predicate `repr` changed spelling in the same release — before:
+`9.8 Kilogram·Metre·Second^-2`, `Unit mismatch for add: Metre vs Second`,
+`units.Metre/[]`; after: `9.8 kilogram·metre·second^-2`,
+`Unit mismatch for add: metre vs second`, `units.metre/[]`. Anything that
+parses or compares those strings must expect the lowercase form; the values,
+dimension keys and arithmetic are unchanged.
+
 ---
 
 ## Two syntactic styles

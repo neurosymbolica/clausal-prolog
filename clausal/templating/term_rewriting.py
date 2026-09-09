@@ -1092,36 +1092,15 @@ def _collect_constant_refs(node) -> list[str]:
     return ordered
 
 
-class ClausalLintWarning(UserWarning):
-    """Load-time lint diagnostic for a likely-footgun Clausal construct."""
-
-
-class ClausalSingletonWarning(ClausalLintWarning):
-    """A named logic variable occurring exactly once in its clause.
-
-    Suppress per-variable with the ``_UNUSED`` suffix, per-file with
-    ``-allow_singletons``. The suffix is the sole canonical spelling —
-    case-based exemptions are blind for caseless scripts, which the
-    ``isupper()`` rule forces into leading-underscore variables.
-    """
-
-
-class ClausalSeamLiteralWarning(ClausalLintWarning):
-    """A ``"..."`` literal inside a ``--`` seam in a module that never said
-    which meaning it wants.  Under the engine default ``-double_quotes(atom)``
-    the literal is an ATOM; a Python author reads it as a string.  The
-    silent version of that mistake is a term that unifies with nothing, so
-    the seam says so once and points at the directive."""
-
-
-class ClausalDeprecatedSpellingWarning(ClausalLintWarning):
-    """A construct written with a superseded surface spelling.
-
-    Not a ``DeprecationWarning``: those are silenced by default outside
-    ``__main__``, and a load-time lint that nobody sees is the silent alias
-    this warning exists to avoid.  Suppress it the way the other lints are
-    suppressed — ``warnings.filterwarnings`` on this class.
-    """
+# The lint warning classes live in clausal.lint_warnings (no imports there)
+# so a layer that only raises one — units.py's deprecated-spelling alias from
+# plain Python — need not load this module.  Re-exported for existing callers.
+from clausal.lint_warnings import (  # noqa: E402, F401
+    ClausalLintWarning,
+    ClausalSingletonWarning,
+    ClausalSeamLiteralWarning,
+    ClausalDeprecatedSpellingWarning,
+)
 
 
 class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
@@ -6691,7 +6670,7 @@ class EmbedTransformer(NodeTransformer):
         """Lint the old unit spellings of one ``-import_from(py.units, …)``.
 
         The counterpart of ``_warn_deprecated_test_spelling`` for the units
-        module: ``metre`` is the spelling, ``metre`` the old one.  A file
+        module: ``metre`` is the spelling, ``Metre`` the old one.  A file
         imports its units in one list, so this fires ONCE per file for that
         list — naming every rename in it — rather than once per use site.
         A name already warned about in this file is not repeated.  Message
@@ -6727,7 +6706,7 @@ class EmbedTransformer(NodeTransformer):
 
         A deprecated TitleCase unit name in a units import (``metre``) is
         imported as its lowercase unit under the old local name (``from
-        py.units import metre as metre``) and linted once per file, so the
+        py.units import metre as Metre``) and linted once per file, so the
         file keeps working while the load names the rename.
 
         Emits a Python ``from dotted.module import Pred1, Pred2 as Local``

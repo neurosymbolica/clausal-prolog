@@ -47,6 +47,7 @@ from __future__ import annotations
 from typing import Callable
 
 from clausal.terms import Quantity, UnitsMismatch  # noqa: F401
+from clausal.lint_warnings import ClausalDeprecatedSpellingWarning
 from clausal.logic.variables import deref, is_var, unify, get_attr
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
@@ -270,7 +271,7 @@ minute       = Quantity(60,      {second: 1})
 hour         = Quantity(3_600,   {second: 1})
 day          = Quantity(86_400,  {second: 1})
 week         = Quantity(604_800, {second: 1})
-julian_year   = Quantity(31_557_600, {second: 1})
+julian_year  = Quantity(31_557_600, {second: 1})
 
 # ── Information (stored as bits) ──────────────────────────────────────────────
 # bit is the IEC 80000-13 base unit; all values are normalised to bits.
@@ -435,7 +436,7 @@ avogadro_constant      = 6.02214076e23     / mole(1)
 elementary_charge      = 1.602176634e-19   * SI_Charge
 standard_gravity       = 9.80665           * SI_Acceleration
 gravitational_constant = 6.67430e-11       * metre(1)**3 / kilogram(1) / second(1)**2
-atomic_mass_unit        = 1.66053906660e-27 * kilogram(1)
+atomic_mass_unit       = 1.66053906660e-27 * kilogram(1)
 electron_mass          = 9.1093837015e-31  * kilogram(1)
 proton_mass            = 1.67262192369e-27 * kilogram(1)
 vacuum_permeability    = 1.25663706212e-6  * kilogram(1) * metre(1) / second(1)**2 / ampere(1)**2
@@ -527,11 +528,12 @@ has_units._register(2, simple_to_trampoline(_units_constraint._has_units))
 # family is spelled like ``metre`` (``kilometre``); the physical constants
 # are snake_case (``speed_of_light``).  The spellings they replaced — the
 # TitleCase names and the American ``kilometer`` family — still resolve,
-# through this table, but warn: once per process per name from Python attribute access (the module
-# ``__getattr__`` below), once per file from a ``-import_from(py.units, …)``
-# list (the seam rewrites the import to the lowercase name; see
-# ``_handle_import_from_directive`` in clausal/templating/term_rewriting.py).
-# Both will be removed in a future release.
+# through this table, but warn: once per process per name from Python
+# attribute access (the module ``__getattr__`` below), once per file from a
+# ``-import_from(py.units, …)`` list (the seam rewrites the import to the
+# current name; see ``_handle_import_from_directive`` in
+# clausal/templating/term_rewriting.py).  Both will be removed in a future
+# release.
 
 _DEPRECATED_UNIT_NAMES: dict[str, str] = {
     # SI base units
@@ -588,21 +590,31 @@ del _old, _new
 _warned_deprecated_unit_names: set[str] = set()
 
 
-def __getattr__(name: str):
+def _resolve_deprecated_name(name: str, module_name: str):
+    """Resolve a deprecated spelling for ``module_name``'s ``__getattr__``.
+
+    ``stacklevel=3`` names the line that READ the attribute: 1 is this
+    function, 2 the module ``__getattr__`` that called it (ours, or the
+    ``clausal.modules.py.units`` forwarder), 3 the reader — importlib's own
+    frames are skipped by ``warnings``, so a ``from … import Metre`` is
+    attributed to the import statement.
+    """
     new = _DEPRECATED_UNIT_NAMES.get(name)
     if new is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        raise AttributeError(
+            f"module {module_name!r} has no attribute {name!r}")
     if name not in _warned_deprecated_unit_names:
         _warned_deprecated_unit_names.add(name)
         import warnings  # noqa: PLC0415
-        from clausal.templating.term_rewriting import (  # noqa: PLC0415
-            ClausalDeprecatedSpellingWarning,
-        )
         warnings.warn(
             f"units.{name} is the old spelling of units.{new}. Rename "
             f"`{name}` -> `{new}`; the old spelling still works but will be "
             f"removed in a future release",
             ClausalDeprecatedSpellingWarning,
-            stacklevel=2,
+            stacklevel=3,
         )
     return globals()[new]
+
+
+def __getattr__(name: str):
+    return _resolve_deprecated_name(name, __name__)

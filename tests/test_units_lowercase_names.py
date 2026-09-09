@@ -10,6 +10,8 @@ any more.  See ``todo/remove-deprecated-TitleCase-unit-names-after-migration-202
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import warnings
 
 import pytest
@@ -19,7 +21,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.modules import units
 from clausal.terms import Quantity, UnitsMismatch
-from clausal.templating.term_rewriting import ClausalDeprecatedSpellingWarning
+from clausal.lint_warnings import ClausalDeprecatedSpellingWarning
 
 
 def _load(name, src_text, tmp_path):
@@ -236,6 +238,21 @@ class TestTitleCaseAliases:
         assert "`Second` -> `second`" in msg
         assert "will be removed" in msg
 
+    @pytest.mark.parametrize("module_path", [
+        "units", "py.units", "clausal.modules.units", "clausal.modules.py.units",
+    ])
+    def test_warns_once_per_file_under_every_module_path(self, tmp_path,
+                                                          module_path):
+        """Each spelling of the units module path is linted the same way."""
+        # nv
+        name = "tc_path_" + module_path.replace(".", "_")
+        mod, warned = _load_recording(name, (
+            f"-import_from({module_path}, [Metre])\n"
+            "q(D) <- eval_(5(Metre), D)\n"), tmp_path)
+        assert len(warned) == 1, module_path
+        assert "`Metre` -> `metre`" in str(warned[0].message)
+        assert _one(mod, "q") == Quantity(5, {units.metre: 1})
+
     def test_warns_once_per_file_not_once_per_process(self, tmp_path):
         """A second file loading the same old name warns again."""
         # nv
@@ -379,3 +396,71 @@ class TestBritishSpelling:
         assert "`Centimeter` -> `centimetre`" in msg
         assert _one(mod, "q") == Quantity(5000, {units.metre: 1})
         assert _one(mod, "c") == 200 * units.centimetre
+
+
+# ── The Python-side alias is cheap and points at the caller ──────────────────
+
+
+class TestPythonAliasCost:
+    def test_warning_class_is_shared_with_the_seam(self):
+        """# nv"""
+        from clausal.templating import term_rewriting  # noqa: PLC0415
+        assert (term_rewriting.ClausalDeprecatedSpellingWarning
+                is ClausalDeprecatedSpellingWarning)
+
+    def test_alias_access_does_not_import_the_seam(self):
+        """`units.Metre` from plain Python must not pull the rewriter in."""
+        # nv
+        code = (
+            "import sys, warnings\n"
+            "import clausal.modules.units as u\n"
+            "with warnings.catch_warnings(record=True) as w:\n"
+            "    warnings.simplefilter('always')\n"
+            "    u.Metre\n"
+            "from clausal.lint_warnings import ClausalDeprecatedSpellingWarning\n"
+            "assert len(w) == 1 and w[0].category is ClausalDeprecatedSpellingWarning, w\n"
+            "print('clausal.templating.term_rewriting' in sys.modules)\n"
+        )
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                             text=True, check=True)
+        assert out.stdout.strip() == "False", out.stdout
+
+    def test_warning_names_the_callers_line(self, fresh_python_warnings):
+        """Direct access, the py.units forwarder and a from-import all
+        report THIS file and the accessing line, not the forwarder or
+        importlib."""
+        # nv
+        from clausal.modules.py import units as py_units  # noqa: PLC0415
+
+        def _hits(caught):
+            return [w for w in caught
+                    if issubclass(w.category, ClausalDeprecatedSpellingWarning)]
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            units.Metre                                      # noqa: B018
+            direct_line = _line()
+        (hit,) = _hits(caught)
+        assert (hit.filename, hit.lineno) == (__file__, direct_line)
+
+        units._warned_deprecated_unit_names.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            py_units.Metre                                   # noqa: B018
+            fwd_line = _line()
+        (hit,) = _hits(caught)
+        assert (hit.filename, hit.lineno) == (__file__, fwd_line)
+
+        units._warned_deprecated_unit_names.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            from clausal.modules.py.units import Newton  # noqa: PLC0415, F401
+            imp_line = _line()
+        (hit,) = _hits(caught)
+        assert (hit.filename, hit.lineno) == (__file__, imp_line)
+
+
+def _line():
+    """Line number of the statement just above the call (same frame)."""
+    import inspect  # noqa: PLC0415
+    return inspect.currentframe().f_back.f_lineno - 1
