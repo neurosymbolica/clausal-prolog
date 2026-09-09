@@ -1043,7 +1043,7 @@ static inline int is_nil_spelling(PyObject *t)
  */
 static int unify_census_on = 0;
 static unsigned long long unify_census_count = 0;
-static PyObject *unify_census_sites = NULL;   /* {"int/float": n, ...} */
+static PyObject *unify_census_sites = NULL;   /* {"int/float": n, ...}, unordered pair */
 
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
@@ -1454,8 +1454,15 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             && PyNumber_Check(t1) && PyNumber_Check(t2)) {
         unify_census_count++;
         if (unify_census_sites) {
-            PyObject *key = PyUnicode_FromFormat(
-                "%s/%s", Py_TYPE(t1)->tp_name, Py_TYPE(t2)->tp_name);
+            /* Keyed by the UNORDERED type pair: unify(2, Fraction(2, 1)) and
+             * unify(Fraction(2, 1), 2) are one phenomenon and must sum under
+             * one key, whichever side each term arrived on. The two names go
+             * in descending strcmp order, which keeps the documented
+             * "int/float" spelling. */
+            const char *n1 = Py_TYPE(t1)->tp_name;
+            const char *n2 = Py_TYPE(t2)->tp_name;
+            if (strcmp(n1, n2) < 0) { const char *tmp = n1; n1 = n2; n2 = tmp; }
+            PyObject *key = PyUnicode_FromFormat("%s/%s", n1, n2);
             if (key) {
                 PyObject *cur = PyDict_GetItemWithError(unify_census_sites, key);
                 long n = (cur && PyLong_Check(cur)) ? PyLong_AsLong(cur) : 0;
