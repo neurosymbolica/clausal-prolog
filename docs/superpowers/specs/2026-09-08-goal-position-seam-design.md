@@ -309,7 +309,32 @@ Still out of scope:
 - `--goal` in expression positions other than the listed tests and `for`.
   Comprehensions are the notable other goal-shaped position
   (`[S for S in --goal]`, `any(--goal for ...)`); extension todo
-  (`todo/goal-position-seam-in-comprehensions-2026-09-08.md`), not needed yet.
+  (`todo/goal-position-seam-in-comprehensions-2026-09-08.md`).
+
+  **One half of that todo is IMPOSSIBLE, not merely unbuilt** (hit by
+  downstream code during a migration, confirmed here 2026-09-09). The seam
+  expands to an assignment expression, and CPython forbids one in a
+  comprehension's ITERABLE:
+
+      [x for x in (y := f())]        SyntaxError: assignment expression
+                                     cannot be used in a comprehension
+                                     iterable expression
+      {k: v for k, v in (y := d)}    same
+      [x for x in ys if (y := x)]    COMPILES — condition position is fine
+      [(y := x) for x in ys]         COMPILES — element position is fine
+
+  So `[S for S in --goal]` can never work, while `[S for S in xs if --goal]`
+  could. The workaround is to hoist the seam to the line above, which is
+  correct on every tip.
+
+  Note this is enforced in the SYMBOL-TABLE pass, not the grammar:
+  `ast.parse` accepts all four lines and only `compile()` rejects the first
+  two. A check written with `ast.parse` will report the restriction does not
+  exist. (It is how this spec's author first "disproved" the report.)
+
+- **A splat cannot cross the seam.** `--X(++*vs)` is not a form; write the
+  arguments out. Also hit by downstream code during the same migration, also
+  worked around rather than fixed.
 - A push/callback query API (the pull generator is the control flow).
 - Dict-lookup rewriting of body names; exports are plain locals.
 - Any change to `unify`, `solve`, `query`, `once` or the trail.
