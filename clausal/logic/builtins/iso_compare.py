@@ -11,6 +11,7 @@ from fractions import Fraction as _Fraction
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.builtins._helpers import _arity as _term_arity
 from clausal.logic.builtins._helpers import _functor_name as _term_functor_name
+from clausal.logic.builtins._helpers import _standard_order_key
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.constraints import structural_eq as _structural_eq
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
@@ -466,4 +467,67 @@ def _clp_ge(a, b, trail, k):
     """CLP(FD)/CLP(R) greater-than-or-equal constraint."""
     from clausal.logic.clpfd import fd_ge
     if fd_ge(a, b, trail):
+        yield None
+
+
+# ── standard order of terms (spec 2026-09-09) ────────────────────────────────
+#
+# `_standard_order_key` already implemented the order and drove sort/2; these
+# only expose it. The order is TOTAL by construction, so none of these raises:
+# ISO requires the standard order to be defined for every pair of terms.
+
+# Minted once. `mint` interns permanently, so it is for bounded producers —
+# three atoms for the life of the process, not one per comparison.
+_ORD_LT = mint("<")
+_ORD_EQ = mint("=")
+_ORD_GT = mint(">")
+
+
+def _order_atom(a, b):
+    """`<`, `=` or `>` for *a* against *b*, as a bare str."""
+    ka = _standard_order_key(a)
+    kb = _standard_order_key(b)
+    if ka < kb:
+        return "<"
+    if kb < ka:
+        return ">"
+    return "="
+
+
+def _register_order_cmp(name, accept):
+    """Register one standard-order comparison.
+
+    `accept` is closed over, NOT passed as a default argument. A default would
+    sit in `params` after `a, b` and push `(trail, k)` past
+    `_registry._extract_fields_simple`'s `params[:-2]`, registering a /4 term
+    class with two junk variables — which is exactly what happened to the six
+    arithmetic comparisons on the predecessor branch and reached final review.
+    """
+    def _cmp(a, b, trail, k):
+        if _order_atom(a, b) in accept:
+            yield None
+
+    _cmp.__name__ = f"_iso_order_{name}"
+    return _builtin(name, 2, fields=("a", "b"))(_cmp)
+
+
+_register_order_cmp("@<", ("<",))
+_register_order_cmp("@>", (">",))
+_register_order_cmp("@=<", ("<", "="))
+_register_order_cmp("@>=", (">", "="))
+
+
+@_builtin("compare", 3, fields=("order", "a", "b"))
+def _iso_compare(order, a, b, trail, k):
+    """ISO compare/3: unify Order with the atom `<`, `=` or `>`.
+
+    `compare(=, X, Y)` holds exactly when `'=='(X, Y)` — an identity ISO
+    guarantees. It holds here by construction rather than by coincidence:
+    the number-band ranks in `_standard_order_key` are derived from the same
+    numeric kinds `_numeric_tag` uses, so two terms share a key exactly when
+    `_iso_identical` calls them identical.
+    """
+    got = _order_atom(a, b)
+    atom = _ORD_LT if got == "<" else (_ORD_EQ if got == "=" else _ORD_GT)
+    if _unify(order, atom, trail):
         yield None
