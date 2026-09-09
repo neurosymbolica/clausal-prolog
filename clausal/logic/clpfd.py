@@ -34,6 +34,7 @@ from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import (
+    present_number,
     Var,
     Trail,
     deref,
@@ -1389,8 +1390,8 @@ def _eval_ground(expr):
     # fold; it is rejected by _expr_domain's stricter fallback instead.
     if isinstance(expr, (int, float, Fraction)) and not isinstance(expr, bool):
         # An integral rational presents as int (see the tail below).
-        if type(expr) is Fraction and expr.denominator == 1:
-            return expr.numerator
+        if type(expr) is Fraction:
+            return present_number(expr)
         return expr
     if is_var(expr):
         return None
@@ -1463,10 +1464,11 @@ def _eval_ground(expr):
     # true at once. This tail is the single exit for EVERY operator node, so
     # a Fraction reached by any route — Div, a Fraction leaf, ``Fraction(1,
     # 2) ** -1`` under Pow, Mod/FloorDiv over Fraction operands — is
-    # presented here. ``type(...) is Fraction`` (not isinstance) is a
+    # presented here. The rule itself is ``present_number`` (one spelling,
+    # in clausal.logic.variables); the ``type(...) is Fraction`` guard is a
     # hot-path choice: one pointer compare per node for the int case.
-    if type(result) is Fraction and result.denominator == 1:
-        return result.numerator
+    if type(result) is Fraction:
+        return present_number(result)
     return result
 
 

@@ -178,9 +178,12 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                              args=[arith_to_ast_expr(term, {})], keywords=[])
             code = compile(_ast.fix_missing_locations(_ast.Expression(body=expr)),
                            "<seam>", "eval")
-            # The emitter's ``$``-runtime names are not in a module's globals
-            # (a literal ``4 / 2`` here raised NameError on ``$Fraction``);
-            # they are supplied as eval locals, without copying the module.
+            # The two ``$``-runtime names the value emitter can produce for
+            # GROUND arithmetic are not in a module's globals (a literal
+            # ``4 / 2`` here raised NameError on ``$Fraction``); they are
+            # supplied as eval locals, without copying the module. Only
+            # these two: a non-scalar operand can still make the term
+            # emitter reach for other ``$``-names, which stay unresolved.
             runtime = {"$exact_div": _exact_div, "$present": _present_number}
             result = eval(code, module_globals, runtime)  # noqa: S307 — the module's own arithmetic
             import numbers

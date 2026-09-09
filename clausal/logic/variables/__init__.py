@@ -22,6 +22,8 @@ Python (3.13t+).  The rules:
   - Constraint hooks re-enter the engine and must be re-entrant.
 """
 
+from fractions import Fraction as _Fraction
+
 from ._variables import (
     Var as PlainVar,
     AttVar,
@@ -54,7 +56,31 @@ def unregister_attr_hook(key: str) -> None:
     register_attr_hook(key, None)
 
 
+def present_number(x):
+    """The number a binder hands to ``unify``: an integral ``Fraction`` as int.
+
+    THE one spelling of the rule. ``int/int`` is exact (``3/2`` is
+    ``Fraction(3, 2)``, never 1.5), but ``Fraction(2, 1)`` is not the term
+    ``2``: the standard order (``'=='``, ``compare/3``) tags every numeric
+    type as its own kind while ``unify`` compares by ``==``, so an integral
+    Fraction reaching a variable made ``'is'(X, 4/2), '=='(X, 2)`` false and
+    ``'='(X, 2)`` true at once. Every producer — the interpreted evaluator,
+    the compiled ``$present``/``$exact_div``, CLP(Q)'s binders, the Z3
+    converter, ``between/3`` — calls this.
+
+    The predicate is ``type(x) is Fraction``, deliberately not
+    ``isinstance``: this sits on arithmetic hot paths and an exact type
+    check is one pointer compare. A ``Fraction`` SUBCLASS is therefore
+    passed through untouched — none exists in the engine, and a subclass
+    that wanted presenting would have to say so here.
+    """
+    if type(x) is _Fraction and x.denominator == 1:
+        return x.numerator
+    return x
+
+
 __all__ = [
+    "present_number",
     "Var",
     "PlainVar",
     "AttVar",

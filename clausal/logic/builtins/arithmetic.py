@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from math import gcd as _gcd
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import deref, is_var, unify, present_number
 from clausal.terms import Quantity
 
 from clausal.logic.builtins._registry import _builtin
@@ -48,8 +48,8 @@ def _eval_between_bound(term):
 
     Reuses the runtime ground evaluator behind the ``==`` comparison surface
     (``clpfd._eval_ground`` — int/int division yields an exact rational,
-    presented as int when integral; the denominator check below is kept
-    as a local belt-and-braces for that evaluator's invariant).
+    presented as int when integral; ``present_number`` below is a local
+    belt-and-braces for that evaluator's invariant).
 
     Returns the evaluated int, or None when the expression's only obstacle
     is an unbound Var — the caller then keeps between/3's silent
@@ -66,7 +66,6 @@ def _eval_between_bound(term):
     raise below covers what evaluates to None while ground (a zero
     divisor) or to a non-integer (7/2, bool) and names "between/3".
     """
-    from fractions import Fraction
     from clausal.logic.clpfd import _eval_ground  # lazy: clpfd is heavy
     from clausal.logic.exceptions import LogicException, type_error
 
@@ -78,8 +77,7 @@ def _eval_between_bound(term):
         # (non-numeric leaves raised inside _eval_ground already): name the
         # unevaluated bound rather than vanish.
         raise LogicException(type_error("integer", term, "between/3"))
-    if isinstance(val, Fraction) and val.denominator == 1:
-        val = int(val)  # exact rational that IS an integer (e.g. 6 / 2)
+    val = present_number(val)  # an exact rational that IS an integer (6 / 2)
     if not isinstance(val, int) or isinstance(val, bool):
         raise LogicException(type_error("integer", val, "between/3"))
     return val

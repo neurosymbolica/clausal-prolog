@@ -39,6 +39,7 @@ from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import (
+    present_number,
     Var, Trail, deref, is_var, unify, put_attr, get_attr,
 )
 
@@ -348,8 +349,8 @@ def z3_to_python(z3_val: Any) -> int | float | Fraction | str:
         # An integral rational presents as int, as every other binder in the
         # engine does (``clpq._present``): ``Fraction(5, 1)`` is not the term
         # ``5`` in the standard order.
-        val = Fraction(z3_val.numerator_as_long(), z3_val.denominator_as_long())
-        return val.numerator if val.denominator == 1 else val
+        return present_number(
+            Fraction(z3_val.numerator_as_long(), z3_val.denominator_as_long()))
     if _z3.is_true(z3_val):
         return 1
     if _z3.is_false(z3_val):

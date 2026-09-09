@@ -22,6 +22,7 @@ from fractions import Fraction
 from typing import Any
 
 from clausal.logic.variables import (
+    present_number,
     Var,
     Trail,
     deref,
@@ -879,19 +880,14 @@ def _is_ground_q(x: Any) -> bool:
 
 
 def _present(x: Any) -> Any:
-    """The value handed to ``unify``: an integral ``Fraction`` as its ``int``.
-
-    Tableau arithmetic stays exact and stays ``Fraction`` throughout; only the
-    value BOUND to a logic variable is presented. ``X == 4/2`` binds ``2`` —
-    the term ``'=='`` and ``compare/3`` place beside ``2`` in the standard
-    order, where ``Fraction(2, 1)`` is a different kind — and ``X == 3/2``
-    binds ``Fraction(3, 2)`` unchanged. Every site in this module that binds
-    a value goes through here; ``_q_hook`` accepts the int (ints are
-    rationals). ``bool`` is not a rational and is left alone.
+    """The value handed to ``unify``: ``present_number`` (one rule, in
+    ``clausal.logic.variables``). Tableau arithmetic stays exact and stays
+    ``Fraction`` throughout; only the value BOUND to a logic variable is
+    presented, so ``X == 4/2`` binds ``2`` and ``X == 3/2`` binds
+    ``Fraction(3, 2)``. Every site in this module that binds a value goes
+    through here; ``_q_hook`` accepts the int (ints are rationals).
     """
-    if isinstance(x, Fraction) and x.denominator == 1:
-        return x.numerator
-    return x
+    return present_number(x)
 
 
 def _promote_fd_to_q(var: Var, trail: Trail) -> None:

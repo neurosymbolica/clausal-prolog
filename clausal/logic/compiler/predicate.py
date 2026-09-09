@@ -18,7 +18,7 @@ import ast
 import warnings
 from typing import Any, Callable
 
-from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
+from clausal.logic.variables import Var, is_var, deref, unify, present_number
 from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yield
 from clausal.logic import cells as _cells_module
 from clausal.logic.cells import CELLS_NAMESPACE_KEY as _CELLS_NAMESPACE_KEY
@@ -156,31 +156,6 @@ from .goal_trampoline import (
 
 from fractions import Fraction  # noqa: F401 — referenced as _Fraction
 
-
-def _exact_div(l, r):
-    """``$exact_div``: a literal int/int Div in compiled arithmetic.
-
-    Exact (``3/2`` is ``Fraction(3, 2)``), and an integral quotient is the
-    int ``2``, never ``Fraction(2, 1)`` — see ``$present``.
-    """
-    return _present_number(Fraction(l, r))
-
-
-def _present_number(x):
-    """``$present``: the value a compiled arithmetic expression hands to unify.
-
-    An integral ``Fraction`` presents as its int. ``Fraction(2, 1)`` is not
-    the term ``2`` — the standard order (``'=='``, ``compare/3``) tags every
-    numeric type as its own kind while ``unify`` compares by ``==`` — so a
-    compiled ``eval_((1/2) + (1/2), X)`` must bind ``1`` exactly as the
-    interpreted evaluator (``clpfd._eval_ground``) and CLP(Q)
-    (``clpq._present``, of which this is a twin: the compiler does not import
-    clpq) do. ``type(...) is Fraction`` keeps the int hot path at one
-    pointer compare.
-    """
-    if type(x) is Fraction and x.denominator == 1:
-        return x.numerator
-    return x
 import sys as _sys  # noqa: F401
 import warnings  # noqa: F401
 from collections import defaultdict  # noqa: F401
@@ -333,6 +308,21 @@ from clausal.logic.seam import (
     each as _each,
     export as _export,
 )
+
+
+def _exact_div(l, r):
+    """``$exact_div``: a literal int/int Div in compiled arithmetic — exact
+    (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int."""
+    return _present_number(Fraction(l, r))
+
+
+def _present_number(x):
+    """``$present``: the value a compiled arithmetic expression hands to
+    unify. The rule is ``clausal.logic.variables.present_number``; this is
+    the compiler's runtime name for it, so ``eval_((1/2) + (1/2), X)``
+    binds ``1`` exactly as the interpreted evaluator and CLP(Q) do."""
+    return present_number(x)
+
 
 INJECTED_RUNTIME_BUILTINS: dict = {
     # Term-constructor helpers and runtime types emitted as bare Names by

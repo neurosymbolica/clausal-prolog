@@ -293,9 +293,10 @@ class TestZ3Conversion:
 
 class TestCompiledArithmetic:
     """``eval_(E, X)`` never touches ``_eval_ground``: the compiler emits a
-    native Python expression (``$Fraction(l, r)`` for a literal int/int Div)
-    whose value goes straight to ``$unify``. The seam's value arithmetic
-    reuses the same emitter. Both must present an integral rational as int."""
+    native Python expression (``$exact_div(l, r)`` for a literal int/int Div,
+    the whole tree wrapped in ``$present``) whose value goes to ``$unify``.
+    The seam's value arithmetic reuses the same emitter. Both must present
+    an integral rational as int."""
 
     @pytest.mark.parametrize("expr, want", [
         ("4 / 2", 2),
@@ -314,6 +315,24 @@ class TestCompiledArithmetic:
     def test_eval_float_division_is_untouched(self, tmp_path):
         got = _bind(tmp_path, "eval_(4.0 / 2, X)")
         assert got == 2.0 and type(got) is float
+
+    def test_pass_through_of_a_fraction_bound_operand_is_presented(self, tmp_path):
+        """PIN of chosen behaviour: an operand ALREADY bound to
+        ``Fraction(2, 1)`` (from Python, say) is presented when it passes
+        through a binder — ``eval_(X, Y)`` binds ``Y`` to int 2 while ``X``
+        keeps its Fraction, so ``'=='(X, Y)`` is false afterwards. That
+        matches ``_eval_ground``'s leaf rule; the two binders must agree."""
+        src = ("p(X, Y) <- eval_(X, Y)\n"
+               "q(X, Y) <- 'is'(Y, X)\n")
+        mod = _module(tmp_path, src)
+        for name in ("p", "q"):
+            y = Var()
+            for _ in call(name, Fraction(2, 1), y, module=mod):
+                got = deref(y)
+                break
+            else:
+                pytest.fail(f"{name} had no solution")
+            assert got == 2 and type(got) is int, (name, got)
 
     def test_seam_value_arithmetic(self, tmp_path):
         from clausal.import_hook import _load_module
