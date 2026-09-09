@@ -845,14 +845,44 @@ def _standard_order_key(term: Any) -> tuple:
     return (_ORD_OTHER, _OpaqueOrder(term))
 
 
+# Exact types whose native ``<`` is KNOWN to agree with
+# :func:`_standard_order_key`, each verified by measurement 2026-09-09.
+# Membership is a POSITIVE claim and needs evidence; absence costs only speed,
+# so the safe direction is to leave a type out.
+#
+# ``tuple`` is excluded because it is PROVEN wrong: cells key arity-first
+# (ISO 7.2.1) while Python compares tuples elementwise, so
+# ``[('f', 1, 2), ('g', 1)]`` sorts to ``[f/2, g/1]`` natively and
+# ``[g/1, f/2]`` by key. ``list`` is excluded because it is NOT proven right —
+# a list whose elements are compounds inherits exactly that disagreement.
+# ``Quantity`` is excluded because its ``<`` raises across dimensions.
+_NATIVE_ORDER_SAFE = frozenset({int, float, bool, str, bytes, _Decimal, _Fraction})
+
+
 def _standard_order_sorted(items: list) -> list:
     """Sort *items* into the standard order of terms.
 
-    Mutually comparable elements keep Python's own ordering — that path was
-    always right and stays the fast one.  Anything else (any compound, or a
-    mix of types) goes through :func:`_standard_order_key`.
+    A homogeneous list of a known-safe type keeps Python's own ordering, which
+    is the common case and the fast one. Everything else goes through
+    :func:`_standard_order_key`.
+
+    ``set(map(type, items))`` is one C-level pass and the set is bounded by the
+    number of DISTINCT types, not the list length, so a million-element int
+    list yields a one-element set. ``type()`` rather than ``isinstance()`` is
+    deliberate: exact identity keeps subclasses off the native path, which
+    matters for ``bool`` (a subclass of ``int``) and for any future
+    ``Quantity`` subclass such as a strict-units one.
+
+    This replaces a ``try/except TypeError`` that discovered incomparability by
+    CATCHING A FAILURE. Two things escaped it. ``Quantity.__lt__`` raises
+    ``UnitsMismatch``, which is not a ``TypeError``, so sorting across
+    dimensions — or a quantity against a plain number — CRASHED rather than
+    falling back. And equal-value ``int``/``float`` raise nothing at all, so
+    the native path returned an INPUT-ORDER-DEPENDENT answer: ``[1, 1.0]`` and
+    ``[1.0, 1]`` each sorted to themselves. A guard that fires only on
+    exceptions cannot see either case; a type gate sees both.
     """
-    try:
+    types = set(map(type, items))
+    if len(types) == 1 and types.pop() in _NATIVE_ORDER_SAFE:
         return sorted(items)
-    except TypeError:
-        return sorted(items, key=_standard_order_key)
+    return sorted(items, key=_standard_order_key)

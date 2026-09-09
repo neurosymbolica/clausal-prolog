@@ -79,3 +79,52 @@ def test_cross_dimension_comparison_never_raises():
 def test_a_quantity_still_sorts_before_atoms_and_compounds():
     assert _lt(Quantity(5, {"m": 1}), ("a",))
     assert _lt(Quantity(5, {"m": 1}), ("f", 1))
+
+
+# --- the sort/2 fast path (spec §5) ----------------------------------------
+
+from clausal.logic.builtins._helpers import _standard_order_sorted as S
+
+
+def test_sort_is_not_input_order_dependent():
+    """Measured BEFORE the fix: `S([1, 1.0])` -> `[1, 1.0]` and
+    `S([1.0, 1])` -> `[1.0, 1]`. The same multiset sorted to two different
+    answers, so sort/2 had no stable opinion about equal-value int/float and
+    no tiebreak could be implemented while that path survived.
+
+    Compared by TYPE, not by value: `[1, 1.0] == [1.0, 1]` is True in Python
+    because `1 == 1.0`, so a plain list comparison here cannot fail for the
+    reason this test exists. The first draft of this test did exactly that and
+    passed while the bug was live."""
+    def shape(xs):
+        return [(type(x).__name__, x) for x in xs]
+    assert shape(S([1, 1.0])) == shape(S([1.0, 1]))
+    assert shape(S([1, 1.0])) == [("float", 1.0), ("int", 1)]
+
+
+def test_same_type_is_not_a_sufficient_guard_for_the_native_path():
+    """All tuples, one Python type — but cells key ARITY-FIRST (ISO 7.2.1)
+    while Python compares tuples elementwise. Measured 2026-09-09:
+    native gives [f/2, g/1], the key gives [g/1, f/2]. This is why the guard
+    is a membership test and not a homogeneity test."""
+    assert S([("f", 1, 2), ("g", 1)]) == [("g", 1), ("f", 1, 2)]
+
+
+def test_sorting_across_dimensions_does_not_raise():
+    """`Quantity.__lt__` raises `UnitsMismatch`, which is NOT a `TypeError`,
+    so the old `except TypeError` never fired and the exception ESCAPED:
+    sort/2 CRASHED on any list mixing dimensions or mixing quantities with
+    plain numbers. The key handles all of them."""
+    assert S([Quantity(5, {"m": 1}), Quantity(2, {"kg": 1})]) == [
+        Quantity(2, {"kg": 1}), Quantity(5, {"m": 1})]
+    assert S([3, Quantity(5, {"m": 1}), 4]) == [3, 4, Quantity(5, {"m": 1})]
+
+
+def test_homogeneous_safe_types_still_take_the_native_path():
+    assert S([3, 1, 2]) == [1, 2, 3]
+    assert S(["b", "ab", "a"]) == ["a", "ab", "b"]
+    assert S([b"b", b"ab"]) == [b"ab", b"b"]
+
+
+def test_an_empty_list_sorts_without_reaching_the_membership_test():
+    assert S([]) == []
