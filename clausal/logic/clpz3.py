@@ -334,7 +334,7 @@ def z3_to_python(z3_val: Any) -> int | float | Fraction | str:
 
     Mapping:
     - Z3 integer       → Python int
-    - Z3 rational      → Fraction (exact)
+    - Z3 rational      → Fraction (exact); int when integral
     - Z3 true/false    → 1 / 0  (Clausal uses 0/1 for booleans)
     - Z3 bitvector     → Python int (unsigned)
     - Z3 string        → Python str
@@ -344,7 +344,12 @@ def z3_to_python(z3_val: Any) -> int | float | Fraction | str:
     if _z3.is_int_value(z3_val):
         return z3_val.as_long()
     if _z3.is_rational_value(z3_val):
-        return Fraction(z3_val.numerator_as_long(), z3_val.denominator_as_long())
+        # Z3 answers a Real-sorted value as a rational even when it is whole.
+        # An integral rational presents as int, as every other binder in the
+        # engine does (``clpq._present``): ``Fraction(5, 1)`` is not the term
+        # ``5`` in the standard order.
+        val = Fraction(z3_val.numerator_as_long(), z3_val.denominator_as_long())
+        return val.numerator if val.denominator == 1 else val
     if _z3.is_true(z3_val):
         return 1
     if _z3.is_false(z3_val):

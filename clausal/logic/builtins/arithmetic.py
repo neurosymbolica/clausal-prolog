@@ -47,7 +47,9 @@ def _eval_between_bound(term):
     """Evaluate an arithmetic operator term appearing as a between/3 bound.
 
     Reuses the runtime ground evaluator behind the ``==`` comparison surface
-    (``clpfd._eval_ground`` — int/int division yields an exact Fraction).
+    (``clpfd._eval_ground`` — int/int division yields an exact rational,
+    presented as int when integral; the denominator check below is kept
+    as a local belt-and-braces for that evaluator's invariant).
 
     Returns the evaluated int, or None when the expression's only obstacle
     is an unbound Var — the caller then keeps between/3's silent

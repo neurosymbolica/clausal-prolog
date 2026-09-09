@@ -798,7 +798,7 @@ class Tableau:
             if lo is not None and hi is not None and lo == hi:
                 var = deref(var)
                 if is_var(var):
-                    if not unify(var, lo, trail):
+                    if not unify(var, _present(lo), trail):
                         return False
         return True
 
@@ -876,6 +876,22 @@ def _min_none(a: Fraction | None, b: Fraction | None) -> Fraction | None:
 
 def _is_ground_q(x: Any) -> bool:
     return isinstance(x, (int, Fraction)) and not isinstance(x, bool)
+
+
+def _present(x: Any) -> Any:
+    """The value handed to ``unify``: an integral ``Fraction`` as its ``int``.
+
+    Tableau arithmetic stays exact and stays ``Fraction`` throughout; only the
+    value BOUND to a logic variable is presented. ``X == 4/2`` binds ``2`` —
+    the term ``'=='`` and ``compare/3`` place beside ``2`` in the standard
+    order, where ``Fraction(2, 1)`` is a different kind — and ``X == 3/2``
+    binds ``Fraction(3, 2)`` unchanged. Every site in this module that binds
+    a value goes through here; ``_q_hook`` accepts the int (ints are
+    rationals). ``bool`` is not a rational and is left alone.
+    """
+    if isinstance(x, Fraction) and x.denominator == 1:
+        return x.numerator
+    return x
 
 
 def _promote_fd_to_q(var: Var, trail: Trail) -> None:
@@ -1048,7 +1064,7 @@ def _post_q_domain(target: Any, lo: Fraction | None,
 
     flo, fhi = new_state.lo, new_state.hi
     if flo is not None and fhi is not None and flo == fhi:
-        if not unify(target, flo, trail):
+        if not unify(target, _present(flo), trail):
             return False
     return True
 
@@ -1141,10 +1157,10 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     # If one side is ground and other is a bare var, use unify for speed
     if _is_ground_q(r) and is_var(l):
         _ensure_q_for_expr(l, trail)
-        return unify(l, Fraction(r), trail)
+        return unify(l, _present(r), trail)
     if _is_ground_q(l) and is_var(r):
         _ensure_q_for_expr(r, trail)
-        return unify(r, Fraction(l), trail)
+        return unify(r, _present(l), trail)
     _ensure_q_for_expr(l, trail)
     _ensure_q_for_expr(r, trail)
     lc = _linearize(l, trail)
@@ -1266,7 +1282,7 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     opt = tab_copy.optimize(coeffs, 'max')
     if opt is None:
         return False  # unbounded
-    return unify(result_var, opt + const, trail)
+    return unify(result_var, _present(opt + const), trail)
 
 
 def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
@@ -1286,7 +1302,7 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     opt = tab_copy.optimize(coeffs, 'min')
     if opt is None:
         return False  # unbounded
-    return unify(result_var, opt + const, trail)
+    return unify(result_var, _present(opt + const), trail)
 
 
 def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
@@ -1378,7 +1394,7 @@ def _bind_optimal(tableau: Tableau, trail: Trail) -> bool:
         else:
             val = tableau.assign.get(vid)
         if val is not None:
-            if not unify(var, val, trail):
+            if not unify(var, _present(val), trail):
                 return False
     return True
 
@@ -1402,7 +1418,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
         return False
     if not _bind_optimal(tableau, trail):
         return False
-    return unify(result_var, opt + const, trail)
+    return unify(result_var, _present(opt + const), trail)
 
 
 def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
@@ -1424,7 +1440,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
         return False
     if not _bind_optimal(tableau, trail):
         return False
-    return unify(result_var, opt + const, trail)
+    return unify(result_var, _present(opt + const), trail)
 
 
 # ── Public API: projection ───────────────────────────────────────────────────
@@ -1628,7 +1644,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     _tableaux[tid] = best_tab
     if not _bind_optimal(best_tab, trail):
         return False
-    return unify(result_var, best_val, trail)
+    return unify(result_var, _present(best_val), trail)
 
 
 _BB_MAX_DEPTH = 50  # safety limit for branch-and-bound recursion

@@ -532,8 +532,9 @@ class TestZ3ToPython:
     def test_rational_whole(self):
         # nv
         result = z3_to_python(z3.RealVal("5"))
-        # May come back as Fraction(5, 1) or int depending on Z3
+        # An integral rational presents as int (tests/test_integral_rationals.py)
         assert result == 5
+        assert type(result) is int
 
     def test_rational_half(self):
         # nv

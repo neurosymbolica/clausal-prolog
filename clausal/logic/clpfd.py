@@ -1388,6 +1388,9 @@ def _eval_ground(expr):
     # the leaf guard.  A float leaf beside an FD *Var* never reaches this
     # fold; it is rejected by _expr_domain's stricter fallback instead.
     if isinstance(expr, (int, float, Fraction)) and not isinstance(expr, bool):
+        # An integral rational presents as int (see the tail below).
+        if type(expr) is Fraction and expr.denominator == 1:
+            return expr.numerator
         return expr
     if is_var(expr):
         return None
@@ -1399,47 +1402,70 @@ def _eval_ground(expr):
     if isinstance(expr, _Add):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
-        if l is not None and r is not None:
-            return l + r
+        if l is None or r is None:
+            return None
+        result = l + r
     elif isinstance(expr, _Sub):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
-        if l is not None and r is not None:
-            return l - r
+        if l is None or r is None:
+            return None
+        result = l - r
     elif isinstance(expr, _Mult):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
-        if l is not None and r is not None:
-            return l * r
+        if l is None or r is None:
+            return None
+        result = l * r
     elif isinstance(expr, _Div):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
-        if l is not None and r is not None and r != 0:
-            # int/int → Fraction for exact rational arithmetic
-            if isinstance(l, int) and not isinstance(l, bool) \
-               and isinstance(r, int) and not isinstance(r, bool):
-                return Fraction(l, r)
-            return l / r
+        if l is None or r is None or r == 0:
+            return None
+        # int/int → Fraction for exact rational arithmetic
+        if isinstance(l, int) and not isinstance(l, bool) \
+           and isinstance(r, int) and not isinstance(r, bool):
+            result = Fraction(l, r)
+        else:
+            result = l / r
     elif isinstance(expr, _FloorDiv):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
-        if l is not None and r is not None and r != 0:
-            return l // r
+        if l is None or r is None or r == 0:
+            return None
+        result = l // r
     elif isinstance(expr, _Mod):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
-        if l is not None and r is not None and r != 0:
-            return l % r
+        if l is None or r is None or r == 0:
+            return None
+        result = l % r
     elif isinstance(expr, _Pow):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
-        if l is not None and r is not None:
-            return l ** r
+        if l is None or r is None:
+            return None
+        result = l ** r
     elif isinstance(expr, _Negate):
         o = _eval_ground(expr.operand)
-        if o is not None:
-            return -o
-    return None
+        if o is None:
+            return None
+        result = -o
+    else:
+        return None
+    # The single choke point for "no evaluated expression yields an integral
+    # Fraction": ``int/int`` is exact (``3/2`` is ``Fraction(3, 2)``, never
+    # 1.5), but ``4/2``, ``(1/2) + (1/2)`` and ``(4/2) * 3`` are the INTEGERS
+    # 2, 1 and 6 and present as ``int``. ``Fraction(2, 1)`` is not the term
+    # ``2``: ``'=='``/``compare/3`` tag every numeric type as its own kind in
+    # the standard order while ``unify`` compares by ``==``, so an integral
+    # Fraction made ``'is'(X, 4/2), '=='(X, 2)`` false and ``'='(X, 2)``
+    # true at once. ``type(...) is Fraction`` keeps the int hot path at one
+    # pointer compare (a Fraction can only arise from a Div or a Fraction
+    # leaf, and both are normalised, so the check never needs isinstance).
+    if type(result) is Fraction and result.denominator == 1:
+        return result.numerator
+    return result
 
 
 # ── Variable collection ──────────────────────────────────────────────────────
