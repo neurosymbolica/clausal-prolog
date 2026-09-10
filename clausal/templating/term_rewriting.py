@@ -706,6 +706,44 @@ def _is_titlecase_identifier(identifier: str) -> bool:
     return identifier[:1].isupper() and any(c.islower() for c in identifier)
 
 
+def _double_prefix_operand(node, op_type):
+    """The operand of an ADJACENT double-prefix operator, else ``None``.
+
+    ``++expr`` / ``--expr`` / ``~~expr`` are single operators spelled with
+    two characters, and Python's parser does not know that: ``++X`` arrives
+    as ``UnaryOp(UAdd, UnaryOp(UAdd, X))``, which is also exactly what the
+    arithmetic ``+ +X`` arrives as.  For ``--`` the collision is worse still
+    -- ``a <- -b`` and ``a < --b`` parse to the IDENTICAL tree, because the
+    arrow is a ``Lt`` followed by a ``USub``.  Only the source COLUMNS tell
+    the operator from the arithmetic, so the adjacency test is not a detail
+    of one call site: it is the operator's definition, and every reader of
+    these shapes has to apply it.
+
+    Three readers did not, which is why this is one function.  The transform
+    (``TermTransformer.visit_UnaryOp``) required adjacency while
+    ``_clause_variable_names`` and the TitleCase lint did not, so a spaced
+    ``+ +Foo`` was compiled as arithmetic on the logic variable ``Foo`` --
+    Clausal code -- while both of those skipped it as a Python escape.  The
+    collector thereby threw away the only evidence that ``Foo`` was a
+    variable at all, and the lint skipped the functor position it exists to
+    refuse.  (The lint's docstring already SAID "adjacent double ``UAdd``";
+    the code had never done it.)
+    """
+    if (isinstance(node, UnaryOp) and isinstance(node.op, op_type)
+            and isinstance(node.operand, UnaryOp)
+            and isinstance(node.operand.op, op_type)
+            and node.lineno == node.operand.lineno
+            and node.col_offset == node.operand.col_offset - 1):
+        return node.operand.operand
+    return None
+
+
+def _python_escape_operand(node):
+    """``++expr`` → ``expr``; anything else → ``None``.  See
+    ``_double_prefix_operand`` for why adjacency is part of the question."""
+    return _double_prefix_operand(node, UAdd)
+
+
 def _clause_scope_exclusions(import_remap) -> frozenset:
     """TitleCase names a CLAUSAL context must not treat as logic variables.
 
@@ -742,9 +780,7 @@ def _clause_variable_names(node, excluded) -> set:
             return                      # verbatim Python: not evidence
 
         def visit_UnaryOp(self, node):
-            if (isinstance(node.op, UAdd)
-                    and isinstance(node.operand, UnaryOp)
-                    and isinstance(node.operand.op, UAdd)):
+            if _python_escape_operand(node) is not None:
                 return                  # ``++`` escape: not evidence
             self.generic_visit(node)
 
@@ -2844,15 +2880,11 @@ class TermTransformer(NodeTransformer):
 
     def visit_UnaryOp(transformer, unary_op):
         # ++expr — Python escape: evaluate expr as Python at search time.
-        if (
-            isinstance(unary_op.op, UAdd)
-            and isinstance(unary_op.operand, UnaryOp)
-            and isinstance(unary_op.operand.op, UAdd)
-            # Adjacent columns — no space between the two '+' signs.
-            and unary_op.col_offset == unary_op.operand.col_offset - 1
-            and unary_op.lineno == unary_op.operand.lineno
-        ):
-            expression = unary_op.operand.operand
+        # Adjacency (no space between the two '+' signs) is part of the
+        # question -- see ``_double_prefix_operand``.
+        escaped = _python_escape_operand(unary_op)
+        if escaped is not None:
+            expression = escaped
             var_names = _collect_logic_var_names(
                 expression, transformer._python_scope_exclusions())
             if transformer._python_visitor is not None:
@@ -5667,8 +5699,11 @@ class EmbedTransformer(NodeTransformer):
         ``++`` remedy would be wrong advice there.  Within a Clausal subtree
         it does NOT read:
 
-        * a ``++`` Python escape (adjacent double ``UAdd``): Python code by
-          definition, the very place a TitleCase class name belongs;
+        * a ``++`` Python escape (adjacent double ``UAdd`` --
+          ``_python_escape_operand``, the same predicate the TRANSFORM
+          applies, so a spaced ``+ +Foo`` that compiles as Clausal is linted
+          as Clausal): Python code by definition, the very place a TitleCase
+          class name belongs;
         * string literals and f-strings: text, not identifiers;
         * a name bound by an ``-import_from`` list (or its ``alias(...)``
           local name) — see ``_titlecase_prepass``;
@@ -5696,9 +5731,7 @@ class EmbedTransformer(NodeTransformer):
         import warnings  # noqa: PLC0415
 
         def _is_escape(node):
-            return (isinstance(node, UnaryOp) and isinstance(node.op, UAdd)
-                    and isinstance(node.operand, UnaryOp)
-                    and isinstance(node.operand.op, UAdd))
+            return _python_escape_operand(node) is not None
 
         def consider(ident, node):
             if (ident not in transformer._titlecase_seen
@@ -5918,55 +5951,52 @@ class EmbedTransformer(NodeTransformer):
         return result
 
     def visit_UnaryOp(transformer, unary_op):
-        match unary_op:  # -- term_expression
-            case UnaryOp(op=USub(), operand=UnaryOp(op=USub(), operand=expression)):
-                # '--' must be written without a space (the two '-' are adjacent).
-                if (
-                    unary_op.col_offset == unary_op.operand.col_offset - 1
-                    and unary_op.lineno == unary_op.operand.lineno
-                ):
-                    # THE SEAM: ``--term`` yields the runtime TERM, built at
-                    # the point of execution in the host module's namespace
-                    # (clausal.logic.seam.seam_term), never a rewriter node.
-                    # Every logic variable of the expression is bound up
-                    # front, so a ``++`` thunk that names a variable first
-                    # written later in the same term still finds it, and an
-                    # inner seam (inside that ``++``) reuses the variables an
-                    # enclosing seam already bound rather than shadowing them.
-                    transformer._lint_titlecase(expression)
-                    term_ast, fresh = transformer._seam_term_ast(expression, unary_op)
-                    if fresh:
-                        # term position: bind the fresh variables inline
-                        binds = [transformer._var_bind(n, unary_op) for n in fresh]
-                        term_ast = replace(
-                            Subscript(
-                                value=replace(Tuple(elts=[*binds, term_ast], ctx=Load()), unary_op),
-                                slice=replace(Constant(value=-1), unary_op),
-                                ctx=Load(),
-                            ),
-                            unary_op,
-                        )
-                    return transformer._seam_call(term_ast, unary_op)
-            case UnaryOp(op=Invert(), operand=UnaryOp(op=Invert(), operand=expression)):
-                # '~~' must be written without a space (the two '~' are adjacent).
-                if (
-                    unary_op.col_offset == unary_op.operand.col_offset - 1
-                    and unary_op.lineno == unary_op.operand.lineno
-                ):
-                    inner = _py_ast_expr(expression, unary_op)
-                    # Wrap with $ast.fix_missing_locations so runtime nodes have positions.
-                    # '$ast' uses '$' so user code cannot accidentally shadow the stdlib ast module.
-                    result = replace(Call(
-                        func=replace(Attribute(
-                            value=replace(Name(id='$ast', ctx=load), unary_op),
-                            attr='fix_missing_locations',
-                            ctx=load,
-                        ), unary_op),
-                        args=[inner],
-                        keywords=[],
-                    ), unary_op)
-                    fix_missing_locations(result)
-                    return result
+        # ``--`` and ``~~`` must be written without a space, and for ``--``
+        # that is not a nicety: ``a <- -b`` and ``a < --b`` parse to the same
+        # tree, so the columns are the only thing that says which was
+        # written.  ``_double_prefix_operand`` is the one place that test
+        # lives -- see its docstring for the three readers that each had
+        # their own copy, one of them without the test at all.
+        expression = _double_prefix_operand(unary_op, USub)
+        if expression is not None:
+            # THE SEAM: ``--term`` yields the runtime TERM, built at
+            # the point of execution in the host module's namespace
+            # (clausal.logic.seam.seam_term), never a rewriter node.
+            # Every logic variable of the expression is bound up
+            # front, so a ``++`` thunk that names a variable first
+            # written later in the same term still finds it, and an
+            # inner seam (inside that ``++``) reuses the variables an
+            # enclosing seam already bound rather than shadowing them.
+            transformer._lint_titlecase(expression)
+            term_ast, fresh = transformer._seam_term_ast(expression, unary_op)
+            if fresh:
+                # term position: bind the fresh variables inline
+                binds = [transformer._var_bind(n, unary_op) for n in fresh]
+                term_ast = replace(
+                    Subscript(
+                        value=replace(Tuple(elts=[*binds, term_ast], ctx=Load()), unary_op),
+                        slice=replace(Constant(value=-1), unary_op),
+                        ctx=Load(),
+                    ),
+                    unary_op,
+                )
+            return transformer._seam_call(term_ast, unary_op)
+        expression = _double_prefix_operand(unary_op, Invert)
+        if expression is not None:
+            inner = _py_ast_expr(expression, unary_op)
+            # Wrap with $ast.fix_missing_locations so runtime nodes have positions.
+            # '$ast' uses '$' so user code cannot accidentally shadow the stdlib ast module.
+            result = replace(Call(
+                func=replace(Attribute(
+                    value=replace(Name(id='$ast', ctx=load), unary_op),
+                    attr='fix_missing_locations',
+                    ctx=load,
+                ), unary_op),
+                args=[inner],
+                keywords=[],
+            ), unary_op)
+            fix_missing_locations(result)
+            return result
         unary_op.operand = transformer.visit(unary_op.operand)
         return unary_op
 
@@ -8185,13 +8215,7 @@ class EmbedTransformer(NodeTransformer):
 
         def _is_double(op_type):
             """True if ctx is op_type(op_type(Dict(…))) with adjacent operators."""
-            return (
-                isinstance(ctx, UnaryOp) and isinstance(ctx.op, op_type)
-                and isinstance(ctx.operand, UnaryOp) and isinstance(ctx.operand.op, op_type)
-                and isinstance(ctx.operand.operand, Dict)
-                and ctx.lineno == ctx.operand.lineno
-                and ctx.col_offset == ctx.operand.col_offset - 1
-            )
+            return isinstance(_double_prefix_operand(ctx, op_type), Dict)
 
         if _is_double(USub):
             # with --{} as target: — block form of --; produces simple_ast terms.

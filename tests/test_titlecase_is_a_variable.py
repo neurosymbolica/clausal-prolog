@@ -13,6 +13,7 @@ clause body from a clear load error into a units expression that dies much
 later with a message about SI prefixes.  See the comment on
 ``_lint_titlecase``'s walk.
 """
+import ast
 import textwrap
 import warnings
 
@@ -182,6 +183,30 @@ def test_fstring_interpolation_of_a_python_class_still_evaluates(tmp_path):
         from fractions import Fraction
         -module(ttiav_fstr, [p(S)])
         p(S) <- (S is f"{Fraction(1, 3)}")
+    """)
+    assert _answers(mod, "p") == [("1/3",)]
+
+
+def test_plus_plus_operand_of_a_python_class_still_evaluates(tmp_path):
+    """The ``++`` TWIN of the test above, and the negative control for the
+    OTHER skip.
+
+    Two different skips keep a thunk body's names out of the clause-variable
+    evidence: ``_clause_variable_names`` refuses ``JoinedStr`` and it refuses
+    an adjacent ``++``.  The f-string test exercises the first only.  Delete
+    the ``++`` arm and ``Fraction`` is collected as a clause variable, which
+    subtracts it from the Python-scope exclusions, which captures it as an
+    unbound lambda parameter -- and ``++Fraction(1, 3)`` dies at QUERY time
+    with ``'AttVar' object is not callable``, with no load diagnostic
+    (``_lint_titlecase`` does not read a ``++`` subtree either).
+
+    Asserted through ``str`` so the answer is the same ``"1/3"`` the
+    f-string twin asserts, which is what makes the pair readable as a pair.
+    """
+    mod = _load(tmp_path, "ppclass", """
+        from fractions import Fraction
+        -module(ttiav_ppclass, [p(S)])
+        p(S) <- (S is ++str(Fraction(1, 3)))
     """)
     assert _answers(mod, "p") == [("1/3",)]
 
@@ -678,3 +703,105 @@ def test_head_and_body_thunks_agree_across_all_three_spellings(tmp_path):
     # the right answer -- for all three.  What must never appear is a class.
     assert all(r.startswith("_") for r in rendered.values()), rendered
     assert not any("class" in r for r in rendered.values()), rendered
+
+
+# ── The escape predicate is one predicate, adjacency included ──────────────
+
+def test_a_spaced_plus_plus_is_not_an_escape_for_the_collector():
+    """The same adjacency rule, on the ``++`` side and from the COLLECTOR's
+    end — one shared predicate, so the two cannot disagree.
+
+    ``+ +Node`` is NOT a Python escape: ``visit_UnaryOp`` requires the two
+    operators to be adjacent, so the transform compiles it as arithmetic on
+    the logic variable ``Node``.  The clause therefore DOES use ``Node`` as a
+    variable, and a collector that skipped ``+ +`` as an escape threw away
+    the only evidence of it — after which a thunk in the same clause resolves
+    ``Node`` in the module namespace instead.
+
+    Asserted on the collector directly rather than end-to-end, because
+    end-to-end the fault is MASKED: the arithmetic reading emits
+    ``(Node := $Var())``, whose walrus leaks a same-named binding into the
+    module globals that the uncaptured thunk then finds.  A test through the
+    front door would have passed either way."""
+    from clausal.templating.term_rewriting import _clause_variable_names
+    adjacent = ast.parse("maybe(++Node)", mode="eval").body
+    spaced = ast.parse("maybe(+ +Node)", mode="eval").body
+    assert _clause_variable_names(adjacent, frozenset()) == set()
+    assert _clause_variable_names(spaced, frozenset()) == {"Node"}
+
+
+def test_a_spaced_plus_plus_is_not_an_escape_for_the_lint_either(tmp_path):
+    """The third copy of the predicate.  The TitleCase lint skips a ``++``
+    subtree because the name there is Python — its own docstring says
+    "adjacent double ``UAdd``" — but the code omitted the adjacency test, so
+    it also skipped ``+ +Foo(1)``, which the transform compiles as Clausal.
+    The functor refusal the lint exists for therefore never fired."""
+    with pytest.raises(SyntaxError) as excinfo:
+        _load(tmp_path, "lint_spaced", """
+            -module(cvmit_lint_spaced, [p(X)])
+            bar(Y),
+            p(X) <- (bar(+ +Foo(1)))
+        """)
+    assert "Foo" in str(excinfo.value)
+
+
+def test_a_non_variable_spelling_stays_double_negation(tmp_path):
+    """The marker names a Clausal VARIABLE, and ``total`` cannot be one, so
+    ``--total`` is the arithmetic it always was.  Numeric on purpose: here
+    the double negation IS the property under test."""
+    mod = _load(tmp_path, "lower", """
+        total = 4
+        -module(cvmit_lower, [p(S)])
+        p(S) <- (S is ++(--total))
+    """)
+    assert _answers(mod, "p") == [(4,)]
+
+
+# ── One shared scope across every outermost root ───────────────────────────
+#
+# ``note_clause_scope``'s auto-note in ``visit`` fires once per outermost
+# root and ACCUMULATES, so where one transformer visits several roots that
+# share a variable scope, a thunk in root 1 is decided before root 2's names
+# are known.  Both sites below are such a shape, and both are order-sensitive
+# without an up-front note — silently, since the two readings differ only in
+# what the thunk formats.
+
+def _lambda_params(rendered, name):
+    """Whether the emitted thunk captured *name* as a lambda parameter."""
+    return f"lambda {name}:" in rendered
+
+
+def test_the_dash_dash_block_form_notes_every_statement_up_front():
+    from clausal.templating.term_rewriting import EmbedTransformer, unparse
+
+    def render(src):
+        tree = ast.parse(src)
+        ast.fix_missing_locations(tree)
+        out = EmbedTransformer().visit(tree)
+        ast.fix_missing_locations(out)
+        return unparse(out)
+
+    thunk_first = render(
+        'with --{} as clauses:\n    bar(f"{Node}")\n    tree(Node)\n')
+    thunk_last = render(
+        'with --{} as clauses:\n    tree(Node)\n    bar(f"{Node}")\n')
+    assert _lambda_params(thunk_last, "Node"), thunk_last
+    assert _lambda_params(thunk_first, "Node"), thunk_first
+
+
+def test_the_repl_conjunction_path_notes_every_conjunct_up_front():
+    from clausal.import_hook import _StarQueryTransformer
+    from clausal.templating.term_rewriting import unparse
+
+    def render(src):
+        tree = ast.parse(src)
+        out = _StarQueryTransformer().visit(tree)
+        ast.fix_missing_locations(out)
+        return unparse(out)
+
+    thunk_first = render(
+        '_clausal_star_query_(bar(f"{Node}"), tree(Node))')
+    thunk_last = render(
+        '_clausal_star_query_(tree(Node), bar(f"{Node}"))')
+    assert _lambda_params(thunk_last, "Node"), thunk_last
+    assert _lambda_params(thunk_first, "Node"), thunk_first
