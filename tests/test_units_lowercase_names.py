@@ -162,6 +162,22 @@ class TestPrintedLabel:
 
 
 class TestTitleCaseAliases:
+    def test_bare_titlecase_unit_name_is_a_syntax_error(self):
+        """The deprecation-window witness: a TitleCase unit name used BARE
+        (outside an ``-import_from`` list, where the alias still resolves)
+        is TitleCase in a Clausal position and does not load.
+        Fixture: tests/fixtures/titlecase_unit_spelling_witness.clausal."""
+        # nv
+        import pathlib
+        from clausal.import_hook import _load_module
+        p = (pathlib.Path(__file__).parent / "fixtures"
+             / "titlecase_unit_spelling_witness.clausal")
+        with pytest.raises(SyntaxError) as ei:
+            _load_module("_titlecase_unit_witness", str(p))
+        assert "`Metre` is TitleCase" in str(ei.value)
+        assert "Rename `Metre` -> `metre`" in str(ei.value)
+        assert ei.value.lineno == 7
+
     def test_alias_table_is_complete(self):
         """Every entry names a real lowercase unit; every unit has an entry."""
         # nv

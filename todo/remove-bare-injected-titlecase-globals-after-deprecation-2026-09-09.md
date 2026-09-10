@@ -11,6 +11,21 @@ TitleCase has no role in Clausal code; a Python class is reached via
 stays bare permanently (its lowercase alias folds into it); it is NOT part of
 this removal.
 
+## State on 2026-09-10
+
+The TitleCase lint is an ERROR (`TITLECASE_IDENTIFIER_SEVERITY = "error"`): a
+bare `Var(...)`, `Add`, `Node(...)` in a Clausal position no longer loads,
+and the message names `++Name`.  So from source the bare aliases are
+reachable only through a `++` escape, an f-string or hosted Python — the
+guard in item 2 and the distrust clauses in item 3 are unreachable from a
+`.clausal` file.  `tests/test_dollar_runtime_names.py` now asserts the
+SyntaxError for a TitleCase user head spelled like a runtime class
+(`TestUserPredicateNamedLikeARuntimeClass`, `TestUserPredicateNamedPredicateMeta`,
+`TestMintingGuardOnlyForTwinnedHeads`); the pool-split tests in
+`tests/test_strict_atoms_default.py` demote the lint to its warning form to
+keep pinning the distrust clauses for the window, and one test there pins
+that the lint fires first under the default.
+
 ## What is removed at the end of the window
 
 1. The BARE aliases in every seeding namespace.  Both are built through

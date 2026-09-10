@@ -19,13 +19,22 @@ of `_handle_import_from_directive` in `clausal/templating/term_rewriting.py` tha
 per file (`_warn_deprecated_unit_spelling`, `_UNITS_MODULE_PATHS`,
 `_deprecated_unit_renames`).
 
-**Exit criterion (measurable):** all of the above, the `TestTitleCaseAliases` class in
-`tests/test_units_lowercase_names.py`, and the one fixture deliberately kept on the old
-spelling (`tests/fixtures/units_expr_sugar.clausal`) are removed in one change, when (a)
-no `.clausal` or `.py` in this repository spells a TitleCase unit name except a single test
-that asserts the removal error, and (b) the downstream users of `py.units` have been
-migrated (their owners report zero `ClausalDeprecatedSpellingWarning`s naming a unit
-across their suites).
+**State on 2026-09-10:** a TitleCase identifier in a Clausal position is a load-time
+SyntaxError.  A TitleCase unit name used BARE no longer loads; the engine-side witness now
+ASSERTS that error — `tests/fixtures/titlecase_unit_spelling_witness.clausal`, checked by
+`TestTitleCaseAliases::test_bare_titlecase_unit_name_is_a_syntax_error` in
+`tests/test_units_lowercase_names.py`.  The fixture that used to be kept on the old
+spelling (`tests/fixtures/units_expr_sugar.clausal`) was renamed to the lowercase names.
+Names in an `-import_from(py.units, [...])` list are exempt from the lint, so the alias
+path (rewrite + once-per-file warning) is still the only way the old spelling reaches a
+file, and it is what downstream still uses.
+
+**Exit criterion (measurable):** all of the above and the alias-path tests in the
+`TestTitleCaseAliases` class in `tests/test_units_lowercase_names.py` are removed in one
+change, when (a) no `.clausal` or `.py` in this repository spells a TitleCase unit name
+except the witness fixture and the single test that asserts the removal error, and (b) the
+downstream users of `py.units` have been migrated (their owners report zero
+`ClausalDeprecatedSpellingWarning`s naming a unit across their suites).
 
 **When removed:** `-import_from(py.units, [Metre])` should fail LOUDLY at load (an
 ImportError naming the rename, which the units-module branch can raise instead of

@@ -1,0 +1,5 @@
+# Deprecation-window witness: the retired `Test/1` spelling of the runner's
+# `test/1` predicate.  TitleCase has no role in Clausal code, so this file
+# must NOT load — the TitleCase lint raises a located SyntaxError at line 5
+# naming the rename.  Asserted by tests/test_testing_cli.py.
+Test("one is one") <- (1 == 1)

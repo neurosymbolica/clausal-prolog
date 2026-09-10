@@ -1,7 +1,7 @@
 """CLI behaviour for ``python -m clausal.testing``.
 
 Regression: a missing path (mistyped path / wrong cwd) and a file with no
-``Test(...)`` clauses both used to report ``[PASSED]`` with exit 0, masking
+``test(...)`` clauses both used to report ``[PASSED]`` with exit 0, masking
 mistakes as green runs. See todo/testing-missing-file-reports-pass.md.
 """
 
@@ -44,7 +44,7 @@ def test_testless_file_strict_fails(capsys, tmp_path):
 
 def test_passing_file_still_passes(capsys, tmp_path):
     p = tmp_path / "ok.clausal"
-    p.write_text('Test("one is one") <- (1 == 1)\n')
+    p.write_text('test("one is one") <- (1 == 1)\n')
     rc = main([str(p)])
     out = capsys.readouterr().out
     assert rc == 0
@@ -53,18 +53,21 @@ def test_passing_file_still_passes(capsys, tmp_path):
 
 def test_failing_file_still_fails(capsys, tmp_path):
     p = tmp_path / "bad.clausal"
-    p.write_text('Test("one is two") <- (1 == 2)\n')
+    p.write_text('test("one is two") <- (1 == 2)\n')
     rc = main([str(p)])
     assert rc == 1
     assert "[FAILED]" in capsys.readouterr().out
 
 
-# ── test/1 is the predicate; Test/1 is its deprecated spelling ───────────────
+# ── test/1 is the predicate; Test/1 was its spelling ─────────────────────────
 #
 # Predicates are lowercase (docs/syntax.md), so the test-clause predicate is
-# ``test/1``.  ``Test/1`` still runs but warns once per file at load time,
-# the way ``If`` -> ``if_`` does.  A file may hold both spellings during a
-# rename, and the runner reports the UNION in source order.
+# ``test/1``.  ``Test/1`` is TitleCase, which has no role in Clausal code:
+# a file spelling it no longer loads — the TitleCase lint raises a located
+# SyntaxError at the first ``Test(`` clause and names the rename.  These are
+# the engine-side witnesses of that; the runner's own ``Test/1`` union
+# (``collect_tests`` reads both spellings) stays until the removal in
+# todo/remove-Test-1-spelling-union-after-migration-2026-09-10.md.
 
 import warnings
 
@@ -108,43 +111,57 @@ def test_lowercase_only_file_runs_all_silently(tmp_path):
         ("zeta", True), ("alpha", True), ("mid", True)]
 
 
-def test_uppercase_only_file_runs_all_and_warns_once(tmp_path):
+def test_uppercase_file_does_not_load_and_names_the_rename(tmp_path):
     """# nv"""
     p = tmp_path / "upper.clausal"
     p.write_text(UPPER)
-    mod, spelling = _load_recording(p)
-    assert len(spelling) == 1, [str(w.message) for w in spelling]
-    message = str(spelling[0].message)
-    assert "`Test` -> `test`" in message
-    assert "test/1" in message
+    with pytest.raises(SyntaxError) as ei:
+        load_clausal_module(p)
+    message = str(ei.value)
+    assert "`Test` is TitleCase" in message
+    assert "Rename `Test` -> `test`" in message
     assert "upper.clausal:1" in message  # the first offending site
-    assert collect_tests(mod) == ["zeta", "alpha", "mid"]
-    assert [(r.name, r.passed) for r in run_file(p).results] == [
-        ("zeta", True), ("alpha", True), ("mid", True)]
+    assert ei.value.lineno == 1
 
 
-def test_mixed_file_runs_the_union_in_source_order(tmp_path):
-    """# nv"""
+def test_uppercase_file_is_a_load_failure_for_the_runner(tmp_path):
+    """``run_file`` reports the load error as the single ``<load>`` result
+    and the CLI exits 1 — never a green run."""
+    # nv
+    p = tmp_path / "upper.clausal"
+    p.write_text(UPPER)
+    results = run_file(p)
+    assert [(r.name, r.passed) for r in results.results] == [("<load>", False)]
+    assert isinstance(results.results[0].error, SyntaxError)
+    assert main([str(p)]) == 1
+
+
+def test_witness_fixture_on_the_old_spelling_does_not_load():
+    """The checked-in witness (tests/fixtures/titlecase_test_spelling_witness.clausal)."""
+    # nv
+    from pathlib import Path
+    p = Path(__file__).parent / "fixtures" / "titlecase_test_spelling_witness.clausal"
+    with pytest.raises(SyntaxError) as ei:
+        load_clausal_module(p)
+    assert "Rename `Test` -> `test`" in str(ei.value)
+    assert ei.value.lineno == 5
+    assert [(r.name, r.passed) for r in run_file(p).results] == [("<load>", False)]
+
+
+def test_mixed_file_fails_at_the_first_uppercase_clause(tmp_path):
+    """A file part-way through a rename does not load either; the error
+    locates the first ``Test(`` clause, not the file's first line."""
+    # nv
     p = tmp_path / "mixed.clausal"
     p.write_text(
         'test("a") <- (1 == 1)\n'
         'Test("b") <- (1 == 1)\n'
         'test("c") <- (1 == 1)\n'
-        'Test("d") <- (1 == 2)\n'   # a failing legacy clause: FAIL, not error
-        'test("e") <- (1 == 2)\n'   # a failing canonical clause
     )
-    mod, spelling = _load_recording(p)
-    assert len(spelling) == 1
-    assert collect_tests(mod) == ["a", "b", "c", "d", "e"]
-    results = run_file(p)
-    assert [(r.name, r.passed, r.error) for r in results.results] == [
-        ("a", True, None), ("b", True, None), ("c", True, None),
-        ("d", False, None), ("e", False, None)]
-    # Each failure was diagnosed against ITS OWN clause, whichever spelling.
-    for r in results.results[3:]:
-        assert r.diagnostic is not None
-        assert not any("could not locate" in n for n in r.diagnostic.notes)
-        assert r.line is not None
+    with pytest.raises(SyntaxError) as ei:
+        load_clausal_module(p)
+    assert "mixed.clausal:2" in str(ei.value)
+    assert ei.value.lineno == 2
 
 
 def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
@@ -160,27 +177,6 @@ def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
     help_text = capsys.readouterr().out
     assert "test/1" in help_text
     assert "Test(...)" not in help_text
-
-
-def test_same_description_under_both_spellings_warns(tmp_path):
-    """# nv"""
-    p = tmp_path / "dup.clausal"
-    p.write_text(
-        'test("same") <- (1 == 1)\n'
-        'Test("same") <- (1 == 2)\n'
-        'test("other") <- (1 == 1)\n'
-    )
-    mod, _spelling = _load_recording(p)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        names = collect_tests(mod)
-    dups = [w for w in caught if "both test/1 and Test/1" in str(w.message)]
-    assert len(dups) == 1, [str(w.message) for w in caught]
-    message = str(dups[0].message)
-    assert "dup.clausal" in message
-    assert "'same'" in message
-    assert "'other'" not in message
-    assert names == ["same", "same", "other"]
 
 
 # ── ``.seam`` is an alias extension for ``.clausal`` ─────────────────────────

@@ -1,0 +1,7 @@
+# Deprecation-window witness: the retired TitleCase spelling of an SI unit
+# used BARE (not through an -import_from list, where the alias still
+# resolves for the window).  TitleCase has no role in Clausal code, so this
+# file must NOT load — the TitleCase lint raises a located SyntaxError at
+# line 7 naming the rename.  Asserted by tests/test_units_lowercase_names.py.
+-import_from(py.units, [metre])
+speed(X) <- (X is 5.0(Metre))

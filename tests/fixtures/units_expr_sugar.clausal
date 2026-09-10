@@ -1,26 +1,26 @@
-# Deliberately kept on the deprecated TitleCase unit spelling (Metre, Second,
-# Newton): it exercises the alias path in -import_from and the once-per-file
-# lint.  Every other fixture uses the lowercase names.  Remove together with
-# the aliases — see todo/remove-deprecated-TitleCase-unit-names-after-migration-2026-09-09.md.
--import_from(py.units, [Metre, Second, Newton])
+# Unit sugar on lists, scalars, variables and compound units.  Once the one
+# fixture kept on the TitleCase unit spelling; the TitleCase lint is an
+# error now, and the deprecation-window witness for the old spelling is
+# tests/fixtures/titlecase_unit_spelling_witness.clausal.
+-import_from(py.units, [metre, second, newton])
 
-# [1,2,3](Metre) - list with unit annotation
+# [1,2,3](metre) - list with unit annotation
 test("list with unit") <- (
-    X is [1.0, 2.0, 3.0](Metre),
-    has_units(X, Metre))  # nv
+    X is [1.0, 2.0, 3.0](metre),
+    has_units(X, metre))  # nv
 
 # Scalar sugar still works
 test("scalar with unit") <- (
-    X is 5.0(Metre),
-    has_units(X, Metre))  # nv
+    X is 5.0(metre),
+    has_units(X, metre))  # nv
 
 # Variable sugar still works
 test("var with unit") <- (
     V is 9.8,
-    X is V(Newton),
-    has_units(X, Newton))  # nv
+    X is V(newton),
+    has_units(X, newton))  # nv
 
 # Compound unit on list
 test("list with compound unit") <- (
-    X is [0.0, 10.0, 20.0](Metre/Second),
-    has_units(X, Metre/Second))  # nv
+    X is [0.0, 10.0, 20.0](metre/second),
+    has_units(X, metre/second))  # nv
