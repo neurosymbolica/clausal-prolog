@@ -137,7 +137,7 @@ class TestClausalTranslation:
         # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
-            s.consult_clausal("Foo(1, 2),\nFoo(3, 4),")
+            s.consult_clausal("foo(1, 2),\nfoo(3, 4),")
             results = s.query_all("foo(X, Y).")
             assert len(results) == 2
 
@@ -146,11 +146,11 @@ class TestClausalTranslation:
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_clausal(textwrap.dedent("""\
-                Edge(1, 2),
-                Edge(2, 3),
-                Edge(3, 4),
-                Reach(X, Y) <- Edge(X, Y)
-                Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
+                edge(1, 2),
+                edge(2, 3),
+                edge(3, 4),
+                reach(X, Y) <- edge(X, Y)
+                reach(X, Y) <- (edge(X, Z), reach(Z, Y))
             """))
             assert s.query_bool("reach(1, 4).")
             results = s.query_all("reach(1, X).")
@@ -161,7 +161,7 @@ class TestClausalTranslation:
         # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
-            s.consult_clausal("Double(X, Y) <- (eval_(X * 2, Y))")
+            s.consult_clausal("double(X, Y) <- (eval_(X * 2, Y))")
             assert s.query_one("double(5, Y).") == {"Y": 10}
 
     def test_consult_clausal_list_patterns(self):
@@ -169,8 +169,8 @@ class TestClausalTranslation:
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_clausal(textwrap.dedent("""\
-                MyAppend([], L, L),
-                MyAppend([H, *T], L, [H, *R]) <- MyAppend(T, L, R)
+                my_append([], L, L),
+                my_append([H, *T], L, [H, *R]) <- my_append(T, L, R)
             """))
             sol = s.query_one("my_append([1,2], [3,4], R).")
             assert sol["R"] == [1, 2, 3, 4]
@@ -179,7 +179,7 @@ class TestClausalTranslation:
         """consult_file auto-detects .clausal extension."""
         # nv
         f = tmp_path / "facts.clausal"
-        f.write_text("Color(red),\nColor(blue),\n")
+        f.write_text("color(red),\ncolor(blue),\n")
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_file(str(f))

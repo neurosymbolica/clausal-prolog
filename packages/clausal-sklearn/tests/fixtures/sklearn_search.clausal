@@ -4,7 +4,7 @@
 
 # ── GridSearch ───────────────────────────────────────────────────────
 
-Test("grid search svc on iris") <- (
+test("grid search svc on iris") <- (
     LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
@@ -15,7 +15,7 @@ Test("grid search svc on iris") <- (
 
 # ── GridSearch with metric ───────────────────────────────────────────
 
-Test("grid search with accuracy metric") <- (
+test("grid search with accuracy metric") <- (
     LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf"]},
@@ -26,7 +26,7 @@ Test("grid search with accuracy metric") <- (
 
 # ── BestParams ───────────────────────────────────────────────────────
 
-Test("best params from grid search") <- (
+test("best params from grid search") <- (
     LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf", "linear"]},
@@ -36,7 +36,7 @@ Test("best params from grid search") <- (
 
 # ── SearchResults ────────────────────────────────────────────────────
 
-Test("search results from grid search") <- (
+test("search results from grid search") <- (
     LoadDataset("iris", DATASET),
     GridSearch(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf"]},
@@ -46,7 +46,7 @@ Test("search results from grid search") <- (
 
 # ── RandomSearch ─────────────────────────────────────────────────────
 
-Test("random search on iris") <- (
+test("random search on iris") <- (
     LoadDataset("iris", DATASET),
     RandomSearch(Est("random_forest", {}),
                  {"n_estimators": [10, 50, 100], "max_depth": [3, 5, 10]},

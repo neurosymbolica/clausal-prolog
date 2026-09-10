@@ -69,5 +69,5 @@ class TestOpencvPhase6Fixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), \
+        assert _succeeds("test", name, module=self.mod), \
             f"Test({name!r}) failed"

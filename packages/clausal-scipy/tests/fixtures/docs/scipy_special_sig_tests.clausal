@@ -1,16 +1,16 @@
 # Companion tests for docs/scipy_special.md signature blocks.
 -import_from(scipy_special, [Gamma, Erf, ErfComplement, Factorial, Comb])
 
-Test("gamma exists") <- (
+test("gamma exists") <- (
     Gamma(5.0, V),
     DIFF is ++(abs(V - 24.0)),
     DIFF < 1e-10)  # nv
 
-Test("erf exists") <- (
+test("erf exists") <- (
     Erf(0.0, V),
     ++(abs(V)) < 1e-10)  # nv
 
-Test("factorial exists") <- (
+test("factorial exists") <- (
     Factorial(5, V),
     V is ++(float(V)),
     ++(abs(V - 120.0)) < 1e-10)  # nv

@@ -2,29 +2,29 @@
 
 # ── sum_/5 ──────────────────────────────────────────────────────────────
 
-Test("sum of i from 1 to N") <- (
+test("sum of i from 1 to N") <- (
     sum_(I, I, 1, N, R),
     R == N*(N + 1)/2
 )  # nv
 
-Test("sum of i^2 from 1 to 5") <- (
+test("sum of i^2 from 1 to 5") <- (
     sum_(I**2, I, 1, 5, R),
     R == 55
 )  # nv
 
-Test("sum of constants") <- (
+test("sum of constants") <- (
     sum_(3, I_UNUSED, 1, N, R),
     R == 3*N
 )  # nv
 
 # ── Product/5 ─────────────────────────────────────────────────────────────
 
-Test("product 1 to 5") <- (
+test("product 1 to 5") <- (
     Product(I, I, 1, 5, R),
     R == 120
 )  # nv
 
-Test("product symbolic") <- (
+test("product symbolic") <- (
     Product(X, X, 1, N_UNUSED, R),
     S is ++str(R),
     ++("factorial" in S)
@@ -32,22 +32,22 @@ Test("product symbolic") <- (
 
 # ── Binomial/3 ───────────────────────────────────────────────────────────────
 
-Test("binomial 5 choose 2") <- (
+test("binomial 5 choose 2") <- (
     Binomial(5, 2, R),
     R == 10
 )  # nv
 
-Test("binomial 10 choose 0") <- (
+test("binomial 10 choose 0") <- (
     Binomial(10, 0, R),
     R == 1
 )  # nv
 
-Test("binomial 10 choose 10") <- (
+test("binomial 10 choose 10") <- (
     Binomial(10, 10, R),
     R == 1
 )  # nv
 
-Test("binomial symbolic") <- (
+test("binomial symbolic") <- (
     Binomial(N, 2, R),
     R == N*(N - 1)/2
 )  # nv

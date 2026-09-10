@@ -36,7 +36,7 @@ Handles are opaque integers. They are valid until `Free` is called.
 -import_from(scipy_interpolate, [MakeSpline, EvalSpline,
     SplineIntegral, SplineDerivative, Free])
 
-SplineWorkflow(XS, YS, QUERY_XS, VALUES, AREA) <- (
+spline_workflow(XS, YS, QUERY_XS, VALUES, AREA) <- (
     MakeSpline(XS, YS, 3, HANDLE),
     EvalSpline(HANDLE, QUERY_XS, VALUES),
     SplineIntegral(HANDLE, 0.0, 10.0, AREA),
@@ -131,14 +131,14 @@ Example — invert a spline to find the input that gives a target output:
 -import_from(scipy_interpolate, [MakePCHIP, EvalSpline, Free])
 
 # Forward: evaluate the interpolator at x=2.5
-SplineForward(XS, YS, RESULT) <- (
+spline_forward(XS, YS, RESULT) <- (
     MakePCHIP(XS, YS, H),
     EvalSpline(H, 2.5, RESULT),
     Free(H)
 )
 
 # Backward: find x such that spline(x) = target value
-SplineInvert(XS, YS, TARGET, X) <- (
+spline_invert(XS, YS, TARGET, X) <- (
     MakePCHIP(XS, YS, H),
     EvalSpline(H, X, TARGET),
     Free(H)
@@ -208,7 +208,7 @@ Good practice: call `Free` when the interpolator is no longer needed to prevent 
 -import_from(scipy_interpolate, [MakeCubic, SplineIntegral,
     SplineDerivative, EvalSpline, Free])
 
-SplineAnalysis(XS, YS, AREA, DERIV_AT_2) <- (
+spline_analysis(XS, YS, AREA, DERIV_AT_2) <- (
     MakeCubic(XS, YS, H),
     SplineIntegral(H, 0.0, 4.0, AREA),
     SplineDerivative(H, HD),
@@ -224,7 +224,7 @@ SplineAnalysis(XS, YS, AREA, DERIV_AT_2) <- (
 ```clausal
 -import_from(scipy_interpolate, [MakeRegularGrid, EvalRegularGrid, Free])
 
-GridInterp(POINTS, VALUES, QUERY, RESULT) <- (
+grid_interp(POINTS, VALUES, QUERY, RESULT) <- (
     MakeRegularGrid(POINTS, VALUES, HANDLE),
     EvalRegularGrid(HANDLE, QUERY, RESULT),
     Free(HANDLE)
@@ -236,7 +236,7 @@ GridInterp(POINTS, VALUES, QUERY, RESULT) <- (
 ```clausal
 -import_from(scipy_interpolate, [MakeRadialBasis, EvalRadialBasis, Free])
 
-RbfInterp(SAMPLE_PTS, SAMPLE_VALS, QUERY_PTS, RESULT) <- (
+rbf_interp(SAMPLE_PTS, SAMPLE_VALS, QUERY_PTS, RESULT) <- (
     MakeRadialBasis(SAMPLE_PTS, SAMPLE_VALS, 'thin_plate_spline', HANDLE),
     EvalRadialBasis(HANDLE, QUERY_PTS, RESULT),
     Free(HANDLE)

@@ -102,8 +102,8 @@ def test_boolean_saturated_default():
 
 def test_facts_only_no_rules_for_query_predicate():
     """Path is registered -bottom_up but has no clauses; querying yields []."""
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
+    mod, c = _setup_program(("edge", ["a", "b"]), ("path", ["a", "b"]))
+    Edge, Path = c["edge"], c["path"]
     facts = [(Edge("a", "b"), True)]
     out = evaluate(boolean, facts, Path(Var(), Var()), module=mod)
     assert out == []
@@ -113,8 +113,8 @@ def test_facts_only_no_rules_for_query_predicate():
 
 
 def test_purity_error_on_unmarked_callee():
-    mod, c = _setup_program(("Path", ["a", "b"]),)
-    Path = c["Path"]
+    mod, c = _setup_program(("path", ["a", "b"]),)
+    Path = c["path"]
     A, B = Var(), Var()
     # Body calls "MystePred" which is neither -bottom_up, -pure, nor default-pure.
     Path._assertz(Clause(
@@ -130,15 +130,15 @@ def test_purity_error_on_unmarked_callee():
 
 def test_default_pure_builtins_accepted():
     """`is`/2 (Unify) is on the default-pure whitelist."""
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
+    mod, c = _setup_program(("edge", ["a", "b"]), ("path", ["a", "b"]))
+    Edge, Path = c["edge"], c["path"]
     # Path(A, B) :- Edge(A, B), length([A, B], 2)
     # length/2 is on the default-pure whitelist.
     A, B = Var(), Var()
     Path._assertz(Clause(
         head=Path(A, B),
         body=[
-            _ast_call("Edge", A, B),
+            _ast_call("edge", A, B),
             _ast_call("length", [A, B], 2),
         ],
     ))
@@ -150,11 +150,11 @@ def test_default_pure_builtins_accepted():
 def test_pure_marked_callee_accepted():
     """A user predicate marked via `pure_/1` is callable from -bottom_up bodies."""
     mod, c = _setup_program(
-        ("Edge", ["a", "b"]),
-        ("Path", ["a", "b"]),
+        ("edge", ["a", "b"]),
+        ("path", ["a", "b"]),
         ("MyHelper", ["x"], False),  # not -bottom_up
     )
-    Edge, Path, MyHelper = c["Edge"], c["Path"], c["MyHelper"]
+    Edge, Path, MyHelper = c["edge"], c["path"], c["MyHelper"]
     setattr(MyHelper, PURE_FLAG, True)
     # MyHelper has no clauses; it'll fail when called. That's fine — the
     # purity check only validates the *call site*, not whether the call
@@ -162,7 +162,7 @@ def test_pure_marked_callee_accepted():
     A, B = Var(), Var()
     Path._assertz(Clause(
         head=Path(A, B),
-        body=[_ast_call("Edge", A, B), _ast_call("MyHelper", A)],
+        body=[_ast_call("edge", A, B), _ast_call("MyHelper", A)],
     ))
     facts = [(Edge("a", "b"), True)]
     # Should not raise PurityError — the validate step accepts it.
@@ -196,13 +196,13 @@ def test_pure_marked_callee_accepted():
 ])
 def test_attributed_var_constraint_rejected(constraint, arity, call_args):
     """An unmarked attributed-var poster in a -bottom_up body raises PurityError."""
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
+    mod, c = _setup_program(("edge", ["a", "b"]), ("path", ["a", "b"]))
+    Edge, Path = c["edge"], c["path"]
     A, B = Var(), Var()
     Path._assertz(Clause(
         head=Path(A, B),
         body=[
-            _ast_call("Edge", A, B),
+            _ast_call("edge", A, B),
             _ast_call(constraint, *call_args(A, B)),
         ],
     ))
@@ -217,13 +217,13 @@ def test_attributed_var_constraint_rejected(constraint, arity, call_args):
 
 def test_non_ground_head_raises():
     """A head variable not bound by the body should raise NonGroundTupleError."""
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
+    mod, c = _setup_program(("edge", ["a", "b"]), ("path", ["a", "b"]))
+    Edge, Path = c["edge"], c["path"]
     A, B, C = Var(), Var(), Var()
     # Path(A, C) :- Edge(A, B)   -- C is free!
     Path._assertz(Clause(
         head=Path(A, C),
-        body=[_ast_call("Edge", A, B)],
+        body=[_ast_call("edge", A, B)],
     ))
     facts = [(Edge("a", "b"), True)]
     with pytest.raises(NonGroundTupleError):
@@ -231,8 +231,8 @@ def test_non_ground_head_raises():
 
 
 def test_non_ground_input_fact_raises():
-    mod, c = _setup_program(("Edge", ["a", "b"]),)
-    Edge = c["Edge"]
+    mod, c = _setup_program(("edge", ["a", "b"]),)
+    Edge = c["edge"]
     # Provide a fact with an unbound Var — illegal for a ground-tuple engine.
     bad_fact = (Edge("a", Var()), True)
     with pytest.raises(NonGroundTupleError):
@@ -303,8 +303,8 @@ def test_goal_must_be_bottom_up_predicate():
 
 
 def test_fact_must_match_registered_predicate():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Other", ["x"], False))
-    Edge, Other = c["Edge"], c["Other"]
+    mod, c = _setup_program(("edge", ["a", "b"]), ("Other", ["x"], False))
+    Edge, Other = c["edge"], c["Other"]
     with pytest.raises(ValueError):
         evaluate(boolean, [(Other(1), True)], Edge(Var(), Var()), module=mod)
 
@@ -313,10 +313,10 @@ def test_fact_must_match_registered_predicate():
 
 
 def test_python_query_helper():
-    mod, c = _setup_program(("Edge", ["a", "b"]), ("Path", ["a", "b"]))
-    Edge, Path = c["Edge"], c["Path"]
+    mod, c = _setup_program(("edge", ["a", "b"]), ("path", ["a", "b"]))
+    Edge, Path = c["edge"], c["path"]
     A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
+    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("edge", A, B)]))
     facts = [(Edge("a", "b"), True)]
     out = query(Path(Var(), Var()), facts=facts, semiring=boolean, module=mod)
     assert len(out) == 1
@@ -344,8 +344,8 @@ class _CountSemiring(Provenance):
 
 def test_custom_semiring_count_facts():
     """Engine is generic: a count semiring runs through cleanly on input facts."""
-    mod, c = _setup_program(("Edge", ["a", "b"]),)
-    Edge = c["Edge"]
+    mod, c = _setup_program(("edge", ["a", "b"]),)
+    Edge = c["edge"]
     sr = _CountSemiring()
     facts = [(Edge("a", "b"), 1), (Edge("a", "b"), 1)]
     out = evaluate(sr, facts, Edge(Var(), Var()), module=mod)

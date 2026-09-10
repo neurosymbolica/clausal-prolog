@@ -17,21 +17,21 @@
 # Homography
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("find_homography on 4 corner correspondences returns 3x3") <- (
+test("find_homography on 4 corner correspondences returns 3x3") <- (
     SRC is ++(numpy.array([[0,0],[100,0],[100,100],[0,100]], dtype=numpy.float32)),
     DST is ++(numpy.array([[10,10],[110,10],[110,110],[10,110]], dtype=numpy.float32)),
     find_homography(SRC, DST, H),
     shape(H, [3, 3])
 )  # nv
 
-Test("find_homography with explicit RANSAC method") <- (
+test("find_homography with explicit RANSAC method") <- (
     SRC is ++(numpy.array([[0,0],[100,0],[100,100],[0,100],[50,50]], dtype=numpy.float32)),
     DST is ++(numpy.array([[10,10],[110,10],[110,110],[10,110],[60,60]], dtype=numpy.float32)),
     find_homography(SRC, DST, ransac, H),
     shape(H, [3, 3])
 )  # nv
 
-Test("find_homography_mask returns H and inlier mask") <- (
+test("find_homography_mask returns H and inlier mask") <- (
     SRC is ++(numpy.array([[0,0],[100,0],[100,100],[0,100],[50,50]], dtype=numpy.float32)),
     DST is ++(numpy.array([[10,10],[110,10],[110,110],[10,110],[60,60]], dtype=numpy.float32)),
     find_homography_mask(SRC, DST, ransac, H, MASK),
@@ -39,7 +39,7 @@ Test("find_homography_mask returns H and inlier mask") <- (
     shape(MASK, [5, 1])
 )  # nv
 
-Test("find_homography_mask with explicit RANSAC threshold") <- (
+test("find_homography_mask with explicit RANSAC threshold") <- (
     SRC is ++(numpy.array([[0,0],[100,0],[100,100],[0,100],[50,50]], dtype=numpy.float32)),
     DST is ++(numpy.array([[10,10],[110,10],[110,110],[10,110],[60,60]], dtype=numpy.float32)),
     find_homography_mask(SRC, DST, ransac, 3.0, H, MASK),
@@ -51,7 +51,7 @@ Test("find_homography_mask with explicit RANSAC threshold") <- (
 # Fundamental and essential matrices
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("find_fundamental_mat from 8 point pairs") <- (
+test("find_fundamental_mat from 8 point pairs") <- (
     # Random points seeded for reproducibility — the 8-point algorithm
     # rejects collinear or symmetric configurations.
     P1 is ++(numpy.random.default_rng(42).random((15, 2)).astype(numpy.float32) * 100),
@@ -60,7 +60,7 @@ Test("find_fundamental_mat from 8 point pairs") <- (
     shape(F, [3, 3])
 )  # nv
 
-Test("find_essential_mat with intrinsics K") <- (
+test("find_essential_mat with intrinsics K") <- (
     P1 is ++(numpy.random.default_rng(42).random((15, 2)).astype(numpy.float32) * 100),
     P2 is ++(P1 + numpy.random.default_rng(43).random((15, 2)).astype(numpy.float32) * 5),
     K is ++(numpy.array([[800,0,320],[0,800,240],[0,0,1]], dtype=numpy.float64)),
@@ -72,20 +72,20 @@ Test("find_essential_mat with intrinsics K") <- (
 # Rodrigues — bidirectional, self-inverse
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("rodrigues forward yields a 3x3 matrix") <- (
+test("rodrigues forward yields a 3x3 matrix") <- (
     RVEC is ++(numpy.array([0.1, 0.2, 0.3], dtype=numpy.float64)),
     rodrigues(RVEC, RMAT),
     shape(RMAT, [3, 3])
 )  # nv
 
-Test("rodrigues backward (-RVEC, +RMAT)") <- (
+test("rodrigues backward (-RVEC, +RMAT)") <- (
     RVEC is ++(numpy.array([0.1, 0.2, 0.3], dtype=numpy.float64)),
     rodrigues(RVEC, RMAT),
     rodrigues(RVEC2, RMAT),
     shape(RVEC2, [3, 1])
 )  # nv
 
-Test("rodrigues round-trip is identity") <- (
+test("rodrigues round-trip is identity") <- (
     RVEC is ++(numpy.array([[0.1], [0.2], [0.3]], dtype=numpy.float64)),
     rodrigues(RVEC, RMAT),
     rodrigues(RVEC2, RMAT),
@@ -96,7 +96,7 @@ Test("rodrigues round-trip is identity") <- (
 # PnP
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("solve_pnp from coplanar points") <- (
+test("solve_pnp from coplanar points") <- (
     OBJ is ++(numpy.array(
         [[0,0,0],[1,0,0],[2,0,0],[0,1,0],[1,1,0],[2,1,0]],
         dtype=numpy.float32)),
@@ -110,7 +110,7 @@ Test("solve_pnp from coplanar points") <- (
     shape(TVEC, [3, 1])
 )  # nv
 
-Test("solve_pnp with explicit flags") <- (
+test("solve_pnp with explicit flags") <- (
     OBJ is ++(numpy.array(
         [[0,0,0],[1,0,0],[2,0,0],[0,1,0],[1,1,0],[2,1,0]],
         dtype=numpy.float32)),
@@ -123,7 +123,7 @@ Test("solve_pnp with explicit flags") <- (
     shape(RVEC, [3, 1])
 )  # nv
 
-Test("solve_pnp_ransac returns tagged pnp_ransac result") <- (
+test("solve_pnp_ransac returns tagged pnp_ransac result") <- (
     OBJ is ++(numpy.array(
         [[0,0,0],[1,0,0],[2,0,0],[0,1,0],[1,1,0],[2,1,0]],
         dtype=numpy.float32)),
@@ -142,7 +142,7 @@ Test("solve_pnp_ransac returns tagged pnp_ransac result") <- (
 # 7x6 grid synthetic calibration with 2 views — single-view calibration is
 # under-determined and cv2 rejects it. The recovered K is meaningless on
 # synthetic data, but the tagged-tuple shape is what we're verifying.
-Test("calibrate_camera from two synthetic views") <- (
+test("calibrate_camera from two synthetic views") <- (
     OBJP is ++(numpy.array(
         [[float(x), float(y), 0.0] for y in range(6) for x in range(7)],
         dtype=numpy.float32)),
@@ -156,7 +156,7 @@ Test("calibrate_camera from two synthetic views") <- (
                        ("calib", _RMS_UNUSED, _K_UNUSED, _DIST_UNUSED, _RVECS_UNUSED, _TVECS_UNUSED))
 )  # nv
 
-Test("calibrate_camera tagged result has matching list lengths") <- (
+test("calibrate_camera tagged result has matching list lengths") <- (
     OBJP is ++(numpy.array(
         [[float(x), float(y), 0.0] for y in range(6) for x in range(7)],
         dtype=numpy.float32)),
@@ -177,7 +177,7 @@ Test("calibrate_camera tagged result has matching list lengths") <- (
 # Projection and undistortion
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("project_points returns image points and jacobian") <- (
+test("project_points returns image points and jacobian") <- (
     OBJ is ++(numpy.array([[0,0,0],[1,1,0]], dtype=numpy.float32)),
     RVEC is ++(numpy.zeros((3, 1), dtype=numpy.float64)),
     TVEC is ++(numpy.array([[0],[0],[5]], dtype=numpy.float64)),
@@ -187,7 +187,7 @@ Test("project_points returns image points and jacobian") <- (
     shape(IMG_PTS, [2, 1, 2])
 )  # nv
 
-Test("undistort with zero distortion is identity-ish") <- (
+test("undistort with zero distortion is identity-ish") <- (
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     K is ++(numpy.array([[100,0,64],[0,100,64],[0,0,1]], dtype=numpy.float64)),
     DIST is ++(numpy.zeros(5, dtype=numpy.float64)),
@@ -196,7 +196,7 @@ Test("undistort with zero distortion is identity-ish") <- (
     shape(OUT, S)
 )  # nv
 
-Test("undistort with new camera matrix") <- (
+test("undistort with new camera matrix") <- (
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     K is ++(numpy.array([[100,0,64],[0,100,64],[0,0,1]], dtype=numpy.float64)),
     DIST is ++(numpy.zeros(5, dtype=numpy.float64)),
@@ -206,7 +206,7 @@ Test("undistort with new camera matrix") <- (
     shape(OUT, S)
 )  # nv
 
-Test("init_undistort_rectify_map yields two maps") <- (
+test("init_undistort_rectify_map yields two maps") <- (
     K is ++(numpy.array([[100,0,64],[0,100,64],[0,0,1]], dtype=numpy.float64)),
     DIST is ++(numpy.zeros(5, dtype=numpy.float64)),
     R is ++(numpy.eye(3, dtype=numpy.float64)),
@@ -225,32 +225,32 @@ Test("init_undistort_rectify_map yields two maps") <- (
 # Chessboard detection (find_chessboard_corners + corner_sub_pix)
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("find_chessboard_corners finds 7x6 grid on synthetic board") <- (
+test("find_chessboard_corners finds 7x6 grid on synthetic board") <- (
     imread("/tmp/clausal_opencv_checkerboard.png", imread_grayscale, IMG),
     find_chessboard_corners(IMG, [7, 6], CORNERS),
     shape(CORNERS, [42, 1, 2])
 )  # nv
 
-Test("find_chessboard_corners with flags") <- (
+test("find_chessboard_corners with flags") <- (
     imread("/tmp/clausal_opencv_checkerboard.png", imread_grayscale, IMG),
     find_chessboard_corners(IMG, [7, 6], calib_cb_adaptive_thresh, CORNERS),
     shape(CORNERS, [42, 1, 2])
 )  # nv
 
-Test("find_chessboard_corners returns empty list when no board") <- (
+test("find_chessboard_corners returns empty list when no board") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     find_chessboard_corners(IMG, [7, 6], CORNERS),
     CORNERS == []
 )  # nv
 
-Test("corner_sub_pix refines detected corners") <- (
+test("corner_sub_pix refines detected corners") <- (
     imread("/tmp/clausal_opencv_checkerboard.png", imread_grayscale, IMG),
     find_chessboard_corners(IMG, [7, 6], CORNERS),
     corner_sub_pix(IMG, CORNERS, [5, 5], [-1, -1], REFINED),
     shape(REFINED, [42, 1, 2])
 )  # nv
 
-Test("corner_sub_pix with explicit criteria") <- (
+test("corner_sub_pix with explicit criteria") <- (
     imread("/tmp/clausal_opencv_checkerboard.png", imread_grayscale, IMG),
     find_chessboard_corners(IMG, [7, 6], CORNERS),
     # criteria = (type, max_iter, epsilon)
@@ -263,7 +263,7 @@ Test("corner_sub_pix with explicit criteria") <- (
 # recover_pose from an essential matrix
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("recover_pose from essential matrix returns tagged pose result") <- (
+test("recover_pose from essential matrix returns tagged pose result") <- (
     P1 is ++(numpy.random.default_rng(42).random((15, 2)).astype(numpy.float32) * 100),
     P2 is ++(P1 + numpy.random.default_rng(43).random((15, 2)).astype(numpy.float32) * 5),
     K is ++(numpy.array([[800,0,320],[0,800,240],[0,0,1]], dtype=numpy.float64)),
@@ -271,7 +271,7 @@ Test("recover_pose from essential matrix returns tagged pose result") <- (
     recover_pose(E, P1, P2, K, ("pose", _R_UNUSED, _T_UNUSED, _MASK_UNUSED, _N_INLIERS_UNUSED))
 )  # nv
 
-Test("recover_pose pose fields have expected shapes") <- (
+test("recover_pose pose fields have expected shapes") <- (
     P1 is ++(numpy.random.default_rng(42).random((15, 2)).astype(numpy.float32) * 100),
     P2 is ++(P1 + numpy.random.default_rng(43).random((15, 2)).astype(numpy.float32) * 5),
     K is ++(numpy.array([[800,0,320],[0,800,240],[0,0,1]], dtype=numpy.float64)),
@@ -283,7 +283,7 @@ Test("recover_pose pose fields have expected shapes") <- (
     integer(N_INLIERS)
 )  # nv
 
-Test("decompose_homography_mat returns a non-empty solution list") <- (
+test("decompose_homography_mat returns a non-empty solution list") <- (
     SRC is ++(numpy.array([[0,0],[100,0],[100,100],[0,100]], dtype=numpy.float32)),
     DST is ++(numpy.array([[10,10],[110,10],[110,110],[10,110]], dtype=numpy.float32)),
     find_homography(SRC, DST, H),
@@ -297,14 +297,14 @@ Test("decompose_homography_mat returns a non-empty solution list") <- (
 # DFT (bidirectional)
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("dft forward yields a complex-channel output") <- (
+test("dft forward yields a complex-channel output") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, GRAY_U8),
     F is ++(GRAY_U8.astype(numpy.float32)),
     dft(F, SPEC),
     shape(SPEC, [_, _, 2])
 )  # nv
 
-Test("dft forward then inverse round-trips") <- (
+test("dft forward then inverse round-trips") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, GRAY_U8),
     F is ++(GRAY_U8.astype(numpy.float32)),
     dft(F, SPEC),
@@ -312,7 +312,7 @@ Test("dft forward then inverse round-trips") <- (
     ++(numpy.allclose(F, F2, atol=0.1))
 )  # nv
 
-Test("dft with explicit forward-only flags") <- (
+test("dft with explicit forward-only flags") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, GRAY_U8),
     F is ++(GRAY_U8.astype(numpy.float32)),
     DFT_FLAGS is ++(__import__("cv2").DFT_COMPLEX_OUTPUT),

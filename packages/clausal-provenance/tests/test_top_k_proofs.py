@@ -79,29 +79,29 @@ def _ast_call(name, *args):
 
 def _setup_path_program():
     """Build an (Edge/2, Path/2) reach program with two rules."""
-    Edge = make_predicate("Edge", ["a", "b"])
-    Path = make_predicate("Path", ["a", "b"])
+    Edge = make_predicate("edge", ["a", "b"])
+    Path = make_predicate("path", ["a", "b"])
     Edge.__module__ = "test_topk_proofs"
     Path.__module__ = "test_topk_proofs"
     setattr(Edge, BOTTOM_UP_FLAG, True)
     setattr(Path, BOTTOM_UP_FLAG, True)
 
     A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
+    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("edge", A, B)]))
     A2, M, B2 = Var(), Var(), Var()
     Path._assertz(Clause(
         head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
+        body=[_ast_call("edge", A2, M), _ast_call("path", M, B2)],
     ))
-    mod = Module("test_topk_proofs", module_dict={"Edge": Edge, "Path": Path})
+    mod = Module("test_topk_proofs", module_dict={"edge": Edge, "path": Path})
     return mod, Edge, Path
 
 
 def _setup_sumdigits_program():
-    """SumDigits(A, B, T) <- Digit(A, X), Digit(B, Y), T is X + Y."""
+    """sum_digits(A, B, T) <- digit(A, X), digit(B, Y), T is X + Y."""
     from clausal.pythonic_ast.nodes import Is, BinOp, BinOpKind
-    Digit = make_predicate("Digit", ["image_id", "value"])
-    SumDigits = make_predicate("SumDigits", ["a", "b", "total"])
+    Digit = make_predicate("digit", ["image_id", "value"])
+    SumDigits = make_predicate("sum_digits", ["a", "b", "total"])
     Digit.__module__ = "test_topk_sum"
     SumDigits.__module__ = "test_topk_sum"
     setattr(Digit, BOTTOM_UP_FLAG, True)
@@ -111,12 +111,12 @@ def _setup_sumdigits_program():
     SumDigits._assertz(Clause(
         head=SumDigits(A, B, T),
         body=[
-            _ast_call("Digit", A, X),
-            _ast_call("Digit", B, Y),
+            _ast_call("digit", A, X),
+            _ast_call("digit", B, Y),
             Is(target=T, value=BinOp(left=X, op=BinOpKind.ADD, right=Y)),
         ],
     ))
-    mod = Module("test_topk_sum", module_dict={"Digit": Digit, "SumDigits": SumDigits})
+    mod = Module("test_topk_sum", module_dict={"digit": Digit, "sum_digits": SumDigits})
     return mod, Digit, SumDigits
 
 

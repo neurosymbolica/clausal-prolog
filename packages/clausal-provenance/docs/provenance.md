@@ -13,17 +13,17 @@ into a perception model's parameters.
 ```clausal
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
--module(reach, [Edge(A, B), Path(A, B)])
+-module(reach, [edge(A, B), path(A, B)])
 
-bottom_up_(Edge)
-bottom_up_(Path)
+bottom_up_(edge)
+bottom_up_(path)
 
-Path(A, B) <- Edge(A, B)
-Path(A, C) <- (Edge(A, B), Path(B, C))
+path(A, B) <- edge(A, B)
+path(A, C) <- (edge(A, B), path(B, C))
 
-Test("reachability under boolean") <- (
-    FACTS is [(Edge("a", "b"), True), (Edge("b", "c"), True)],
-    solve(boolean, FACTS, Path("a", "c"), [(_, True)])
+test("reachability under boolean") <- (
+    FACTS is [(edge("a", "b"), True), (edge("b", "c"), True)],
+    solve(boolean, FACTS, path("a", "c"), [(_, True)])
 )
 ```
 
@@ -69,36 +69,36 @@ A program has three pieces:
 ```clausal
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
--module(mnist_sum, [Digit(IMG, V), SumDigits(A, B, T)])
+-module(mnist_sum, [digit(IMG, V), sum_digits(A, B, T)])
 
-bottom_up_(Digit)
-bottom_up_(SumDigits)
+bottom_up_(digit)
+bottom_up_(sum_digits)
 
-SumDigits(IMG_A, IMG_B, TOTAL) <- (
-    Digit(IMG_A, A),
-    Digit(IMG_B, B),
+sum_digits(IMG_A, IMG_B, TOTAL) <- (
+    digit(IMG_A, A),
+    digit(IMG_B, B),
     TOTAL == A + B,
 )
 
-Test("boolean: enumerate possible sums") <- (
+test("boolean: enumerate possible sums") <- (
     FACTS is [
-        (Digit(0, 3), True),
-        (Digit(0, 4), True),
-        (Digit(1, 5), True),
+        (digit(0, 3), True),
+        (digit(0, 4), True),
+        (digit(1, 5), True),
     ],
-    solve(boolean, FACTS, SumDigits(0, 1, T), R),
+    solve(boolean, FACTS, sum_digits(0, 1, T), R),
     length(R, 2)
 )
 ```
 
 Three things to notice:
 
-- **`bottom_up_(Digit)`** registers `Digit/2` for bottom-up evaluation.
-  The same fact base must consistently be tagged: either every `Digit`
+- **`bottom_up_(digit)`** registers `digit/2` for bottom-up evaluation.
+  The same fact base must consistently be tagged: either every `digit`
   fact carries a tag, or none do.
 - **`==` (not `is`)** binds `TOTAL`. Clausal's `is` is *structural unify*,
   not arithmetic eval — it would fail here. `==` is `ArithEq`.
-- **No `,` after `bottom_up_(Digit)`** — a trailing comma at top level
+- **No `,` after `bottom_up_(digit)`** — a trailing comma at top level
   turns the directive into a clause-with-empty-body and fails. Keep each
   registration on its own line.
 
@@ -127,8 +127,8 @@ call:
 with tag `False`.
 
 ```clausal
-FACTS is [(Edge("a", "b"), True), (Edge("b", "c"), True)],
-solve(boolean, FACTS, Path("a", "c"), [(_, True)])
+FACTS is [(edge("a", "b"), True), (edge("b", "c"), True)],
+solve(boolean, FACTS, path("a", "c"), [(_, True)])
 ```
 
 `boolean` is also the engine smoke test: any program that runs under any
@@ -141,18 +141,18 @@ identical answer set.
 Treats alternative derivations as independent events:
 
 ```clausal
-Test("add_mult_prob: confident pair multiplies cleanly") <- (
+test("add_mult_prob: confident pair multiplies cleanly") <- (
     FACTS is [
-        (Digit(0, 3), 0.7),
-        (Digit(1, 5), 0.9),
+        (digit(0, 3), 0.7),
+        (digit(1, 5), 0.9),
     ],
-    solve(add_mult_prob, FACTS, SumDigits(0, 1, 8), R),
-    R == [(SumDigits(0, 1, 8), 0.63)]
+    solve(add_mult_prob, FACTS, sum_digits(0, 1, 8), R),
+    R == [(sum_digits(0, 1, 8), 0.63)]
 )
 ```
 
 The tag `0.63 = 0.7 · 0.9`: there's exactly one proof of
-`SumDigits(0, 1, 8)` and `⊗` multiplies the two confidences.
+`sum_digits(0, 1, 8)` and `⊗` multiplies the two confidences.
 
 When the same input fact appears in multiple proofs of one tuple,
 `add_mult_prob` over-counts (treats them as independent when they share
@@ -252,7 +252,7 @@ declare the engine's view of your predicates:
 ```clausal
 -import_from(provenance, [bottom_up_, pure_])
 
-bottom_up_(SumDigits)       # SumDigits/3 is evaluated bottom-up
+bottom_up_(sum_digits)       # sum_digits/3 is evaluated bottom-up
 pure_(SafeColor)            # SafeColor/2 may be called from a -bottom_up body
 ```
 
@@ -300,7 +300,7 @@ pairs. `Goal` is an ordinary goal whose head predicate is `-bottom_up`.
 across semirings, only the tag type changes.
 
 ```clausal
-solve(boolean, FACTS, Path("a", DST), R)
+solve(boolean, FACTS, path("a", DST), R)
 ```
 
 There is no `provenance.fact/2` posting builtin — facts always pass as a
@@ -323,7 +323,7 @@ aggregate(+Semiring, +Op, +TaggedList, -Result)
 | `top_k_proofs(k)` | `Σ recover_fn(t_i)` (I-E per term) | `Σ v_i · recover_fn(t_i)` | `(v*, t*)` |
 
 ```clausal
-Test("aggregate count under add_mult_prob = expected count") <- (
+test("aggregate count under add_mult_prob = expected count") <- (
     aggregate(add_mult_prob, "count", [0.3, 0.5, 0.2], EXPECTED),
     EXPECTED < 1.0000000001,
     EXPECTED > 0.9999999999
@@ -365,32 +365,32 @@ the graph at registration time and rejects cyclic negation with a clear
 error message naming the offending predicates.
 
 ```clausal
--module(network, [Edge(A, B), Block(N), Reachable(N), Allowed(N)])
+-module(network, [edge(A, B), block(N), reachable(N), allowed(N)])
 
-bottom_up_(Edge)
-bottom_up_(Block)
-bottom_up_(Reachable)
-bottom_up_(Allowed)
+bottom_up_(edge)
+bottom_up_(block)
+bottom_up_(reachable)
+bottom_up_(allowed)
 
-Reachable(X) <- Edge(_, X)
+reachable(X) <- edge(_, X)
 
-Allowed(X) <- (
-    Reachable(X),
-    not Block(X),
+allowed(X) <- (
+    reachable(X),
+    not block(X),
 )
 
-Test("certain block excludes via 1 - 1.0 = 0") <- (
+test("certain block excludes via 1 - 1.0 = 0") <- (
     FACTS is [
-        (Edge("a", "b"), 0.7),
-        (Block("b"), 1.0),
+        (edge("a", "b"), 0.7),
+        (block("b"), 1.0),
     ],
-    solve(add_mult_prob, FACTS, Allowed("b"), [])
+    solve(add_mult_prob, FACTS, allowed("b"), [])
 )
 ```
 
-`Allowed` depends positively on `Reachable` and negatively on `Block`;
-these live in lower strata and saturate before `Allowed` runs. Under
-`add_mult_prob`, `negate(1.0) = 0.0`, so the `Allowed("b")` candidate is
+`allowed` depends positively on `reachable` and negatively on `block`;
+these live in lower strata and saturate before `allowed` runs. Under
+`add_mult_prob`, `negate(1.0) = 0.0`, so the `allowed("b")` candidate is
 multiplied by `0` and pruned via `discard`.
 
 ---
@@ -406,16 +406,16 @@ sum; gradients train a CNN that has never seen image-level digit labels.
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
 -module(mnist_sum, [
-    Digit(IMAGE_ID, VALUE),
-    SumDigits(IMAGE_A, IMAGE_B, TOTAL),
+    digit(IMAGE_ID, VALUE),
+    sum_digits(IMAGE_A, IMAGE_B, TOTAL),
 ])
 
-bottom_up_(Digit)
-bottom_up_(SumDigits)
+bottom_up_(digit)
+bottom_up_(sum_digits)
 
-SumDigits(IMG_A, IMG_B, TOTAL) <- (
-    Digit(IMG_A, A),
-    Digit(IMG_B, B),
+sum_digits(IMG_A, IMG_B, TOTAL) <- (
+    digit(IMG_A, A),
+    digit(IMG_B, B),
     TOTAL == A + B,
 )
 ```

@@ -14,64 +14,64 @@ setup(DOC) <- (LoadModel("en_core_web_sm", "sig_test"), Process("sig_test", "App
 
 # ── Layer 1 — Model management ─────────────────────────────────────────────
 
-Test("load model arity 1") <- LoadModel("en_core_web_sm")  # nv
+test("load model arity 1") <- LoadModel("en_core_web_sm")  # nv
 
-Test("load model arity 2") <- LoadModel("en_core_web_sm", "sig_alias")  # nv
+test("load model arity 2") <- LoadModel("en_core_web_sm", "sig_alias")  # nv
 
-Test("unload model") <- (LoadModel("en_core_web_sm", "sig_unload"), UnloadModel("sig_unload"))  # nv
+test("unload model") <- (LoadModel("en_core_web_sm", "sig_unload"), UnloadModel("sig_unload"))  # nv
 
-Test("current model") <- (LoadModel("en_core_web_sm", "sig_cm"), CurrentModel("sig_cm"))  # nv
+test("current model") <- (LoadModel("en_core_web_sm", "sig_cm"), CurrentModel("sig_cm"))  # nv
 
 # ── Layer 2 — Process ──────────────────────────────────────────────────────
 
-Test("process") <- (LoadModel("en_core_web_sm", "sig_proc"), Process("sig_proc", "Hello world.", _))  # nv
+test("process") <- (LoadModel("en_core_web_sm", "sig_proc"), Process("sig_proc", "Hello world.", _))  # nv
 
 # ── Layer 3 — Tokens ───────────────────────────────────────────────────────
 
-Test("token 2") <- (setup(DOC), Token(DOC, TOK), TokenText(TOK, "Apple"))  # nv
+test("token 2") <- (setup(DOC), Token(DOC, TOK), TokenText(TOK, "Apple"))  # nv
 
-Test("token 3") <- (setup(DOC), Token(DOC, 0, TOK), TokenText(TOK, "Apple"))  # nv
+test("token 3") <- (setup(DOC), Token(DOC, 0, TOK), TokenText(TOK, "Apple"))  # nv
 
-Test("token text") <- (setup(DOC), Token(DOC, 0, TOK), TokenText(TOK, T), T == "Apple")  # nv
+test("token text") <- (setup(DOC), Token(DOC, 0, TOK), TokenText(TOK, T), T == "Apple")  # nv
 
-Test("token list") <- (setup(DOC), TokenList(DOC, TOKS), FIRST is ++TOKS[0], T is ++FIRST["text"], T == "Apple")  # nv
+test("token list") <- (setup(DOC), TokenList(DOC, TOKS), FIRST is ++TOKS[0], T is ++FIRST["text"], T == "Apple")  # nv
 
 # ── Layer 4 — Annotations ──────────────────────────────────────────────────
 
-Test("pos") <- (setup(DOC), Token(DOC, 0, TOK), Pos(TOK, "PROPN"))  # nv
+test("pos") <- (setup(DOC), Token(DOC, 0, TOK), Pos(TOK, "PROPN"))  # nv
 
-Test("tag") <- (setup(DOC), Token(DOC, 0, TOK), Tag(TOK, _))  # nv
+test("tag") <- (setup(DOC), Token(DOC, 0, TOK), Tag(TOK, _))  # nv
 
-Test("lemma") <- (setup(DOC), Token(DOC, 2, TOK), Lemma(TOK, "look"))  # nv
+test("lemma") <- (setup(DOC), Token(DOC, 2, TOK), Lemma(TOK, "look"))  # nv
 
-Test("dep") <- (setup(DOC), Token(DOC, 0, TOK), Dep(TOK, "nsubj"))  # nv
+test("dep") <- (setup(DOC), Token(DOC, 0, TOK), Dep(TOK, "nsubj"))  # nv
 
-Test("head") <- (setup(DOC), Token(DOC, 0, TOK), Head(TOK, _))  # nv
+test("head") <- (setup(DOC), Token(DOC, 0, TOK), Head(TOK, _))  # nv
 
-Test("shape") <- (setup(DOC), Token(DOC, 0, TOK), Shape(TOK, "Xxxxx"))  # nv
+test("shape") <- (setup(DOC), Token(DOC, 0, TOK), Shape(TOK, "Xxxxx"))  # nv
 
-Test("is alpha") <- (setup(DOC), Token(DOC, 0, TOK), IsAlpha(TOK))  # nv
+test("is alpha") <- (setup(DOC), Token(DOC, 0, TOK), IsAlpha(TOK))  # nv
 
-Test("is stop") <- (setup(DOC), Token(DOC, 1, TOK), IsStop(TOK))  # nv
+test("is stop") <- (setup(DOC), Token(DOC, 1, TOK), IsStop(TOK))  # nv
 
 # ── Layer 5 — NER ──────────────────────────────────────────────────────────
 
-Test("entity 2") <- (setup(DOC), Entity(DOC, E), T is ++E["text"], T == "Apple")  # nv
+test("entity 2") <- (setup(DOC), Entity(DOC, E), T is ++E["text"], T == "Apple")  # nv
 
-Test("entity 3") <- (setup(DOC), Entity(DOC, "ORG", E), T is ++E["text"], T == "Apple")  # nv
+test("entity 3") <- (setup(DOC), Entity(DOC, "ORG", E), T is ++E["text"], T == "Apple")  # nv
 
-Test("entity list") <- (setup(DOC), EntityList(DOC, ENTS), FIRST is ++ENTS[0], T is ++FIRST["text"], T == "Apple")  # nv
+test("entity list") <- (setup(DOC), EntityList(DOC, ENTS), FIRST is ++ENTS[0], T is ++FIRST["text"], T == "Apple")  # nv
 
 # ── Layer 6 — Sentences ────────────────────────────────────────────────────
 
-Test("sentence") <- (setup(DOC), Sentence(DOC, _))  # nv
+test("sentence") <- (setup(DOC), Sentence(DOC, _))  # nv
 
-Test("sentence list") <- (setup(DOC), SentenceList(DOC, SENTS), FIRST is ++SENTS[0], FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
+test("sentence list") <- (setup(DOC), SentenceList(DOC, SENTS), FIRST is ++SENTS[0], FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
 # ── Layer 7 — Similarity ───────────────────────────────────────────────────
 
-Test("similarity") <- (LoadModel("en_core_web_sm", "sig_sim"), Similarity("sig_sim", "cat", "dog", _))  # nv
+test("similarity") <- (LoadModel("en_core_web_sm", "sig_sim"), Similarity("sig_sim", "cat", "dog", _))  # nv
 
 # ── Layer 8 — Noun chunks ──────────────────────────────────────────────────
 
-Test("noun chunk") <- (setup(DOC), NounChunk(DOC, C), T is ++C["text"], T == "Apple")  # nv
+test("noun chunk") <- (setup(DOC), NounChunk(DOC, C), T is ++C["text"], T == "Apple")  # nv

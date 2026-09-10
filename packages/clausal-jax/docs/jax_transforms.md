@@ -45,7 +45,7 @@ predicates are **one-shot** — they take the function *and* the input
 and produce the output directly:
 
 ```clausal
-Test("one-shot grad") <- (
+test("one-shot grad") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array(3.0)),
     grad_value(F, X, G),
@@ -67,7 +67,7 @@ Gradient of `F` at `X`. `F` must return a scalar; for vector-valued
 `F`, reach for `jacobian/3`.
 
 ```clausal
-Test("grad of x^2 at 3") <- (
+test("grad of x^2 at 3") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array(3.0)),
     grad_value(F, X, G),
@@ -81,7 +81,7 @@ Returns a tuple `(value, gradient)` — decompose with Clausal's tuple
 syntax, consistent with Phase 4's `svd`, `qr`, `eig`.
 
 ```clausal
-Test("value_and_grad of x^3 at 2") <- (
+test("value_and_grad of x^3 at 2") <- (
     F is ++(lambda x: x ** 3),
     X is ++(jax.numpy.array(2.0)),
     value_and_grad(F, X, RESULT),
@@ -98,7 +98,7 @@ Jacobian-vector product in the forward direction. `PRIMALS` and
 positional arg). `RESULT` is a tuple `(primal_out, tangent_out)`.
 
 ```clausal
-Test("jvp of x^2 at 3 with tangent 1") <- (
+test("jvp of x^2 at 3 with tangent 1") <- (
     F is ++(lambda x: x ** 2),
     P is ++(jax.numpy.array(3.0)),
     T is ++(jax.numpy.array(1.0)),
@@ -115,7 +115,7 @@ Reverse-mode analogue. Returns `(value, vjp_fn)` — where `vjp_fn` is a
 Python callable that maps cotangents to gradients. Invoke it via `++()`:
 
 ```clausal
-Test("vjp_fn gives gradient") <- (
+test("vjp_fn gives gradient") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
     vjp_value(F, X, RESULT),
@@ -133,7 +133,7 @@ Jacobian via reverse-mode by default; `jacfwd` for forward-mode,
 `jacrev` for explicit reverse-mode (same as `jacobian`).
 
 ```clausal
-Test("jacobian of elementwise square") <- (
+test("jacobian of elementwise square") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
     jacobian(F, X, J),
@@ -147,7 +147,7 @@ Test("jacobian of elementwise square") <- (
 The Hessian matrix — second derivatives:
 
 ```clausal
-Test("hessian of sum(x^2) is 2I") <- (
+test("hessian of sum(x^2) is 2I") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     X is ++(jax.numpy.array([1.0, 2.0])),
     hessian(F, X, H),
@@ -162,7 +162,7 @@ Test("hessian of sum(x^2) is 2I") <- (
 The wrapper passes the Clausal-side pytree through to JAX unchanged:
 
 ```clausal
-Test("grad with dict params") <- (
+test("grad with dict params") <- (
     F is ++(lambda p: (p["a"] ** 2) + (p["b"] ** 2)),
     PARAMS is ++({"a": jax.numpy.array(3.0), "b": jax.numpy.array(4.0)}),
     grad_value(F, PARAMS, G),
@@ -183,7 +183,7 @@ and so on.
 vector-valued `F` fails cleanly:
 
 ```clausal
-Test("grad of vector fails") <- (
+test("grad of vector fails") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
     not grad_value(F, X, _G)       # fails — x^2 is not scalar
@@ -202,14 +202,14 @@ Apply `jax.vmap(F)` to `X`. The 4-arity form takes a dict of keyword
 options — `in_axes`, `out_axes`, etc.
 
 ```clausal
-Test("vmap doubles each element") <- (
+test("vmap doubles each element") <- (
     F is ++(lambda x: x * 2),
     X is ++(jax.numpy.arange(5)),
     vmap_apply(F, X, R),
     array_list(R, [0, 2, 4, 6, 8])
 )
 
-Test("vmap with in_axes=0") <- (
+test("vmap with in_axes=0") <- (
     F is ++(lambda x: x + 1),
     X is ++(jax.numpy.array([[0, 1], [2, 3]])),
     vmap_apply(F, X, {"in_axes": 0}, R),
@@ -241,7 +241,7 @@ Returns a JIT-compiled callable. This is the one predicate that *does*
 return a function (the whole point of JIT is the compiled artifact):
 
 ```clausal
-Test("jit_compile") <- (
+test("jit_compile") <- (
     F is ++(lambda x: x * x),
     jit_compile(F, F_JIT),
     X is ++(jax.numpy.array(5.0)),
@@ -277,7 +277,7 @@ describing the computation graph. Useful for debugging or for printing
 the traced form.
 
 ```clausal
-Test("make_jaxpr captures computation") <- (
+test("make_jaxpr captures computation") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array(3.0)),
     make_jaxpr(F, X, JP),
@@ -293,7 +293,7 @@ Cheap; works even for inputs that would need terabytes if
 materialised.
 
 ```clausal
-Test("eval_shape doesn't allocate") <- (
+test("eval_shape doesn't allocate") <- (
     F is ++(lambda x: x + 1),
     X is ++(jax.ShapeDtypeStruct((1000000, 1000000), jax.numpy.float32)),
     eval_shape(F, X, SD),

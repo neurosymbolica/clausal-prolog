@@ -23,7 +23,7 @@ or via the canonical `py.*` path:
 |------|-----------|-------|
 | 3 — handle | `MakeCSR`, `MakeCSC`, `MakeCOO`, `MakeDiagonals`, `MakeEye` | Sparse matrix construction |
 | 3 — handle | `ToDense`, `FromDense` | Dense/sparse conversions |
-| 3 — handle | `Shape`, `NonzeroCount` | Inspection |
+| 3 — handle | `shape`, `NonzeroCount` | Inspection |
 | linalg | `Solve`, `EigenDecomposeHermitian`, `SingularValueDecompose` | Sparse linear algebra |
 | lifecycle | `Free` | Release any handle |
 
@@ -266,7 +266,7 @@ solve_sparse(DATA, IDX, PTR, SHAPE, B, X) <- (
 
 sparsity(DATA, IDX, PTR, SPARSITY) <- (
     MakeCSR(DATA, IDX, PTR, A),
-    Shape(A, S),
+    shape(A, S),
     NonzeroCount(A, NNZ),
     TOTAL is ++(S[0] * S[1]),
     SPARSITY is ++(1.0 - NNZ / TOTAL),

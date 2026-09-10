@@ -43,11 +43,11 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 | `scipy.special.gammainc` | `GammaInc` (bidirectional) |
 | `scipy.special.gammaincc` | `GammaIncComplement` (bidirectional) |
 | `scipy.special.betainc` | `BetaInc` (bidirectional) |
-| `scipy.special.boxcox` | `Boxcox` (bidirectional; Lambda first) |
+| `scipy.special.boxcox` | `boxcox` (bidirectional; Lambda first) |
 | `scipy.special.boxcox1p` | `Boxcox1p` (bidirectional; Lambda first) |
 | `scipy.special.cbrt` | `CubeRoot` |
 | `scipy.special.kl_div` | `KlDivergence` |
-| `scipy.special.logsumexp` | `LogSumExp` |
+| `scipy.special.logsumexp` | `log_sum_exp` |
 | `scipy.special.lpmv` | `AssocLegendre` |
 | `scipy.special.eval_legendre` | `LegendrePoly` |
 | `scipy.special.eval_chebyt/u` | `ChebyshevT`, `ChebyshevU` |
@@ -69,8 +69,8 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 Example:
 
 ```clausal
-ComputeCoefficients(N, K, COEFF) <- (
-    Comb(N, K, COEFF),
+compute_coefficients(N, K, COEFF) <- (
+    comb(N, K, COEFF),
     ++print(f"C({N},{K}) = {COEFF}")
 )
 ```
@@ -102,9 +102,9 @@ Example — bidirectional NormalCdf acts as both CDF and quantile function:
 Example — round-trip through Box-Cox transform:
 
 ```clausal
-BoxcoxRoundTrip(LAM, X) <- (
-    Boxcox(LAM, X, Y),
-    Boxcox(LAM, X2, Y),
+boxcox_round_trip(LAM, X) <- (
+    boxcox(LAM, X, Y),
+    boxcox(LAM, X2, Y),
     DIFF is ++(abs(float(X2) - float(X))),
     DIFF < 1e-9
 )
@@ -142,11 +142,11 @@ BoxcoxRoundTrip(LAM, X) <- (
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:information_theory"
 ```
 
-Example — stable log-sum using `LogSumExp`:
+Example — stable log-sum using `log_sum_exp`:
 
 ```clausal
-StableLogProb(LOGITS, LP) <- (
-    LogSumExp(LOGITS, Z),
+stable_log_prob(LOGITS, LP) <- (
+    log_sum_exp(LOGITS, Z),
     LP is ++(LOGITS - float(Z))
 )
 ```
@@ -175,7 +175,7 @@ StableLogProb(LOGITS, LP) <- (
 -import_from(scipy_special, [Gamma, BesselK, BesselJZeros])
 
 # Matérn 5/2 covariance function value at distance D
-Matern52(D, NU_5_2, RESULT) <- (
+matern52(D, NU_5_2, RESULT) <- (
     SQRT5 is ++(5.0 ** 0.5),
     ARG is SQRT5 * D,
     TERM1 is ARG,
@@ -184,7 +184,7 @@ Matern52(D, NU_5_2, RESULT) <- (
 )
 
 # First zero of J_0 (wave antinodes)
-FirstAntinode(ZERO) <- (
+first_antinode(ZERO) <- (
     BesselJZeros(0, 1, ZEROS),
     ZERO is ++float(list(ZEROS)[0])
 )

@@ -3,14 +3,14 @@
 # ── EvalSpline(HANDLE, X, Y) — arity-3 bidirectional ────────────────────
 
 # forward
-Test("eval spline forward at known point") <- (
+test("eval spline forward at known point") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, 1.0, Y),
     DIFF is ++(abs(float(Y) - 1.0)),
     DIFF < 1e-9,
     Free(HANDLE))  # nv
 
-Test("eval spline forward at midpoint") <- (
+test("eval spline forward at midpoint") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, 0.0, Y),
     DIFF is ++(abs(float(Y) - 0.0)),
@@ -18,14 +18,14 @@ Test("eval spline forward at midpoint") <- (
     Free(HANDLE))  # nv
 
 # backward (root-finding via brentq)
-Test("eval spline backward finds x for y=4.0") <- (
+test("eval spline backward finds x for y=4.0") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, X, 4.0),
     DIFF is ++(abs(float(X) - 2.0)),
     DIFF < 1e-6,
     Free(HANDLE))  # nv
 
-Test("eval spline backward finds x for y=1.0") <- (
+test("eval spline backward finds x for y=1.0") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, X, 1.0),
     DIFF is ++(abs(float(X) - 1.0)),
@@ -33,25 +33,25 @@ Test("eval spline backward finds x for y=1.0") <- (
     Free(HANDLE))  # nv
 
 # both ground agrees
-Test("eval spline consistency agrees") <- (
+test("eval spline consistency agrees") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, 1.0, 1.0),
     Free(HANDLE))  # nv
 
 # both ground disagrees
-Test("eval spline consistency disagrees fails") <- (
+test("eval spline consistency disagrees fails") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     not EvalSpline(HANDLE, 1.0, 999.0),
     Free(HANDLE))  # nv
 
 # backward fails for out-of-range target
-Test("eval spline backward out of range fails") <- (
+test("eval spline backward out of range fails") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     not EvalSpline(HANDLE, _, 100.0),
     Free(HANDLE))  # nv
 
 # round-trip
-Test("eval spline round-trip") <- (
+test("eval spline round-trip") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, 1.5, Y),
     EvalSpline(HANDLE, X, Y),
@@ -61,14 +61,14 @@ Test("eval spline round-trip") <- (
 
 # ── EvalSpline(HANDLE, X, NU, Y) — arity-4 unidirectional ──────────────
 
-Test("eval spline derivative arity-4") <- (
+test("eval spline derivative arity-4") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, 1.0, 0, Y),
     DIFF is ++(abs(float(Y) - 1.0)),
     DIFF < 1e-9,
     Free(HANDLE))  # nv
 
-Test("eval spline first derivative") <- (
+test("eval spline first derivative") <- (
     MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
     EvalSpline(HANDLE, 1.0, 1, DY_UNUSED),
     Free(HANDLE))  # nv

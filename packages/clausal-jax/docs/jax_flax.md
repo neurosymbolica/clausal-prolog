@@ -38,7 +38,7 @@ PRNG key + example input to get a variables pytree, then call
 model carries no state.
 
 ```clausal
-Test("Dense init+apply round-trip") <- (
+test("Dense init+apply round-trip") <- (
     dense(8, MODEL),
     key(0, K),
     EXAMPLE is ++(jax.numpy.ones(4)),
@@ -211,7 +211,7 @@ Combining Phase 12 (`value_and_grad`) + Phase 16 (optax) + Phase 18
 (this module). Variables flow through every step:
 
 ```clausal
-Test("MLP one optax SGD step changes the variables") <- (
+test("MLP one optax SGD step changes the variables") <- (
     dense(4, FC1),
     dense(1, FC2),
     sequential([FC1, FC2], MODEL),

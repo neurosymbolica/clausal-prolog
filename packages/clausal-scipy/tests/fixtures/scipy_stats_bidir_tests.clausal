@@ -1,14 +1,14 @@
 -import_from(scipy_stats, [StatsFreezeDist, StatsFrozenCdf, StatsFrozenFree])
 
 # StatsFrozenCdf: forward
-Test("frozen cdf forward at x=0") <- (
+test("frozen cdf forward at x=0") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     StatsFrozenCdf(H, 0.0, P),
     DIFF is ++(abs(float(P) - 0.5)),
     DIFF < 1e-10,
     StatsFrozenFree(H))  # nv
 
-Test("frozen cdf forward at x=1.96") <- (
+test("frozen cdf forward at x=1.96") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     StatsFrozenCdf(H, 1.96, P),
     P > 0.974,
@@ -16,14 +16,14 @@ Test("frozen cdf forward at x=1.96") <- (
     StatsFrozenFree(H))  # nv
 
 # StatsFrozenCdf: backward (ppf direction)
-Test("frozen cdf backward is ppf") <- (
+test("frozen cdf backward is ppf") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     StatsFrozenCdf(H, X, 0.975),
     DIFF is ++(abs(float(X) - 1.9599639845)),
     DIFF < 1e-6,
     StatsFrozenFree(H))  # nv
 
-Test("frozen cdf backward at p=0.5") <- (
+test("frozen cdf backward at p=0.5") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     StatsFrozenCdf(H, X, 0.5),
     DIFF is ++(abs(float(X) - 0.0)),
@@ -31,7 +31,7 @@ Test("frozen cdf backward at p=0.5") <- (
     StatsFrozenFree(H))  # nv
 
 # StatsFrozenCdf: round-trip
-Test("frozen cdf round-trip") <- (
+test("frozen cdf round-trip") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     StatsFrozenCdf(H, 1.5, P),
     StatsFrozenCdf(H, X, P),
@@ -40,19 +40,19 @@ Test("frozen cdf round-trip") <- (
     StatsFrozenFree(H))  # nv
 
 # StatsFrozenCdf: consistency check (both ground)
-Test("frozen cdf consistency check succeeds") <- (
+test("frozen cdf consistency check succeeds") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     P is ++(__import__('scipy.stats', fromlist=['norm']).norm.cdf(1.0)),
     StatsFrozenCdf(H, 1.0, P),
     StatsFrozenFree(H))  # nv
 
-Test("frozen cdf consistency fails on mismatch") <- (
+test("frozen cdf consistency fails on mismatch") <- (
     StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     not StatsFrozenCdf(H, 1.0, 0.0),
     StatsFrozenFree(H))  # nv
 
 # Works with non-normal distributions
-Test("frozen cdf backward for exponential dist") <- (
+test("frozen cdf backward for exponential dist") <- (
     StatsFreezeDist('expon', ++({"scale": 2.0}), H),
     StatsFrozenCdf(H, X, 0.5),
     DIFF is ++(abs(float(X) - 1.3862943611)),

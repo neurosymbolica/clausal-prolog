@@ -1,57 +1,57 @@
 -import_from(provenance, [bottom_up_, solve, boolean])
 
 -module(mutual_recursion, [
-    Pred(N, M),       # N's predecessor is M (N = M + 1)
-    Zero(X),
-    Even(X),
-    Odd(X),
+    pred(N, M),       # N's predecessor is M (N = M + 1)
+    zero(X),
+    even(X),
+    odd(X),
 ])
 
-bottom_up_(Pred)
-bottom_up_(Zero)
-bottom_up_(Even)
-bottom_up_(Odd)
+bottom_up_(pred)
+bottom_up_(zero)
+bottom_up_(even)
+bottom_up_(odd)
 
-# Mutual recursion across two predicates: SCC analysis must place Even
-# and Odd in one stratum.
-Even(X) <- Zero(X)
-Odd(N) <- (Pred(N, M), Even(M))
-Even(N) <- (Pred(N, M), Odd(M))
+# Mutual recursion across two predicates: SCC analysis must place even
+# and odd in one stratum.
+even(X) <- zero(X)
+odd(N) <- (pred(N, M), even(M))
+even(N) <- (pred(N, M), odd(M))
 
 
-Test("mutual recursion across two predicates: Even") <- (
+test("mutual recursion across two predicates: even") <- (
     FACTS is [
-        (Zero(0), True),
-        (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
-        (Pred(4, 3), True), (Pred(5, 4), True),
+        (zero(0), True),
+        (pred(1, 0), True), (pred(2, 1), True), (pred(3, 2), True),
+        (pred(4, 3), True), (pred(5, 4), True),
     ],
-    solve(boolean, FACTS, Even(X_UNUSED), R),
+    solve(boolean, FACTS, even(X_UNUSED), R),
     length(R, 3)
 )
 
-Test("mutual recursion across two predicates: Odd") <- (
+test("mutual recursion across two predicates: odd") <- (
     FACTS is [
-        (Zero(0), True),
-        (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
-        (Pred(4, 3), True), (Pred(5, 4), True),
+        (zero(0), True),
+        (pred(1, 0), True), (pred(2, 1), True), (pred(3, 2), True),
+        (pred(4, 3), True), (pred(5, 4), True),
     ],
-    solve(boolean, FACTS, Odd(X_UNUSED), R),
+    solve(boolean, FACTS, odd(X_UNUSED), R),
     length(R, 3)
 )
 
-Test("mutual recursion: Even(4) is derived") <- (
+test("mutual recursion: even(4) is derived") <- (
     FACTS is [
-        (Zero(0), True),
-        (Pred(1, 0), True), (Pred(2, 1), True), (Pred(3, 2), True),
-        (Pred(4, 3), True),
+        (zero(0), True),
+        (pred(1, 0), True), (pred(2, 1), True), (pred(3, 2), True),
+        (pred(4, 3), True),
     ],
-    solve(boolean, FACTS, Even(4), [(_, True)])
+    solve(boolean, FACTS, even(4), [(_, True)])
 )
 
-Test("mutual recursion: Odd(2) is not derived") <- (
+test("mutual recursion: odd(2) is not derived") <- (
     FACTS is [
-        (Zero(0), True),
-        (Pred(1, 0), True), (Pred(2, 1), True),
+        (zero(0), True),
+        (pred(1, 0), True), (pred(2, 1), True),
     ],
-    solve(boolean, FACTS, Odd(2), [])
+    solve(boolean, FACTS, odd(2), [])
 )

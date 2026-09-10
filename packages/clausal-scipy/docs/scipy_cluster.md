@@ -9,8 +9,8 @@ The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.
 ```clausal
 -import_from(scipy_cluster, [Linkage, FlatCluster, Dendrogram,
                               Cophenet, Inconsistent,
-                              KMeans2, KMeans, VectorQuantize, Whiten,
-                              ResultGet])
+                              k_means2, k_means, vector_quantize, whiten,
+                              result_get])
 ```
 
 Or via the canonical `py.*` path:
@@ -23,7 +23,7 @@ Or via the canonical `py.*` path:
 
 ## Tier
 
-All predicates are **Tier 2** — they return result dicts or NumPy arrays. Use `ResultGet` to access named fields from dict results.
+All predicates are **Tier 2** — they return result dicts or NumPy arrays. Use `result_get` to access named fields from dict results.
 
 ---
 
@@ -38,10 +38,10 @@ The `Cluster` prefix is dropped since these predicates live in the cluster [modu
 | `hierarchy.dendrogram` | `Dendrogram` |
 | `hierarchy.cophenet` | `Cophenet` |
 | `hierarchy.inconsistent` | `Inconsistent` |
-| `vq.kmeans2` | `KMeans2` |
-| `vq.kmeans` | `KMeans` |
-| `vq.vq` | `VectorQuantize` |
-| `vq.whiten` | `Whiten` |
+| `vq.kmeans2` | `k_means2` |
+| `vq.kmeans` | `k_means` |
+| `vq.vq` | `vector_quantize` |
+| `vq.whiten` | `whiten` |
 
 ---
 
@@ -128,9 +128,9 @@ Compute inconsistency statistics for each non-singleton cluster in linkage matri
 
 ### Vector quantisation
 
-#### `KMeans2(DATA, K, RESULT)`
-#### `KMeans2(DATA, K, ITERATIONS, RESULT)`
-#### `KMeans2(DATA, K, ITERATIONS, SEED, RESULT)`
+#### `k_means2(DATA, K, RESULT)`
+#### `k_means2(DATA, K, ITERATIONS, RESULT)`
+#### `k_means2(DATA, K, ITERATIONS, SEED, RESULT)`
 
 k-means clustering with explicit re-initialisation (`scipy.cluster.vq.kmeans2`).
 
@@ -140,15 +140,15 @@ k-means clustering with explicit re-initialisation (`scipy.cluster.vq.kmeans2`).
 - `RESULT`: dict `{'centroid': ndarray shape (K, D), 'label': ndarray shape (N,)}`
 
 ```clausal
-KMeans2(DATA, 3, RESULT),
-ResultGet(RESULT, 'centroid', CENTROIDS),
-ResultGet(RESULT, 'label', LABELS),
+k_means2(DATA, 3, RESULT),
+result_get(RESULT, 'centroid', CENTROIDS),
+result_get(RESULT, 'label', LABELS),
 ```
 
 ---
 
-#### `KMeans(OBS, K, RESULT)`
-#### `KMeans(OBS, K, ITERATIONS, RESULT)`
+#### `k_means(OBS, K, RESULT)`
+#### `k_means(OBS, K, ITERATIONS, RESULT)`
 
 Classic k-means (`scipy.cluster.vq.kmeans`). Runs until convergence or the iteration limit.
 
@@ -162,7 +162,7 @@ Classic k-means (`scipy.cluster.vq.kmeans`). Runs until convergence or the itera
 
 ---
 
-#### `VectorQuantize(OBS, CODE_BOOK, RESULT)`
+#### `vector_quantize(OBS, CODE_BOOK, RESULT)`
 
 Assign each observation in `OBS` to the nearest code in `CODE_BOOK`.
 
@@ -173,15 +173,15 @@ Assign each observation in `OBS` to the nearest code in `CODE_BOOK`.
   - `dist[i]` — Euclidean distance to that centroid
 
 ```clausal
-KMeans(DATA, 2, KR),
-ResultGet(KR, 'codebook', CODEBOOK),
-VectorQuantize(DATA, CODEBOOK, VQR),
-ResultGet(VQR, 'code', CODE),
+k_means(DATA, 2, KR),
+result_get(KR, 'codebook', CODEBOOK),
+vector_quantize(DATA, CODEBOOK, VQR),
+result_get(VQR, 'code', CODE),
 ```
 
 ---
 
-#### `Whiten(OBS, RESULT)`
+#### `whiten(OBS, RESULT)`
 
 Normalise observations by dividing each feature by its standard deviation.
 
@@ -189,26 +189,26 @@ Normalise observations by dividing each feature by its standard deviation.
 - `RESULT`: ndarray of shape `(N, D)` with each column standardised to unit variance
 
 ```clausal
-Whiten(RAW_DATA, NORMALISED),
-KMeans2(NORMALISED, 3, RESULT),
+whiten(RAW_DATA, NORMALISED),
+k_means2(NORMALISED, 3, RESULT),
 ```
 
 ---
 
 ### Helper
 
-#### `ResultGet(RESULT, FIELD, VALUE)`
+#### `result_get(RESULT, FIELD, VALUE)`
 
 Extract a named field from a Tier 2 result dict.
 
-- `RESULT`: dict returned by `KMeans2`, `KMeans`, `VectorQuantize`, `Cophenet` (with Y), or `Dendrogram`
+- `RESULT`: dict returned by `k_means2`, `k_means`, `vector_quantize`, `Cophenet` (with Y), or `Dendrogram`
 - `FIELD`: string key
 - `VALUE`: unified with `RESULT[FIELD]`
 
 ```clausal
-KMeans(DATA, 2, R),
-ResultGet(R, 'codebook', CODEBOOK),
-ResultGet(R, 'distortion', D),
+k_means(DATA, 2, R),
+result_get(R, 'codebook', CODEBOOK),
+result_get(R, 'distortion', D),
 ```
 
 ---
@@ -223,9 +223,9 @@ ResultGet(R, 'distortion', D),
 
 ## Notes
 
-- `KMeans2` uses random initialisation by default; results are non-deterministic unless `SEED` is fixed.
-- `KMeans` and `KMeans2` may warn about empty clusters on small or degenerate data.
-- `Dendrogram` always passes `no_plot=True` internally — it returns the layout dict but never calls matplotlib. If you need a plot, access the raw data via `ResultGet` and draw it yourself.
+- `k_means2` uses random initialisation by default; results are non-deterministic unless `SEED` is fixed.
+- `k_means` and `k_means2` may warn about empty clusters on small or degenerate data.
+- `Dendrogram` always passes `no_plot=True` internally — it returns the layout dict but never calls matplotlib. If you need a plot, access the raw data via `result_get` and draw it yourself.
 - All predicates fail silently (yield no solutions) on exceptions such as singular matrices or incompatible array shapes.
 
 ---

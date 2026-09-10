@@ -60,7 +60,7 @@ Example — smooth a noisy 1-D signal:
 ```clausal
 -import_from(scipy_ndimage, [GaussianFilter])
 
-SmoothSignal(NOISY, SMOOTHED) <- (
+smooth_signal(NOISY, SMOOTHED) <- (
     GaussianFilter(NOISY, ++(2.0), SMOOTHED)
 )
 ```
@@ -78,7 +78,7 @@ Example — edge detection with a simple difference kernel:
 ```clausal
 -import_from(scipy_ndimage, [Convolve])
 
-EdgeDetect(SIGNAL, EDGES) <- (
+edge_detect(SIGNAL, EDGES) <- (
     KERNEL is ++([-1.0, 0.0, 1.0]),
     Convolve(SIGNAL, KERNEL, EDGES)
 )
@@ -97,7 +97,7 @@ Example — count blobs in a binary image:
 ```clausal
 -import_from(scipy_ndimage, [label])
 
-CountBlobs(IMAGE, COUNT) <- (
+count_blobs(IMAGE, COUNT) <- (
     label(IMAGE, LABELED),
     COUNT is ++(int(LABELED['num_features']))
 )
@@ -119,7 +119,7 @@ Example — remove noise then fill gaps in a binary mask:
 ```clausal
 -import_from(scipy_ndimage, [BinaryOpening, BinaryClosing])
 
-CleanMask(RAW_MASK, CLEAN) <- (
+clean_mask(RAW_MASK, CLEAN) <- (
     BinaryOpening(RAW_MASK, OPENED),
     BinaryClosing(OPENED, CLEAN)
 )
@@ -138,7 +138,7 @@ Example — centre-crop after zoom:
 ```clausal
 -import_from(scipy_ndimage, [Zoom])
 
-ZoomImage(IMAGE, FACTOR, ZOOMED) <- (
+zoom_image(IMAGE, FACTOR, ZOOMED) <- (
     Zoom(IMAGE, FACTOR, ZOOMED)
 )
 ```
@@ -156,7 +156,7 @@ Example — find the centroid of a blob:
 ```clausal
 -import_from(scipy_ndimage, [label, CenterOfMass])
 
-BlobCentroid(BINARY_IMAGE, CENTROID) <- (
+blob_centroid(BINARY_IMAGE, CENTROID) <- (
     label(BINARY_IMAGE, LABELED),
     CenterOfMass(BINARY_IMAGE, CENTROID)
 )
@@ -171,7 +171,7 @@ BlobCentroid(BINARY_IMAGE, CENTROID) <- (
 ```clausal
 -import_from(scipy_ndimage, [GaussianFilter, Convolve])
 
-ProcessSignal(NOISY, SMOOTHED, EDGES) <- (
+process_signal(NOISY, SMOOTHED, EDGES) <- (
     GaussianFilter(NOISY, ++(1.5), SMOOTHED),
     KERNEL is ++([-1.0, 0.0, 1.0]),
     Convolve(SMOOTHED, KERNEL, EDGES)
@@ -183,7 +183,7 @@ ProcessSignal(NOISY, SMOOTHED, EDGES) <- (
 ```clausal
 -import_from(scipy_ndimage, [label, FindObjects])
 
-LabelAndLocate(BINARY, COUNT, REGIONS) <- (
+label_and_locate(BINARY, COUNT, REGIONS) <- (
     label(BINARY, LABELED),
     COUNT is ++(int(LABELED['num_features'])),
     FindObjects(LABELED['label_array'], REGIONS)
@@ -195,7 +195,7 @@ LabelAndLocate(BINARY, COUNT, REGIONS) <- (
 ```clausal
 -import_from(scipy_ndimage, [BinaryOpening])
 
-RemoveNoise(RAW, CLEAN) <- (
+remove_noise(RAW, CLEAN) <- (
     BinaryOpening(RAW, CLEAN)
 )
 ```

@@ -209,9 +209,9 @@ class TestGnuPrologClausal:
     def test_consult_clausal_rule(self, g):
         # nv
         g.consult_clausal(textwrap.dedent("""\
-            ParentC2(tom, bob)
-            ParentC2(bob, ann)
-            GrandparentC2(X, _z) <- (ParentC2(X, _y), ParentC2(_y, _z))
+            parent_c2(tom, bob)
+            parent_c2(bob, ann)
+            grandparent_c2(X, _z) <- (parent_c2(X, _y), parent_c2(_y, _z))
         """))
         assert g.query_one("grandparent_c2(tom, X).") == {"X": "ann"}
 

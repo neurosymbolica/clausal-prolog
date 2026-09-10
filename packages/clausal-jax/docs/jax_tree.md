@@ -35,7 +35,7 @@ Nondeterministic — each leaf of `TREE`, in JAX's traversal order, is a
 solution. Combine with `findall` to collect them:
 
 ```clausal
-Test("leaf enumerates flat list") <- (
+test("leaf enumerates flat list") <- (
     TREE is ++([1.0, 2.0, 3.0]),
     findall(L, leaf(TREE, L), LS),
     LS == [1.0, 2.0, 3.0]
@@ -46,7 +46,7 @@ Scalars are pytrees of depth zero — they produce a single leaf. Empty
 containers produce no leaves:
 
 ```clausal
-Test("leaf on empty dict") <- (
+test("leaf on empty dict") <- (
     TREE is ++({}),
     findall(L, leaf(TREE, L), LS),
     LS == []
@@ -68,12 +68,12 @@ Each solution binds both the leaf and its **key-path** — a tuple of
 Pattern-match the path directly:
 
 ```clausal
-Test("leaf_with_path exposes dict key") <- (
+test("leaf_with_path exposes dict key") <- (
     TREE is ++({"a": 1.0}),
     leaf_with_path(TREE, (("key", "a"),), 1.0)
 )
 
-Test("nested dict + list index") <- (
+test("nested dict + list index") <- (
     TREE is ++({"a": [1.0, 2.0]}),
     leaf_with_path(TREE, (("key", "a"), ("index", 1)), 2.0)
 )
@@ -85,7 +85,7 @@ Render a Clausal-side path tuple as the same string JAX itself produces
 (`['a'][0]`, `.bias`, etc.). Useful for error messages and debug logs:
 
 ```clausal
-Test("keystr dict + index") <- (
+test("keystr dict + index") <- (
     keystr((("key", "a"), ("index", 0)), S),
     S == "['a'][0]"
 )
@@ -103,7 +103,7 @@ token plus a flat list of leaves.
 **Backward** `(-TREE, +TREEDEF, +LEAVES)` — rebuilds the tree.
 
 ```clausal
-Test("tree_flatten roundtrip") <- (
+test("tree_flatten roundtrip") <- (
     TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
     tree_flatten(TREE, TREEDEF, LEAVES),
     tree_flatten(REBUILT, TREEDEF, LEAVES),
@@ -116,7 +116,7 @@ with `==`. The backward direction is the standard way to rebuild a
 pytree with modified leaves:
 
 ```clausal
-Test("modify leaves via flatten/unflatten") <- (
+test("modify leaves via flatten/unflatten") <- (
     TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
     tree_flatten(TREE, TREEDEF, LEAVES),
     MODIFIED is ++([l * 10 for l in LEAVES]),
@@ -141,7 +141,7 @@ Succeeds iff `LEAVES` is a flat list — i.e. nothing inside is itself a
 pytree container. Fails quietly if any element is a list/dict/tuple:
 
 ```clausal
-Test("all_leaves rejects nested list") <- (
+test("all_leaves rejects nested list") <- (
     not all_leaves([[1.0], 2.0])
 )
 ```
@@ -161,7 +161,7 @@ Apply the Python callable `F` to every leaf. The structure is
 preserved:
 
 ```clausal
-Test("tree_map doubles leaves") <- (
+test("tree_map doubles leaves") <- (
     TREE is ++({"a": 1.0, "b": 2.0}),
     F is ++(lambda x: x * 2),
     tree_map(F, TREE, DOUBLED),
@@ -176,7 +176,7 @@ Test("tree_map doubles leaves") <- (
 `F` is called with one argument per tree:
 
 ```clausal
-Test("add matching leaves of two trees") <- (
+test("add matching leaves of two trees") <- (
     T1 is ++({"a": 1.0, "b": 2.0}),
     T2 is ++({"a": 10.0, "b": 20.0}),
     F is ++(lambda x, y: x + y),
@@ -191,7 +191,7 @@ Test("add matching leaves of two trees") <- (
 Left-fold over leaves with accumulator `INIT`:
 
 ```clausal
-Test("tree_reduce sums leaves") <- (
+test("tree_reduce sums leaves") <- (
     TREE is ++({"a": 1.0, "b": 2.0, "c": 3.0}),
     F is ++(lambda acc, x: acc + x),
     tree_reduce(F, TREE, 0.0, TOTAL),
@@ -208,7 +208,7 @@ not behind any optimiser library. `py.jax_optax.apply_updates` is
 re-exported for backwards compatibility.
 
 ```clausal
-Test("apply_updates on a dict pytree") <- (
+test("apply_updates on a dict pytree") <- (
     PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.5)}),
     UPDATES is ++({"w": jax.numpy.array([-0.1, -0.2]), "b": jax.numpy.array(-0.05)}),
     apply_updates(PARAMS, UPDATES, NEW)
@@ -227,7 +227,7 @@ The Clausal sweet spot. Collect the leaves that satisfy a predicate
 without having to flatten + filter procedurally:
 
 ```clausal
-Test("leaves greater than 2") <- (
+test("leaves greater than 2") <- (
     TREE is ++({"a": 1.0, "b": [2.0, 3.0, 4.0]}),
     findall(L, (leaf(TREE, L), L > 2.0), BIG),
     length(BIG, 2)
@@ -253,7 +253,7 @@ large_params(PARAMS, BIG) <- (
 them inline with the standard `++()` idiom:
 
 ```clausal
-Test("callable via ++()") <- (
+test("callable via ++()") <- (
     TREE is ++({"a": 1.0}),
     F is ++(lambda x: x * 2),
     tree_map(F, TREE, SCALED),

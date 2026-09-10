@@ -3,77 +3,77 @@
 
 # ── IsPrime/1 ────────────────────────────────────────────────────────────────
 
-Test("is prime 7") <- IsPrime(7)  # nv
-Test("is prime 11") <- IsPrime(11)  # nv
-Test("not prime 4") <- (not IsPrime(4))  # nv
-Test("not prime 1") <- (not IsPrime(1))  # nv
+test("is prime 7") <- IsPrime(7)  # nv
+test("is prime 11") <- IsPrime(11)  # nv
+test("not prime 4") <- (not IsPrime(4))  # nv
+test("not prime 1") <- (not IsPrime(1))  # nv
 
 # ── NextPrime/2 ──────────────────────────────────────────────────────────────
 
-Test("next prime after 7") <- (
+test("next prime after 7") <- (
     NextPrime(7, P),
     P == 11
 )  # nv
 
-Test("next prime after 10") <- (
+test("next prime after 10") <- (
     NextPrime(10, P),
     P == 11
 )  # nv
 
-Test("next prime after 1") <- (
+test("next prime after 1") <- (
     NextPrime(1, P),
     P == 2
 )  # nv
 
 # ── FactorInt/2 ──────────────────────────────────────────────────────────────
 
-Test("factor 12") <- (
+test("factor 12") <- (
     FactorInt(12, F),
     F is {2: 2, 3: 1}
 )  # nv
 
-Test("factor prime") <- (
+test("factor prime") <- (
     FactorInt(13, F),
     F is {13: 1}
 )  # nv
 
-Test("factor 360") <- (
+test("factor 360") <- (
     FactorInt(360, F),
     F is {2: 3, 3: 2, 5: 1}
 )  # nv
 
 # ── Divisors/2 ───────────────────────────────────────────────────────────────
 
-Test("divisors 12") <- (
+test("divisors 12") <- (
     Divisors(12, D),
     D == [1, 2, 3, 4, 6, 12]
 )  # nv
 
-Test("divisors prime") <- (
+test("divisors prime") <- (
     Divisors(7, D),
     D == [1, 7]
 )  # nv
 
 # ── gcd/3 ─────────────────────────────────────────────────────────────────
 
-Test("gcd integers") <- (
+test("gcd integers") <- (
     gcd(12, 8, R),
     R == 4
 )  # nv
 
-Test("gcd polynomials") <- (
+test("gcd polynomials") <- (
     gcd(X**2 - 1, X - 1, R),
     R == X - 1
 )  # nv
 
 # ── lcm/3 ─────────────────────────────────────────────────────────────────
 
-Test("lcm integers") <- (
+test("lcm integers") <- (
     lcm(4, 6, R),
     R == 12
 )  # nv
 
-Test("lcm polynomials") <- (
+test("lcm polynomials") <- (
     lcm(X - 1, X + 1, R),
     R == X**2 - 1
 )  # nv

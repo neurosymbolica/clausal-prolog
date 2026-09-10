@@ -5,13 +5,13 @@ The `spacy` module exposes spaCy's NLP pipeline as Clausal predicates. It provid
 **Requires:** `pip install spacy` and at least one downloaded spaCy model (e.g. `python -m spacy download en_core_web_sm`).
 
 ```clausal
--import_from(spacy, [LoadModel, Process, Token, Lemma, Entity])
+-import_from(spacy, [load_model, process, token, Lemma, entity])
 
-Nouns(DOC, TOK) <- (
-    LoadModel("en_core_web_sm", "nlp"),
-    Process("nlp", DOC, DOC_OBJ),
-    Token(DOC_OBJ, TOK),
-    Pos(TOK, "NOUN")
+nouns(DOC, TOK) <- (
+    load_model("en_core_web_sm", "nlp"),
+    process("nlp", DOC, DOC_OBJ),
+    token(DOC_OBJ, TOK),
+    pos(TOK, "NOUN")
 )
 ```
 
@@ -21,14 +21,14 @@ Nouns(DOC, TOK) <- (
 
 ```clausal
 -import_from(spacy, [
-    LoadModel, UnloadModel, CurrentModel,
-    Process,
-    Token, TokenText, TokenList,
-    Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop,
-    Entity, EntityList,
+    load_model, UnloadModel, current_model,
+    process,
+    token, token_text, token_list,
+    pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop,
+    entity, EntityList,
     Sentence, SentenceList,
-    Similarity,
-    NounChunk
+    similarity,
+    noun_chunk
 ])
 ```
 
@@ -38,7 +38,7 @@ Nouns(DOC, TOK) <- (
 
 Models are loaded once and kept in a module-level registry under string aliases. All registry access is [thread-safe](free_threading.md).
 
-### `LoadModel/1`
+### `load_model/1`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_1_sig"
@@ -50,7 +50,7 @@ Load a spaCy model by name; the model name is used as the alias. Idempotent — 
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_1_ex"
 ```
 
-### `LoadModel/2`
+### `load_model/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_2_sig"
@@ -70,7 +70,7 @@ Load `Name` under a custom `Alias`. Useful for loading the same model under mult
 
 Remove the model from the registry. **Fails** if the alias is not registered.
 
-### `CurrentModel/1`
+### `current_model/1`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:current_model_sig"
@@ -79,14 +79,14 @@ Remove the model from the registry. **Fails** if the alias is not registered.
 when `Alias` is unbound, **nondeterministically enumerates** all registered aliases. when ground, succeeds if that alias is currently loaded.
 
 ```clausal
-ListModels(A) <- CurrentModel(A)
+list_models(A) <- current_model(A)
 ```
 
 ---
 
 ## Layer 2 — Document processing
 
-### `Process/3`
+### `process/3`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:process_sig"
@@ -96,8 +96,8 @@ Run `Text` through the model registered as `Alias` and unify `Doc` with the resu
 
 ```clausal
 setup(DOC) <- (
-    LoadModel("en_core_web_sm", "nlp"),
-    Process("nlp", "The quick brown fox jumps.", DOC)
+    load_model("en_core_web_sm", "nlp"),
+    process("nlp", "The quick brown fox jumps.", DOC)
 )
 ```
 
@@ -121,7 +121,7 @@ A token is represented as a plain Python dict with keys:
 | `is_stop` | bool | True if the token is a stop word |
 | `shape` | str | Orthographic shape (e.g. `"Xxxxx"`, `"dd"`) |
 
-### `Token/2`
+### `token/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_2_sig"
@@ -130,10 +130,10 @@ A token is represented as a plain Python dict with keys:
 **Nondeterministic.** Yields one solution per token in `Doc`, binding `Tok` to the token dict.
 
 ```clausal
-AllTokens(DOC, TOK) <- Token(DOC, TOK)
+all_tokens(DOC, TOK) <- token(DOC, TOK)
 ```
 
-### `Token/3`
+### `token/3`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_3_sig"
@@ -142,11 +142,11 @@ AllTokens(DOC, TOK) <- Token(DOC, TOK)
 when `Index` is ground, retrieves the token at that position (fails if out of range). when `Index` is unbound, iterates all tokens and binds `Index` to each token's position.
 
 ```clausal
-FirstToken(DOC, TOK) <- Token(DOC, 0, TOK)
-IndexedTokens(DOC, I, TOK) <- Token(DOC, I, TOK)
+first_token(DOC, TOK) <- token(DOC, 0, TOK)
+indexed_tokens(DOC, I, TOK) <- token(DOC, I, TOK)
 ```
 
-### `TokenText/2`
+### `token_text/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_text_sig"
@@ -155,10 +155,10 @@ IndexedTokens(DOC, I, TOK) <- Token(DOC, I, TOK)
 Unify `Text` with the surface form of a token dict. equivalent to `T is ++Tok["text"]` but more readable.
 
 ```clausal
-IsApple(TOK) <- TokenText(TOK, "Apple")
+is_apple(TOK) <- token_text(TOK, "Apple")
 ```
 
-### `TokenList/2`
+### `token_list/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_list_sig"
@@ -167,7 +167,7 @@ IsApple(TOK) <- TokenText(TOK, "Apple")
 Unify `Tokens` with a list of all token dicts in the document. Deterministic.
 
 ```clausal
-Toks(DOC, TOKENS) <- TokenList(DOC, TOKENS)
+toks(DOC, TOKENS) <- token_list(DOC, TOKENS)
 ```
 
 ---
@@ -176,7 +176,7 @@ Toks(DOC, TOKENS) <- TokenList(DOC, TOKENS)
 
 All annotation predicates take a token dict as their first argument and unify the second argument with the annotation value.
 
-### `Pos/2`
+### `pos/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:pos_sig"
@@ -184,8 +184,8 @@ All annotation predicates take a token dict as their first argument and unify th
 
 Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"ADJ"`, etc.
 
-!!! note "Why `Pos` not `POS`?"
-    `POS` is all-uppercase, which the term transformer would interpret as a logic variable. The predicate is therefore named `Pos`.
+!!! note "Why `pos` not `POS`?"
+    `POS` is all-uppercase, which the term transformer would interpret as a logic variable. The predicate is therefore named `pos`.
 
 ### `Tag/2`
 
@@ -249,7 +249,7 @@ Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
 
 An entity is a dict with keys: `text`, `label`, `start`, `end`, `start_char`, `end_char`.
 
-### `Entity/2`
+### `entity/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_2_sig"
@@ -258,10 +258,10 @@ An entity is a dict with keys: `text`, `label`, `start`, `end`, `start_char`, `e
 **Nondeterministic.** Yields one solution per entity in the document.
 
 ```clausal
-Orgs(DOC, ENT) <- (Entity(DOC, ENT), T is ++ENT["label"], T == "ORG")
+orgs(DOC, ENT) <- (entity(DOC, ENT), T is ++ENT["label"], T == "ORG")
 ```
 
-### `Entity/3`
+### `entity/3`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_3_sig"
@@ -270,8 +270,8 @@ Orgs(DOC, ENT) <- (Entity(DOC, ENT), T is ++ENT["label"], T == "ORG")
 Filtered iteration — only yields entities whose label matches `label`.
 
 ```clausal
-People(DOC, ENT) <- Entity(DOC, "PERSON", ENT)
-Orgs(DOC, ENT) <- Entity(DOC, "ORG", ENT)
+people(DOC, ENT) <- entity(DOC, "PERSON", ENT)
+orgs(DOC, ENT) <- entity(DOC, "ORG", ENT)
 ```
 
 ### `EntityList/2`
@@ -311,7 +311,7 @@ Unify `Sents` with a list of all sentence strings. Deterministic.
 
 ## Layer 7 — Similarity
 
-### `Similarity/4`
+### `similarity/4`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:similarity_sig"
@@ -320,8 +320,8 @@ Unify `Sents` with a list of all sentence strings. Deterministic.
 Process both texts through the model and unify `Score` with their cosine similarity as a float in `[0.0, 1.0]`.
 
 ```clausal
-Close(T1, T2) <- (
-    Similarity("en", T1, T2, S),
+close(T1, T2) <- (
+    similarity("en", T1, T2, S),
     S > 0.8
 )
 ```
@@ -335,7 +335,7 @@ Close(T1, T2) <- (
 
 A noun chunk is a dict with keys: `text`, `root_text`, `root_dep`, `root_head_text`.
 
-### `NounChunk/2`
+### `noun_chunk/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:noun_chunk_sig"
@@ -344,8 +344,8 @@ A noun chunk is a dict with keys: `text`, `root_text`, `root_dep`, `root_head_te
 **Nondeterministic.** Yields one solution per noun chunk.
 
 ```clausal
-Subjects(DOC, CHUNK) <- (
-    NounChunk(DOC, CHUNK),
+subjects(DOC, CHUNK) <- (
+    noun_chunk(DOC, CHUNK),
     D is ++CHUNK["root_dep"],
     D == "nsubj"
 )
@@ -356,31 +356,31 @@ Subjects(DOC, CHUNK) <- (
 ## Working example
 
 ```clausal
--import_from(spacy, [LoadModel, Process, Token, Pos, Lemma, Entity, Dep])
+-import_from(spacy, [load_model, process, token, pos, Lemma, entity, Dep])
 
 # Find all noun subjects in a sentence
-NounSubjects(TEXT, LEMMA) <- (
-    LoadModel("en_core_web_sm", "nlp"),
-    Process("nlp", TEXT, DOC),
-    Token(DOC, TOK),
-    Pos(TOK, "NOUN"),
+noun_subjects(TEXT, LEMMA) <- (
+    load_model("en_core_web_sm", "nlp"),
+    process("nlp", TEXT, DOC),
+    token(DOC, TOK),
+    pos(TOK, "NOUN"),
     Dep(TOK, "nsubj"),
     Lemma(TOK, LEMMA)
 )
 
 # Extract all organisation entities
-Orgs(TEXT, ORG_TEXT) <- (
-    LoadModel("en_core_web_sm", "nlp"),
-    Process("nlp", TEXT, DOC),
-    Entity(DOC, "ORG", ENT),
+orgs(TEXT, ORG_TEXT) <- (
+    load_model("en_core_web_sm", "nlp"),
+    process("nlp", TEXT, DOC),
+    entity(DOC, "ORG", ENT),
     ORG_TEXT is ++ENT["text"]
 )
 
 # include tokens by POS and collect as list
-NounLemmas(TEXT, LEMMAS) <- (
-    LoadModel("en_core_web_sm", "nlp"),
-    Process("nlp", TEXT, DOC),
-    findall(L, (Token(DOC, TOK), Pos(TOK, "NOUN"), Lemma(TOK, L)), LEMMAS)
+noun_lemmas(TEXT, LEMMAS) <- (
+    load_model("en_core_web_sm", "nlp"),
+    process("nlp", TEXT, DOC),
+    findall(L, (token(DOC, TOK), pos(TOK, "NOUN"), Lemma(TOK, L)), LEMMAS)
 )
 ```
 
@@ -391,7 +391,7 @@ NounLemmas(TEXT, LEMMAS) <- (
     Tests are in `tests/test_spacy_module.py` (50+ tests, skipped if spaCy is unavailable).
 
     - **Helpers**: `_token_to_dict`, `_ent_to_dict`, `_chunk_to_dict` key sets and values
-    - **Model registry**: load/unload, idempotent load, `CurrentModel` enumerate/check
+    - **Model registry**: load/unload, idempotent load, `current_model` enumerate/check
     - **Process**: returns Doc, error on unknown alias
     - **Token/2,3**: iteration count, first token, by index, out-of-range, iterate with index
     - **TokenText, TokenList**: extraction, list length and contents
@@ -419,9 +419,9 @@ NounLemmas(TEXT, LEMMAS) <- (
 
     1. **Doc as opaque handle** — the spaCy `Doc` object is passed directly as a logic term. It can be unified, stored, and passed around, but its internal structure is accessed only via the provided predicates.
     2. **Token as dict** — tokens are converted to plain Python dicts. This makes them easy to access with `++TOK["text"]` and compatible with dict-handling builtins. Dicts are ground (no logic variables inside), so they unify structurally.
-    3. **Filtered iteration** — `Entity/3` and similar predicates filter at iteration time rather than via a separate filter predicate, following the pattern of `query/4` with SQL `WHERE` clauses.
+    3. **Filtered iteration** — `entity/3` and similar predicates filter at iteration time rather than via a separate filter predicate, following the pattern of `query/4` with SQL `WHERE` clauses.
     4. **Model aliases** — models are referenced by string aliases throughout, making predicates composable without carrying model references. The same pattern is used in the SQLite module.
-    5. **`Pos` not `POS`** — `POS` is all-uppercase and would be treated as a logic variable by the term transformer. `Pos` (title-case) avoids the collision.
+    5. **`pos` not `POS`** — `POS` is all-uppercase and would be treated as a logic variable by the term transformer. `pos` (title-case) avoids the collision.
     6. **Lazy spaCy import** — `import spacy` is deferred to first use so that `.clausal` files importing this module compile correctly even when spaCy is not installed. Errors are reported at predicate call time with a clear message.
 
 ---

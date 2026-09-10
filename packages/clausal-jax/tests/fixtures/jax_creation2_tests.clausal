@@ -8,7 +8,7 @@
 
 # --- Creation variants: *_like ---
 
-Test("zeros_like preserves shape") <- (
+test("zeros_like preserves shape") <- (
     ones([3, 4], A),
     zeros_like(A, R),
     shape(R, [3, 4]),
@@ -17,40 +17,40 @@ Test("zeros_like preserves shape") <- (
                    [0.0, 0.0, 0.0, 0.0]])
 )  # nv
 
-Test("zeros_like preserves dtype") <- (
+test("zeros_like preserves dtype") <- (
     ones([2], {"dtype": int32}, A),
     zeros_like(A, R),
     dtype(R, int32)
 )  # nv
 
-Test("ones_like preserves shape") <- (
+test("ones_like preserves shape") <- (
     zeros([2, 2], A),
     ones_like(A, R),
     array_list(R, [[1.0, 1.0], [1.0, 1.0]])
 )  # nv
 
-Test("full_like fills with value") <- (
+test("full_like fills with value") <- (
     zeros([2, 3], A),
     full_like(A, 7.0, R),
     shape(R, [2, 3]),
     array_list(R, [[7.0, 7.0, 7.0], [7.0, 7.0, 7.0]])
 )  # nv
 
-Test("zeros_like opts overrides dtype") <- (
+test("zeros_like opts overrides dtype") <- (
     ones([2, 3], A),
     zeros_like(A, {"dtype": int32}, R),
     shape(R, [2, 3]),
     dtype(R, int32)
 )  # nv
 
-Test("ones_like opts overrides dtype") <- (
+test("ones_like opts overrides dtype") <- (
     zeros([3], A),
     ones_like(A, {"dtype": int32}, R),
     dtype(R, int32),
     array_list(R, [1, 1, 1])
 )  # nv
 
-Test("full_like opts overrides dtype") <- (
+test("full_like opts overrides dtype") <- (
     ones([2], A),
     full_like(A, 7, {"dtype": int32}, R),
     dtype(R, int32),
@@ -59,12 +59,12 @@ Test("full_like opts overrides dtype") <- (
 
 # --- empty (JAX actually returns zeros) ---
 
-Test("empty shape") <- (
+test("empty shape") <- (
     empty([2, 3], A),
     shape(A, [2, 3])
 )  # nv
 
-Test("empty with dtype option") <- (
+test("empty with dtype option") <- (
     empty([3], {"dtype": int32}, A),
     shape(A, [3]),
     dtype(A, int32)
@@ -72,21 +72,21 @@ Test("empty with dtype option") <- (
 
 # --- logspace / geomspace ---
 
-Test("logspace default base 10") <- (
+test("logspace default base 10") <- (
     logspace(0.0, 2.0, 3, A),
     shape(A, [3]),
     array([1.0, 10.0, 100.0], EXPECTED),
     allclose(A, EXPECTED, 0.001, 0.0)
 )  # nv
 
-Test("logspace with base option") <- (
+test("logspace with base option") <- (
     logspace(0.0, 3.0, 4, {"base": 2.0}, A),
     shape(A, [4]),
     array([1.0, 2.0, 4.0, 8.0], EXPECTED),
     allclose(A, EXPECTED, 0.001, 0.0)
 )  # nv
 
-Test("geomspace endpoints") <- (
+test("geomspace endpoints") <- (
     geomspace(1.0, 1000.0, 4, A),
     shape(A, [4]),
     array([1.0, 10.0, 100.0, 1000.0], EXPECTED),
@@ -95,7 +95,7 @@ Test("geomspace endpoints") <- (
 
 # --- meshgrid ---
 
-Test("meshgrid default xy indexing") <- (
+test("meshgrid default xy indexing") <- (
     array([1.0, 2.0, 3.0], X),
     array([4.0, 5.0], Y),
     meshgrid([X, Y], [XX, YY]),
@@ -105,7 +105,7 @@ Test("meshgrid default xy indexing") <- (
     array_list(YY, [[4.0, 4.0, 4.0], [5.0, 5.0, 5.0]])
 )  # nv
 
-Test("meshgrid ij indexing") <- (
+test("meshgrid ij indexing") <- (
     array([1.0, 2.0, 3.0], X),
     array([4.0, 5.0], Y),
     meshgrid([X, Y], {"indexing": "ij"}, [XX, YY]),
@@ -115,26 +115,26 @@ Test("meshgrid ij indexing") <- (
 
 # --- diag ---
 
-Test("diag from 1d creates square matrix") <- (
+test("diag from 1d creates square matrix") <- (
     array([1, 2, 3], V),
     diag(V, M),
     shape(M, [3, 3]),
     array_list(M, [[1, 0, 0], [0, 2, 0], [0, 0, 3]])
 )  # nv
 
-Test("diag extracts from 2d") <- (
+test("diag extracts from 2d") <- (
     array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], M),
     diag(M, V),
     array_list(V, [1, 5, 9])
 )  # nv
 
-Test("diag with k offset extracts super-diagonal") <- (
+test("diag with k offset extracts super-diagonal") <- (
     array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], M),
     diag(M, 1, V),
     array_list(V, [2, 6])
 )  # nv
 
-Test("diag with k offset extracts sub-diagonal") <- (
+test("diag with k offset extracts sub-diagonal") <- (
     array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], M),
     diag(M, -1, V),
     array_list(V, [4, 8])
@@ -142,7 +142,7 @@ Test("diag with k offset extracts sub-diagonal") <- (
 
 # --- identity ---
 
-Test("identity 3x3") <- (
+test("identity 3x3") <- (
     identity(3, A),
     shape(A, [3, 3]),
     array_list(A, [[1.0, 0.0, 0.0],
@@ -150,7 +150,7 @@ Test("identity 3x3") <- (
                    [0.0, 0.0, 1.0]])
 )  # nv
 
-Test("identity with dtype option") <- (
+test("identity with dtype option") <- (
     identity(2, {"dtype": int32}, A),
     dtype(A, int32),
     array_list(A, [[1, 0], [0, 1]])
@@ -158,62 +158,62 @@ Test("identity with dtype option") <- (
 
 # --- Arithmetic gaps ---
 
-Test("sub element-wise") <- (
+test("sub element-wise") <- (
     array([10, 20, 30], A),
     array([1, 2, 3], B),
     sub(A, B, C),
     array_list(C, [9, 18, 27])
 )  # nv
 
-Test("sub broadcasts scalar") <- (
+test("sub broadcasts scalar") <- (
     array([10, 20, 30], A),
     array(5, B),
     sub(A, B, C),
     array_list(C, [5, 15, 25])
 )  # nv
 
-Test("div true divides") <- (
+test("div true divides") <- (
     array([10.0, 20.0, 30.0], A),
     array([2.0, 4.0, 5.0], B),
     div(A, B, C),
     array_list(C, [5.0, 5.0, 6.0])
 )  # nv
 
-Test("div of ints produces floats") <- (
+test("div of ints produces floats") <- (
     array([7, 5], A),
     array([2, 2], B),
     div(A, B, C),
     array_list(C, [3.5, 2.5])
 )  # nv
 
-Test("floor_div truncates") <- (
+test("floor_div truncates") <- (
     array([7, 8, 9], A),
     array([2, 3, 4], B),
     floor_div(A, B, C),
     array_list(C, [3, 2, 2])
 )  # nv
 
-Test("mod remainder") <- (
+test("mod remainder") <- (
     array([7, 8, 9], A),
     array([3, 3, 3], B),
     mod(A, B, C),
     array_list(C, [1, 2, 0])
 )  # nv
 
-Test("neg negates values") <- (
+test("neg negates values") <- (
     array([1, -2, 3], A),
     neg(A, R),
     array_list(R, [-1, 2, -3])
 )  # nv
 
-Test("neg twice recovers") <- (
+test("neg twice recovers") <- (
     array([1.0, -2.0, 3.0], A),
     neg(A, R1),
     neg(R1, R2),
     array_list(R2, [1.0, -2.0, 3.0])
 )  # nv
 
-Test("reciprocal inverts") <- (
+test("reciprocal inverts") <- (
     array([1.0, 2.0, 4.0], A),
     reciprocal(A, R),
     array_list(R, [1.0, 0.5, 0.25])

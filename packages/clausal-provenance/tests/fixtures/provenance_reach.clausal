@@ -1,145 +1,145 @@
 -import_from(provenance, [bottom_up_, solve, recover, boolean, add_mult_prob])
 
 -module(provenance_reach, [
-    Edge(SRC, DST),
-    Path(SRC, DST),
+    edge(SRC, DST),
+    path(SRC, DST),
 ])
 
-bottom_up_(Edge)
-bottom_up_(Path)
+bottom_up_(edge)
+bottom_up_(path)
 
-Path(SRC, DST) <- Edge(SRC, DST)
+path(SRC, DST) <- edge(SRC, DST)
 
-Path(SRC, DST) <- (
-    Edge(SRC, MID),
-    Path(MID, DST),
+path(SRC, DST) <- (
+    edge(SRC, MID),
+    path(MID, DST),
 )
 
 
 # ── Single-rule reachability ──────────────────────────────────────────
 
-Test("direct edge under boolean") <- (
+test("direct edge under boolean") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("b", "c"), True),
+        (edge("a", "b"), True),
+        (edge("b", "c"), True),
     ],
-    solve(boolean, FACTS, Path("a", "b"), R),
-    R == [(Path("a", "b"), True)]
+    solve(boolean, FACTS, path("a", "b"), R),
+    R == [(path("a", "b"), True)]
 )
 
 
 # ── Transitive closure ────────────────────────────────────────────────
 
-Test("transitive closure under boolean") <- (
+test("transitive closure under boolean") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("b", "c"), True),
-        (Edge("c", "d"), True),
+        (edge("a", "b"), True),
+        (edge("b", "c"), True),
+        (edge("c", "d"), True),
     ],
-    solve(boolean, FACTS, Path("a", "d"), R),
-    R == [(Path("a", "d"), True)]
+    solve(boolean, FACTS, path("a", "d"), R),
+    R == [(path("a", "d"), True)]
 )
 
-Test("multiple answers from one start node") <- (
+test("multiple answers from one start node") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("b", "c"), True),
-        (Edge("c", "d"), True),
+        (edge("a", "b"), True),
+        (edge("b", "c"), True),
+        (edge("c", "d"), True),
     ],
-    solve(boolean, FACTS, Path("a", DST_UNUSED), R),
+    solve(boolean, FACTS, path("a", DST_UNUSED), R),
     length(R, 3)
 )
 
-Test("disconnected nodes yield no path") <- (
+test("disconnected nodes yield no path") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("c", "d"), True),
+        (edge("a", "b"), True),
+        (edge("c", "d"), True),
     ],
-    solve(boolean, FACTS, Path("a", "d"), []),
+    solve(boolean, FACTS, path("a", "d"), []),
 )
 
 
 # ── Cycles ────────────────────────────────────────────────────────────
 
-Test("cycle does not blow up the fixpoint — set semantics") <- (
+test("cycle does not blow up the fixpoint — set semantics") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("b", "a"), True),
+        (edge("a", "b"), True),
+        (edge("b", "a"), True),
     ],
-    solve(boolean, FACTS, Path("a", DST_UNUSED), R),
+    solve(boolean, FACTS, path("a", DST_UNUSED), R),
     length(R, 2)
 )
 
 
 # ── Multiple disconnected components ──────────────────────────────────
 
-Test("multiple starts: pairs from two disjoint components") <- (
+test("multiple starts: pairs from two disjoint components") <- (
     FACTS is [
-        (Edge(0, 1), True),
-        (Edge(1, 2), True),
-        (Edge(10, 11), True),
+        (edge(0, 1), True),
+        (edge(1, 2), True),
+        (edge(10, 11), True),
     ],
-    solve(boolean, FACTS, Path(SRC_UNUSED, DST_UNUSED), R),
+    solve(boolean, FACTS, path(SRC_UNUSED, DST_UNUSED), R),
     length(R, 4)
 )
 
 
 # ── Goal binding modes ────────────────────────────────────────────────
 
-Test("goal with both args bound — single match") <- (
+test("goal with both args bound — single match") <- (
     FACTS is [
-        (Edge(0, 1), True),
-        (Edge(1, 2), True),
+        (edge(0, 1), True),
+        (edge(1, 2), True),
     ],
-    solve(boolean, FACTS, Path(0, 2), [(_, True)])
+    solve(boolean, FACTS, path(0, 2), [(_, True)])
 )
 
-Test("goal with no matching path returns []") <- (
+test("goal with no matching path returns []") <- (
     FACTS is [
-        (Edge(0, 1), True),
-        (Edge(1, 2), True),
+        (edge(0, 1), True),
+        (edge(1, 2), True),
     ],
-    solve(boolean, FACTS, Path(0, 99), [])
+    solve(boolean, FACTS, path(0, 99), [])
 )
 
 
 # ── Empty input handling ──────────────────────────────────────────────
 
-Test("no facts, no answers") <- (
-    solve(boolean, [], Path("a", "b"), [])
+test("no facts, no answers") <- (
+    solve(boolean, [], path("a", "b"), [])
 )
 
-Test("facts-only relation queried on input predicate") <- (
+test("facts-only relation queried on input predicate") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("b", "c"), True),
+        (edge("a", "b"), True),
+        (edge("b", "c"), True),
     ],
-    solve(boolean, FACTS, Edge(SRC_UNUSED, DST_UNUSED), R),
+    solve(boolean, FACTS, edge(SRC_UNUSED, DST_UNUSED), R),
     length(R, 2)
 )
 
 
 # ── Tag merging via semiring.add ──────────────────────────────────────
 
-Test("duplicate facts merge: True ∨ True = True, single tuple") <- (
+test("duplicate facts merge: True ∨ True = True, single tuple") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("a", "b"), True),
-        (Edge("a", "b"), True),
+        (edge("a", "b"), True),
+        (edge("a", "b"), True),
+        (edge("a", "b"), True),
     ],
-    solve(boolean, FACTS, Edge(SRC_UNUSED, DST_UNUSED), R),
+    solve(boolean, FACTS, edge(SRC_UNUSED, DST_UNUSED), R),
     length(R, 1)
 )
 
 
 # ── recover/3 — the boundary identity for boolean ─────────────────────
 
-Test("recover/3 on boolean is identity") <- (
+test("recover/3 on boolean is identity") <- (
     recover(boolean, True, OUT),
     OUT == True
 )
 
-Test("recover/3 on boolean preserves False") <- (
+test("recover/3 on boolean preserves False") <- (
     recover(boolean, False, OUT),
     OUT == False
 )
@@ -147,35 +147,35 @@ Test("recover/3 on boolean preserves False") <- (
 
 # ── add_mult_prob through the engine ──────────────────────────────────
 
-Test("add_mult_prob: two-hop = product of edge probabilities") <- (
+test("add_mult_prob: two-hop = product of edge probabilities") <- (
     # 0.7 * 0.5 = 0.35
     FACTS is [
-        (Edge("a", "b"), 0.7),
-        (Edge("b", "c"), 0.5),
+        (edge("a", "b"), 0.7),
+        (edge("b", "c"), 0.5),
     ],
-    solve(add_mult_prob, FACTS, Path("a", "c"), [(_, P)]),
+    solve(add_mult_prob, FACTS, path("a", "c"), [(_, P)]),
     P > 0.3499999999,
     P < 0.3500000001,
 )
 
-Test("add_mult_prob: alternative paths combine via noisy-OR") <- (
-    # Path a→b→d (0.6 * 0.6 = 0.36) and a→c→d (0.5 * 0.4 = 0.20).
+test("add_mult_prob: alternative paths combine via noisy-OR") <- (
+    # path a→b→d (0.6 * 0.6 = 0.36) and a→c→d (0.5 * 0.4 = 0.20).
     # noisy_or(0.36, 0.20) = 0.36 + 0.20 - 0.36*0.20 = 0.488.
     FACTS is [
-        (Edge("a", "b"), 0.6),
-        (Edge("b", "d"), 0.6),
-        (Edge("a", "c"), 0.5),
-        (Edge("c", "d"), 0.4),
+        (edge("a", "b"), 0.6),
+        (edge("b", "d"), 0.6),
+        (edge("a", "c"), 0.5),
+        (edge("c", "d"), 0.4),
     ],
-    solve(add_mult_prob, FACTS, Path("a", "d"), [(_, P)]),
+    solve(add_mult_prob, FACTS, path("a", "d"), [(_, P)]),
     P > 0.4879999999,
     P < 0.4880000001,
 )
 
-Test("add_mult_prob: zero-prob input is pruned by discard threshold") <- (
+test("add_mult_prob: zero-prob input is pruned by discard threshold") <- (
     FACTS is [
-        (Edge("a", "b"), 0.0),
-        (Edge("b", "c"), 0.5),
+        (edge("a", "b"), 0.0),
+        (edge("b", "c"), 0.5),
     ],
-    solve(add_mult_prob, FACTS, Path("a", "c"), [])
+    solve(add_mult_prob, FACTS, path("a", "c"), [])
 )

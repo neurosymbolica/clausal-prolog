@@ -8,68 +8,68 @@
 
 # ── Simplify/2 ───────────────────────────────────────────────────────────────
 
-Test("simplify cancellation") <- Simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)  # nv
+test("simplify cancellation") <- Simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)  # nv
 
-Test("simplify fraction") <- (
+test("simplify fraction") <- (
     Simplify((X**2 - 1) / (X - 1), R),
     R == X + 1
 )  # nv
 
 # ── Expand/2 ─────────────────────────────────────────────────────────────────
 
-Test("expand square") <- (
+test("expand square") <- (
     Expand((X + 1)**2, R),
     R == X**2 + 2*X + 1
 )  # nv
 
-Test("expand product") <- (
+test("expand product") <- (
     Expand((X + 1) * (X - 1), R),
     R == X**2 - 1
 )  # nv
 
-Test("expand cube") <- (
+test("expand cube") <- (
     Expand((X + 1)**3, R),
     R == X**3 + 3*X**2 + 3*X + 1
 )  # nv
 
 # ── Factor/2 ─────────────────────────────────────────────────────────────────
 
-Test("factor diff of squares") <- (
+test("factor diff of squares") <- (
     Factor(X**2 - 1, R),
     R == (X - 1) * (X + 1)
 )  # nv
 
-Test("factor quadratic") <- (
+test("factor quadratic") <- (
     Factor(X**2 + 5*X + 6, R),
     R == (X + 2) * (X + 3)
 )  # nv
 
 # ── Solve/3: nondeterministic ────────────────────────────────────────────────
 
-Test("solve linear") <- (
+test("solve linear") <- (
     Solve(2*X - 6, X, S),
     S == 3
 )  # nv
 
-Test("solve quadratic +2") <- (
+test("solve quadratic +2") <- (
     Solve(X**2 - 4, X, S),
     S == 2
 )  # nv
 
-Test("solve quadratic -2") <- (
+test("solve quadratic -2") <- (
     Solve(X**2 - 4, X, S),
     S == -2
 )  # nv
 
 # ── SolveAll/3 ───────────────────────────────────────────────────────────────
 
-Test("solve all quadratic") <- (
+test("solve all quadratic") <- (
     SolveAll(X**2 - 9, X, SOLS),
     S is ++sorted(SOLS),
     S == [-3, 3]
 )  # nv
 
-Test("solve all cubic") <- (
+test("solve all cubic") <- (
     SolveAll(X**3 - X, X, SOLS),
     S is ++sorted(SOLS),
     S == [-1, 0, 1]
@@ -77,66 +77,66 @@ Test("solve all cubic") <- (
 
 # ── Diff/2,3 ─────────────────────────────────────────────────────────────────
 
-Test("diff power rule") <- (
+test("diff power rule") <- (
     Diff(X**3, X, R),
     R == 3*X**2
 )  # nv
 
-Test("diff constant") <- (
+test("diff constant") <- (
     Diff(5*X**0, X, R),
     R == 0
 )  # nv
 
-Test("diff sum") <- (
+test("diff sum") <- (
     Diff(X**2 + 3*X + 1, X, R),
     R == 2*X + 3
 )  # nv
 
-Test("diff partial") <- (
+test("diff partial") <- (
     Diff(X*Y + X**2, X, R),
     R == Y + 2*X
 )  # nv
 
 # ── Integrate/2,3 ────────────────────────────────────────────────────────────
 
-Test("integrate power") <- (
+test("integrate power") <- (
     Integrate(X**2, X, R),
     R == X**3 / 3
 )  # nv
 
-Test("integrate sum") <- (
+test("integrate sum") <- (
     Integrate(3*X**2 + 2*X, X, R),
     R == X**3 + X**2
 )  # nv
 
 # ── Limit/4 ──────────────────────────────────────────────────────────────────
 
-Test("limit x→0 of x+1") <- (
+test("limit x→0 of x+1") <- (
     Limit(X + 1, X, 0, R),
     R == 1
 )  # nv
 
-Test("limit 1/x at inf") <- (
+test("limit 1/x at inf") <- (
     Limit(1/X, X, inf, R),
     R == 0
 )  # nv
 
 # ── Series/4 ─────────────────────────────────────────────────────────────────
 
-Test("series 1/(1-x) to 4") <- (
+test("series 1/(1-x) to 4") <- (
     Series(1/(1-X), X, 4, R),
     R == 1 + X + X**2 + X**3
 )  # nv
 
 # ── SymEqual/2 still works for explicit use ─────────────────────────────────
 
-Test("sym_equal reflexive") <- (
+test("sym_equal reflexive") <- (
     SymEqual(
         X**2 + 1,
         1 + X**2
     )
 )  # nv
-Test("sym_equal nontrivial") <- (
+test("sym_equal nontrivial") <- (
     SymEqual(
         (X + 1)**2 - X**2,
         2*X + 1
@@ -145,38 +145,38 @@ Test("sym_equal nontrivial") <- (
 
 # ── == with SymExpr does symbolic comparison ────────────────────────────────
 
-Test("== reorder") <- (
+test("== reorder") <- (
     Expand(X*Y, R),
     R == Y*X
 )  # nv
 
 # ── SymStr/2 — readable string output ───────────────────────────────────────
 
-Test("sym_str constant") <- (
+test("sym_str constant") <- (
     SymStr(42, S),
     S == "42"
 )  # nv
 
-Test("sym_str expression") <- (
+test("sym_str expression") <- (
     SymStr(X_UNUSED**2 + 1, S),
     ++("**2" in S)
 )  # nv
 
 # ── Chaining — pipe results between predicates ──────────────────────────────
 
-Test("expand then factor roundtrip") <- (
+test("expand then factor roundtrip") <- (
     Expand((X + 2) * (X + 3), EXP),
     Factor(EXP, F),
     F == (X + 2) * (X + 3)
 )  # nv
 
-Test("diff then integrate roundtrip") <- (
+test("diff then integrate roundtrip") <- (
     Diff(X**4, X, D),
     Integrate(D, X, I),
     I == X**4
 )  # nv
 
-Test("solve then verify") <- (
+test("solve then verify") <- (
     Solve(X**2 - 16, X, S),
     V is ++(S**2),
     V == 16
@@ -184,14 +184,14 @@ Test("solve then verify") <- (
 
 # ── Multivariate ────────────────────────────────────────────────────────────
 
-Test("expand multivar") <- (
+test("expand multivar") <- (
     Expand((X + Y)**2, R),
     R == X**2 + 2*X*Y + Y**2
 )  # nv
 
 # ── Sym/2 still works when you want named symbols ──────────────────────────
 
-Test("sym named") <- (
+test("sym named") <- (
     Sym("x", X),
     EXPR is ++(X**2 + 1),
     S is ++str(EXPR),
@@ -200,7 +200,7 @@ Test("sym named") <- (
 
 # ── FreeVars/2 ───────────────────────────────────────────────────────────────
 
-Test("free vars none") <- (
+test("free vars none") <- (
     FreeVars(42, V),
     V == []
 )  # nv

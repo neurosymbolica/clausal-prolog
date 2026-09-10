@@ -74,7 +74,7 @@ pytrees.
 ### Minimal example
 
 ```clausal
-Test("one SGD step on a flat array") <- (
+test("one SGD step on a flat array") <- (
     sgd(0.1, OPT),
     PARAMS is ++(jax.numpy.array([1.0, 2.0, 3.0])),
     init_optimizer(OPT, PARAMS, STATE0),
@@ -90,7 +90,7 @@ Test("one SGD step on a flat array") <- (
 ### With `value_and_grad`
 
 ```clausal
-Test("one Adam step on x^2") <- (
+test("one Adam step on x^2") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     PARAMS is ++(jax.numpy.array([3.0, 4.0])),
     value_and_grad(F, PARAMS, VG),

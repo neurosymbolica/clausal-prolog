@@ -20,6 +20,12 @@ failure and the CLI exits 1).  The two fixtures that used to be kept on the old 
 (`tests/fixtures/tabled_fib.clausal`, `tests/fixtures/builtins_arith.clausal`) were renamed
 in the same change.
 
+**2026-09-10, later the same day:** the `packages/*/tests/fixtures` files (103, the bulk of the
+`Test(` spellings) were migrated too (`todo/done/packages-fixtures-still-titlecase-2026-09-10.md`),
+and `tests/test_titlecase_gate.py` now measures the count: zero TitleCase identifiers in any
+Clausal position under `clausal/`, `tests/` and `packages/`, witnesses excepted.  Nothing in this
+repository can reach the union any more.
+
 **Exit criterion (measurable):** remove the union, `_warn_deprecated_test_spelling`,
 `TEST_DEPRECATED_NAME` and the `Test(` arm of `_TEST_CLAUSE_RE` in one change, when the
 downstream owners report zero `Test(` clauses across their trees (each owner replies with

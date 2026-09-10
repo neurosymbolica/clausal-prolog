@@ -24,7 +24,7 @@ Predicates fall into two tiers depending on whether the result is a single array
 
 **Tier 1 — single result**: RESULT is unified with the output array (or scalar).
 
-**Tier 2 — result dict**: RESULT is unified with a Python dict. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields by name.
+**Tier 2 — result dict**: RESULT is unified with a Python dict. Use `result_get(RESULT, FIELD, VALUE)` to extract individual fields by name.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:tiers"
@@ -38,15 +38,15 @@ Predicate names use full English words; scipy's terse abbreviations are expanded
 
 | scipy function | Clausal predicate |
 |---|---|
-| `scipy.linalg.solve` | `Solve` |
+| `scipy.linalg.solve` | `solve` |
 | `scipy.linalg.lstsq` | `LeastSquares` |
 | `scipy.linalg.solve_triangular` | `SolveTriangular` |
 | `scipy.linalg.lu` | `LuDecompose` |
 | `scipy.linalg.qr` | `QrDecompose` |
-| `scipy.linalg.svd` | `SingularValueDecompose` |
+| `scipy.linalg.svd` | `singular_value_decompose` |
 | `scipy.linalg.cholesky` | `Cholesky` |
 | `scipy.linalg.eig` | `EigenDecompose` |
-| `scipy.linalg.eigh` | `EigenDecomposeHermitian` |
+| `scipy.linalg.eigh` | `eigen_decompose_hermitian` |
 | `scipy.linalg.schur` | `Schur` |
 | `scipy.linalg.inv` | `Inverse` |
 | `scipy.linalg.pinv` | `PseudoInverse` |
@@ -56,8 +56,8 @@ Predicate names use full English words; scipy's terse abbreviations are expanded
 | `scipy.linalg.logm` | `MatrixExpLog` backward |
 | `scipy.linalg.sqrtm` | `MatrixSquareRoot` |
 | `scipy.linalg.funm` | `MatrixFunction` |
-| `scipy.linalg.lu_factor` | `LuFactor` |
-| `scipy.linalg.lu_solve` | `LuSolve` |
+| `scipy.linalg.lu_factor` | `lu_factor` |
+| `scipy.linalg.lu_solve` | `lu_solve` |
 | `scipy.linalg.cho_factor` | `CholeskyFactor` |
 | `scipy.linalg.cho_solve` | `CholeskySolve` |
 
@@ -76,8 +76,8 @@ LU and QR are kept as-is — they are the standard letter names for the matrix f
 Example:
 
 ```clausal
-SolveSystem(A, B, X) <- (
-    Solve(A, B, X),
+solve_system(A, B, X) <- (
+    solve(A, B, X),
     ++print(f"Solution: {X}")
 )
 ```
@@ -95,9 +95,9 @@ All decomposition predicates are **bidirectional**: the forward direction decomp
 Example — extract singular values:
 
 ```clausal
-LargestSingularValue(A, S1) <- (
-    SingularValueDecompose(A, DECOMP),
-    ResultGet(DECOMP, 's', S),
+largest_singular_value(A, S1) <- (
+    singular_value_decompose(A, DECOMP),
+    result_get(DECOMP, 's', S),
     S1 is ++S[0]
 )
 ```
@@ -113,9 +113,9 @@ LargestSingularValue(A, S1) <- (
 Example — check positive definiteness via eigenvalues:
 
 ```clausal
-IsPositiveDefinite(A) <- (
-    EigenDecomposeHermitian(A, D),
-    ResultGet(D, 'eigenvalues', VALS),
+is_positive_definite(A) <- (
+    eigen_decompose_hermitian(A, D),
+    result_get(D, 'eigenvalues', VALS),
     ++all(v > 0 for v in VALS)
 )
 ```
@@ -124,7 +124,7 @@ IsPositiveDefinite(A) <- (
 
 ### Two-step factorisations
 
-when solving multiple systems with the same matrix, factorising once and reusing is more efficient than calling `Solve` repeatedly.
+when solving multiple systems with the same matrix, factorising once and reusing is more efficient than calling `solve` repeatedly.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:two_step_factorisations"
@@ -133,9 +133,9 @@ when solving multiple systems with the same matrix, factorising once and reusing
 Example — solve multiple right-hand sides efficiently:
 
 ```clausal
-SolveMultiple(A, RHS_LIST, SOLUTIONS) <- (
-    LuFactor(A, LU),
-    maplist([B]>>(LuSolve(LU, B, X), X), RHS_LIST, SOLUTIONS)
+solve_multiple(A, RHS_LIST, SOLUTIONS) <- (
+    lu_factor(A, LU),
+    maplist([B]>>(lu_solve(LU, B, X), X), RHS_LIST, SOLUTIONS)
 )
 ```
 
@@ -152,19 +152,19 @@ SolveMultiple(A, RHS_LIST, SOLUTIONS) <- (
 ## Complete example — principal component analysis
 
 ```clausal
--import_from(scipy_linalg, [SingularValueDecompose, ResultGet])
+-import_from(scipy_linalg, [singular_value_decompose, result_get])
 
 # Compute the top-K principal components of a data matrix X
 # (rows = observations, columns = features; X should be mean-centred)
-PrincipalComponents(X, K, COMPONENTS) <- (
-    SingularValueDecompose(X, SVD),
-    ResultGet(SVD, 'vh', VH),
+principal_components(X, K, COMPONENTS) <- (
+    singular_value_decompose(X, SVD),
+    result_get(SVD, 'vh', VH),
     COMPONENTS is ++VH[:K]
 )
 
-ExplainedVariance(X, K, RATIO) <- (
-    SingularValueDecompose(X, SVD),
-    ResultGet(SVD, 's', S),
+explained_variance(X, K, RATIO) <- (
+    singular_value_decompose(X, SVD),
+    result_get(SVD, 's', S),
     TOTAL is ++float((S ** 2).sum()),
     TOP_K is ++float((S[:K] ** 2).sum()),
     RATIO is TOP_K / TOTAL
@@ -179,7 +179,7 @@ ExplainedVariance(X, K, RATIO) <- (
 - Tier 2 result dicts are plain Python dicts — they can be passed to [`++` escapes](python_integration.md) for further NumPy processing.
 - `EigenDecompose` may return complex eigenvalues for non-symmetric matrices; use `++(vals.real)` to extract real parts when appropriate.
 - `MatrixExpLog` (logm direction) and `MatrixSquareRoot` may return complex results even for real inputs; wrap with `++(result.real)` if only the real part is needed.
-- Predicates fail (no solution) when `ResultGet` cannot find the field, or when a bound `RESULT` does not unify with the computed value; scipy exceptions propagate as Python exceptions.
+- Predicates fail (no solution) when `result_get` cannot find the field, or when a bound `RESULT` does not unify with the computed value; scipy exceptions propagate as Python exceptions.
 
 ---
 

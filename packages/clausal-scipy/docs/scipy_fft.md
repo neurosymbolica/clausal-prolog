@@ -86,7 +86,7 @@ Example — frequency analysis of a sine wave:
 ```clausal
 -import_from(scipy_fft, [FFTransform, FFTFrequencies])
 
-FrequencySpectrum(SIGNAL, FREQS, SPECTRUM) <- (
+frequency_spectrum(SIGNAL, FREQS, SPECTRUM) <- (
     FFTransform(SIGNAL, SPECTRUM),
     LEN is ++(len(SIGNAL)),
     FFTFrequencies(LEN, FREQS)
@@ -106,7 +106,7 @@ Example — round-trip:
 ```clausal
 -import_from(scipy_fft, [FFTransform2D])
 
-RoundTrip2D(IMAGE, RECOVERED) <- (
+round_trip2_d(IMAGE, RECOVERED) <- (
     FFTransform2D(IMAGE, SPECTRUM),
     FFTransform2D(RECOVERED, SPECTRUM)
 )
@@ -135,7 +135,7 @@ Example — filter a 1-D signal in the frequency domain:
 ```clausal
 -import_from(scipy_fft, [RealFFT])
 
-LowPassFilter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
+low_pass_filter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
     RealFFT(SIGNAL, SPECTRUM),
     ZEROED is ++(
         [SPECTRUM[i] if i < int(CUTOFF_BIN) else 0.0
@@ -174,7 +174,7 @@ Example — plot-ready spectrum:
 ```clausal
 -import_from(scipy_fft, [FFTransform, FFTFrequencies, FFTShift])
 
-CentredSpectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
+centred_spectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
     LEN is ++(len(SIGNAL)),
     FFTransform(SIGNAL, SPECTRUM),
     FFTFrequencies(LEN, FREQS),
@@ -204,7 +204,7 @@ CentredSpectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
 ```clausal
 -import_from(scipy_fft, [FFTransform2D, FFTShift])
 
-ImageSpectrum(IMAGE, CENTRED_SPECTRUM) <- (
+image_spectrum(IMAGE, CENTRED_SPECTRUM) <- (
     FFTransform2D(IMAGE, SPECTRUM),
     FFTShift(SPECTRUM, CENTRED_SPECTRUM)
 )

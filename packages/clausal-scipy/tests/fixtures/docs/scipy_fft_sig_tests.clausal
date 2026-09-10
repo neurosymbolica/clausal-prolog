@@ -1,15 +1,15 @@
 # Companion tests for docs/scipy_fft.md signature blocks.
 -import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies])
 
-Test("fft exists") <- (
+test("fft exists") <- (
     FFTransform([1.0, 1.0, 1.0, 1.0], R),
     DC is ++(abs(complex(R[0]))),
     ++(abs(DC - 4.0)) < 1e-10)  # nv
 
-Test("real fft exists") <- (
+test("real fft exists") <- (
     RealFFT([1.0, 0.0, 1.0, 0.0], R),
     nonvar(R))  # nv
 
-Test("fft frequencies exists") <- (
+test("fft frequencies exists") <- (
     FFTFrequencies(4, 1.0, R),
     nonvar(R))  # nv

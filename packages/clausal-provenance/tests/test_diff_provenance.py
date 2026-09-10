@@ -66,23 +66,23 @@ def _ast_call(name, *args):
 
 def _setup_path_program():
     """Build a fresh (Edge/2, Path/2) reach program with two rules."""
-    Edge = make_predicate("Edge", ["a", "b"])
-    Path = make_predicate("Path", ["a", "b"])
+    Edge = make_predicate("edge", ["a", "b"])
+    Path = make_predicate("path", ["a", "b"])
     Edge.__module__ = "test_diff_prov"
     Path.__module__ = "test_diff_prov"
     setattr(Edge, BOTTOM_UP_FLAG, True)
     setattr(Path, BOTTOM_UP_FLAG, True)
 
     A, B = Var(), Var()
-    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("Edge", A, B)]))
+    Path._assertz(Clause(head=Path(A, B), body=[_ast_call("edge", A, B)]))
 
     A2, M, B2 = Var(), Var(), Var()
     Path._assertz(Clause(
         head=Path(A2, B2),
-        body=[_ast_call("Edge", A2, M), _ast_call("Path", M, B2)],
+        body=[_ast_call("edge", A2, M), _ast_call("path", M, B2)],
     ))
 
-    mod = Module("test_diff_prov", module_dict={"Edge": Edge, "Path": Path})
+    mod = Module("test_diff_prov", module_dict={"edge": Edge, "path": Path})
     return mod, Edge, Path
 
 

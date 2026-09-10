@@ -2,21 +2,21 @@
 -import_from(scipy_spatial, [CrossDistance, PairwiseDistance, PointDistance,
     MakeKdTree, KdTreeQuery, MakeConvexHull, ConvexHullAttr, Free])
 
-Test("cross distance exists") <- (
+test("cross distance exists") <- (
     CrossDistance([[0.0, 0.0]], [[3.0, 4.0]], "euclidean", D),
     V is ++(float(D[0, 0])),
     ++(abs(V - 5.0)) < 1e-10)  # nv
 
-Test("point distance exists") <- (
+test("point distance exists") <- (
     PointDistance("euclidean", ++([0.0, 0.0]), ++([3.0, 4.0]), D),
     ++(abs(D - 5.0)) < 1e-10)  # nv
 
-Test("kdtree exists") <- (
+test("kdtree exists") <- (
     MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], KD),
     KdTreeQuery(KD, ++([0.0, 0.0]), R_UNUSED),
     Free(KD))  # nv
 
-Test("convex hull exists") <- (
+test("convex hull exists") <- (
     MakeConvexHull([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], H),
     ConvexHullAttr(H, "volume", _),
     Free(H))  # nv

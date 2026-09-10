@@ -11,21 +11,21 @@
 
 # --- grad_value ---
 
-Test("grad of x^2 at 3 is 6") <- (
+test("grad of x^2 at 3 is 6") <- (
     F is ++(lambda x: x ** 2),
     array(3.0, X),
     grad_value(F, X, G),
     array_list(G, 6.0)
 )  # nv
 
-Test("grad of sum(x^2) gives 2x") <- (
+test("grad of sum(x^2) gives 2x") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0, 3.0], X),
     grad_value(F, X, G),
     array_list(G, [2.0, 4.0, 6.0])
 )  # nv
 
-Test("grad of sin at 0 is 1") <- (
+test("grad of sin at 0 is 1") <- (
     F is ++(lambda x: jax.numpy.sin(x)),
     array(0.0, X),
     grad_value(F, X, G),
@@ -37,7 +37,7 @@ Test("grad of sin at 0 is 1") <- (
 
 # --- value_and_grad (tuple decomposition) ---
 
-Test("value_and_grad of x^3 at 2") <- (
+test("value_and_grad of x^3 at 2") <- (
     F is ++(lambda x: x ** 3),
     array(2.0, X),
     value_and_grad(F, X, RESULT),
@@ -46,7 +46,7 @@ Test("value_and_grad of x^3 at 2") <- (
     array_list(G, 12.0)
 )  # nv
 
-Test("value_and_grad on vector sum(x^2)") <- (
+test("value_and_grad on vector sum(x^2)") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0, 3.0], X),
     value_and_grad(F, X, RESULT),
@@ -57,7 +57,7 @@ Test("value_and_grad on vector sum(x^2)") <- (
 
 # --- jvp_value ---
 
-Test("jvp of x^2 at 3 with tangent 1 gives 6") <- (
+test("jvp of x^2 at 3 with tangent 1 gives 6") <- (
     F is ++(lambda x: x ** 2),
     array(3.0, P),
     array(1.0, T),
@@ -67,7 +67,7 @@ Test("jvp of x^2 at 3 with tangent 1 gives 6") <- (
     array_list(TANGENT, 6.0)
 )  # nv
 
-Test("jvp sum(x^2) along [1,0,0] gives 2") <- (
+test("jvp sum(x^2) along [1,0,0] gives 2") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0, 3.0], P),
     array([1.0, 0.0, 0.0], T),
@@ -78,7 +78,7 @@ Test("jvp sum(x^2) along [1,0,0] gives 2") <- (
 
 # --- vjp_value ---
 
-Test("vjp value matches forward eval") <- (
+test("vjp value matches forward eval") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0, 3.0], X),
     vjp_value(F, X, RESULT),
@@ -86,7 +86,7 @@ Test("vjp value matches forward eval") <- (
     array_list(V, 14.0)
 )  # nv
 
-Test("vjp_fn applied gives gradient") <- (
+test("vjp_fn applied gives gradient") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0, 3.0], X),
     vjp_value(F, X, RESULT),
@@ -99,7 +99,7 @@ Test("vjp_fn applied gives gradient") <- (
 
 # --- Jacobian / Hessian ---
 
-Test("jacobian of elementwise square") <- (
+test("jacobian of elementwise square") <- (
     F is ++(lambda x: x ** 2),
     array([1.0, 2.0, 3.0], X),
     jacobian(F, X, J),
@@ -107,7 +107,7 @@ Test("jacobian of elementwise square") <- (
     array_list(J, [[2.0, 0.0, 0.0], [0.0, 4.0, 0.0], [0.0, 0.0, 6.0]])
 )  # nv
 
-Test("jacfwd matches jacrev for pointwise fn") <- (
+test("jacfwd matches jacrev for pointwise fn") <- (
     F is ++(lambda x: x ** 2),
     array([1.0, 2.0, 3.0], X),
     jacfwd(F, X, JF),
@@ -117,7 +117,7 @@ Test("jacfwd matches jacrev for pointwise fn") <- (
     LF == LR
 )  # nv
 
-Test("hessian of sum(x^2) is 2I") <- (
+test("hessian of sum(x^2) is 2I") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([1.0, 2.0], X),
     hessian(F, X, H),
@@ -127,14 +127,14 @@ Test("hessian of sum(x^2) is 2I") <- (
 
 # --- vmap ---
 
-Test("vmap doubles each element") <- (
+test("vmap doubles each element") <- (
     F is ++(lambda x: x * 2),
     arange(5, X),
     vmap_apply(F, X, R),
     array_list(R, [0, 2, 4, 6, 8])
 )  # nv
 
-Test("vmap preserves shape") <- (
+test("vmap preserves shape") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([[1.0, 2.0], [3.0, 4.0]], X),
     vmap_apply(F, X, R),
@@ -142,7 +142,7 @@ Test("vmap preserves shape") <- (
     array_list(R, [5.0, 25.0])
 )  # nv
 
-Test("vmap with explicit in_axes=0") <- (
+test("vmap with explicit in_axes=0") <- (
     F is ++(lambda x: x + 1),
     array([[0, 1], [2, 3]], X),
     vmap_apply(F, X, {"in_axes": 0}, R),
@@ -151,7 +151,7 @@ Test("vmap with explicit in_axes=0") <- (
 
 # --- jit_compile ---
 
-Test("jit_compile returns callable that produces correct output") <- (
+test("jit_compile returns callable that produces correct output") <- (
     F is ++(lambda x: x * x),
     jit_compile(F, F_JIT),
     array(5.0, X),
@@ -159,7 +159,7 @@ Test("jit_compile returns callable that produces correct output") <- (
     array_list(Y, 25.0)
 )  # nv
 
-Test("jit_compile of grad gives same value as grad_value") <- (
+test("jit_compile of grad gives same value as grad_value") <- (
     F is ++(lambda x: x ** 3),
     grad_fn(F, GRAD),
     jit_compile(GRAD, GRAD_JIT),
@@ -170,7 +170,7 @@ Test("jit_compile of grad gives same value as grad_value") <- (
 
 # --- make_jaxpr ---
 
-Test("make_jaxpr returns a Jaxpr") <- (
+test("make_jaxpr returns a Jaxpr") <- (
     F is ++(lambda x: x ** 2),
     array(3.0, X),
     make_jaxpr(F, X, JP),
@@ -179,7 +179,7 @@ Test("make_jaxpr returns a Jaxpr") <- (
 
 # --- eval_shape ---
 
-Test("eval_shape of matmul") <- (
+test("eval_shape of matmul") <- (
     F is ++(lambda x: x @ x.T),
     X is ++jax.ShapeDtypeStruct((10, 5), jax.numpy.float32),
     eval_shape(F, X, SD),
@@ -187,7 +187,7 @@ Test("eval_shape of matmul") <- (
     S == (10, 10)
 )  # nv
 
-Test("eval_shape cheap — doesn't allocate the huge result") <- (
+test("eval_shape cheap — doesn't allocate the huge result") <- (
     F is ++(lambda x: x + 1),
     # 1_000_000 x 1_000_000 would be ~4 TB if materialised.
     X is ++jax.ShapeDtypeStruct((1000000, 1000000), jax.numpy.float32),
@@ -198,7 +198,7 @@ Test("eval_shape cheap — doesn't allocate the huge result") <- (
 
 # --- Pytree inputs to grad ---
 
-Test("grad with dict input") <- (
+test("grad with dict input") <- (
     F is ++(lambda params: (params["a"] ** 2) + (params["b"] ** 2)),
     PARAMS is ++({"a": jax.numpy.array(3.0), "b": jax.numpy.array(4.0)}),
     grad_value(F, PARAMS, G),
@@ -210,7 +210,7 @@ Test("grad with dict input") <- (
 
 # --- grad requires scalar output ---
 
-Test("grad of vector output fails (not scalar)") <- (
+test("grad of vector output fails (not scalar)") <- (
     F is ++(lambda x: x ** 2),
     array([1.0, 2.0, 3.0], X),
     not grad_value(F, X, _G_UNUSED)

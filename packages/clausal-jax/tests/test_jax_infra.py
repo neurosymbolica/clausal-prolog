@@ -127,7 +127,7 @@ class TestJaxArrayFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -182,7 +182,7 @@ class TestJaxFftFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -256,7 +256,7 @@ class TestJaxLinalgFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -312,7 +312,7 @@ class TestJaxComparisonFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -374,7 +374,7 @@ class TestJaxMathFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -444,7 +444,7 @@ class TestJaxShapeExtrasFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -499,7 +499,7 @@ class TestJaxCreation2Fixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -555,7 +555,7 @@ class TestJaxStatsFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -612,7 +612,7 @@ class TestJaxTreeFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -666,7 +666,7 @@ class TestJaxShardingFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -718,7 +718,7 @@ class TestJaxTransformsFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -786,7 +786,7 @@ class TestJaxScipyFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -844,7 +844,7 @@ class TestJaxNnFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -867,7 +867,7 @@ class TestJaxNnTreeIntegrationFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -927,7 +927,7 @@ class TestJaxRandomFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1104,7 +1104,7 @@ class TestJaxOptaxFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1210,7 +1210,7 @@ class TestJaxEquinoxFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 class TestJaxEquinoxInfrastructure:
@@ -1308,7 +1308,7 @@ class TestJaxFlaxFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 class TestJaxFlaxInfrastructure:

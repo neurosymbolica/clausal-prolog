@@ -24,7 +24,7 @@
 # Layer construction
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("linear forward shape") <- (
+test("linear forward shape") <- (
     key(0, K),
     linear(4, 8, K, MODEL),
     ones(4, X),
@@ -32,7 +32,7 @@ Test("linear forward shape") <- (
     shape(Y, [8])
 )  # nv
 
-Test("linear with use_bias=False opts") <- (
+test("linear with use_bias=False opts") <- (
     key(0, K),
     linear(4, 8, {"use_bias": False}, K, MODEL),
     ones(4, X),
@@ -40,7 +40,7 @@ Test("linear with use_bias=False opts") <- (
     shape(Y, [8])
 )  # nv
 
-Test("mlp forward shape") <- (
+test("mlp forward shape") <- (
     key(0, K),
     mlp(2, 3, 8, 2, K, MODEL),
     ones(2, X),
@@ -48,14 +48,14 @@ Test("mlp forward shape") <- (
     shape(Y, [3])
 )  # nv
 
-Test("layer_norm forward preserves shape") <- (
+test("layer_norm forward preserves shape") <- (
     layer_norm(8, NORM),
     arange(8.0, X),
     apply_module(NORM, X, Y),
     shape(Y, [8])
 )  # nv
 
-Test("sequential of linear, layer_norm, linear") <- (
+test("sequential of linear, layer_norm, linear") <- (
     key(0, K0),
     split_key(K0, 2, [K1, K2]),
     linear(4, 6, K1, A),
@@ -67,14 +67,14 @@ Test("sequential of linear, layer_norm, linear") <- (
     shape(Y, [2])
 )  # nv
 
-Test("identity is a no-op") <- (
+test("identity is a no-op") <- (
     identity(M),
     array([1.0, 2.0, 3.0], X),
     apply_module(M, X, Y),
     array_list(Y, [1.0, 2.0, 3.0])
 )  # nv
 
-Test("lambda_layer wraps a callable") <- (
+test("lambda_layer wraps a callable") <- (
     FN is ++(lambda x: x * 2),
     lambda_layer(FN, M),
     array([1.0, 2.0, 3.0], X),
@@ -82,14 +82,14 @@ Test("lambda_layer wraps a callable") <- (
     array_list(Y, [2.0, 4.0, 6.0])
 )  # nv
 
-Test("dropout defaults to inference (no-op)") <- (
+test("dropout defaults to inference (no-op)") <- (
     dropout(0.5, M),
     ones(8, X),
     apply_module(M, X, Y),
     array_list(Y, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
 )  # nv
 
-Test("conv2d forward shape") <- (
+test("conv2d forward shape") <- (
     key(0, K),
     conv2d(3, 8, 3, K, MODEL),
     ones([3, 16, 16], X),
@@ -97,28 +97,28 @@ Test("conv2d forward shape") <- (
     shape(Y, [8, 14, 14])
 )  # nv
 
-Test("max_pool2d shape with stride=2 opts") <- (
+test("max_pool2d shape with stride=2 opts") <- (
     max_pool2d(2, {"stride": 2}, M),
     ones([1, 8, 8], X),
     apply_module(M, X, Y),
     shape(Y, [1, 4, 4])
 )  # nv
 
-Test("avg_pool1d shape with stride=2 opts") <- (
+test("avg_pool1d shape with stride=2 opts") <- (
     avg_pool1d(2, {"stride": 2}, M),
     ones([1, 8], X),
     apply_module(M, X, Y),
     shape(Y, [1, 4])
 )  # nv
 
-Test("adaptive_avg_pool2d shape") <- (
+test("adaptive_avg_pool2d shape") <- (
     adaptive_avg_pool2d([4, 4], M),
     ones([1, 16, 16], X),
     apply_module(M, X, Y),
     shape(Y, [1, 4, 4])
 )  # nv
 
-Test("embedding lookup shape") <- (
+test("embedding lookup shape") <- (
     key(0, K),
     embedding(10, 4, K, M),
     array(3, X),
@@ -126,7 +126,7 @@ Test("embedding lookup shape") <- (
     shape(Y, [4])
 )  # nv
 
-Test("lstm_cell single-step shape") <- (
+test("lstm_cell single-step shape") <- (
     key(0, K),
     lstm_cell(4, 8, K, M),
     ones(4, X),
@@ -141,7 +141,7 @@ Test("lstm_cell single-step shape") <- (
 # Filter transforms
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("filter_grad_value over a Linear loss") <- (
+test("filter_grad_value over a Linear loss") <- (
     key(0, K),
     linear(4, 1, K, MODEL),
     ones(4, XS_UNUSED),
@@ -151,7 +151,7 @@ Test("filter_grad_value over a Linear loss") <- (
     not tree_equal(GRADS, MODEL)
 )  # nv
 
-Test("filter_value_and_grad tuple decomposition") <- (
+test("filter_value_and_grad tuple decomposition") <- (
     key(0, K),
     linear(2, 1, K, MODEL),
     LOSS_FN is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(2)) ** 2)),
@@ -162,7 +162,7 @@ Test("filter_value_and_grad tuple decomposition") <- (
     not tree_equal(G, MODEL)
 )  # nv
 
-Test("filter_jit_compile produces equivalent callable") <- (
+test("filter_jit_compile produces equivalent callable") <- (
     key(0, K),
     linear(3, 2, K, MODEL),
     F is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(3)))),
@@ -176,7 +176,7 @@ Test("filter_jit_compile produces equivalent callable") <- (
 # Partition / combine round-trip
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("partition splits and combine rebuilds") <- (
+test("partition splits and combine rebuilds") <- (
     key(0, K),
     linear(3, 5, K, MODEL),
     FILTER is ++equinox.is_array,
@@ -189,7 +189,7 @@ Test("partition splits and combine rebuilds") <- (
 # tree_at — surgical updates
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("tree_at_set replaces a single leaf") <- (
+test("tree_at_set replaces a single leaf") <- (
     key(0, K),
     linear(2, 3, K, MODEL),
     WHERE is ++(lambda m: m.bias),
@@ -199,7 +199,7 @@ Test("tree_at_set replaces a single leaf") <- (
     array_list(NB, [0.0, 0.0, 0.0])
 )  # nv
 
-Test("tree_at_apply transforms a leaf") <- (
+test("tree_at_apply transforms a leaf") <- (
     key(0, K),
     linear(2, 3, K, MODEL),
     WHERE is ++(lambda m: m.bias),
@@ -213,26 +213,26 @@ Test("tree_at_apply transforms a leaf") <- (
 # Leaf checks
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("is_array succeeds on a JAX array") <- (
+test("is_array succeeds on a JAX array") <- (
     array([1.0, 2.0], X),
     is_array(X)
 )  # nv
 
-Test("is_array fails on a Python int") <- (
+test("is_array fails on a Python int") <- (
     not is_array(3)
 )  # nv
 
-Test("is_inexact_array succeeds on a float array") <- (
+test("is_inexact_array succeeds on a float array") <- (
     array([1.0, 2.0], X),
     is_inexact_array(X)
 )  # nv
 
-Test("is_inexact_array fails on an int array") <- (
+test("is_inexact_array fails on an int array") <- (
     array([1, 2], {"dtype": int32}, X),
     not is_inexact_array(X)
 )  # nv
 
-Test("tree_equal on identical models") <- (
+test("tree_equal on identical models") <- (
     key(0, K),
     linear(2, 3, K, M1),
     linear(2, 3, K, M2),
@@ -243,7 +243,7 @@ Test("tree_equal on identical models") <- (
 # Serialisation round-trip
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("serialise then deserialise round-trip") <- (
+test("serialise then deserialise round-trip") <- (
     key(0, K),
     linear(3, 5, K, MODEL),
     PATH is "/tmp/test_jax_equinox_roundtrip.eqx",
@@ -258,7 +258,7 @@ Test("serialise then deserialise round-trip") <- (
 # End-to-end: MLP + optax training step
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("MLP one optax SGD step changes the model") <- (
+test("MLP one optax SGD step changes the model") <- (
     key(0, K0),
     split_key(K0, 2, [K_INIT, _]),
     mlp(2, 1, 4, 1, K_INIT, MODEL),
@@ -281,17 +281,17 @@ Test("MLP one optax SGD step changes the model") <- (
 # Stateful modules (Phase 17b)
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("batch_norm constructs model and state") <- (
+test("batch_norm constructs model and state") <- (
     batch_norm(3, "batch", BN, STATE_UNUSED),
     is_stateful(BN)
 )  # nv
 
-Test("batch_norm with mode=batch opts") <- (
+test("batch_norm with mode=batch opts") <- (
     batch_norm(3, "batch", {"mode": "batch"}, BN, STATE_UNUSED),
     is_stateful(BN)
 )  # nv
 
-Test("apply_stateful_module in inference mode preserves shape") <- (
+test("apply_stateful_module in inference mode preserves shape") <- (
     batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
     inference_mode(BN, BN_EVAL),
     ones(3, X),
@@ -299,7 +299,7 @@ Test("apply_stateful_module in inference mode preserves shape") <- (
     shape(Y, [3])
 )  # nv
 
-Test("apply_stateful_module under vmap preserves batch shape") <- (
+test("apply_stateful_module under vmap preserves batch shape") <- (
     batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
     ones([4, 3], X),
     VMAPPED is ++jax.vmap(BN, axis_name="batch",
@@ -308,7 +308,7 @@ Test("apply_stateful_module under vmap preserves batch shape") <- (
     shape(Y, [4, 3])
 )  # nv
 
-Test("dropout_train differs from its input under a key") <- (
+test("dropout_train differs from its input under a key") <- (
     dropout_train(0.5, D),
     ones(64, X),
     key(42, K),
@@ -317,21 +317,21 @@ Test("dropout_train differs from its input under a key") <- (
     not allclose(Y, X)
 )  # nv
 
-Test("inference_mode flips inference field to True") <- (
+test("inference_mode flips inference field to True") <- (
     batch_norm(3, "batch", BN, _STATE_UNUSED),
     inference_mode(BN, BN_EVAL),
     ++BN.inference == False,
     ++BN_EVAL.inference == True
 )  # nv
 
-Test("inference_mode/3 with value=False switches back") <- (
+test("inference_mode/3 with value=False switches back") <- (
     batch_norm(3, "batch", BN, _STATE_UNUSED),
     inference_mode(BN, BN_EVAL),
     inference_mode(BN_EVAL, False, BN_TRAIN),
     ++BN_TRAIN.inference == False
 )  # nv
 
-Test("is_stateful discriminates BatchNorm vs Linear") <- (
+test("is_stateful discriminates BatchNorm vs Linear") <- (
     batch_norm(3, "batch", BN, _STATE_UNUSED),
     key(0, K),
     linear(3, 3, K, LIN),
@@ -339,7 +339,7 @@ Test("is_stateful discriminates BatchNorm vs Linear") <- (
     not is_stateful(LIN)
 )  # nv
 
-Test("make_with_state generic form equals batch_norm/5") <- (
+test("make_with_state generic form equals batch_norm/5") <- (
     BN_CLS is ++equinox.nn.BatchNorm,
     make_with_state(BN_CLS, {"input_size": 3, "axis_name": "batch",
                              "mode": "batch"}, BN_A, STATE_A),
@@ -352,14 +352,14 @@ Test("make_with_state generic form equals batch_norm/5") <- (
 # Layer-class registry (discovery)
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("layer_class registry exposes Linear, MLP, Conv2d") <- (
+test("layer_class registry exposes Linear, MLP, Conv2d") <- (
     layer_class("Linear", _),
     layer_class("MLP", _),
     layer_class("Conv2d", _),
     layer_class("LayerNorm", _)
 )  # nv
 
-Test("layer_class findall has at least 40 entries") <- (
+test("layer_class findall has at least 40 entries") <- (
     findall(N, layer_class(N, _), NS),
     length(NS, L),
     L >= 40

@@ -35,7 +35,7 @@ Nondeterministic — each globally-visible (or locally-addressable)
 device is a solution.
 
 ```clausal
-Test("jax_device enumerates devices") <- (
+test("jax_device enumerates devices") <- (
     findall(D, jax_device(D), DS),
     length(DS, N),
     N >= 1
@@ -51,7 +51,7 @@ directly.
 Deterministic totals:
 
 ```clausal
-Test("count matches enumeration") <- (
+test("count matches enumeration") <- (
     findall(D, jax_device(D), DS),
     length(DS, N),
     device_count(M),
@@ -65,7 +65,7 @@ Test("count matches enumeration") <- (
 device by id. `device_platform/2` returns `"cpu"`, `"gpu"`, or `"tpu"`.
 
 ```clausal
-Test("device by id") <- (
+test("device by id") <- (
     device_id(D, 0),
     device_platform(D, "cpu")
 )
@@ -91,7 +91,7 @@ A **mesh** is a named grid of devices. `make_mesh/3` takes a shape
 tuple and a tuple of axis names:
 
 ```clausal
-Test("make_mesh") <- (
+test("make_mesh") <- (
     make_mesh([1], ["x"], MESH),
     mesh_axis_names(MESH, ("x",))
 )
@@ -107,7 +107,7 @@ Inspect mesh shape, axes, and backing devices with
 returns an `OrderedDict` mapping axis names to sizes:
 
 ```clausal
-Test("mesh_shape") <- (
+test("mesh_shape") <- (
     make_mesh([1], ["x"], MESH),
     mesh_shape(MESH, SHAPE),
     KEYS is ++(list(SHAPE.keys())),
@@ -125,13 +125,13 @@ Build a `PartitionSpec(*axes)`. Each axis entry is either a mesh axis
 name (string) or `None` for "unsharded over this tensor dim":
 
 ```clausal
-Test("partition_spec") <- (
+test("partition_spec") <- (
     partition_spec(["x"], P),
     S is ++(str(P)),
     S == "P('x',)"
 )
 
-Test("partition_spec with unsharded dim") <- (
+test("partition_spec with unsharded dim") <- (
     partition_spec(["x", ++(None)], P),
     S is ++(str(P)),
     S == "P('x', None)"
@@ -143,7 +143,7 @@ Test("partition_spec with unsharded dim") <- (
 Combine a mesh with a `PartitionSpec` into a `NamedSharding`:
 
 ```clausal
-Test("named_sharding") <- (
+test("named_sharding") <- (
     make_mesh([1], ["x"], MESH),
     partition_spec(["x"], P),
     named_sharding(MESH, P, S),
@@ -155,7 +155,7 @@ Two `NamedSharding`s built from equal meshes and equal specs compare
 equal with `==`:
 
 ```clausal
-Test("named_sharding equality") <- (
+test("named_sharding equality") <- (
     make_mesh([1], ["x"], M1),
     make_mesh([1], ["x"], M2),
     partition_spec(["x"], P),
@@ -182,14 +182,14 @@ sharding. The second argument is a `Device` object or a `Sharding`
 object — **not a numeric index**:
 
 ```clausal
-Test("resolve id to Device before placement") <- (
+test("resolve id to Device before placement") <- (
     # Correct — resolve id to a Device first
     array([1.0], A),
     device_id(D, 0),
     device_put(A, D, _A2)
 )
 
-Test("numeric index fails") <- (
+test("numeric index fails") <- (
     # Wrong — raises TypeError, surfaced as predicate failure
     array([1.0], A),
     not device_put(A, 0, _A2)
@@ -197,7 +197,7 @@ Test("numeric index fails") <- (
 ```
 
 ```clausal
-Test("device_put to device") <- (
+test("device_put to device") <- (
     array([1.0, 2.0, 3.0], A),
     jax_device(D),
     device_put(A, D, A2),
@@ -205,7 +205,7 @@ Test("device_put to device") <- (
     device_id(D2, 0)
 )
 
-Test("device_put with named sharding") <- (
+test("device_put with named sharding") <- (
     array([[1.0, 2.0], [3.0, 4.0]], A),
     make_mesh([1], ["x"], M),
     partition_spec(["x"], P),
@@ -225,7 +225,7 @@ sharding object; check mode accepts either direct `==` or `repr`
 equality as a fallback:
 
 ```clausal
-Test("sharding query") <- (
+test("sharding query") <- (
     array([1.0, 2.0, 3.0], A),
     sharding(A, S),
     S != ++(None)
@@ -246,7 +246,7 @@ Test("sharding query") <- (
 calls it for you, so you just write `is_deleted(A)`.
 
 ```clausal
-Test("fresh array is not deleted") <- (
+test("fresh array is not deleted") <- (
     array([1.0, 2.0, 3.0], A),
     not is_deleted(A)
 )
@@ -273,7 +273,7 @@ data_first_sharding(MESH, S) <- (
     named_sharding(MESH, P, S)
 )
 
-Test("find a data-first sharding") <- (
+test("find a data-first sharding") <- (
     make_mesh([1], ["data"], M),
     data_first_sharding(M, _S)
 )

@@ -18,7 +18,7 @@
 # Init / apply round-trip on basic layers
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("Dense init returns params, apply produces correct shape") <- (
+test("Dense init returns params, apply produces correct shape") <- (
     dense(8, MODEL),
     key(0, K),
     ones(4, EXAMPLE),
@@ -28,7 +28,7 @@ Test("Dense init returns params, apply produces correct shape") <- (
     shape(Y, [8])
 )  # nv
 
-Test("Dense with use_bias=False opts") <- (
+test("Dense with use_bias=False opts") <- (
     dense(8, {"use_bias": False}, MODEL),
     key(0, K),
     ones(4, EXAMPLE),
@@ -38,7 +38,7 @@ Test("Dense with use_bias=False opts") <- (
     shape(Y, [8])
 )  # nv
 
-Test("Conv 2-spatial init+apply") <- (
+test("Conv 2-spatial init+apply") <- (
     conv(8, [3, 3], MODEL),
     key(0, K),
     ones([1, 16, 16, 3], EXAMPLE),
@@ -48,7 +48,7 @@ Test("Conv 2-spatial init+apply") <- (
     shape(Y, [1, 16, 16, 8])
 )  # nv
 
-Test("LayerNorm preserves shape") <- (
+test("LayerNorm preserves shape") <- (
     layer_norm(MODEL),
     key(0, K),
     arange(8.0, EXAMPLE),
@@ -58,7 +58,7 @@ Test("LayerNorm preserves shape") <- (
     shape(Y, [8])
 )  # nv
 
-Test("Embed lookup shape") <- (
+test("Embed lookup shape") <- (
     embed(10, 4, MODEL),
     key(0, K),
     array(0, EXAMPLE),
@@ -68,7 +68,7 @@ Test("Embed lookup shape") <- (
     shape(Y, [4])
 )  # nv
 
-Test("Sequential composes Dense + Dense") <- (
+test("Sequential composes Dense + Dense") <- (
     dense(8, FC1),
     dense(2, FC2),
     sequential([FC1, FC2], MODEL),
@@ -84,7 +84,7 @@ Test("Sequential composes Dense + Dense") <- (
 # init_with_output: combined init + first forward pass
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("init_with_output gives same result as init then apply") <- (
+test("init_with_output gives same result as init then apply") <- (
     dense(8, MODEL),
     key(0, K),
     ones(4, EXAMPLE),
@@ -98,7 +98,7 @@ Test("init_with_output gives same result as init then apply") <- (
 # Stochastic apply: Dropout needs apply-time RNG
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("Dropout in inference mode (no RNG needed) is identity") <- (
+test("Dropout in inference mode (no RNG needed) is identity") <- (
     dropout(0.5, {"deterministic": True}, MODEL),
     key(0, K),
     ones(4, EXAMPLE),
@@ -107,7 +107,7 @@ Test("Dropout in inference mode (no RNG needed) is identity") <- (
     array_list(Y, [1.0, 1.0, 1.0, 1.0])
 )  # nv
 
-Test("Dropout in training mode needs apply_with_rngs") <- (
+test("Dropout in training mode needs apply_with_rngs") <- (
     dropout(0.5, {"deterministic": False}, MODEL),
     key(0, K0),
     split_key(K0, 2, [K_INIT, K_DROP]),
@@ -121,7 +121,7 @@ Test("Dropout in training mode needs apply_with_rngs") <- (
 # Stateful apply: BatchNorm needs apply_mutable
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("BatchNorm apply_mutable returns (out, new_state)") <- (
+test("BatchNorm apply_mutable returns (out, new_state)") <- (
     batch_norm({"use_running_average": False}, BN),
     key(0, K),
     ones([4, 8], EXAMPLE),
@@ -136,13 +136,13 @@ Test("BatchNorm apply_mutable returns (out, new_state)") <- (
 # Pooling functions (not Modules — no init/apply)
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("max_pool with stride=2 halves spatial dims") <- (
+test("max_pool with stride=2 halves spatial dims") <- (
     ones([1, 8, 8, 3], X),
     max_pool(X, [2, 2], {"strides": [2, 2]}, R),
     shape(R, [1, 4, 4, 3])
 )  # nv
 
-Test("avg_pool default stride=window") <- (
+test("avg_pool default stride=window") <- (
     ones([1, 8, 8, 3], X),
     avg_pool(X, [2, 2], R),
     shape(R, [1, 7, 7, 3])
@@ -152,7 +152,7 @@ Test("avg_pool default stride=window") <- (
 # End-to-end: MLP + optax SGD step
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("MLP one optax SGD step changes the variables") <- (
+test("MLP one optax SGD step changes the variables") <- (
     dense(4, FC1),
     dense(1, FC2),
     sequential([FC1, FC2], MODEL),
@@ -183,7 +183,7 @@ Test("MLP one optax SGD step changes the variables") <- (
 # Pytree predicates work on variables (Phase 9)
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("leaf enumerates Dense variable arrays") <- (
+test("leaf enumerates Dense variable arrays") <- (
     dense(8, MODEL),
     key(0, K),
     ones(4, EXAMPLE),
@@ -198,7 +198,7 @@ Test("leaf enumerates Dense variable arrays") <- (
 # layer_class registry
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("layer_class exposes Dense, Conv, LayerNorm") <- (
+test("layer_class exposes Dense, Conv, LayerNorm") <- (
     layer_class("Dense", _),
     layer_class("Conv", _),
     layer_class("LayerNorm", _),
@@ -206,7 +206,7 @@ Test("layer_class exposes Dense, Conv, LayerNorm") <- (
     layer_class("Sequential", _)
 )  # nv
 
-Test("layer_class findall has at least 30 entries") <- (
+test("layer_class findall has at least 30 entries") <- (
     findall(N, layer_class(N, _), NS),
     length(NS, L),
     L >= 30

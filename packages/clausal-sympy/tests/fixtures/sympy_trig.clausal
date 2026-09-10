@@ -3,31 +3,31 @@
 
 # ── TrigSimp/2 ───────────────────────────────────────────────────────────────
 
-Test("trig simp pythagorean") <- (
+test("trig simp pythagorean") <- (
     TrigSimp(sin(X)**2 + cos(X)**2, R),
     R == 1
 )  # nv
 
-Test("trig simp double angle") <- (
+test("trig simp double angle") <- (
     TrigSimp(2 * sin(X) * cos(X), R),
     R == sin(2*X)
 )  # nv
 
 # ── ExpandTrig/2 ─────────────────────────────────────────────────────────────
 
-Test("expand trig sum") <- (
+test("expand trig sum") <- (
     ExpandTrig(sin(X + Y), R),
     R == sin(X)*cos(Y) + sin(Y)*cos(X)
 )  # nv
 
-Test("expand trig double") <- (
+test("expand trig double") <- (
     ExpandTrig(cos(2*X), R),
     R == 2*cos(X)**2 - 1
 )  # nv
 
 # ── Mixed: trig + calculus ───────────────────────────────────────────────────
 
-Test("simplify exp log") <- (
+test("simplify exp log") <- (
     Simplify(exp(log(X)), R),
     R == X
 )  # nv

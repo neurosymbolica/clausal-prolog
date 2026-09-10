@@ -3,14 +3,14 @@
                           FFTFrequencies, RealFFTFrequencies, FFTShift])
 
 # FFTransform of constant signal [1,1,1,1] - DC component should be 4.0
-Test("fft constant signal") <- (
+test("fft constant signal") <- (
     FFTransform([1.0, 1.0, 1.0, 1.0], RESULT),
     DC is ++(abs(complex(RESULT[0]))),
     DIFF is ++(abs(float(DC) - 4.0)),
     DIFF < 1e-10)  # nv
 
 # FFTransform round-trip: backward direction should recover original
-Test("fft round trip") <- (
+test("fft round trip") <- (
     X is [1.0, 2.0, 3.0, 4.0],
     FFTransform(X, SPECTRUM),
     FFTransform(RECOVERED, SPECTRUM),
@@ -18,13 +18,13 @@ Test("fft round trip") <- (
     ERR < 1e-10)  # nv
 
 # RealFFT: output length for 4-point input is 3 (n//2+1)
-Test("real fft output length") <- (
+test("real fft output length") <- (
     RealFFT([1.0, 0.0, 0.0, 0.0], RESULT),
     LEN is ++(len(RESULT)),
     LEN == 3)  # nv
 
 # FFTFrequencies: fftfreq(4) first element is 0.0, second is 0.25
-Test("fft frequencies length 4") <- (
+test("fft frequencies length 4") <- (
     FFTFrequencies(4, FREQS),
     F0 is ++(float(FREQS[0])),
     F1 is ++(float(FREQS[1])),
@@ -33,7 +33,7 @@ Test("fft frequencies length 4") <- (
     DIFF < 1e-10)  # nv
 
 # RealFFTFrequencies: 8-point real FFT gives 5 frequencies, first is 0.0
-Test("real fft frequencies non negative") <- (
+test("real fft frequencies non negative") <- (
     RealFFTFrequencies(8, FREQS),
     LEN is ++(len(FREQS)),
     LEN == 5,
@@ -41,7 +41,7 @@ Test("real fft frequencies non negative") <- (
     F0 == 0.0)  # nv
 
 # FFTShift round-trip via backward direction
-Test("fft shift and inverse") <- (
+test("fft shift and inverse") <- (
     X is [0.0, 1.0, 2.0, 3.0],
     FFTShift(X, SHIFTED),
     FFTShift(RECOVERED, SHIFTED),
@@ -52,7 +52,7 @@ Test("fft shift and inverse") <- (
     DIFF < 1e-10)  # nv
 
 # DiscreteCosineTransform round-trip via backward direction
-Test("dct round trip") <- (
+test("dct round trip") <- (
     X is [1.0, 2.0, 3.0, 4.0],
     DiscreteCosineTransform(X, COEFFS),
     DiscreteCosineTransform(RECOVERED, COEFFS),

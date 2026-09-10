@@ -14,40 +14,40 @@
                               CenterOfMass])
 
 # Gaussian filter of constant array returns constant array
-Test("gaussian filter constant") <- (
+test("gaussian filter constant") <- (
     GaussianFilter([1.0, 1.0, 1.0, 1.0, 1.0], 1.0, RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 1.0)),
     DIFF < 1e-6)  # nv
 
 # Uniform filter of constant array returns constant array
-Test("uniform filter constant") <- (
+test("uniform filter constant") <- (
     UniformFilter([2.0, 2.0, 2.0, 2.0, 2.0], RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 2.0)),
     DIFF < 1e-6)  # nv
 
 # Uniform filter with explicit size
-Test("uniform filter with size") <- (
+test("uniform filter with size") <- (
     UniformFilter([1.0, 2.0, 3.0, 4.0, 5.0], 3, RESULT),
     LEN is ++(len(RESULT)),
     LEN == 5)  # nv
 
 # Convolve with identity kernel [0,1,0] returns same array
-Test("convolve identity kernel") <- (
+test("convolve identity kernel") <- (
     Convolve([1.0, 2.0, 3.0, 4.0, 5.0], [0.0, 1.0, 0.0], RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 3.0)),
     DIFF < 1e-6)  # nv
 
 # label: two separate regions in a one-dimensional array
-Test("label two regions") <- (
+test("label two regions") <- (
     label([1, 1, 0, 1, 1], RESULT),
     N is ++(int(RESULT['num_features'])),
     N == 2)  # nv
 
 # Binary erosion of solid block shrinks it
-Test("binary erosion shrinks") <- (
+test("binary erosion shrinks") <- (
     BinaryErosion([False, True, True, True, False], RESULT),
     CENTER is ++(bool(RESULT[2])),
     CENTER == True,
@@ -55,7 +55,7 @@ Test("binary erosion shrinks") <- (
     EDGE == False)  # nv
 
 # Binary dilation of single True expands it
-Test("binary dilation expands") <- (
+test("binary dilation expands") <- (
     BinaryDilation([False, False, True, False, False], RESULT),
     LEFT is ++(bool(RESULT[1])),
     LEFT == True,
@@ -63,25 +63,25 @@ Test("binary dilation expands") <- (
     RIGHT == True)  # nv
 
 # Binary opening (erosion then dilation): removes isolated points
-Test("binary opening removes isolated") <- (
+test("binary opening removes isolated") <- (
     BinaryOpening([False, True, False, True, True, True, False], RESULT),
     ISOLATED is ++(bool(RESULT[1])),
     ISOLATED == False)  # nv
 
 # Binary closing (dilation then erosion): fills small gaps
-Test("binary closing fills gap") <- (
+test("binary closing fills gap") <- (
     BinaryClosing([True, True, False, True, True], RESULT),
     GAP is ++(bool(RESULT[2])),
     GAP == True)  # nv
 
 # Zoom: scale a one-dimensional array up by factor 2
-Test("zoom scales up") <- (
+test("zoom scales up") <- (
     Zoom([1.0, 2.0, 3.0], 2.0, RESULT),
     LEN is ++(len(RESULT)),
     LEN == 6)  # nv
 
 # Rotate two-dimensional array by 0 degrees returns same shape
-Test("rotate zero degrees") <- (
+test("rotate zero degrees") <- (
     Rotate([[1.0, 2.0], [3.0, 4.0]], 0.0, RESULT),
     ROWS is ++(RESULT.shape[0]),
     COLS is ++(RESULT.shape[1]),
@@ -89,20 +89,20 @@ Test("rotate zero degrees") <- (
     COLS == 2)  # nv
 
 # Shift one-dimensional array by 0 returns same values
-Test("shift by zero") <- (
+test("shift by zero") <- (
     Shift([1.0, 2.0, 3.0, 4.0, 5.0], 0.0, RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 3.0)),
     DIFF < 1e-6)  # nv
 
 # FindObjects: two regions give two slice entries
-Test("find objects two regions") <- (
+test("find objects two regions") <- (
     FindObjects([1, 1, 0, 2, 2], RESULT),
     LEN is ++(len(RESULT)),
     LEN == 2)  # nv
 
 # CenterOfMass of uniform one-dimensional array is at centre
-Test("center of mass uniform") <- (
+test("center of mass uniform") <- (
     CenterOfMass([1.0, 1.0, 1.0, 1.0, 1.0], COM),
     C is ++(float(COM[0])),
     DIFF is ++(abs(C - 2.0)),

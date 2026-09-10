@@ -10,7 +10,7 @@
 
 # --- det, slogdet ---
 
-Test("det of 2x2") <- (
+test("det of 2x2") <- (
     array([[1.0, 2.0], [3.0, 4.0]], A),
     det(A, D),
     array_list(D, V),
@@ -18,7 +18,7 @@ Test("det of 2x2") <- (
     V < -1.9
 )  # nv
 
-Test("det of identity is 1") <- (
+test("det of identity is 1") <- (
     eye(3, A),
     det(A, D),
     array_list(D, V),
@@ -26,7 +26,7 @@ Test("det of identity is 1") <- (
     V < 1.01
 )  # nv
 
-Test("slogdet of identity") <- (
+test("slogdet of identity") <- (
     eye(3, A),
     slogdet(A, RESULT),
     RESULT is (SIGN, LOGDET),
@@ -40,13 +40,13 @@ Test("slogdet of identity") <- (
 
 # --- inv ---
 
-Test("inv shape matches input") <- (
+test("inv shape matches input") <- (
     array([[2.0, 1.0], [1.0, 3.0]], A),
     inv(A, B),
     shape(B, [2, 2])
 )  # nv
 
-Test("A @ inv(A) is approximately identity") <- (
+test("A @ inv(A) is approximately identity") <- (
     array([[2.0, 1.0], [1.0, 3.0]], A),
     inv(A, B),
     matmul(A, B, I),
@@ -57,7 +57,7 @@ Test("A @ inv(A) is approximately identity") <- (
     V < 2.01
 )  # nv
 
-Test("inv of inv recovers original") <- (
+test("inv of inv recovers original") <- (
     array([[2.0, 1.0], [1.0, 3.0]], A),
     inv(A, B),
     inv(B, C),
@@ -70,14 +70,14 @@ Test("inv of inv recovers original") <- (
 
 # --- solve ---
 
-Test("solve with identity returns B") <- (
+test("solve with identity returns B") <- (
     eye(2, A),
     array([3.0, 4.0], B),
     solve(A, B, X),
     array_list(X, [3.0, 4.0])
 )  # nv
 
-Test("solve diagonal system") <- (
+test("solve diagonal system") <- (
     array([[2.0, 0.0], [0.0, 4.0]], A),
     array([6.0, 8.0], B),
     solve(A, B, X),
@@ -93,7 +93,7 @@ Test("solve diagonal system") <- (
 
 # --- svd ---
 
-Test("svd returns U, S, Vh with correct shapes") <- (
+test("svd returns U, S, Vh with correct shapes") <- (
     array([[1.0, 2.0], [3.0, 4.0]], A),
     svd(A, RESULT),
     RESULT is (U, S, VH),
@@ -102,7 +102,7 @@ Test("svd returns U, S, Vh with correct shapes") <- (
     shape(VH, [2, 2])
 )  # nv
 
-Test("svd on tall matrix (full_matrices=True default)") <- (
+test("svd on tall matrix (full_matrices=True default)") <- (
     array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], A),
     svd(A, RESULT),
     RESULT is (U, S, VH),
@@ -113,7 +113,7 @@ Test("svd on tall matrix (full_matrices=True default)") <- (
 
 # --- eig, eigh ---
 
-Test("eigh on 2x2 symmetric returns real values and vectors") <- (
+test("eigh on 2x2 symmetric returns real values and vectors") <- (
     array([[2.0, 1.0], [1.0, 2.0]], A),
     eigh(A, RESULT),
     RESULT is (EIGVALS, EIGVECS),
@@ -121,7 +121,7 @@ Test("eigh on 2x2 symmetric returns real values and vectors") <- (
     shape(EIGVECS, [2, 2])
 )  # nv
 
-Test("eigh eigenvalues of [[2,1],[1,2]] are 1 and 3") <- (
+test("eigh eigenvalues of [[2,1],[1,2]] are 1 and 3") <- (
     array([[2.0, 1.0], [1.0, 2.0]], A),
     eigh(A, RESULT),
     RESULT is (EIGVALS, _),
@@ -135,13 +135,13 @@ Test("eigh eigenvalues of [[2,1],[1,2]] are 1 and 3") <- (
     V1 < 3.01
 )  # nv
 
-Test("eigvalsh returns shape-only array of eigenvalues") <- (
+test("eigvalsh returns shape-only array of eigenvalues") <- (
     array([[1.0, 0.0], [0.0, 4.0]], A),
     eigvalsh(A, E),
     shape(E, [2])
 )  # nv
 
-Test("eig returns shape-correct tuple") <- (
+test("eig returns shape-correct tuple") <- (
     array([[1.0, 0.0], [0.0, 2.0]], A),
     eig(A, RESULT),
     RESULT is (EIGVALS, EIGVECS),
@@ -149,7 +149,7 @@ Test("eig returns shape-correct tuple") <- (
     shape(EIGVECS, [2, 2])
 )  # nv
 
-Test("eigvals returns shape-correct array") <- (
+test("eigvals returns shape-correct array") <- (
     array([[1.0, 0.0], [0.0, 2.0]], A),
     eigvals(A, E),
     shape(E, [2])
@@ -157,13 +157,13 @@ Test("eigvals returns shape-correct array") <- (
 
 # --- cholesky ---
 
-Test("cholesky of positive-definite matrix") <- (
+test("cholesky of positive-definite matrix") <- (
     array([[4.0, 2.0], [2.0, 3.0]], A),
     cholesky(A, L),
     shape(L, [2, 2])
 )  # nv
 
-Test("cholesky diagonal entry is sqrt of input diag") <- (
+test("cholesky diagonal entry is sqrt of input diag") <- (
     array([[4.0, 2.0], [2.0, 3.0]], A),
     cholesky(A, L),
     # L is lower-triangular with L[0,0] = sqrt(4) = 2.0
@@ -175,7 +175,7 @@ Test("cholesky diagonal entry is sqrt of input diag") <- (
 
 # --- qr ---
 
-Test("qr on 3x2 matrix (reduced)") <- (
+test("qr on 3x2 matrix (reduced)") <- (
     array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], A),
     qr(A, RESULT),
     RESULT is (Q, R),
@@ -183,7 +183,7 @@ Test("qr on 3x2 matrix (reduced)") <- (
     shape(R, [2, 2])
 )  # nv
 
-Test("qr on square matrix") <- (
+test("qr on square matrix") <- (
     array([[1.0, 2.0], [3.0, 4.0]], A),
     qr(A, RESULT),
     RESULT is (Q, R),
@@ -193,7 +193,7 @@ Test("qr on square matrix") <- (
 
 # --- lstsq ---
 
-Test("lstsq returns 4-tuple") <- (
+test("lstsq returns 4-tuple") <- (
     array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], A),
     array([1.0, 2.0, 3.0], B),
     lstsq(A, B, RESULT),
@@ -203,7 +203,7 @@ Test("lstsq returns 4-tuple") <- (
 
 # --- norm ---
 
-Test("norm default (frobenius) on [[3,4]]") <- (
+test("norm default (frobenius) on [[3,4]]") <- (
     array([[3.0, 4.0]], A),
     norm(A, N),
     array_list(N, V),
@@ -211,7 +211,7 @@ Test("norm default (frobenius) on [[3,4]]") <- (
     V < 5.01
 )  # nv
 
-Test("norm of vector [3,4] is 5") <- (
+test("norm of vector [3,4] is 5") <- (
     array([3.0, 4.0], A),
     norm(A, N),
     array_list(N, V),
@@ -219,7 +219,7 @@ Test("norm of vector [3,4] is 5") <- (
     V < 5.01
 )  # nv
 
-Test("norm with ord=1 on vector") <- (
+test("norm with ord=1 on vector") <- (
     array([3.0, -4.0], A),
     norm(A, 1, N),
     array_list(N, V),
@@ -227,7 +227,7 @@ Test("norm with ord=1 on vector") <- (
     V < 7.01
 )  # nv
 
-Test("norm with ord=2 on vector") <- (
+test("norm with ord=2 on vector") <- (
     array([3.0, 4.0], A),
     norm(A, 2, N),
     array_list(N, V),
@@ -237,13 +237,13 @@ Test("norm with ord=2 on vector") <- (
 
 # --- matrix_rank ---
 
-Test("matrix_rank of identity is 3") <- (
+test("matrix_rank of identity is 3") <- (
     eye(3, A),
     matrix_rank(A, R),
     R == 3
 )  # nv
 
-Test("matrix_rank of singular matrix") <- (
+test("matrix_rank of singular matrix") <- (
     array([[1.0, 2.0], [2.0, 4.0]], A),
     matrix_rank(A, R),
     R == 1
@@ -251,13 +251,13 @@ Test("matrix_rank of singular matrix") <- (
 
 # --- pinv ---
 
-Test("pinv shape for rectangular") <- (
+test("pinv shape for rectangular") <- (
     array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
     pinv(A, B),
     shape(B, [3, 2])
 )  # nv
 
-Test("pinv of square invertible matches inv") <- (
+test("pinv of square invertible matches inv") <- (
     array([[2.0, 1.0], [1.0, 3.0]], A),
     pinv(A, P),
     inv(A, I),
@@ -273,13 +273,13 @@ Test("pinv of square invertible matches inv") <- (
 
 # --- matrix_power ---
 
-Test("matrix_power 0 is identity") <- (
+test("matrix_power 0 is identity") <- (
     array([[2.0, 0.0], [0.0, 3.0]], A),
     matrix_power(A, 0, B),
     array_list(B, [[1.0, 0.0], [0.0, 1.0]])
 )  # nv
 
-Test("matrix_power 1 is A") <- (
+test("matrix_power 1 is A") <- (
     array([[2.0, 0.0], [0.0, 3.0]], A),
     matrix_power(A, 1, B),
     at_get(B, (0, 0), B00),
@@ -288,7 +288,7 @@ Test("matrix_power 1 is A") <- (
     V < 2.01
 )  # nv
 
-Test("matrix_power 2 squares diagonal") <- (
+test("matrix_power 2 squares diagonal") <- (
     array([[2.0, 0.0], [0.0, 3.0]], A),
     matrix_power(A, 2, B),
     at_get(B, (0, 0), B00),
@@ -303,14 +303,14 @@ Test("matrix_power 2 squares diagonal") <- (
 
 # --- cross ---
 
-Test("cross product of x and y is z") <- (
+test("cross product of x and y is z") <- (
     array([1.0, 0.0, 0.0], A),
     array([0.0, 1.0, 0.0], B),
     cross(A, B, C),
     array_list(C, [0.0, 0.0, 1.0])
 )  # nv
 
-Test("cross product antisymmetry: a x b = -(b x a)") <- (
+test("cross product antisymmetry: a x b = -(b x a)") <- (
     array([1.0, 2.0, 3.0], A),
     array([4.0, 5.0, 6.0], B),
     cross(A, B, C1),
@@ -328,7 +328,7 @@ Test("cross product antisymmetry: a x b = -(b x a)") <- (
 
 # JAX's inv on a singular matrix does NOT raise; it returns an array full
 # of inf/nan. Predicate succeeds, but the result is numerically unusable.
-Test("inv of singular matrix succeeds with non-finite values") <- (
+test("inv of singular matrix succeeds with non-finite values") <- (
     array([[1.0, 2.0], [2.0, 4.0]], A),
     inv(A, B),
     shape(B, [2, 2]),
@@ -344,7 +344,7 @@ Test("inv of singular matrix succeeds with non-finite values") <- (
 # jnp.linalg.eig and eigvals return complex arrays even for real
 # eigenvalues. To compare against real expected values, pull out
 # the .real part in a ++() escape.
-Test("eigvals of diagonal matrix has correct real parts") <- (
+test("eigvals of diagonal matrix has correct real parts") <- (
     array([[1.0, 0.0], [0.0, 2.0]], A),
     eigvals(A, E),
     complex_split(E, E_REAL, _),
@@ -360,7 +360,7 @@ Test("eigvals of diagonal matrix has correct real parts") <- (
 
 # --- norm with ord='fro' and ord=inf ---
 
-Test("norm with ord='fro' on [[3,4]]") <- (
+test("norm with ord='fro' on [[3,4]]") <- (
     array([[3.0, 4.0]], A),
     norm(A, "fro", N),
     array_list(N, V),
@@ -368,7 +368,7 @@ Test("norm with ord='fro' on [[3,4]]") <- (
     V < 5.01
 )  # nv
 
-Test("norm with ord=inf on vector [1,-7,3]") <- (
+test("norm with ord=inf on vector [1,-7,3]") <- (
     array([1.0, -7.0, 3.0], A),
     norm(A, inf, N),
     array_list(N, V),
@@ -378,7 +378,7 @@ Test("norm with ord=inf on vector [1,-7,3]") <- (
 
 # --- matrix_power with negative N ---
 
-Test("matrix_power -1 is inv") <- (
+test("matrix_power -1 is inv") <- (
     array([[2.0, 0.0], [0.0, 4.0]], A),
     matrix_power(A, -1, B),
     at_get(B, (0, 0), B00),

@@ -145,7 +145,7 @@ these names keep the Python builtin.
 ```clausal
 -import_from(py.jax, [sum])
 
-Test("fragile") <- (
+test("fragile") <- (
     sum([1, 2, 3], S)        # py.jax.sum: treats [1,2,3] as a 1-D
                              # array literal and reduces. S is a JAX
                              # scalar array (6), *not* the Python int 6.
@@ -494,13 +494,13 @@ bidirectional noun predicate. Forward mode splits, backward mode
 concatenates:
 
 ```clausal
-Test("partition forward") <- (
+test("partition forward") <- (
     arange(0, 6, A),
     partition(A, 3, [P0, P1, P2]),          # LS bound by forward
     array_list(P0, [0, 1])
 )
 
-Test("partition backward") <- (
+test("partition backward") <- (
     array([0, 1], P0), array([2, 3], P1), array([4, 5], P2),
     partition(A, 3, [P0, P1, P2]),          # A bound by backward
     array_list(A, [0, 1, 2, 3, 4, 5])
@@ -516,13 +516,13 @@ only covers the narrower case where LS is a valid split of A.
 which side is bound:
 
 ```clausal
-Test("stacked forward") <- (
+test("stacked forward") <- (
     zeros([3], Z), ones([3], O),
     stacked([Z, O], 0, A),             # A has shape [2, 3]
     shape(A, [2, 3])
 )
 
-Test("stacked backward") <- (
+test("stacked backward") <- (
     array([[1, 2], [3, 4], [5, 6]], A),
     stacked([R0, R1, R2], 0, A),
     array_list(R0, [1, 2])             # R1 = [3,4], R2 = [5,6]
@@ -540,7 +540,7 @@ predicate) when `A`'s length along the axis doesn't divide evenly by
 extra element:
 
 ```clausal
-Test("array_split uneven") <- (
+test("array_split uneven") <- (
     arange(0, 7, A),
     array_split(A, 3, LS),
     length(LS, 3)                       # pieces are [0,1,2], [3,4], [5,6]
@@ -550,7 +550,7 @@ Test("array_split uneven") <- (
 Both forms also accept a list of indices in place of `N`:
 
 ```clausal
-Test("partition by indices") <- (
+test("partition by indices") <- (
     arange(0, 10, A),
     partition(A, [3, 7], [P0, P1, P2])  # [0..2], [3..6], [7..9]
 )
@@ -563,7 +563,7 @@ A plain Clausal list works too — `_deep_deref` passes it through to JAX,
 which treats it as an iterable of axes:
 
 ```clausal
-Test("flip with tuple axes") <- (
+test("flip with tuple axes") <- (
     array([[1, 2], [3, 4]], A),
     flip(A, (0, 1), R)                  # reverse both rows and columns
 )
@@ -574,7 +574,7 @@ be bound. `flip/2` (no axis) reverses **every** axis; same shorthand
 as passing a tuple of all axes:
 
 ```clausal
-Test("flip/2 bidirectional") <- (
+test("flip/2 bidirectional") <- (
     array([[1, 2, 3], [4, 5, 6]], A),
     flip(A, R),                         # forward: R = [[6,5,4], [3,2,1]]
     flip(A2, R)                         # backward: A2 equals A
@@ -587,7 +587,7 @@ behaviour, not an artefact of the wrapper. Use `roll/4` with an
 explicit axis when you want per-axis rolling:
 
 ```clausal
-Test("roll/3 vs roll/4 on 2d") <- (
+test("roll/3 vs roll/4 on 2d") <- (
     array([[0, 1, 2], [3, 4, 5]], A),
     roll(A, 1, R),                      # R = [[5,0,1], [2,3,4]] — flat
     roll(A, 1, 0, R2)                   # R2 = [[3,4,5], [0,1,2]] — axis 0
@@ -602,7 +602,7 @@ predicate. In practice, compose with `reshape/3` or `ravel` when you
 want that:
 
 ```clausal
-Test("flatten-then-repeat via reshape") <- (
+test("flatten-then-repeat via reshape") <- (
     array([[1, 2], [3, 4]], A),
     reshape(A, [4], A1),                # [1, 2, 3, 4]
     repeat(A1, 2, 0, R)                 # [1,1,2,2,3,3,4,4]
@@ -625,7 +625,7 @@ bound. The forward direction (`jnp.stack`) works on any modern JAX.
 pair, or a per-axis list/tuple of pairs:
 
 ```clausal
-Test("pad modes") <- (
+test("pad modes") <- (
     array([1, 2, 3], A),
     pad(A, [1, 2], R),                  # [0,1,2,3,0,0] (constant is default)
     pad(A, [1, 2], "edge", R2),         # [1,1,2,3,3,3]
@@ -788,7 +788,7 @@ infinity norms. No arg = Frobenius for matrices, 2-norm for vectors.
 ### Example
 
 ```clausal
-Test("solve diagonal system") <- (
+test("solve diagonal system") <- (
     array([[2.0, 0.0], [0.0, 4.0]], A),
     array([6.0, 8.0], B),
     solve(A, B, X)            # X ≈ [3.0, 2.0]
@@ -862,13 +862,13 @@ Axes for the `/3` forms are a Clausal list of ints, e.g.
 ### Example
 
 ```clausal
-Test("roundtrip") <- (
+test("roundtrip") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     fft_transform(T, F),            # forward
     fft_transform(T2, F)            # backward — T2 ≈ T
 )
 
-Test("frequencies of length-4 signal") <- (
+test("frequencies of length-4 signal") <- (
     fft_frequencies(4, F),
     array_list(F, [0.0, 0.25, -0.5, -0.25])
 )
@@ -940,7 +940,7 @@ These succeed iff the reduction is true; failure under `not(...)`.
 | `all(A)` / `all(A, AXIS)` | All elements truthy |
 
 ```clausal
-Test("allclose within tolerance") <- (
+test("allclose within tolerance") <- (
     array([1.0, 2.0], A),
     array([1.0000001, 2.0], B),
     allclose(A, B)
@@ -966,7 +966,7 @@ Test("allclose within tolerance") <- (
 | `put_along_axis(A, IDX, VAL, AXIS, R)` | Scatter `VAL` into `A` at `IDX` along `AXIS` (returns a new array) |
 
 ```clausal
-Test("where selects") <- (
+test("where selects") <- (
     array([True, False, True], COND),
     array([10, 20, 30], X),
     array([1, 2, 3], Y),
@@ -974,7 +974,7 @@ Test("where selects") <- (
     array_list(R, [10, 2, 30])
 )
 
-Test("take along axis 0") <- (
+test("take along axis 0") <- (
     array([[1, 2], [3, 4], [5, 6]], A),
     array([0, 2], IDX),
     take(A, IDX, 0, R),
@@ -1046,13 +1046,13 @@ functions don't raise. Guard with `allclose/4` or a range check if you
 need strictness.
 
 ```clausal
-Test("logarithm forward") <- (
+test("logarithm forward") <- (
     array(1.0, X),
     logarithm(X, Y),
     array_list(Y, 0.0)
 )
 
-Test("logarithm backward") <- (
+test("logarithm backward") <- (
     array(0.0, Y),
     logarithm(X, Y),
     array_list(X, 1.0)
@@ -1084,7 +1084,7 @@ a principal-branch angle. Round-tripping `sin` then `arcsin` on
 and the user doesn't see the submodule split.
 
 ```clausal
-Test("softmax sums to 1 along axis") <- (
+test("softmax sums to 1 along axis") <- (
     array([1.0, 2.0, 3.0, 4.0], A),
     softmax(A, 0, R),
     sum(R, S),

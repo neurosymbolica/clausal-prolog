@@ -18,21 +18,21 @@
 
 # --- Thresholding ---
 
-Test("threshold binary preserves the literal level") <- (
+test("threshold binary preserves the literal level") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, USED, OUT),
     USED == 128.0,
     is_grayscale(OUT)
 )  # nv
 
-Test("threshold otsu returns the chosen level") <- (
+test("threshold otsu returns the chosen level") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 0.0, 255.0, thresh_otsu, USED, _),
     USED >= 0.0,
     USED <= 255.0
 )  # nv
 
-Test("threshold binary_inv flips foreground/background") <- (
+test("threshold binary_inv flips foreground/background") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     threshold(IMG, 128.0, 255.0, thresh_binary_inv, _, INV),
@@ -41,7 +41,7 @@ Test("threshold binary_inv flips foreground/background") <- (
     min_max_loc(D, ("min_max", 255.0, 255.0, _, _))
 )  # nv
 
-Test("adaptive_threshold preserves shape") <- (
+test("adaptive_threshold preserves shape") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     adaptive_threshold(IMG, 255.0, adaptive_thresh_mean_c, thresh_binary,
                        3, 0.0, OUT),
@@ -49,7 +49,7 @@ Test("adaptive_threshold preserves shape") <- (
     shape(OUT, S)
 )  # nv
 
-Test("adaptive_threshold gaussian variant") <- (
+test("adaptive_threshold gaussian variant") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     adaptive_threshold(IMG, 255.0, adaptive_thresh_gaussian_c, thresh_binary,
                        3, 0.0, OUT),
@@ -58,21 +58,21 @@ Test("adaptive_threshold gaussian variant") <- (
 
 # --- find_contours ---
 
-Test("find_contours on a thresholded shape returns one external contour") <- (
+test("find_contours on a thresholded shape returns one external contour") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
     length(CS, 1)
 )  # nv
 
-Test("find_contours retr_tree gives same one contour") <- (
+test("find_contours retr_tree gives same one contour") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_tree, chain_approx_simple, CS, _),
     length(CS, 1)
 )  # nv
 
-Test("find_contours retr_list returns hierarchy") <- (
+test("find_contours retr_list returns hierarchy") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_list, chain_approx_simple, _, HIER),
@@ -80,7 +80,7 @@ Test("find_contours retr_list returns hierarchy") <- (
     shape(HIER, [1, _, 4])
 )  # nv
 
-Test("find_contours with offset preserves contour count") <- (
+test("find_contours with offset preserves contour count") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, [0, 0], CS, _),
@@ -89,7 +89,7 @@ Test("find_contours with offset preserves contour count") <- (
 
 # --- contour enumeration ---
 
-Test("contour/2 enumerates each contour") <- (
+test("contour/2 enumerates each contour") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -99,7 +99,7 @@ Test("contour/2 enumerates each contour") <- (
 
 # --- Measurements ---
 
-Test("contour_area for known rectangle approx matches 12x16") <- (
+test("contour_area for known rectangle approx matches 12x16") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -109,7 +109,7 @@ Test("contour_area for known rectangle approx matches 12x16") <- (
     A <= 200.0
 )  # nv
 
-Test("contour_area oriented variant") <- (
+test("contour_area oriented variant") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -120,7 +120,7 @@ Test("contour_area oriented variant") <- (
     A_UNSIGNED >= 150.0
 )  # nv
 
-Test("contour_perimeter closed > 0") <- (
+test("contour_perimeter closed > 0") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -131,7 +131,7 @@ Test("contour_perimeter closed > 0") <- (
 
 # --- bounding shapes ---
 
-Test("bounding_rect decomposes to rect/4") <- (
+test("bounding_rect decomposes to rect/4") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -140,7 +140,7 @@ Test("bounding_rect decomposes to rect/4") <- (
     R == ("rect", 10, 8, 12, 16)
 )  # nv
 
-Test("min_enclosing_circle has positive radius") <- (
+test("min_enclosing_circle has positive radius") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -149,7 +149,7 @@ Test("min_enclosing_circle has positive radius") <- (
     RADIUS > 0.0
 )  # nv
 
-Test("min_area_rect decomposes to rotated_rect") <- (
+test("min_area_rect decomposes to rotated_rect") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -159,7 +159,7 @@ Test("min_area_rect decomposes to rotated_rect") <- (
 
 # --- Convex hull ---
 
-Test("convex_hull area >= original contour area") <- (
+test("convex_hull area >= original contour area") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -170,7 +170,7 @@ Test("convex_hull area >= original contour area") <- (
     A_HULL >= A_C
 )  # nv
 
-Test("convex_hull clockwise variant") <- (
+test("convex_hull clockwise variant") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -182,7 +182,7 @@ Test("convex_hull clockwise variant") <- (
 
 # --- approx_poly_dp ---
 
-Test("approx_poly_dp reduces or matches vertex count") <- (
+test("approx_poly_dp reduces or matches vertex count") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_none, CS, _),
@@ -195,7 +195,7 @@ Test("approx_poly_dp reduces or matches vertex count") <- (
 
 # --- point_polygon_test ---
 
-Test("point inside the rectangle has positive distance") <- (
+test("point inside the rectangle has positive distance") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -204,7 +204,7 @@ Test("point inside the rectangle has positive distance") <- (
     D > 0.0
 )  # nv
 
-Test("point outside has negative distance") <- (
+test("point outside has negative distance") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -213,7 +213,7 @@ Test("point outside has negative distance") <- (
     D < 0.0
 )  # nv
 
-Test("point_polygon_test without measure_dist returns +1/0/-1") <- (
+test("point_polygon_test without measure_dist returns +1/0/-1") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -224,7 +224,7 @@ Test("point_polygon_test without measure_dist returns +1/0/-1") <- (
 
 # --- moments ---
 
-Test("moments m00 equals contour_area on the same contour") <- (
+test("moments m00 equals contour_area on the same contour") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -237,7 +237,7 @@ Test("moments m00 equals contour_area on the same contour") <- (
     M00 - A < 0.001
 )  # nv
 
-Test("moments of binary image returns moments_t term") <- (
+test("moments of binary image returns moments_t term") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     moments(BIN, True, ("moments_t",
@@ -246,7 +246,7 @@ Test("moments of binary image returns moments_t term") <- (
                         _, _, _, _, _, _, _))
 )  # nv
 
-Test("moments_field for nu20 returns a float") <- (
+test("moments_field for nu20 returns a float") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -256,7 +256,7 @@ Test("moments_field for nu20 returns a float") <- (
     NU == NU
 )  # nv
 
-Test("moments_field unknown name fails") <- (
+test("moments_field unknown name fails") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
     find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -267,16 +267,16 @@ Test("moments_field unknown name fails") <- (
 
 # --- threshold_type registry ---
 
-Test("threshold_type registry lookup otsu") <- (
+test("threshold_type registry lookup otsu") <- (
     threshold_type("otsu", T),
     T == thresh_otsu
 )  # nv
 
-Test("threshold_type findall enumerates all 7") <- (
+test("threshold_type findall enumerates all 7") <- (
     findall(N, threshold_type(N, _), NS),
     length(NS, 7)
 )  # nv
 
-Test("threshold_type unknown name fails") <- (
+test("threshold_type unknown name fails") <- (
     not threshold_type("bogus", _)
 )  # nv

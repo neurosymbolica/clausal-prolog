@@ -48,9 +48,9 @@ def _ast_call(name, *args):
 
 def _setup_negation_program():
     """Two-stratum program: Block, Reachable<-Edge, Allowed<-Reachable & not Block."""
-    Edge = make_predicate("Edge", ["a", "b"])
+    Edge = make_predicate("edge", ["a", "b"])
     Block = make_predicate("Block", ["x"])
-    Reachable = make_predicate("Reachable", ["x"])
+    Reachable = make_predicate("reachable", ["x"])
     Allowed = make_predicate("Allowed", ["x"])
     for cls in (Edge, Block, Reachable, Allowed):
         cls.__module__ = "test_negation"
@@ -60,7 +60,7 @@ def _setup_negation_program():
     A, X = Var(), Var()
     Reachable._assertz(Clause(
         head=Reachable(X),
-        body=[_ast_call("Edge", A, X)],
+        body=[_ast_call("edge", A, X)],
     ))
 
     # Allowed(X) <- Reachable(X), not Block(X)
@@ -68,14 +68,14 @@ def _setup_negation_program():
     Allowed._assertz(Clause(
         head=Allowed(X2),
         body=[
-            _ast_call("Reachable", X2),
-            Not(operand=_ast_call("Block", X2)),
+            _ast_call("reachable", X2),
+            Not(operand=_ast_call("block", X2)),
         ],
     ))
 
     mod = Module("test_negation", module_dict={
-        "Edge": Edge, "Block": Block,
-        "Reachable": Reachable, "Allowed": Allowed,
+        "edge": Edge, "Block": Block,
+        "reachable": Reachable, "Allowed": Allowed,
     })
     return mod, Edge, Block, Reachable, Allowed
 

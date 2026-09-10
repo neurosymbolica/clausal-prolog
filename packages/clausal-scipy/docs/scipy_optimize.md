@@ -20,7 +20,7 @@ Or via the canonical `py.*` path:
 
 ## Tiers
 
-All optimisation predicates are **Tier 2**: RESULT is unified with a Python dict. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields.
+All optimisation predicates are **Tier 2**: RESULT is unified with a Python dict. Use `result_get(RESULT, FIELD, VALUE)` to extract individual fields.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:tiers"
@@ -36,9 +36,9 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 
 | scipy function | Clausal predicate |
 |---|---|
-| `minimize_scalar` | `MinimizeScalar` |
+| `minimize_scalar` | `minimize_scalar` |
 | `minimize` | `Minimize` |
-| `differential_evolution` | `DifferentialEvolution` |
+| `differential_evolution` | `differential_evolution` |
 | `basinhopping` | `BasinHopping` |
 | `dual_annealing` | `DualAnnealing` |
 | `shgo` | `ShgoMinimize` |
@@ -67,9 +67,9 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 Example:
 
 ```clausal
-MinimizeQuadratic(RESULT) <- (
-    MinimizeScalar(++(lambda x: (x - 3.0)**2), RESULT),
-    ResultGet(RESULT, 'x', X),
+minimize_quadratic(RESULT) <- (
+    minimize_scalar(++(lambda x: (x - 3.0)**2), RESULT),
+    result_get(RESULT, 'x', X),
     ++print(f"minimum at x={float(X):.4f}")
 )
 ```
@@ -85,12 +85,12 @@ MinimizeQuadratic(RESULT) <- (
 Example:
 
 ```clausal
--import_from(scipy_optimize, [Minimize, ResultGet])
+-import_from(scipy_optimize, [Minimize, result_get])
 
-RosenbrockMinimum(X) <- (
+rosenbrock_minimum(X) <- (
     Minimize(++(lambda x: (1 - x[0])**2 + 100*(x[1] - x[0]**2)**2),
              ++([0.0, 0.0]), 'L-BFGS-B', RESULT),
-    ResultGet(RESULT, 'x', X)
+    result_get(RESULT, 'x', X)
 )
 ```
 
@@ -107,13 +107,13 @@ These methods search for a global minimum and do not require a gradient.
 Example — find global minimum of a multi-modal function:
 
 ```clausal
-GlobalMin(X) <- (
-    DifferentialEvolution(
+global_min(X) <- (
+    differential_evolution(
         ++(lambda x: x[0]**2 * __import__('math').sin(4*x[0])),
         ++([ (-10, 10) ]),
         42,
         RESULT),
-    ResultGet(RESULT, 'x', X)
+    result_get(RESULT, 'x', X)
 )
 ```
 
@@ -128,12 +128,12 @@ GlobalMin(X) <- (
 Example — fit an exponential decay:
 
 ```clausal
--import_from(scipy_optimize, [CurveFit, ResultGet])
+-import_from(scipy_optimize, [CurveFit, result_get])
 
-FitDecay(XDATA, YDATA, PARAMS) <- (
+fit_decay(XDATA, YDATA, PARAMS) <- (
     CurveFit(++(lambda x, a, b: a * __import__('numpy').exp(-b * x)),
              XDATA, YDATA, ++([1.0, 0.5]), RESULT),
-    ResultGet(RESULT, 'popt', PARAMS)
+    result_get(RESULT, 'popt', PARAMS)
 )
 ```
 
@@ -148,13 +148,13 @@ FitDecay(XDATA, YDATA, PARAMS) <- (
 Example:
 
 ```clausal
--import_from(scipy_optimize, [RootScalar, ResultGet])
+-import_from(scipy_optimize, [RootScalar, result_get])
 
-SquareRoot(N, ROOT) <- (
+square_root(N, ROOT) <- (
     N > 0,
     RootScalar(++(lambda x: x**2 - float(N)),
                'brentq', ++([0.0, float(N) + 1.0]), RESULT),
-    ResultGet(RESULT, 'root', ROOT)
+    result_get(RESULT, 'root', ROOT)
 )
 ```
 
@@ -175,13 +175,13 @@ Example — two-variable LP:
 Example — MILP with integrality constraints:
 
 ```clausal
--import_from(scipy_optimize, [MixedIntegerLinearProgram, LinearConstraint, Bounds, ResultGet])
+-import_from(scipy_optimize, [MixedIntegerLinearProgram, LinearConstraint, Bounds, result_get])
 
-IntegerPlan(X) <- (
+integer_plan(X) <- (
     LinearConstraint(++([[1.0, 1.0]]), ++([0.0]), ++([4.0]), CON),
     Bounds(++([0.0, 0.0]), ++([3.0, 3.0]), BDS),
     MixedIntegerLinearProgram(++([-1.0, -2.0]), CON, ++([1, 1]), BDS, RESULT),
-    ResultGet(RESULT, 'x', X)
+    result_get(RESULT, 'x', X)
 )
 ```
 
@@ -197,8 +197,8 @@ Common fields by predicate:
 
 | Predicate | Useful fields |
 |---|---|
-| `Minimize`, `MinimizeScalar` | `'x'`, `'fun'`, `'success'`, `'message'`, `'nit'` |
-| `DifferentialEvolution`, `DualAnnealing`, `ShgoMinimize` | `'x'`, `'fun'`, `'success'` |
+| `Minimize`, `minimize_scalar` | `'x'`, `'fun'`, `'success'`, `'message'`, `'nit'` |
+| `differential_evolution`, `DualAnnealing`, `ShgoMinimize` | `'x'`, `'fun'`, `'success'` |
 | `BasinHopping` | `'x'`, `'fun'`, `'message'` |
 | `NonlinearLeastSquares` | `'x'`, `'cost'`, `'fun'`, `'success'` |
 | `CurveFit` | `'popt'`, `'pcov'` |
@@ -220,9 +220,9 @@ Common fields by predicate:
 
 - **Callables**: pass Python functions via the [`++()` escape](python_integration.md) — e.g. `FUN=++(lambda x: x[0]**2)`. The predicate receives and passes on a plain Python callable; no special boundary wrapping is needed.
 - **Array inputs**: X0, BOUNDS, and coefficient arrays should be passed as Python lists or NumPy arrays via `++()`.
-- **Global methods** (`DifferentialEvolution`, `DualAnnealing`, `BasinHopping`, `ShgoMinimize`) are stochastic or slow; pass `SEED=` for reproducibility in tests.
+- **Global methods** (`differential_evolution`, `DualAnnealing`, `BasinHopping`, `ShgoMinimize`) are stochastic or slow; pass `SEED=` for reproducibility in tests.
 - **`NonlinearLeastSquares` vs `LeastSquares`**: `NonlinearLeastSquares` (from `scipy_optimize`) minimises `||fun(x)||²` for a nonlinear `fun`. `LeastSquares` (from [`scipy_linalg`](scipy_linalg.md)) solves the linear system `A @ x ≈ b` via `lstsq`. They are different operations.
-- Predicates fail (no solution) when `ResultGet` cannot find the requested field, or when a bound `RESULT` does not unify with the computed value. Scipy exceptions propagate as Python exceptions.
+- Predicates fail (no solution) when `result_get` cannot find the requested field, or when a bound `RESULT` does not unify with the computed value. Scipy exceptions propagate as Python exceptions.
 
 ---
 

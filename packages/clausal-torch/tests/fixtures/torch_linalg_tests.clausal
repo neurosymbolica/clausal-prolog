@@ -7,7 +7,7 @@
 
 # --- Determinant ---
 
-Test("det of identity") <- (
+test("det of identity") <- (
     eye(2, A),
     det(A, D),
     tensor_list(D, V),
@@ -15,7 +15,7 @@ Test("det of identity") <- (
     V < 1.01
 )  # nv
 
-Test("det of 2x2") <- (
+test("det of 2x2") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     det(A, D),
     tensor_list(D, V),
@@ -25,13 +25,13 @@ Test("det of 2x2") <- (
 
 # --- Inverse ---
 
-Test("inv of identity") <- (
+test("inv of identity") <- (
     eye(3, I),
     inv(I, B),
     shape(B, [3, 3])
 )  # nv
 
-Test("inv roundtrip") <- (
+test("inv roundtrip") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     inv(A, B),
     inv(B, C_UNUSED),
@@ -43,7 +43,7 @@ Test("inv roundtrip") <- (
     shape(PROD, [2, 2])
 )  # nv
 
-Test("inv of singular fails") <- (
+test("inv of singular fails") <- (
     not(
         tensor([[1.0, 2.0], [2.0, 4.0]], A),
         inv(A, _)
@@ -52,7 +52,7 @@ Test("inv of singular fails") <- (
 
 # --- Solve ---
 
-Test("solve identity system") <- (
+test("solve identity system") <- (
     eye(2, A),
     tensor([3.0, 4.0], B),
     solve(A, B, X),
@@ -63,7 +63,7 @@ Test("solve identity system") <- (
     V2 < 4.01
 )  # nv
 
-Test("solve 2x2 system") <- (
+test("solve 2x2 system") <- (
     tensor([[2.0, 1.0], [1.0, 3.0]], A),
     tensor([5.0, 10.0], B),
     solve(A, B, X),
@@ -72,7 +72,7 @@ Test("solve 2x2 system") <- (
 
 # --- SVD ---
 
-Test("svd shapes") <- (
+test("svd shapes") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     svd(A, RESULT),
     RESULT is (U, S, VH),
@@ -81,7 +81,7 @@ Test("svd shapes") <- (
     shape(VH, [2, 2])
 )  # nv
 
-Test("svd rectangular") <- (
+test("svd rectangular") <- (
     tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
     svd(A, RESULT),
     RESULT is (U, S, VH),
@@ -92,7 +92,7 @@ Test("svd rectangular") <- (
 
 # --- Eigendecomposition ---
 
-Test("eig shapes") <- (
+test("eig shapes") <- (
     tensor([[1.0, 2.0], [2.0, 1.0]], A),
     eig(A, RESULT),
     RESULT is (L, V),
@@ -102,20 +102,20 @@ Test("eig shapes") <- (
 
 # --- Cholesky ---
 
-Test("cholesky of identity") <- (
+test("cholesky of identity") <- (
     eye(3, I),
     cholesky(I, L),
     shape(L, [3, 3])
 )  # nv
 
-Test("cholesky reconstruct") <- (
+test("cholesky reconstruct") <- (
     # Positive definite matrix: A = [[4, 2], [2, 3]]
     tensor([[4.0, 2.0], [2.0, 3.0]], A),
     cholesky(A, L),
     shape(L, [2, 2])
 )  # nv
 
-Test("cholesky of non-positive-definite fails") <- (
+test("cholesky of non-positive-definite fails") <- (
     not(
         tensor([[-1.0, 0.0], [0.0, -1.0]], A),
         cholesky(A, _)
@@ -124,7 +124,7 @@ Test("cholesky of non-positive-definite fails") <- (
 
 # --- QR ---
 
-Test("qr shapes") <- (
+test("qr shapes") <- (
     tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], A),
     qr(A, RESULT),
     RESULT is (Q, R),
@@ -132,7 +132,7 @@ Test("qr shapes") <- (
     shape(R, [2, 2])
 )  # nv
 
-Test("qr square") <- (
+test("qr square") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     qr(A, RESULT),
     RESULT is (Q, R),
@@ -142,7 +142,7 @@ Test("qr square") <- (
 
 # --- Norm ---
 
-Test("norm of vector") <- (
+test("norm of vector") <- (
     tensor([3.0, 4.0], A),
     norm(A, N),
     tensor_list(N, V),
@@ -150,7 +150,7 @@ Test("norm of vector") <- (
     V < 5.01
 )  # nv
 
-Test("norm with ord") <- (
+test("norm with ord") <- (
     tensor([3.0, 4.0], A),
     norm(A, 1, N),
     tensor_list(N, V),
@@ -158,7 +158,7 @@ Test("norm with ord") <- (
     V < 7.01
 )  # nv
 
-Test("norm of matrix") <- (
+test("norm of matrix") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     norm(A, N),
     tensor_list(N, V),
@@ -167,13 +167,13 @@ Test("norm of matrix") <- (
 
 # --- Matrix rank ---
 
-Test("matrix_rank of identity") <- (
+test("matrix_rank of identity") <- (
     eye(3, I),
     matrix_rank(I, R),
     tensor_list(R, 3)
 )  # nv
 
-Test("matrix_rank of rank-1") <- (
+test("matrix_rank of rank-1") <- (
     tensor([[1.0, 2.0], [2.0, 4.0]], A),
     matrix_rank(A, R),
     tensor_list(R, 1)
@@ -181,13 +181,13 @@ Test("matrix_rank of rank-1") <- (
 
 # --- Pseudoinverse ---
 
-Test("pinv shapes") <- (
+test("pinv shapes") <- (
     tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
     pinv(A, B),
     shape(B, [3, 2])
 )  # nv
 
-Test("pinv of square invertible") <- (
+test("pinv of square invertible") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     pinv(A, B),
     shape(B, [2, 2])
@@ -195,7 +195,7 @@ Test("pinv of square invertible") <- (
 
 # --- Cross product ---
 
-Test("cross product") <- (
+test("cross product") <- (
     tensor([1.0, 0.0, 0.0], A),
     tensor([0.0, 1.0, 0.0], B),
     cross(A, B, C),
@@ -210,7 +210,7 @@ Test("cross product") <- (
 
 # --- Dot product ---
 
-Test("dot product") <- (
+test("dot product") <- (
     tensor([1.0, 2.0, 3.0], A),
     tensor([4.0, 5.0, 6.0], B),
     dot(A, B, C),
@@ -219,7 +219,7 @@ Test("dot product") <- (
     V < 32.01
 )  # nv
 
-Test("dot product orthogonal") <- (
+test("dot product orthogonal") <- (
     tensor([1.0, 0.0], A),
     tensor([0.0, 1.0], B),
     dot(A, B, C),

@@ -42,7 +42,7 @@ Nondeterministic fact table keyed on JAX's own activation names.
 | `(+NAME, +FN)` | Check |
 
 ```clausal
-Test("activation lookup by name") <- (
+test("activation lookup by name") <- (
     activation("relu", FN),
     FN != ++(None)
 )
@@ -75,7 +75,7 @@ predicate).
 | `silu_apply(A, R)` | Also known as swish |
 
 ```clausal
-Test("relu zeroes negatives") <- (
+test("relu zeroes negatives") <- (
     array([-1.0, 0.0, 1.0, 2.0], A),
     relu_apply(A, R),
     array_list(R, [0.0, 0.0, 1.0, 2.0])
@@ -91,7 +91,7 @@ stay inside one import block when working with neural-net code.
 Index-array-to-one-hot encoding:
 
 ```clausal
-Test("one_hot basic") <- (
+test("one_hot basic") <- (
     array([0, 2, 1], X),
     one_hot(X, 3, R),
     array_list(R, [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
@@ -164,14 +164,14 @@ the distinction.
 Invoke an initializer:
 
 ```clausal
-Test("init_array with glorot_uniform") <- (
+test("init_array with glorot_uniform") <- (
     initializer("glorot_uniform", F),
     key(0, K),
     init_array(F, K, [10, 5], W),
     shape(W, [10, 5])
 )
 
-Test("init_array with zeros (direct initializer)") <- (
+test("init_array with zeros (direct initializer)") <- (
     initializer("zeros", F),
     key(0, K),
     init_array(F, K, [3], W),
@@ -182,7 +182,7 @@ Test("init_array with zeros (direct initializer)") <- (
 `init_array` is deterministic given the same key:
 
 ```clausal
-Test("same key → same sample") <- (
+test("same key → same sample") <- (
     initializer("glorot_uniform", F),
     key(7, K),
     init_array(F, K, [4, 2], W1),
@@ -201,7 +201,7 @@ result straight into `init_array`. With `-import_module(jax)` at the
 top of the file, the Python-side access path stays clean:
 
 ```clausal
-Test("constant 0.5 initializer") <- (
+test("constant 0.5 initializer") <- (
     F is ++(jax.nn.initializers.constant(0.5)),
     key(0, K),
     init_array(F, K, [3], W),
@@ -221,7 +221,7 @@ compute fan-in / fan-out). A 1-D call fails with a `ValueError` from
 JAX, which surfaces as predicate failure:
 
 ```clausal
-Test("1-D glorot fails") <- (
+test("1-D glorot fails") <- (
     initializer("glorot_uniform", F),
     key(0, K),
     not init_array(F, K, [8], _W)    # fails — 1-D not allowed

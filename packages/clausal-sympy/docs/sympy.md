@@ -5,12 +5,12 @@ The `sympy` standard library module provides symbolic mathematics predicates bac
 ```clausal
 -import_from(sympy, [Diff, Solve, Simplify, sin, cos, inf])
 
-Test("diff sin") <- (
+test("diff sin") <- (
     Diff(sin(X), X, R),
     R == cos(X)
 )
 
-Test("solve quadratic") <- (
+test("solve quadratic") <- (
     Solve(X**2 - 4, X, S),
     S == 2
 )

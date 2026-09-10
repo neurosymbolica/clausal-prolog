@@ -7,7 +7,7 @@ The `sklearn` module provides predicates for machine learning via [scikit-learn]
 ```clausal
 -import_from(sklearn, [Est, Dataset, Fitted, LoadDataset, Fit, Predict, Score])
 
-TrainAndPredict(ALGO, DATASET, PREDS) <- (
+train_and_predict(ALGO, DATASET, PREDS) <- (
     LoadDataset(DATASET, D),
     Fit(Est(ALGO, {}), D, F),
     D is ("Dataset", X, Y),
@@ -20,7 +20,7 @@ Or via [module import](import.md):
 ```clausal
 -import_module(sklearn)
 
-Main <- (
+main <- (
     sklearn.LoadDataset("iris", D),
     sklearn.Fit(sklearn.Est("random_forest", {"n_estimators": 10}), D, F),
     sklearn.Score(F, D, S),

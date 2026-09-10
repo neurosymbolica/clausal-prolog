@@ -3,21 +3,21 @@
 -import_from(torch_data, [tensor_dataset, dataset_length,
                               dataset_item, dataset_element])
 
-Test("tensor_dataset construction") <- (
+test("tensor_dataset construction") <- (
     tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], X),
     tensor([0, 1, 0], Y),
     tensor_dataset([X, Y], DS),
     dataset_length(DS, 3)
 )  # nv
 
-Test("dataset_length query") <- (
+test("dataset_length query") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], X),
     tensor_dataset([X], DS),
     dataset_length(DS, N),
     N == 2
 )  # nv
 
-Test("dataset_item access") <- (
+test("dataset_item access") <- (
     tensor([[10.0], [20.0], [30.0]], X),
     tensor([1, 2, 3], Y),
     tensor_dataset([X, Y], DS),
@@ -26,7 +26,7 @@ Test("dataset_item access") <- (
     tensor_list(X0, [10.0])
 )  # nv
 
-Test("dataset_element enumerate") <- (
+test("dataset_element enumerate") <- (
     tensor([[1.0], [2.0], [3.0]], X),
     tensor_dataset([X], DS),
     findall(I, dataset_element(DS, I, _), INDICES),

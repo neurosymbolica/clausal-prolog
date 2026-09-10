@@ -80,7 +80,7 @@ Example:
 ```clausal
 -import_from(scipy_stats, [StatsMean, StatsDescribe, ResultGet])
 
-Summarise(DATA, MEAN) <- (
+summarise(DATA, MEAN) <- (
     StatsMean(DATA, MEAN),
     StatsDescribe(DATA, DESC),
     ResultGet(DESC, 'variance', VAR),
@@ -101,7 +101,7 @@ Example:
 ```clausal
 -import_from(scipy_stats, [StatsLinearRegression, ResultGet])
 
-LinearFit(X, Y, SLOPE, INTERCEPT) <- (
+linear_fit(X, Y, SLOPE, INTERCEPT) <- (
     StatsLinearRegression(X, Y, RESULT),
     ResultGet(RESULT, 'slope', SLOPE),
     ResultGet(RESULT, 'intercept', INTERCEPT)
@@ -121,7 +121,7 @@ Example:
 ```clausal
 -import_from(scipy_stats, [StatsTTestIndependent, ResultGet])
 
-TwoGroupTest(GROUP_A, GROUP_B, PVAL) <- (
+two_group_test(GROUP_A, GROUP_B, PVAL) <- (
     StatsTTestIndependent(GROUP_A, GROUP_B, False, RESULT),
     ResultGet(RESULT, 'pvalue', PVAL)
 )
@@ -140,7 +140,7 @@ Example:
 ```clausal
 -import_from(scipy_stats, [StatsKruskal, ResultGet])
 
-GroupDifference(GROUPS, PVAL) <- (
+group_difference(GROUPS, PVAL) <- (
     StatsKruskal(GROUPS, RESULT),
     ResultGet(RESULT, 'pvalue', PVAL)
 )
@@ -176,7 +176,7 @@ Example — reuse a frozen beta distribution:
 -import_from(scipy_stats, [StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
                             StatsFrozenStats, StatsFrozenFree])
 
-BetaAnalysis(HANDLE) <- (
+beta_analysis(HANDLE) <- (
     StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), HANDLE),
     StatsFrozenPdf(HANDLE, 0.3, PDF),
     StatsFrozenCdf(HANDLE, 0.3, CDF),
@@ -192,14 +192,14 @@ Example — bidirectional `StatsFrozenCdf` as CDF and quantile function:
 -import_from(scipy_stats, [StatsFreezeDist, StatsFrozenCdf, StatsFrozenFree])
 
 # Forward: P = CDF(0.3) for Beta(2, 5)
-BetaCdf(P) <- (
+beta_cdf(P) <- (
     StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H),
     StatsFrozenCdf(H, 0.3, P),
     StatsFrozenFree(H)
 )
 
 # Backward: X = quantile at P=0.5 (median) for Beta(2, 5)
-BetaMedian(X) <- (
+beta_median(X) <- (
     StatsFreezeDist('beta', ++({'a': 2.0, 'b': 5.0}), H),
     StatsFrozenCdf(H, X, 0.5),
     StatsFrozenFree(H)

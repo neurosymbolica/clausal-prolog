@@ -13,17 +13,17 @@
 # Cascade classifier
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("make_cascade_classifier on bundled face XML returns a handle") <- (
+test("make_cascade_classifier on bundled face XML returns a handle") <- (
     haar_cascade_path("face", PATH),
     make_cascade_classifier(PATH, H),
     integer(H)
 )  # nv
 
-Test("make_cascade_classifier fails on missing XML") <- (
+test("make_cascade_classifier fails on missing XML") <- (
     not make_cascade_classifier("/does/not/exist.xml", _)
 )  # nv
 
-Test("detect_multi_scale on scene returns a list (possibly empty)") <- (
+test("detect_multi_scale on scene returns a list (possibly empty)") <- (
     haar_cascade_path("face", PATH),
     make_cascade_classifier(PATH, CASCADE),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
@@ -31,7 +31,7 @@ Test("detect_multi_scale on scene returns a list (possibly empty)") <- (
     is_list(RECTS)
 )  # nv
 
-Test("detect_multi_scale with scale_factor") <- (
+test("detect_multi_scale with scale_factor") <- (
     haar_cascade_path("face", PATH),
     make_cascade_classifier(PATH, CASCADE),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
@@ -39,7 +39,7 @@ Test("detect_multi_scale with scale_factor") <- (
     is_list(RECTS)
 )  # nv
 
-Test("detect_multi_scale with scale_factor and min_neighbors") <- (
+test("detect_multi_scale with scale_factor and min_neighbors") <- (
     haar_cascade_path("face", PATH),
     make_cascade_classifier(PATH, CASCADE),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
@@ -47,7 +47,7 @@ Test("detect_multi_scale with scale_factor and min_neighbors") <- (
     is_list(RECTS)
 )  # nv
 
-Test("detect_multi_scale with scale_factor, min_neighbors, min_size") <- (
+test("detect_multi_scale with scale_factor, min_neighbors, min_size") <- (
     haar_cascade_path("face", PATH),
     make_cascade_classifier(PATH, CASCADE),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
@@ -59,23 +59,23 @@ Test("detect_multi_scale with scale_factor, min_neighbors, min_size") <- (
 # Haar cascade registry
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("haar_cascade_path lookup face") <- (
+test("haar_cascade_path lookup face") <- (
     haar_cascade_path("face", PATH),
     ++(isinstance(PATH, str))
 )  # nv
 
-Test("haar_cascade_path enumerates several cascades") <- (
+test("haar_cascade_path enumerates several cascades") <- (
     findall(N, haar_cascade_path(N, _), NAMES),
     length(NAMES, K),
     K >= 5
 )  # nv
 
-Test("haar_cascade_path unknown name fails") <- (
+test("haar_cascade_path unknown name fails") <- (
     not haar_cascade_path("not_a_real_cascade", _)
 )  # nv
 
 # Every registered path resolves to an existing file.
-Test("all registered cascades exist on disk") <- (
+test("all registered cascades exist on disk") <- (
     findall(P, haar_cascade_path(_, P), PATHS),
     findall(P, (in_(P, PATHS), ++(__import__("os").path.exists(P))), EXISTING),
     length(PATHS, N),
@@ -86,19 +86,19 @@ Test("all registered cascades exist on disk") <- (
 # HOG descriptor
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("make_hog default") <- (
+test("make_hog default") <- (
     make_hog(H),
     integer(H)
 )  # nv
 
-Test("make_hog with custom opts") <- (
+test("make_hog with custom opts") <- (
     make_hog({"win_size": [32, 64], "block_size": [8, 8],
               "block_stride": [4, 4], "cell_size": [4, 4],
               "nbins": 9}, H),
     integer(H)
 )  # nv
 
-Test("hog_default_people_detector returns a vector") <- (
+test("hog_default_people_detector returns a vector") <- (
     hog_default_people_detector(SVM),
     shape(SVM, [N]),
     N > 0
@@ -106,7 +106,7 @@ Test("hog_default_people_detector returns a vector") <- (
 
 # HOG default window is 64x128. Compute on a resized 64x128 image
 # and verify the descriptor length is non-zero.
-Test("hog_compute on properly-sized image yields a descriptor") <- (
+test("hog_compute on properly-sized image yields a descriptor") <- (
     make_hog(HOG),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     resize(IMG, [64, 128], RESIZED),
@@ -118,7 +118,7 @@ Test("hog_compute on properly-sized image yields a descriptor") <- (
 # hog_set_svm_detector — state threading round-trip
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("hog_set_svm_detector returns a NEW handle") <- (
+test("hog_set_svm_detector returns a NEW handle") <- (
     make_hog(HOG0),
     hog_default_people_detector(SVM),
     hog_set_svm_detector(HOG0, SVM, HOG1),
@@ -127,7 +127,7 @@ Test("hog_set_svm_detector returns a NEW handle") <- (
 
 # After set-SVM, the new handle can run hog_detect (which requires an SVM).
 # Detection may or may not find people; we only assert it returns a list.
-Test("hog_detect on SVM-installed HOG returns a list") <- (
+test("hog_detect on SVM-installed HOG returns a list") <- (
     make_hog(HOG0),
     hog_default_people_detector(SVM),
     hog_set_svm_detector(HOG0, SVM, HOG1),
@@ -137,7 +137,7 @@ Test("hog_detect on SVM-installed HOG returns a list") <- (
     is_list(RECTS)
 )  # nv
 
-Test("hog_detect with opts on SVM-installed HOG") <- (
+test("hog_detect with opts on SVM-installed HOG") <- (
     make_hog(HOG0),
     hog_default_people_detector(SVM),
     hog_set_svm_detector(HOG0, SVM, HOG1),
@@ -150,7 +150,7 @@ Test("hog_detect with opts on SVM-installed HOG") <- (
 # After hog_set_svm_detector(HOG0, SVM, HOG1), HOG0 is still valid.
 # Verify by computing on it — it must succeed (descriptor compute does
 # not need an SVM).
-Test("original HOG handle remains usable after set_svm_detector") <- (
+test("original HOG handle remains usable after set_svm_detector") <- (
     make_hog(HOG0),
     hog_default_people_detector(SVM),
     hog_set_svm_detector(HOG0, SVM, _HOG1_UNUSED),
@@ -164,20 +164,20 @@ Test("original HOG handle remains usable after set_svm_detector") <- (
 # Handle lifecycle
 # ──────────────────────────────────────────────────────────────────────────
 
-Test("free releases a cascade handle") <- (
+test("free releases a cascade handle") <- (
     haar_cascade_path("face", PATH),
     make_cascade_classifier(PATH, CASCADE),
     free(CASCADE),
     not detect_multi_scale(CASCADE, _, _)
 )  # nv
 
-Test("free releases a HOG handle") <- (
+test("free releases a HOG handle") <- (
     make_hog(HOG),
     free(HOG),
     not hog_compute(HOG, _, _)
 )  # nv
 
-Test("free on the SVM-installed HOG does not invalidate the original") <- (
+test("free on the SVM-installed HOG does not invalidate the original") <- (
     make_hog(HOG0),
     hog_default_people_detector(SVM),
     hog_set_svm_detector(HOG0, SVM, HOG1),

@@ -1,30 +1,30 @@
 -import_from(provenance, [bottom_up_, solve, boolean])
 
 -module(datalog_reach, [
-    Edge(SRC, DST),
-    Reachable(SRC, DST),
+    edge(SRC, DST),
+    reachable(SRC, DST),
 ])
 
 # Bottom-up evaluation makes this fast on dense graphs vs tabled SLG.
-bottom_up_(Edge)
-bottom_up_(Reachable)
+bottom_up_(edge)
+bottom_up_(reachable)
 
-Reachable(SRC, DST) <- Edge(SRC, DST)
+reachable(SRC, DST) <- edge(SRC, DST)
 
-Reachable(SRC, DST) <- (
-    Edge(SRC, MID),
-    Reachable(MID, DST),
+reachable(SRC, DST) <- (
+    edge(SRC, MID),
+    reachable(MID, DST),
 )
 
 
 # ── Showcase: chain reachability over a 10-node line ─────────────────
 
-Test("chain reachability") <- (
+test("chain reachability") <- (
     FACTS is [
-        (Edge(0, 1), True), (Edge(1, 2), True), (Edge(2, 3), True),
-        (Edge(3, 4), True), (Edge(4, 5), True), (Edge(5, 6), True),
-        (Edge(6, 7), True), (Edge(7, 8), True), (Edge(8, 9), True),
+        (edge(0, 1), True), (edge(1, 2), True), (edge(2, 3), True),
+        (edge(3, 4), True), (edge(4, 5), True), (edge(5, 6), True),
+        (edge(6, 7), True), (edge(7, 8), True), (edge(8, 9), True),
     ],
-    solve(boolean, FACTS, Reachable(0, DST_UNUSED), R),
+    solve(boolean, FACTS, reachable(0, DST_UNUSED), R),
     length(R, 9)
 )

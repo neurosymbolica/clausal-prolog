@@ -55,28 +55,28 @@ class TestRead:
     def test_parse_scalar_int(self, tmp_path):
         # nv
         mod = _load("yr1", """
-read_int(S, N) <- Read(S, N)
+read_int(S, N) <- read(S, N)
 """, tmp_path)
         assert _first("read_int", "42", module=mod) == 42
 
     def test_parse_scalar_float(self, tmp_path):
         # nv
         mod = _load("yr2", """
-read_float(S, N) <- Read(S, N)
+read_float(S, N) <- read(S, N)
 """, tmp_path)
         assert _first("read_float", "3.14", module=mod) == 3.14
 
     def test_parse_scalar_string(self, tmp_path):
         # nv
         mod = _load("yr3", """
-read_str(S, R) <- Read(S, R)
+read_str(S, R) <- read(S, R)
 """, tmp_path)
         assert _first("read_str", "hello world", module=mod) == "hello world"
 
     def test_parse_mapping(self, tmp_path):
         # nv
         mod = _load("yr4", """
-read_map(S, R) <- Read(S, R)
+read_map(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_map", "name: alice\nage: 30", module=mod)
         assert result == {"name": "alice", "age": 30}
@@ -84,7 +84,7 @@ read_map(S, R) <- Read(S, R)
     def test_parse_sequence(self, tmp_path):
         # nv
         mod = _load("yr5", """
-read_seq(S, R) <- Read(S, R)
+read_seq(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_seq", "[1, 2, 3]", module=mod)
         assert result == [1, 2, 3]
@@ -92,7 +92,7 @@ read_seq(S, R) <- Read(S, R)
     def test_parse_nested_mapping(self, tmp_path):
         # nv
         mod = _load("yr6", """
-read_nested(S, R) <- Read(S, R)
+read_nested(S, R) <- read(S, R)
 """, tmp_path)
         yaml_str = "server:\n  host: localhost\n  port: 8080"
         result = _first("read_nested", yaml_str, module=mod)
@@ -101,7 +101,7 @@ read_nested(S, R) <- Read(S, R)
     def test_parse_bool_true(self, tmp_path):
         # nv
         mod = _load("yr7", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_val", "true", module=mod)
         assert result is True
@@ -109,7 +109,7 @@ read_val(S, R) <- Read(S, R)
     def test_parse_bool_false(self, tmp_path):
         # nv
         mod = _load("yr8", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_val", "false", module=mod)
         assert result is False
@@ -117,7 +117,7 @@ read_val(S, R) <- Read(S, R)
     def test_parse_null(self, tmp_path):
         # nv
         mod = _load("yr9", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_val", "null", module=mod)
         assert result is None
@@ -125,7 +125,7 @@ read_val(S, R) <- Read(S, R)
     def test_parse_empty_doc(self, tmp_path):
         # nv
         mod = _load("yr10", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_val", "", module=mod)
         assert result is None
@@ -133,7 +133,7 @@ read_val(S, R) <- Read(S, R)
     def test_parse_flow_style_mapping(self, tmp_path):
         # nv
         mod = _load("yr11", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_val", "{a: 1, b: 2}", module=mod)
         assert result == {"a": 1, "b": 2}
@@ -141,7 +141,7 @@ read_val(S, R) <- Read(S, R)
     def test_parse_multiline_literal_block(self, tmp_path):
         # nv
         mod = _load("yr12", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         yaml_str = "text: |\n  line one\n  line two\n"
         result = _first("read_val", yaml_str, module=mod)
@@ -150,7 +150,7 @@ read_val(S, R) <- Read(S, R)
     def test_parse_list_of_mappings(self, tmp_path):
         # nv
         mod = _load("yr13", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         yaml_str = "- name: alice\n  age: 30\n- name: bob\n  age: 25"
         result = _first("read_val", yaml_str, module=mod)
@@ -162,7 +162,7 @@ read_val(S, R) <- Read(S, R)
     def test_invalid_yaml_fails(self, tmp_path):
         # nv
         mod = _load("yr14", """
-read_val(S, R) <- Read(S, R)
+read_val(S, R) <- read(S, R)
 """, tmp_path)
         # Unbalanced braces — invalid YAML
         result = _first("read_val", "{a: [}", module=mod)
@@ -224,7 +224,7 @@ write_val(D, S) <- write(D, S)
     def test_round_trip(self, tmp_path):
         # nv
         mod = _load("yw6", """
-round_trip(S, R) <- (Read(S, D) and write(D, R))
+round_trip(S, R) <- (read(S, D) and write(D, R))
 """, tmp_path)
         yaml_in = "a: 1\nb: 2"
         result = _first("round_trip", yaml_in, module=mod)
@@ -243,7 +243,7 @@ class TestReadAll:
     def test_multi_doc(self, tmp_path):
         # nv
         mod = _load("yra1", """
-read_all(S, R) <- ReadAll(S, R)
+read_all(S, R) <- read_all(S, R)
 """, tmp_path)
         yaml_str = "a: 1\n---\nb: 2"
         result = _first("read_all", yaml_str, module=mod)
@@ -252,7 +252,7 @@ read_all(S, R) <- ReadAll(S, R)
     def test_single_doc(self, tmp_path):
         # nv
         mod = _load("yra2", """
-read_all(S, R) <- ReadAll(S, R)
+read_all(S, R) <- read_all(S, R)
 """, tmp_path)
         result = _first("read_all", "x: 1", module=mod)
         assert result == [{"x": 1}]
@@ -260,7 +260,7 @@ read_all(S, R) <- ReadAll(S, R)
     def test_empty_stream(self, tmp_path):
         # nv
         mod = _load("yra3", """
-read_all(S, R) <- ReadAll(S, R)
+read_all(S, R) <- read_all(S, R)
 """, tmp_path)
         result = _first("read_all", "", module=mod)
         assert result == []
@@ -276,7 +276,7 @@ class TestWriteAll:
     def test_multi_doc_write(self, tmp_path):
         # nv
         mod = _load("ywa1", """
-write_all(D, S) <- WriteAll(D, S)
+write_all(D, S) <- write_all(D, S)
 """, tmp_path)
         docs = [{"a": 1}, {"b": 2}]
         result = _first("write_all", docs, module=mod)
@@ -287,7 +287,7 @@ write_all(D, S) <- WriteAll(D, S)
     def test_round_trip_multi_doc(self, tmp_path):
         # nv
         mod = _load("ywa2", """
-round_trip_all(S, R) <- (ReadAll(S, D) and WriteAll(D, R))
+round_trip_all(S, R) <- (read_all(S, D) and write_all(D, R))
 """, tmp_path)
         yaml_in = "x: 1\n---\ny: 2"
         result = _first("round_trip_all", yaml_in, module=mod)
@@ -307,7 +307,7 @@ class TestFileIO:
         yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text("name: alice\nage: 30\n")
         mod = _load("yrf1", """
-read_file(P, R) <- ReadFile(P, R)
+read_file(P, R) <- read_file(P, R)
 """, tmp_path)
         result = _first("read_file", str(yaml_file), module=mod)
         assert result == {"name": "alice", "age": 30}
@@ -315,7 +315,7 @@ read_file(P, R) <- ReadFile(P, R)
     def test_read_nonexistent_file_fails(self, tmp_path):
         # nv
         mod = _load("yrf2", """
-read_file(P, R) <- ReadFile(P, R)
+read_file(P, R) <- read_file(P, R)
 """, tmp_path)
         result = _first("read_file", str(tmp_path / "nope.yaml"), module=mod)
         assert result is None  # fails
@@ -325,7 +325,7 @@ read_file(P, R) <- ReadFile(P, R)
         # nv
         yaml_file = tmp_path / "output.yaml"
         mod = _load("ywf1", """
-read_back(P, V) <- (ReadFile(P, D) and Get(D, "greeting", V))
+read_back(P, V) <- (read_file(P, D) and get(D, "greeting", V))
 """, tmp_path)
         # write via Python first
         import yaml
@@ -338,7 +338,7 @@ read_back(P, V) <- (ReadFile(P, D) and Get(D, "greeting", V))
         # nv
         yaml_file = tmp_path / "written.yaml"
         mod = _load("ywf2", """
-do_write(P, D) <- WriteFile(P, D)
+do_write(P, D) <- write_file(P, D)
 """, tmp_path)
         data = {"color": "blue", "count": 7}
         assert _succeeds("do_write", str(yaml_file), data, module=mod)
@@ -358,14 +358,14 @@ class TestGet:
     def test_single_key(self, tmp_path):
         # nv
         mod = _load("yg1", """
-get_val(S, K, V) <- (Read(S, D) and Get(D, K, V))
+get_val(S, K, V) <- (read(S, D) and get(D, K, V))
 """, tmp_path)
         assert _first("get_val", "name: alice", "name", module=mod) == "alice"
 
     def test_nested_keys(self, tmp_path):
         # nv
         mod = _load("yg2", """
-get_nested(S, V) <- (Read(S, D) and Get(D, ["server", "port"], V))
+get_nested(S, V) <- (read(S, D) and get(D, ["server", "port"], V))
 """, tmp_path)
         yaml_str = "server:\n  host: localhost\n  port: 8080"
         assert _first("get_nested", yaml_str, module=mod) == 8080
@@ -373,14 +373,14 @@ get_nested(S, V) <- (Read(S, D) and Get(D, ["server", "port"], V))
     def test_list_index(self, tmp_path):
         # nv
         mod = _load("yg3", """
-get_idx(S, V) <- (Read(S, D) and Get(D, [0], V))
+get_idx(S, V) <- (read(S, D) and get(D, [0], V))
 """, tmp_path)
         assert _first("get_idx", "[10, 20, 30]", module=mod) == 10
 
     def test_mixed_keys_and_indices(self, tmp_path):
         # nv
         mod = _load("yg4", """
-get_mixed(S, V) <- (Read(S, D) and Get(D, ["items", 1, "name"], V))
+get_mixed(S, V) <- (read(S, D) and get(D, ["items", 1, "name"], V))
 """, tmp_path)
         yaml_str = "items:\n  - name: first\n  - name: second"
         assert _first("get_mixed", yaml_str, module=mod) == "second"
@@ -388,14 +388,14 @@ get_mixed(S, V) <- (Read(S, D) and Get(D, ["items", 1, "name"], V))
     def test_missing_key_fails(self, tmp_path):
         # nv
         mod = _load("yg5", """
-get_val(S, K, V) <- (Read(S, D) and Get(D, K, V))
+get_val(S, K, V) <- (read(S, D) and get(D, K, V))
 """, tmp_path)
         assert _first("get_val", "x: 1", "missing", module=mod) is None
 
     def test_index_out_of_range_fails(self, tmp_path):
         # nv
         mod = _load("yg6", """
-get_val(S, V) <- (Read(S, D) and Get(D, [99], V))
+get_val(S, V) <- (read(S, D) and get(D, [99], V))
 """, tmp_path)
         assert _first("get_val", "[1, 2]", module=mod) is None
 
@@ -418,7 +418,7 @@ class TestFixture:
         self.module = mod.__dict__["$module"]
 
     def _run_test(self, name):
-        assert _succeeds("Test", name, module=self.module), \
+        assert _succeeds("test", name, module=self.module), \
             f"Test({name!r}) failed — no solutions"
 
     def test_parse_scalar_int(self):

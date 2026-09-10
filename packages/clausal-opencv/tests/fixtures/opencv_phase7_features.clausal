@@ -18,52 +18,52 @@
 
 # --- Detector construction ---
 
-Test("make_orb default returns an integer handle") <- (
+test("make_orb default returns an integer handle") <- (
     make_orb(H),
     integer(H)
 )  # nv
 
-Test("make_orb with opts") <- (
+test("make_orb with opts") <- (
     make_orb({"n_features": 100}, H),
     integer(H)
 )  # nv
 
-Test("make_sift default") <- (
+test("make_sift default") <- (
     make_sift(H),
     integer(H)
 )  # nv
 
-Test("make_sift with opts") <- (
+test("make_sift with opts") <- (
     make_sift({"n_features": 50, "contrast_threshold": 0.04}, H),
     integer(H)
 )  # nv
 
-Test("make_akaze default") <- (
+test("make_akaze default") <- (
     make_akaze(H),
     integer(H)
 )  # nv
 
-Test("make_brisk default") <- (
+test("make_brisk default") <- (
     make_brisk(H),
     integer(H)
 )  # nv
 
-Test("make_kaze default") <- (
+test("make_kaze default") <- (
     make_kaze(H),
     integer(H)
 )  # nv
 
-Test("make_fast default") <- (
+test("make_fast default") <- (
     make_fast(H),
     integer(H)
 )  # nv
 
-Test("make_fast with threshold opt") <- (
+test("make_fast with threshold opt") <- (
     make_fast({"threshold": 50}, H),
     integer(H)
 )  # nv
 
-Test("each detector gets a distinct handle") <- (
+test("each detector gets a distinct handle") <- (
     make_orb(H1),
     make_orb(H2),
     H1 != H2
@@ -71,7 +71,7 @@ Test("each detector gets a distinct handle") <- (
 
 # --- Detection / description ---
 
-Test("orb detect on scene yields keypoints") <- (
+test("orb detect on scene yields keypoints") <- (
     make_orb({"n_features": 200}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect(ORB, IMG, KPS),
@@ -79,7 +79,7 @@ Test("orb detect on scene yields keypoints") <- (
     N > 0
 )  # nv
 
-Test("orb detect_and_compute yields keypoints and matching descriptors") <- (
+test("orb detect_and_compute yields keypoints and matching descriptors") <- (
     make_orb({"n_features": 200}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(ORB, IMG, KPS, DESCS),
@@ -88,7 +88,7 @@ Test("orb detect_and_compute yields keypoints and matching descriptors") <- (
     shape(DESCS, [N, 32])
 )  # nv
 
-Test("orb detect_and_compute with full-image mask") <- (
+test("orb detect_and_compute with full-image mask") <- (
     make_orb({"n_features": 50}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     MASK is ++(numpy.ones((128, 128), dtype=numpy.uint8) * 255),
@@ -97,7 +97,7 @@ Test("orb detect_and_compute with full-image mask") <- (
     N > 0
 )  # nv
 
-Test("compute after detect yields descriptors") <- (
+test("compute after detect yields descriptors") <- (
     make_orb({"n_features": 100}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect(ORB, IMG, KPS),
@@ -105,7 +105,7 @@ Test("compute after detect yields descriptors") <- (
     shape(DESCS, [_, 32])
 )  # nv
 
-Test("sift detect yields keypoints") <- (
+test("sift detect yields keypoints") <- (
     make_sift({"n_features": 100}, SIFT),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect(SIFT, IMG, KPS),
@@ -113,14 +113,14 @@ Test("sift detect yields keypoints") <- (
     N > 0
 )  # nv
 
-Test("sift descriptors are 128-dim float32") <- (
+test("sift descriptors are 128-dim float32") <- (
     make_sift({"n_features": 30}, SIFT),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(SIFT, IMG, _, DESCS),
     shape(DESCS, [_, 128])
 )  # nv
 
-Test("akaze descriptors round-trip") <- (
+test("akaze descriptors round-trip") <- (
     make_akaze(AKAZE),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(AKAZE, IMG, KPS, DESCS),
@@ -129,7 +129,7 @@ Test("akaze descriptors round-trip") <- (
     shape(DESCS, [N, _])
 )  # nv
 
-Test("fast detect returns keypoints (no descriptors)") <- (
+test("fast detect returns keypoints (no descriptors)") <- (
     make_fast(FAST),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect(FAST, IMG, KPS),
@@ -139,7 +139,7 @@ Test("fast detect returns keypoints (no descriptors)") <- (
 
 # --- keypoint enumeration and decomposition ---
 
-Test("keypoint/2 nondet enumeration") <- (
+test("keypoint/2 nondet enumeration") <- (
     make_orb({"n_features": 30}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect(ORB, IMG, KPS),
@@ -148,7 +148,7 @@ Test("keypoint/2 nondet enumeration") <- (
     length(ALL, N)
 )  # nv
 
-Test("keypoint/7 decomposes a single keypoint") <- (
+test("keypoint/7 decomposes a single keypoint") <- (
     make_orb({"n_features": 10}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect(ORB, IMG, [KP, *_]),
@@ -159,7 +159,7 @@ Test("keypoint/7 decomposes a single keypoint") <- (
     RESPONSE >= 0.0
 )  # nv
 
-Test("keypoint/7 constructs a new keypoint from fields") <- (
+test("keypoint/7 constructs a new keypoint from fields") <- (
     keypoint(KP, [10.0, 20.0], 5.0, 0.0, 0.5, 0, 0),
     keypoint(KP, [X, Y], SIZE, _, RESP, _, _),
     X == 10.0,
@@ -170,22 +170,22 @@ Test("keypoint/7 constructs a new keypoint from fields") <- (
 
 # --- BF matcher ---
 
-Test("make_bf_matcher default") <- (
+test("make_bf_matcher default") <- (
     make_bf_matcher(BF),
     integer(BF)
 )  # nv
 
-Test("make_bf_matcher with norm type") <- (
+test("make_bf_matcher with norm type") <- (
     make_bf_matcher(norm_hamming, BF),
     integer(BF)
 )  # nv
 
-Test("make_bf_matcher with norm and cross-check") <- (
+test("make_bf_matcher with norm and cross-check") <- (
     make_bf_matcher(norm_hamming, True, BF),
     integer(BF)
 )  # nv
 
-Test("bf matcher self-match (orb descriptors)") <- (
+test("bf matcher self-match (orb descriptors)") <- (
     make_orb({"n_features": 50}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(ORB, IMG, _, DESCS),
@@ -195,7 +195,7 @@ Test("bf matcher self-match (orb descriptors)") <- (
     N > 0
 )  # nv
 
-Test("knn_match yields k candidates per query") <- (
+test("knn_match yields k candidates per query") <- (
     make_orb({"n_features": 50}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(ORB, IMG, _, DESCS),
@@ -204,7 +204,7 @@ Test("knn_match yields k candidates per query") <- (
     length(FIRST_GROUP, 2)
 )  # nv
 
-Test("radius_match returns matches within radius") <- (
+test("radius_match returns matches within radius") <- (
     make_orb({"n_features": 30}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(ORB, IMG, _, DESCS),
@@ -216,7 +216,7 @@ Test("radius_match returns matches within radius") <- (
 
 # --- match_pair enumeration / dmatch decomposition ---
 
-Test("match_pair enumerates each match") <- (
+test("match_pair enumerates each match") <- (
     make_orb({"n_features": 30}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(ORB, IMG, _, DESCS),
@@ -227,7 +227,7 @@ Test("match_pair enumerates each match") <- (
     length(ALL, N)
 )  # nv
 
-Test("dmatch decomposes into 4 integers/float") <- (
+test("dmatch decomposes into 4 integers/float") <- (
     make_orb({"n_features": 30}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(ORB, IMG, _, DESCS),
@@ -239,7 +239,7 @@ Test("dmatch decomposes into 4 integers/float") <- (
     DIST >= 0.0
 )  # nv
 
-Test("self-match distances are all zero") <- (
+test("self-match distances are all zero") <- (
     make_orb({"n_features": 30}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(ORB, IMG, _, DESCS),
@@ -255,7 +255,7 @@ Test("self-match distances are all zero") <- (
 
 # --- FLANN matcher (requires float32 descriptors → SIFT) ---
 
-Test("flann matcher with sift descriptors") <- (
+test("flann matcher with sift descriptors") <- (
     make_sift({"n_features": 50}, SIFT),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(SIFT, IMG, _, DESCS),
@@ -265,7 +265,7 @@ Test("flann matcher with sift descriptors") <- (
     N > 0
 )  # nv
 
-Test("flann with explicit index/search params") <- (
+test("flann with explicit index/search params") <- (
     make_sift({"n_features": 30}, SIFT),
     imread("/tmp/clausal_opencv_scene.png", imread_grayscale, IMG),
     detect_and_compute(SIFT, IMG, _, DESCS),
@@ -277,19 +277,19 @@ Test("flann with explicit index/search params") <- (
 
 # --- Handle lifecycle ---
 
-Test("free releases an ORB handle") <- (
+test("free releases an ORB handle") <- (
     make_orb(H),
     free(H),
     not detect(H, _, _)
 )  # nv
 
-Test("free on unknown handle fails") <- (
+test("free on unknown handle fails") <- (
     not free(99999999)
 )  # nv
 
 # --- draw_keypoints / draw_matches (from Phase 6) ---
 
-Test("draw_keypoints overlays markers") <- (
+test("draw_keypoints overlays markers") <- (
     make_orb({"n_features": 20}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_color, IMG),
     cvt_color(IMG, color_bgr2gray, GRAY),
@@ -298,7 +298,7 @@ Test("draw_keypoints overlays markers") <- (
     shape(OUT, [128, 128, 3])
 )  # nv
 
-Test("draw_keypoints with flags") <- (
+test("draw_keypoints with flags") <- (
     make_orb({"n_features": 20}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_color, IMG),
     cvt_color(IMG, color_bgr2gray, GRAY),
@@ -307,7 +307,7 @@ Test("draw_keypoints with flags") <- (
     shape(OUT, [128, 128, 3])
 )  # nv
 
-Test("draw_matches builds a wide composite") <- (
+test("draw_matches builds a wide composite") <- (
     make_orb({"n_features": 30}, ORB),
     imread("/tmp/clausal_opencv_scene.png", imread_color, IMG),
     cvt_color(IMG, color_bgr2gray, GRAY),

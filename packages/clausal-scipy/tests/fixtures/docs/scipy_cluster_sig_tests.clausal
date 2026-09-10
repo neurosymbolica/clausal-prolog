@@ -1,14 +1,14 @@
 # Companion tests for docs/scipy_cluster.md signature blocks.
 -import_from(scipy_cluster, [Linkage, FlatCluster, KMeans2, ResultGet])
 
-SamplePts(DATA) <- (DATA is [[1.0, 1.0], [1.2, 0.9], [0.8, 1.1], [5.0, 5.0], [5.1, 4.9], [4.9, 5.1]])
+sample_pts(DATA) <- (DATA is [[1.0, 1.0], [1.2, 0.9], [0.8, 1.1], [5.0, 5.0], [5.1, 4.9], [4.9, 5.1]])
 
-Test("linkage exists") <- (
-    SamplePts(DATA),
+test("linkage exists") <- (
+    sample_pts(DATA),
     Linkage(DATA, Z),
     nonvar(Z))  # nv
 
-Test("kmeans2 exists") <- (
-    SamplePts(DATA),
+test("kmeans2 exists") <- (
+    sample_pts(DATA),
     KMeans2(DATA, 2, R),
     ResultGet(R, "centroid", _))  # nv

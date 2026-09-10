@@ -20,42 +20,42 @@
 
 # --- Smoothing ---
 
-Test("gaussian_blur with 3x3 kernel preserves shape") <- (
+test("gaussian_blur with 3x3 kernel preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     gaussian_blur(IMG, [3, 3], OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("gaussian_blur with explicit sigma") <- (
+test("gaussian_blur with explicit sigma") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     gaussian_blur(IMG, [3, 3], 1.0, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("gaussian_blur with separate sigma_x, sigma_y") <- (
+test("gaussian_blur with separate sigma_x, sigma_y") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     gaussian_blur(IMG, [3, 3], 1.0, 1.5, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("median_blur with ksize 3") <- (
+test("median_blur with ksize 3") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     median_blur(IMG, 3, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("box_filter preserves shape") <- (
+test("box_filter preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     box_filter(IMG, cv_8u, [3, 3], OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("bilateral_filter preserves shape and channels") <- (
+test("bilateral_filter preserves shape and channels") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     bilateral_filter(IMG, 5, 50.0, 50.0, OUT),
     shape(IMG, S),
@@ -64,7 +64,7 @@ Test("bilateral_filter preserves shape and channels") <- (
 
 # --- Convolution ---
 
-Test("filter_2d with identity kernel returns input unchanged") <- (
+test("filter_2d with identity kernel returns input unchanged") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     K_IDENT is ++(numpy.array([[0,0,0],[0,1,0],[0,0,0]], dtype=numpy.float32)),
     filter_2d(IMG, cv_8u, K_IDENT, OUT),
@@ -72,7 +72,7 @@ Test("filter_2d with identity kernel returns input unchanged") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("sep_filter_2d with two 1-element kernels preserves shape") <- (
+test("sep_filter_2d with two 1-element kernels preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     KX is ++(numpy.array([1.0], dtype=numpy.float32)),
     KY is ++(numpy.array([1.0], dtype=numpy.float32)),
@@ -83,48 +83,48 @@ Test("sep_filter_2d with two 1-element kernels preserves shape") <- (
 
 # --- Edge detection ---
 
-Test("sobel dx=1, dy=0 preserves spatial shape") <- (
+test("sobel dx=1, dy=0 preserves spatial shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     sobel(IMG, cv_16s, 1, 0, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("sobel with explicit ksize") <- (
+test("sobel with explicit ksize") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     sobel(IMG, cv_16s, 1, 0, 3, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("scharr dx=1, dy=0") <- (
+test("scharr dx=1, dy=0") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     scharr(IMG, cv_16s, 1, 0, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("laplacian default ksize") <- (
+test("laplacian default ksize") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     laplacian(IMG, cv_16s, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("laplacian explicit ksize") <- (
+test("laplacian explicit ksize") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     laplacian(IMG, cv_16s, 3, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("canny output is single-channel uint8") <- (
+test("canny output is single-channel uint8") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     canny(IMG, 50.0, 150.0, EDGES),
     is_grayscale(EDGES)
 )  # nv
 
-Test("canny with explicit aperture size") <- (
+test("canny with explicit aperture size") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     canny(IMG, 50.0, 150.0, 3, EDGES),
     is_grayscale(EDGES)
@@ -132,22 +132,22 @@ Test("canny with explicit aperture size") <- (
 
 # --- Morphology ---
 
-Test("get_structuring_element rect shape") <- (
+test("get_structuring_element rect shape") <- (
     get_structuring_element(morph_rect, [3, 3], K),
     shape(K, [3, 3])
 )  # nv
 
-Test("get_structuring_element ellipse shape") <- (
+test("get_structuring_element ellipse shape") <- (
     get_structuring_element(morph_ellipse, [5, 5], K),
     shape(K, [5, 5])
 )  # nv
 
-Test("get_structuring_element cross with explicit anchor") <- (
+test("get_structuring_element cross with explicit anchor") <- (
     get_structuring_element(morph_cross, [3, 3], [1, 1], K),
     shape(K, [3, 3])
 )  # nv
 
-Test("erode with rect kernel preserves shape") <- (
+test("erode with rect kernel preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     get_structuring_element(morph_rect, [3, 3], K),
     erode(IMG, K, OUT),
@@ -155,7 +155,7 @@ Test("erode with rect kernel preserves shape") <- (
     shape(OUT, S)
 )  # nv
 
-Test("dilate with rect kernel preserves shape") <- (
+test("dilate with rect kernel preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     get_structuring_element(morph_rect, [3, 3], K),
     dilate(IMG, K, OUT),
@@ -163,7 +163,7 @@ Test("dilate with rect kernel preserves shape") <- (
     shape(OUT, S)
 )  # nv
 
-Test("erode with iterations=2 preserves shape") <- (
+test("erode with iterations=2 preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     get_structuring_element(morph_rect, [3, 3], K),
     erode(IMG, K, 2, OUT),
@@ -171,7 +171,7 @@ Test("erode with iterations=2 preserves shape") <- (
     shape(OUT, S)
 )  # nv
 
-Test("morphology_ex open equals erode-then-dilate") <- (
+test("morphology_ex open equals erode-then-dilate") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     get_structuring_element(morph_rect, [3, 3], K),
     erode(IMG, K, ER),
@@ -181,7 +181,7 @@ Test("morphology_ex open equals erode-then-dilate") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("morphology_ex close equals dilate-then-erode") <- (
+test("morphology_ex close equals dilate-then-erode") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     get_structuring_element(morph_rect, [3, 3], K),
     dilate(IMG, K, DI),
@@ -191,7 +191,7 @@ Test("morphology_ex close equals dilate-then-erode") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("morphology_ex with iterations") <- (
+test("morphology_ex with iterations") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     get_structuring_element(morph_rect, [3, 3], K),
     morphology_ex(IMG, morph_gradient, K, 1, OUT),
@@ -201,7 +201,7 @@ Test("morphology_ex with iterations") <- (
 
 # --- Pyramids ---
 
-Test("pyr_down halves the dimensions") <- (
+test("pyr_down halves the dimensions") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     shape(IMG, [H_UNUSED, W_UNUSED, _]),
     pyr_down(IMG, DOWN),
@@ -210,13 +210,13 @@ Test("pyr_down halves the dimensions") <- (
     WD == 2
 )  # nv
 
-Test("pyr_up doubles the dimensions") <- (
+test("pyr_up doubles the dimensions") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     pyr_up(IMG, UP),
     shape(UP, [8, 8, 3])
 )  # nv
 
-Test("pyr_down with explicit dstsize") <- (
+test("pyr_down with explicit dstsize") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     pyr_down(IMG, [2, 2], DOWN),
     shape(DOWN, [2, 2, 3])
@@ -224,51 +224,51 @@ Test("pyr_down with explicit dstsize") <- (
 
 # --- Registries ---
 
-Test("interpolation registry lookup cubic") <- (
+test("interpolation registry lookup cubic") <- (
     interpolation("cubic", C),
     C == inter_cubic
 )  # nv
 
-Test("interpolation reverse lookup") <- (
+test("interpolation reverse lookup") <- (
     interpolation(NAME, inter_area),
     NAME == "area"
 )  # nv
 
-Test("interpolation findall enumerates all 5") <- (
+test("interpolation findall enumerates all 5") <- (
     findall(N, interpolation(N, _), NS),
     length(NS, 5)
 )  # nv
 
-Test("border_type registry lookup reflect") <- (
+test("border_type registry lookup reflect") <- (
     border_type("reflect", C),
     C == border_reflect
 )  # nv
 
-Test("border_type findall enumerates 6") <- (
+test("border_type findall enumerates 6") <- (
     findall(N, border_type(N, _), NS),
     length(NS, 6)
 )  # nv
 
-Test("morph_op registry lookup open") <- (
+test("morph_op registry lookup open") <- (
     morph_op("open", C),
     C == morph_open
 )  # nv
 
-Test("morph_op findall enumerates all 8") <- (
+test("morph_op findall enumerates all 8") <- (
     findall(N, morph_op(N, _), NS),
     length(NS, 8)
 )  # nv
 
-Test("morph_shape registry lookup rect") <- (
+test("morph_shape registry lookup rect") <- (
     morph_shape("rect", C),
     C == morph_rect
 )  # nv
 
-Test("morph_shape findall enumerates all 3") <- (
+test("morph_shape findall enumerates all 3") <- (
     findall(N, morph_shape(N, _), NS),
     length(NS, 3)
 )  # nv
 
-Test("morph_shape unknown name fails") <- (
+test("morph_shape unknown name fails") <- (
     not morph_shape("hexagon", _)
 )  # nv

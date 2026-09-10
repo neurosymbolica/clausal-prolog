@@ -340,7 +340,7 @@ The full loop combining Phase 16 (optax) + Phase 17 (equinox) +
 Phase 12 (filter transforms):
 
 ```clausal
-Test("MLP one optax SGD step changes the model") <- (
+test("MLP one optax SGD step changes the model") <- (
     key(0, K0),
     split_key(K0, 2, [K_INIT, _]),
     mlp(2, 1, 4, 1, K_INIT, MODEL),

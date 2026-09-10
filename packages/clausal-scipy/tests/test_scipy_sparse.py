@@ -624,7 +624,7 @@ class TestModuleExports:
             "MakeCSR", "MakeCSC", "MakeCOO", "MakeDiagonals", "MakeEye",
             "ToDense", "FromDense",
             "Shape", "NonzeroCount",
-            "Solve", "EigenDecomposeHermitian", "SingularValueDecompose",
+            "solve", "EigenDecomposeHermitian", "SingularValueDecompose",
             "Free",
         ]:
             assert hasattr(m, name), f"Missing export: {name}"
@@ -696,4 +696,4 @@ class TestSciPySparseFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"

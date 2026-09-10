@@ -10,7 +10,7 @@
 # Docs/jax_nn.md promises that initialising a parameter pytree is
 # "just composition"; these tests make that claim verifiable.
 
-Test("init a two-layer param pytree") <- (
+test("init a two-layer param pytree") <- (
     initializer("glorot_uniform", F),
     key(0, K),
     split_key(K, 2, [K1, K2]),
@@ -21,7 +21,7 @@ Test("init a two-layer param pytree") <- (
     length(LEAVES, 2)
 )  # nv
 
-Test("tree_map preserves structure over an init'd param pytree") <- (
+test("tree_map preserves structure over an init'd param pytree") <- (
     initializer("zeros", F),
     key(0, K),
     split_key(K, 2, [K1, K2]),
@@ -35,7 +35,7 @@ Test("tree_map preserves structure over an init'd param pytree") <- (
     TD1 == TD2
 )  # nv
 
-Test("tree_reduce sums element counts across param leaves") <- (
+test("tree_reduce sums element counts across param leaves") <- (
     initializer("zeros", F),
     key(0, K),
     split_key(K, 2, [K1, K2]),
@@ -47,7 +47,7 @@ Test("tree_reduce sums element counts across param leaves") <- (
     TOTAL == 65
 )  # nv
 
-Test("tree_leaves_list preserves leaf order by dict key") <- (
+test("tree_leaves_list preserves leaf order by dict key") <- (
     initializer("zeros", F),
     key(0, K),
     split_key(K, 2, [K1, K2]),

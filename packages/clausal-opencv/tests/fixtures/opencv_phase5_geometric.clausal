@@ -16,19 +16,19 @@
 
 # --- resize ---
 
-Test("resize to explicit [W, H]") <- (
+test("resize to explicit [W, H]") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     resize(IMG, [10, 10], OUT),
     size(OUT, [10, 10])
 )  # nv
 
-Test("resize with explicit interpolation") <- (
+test("resize with explicit interpolation") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     resize(IMG, [10, 10], inter_cubic, OUT),
     size(OUT, [10, 10])
 )  # nv
 
-Test("resize_factor halves both dims") <- (
+test("resize_factor halves both dims") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     size(IMG, [W_UNUSED, H_UNUSED]),
     resize_factor(IMG, 0.5, 0.5, OUT),
@@ -37,7 +37,7 @@ Test("resize_factor halves both dims") <- (
     H2 == 16
 )  # nv
 
-Test("resize_factor with nearest interpolation") <- (
+test("resize_factor with nearest interpolation") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     resize_factor(IMG, 0.5, 0.5, inter_nearest, OUT),
     size(OUT, [16, 16])
@@ -45,7 +45,7 @@ Test("resize_factor with nearest interpolation") <- (
 
 # --- rotate ---
 
-Test("rotate 90 clockwise then 90 counter-clockwise is identity") <- (
+test("rotate 90 clockwise then 90 counter-clockwise is identity") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     rotate(IMG, rotate_90_clockwise, R1),
     rotate(R1, rotate_90_counterclockwise, R2),
@@ -53,7 +53,7 @@ Test("rotate 90 clockwise then 90 counter-clockwise is identity") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("rotate 180 twice is identity") <- (
+test("rotate 180 twice is identity") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     rotate(IMG, rotate_180, R1),
     rotate(R1, rotate_180, R2),
@@ -61,7 +61,7 @@ Test("rotate 180 twice is identity") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("rotate 90 clockwise swaps W and H for color image") <- (
+test("rotate 90 clockwise swaps W and H for color image") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     shape(IMG, [H, W, _]),
     rotate(IMG, rotate_90_clockwise, R),
@@ -70,12 +70,12 @@ Test("rotate 90 clockwise swaps W and H for color image") <- (
 
 # --- get_rotation_matrix_2d ---
 
-Test("get_rotation_matrix_2d returns a 2x3 matrix") <- (
+test("get_rotation_matrix_2d returns a 2x3 matrix") <- (
     get_rotation_matrix_2d([16.0, 16.0], 30.0, 1.0, M),
     shape(M, [2, 3])
 )  # nv
 
-Test("get_rotation_matrix_2d with zero angle and scale 1 is identity-affine") <- (
+test("get_rotation_matrix_2d with zero angle and scale 1 is identity-affine") <- (
     get_rotation_matrix_2d([0.0, 0.0], 0.0, 1.0, M),
     # M should be [[1,0,0],[0,1,0]] modulo float
     shape(M, [2, 3])
@@ -83,14 +83,14 @@ Test("get_rotation_matrix_2d with zero angle and scale 1 is identity-affine") <-
 
 # --- affine_inverse (bidirectional) ---
 
-Test("affine_inverse forward then forward is identity (self-inverse)") <- (
+test("affine_inverse forward then forward is identity (self-inverse)") <- (
     get_rotation_matrix_2d([16.0, 16.0], 30.0, 1.0, M),
     affine_inverse(M, M_INV),
     affine_inverse(M_INV, M_BACK),
     ++(numpy.allclose(M, M_BACK))
 )  # nv
 
-Test("affine_inverse backward mode (-M, +M_INV)") <- (
+test("affine_inverse backward mode (-M, +M_INV)") <- (
     get_rotation_matrix_2d([16.0, 16.0], 30.0, 1.0, M),
     affine_inverse(M, M_INV),
     affine_inverse(M_BACK, M_INV),
@@ -99,7 +99,7 @@ Test("affine_inverse backward mode (-M, +M_INV)") <- (
 
 # --- warp_affine ---
 
-Test("warp_affine identity-matrix preserves the image") <- (
+test("warp_affine identity-matrix preserves the image") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     size(IMG, [W, H]),
     M is ++(numpy.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=numpy.float32)),
@@ -108,7 +108,7 @@ Test("warp_affine identity-matrix preserves the image") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("warp_affine with explicit interpolation flag") <- (
+test("warp_affine with explicit interpolation flag") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     size(IMG, [W, H]),
     M is ++(numpy.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=numpy.float32)),
@@ -116,7 +116,7 @@ Test("warp_affine with explicit interpolation flag") <- (
     size(OUT, [W, H])
 )  # nv
 
-Test("warp_affine with border mode") <- (
+test("warp_affine with border mode") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     size(IMG, [W, H]),
     M is ++(numpy.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=numpy.float32)),
@@ -124,7 +124,7 @@ Test("warp_affine with border mode") <- (
     size(OUT, [W, H])
 )  # nv
 
-Test("warp_affine with border value") <- (
+test("warp_affine with border value") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     size(IMG, [W, H]),
     M is ++(numpy.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=numpy.float32)),
@@ -134,7 +134,7 @@ Test("warp_affine with border value") <- (
 
 # --- warp_perspective ---
 
-Test("warp_perspective with 3x3 identity is identity") <- (
+test("warp_perspective with 3x3 identity is identity") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     size(IMG, [W, H]),
     M is ++(numpy.eye(3, dtype=numpy.float32)),
@@ -143,7 +143,7 @@ Test("warp_perspective with 3x3 identity is identity") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("warp_perspective with flags arg") <- (
+test("warp_perspective with flags arg") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     size(IMG, [W, H]),
     M is ++(numpy.eye(3, dtype=numpy.float32)),
@@ -153,14 +153,14 @@ Test("warp_perspective with flags arg") <- (
 
 # --- get_affine_transform / get_perspective_transform ---
 
-Test("get_affine_transform from 3 point pairs") <- (
+test("get_affine_transform from 3 point pairs") <- (
     SRC is ++(numpy.array([[0.0, 0.0], [10.0, 0.0], [0.0, 10.0]], dtype=numpy.float32)),
     DST is ++(numpy.array([[0.0, 0.0], [20.0, 0.0], [0.0, 20.0]], dtype=numpy.float32)),
     get_affine_transform(SRC, DST, M),
     shape(M, [2, 3])
 )  # nv
 
-Test("get_perspective_transform from 4 corner pairs") <- (
+test("get_perspective_transform from 4 corner pairs") <- (
     SRC is ++(numpy.array([[0,0],[10,0],[10,10],[0,10]], dtype=numpy.float32)),
     DST is ++(numpy.array([[0,0],[20,0],[20,20],[0,20]], dtype=numpy.float32)),
     get_perspective_transform(SRC, DST, M),
@@ -169,7 +169,7 @@ Test("get_perspective_transform from 4 corner pairs") <- (
 
 # --- remap ---
 
-Test("remap with identity maps returns input") <- (
+test("remap with identity maps returns input") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     size(IMG, [W_UNUSED, H_UNUSED]),
     MAP_X is ++(numpy.tile(numpy.arange(32, dtype=numpy.float32), (32, 1))),
@@ -179,7 +179,7 @@ Test("remap with identity maps returns input") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("remap with border_mode arg") <- (
+test("remap with border_mode arg") <- (
     imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
     MAP_X is ++(numpy.tile(numpy.arange(32, dtype=numpy.float32), (32, 1))),
     MAP_Y is ++(numpy.tile(numpy.arange(32, dtype=numpy.float32).reshape(-1, 1), (1, 32))),
@@ -189,7 +189,7 @@ Test("remap with border_mode arg") <- (
 
 # --- copy_make_border ---
 
-Test("copy_make_border replicate adds 2-pixel margin") <- (
+test("copy_make_border replicate adds 2-pixel margin") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     size(IMG, [W_UNUSED, H_UNUSED]),
     copy_make_border(IMG, 2, 2, 2, 2, border_replicate, OUT),
@@ -198,7 +198,7 @@ Test("copy_make_border replicate adds 2-pixel margin") <- (
     H2 == 8
 )  # nv
 
-Test("copy_make_border constant with explicit value") <- (
+test("copy_make_border constant with explicit value") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     copy_make_border(IMG, 1, 1, 1, 1, border_constant, [0, 0, 0], OUT),
     size(OUT, [6, 6])

@@ -172,7 +172,7 @@ class TestTreallaExecution:
     def test_simple_fact_query(self):
         """Translate a simple fact and query it."""
         # nv
-        prolog = clausal_source_to_prolog("Foo(1, 2),\nFoo(3, 4),", dialect=_TREALLA)
+        prolog = clausal_source_to_prolog("foo(1, 2),\nfoo(3, 4),", dialect=_TREALLA)
         result = _run_trealla(
             prolog,
             "foo(1, 2), write(ok), nl, halt",
@@ -184,7 +184,7 @@ class TestTreallaExecution:
         """Translate a rule and query it."""
         # nv
         prolog = clausal_source_to_prolog(
-            "Double(X, Y) <- (eval_(X * 2, Y))",
+            "double(X, Y) <- (eval_(X * 2, Y))",
             dialect=_TREALLA,
         )
         result = _run_trealla(
@@ -198,11 +198,11 @@ class TestTreallaExecution:
         """Translate recursive rules (edge/reach) and query reachability."""
         # nv
         src = textwrap.dedent("""\
-            Edge(1, 2),
-            Edge(2, 3),
-            Edge(3, 4),
-            Reach(X, Y) <- Edge(X, Y)
-            Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
+            edge(1, 2),
+            edge(2, 3),
+            edge(3, 4),
+            reach(X, Y) <- edge(X, Y)
+            reach(X, Y) <- (edge(X, Z), reach(Z, Y))
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(
@@ -216,8 +216,8 @@ class TestTreallaExecution:
         """Translate list operations and run in Trealla."""
         # nv
         src = textwrap.dedent("""\
-            MyAppend([], L, L),
-            MyAppend([H, *T], L, [H, *R]) <- MyAppend(T, L, R)
+            my_append([], L, L),
+            my_append([H, *T], L, [H, *R]) <- my_append(T, L, R)
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(
@@ -231,14 +231,14 @@ class TestTreallaExecution:
         """eval_(translates to 'is' and evaluates in Trealla., Arithmetic)"""
         # nv
         src = textwrap.dedent("""\
-            Fib(0, 0),
-            Fib(1, 1),
-            Fib(N, R) <- (
+            fib(0, 0),
+            fib(1, 1),
+            fib(N, R) <- (
                 N > 1,
                 eval_(N - 1, N1),
                 eval_(N - 2, N2),
-                Fib(N1, A),
-                Fib(N2, B),
+                fib(N1, A),
+                fib(N2, B),
                 eval_(A + B, R)
             )
         """)
@@ -255,9 +255,9 @@ class TestTreallaExecution:
         """Negation as failure (not -> \\+) works in Trealla."""
         # nv
         src = textwrap.dedent("""\
-            Even(0),
-            Even(N) <- (N > 0, eval_(N - 2, N1), Even(N1))
-            Odd(N) <- (not Even(N))
+            even(0),
+            even(N) <- (N > 0, eval_(N - 2, N1), even(N1))
+            odd(N) <- (not even(N))
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(
@@ -270,7 +270,7 @@ class TestTreallaExecution:
     def test_unification(self):
         """Unification (is -> =) works correctly."""
         # nv
-        src = "Test(X, Y) <- (X is Y)"
+        src = "test(X, Y) <- (X is Y)"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(
             prolog,
@@ -283,9 +283,9 @@ class TestTreallaExecution:
         """Disjunction (or -> ;) works in Trealla."""
         # nv
         src = textwrap.dedent("""\
-            Color(red),
-            Color(blue),
-            RedOrBlue(X) <- (X is red or X is blue)
+            color(red),
+            color(blue),
+            red_or_blue(X) <- (X is red or X is blue)
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(
@@ -299,9 +299,9 @@ class TestTreallaExecution:
         """FindAll translates to findall/3 and works in Trealla."""
         # nv
         src = textwrap.dedent("""\
-            Num(1),
-            Num(2),
-            Num(3),
+            num(1),
+            num(2),
+            num(3),
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         prolog += "\n:- use_module(library(lists)).\n"
@@ -406,7 +406,7 @@ class TestTreallaDialectFeatures:
         # nv
         src = textwrap.dedent("""\
             -import_from(clausal.logic.clpfd, [in_domain, all_different])
-            Test(X) <- (
+            test(X) <- (
                 in_domain(X, 1, 3),
                 all_different([X])
             )
@@ -418,21 +418,21 @@ class TestTreallaDialectFeatures:
     def test_trealla_leq_operator(self):
         """Trealla uses =< (ISO) for less-or-equal."""
         # nv
-        src = "Test() <- (1 <= 2)"
+        src = "test() <- (1 <= 2)"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "=<" in prolog
 
     def test_trealla_dif(self):
         """dif/2 is available in Trealla."""
         # nv
-        src = "Test(X, Y) <- (X is not Y)"
+        src = "test(X, Y) <- (X is not Y)"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "dif" in prolog
 
     def test_trealla_member(self):
         """in -> member/2 works for Trealla."""
         # nv
-        src = "Test(X) <- (X in [1, 2, 3])"
+        src = "test(X) <- (X in [1, 2, 3])"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "member" in prolog
 
@@ -458,7 +458,7 @@ class TestISOEdgeCases:
     def test_operator_precedence_iso(self):
         """ISO operator precedence is preserved in translation."""
         # nv
-        src = "Test(R) <- (eval_(2 + 3 * 4, R))"
+        src = "test(R) <- (eval_(2 + 3 * 4, R))"
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "test(R), write(R), nl, halt")
         assert result.returncode == 0
@@ -496,7 +496,7 @@ class TestISOEdgeCases:
         """[H|T] pattern matching works."""
         # nv
         src = textwrap.dedent("""\
-            Head([H, *_], H),
+            head([H, *_], H),
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "head([a,b,c], H), write(H), nl, halt")
@@ -507,8 +507,8 @@ class TestISOEdgeCases:
         """Nested compound terms translate correctly."""
         # nv
         src = textwrap.dedent("""\
-            Eval(add(X, Y), R) <- (eval_(X + Y, R))
-            Eval(mul(X, Y), R) <- (eval_(X * Y, R))
+            eval(add(X, Y), R) <- (eval_(X + Y, R))
+            eval(mul(X, Y), R) <- (eval_(X * Y, R))
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(prolog, "eval(add(2,3), R), write(R), nl, halt")
@@ -519,9 +519,9 @@ class TestISOEdgeCases:
         """Multiple solutions via backtracking work correctly."""
         # nv
         src = textwrap.dedent("""\
-            Color(red),
-            Color(green),
-            Color(blue),
+            color(red),
+            color(green),
+            color(blue),
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         prolog += "\n:- use_module(library(lists)).\n"
@@ -536,10 +536,10 @@ class TestISOEdgeCases:
         """All comparison operators translate to ISO forms."""
         # nv
         src = textwrap.dedent("""\
-            TestLt() <- (1 < 2)
-            TestLeq() <- (1 <= 1)
-            TestGt() <- (2 > 1)
-            TestGeq() <- (1 >= 1)
+            test_lt() <- (1 < 2)
+            test_leq() <- (1 <= 1)
+            test_gt() <- (2 > 1)
+            test_geq() <- (1 >= 1)
         """)
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         result = _run_trealla(

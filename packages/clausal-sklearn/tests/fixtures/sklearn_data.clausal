@@ -4,24 +4,24 @@
 
 # ── Dataset loading ──────────────────────────────────────────────────
 
-Test("load diabetes dataset") <- (
+test("load diabetes dataset") <- (
     LoadDataset("diabetes", DATASET),
     DATASET is ("Dataset", X_UNUSED, Y_UNUSED)
 )  # nv
 
-Test("load wine dataset") <- (
+test("load wine dataset") <- (
     LoadDataset("wine", DATASET),
     DATASET is ("Dataset", X_UNUSED, Y_UNUSED)
 )  # nv
 
-Test("load breast cancer dataset") <- (
+test("load breast cancer dataset") <- (
     LoadDataset("breast_cancer", DATASET),
     DATASET is ("Dataset", X_UNUSED, Y_UNUSED)
 )  # nv
 
 # ── SplitData ────────────────────────────────────────────────────────
 
-Test("split iris data") <- (
+test("split iris data") <- (
     LoadDataset("iris", DATASET),
     SplitData(DATASET, 0.2, SPLIT),
     SPLIT is ("Split", TRAIN, TEST),
@@ -29,7 +29,7 @@ Test("split iris data") <- (
     TEST is ("Dataset", XTEST_UNUSED, YTEST_UNUSED)
 )  # nv
 
-Test("split with seed is reproducible") <- (
+test("split with seed is reproducible") <- (
     LoadDataset("iris", DATASET),
     SplitData(DATASET, 0.3, 42, SPLIT1_UNUSED),
     SplitData(DATASET, 0.3, 42, SPLIT2_UNUSED)
@@ -37,7 +37,7 @@ Test("split with seed is reproducible") <- (
 
 # ── Train/test workflow ──────────────────────────────────────────────
 
-Test("split then fit then score") <- (
+test("split then fit then score") <- (
     LoadDataset("iris", DATASET),
     SplitData(DATASET, 0.2, 42, SPLIT),
     SPLIT is ("Split", TRAIN, TEST),
@@ -48,7 +48,7 @@ Test("split then fit then score") <- (
 
 # ── MakeDataset ──────────────────────────────────────────────────────
 
-Test("make classification dataset") <- (
+test("make classification dataset") <- (
     MakeDataset("classification",
                 {"n_samples": 100, "n_features": 5, "n_classes": 2,
                  "n_informative": 3, "random_state": 42},
@@ -56,14 +56,14 @@ Test("make classification dataset") <- (
     DATASET is ("Dataset", X_UNUSED, Y_UNUSED)
 )  # nv
 
-Test("make regression dataset") <- (
+test("make regression dataset") <- (
     MakeDataset("regression",
                 {"n_samples": 100, "n_features": 5, "random_state": 42},
                 DATASET),
     DATASET is ("Dataset", X_UNUSED, Y_UNUSED)
 )  # nv
 
-Test("make blobs dataset") <- (
+test("make blobs dataset") <- (
     MakeDataset("blobs",
                 {"n_samples": 100, "centers": 3, "random_state": 42},
                 DATASET),
@@ -72,13 +72,13 @@ Test("make blobs dataset") <- (
 
 # ── EncodeLabels ─────────────────────────────────────────────────────
 
-Test("encode labels") <- (
+test("encode labels") <- (
     EncodeLabels(["cat", "dog", "cat", "bird", "dog"], ENC_UNUSED, MAP_UNUSED)
 )  # nv
 
 # ── Normalize ────────────────────────────────────────────────────────
 
-Test("normalize l2") <- (
+test("normalize l2") <- (
     LoadDataset("iris", DATASET),
     DATASET is ("Dataset", X, Y_UNUSED),
     Normalize(X, "l2", N_UNUSED)

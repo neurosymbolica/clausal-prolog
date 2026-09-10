@@ -1,12 +1,12 @@
 # Companion tests for docs/scipy_differentiate.md signature blocks.
 -import_from(scipy_differentiate, [Derivative, Jacobian, ResultGet])
 
-Test("derivative exists") <- (
+test("derivative exists") <- (
     Derivative(++(lambda x: x**2), 3.0, R),
     ResultGet(R, "df", DF),
     DIFF is ++(abs(DF - 6.0)),
     DIFF < 1e-8)  # nv
 
-Test("jacobian exists") <- (
+test("jacobian exists") <- (
     Jacobian(++(lambda x: [x[0]**2, x[1]**2]), ++([1.0, 2.0]), R),
     ResultGet(R, "df", _))  # nv

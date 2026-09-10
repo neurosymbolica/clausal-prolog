@@ -8,7 +8,7 @@ Two test layers:
    testing the adapter layer and data conversion helpers.
 
 2. Fixture integration — loads tests/fixtures/spacy_basic.clausal and runs
-   each ``Test/1`` clause via ``call("Test", name, module=mod)``.
+   each ``test/1`` clause via ``call("test", name, module=mod)``.
 """
 
 from __future__ import annotations
@@ -735,4 +735,4 @@ class TestSpacyBasicFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod)
+        assert _succeeds("test", name, module=self.mod)

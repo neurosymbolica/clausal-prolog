@@ -18,69 +18,69 @@
 
 # --- imread / shape / properties ---
 
-Test("imread color produces 3-D shape") <- (
+test("imread color produces 3-D shape") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     shape(IMG, [_, _, 3]),
     is_color(IMG)
 )  # nv
 
-Test("imread grayscale produces 2-D shape") <- (
+test("imread grayscale produces 2-D shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     shape(IMG, [_, _]),
     is_grayscale(IMG),
     channels_count(IMG, 1)
 )  # nv
 
-Test("imread unchanged on rgb fixture is uint8") <- (
+test("imread unchanged on rgb fixture is uint8") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_unchanged, IMG),
     is_uint8(IMG)
 )  # nv
 
-Test("imread default flag returns color image") <- (
+test("imread default flag returns color image") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", IMG),
     is_color(IMG)
 )  # nv
 
-Test("shape check mode succeeds with concrete shape") <- (
+test("shape check mode succeeds with concrete shape") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     shape(IMG, [4, 4, 3])
 )  # nv
 
-Test("shape check mode fails with wrong shape") <- (
+test("shape check mode fails with wrong shape") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     not shape(IMG, [5, 6, 3])
 )  # nv
 
-Test("size returns [W, H] swapped from shape") <- (
+test("size returns [W, H] swapped from shape") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     shape(IMG, [H, W, _]),
     size(IMG, [W, H])
 )  # nv
 
-Test("element_count matches product of dims") <- (
+test("element_count matches product of dims") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     shape(IMG, [4, 4, 3]),
     element_count(IMG, 48)
 )  # nv
 
-Test("channels_count check mode 3") <- (
+test("channels_count check mode 3") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     channels_count(IMG, 3)
 )  # nv
 
-Test("imread fails on missing file") <- (
+test("imread fails on missing file") <- (
     not imread("/tmp/this_file_does_not_exist_clausal_opencv.png", imread_color, _)
 )  # nv
 
 # --- image_encoded round-trip ---
 
-Test("image_encoded forward yields bytes") <- (
+test("image_encoded forward yields bytes") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     image_encoded(IMG, ".png", BUF),
     ++(isinstance(BUF, bytes))
 )  # nv
 
-Test("image_encoded round-trip preserves shape") <- (
+test("image_encoded round-trip preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     image_encoded(IMG, ".png", BUF),
     image_encoded(IMG2, ".png", BUF),
@@ -90,7 +90,7 @@ Test("image_encoded round-trip preserves shape") <- (
 
 # --- imwrite ---
 
-Test("imwrite roundtrip png") <- (
+test("imwrite roundtrip png") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     imwrite("/tmp/clausal_opencv_out.png", IMG),
     imread("/tmp/clausal_opencv_out.png", imread_color, IMG2),
@@ -100,33 +100,33 @@ Test("imwrite roundtrip png") <- (
 
 # --- Arithmetic (grayscale to allow min_max_loc) ---
 
-Test("absdiff with self is zero on grayscale") <- (
+test("absdiff with self is zero on grayscale") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     absdiff(IMG, IMG, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("add saturates at 255 for uint8 grayscale") <- (
+test("add saturates at 255 for uint8 grayscale") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     add(IMG, IMG, OUT),
     min_max_loc(OUT, ("min_max", _MIN_UNUSED, MAX_V, _, _)),
     MAX_V <= 255.0
 )  # nv
 
-Test("subtract self gives zero on grayscale") <- (
+test("subtract self gives zero on grayscale") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     subtract(IMG, IMG, OUT),
     min_max_loc(OUT, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("min(A,A) equals A") <- (
+test("min(A,A) equals A") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     min(IMG, IMG, OUT),
     absdiff(IMG, OUT, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("max(A,A) equals A") <- (
+test("max(A,A) equals A") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     max(IMG, IMG, OUT),
     absdiff(IMG, OUT, D),
@@ -135,7 +135,7 @@ Test("max(A,A) equals A") <- (
 
 # --- Bitwise (grayscale for equality, color for shape) ---
 
-Test("bitwise_not is involutive on grayscale") <- (
+test("bitwise_not is involutive on grayscale") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     bitwise_not(IMG, INV),
     bitwise_not(INV, INV2),
@@ -143,21 +143,21 @@ Test("bitwise_not is involutive on grayscale") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("bitwise_not on color preserves shape") <- (
+test("bitwise_not on color preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     bitwise_not(IMG, INV),
     shape(IMG, S),
     shape(INV, S)
 )  # nv
 
-Test("bitwise_and with self equals self") <- (
+test("bitwise_and with self equals self") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     bitwise_and(IMG, IMG, OUT),
     absdiff(IMG, OUT, D),
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("bitwise_xor with self is zero on grayscale") <- (
+test("bitwise_xor with self is zero on grayscale") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     bitwise_xor(IMG, IMG, OUT),
     min_max_loc(OUT, ("min_max", 0.0, 0.0, _, _))
@@ -165,7 +165,7 @@ Test("bitwise_xor with self is zero on grayscale") <- (
 
 # --- Whole-image transforms ---
 
-Test("flip code 0 vertical is involutive") <- (
+test("flip code 0 vertical is involutive") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     flip(IMG, 0, F),
     flip(F, 0, F2),
@@ -173,7 +173,7 @@ Test("flip code 0 vertical is involutive") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("flip code 1 horizontal is involutive") <- (
+test("flip code 1 horizontal is involutive") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     flip(IMG, 1, F),
     flip(F, 1, F2),
@@ -181,7 +181,7 @@ Test("flip code 1 horizontal is involutive") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("flip code -1 both axes is involutive") <- (
+test("flip code -1 both axes is involutive") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     flip(IMG, -1, F),
     flip(F, -1, F2),
@@ -189,21 +189,21 @@ Test("flip code -1 both axes is involutive") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("transpose swaps H and W of a color image") <- (
+test("transpose swaps H and W of a color image") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     shape(IMG, [H, W, _]),
     transpose(IMG, T),
     shape(T, [W, H, _])
 )  # nv
 
-Test("transpose of grayscale swaps dims") <- (
+test("transpose of grayscale swaps dims") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     shape(IMG, [H, W]),
     transpose(IMG, T),
     shape(T, [W, H])
 )  # nv
 
-Test("copy_image produces an equal but independent array") <- (
+test("copy_image produces an equal but independent array") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     copy_image(IMG, COPY),
     absdiff(IMG, COPY, D),
@@ -212,47 +212,47 @@ Test("copy_image produces an equal but independent array") <- (
 
 # --- Mean ---
 
-Test("mean of grayscale returns 4-tuple with zero in unused channels") <- (
+test("mean of grayscale returns 4-tuple with zero in unused channels") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     mean(IMG, [_, 0.0, 0.0, 0.0])
 )  # nv
 
-Test("mean of color returns 4-tuple") <- (
+test("mean of color returns 4-tuple") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     mean(IMG, [_, _, _, _])
 )  # nv
 
 # --- Additional arithmetic coverage ---
 
-Test("multiply element-wise preserves shape") <- (
+test("multiply element-wise preserves shape") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     multiply(IMG, IMG, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("multiply with scale factor") <- (
+test("multiply with scale factor") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     multiply(IMG, IMG, 0.5, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("divide with self is uniform 1") <- (
+test("divide with self is uniform 1") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     divide(IMG, IMG, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("divide with scale") <- (
+test("divide with scale") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     divide(IMG, IMG, 100.0, OUT),
     shape(IMG, S),
     shape(OUT, S)
 )  # nv
 
-Test("bitwise_or with zero is identity") <- (
+test("bitwise_or with zero is identity") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     bitwise_xor(IMG, IMG, ZEROS),
     bitwise_or(IMG, ZEROS, OUT),
@@ -260,7 +260,7 @@ Test("bitwise_or with zero is identity") <- (
     min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 )  # nv
 
-Test("bitwise_or with mask") <- (
+test("bitwise_or with mask") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     bitwise_or(IMG, IMG, IMG, OUT),
     shape(IMG, S),
@@ -269,12 +269,12 @@ Test("bitwise_or with mask") <- (
 
 # --- dtype property ---
 
-Test("dtype query returns numpy dtype") <- (
+test("dtype query returns numpy dtype") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     dtype(IMG, _D_UNUSED)
 )  # nv
 
-Test("dtype check mode succeeds for uint8 fixture") <- (
+test("dtype check mode succeeds for uint8 fixture") <- (
     imread("/tmp/clausal_opencv_tiny_rgb.png", imread_color, IMG),
     dtype(IMG, D),
     dtype(IMG, D)
@@ -282,7 +282,7 @@ Test("dtype check mode succeeds for uint8 fixture") <- (
 
 # --- min_max_loc ---
 
-Test("min_max_loc on uint8 grayscale returns sensible values") <- (
+test("min_max_loc on uint8 grayscale returns sensible values") <- (
     imread("/tmp/clausal_opencv_tiny_gray.png", imread_grayscale, IMG),
     min_max_loc(IMG, ("min_max", MIN_V, MAX_V, _, _)),
     MIN_V >= 0.0,

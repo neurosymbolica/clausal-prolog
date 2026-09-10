@@ -58,14 +58,14 @@ element-wise to a `jax.Array`.
 | `spence(X, R)` | Spence's (dilogarithm) |
 
 ```clausal
-Test("erf at 0 is 0") <- (
+test("erf at 0 is 0") <- (
     array([0.0], X),
     erf(X, R),
     array(0.0, ZERO),
     allclose(R, ZERO, 0.0001, 0.0)
 )
 
-Test("expit + logit round-trip") <- (
+test("expit + logit round-trip") <- (
     array([0.7], X),
     expit(X, Y),
     logit(Y, X2),
@@ -104,12 +104,12 @@ Enumerated names: `norm`, `uniform`, `bernoulli`, `beta`, `binom`,
 `t`, `truncnorm`, `vonmises`, `wrapcauchy`, `gennorm`, `geom`.
 
 ```clausal
-Test("distribution lookup") <- (
+test("distribution lookup") <- (
     distribution("norm", M),
     M != ++(None)
 )
 
-Test("distribution enumeration") <- (
+test("distribution enumeration") <- (
     findall(N, distribution(N, _), NS),
     length(NS, 23)
 )
@@ -133,13 +133,13 @@ dict of parameters matching the distribution's keyword arguments.
 | `logpmf(DIST, X, PARAMS, R)` | discrete | Log mass |
 
 ```clausal
-Test("normal pdf at mean") <- (
+test("normal pdf at mean") <- (
     pdf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, P),
     array(0.3989423, EXPECTED),
     allclose(P, EXPECTED, 0.0001, 0.0)
 )
 
-Test("bernoulli pmf at 1") <- (
+test("bernoulli pmf at 1") <- (
     pmf("bernoulli", 1, {"p": 0.3}, P),
     array(0.3, EXPECTED),
     allclose(P, EXPECTED, 0.0001, 0.0)
@@ -156,7 +156,7 @@ missing for the named distribution, `_pure`'s exception handler turns
 the resulting `AttributeError` into predicate failure:
 
 ```clausal
-Test("bernoulli has no pdf") <- (
+test("bernoulli has no pdf") <- (
     not pdf("bernoulli", 1, {"p": 0.5}, _P)
 )
 ```

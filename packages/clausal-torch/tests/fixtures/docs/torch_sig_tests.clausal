@@ -37,114 +37,114 @@
 
 # -- Creation --
 
-Test("tensor exists") <- (
+test("tensor exists") <- (
     tensor([1.0, 2.0, 3.0], T),
     shape(T, [3])
 )  # nv
 
-Test("zeros exists") <- (
+test("zeros exists") <- (
     zeros([2, 3], T),
     shape(T, [2, 3])
 )  # nv
 
-Test("ones exists") <- (
+test("ones exists") <- (
     ones([2, 3], T),
     shape(T, [2, 3])
 )  # nv
 
-Test("randn exists") <- (
+test("randn exists") <- (
     randn([3, 4], T),
     shape(T, [3, 4])
 )  # nv
 
-Test("arange exists") <- (
+test("arange exists") <- (
     arange(5, T),
     shape(T, [5])
 )  # nv
 
-Test("linspace exists") <- (
+test("linspace exists") <- (
     linspace(0.0, 1.0, 5, T),
     shape(T, [5])
 )  # nv
 
-Test("full exists") <- (
+test("full exists") <- (
     full([2, 3], 7.0, T),
     shape(T, [2, 3])
 )  # nv
 
-Test("eye exists") <- (
+test("eye exists") <- (
     eye(3, T),
     shape(T, [3, 3])
 )  # nv
 
 # -- Properties --
 
-Test("shape exists") <- (
+test("shape exists") <- (
     zeros([3, 4, 5], T),
     shape(T, [3, 4, 5])
 )  # nv
 
-Test("dtype exists") <- (
+test("dtype exists") <- (
     zeros([2], T),
     dtype(T, float32)
 )  # nv
 
-Test("device exists") <- (
+test("device exists") <- (
     zeros([2], T),
     device(T, "cpu")
 )  # nv
 
-Test("dim exists") <- (
+test("dim exists") <- (
     zeros([2, 3], T),
     dim(T, 2)
 )  # nv
 
-Test("element_count exists") <- (
+test("element_count exists") <- (
     zeros([2, 3], T),
     element_count(T, 6)
 )  # nv
 
-Test("is_contiguous exists") <- (
+test("is_contiguous exists") <- (
     zeros([2, 3], T),
     is_contiguous(T)
 )  # nv
 
 # -- Math --
 
-Test("matmul exists") <- (
+test("matmul exists") <- (
     zeros([2, 3], A),
     zeros([3, 4], B),
     matmul(A, B, C),
     shape(C, [2, 4])
 )  # nv
 
-Test("add exists") <- (
+test("add exists") <- (
     tensor([1.0, 2.0], A),
     tensor([3.0, 4.0], B),
     add(A, B, C),
     shape(C, [2])
 )  # nv
 
-Test("cat exists") <- (
+test("cat exists") <- (
     zeros([2, 3], A),
     ones([2, 3], B),
     cat([A, B], 0, C),
     shape(C, [4, 3])
 )  # nv
 
-Test("sum exists") <- (
+test("sum exists") <- (
     tensor([1.0, 2.0, 3.0], T),
     sum(T, S),
     nonvar(S)
 )  # nv
 
-Test("relu exists") <- (
+test("relu exists") <- (
     tensor([-1.0, 0.0, 1.0], T),
     relu(T, T2),
     tensor_list(T2, [0.0, 0.0, 1.0])
 )  # nv
 
-Test("softmax exists") <- (
+test("softmax exists") <- (
     tensor([1.0, 2.0, 3.0], T),
     softmax(T, 0, T2),
     shape(T2, [3])
@@ -152,43 +152,43 @@ Test("softmax exists") <- (
 
 # -- Shape --
 
-Test("reshape exists") <- (
+test("reshape exists") <- (
     arange(6, T),
     reshape(T, [2, 3], T2),
     shape(T2, [2, 3])
 )  # nv
 
-Test("squeeze exists") <- (
+test("squeeze exists") <- (
     zeros([3, 1, 4], T),
     squeeze(T, 1, T2),
     shape(T2, [3, 4])
 )  # nv
 
-Test("unsqueeze exists") <- (
+test("unsqueeze exists") <- (
     zeros([3, 4], T),
     unsqueeze(T, 1, T2),
     shape(T2, [3, 1, 4])
 )  # nv
 
-Test("flatten exists") <- (
+test("flatten exists") <- (
     zeros([2, 3, 4], T),
     flatten(T, T2),
     shape(T2, [24])
 )  # nv
 
-Test("transpose exists") <- (
+test("transpose exists") <- (
     zeros([2, 3], T),
     transpose(T, 0, 1, T2),
     shape(T2, [3, 2])
 )  # nv
 
-Test("split exists") <- (
+test("split exists") <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
     split(T, 2, PARTS),
     length(PARTS, 2)
 )  # nv
 
-Test("flip exists") <- (
+test("flip exists") <- (
     tensor([1.0, 2.0, 3.0], T),
     flip(T, [0], F),
     tensor_list(F, [3.0, 2.0, 1.0])
@@ -196,7 +196,7 @@ Test("flip exists") <- (
 
 # -- Conversions --
 
-Test("tensor_list exists") <- (
+test("tensor_list exists") <- (
     tensor([1.0, 2.0, 3.0], T),
     tensor_list(T, L),
     L == [1.0, 2.0, 3.0]
@@ -204,19 +204,19 @@ Test("tensor_list exists") <- (
 
 # -- Linear Algebra --
 
-Test("det exists") <- (
+test("det exists") <- (
     eye(2, A),
     det(A, D),
     nonvar(D)
 )  # nv
 
-Test("inv exists") <- (
+test("inv exists") <- (
     eye(3, I),
     inv(I, B),
     shape(B, [3, 3])
 )  # nv
 
-Test("norm exists") <- (
+test("norm exists") <- (
     tensor([3.0, 4.0], A),
     norm(A, N),
     nonvar(N)
@@ -224,7 +224,7 @@ Test("norm exists") <- (
 
 # -- FFT --
 
-Test("fft_transform exists") <- (
+test("fft_transform exists") <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
     fft_transform(T, F),
     shape(F, [4])
@@ -232,14 +232,14 @@ Test("fft_transform exists") <- (
 
 # -- Comparisons --
 
-Test("eq exists") <- (
+test("eq exists") <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 3.0], B),
     eq(A, B, C),
     shape(C, [2])
 )  # nv
 
-Test("equal exists") <- (
+test("equal exists") <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 2.0], B),
     equal(A, B)
@@ -247,7 +247,7 @@ Test("equal exists") <- (
 
 # -- Selection --
 
-Test("where exists") <- (
+test("where exists") <- (
     tensor([1.0, 2.0], X),
     tensor([10.0, 20.0], Y),
     gt(X, Y, COND),
@@ -257,7 +257,7 @@ Test("where exists") <- (
 
 # -- Einsum --
 
-Test("einsum exists") <- (
+test("einsum exists") <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], A),
     tensor([[5.0, 6.0], [7.0, 8.0]], B),
     einsum("ij,jk->ik", [A, B], C),
@@ -266,13 +266,13 @@ Test("einsum exists") <- (
 
 # -- Advanced Math --
 
-Test("sqrt exists") <- (
+test("sqrt exists") <- (
     tensor([4.0, 9.0], T),
     sqrt(T, R),
     nonvar(R)
 )  # nv
 
-Test("sigmoid exists") <- (
+test("sigmoid exists") <- (
     tensor([0.0], T),
     sigmoid(T, R),
     nonvar(R)
@@ -280,18 +280,18 @@ Test("sigmoid exists") <- (
 
 # -- Creation Variants --
 
-Test("zeros_like exists") <- (
+test("zeros_like exists") <- (
     tensor([1.0, 2.0], T),
     zeros_like(T, Z),
     shape(Z, [2])
 )  # nv
 
-Test("rand exists") <- (
+test("rand exists") <- (
     rand([3, 4], T),
     shape(T, [3, 4])
 )  # nv
 
-Test("diag exists") <- (
+test("diag exists") <- (
     tensor([1.0, 2.0, 3.0], V),
     diag(V, M),
     shape(M, [3, 3])
@@ -299,14 +299,14 @@ Test("diag exists") <- (
 
 # -- Arithmetic Gaps --
 
-Test("sub exists") <- (
+test("sub exists") <- (
     tensor([5.0, 3.0], A),
     tensor([2.0, 1.0], B),
     sub(A, B, C),
     nonvar(C)
 )  # nv
 
-Test("neg exists") <- (
+test("neg exists") <- (
     tensor([1.0, -2.0], T),
     neg(T, R),
     nonvar(R)
@@ -314,13 +314,13 @@ Test("neg exists") <- (
 
 # -- Stats/Selection --
 
-Test("sort exists") <- (
+test("sort exists") <- (
     tensor([3.0, 1.0, 2.0], T),
     sort(T, RESULT),
     nonvar(RESULT)
 )  # nv
 
-Test("unique exists") <- (
+test("unique exists") <- (
     tensor([3.0, 1.0, 2.0, 1.0], T),
     unique(T, U),
     nonvar(U)

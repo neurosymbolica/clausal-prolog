@@ -7,8 +7,8 @@ The `yaml_module` module provides predicates for parsing and generating YAML, ba
 ```clausal
 -import_from(yaml_module, [Read, write, Get])
 
-ParseConfig(PATH, HOST, PORT) <- (
-    ReadFile(PATH, D),
+parse_config(PATH, HOST, PORT) <- (
+    read_file(PATH, D),
     Get(D, ["server", "host"], HOST),
     Get(D, ["server", "port"], PORT)
 )
@@ -19,7 +19,7 @@ Or via [module import](import.md):
 ```clausal
 -import_module(yaml_module)
 
-ParseConfig(PATH, HOST) <- (
+parse_config(PATH, HOST) <- (
     yaml_module.ReadFile(PATH, D),
     yaml_module.Get(D, ["server", "host"], HOST)
 )
@@ -31,7 +31,7 @@ ParseConfig(PATH, HOST) <- (
 
 ```clausal
 -import_from(yaml_module, [Read, write, ReadAll, WriteAll,
-                            ReadFile, WriteFile, Get])
+                            read_file, WriteFile, Get])
 ```
 
 The module name is `yaml_module` (not `yaml`) to avoid shadowing Python's PyYAML package in the import machinery.
@@ -75,7 +75,7 @@ Parse a YAML string into a Python object. Fails on invalid YAML.
 ```clausal
 -import_from(yaml_module, [Read, Get])
 
-Test("parse mapping") <- (
+test("parse mapping") <- (
     Read("name: alice\nage: 30", D),
     Get(D, "name", "alice")
 )
@@ -92,14 +92,14 @@ Parse a multi-document YAML string (documents separated by `---`) into a list of
 ```clausal
 -import_from(yaml_module, [ReadAll])
 
-Test("multi-doc") <- (
+test("multi-doc") <- (
     ReadAll("a: 1\n---\nb: 2", DOCS),
     LEN is ++len(DOCS),
     LEN == 2
 )
 ```
 
-### `ReadFile/2`
+### `read_file/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:read_file_sig"
@@ -108,7 +108,7 @@ Test("multi-doc") <- (
 Read and parse a YAML file from disk. Fails if the file does not exist or contains invalid YAML.
 
 ```clausal
-LoadConfig(PATH, CFG) <- ReadFile(PATH, CFG)
+load_config(PATH, CFG) <- read_file(PATH, CFG)
 ```
 
 ---
@@ -126,7 +126,7 @@ Serialize a Python object to a YAML string. Uses block style (`default_flow_styl
 ```clausal
 -import_from(yaml_module, [Read, write, Get])
 
-Test("serialize") <- (
+test("serialize") <- (
     DATA is ++{"x": 1, "y": 2},
     write(DATA, S),
     Read(S, D),
@@ -172,7 +172,7 @@ Fails if any key is missing or index is out of range.
 ```clausal
 -import_from(yaml_module, [Read, Get])
 
-Test("nested access") <- (
+test("nested access") <- (
     Read("items:\n  - name: first\n  - name: second", D),
     Get(D, ["items", 1, "name"], "second")
 )

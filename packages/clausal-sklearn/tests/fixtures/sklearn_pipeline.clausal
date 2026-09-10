@@ -3,7 +3,7 @@
 
 # ── Pipeline construction and fitting ────────────────────────────────
 
-Test("pipeline scaler + logistic regression") <- (
+test("pipeline scaler + logistic regression") <- (
     Pipeline([("scaler", Est("standard_scaler", {})),
               ("clf", Est("logistic_regression", {"max_iter": 200}))],
              PIPE),
@@ -15,7 +15,7 @@ Test("pipeline scaler + logistic regression") <- (
 
 # ── Pipeline predict ─────────────────────────────────────────────────
 
-Test("pipeline predict") <- (
+test("pipeline predict") <- (
     Pipeline([("scaler", Est("standard_scaler", {})),
               ("clf", Est("logistic_regression", {"max_iter": 200}))],
              PIPE),
@@ -27,7 +27,7 @@ Test("pipeline predict") <- (
 
 # ── PipelineStep ─────────────────────────────────────────────────────
 
-Test("pipeline step extraction") <- (
+test("pipeline step extraction") <- (
     Pipeline([("scaler", Est("standard_scaler", {})),
               ("clf", Est("logistic_regression", {"max_iter": 200}))],
              PIPE),
@@ -39,7 +39,7 @@ Test("pipeline step extraction") <- (
 
 # ── Pipeline with PCA ────────────────────────────────────────────────
 
-Test("pipeline pca + classifier") <- (
+test("pipeline pca + classifier") <- (
     Pipeline([("pca", Est("pca", {"n_components": 2})),
               ("clf", Est("random_forest", {"n_estimators": 10}))],
              PIPE),
@@ -51,7 +51,7 @@ Test("pipeline pca + classifier") <- (
 
 # ── Pipeline with train/test split ───────────────────────────────────
 
-Test("pipeline with split") <- (
+test("pipeline with split") <- (
     Pipeline([("scaler", Est("standard_scaler", {})),
               ("clf", Est("logistic_regression", {"max_iter": 200}))],
              PIPE),

@@ -111,7 +111,7 @@ class TestTorchTensorFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -140,7 +140,7 @@ class TestTorchNnFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -178,7 +178,7 @@ class TestTorchRegistryFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -200,7 +200,7 @@ class TestTorchIoFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -256,7 +256,7 @@ class TestTorchLinalgFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -297,7 +297,7 @@ class TestTorchFFTFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -347,7 +347,7 @@ class TestTorchComparisonFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -410,7 +410,7 @@ class TestTorchMathFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -464,7 +464,7 @@ class TestTorchShape2Fixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -512,7 +512,7 @@ class TestTorchDistributionsFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -574,7 +574,7 @@ class TestTorchFunctionalFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -603,7 +603,7 @@ class TestTorchSchedulersFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -726,7 +726,7 @@ class TestTorchCreation2Fixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("Test", name, module=self.mod), f"Test({name!r}) failed"
+        assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
 
 
 # ════════════════════════════════════════════════════════════════════════════

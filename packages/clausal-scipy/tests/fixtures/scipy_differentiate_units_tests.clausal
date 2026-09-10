@@ -1,7 +1,7 @@
 -import_from(scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
 
 # no units on x - plain fast path (verify existing behaviour is preserved)
-Test("derivative no units plain fast path") <- (
+test("derivative no units plain fast path") <- (
     Derivative(++(lambda x: x**2), 3.0, R),
     ResultGet(R, 'df', DF),
     DIFF is ++(abs(float(DF) - 6.0)),

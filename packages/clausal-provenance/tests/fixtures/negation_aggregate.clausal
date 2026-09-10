@@ -1,84 +1,84 @@
 -import_from(provenance, [bottom_up_, solve, aggregate, boolean, add_mult_prob])
 
 -module(negation_aggregate, [
-    Edge(SRC, DST),
-    Block(NODE),
-    Reachable(NODE),
-    Allowed(NODE),
+    edge(SRC, DST),
+    block(NODE),
+    reachable(NODE),
+    allowed(NODE),
 ])
 
-bottom_up_(Edge)
-bottom_up_(Block)
-bottom_up_(Reachable)
-bottom_up_(Allowed)
+bottom_up_(edge)
+bottom_up_(block)
+bottom_up_(reachable)
+bottom_up_(allowed)
 
-Reachable(X) <- Edge(_, X)
+reachable(X) <- edge(_, X)
 
-Allowed(X) <- (
-    Reachable(X),
-    not Block(X),
+allowed(X) <- (
+    reachable(X),
+    not block(X),
 )
 
 
 # ── Stratified negation under boolean ─────────────────────────────────
 
-Test("boolean: blocked node excluded from Allowed") <- (
+test("boolean: blocked node excluded from allowed") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("a", "c"), True),
-        (Edge("a", "d"), True),
-        (Block("c"), True),
+        (edge("a", "b"), True),
+        (edge("a", "c"), True),
+        (edge("a", "d"), True),
+        (block("c"), True),
     ],
-    solve(boolean, FACTS, Allowed(NODE_UNUSED), R),
+    solve(boolean, FACTS, allowed(NODE_UNUSED), R),
     length(R, 2)
 )
 
-Test("boolean: no blocks keeps everything Reachable") <- (
+test("boolean: no blocks keeps everything reachable") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("a", "c"), True),
-        (Edge("a", "d"), True),
+        (edge("a", "b"), True),
+        (edge("a", "c"), True),
+        (edge("a", "d"), True),
     ],
-    solve(boolean, FACTS, Allowed(NODE_UNUSED), R),
+    solve(boolean, FACTS, allowed(NODE_UNUSED), R),
     length(R, 3)
 )
 
-Test("boolean: every node blocked → empty Allowed") <- (
+test("boolean: every node blocked → empty allowed") <- (
     FACTS is [
-        (Edge("a", "b"), True),
-        (Edge("a", "c"), True),
-        (Block("b"), True),
-        (Block("c"), True),
+        (edge("a", "b"), True),
+        (edge("a", "c"), True),
+        (block("b"), True),
+        (block("c"), True),
     ],
-    solve(boolean, FACTS, Allowed(NODE_UNUSED), [])
+    solve(boolean, FACTS, allowed(NODE_UNUSED), [])
 )
 
 
 # ── Stratified negation under add_mult_prob ───────────────────────────
 
-Test("add_mult_prob: certain block excludes via 1 - 1.0 = 0") <- (
+test("add_mult_prob: certain block excludes via 1 - 1.0 = 0") <- (
     FACTS is [
-        (Edge("a", "b"), 0.7),
-        (Block("b"), 1.0),
+        (edge("a", "b"), 0.7),
+        (block("b"), 1.0),
     ],
-    solve(add_mult_prob, FACTS, Allowed("b"), [])
+    solve(add_mult_prob, FACTS, allowed("b"), [])
 )
 
-Test("add_mult_prob: probabilistic block multiplies by (1 - p_block)") <- (
+test("add_mult_prob: probabilistic block multiplies by (1 - p_block)") <- (
     FACTS is [
-        (Edge("a", "c"), 0.9),
-        (Block("c"), 0.6),
+        (edge("a", "c"), 0.9),
+        (block("c"), 0.6),
     ],
-    solve(add_mult_prob, FACTS, Allowed("c"), [(_, P)]),
+    solve(add_mult_prob, FACTS, allowed("c"), [(_, P)]),
     P > 0.3599999999,
     P < 0.3600000001,
 )
 
-Test("add_mult_prob: no block keeps full Reachable probability") <- (
+test("add_mult_prob: no block keeps full reachable probability") <- (
     FACTS is [
-        (Edge("a", "b"), 0.8),
+        (edge("a", "b"), 0.8),
     ],
-    solve(add_mult_prob, FACTS, Allowed("b"), [(_, P)]),
+    solve(add_mult_prob, FACTS, allowed("b"), [(_, P)]),
     P > 0.7999999999,
     P < 0.8000000001,
 )
@@ -86,23 +86,23 @@ Test("add_mult_prob: no block keeps full Reachable probability") <- (
 
 # ── aggregate/4 — boolean count, sum, argmax ──────────────────────────
 
-Test("aggregate count under boolean") <- (
+test("aggregate count under boolean") <- (
     aggregate(boolean, "count", [True, False, True, True], 3)
 )
 
-Test("aggregate count under boolean — empty list") <- (
+test("aggregate count under boolean — empty list") <- (
     aggregate(boolean, "count", [], 0)
 )
 
-Test("aggregate sum under boolean") <- (
+test("aggregate sum under boolean") <- (
     aggregate(boolean, "sum", [(1, True), (2, False), (3, True)], 4)
 )
 
-Test("aggregate argmax under boolean — picks largest True-tagged value") <- (
+test("aggregate argmax under boolean — picks largest True-tagged value") <- (
     aggregate(boolean, "argmax", [(1, True), (2, False), (3, True)], (3, True))
 )
 
-Test("aggregate argmax under boolean — all False yields (None, False)") <- (
+test("aggregate argmax under boolean — all False yields (None, False)") <- (
     aggregate(boolean, "argmax", [(1, False), (2, False)], (NONE, False)),
     NONE == None
 )
@@ -110,19 +110,19 @@ Test("aggregate argmax under boolean — all False yields (None, False)") <- (
 
 # ── aggregate/4 — add_mult_prob (expectation semantics) ───────────────
 
-Test("aggregate count under add_mult_prob = expected count") <- (
+test("aggregate count under add_mult_prob = expected count") <- (
     aggregate(add_mult_prob, "count", [0.3, 0.5, 0.2], EXPECTED),
     EXPECTED < 1.0000000001,
     EXPECTED > 0.9999999999
 )
 
-Test("aggregate sum under add_mult_prob = expected sum") <- (
+test("aggregate sum under add_mult_prob = expected sum") <- (
     aggregate(add_mult_prob, "sum", [(3, 0.7), (5, 0.3)], EXPECTED),
     EXPECTED < 3.6000000001,
     EXPECTED > 3.5999999999
 )
 
-Test("aggregate argmax under add_mult_prob picks highest-prob value") <- (
+test("aggregate argmax under add_mult_prob picks highest-prob value") <- (
     aggregate(add_mult_prob, "argmax",
               [(3, 0.4), (5, 0.7), (8, 0.6)],
               (5, 0.7))

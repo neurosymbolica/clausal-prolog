@@ -65,7 +65,7 @@ input.
 - `(-IMG, +EXT, +BUF)` — decode BUF back into an image
 
 ```clausal
-Test("encode a PNG and decode it back") <- (
+test("encode a PNG and decode it back") <- (
     imread("photo.png", imread_color, IMG),
     image_encoded(IMG, ".png", BUF),
     image_encoded(IMG2, ".png", BUF),
@@ -84,7 +84,7 @@ load_or_warn(PATH, IMG) <- (
 )
 load_or_warn(PATH, _) <- (
     not imread(PATH, imread_color, _),
-    Print("skipping unreadable file: "), Print(PATH)
+    print("skipping unreadable file: "), print(PATH)
 )
 ```
 

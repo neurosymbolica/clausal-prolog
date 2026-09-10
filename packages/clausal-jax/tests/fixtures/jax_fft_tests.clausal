@@ -8,14 +8,14 @@
 
 # --- fft_transform (complex FFT <-> inverse) ---
 
-Test("fft_transform forward shape") <- (
+test("fft_transform forward shape") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     fft_transform(T, F),
     shape(F, [4])
 )  # nv
 
 # fft of impulse [1, 0, 0, 0] is [1, 1, 1, 1] (all ones, complex)
-Test("fft_transform of impulse is all ones") <- (
+test("fft_transform of impulse is all ones") <- (
     array([1.0, 0.0, 0.0, 0.0], T),
     fft_transform(T, F),
     at_get(F, 0, F0),
@@ -28,7 +28,7 @@ Test("fft_transform of impulse is all ones") <- (
 )  # nv
 
 # Roundtrip: T -> F -> T2; T2 should be close to T
-Test("fft_transform roundtrip recovers real part") <- (
+test("fft_transform roundtrip recovers real part") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     fft_transform(T, F),
     fft_transform(T2, F),
@@ -44,7 +44,7 @@ Test("fft_transform roundtrip recovers real part") <- (
     V1_REAL < 2.01
 )  # nv
 
-Test("fft_transform with axis on 2d array") <- (
+test("fft_transform with axis on 2d array") <- (
     zeros([3, 4], T),
     fft_transform(T, 1, F),
     shape(F, [3, 4])
@@ -52,7 +52,7 @@ Test("fft_transform with axis on 2d array") <- (
 
 # --- real_fft (rfft <-> irfft), bijective for even N ---
 
-Test("real_fft forward shape on even-length signal") <- (
+test("real_fft forward shape on even-length signal") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     real_fft(T, F),
     # rfft of length-4 real signal has length 4 // 2 + 1 = 3
@@ -60,7 +60,7 @@ Test("real_fft forward shape on even-length signal") <- (
 )  # nv
 
 # real_fft roundtrip recovers the original real signal (real output, not complex)
-Test("real_fft roundtrip for even N recovers signal") <- (
+test("real_fft roundtrip for even N recovers signal") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     real_fft(T, F),
     real_fft(T2, F),
@@ -75,7 +75,7 @@ Test("real_fft roundtrip for even N recovers signal") <- (
     V3 < 4.01
 )  # nv
 
-Test("real_fft with axis") <- (
+test("real_fft with axis") <- (
     zeros([4, 6], T),
     real_fft(T, 0, F),
     shape(F, [3, 6])
@@ -83,13 +83,13 @@ Test("real_fft with axis") <- (
 
 # --- fft_transform_2d ---
 
-Test("fft_transform_2d shape") <- (
+test("fft_transform_2d shape") <- (
     zeros([4, 4], T),
     fft_transform_2d(T, F),
     shape(F, [4, 4])
 )  # nv
 
-Test("fft_transform_2d roundtrip shape") <- (
+test("fft_transform_2d roundtrip shape") <- (
     array([[1.0, 2.0], [3.0, 4.0]], T),
     fft_transform_2d(T, F),
     fft_transform_2d(T2, F),
@@ -98,7 +98,7 @@ Test("fft_transform_2d roundtrip shape") <- (
 
 # --- fft_transform_nd ---
 
-Test("fft_transform_nd on 3-d array") <- (
+test("fft_transform_nd on 3-d array") <- (
     zeros([2, 3, 4], T),
     fft_transform_nd(T, F),
     shape(F, [2, 3, 4])
@@ -106,20 +106,20 @@ Test("fft_transform_nd on 3-d array") <- (
 
 # --- fft_shift (self-inverse for even N) ---
 
-Test("fft_shift swaps halves for even N") <- (
+test("fft_shift swaps halves for even N") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     fft_shift(T, S),
     array_list(S, [3.0, 4.0, 1.0, 2.0])
 )  # nv
 
-Test("fft_shift roundtrip") <- (
+test("fft_shift roundtrip") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     fft_shift(T, S),
     fft_shift(T2, S),
     array_list(T2, [1.0, 2.0, 3.0, 4.0])
 )  # nv
 
-Test("fft_shift on 2d") <- (
+test("fft_shift on 2d") <- (
     zeros([4, 4], T),
     fft_shift(T, S),
     shape(S, [4, 4])
@@ -128,24 +128,24 @@ Test("fft_shift on 2d") <- (
 # --- fft_frequencies ---
 
 # jnp.fft.fftfreq(4) = [0, 0.25, -0.5, -0.25] (default d=1)
-Test("fft_frequencies default sample spacing") <- (
+test("fft_frequencies default sample spacing") <- (
     fft_frequencies(4, F),
     array_list(F, [0.0, 0.25, -0.5, -0.25])
 )  # nv
 
 # With sample spacing d=0.5, frequencies scale by 1/d = 2
-Test("fft_frequencies with sample spacing") <- (
+test("fft_frequencies with sample spacing") <- (
     fft_frequencies(4, 0.5, F),
     array_list(F, [0.0, 0.5, -1.0, -0.5])
 )  # nv
 
 # rfftfreq(4) = [0, 0.25, 0.5] (length N // 2 + 1)
-Test("real_fft_frequencies default") <- (
+test("real_fft_frequencies default") <- (
     real_fft_frequencies(4, F),
     array_list(F, [0.0, 0.25, 0.5])
 )  # nv
 
-Test("real_fft_frequencies with sample spacing") <- (
+test("real_fft_frequencies with sample spacing") <- (
     real_fft_frequencies(4, 0.5, F),
     array_list(F, [0.0, 0.5, 1.0])
 )  # nv
@@ -153,7 +153,7 @@ Test("real_fft_frequencies with sample spacing") <- (
 # --- Backfill: axis-aware round-trip and missing value checks ---
 
 # Round-trip through fft_transform/3 along a specific axis.
-Test("fft_transform/3 roundtrip along axis 1 recovers real parts") <- (
+test("fft_transform/3 roundtrip along axis 1 recovers real parts") <- (
     array([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], T),
     fft_transform(T, 1, F),
     fft_transform(T2, 1, F),
@@ -170,7 +170,7 @@ Test("fft_transform/3 roundtrip along axis 1 recovers real parts") <- (
 )  # nv
 
 # Value correctness: fft2 of an impulse matrix is all ones.
-Test("fft_transform_2d of impulse is all ones") <- (
+test("fft_transform_2d of impulse is all ones") <- (
     array([[1.0, 0.0], [0.0, 0.0]], T),
     fft_transform_2d(T, F),
     at_get(F, (0, 0), F00),
@@ -184,7 +184,7 @@ Test("fft_transform_2d of impulse is all ones") <- (
 )  # nv
 
 # Value correctness: fftn of an N-D impulse is also all-ones.
-Test("fft_transform_nd of impulse is all ones") <- (
+test("fft_transform_nd of impulse is all ones") <- (
     array([[[1.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]], T),
     fft_transform_nd(T, F),
     at_get(F, (0, 0, 0), F000),
@@ -197,7 +197,7 @@ Test("fft_transform_nd of impulse is all ones") <- (
 # Odd-N fftfreq has a different layout than even-N.
 # jnp.fft.fftfreq(5) approximately [0, 0.2, 0.4, -0.4, -0.2];
 # 0.2 isn't exact in float32 so use range checks on extracted elements.
-Test("fft_frequencies odd N layout") <- (
+test("fft_frequencies odd N layout") <- (
     fft_frequencies(5, F),
     shape(F, [5]),
     at_get(F, 0, F0),
@@ -213,7 +213,7 @@ Test("fft_frequencies odd N layout") <- (
 
 # Odd-N real_fft loses the trailing sample. Pin the behaviour so any
 # future JAX change surfaces as a regression.
-Test("real_fft roundtrip for odd N is lossy") <- (
+test("real_fft roundtrip for odd N is lossy") <- (
     array([1.0, 2.0, 3.0, 4.0, 5.0], T),
     real_fft(T, F),
     real_fft(T2, F),
@@ -225,21 +225,21 @@ Test("real_fft roundtrip for odd N is lossy") <- (
 
 # fft_transform_2d(T, [0, 1], F) equals the default /2 form (default axes=(-2,-1)
 # means the same axes for a 2-D input).
-Test("fft_transform_2d with explicit axes") <- (
+test("fft_transform_2d with explicit axes") <- (
     zeros([3, 4], T),
     fft_transform_2d(T, [0, 1], F),
     shape(F, [3, 4])
 )  # nv
 
 # fftn on only axis 0 leaves other axes untransformed.
-Test("fft_transform_nd with axes=[0] on 3d") <- (
+test("fft_transform_nd with axes=[0] on 3d") <- (
     zeros([2, 3, 4], T),
     fft_transform_nd(T, [0], F),
     shape(F, [2, 3, 4])
 )  # nv
 
 # fftshift on only axis 1 of a 2-D matrix leaves axis 0 untouched.
-Test("fft_shift with axes=[1]") <- (
+test("fft_shift with axes=[1]") <- (
     array([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], T),
     fft_shift(T, [1], S),
     # axis 0 unchanged, axis 1 rotated by 2: [3,4,1,2] / [7,8,5,6]
@@ -249,7 +249,7 @@ Test("fft_shift with axes=[1]") <- (
 # --- Backfill: _bidir_2 check-mode pinning (both args bound) ---
 
 # fftshift is exact on integer signals — check mode succeeds when args match.
-Test("fft_shift check mode succeeds on equal JAX arrays") <- (
+test("fft_shift check mode succeeds on equal JAX arrays") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     array([3.0, 4.0, 1.0, 2.0], S_EXPECTED),
     fft_shift(T, S_EXPECTED)
@@ -257,7 +257,7 @@ Test("fft_shift check mode succeeds on equal JAX arrays") <- (
 
 # Check mode fails cleanly on mismatching arrays (previously raised,
 # wrapped to a silent failure; now it fails via value-equal).
-Test("fft_shift check mode fails on unequal JAX arrays") <- (
+test("fft_shift check mode fails on unequal JAX arrays") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     array([9.9, 9.9, 9.9, 9.9], S_WRONG),
     not fft_shift(T, S_WRONG)

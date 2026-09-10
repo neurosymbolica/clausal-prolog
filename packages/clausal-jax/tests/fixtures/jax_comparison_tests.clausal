@@ -9,42 +9,42 @@
 
 # --- Element-wise comparisons ---
 
-Test("eq element-wise") <- (
+test("eq element-wise") <- (
     array([1, 2, 3], A),
     array([1, 5, 3], B),
     eq(A, B, C),
     array_list(C, [True, False, True])
 )  # nv
 
-Test("ne element-wise") <- (
+test("ne element-wise") <- (
     array([1, 2, 3], A),
     array([1, 5, 3], B),
     ne(A, B, C),
     array_list(C, [False, True, False])
 )  # nv
 
-Test("gt element-wise") <- (
+test("gt element-wise") <- (
     array([1.0, 2.0, 3.0], A),
     array([2.0, 2.0, 2.0], B),
     gt(A, B, C),
     array_list(C, [False, False, True])
 )  # nv
 
-Test("lt element-wise") <- (
+test("lt element-wise") <- (
     array([1.0, 2.0, 3.0], A),
     array([2.0, 2.0, 2.0], B),
     lt(A, B, C),
     array_list(C, [True, False, False])
 )  # nv
 
-Test("ge element-wise") <- (
+test("ge element-wise") <- (
     array([1.0, 2.0, 3.0], A),
     array([2.0, 2.0, 2.0], B),
     ge(A, B, C),
     array_list(C, [False, True, True])
 )  # nv
 
-Test("le element-wise") <- (
+test("le element-wise") <- (
     array([1.0, 2.0, 3.0], A),
     array([2.0, 2.0, 2.0], B),
     le(A, B, C),
@@ -53,55 +53,55 @@ Test("le element-wise") <- (
 
 # --- Check predicates: equal, array_equal, allclose ---
 
-Test("equal check succeeds") <- (
+test("equal check succeeds") <- (
     array([1.0, 2.0, 3.0], A),
     array([1.0, 2.0, 3.0], B),
     equal(A, B)
 )  # nv
 
-Test("equal check fails") <- (
+test("equal check fails") <- (
     array([1.0, 2.0, 3.0], A),
     array([1.0, 2.0, 4.0], B),
     not(equal(A, B))
 )  # nv
 
-Test("equal check fails on different shapes") <- (
+test("equal check fails on different shapes") <- (
     array([1.0, 2.0], A),
     array([1.0, 2.0, 3.0], B),
     not(equal(A, B))
 )  # nv
 
-Test("array_equal succeeds") <- (
+test("array_equal succeeds") <- (
     array([[1, 2], [3, 4]], A),
     array([[1, 2], [3, 4]], B),
     array_equal(A, B)
 )  # nv
 
-Test("array_equal fails") <- (
+test("array_equal fails") <- (
     array([[1, 2], [3, 4]], A),
     array([[1, 2], [3, 5]], B),
     not(array_equal(A, B))
 )  # nv
 
-Test("allclose within tolerance") <- (
+test("allclose within tolerance") <- (
     array([1.0, 2.0], A),
     array([1.0000001, 2.0], B),
     allclose(A, B)
 )  # nv
 
-Test("allclose fails outside tolerance") <- (
+test("allclose fails outside tolerance") <- (
     array([1.0, 2.0], A),
     array([1.1, 2.0], B),
     not(allclose(A, B))
 )  # nv
 
-Test("allclose with explicit tolerances succeeds") <- (
+test("allclose with explicit tolerances succeeds") <- (
     array([1.0, 2.0], A),
     array([1.05, 2.05], B),
     allclose(A, B, 0.1, 0.0)
 )  # nv
 
-Test("allclose with explicit tolerances fails") <- (
+test("allclose with explicit tolerances fails") <- (
     array([1.0, 2.0], A),
     array([1.2, 2.2], B),
     not(allclose(A, B, 0.01, 0.0))
@@ -109,27 +109,27 @@ Test("allclose with explicit tolerances fails") <- (
 
 # --- Logical operations ---
 
-Test("logical_and") <- (
+test("logical_and") <- (
     array([True, True, False, False], A),
     array([True, False, True, False], B),
     logical_and(A, B, C),
     array_list(C, [True, False, False, False])
 )  # nv
 
-Test("logical_or") <- (
+test("logical_or") <- (
     array([True, True, False, False], A),
     array([True, False, True, False], B),
     logical_or(A, B, C),
     array_list(C, [True, True, True, False])
 )  # nv
 
-Test("logical_not") <- (
+test("logical_not") <- (
     array([True, False, True], A),
     logical_not(A, B),
     array_list(B, [False, True, False])
 )  # nv
 
-Test("logical_xor") <- (
+test("logical_xor") <- (
     array([True, True, False, False], A),
     array([True, False, True, False], B),
     logical_xor(A, B, C),
@@ -138,39 +138,39 @@ Test("logical_xor") <- (
 
 # --- any / all check predicates ---
 
-Test("any true") <- (
+test("any true") <- (
     array([False, False, True], A),
     any(A)
 )  # nv
 
-Test("any fails when all false") <- (
+test("any fails when all false") <- (
     array([False, False, False], A),
     not(any(A))
 )  # nv
 
-Test("all true") <- (
+test("all true") <- (
     array([True, True, True], A),
     all(A)
 )  # nv
 
-Test("all fails with false") <- (
+test("all fails with false") <- (
     array([True, False, True], A),
     not(all(A))
 )  # nv
 
-Test("any with axis") <- (
+test("any with axis") <- (
     array([[False, True], [False, False]], A),
     any(A, 1)
 )  # nv
 
-Test("all with axis") <- (
+test("all with axis") <- (
     array([[True, True], [True, True]], A),
     all(A, 0)
 )  # nv
 
 # --- Selection ---
 
-Test("where selects") <- (
+test("where selects") <- (
     array([True, False, True], COND),
     array([10, 20, 30], X),
     array([1, 2, 3], Y),
@@ -178,27 +178,27 @@ Test("where selects") <- (
     array_list(R, [10, 2, 30])
 )  # nv
 
-Test("where broadcasts scalar branches") <- (
+test("where broadcasts scalar branches") <- (
     array([True, False, True, False], COND),
     where(COND, 1, 0, R),
     array_list(R, [1, 0, 1, 0])
 )  # nv
 
-Test("masked_select") <- (
+test("masked_select") <- (
     array([1, 2, 3, 4, 5], A),
     array([True, False, True, False, True], MASK),
     masked_select(A, MASK, R),
     array_list(R, [1, 3, 5])
 )  # nv
 
-Test("masked_select non-contiguous mask") <- (
+test("masked_select non-contiguous mask") <- (
     array([10, 20, 30, 40, 50, 60], A),
     array([False, True, True, False, True, False], MASK),
     masked_select(A, MASK, R),
     array_list(R, [20, 30, 50])
 )  # nv
 
-Test("take along axis 0") <- (
+test("take along axis 0") <- (
     array([[1, 2], [3, 4], [5, 6]], A),
     array([0, 2], IDX),
     take(A, IDX, 0, R),
@@ -206,14 +206,14 @@ Test("take along axis 0") <- (
     array_list(R, [[1, 2], [5, 6]])
 )  # nv
 
-Test("take along axis 1") <- (
+test("take along axis 1") <- (
     array([[1, 2, 3], [4, 5, 6]], A),
     array([2, 0], IDX),
     take(A, IDX, 1, R),
     array_list(R, [[3, 1], [6, 4]])
 )  # nv
 
-Test("put_along_axis scatter") <- (
+test("put_along_axis scatter") <- (
     zeros([3, 3], A),
     array([[1], [2], [0]], IDX),
     array([[7.0], [8.0], [9.0]], VAL),

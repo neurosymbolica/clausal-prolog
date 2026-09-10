@@ -47,7 +47,7 @@ def mnist_sum_program():
     path = os.path.join(here, "fixtures", "mnist_sum.clausal")
     mod = load_clausal_module(path)
     cm = mod.__dict__["$module"]
-    return mod.Digit, mod.SumDigits, cm
+    return mod.digit, mod.SumDigits, cm
 
 
 def _digit_facts(probs, image_ids=(0, 1)):

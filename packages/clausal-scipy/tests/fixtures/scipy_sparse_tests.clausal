@@ -5,7 +5,7 @@
     Free
 ])
 
-Test("makecsr returns handle") <- (
+test("makecsr returns handle") <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -13,7 +13,7 @@ Test("makecsr returns handle") <- (
     ++(isinstance(H, int)),
     Free(H))  # nv
 
-Test("makecsr nnz correct") <- (
+test("makecsr nnz correct") <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -22,7 +22,7 @@ Test("makecsr nnz correct") <- (
     NNZ == 5,
     Free(H))  # nv
 
-Test("makecsc returns handle") <- (
+test("makecsc returns handle") <- (
     DATA is [1.0, 4.0, 3.0, 2.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -30,7 +30,7 @@ Test("makecsc returns handle") <- (
     ++(isinstance(H, int)),
     Free(H))  # nv
 
-Test("makecoo returns handle") <- (
+test("makecoo returns handle") <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     ROW is [0, 0, 1, 2, 2],
     COL is [0, 2, 1, 0, 2],
@@ -38,7 +38,7 @@ Test("makecoo returns handle") <- (
     ++(isinstance(H, int)),
     Free(H))  # nv
 
-Test("makecoo todense round-trip") <- (
+test("makecoo todense round-trip") <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     ROW is [0, 0, 1, 2, 2],
     COL is [0, 2, 1, 0, 2],
@@ -51,7 +51,7 @@ Test("makecoo todense round-trip") <- (
     ++(abs(V11 - 3.0)) < 1e-10,
     Free(H))  # nv
 
-Test("makediags main diagonal") <- (
+test("makediags main diagonal") <- (
     DIAG is [1.0, 2.0, 3.0],
     MakeDiagonals(DIAG, H),
     ToDense(H, D),
@@ -63,7 +63,7 @@ Test("makediags main diagonal") <- (
     ++(abs(V2 - 3.0)) < 1e-10,
     Free(H))  # nv
 
-Test("makeeye 3x3 identity") <- (
+test("makeeye 3x3 identity") <- (
     MakeEye(3, H),
     ToDense(H, D),
     V00 is ++(float(D[0, 0])),
@@ -76,13 +76,13 @@ Test("makeeye 3x3 identity") <- (
     ++(abs(V01)) < 1e-10,
     Free(H))  # nv
 
-Test("makeeye nnz equals n") <- (
+test("makeeye nnz equals n") <- (
     MakeEye(4, H),
     NonzeroCount(H, NNZ),
     NNZ == 4,
     Free(H))  # nv
 
-Test("todense correct shape") <- (
+test("todense correct shape") <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -95,7 +95,7 @@ Test("todense correct shape") <- (
     COLS == 3,
     Free(H))  # nv
 
-Test("todense correct values") <- (
+test("todense correct values") <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -105,7 +105,7 @@ Test("todense correct values") <- (
     ++(abs(V02 - 2.0)) < 1e-10,
     Free(H))  # nv
 
-Test("fromdense round-trip") <- (
+test("fromdense round-trip") <- (
     A is [[1.0, 0.0], [0.0, 2.0]],
     FromDense(A, H),
     ToDense(H, D),
@@ -115,7 +115,7 @@ Test("fromdense round-trip") <- (
     ++(abs(V11 - 2.0)) < 1e-10,
     Free(H))  # nv
 
-Test("shape returns tuple") <- (
+test("shape returns tuple") <- (
     MakeEye(3, H),
     Shape(H, S),
     R is ++(S[0]),
@@ -124,7 +124,7 @@ Test("shape returns tuple") <- (
     C == 3,
     Free(H))  # nv
 
-Test("nonzerocount correct") <- (
+test("nonzerocount correct") <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -133,7 +133,7 @@ Test("nonzerocount correct") <- (
     NNZ == 5,
     Free(H))  # nv
 
-Test("solve linear system") <- (
+test("solve linear system") <- (
     AD is [4.0, 1.0, 1.0, 3.0],
     AI is [0, 1, 0, 1],
     AP is [0, 2, 4],
@@ -147,7 +147,7 @@ Test("solve linear system") <- (
     ++(abs(X1 - 1.0)) < 1e-8,
     Free(AH))  # nv
 
-Test("eigendecompose hermitian k2") <- (
+test("eigendecompose hermitian k2") <- (
     M is [[4.0, 1.0, 0.0, 0.0],
           [1.0, 3.0, 1.0, 0.0],
           [0.0, 1.0, 5.0, 1.0],
@@ -159,7 +159,7 @@ Test("eigendecompose hermitian k2") <- (
     LEN == 2,
     Free(H))  # nv
 
-Test("svd k2 s positive") <- (
+test("svd k2 s positive") <- (
     M is [[1.0, 2.0, 0.0],
           [0.0, 3.0, 1.0],
           [1.0, 0.0, 4.0]],
@@ -171,6 +171,6 @@ Test("svd k2 s positive") <- (
     ++(all(v > 0 for v in S)),
     Free(H))  # nv
 
-Test("free handle succeeds") <- (
+test("free handle succeeds") <- (
     MakeEye(3, H),
     Free(H))  # nv

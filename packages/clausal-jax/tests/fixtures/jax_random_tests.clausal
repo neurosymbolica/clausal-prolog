@@ -13,35 +13,35 @@
 
 # --- Key primitives ---
 
-Test("create key") <- (
+test("create key") <- (
     key(42, K),
     shape(K, [])
 )  # nv
 
-Test("create key with zero seed") <- (
+test("create key with zero seed") <- (
     key(0, K),
     shape(K, [])
 )  # nv
 
-Test("create key with large seed") <- (
+test("create key with large seed") <- (
     key(2147483647, K),
     shape(K, [])
 )  # nv
 
-Test("split into 2") <- (
+test("split into 2") <- (
     key(0, K0),
     split_key(K0, [K1, K2]),
     shape(K1, []),
     shape(K2, [])
 )  # nv
 
-Test("split into N=3") <- (
+test("split into N=3") <- (
     key(0, K0),
     split_key(K0, 3, KS),
     length(KS, 3)
 )  # nv
 
-Test("split into N=5") <- (
+test("split into N=5") <- (
     key(0, K0),
     split_key(K0, 5, KS),
     length(KS, 5)
@@ -50,7 +50,7 @@ Test("split into N=5") <- (
 # Two subkeys from the same split must be different — verify by the
 # samples they produce (comparing key objects directly via == would go
 # through element-wise array semantics).
-Test("split produces distinct keys") <- (
+test("split produces distinct keys") <- (
     key(0, K0),
     split_key(K0, [K1, K2]),
     normal(K1, [3], A1),
@@ -60,7 +60,7 @@ Test("split produces distinct keys") <- (
     not(L1 == L2)
 )  # nv
 
-Test("fold_in produces different key") <- (
+test("fold_in produces different key") <- (
     key(0, K0),
     fold_in(K0, 5, K1),
     normal(K0, [3], A0),
@@ -71,7 +71,7 @@ Test("fold_in produces different key") <- (
 )  # nv
 
 # key_bytes bijection: roundtrip preserves sampling behaviour.
-Test("key_bytes roundtrip reproduces samples") <- (
+test("key_bytes roundtrip reproduces samples") <- (
     key(42, K),
     key_bytes(K, B),
     key_bytes(K2, B),
@@ -82,14 +82,14 @@ Test("key_bytes roundtrip reproduces samples") <- (
     L1 == L2
 )  # nv
 
-Test("key_bytes forward shape") <- (
+test("key_bytes forward shape") <- (
     key(0, K),
     key_bytes(K, B),
     shape(B, [2])
 )  # nv
 
 # Determinism: same seed yields same samples.
-Test("determinism — same seed") <- (
+test("determinism — same seed") <- (
     key(7, K1),
     key(7, K2),
     normal(K1, [5], A1),
@@ -101,25 +101,25 @@ Test("determinism — same seed") <- (
 
 # --- Samplers ---
 
-Test("normal shape") <- (
+test("normal shape") <- (
     key(0, K),
     normal(K, [100], A),
     shape(A, [100])
 )  # nv
 
-Test("normal 2d shape") <- (
+test("normal 2d shape") <- (
     key(0, K),
     normal(K, [4, 5], A),
     shape(A, [4, 5])
 )  # nv
 
-Test("uniform shape") <- (
+test("uniform shape") <- (
     key(0, K),
     uniform(K, [50], A),
     shape(A, [50])
 )  # nv
 
-Test("uniform range") <- (
+test("uniform range") <- (
     key(1, K),
     uniform(K, [1000], 0.0, 10.0, A),
     max(A, MAX), array_list(MAX, MV),
@@ -128,20 +128,20 @@ Test("uniform range") <- (
     MN >= 0.0
 )  # nv
 
-Test("bernoulli default shape") <- (
+test("bernoulli default shape") <- (
     key(0, K),
     bernoulli(K, 0.5, A),
     dtype(A, bool_)
 )  # nv
 
-Test("bernoulli with shape") <- (
+test("bernoulli with shape") <- (
     key(0, K),
     bernoulli(K, 0.5, [100], A),
     shape(A, [100]),
     dtype(A, bool_)
 )  # nv
 
-Test("categorical picks a class") <- (
+test("categorical picks a class") <- (
     key(0, K),
     array([0.1, 0.2, 0.7], LOGITS),
     categorical(K, LOGITS, C),
@@ -150,31 +150,31 @@ Test("categorical picks a class") <- (
     CV < 3
 )  # nv
 
-Test("poisson shape") <- (
+test("poisson shape") <- (
     key(0, K),
     poisson(K, 3.0, [10], A),
     shape(A, [10])
 )  # nv
 
-Test("gamma shape") <- (
+test("gamma shape") <- (
     key(0, K),
     gamma(K, 2.0, [10], A),
     shape(A, [10])
 )  # nv
 
-Test("beta shape") <- (
+test("beta shape") <- (
     key(0, K),
     beta(K, 1.0, 2.0, [10], A),
     shape(A, [10])
 )  # nv
 
-Test("exponential shape") <- (
+test("exponential shape") <- (
     key(0, K),
     exponential(K, [10], A),
     shape(A, [10])
 )  # nv
 
-Test("dirichlet sums to one") <- (
+test("dirichlet sums to one") <- (
     key(0, K),
     array([1.0, 1.0, 1.0], ALPHA),
     dirichlet(K, ALPHA, A),
@@ -185,7 +185,7 @@ Test("dirichlet sums to one") <- (
     SV < 1.001
 )  # nv
 
-Test("multivariate_normal shape") <- (
+test("multivariate_normal shape") <- (
     key(0, K),
     array([0.0, 0.0], MEAN),
     array([[1.0, 0.0], [0.0, 1.0]], COV),
@@ -193,28 +193,28 @@ Test("multivariate_normal shape") <- (
     shape(A, [10, 2])
 )  # nv
 
-Test("permutation of integer range") <- (
+test("permutation of integer range") <- (
     key(0, K),
     permutation(K, 5, P),
     shape(P, [5]),
     element_count(P, 5)
 )  # nv
 
-Test("permutation of array") <- (
+test("permutation of array") <- (
     key(0, K),
     array([10, 20, 30, 40], X),
     permutation(K, X, P),
     shape(P, [4])
 )  # nv
 
-Test("choice picks from array") <- (
+test("choice picks from array") <- (
     key(0, K),
     array([1, 2, 3, 4, 5], X),
     choice(K, X, [3], C),
     shape(C, [3])
 )  # nv
 
-Test("randint in range") <- (
+test("randint in range") <- (
     key(0, K),
     randint(K, [100], 0, 10, A),
     shape(A, [100]),
@@ -224,7 +224,7 @@ Test("randint in range") <- (
     MN >= 0
 )  # nv
 
-Test("truncated_normal within bounds") <- (
+test("truncated_normal within bounds") <- (
     key(0, K),
     truncated_normal(K, -1.0, 1.0, [200], A),
     max(A, MAX), array_list(MAX, MV),
@@ -235,21 +235,21 @@ Test("truncated_normal within bounds") <- (
 
 # --- Sampler registry ---
 
-Test("sampler registry lookup") <- (
+test("sampler registry lookup") <- (
     sampler("normal", FN),
     NAME is ++FN.__name__,
     NAME == "normal"
 )  # nv
 
-Test("sampler registry includes uniform") <- (
+test("sampler registry includes uniform") <- (
     sampler("uniform", _)
 )  # nv
 
-Test("sampler registry includes bernoulli") <- (
+test("sampler registry includes bernoulli") <- (
     sampler("bernoulli", _)
 )  # nv
 
-Test("sampler registry enumerate contains expected names") <- (
+test("sampler registry enumerate contains expected names") <- (
     findall(N, sampler(N, _), NS),
     in_("normal", NS),
     in_("uniform", NS),
@@ -261,7 +261,7 @@ Test("sampler registry enumerate contains expected names") <- (
 
 # JAX keys are values, not handles — sampling does not mutate the key.
 # Calling normal(K, ...) twice on the same K must produce the same sample.
-Test("key is a value — repeated sampling is idempotent") <- (
+test("key is a value — repeated sampling is idempotent") <- (
     key(0, K),
     normal(K, [3], A1),
     array_list(A1, L1),
@@ -274,7 +274,7 @@ Test("key is a value — repeated sampling is idempotent") <- (
 # keys. We capture K2's expected sample, then consume K1 inside a
 # conjunction that deliberately fails, then re-sample from K2 and
 # check the result is unchanged.
-Test("failed sampler branch leaves sibling key untouched") <- (
+test("failed sampler branch leaves sibling key untouched") <- (
     key(0, K0),
     split_key(K0, [K1, K2]),
     normal(K2, [3], EXPECTED),
@@ -294,7 +294,7 @@ init_two_layers(SEED, W1, W2) <- (
     normal(K2, [3, 2], W2)
 )  # nv
 
-Test("state-threaded initialisation") <- (
+test("state-threaded initialisation") <- (
     init_two_layers(42, W1, W2),
     shape(W1, [4, 3]),
     shape(W2, [3, 2])

@@ -22,7 +22,7 @@
 # Training-loop trio: init, update, apply_updates
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("sgd one step on a flat array") <- (
+test("sgd one step on a flat array") <- (
     sgd(0.1, OPT),
     array([1.0, 2.0, 3.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE0),
@@ -34,7 +34,7 @@ Test("sgd one step on a flat array") <- (
     allclose(NEW_PARAMS, EXPECTED)
 )  # nv
 
-Test("sgd opts: momentum") <- (
+test("sgd opts: momentum") <- (
     sgd(0.1, {"momentum": 0.9}, OPT),
     array([0.0, 0.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE0),
@@ -47,7 +47,7 @@ Test("sgd opts: momentum") <- (
     allclose(NEW, EXPECTED)
 )  # nv
 
-Test("adam step using value_and_grad") <- (
+test("adam step using value_and_grad") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([3.0, 4.0], PARAMS),
     value_and_grad(F, PARAMS, VG),
@@ -60,7 +60,7 @@ Test("adam step using value_and_grad") <- (
     shape(NEW, [2])
 )  # nv
 
-Test("two-step training reduces loss for x^2") <- (
+test("two-step training reduces loss for x^2") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     array([5.0], P0),
     sgd(0.1, OPT),
@@ -77,7 +77,7 @@ Test("two-step training reduces loss for x^2") <- (
     V1 < V0
 )  # nv
 
-Test("apply_updates on pytree of params") <- (
+test("apply_updates on pytree of params") <- (
     PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.5)}),
     UPDATES is ++({"w": jax.numpy.array([-0.1, -0.2]), "b": jax.numpy.array(-0.05)}),
     apply_updates(PARAMS, UPDATES, NEW),
@@ -89,7 +89,7 @@ Test("apply_updates on pytree of params") <- (
     allclose(NB, EB)
 )  # nv
 
-Test("init_optimizer on pytree params returns matching state") <- (
+test("init_optimizer on pytree params returns matching state") <- (
     sgd(0.1, OPT),
     PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.0)}),
     init_optimizer(OPT, PARAMS, STATE),
@@ -100,7 +100,7 @@ Test("init_optimizer on pytree params returns matching state") <- (
 # Gradient-transform composition (chain)
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("chain of clip then sgd builds and steps") <- (
+test("chain of clip then sgd builds and steps") <- (
     clip_by_global_norm(1.0, CLIP),
     sgd(0.1, RAW_SGD),
     chain([CLIP, RAW_SGD], OPT),
@@ -115,7 +115,7 @@ Test("chain of clip then sgd builds and steps") <- (
     allclose(NEW, EXPECTED)
 )  # nv
 
-Test("scale alone") <- (
+test("scale alone") <- (
     scale(0.5, OPT),
     array([0.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE),
@@ -126,7 +126,7 @@ Test("scale alone") <- (
     array_list(NEW, [1.0])
 )  # nv
 
-Test("zero_nans replaces nan grads with 0") <- (
+test("zero_nans replaces nan grads with 0") <- (
     zero_nans(OPT),
     array([1.0, 2.0], PARAMS),
     init_optimizer(OPT, PARAMS, STATE),
@@ -141,14 +141,14 @@ Test("zero_nans replaces nan grads with 0") <- (
 # Schedules
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("constant_schedule returns same value at every step") <- (
+test("constant_schedule returns same value at every step") <- (
     constant_schedule(0.001, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 100, V100),
     V0 == V100
 )  # nv
 
-Test("linear_schedule interpolates") <- (
+test("linear_schedule interpolates") <- (
     linear_schedule(1.0, 0.0, 10, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, V10),
@@ -158,7 +158,7 @@ Test("linear_schedule interpolates") <- (
     V10_F < 0.01
 )  # nv
 
-Test("exponential_decay shrinks") <- (
+test("exponential_decay shrinks") <- (
     exponential_decay(1.0, 1, 0.5, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 4, V4),
@@ -168,7 +168,7 @@ Test("exponential_decay shrinks") <- (
     V4_F < 0.1
 )  # nv
 
-Test("cosine_decay_schedule endpoints") <- (
+test("cosine_decay_schedule endpoints") <- (
     cosine_decay_schedule(1.0, 100, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 100, V_END),
@@ -178,7 +178,7 @@ Test("cosine_decay_schedule endpoints") <- (
     VEND_F < 0.01
 )  # nv
 
-Test("warmup_cosine_decay_schedule peaks at end of warmup") <- (
+test("warmup_cosine_decay_schedule peaks at end of warmup") <- (
     warmup_cosine_decay_schedule(0.0, 1.0, 10, 100, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, VPEAK),
@@ -188,7 +188,7 @@ Test("warmup_cosine_decay_schedule peaks at end of warmup") <- (
     VPEAK_F > 0.99
 )  # nv
 
-Test("piecewise_constant_schedule steps at boundary") <- (
+test("piecewise_constant_schedule steps at boundary") <- (
     piecewise_constant_schedule(1.0, {5: 0.5}, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, V10),
@@ -199,7 +199,7 @@ Test("piecewise_constant_schedule steps at boundary") <- (
     V10_F < 0.51
 )  # nv
 
-Test("polynomial_schedule") <- (
+test("polynomial_schedule") <- (
     polynomial_schedule(1.0, 0.0, 1.0, 10, SCHED),
     schedule_at(SCHED, 0, V0),
     schedule_at(SCHED, 10, V10),
@@ -209,7 +209,7 @@ Test("polynomial_schedule") <- (
     V10_F < 0.01
 )  # nv
 
-Test("scale_by_schedule wired into chain decays effective LR") <- (
+test("scale_by_schedule wired into chain decays effective LR") <- (
     cosine_decay_schedule(1.0, 100, SCHED),
     sgd(1.0, BASE),
     scale_by_schedule(SCHED, SCALER),
@@ -229,7 +229,7 @@ Test("scale_by_schedule wired into chain decays effective LR") <- (
 # Loss functions
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("softmax_cross_entropy on one-hot label") <- (
+test("softmax_cross_entropy on one-hot label") <- (
     array([2.0, 1.0, 0.1], LOGITS),
     array([1.0, 0.0, 0.0], LABELS),
     softmax_cross_entropy(LOGITS, LABELS, L),
@@ -238,7 +238,7 @@ Test("softmax_cross_entropy on one-hot label") <- (
     V < 0.5
 )  # nv
 
-Test("softmax_cross_entropy_with_integer_labels matches one-hot form") <- (
+test("softmax_cross_entropy_with_integer_labels matches one-hot form") <- (
     array([[2.0, 1.0, 0.1]], LOGITS),
     array([0], INT_LABELS),
     array([[1.0, 0.0, 0.0]], OH_LABELS),
@@ -247,7 +247,7 @@ Test("softmax_cross_entropy_with_integer_labels matches one-hot form") <- (
     allclose(L_INT, L_OH)
 )  # nv
 
-Test("sigmoid_binary_cross_entropy on logit 0 with label 1") <- (
+test("sigmoid_binary_cross_entropy on logit 0 with label 1") <- (
     array(0.0, LOGITS),
     array(1.0, LABELS),
     sigmoid_binary_cross_entropy(LOGITS, LABELS, L),
@@ -257,7 +257,7 @@ Test("sigmoid_binary_cross_entropy on logit 0 with label 1") <- (
     V < 0.70
 )  # nv
 
-Test("l2_loss with target") <- (
+test("l2_loss with target") <- (
     array([2.0, 4.0], PRED),
     array([1.0, 1.0], TARGET),
     l2_loss(PRED, TARGET, L),
@@ -265,7 +265,7 @@ Test("l2_loss with target") <- (
     array_list(L, [0.5, 4.5])
 )  # nv
 
-Test("huber_loss small residual ≈ quadratic") <- (
+test("huber_loss small residual ≈ quadratic") <- (
     array(0.0, PRED),
     array(0.5, TARGET),
     huber_loss(PRED, TARGET, L),
@@ -275,7 +275,7 @@ Test("huber_loss small residual ≈ quadratic") <- (
     V < 0.126
 )  # nv
 
-Test("huber_loss with custom delta") <- (
+test("huber_loss with custom delta") <- (
     array(0.0, PRED),
     array(2.0, TARGET),
     huber_loss(PRED, TARGET, 0.5, L),
@@ -285,21 +285,21 @@ Test("huber_loss with custom delta") <- (
     V < 0.88
 )  # nv
 
-Test("cosine_similarity of identical vectors is 1") <- (
+test("cosine_similarity of identical vectors is 1") <- (
     array([1.0, 2.0, 3.0], A),
     cosine_similarity(A, A, L),
     array_list(L, V),
     V > 0.99
 )  # nv
 
-Test("hinge_loss correct margin gives 0") <- (
+test("hinge_loss correct margin gives 0") <- (
     array(2.0, PRED),
     array(1.0, TARGET),
     hinge_loss(PRED, TARGET, L),
     array_list(L, 0.0)
 )  # nv
 
-Test("smooth_labels with alpha=0.1 on 3-class one-hot") <- (
+test("smooth_labels with alpha=0.1 on 3-class one-hot") <- (
     array([1.0, 0.0, 0.0], LABELS),
     smooth_labels(LABELS, 0.1, S),
     array_list(S, [V0, V1, V2]),
@@ -313,7 +313,7 @@ Test("smooth_labels with alpha=0.1 on 3-class one-hot") <- (
 # Registries
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("optimizer registry has known names") <- (
+test("optimizer registry has known names") <- (
     optimizer("sgd", _),
     optimizer("adam", _),
     optimizer("adamw", _),
@@ -321,25 +321,25 @@ Test("optimizer registry has known names") <- (
     optimizer("lion", _)
 )  # nv
 
-Test("optimizer findall returns full list") <- (
+test("optimizer findall returns full list") <- (
     findall(N, optimizer(N, _), NS),
     length(NS, 9)
 )  # nv
 
-Test("optimizer lookup by name returns the constructor") <- (
+test("optimizer lookup by name returns the constructor") <- (
     optimizer("sgd", CTOR),
     OPT is ++CTOR(0.1),
     array([1.0], PARAMS),
     init_optimizer(OPT, PARAMS, _STATE_UNUSED)
 )  # nv
 
-Test("schedule registry has known names") <- (
+test("schedule registry has known names") <- (
     schedule("constant_schedule", _),
     schedule("cosine_decay_schedule", _),
     schedule("warmup_cosine_decay_schedule", _)
 )  # nv
 
-Test("loss_function registry has known names") <- (
+test("loss_function registry has known names") <- (
     loss_function("softmax_cross_entropy", _),
     loss_function("l2_loss", _),
     loss_function("huber_loss", _)
@@ -349,7 +349,7 @@ Test("loss_function registry has known names") <- (
 # multi_steps (gradient accumulation)
 # ════════════════════════════════════════════════════════════════════════════
 
-Test("multi_steps accumulates K gradients before applying") <- (
+test("multi_steps accumulates K gradients before applying") <- (
     sgd(1.0, INNER),
     multi_steps(INNER, 4, OPT),
     array([0.0], PARAMS),

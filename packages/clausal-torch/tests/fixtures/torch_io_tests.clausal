@@ -1,20 +1,20 @@
 -import_module(torch)
 -import_from(torch, [zeros, shape, tensor_list, save, load])
 
-Test("save and load tensor roundtrip") <- (
+test("save and load tensor roundtrip") <- (
     zeros([3, 4], T),
     save(T, "/tmp/clausal_test_tensor.pt"),
     load("/tmp/clausal_test_tensor.pt", T2),
     shape(T2, [3, 4])
 )  # nv
 
-Test("save and load preserves values") <- (
+test("save and load preserves values") <- (
     T is torch.tensor([1.0, 2.0, 3.0]),
     save(T, "/tmp/clausal_test_values.pt"),
     load("/tmp/clausal_test_values.pt", T2),
     tensor_list(T2, [1.0, 2.0, 3.0])
 )  # nv
 
-Test("load nonexistent file fails") <- (
+test("load nonexistent file fails") <- (
     not load("/tmp/clausal_nonexistent_file_xyz.pt", _)
 )  # nv

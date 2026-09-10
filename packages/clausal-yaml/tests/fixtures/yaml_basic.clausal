@@ -2,34 +2,34 @@
 
 # ── Basic parsing ────────────────────────────────────────────────────
 
-Test("parse scalar int") <- (
+test("parse scalar int") <- (
     Read("42", N),
     N == 42
 )  # nv
 
-Test("parse scalar string") <- (
+test("parse scalar string") <- (
     Read("hello", S),
     S == "hello"
 )  # nv
 
-Test("parse mapping") <- (
+test("parse mapping") <- (
     Read("name: alice\nage: 30", DATA),
     Get(DATA, "name", "alice"),
     Get(DATA, "age", 30)
 )  # nv
 
-Test("parse sequence") <- (
+test("parse sequence") <- (
     Read("[1, 2, 3]", DATA),
     DATA == [1, 2, 3]
 )  # nv
 
-Test("parse bool and null") <- (
+test("parse bool and null") <- (
     Read("flag: true\nval: null", DATA),
     Get(DATA, "flag", True),
     Get(DATA, "val", None)
 )  # nv
 
-Test("parse nested mapping") <- (
+test("parse nested mapping") <- (
     Read("server:\n  host: localhost\n  port: 8080", DATA),
     Get(DATA, ["server", "host"], "localhost"),
     Get(DATA, ["server", "port"], 8080)
@@ -37,13 +37,13 @@ Test("parse nested mapping") <- (
 
 # ── Nested access ────────────────────────────────────────────────────
 
-Test("list of maps") <- (
+test("list of maps") <- (
     Read("- name: alice\n  age: 30\n- name: bob\n  age: 25", DATA),
     Get(DATA, [0, "name"], "alice"),
     Get(DATA, [1, "age"], 25)
 )  # nv
 
-Test("config pattern") <- (
+test("config pattern") <- (
     Read("database:\n  host: db.example.com\n  port: 5432\n  name: myapp", DATA),
     Get(DATA, ["database", "host"], "db.example.com"),
     Get(DATA, ["database", "port"], 5432)
@@ -51,7 +51,7 @@ Test("config pattern") <- (
 
 # ── Round-trip ───────────────────────────────────────────────────────
 
-Test("round trip mapping") <- (
+test("round trip mapping") <- (
     Read("x: 1\ny: 2", DATA),
     write(DATA, YAML),
     Read(YAML, DATA2),
@@ -59,7 +59,7 @@ Test("round trip mapping") <- (
     Get(DATA2, "y", 2)
 )  # nv
 
-Test("write and read back") <- (
+test("write and read back") <- (
     Read("a: 1\nb:\n- 2\n- 3", DATA),
     write(DATA, YAML),
     Read(YAML, DATA2),

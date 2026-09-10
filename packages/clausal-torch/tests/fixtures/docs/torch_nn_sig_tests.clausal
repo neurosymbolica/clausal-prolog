@@ -7,7 +7,7 @@
 
 # --- parameter ---
 
-Test("parameter count for Linear") <- (
+test("parameter count for Linear") <- (
     MODEL is torch.nn.Linear(10, 5),
     findall(P, parameter(MODEL, P), PS),
     length(PS, 2)
@@ -15,7 +15,7 @@ Test("parameter count for Linear") <- (
 
 # --- named_parameter ---
 
-Test("named_parameter enumerates weight and bias") <- (
+test("named_parameter enumerates weight and bias") <- (
     MODEL is torch.nn.Linear(10, 5),
     findall(NAME, named_parameter(MODEL, NAME, _), NAMES),
     in_("weight", NAMES),
@@ -24,7 +24,7 @@ Test("named_parameter enumerates weight and bias") <- (
 
 # --- named_module ---
 
-Test("named_module includes self and children") <- (
+test("named_module includes self and children") <- (
     MODEL is torch.nn.Sequential(
         torch.nn.Linear(10, 5),
         torch.nn.ReLU(),
@@ -39,7 +39,7 @@ Test("named_module includes self and children") <- (
 
 # --- named_child ---
 
-Test("named_child names") <- (
+test("named_child names") <- (
     MODEL is torch.nn.Sequential(
         torch.nn.Linear(10, 5),
         torch.nn.ReLU()
@@ -51,7 +51,7 @@ Test("named_child names") <- (
 
 # --- layer registry ---
 
-Test("layer enumerates known types") <- (
+test("layer enumerates known types") <- (
     findall(N, layer(N, _), NS),
     in_("Linear", NS),
     in_("Conv2d", NS),
@@ -60,7 +60,7 @@ Test("layer enumerates known types") <- (
 
 # --- optimizer_type registry ---
 
-Test("optimizer_type enumerates Adam and SGD") <- (
+test("optimizer_type enumerates Adam and SGD") <- (
     findall(N, optimizer_type(N, _), NS),
     in_("Adam", NS),
     in_("SGD", NS)
@@ -68,7 +68,7 @@ Test("optimizer_type enumerates Adam and SGD") <- (
 
 # --- scheduler_type registry ---
 
-Test("scheduler_type enumerates known types") <- (
+test("scheduler_type enumerates known types") <- (
     findall(N, scheduler_type(N, _), NS),
     in_("StepLR", NS),
     in_("CosineAnnealingLR", NS)

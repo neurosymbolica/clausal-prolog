@@ -1,53 +1,53 @@
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
 -module(mnist_sum, [
-    Digit(IMAGE_ID, VALUE),
-    SumDigits(IMAGE_A, IMAGE_B, TOTAL),
+    digit(IMAGE_ID, VALUE),
+    sum_digits(IMAGE_A, IMAGE_B, TOTAL),
 ])
 
-# Digit and SumDigits both flow through the bottom-up engine: Digit is
+# digit and sum_digits both flow through the bottom-up engine: digit is
 # the data layer (perception-model output, supplied as tagged facts);
-# SumDigits is the rule layer.
-bottom_up_(Digit)
-bottom_up_(SumDigits)
+# sum_digits is the rule layer.
+bottom_up_(digit)
+bottom_up_(sum_digits)
 
-SumDigits(IMG_A, IMG_B, TOTAL) <- (
-    Digit(IMG_A, A),
-    Digit(IMG_B, B),
+sum_digits(IMG_A, IMG_B, TOTAL) <- (
+    digit(IMG_A, A),
+    digit(IMG_B, B),
     TOTAL == A + B,
 )
 
 
 # ── Tests under the boolean semiring ────────────────────────────────
 
-Test("boolean: digit-pair sum") <- (
+test("boolean: digit-pair sum") <- (
     FACTS is [
-        (Digit(0, 3), True),
-        (Digit(1, 5), True),
+        (digit(0, 3), True),
+        (digit(1, 5), True),
     ],
-    solve(boolean, FACTS, SumDigits(0, 1, T), R),
+    solve(boolean, FACTS, sum_digits(0, 1, T), R),
     T == 8,
-    R == [(SumDigits(0, 1, 8), True)]
+    R == [(sum_digits(0, 1, 8), True)]
 )
 
-Test("boolean: enumerate possible sums when value uncertain") <- (
+test("boolean: enumerate possible sums when value uncertain") <- (
     FACTS is [
-        (Digit(0, 3), True),
-        (Digit(0, 4), True),
-        (Digit(1, 5), True),
+        (digit(0, 3), True),
+        (digit(0, 4), True),
+        (digit(1, 5), True),
     ],
-    solve(boolean, FACTS, SumDigits(0, 1, T_UNUSED), R),
+    solve(boolean, FACTS, sum_digits(0, 1, T_UNUSED), R),
     length(R, 2)
 )
 
 
-# ── Test under add_mult_prob ────────────────────────────────────────
+# ── test under add_mult_prob ────────────────────────────────────────
 
-Test("add_mult_prob: confident pair multiplies cleanly") <- (
+test("add_mult_prob: confident pair multiplies cleanly") <- (
     FACTS is [
-        (Digit(0, 3), 0.7),
-        (Digit(1, 5), 0.9),
+        (digit(0, 3), 0.7),
+        (digit(1, 5), 0.9),
     ],
-    solve(add_mult_prob, FACTS, SumDigits(0, 1, 8), R),
-    R == [(SumDigits(0, 1, 8), 0.63)]
+    solve(add_mult_prob, FACTS, sum_digits(0, 1, 8), R),
+    R == [(sum_digits(0, 1, 8), 0.63)]
 )

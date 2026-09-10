@@ -70,7 +70,7 @@ Example:
 ```clausal
 -import_from(scipy_integrate, [Quad, ResultGet])
 
-IntegrateSin(V) <- (
+integrate_sin(V) <- (
     Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT),
     ResultGet(RESULT, 'value', V)
 )
@@ -97,7 +97,7 @@ Example — exponential decay:
 ```clausal
 -import_from(scipy_integrate, [SolveInitialValueProblem, ResultGet])
 
-ExponentialDecay(T_FINAL, Y_FINAL) <- (
+exponential_decay(T_FINAL, Y_FINAL) <- (
     SolveInitialValueProblem(
         ++(lambda t, y: [-y[0]]),
         ++([0.0, float(T_FINAL)]),
@@ -151,7 +151,7 @@ Common fields by predicate:
 ```clausal
 -import_from(scipy_integrate, [Quad, ResultGet])
 
-SinIntegral(VALUE) <- (
+sin_integral(VALUE) <- (
     Quad(++(lambda x: __import__('math').sin(x)),
          ++(0.0),
          ++(3.14159265358979),
