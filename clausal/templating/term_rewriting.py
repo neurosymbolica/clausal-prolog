@@ -661,6 +661,14 @@ TITLECASE_IDENTIFIER_SEVERITY = "error"
 #: warning on it would name a rename the language itself does not perform.
 _TITLECASE_EXEMPT_NAMES = frozenset({"Undefined"})
 
+#: TitleCase spellings the language itself renamed (``If`` -> ``if_``,
+#: ``Test`` -> ``test``).  ``If`` is also the name of a reified AST node
+#: class seeded into every module namespace, so without this list the lint
+#: would tell a user writing the old ``If(...)`` to reach it as ``++If`` —
+#: a Python class they never meant.  The remedy for these is the rename.
+_TITLECASE_RENAMED_SPELLINGS = frozenset({ITE_DEPRECATED_NAME,
+                                          TEST_DEPRECATED_NAME})
+
 
 def _is_titlecase_identifier(identifier: str) -> bool:
     """True iff *identifier* is TitleCase in the sense of the lint.
@@ -5243,8 +5251,9 @@ class EmbedTransformer(NodeTransformer):
                 "functors) or ALL_CAPS / underscore-led (logic variables); "
                 "TitleCase has no role"
             )
-            if (ident in _python_class_names()
-                    or ident in transformer._titlecase_python_bound):
+            if (ident not in _TITLECASE_RENAMED_SPELLINGS
+                    and (ident in _python_class_names()
+                         or ident in transformer._titlecase_python_bound)):
                 msg = (
                     f"{where}{snippet}: `{ident}` is TitleCase: `{ident}` is "
                     f"a Python class; reach it as `++{ident}`. {convention}"
