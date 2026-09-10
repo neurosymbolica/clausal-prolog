@@ -106,18 +106,29 @@ def dotted_attr_chain(attr_node):
     return node, parts
 
 
-def is_dict_attr_access(node) -> bool:
+def is_dict_attr_access(node, excluded=frozenset()) -> bool:
     """True for ``VAR.key`` dict attribute-access sugar (a logic-variable base).
 
     False for a qualified name (``mod.pred``, ``currency.euro``) — a dotted
     module path is a different, pre-existing feature and must stay untouched.
+
+    *excluded* names bases that are spelled like variables but which the
+    calling file does not READ as variables — since 2026-09-10 that is
+    ``Undefined`` and the ``-import_from`` names, all TitleCase.  Without it
+    ``Undefined.k`` flipped from a qualified reference to dict-subscript
+    sugar and began demanding that ``k`` be a declared atom.  It defaults to
+    empty so this module stays usable standalone (the SMT prover runs the
+    very same function on its own parse and has no such bindings); the
+    engine passes its clause-scope exclusions.
 
     See docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
     """
     if not isinstance(node, ast.Attribute):
         return False
     chain = dotted_attr_chain(node)
-    return chain is not None and _is_logic_var_name(chain[0].id)
+    return (chain is not None
+            and chain[0].id not in excluded
+            and _is_logic_var_name(chain[0].id))
 
 
 def _is_python_escape(node) -> bool:
@@ -141,6 +152,9 @@ def _is_python_escape(node) -> bool:
 class _SurfaceDesugarer(ast.NodeTransformer):
     """``P.key`` → ``P[key]``; everything else passes through unchanged."""
 
+    def __init__(self, excluded=frozenset()):
+        self._excluded = excluded
+
     def visit_UnaryOp(self, node):
         if _is_python_escape(node):
             # Not Clausal syntax — do not descend.  ``++(D.value)`` is Python
@@ -161,7 +175,7 @@ class _SurfaceDesugarer(ast.NodeTransformer):
         ``mod.pred(A)`` is a qualified predicate call and is likewise a
         ``func`` position; ``visit_Attribute`` leaves it alone anyway.
         """
-        if not is_dict_attr_access(node.func):
+        if not is_dict_attr_access(node.func, self._excluded):
             node.func = self.visit(node.func)
         node.args = [self.visit(arg) for arg in node.args]
         for kw in node.keywords:
@@ -172,7 +186,7 @@ class _SurfaceDesugarer(ast.NodeTransformer):
         # Decide on the node AS PARSED: ``generic_visit`` below rewrites the
         # inner links of a chain, and once ``P.a`` has become ``P[a]`` the
         # outer node no longer looks like attribute access on a variable.
-        sugar = is_dict_attr_access(node)
+        sugar = is_dict_attr_access(node, self._excluded)
         self.generic_visit(node)
         if not sugar:
             # A qualified name (``mod.pred``), or a base this pass does not
@@ -183,7 +197,7 @@ class _SurfaceDesugarer(ast.NodeTransformer):
             ast.Subscript(value=node.value, slice=key, ctx=node.ctx), node)
 
 
-def desugar_surface(tree):
+def desugar_surface(tree, excluded=frozenset()):
     """Expand Clausal surface sugar in *tree*, returning the rewritten tree.
 
     Currently expands exactly one sugar: dict attribute access on a logic
@@ -203,6 +217,6 @@ def desugar_surface(tree):
     Source positions are copied from the replaced construct, so line and
     column information survives.
     """
-    tree = _SurfaceDesugarer().visit(tree)
+    tree = _SurfaceDesugarer(excluded).visit(tree)
     ast.fix_missing_locations(tree)
     return tree

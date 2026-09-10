@@ -706,6 +706,34 @@ def _is_titlecase_identifier(identifier: str) -> bool:
     return identifier[:1].isupper() and any(c.islower() for c in identifier)
 
 
+def _clause_scope_exclusions(import_remap) -> frozenset:
+    """TitleCase names a CLAUSAL context must not treat as logic variables.
+
+    Exactly the names ``visit_Name`` refuses to read as variables: the
+    exempt injected bindings (``Undefined``) and this file's
+    ``-import_from`` names.  Module-level because BOTH transformers need it
+    -- ``TermTransformer`` for ``_reads_as_variable`` and the unit sugar,
+    ``EmbedTransformer`` for the seam -- and a second copy is precisely the
+    drift this change has already paid for three times.
+    """
+    return frozenset(_TITLECASE_EXEMPT_NAMES) | frozenset(
+        n for n in (import_remap or ()) if _is_titlecase_identifier(n))
+
+
+def _python_scope_exclusions(import_remap, python_bound) -> frozenset:
+    """Names a VERBATIM-PYTHON context (a ``++`` operand, an f-string slot)
+    must not capture as lambda parameters: they resolve in the module
+    namespace when the thunk runs.  The clause-scope names plus whatever the
+    file's own hosted Python binds.
+
+    Strictly larger than the clause set, deliberately: ``P is Fraction``
+    reads ``Fraction`` as a VARIABLE while ``++Fraction(1, 3)`` reads it as
+    the class, so one rule cannot serve both scopes.
+    """
+    return _clause_scope_exclusions(import_remap) | frozenset(
+        n for n in (python_bound or ()) if _is_titlecase_identifier(n))
+
+
 def _is_var_in_name_position(identifier: str) -> bool:
     """True if *identifier*, standing where a NAME goes rather than where a
     value goes, reads as a logic variable — ``FOO`` and ``_foo``, not ``Foo``.
@@ -846,7 +874,7 @@ def _is_plain_term(node) -> bool:
     return True
 
 
-def _is_lowerable_goal(goal) -> bool:
+def _is_lowerable_goal(goal, excluded=frozenset()) -> bool:
     """True when reads may be extracted out of *goal* to just before it.
 
     False means "leave this goal alone" — it is not a shape we lower (a
@@ -858,7 +886,8 @@ def _is_lowerable_goal(goal) -> bool:
         if isinstance(goal.func, Name):
             if _is_var_in_name_position(goal.func.id):
                 return False         # meta-call on a variable goal
-        elif not isinstance(goal.func, Attribute) or _is_dict_attr_access(goal.func):
+        elif (not isinstance(goal.func, Attribute)
+                or _is_dict_attr_access(goal.func, excluded)):
             return False
         parts = list(goal.args) + [kw.value for kw in goal.keywords]
     elif isinstance(goal, Compare):
@@ -966,7 +995,7 @@ def _explicit_read_binding(goal):
     return goal.left.id, (base.id, tag)
 
 
-def _lower_dict_reads_in_scope(goal, mint):
+def _lower_dict_reads_in_scope(goal, mint, excluded=frozenset()):
     """Lower every dict read in one control-construct scope.
 
     Returns a goal AST for the scope.  Reads minted here do not escape it.
@@ -974,13 +1003,13 @@ def _lower_dict_reads_in_scope(goal, mint):
     lowered = []
     shared = {}
     for conjunct in _flatten_conjunction(goal):
-        lowered.extend(_lower_dict_reads_in_goal(conjunct, mint, shared))
+        lowered.extend(_lower_dict_reads_in_goal(conjunct, mint, shared, excluded))
     if len(lowered) == 1:
         return lowered[0]
     return replace(Tuple(elts=lowered, ctx=load), goal)
 
 
-def _lower_dict_reads_in_goal(goal, mint, shared):
+def _lower_dict_reads_in_goal(goal, mint, shared, excluded=frozenset()):
     """Lower one goal; returns the read goals plus the rewritten goal."""
     # Control constructs: each arm is its own scope, so a read is never lifted
     # out of it.  `( a(P) or b(P.k) )` must still succeed via `a(P)` when the
@@ -988,14 +1017,15 @@ def _lower_dict_reads_in_goal(goal, mint, shared):
     if isinstance(goal, BoolOp):
         return [replace(
             BoolOp(op=goal.op,
-                   values=[_lower_dict_reads_in_scope(value, mint)
+                   values=[_lower_dict_reads_in_scope(value, mint, excluded)
                            for value in goal.values]),
             goal,
         )]
     if isinstance(goal, UnaryOp) and isinstance(goal.op, Not):
         return [replace(
             UnaryOp(op=goal.op,
-                    operand=_lower_dict_reads_in_scope(goal.operand, mint)),
+                    operand=_lower_dict_reads_in_scope(
+                        goal.operand, mint, excluded)),
             goal,
         )]
     if (isinstance(goal, Call) and isinstance(goal.func, Name)
@@ -1003,7 +1033,7 @@ def _lower_dict_reads_in_goal(goal, mint, shared):
             and not goal.keywords):
         return [replace(
             Call(func=goal.func,
-                 args=[_lower_dict_reads_in_scope(arm, mint)
+                 args=[_lower_dict_reads_in_scope(arm, mint, excluded)
                        for arm in goal.args],
                  keywords=[]),
             goal,
@@ -1022,7 +1052,7 @@ def _lower_dict_reads_in_goal(goal, mint, shared):
             shared[cache_key] = var_name
             return [goal]
 
-    if not _is_lowerable_goal(goal):
+    if not _is_lowerable_goal(goal, excluded):
         return [goal]
     reads = []
     extractor = _DictReadExtractor(mint, shared, reads)
@@ -1037,7 +1067,7 @@ def _lower_dict_reads_in_goal(goal, mint, shared):
     return reads + [goal]
 
 
-def _lower_dict_reads(head_ast, body_ast):
+def _lower_dict_reads(head_ast, body_ast, excluded=frozenset()):
     """Read-once lowering over a whole clause body.  Returns the new body.
 
     The body is copied first: the pass rewrites in place, and the caller's AST
@@ -1049,7 +1079,7 @@ def _lower_dict_reads(head_ast, body_ast):
     implicit variables and reordering goals is an evaluation strategy, not a
     spelling.  See ``clausal/templating/desugar.py``.
     """
-    body_ast = desugar_surface(deepcopy(body_ast))
+    body_ast = desugar_surface(deepcopy(body_ast), excluded)
     taken = {node.id for node in walk(body_ast) if isinstance(node, Name)}
     taken.update(node.id for node in walk(head_ast) if isinstance(node, Name))
     counter = [0]
@@ -1062,7 +1092,7 @@ def _lower_dict_reads(head_ast, body_ast):
                 taken.add(name)
                 return name
 
-    return _lower_dict_reads_in_scope(body_ast, mint)
+    return _lower_dict_reads_in_scope(body_ast, mint, excluded)
 
 
 def _is_unit_expr(node) -> bool:
@@ -1146,23 +1176,45 @@ def _binds_name(module, name: str) -> bool:
     return False
 
 
-def _collect_logic_var_names(node, include_titlecase=True) -> list[str]:
-    """Collect logic variable names from an AST node in first-occurrence order.
+def _collect_logic_var_names(node, excluded) -> list[str]:
+    """Collect logic variable names from *node*, in first-occurrence order.
 
-    ``include_titlecase=False`` for the two VERBATIM-PYTHON contexts: a
-    ``++`` escape operand and an f-string interpolation slot.  A collected
-    name becomes a PARAMETER of the lambda those compile to, bound to a fresh
-    clause variable — so collecting ``Fraction`` out of ``++Fraction(1, 3)``
-    or ``f"{Fraction(1, 3)}"`` shadows the Python class with an unbound
-    ``Var``, and it dies at search time with ``'AttVar' object is not
-    callable``.  For ``++`` that is the very failure the TitleCase lint tells
-    the author to fix BY writing ``++Fraction``; for an f-string there is no
-    diagnostic at all, because the lint skips ``JoinedStr``.  Both are Python
-    by definition, and a capital-initial name in Python is a Python name.
+    *excluded* is REQUIRED, and has no default on purpose.  Every caller sits
+    in one of two scopes and the answer differs between them, so there is no
+    safe default to fall back on — and three review rounds of this change
+    were spent on consumers that asked the LEXICAL rule
+    (``_is_logic_var_name``) where they had to agree with something else.
+    Making the parameter mandatory means a new caller cannot get the lexical
+    rule by accident; it has to name its scope.  The two scopes, both
+    produced by ``TermTransformer``/``EmbedTransformer`` helpers so no caller
+    builds a set by hand:
 
-    NOT passed by the unit-annotation sugar, deliberately: the magnitude
-    expression of ``(A + Foo)(metre)`` is CLAUSAL, so a TitleCase name there
-    is a clause variable and must be captured.
+    * ``_clause_scope_exclusions()`` — CLAUSAL contexts (the ``--`` seam, the
+      unit-sugar magnitude).  These must agree with ``visit_Name``, so the
+      excluded names are the ones it refuses to read as variables:
+      ``Undefined`` and the ``-import_from`` names.  Collecting one of those
+      made the seam emit ``(Undefined := $Var())`` into the host Python
+      scope, clobbering the injected truth value while the term side
+      compiled it as the bound name.
+
+    * ``_python_scope_exclusions()`` — VERBATIM-PYTHON contexts (a ``++``
+      operand, an f-string interpolation slot).  A collected name becomes a
+      PARAMETER of the lambda these lower to; a name NOT collected resolves
+      in the module namespace when the thunk runs.  So the excluded set is
+      everything bound in that namespace: the clause-scope names plus what
+      the file's own hosted Python binds (``_titlecase_python_bound``).
+
+    The difference between the two is real, not an accident of history: a
+    file doing ``from fractions import Fraction`` reads ``P is Fraction`` as
+    a VARIABLE (a hosted-Python binding does not carve a name out of the
+    Clausal variable rule — see ``_reads_as_variable``) while
+    ``++Fraction(1, 3)`` reads it as the class.  One rule cannot serve both.
+
+    Excluding by SPELLING rather than by membership was the round-2 defect:
+    it dropped every capital-initial name, so a genuine clause variable
+    ``Total`` was not captured either, and ``f"{Total}"`` silently formatted
+    an unbound variable's repr while ``f"{TOTAL}"`` -- the identical clause
+    -- gave the right answer.
     """
     ordered: list[str] = []
     seen: set[str] = set()
@@ -1171,8 +1223,7 @@ def _collect_logic_var_names(node, include_titlecase=True) -> list[str]:
         def visit_Name(self, name):
             ident = name.id
             if (ident != "_" and _is_logic_var_name(ident)
-                    and (include_titlecase
-                         or not _is_titlecase_identifier(ident))):
+                    and ident not in excluded):
                 if ident not in seen:
                     seen.add(ident)
                     ordered.append(ident)
@@ -1536,7 +1587,7 @@ class TermTransformer(NodeTransformer):
                  declared_functors=None, atom_functor_sites=None,
                  quote_map=None, double_quotes_mode="atom",
                  seam=False, double_quotes_explicit=True,
-                 python_visitor=None):
+                 python_visitor=None, titlecase_python_bound=None):
         transformer.seen_vars = set()
         # THE SEAM (``--term`` in Python-hosted code): ``seam`` marks a
         # transformer serving one seam expression; ``python_visitor`` is the
@@ -1547,6 +1598,15 @@ class TermTransformer(NodeTransformer):
         transformer._seam = seam
         transformer._double_quotes_explicit = double_quotes_explicit
         transformer._python_visitor = python_visitor
+        # The TitleCase names this file's own hosted Python binds (``from x
+        # import Foo``, ``class Foo``, ``Foo = ...``) -- the SAME live set
+        # ``EmbedTransformer._titlecase_prepass`` fills, shared not copied,
+        # exactly as ``_import_remap`` is.  Used only to decide what a
+        # verbatim-Python thunk must NOT capture; it does not affect how a
+        # term-position name reads (see ``_reads_as_variable``).
+        transformer._titlecase_python_bound = (
+            titlecase_python_bound if titlecase_python_bound is not None
+            else set())
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
         # e.g. a logic-variable comprehension target, pinned by the renderer
@@ -1665,7 +1725,8 @@ class TermTransformer(NodeTransformer):
         not callable — so the shape is reserved rather than silently compiled
         into a call on a dict entry.
         """
-        if _is_dict_attr_access(func_expr):
+        if _is_dict_attr_access(
+                func_expr, transformer._clause_scope_exclusions()):
             base_name, key_names = _dotted_attr_chain(func_expr)
             dotted = ".".join([base_name.id] + key_names)
             raise SyntaxError(
@@ -1817,7 +1878,10 @@ class TermTransformer(NodeTransformer):
             # [1,2,3](metre), (A + B)(metre/second), etc.
             # Transforms to: ++(Quantity(<expr>, Unit))
             raw_unit = call.args[0]
-            var_names = _collect_logic_var_names(call.func)
+            # The magnitude of ``(A + Foo)(metre)`` is Clausal, so a
+            # TitleCase name there is a clause variable.
+            var_names = _collect_logic_var_names(
+                call.func, transformer._clause_scope_exclusions())
             inner = Call(
                 func=replace(Name(id="$Quantity", ctx=load), call),
                 args=[call.func, raw_unit],
@@ -1884,7 +1948,9 @@ class TermTransformer(NodeTransformer):
                 "Predicate",
                 compare,
                 head=transformer.visit(head_ast),
-                body=transformer.visit(_lower_dict_reads(head_ast, body_ast)),
+                body=transformer.visit(_lower_dict_reads(
+                    head_ast, body_ast,
+                    transformer._clause_scope_exclusions())),
             )
 
 
@@ -2141,6 +2207,10 @@ class TermTransformer(NodeTransformer):
             atom_functor_sites=transformer._atom_functor_sites,
             quote_map=transformer._quote_map,
             double_quotes_mode=transformer._double_quotes_mode,
+            # Inherited for the same reason ``_import_remap`` is: a ``++``
+            # or f-string INSIDE a lambda body resolves its free names in
+            # the same module namespace, so it must exclude the same ones.
+            titlecase_python_bound=transformer._titlecase_python_bound,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
         # Shared object (not a copy): occurrences inside the lambda body
@@ -2231,6 +2301,15 @@ class TermTransformer(NodeTransformer):
             clauses=list_ast(clauses, list_comprehension),
         )
 
+    def _clause_scope_exclusions(transformer) -> frozenset:
+        """This file's clause-scope exclusions -- see the module function."""
+        return _clause_scope_exclusions(transformer._import_remap)
+
+    def _python_scope_exclusions(transformer) -> frozenset:
+        """This file's Python-scope exclusions -- see the module function."""
+        return _python_scope_exclusions(
+            transformer._import_remap, transformer._titlecase_python_bound)
+
     def _reads_as_variable(transformer, identifier: str) -> bool:
         """The EFFECTIVE variable reading of *identifier* in this file.
 
@@ -2251,8 +2330,7 @@ class TermTransformer(NodeTransformer):
         return _is_logic_var_name(identifier) and not (
             _is_titlecase_identifier(identifier)
             and (transformer._in_callable_position
-                 or identifier in _TITLECASE_EXEMPT_NAMES
-                 or identifier in transformer._import_remap)
+                 or identifier in transformer._clause_scope_exclusions())
         )
 
     def visit_Name(transformer, name):
@@ -2427,7 +2505,8 @@ class TermTransformer(NodeTransformer):
 
         The method-call form ``P.foo(A)`` is rejected in ``_visit_call_func``.
         """
-        if _is_dict_attr_access(attr_node):
+        if _is_dict_attr_access(
+                attr_node, transformer._clause_scope_exclusions()):
             # Expand the sugar with the SHARED, syntax-only pass (the SMT
             # prover runs the very same function on its own parse), then
             # compile the resulting ``P[key]`` through ``visit_Subscript`` —
@@ -2436,7 +2515,9 @@ class TermTransformer(NodeTransformer):
             # name, logic variable, or bare-atom reference registered for
             # the mint / strict-atoms passes.  Never intern the attribute
             # name directly.
-            return transformer.visit(desugar_surface(deepcopy(attr_node)))
+            return transformer.visit(desugar_surface(
+                deepcopy(attr_node),
+                transformer._clause_scope_exclusions()))
         # Collect the full dotted chain and validate each part.
         parts = []
         node = attr_node
@@ -2459,7 +2540,13 @@ class TermTransformer(NodeTransformer):
                 f"(line {attr_node.lineno}): only dotted names like "
                 f"mod.Pred are supported"
             )
-        if _is_logic_var_name(node.id):
+        # The EFFECTIVE reading, matching the dict-sugar test just above: a
+        # base this file does not read as a variable (``Undefined``, an
+        # ``-import_from`` name) is a legitimate qualified base.  Asking the
+        # lexical rule refused ``Undefined.k`` outright once the dict-sugar
+        # test stopped claiming it.
+        if (_is_logic_var_name(node.id)
+                and node.id not in transformer._clause_scope_exclusions()):
             raise SyntaxError(
                 f"Logic variable '{node.id}' cannot appear as the base "
                 f"of a qualified name (line {attr_node.lineno})"
@@ -2521,7 +2608,7 @@ class TermTransformer(NodeTransformer):
         for v in node.values:
             if isinstance(v, FormattedValue):
                 for name in _collect_logic_var_names(
-                        v.value, include_titlecase=False):
+                        v.value, transformer._python_scope_exclusions()):
                     if name not in seen:
                         seen.add(name)
                         var_names.append(name)
@@ -2606,7 +2693,7 @@ class TermTransformer(NodeTransformer):
         ):
             expression = unary_op.operand.operand
             var_names = _collect_logic_var_names(
-                expression, include_titlecase=False)
+                expression, transformer._python_scope_exclusions())
             if transformer._python_visitor is not None:
                 # A seam's ``++`` operand is Python-hosted code again, so it
                 # may itself contain ``--`` (nesting to any depth).  The
@@ -4869,6 +4956,7 @@ class EmbedTransformer(NodeTransformer):
             seam=seam,
             double_quotes_explicit=transformer._double_quotes_explicit,
             python_visitor=transformer.visit if seam else None,
+            titlecase_python_bound=transformer._titlecase_python_bound,
         )
 
     def _seam_term_ast(transformer, expression, anchor):
@@ -4877,7 +4965,13 @@ class EmbedTransformer(NodeTransformer):
         names this seam introduces (already-bound names of an enclosing seam
         are excluded).  The caller decides how to bind ``fresh``."""
         outer = set().union(*transformer._seam_bound) if transformer._seam_bound else set()
-        fresh = [n for n in _collect_logic_var_names(expression) if n not in outer]
+        # CLAUSAL: ``fresh`` drives ``_var_bind``, which writes these names
+        # into the HOST PYTHON scope, so it must name exactly what
+        # ``visit_Name`` will read as a variable -- otherwise one seam's
+        # two sides disagree about a spelling.
+        fresh = [n for n in _collect_logic_var_names(
+            expression, _clause_scope_exclusions(transformer._import_remap))
+            if n not in outer]
         term_tf = transformer._make_term_transformer(seam=True)
         term_tf.seen_vars.update(outer)
         term_tf.seen_vars.update(fresh)
@@ -5346,6 +5440,12 @@ class EmbedTransformer(NodeTransformer):
     _DECLARATION_DIRECTIVES = frozenset({
         "module", "private", "hide",
         "dynamic", "discontiguous", "table", "shallow",
+        # These read a bare ``Name`` argument directly (``node.id``) rather
+        # than a list or a pred/arity spec, so the term walk skipped them and
+        # the file got CONTRADICTORY answers about one name:
+        # ``-edcg_pred(Foo, 2, [...])`` registered a TitleCase predicate
+        # silently while a later ``Foo(...)`` call was still refused.
+        "edcg_pred", "edcg_acc", "edcg_pass", "specialize", "translations",
     })
 
     def _lint_titlecase_declared_names(transformer, args):
@@ -5769,7 +5869,13 @@ class EmbedTransformer(NodeTransformer):
                 # ``-import_*`` is a module path plus names that are the
                 # exporter's to spell.
                 if directive_name in transformer._DECLARATION_DIRECTIVES:
-                    transformer._lint_titlecase_declared_names(directive_args)
+                    # The keyword VALUES were linted before this branch
+                    # existed and must stay linted: ``-specialize``'s
+                    # ``alias=Foo`` NAMES the predicate the specialisation
+                    # defines, so it is a functor position.
+                    transformer._lint_titlecase_declared_names(
+                        list(directive_args)
+                        + [kw.value for kw in neg.operand.keywords])
                 elif directive_name not in ("import_module", "import_from"):
                     transformer._lint_titlecase(
                         *directive_args,
@@ -5996,7 +6102,9 @@ class EmbedTransformer(NodeTransformer):
                 # explicit read goals at their first-occurrence position, scoped
                 # to the innermost enclosing control construct.
                 body_ast = term_transformer.visit(
-                    _lower_dict_reads(left, body_expr)
+                    _lower_dict_reads(
+                        left, body_expr,
+                        term_transformer._clause_scope_exclusions())
                 )
 
                 # Build head call: functor(field=term, ...) as a plain Python Call,
@@ -6082,7 +6190,14 @@ class EmbedTransformer(NodeTransformer):
                 return transformer._guard_bare_call(functor_name, expr_stmt)
             case Name(id=functor_name) if (
                 transformer._scope_depth == 0
-                and not _is_logic_var_name(functor_name)
+                # The same disjunct as the trailing-comma arm above, for the
+                # same reason: a comma-LESS bare statement for a name already
+                # seen as a functor is a functor position, and without this
+                # ``Foo`` fell through to hosted Python while ``foo`` reached
+                # the arity-conflict diagnosis -- two spellings of one
+                # statement disagreeing.
+                and (not _is_logic_var_name(functor_name)
+                     or _is_titlecase_identifier(functor_name))
                 and transformer._is_module_compile()
             ):
                 if (
