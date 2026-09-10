@@ -533,9 +533,9 @@ def _is_logic_var_name(identifier: str) -> bool:
     return identifier[:1].isupper()
 
 
-def _is_var_in_callable_position(identifier: str) -> bool:
+def _is_var_in_name_position(identifier: str) -> bool:
     """``FOO``/``_foo`` yes, ``Foo`` no -- see
-    ``term_rewriting._is_var_in_callable_position`` for the full rationale.
+    ``term_rewriting._is_var_in_name_position`` for the full rationale.
     Mirrored here for the same reason the classifier itself is: this module
     stays free of a templating import.  The three call sites are the
     ``X(unit)`` quantity-literal shape, where reading a TitleCase callable as
@@ -784,7 +784,7 @@ class _ClausalToProlog:
                 func.value, (int, float)) and not isinstance(func.value, bool):
             self._add_lossy(f"unit discarded: {func.value}({unit.id}) -> {func.value}")
             return PNumber(func.value, unit=unit.id)
-        if isinstance(func, python_ast.Name) and _is_var_in_callable_position(func.id):
+        if isinstance(func, python_ast.Name) and _is_var_in_name_position(func.id):
             self._add_lossy(f"unit discarded: {func.id}({unit.id}) -> {func.id}")
             lowered = self._convert_expr(func)
             return (PVar(lowered.name, unit=unit.id)
@@ -814,7 +814,7 @@ class _ClausalToProlog:
                     and isinstance(func.value, (int, float))
                     and not isinstance(func.value, bool)):
                 self._unit_atoms.add(unit.id)
-            elif isinstance(func, python_ast.Name) and _is_var_in_callable_position(func.id):
+            elif isinstance(func, python_ast.Name) and _is_var_in_name_position(func.id):
                 self._unit_atoms.add(unit.id)
 
     @staticmethod
@@ -831,7 +831,7 @@ class _ClausalToProlog:
                 and isinstance(func.value, (int, float))
                 and not isinstance(func.value, bool)):
             return unit.id
-        if isinstance(func, python_ast.Name) and _is_var_in_callable_position(func.id):
+        if isinstance(func, python_ast.Name) and _is_var_in_name_position(func.id):
             return unit.id
         return None
 

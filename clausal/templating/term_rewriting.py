@@ -706,16 +706,23 @@ def _is_titlecase_identifier(identifier: str) -> bool:
     return identifier[:1].isupper() and any(c.islower() for c in identifier)
 
 
-def _is_var_in_callable_position(identifier: str) -> bool:
-    """True if *identifier*, used as the CALLABLE of a call, reads as a
-    logic variable — i.e. ``FOO`` and ``_foo``, but NOT ``Foo``.
+def _is_var_in_name_position(identifier: str) -> bool:
+    """True if *identifier*, standing where a NAME goes rather than where a
+    value goes, reads as a logic variable — ``FOO`` and ``_foo``, not ``Foo``.
 
-    The ruled asymmetry of 2026-09-10, stated once so every callable-position
+    The ruled asymmetry of 2026-09-10, stated once so every name-position
     guard shares it.  In TERM position a capital initial is a variable, full
-    stop (``_is_logic_var_name``).  In CALLABLE position it is not, because a
-    variable there is not ``call/N`` in this language — it is the
-    UNIT-ANNOTATION sugar, and ``X(newton)`` builds a Quantity rather than
-    calling ``X``.  So a capital-initial callable is one of exactly two
+    stop (``_is_logic_var_name``).  There are two kinds of name position
+    where it is not:
+
+    * the CALLABLE of a call, because a variable there is not ``call/N`` in
+      this language — it is the UNIT-ANNOTATION sugar, and ``X(newton)``
+      builds a Quantity rather than calling ``X``;
+    * a component of a QUALIFIED NAME (``mod.Pred``, ``prolog.TruncDiv``),
+      which is a predicate's name spelled in two parts.  The TitleCase lint
+      has never read attribute names for exactly this reason.
+
+    So a capital-initial name in either position is one of exactly two
     things, neither of them a variable:
 
     * a TitleCase name the file has BOUND (an ``-import_from`` name such as
@@ -849,7 +856,7 @@ def _is_lowerable_goal(goal) -> bool:
     """
     if isinstance(goal, Call):
         if isinstance(goal.func, Name):
-            if _is_var_in_callable_position(goal.func.id):
+            if _is_var_in_name_position(goal.func.id):
                 return False         # meta-call on a variable goal
         elif not isinstance(goal.func, Attribute) or _is_dict_attr_access(goal.func):
             return False
@@ -1257,7 +1264,7 @@ def _isnot_rhs_is_partial_pattern(rhs) -> bool:
     if isinstance(rhs, Call):
         # A functor application like tag(_); exclude a logic variable applied as
         # a goal closure (e.g. Goal(...)) — that is not a data pattern.
-        if isinstance(rhs.func, Name) and _is_var_in_callable_position(rhs.func.id):
+        if isinstance(rhs.func, Name) and _is_var_in_name_position(rhs.func.id):
             return False
     elif not isinstance(rhs, (List, Tuple, Set, Dict)):
         return False
@@ -1613,7 +1620,7 @@ class TermTransformer(NodeTransformer):
         transformer._suppress_bare_atom_collection = False
         # True only while visiting a Call's ``func``.  Term position
         # and callable position read a TitleCase name differently --
-        # see ``_is_var_in_callable_position`` and ``visit_Name``.
+        # see ``_is_var_in_name_position`` and ``visit_Name``.
         transformer._in_callable_position = False
 
     def visit_Await(transformer, await_expr):
@@ -1794,7 +1801,7 @@ class TermTransformer(NodeTransformer):
             return _build_py_thunk_ast(transformer, call, inner, [])
         elif (
             not (isinstance(call.func, Name)
-                 and not _is_var_in_callable_position(call.func.id))
+                 and not _is_var_in_name_position(call.func.id))
             and not isinstance(call.func, Attribute)
             and len(call.args) == 1
             and _is_unit_expr(call.args[0])
@@ -1997,7 +2004,14 @@ class TermTransformer(NodeTransformer):
         if (
             isinstance(key, Name)
             and key.id != "_"
-            and not _is_logic_var_name(key.id)
+            # The EFFECTIVE reading, not the lexical one: a dict key is a
+            # term, so a TitleCase key is a variable key now -- but a name
+            # this file has BOUND (``Undefined``, an ``-import_from`` name)
+            # is an atom key exactly as before.  Asking the lexical rule
+            # here sent those down ``visit(key)``, which answers a
+            # ``LoadName`` -- unhashable, so the dict blew up at
+            # construction with a bare ``TypeError``.
+            and not transformer._reads_as_variable(key.id)
         ):
             if not transformer._suppress_bare_atom_collection:
                 transformer._bare_atom_refs.add(key.id)
@@ -2213,6 +2227,30 @@ class TermTransformer(NodeTransformer):
             clauses=list_ast(clauses, list_comprehension),
         )
 
+    def _reads_as_variable(transformer, identifier: str) -> bool:
+        """The EFFECTIVE variable reading of *identifier* in this file.
+
+        ``_is_logic_var_name`` is the lexical rule; this is the rule as the
+        module actually applies it, and every place that must agree with
+        ``visit_Name`` has to ask THIS, not the lexical predicate.  Keeping
+        two notions of "is a variable" is what silently produced clause code
+        referencing an unregistered ``_v6``: one classifier said ``Clause``
+        was a variable while ``visit_Name`` had already compiled it as a
+        functor reference.
+
+        Identical to ``_is_logic_var_name`` for every spelling that was a
+        variable before 2026-09-10.  For the capital-initial names that
+        joined the class then (``Foo``, not ``FOO``) it subtracts the three
+        positions where the file has said the name means something else --
+        see the comment in ``visit_Name``.
+        """
+        return _is_logic_var_name(identifier) and not (
+            _is_titlecase_identifier(identifier)
+            and (transformer._in_callable_position
+                 or identifier in _TITLECASE_EXEMPT_NAMES
+                 or identifier in transformer._import_remap)
+        )
+
     def visit_Name(transformer, name):
         identifier = name.id
         # ISO/XSB truth-value spellings.  ``true``/``false`` become the very
@@ -2275,12 +2313,7 @@ class TermTransformer(NodeTransformer):
         # positions where the lint used to refuse it.  ALL-CAPS is
         # deliberately NOT carved out anywhere — it was a variable before
         # this change, and nothing may start reading ``FOO`` as a binding.
-        if _is_logic_var_name(identifier) and not (
-            _is_titlecase_identifier(identifier)
-            and (transformer._in_callable_position
-                 or identifier in _TITLECASE_EXEMPT_NAMES
-                 or identifier in transformer._import_remap)
-        ):
+        if transformer._reads_as_variable(identifier):
             transformer.var_occurrences[identifier] += 1
             transformer._logic_var_refs.setdefault(
                 identifier, getattr(name, "lineno", 0))
@@ -2404,7 +2437,12 @@ class TermTransformer(NodeTransformer):
         parts = []
         node = attr_node
         while isinstance(node, Attribute):
-            if _is_logic_var_name(node.attr):
+            # A qualified name's attribute is a NAME component, never a
+            # term -- ``mod.Pred`` is this docstring's own example of the
+            # supported form, and ``prolog.TruncDiv``/``prolog.Rem`` are how
+            # the Prolog bridge spells the ISO operators.  So TitleCase here
+            # is a name, matching the lint, which has never read attributes.
+            if _is_var_in_name_position(node.attr):
                 raise SyntaxError(
                     f"Logic variable '{node.attr}' cannot appear in a "
                     f"qualified name (line {attr_node.lineno})"
