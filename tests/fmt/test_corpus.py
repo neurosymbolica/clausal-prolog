@@ -39,12 +39,23 @@ def _clausal_files() -> list[Path]:
     found: list[Path] = []
     for root in _corpus_roots():
         for path in sorted(root.rglob("*.clausal")):
-            if SKIP_DIRS.isdisjoint(path.parts):
+            # Relative to the ROOT that produced it, never the absolute path:
+            # a checkout may itself live under a directory named like one of
+            # the skips — a git worktree under `.claude/`, say — and filtering
+            # the absolute parts then discards EVERY file and empties the
+            # corpus silently.  The only thing that notices is
+            # ``test_the_corpus_is_not_empty``, and a guard that fails in both
+            # arms of a before/after diff cancels out of the failure-name set
+            # and reads as agreement.  Measured: 430 files present, 0 selected.
+            if SKIP_DIRS.isdisjoint(path.relative_to(root).parts):
                 found.append(path)
     return found
 
 
 CORPUS = _clausal_files()
+
+import sys as _sys
+test_corpus_module = _sys.modules[__name__]
 
 
 def _ids(paths: list[Path]) -> list[str]:
@@ -141,3 +152,41 @@ def _arrows(text: str) -> set:
 def test_the_corpus_is_not_empty():
     # A sweep that silently found nothing would pass forever.
     assert len(CORPUS) > 100
+
+
+# ─── The skip filter is ROOT-RELATIVE, not absolute ─────────────────────────
+
+def test_a_root_living_under_a_skip_name_still_yields_its_files(tmp_path, monkeypatch):
+    """A checkout may itself live under a directory named like one of the
+    skips — a git worktree under `.claude/`, for instance.
+
+    Filtering the ABSOLUTE path's parts then discards every file and the
+    corpus goes silently empty: measured at 430 files present and 0 selected.
+    The only test that notices is ``test_the_corpus_is_not_empty``, and a
+    guard that fails in BOTH arms of a before/after comparison cancels out of
+    the failure-name set and reads as agreement — which is how 1914 corpus
+    cases went unmeasured on both sides of a landing.
+    """
+    root = tmp_path / ".claude" / "worktrees" / "wt"
+    root.mkdir(parents=True)
+    (root / "a.clausal").write_text("p(1),\n")
+    monkeypatch.setenv("CLAUSAL_FMT_CORPUS", str(root))
+    monkeypatch.setattr(test_corpus_module, "REPO", tmp_path / "nonexistent")
+
+    found = test_corpus_module._clausal_files()
+    assert [p.name for p in found] == ["a.clausal"]
+
+
+def test_a_skip_directory_INSIDE_the_root_is_still_skipped(tmp_path, monkeypatch):
+    """The negative half: making the filter root-relative must not stop it
+    filtering.  Without this, deleting the check entirely would pass the test
+    above."""
+    root = tmp_path / "tree"
+    (root / "build").mkdir(parents=True)
+    (root / "keep.clausal").write_text("p(1),\n")
+    (root / "build" / "generated.clausal").write_text("p(2),\n")
+    monkeypatch.setenv("CLAUSAL_FMT_CORPUS", str(root))
+    monkeypatch.setattr(test_corpus_module, "REPO", tmp_path / "nonexistent")
+
+    found = test_corpus_module._clausal_files()
+    assert [p.name for p in found] == ["keep.clausal"]
