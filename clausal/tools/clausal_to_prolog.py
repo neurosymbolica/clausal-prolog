@@ -624,13 +624,6 @@ class _ClausalToProlog:
         self._lossy: list[str] = []
         self._all_lossy: list[str] = []
         self._all_warnings: list[str] = []
-        # Per-clause variable rename table (reset per top-level item).
-        # clausal_var_to_prolog is non-injective (_result and RESULT both →
-        # Result), so without disambiguation two distinct clausal variables
-        # silently merge into one Prolog variable (F022). Mirrors
-        # _PrologToClausal._var_name.
-        self._var_map: dict[str, str] = {}
-        self._var_used: set[str] = set()
         # Top-level statement currently being converted. The provably-list
         # analysis behind the negated-membership refusal is CLAUSE-LOCAL: it
         # reads only this statement's own AST, never other clauses.
@@ -689,23 +682,6 @@ class _ClausalToProlog:
             directives.append(
                 PDirective(PCompound("meta_predicate", (PCompound(name, args),))))
         return directives
-
-    def _prolog_var_name(self, name: str) -> str:
-        """Map a clausal variable to a unique Prolog name within the clause."""
-        if name == "_":
-            return "_"  # anonymous: every occurrence is independent
-        existing = self._var_map.get(name)
-        if existing is not None:
-            return existing
-        base = clausal_var_to_prolog(name)
-        candidate = base
-        n = 2
-        while candidate in self._var_used:
-            candidate = f"{base}{n}"
-            n += 1
-        self._var_map[name] = candidate
-        self._var_used.add(candidate)
-        return candidate
 
     def _add_warning(self, construct: str) -> None:
         """Record an untranslatable construct warning."""
@@ -893,9 +869,6 @@ class _ClausalToProlog:
             self._warnings.clear()
             self._lossy.clear()
             self._check_unit_mixing(stmt)
-            # Variable names are scoped per top-level item (F022).
-            self._var_map = {}
-            self._var_used = set()
             self._current_stmt = stmt
             self._provable_lists = None
             item = self._convert_stmt(stmt)
@@ -1664,7 +1637,7 @@ class _ClausalToProlog:
         if name == "Undefined":
             return PAtom("undefined")
         if _is_logic_var_name(name):
-            return PVar(self._prolog_var_name(name))
+            return PVar(clausal_var_to_prolog(name))
         # Atoms: lowercase or PascalCase predicate name
         return PAtom(resolve_name(name, self.dialect))
 
@@ -2495,9 +2468,11 @@ def _prefix_singletons(item: PItem) -> PItem:
     are what this pass is still for.
 
     Counted over *item* alone (clause head+body together, a fact's args,
-    or a DCG rule's head+body): the same per-item scope convert_module
-    already resets its variable-rename table on (F022), since a variable
-    name has no meaning across top-level items in the first place.
+    or a DCG rule's head+body), because a variable name has no meaning
+    across top-level items in the first place. This used to be phrased as
+    "the same scope convert_module resets its variable-rename table on";
+    that table is gone, and per-item is now this pass's own rule rather
+    than one borrowed from it.
     The anonymous variable (``_``) is exempt — every occurrence is already
     independent, so it is never "a singleton" in the sense that matters
     here. A name already spelled with a leading underscore (every Clausal

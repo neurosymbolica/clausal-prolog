@@ -316,29 +316,6 @@ class _PrologToClausal:
         # Names this module uses as a PREDICATE (clause-head or goal
         # functor). Populated by emit_module before the emission pass.
         self._predicate_names: set[str] = set()
-        # Per-clause variable rename table (reset in _emit_item). Prolog var
-        # names are scoped per clause; prolog_var_to_clausal is non-injective
-        # (Foo and FOO both → _foo), so without disambiguation a satisfiable
-        # clause could silently merge two variables into one (F022).
-        self._var_map: dict[str, str] = {}
-        self._var_used: set[str] = set()
-
-    def _var_name(self, name: str) -> str:
-        """Map a Prolog variable to a unique clausal name within the clause."""
-        if name == "_":
-            return "_"  # anonymous: every occurrence is independent
-        existing = self._var_map.get(name)
-        if existing is not None:
-            return existing
-        base = prolog_var_to_clausal(name)
-        candidate = base
-        n = 2
-        while candidate in self._var_used:
-            candidate = f"{base}_{n}"
-            n += 1
-        self._var_map[name] = candidate
-        self._var_used.add(candidate)
-        return candidate
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
@@ -367,9 +344,6 @@ class _PrologToClausal:
         return body
 
     def _emit_item(self, item: PItem) -> str | None:
-        # Variable names are scoped per top-level item (clause/rule/directive).
-        self._var_map = {}
-        self._var_used = set()
         if isinstance(item, PClause):
             return self._emit_clause(item)
         if isinstance(item, PDCGRule):
@@ -700,7 +674,7 @@ class _PrologToClausal:
         if isinstance(term, PAtom):
             return self._emit_atom(term)
         if isinstance(term, PVar):
-            return self._var_name(term.name)
+            return prolog_var_to_clausal(term.name)
         if isinstance(term, PNumber):
             if isinstance(term.value, float):
                 return repr(term.value)
@@ -965,7 +939,7 @@ class _PrologToClausal:
         if isinstance(term, PNumber):
             return str(term.value) if isinstance(term.value, int) else repr(term.value)
         if isinstance(term, PVar):
-            return self._var_name(term.name)
+            return prolog_var_to_clausal(term.name)
         if isinstance(term, PAtom):
             # ISO evaluable constants: X is pi must not emit a bare `pi`
             # name (NameError at runtime) — map to math.* / a literal (F025).
