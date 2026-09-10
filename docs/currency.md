@@ -250,21 +250,26 @@ currency_end(mark, E)       # E = "2002-05-15";  euro's end is None (still curre
 
 ## Errors and `catch/3`
 
-Two catchable exceptions, both used via the `ClassName(Msg)` catcher form (like any
-[Clausal exception](exceptions.md)):
+Two catchable exceptions.  Both are Python classes, so a `.clausal` file names
+them in its import list and catches them with a `++` catcher (see
+[Clausal exceptions](exceptions.md)): the bare class `++CurrencyPrecisionError`
+matches by `isinstance`; the instance form `++UnitsMismatch(M)` also binds `M`
+to the message.
 
 - **`UnitsMismatch`** — combining different currencies, or a currency with a plain number.
 - **`CurrencyPrecisionError`** — tagging a value with sub-scale precision.
 
 ```clausal
+-import_from(clausal.terms, [CurrencyPrecisionError, UnitsMismatch])
+
 # recover from an over-precise input
-safe_price(Text, P) <-
-    catch(money(Text, euro, P),
-          CurrencyPrecisionError(_Msg),
+safe_price(TEXT, P) <-
+    catch(money(TEXT, euro, P),
+          ++CurrencyPrecisionError,
           money_round(... /* a fallback */, half_up, P)).
 
-# treat a currency mismatch as a rule failure
-catch(eval_(A + B, C), UnitsMismatch(_M), 1 == 1)
+# treat a currency mismatch as a rule failure, keeping the message
+catch(eval_(A + B, C), ++UnitsMismatch(M), 1 == 1)
 ```
 
 An uncaught `CurrencyPrecisionError` / `UnitsMismatch` aborts the query. Note a currency

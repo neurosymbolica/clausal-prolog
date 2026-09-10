@@ -624,12 +624,12 @@ a term of it is the tuple `("point", 1, 2)`. See
 
 ```clausal
 -backend(scryer)  # or -backend(trealla)
--module(queens, [Queens(N, QS)])
+-module(queens, [queens(N, QS)])
 
-Queens(N, QS) <- (
+queens(N, QS) <- (
     length(QS, N),
-    Maplist(in_domain(1, N), QS),
-    SafeQueens(QS),
+    maplist(in_domain(1, N), QS),
+    safe_queens(QS),
     labeling([], QS)
 )
 ```
@@ -637,7 +637,7 @@ Queens(N, QS) <- (
 when `-backend(scryer)` is present, the import hook translates the entire file to Prolog and loads it into an embedded Scryer session. Exported predicates become bridge `PredicateMeta` classes that look like native clausal predicates to callers but execute on Scryer under the hood:
 
 ```python
-from queens import Queens
+from queens import queens
 from clausal import Var, Solutions
 
 QS = Var()
