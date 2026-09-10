@@ -39,7 +39,7 @@ def bench_fib(n: int = 25) -> int:
     F = Var()
     for _ in fib.fib(n, F):
         return int(deref(F))
-    raise RuntimeError(f"Fib({n}) produced no solutions")
+    raise RuntimeError(f"fib({n}) produced no solutions")
 
 
 def bench_nqueens(n: int = 8) -> int:
@@ -99,14 +99,14 @@ def bench_graph(reps: int = 500) -> int:
 
 
 def bench_tabling(n: int = 5000, reps: int = 10) -> object:
-    """Tabled Fibonacci(n) repeated reps times — stresses SLG tabling.
+    """Tabled fib(n) repeated reps times — stresses SLG tabling.
 
     Each repetition reloads the module so the table starts empty, forcing
     the full SLG computation: table lookup, subgoal suspension, answer
     completion, and answer consumption.
     Expected wall time: ~0.55 s per rep at n=5000, ~7.8 s at the default reps=10.
 
-    Fib/2 is functionally deterministic (each N matches exactly one clause
+    fib/2 is functionally deterministic (each N matches exactly one clause
     head), so it has exactly one answer. This loop used to iterate the
     ``call()`` generator to exhaustion instead of stopping at the first
     answer -- wrong shape: forcing full enumeration where one answer
@@ -134,11 +134,11 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
         lm = mod.__dict__["$module"]
         trail = Trail()
         R = Var()
-        for _ in call("Fib", n, R, module=lm, trail=trail):
+        for _ in call("fib", n, R, module=lm, trail=trail):
             result = deref(R)
             break
         else:
-            raise RuntimeError(f"Fib({n}) produced no solutions")
+            raise RuntimeError(f"fib({n}) produced no solutions")
     return result
 
 
@@ -180,7 +180,7 @@ def _cons_chain_length(node: object) -> int:
 
 
 def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
-    """Tabled Nats(n) repeated reps times — stresses SLG tabling's per-answer
+    """Tabled nats(n) repeated reps times — stresses SLG tabling's per-answer
     normalization/copy over COMPOUND answers (bench_tabling's Fib/2 answers
     are scalar ints; this benchmark exists because that gives the walkers
     ~0% share of a profile -- see
@@ -192,17 +192,17 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     want to measure -- it wants the full per-answer freeze/copy work every
     repetition).
 
-    struct_tabling.clausal's ``Nats/2`` builds ``cons(N, cons(N-1, ...))``
+    struct_tabling.clausal's ``nats/2`` builds ``cons(N, cons(N-1, ...))``
     down to the 0-arity atom ``nil`` -- an O(K)-deep compound chain for
-    subgoal ``Nats(K, _)``. Tabling normalizes/copies each stored answer via
+    subgoal ``nats(K, _)``. Tabling normalizes/copies each stored answer via
     ``freeze_args`` -> ``do_deref_walk`` (the C-exposed entry point for the
     walker Phase 0 sped up; see the fixture's header comment), so one
-    top-level ``Nats(n, _)`` call spawns n+1 tabled subgoals (K = 0..n) whose
+    top-level ``nats(n, _)`` call spawns n+1 tabled subgoals (K = 0..n) whose
     answer sizes sum to O(n^2) -- walk-dominated by design, and (per the
     same construction) exercises Phase 0's ``_clausal_new`` fast path, which
     builds every ``cons`` node the walk rebuilds.
 
-    Nats/2 is functionally deterministic (each N matches exactly one clause
+    nats/2 is functionally deterministic (each N matches exactly one clause
     head), so it has exactly one answer per subgoal -- same first-answer
     stopping shape as bench_tabling and bench_fib above, not full
     enumeration.
@@ -231,11 +231,11 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
         lm = mod.__dict__["$module"]
         trail = Trail()
         L = Var()
-        for _ in call("Nats", n, L, module=lm, trail=trail):
+        for _ in call("nats", n, L, module=lm, trail=trail):
             length = _cons_chain_length(deref(L))
             break
         else:
-            raise RuntimeError(f"Nats({n}) produced no solutions")
+            raise RuntimeError(f"nats({n}) produced no solutions")
     return length
 
 
@@ -244,7 +244,7 @@ def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = Fal
     Phase 2 bridge Task 4's THE MEASUREMENT variants B (``intern=False``)
     and C (``intern=True``); variant A is ``bench_struct_tabling`` itself.
 
-    Same tabled ``Nats(N, L)`` recursion, same O(N^2) walk-dominated shape
+    Same tabled ``nats(N, L)`` recursion, same O(N^2) walk-dominated shape
     (see ``bench_struct_tabling``'s docstring), but running the
     ``-tagged_terms`` fixture (``tests/fixtures/struct_tabling_tagged.
     clausal``, Task 3) instead: every ``cons(N, T)`` construction/match is
@@ -257,10 +257,10 @@ def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = Fal
     ``intern=True`` flips ``clausal.logic.cells``' module-level interning
     switch on for the duration of this call (Task 4's ``intern_cell`` /
     the ``TableEntry.add_answer`` hook in ``clausal/logic/tabling.py``):
-    every tabled ``Nats`` answer's cons-cell is interned as it is stored,
+    every tabled ``nats`` answer's cons-cell is interned as it is stored,
     so a structurally-equal cons chain -- including the SAME chain
     re-derived by a later rep's fresh module/table (every rep computes an
-    identical ``Nats(n, _)`` chain) -- collapses onto an earlier rep's
+    identical ``nats(n, _)`` chain) -- collapses onto an earlier rep's
     already-interned object instead of staying a freshly-walked/copied
     tuple every time. ``intern=False`` (default) leaves the switch off:
     freeze/copy work only, same shape of work as variant B / a plain
@@ -294,11 +294,11 @@ def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = Fal
             mod = load_clausal_module(fixture)
             lm = mod.__dict__["$module"]
             L = Var()
-            for _ in call("Nats", n, L, module=lm):
+            for _ in call("nats", n, L, module=lm):
                 length = _cons_chain_length(deref(L))
                 break
             else:
-                raise RuntimeError(f"Nats({n}) produced no solutions")
+                raise RuntimeError(f"nats({n}) produced no solutions")
         return length
     finally:
         set_intern_enabled(False)
@@ -317,7 +317,7 @@ def bench_naf_ite(n: int = 3000) -> str:
 
     fixture = os.path.join(_FIXTURES, "bench_naf_ite.clausal")
     mod = load_clausal_module(fixture)
-    for name in ("NafFactLoop", "NafChainLoop", "IteDetLoop", "IteMultiLoop"):
+    for name in ("naf_fact_loop", "naf_chain_loop", "ite_det_loop", "ite_multi_loop"):
         pred = getattr(mod, name)
         # ``load_clausal_module`` evicts its private module name from
         # sys.modules once loaded (see its docstring), so iterating the
@@ -344,7 +344,7 @@ def bench_thunk_atoms(n: int = 100_000) -> int:
     cell to its spelling) where it used to lower to a single-level
     ``$deref``.  This workload is deliberately shaped so that walk is the
     only thing that changed under it -- the loop around it is a plain tail
-    recursion over integers, and the list is bound once, in ``ThunkAtoms/2``,
+    recursion over integers, and the list is bound once, in ``thunk_atoms/2``,
     then passed down unchanged.
 
     Returns the accumulated sum (5 per iteration, so ``5 * n``), not a bare
@@ -387,7 +387,7 @@ def bench_thunk_atoms(n: int = 100_000) -> int:
     S = Var()
     for _ in call("thunk_atoms", n, S, module=lm):
         return int(deref(S))
-    raise RuntimeError(f"ThunkAtoms({n}) produced no solutions")
+    raise RuntimeError(f"thunk_atoms({n}) produced no solutions")
 
 
 # ── Smoke-test all workloads ──────────────────────────────────────────────────

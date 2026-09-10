@@ -362,7 +362,7 @@ Lowest-overhead path — dispatches directly to the compiled function:
 from clausal import Var, call
 import fibonacci
 
-for trail in call("Fib", 7, N := Var(), module=fibonacci):
+for trail in call("fib", 7, N := Var(), module=fibonacci):
     print(N.value)
 ```
 

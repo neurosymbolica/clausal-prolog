@@ -52,7 +52,7 @@ import family   # .clausal files load via the import hook
 from clausal import call, deref, Var
 
 GRANDCHILD = Var()
-results = [deref(GRANDCHILD) for _ in call("Grandparent", "tom", GRANDCHILD, module=family)]
+results = [deref(GRANDCHILD) for _ in call("grandparent", "tom", GRANDCHILD, module=family)]
 # → ['ann', 'pat']
 ```
 
@@ -60,14 +60,14 @@ results = [deref(GRANDCHILD) for _ in call("Grandparent", "tom", GRANDCHILD, mod
 
 ```prolog
 # fib.clausal
-Fib(0, 0),
-Fib(1, 1),
-Fib(N, RESULT) <- (
+fib(0, 0),
+fib(1, 1),
+fib(N, RESULT) <- (
     N > 1,
     N1 == N - 1,
     N2 == N - 2,
-    Fib(N1, A),
-    Fib(N2, B),
+    fib(N1, A),
+    fib(N2, B),
     RESULT == A + B
 )
 ```
@@ -75,33 +75,33 @@ Fib(N, RESULT) <- (
 ### Tabling (memoisation for cyclic graphs)
 
 ```prolog
--table(Path/2)
+-table(path/2)
 
-Edge(1, 2),
-Edge(2, 3),
-Edge(3, 1),
+edge(1, 2),
+edge(2, 3),
+edge(3, 1),
 
-Path(X, Y) <- Edge(X, Y)
-Path(X, Y) <- (Edge(X, Z), Path(Z, Y))
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (edge(X, Z), path(Z, Y))
 ```
 
 ### DCGs
 
 ```prolog
-Sentence >> (NounPhrase, VerbPhrase)
-NounPhrase >> (["the", "dog"] or ["the", "cat"])
-VerbPhrase >> (["runs"] or ["barks"])
+sentence >> (noun_phrase, verb_phrase)
+noun_phrase >> (["the", "dog"] or ["the", "cat"])
+verb_phrase >> (["runs"] or ["barks"])
 ```
 
 ```python
 from clausal import once
-result = once(call("Phrase", "Sentence", ["the", "cat", "runs"], module=grammar))
+result = once(call("phrase", "sentence", ["the", "cat", "runs"], module=grammar))
 ```
 
 ### CLP(FD) — constraint logic programming over integers
 
 ```prolog
-Sendmoney(S, E, N, D, M, O, R, Y) <- (
+sendmoney(S, E, N, D, M, O, R, Y) <- (
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
     S != 0,
@@ -117,11 +117,11 @@ Sendmoney(S, E, N, D, M, O, R, Y) <- (
 ### Meta-predicates
 
 ```prolog
-Squares(Ns, Squares) <- (
+squares(NS, SQUARES) <- (
     findall(
-        Sq,
-        (in_(X, Ns), Sq == X * X),
-        Squares
+        SQ,
+        (in_(X, NS), SQ == X * X),
+        SQUARES
     )
 )
 ```
@@ -131,10 +131,10 @@ Squares(Ns, Squares) <- (
 `.clausal` files can include inline tests as `test/1` clauses:
 
 ```prolog
-test("fib(5) = 5") <- Fib(5, 5)
+test("fib(5) = 5") <- fib(5, 5)
 test("tom's grandchildren") <- (
-    Grandparent(tom, ann),
-    Grandparent(tom, pat)
+    grandparent(tom, ann),
+    grandparent(tom, pat)
 )
 ```
 

@@ -268,6 +268,6 @@ for _ in call(sudoku.Solve, ROWS):
 String functor names still work when a module is provided:
 
 ```python
-for _ in call("Solve", ROWS, module=mod):
+for _ in call("solve", ROWS, module=mod):
     ...
 ```

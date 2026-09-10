@@ -39,7 +39,7 @@ from clausal.logic.variables import Var, deref
 import graphs  # finds and translates graphs.pl
 
 x, y = Var(), Var()
-for _ in call("Path", x, y, module=graphs.__clausal_module__):
+for _ in call("path", x, y, module=graphs.__clausal_module__):
     print(f"path({deref(x)}, {deref(y)})")
 ```
 
