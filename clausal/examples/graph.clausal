@@ -19,7 +19,7 @@ edge(2, 5),
 edge(5, 6),
 edge(6, 3),
 
-# path finding with cycle detection via visited set.
+# Path finding with cycle detection via visited set.
 
 path(X, Y, PATH) <- path_acc(X, Y, [X], PATH)
 

@@ -5160,7 +5160,11 @@ class EmbedTransformer(NodeTransformer):
         fractions import Fraction``, ``class Helper``, ``Point =
         namedtuple(...)``, ``def Mk``), which ARE Python objects here, so a
         Clausal-position use of one is told to reach it as ``++Name``
-        rather than to rename it."""
+        rather than to rename it.  The one carve-out is
+        ``_TITLECASE_RENAMED_SPELLINGS`` (``If``, ``Test``): the language
+        renamed those spellings, so they name the rename (``if_``, ``test``)
+        even though a same-named class is seeded (``If`` is a reified AST
+        node) — see ``_lint_titlecase``."""
         for stmt in module.body:
             if (isinstance(stmt, Expr) and isinstance(stmt.value, UnaryOp)
                     and isinstance(stmt.value.op, USub)
@@ -5203,6 +5207,11 @@ class EmbedTransformer(NodeTransformer):
         * a name bound by an ``-import_from`` list (or its ``alias(...)``
           local name) — see ``_titlecase_prepass``;
         * ``_TITLECASE_EXEMPT_NAMES`` (``Undefined``).
+
+        And one carve-out in the REMEDY: ``_TITLECASE_RENAMED_SPELLINGS``
+        (``If`` -> ``if_``, ``Test`` -> ``test``) name the rename the
+        language itself performed, never the ``++`` escape, even though
+        ``If`` is also a seeded AST node class.
 
         Python's ``True``/``False``/``None`` arrive as ``Constant`` nodes and
         never reach the walk.  Attribute names (``X.Foo``) and keyword

@@ -221,10 +221,13 @@ def test_injected_runtime_class_suggests_the_escape(tmp_path):
     assert "Rename" not in msg
 
 
-def test_python_builtin_exception_suggests_the_escape(tmp_path):
-    ws = _titlecase_warnings(
-        tmp_path, "n",
-        "-implicit_atoms\nbar(1),\nfoo(X) <- catch(bar(X), ValueError, true)\n")
+def test_python_builtin_exception_suggests_the_escape():
+    # Transformer only, no load: loading this under ``-implicit_atoms`` would
+    # mint ``ValueError`` into the process-wide atom pool and poison every
+    # later module that reaches the builtin bare (a ``++ValueError`` catcher
+    # then evaluates to the atom).
+    ws = _titlecase_warnings_cell(
+        "bar(1),\nfoo(X) <- catch(bar(X), ValueError, true)\n")
     assert _named(ws) == ["ValueError"]
     assert "reach it as `++ValueError`" in str(ws[0].message)
 

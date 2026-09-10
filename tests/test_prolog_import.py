@@ -411,7 +411,7 @@ class TestDynamic:
 
 
 class TestEdgeCases:
-    """edge cases: empty files, comments-only, encoding errors."""
+    """Edge cases: empty files, comments-only, encoding errors."""
 
     def test_empty_pl_file(self, tmp_path):
         # nv

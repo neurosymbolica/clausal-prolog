@@ -1,4 +1,4 @@
-"""Tests for V2-7: Well-Founded semantics (WFS)."""
+"""Tests for V2-7: Well-Founded Semantics (WFS)."""
 
 import os
 import pytest
@@ -949,9 +949,9 @@ class TestResolutionMatchesNafSemantics:
 
 class TestNestedStreamingAttribution:
     def test_undefined_propagates_through_two_positive_hops(self):
-        """aa <- Bb <- Cc with Cc unfounded: when Bb streams its conditional
-        answer, a deeper leader (Cc) can still be parked on the stack —
-        attribution must go to the leader below Bb's OWN position (aa), not
+        """aa <- bb <- cc with cc unfounded: when bb streams its conditional
+        answer, a deeper leader (cc) can still be parked on the stack —
+        attribution must go to the leader below bb's OWN position (aa), not
         blindly to stack[-2]. All three atoms are Undefined."""
         # nv
         lm = _module(_load("wfs_nested_stream"))

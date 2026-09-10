@@ -1,4 +1,4 @@
-"""Tests for V2-17 Definite Clause grammars (DCGs).
+"""Tests for V2-17 Definite Clause Grammars (DCGs).
 
 DCG rules use ``>>`` syntax and compile to ordinary predicates with two
 extra state arguments (input list, remaining list) threaded through the body.
@@ -658,7 +658,7 @@ class TestStateThreading:
     # -- Tree leaf counting --
 
     def test_count_leaves_single(self, tmp_path):
-        """count leaves in a single-leaf tree."""
+        """Count leaves in a single-leaf tree."""
         # nv
         src = (
             '-module(tc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
@@ -675,7 +675,7 @@ class TestStateThreading:
             assert deref(n) == 1
 
     def test_count_leaves_two(self, tmp_path):
-        """count leaves in a two-leaf tree: [leaf, leaf]."""
+        """Count leaves in a two-leaf tree: [leaf, leaf]."""
         # nv
         src = (
             '-module(tc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
@@ -692,7 +692,7 @@ class TestStateThreading:
             assert deref(n) == 2
 
     def test_count_leaves_nested(self, tmp_path):
-        """count leaves in nested tree: [leaf, [leaf, leaf]] = 3."""
+        """Count leaves in nested tree: [leaf, [leaf, leaf]] = 3."""
         # nv
         src = (
             '-module(tc3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'

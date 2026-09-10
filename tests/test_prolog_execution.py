@@ -505,7 +505,7 @@ class TestStrLiteralUnifiesWithImportedAtom:
 
 _VERBATIM_PROSE = (
     "TABLE 1 - Section 1(j)(2)(A) –Married Individuals Filing Joint Returns\n"
-    "If taxable Income Is: The Tax Is:\n"
+    "If Taxable Income Is: The Tax Is:\n"
     "Not over $23,850 10% of the taxable income\n"
     "Over $23,850 but $2,385 plus 12% of\n"
     "not over $96,950 the excess over $23,850\n"

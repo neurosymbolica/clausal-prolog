@@ -408,7 +408,7 @@ class TestOptimization:
         assert deref(y) == F(0)
 
     def test_minimize_lp(self):
-        """scheduling example from docs:
+        """Scheduling example from docs:
         minimize 5X + 3Y subject to
             X + Y >= 10, 2X + Y <= 30, X + 3Y <= 40, X,Y >= 0"""
         # nv

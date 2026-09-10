@@ -332,7 +332,7 @@ same(2, 2),
         assert len(results) == 1
 
     def test_nested_calls_through_elided_predicates(self):
-        """chain of calls through two elided-trail predicates."""
+        """Chain of calls through two elided-trail predicates."""
         # nv
         mod = _load_module("""\
 left(1, 10),

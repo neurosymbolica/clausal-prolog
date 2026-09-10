@@ -147,7 +147,7 @@ def test_nested_imported_compound_head_destructures():
 
 
 def test_nested_imported_compound_head_rejects_outer_class_mismatch():
-    """A wrap term must NOT match a head expecting Item — different classes."""
+    """A wrap term must NOT match a head expecting item — different classes."""
     mod = _load_importer()
     results = _results(mod, "check_nested", ("wrap", "x"))
     assert results == [mint("fallback")], (

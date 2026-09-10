@@ -11,7 +11,7 @@ instead of a bare ``MatchValue``. This measures dispatch cost for:
 
 Compared against an ``int``-literal dispatch table (still ``MatchValue``).
 
-usage (from project root):
+Usage (from project root):
     python benchmarks/bench_bytes_dispatch.py
 """
 

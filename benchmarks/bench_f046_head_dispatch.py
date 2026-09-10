@@ -15,7 +15,7 @@ which still compiles to ``MatchValue`` (untouched by F046) — a rough yardstick
 for "what native match dispatch costs here". Use this to confirm the same-type
 str path stays close to the int baseline and the char-list path is acceptable.
 
-usage (from project root):
+Usage (from project root):
     python benchmarks/bench_f046_head_dispatch.py
 """
 
