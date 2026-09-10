@@ -722,16 +722,67 @@ def _clause_scope_exclusions(import_remap) -> frozenset:
 
 def _python_scope_exclusions(import_remap, python_bound) -> frozenset:
     """Names a VERBATIM-PYTHON context (a ``++`` operand, an f-string slot)
-    must not capture as lambda parameters: they resolve in the module
-    namespace when the thunk runs.  The clause-scope names plus whatever the
-    file's own hosted Python binds.
+    must not capture as lambda parameters: they resolve in the MODULE
+    NAMESPACE when the thunk runs, so capturing one shadows the real binding
+    with an unbound ``Var``.
+
+    Everything in that namespace, which is three sets, not one:
+
+    * the clause-scope names (``Undefined``, the ``-import_from`` names);
+    * what the file's own hosted Python binds (``_titlecase_python_bound``);
+    * ``_python_class_names()`` — the injected runtime builtins, the seeded
+      AST node classes, and Python's own builtins.  Missing this third set
+      is what broke ``++ValueError`` (``catching classes that do not inherit
+      from BaseException``, because the catcher was an unbound Var) and the
+      bare ``Var(...)`` call (``'AttVar' object is not callable``).  It is
+      the same set the lint consults to decide that a name's remedy is
+      ``++Name`` rather than a rename -- which is the giveaway that these
+      are exactly the names a ``++`` is FOR.
 
     Strictly larger than the clause set, deliberately: ``P is Fraction``
     reads ``Fraction`` as a VARIABLE while ``++Fraction(1, 3)`` reads it as
     the class, so one rule cannot serve both scopes.
     """
-    return _clause_scope_exclusions(import_remap) | frozenset(
-        n for n in (python_bound or ()) if _is_titlecase_identifier(n))
+    return (_clause_scope_exclusions(import_remap)
+            | frozenset(n for n in (python_bound or ())
+                        if _is_titlecase_identifier(n))
+            | _module_namespace_class_names())
+
+
+_MODULE_NAMESPACE_CLASS_NAMES: frozenset | None = None
+
+
+def _module_namespace_class_names() -> frozenset:
+    """``_python_class_names()`` restricted to TitleCase, WITHOUT importing
+    the compiler.
+
+    Same content, different source: the injected runtime names are read from
+    ``generated_names``' STATIC list rather than from
+    ``INJECTED_RUNTIME_BUILTINS``.  ``_python_class_names`` imports
+    ``clausal.logic.compiler.predicate`` to get that table, and reflection
+    must never import the compiler -- a pure ``reify_source`` process reads
+    ``$Var``/``$PyThunk`` back by name and is pinned, in a subprocess, to do
+    it without the compiler ever appearing in ``sys.modules``.  Reaching the
+    table the eager way through this path broke that invariant.
+
+    ``generated_names.register_generated_names`` raises if the static list
+    and the runtime table ever disagree, and a test pins the two equal, so
+    this cannot quietly fall behind.
+    """
+    global _MODULE_NAMESPACE_CLASS_NAMES
+    if _MODULE_NAMESPACE_CLASS_NAMES is None:
+        import builtins  # noqa: PLC0415
+        from clausal.logic.generated_names import (  # noqa: PLC0415
+            BARE_ONLY, INJECTED_TITLECASE_NAMES)
+        from clausal.pythonic_ast import nodes as simple_ast  # noqa: PLC0415
+        node_names = getattr(simple_ast, "__all__", None) or [
+            n for n in dir(simple_ast) if isinstance(getattr(simple_ast, n), type)]
+        _MODULE_NAMESPACE_CLASS_NAMES = frozenset(
+            n for n in (set(INJECTED_TITLECASE_NAMES) | set(BARE_ONLY)
+                        | set(node_names)
+                        | {n for n in dir(builtins) if n[:1].isupper()})
+            if _is_titlecase_identifier(n))
+    return _MODULE_NAMESPACE_CLASS_NAMES
 
 
 def _is_var_in_name_position(identifier: str) -> bool:

@@ -214,9 +214,12 @@ def test_engine_visit_attribute_uses_the_shared_pass(monkeypatch):
     calls = []
     real = term_rewriting.desugar_surface
 
-    def spy(tree):
+    def spy(tree, *args, **kwargs):
+        # ``*args`` absorbs the exclusion set the engine passes (the names it
+        # does not read as variables); the spy asserts WHICH TREE reaches the
+        # shared pass, not the call's arity.
         calls.append(ast.unparse(tree))
-        return real(tree)
+        return real(tree, *args, **kwargs)
 
     monkeypatch.setattr(term_rewriting, "desugar_surface", spy)
     term_rewriting.TermTransformer().visit(_expr("P.key"))
