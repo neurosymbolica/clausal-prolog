@@ -198,3 +198,140 @@ def test_the_twin_resolves_in_finder_priority_order(tmp_path, monkeypatch):
 
     assert cli.default_rule_names() == ["twin"]          # listed once
     assert cli.rule_path("twin") == rules / "twin.clausal"
+
+
+def test_a_real_seam_rule_loads_and_fires(tmp_path, monkeypatch):
+    """The half that resolution alone does not prove.
+
+    The three tests above pin DISCOVERY: a `.seam` name is listed and turned
+    into a path.  That a `.seam` file then LOADS is a separate claim, owned by
+    `_load_module`, and a stub containing a comment would satisfy the first
+    while telling us nothing about the second.  So copy a real shipped rule
+    under the other spelling and drive it through `rewrite_source`, asserting
+    it fires on source it is known to rewrite.
+    """
+    from clausal.rewrite import cli
+    from clausal.rewrite.driver import rewrite_source
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    body = cli.rule_path("head_fold")
+    assert body is not None, "the shipped head_fold rule vanished"
+    (rules / "head_fold.seam").write_text(body.read_text())
+    monkeypatch.setattr(cli, "RULES_DIR", rules)
+
+    resolved = cli.rule_paths(["head_fold"])
+    assert resolved == [rules / "head_fold.seam"]
+
+    result = rewrite_source("r(K, S) <- (m(K, M), S is unknown(M))\n", resolved)
+    assert result.text == "r(K, unknown(M)) <- (\n    m(K, M)\n)\n"
+    assert len(result.fired) == 1
+
+
+@pytest.mark.parametrize("name", [
+    "../../etc/passwd", "sub/head_fold", "..", ".", "",
+])
+def test_a_rule_name_is_a_stem_not_a_path(name, monkeypatch, tmp_path):
+    """`load_rules` EXECUTES what `rule_path` returns, so a name carrying
+    separators must not reach outside the rules directory.  Pre-existing
+    exposure; `rule_path` is now the one place a name becomes a path, so it
+    is the one place to refuse."""
+    from clausal.rewrite import cli
+
+    rules = tmp_path / "rules"
+    (rules / "sub").mkdir(parents=True)
+    (rules / "sub" / "head_fold.clausal").write_text("# reachable by traversal\n")
+    monkeypatch.setattr(cli, "RULES_DIR", rules)
+
+    assert cli.rule_path(name) is None
+    with pytest.raises(cli.UnknownRule):
+        cli.rule_paths([name])
+
+
+def test_no_rewrite_site_spells_the_suffix_itself():
+    """The exit check for the whole class, not just the sites fixed once.
+
+    `clausal/_suffixes.py` says every place that recognises a predicate module
+    by its extension consults its tuples rather than spelling the suffix
+    itself.  The behavioural tests above cannot enforce that: the shipped
+    rules carry the first suffix today, so a site that hardcodes it behaves
+    identically until the rename and only then fails — precisely too late to
+    learn about it.  So assert the property on the SOURCE.
+
+    Read through `ast` rather than line by line: a first version scanned raw
+    lines and flagged the neighbouring docstring that QUOTES the removed
+    shape in order to explain it.  Prose about a defect is not the defect, so
+    docstrings are excluded and every other string constant is inspected,
+    f-strings included.
+
+    Scope is stated rather than implied: the CLI and this suite's fixtures,
+    being the two files that turn a rule NAME into a path.
+    """
+    import ast
+    import pathlib
+
+    from clausal._suffixes import CLAUSAL_SUFFIXES
+    from clausal.rewrite import cli
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    watched = [
+        root / "clausal" / "rewrite" / "cli.py",
+        pathlib.Path(__file__).resolve().parent / "conftest.py",
+    ]
+
+    def _docstring_nodes(tree):
+        out = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Module, ast.ClassDef,
+                                     ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            body = getattr(node, "body", None)
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                out.add(id(body[0].value))
+        return out
+
+    def _offenders(path):
+        tree = ast.parse(path.read_text())
+        docstrings = _docstring_nodes(tree)
+        hits = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if id(node) in docstrings:
+                    continue
+                if not any(sfx in node.value for sfx in CLAUSAL_SUFFIXES):
+                    continue
+                # Prose mentions a suffix inside a sentence; a path or a glob
+                # is one whitespace-free token (`".clausal"`, `"*.clausal"`,
+                # and the literal part of `f"{name}.clausal"`).  Help text
+                # and messages that NAME the suffixes are not sites.
+                if any(ch.isspace() for ch in node.value):
+                    continue
+                hits.append(f"{path.name}:{node.lineno}: {node.value!r}")
+        return hits
+
+    # Positive control: the check DOES catch both removed shapes, so an empty
+    # result means "clean" rather than "the check stopped looking".
+    control = pathlib.Path(__file__).parent / "_suffix_check_control.py"
+    control.write_text(
+        'D = None\n'
+        'def f(name):\n'
+        '    """A docstring naming .clausal must NOT be flagged."""\n'
+        '    a = D / f"{name}.clausal"\n'
+        '    b = D.glob("*.clausal")\n'
+        '    return a, b\n')
+    try:
+        caught = _offenders(control)
+        assert len(caught) == 2, f"control should catch 2 sites, caught {caught}"
+    finally:
+        control.unlink()
+
+    offenders = [hit for path in watched for hit in _offenders(path)]
+    assert not offenders, (
+        "a rule path is built from a hardcoded suffix; use "
+        "clausal.rewrite.cli.rule_path / CLAUSAL_SUFFIXES:\n  "
+        + "\n  ".join(offenders))
+
+    # And the property the check exists to protect, stated directly.
+    assert cli.rule_path("head_fold") is not None

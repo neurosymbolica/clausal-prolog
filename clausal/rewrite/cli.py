@@ -17,6 +17,7 @@ a file that no rule touched still comes back house-style.  That is why
 from __future__ import annotations
 
 import argparse
+import pathlib
 import sys
 from pathlib import Path
 
@@ -57,6 +58,13 @@ def rule_path(name: str) -> Path | None:
     finder's own priority, so a directory holding both twins resolves the way
     an import of the same stem would.
     """
+    # A rule name is a bare stem, never a path.  `load_rules` EXECUTES what
+    # this returns, so a name carrying separators (`../../tmp/evil`) would
+    # otherwise reach `_load_module` from outside the rules directory.  The
+    # exposure predates this function; making it the one place a name becomes
+    # a path makes it the one place to enforce that.
+    if name != pathlib.Path(name).name or name in ("", ".", ".."):
+        return None
     for suffix in CLAUSAL_SUFFIXES:
         candidate = RULES_DIR / f"{name}{suffix}"
         if candidate.is_file():
