@@ -6210,6 +6210,7 @@ class EmbedTransformer(NodeTransformer):
         transformer._titlecase_prepass(module)
         result = transformer.generic_visit(module)
         transformer._check_var_shaped_predicate_names()
+        transformer._check_constant_atom_collision()
         transformer._settle_atom_functor_sites()
         if transformer._bare_atom_refs:
             transformer._module_items.append(
@@ -6221,6 +6222,39 @@ class EmbedTransformer(NodeTransformer):
         ):
             transformer._module_items.append(ImplicitAtomsItem())
         return result
+
+    def _check_constant_atom_collision(transformer):
+        """Refuse a name DECLARED both as a constant and as a bare atom.
+
+        A name can be a constant and an atom -- that combination is fine and
+        supported.  ``pi`` is the constant and ``'pi'`` is the atom, the
+        quoted form being the same atom ``global_atom/2`` yields, and the two
+        live side by side in one file.
+
+        What cannot work is DECLARING the atom bare, in ``-module``,
+        ``-private`` or ``-hide``.  Such a listing rebinds the module global
+        to the atom in ``compiler_v2._process_declarations``, which runs
+        AFTER the module body -- so the value ``-constants`` bound, gated for
+        groundness and froze is silently overwritten.  Measured: the global
+        ends as ``('pi',)``, and even ``++pi`` then yields the atom instead
+        of the value.  Silence is the problem, so this is a load-time error.
+
+        Checked here rather than in the directive handlers because either
+        declaration may come first; ``visit_Module`` is the first point at
+        which both sets are complete.
+        """
+        clashes = sorted(transformer._constants & transformer._atoms)
+        if not clashes:
+            return
+        names = ", ".join(f"`{n}`" for n in clashes)
+        subject = f"{names} are" if len(clashes) > 1 else f"{names} is"
+        raise SyntaxError(
+            f"{subject} declared as a constant AND listed as a bare atom. "
+            f"The atom listing rebinds the module global after the file has "
+            f"run, so the constant would be silently destroyed. A name CAN "
+            f"be both — drop it from the -module/-private/-hide list and "
+            f"write the atom quoted, as '{clashes[0]}', which reaches it "
+            f"without touching the global; or rename one of the two.")
 
     def _settle_atom_functor_sites(transformer):
         """Decide every deferred "atom applied as a functor" candidate.

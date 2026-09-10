@@ -893,3 +893,87 @@ def test_a_mistyped_constant_reference_is_the_strict_atoms_error(tmp_path):
             holds(max_fien),
         """)
     assert "max_fien" in str(excinfo.value)
+
+
+def test_declaring_a_name_as_both_a_constant_and_a_bare_atom_is_refused(tmp_path):
+    """The one combination that cannot work.
+
+    A ``-module``/``-private`` atom listing rebinds the module global to the
+    atom AFTER the module body has run, so the constant that -constants
+    bound, gated and froze is silently overwritten -- measured: the global
+    ends as ``('pi',)`` and even ``++pi`` yields the atom rather than the
+    value.  Refused rather than resolved.
+    """
+    with pytest.raises(SyntaxError) as excinfo:
+        _load(tmp_path, "c_clash", """
+            -module(c_clash, [holds/1, pi])
+            -constants(pi = 5000)
+
+            holds(pi),
+        """)
+    message = str(excinfo.value)
+    assert "pi" in message
+    assert "constant" in message and "atom" in message
+
+
+def test_the_collision_is_refused_in_the_other_order_too(tmp_path):
+    """-constants before the listing, and after: the check runs once the
+    whole module has been walked, so it cannot depend on statement order."""
+    with pytest.raises(SyntaxError, match="pi"):
+        _load(tmp_path, "c_clash2", """
+            -constants(pi = 5000)
+            -module(c_clash2, [holds/1, pi])
+
+            holds(pi),
+        """)
+
+
+def test_a_private_atom_listing_collides_the_same_way(tmp_path):
+    """-private rebinds the global exactly as -module does."""
+    with pytest.raises(SyntaxError, match="pi"):
+        _load(tmp_path, "c_clash3", """
+            -module(c_clash3, [holds/1])
+            -private([pi])
+            -constants(pi = 5000)
+
+            holds(pi),
+        """)
+
+
+def test_a_name_can_be_a_constant_AND_an_atom_via_the_quoted_form(tmp_path):
+    """The operator's point, and it holds: only the BARE atom declaration
+    collides.  The quoted form reaches the atom without touching the module
+    global, so one name carries both readings in one file -- ``pi`` is the
+    constant, ``'pi'`` is the atom, and the quoted one is the same atom
+    ``global_atom/2`` yields.
+    """
+    m = _load(tmp_path, "c_both", """
+        -module(c_both, [constant_is/1, atom_is/1, agrees/0])
+        -constants(pi = 5000)
+
+        constant_is(pi),
+        atom_is('pi'),
+        agrees <- (global_atom("pi", A), atom_is(A))
+    """)
+    mod = m.__dict__["$module"]
+
+    def ask(goal):
+        v = Var()
+        return [deref(v) for _ in call(goal, v, module=mod)]
+
+    assert ask("constant_is") == [5000]
+    assert ask("atom_is") == [("pi",)]
+    assert len(list(call("agrees", module=mod))) == 1, (
+        "the quoted form must be the same atom global_atom/2 yields")
+
+
+def test_distinct_names_do_not_collide(tmp_path):
+    """The negative control: without it, a check that refuses EVERYTHING
+    passes every test above."""
+    m = _load(tmp_path, "c_noclash", """
+        -module(c_noclash, [holds/1, pi])
+        -constants(max_fine = 5000)
+
+        holds(pi),
+    """)
+    assert m.max_fine == 5000
