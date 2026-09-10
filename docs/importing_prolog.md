@@ -299,10 +299,12 @@ a leading underscore (`Head` became `_head`), which was not injective —
 `Head` and `HEAD` both became `_head` — so a clause using both silently
 merged them into one variable.
 
-One spelling does not survive: a Prolog variable named `_PI_` arrives as
-`_PI_`, which is Clausal's [module constant](syntax.md#constants) class
-rather than a variable, and the module then fails to load rather than
-importing with a renamed variable.
+Two spellings do not survive, and are refused rather than translated:
+`_PI_`, because Clausal reads one leading and one trailing underscore as a
+[module constant](syntax.md#constants) rather than a variable, and `__Foo`,
+because a leading double underscore is excluded from the variable class.
+Both are legal ISO variables; the refusal names the Prolog variable and
+suggests a spelling that works. `_PI_` used to be silently renamed to `_pi`.
 
 ---
 

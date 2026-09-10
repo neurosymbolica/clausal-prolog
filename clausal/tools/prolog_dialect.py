@@ -150,15 +150,18 @@ def prolog_var_to_clausal(name: str) -> str:
     outbound rule it was non-injective (``Foo`` and ``FOO`` both -> ``_foo``)
     and needed the same per-clause uniquifier behind it.
 
-    One guard died with the mangling and is worth naming, because it did not
-    become unnecessary — it became unreachable.  The old rule lowercased, so
-    Prolog ``_PI_`` arrived as ``_pi_``, which is Clausal's *module constant*
-    lexical class rather than a variable; trailing underscores were therefore
-    stripped.  Under identity ``_PI_`` simply stays ``_PI_``, which is still
-    constant-shaped — but it now fails LOUDLY at load ("undeclared constant")
-    instead of being quietly renamed, and stripping is no longer something
-    this function can do without breaking injectivity.  See
-    tests/test_prolog_var_identity.py.
+    Two ISO variable spellings have no Clausal variable spelling: ``_PI_``
+    (the module-CONSTANT class) and ``__Foo`` (a dunder).  The old rule
+    lowercased and stripped trailing underscores, which hid the first of them
+    behind a rename.  Renaming is what made the mapping non-injective, so
+    this function no longer does it — and the names are REFUSED instead, by
+    ``prolog_to_clausal._checked_var_name``, with a message naming the Prolog
+    variable.  Refusing is not renaming: the mapping stays injective.
+
+    The check is deliberately not here.  A partial mapping function invites a
+    caller to "fix" the input, which is how non-injectivity arrived the first
+    time; the call site can refuse without offering that temptation.  See
+    tests/test_prolog_to_clausal_var_names.py.
     """
     return name
 

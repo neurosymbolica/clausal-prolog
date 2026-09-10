@@ -36,7 +36,10 @@ from clausal.tools.prolog_dialect import (
     prolog_var_to_clausal,
     BUILTIN_NAME_MAP,
 )
-from clausal.templating.term_rewriting import _titlecase_to_snake
+from clausal.templating.term_rewriting import (
+    _is_logic_var_name as _engine_is_logic_var_name,
+    _titlecase_to_snake,
+)
 from clausal.tools.prolog_parser import parse
 # The two quoted-token writers (spec §6.7): an ATOM is single-quoted, a
 # STRING is double-quoted, and which one a literal gets is the whole
@@ -296,6 +299,80 @@ def _collect_predicate_names(pmodule: PModule) -> set[str]:
         if body is not None:
             walk(body)
     return names
+
+
+def _checked_var_name(prolog_name: str) -> str:
+    """A Prolog variable's Clausal spelling, or a refusal naming the variable.
+
+    Names cross unchanged, so this is ``prolog_var_to_clausal`` plus one
+    check: does the result still read as a VARIABLE to the Clausal loader?
+
+    Almost always yes -- capital-initial and ``_``-led are variables in both
+    languages. Two legal ISO spellings are the exception, and the loader's own
+    classifier is what decides, so this cannot drift from the rule:
+
+        ``_PI_``   the module-CONSTANT class (one leading, one trailing ``_``)
+        ``__Foo``  a dunder, excluded from the variable class
+
+    Translated verbatim these produce Clausal that will not load, from a `.pl`
+    file that was well-formed -- and the eventual error comes from the
+    constants machinery, naming a generated symptom rather than the Prolog
+    variable that caused it. So the refusal happens here, where the offending
+    name is still in hand.
+
+    This is the variable-position instance of an invariant the module already
+    holds for functors (see ``_emit_functor``'s refusal of ``'Foo'``): the
+    translator never emits a name the loader reads as something other than
+    what was meant.
+
+    REFUSING IS NOT RENAMING. The mapping stays injective -- no two Prolog
+    variables are merged. A name that cannot cross is reported, not repaired.
+    The check is deliberately NOT inside ``prolog_var_to_clausal``: making
+    that function partial would tempt a future caller into a "safe" rename,
+    which is how non-injectivity arrived the first time.
+    """
+    name = prolog_var_to_clausal(prolog_name)
+    # ``_`` is the anonymous variable. It fails the classifier by design
+    # (it names nothing) and is handled by the reader, not by this rule.
+    if name == "_" or _engine_is_logic_var_name(name):
+        return name
+    if _is_constant_name_shape(name):
+        detail = ("Clausal reads one leading and one trailing underscore as a "
+                  "module CONSTANT, not a variable")
+        remedy = ("Rename the variable in the Prolog source -- dropping either "
+                  f"underscore ({name[1:]!r} or {name[:-1]!r}) makes it a "
+                  "variable again -- and translate again.")
+    else:
+        detail = ("Clausal excludes names beginning with a double underscore "
+                  "from the logic-variable class")
+        # Only offer the de-doubled spelling when it is itself a variable.
+        # ``__`` would reduce to ``_``, the ANONYMOUS variable, and renaming
+        # a named variable to the wildcard changes what the clause means --
+        # every occurrence would become independent.
+        single = name[1:]
+        remedy = (
+            "Rename the variable in the Prolog source to use a single "
+            f"leading underscore ({single!r}) and translate again."
+            if _engine_is_logic_var_name(single)
+            else "Rename the variable in the Prolog source to a single "
+                 "leading underscore followed by a letter, or to a "
+                 "capital-initial name, and translate again."
+        )
+    raise PrologTranslationError(
+        f"Prolog variable {prolog_name!r} has no Clausal variable spelling: "
+        f"{detail}, so the translated file would not load.\n" + remedy
+    )
+
+
+def _is_constant_name_shape(name: str) -> bool:
+    """Constant-shaped, i.e. rejected for THAT reason rather than as a dunder.
+
+    Only used to pick which half of the diagnostic above to print; the
+    engine's ``_is_logic_var_name`` remains the authority on whether a name
+    is a variable at all.
+    """
+    return (len(name) >= 3 and name[0] == "_" and name[-1] == "_"
+            and name[1] != "_" and name[-2] != "_")
 
 
 class _PrologToClausal:
@@ -674,7 +751,7 @@ class _PrologToClausal:
         if isinstance(term, PAtom):
             return self._emit_atom(term)
         if isinstance(term, PVar):
-            return prolog_var_to_clausal(term.name)
+            return _checked_var_name(term.name)
         if isinstance(term, PNumber):
             if isinstance(term.value, float):
                 return repr(term.value)
@@ -939,7 +1016,7 @@ class _PrologToClausal:
         if isinstance(term, PNumber):
             return str(term.value) if isinstance(term.value, int) else repr(term.value)
         if isinstance(term, PVar):
-            return prolog_var_to_clausal(term.name)
+            return _checked_var_name(term.name)
         if isinstance(term, PAtom):
             # ISO evaluable constants: X is pi must not emit a bare `pi`
             # name (NameError at runtime) — map to math.* / a literal (F025).
