@@ -148,15 +148,22 @@ def test_leading_underscore_term_position_unchanged(tmp_path):
     assert _answers(mod, "p") == [(1,)]
 
 
-def test_lowercase_functor_and_atom_unchanged(tmp_path):
-    """The ordinary case: a lowercase name is still a functor, not a
-    variable."""
+def test_lowercase_name_in_term_position_is_an_atom_not_a_variable(tmp_path):
+    """The ordinary case, asserted on a LOWERCASE name.
+
+    This used to spell its clause ``p(Y) <- (bar(Y))`` -- an ALL_CAPS
+    variable -- so it duplicated the test above and would still have passed
+    if the rule had started reading lowercase names as variables, which is
+    the one thing its docstring claimed to check.  ``red`` here is an atom:
+    the fact matches only the atom, and the answer comes back as the atom
+    rather than as a fresh binding."""
     mod = _load(tmp_path, "lower", """
-        -module(ttiav_lower, [p(X)])
-        bar(1),
-        p(Y) <- (bar(Y))
+        -module(ttiav_lower, [p(X), red])
+        bar(red),
+        p(X) <- (bar(X))
     """)
-    assert _answers(mod, "p") == [(1,)]
+    [(answer,)] = _answers(mod, "p")
+    assert answer == ("red",), answer
 
 
 # ── Python-by-definition contexts keep the Python reading ──────────────────
@@ -430,3 +437,125 @@ def test_a_thunk_inside_a_lambda_body_uses_the_same_exclusions(tmp_path):
     assert not [w for w in rec
                 if issubclass(w.category, ClausalSingletonWarning)
                 and "`Fraction`" in str(w.message)]
+
+
+# ── A clause variable wins over a same-spelled module-namespace class ──────
+#
+# The Python-scope exclusion holds every TitleCase name in the module
+# namespace -- all of ``pythonic_ast.nodes.__all__`` (``Node``, ``Branch``,
+# ``Match``, ``Call``, ``Return``, ``Slice`` …) plus the TitleCase builtins.
+# Excluding by SPELLING alone means an ordinary clause variable that happens
+# to share one of those spellings is not captured, and the thunk formats the
+# CLASS.  Silently, because the lint returns early on both ``JoinedStr`` and
+# ``++``.  The names are short, ordinary and domain-plausible, so the
+# collision is not exotic.
+
+def test_a_clause_variable_named_like_an_ast_node_is_still_captured(tmp_path):
+    """``Node`` is bound by ``tree/1`` here, so the f-string must format the
+    BINDING (7), not ``<class '...nodes.Node'>``."""
+    mod = _load(tmp_path, "nodevar", """
+        -module(ttiav_nodevar, [p(S)])
+        tree(7),
+        p(S) <- (tree(Node), S is f"{Node}")
+    """)
+    assert _answers(mod, "p") == [("7",)]
+
+
+def test_a_clause_variable_named_like_a_builtin_is_still_captured(tmp_path):
+    mod = _load(tmp_path, "matchvar", """
+        -module(ttiav_matchvar, [p(S)])
+        tree(7),
+        p(S) <- (tree(Match), S is ++(Match + 1))
+    """)
+    assert _answers(mod, "p") == [(8,)]
+
+
+def test_the_namespace_name_still_wins_when_the_clause_never_binds_it(
+        tmp_path):
+    """The other side of the rule, and the reason it is "unless the clause
+    binds it" rather than "never exclude": a name appearing ONLY inside the
+    thunk is the module-namespace class, which is what ``++Name`` is for."""
+    mod = _load(tmp_path, "nsonly", """
+        from fractions import Fraction
+        -module(ttiav_nsonly, [p(S)])
+        p(S) <- (S is f"{Fraction(1, 3)}")
+    """)
+    assert _answers(mod, "p") == [("1/3",)]
+
+
+def test_capture_does_not_depend_on_where_the_thunk_sits_in_the_clause(
+        tmp_path):
+    """The CAPTURE decision is made over the whole clause, not from what the
+    walk has seen so far -- otherwise one clause would mean two different
+    things depending on goal order.
+
+    Here the thunk runs BEFORE the goal that binds the name, so an unbound
+    variable is the right answer; what matters is that both spellings give
+    the SAME right answer.  Were the namespace collision still deciding it,
+    the TitleCase arm would render the class instead -- which is why this
+    asserts what the two arms produce rather than merely that they load.
+    """
+    rendered = []
+    for spelling in ("Node", "NODE"):
+        mod = _load(tmp_path, f"orderindep_{spelling}", f"""
+            -module(ttiav_orderindep_{spelling}, [p(S)])
+            tree(7),
+            p(S) <- (S is f"{{{spelling}}}", tree({spelling}))
+        """)
+        [(answer,)] = _answers(mod, "p")
+        rendered.append(answer)
+    # An unbound variable renders as ``_N``; the class would render as
+    # ``<class '...'>``.  Both arms must be the former.
+    assert all(r.startswith("_") for r in rendered), rendered
+    assert not any("class" in r for r in rendered), rendered
+
+
+def test_a_captured_namespace_named_variable_is_not_a_singleton(tmp_path):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _load(tmp_path, "nodesingle", """
+            -module(ttiav_nodesingle, [p(S)])
+            tree(7),
+            p(S) <- (tree(Node), S is f"{Node}")
+        """)
+    assert not [w for w in rec
+                if issubclass(w.category, ClausalSingletonWarning)
+                and "`Node`" in str(w.message)]
+
+
+# ── The arrow-lambda reading of a bare TitleCase head ─────────────────────
+
+def test_a_bare_titlecase_arrow_head_inside_a_term_is_a_lambda(tmp_path):
+    """``Foo <- Body`` in TERM position is an arrow LAMBDA, not a clause.
+
+    ``_extract_arrow_lambda_params`` asks whether the head is a list of logic
+    variables, so a bare capital-initial head now matches and lowers to a
+    closure.  That mirrors what ``FOO <- Body`` has always done, and it is
+    the consistent reading -- a capital initial in term position is a
+    variable, and a lambda head is a parameter list.  Pinned so the reading
+    is deliberate rather than incidental: the shape LOADS, its head lowers
+    to a closure, and ``assertz`` then refuses that closure at query time --
+    loudly, naming it -- exactly as its ALL_CAPS twin does.
+    """
+    outcomes = []
+    for spelling in ("Foo", "FOO"):
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("ignore")
+            mod = _load(tmp_path, f"arrowlam_{spelling}", f"""
+                -module(ttiav_arrowlam_{spelling}, [p(X)])
+                bar(1),
+                p(X) <- (assertz({spelling} <- bar(X)))
+            """)
+        # It LOADS, and the head lowers to a closure, so ``assertz`` refuses
+        # it at query time -- loudly, naming the lambda.  Recorded rather
+        # than merely tolerated: if this ever starts asserting a clause, or
+        # starts refusing at load, the change is deliberate.
+        try:
+            list(call("p", Var(), module=_module(mod)))
+            outcomes.append("succeeded")
+        except TypeError as exc:
+            outcomes.append(("TypeError", "functor, arity" in str(exc)))
+    # Both spellings agree -- which is the property that matters.  Linting
+    # only the TitleCase arm would make one clause mean two things depending
+    # on how its head is spelled, the very divergence this change removes.
+    assert outcomes[0] == outcomes[1], outcomes

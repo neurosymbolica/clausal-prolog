@@ -714,3 +714,41 @@ def test_constants_rhs_functor_partial_construction_is_a_load_error(tmp_path):
             -constants(_BAD_ = pair(1))
             p(X) <- (X is _BAD_)
         """)
+
+
+def test_truth_value_spelling_as_a_constant_dict_key(tmp_path):
+    """``undefined`` is a legal ``-constants`` dict key, both spellings.
+
+    ``_transform_constant_dict_key`` is the ``-constants`` twin of
+    ``_visit_dict_key``, and it was missed when that one moved to the
+    EFFECTIVE variable reading.  ``Undefined`` is capital-initial, so the
+    lexical rule called it a variable, the ``$intern_atom`` branch was
+    skipped, and the directive refused with "``Undefined`` is a
+    logic-variable name".  The alias rewrite just above that site turns a
+    lowercase ``undefined`` key into ``Name("Undefined")`` first, so BOTH
+    spellings were affected -- and the path's own docstring promises it
+    handles the truth-value spellings.
+    """
+    from clausal.terms import DictTerm
+    for tag, key in (("lower", "undefined"), ("canon", "Undefined")):
+        m = _load(tmp_path, f"tvkey_{tag}", f"""
+            -constants(_D_ = {{{key}: 1}})
+            lookup(X) <- (X is _D_)
+        """)
+        v = Var()
+        [result] = [deref(v) for _ in call("lookup", v,
+                                           module=m.__dict__["$module"])]
+        assert isinstance(result, DictTerm), (tag, result)
+
+
+def test_declared_atom_constant_dict_key_still_works(tmp_path):
+    """The control: an ordinary declared atom key is unaffected."""
+    from clausal.terms import DictTerm
+    m = _load(tmp_path, "tvkey_ctl", """
+        -private([alpha])
+        -constants(_D_ = {alpha: 1})
+        lookup(X) <- (X is _D_)
+    """)
+    v = Var()
+    [result] = [deref(v) for _ in call("lookup", v, module=m.__dict__["$module"])]
+    assert isinstance(result, DictTerm)
