@@ -36,6 +36,7 @@ from clausal.tools.prolog_dialect import (
     prolog_var_to_clausal,
     BUILTIN_NAME_MAP,
 )
+from clausal.templating.term_rewriting import _titlecase_to_snake
 from clausal.tools.prolog_parser import parse
 # The two quoted-token writers (spec §6.7): an ATOM is single-quoted, a
 # STRING is double-quoted, and which one a literal gets is the whole
@@ -1040,8 +1041,24 @@ class _PrologToClausal:
         clausal_name = _REVERSE_BUILTIN_MAP.get(prolog_name)
         if clausal_name is not None:
             return clausal_name
-        # Unmapped names cross unchanged.
+        # Unmapped names cross unchanged — except that a Python keyword
+        # gets the trailing underscore the codebase uses for the same
+        # collision (``in_``, ``if_``): ``not/1`` -> ``not_``.
         name = prolog_name
+        if keyword.iskeyword(name):
+            name = name + "_"
+        # A TitleCase functor (a quoted atom such as ``'Foo'``) would be
+        # emitted as a name the Clausal loader rejects (TitleCase has no
+        # role there; the lint is an error).  This translator must never
+        # EMIT one, so refuse here and name the spelling that loads.
+        if name[:1].isupper() and any(c.islower() for c in name):
+            raise PrologTranslationError(
+                f"Prolog functor {prolog_name!r} is TitleCase, which has no "
+                f"role in Clausal (predicates and functors are lowercase; "
+                f"a file spelling {name!r} does not load).\n"
+                f"Rename it in the Prolog source to "
+                f"{_titlecase_to_snake(name)!r} and translate again."
+            )
         # A functor whose converted name is not a plain Python identifier
         # (quoted atoms like 'hello world', operator soup from unmapped
         # user ops, keyword collisions like `none` → None) cannot become a

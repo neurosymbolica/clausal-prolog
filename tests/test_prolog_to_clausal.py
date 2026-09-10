@@ -302,6 +302,38 @@ class TestNamingConventions:
         assert "foo_bar(1)" in result
         assert "FooBar" not in result
 
+    @pytest.mark.parametrize("pl, clausal", [
+        ("not(X) :- fail.", "not_(X)"),
+        ("assert(X) :- true.", "assert_(X)"),
+        ("if(C, T, E) :- true.", "if_(C, T, E)"),
+        ("and(A, B, C) :- true.", "and_(A, B, C)"),
+        ("or(A, B, C) :- true.", "or_(A, B, C)"),
+        ("import(M) :- true.", "import_(M)"),
+    ])
+    def test_keyword_named_functor_gets_the_trailing_underscore(self, pl, clausal):
+        """A Prolog functor spelled like a Python keyword crosses as
+        ``name_`` — the codebase's own convention (``in_``, ``if_``)."""
+        # nv
+        out = prolog_to_clausal(pl)
+        assert clausal in out, out
+
+    @pytest.mark.parametrize("pl, old, new", [
+        ("'Foo'(x).", "Foo", "foo"),
+        ("'FooBar'(1, 2).", "FooBar", "foo_bar"),
+        ("p(X) :- 'Bar'(X).", "Bar", "bar"),
+    ])
+    def test_titlecase_functor_is_refused_naming_the_rename(self, pl, old, new):
+        """A quoted TitleCase functor would be emitted as a name the Clausal
+        loader rejects; the translator refuses at translation time and names
+        the snake_case spelling instead of producing a file that cannot load."""
+        # nv
+        with pytest.raises(PrologTranslationError) as ei:
+            prolog_to_clausal(pl)
+        msg = str(ei.value)
+        assert f"'{old}'" in msg or f"`{old}`" in msg or old in msg
+        assert new in msg
+        assert "TitleCase" in msg
+
     def test_variable_conversion(self):
         # nv
         src = "foo(Head, Tail)."
