@@ -32,6 +32,7 @@ from clausal.tools.prolog_operators import OperatorTable
 # the engine enforces (see _refuse_arrow_lambda_in_term_position).
 from clausal.templating.term_rewriting import (
     _is_arrow_adjacent as _engine_is_arrow_adjacent,
+    _is_constant_name as _engine_is_constant_name,
     _leftmost_usub as _engine_leftmost_usub,
 )
 from clausal.tools.prolog_dialect import (
@@ -2479,6 +2480,30 @@ def _prefix_singletons(item: PItem) -> PItem:
     ``_x``-style singleton, now that names cross unchanged) is left as-is
     rather than double-prefixed.
 
+    Two further cases DECLINE the rename, and both were unreachable while
+    variable names were mangled on the way out. The old mangler stripped
+    leading underscores and made every base name distinct, so ``"_" + name``
+    was guaranteed to be both free and variable-shaped. This pass never
+    depended on the rename table's PURPOSE, but it did depend on that
+    property of its OUTPUT, and the property left with it:
+
+    * **The target is already a live name.** A source may carry both ``X``
+      and ``_X``. If ``X`` is a singleton, prefixing it produces ``_X`` --
+      the other variable -- and the clause silently unifies two distinct
+      arguments. That is the F022 defect exactly, reached by a pass that maps
+      no names at all. Counts are taken over the whole item before any
+      rename, so the check sees every name including ones this pass would
+      not touch.
+    * **The result would not be a variable.** ``X_`` is a legal Clausal
+      variable; ``_X_`` is a module CONSTANT, so prefixing emits a name that
+      does not read back as a variable, and a file that loaded fine exports
+      to a `.pl` whose re-import will not load. (The inbound translator used
+      to strip trailing underscores and absorb this; it no longer renames.)
+
+    Declining costs a singleton warning from the target engine. That is worth
+    strictly less than a wrong answer or an unloadable round trip, and unlike
+    either of those it is visible to the user.
+
     A plain AST rewrite, applied per item by construction: walking every
     PVar in the item's subterms means DCG hidden args, nested compounds,
     and list elements are all covered without enumerating term shapes by
@@ -2499,9 +2524,14 @@ def _prefix_singletons(item: PItem) -> PItem:
 
     class _Renamer(PrologTransformer):
         def visit_PVar(self, node):
-            if node.name in singletons and not node.name.startswith("_"):
-                return PVar("_" + node.name, unit=node.unit)
-            return node
+            if node.name not in singletons or node.name.startswith("_"):
+                return node
+            prefixed = "_" + node.name
+            if prefixed in counts:
+                return node          # already another variable in this item
+            if _engine_is_constant_name(prefixed):
+                return node          # would not read back as a variable
+            return PVar(prefixed, unit=node.unit)
 
     return _Renamer().visit(item)
 

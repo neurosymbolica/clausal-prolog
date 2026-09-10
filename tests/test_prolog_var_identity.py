@@ -115,3 +115,54 @@ def test_wildcard_stays_anonymous_in_both_directions():
 
     returned = prolog_to_clausal("p(_, _) :- q(_, _).")
     assert returned.strip() == "p(_, _) <- (q(_, _))"
+
+
+# ── The singleton pass must not undo injectivity ──────────────────────
+#
+# Deleting the rename table removed more than its stated purpose. Its OUTPUT
+# had a property that a different pass silently relied on: every emitted base
+# name was distinct, and none was underscore-led (the old mangler stripped
+# leading underscores). ``_prefix_singletons`` renames a singleton to
+# ``"_" + name`` without checking the target is free, which was safe only
+# because that property held. Under identity it does not: a source can carry
+# both ``X`` and ``_X``.
+
+def test_singleton_prefix_does_not_collide_with_a_live_variable():
+    """The bug this file exists to prevent, arriving through another door.
+
+    ``X`` occurs once so the singleton pass wants to call it ``_X``; ``_X``
+    already names a DIFFERENT variable in the same clause. Prefixing would
+    unify the head's two arguments — a silent wrong answer of exactly the
+    F022 kind, produced by a pass that never mapped names at all.
+
+    The pass must decline. The ISO singleton warning it exists to silence is
+    worth strictly less than a correct program.
+    """
+    emitted = clausal_source_to_prolog("p(X, _X) <- (q(_X))")
+    assert "p(X, _X) :-" in emitted, emitted
+    assert len(set(_prolog_var_names(emitted))) == 2, emitted
+
+
+def test_singleton_prefix_declines_rather_than_building_a_constant_name():
+    """``X_`` is a legal Clausal variable; ``_X_`` is a module constant.
+
+    Prefixing a trailing-underscore singleton emits a name that is not a
+    variable on the way back, so a file that loaded fine exports to a `.pl`
+    whose re-import will not load. The inbound trailing-underscore strip used
+    to absorb this; nothing does now, so the pass must not create it.
+    """
+    emitted = clausal_source_to_prolog("p(X_, Y) <- (q(Y))")
+    assert "p(X_, Y) :-" in emitted, emitted
+    assert "_X_" not in emitted, emitted
+    # and the round trip survives
+    assert prolog_to_clausal(emitted).strip() == "p(X_, Y) <- (q(Y))"
+
+
+def test_singleton_prefixing_still_happens_when_it_is_safe():
+    """Positive control: the two guards above must not disable the pass.
+
+    A test that only checked declining would pass on a pass that never fired.
+    """
+    emitted = clausal_source_to_prolog(
+        "schedule(high, DEPENDENCE, low) <- (q(1))")
+    assert "_DEPENDENCE" in emitted, emitted
