@@ -114,7 +114,7 @@ side effects to the Python caller:
 ```python
 # skip
 # Python caller does the I/O
-for trail in call("Solve", data, result, module=mod):
+for trail in call("solve", data, result, module=mod):
     print(deref(result))  # I/O in Python, not in Clausal
 ```
 
@@ -130,7 +130,7 @@ big_table = [(k, v) for k, v in dataset.items()]
 
 def worker():
     result = Var()
-    for trail in call("Lookup", "key42", big_table, result, module=mod):
+    for trail in call("lookup", "key42", big_table, result, module=mod):
         print(deref(result))
 ```
 
@@ -144,13 +144,13 @@ Don't share an unbound variable between threads:
 # Good: fresh Var per thread
 def worker():
     x = Var()
-    for trail in call("MyPred", x, module=mod):
+    for trail in call("my_pred", x, module=mod):
         results.append(deref(x))
 
 # Bad: shared unbound Var
 x = Var()
 def worker():
-    for trail in call("MyPred", x, module=mod):  # races on x
+    for trail in call("my_pred", x, module=mod):  # races on x
         ...
 ```
 
