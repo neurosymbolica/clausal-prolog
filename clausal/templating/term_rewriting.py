@@ -600,10 +600,17 @@ def _is_logic_var_name(identifier: str) -> bool:
     * **Leading single underscore** — ``_x``, ``_foo``, ``_head``.
       The underscore must be a single leading one; dunders (``__``) and the
       bare ``_`` wildcard are excluded.
-    * **ALL-CAPS** — ``X``, ``FOO``, ``HEAD``, ``TAIL``.
-      Every *cased* character must be uppercase and there must be at least one
-      cased character (so plain ``_`` and digit-only names are excluded).
-      Underscores and digits are allowed inside (e.g. ``N1``, ``MAX_OF``).
+    * **Capital initial** — ``X``, ``FOO``, ``Foo``, ``FooBar``, ``N1``.
+      The ISO Prolog rule: an identifier whose first character is an
+      uppercase letter names a variable.  Underscores and digits are allowed
+      after it (``N1``, ``MAX_OF``, ``Foo_bar``).
+
+    ``Foo`` joined the second class on 2026-09-10.  It used to be neither a
+    variable nor a legal identifier — TitleCase in ANY Clausal position was a
+    load-time error — and it is now a variable wherever a VALUE goes.  The
+    lint that refused it survives, narrowed to FUNCTOR position only (see
+    ``_lint_titlecase``): this predicate is purely lexical and says nothing
+    about position, so the two rules live in different places on purpose.
 
     Constant-shaped names (``_PI_``) are excluded too — pinned by
     test_var_classifier_conformance.
@@ -616,27 +623,31 @@ def _is_logic_var_name(identifier: str) -> bool:
         return False
     if identifier.startswith("_"):
         return True
-    # ALL-CAPS: str.isupper() is True iff all cased chars are uppercase AND
-    # there is at least one cased character — exactly what we want.
-    return identifier.isupper()
+    # ``"".isupper()`` is False and a digit is not upper, so a name that is
+    # empty, digit-initial or lowercase-initial is correctly rejected.
+    return identifier[:1].isupper()
 
 
 def _suggest_non_var_name(identifier: str) -> str:
     """A spelling of *identifier* that ``_is_logic_var_name`` rejects.
 
     Only used inside error messages, so "plausible" beats "canonical":
-    ``FOO`` -> ``Foo``, ``_foo`` -> ``foo``, ``F`` -> ``Fx`` (a single letter
-    title-cased is still all-caps).
+    ``FOO`` -> ``foo``, ``_foo`` -> ``foo``.
+
+    It used to suggest ``Foo`` for ``FOO`` — the closest-looking spelling
+    that was not a variable.  Since 2026-09-10 a capital initial IS a
+    variable, so every capital-initial suggestion would have named another
+    variable; the whole non-variable namespace is lowercase now, and the
+    suggestion says so.
     """
-    stripped = identifier.lstrip("_")
+    stripped = identifier.lstrip("_").lower()
     if not stripped:
         return "foo"
-    if identifier.startswith("_"):
-        candidate = stripped
-    else:
-        candidate = stripped[0] + stripped[1:].lower()
-    if _is_logic_var_name(candidate):
-        candidate = candidate + "x"
+    candidate = stripped
+    if _is_logic_var_name(candidate) or not candidate[:1].isalpha():
+        # Nothing lexical is left to lower (a non-alphabetic initial, say),
+        # so prefix rather than return a spelling the caller cannot use.
+        candidate = "x" + candidate
     return candidate
 
 
@@ -679,14 +690,49 @@ _TITLECASE_RENAMED_SPELLINGS = frozenset({"If", TEST_DEPRECATED_NAME})
 def _is_titlecase_identifier(identifier: str) -> bool:
     """True iff *identifier* is TitleCase in the sense of the lint.
 
-    An initial capital, at least one lowercase letter somewhere, and not a
-    logic variable by ``_is_logic_var_name`` (an ALL-CAPS name has no
-    lowercase letter, so the last test is belt-and-braces: it keeps the
-    predicate honest if the variable rule ever widens).
+    An initial capital plus at least one lowercase letter somewhere — which
+    is exactly what separates ``Foo`` from the ALL-CAPS ``FOO``.
+
+    It used to end with ``and not _is_logic_var_name(identifier)``, described
+    there as belt-and-braces "if the variable rule ever widens".  The
+    variable rule widened on 2026-09-10 and that clause was not
+    belt-and-braces at all: ``_is_logic_var_name`` now accepts every
+    capital-initial name, so the conjunct would be False for every TitleCase
+    identifier and the lint would silently pass EVERYTHING — a check that
+    verifies nothing while still reporting success.  The predicate is
+    lexical and independent now: it asks only how the name is SPELLED, and
+    ``_lint_titlecase`` decides which POSITIONS it is asked about.
     """
-    return (identifier[:1].isupper()
-            and any(c.islower() for c in identifier)
-            and not _is_logic_var_name(identifier))
+    return identifier[:1].isupper() and any(c.islower() for c in identifier)
+
+
+def _is_var_in_callable_position(identifier: str) -> bool:
+    """True if *identifier*, used as the CALLABLE of a call, reads as a
+    logic variable — i.e. ``FOO`` and ``_foo``, but NOT ``Foo``.
+
+    The ruled asymmetry of 2026-09-10, stated once so every callable-position
+    guard shares it.  In TERM position a capital initial is a variable, full
+    stop (``_is_logic_var_name``).  In CALLABLE position it is not, because a
+    variable there is not ``call/N`` in this language — it is the
+    UNIT-ANNOTATION sugar, and ``X(newton)`` builds a Quantity rather than
+    calling ``X``.  So a capital-initial callable is one of exactly two
+    things, neither of them a variable:
+
+    * a TitleCase name the file has BOUND (an ``-import_from`` name such as
+      the reified-AST constructors, or ``Undefined``) — a real functor, which
+      must be CALLED, not turned into a unit;
+    * an unbound TitleCase name — a load-time error from ``_lint_titlecase``,
+      which names the ``++Name`` remedy.
+
+    Reading such a callable as a variable is what silently converts
+    ``foldable(Atom(_))`` from a goal into ``++(Quantity(Atom, {_}))``: the
+    call disappears, and the failure surfaces much later as "cannot build a
+    Quantity from AttVar(...): SI prefixes cannot be used as units", naming
+    neither ``Atom`` nor the line it was written on.  ``FOO(3)`` keeps the
+    units reading exactly as before.
+    """
+    return (_is_logic_var_name(identifier)
+            and not _is_titlecase_identifier(identifier))
 
 
 _PYTHON_CLASS_NAMES: frozenset | None = None
@@ -803,7 +849,7 @@ def _is_lowerable_goal(goal) -> bool:
     """
     if isinstance(goal, Call):
         if isinstance(goal.func, Name):
-            if _is_logic_var_name(goal.func.id):
+            if _is_var_in_callable_position(goal.func.id):
                 return False         # meta-call on a variable goal
         elif not isinstance(goal.func, Attribute) or _is_dict_attr_access(goal.func):
             return False
@@ -1093,15 +1139,29 @@ def _binds_name(module, name: str) -> bool:
     return False
 
 
-def _collect_logic_var_names(node) -> list[str]:
-    """Collect logic variable names from an AST node in first-occurrence order."""
+def _collect_logic_var_names(node, include_titlecase=True) -> list[str]:
+    """Collect logic variable names from an AST node in first-occurrence order.
+
+    ``include_titlecase=False`` for a ``++`` Python escape.  A collected name
+    becomes a PARAMETER of the lambda the escape compiles to, bound to a
+    fresh clause variable — so collecting ``Fraction`` out of
+    ``++Fraction(1, 3)`` shadows the Python class with an unbound ``Var`` and
+    the escape dies at search time with ``'AttVar' object is not callable``.
+    That is the very failure the TitleCase lint tells the author to fix BY
+    writing ``++Fraction``, so the remedy has to keep working: inside a ``++``
+    escape the code is Python by definition, and a capital-initial name there
+    is a Python name.  The lint has always skipped ``++`` operands for the
+    same reason.
+    """
     ordered: list[str] = []
     seen: set[str] = set()
 
     class _Collector(NodeVisitor):
         def visit_Name(self, name):
             ident = name.id
-            if ident != "_" and _is_logic_var_name(ident):
+            if (ident != "_" and _is_logic_var_name(ident)
+                    and (include_titlecase
+                         or not _is_titlecase_identifier(ident))):
                 if ident not in seen:
                     seen.add(ident)
                     ordered.append(ident)
@@ -1197,7 +1257,7 @@ def _isnot_rhs_is_partial_pattern(rhs) -> bool:
     if isinstance(rhs, Call):
         # A functor application like tag(_); exclude a logic variable applied as
         # a goal closure (e.g. Goal(...)) — that is not a data pattern.
-        if isinstance(rhs.func, Name) and _is_logic_var_name(rhs.func.id):
+        if isinstance(rhs.func, Name) and _is_var_in_callable_position(rhs.func.id):
             return False
     elif not isinstance(rhs, (List, Tuple, Set, Dict)):
         return False
@@ -1551,6 +1611,10 @@ class TermTransformer(NodeTransformer):
         # ``call.func`` so that predicate functor names (which are calls, not
         # atoms) are excluded from the global-atom auto-mint set.
         transformer._suppress_bare_atom_collection = False
+        # True only while visiting a Call's ``func``.  Term position
+        # and callable position read a TitleCase name differently --
+        # see ``_is_var_in_callable_position`` and ``visit_Name``.
+        transformer._in_callable_position = False
 
     def visit_Await(transformer, await_expr):
         return node_ast("Await", await_expr, value=transformer.visit(await_expr.value))
@@ -1644,11 +1708,17 @@ class TermTransformer(NodeTransformer):
                 "LoadName", func_expr,
                 name=replace(Constant(value=dotted or identifier), func_expr))
         prev = transformer._suppress_bare_atom_collection
+        prev_callable = transformer._in_callable_position
         transformer._suppress_bare_atom_collection = True
+        # Only a bare ``Name`` is a callable position in the sense that
+        # matters here.  A nested callable (``f(a)(b)``) must not leak the
+        # flag onto ``f(a)``'s own arguments, which are terms.
+        transformer._in_callable_position = isinstance(func_expr, Name)
         try:
             return transformer.visit(func_expr)
         finally:
             transformer._suppress_bare_atom_collection = prev
+            transformer._in_callable_position = prev_callable
 
     def visit_Call(transformer, call):
         visit = transformer.visit
@@ -1723,7 +1793,8 @@ class TermTransformer(NodeTransformer):
             )
             return _build_py_thunk_ast(transformer, call, inner, [])
         elif (
-            not (isinstance(call.func, Name) and not _is_logic_var_name(call.func.id))
+            not (isinstance(call.func, Name)
+                 and not _is_var_in_callable_position(call.func.id))
             and not isinstance(call.func, Attribute)
             and len(call.args) == 1
             and _is_unit_expr(call.args[0])
@@ -2174,11 +2245,42 @@ class TermTransformer(NodeTransformer):
                 ),
                 name,
             )
-        # Logic variable: leading single underscore OR all-caps name.
+        # Logic variable: leading single underscore OR capital initial.
         # Examples (underscore): _x, _foo, _head — all are logic variables.
-        # Examples (all-caps):   X, FOO, HEAD, TAIL, N1, MAX_OF.
-        # Excluded: __, __init__ (dunder-style), MixedCase, lowercase.
-        if _is_logic_var_name(identifier):
+        # Examples (capital):    X, FOO, HEAD, N1, MAX_OF, Foo, FooBar.
+        # Excluded: __, __init__ (dunder-style), lowercase.
+        #
+        # THE CARVE-OUT, and only for the capital-initial names that joined
+        # the class on 2026-09-10 (``Foo``, not ``FOO``).  A TitleCase name
+        # is a variable in TERM position only, and not when this file has
+        # explicitly BOUND it.  Three cases, all of them TitleCase-only:
+        #
+        # * CALLABLE POSITION (``transformer._in_callable_position``, set by
+        #   ``_visit_call_func``).  ``Foo(X)`` is a functor, never a variable
+        #   — a variable there would be the unit-annotation sugar, which is
+        #   the whole reason the lint still refuses TitleCase functors.  This
+        #   is also what keeps ``_check_var_shaped_predicate_names`` honest:
+        #   without it a TitleCase body call registered a variable READ, and
+        #   the file was refused for "predicate name also read as a logic
+        #   variable" instead of getting the lint's ``++Name`` remedy.
+        # * an ``-import_from`` name (``_import_remap``) — otherwise
+        #   ``-import_from(py.units, [Metre])`` binds a name no use site can
+        #   reach, and every existing units import becomes a load error.
+        # * ``_TITLECASE_EXEMPT_NAMES`` (``Undefined``, the injected third
+        #   truth value) — otherwise it silently becomes a fresh variable
+        #   that unifies with anything instead of the value it names.
+        #
+        # These are exactly the carve-outs the TitleCase lint has always had,
+        # so it is one rule: TitleCase reads as a variable in precisely the
+        # positions where the lint used to refuse it.  ALL-CAPS is
+        # deliberately NOT carved out anywhere — it was a variable before
+        # this change, and nothing may start reading ``FOO`` as a binding.
+        if _is_logic_var_name(identifier) and not (
+            _is_titlecase_identifier(identifier)
+            and (transformer._in_callable_position
+                 or identifier in _TITLECASE_EXEMPT_NAMES
+                 or identifier in transformer._import_remap)
+        ):
             transformer.var_occurrences[identifier] += 1
             transformer._logic_var_refs.setdefault(
                 identifier, getattr(name, "lineno", 0))
@@ -2450,7 +2552,8 @@ class TermTransformer(NodeTransformer):
             and unary_op.lineno == unary_op.operand.lineno
         ):
             expression = unary_op.operand.operand
-            var_names = _collect_logic_var_names(expression)
+            var_names = _collect_logic_var_names(
+                expression, include_titlecase=False)
             if transformer._python_visitor is not None:
                 # A seam's ``++`` operand is Python-hosted code again, so it
                 # may itself contain ``--`` (nesting to any depth).  The
@@ -5175,9 +5278,20 @@ class EmbedTransformer(NodeTransformer):
             if _is_titlecase_identifier(bound):
                 transformer._titlecase_python_bound.add(bound)
 
-    def _lint_titlecase(transformer, *nodes):
-        """Lint every TitleCase ``Name`` in the CLAUSAL subtrees *nodes*
-        (see ClausalTitleCaseIdentifierWarning), once per (file, identifier).
+    def _lint_titlecase(transformer, *nodes, root_is_functor=False):
+        """Lint every TitleCase ``Name`` in FUNCTOR position within the
+        CLAUSAL subtrees *nodes* (see ClausalTitleCaseIdentifierWarning),
+        once per (file, identifier).
+
+        POSITION.  Only the ``func`` of a ``Call`` is read — a clause head's
+        functor, and a goal called in a body, at any nesting depth (so the
+        ``Fraction`` of ``bar(Fraction(1, 3))`` is reached even though the
+        call sits in an argument).  A capital-initial name standing anywhere
+        a VALUE goes is a logic variable since 2026-09-10
+        (``_is_logic_var_name``) and is not linted at all.  ``root_is_functor``
+        marks the two callers that hand over a bare ``Name`` which IS a
+        functor — the zero-arity fact heads ``flag,`` and ``flag`` — since
+        nothing in the node itself says so.
 
         Called from each point where the transformer recognises a Clausal
         position in the raw parse tree — a clause (``head <- body``, a DCG
@@ -5225,20 +5339,22 @@ class EmbedTransformer(NodeTransformer):
                     and isinstance(node.operand, UnaryOp)
                     and isinstance(node.operand.op, UAdd))
 
-        def walk_(node):
+        def consider(ident, node):
+            if (ident not in transformer._titlecase_seen
+                    and ident not in _TITLECASE_EXEMPT_NAMES
+                    and _is_titlecase_identifier(ident)):
+                transformer._titlecase_seen.add(ident)
+                if ident not in transformer._titlecase_imported:
+                    report(ident, node)
+
+        def walk_(node, functor_position=False):
             # ``'Foo'(...)``: a string literal as the callable is sugar for
             # the name ``Foo`` (``visit_Call`` rewrites it AFTER this walk
             # ran on the raw tree), so the string is read as the identifier
             # it names; the report is located on the call.
             if (isinstance(node, Call) and isinstance(node.func, Constant)
                     and isinstance(node.func.value, str)):
-                ident = node.func.value
-                if (ident not in transformer._titlecase_seen
-                        and ident not in _TITLECASE_EXEMPT_NAMES
-                        and _is_titlecase_identifier(ident)):
-                    transformer._titlecase_seen.add(ident)
-                    if ident not in transformer._titlecase_imported:
-                        report(ident, node)
+                consider(node.func.value, node)
                 for child in node.args:
                     walk_(child)
                 for kw in node.keywords:
@@ -5247,13 +5363,36 @@ class EmbedTransformer(NodeTransformer):
             if isinstance(node, (Constant, JoinedStr)) or _is_escape(node):
                 return
             if isinstance(node, Name):
-                ident = node.id
-                if (ident not in transformer._titlecase_seen
-                        and ident not in _TITLECASE_EXEMPT_NAMES
-                        and _is_titlecase_identifier(ident)):
-                    transformer._titlecase_seen.add(ident)
-                    if ident not in transformer._titlecase_imported:
-                        report(ident, node)
+                # THE POSITION RULE.  A capital-initial name standing where a
+                # VALUE goes is a logic variable (``_is_logic_var_name``), so
+                # there is nothing to lint about it; only the FUNCTOR of a
+                # call — a clause head's functor, or a goal in a body — is
+                # still refused.
+                #
+                # Why the functor case is not simply allowed to be a variable
+                # too: a variable in functor position is NOT ``call/N`` in
+                # this language, it is the UNIT-ANNOTATION sugar.
+                # ``run(G, X) <- (G(X))`` does not call ``G``; it builds a
+                # Quantity whose unit is ``G`` and dies at RUNTIME with
+                # "cannot build a Quantity from AttVar(...): SI prefixes
+                # cannot be used as units".  So if TitleCase were a variable
+                # here as well, a bare Python class in a clause body
+                # (``bar(Fraction(1, 3))``) would stop being a load error
+                # that names the ``++Fraction`` escape and would quietly
+                # become a units expression failing much later, in a message
+                # about SI prefixes that names neither ``Fraction`` nor the
+                # line it was written on.  The asymmetry this creates is
+                # deliberate and was ruled on 2026-09-10: ``FOO(3)`` is legal
+                # units sugar with a computed unit, ``Foo(3)`` is refused.
+                if functor_position:
+                    consider(node.id, node)
+                return
+            if isinstance(node, Call):
+                walk_(node.func, functor_position=True)
+                for child in node.args:
+                    walk_(child)
+                for kw in node.keywords:
+                    walk_(kw.value)
                 return
             for child in iter_child_nodes(node):
                 walk_(child)
@@ -5300,7 +5439,7 @@ class EmbedTransformer(NodeTransformer):
 
         for node in nodes:
             if node is not None:
-                walk_(node)
+                walk_(node, functor_position=root_is_functor)
 
     def visit_Module(transformer, module):
         """Visit the module body, then emit a final ``BareAtomRefs`` item
@@ -5607,10 +5746,18 @@ class EmbedTransformer(NodeTransformer):
                 )
             case Tuple(elts=[Name(id=functor_name) as name_node], ctx=Load()) if (
                 transformer._scope_depth == 0
-                and not _is_logic_var_name(functor_name)
+                and (not _is_logic_var_name(functor_name)
+                     # A zero-arity fact head is a FUNCTOR position, so a
+                     # TitleCase one is still refused — but it has to reach
+                     # the lint to be refused, and the variable rule now
+                     # accepts the spelling.  Without this arm ``Foo,`` fell
+                     # through to hosted Python and died at exec with a bare
+                     # ``NameError: name 'Foo' is not defined``, naming
+                     # neither the convention nor the ``++`` remedy.
+                     or _is_titlecase_identifier(functor_name))
             ):
                 # A10-F011: zero-arity trailing-comma fact ``flag,`` — shared helper.
-                transformer._lint_titlecase(name_node)
+                transformer._lint_titlecase(name_node, root_is_functor=True)
                 return transformer._build_zero_arity_fact_statements(
                     functor_name, name_node, expr_stmt,
                 )
@@ -5843,7 +5990,8 @@ class EmbedTransformer(NodeTransformer):
                     # so no error either) and the fact was never asserted.
                     or functor_name in transformer._atoms
                 ):
-                    transformer._lint_titlecase(expr_stmt.value)
+                    transformer._lint_titlecase(expr_stmt.value,
+                                                root_is_functor=True)
                     return transformer._build_zero_arity_fact_statements(
                         functor_name, expr_stmt.value, expr_stmt,
                     )
@@ -6917,7 +7065,17 @@ class EmbedTransformer(NodeTransformer):
                 # clause head (which at least works head-only — see
                 # ``_check_var_shaped_predicate_names``), an imported name
                 # exists only to be called, so there is nothing to preserve.
-                if _is_logic_var_name(local_name):
+                #
+                # TitleCase is exempt: ``visit_Name`` consults the remap
+                # BEFORE the variable rule for a TitleCase name (see the
+                # carve-out there), so an imported ``Metre`` IS reachable and
+                # the unreachability this guard exists to prevent does not
+                # arise.  Without the exemption the deprecated-unit-spelling
+                # path below became unreachable itself and every
+                # ``-import_from(py.units, [Metre])`` in the wild turned into
+                # a load error overnight.
+                if (_is_logic_var_name(local_name)
+                        and not _is_titlecase_identifier(local_name)):
                     raise SyntaxError(
                         f"-import_from name {local_name!r} is a logic-variable "
                         f"name; a call to it is read as a variable, never as "
@@ -6971,7 +7129,11 @@ class EmbedTransformer(NodeTransformer):
                 # unreachable — visit_Name treats it as a variable before the
                 # remap fires, so the call site later fails with a cryptic
                 # NotImplementedError. Reject it here at the directive.
-                if _is_logic_var_name(local_name):
+                # TitleCase is exempt for the same reason as the bare-name
+                # form above: visit_Name consults the remap first for it, so
+                # ``alias(metre, Metre)`` binds a name that use sites reach.
+                if (_is_logic_var_name(local_name)
+                        and not _is_titlecase_identifier(local_name)):
                     raise SyntaxError(
                         f"-import_from alias {local_name!r} is a logic-variable "
                         f"name; use a non-variable alias: "
