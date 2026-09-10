@@ -118,11 +118,10 @@ name, so it must spell a plain, non-keyword name. `'foo bar'(X)` and
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's and Prolog's existing convention).
 
-One shape is carved *out* of both conventions: an identifier with exactly one leading and one
-trailing underscore (`_PI_`, `_MAX_RETRIES_`) is a [**constant**](#constants) reference, not a
-logic variable — see below. `_x` (single leading underscore, no trailing one) and `X_` (no
-leading underscore) are unaffected and remain ordinary leading-underscore and ALL-CAPS
-variables respectively.
+Nothing is carved out of these conventions. Until 2026-09-11 one shape was: an identifier with
+exactly one leading and one trailing underscore (`_PI_`) was a **constant**, never a variable.
+Constants are spelled like atoms now (see [Constants](#constants)), so `_PI_` is an ordinary
+leading-underscore variable like `_x`, and the rule is exactly two clauses with no exceptions.
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
@@ -218,30 +217,51 @@ test("most general query") <- var(SOME_UNBOUND_VAR)
 
 ## Constants
 
-`area == _PI_ * R**2` instead of `(is_pi(PI), area == PI * R**2)` or a Python `math.pi`
+`area == pi * R**2` instead of `(is_pi(PI), area == PI * R**2)` or a Python `math.pi`
 escape: a **constant** is a module-level name, bound once to a ground value at load time, that
 reads exactly like an ordinary term argument.
 
-**Lexical rule** — a constant name has exactly one leading underscore, exactly one trailing
-underscore, and at least one character between them, with the interior starting with a
-non-digit:
+**Lexical rule** — a constant is spelled like an atom. That is stated as the complement of the
+[logic-variable rule](#logic-variables): any identifier that rule does not claim, which is to
+say one that is neither underscore-led nor capital-initial.
 
-```python
-_PI_, _MAX_RETRIES_, _円周率_   # constant names
-_1_                              # rejected — interior starts with a digit
-_X__, __X_                       # excluded — the interior touches a second underscore
+```text
+pi, max_retries, 円周率     # constant names
+_pi, Pi, PI                  # rejected — all three are logic variables
 ```
 
-This shape is carved out of both logic-variable conventions (see [Logic
-variables](#logic-variables) above) — a constant name is never read as a variable, in either
-style.
+`円周率` is in that list on purpose. An uncased script has no lowercase form *and* no capital
+one, so a rule phrased as "lowercase" would refuse it while offering nothing in its place; a
+rule phrased as "not a variable" admits it, because it is not a variable.
+
+!!! note "This spelling changed on 2026-09-11"
+    A constant used to be written `_PI_` — one leading and one trailing underscore. To any
+    Prolog reader a leading underscore marks a variable, so the old spelling read as the one
+    thing a constant is not, and it cost the variable rule an exception in five places. The old
+    spelling is refused with a message naming the replacement.
+
+**Reaching the value.** Because the name is atom-shaped, a constant lives in the same namespace
+as an atom, and the two ways of writing it differ in *when* the value is read:
+
+| written | means | bound |
+| --- | --- | --- |
+| `pi` | the value, embedded in the clause term | at clause construction |
+| `++pi` | the value, looked up in module globals | when the goal runs |
+| `'pi'` | the atom `("pi",)` | — |
+
+`++pi` is the spelling to reach for. It is what makes a constant *late-bound*, so that changing
+a declaration changes every use; and it is explicit, which matters when the same file also uses
+the atom. A name may be both a constant and an atom — but it may **not** be declared as a
+constant *and* listed as a bare atom in `-module`/`-private`/`-hide`, because that listing
+rebinds the module global to the atom after the file has run and would silently destroy the
+constant. That combination is a load-time error; write the atom quoted instead.
 
 ### Declaring
 
 ```clausal
--constants(_PI_ = 3.14159, _MAX_RETRIES_ = 3)
+-constants(pi = 3.14159, max_retries = 3)
 
-area(R, AREA) <- (AREA == _PI_ * R**2)
+area(R, AREA) <- (AREA == ++pi * R**2)
 
 test("area of radius 2") <- (
     area(2, AREA),
@@ -255,7 +275,7 @@ declared, same as multiple `name = value` pairs in one directive can. The right-
 accepts:
 
 - scalar literals (`3.14159`, `"eur"`, `True`),
-- a previously-declared constant (`-constants(_BASE_ = 10, _LIMIT_ = _BASE_ * 4 + 2)`),
+- a previously-declared constant (`-constants(base = 10, limit = base * 4 + 2)`),
 - a declared atom,
 - unary/binary arithmetic over those,
 - a `++(expr)` escape, evaluated as raw Python **at load time**, and
@@ -263,13 +283,13 @@ accepts:
   mixing any of the above at any depth:
 
 ```clausal
--constants(_PI_ = ++__import__('math').pi)
+-constants(pi = ++__import__('math').pi)
 ```
 
 !!! warning "`++` RHS values can be machine-dependent"
     `++(expr)` is evaluated once, when the file loads — nothing stops it from calling
     something that isn't reproducible across machines or runs:
-    `-constants(_N_WORKERS_ = ++os.cpu_count())` is legal, and will bind a different value on
+    `-constants(n_workers = ++os.cpu_count())` is legal, and will bind a different value on
     a different machine. This is a documented caveat, not a guardrail — if reproducibility
     matters, don't reach for `++` in a `-constants` RHS.
 
@@ -283,10 +303,10 @@ build in a clause body, with the same unification semantics — not a Python val
 -private([mn, mx, red, green])
 
 -constants(
-    _COUNTRY_CODES_ = ['au', 'al', 'za'],
-    _ORIGIN_ = point(0, 0),
-    _LIMITS_ = {mn: 1, mx: 99},
-    _FLAGS_ = {red, green},
+    country_codes = ['au', 'al', 'za'],
+    origin = point(0, 0),
+    limits = {mn: 1, mx: 99},
+    flags = {red, green},
 )
 ```
 
@@ -306,13 +326,13 @@ class *statement* execute before the constant's assignment does; an undeclared f
 located, load-time `SyntaxError` naming the remedy:
 
 ```text
-SyntaxError: -constants: `_P_` RHS calls `point(...)`, which is not a declared functor above
+SyntaxError: -constants: `p` RHS calls `point(...)`, which is not a declared functor above
 this -constants directive — declare it with -module/-private/-dynamic before -constants, or
 import it with -import_from/-import_module
 ```
 
 Every declaration must still be **fully ground** — no unbound logic variable may appear
-anywhere in the computed value, structured RHS included: `-constants(_L_ = [1, X, 3])` is a
+anywhere in the computed value, structured RHS included: `-constants(l = [1, X, 3])` is a
 located, load-time `SyntaxError`, not a freshly-minted `Var`. (An unground value that only a
 `++()` escape could produce still hits the runtime `ConstantNotGroundError` backstop, before
 any clause compiles.) A `++()` escape is legal as an *element* inside a structured RHS
@@ -346,44 +366,46 @@ any clause compiles.) A `++()` escape is legal as an *element* inside a structur
     subclass) — `bytes` already *is* Python's immutable byte-string type, so there is nothing
     to subclass.
 
-### References fold — no runtime lookup, ever
+### A bare reference folds; `++name` looks up
 
-A constant reference is replaced by its ground value during compilation — the same mechanism
-that already folds the `true`/`false`/`undefined` truth-value aliases. There is no `Var`, no
-deref, and no runtime cost: `_PI_` in a compiled clause *is* `3.14159`. This applies uniformly,
-**including in head position** — `area(_PI_, R)` compiles exactly as `area(3.14159, R)` would,
-and dispatching on the literal value is a legitimate idiom that earns no lint.
+A **bare** constant reference is replaced by its ground value during compilation — the same
+mechanism that already folds the `true`/`false`/`undefined` truth-value aliases. There is no
+`Var`, no deref, and no runtime cost: `pi` in a compiled clause *is* `3.14159`. This applies
+uniformly, **including in head position** — `area(pi, R)` compiles exactly as
+`area(3.14159, R)` would, and dispatching on the literal value is a legitimate idiom that earns
+no lint.
 
-Referencing a constant-shaped name that nothing declares is a load-time `SyntaxError`, not a
-fresh variable and not a runtime `NameError` — this also applies inside `++()` and f-string
-escapes (a comprehension's or walrus expression's own binding target of the same shape is not
-mistaken for a free reference):
+`++pi` does the opposite and is usually what you want: it resolves the module global when the
+goal runs, so a constant is late-bound and one declaration governs every use. Rebinding the
+global after load moves a `++pi` answer and leaves a folded `pi` answer where it was.
 
-```text
-SyntaxError: `_PI_` is a constant name (one leading and one trailing underscore) but nothing
-declares it. Declare -constants(_PI_ = <ground value>) before this clause, or import it:
--import_from(mod, [_PI_])
-```
+Referencing a name that nothing declares is the ordinary strict-atoms `NameError`, the same one
+any other undeclared bare name gets. There is no constants-specific diagnostic any more: the
+name no longer says it is a constant, so nothing can tell a mistyped `max_fien` from an
+ordinary Python helper. Inside a `++()` or f-string escape the body is verbatim Python, so a
+free name there fails as a Python `NameError` — at load time in a `-constants` RHS, which is
+evaluated at module level, and when the goal runs in a clause body.
 
 ### Importing
 
 Constants export automatically — every `-constants` declaration is a public module global, so
-there is nothing to list in `-module` or `-private` (doing so is a `SyntaxError`: "constants
-are public module globals — declare with `-constants` and import with `-import_from`; no
-export listing is needed"). Import with the same directives used for predicates:
+there is nothing to list in `-module` or `-private`. Listing one there is a `SyntaxError`, but
+for a sharper reason than it used to be: a listed lowercase name is an *atom*, and the atom
+listing would rebind the module global and destroy the constant. Import with the same
+directives used for predicates:
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
 ```
 
-Qualified access (`other_module._PI_`) works both as a bare term and inside `++()` — the same
+Qualified access (`other_module.pi`) works both as a bare term and inside `++()` — the same
 dotted-attribute mechanism that already resolves a qualified atom reference like
 `currency.euro` covers constants too. See [Import System](import.md#importing-constants) for
 the full directive semantics.
 
 ### The `_UNUSED` edge
 
-A constant name ending in `_UNUSED` (`_X_UNUSED_`) is legal, but earns a load-time
+A constant name ending in `_UNUSED` (`item_UNUSED`) is legal, but earns a load-time
 `ClausalLintWarning` — it visually collides with the [singleton-suppression
 suffix](#singleton-variables-and-_unused) above, which applies to *variables*, not constants.
 Pick a different name.

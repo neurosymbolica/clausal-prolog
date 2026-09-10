@@ -377,9 +377,8 @@ fib(N, RESULT) <- (
 # === Constants ===
 
 --8<-- [start:constants_importing]
--import_from(other_module, [_PI_])                        # direct
--import_from(other_module, [alias(_PI_, _MYPI_)])          # alias — both sides must be
-                                                             # constant-shaped
+-import_from(other_module, [pi])                          # direct
+-import_from(other_module, [alias(pi, mypi)])              # alias — an ordinary rename
 -import_module(other_module)                               # whole-module, qualified access
-circumference(R, C) <- (C == 2 * other_module._PI_ * R)     # bare-term — works directly
+circumference(R, C) <- (C == 2 * other_module.pi * R)      # bare-term — works directly
 --8<-- [end:constants_importing]

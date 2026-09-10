@@ -115,13 +115,13 @@ carry a disambiguating numeric suffix to lose it.
 
 Two consequences worth knowing:
 
-- Two legal ISO variable spellings have no Clausal variable spelling and are
-  now **refused** by the importer rather than translated: `_PI_` (Clausal
-  reads one leading and one trailing underscore as a
-  [module constant](syntax.md#constants)) and `__Foo` (a dunder, excluded
-  from the variable class). `_PI_` used to be silently renamed to `_pi`.
-  Refusing is not renaming, so injectivity is unaffected; the message names
-  the Prolog variable and offers a spelling that works.
+- One legal ISO variable spelling has no Clausal variable spelling and is
+  **refused** by the importer rather than translated: `__Foo`, a dunder,
+  excluded from the variable class. Refusing is not renaming, so injectivity
+  is unaffected; the message names the Prolog variable and offers a spelling
+  that works. `_PI_` was refused for the same reason until 2026-09-11, when
+  the [module-constant](syntax.md#constants) spelling was retired; it now
+  crosses like any other variable.
 - The singleton post-pass still runs, so a variable occurring exactly once in
   an exported clause is emitted with a leading underscore (`RESULT` →
   `_RESULT`) to silence the ISO singleton warning. A Clausal `_x`-style name

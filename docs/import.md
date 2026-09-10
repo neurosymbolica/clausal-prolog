@@ -142,18 +142,21 @@ Behind the scenes, imported predicates are stored under a fully-qualified dotted
 
 #### Importing constants
 
-[Module-level constants](syntax.md#constants) (`_PI_`) use the same two directives, with the
+[Module-level constants](syntax.md#constants) (`pi`) use the same two directives, with the
 same direct and alias forms:
 
 ```clausal
 --8<-- "tests/fixtures/docs/import_sigs.txt:import_from_constants"
 ```
 
-Two differences from a predicate import: a constant alias must have a constant-shaped name on
-**both** sides (`alias(_PI_, Pi)` is rejected — a constant can only alias to another constant,
-never to a predicate-style name), and importing a constant name that collides with an earlier
-`-constants` declaration or an earlier import in the same file is a `SyntaxError` rather than a
-silent overwrite — rename the incoming one with `alias(...)`.
+One difference from a predicate import: importing a name that this file already declared with
+`-constants` is a `SyntaxError` rather than a silent overwrite, since the import would rebind
+the same module global — rename the incoming one with `alias(...)`.
+
+The alias form used to require a constant-shaped name on **both** sides. That rule lapsed on
+2026-09-11 with the spelling it was built on: an importer cannot tell a constant from an atom
+or a predicate in another module, because whether a name is a constant is the *owner's* fact
+and an atom-shaped name does not carry it. `alias(pi, mypi)` is an ordinary rename now.
 
 A module's `-constants` declarations are all public interface — there is nothing to list in
 `-module`/`-private` and no export step — and enumerable via
@@ -185,11 +188,11 @@ The dotted chain in a qualified call must consist entirely of non-variable names
 
 Only simple dotted name chains are supported. Computed attribute access or method calls are not valid in predicate position.
 
-[Constants](syntax.md#constants) (`_PI_`) are not variable names — the re-carve that gave
-constants their own lexical class specifically excluded them from `_is_logic_var_name` — so a
-qualified constant reference passes this rule by construction, with no special-casing needed.
-After `-import_module(other_module)`, `other_module._PI_` resolves in **both** term position
-and inside a `++()` escape:
+[Constants](syntax.md#constants) (`pi`) are not variable names — a constant is spelled like an
+atom, which is exactly the complement of `_is_logic_var_name` — so a qualified constant
+reference passes this rule by construction, with no special-casing needed. After
+`-import_module(other_module)`, `other_module.pi` resolves in **both** term position and inside
+a `++()` escape:
 
 ```clausal
 --8<-- "tests/fixtures/docs/import_sigs.txt:qualified_constant_access"

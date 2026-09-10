@@ -605,10 +605,10 @@ class TestTheNilAtomInAKeyPosition:
         mod = _load_inline_clausal(
             "_fix3_constants_nil",
             "-private([a])\n"
-            "-constants(_D_ = {'[]': 1, a: 2})\n"
-            "-constants(_E_ = {[]: 3})\n"
-            "c1(_D_),\n"
-            "c2(_E_),\n",
+            "-constants(c_d = {'[]': 1, a: 2})\n"
+            "-constants(c_e = {[]: 3})\n"
+            "c1(c_d),\n"
+            "c2(c_e),\n",
         )
         X = Var()
         (d,), = _answers(("c1", X), mod, X)
@@ -622,17 +622,17 @@ class TestTheNilAtomInAKeyPosition:
         """Fix round 4, item 4: fix round 3 folded the two nil LITERAL
         spellings at compile time, but a key written as a reference to an
         earlier constant is only known at exec time — and a ``-constants``
-        list value is frozen, so ``{_N_: 1}`` with ``_N_ = []`` built a raw
+        list value is frozen, so ``{c_n: 1}`` with ``c_n = []`` built a raw
         ``TypeError: unhashable type: '_FrozenList'`` at load, before
         ``DictTerm`` ever saw the key."""
         mod = _load_inline_clausal(
             "_fix4_constants_ref_nil",
             "-private([a])\n"
-            "-constants(_N_ = [], _S_ = \"\", _D_ = {_N_: 1, a: 2})\n"
-            "-constants(_E_ = {_S_: 3}, _F_ = {\"\": 4})\n"
-            "c1(_D_),\n"
-            "c2(_E_),\n"
-            "c3(_F_),\n"
+            "-constants(c_n = [], c_s = \"\", c_d = {c_n: 1, a: 2})\n"
+            "-constants(c_e = {c_s: 3}, c_f = {\"\": 4})\n"
+            "c1(c_d),\n"
+            "c2(c_e),\n"
+            "c3(c_f),\n"
             "c4(D) <- (D is {\"\": 1}),\n",
         )
         X = Var()

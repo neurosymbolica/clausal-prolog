@@ -2790,12 +2790,29 @@ class TermTransformer(NodeTransformer):
             identifier = _TRUTH_ALIASES[identifier]
             if identifier in _BOOL_ALIAS_VALUES:
                 return replace(Constant(value=_BOOL_ALIAS_VALUES[identifier]), name)
-        # A constant is NOT reached from term position any more (2026-09-11).
-        # Its name is atom-shaped, so a bare load here is an atom and nothing
-        # else; the value is reached with the explicit ``++name`` escape,
-        # which is ordinary Python and resolves the module global at solve
-        # time.  A name declared BOTH ways is refused in ``visit_Module``,
-        # because the atom rebinding would otherwise silently win.
+        # Declared or imported constant: a module global holding a ground
+        # value, bound before any clause statement executes.  A plain Name
+        # load embeds the value in the clause term at construction, so the
+        # clause builder converts it the way it converts any literal -- a
+        # functor instance becomes its cell form.
+        #
+        # This branch is NOT redundant with the bare-atom path below, and
+        # measuring that is what put it back after 2026-09-11 first deleted
+        # it.  The fall-through emits ``$LoadName``, whose whole job is to
+        # resolve LATER (so an atom declared further down the file still
+        # works), and which therefore hands back the raw Python object with
+        # no term conversion: ``-constants(origin = point(0, 0))`` reached
+        # the clause as a ``point`` INSTANCE instead of ``('point', 0, 0)``.
+        # A scalar constant showed nothing, because an int converts to
+        # itself -- only the structured cases moved.
+        #
+        # The 2026-09-11 rulings are untouched by this: they are about the
+        # SPELLING (atom-shaped) and about ``++name`` being the late-bound
+        # retrieval.  Both still hold -- see
+        # ``test_bare_name_folds_and_the_escape_looks_up``, which pins the
+        # two binding times against each other.
+        if identifier in transformer.constants:
+            return replace(Name(id=identifier, ctx=load), name)
         # Anonymous variable: each _ is a fresh Var, never reused.
         if identifier == "_":
             return replace(
@@ -7909,6 +7926,16 @@ class EmbedTransformer(NodeTransformer):
             if isinstance(item, Name):
                 # Map local name → "module.path.Name" for dotted globals key
                 local_name = item.id
+                # An import binds the local name as a module global, so a
+                # name this file already declared as a constant would be
+                # silently overwritten by it -- the same shape the
+                # constant/atom collision check refuses, one directive over.
+                if local_name in transformer._constants:
+                    raise SyntaxError(
+                        f"-import_from: `{local_name}` is already bound by "
+                        f"an earlier -constants in this file; the import "
+                        f"would overwrite the constant. Import it under "
+                        f"another name: alias({{local_name}}, other_name)")
                 # There is no imported-constant branch here (2026-09-11).  A
                 # constant name is atom-shaped now, so the importer cannot
                 # tell a constant from an atom or a predicate in the owner
@@ -7967,6 +7994,16 @@ class EmbedTransformer(NodeTransformer):
             ):
                 orig_name = item.args[0].id
                 local_name = item.args[1].id
+                # An import binds the local name as a module global, so a
+                # name this file already declared as a constant would be
+                # silently overwritten by it -- the same shape the
+                # constant/atom collision check refuses, one directive over.
+                if local_name in transformer._constants:
+                    raise SyntaxError(
+                        f"-import_from: `{local_name}` is already bound by "
+                        f"an earlier -constants in this file; the import "
+                        f"would overwrite the constant. Import it under "
+                        f"another name: alias({{orig_name}}, other_name)")
                 # No constant-alias branch either -- see the bare-name form
                 # above.  ``alias(max_fine, cap)`` is an ordinary rename now,
                 # and the shape-matching rule it used to enforce ("a constant

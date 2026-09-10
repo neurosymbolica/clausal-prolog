@@ -95,7 +95,7 @@ The list may also contain bare atoms:
 
 An atom may appear in both `-module` and `-private`. The first listing processed wins and the second is a no-op — and since both resolve to the same global atom, the duplication is redundant rather than conflicting.
 
-A [constant](#-constants) (`_PI_`) may also be listed in `-private`, as pure documentation: it records "this constant is an implementation detail" and nothing more — no class is minted, and the constant stays a public module global (effect 5 above only). `-module` still rejects constants, since an export-list entry would imply a public/private distinction that constants do not have.
+A [constant](#-constants) used to be listable in `-private` as pure documentation ("this one is an implementation detail"), a recorded no-op. That lapsed on 2026-09-11: a constant is spelled like an atom now, so a listed name *is* an atom, and the listing would rebind the module global and destroy the constant. Listing a declared constant in `-module`, `-private` or `-hide` is a load-time error. If both readings are wanted, keep the declaration and write the atom quoted — `pi` is the constant, `'pi'` is the atom.
 
 ---
 
@@ -417,9 +417,9 @@ hand. Prolog has no answer to this beyond a fact plus an extra goal (`is_pi(PI),
 R**2`); Clausal gives constants their own lexical class instead.
 
 ```clausal
--constants(_PI_ = 3.14159, _MAX_RETRIES_ = 3)
+-constants(pi = 3.14159, max_retries = 3)
 
-area(R, AREA) <- (AREA == _PI_ * R**2)
+area(R, AREA) <- (AREA == ++pi * R**2)
 
 test("area of radius 2") <- (
     area(2, AREA),
@@ -427,8 +427,9 @@ test("area of radius 2") <- (
 )
 ```
 
-`-constants(name = value, ...)` declares one or more module-level constants — identifiers with
-exactly one leading and one trailing underscore (`_PI_`, `_MAX_RETRIES_`; see [Constants in the
+`-constants(name = value, ...)` declares one or more module-level constants — identifiers
+spelled like atoms, which is to say anything the logic-variable rule does not claim (`pi`,
+`max_retries`, `円周率`; see [Constants in the
 syntax reference](syntax.md#constants) for the full lexical rule). Every reference to a
 declared constant is replaced by its value at compile time — there is no runtime lookup, and
 the substitution applies uniformly, head position included.
@@ -444,7 +445,7 @@ RHS builds the same real Clausal term the identical literal would build in a cla
 declared-above ordering rule a functor call needs and the frozen/immutable-value guarantee.
 
 !!! warning "`++` RHS values can be machine-dependent"
-    `-constants(_N_WORKERS_ = ++os.cpu_count())` is legal — but it binds a different value on
+    `-constants(n_workers = ++os.cpu_count())` is legal — but it binds a different value on
     a different machine. `++()` is evaluated once, at load time; nothing about it guarantees
     reproducibility across environments.
 

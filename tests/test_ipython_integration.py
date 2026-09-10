@@ -131,7 +131,7 @@ def test_constants_directive_rejected_interactively():
     # bypasses _FreshEmbedTransformer's catch-and-print wrapper so the
     # SyntaxError itself can be asserted on.
     # nv
-    tree = ast.parse("-constants(_PI_ = 3.14)\n")
+    tree = ast.parse("-constants(c_pi = 3.14)\n")
     with pytest.raises(SyntaxError, match="not supported interactively"):
         EmbedTransformer(implicit_atoms_default=True, interactive=True).visit(tree)
 
@@ -140,7 +140,7 @@ def test_constants_directive_still_works_in_module_compile():
     # A non-interactive EmbedTransformer (the .clausal module-compile path,
     # interactive=False by default) must be unaffected.
     # nv
-    tree = ast.parse("-constants(_PI_ = 3.14)\n")
+    tree = ast.parse("-constants(c_pi = 3.14)\n")
     transformed = EmbedTransformer().visit(tree)
     ast.fix_missing_locations(transformed)
     src = ast.unparse(transformed)
@@ -153,7 +153,7 @@ def test_constants_directive_rejection_surfaces_through_fresh_transformer(capsys
     # unregister the transformer) — confirm the printed traceback carries our
     # rejection message rather than the old bare NameError.
     # nv
-    tree = ast.parse("-constants(_PI_ = 3.14)\nresult = _PI_\n")
+    tree = ast.parse("-constants(c_pi = 3.14)\nresult = c_pi\n")
     _FreshEmbedTransformer().visit(tree)
     err = capsys.readouterr().err
     assert "not supported interactively" in err

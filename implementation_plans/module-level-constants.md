@@ -1,3 +1,10 @@
+> **Superseded in part, 2026-09-11.** The `_CONSTANT_` spelling this document
+> describes was retired: a constant is spelled like an atom now, and the value is
+> reached with `++name`. The directive, the groundness gate, the type-preserving
+> freezing and `module_constant/3` are all unchanged. Read this file as the record
+> of how the mechanism was built, not as a description of the surface. See
+> `docs/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md`.
+
 # Module-level constants: `_PI_` — declared, ground, folded at compile time
 
 **Status:** IMPLEMENTED (2026-08-25, branch `feat/constants-and-singleton-lint`). The seven

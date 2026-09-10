@@ -601,17 +601,17 @@ way for a strict-default file to obtain a global atom it does not list. See
 ```
 Reflect on a module's own [`-constants`](directives.md#-constants) declarations. `Module` is the
 Python module object a `-import_module(...)` directive binds — the same object a qualified
-constant reference like `other_module._PI_` resolves against; `Name` is the constant's full
-declaration spelling as a string, underscores included (`"_PI_"`, not `"PI"`); `Value` is the
+constant reference like `other_module.pi` resolves against; `Name` is the constant's
+declaration spelling as a string (`"max_retries"`); `Value` is the
 constant's frozen value — the identical object the declaring module's own clause bodies embed.
 
 ```clausal
 -module(m, [])
--constants(_MAX_RETRIES_ = 3)
+-constants(max_retries = 3)
 ```
 ```clausal
 -import_module(m)
-retry_limit(N) <- module_constant(m, "_MAX_RETRIES_", N)
+retry_limit(N) <- module_constant(m, "max_retries", N)
 ```
 
 Four modes, following directly from which of `Module`/`Name` are bound:

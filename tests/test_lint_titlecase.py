@@ -512,7 +512,7 @@ def test_directive_argument_in_functor_position_still_warns(tmp_path):
         warnings.simplefilter("always")
         with pytest.raises(SyntaxError):
             _load(tmp_path, "s_dir_functor",
-                  "-constants(_L_ = [Foo(1), bar])\n")
+                  "-constants(c_l = [Foo(1), bar])\n")
     ws = [w for w in rec
           if issubclass(w.category, ClausalTitleCaseIdentifierWarning)]
     assert _named(ws) == ["Foo"]
@@ -527,7 +527,7 @@ def test_constants_directive_list_element_is_a_term_and_is_not_warned(
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
         with pytest.raises(SyntaxError, match="-constants"):
-            _load(tmp_path, "s_const", "-constants(_L_ = [Foo, bar])\n")
+            _load(tmp_path, "s_const", "-constants(c_l = [Foo, bar])\n")
     ws = [w for w in rec
           if issubclass(w.category, ClausalTitleCaseIdentifierWarning)]
     assert _named(ws) == []
@@ -574,7 +574,7 @@ def test_warning_is_not_attributed_to_the_rewriter(tmp_path):
 # a ``BinOp(Name, Div, Constant)`` and a ``-private``/``-module`` list entry is
 # a bare ``Name``, so neither is syntactically a call -- but every one of them
 # NAMES A PREDICATE OR ATOM the module declares, which is the functor position
-# the rule is about.  (Contrast ``-constants(_L_ = [Foo, bar])`` above, whose
+# the rule is about.  (Contrast ``-constants(c_l = [Foo, bar])`` above, whose
 # list holds TERMS.)
 
 @pytest.mark.parametrize("source", [
