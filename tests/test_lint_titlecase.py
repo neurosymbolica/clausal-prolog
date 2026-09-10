@@ -224,6 +224,27 @@ def test_string_callable_sugar_fact_lowercase_loads(tmp_path, monkeypatch):
     assert len(list(call("foo", 1, module=mod.__dict__["$module"]))) == 1
 
 
+def test_a_file_that_binds_its_own_Test_class_is_told_the_escape(
+        tmp_path, monkeypatch):
+    """The renamed-spelling carve-out speaks for the LANGUAGE, so it must
+    not overrule a class the FILE ITSELF binds.
+
+    ``Test`` is in ``_TITLECASE_RENAMED_SPELLINGS`` because ``Test/1`` was
+    the old spelling of the test predicate.  But a module whose hosted
+    Python defines its own ``Test`` means that class, and "Rename `Test` ->
+    `test`" names a predicate that does not exist — the wrong-advice
+    failure this lint exists to prevent.  The paired test below is the
+    control: with no such binding in the file, the carve-out still holds.
+    """
+    _as_error(monkeypatch)
+    with pytest.raises(SyntaxError) as ei:
+        _load(tmp_path, "own_test_class",
+              "class Test:\n    pass\n\ngo(X) <- (Test(X))\n")
+    msg = str(ei.value)
+    assert "`++Test`" in msg
+    assert "Rename `Test` -> `test`" not in msg
+
+
 @pytest.mark.parametrize("old, new, text", [
     ("If", "if_", "c(X, L) <- If(X >= 0, L is 1, L is 2)\n"),
     ("Test", "test", 'Test("one") <- (1 == 1)\n'),

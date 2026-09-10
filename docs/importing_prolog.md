@@ -283,11 +283,17 @@ The key operator mappings:
 | `-->` | `>>` |
 | `member(X, L)` | `X in L` |
 
-Predicate names are converted from `snake_case` to `PascalCase`:
-`foo_bar/2` becomes `FooBar/2`.
+Predicate names cross unchanged: `foo_bar/2` stays `foo_bar/2`. A name
+that collides with a Python keyword gets a trailing underscore (`not/1`
+becomes `not_/1`), and a quoted functor whose name is not a plain lowercase
+name is refused rather than translated — `'Foo'`, `'FOO'` and `'_foo'` would
+each be emitted as a name Clausal reads as something other than a predicate
+(a TitleCase identifier is a load-time error; the other two are logic
+variables).
 
 Variables keep their Prolog names if single-letter (`X`, `Y`), otherwise
-get a trailing underscore: `Head` becomes `head_`, `Result` becomes `result_`.
+get a LEADING underscore: `Head` becomes `_head`, `Result` becomes
+`_result`.
 
 ---
 

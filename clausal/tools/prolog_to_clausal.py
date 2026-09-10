@@ -1047,23 +1047,47 @@ class _PrologToClausal:
         name = prolog_name
         if keyword.iskeyword(name):
             name = name + "_"
-        # A TitleCase functor (a quoted atom such as ``'Foo'``) would be
-        # emitted as a name the Clausal loader rejects (TitleCase has no
-        # role there; the lint is an error).  This translator must never
-        # EMIT one, so refuse here and name the spelling that loads.
-        # The same for ANY initial capital: ``'FOO'`` / ``'X1'`` would be
-        # emitted as variable-shaped names.
-        if name[:1].isupper() and not _is_plain_atom_name(name):
-            suggested = (_titlecase_to_snake(name)
-                         if any(c.islower() for c in name) else name.lower())
-            shape = ("TitleCase" if any(c.islower() for c in name)
-                     else "capitalised (variable-shaped)")
+        # A functor whose EMITTED name is not a plain atom name is a name
+        # the Clausal loader reads as something OTHER than a predicate, and
+        # this translator must never emit one.  Two shapes reach here:
+        # TitleCase (a quoted atom such as ``'Foo'``), which the lint makes
+        # a load-time error; and the variable-shaped names — an initial
+        # capital (``'FOO'``, ``'X1'``) or a LEADING UNDERSCORE (``'_foo'``),
+        # both of which ``_is_logic_var_name`` classifies as logic
+        # variables, so the emitted clause would quietly acquire a variable
+        # where a predicate was meant.
+        #
+        # The test is ``not _is_plain_atom_name`` rather than an initial-
+        # capital one: keying on the capital missed the underscore case, and
+        # paired the two as ``name[:1].isupper() and not
+        # _is_plain_atom_name(name)``, whose second conjunct is dead
+        # (``_is_plain_atom_name`` requires ``name[0].islower()``).  A name
+        # that is not an identifier at all falls through to the check below,
+        # which owns that message.
+        if name.isidentifier() and not _is_plain_atom_name(name):
+            stripped = name.lstrip("_") or name
+            if stripped[:1].isupper() and any(c.islower() for c in stripped):
+                suggested = _titlecase_to_snake(stripped)
+            else:
+                suggested = stripped.lower()
+            if name[:1] == "_":
+                shape = "underscore-led (variable-shaped)"
+            elif any(c.islower() for c in name):
+                shape = "TitleCase"
+            else:
+                shape = "capitalised (variable-shaped)"
+            # Only offer a rename that would itself load — ``'_'`` and
+            # friends have no plain spelling to suggest.
+            remedy = (f"Rename it in the Prolog source to {suggested!r} and "
+                      f"translate again."
+                      if _is_plain_atom_name(suggested)
+                      else "Rename it in the Prolog source to a lowercase "
+                           "name and translate again.")
             raise PrologTranslationError(
                 f"Prolog functor {prolog_name!r} is {shape}, which has no "
                 f"role as a Clausal predicate or functor name (those are "
                 f"lowercase; a file spelling {name!r} does not load).\n"
-                f"Rename it in the Prolog source to {suggested!r} and "
-                f"translate again."
+                + remedy
             )
         # A functor whose converted name is not a plain Python identifier
         # (quoted atoms like 'hello world', operator soup from unmapped

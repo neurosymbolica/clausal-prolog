@@ -5261,7 +5261,16 @@ class EmbedTransformer(NodeTransformer):
                 "functors) or ALL_CAPS / underscore-led (logic variables); "
                 "TitleCase has no role"
             )
-            if (ident not in _TITLECASE_RENAMED_SPELLINGS
+            # The renamed-spelling carve-out speaks for the LANGUAGE (``If``
+            # is also a seeded AST node class, but the remedy is ``if_``),
+            # so it must not overrule a class the FILE ITSELF binds: a
+            # module whose hosted Python defines or imports its own ``Test``
+            # means that class, and telling its author to "Rename `Test` ->
+            # `test`" names a predicate that does not exist.
+            renamed_by_the_language = (
+                ident in _TITLECASE_RENAMED_SPELLINGS
+                and ident not in transformer._titlecase_python_bound)
+            if (not renamed_by_the_language
                     and (ident in _python_class_names()
                          or ident in transformer._titlecase_python_bound)):
                 msg = (

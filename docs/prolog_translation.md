@@ -83,9 +83,8 @@ for item in pmodule.items:
 
 | Clausal | Prolog | Rule |
 |---|---|---|
-| `FooBar` | `foo_bar` | PascalCase → snake_case |
-| `all_different` | `all_different` | PascalCase → snake_case |
-| `DCGRule` | `dcg_rule` | Acronym runs split correctly |
+| `all_different` | `all_different` | names cross unchanged |
+| `dcg_rule` | `dcg_rule` | names cross unchanged |
 | `findall` | `findall` | Builtin name map overrides |
 | `time_goal` | `time` | Builtin name map (SWI/Scryer) |
 
@@ -248,7 +247,7 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 
 | Prolog | Clausal | Rule |
 |---|---|---|
-| `foo_bar(X)` | `FooBar(X)` | snake_case → PascalCase |
+| `foo_bar(X)` | `foo_bar(X)` | names cross unchanged |
 | `findall(...)` | `findall(...)` | reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `X is not Y` | Disequality |

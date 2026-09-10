@@ -336,6 +336,35 @@ class TestNamingConventions:
         assert new in msg
         assert "TitleCase" in msg or "variable-shaped" in msg
 
+    @pytest.mark.parametrize("pl, old, new", [
+        ("'_foo'(x).", "_foo", "foo"),
+        ("'_Foo'(x).", "_Foo", "foo"),
+        ("p(X) :- '_bar'(X).", "_bar", "bar"),
+    ])
+    def test_underscore_led_functor_is_refused_as_variable_shaped(
+            self, pl, old, new):
+        """A LEADING UNDERSCORE is the third variable-shaped spelling.
+
+        The refusal used to key on an initial capital, so ``'_foo'(x)`` was
+        emitted as ``_foo(x)`` — a name ``_is_logic_var_name`` classifies as
+        a logic variable, so the clause quietly acquired a variable where a
+        predicate was meant.  That is the same failure the ``'FOO'`` and
+        ``'X1'`` cases above exist to close, and the translator's invariant
+        is that it never EMITS a name the loader reads as something else.
+        """
+        # nv
+        from clausal.templating.term_rewriting import _is_logic_var_name
+
+        # The premise the refusal rests on, asserted rather than assumed.
+        assert _is_logic_var_name(old)
+        with pytest.raises(PrologTranslationError) as ei:
+            prolog_to_clausal(pl)
+        msg = str(ei.value)
+        assert "underscore-led" in msg
+        # The exact remedy, so the assertion cannot pass on the offending
+        # spelling merely containing the suggested one.
+        assert f"to {new!r}" in msg
+
     def test_variable_conversion(self):
         # nv
         src = "foo(Head, Tail)."
