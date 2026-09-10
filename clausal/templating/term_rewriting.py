@@ -851,26 +851,14 @@ def _clause_variable_names(node, excluded) -> set:
     module-namespace binding.  A name used outside one is evidence, and that
     is what makes ``tree(Node), f"{Node}"`` format the binding rather than
     ``<class '...nodes.Node'>``.
+
+    The skipping itself lives in ``_collect_logic_var_names`` rather than in
+    a collector of its own: the seam needs the SAME answer in first-occurrence
+    ORDER, and two walks that were meant to agree but were written twice is
+    exactly the drift that produced the defect this delegation removes.
     """
-    found: set = set()
-
-    class _Collector(NodeVisitor):
-        def visit_JoinedStr(self, node):
-            return                      # verbatim Python: not evidence
-
-        def visit_UnaryOp(self, node):
-            if _python_escape_operand(node) is not None:
-                return                  # ``++`` escape: not evidence
-            self.generic_visit(node)
-
-        def visit_Name(self, name):
-            ident = name.id
-            if (ident != "_" and _is_logic_var_name(ident)
-                    and ident not in excluded):
-                found.add(ident)
-
-    _Collector().visit(node)
-    return found
+    return set(_collect_logic_var_names(node, excluded,
+                                        python_bodies="skip"))
 
 
 def _python_scope_exclusions(import_remap, python_bound,
@@ -1382,7 +1370,8 @@ def _binds_name(module, name: str) -> bool:
     return False
 
 
-def _collect_logic_var_names(node, excluded) -> list[str]:
+def _collect_logic_var_names(node, excluded, *,
+                             python_bodies="descend") -> list[str]:
     """Collect logic variable names from *node*, in first-occurrence order.
 
     *excluded* is REQUIRED, and has no default on purpose.  Every caller sits
@@ -1421,11 +1410,44 @@ def _collect_logic_var_names(node, excluded) -> list[str]:
     ``Total`` was not captured either, and ``f"{Total}"`` silently formatted
     an unbound variable's repr while ``f"{TOTAL}"`` -- the identical clause
     -- gave the right answer.
+
+    *python_bodies* says what the walk does with the verbatim-Python bodies
+    it meets -- a ``++`` operand, an f-string interpolation slot.  Which of
+    the three it wants follows from the caller's scope, not from taste:
+
+    * ``"descend"`` -- a caller ASKING ABOUT a Python body (the two
+      ``_python_scope_exclusions`` call sites).  The names it wants are
+      precisely the ones written inside, and a nested body (``++f"{X}"``) is
+      part of the one lambda it is collecting parameters for.
+    * ``"skip"`` -- a caller asking what the surrounding CLAUSE treats as a
+      variable.  A name appearing only inside a Python body is not evidence
+      about the Clausal text; it is the author naming a module binding.  And
+      in a clause a ``--X`` inside a ``++`` is the variable MARKER, which is
+      CHECKED against the clause's own variables and so must never be the
+      thing that puts a name among them.
     """
+    if python_bodies not in ("descend", "skip"):
+        raise ValueError(f"unknown python_bodies mode: {python_bodies!r}")
     ordered: list[str] = []
     seen: set[str] = set()
 
     class _Collector(NodeVisitor):
+        def _python_body(self, node):
+            """A verbatim-Python body: descend into it or ignore it,
+            according to *python_bodies*."""
+            if python_bodies == "descend":
+                self.generic_visit(node)
+
+        def visit_JoinedStr(self, joined):
+            self._python_body(joined)
+
+        def visit_UnaryOp(self, unary_op):
+            if (python_bodies != "descend"
+                    and _python_escape_operand(unary_op) is not None):
+                self._python_body(_python_escape_operand(unary_op))
+                return
+            self.generic_visit(unary_op)
+
         def visit_Name(self, name):
             ident = name.id
             if (ident != "_" and _is_logic_var_name(ident)
