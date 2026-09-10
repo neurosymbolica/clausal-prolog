@@ -1,10 +1,16 @@
-"""TitleCase-identifier lint: ``Foo``-shaped names have no role in Clausal.
+"""TitleCase-identifier lint: ``Foo``-shaped names have no role as FUNCTORS.
 
-Identifiers in a ``.clausal`` file are lowercase (predicates, atoms,
-functors) or ALL_CAPS / underscore-led (logic variables).  TitleCase — an
-initial capital followed by at least one lowercase letter — is neither, so
-the transformer lints it once per (file, identifier).  Python classes are
-reached through the ``++ClassName`` escape, which the lint does not read.
+Since 2026-09-10 the lint is POSITIONAL.  A capital-initial identifier
+standing where a VALUE goes is a logic variable like ``FOO`` and ``_foo``
+(``test_titlecase_is_a_variable``), and is not linted at all.  In FUNCTOR
+position -- a clause head's functor, a goal called in a body, at any nesting
+depth -- it is still refused once per (file, identifier), because a variable
+there is not ``call/N`` but the unit-annotation sugar: reading it as one
+turns a bare Python class in a clause body into a Quantity that fails much
+later complaining about SI prefixes.
+
+Python classes are reached through the ``++ClassName`` escape, which the
+lint does not read.
 """
 import textwrap
 import warnings
@@ -281,10 +287,27 @@ def test_python_builtin_exception_suggests_the_escape():
     # mint ``ValueError`` into the process-wide atom pool and poison every
     # later module that reaches the builtin bare (a ``++ValueError`` catcher
     # then evaluates to the atom).
+    #
+    # FUNCTOR position, so still linted.  The catcher ARGUMENT spelling this
+    # used to use is a TERM position and is now a variable -- see
+    # ``test_builtin_exception_as_a_catcher_is_a_variable_now`` below.
     ws = _titlecase_warnings_cell(
-        "bar(1),\nfoo(X) <- catch(bar(X), ValueError, true)\n")
+        "bar(1),\nfoo(X) <- (bar(X), ValueError(X))\n")
     assert _named(ws) == ["ValueError"]
     assert "reach it as `++ValueError`" in str(ws[0].message)
+
+
+def test_builtin_exception_as_a_catcher_is_a_variable_now():
+    """The narrowing, stated as the consequence a reader most needs to see.
+
+    ``catch(G, ValueError, R)`` used to be refused: TitleCase in any position
+    was an error.  The catcher is a TERM position, so ``ValueError`` there is
+    now an ordinary logic variable -- which, as in ISO Prolog, makes it a
+    CATCH-ALL rather than a filter on that class.  No file relied on the old
+    reading (it did not load), but the spelling is no longer flagged, so the
+    lint is not what stops someone writing it."""
+    assert _titlecase_warnings_cell(
+        "bar(1),\nfoo(X) <- catch(bar(X), ValueError, true)\n") == []
 
 
 def test_user_name_still_suggests_snake_case(tmp_path):
@@ -464,24 +487,43 @@ def test_star_query_warns():
     assert _named(_titlecase_warnings_cell("*(Foo(X))\n")) == ["Foo"]
 
 
-def test_directive_keyword_argument_warns():
-    ws = _titlecase_warnings_cell(
-        "-specialize(solve, natnum_program, alias=Foo)\n")
+def test_directive_keyword_argument_value_is_a_term_and_is_not_warned():
+    """A keyword argument's VALUE is a term position, so it is a variable
+    now.  (The keyword NAME was never a ``Name`` node and was never read.)"""
+    assert _titlecase_warnings_cell(
+        "-specialize(solve, natnum_program, alias=Foo)\n") == []
+
+
+def test_directive_argument_in_functor_position_still_warns(tmp_path):
+    """Narrowing the walk must not stop it descending into directives: a
+    CALL nested inside a directive argument is still a functor position.
+
+    As with the term-position case above, ``-constants`` refuses the RHS
+    afterwards; the lint runs on the raw arguments first, so it is the
+    warning -- not the load -- that this pins."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        with pytest.raises(SyntaxError):
+            _load(tmp_path, "s_dir_functor",
+                  "-constants(_L_ = [Foo(1), bar])\n")
+    ws = [w for w in rec
+          if issubclass(w.category, ClausalTitleCaseIdentifierWarning)]
     assert _named(ws) == ["Foo"]
 
 
-def test_constants_directive_list_warns_before_the_directive_rejects_it(
+def test_constants_directive_list_element_is_a_term_and_is_not_warned(
         tmp_path):
-    """The lint runs on the directive's raw arguments before the directive
-    handler does, so it names ``Foo`` even though ``-constants`` then
-    rejects an RHS that references an undeclared name."""
+    """A list element is a term position, so ``Foo`` is a variable and the
+    lint says nothing.  ``-constants`` still refuses the RHS -- for the
+    better reason that a constant may not be built from a variable -- so the
+    file does not load either way."""
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
         with pytest.raises(SyntaxError, match="-constants"):
             _load(tmp_path, "s_const", "-constants(_L_ = [Foo, bar])\n")
     ws = [w for w in rec
           if issubclass(w.category, ClausalTitleCaseIdentifierWarning)]
-    assert _named(ws) == ["Foo"]
+    assert _named(ws) == []
 
 
 # --- Names the file's own Python binds get the ``++`` remedy ---------------
@@ -496,8 +538,10 @@ def test_constants_directive_list_warns_before_the_directive_rejects_it(
     ("Frac", "from fractions import Fraction as Frac\n"),
 ])
 def test_python_bound_name_suggests_the_escape(tmp_path, name, binding):
+    # A FUNCTOR position: ``P is Name`` puts the name in TERM position, where
+    # it is a variable now and carries no lint.
     ws = _titlecase_warnings(
-        tmp_path, f"pb_{name}", binding + f"q(P) <- (P is {name})\n")
+        tmp_path, f"pb_{name}", binding + f"q(P) <- (P is {name}())\n")
     assert _named(ws) == [name]
     assert f"reach it as `++{name}`" in str(ws[0].message)
     assert "Rename" not in str(ws[0].message)

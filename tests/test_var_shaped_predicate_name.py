@@ -75,7 +75,9 @@ class TestReportedCrash:
         assert "'AttVar' object is not callable" in message
 
     def test_the_message_suggests_a_non_variable_spelling(self, tmp_path):
-        with pytest.raises(SyntaxError, match=r"e\.g\. Foo"):
+        # ``foo``, not ``Foo``: since 2026-09-10 a capital initial is itself a
+        # logic variable, so the old suggestion would have named another one.
+        with pytest.raises(SyntaxError, match=r"e\.g\. foo"):
             _load(tmp_path, "suggest", """
                 FOO(N, X) <- (N > 0, M is N - 1, FOO(M, X))
                 FOO(N, X) <- (X is N)
