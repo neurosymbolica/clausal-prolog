@@ -1678,7 +1678,8 @@ class TermTransformer(NodeTransformer):
                  declared_functors=None, atom_functor_sites=None,
                  quote_map=None, double_quotes_mode="atom",
                  seam=False, double_quotes_explicit=True,
-                 python_visitor=None, titlecase_python_bound=None):
+                 python_visitor=None, titlecase_python_bound=None,
+                 clause_var_names=None):
         transformer.seen_vars = set()
         # THE SEAM (``--term`` in Python-hosted code): ``seam`` marks a
         # transformer serving one seam expression; ``python_visitor`` is the
@@ -1703,7 +1704,17 @@ class TermTransformer(NodeTransformer):
         # ``note_clause_scope``).  A verbatim-Python thunk consults it so a
         # clause variable is captured even when its spelling collides with
         # something in the module namespace.
-        transformer._clause_var_names: set[str] = set()
+        # SHARED with a parent transformer (not copied), exactly as
+        # ``_titlecase_python_bound`` is: a lambda body and a nested seam are
+        # inside the enclosing CLAUSE, so a thunk in them must see the same
+        # clause variables.  Starting a sub-transformer with an empty set
+        # reintroduced the divergence from the other side -- one spelling
+        # meaning two things depending only on whether it sat inside a
+        # lambda, which is the invariant
+        # ``test_a_thunk_inside_a_lambda_body_uses_the_same_exclusions``
+        # exists to hold.
+        transformer._clause_var_names: set[str] = (
+            clause_var_names if clause_var_names is not None else set())
         transformer._visit_depth = 0
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
@@ -2309,6 +2320,10 @@ class TermTransformer(NodeTransformer):
             # or f-string INSIDE a lambda body resolves its free names in
             # the same module namespace, so it must exclude the same ones.
             titlecase_python_bound=transformer._titlecase_python_bound,
+            # And the enclosing clause's variables, for the same reason
+            # again: a lambda body is inside the clause, so a name the
+            # clause binds is a variable there too.
+            clause_var_names=transformer._clause_var_names,
         )
         lambda_transformer.seen_vars = transformer.seen_vars.copy()
         # Shared object (not a copy): occurrences inside the lambda body
@@ -2402,11 +2417,30 @@ class TermTransformer(NodeTransformer):
     def note_clause_scope(transformer, *nodes):
         """Record which names *nodes* use as logic variables outside thunks.
 
-        Accumulates, so it is safe to call more than once and in any order --
-        which is what lets ``visit`` call it automatically for every clause
-        shape (fact, query, DCG, seam) without each call site remembering,
-        while the two sites that hold a head AND a body can note both up
-        front so a thunk in the HEAD still sees the body's variables.
+        Accumulates, so it is safe to call more than once and in any order.
+        That is what lets ``visit`` call it automatically on every outermost
+        root, covering shapes with no dedicated site (queries, seams, the
+        ``--{}`` block form), while the three sites that hold a whole clause
+        note it up front.
+
+        Those three sites are REQUIRED, not an optimisation, and each is
+        marked at its call: ``visit``'s auto-note fires once per outermost
+        root, and a clause is visited as several roots -- each head argument,
+        then the body -- so a thunk in the HEAD would otherwise see only the
+        roots visited before it.  The three are the arrow rule, the DCG rule
+        and the bodyless fact.  (An earlier version of this docstring
+        described those sites while none of them existed; the mechanism read
+        as done and was not.  If a fourth clause shape is added, it needs a
+        call here too -- the auto-note alone makes POSITION decide, which is
+        the fault this whole mechanism removes.)
+
+        A sub-transformer SHARES the set rather than noting afresh: see the
+        ``clause_var_names`` argument to ``TermTransformer`` and to
+        ``_make_term_transformer``.  The ``--`` seam takes no set, and needs
+        none: a seam is Python-hosted code, so there is no enclosing clause
+        whose variables it could inherit -- its own scope comes from the
+        auto-note, and ``_seam_term_ast`` computes ``fresh`` from the same
+        clause-scope exclusions.
         """
         excluded = transformer._clause_scope_exclusions()
         for node in nodes:
@@ -5057,7 +5091,8 @@ class EmbedTransformer(NodeTransformer):
             transformer._directive_minted_functors.discard(functor_name)
             transformer._seen_functors.pop(functor_name, None)
 
-    def _make_term_transformer(transformer, atoms=None, *, seam=False):
+    def _make_term_transformer(transformer, atoms=None, *, seam=False,
+                               clause_var_names=None):
         """Build a TermTransformer sharing this EmbedTransformer's
         bare-atom and logic-variable collection sinks and import-remap table.
 
@@ -5084,6 +5119,7 @@ class EmbedTransformer(NodeTransformer):
             double_quotes_explicit=transformer._double_quotes_explicit,
             python_visitor=transformer.visit if seam else None,
             titlecase_python_bound=transformer._titlecase_python_bound,
+            clause_var_names=clause_var_names,
         )
 
     def _seam_term_ast(transformer, expression, anchor):
@@ -5402,6 +5438,10 @@ class EmbedTransformer(NodeTransformer):
                 has_keywords=bool(kwarg_field_names))
 
         term_transformer = transformer._make_term_transformer()
+        # A fact has no body, but its arguments are still one scope: a thunk
+        # in argument 1 must see a name argument 2 binds.
+        term_transformer.note_clause_scope(
+            *orig_pos_args, *(kw.value for kw in orig_kw_args))
         transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
         transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
 
@@ -6223,6 +6263,15 @@ class EmbedTransformer(NodeTransformer):
                 # Transform terms. One shared transformer keeps variable bindings
                 # (walrus operator) consistent across head and body.
                 term_transformer = transformer._make_term_transformer()
+                # Note head AND body up front, so a thunk in the HEAD sees
+                # the variables the BODY binds.  The auto-note in ``visit``
+                # fires per outermost root, and each head argument is its own
+                # root visited before the body, so without this a head thunk
+                # saw only earlier arguments -- position deciding the reading,
+                # which is the fault this whole mechanism removes.
+                term_transformer.note_clause_scope(
+                    *orig_pos_args, *(kw.value for kw in orig_kw_args),
+                    body_expr)
                 transformed_pos = [term_transformer.visit(a) for a in orig_pos_args]
                 transformed_kw = [term_transformer.visit(kw.value) for kw in orig_kw_args]
                 # Read-once lowering: dict reads (``P.key`` / ``P[key]``) become
@@ -8070,6 +8119,9 @@ class EmbedTransformer(NodeTransformer):
         dcg_call_names = _collect_call_func_names(body_expr_raw)
         dcg_atoms = transformer._atoms - dcg_call_names
         term_transformer = transformer._make_term_transformer(atoms=dcg_atoms)
+        # Head AND body up front -- see the arrow rule for why.
+        term_transformer.note_clause_scope(
+            *orig_pos_args, *(kw.value for kw in orig_kw_args), body_expr_raw)
         transformed_pos = [
             term_transformer.visit(a) for a in orig_pos_args
         ]
