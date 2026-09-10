@@ -7046,12 +7046,6 @@ class EmbedTransformer(NodeTransformer):
                         export, expr_stmt, statements,
                         "-module export list (name/arity)")
                     continue
-                if isinstance(export, Name) and _is_constant_name(export.id):
-                    raise SyntaxError(
-                        f"-module cannot list constant `{export.id}`: "
-                        f"constants are public module globals — declare "
-                        f"with -constants and import with -import_from; no "
-                        f"export listing is needed")
                 if isinstance(export, Name):
                     # Bare atom: global by spelling (§1b/R2) — no class is
                     # minted any more (no ``_register_functor``/
@@ -7137,7 +7131,6 @@ class EmbedTransformer(NodeTransformer):
         """
         statements = []
         private_info = []  # for ModuleAST accumulation
-        private_constants = []  # documentation-only constant listings
         signature_entries = []  # (name, fields) pairs -- see _make_functor_signatures_update_ast
         # A10-F012: a missing/malformed list (e.g. -private(helper(X))) used to
         # silently become a no-op, so the predicate signature was later
@@ -7159,13 +7152,6 @@ class EmbedTransformer(NodeTransformer):
                     _resolved_export_spec(transformer, _pred_export),
                     item, expr_stmt, statements,
                     "-private declaration (name/arity)")
-                continue
-            if isinstance(item, Name) and _is_constant_name(item.id):
-                # Documentation-only: visibility is advisory throughout, so a
-                # constant listing just records "implementation detail" — no
-                # class is minted (the constant stays a public module global,
-                # which is why -module still rejects the same shape).
-                private_constants.append(item.id)
                 continue
             if isinstance(item, Name):
                 # Bare atom: global by spelling (§1b/R2) — no class minted;
@@ -7199,7 +7185,7 @@ class EmbedTransformer(NodeTransformer):
             # is still well-formed.  (The ISO ``foo/2`` arity form IS handled,
             # above: R6b, a PREDICATE entry.)
         transformer._module_items.append(
-            PrivateDeclItem(items=private_info, constants=private_constants))
+            PrivateDeclItem(items=private_info))
         sig_stmt = _make_functor_signatures_update_ast(signature_entries, expr_stmt)
         if sig_stmt is not None:
             statements.append(sig_stmt)
@@ -7284,10 +7270,6 @@ class EmbedTransformer(NodeTransformer):
                     "already module-local, so hiding does not apply to "
                     f"them): got `{unparse(item)}`")
             atom_name = item.id
-            if _is_constant_name(atom_name):
-                raise SyntaxError(
-                    f"-hide cannot list constant `{atom_name}`: constants "
-                    f"are public module globals — declare with -constants")
             hide_lineno = getattr(expr_stmt, "lineno", 0)
             if atom_name in transformer._seen_functors:
                 # Mirror-image of the check in ``_register_functor`` — this
