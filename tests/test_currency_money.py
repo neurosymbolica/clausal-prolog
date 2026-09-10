@@ -14,6 +14,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Trail, Var as LVar, deref
 from clausal.logic.solve import _drive_trampoline
 from clausal.logic.exceptions import LogicException
+from clausal.logic.atoms import mint
 
 
 def _run(pred, *args):
@@ -206,3 +207,50 @@ class TestCurrencyFormat:
         from clausal.modules.py.units import metre
         q = Quantity(5.0, {metre: 1})
         assert format(q, "") == str(q)
+
+
+class TestModulePredicateBoundaryCatchers:
+    """A Python exception raised inside a module predicate reaches the
+    catcher chain wrapped by ``_catchable_dispatch`` as
+    ``LogicException(python_error_term(exc)) from exc``.  ``catch_match``
+    unwraps that shape for the Python arms of a ``++`` catcher, but ONLY
+    for a catcher that is not itself (a subclass of) ``LogicException`` —
+    the wrapper IS one, and ``++LogicException`` must keep matching it.
+    ``money/3`` is the module predicate that raises here (``CurrencyPrecisionError``);
+    the ``py.*`` wrappers fail cleanly on bad input instead of raising."""
+
+    SRC = (
+        "-import_from(currency, [money])\n"
+        "-import_from(european_union, [euro])\n"
+        "-import_from(clausal.terms, [CurrencyPrecisionError])\n"
+        "-import_from(clausal.logic.exceptions, [LogicException])\n"
+        "-private([caught])\n"
+        "c_logic(R) <- catch(money(\"7.891\", euro, _P), ++LogicException, R is caught)\n"
+        "c_class(R) <- catch(money(\"7.891\", euro, _P), ++CurrencyPrecisionError, R is caught)\n"
+        "c_inst(M) <- catch(money(\"7.891\", euro, _P), ++CurrencyPrecisionError(M), true)\n"
+        "c_super(R) <- catch(money(\"7.891\", euro, _P), ++Exception, R is caught)\n"
+        "c_wrong(R) <- catch(money(\"7.891\", euro, _P), ++ValueError, R is caught)\n"
+    )
+
+    def _answers(self, pred):
+        from clausal.logic.variables import Var, deref
+        mod = _load("money_boundary_" + pred, self.SRC)
+        out = Var()
+        return [deref(out) for _ in call(pred, out, module=mod)]
+
+    def test_logic_exception_catcher_sees_the_wrapper(self):
+        assert self._answers("c_logic") == [mint("caught")]
+
+    def test_class_catcher_sees_the_python_cause(self):
+        assert self._answers("c_class") == [mint("caught")]
+
+    def test_instance_catcher_binds_the_message(self):
+        [msg] = self._answers("c_inst")
+        assert "7.891" in str(msg)
+
+    def test_python_superclass_catcher_matches(self):
+        assert self._answers("c_super") == [mint("caught")]
+
+    def test_wrong_python_class_stays_selective(self):
+        with pytest.raises(LogicException):
+            self._answers("c_wrong")

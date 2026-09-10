@@ -176,8 +176,17 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
     # catcher can be written in any more — so a ``++`` catcher must see the
     # ORIGINAL exception: unwrap exactly that shape (a non-logic cause whose
     # class name is the wrapper's functor) and match the Python arms on it.
+    #
+    # The unwrap is scoped to catchers that are NOT themselves (a subclass
+    # or instance of) ``LogicException``: the wrapper IS one, so
+    # ``++LogicException`` keeps matching it — Python semantics, the way
+    # ``++Exception`` matches the cause.
     cause = getattr(exc, "__cause__", None)
-    if (isinstance(exc, LogicException)
+    catcher_is_logic = (
+        (isinstance(catcher, type) and issubclass(catcher, LogicException))
+        or isinstance(catcher, LogicException))
+    if (not catcher_is_logic
+            and isinstance(exc, LogicException)
             and isinstance(cause, BaseException)
             and not isinstance(cause, LogicException)
             and getattr(getattr(exc, "term", None), "functor", None)
