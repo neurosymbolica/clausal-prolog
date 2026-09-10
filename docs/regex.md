@@ -171,9 +171,9 @@ test("findall single group is a string") <- (
 
 ## Auto-Binding
 
-Named groups using ALLCAPS or leading-underscore names are automatically bound to corresponding clause [variables](syntax.md) at compile time (via [goal expansion](term_expansion.md)). This is the key feature that makes regex feel native in Clausal.
+Named groups whose names are spelled like clause [variables](syntax.md) — capital-initial (`YEAR`, `Year`) or leading-underscore (`_rest`) — are automatically bound to the same-named variable at compile time (via [goal expansion](term_expansion.md)). This is the key feature that makes regex feel native in Clausal. A lowercase group name is an atom spelling, so it stays regex-only and binds nothing.
 
-### ALLCAPS Groups
+### Capital-Initial Groups
 
 ```clausal
 -double_quotes(chars)
@@ -346,7 +346,7 @@ test("dynamic prefix fail") <- (not match_prefix("bye", "hello world"))
 ```
 
 Dynamic patterns are compiled at runtime (no precompilation). Named-group
-auto-binding still applies: a group whose name (ALLCAPS or leading-underscore)
+auto-binding still applies: a group whose name (capital-initial or leading-underscore)
 matches an in-scope clause variable is bound at runtime when it participates in
 the match. Because the group names are unknown until the goal runs, a variable
 is only bound when its matching group is actually present — otherwise it is
@@ -374,7 +374,7 @@ test("dynamic autobind") <- find_year(r"(?P<YEAR>\d+)", "2026", "2026")
 ## Gotchas
 
 - **match is anchored at start**; search is not. Use `search` when you want to find a pattern anywhere in the string.
-- **Auto-binding requires ALLCAPS or leading-underscore** group names. A group named `(?P<year>...)` (lowercase, no leading underscore) will NOT auto-bind — use `(?P<YEAR>...)` instead.
+- **Auto-binding requires a variable-shaped** group name: capital-initial (`(?P<YEAR>...)`, `(?P<Year>...)`) or leading-underscore (`(?P<_rest>...)`). A group named `(?P<year>...)` (lowercase) will NOT auto-bind — use `(?P<YEAR>...)` instead.
 - **Regex findall vs [meta-predicate findall](meta_predicates.md)**: The regex `findall/3` is nondeterministic (yields one match at a time). The meta-predicate `findall/3` collects all solutions into a list. Use qualified names (`regex.findall`) if both are imported.
 - **Dynamic patterns skip precompilation**. For hot loops, prefer string literals so the pattern is compiled once at load time.
 
@@ -386,7 +386,7 @@ test("dynamic autobind") <- find_year(r"(?P<YEAR>\d+)", "2026", "2026")
 
     - **match/2**: digits, anchoring, email, empty, unicode
     - **match/3**: named groups, positional groups, no match
-    - **Auto-binding**: ALLCAPS groups, leading-underscore groups
+    - **Auto-binding**: ALLCAPS groups, TitleCase groups, leading-underscore groups
     - **search/2,3**: unanchored search, group extraction
     - **replace/4**: whitespace, digit removal, backreferences
     - **split/3**: comma, whitespace

@@ -777,8 +777,15 @@ class _ClausalToProlog:
         if node.keywords or len(node.args) != 1:
             return None
         unit = node.args[0]
-        if not isinstance(unit, python_ast.Name) or _is_logic_var_name(unit.id):
-            return None            # a unit is a lowercase atom, never a variable
+        if not isinstance(unit, python_ast.Name) or _is_var_in_name_position(unit.id):
+            # A unit is a NAME position -- the same argument as the callable
+            # and the qualified-name cases.  Asking the LEXICAL rule here
+            # made the still-supported ``-import_from(py.units, [Metre])``
+            # spelling stop lowering: ``_try_quantity`` returned None and the
+            # clause exported as the unrepresentable ``X = ???(_Metre)``
+            # under a bogus "compound unit expression" refusal -- a working
+            # quantity silently exported as something else.
+            return None
         func = node.func
         if isinstance(func, python_ast.Constant) and isinstance(
                 func.value, (int, float)) and not isinstance(func.value, bool):
@@ -807,7 +814,7 @@ class _ClausalToProlog:
             if node.keywords or len(node.args) != 1:
                 continue
             unit = node.args[0]
-            if not isinstance(unit, python_ast.Name) or _is_logic_var_name(unit.id):
+            if not isinstance(unit, python_ast.Name) or _is_var_in_name_position(unit.id):
                 continue
             func = node.func
             if (isinstance(func, python_ast.Constant)
@@ -824,7 +831,7 @@ class _ClausalToProlog:
                 or len(node.args) != 1:
             return None
         unit = node.args[0]
-        if not isinstance(unit, python_ast.Name) or _is_logic_var_name(unit.id):
+        if not isinstance(unit, python_ast.Name) or _is_var_in_name_position(unit.id):
             return None
         func = node.func
         if (isinstance(func, python_ast.Constant)

@@ -328,7 +328,9 @@ def _expand_regex(goal: Any, ctx: _ExpansionContext) -> Any:
     if nargs != 2:
         return goal
 
-    # match/2 or search/2: check for auto-bindable groups.
+    # match/2 or search/2: check for auto-bindable groups.  The gate is the
+    # variable classifier, so it moves with it -- see ``_bind_if_present``
+    # below for the 2026-09-10 widening to capital-initial names.
     bindable = {
         name: idx
         for name, idx in compiled.groupindex.items()
@@ -406,8 +408,15 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
     def _bind_if_present(g, _field):
         if isinstance(g, dict):
             for key, val in g.items():
-                # Same naming gate as static expansion: only ALLCAPS /
-                # leading-underscore group names auto-bind (docs/regex.md).
+                # Same naming gate as static expansion: a group name that
+                # is spelled like a Clausal LOGIC VARIABLE auto-binds
+                # (docs/regex.md).  That is capital-initial (``YEAR``,
+                # ``Year``) or leading-underscore (``_rest``); a lowercase
+                # name is an atom spelling and stays regex-only.  TitleCase
+                # joined the variable class on 2026-09-10 and this gate
+                # follows it deliberately -- a group named ``Year`` that did
+                # NOT bind a clause variable named ``Year`` would make the
+                # gate disagree with the language about what a variable is.
                 # A group that matched nothing (val None) is skipped — unlike
                 # static expansion, which binds None — because in dynamic mode
                 # EVERY clause variable is a candidate, and binding None to a
