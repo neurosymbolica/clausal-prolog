@@ -260,3 +260,173 @@ def test_hosted_python_binding_does_not_carve_a_name_out_of_the_rule(
     """)
     from fractions import Fraction as _F
     assert _answers(mod2, "q") == [(_F(1, 3),)]
+
+
+# ── A genuine TitleCase CLAUSE VARIABLE works in ++ and f-strings ──────────
+#
+# The two spellings of one clause must give the same answers.  Excluding
+# every capital-initial name from thunk capture (rather than only the ones
+# the file's hosted Python binds) left the lambda with no parameter for the
+# variable, so the name resolved in module globals instead: the f-string
+# formatted an unbound variable's repr -- a WRONG VALUE, silently -- and the
+# ``++`` arithmetic raised on an AttVar.  Neither is reachable by the lint,
+# which returns early on both ``JoinedStr`` and ``++``.
+
+def _pair(tmp_path, tag, body_titlecase, body_allcaps):
+    """Load the same clause under both spellings and return both answers."""
+    out = []
+    for suffix, body in (("tc", body_titlecase), ("uc", body_allcaps)):
+        mod = _load(tmp_path, f"{tag}_{suffix}", f"""
+            -module(ttiav_{tag}_{suffix}, [p(S)])
+            bar(7),
+            p(S) <- ({body})
+        """)
+        out.append(_answers(mod, "p"))
+    return out
+
+
+def test_fstring_captures_a_titlecase_clause_variable(tmp_path):
+    titlecase, allcaps = _pair(
+        tmp_path, "fscap",
+        'bar(Total), S is f"{Total}"',
+        'bar(TOTAL), S is f"{TOTAL}"')
+    assert titlecase == allcaps == [("7",)]
+
+
+def test_python_escape_captures_a_titlecase_clause_variable(tmp_path):
+    titlecase, allcaps = _pair(
+        tmp_path, "escap",
+        "bar(Total), S is ++(Total + 1)",
+        "bar(TOTAL), S is ++(TOTAL + 1)")
+    assert titlecase == allcaps == [(8,)]
+
+
+def test_a_captured_titlecase_variable_is_not_reported_as_a_singleton(
+        tmp_path):
+    """``_build_py_thunk_ast`` bumps the occurrence counter only for names it
+    CAPTURES, so failing to capture also produced a bogus singleton warning
+    for a variable used twice."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _load(tmp_path, "nosingle", """
+            -module(ttiav_nosingle, [p(S)])
+            bar(7),
+            p(S) <- (bar(Total), S is f"{Total}")
+        """)
+    named = [str(w.message) for w in rec
+             if issubclass(w.category, ClausalSingletonWarning)
+             and "`Total`" in str(w.message)]
+    assert named == [], named
+
+
+def test_hosted_python_name_is_still_excluded_from_capture(tmp_path):
+    """The round-2 fix must survive: a name the file's hosted Python BINDS is
+    still resolved as Python inside a thunk, not captured as a variable."""
+    mod = _load(tmp_path, "stillpy", """
+        from fractions import Fraction
+        -module(ttiav_stillpy, [p(S)])
+        p(S) <- (S is f"{Fraction(1, 3)}")
+    """)
+    assert _answers(mod, "p") == [("1/3",)]
+
+
+def test_hosted_python_name_and_clause_variable_in_one_thunk(tmp_path):
+    """Both rules at once, which is the case a per-name test cannot reach:
+    ``Fraction`` resolves as Python and ``Total`` is captured, in the SAME
+    interpolation."""
+    mod = _load(tmp_path, "mixed_thunk", """
+        from fractions import Fraction
+        -module(ttiav_mixed_thunk, [p(S)])
+        bar(3),
+        p(S) <- (bar(Total), S is f"{Fraction(1, Total)}")
+    """)
+    assert _answers(mod, "p") == [("1/3",)]
+
+
+# ── The seam must bind exactly what visit_Name reads as a variable ─────────
+
+def test_seam_does_not_bind_an_exempt_or_imported_name_as_a_variable():
+    """``--f(Undefined)`` must not emit ``(Undefined := $Var())``.
+
+    The seam's ``fresh`` list drives ``_var_bind``, which writes those names
+    into the HOST PYTHON scope.  Collecting a name ``visit_Name`` refuses to
+    read as a variable clobbers the injected binding for the rest of that
+    scope while the term side compiles it as the bound name -- the two sides
+    of one seam disagreeing about the same spelling.
+    """
+    import ast as _ast
+    from clausal.templating.term_rewriting import _collect_logic_var_names
+    clause_ctx = frozenset({"Undefined", "Metre"})
+    node = _ast.parse("f(Undefined, Metre, Total, TOTAL)", mode="eval").body
+    assert _collect_logic_var_names(node, clause_ctx) == ["Total", "TOTAL"]
+
+
+# ── Two shapes that must not diverge from their lowercase twins ────────────
+
+def test_qualified_name_on_an_exempt_base_is_not_dict_sugar(tmp_path):
+    """``Undefined.k`` is a qualified name, not a dict read.
+
+    ``is_dict_attr_access`` asks whether the BASE is a logic variable.  On
+    the lexical rule every capital-initial base qualifies, including the
+    names ``visit_Name`` refuses to read as variables, so ``Undefined.k``
+    flipped from a qualified reference to dict-subscript sugar and started
+    demanding that ``k`` be a declared atom."""
+    mod = _load(tmp_path, "qualbase", """
+        -module(ttiav_qualbase, [p(X)])
+        p(X) <- (X is Undefined.k)
+    """)
+    assert mod is not None
+
+
+def test_comma_less_bare_titlecase_statement_matches_its_lowercase_twin(
+        tmp_path, monkeypatch):
+    """``Foo`` with no trailing comma, for a name already seen as a functor.
+
+    The trailing-comma arm got a TitleCase disjunct so the lint could still
+    refuse it; the comma-LESS arm did not, so the statement fell through to
+    hosted Python -- the exact silent-fallthrough the sibling fix cites as
+    its reason.  With the lint demoted, both spellings must reach the same
+    arity-conflict diagnosis."""
+    from clausal.templating import term_rewriting
+    monkeypatch.setattr(
+        term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "warn")
+    with pytest.raises(SyntaxError, match="conflicts with"):
+        _load(tmp_path, "commaless_lc", """
+            -module(ttiav_commaless_lc, [])
+            foo(1),
+            foo
+        """)
+    with pytest.raises(SyntaxError, match="conflicts with"):
+        _load(tmp_path, "commaless_tc", """
+            -module(ttiav_commaless_tc, [])
+            Foo(1),
+            Foo
+        """)
+
+
+def test_a_thunk_inside_a_lambda_body_uses_the_same_exclusions(tmp_path):
+    """A sub-transformer must inherit the hosted-Python binding set.
+
+    A lambda body gets its own ``TermTransformer``; it already inherited
+    ``_import_remap`` and now inherits the hosted-Python names too, because a
+    ``++`` or f-string inside it resolves free names in the SAME module
+    namespace.  Without that, one spelling would mean two different things
+    depending only on whether it sits inside a lambda.
+
+    (Interpolating the lambda's own PARAMETER is a separate, pre-existing
+    limitation -- ``f"{_x}"`` in a lambda body raises ``NameError`` on main
+    too -- so this stays to the part the exclusion set decides.)
+    """
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _load(tmp_path, "lamthunk", """
+            from fractions import Fraction
+            -module(ttiav_lamthunk, [p(L)])
+            p(L) <- (L is (_x <- (f"{Fraction(1, 3)}")))
+        """)
+    # Captured names get an occurrence bump, so capturing ``Fraction`` here
+    # would have silently suppressed nothing and bound an unbound Var into
+    # the interpolation.  It must not be treated as a variable at all.
+    assert not [w for w in rec
+                if issubclass(w.category, ClausalSingletonWarning)
+                and "`Fraction`" in str(w.message)]

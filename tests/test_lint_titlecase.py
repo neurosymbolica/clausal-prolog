@@ -487,11 +487,12 @@ def test_star_query_warns():
     assert _named(_titlecase_warnings_cell("*(Foo(X))\n")) == ["Foo"]
 
 
-def test_directive_keyword_argument_value_is_a_term_and_is_not_warned():
-    """A keyword argument's VALUE is a term position, so it is a variable
-    now.  (The keyword NAME was never a ``Name`` node and was never read.)"""
-    assert _titlecase_warnings_cell(
-        "-specialize(solve, natnum_program, alias=Foo)\n") == []
+# ``-specialize(mi, source, alias=Foo)`` was briefly asserted here to be a
+# term position and therefore unlinted.  That was wrong, and the correction
+# is worth stating: ``alias`` NAMES the predicate the specialisation defines,
+# so it is a functor position like any other declared name.  It is pinned by
+# ``test_directive_keyword_argument_value_is_read_again`` below.  A keyword
+# argument's NAME is not a ``Name`` node and has never been read at all.
 
 
 def test_directive_argument_in_functor_position_still_warns(tmp_path):
@@ -616,3 +617,38 @@ def test_lowercase_declarations_are_still_silent(tmp_path):
         "-module(m, [foo, bar(X)])\n"
         "-private([baz])\n"
         "-dynamic(foo/0)\n") == []
+
+
+# --- Directives that read a bare ``Name`` argument directly ----------------
+#
+# These do not take a list or a pred/arity spec: they read ``node.id`` off a
+# positional (or keyword) argument.  Narrowing the walk to ``Call.func``
+# dropped them the same way it dropped the declaration lists, and the result
+# was contradictory: ``-edcg_pred(Foo, 2, [...])`` registered a TitleCase
+# predicate silently while a later ``Foo(...)`` call was still refused.
+
+@pytest.mark.parametrize("source", [
+    "-edcg_pred(Foo, 2, [])\n",
+    "-edcg_acc(Foo, V_, I_, O_, {j})\n",
+    "-edcg_pass(Foo)\n",
+])
+def test_bare_name_directive_argument_warns(tmp_path, source):
+    ws = _titlecase_warnings(tmp_path, "bn" + str(abs(hash(source))), source)
+    assert "Foo" in _named(ws), (source, _named(ws))
+
+
+def test_directive_keyword_argument_value_is_read_again():
+    """The keyword values were passed to the lint before the declaration
+    walk was introduced and were dropped by it.  ``-specialize``'s ``alias``
+    NAMES the predicate the specialisation defines, so it is a functor
+    position -- unlike the ordinary keyword-argument VALUE two tests above,
+    which is a term."""
+    ws = _titlecase_warnings_cell(
+        "-specialize(solve, natnum_program, alias=Foo)\n")
+    assert _named(ws) == ["Foo"]
+
+
+def test_lowercase_bare_name_directives_are_silent(tmp_path):
+    assert _titlecase_warnings(
+        tmp_path, "bn_ok",
+        "-edcg_pass(counter)\n") == []
