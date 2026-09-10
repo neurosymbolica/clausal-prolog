@@ -25,7 +25,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 | `--expr` | Python expression embedded inside a logic term |
 | `++expr` | In a Python context: logic term inside a Python expression. In a `.clausal` context: evaluate Python expression at search time |
 | `~~expr` | Capture expression as a `simple_ast` AST node (works anywhere) |
-| `--X` *inside a thunk* | The Clausal variable `X` — see [Marking a variable inside a thunk](#marking-a-variable-inside-a-thunk--x) |
+| `--X` *inside a thunk* | The Clausal variable `X` — see [Marking a variable inside a thunk](#marking-a-variable-inside-a-thunk) |
 
 `--` was chosen because:
 - it doesn't introduce a new keyword or clobber any identifier
@@ -764,7 +764,7 @@ Simple variable references like `f"{X}"` and `f"{NAME}"` work correctly. Format 
 
 ---
 
-### Marking a variable inside a thunk — `--X`
+### Marking a variable inside a thunk
 
 An f-string slot and a `++` operand are verbatim Python, so a name written
 there could mean either the clause's logic variable or a binding in the
@@ -781,8 +781,8 @@ shout(S) <- (tree(Node), S is ++str(--Node).upper())
 ```
 
 This is purely additive — bare `X` keeps working exactly as before, and both
-spellings give the same answer wherever the marker is accepted. Three things
-are worth knowing:
+spellings give the same answer wherever the marker is accepted. What to
+know:
 
 - **It is recognised anywhere inside the slot or operand**, not only at the
   top: a thunk body is usually a call, and `++len(--List)` is the shape that
@@ -793,9 +793,19 @@ are worth knowing:
   way, because a bare name the clause does not bind is a legitimate
   reference to the module namespace; a marked one is not.
 - **Only an identifier that is a variable spelling is a marker.** `--total`
-  is the double negation it always was, and inside a `--` seam the marker is
-  not recognised at all, because there `--expr` is already the seam itself.
+  is the double negation it always was.
+- **It is not recognised inside an inline `--` seam.** There a `++` operand
+  is hosted Python again and `--expr` is already the seam itself, nesting to
+  any depth, so the marker would be a second meaning for one spelling. The
+  `with --{}` *block* form is not a seam operand — its statements are
+  Clausal terms — and markers do work there.
+- **Not in a format spec.** A format spec captures no clause variables on
+  either spelling, so `f"{N:>{--W}}"` is a load error rather than a marker
+  that would quietly resolve `W` in the module namespace. Put the marker in
+  a value slot, or format inside a `++` escape.
 
+
+---
 
 ## [Python interop](python_integration.md) — `++()` escape
 
