@@ -165,9 +165,14 @@ Prolog. See [Atoms vs strings](syntax.md#atoms-vs-strings).
 | Prolog convention | Clausal convention |
 |---|---|
 | `lowercase_atoms` for predicates | `snake_case` for predicates and builtins (`append`, `in_`, `read_file`, `find_path`) |
-| `TitleCase` for variables | `ALL_CAPS` (or leading `_lowercase`) for variables (`X`, `LIST`, `SAMPLE_SIZE`, `_rest`) |
-| `TitleCase` for compound functors | `TitleCase` for atoms and functors declared via `-module`/`-private` (`Red`, `Point(X, Y)`) |
+| `TitleCase` for variables | `TitleCase` works unchanged (`Foo`, `Total`); `ALL_CAPS` or leading `_lowercase` are the native styles (`X`, `LIST`, `SAMPLE_SIZE`, `_rest`) |
+| `TitleCase` for compound functors | `snake_case`, declared via `-module`/`-private` (`red`, `point(X, Y)`) — a `TitleCase` functor is a load error, and a Python class is reached as `++Name` |
 | `abbreviations` (`nb_getval`) | spell names out; keep only universal abbreviations (`DCG`, `CLP`, `msort`, `succ`) |
+
+A Prolog variable therefore needs no transliteration: `p(Foo) :- bar(Foo).` becomes
+`p(Foo) <- (bar(Foo))` with the spelling intact. A Prolog *functor* does, because that is the
+one position where the two languages disagree — see
+[One asymmetry: TitleCase in functor position](syntax.md#one-asymmetry-titlecase-in-functor-position).
 
 `snake_case` for predicates is a **convention, not a language rule** — the parser accepts any
 lowercase-initial identifier. It mirrors Python's standard library and SWI-Prolog, so code reads
