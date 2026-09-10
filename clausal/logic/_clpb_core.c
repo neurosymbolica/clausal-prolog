@@ -333,11 +333,24 @@ c_make_node(int var_id, PyObject *high, PyObject *low,
         return low;
     }
 
-    /* Look up the Var object for this var_id */
+    /* Look up the Var object for this var_id.
+     *
+     * OWNED, not borrowed, and that is a correctness requirement rather
+     * than tidiness (2026-09-11).  Everything below allocates -- and an
+     * allocation can run the collector, which can run a weakref finalizer,
+     * and `clpb._cleanup_trail_allocs` is exactly such a finalizer: it pops
+     * `_id_to_var[idx]` and `_unique_tables[id(var)]` when a Trail dies.
+     * Held borrowed, `var` could be freed underneath this call and `tbl`
+     * could be freed before it is next read -- a dangling dict, then a
+     * segfault inside PyDict_GetItem.  Owning both for the duration also
+     * pins the Var's ADDRESS, which is what the unique table is keyed on,
+     * so no other variable can alias this table mid-call.
+     */
     PyObject *vid_key = PyLong_FromLong(var_id);
     if (!vid_key) return NULL;
 
     PyObject *var = PyDict_GetItem(id_to_var, vid_key);   /* borrowed */
+    Py_XINCREF(var);                                      /* now owned */
     Py_DECREF(vid_key);
 
     if (!var) {
@@ -350,48 +363,52 @@ c_make_node(int var_id, PyObject *high, PyObject *low,
     }
 
     /* ── Get or create the per-variable unique table ─────────── */
-    PyObject *tbl_key = PyLong_FromSsize_t((Py_ssize_t)var);
-    if (!tbl_key) return NULL;
+    PyObject *tbl = NULL, *ukey = NULL, *args = NULL, *result = NULL;
 
-    PyObject *tbl = PyDict_GetItem(unique_tables, tbl_key);   /* borrowed */
+    PyObject *tbl_key = PyLong_FromSsize_t((Py_ssize_t)var);
+    if (!tbl_key) goto done;
+
+    tbl = PyDict_GetItem(unique_tables, tbl_key);         /* borrowed */
+    Py_XINCREF(tbl);                                      /* now owned */
     if (!tbl) {
         tbl = PyDict_New();
-        if (!tbl) { Py_DECREF(tbl_key); return NULL; }
+        if (!tbl) { Py_DECREF(tbl_key); goto done; }
         if (PyDict_SetItem(unique_tables, tbl_key, tbl) < 0) {
-            Py_DECREF(tbl);
+            Py_CLEAR(tbl);
             Py_DECREF(tbl_key);
-            return NULL;
+            goto done;
         }
-        Py_DECREF(tbl);                       /* dict owns it now */
-        tbl = PyDict_GetItem(unique_tables, tbl_key); /* re-fetch borrowed */
+        /* keep our own reference; the dict has its own */
     }
     Py_DECREF(tbl_key);
 
     /* ── Unique-table lookup: (id(high), id(low)) ───────────── */
-    PyObject *ukey = Py_BuildValue("(nn)", (Py_ssize_t)high, (Py_ssize_t)low);
-    if (!ukey) return NULL;
+    ukey = Py_BuildValue("(nn)", (Py_ssize_t)high, (Py_ssize_t)low);
+    if (!ukey) goto done;
 
     PyObject *existing = PyDict_GetItem(tbl, ukey);   /* borrowed */
     if (existing) {
-        Py_DECREF(ukey);
         Py_INCREF(existing);
-        return existing;
+        result = existing;
+        goto done;
     }
 
     /* ── Create new node and insert ─────────────────────────── */
-    PyObject *args = Py_BuildValue("(iOO)", var_id, high, low);
-    if (!args) { Py_DECREF(ukey); return NULL; }
-    PyObject *node = BDDNode_new(&BDDNodeType, args, NULL);
-    Py_DECREF(args);
-    if (!node) { Py_DECREF(ukey); return NULL; }
+    args = Py_BuildValue("(iOO)", var_id, high, low);
+    if (!args) goto done;
+    result = BDDNode_new(&BDDNodeType, args, NULL);
+    Py_CLEAR(args);
+    if (!result) goto done;
 
-    if (PyDict_SetItem(tbl, ukey, node) < 0) {
-        Py_DECREF(ukey);
-        Py_DECREF(node);
-        return NULL;
-    }
-    Py_DECREF(ukey);
-    return node;          /* new reference from BDDNode_new */
+    if (PyDict_SetItem(tbl, ukey, result) < 0)
+        Py_CLEAR(result);
+
+done:
+    Py_XDECREF(args);
+    Py_XDECREF(ukey);
+    Py_XDECREF(tbl);
+    Py_DECREF(var);
+    return result;        /* new reference, or NULL with an exception set */
 }
 
 /* ── Terminal cases for apply ───────────────────────────────────── */
