@@ -21,16 +21,16 @@ The key idea is to represent an *object-level* program — the program being int
 In Clausal, object-level terms are ordinary predicate instances. We declare private functor classes for the object level so they are treated purely as data, not called directly:
 
 ```clausal
--private([Natnum(VALUE), succ(INNER), Edge(FROM, TO), Path(FROM, TO)])
+-private([natnum(VALUE), succ(INNER), edge(FROM, TO), path(FROM, TO)])
 ```
 
 A program is then a list of such clauses:
 
 ```clausal
-NatnumProgram(PROGRAM) <- (
+natnum_program(PROGRAM) <- (
     PROGRAM is [
-        [Natnum(0), []],
-        [Natnum(succ(X)), [Natnum(X)]]
+        [natnum(0), []],
+        [natnum(succ(X)), [natnum(X)]]
     ]
 )
 ```
@@ -45,13 +45,13 @@ natnum(s(X)) :- natnum(X).
 Similarly, a graph reachability program:
 
 ```clausal
-GraphProgram(PROGRAM) <- (
+graph_program(PROGRAM) <- (
     PROGRAM is [
-        [Edge("a", "b"), []],
-        [Edge("b", "c"), []],
-        [Edge("b", "d"), []],
-        [Path(X, Y), [Edge(X, Y)]],
-        [Path(X, Y), [Edge(X, Z), Path(Z, Y)]]
+        [edge("a", "b"), []],
+        [edge("b", "c"), []],
+        [edge("b", "d"), []],
+        [path(X, Y), [edge(X, Y)]],
+        [path(X, Y), [edge(X, Z), path(Z, Y)]]
     ]
 )
 ```
@@ -63,7 +63,7 @@ GraphProgram(PROGRAM) <- (
 All meta-interpreters share a helper that finds a clause in the program whose head unifies with a given goal, returning a fresh copy of the body (to avoid variable clashes between different resolution steps):
 
 ```clausal
-MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
+match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
     CLAUSE in PROGRAM,
     copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
     GOAL is FRESH_HEAD,
@@ -79,11 +79,11 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 The simplest meta-interpreter processes a *list* of goals, replacing each goal with the body of a matching clause, and recursing until the list is empty.
 
 ```clausal
-Solve([], _PROGRAM_UNUSED),
-Solve([GOAL, *GOALS], PROGRAM) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
+solve([], _PROGRAM_UNUSED),
+solve([GOAL, *GOALS], PROGRAM) <- (
+    match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
-    Solve(ALL_GOALS, PROGRAM),
+    solve(ALL_GOALS, PROGRAM),
 )
 ```
 
@@ -113,11 +113,11 @@ result = list(Solve.query(goals=[Path("a", "c")], program=g))
 By adding a counter argument, we can count the number of resolution steps (clause applications) the interpreter performs:
 
 ```clausal
-SolveCount([], _PROGRAM_UNUSED, 0),
-SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
+solve_count([], _PROGRAM_UNUSED, 0),
+solve_count([GOAL, *GOALS], PROGRAM, COUNT) <- (
+    match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
-    SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
+    solve_count(ALL_GOALS, PROGRAM, SUB_COUNT),
     COUNT == SUB_COUNT + 1,
 )
 ```
@@ -128,12 +128,12 @@ Each recursive call adds one to the count after the sub-proof completes. The cou
 
 | Query | Steps |
 |---|---|
-| `Natnum(0)` | 1 — one fact applied |
-| `Natnum(succ(0))` | 2 — recursive clause + base fact |
-| `Natnum(succ(succ(0)))` | 3 — two recursive steps + base |
-| `Edge("a","b")` | 1 — one fact |
-| `Path("a","b")` | 2 — one path clause + one edge fact |
-| `Path("a","c")` | 4 — path + edge + path + edge |
+| `natnum(0)` | 1 — one fact applied |
+| `natnum(succ(0))` | 2 — recursive clause + base fact |
+| `natnum(succ(succ(0)))` | 3 — two recursive steps + base |
+| `edge("a","b")` | 1 — one fact |
+| `path("a","b")` | 2 — one path clause + one edge fact |
+| `path("a","c")` | 4 — path + edge + path + edge |
 
 ---
 
@@ -142,13 +142,13 @@ Each recursive call adds one to the count after the sub-proof completes. The cou
 The vanilla interpreter will loop forever on programs that have cycles or infinite derivations. Adding a depth limit causes it to fail rather than diverge:
 
 ```clausal
-SolveLimit([], _PROGRAM_UNUSED, _MAX_UNUSED),
-SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
+solve_limit([], _PROGRAM_UNUSED, _MAX_UNUSED),
+solve_limit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
     MAX1 == MAX - 1,
-    MatchClause(GOAL, BODY, PROGRAM),
+    match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
-    SolveLimit(ALL_GOALS, PROGRAM, MAX1),
+    solve_limit(ALL_GOALS, PROGRAM, MAX1),
 )
 ```
 
@@ -170,28 +170,28 @@ SolveLimit([Path("a","c")], P, 4)       → succeeds
 Iterative deepening combines the completeness of breadth-first search with the space efficiency of depth-first search. It repeatedly tries increasing depth limits until a proof is found:
 
 ```clausal
-SolveIterativeDeepening(GOALS, PROGRAM) <- (
+solve_iterative_deepening(GOALS, PROGRAM) <- (
     between(0, 1000, DEPTH),
-    SolveLimit(GOALS, PROGRAM, DEPTH),
+    solve_limit(GOALS, PROGRAM, DEPTH),
 )
 ```
 
-`between` generates 0, 1, 2, … in order. For each candidate depth, `SolveLimit` either finds a proof or fails. On failure, backtracking increments the depth and tries again. The first depth at which a proof exists is found, and the proof is returned.
+`between` generates 0, 1, 2, … in order. For each candidate depth, `solve_limit` either finds a proof or fails. On failure, backtracking increments the depth and tries again. The first depth at which a proof exists is found, and the proof is returned.
 
 **The key advantage** is completeness on programs where naive DFS would loop. Consider a cyclic graph where the only successful path clause is listed *after* the recursive one:
 
 ```clausal
-CyclicProgram(PROGRAM) <- (
+cyclic_program(PROGRAM) <- (
     PROGRAM is [
-        [Edge("a", "b"), []],
-        [Edge("b", "a"), []],
-        [Path(X, Y), [Edge(X, Z), Path(Z, Y)]],   # recursive — tried first
-        [Path(X, Y), [Edge(X, Y)]]                  # base — tried second
+        [edge("a", "b"), []],
+        [edge("b", "a"), []],
+        [path(X, Y), [edge(X, Z), path(Z, Y)]],   # recursive — tried first
+        [path(X, Y), [edge(X, Y)]]                  # base — tried second
     ]
 )
 ```
 
-`Solve([Path("a","b")], CyclicProgram)` loops forever — the recursive clause is always tried first, generating `a→b→a→b→…`. But `SolveIterativeDeepening([Path("a","b")], CyclicProgram)` succeeds at depth 2, because at depth 1 both branches are exhausted, and at depth 2 `a→b` is found via the base clause.
+`solve([path("a","b")], cyclic_program)` loops forever — the recursive clause is always tried first, generating `a→b→a→b→…`. But `solve_iterative_deepening([path("a","b")], cyclic_program)` succeeds at depth 2, because at depth 1 both branches are exhausted, and at depth 2 `a→b` is found via the base clause.
 
 ---
 
@@ -200,17 +200,17 @@ CyclicProgram(PROGRAM) <- (
 The proof tree interpreter extends the vanilla interpreter to build a *trace* of the proof — a tree recording which clause was used to resolve each goal, and how its body was proved:
 
 ```clausal
-SolveTree([], _PROGRAM_UNUSED, []),
-SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
-    SolveTree(BODY, PROGRAM, BODY_TREE),
-    SolveTree(GOALS, PROGRAM, GOALS_TREE),
+solve_tree([], _PROGRAM_UNUSED, []),
+solve_tree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
+    match_clause(GOAL, BODY, PROGRAM),
+    solve_tree(BODY, PROGRAM, BODY_TREE),
+    solve_tree(GOALS, PROGRAM, GOALS_TREE),
 )
 ```
 
 Each node in the tree is `[Goal, SubTree]` where `SubTree` is the proof tree for the body goals that were used to resolve `Goal`. Facts (clauses with empty body) produce leaf nodes `[Goal, []]`.
 
-**Example: `Path("a","c")`**
+**Example: `path("a","c")`**
 
 ```
 Path("a", "c")
@@ -225,7 +225,7 @@ In Clausal list notation:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:metainterp_graph_test"
 ```
 
-**Example: `Natnum(s(s(0)))`**
+**Example: `natnum(s(s(0)))`**
 
 ```
 Natnum(succ(succ(0)))
@@ -245,7 +245,7 @@ Natnum(succ(succ(0)))
 
 **`copy_term` for fresh variables** — without freshening, reusing a clause that contains `X` twice would unify all occurrences of `X` across different resolution steps. `copy_term` renames all variables in a clause before unification, exactly as a real Prolog interpreter would.
 
-**Composability** — each interpreter is a small, self-contained predicate. They can be combined: for example, `SolveCount` could be extended with a depth limit (producing a counted, depth-bounded interpreter) by merging the two patterns. These interpreters can also be [specialized](specialization.md) via partial deduction to eliminate interpretation overhead.
+**Composability** — each interpreter is a small, self-contained predicate. They can be combined: for example, `solve_count` could be extended with a depth limit (producing a counted, depth-bounded interpreter) by merging the two patterns. These interpreters can also be [specialized](specialization.md) via partial deduction to eliminate interpretation overhead.
 
 ---
 

@@ -19,7 +19,7 @@ source text. It is safe to reflect over untrusted rulebases.
     reified_clause, clause_head, clause_body, goal_functor, Clause, Goal,
 ])
 
-HeadName(SRC, NAME) <- (
+head_name(SRC, NAME) <- (
     reified_clause(SRC, CLAUSE),
     clause_head(CLAUSE, HEAD),
     goal_functor(HEAD, NAME, _)
@@ -140,7 +140,9 @@ operator nodes, lists, tuples, and dict values. The workhorse for "find a
 `++` escape anywhere" checks:
 
 ```clausal
-EscapeCode(SRC, CODE) <- (
+-import_from(reflection, [reified_item, reified_subterm, Escape])
+
+escape_code(SRC, CODE) <- (
     reified_item(SRC, ITEM),
     reified_subterm(ITEM, Escape(CODE, _, _))
 )
@@ -154,7 +156,7 @@ matcher can *quote* the clause it is objecting to — including one it rebuilt
 with `replace_subterm/4` that never came from source text:
 
 ```clausal
-SwappedSource(SRC, TEXT) <- (
+swapped_source(SRC, TEXT) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
     op_node(SUB, "GtE", ARGS),
@@ -177,18 +179,20 @@ sugar for the equivalent vocabulary pattern, so matchers are written in the
 same syntax as the clauses they match:
 
 ```clausal
-ShapeXY(SRC) <- reified_clause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))
+shape_xy(SRC) <- reified_clause(SRC, my_pred(A, B) <- (goalx(A), goaly(B)))
 ```
 
 is rewritten at compile time (goal expansion) into
 
 ```clausal
-ShapeXY(SRC) <- reified_clause(SRC,
-    Clause(Goal("MyPred", [A, B], []),
-           [Goal("Goalx", [A], []), Goal("Goaly", [B], [])]))
+-import_from(reflection, [reified_clause, Clause, Goal])
+
+shape_xy(SRC) <- reified_clause(SRC,
+    Clause(Goal("my_pred", [A, B], []),
+           [Goal("goalx", [A], []), Goal("goaly", [B], [])]))
 ```
 
-(The expansion is built by the compiler, so its `"MyPred"` is the raw
+(The expansion is built by the compiler, so its `"my_pred"` is the raw
 spelling *string* the reified `Goal.name` field holds, whatever
 `-double_quotes` mode the matcher's module is in. Writing that vocabulary
 form by hand under the default `atom` mode would give you atoms and match
@@ -198,14 +202,14 @@ Semantics:
 
 - **Pattern variables are the matcher's own variables.** They *capture*
   the reified subterms they align with — `A` above binds to
-  `Variable("X")` when matching `MyPred(X, Y) <- (Goalx(X), Goaly(Y))` —
+  `Variable("X")` when matching `my_pred(X, Y) <- (goalx(X), goaly(Y))` —
   and repeated variables enforce sharing: the pattern above rejects
-  `MyPred(X, Y) <- (Goalx(Y), Goaly(X))`. To pin an actual source-level
+  `my_pred(X, Y) <- (goalx(Y), goaly(X))`. To pin an actual source-level
   name, write `Variable("X")` explicitly in the pattern.
 - **Facts:** `Tagged(_, ok) <- True` matches the fact `Tagged(1, ok),`
   (a `True` body is the empty goal list). Atoms in patterns match reified
   `Atom` terms, not strings.
-- **Whole-body capture:** `MyPred(_, _) <- GOALS` binds `GOALS` to the
+- **Whole-body capture:** `my_pred(_, _) <- GOALS` binds `GOALS` to the
   body's goal list.
 - **Goal lists match exactly.** A two-goal pattern body matches two-goal
   bodies only.
@@ -233,22 +237,22 @@ The motivating example — "a called predicate that is neither defined nor
 imported":
 
 ```clausal
-CalledPredicate(SRC, NAME, ARITY) <- (
+called_predicate(SRC, NAME, ARITY) <- (
     reified_clause(SRC, CLAUSE),
     clause_body(CLAUSE, GOALS),
     GOAL in GOALS,
     goal_functor(GOAL, NAME, ARITY)
 )
 
-DefinedName(SRC, NAME) <- (
+defined_name(SRC, NAME) <- (
     reified_clause(SRC, CLAUSE),
     clause_head(CLAUSE, HEAD),
     goal_functor(HEAD, NAME, _)
 )  # goal_functor on both sides, so both NAMEs are atoms
 
-UndefinedCall(SRC, NAME) <- (
-    CalledPredicate(SRC, NAME, _),
-    not DefinedName(SRC, NAME)
+undefined_call(SRC, NAME) <- (
+    called_predicate(SRC, NAME, _),
+    not defined_name(SRC, NAME)
 )
 ```
 
@@ -268,7 +272,7 @@ any_goals >> (any_goal, any_goals)
 
 starts_with_edge >> (edge_goal, any_goals)
 
-StartsWithEdge(SRC, NAME) <- (
+starts_with_edge(SRC, NAME) <- (
     reified_clause(SRC, CLAUSE),
     clause_head(CLAUSE, HEAD),
     goal_functor(HEAD, NAME, _),

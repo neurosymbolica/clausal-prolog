@@ -26,14 +26,14 @@ test("keep evens") <- (
 
 ### call/1..8 and call_goal/1..8
 
-`Call(Goal)` invokes a goal. `Call(Goal, A1, ..., AN)` appends extra arguments.
+`call(Goal)` invokes a goal. `call(Goal, A1, ..., AN)` appends extra arguments.
 `call_goal` is an alias.
 
 ```clausal
-test("call/1") <- Call((X <- (X == 42)), 42)
+test("call/1") <- call((X <- (X == 42)), 42)
 
 test("call/2") <- (
-    Call(((X, Y) <- (Y == X * 2)), 5, 10)
+    call(((X, Y) <- (Y == X * 2)), 5, 10)
 )
 ```
 
@@ -256,7 +256,7 @@ test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
   solution only). It does not backtrack into the goal.
 - **Lambda syntax** — single-arg: `(X <- (body))`. Multi-arg: `((X, Y) <- (body))`
   with extra outer parens for the tuple. See [Lambdas](lambdas.md) for details.
-- **`Call/N` appends arguments** — `Call(foo, 1, 2)` calls `foo(1, 2)`.
+- **`call/N` appends arguments** — `call(foo, 1, 2)` calls `foo(1, 2)`.
 
 ---
 

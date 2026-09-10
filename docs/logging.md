@@ -9,7 +9,7 @@ Since Python's `logging` module is the backend, all of Python's handler ecosyste
 ```clausal
 -import_from(log, [get_logger, info, debug, warning, error, set_level])
 
-Main(NAME) <- (
+main(NAME) <- (
     get_logger("myapp", L),
     set_level(L, "debug"),
     debug(L, f"Starting with name={NAME}"),
@@ -22,7 +22,7 @@ Or via [module import](import.md):
 ```clausal
 -import_module(log)
 
-Main <- (
+main <- (
     log.get_logger("myapp", L),
     log.info(L, "ready")
 )
@@ -163,7 +163,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"
 **Succeeds** if the logger would process a message at `Level`; **fails** otherwise. This is the one logging predicate that can fail — useful for guarding expensive message construction:
 
 ```clausal
-Process(L, DATA) <- (
+process(L, DATA) <- (
     (is_enabled_for(L, "debug"), debug(L, f"Processing: {DATA}") or True),
     do_work(DATA)
 )

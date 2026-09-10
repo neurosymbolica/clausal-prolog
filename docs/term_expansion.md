@@ -14,7 +14,7 @@ Term expansion and goal expansion are compile-time transformation passes that re
 
 ## Term Expansion
 
-Term expansion rewrites module items (clauses, facts, directives) at load time, before compilation. Define `TermExpansion/4` clauses to transform your source.
+Term expansion rewrites module items (clauses, facts, directives) at load time, before compilation. Define `term_expansion/4` clauses to transform your source.
 
 ### Writing Expansion Rules
 
@@ -124,7 +124,7 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) applies these transf
 
 **Pattern precompilation**: String-literal regex patterns are compiled to `re.Pattern` objects at load time, avoiding runtime recompilation.
 
-**Dotted-name support**: Qualified calls like `module.Pred(X)` are resolved during goal expansion (see [Import](import.md)).
+**Dotted-name support**: Qualified calls like `module.pred(X)` are resolved during goal expansion (see [Import](import.md)).
 
 ### How Goal Expansion Works
 
@@ -175,7 +175,7 @@ The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to
 
 ## Gotchas
 
-- **TermExpansion clauses are NOT themselves expanded** — they pass through unchanged to prevent infinite loops.
+- **term_expansion clauses are NOT themselves expanded** — they pass through unchanged to prevent infinite loops.
 - **Always use `q()`** to quote terms in expansion rules. Without it, the term is evaluated instead of treated as data.
 - **Module state starts as `None`** unless you initialize it. Guard arithmetic operations accordingly.
 - **One-to-many expansion returns a list** — make sure OUTPUT is `[item1, item2, ...]`, not a bare term, when you want multiple outputs.

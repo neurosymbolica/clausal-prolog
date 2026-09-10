@@ -9,7 +9,7 @@ Since Python's `sqlite3` module is the backend, all SQLite features are availabl
 ```clausal
 -import_from(sqlite, [connect, exec, query, disconnect])
 
-Main <- (
+main <- (
     connect(":memory:", "mydb"),
     exec("mydb", "CREATE TABLE users (name TEXT, age INTEGER)"),
     exec("mydb", "INSERT INTO users VALUES (?, ?)", ["alice", 30]),
@@ -23,7 +23,7 @@ Or via [module import](import.md):
 ```clausal
 -import_module(sqlite)
 
-Main <- (
+main <- (
     sqlite.connect(":memory:", "db"),
     sqlite.exec("db", "CREATE TABLE t (x INTEGER)"),
     sqlite.query("db", "SELECT x FROM t", X),
@@ -76,7 +76,7 @@ Close the connection and unregister `Alias`. **Fails** if `Alias` is not connect
 when `Alias` is unbound, **nondeterministically enumerates** all open connection aliases. when `Alias` is ground, succeeds if that alias is currently connected.
 
 ```clausal
-ListDbs <- (
+list_dbs <- (
     current_connection(A),
     ++print(f"Open: {A}")
 )
@@ -98,10 +98,10 @@ Execute a SELECT query and **nondeterministically iterate** over result rows via
 
 ```clausal
 # Multi-column: Row unifies with a tuple
-AllUsers(ROW) <- query("db", "SELECT name, age FROM users", ROW)
+all_users(ROW) <- query("db", "SELECT name, age FROM users", ROW)
 
 # Single-column: Row unifies with the value directly
-AllNames(NAME) <- query("db", "SELECT name FROM users", NAME)
+all_names(NAME) <- query("db", "SELECT name FROM users", NAME)
 ```
 
 **Fails** (produces zero solutions) if the query returns no rows.
@@ -115,7 +115,7 @@ AllNames(NAME) <- query("db", "SELECT name FROM users", NAME)
 Parameterized query with `?` placeholders. `Params` is a list of values.
 
 ```clausal
-OlderThan(MIN_AGE, NAME) <- (
+older_than(MIN_AGE, NAME) <- (
     query("db", "SELECT name FROM users WHERE age > ?", [MIN_AGE], NAME)
 )
 ```
@@ -129,7 +129,7 @@ OlderThan(MIN_AGE, NAME) <- (
 Execute a DDL or DML statement (CREATE, INSERT, UPDATE, DELETE). **Succeeds once** and auto-commits.
 
 ```clausal
-Setup <- (
+setup <- (
     exec("db", "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)"),
     exec("db", "INSERT INTO items VALUES (1, 'widget')")
 )
@@ -144,7 +144,7 @@ Setup <- (
 Parameterized DML with `?` placeholders. Auto-commits.
 
 ```clausal
-AddUser(NAME, AGE) <- (
+add_user(NAME, AGE) <- (
     exec("db", "INSERT INTO users VALUES (?, ?)", [NAME, AGE])
 )
 ```
@@ -158,7 +158,7 @@ AddUser(NAME, AGE) <- (
 Execute DML and unify `Count` with the number of affected rows.
 
 ```clausal
-Cleanup(N) <- (
+cleanup(N) <- (
     row_count("db", "DELETE FROM sessions WHERE expired = 1", N),
     ++print(f"Removed {N} expired sessions")
 )
@@ -177,9 +177,9 @@ Cleanup(N) <- (
 when `TableName` is unbound, **nondeterministically enumerates** all table names. when ground, succeeds if that table exists.
 
 ```clausal
-HasUsersTable <- table("db", "users")
+has_users_table <- table("db", "users")
 
-ListTables(T) <- table("db", T)
+list_tables(T) <- table("db", T)
 ```
 
 ### `column/4`
@@ -191,7 +191,7 @@ ListTables(T) <- table("db", T)
 Enumerate columns of a table. Yields `(ColName, ColType)` pairs. Column types are SQLite type strings: `"TEXT"`, `"INTEGER"`, `"REAL"`, `"BLOB"`, etc.
 
 ```clausal
-ShowSchema(COL, TYPE) <- (
+show_schema(COL, TYPE) <- (
     column("db", "users", COL, TYPE),
     ++print(f"  {COL}: {TYPE}")
 )

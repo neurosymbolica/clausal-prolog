@@ -213,7 +213,7 @@ for SWI-Prolog, Scryer Prolog, etc.
 ### Qualified Calls
 
 - Prolog `lists:member(X, L)` → Clausal `lists.in_(X, L)` (via BUILTIN_NAME_MAP)
-- For non-builtin predicates: `mymod:foo(X)` → `mymod.Foo(X)` (snake_to_pascal)
+- For non-builtin predicates: `mymod:foo(X)` → `mymod.foo(X)` (names cross unchanged)
 
 ### Library Mapping
 

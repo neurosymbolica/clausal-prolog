@@ -66,7 +66,7 @@ variables respectively.
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
-This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). In Python, TitleCase names are conventionally class names, so Clausal reserves TitleCase for atoms and compound-term functors (`Red`, `Point(X, Y)`); predicates themselves are lowercase (`findall`, `in_`, `length`). Reusing TitleCase for variables as well would create ambiguity: in `Foo(Bar)`, is `Bar` the atom `Bar` or a logic variable? ALL-CAPS resolves this cleanly — `findall(X, in_(X, LIST), BAG)` is unambiguous.
+This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). In Python, TitleCase names are conventionally class names, so Clausal reserves TitleCase for atoms and compound-term functors (`Red`, `point(X, Y)`); predicates themselves are lowercase (`findall`, `in_`, `length`). Reusing TitleCase for variables as well would create ambiguity: in `Foo(Bar)`, is `Bar` the atom `Bar` or a logic variable? ALL-CAPS resolves this cleanly — `findall(X, in_(X, LIST), BAG)` is unambiguous.
 
 Why ALL-CAPS works well:
 - Python programmers already associate titlecase with class names — static, global, noun-like. This is actually close to how atoms and predicates behave, not variables.
@@ -203,12 +203,12 @@ A structured RHS builds a **real Clausal term** — the same term the identical 
 build in a clause body, with the same unification semantics — not a Python value:
 
 ```clausal
--module(m, [Point(X, Y)])
+-module(m, [point(X, Y)])
 -private([mn, mx, red, green])
 
 -constants(
     _COUNTRY_CODES_ = ['au', 'al', 'za'],
-    _ORIGIN_ = Point(0, 0),
+    _ORIGIN_ = point(0, 0),
     _LIMITS_ = {mn: 1, mx: 99},
     _FLAGS_ = {red, green},
 )
@@ -216,21 +216,21 @@ build in a clause body, with the same unification semantics — not a Python val
 
 Lists, tuples, sets, and dicts lower through the same construction a clause body's literal of
 the same shape uses (a list is a plain list, a set is a `SetTerm`, a dict is a `DictTerm`), and
-a functor call (`Point(0, 0)`) constructs a real instance of that functor's class — so a
+a functor call (`point(0, 0)`) constructs a real instance of that functor's class — so a
 structured constant unifies exactly as the equivalent literal would, indexes the same way, and
 carries no extra runtime cost per reference.
 
 **A functor used in a structured RHS must already be declared *above* the `-constants`
-directive** — via `-module`, `-private`, `-dynamic`, an earlier RULE clause (`Point(X, Y) <- (...)`)
-defining it, an earlier properly-terminated bodyless FACT (`Point(1, 2),` — the trailing comma is
-what makes it a fact at all; `Point(1, 2)` with no comma is a bare, unregistered expression
+directive** — via `-module`, `-private`, `-dynamic`, an earlier RULE clause (`point(X, Y) <- (...)`)
+defining it, an earlier properly-terminated bodyless FACT (`point(1, 2),` — the trailing comma is
+what makes it a fact at all; `point(1, 2)` with no comma is a bare, unregistered expression
 statement, not a declaration — see the comma-optional fact rule above), or imported via
 `-import_from`/`-import_module`. This is the same source-order rule that makes the functor's
 class *statement* execute before the constant's assignment does; an undeclared functor is a
 located, load-time `SyntaxError` naming the remedy:
 
 ```text
-SyntaxError: -constants: `_P_` RHS calls `Point(...)`, which is not a declared functor above
+SyntaxError: -constants: `_P_` RHS calls `point(...)`, which is not a declared functor above
 this -constants directive — declare it with -module/-private/-dynamic before -constants, or
 import it with -import_from/-import_module
 ```
@@ -264,7 +264,7 @@ any clause compiles.) A `++()` escape is legal as an *element* inside a structur
     for a shallow one) returns a PLAIN, unfrozen container — that round-trip (also how
     `pickle` serializes a frozen constant) is the documented escape route. The one deliberate
     exception to all of this: a functor constant's *own field values* are **not** frozen
-    (`Point([1, 2, 3], 0)`'s list field can still be mutated) — freezing stops at the term
+    (`point([1, 2, 3], 0)`'s list field can still be mutated) — freezing stops at the term
     boundary a functor call introduces, not inside it. And one type-changing freeze: a
     `++()`-escape-built `bytearray` value freezes to `bytes` (a different type, not a frozen
     subclass) — `bytes` already *is* Python's immutable byte-string type, so there is nothing

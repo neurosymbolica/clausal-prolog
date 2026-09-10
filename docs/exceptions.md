@@ -121,11 +121,11 @@ Those are `BaseException`s and pass straight through any handler.
 ### halt/0, halt/1
 
 ```clausal
-done() <- Halt()
-done_with_code() <- Halt(1)
+done() <- halt()
+done_with_code() <- halt(1)
 ```
 
-`Halt()` raises `SystemExit(0)`. `Halt(N)` raises `SystemExit(N)`.
+`halt()` raises `SystemExit(0)`. `halt(N)` raises `SystemExit(N)`.
 
 ---
 
@@ -303,7 +303,7 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
   re-raises if no match
 - `Catch(goal, error)` — like `catch/3` but always catches (no re-raise); recovery = `true`
 - `catch_recover(goal, error, recovery)` — like `catch/3` but always catches (no re-raise)
-- `Halt()` / `Halt(N)` compile to `raise SystemExit(0)` / `raise SystemExit(N)`
+- `halt()` / `halt(N)` compile to `raise SystemExit(0)` / `raise SystemExit(N)`
 
 ---
 

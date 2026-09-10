@@ -7,12 +7,12 @@ Directives are module-level declarations in `.clausal` files that control predic
 ## Module Declaration
 
 ```clausal
--module(my_module, [Pred1(A, B), Pred2(X)])
+-module(my_module, [pred1(A, B), pred2(X)])
 ```
 
 Declares the module name and its public exports. The export list specifies which predicates are accessible to importers. If omitted, the module name is derived from the filename.
 
-The export list may mix predicates with arity (e.g. `Pred1(A, B)`) and bare atoms (zero-arity predicates):
+The export list may mix predicates with arity (e.g. `pred1(A, B)`) and bare atoms (zero-arity predicates):
 
 ```clausal
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_with_atoms"
@@ -66,7 +66,7 @@ Both spellings work in [`-private`](#-private) too.
 ### -private
 
 ```clausal
--private([Helper(X, Y), Edge(A, B)])
+-private([helper(X, Y), edge(A, B)])
 ```
 
 Declares predicates and atoms that are internal to the module. Predicates get proper `PredicateMeta` classes and atoms become writable bare names, exactly as `-module` exports do — and, as for `-module`, an atom listed here is the ordinary global atom of that spelling, not a module-local variant.
@@ -130,7 +130,7 @@ Import all exported predicates from a module:
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_module"
 ```
 
-Imported predicates are accessed via qualified names: `utils.Double(X, Y)`.
+Imported predicates are accessed via qualified names: `utils.double(X, Y)`.
 
 See [Import System](import.md) for full details. For importing Prolog `.pl` files directly, see [Importing Prolog](importing_prolog.md).
 
@@ -243,7 +243,7 @@ predicate, not data — calling it compiles to a goal (class/dispatch emission)
 exactly as without the flag; OWA only concerns functor *construction*.
 
 **Dotted references stay loud.** An unresolvable dotted reference
-(`other.NoSuchThing(1, 2)` — a typo or a missing import) is a name-resolution
+(`other.no_such_thing(1, 2)` — a typo or a missing import) is a name-resolution
 failure, not a functor-vocabulary question: it raises the ordinary `NameError`
 under the flag exactly as without it. OWA opens the flagged module's own local
 functor vocabulary; it does not suppress qualified-name resolution failures. A

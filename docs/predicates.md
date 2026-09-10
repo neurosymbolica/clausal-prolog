@@ -7,20 +7,20 @@ Predicates are the core building block of Clausal programs. A predicate defines 
 ## Quick Example
 
 ```clausal
-# Facts: Edge/2 is true for these pairs
-Edge(1, 2),
-Edge(2, 3),
-Edge(1, 3),
+# Facts: edge/2 is true for these pairs
+edge(1, 2),
+edge(2, 3),
+edge(1, 3),
 
-# Rule: Reach/2 is true when there is a path
-Reach(X, Y) <- Edge(X, Y)
-Reach(X, Y) <- (
-    Edge(X, Z),
-    Reach(Z, Y)
+# Rule: reach/2 is true when there is a path
+reach(X, Y) <- edge(X, Y)
+reach(X, Y) <- (
+    edge(X, Z),
+    reach(Z, Y)
 )
 ```
 
-Query: `Reach(1, 3)` succeeds (both directly and via node 2).
+Query: `reach(1, 3)` succeeds (both directly and via node 2).
 
 ---
 
@@ -175,22 +175,22 @@ For [list](lists.md) relations, the base clause typically holds for the empty li
 The `-private` directive marks predicates as internal to the module — not part of the surface other modules are meant to build on:
 
 ```clausal
--private([Helper(X, Y)])
+-private([helper(X, Y)])
 
 # Documented surface: other modules are meant to call this
-Compute(X, R) <- (
-    Helper(X, TEMP),
+compute(X, R) <- (
+    helper(X, TEMP),
     R == TEMP * 2
 )
 
-# Internal: an implementation detail of Compute/2
-Helper(X, Y) <- (Y == X + 1)
+# Internal: an implementation detail of compute/2
+helper(X, Y) <- (Y == X + 1)
 ```
 
 Use `-private` when a predicate is an implementation detail that other modules should not depend on.
 
 !!! warning "`-private` is advisory, not enforced"
-    A `-private` predicate is **still importable**. `-import_from(this_module, [Helper])` succeeds and binds this module's `Helper` class. Clausal has no access control — the marker discourages coupling, it does not prevent it, exactly like a leading underscore in Python. See [Directives § `-private`](directives.md#-private) for the full meaning of the directive.
+    A `-private` predicate is **still importable**. `-import_from(this_module, [helper])` succeeds and binds this module's `helper` class. Clausal has no access control — the marker discourages coupling, it does not prevent it, exactly like a leading underscore in Python. See [Directives § `-private`](directives.md#-private) for the full meaning of the directive.
 
 ---
 

@@ -18,7 +18,7 @@ After [setting up the IPython startup hook](#set-up-the-ipython-startup-hook)
 import clausal.examples.sudoku as sudoku
 
 # Cell 2 — query
-*(sudoku.Problem(1, ROWS), sudoku.Sudoku(ROWS))
+*(sudoku.problem(1, ROWS), sudoku.sudoku(ROWS))
 ```
 
 `ROWS` is declared automatically as a fresh logic variable — no `Var()` needed.

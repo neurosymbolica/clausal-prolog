@@ -54,7 +54,7 @@ parse_line(LINE, FIELDS) <- parse_row(LINE, FIELDS)
 
 parse_and_get_name(CSV_TEXT, NAME) <- (
     parse_records(CSV_TEXT, HEADERS_UNUSED, RECORDS),
-    Member(RECORD, RECORDS),
+    member(RECORD, RECORDS),
     get(RECORD, "name", NAME)
 )
 ```

@@ -22,12 +22,12 @@ not unify with the string a group binds; see
 # AST-Name check — a known, documented lint gap for this pattern.
 -import_from(regex, [match])
 
-ParseDate(DATE, YEAR, MONTH) <- (
+parse_date(DATE, YEAR, MONTH) <- (
     match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", DATE)
 )
 
 test("parse date") <- (
-    ParseDate("2026-03", YEAR, MONTH),
+    parse_date("2026-03", YEAR, MONTH),
     YEAR == "2026",
     MONTH == "03"
 )
@@ -182,12 +182,12 @@ Named groups using ALLCAPS or leading-underscore names are automatically bound t
 # inside the pattern STRING, invisible to the singleton counter.
 -import_from(regex, [match])
 
-ParseEmail(EMAIL, USER, DOMAIN) <- (
+parse_email(EMAIL, USER, DOMAIN) <- (
     match(r"(?P<USER>[^@]+)@(?P<DOMAIN>.+)", EMAIL)
 )
 
 test("parse email") <- (
-    ParseEmail("alice@example.com", USER, DOMAIN),
+    parse_email("alice@example.com", USER, DOMAIN),
     USER == "alice",
     DOMAIN == "example.com"
 )
@@ -202,12 +202,12 @@ test("parse email") <- (
 # pattern STRING, invisible to the singleton counter.
 -import_from(regex, [search])
 
-ExtractPort(URL, _port) <- (
+extract_port(URL, _port) <- (
     search(r":(?P<_port>\d+)", URL)
 )
 
 test("extract port") <- (
-    ExtractPort("http://localhost:8080/api", PORT),
+    extract_port("http://localhost:8080/api", PORT),
     PORT == "8080"
 )
 ```
@@ -235,19 +235,19 @@ You never see the expanded form — just use the variable names in your pattern.
 # the pattern STRING, invisible to the singleton counter.
 -import_from(regex, [match])
 
-ParseLogLine(LINE, LEVEL, MESSAGE) <- (
+parse_log_line(LINE, LEVEL, MESSAGE) <- (
     match(r"(?P<LEVEL>INFO|WARN|ERROR)\s+(?P<MESSAGE>.+)", LINE)
 )
 
-IsError(LINE) <- match(r"^ERROR", LINE)
+is_error(LINE) <- match(r"^ERROR", LINE)
 
 test("parse log info") <- (
-    ParseLogLine("INFO system started", LEVEL, MSG),
+    parse_log_line("INFO system started", LEVEL, MSG),
     LEVEL == "INFO",
     MSG == "system started"
 )
-test("is error") <- IsError("ERROR disk full")
-test("not error") <- (not IsError("INFO ok"))
+test("is error") <- is_error("ERROR disk full")
+test("not error") <- (not is_error("INFO ok"))
 ```
 
 ### CSV Field Extraction
@@ -256,10 +256,10 @@ test("not error") <- (not IsError("INFO ok"))
 -double_quotes(chars)
 -import_from(regex, [split])
 
-ParseCsv(LINE, FIELDS) <- split(r",\s*", LINE, FIELDS)
+parse_csv(LINE, FIELDS) <- split(r",\s*", LINE, FIELDS)
 
 test("parse csv") <- (
-    ParseCsv("a, b, c", FIELDS),
+    parse_csv("a, b, c", FIELDS),
     FIELDS == ["a", "b", "c"]
 )
 ```
@@ -273,15 +273,15 @@ test("parse csv") <- (
 # pattern STRING, invisible to the singleton counter.
 -import_from(regex, [match])
 
-RouteUser(PATH, USER_ID) <- (
+route_user(PATH, USER_ID) <- (
     match(r"/users/(?P<USER_ID>\d+)", PATH)
 )
 
-RouteApi(PATH) <- match(r"^/api/v\d+/", PATH)
+route_api(PATH) <- match(r"^/api/v\d+/", PATH)
 
-test("route user") <- (RouteUser("/users/42", UID), UID == "42")
-test("route api") <- RouteApi("/api/v2/data")
-test("not api") <- (not RouteApi("/users/1"))
+test("route user") <- (route_user("/users/42", UID), UID == "42")
+test("route api") <- route_api("/api/v2/data")
+test("not api") <- (not route_api("/users/1"))
 ```
 
 ### Data Validation
@@ -290,12 +290,12 @@ test("not api") <- (not RouteApi("/users/1"))
 -double_quotes(chars)
 -import_from(regex, [match])
 
-ValidEmail(S) <- match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", S)
-ValidIpv4(S) <- match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", S)
+valid_email(S) <- match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", S)
+valid_ipv4(S) <- match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", S)
 
-test("valid email") <- ValidEmail("alice@example.com")
-test("invalid email") <- (not ValidEmail("not-an-email"))
-test("valid ipv4") <- ValidIpv4("192.168.1.1")
+test("valid email") <- valid_email("alice@example.com")
+test("invalid email") <- (not valid_email("not-an-email"))
+test("valid ipv4") <- valid_ipv4("192.168.1.1")
 ```
 
 ### Combining Regex with findall (Meta-Predicate)
@@ -306,7 +306,7 @@ Use the [`findall` meta-predicate](meta_predicates.md) to collect all regex matc
 -double_quotes(chars)
 -import_module(regex)
 
-AllNumbers(TEXT, NUMBERS) <- (
+all_numbers(TEXT, NUMBERS) <- (
     findall(
         NUM,
         regex.findall(r"\d+", TEXT, NUM),
@@ -315,7 +315,7 @@ AllNumbers(TEXT, NUMBERS) <- (
 )
 
 test("all numbers") <- (
-    AllNumbers("a1b23c456", NUMS),
+    all_numbers("a1b23c456", NUMS),
     NUMS == ["1", "23", "456"]
 )
 ```
@@ -336,13 +336,13 @@ Patterns can be variables or f-strings — they are compiled at runtime:
 -double_quotes(chars)
 -import_from(regex, [match])
 
-MatchPrefix(PREFIX, TEXT) <- (
+match_prefix(PREFIX, TEXT) <- (
     PAT is f"^{PREFIX}",
     match(PAT, TEXT)
 )
 
-test("dynamic prefix") <- MatchPrefix("hello", "hello world")
-test("dynamic prefix fail") <- (not MatchPrefix("bye", "hello world"))
+test("dynamic prefix") <- match_prefix("hello", "hello world")
+test("dynamic prefix fail") <- (not match_prefix("bye", "hello world"))
 ```
 
 Dynamic patterns are compiled at runtime (no precompilation). Named-group
@@ -364,9 +364,9 @@ unbound rather than clobbering it with `None`.
 # (the pattern itself is a variable here, not a literal).
 -import_from(regex, [match])
 
-FindYear(PAT, S, YEAR) <- match(PAT, S)
+find_year(PAT, S, YEAR) <- match(PAT, S)
 
-test("dynamic autobind") <- FindYear(r"(?P<YEAR>\d+)", "2026", "2026")
+test("dynamic autobind") <- find_year(r"(?P<YEAR>\d+)", "2026", "2026")
 ```
 
 ---

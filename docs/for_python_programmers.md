@@ -132,11 +132,11 @@ with identity. when you declare atoms in `-private` or `-module`, Clausal
 creates zero-arity classes:
 
 ```clausal
--private([red, green, blue, Color(C)])
+-private([red, green, blue, color(C)])
 
-Color(red),
-Color(green),
-Color(blue),
+color(red),
+color(green),
+color(blue),
 ```
 
 From the Python side, `red`, `green`, and `blue` are **arity-0 cells**: the

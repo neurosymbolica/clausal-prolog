@@ -33,7 +33,7 @@ Import a Clausal module and query it with the `*(goals)` syntax:
 ```python
 import clausal.examples.fibonacci as fib
 
-*(fib.Fib(8, N))
+*(fib.fib(8, N))
 ```
 
 This displays `N is 21` with syntax colouring.  Uppercase names like `N` are

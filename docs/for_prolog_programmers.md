@@ -119,7 +119,7 @@ available as builtins.
 ```
 
 equivalent to Prolog's `use_module` family. Qualified calls use dot notation:
-`math_utils.Factorial(N, F)`.
+`math_utils.factorial(N, F)`.
 
 > **One genuine difference — read this.** Names resolve **lexically, against the
 > defining module** (Python-style): there is no flat global predicate database

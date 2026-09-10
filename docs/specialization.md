@@ -1,6 +1,6 @@
 # Meta-Interpreter Specialization
 
-[Meta-interpreters](metainterpreters.md) (MIs) are one of the most powerful features of logic programming: write a small interpreter, extend it with tracing, counting, depth limiting, or proof trees, and run any object program through it. The cost is interpretation overhead — every goal resolution goes through `MatchClause`, `copy_term`, list manipulation, and recursive calls.
+[Meta-interpreters](metainterpreters.md) (MIs) are one of the most powerful features of logic programming: write a small interpreter, extend it with tracing, counting, depth limiting, or proof trees, and run any object program through it. The cost is interpretation overhead — every goal resolution goes through `match_clause`, `copy_term`, list manipulation, and recursive calls.
 
 **Partial deduction** (partial evaluation for logic programs) eliminates this overhead. Specializing an MI with respect to a known object program produces a residual program structurally identical to the object program, but with the MI's extensions woven directly into the compiled code. This is the **first Futamura projection** applied to logic programming.
 
@@ -13,16 +13,16 @@ The implementation lives in `clausal.logic.specialization`.
 Clausal ships five MIs ported from Triska's [acomip](https://www.metalevel.at/acomip/), all available via:
 
 ```clausal
--import_from(clausal.examples.metainterpreters, [Solve, SolveCount, SolveLimit, SolveTree])
+-import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit, solve_tree])
 ```
 
 | MI | signature | Extension |
 |---|---|---|
-| `Solve` | `(GOALS, PROGRAM)` | None — vanilla |
-| `SolveCount` | `(GOALS, PROGRAM, COUNT)` | Counts inference steps |
-| `SolveLimit` | `(GOALS, PROGRAM, MAX_DEPTH)` | Depth-bounded search |
+| `solve` | `(GOALS, PROGRAM)` | None — vanilla |
+| `solve_count` | `(GOALS, PROGRAM, COUNT)` | Counts inference steps |
+| `solve_limit` | `(GOALS, PROGRAM, MAX_DEPTH)` | Depth-bounded search |
 | `SolveIterativeDeepening` | `(GOALS, PROGRAM)` | Complete search via iterative deepening |
-| `SolveTree` | `(GOALS, PROGRAM, TREE)` | Builds proof trees |
+| `solve_tree` | `(GOALS, PROGRAM, TREE)` | Builds proof trees |
 
 Object programs are represented as lists of `[Head, BodyGoals]` pairs, where terms use list form: `f(A, B)` becomes `["f", A, B]`.
 
@@ -33,22 +33,22 @@ Object programs are represented as lists of `[Head, BodyGoals]` pairs, where ter
 ### The `-specialize` directive
 
 ```clausal
--import_from(clausal.examples.metainterpreters, [SolveCount])
+-import_from(clausal.examples.metainterpreters, [solve_count])
 
-NatnumProgram(PROGRAM) <- (
+natnum_program(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", X]], [["natnum", X]]]
     ]
 )
 
--specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+-specialize(solve_count, natnum_program, alias=solve_count_natnum)
 ```
 
-This produces a new predicate `SolveCountNatnum` that:
+This produces a new predicate `solve_count_natnum` that:
 
-- Resolves `natnum` goals at full compiled speed (no `MatchClause`, no `append`)
-- Preserves the counting extension from `SolveCount`
+- Resolves `natnum` goals at full compiled speed (no `match_clause`, no `append`)
+- Preserves the counting extension from `solve_count`
 - Drops the `PROGRAM` argument (it was static)
 
 Call it directly:
@@ -79,9 +79,9 @@ The MI pattern (goal-list arg, program arg, extra args, recursive style) is reco
 
 ## What the specializer produces
 
-### Vanilla MI (Solve)
+### Vanilla MI (solve)
 
-Given the natnum program, `Solve` is specialized to:
+Given the natnum program, `solve` is specialized to:
 
 ```
 SolveNatnum([], )                                              # base case
@@ -90,9 +90,9 @@ SolveNatnum([["natnum", ["s", X]], *GOALS]) <-                  # rule
     SolveNatnum([["natnum", X], *GOALS])
 ```
 
-The `MatchClause`/`append` machinery is gone. One clause per object clause, plus the base case.
+The `match_clause`/`append` machinery is gone. One clause per object clause, plus the base case.
 
-### Counting MI (SolveCount)
+### Counting MI (solve_count)
 
 ```
 SolveCountNatnum([], 0)
@@ -169,8 +169,8 @@ The intermediate list is eliminated — edge matching is inlined directly into t
 
 CPD correctly preserves MI extensions:
 
-- **Counting MIs** (SolveCount): each inlined step adds its own `COUNT == SUB_COUNT + 1` via post-match goal chaining.
-- **Depth-limited MIs** (SolveLimit): each inlined step adds its own `MAX > 0, MAX1 == MAX - 1` via pre-match goal chaining.
+- **Counting MIs** (solve_count): each inlined step adds its own `COUNT == SUB_COUNT + 1` via post-match goal chaining.
+- **Depth-limited MIs** (solve_limit): each inlined step adds its own `MAX > 0, MAX1 == MAX - 1` via pre-match goal chaining.
 
 ---
 
@@ -180,12 +180,12 @@ The specializer automatically recognizes two MI styles:
 
 ### Tail-recursive (Pattern A)
 
-Used by `Solve`, `SolveCount`, `SolveLimit`:
+Used by `solve`, `solve_count`, `solve_limit`:
 
 ```
 MI([], ...)                                   # base
 MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
-    MatchClause(GOAL, BODY, PROGRAM),
+    match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
     MI(ALL_GOALS, PROGRAM, ...)
 )
@@ -193,12 +193,12 @@ MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
 
 ### Split / non-tail-recursive (Pattern B)
 
-Used by `SolveTree`:
+Used by `solve_tree`:
 
 ```
 MI([], ..., [])                               # base
 MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
-    MatchClause(GOAL, BODY, PROGRAM),
+    match_clause(GOAL, BODY, PROGRAM),
     MI(BODY, PROGRAM, BODY_TREE),
     MI(GOALS, PROGRAM, GOALS_TREE)
 )
@@ -206,7 +206,7 @@ MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
 
 ### Extra arguments
 
-Pre-match goals (before `MatchClause`, e.g. depth check in `SolveLimit`) and post-match goals (after the recursive call, e.g. counting in `SolveCount`) are detected automatically and preserved in specialized clauses.
+Pre-match goals (before `match_clause`, e.g. depth check in `solve_limit`) and post-match goals (after the recursive call, e.g. counting in `solve_count`) are detected automatically and preserved in specialized clauses.
 
 ---
 

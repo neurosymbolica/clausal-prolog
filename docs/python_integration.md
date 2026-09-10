@@ -402,7 +402,7 @@ This means `datetime`, `Decimal`, `pathlib.Path`, and any other Python type with
 ```clausal
 -import_from(date_time, [date])
 
-IsoDate(Y, M, D, S) <- (
+iso_date(Y, M, D, S) <- (
     date(Y, M, D, DT),
     S is ++DT.isoformat()
 )

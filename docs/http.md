@@ -9,9 +9,9 @@ stdlib. Zero third-party dependencies.
 -import_from(py.http, [get, json_get, post, request])
 -import_from(py.url, [encode, decode, parse, join])
 
-FetchPage(URL, BODY) <- get(URL, BODY)
+fetch_page(URL, BODY) <- get(URL, BODY)
 
-FetchApi(URL, DATA) <- json_get(URL, DATA)
+fetch_api(URL, DATA) <- json_get(URL, DATA)
 ```
 
 Or via [module import](import.md):
@@ -20,7 +20,7 @@ Or via [module import](import.md):
 -import_module(py.http)
 -import_module(py.url)
 
-Main <- (
+main <- (
     py.http.get("http://example.com", BODY),
     ++print(BODY)
 )

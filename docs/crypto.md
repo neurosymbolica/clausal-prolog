@@ -11,14 +11,14 @@ use only the standard library — no third-party dependencies.
 -import_from(py.hmac, [sign, verify])
 -import_from(py.pbkdf2, [derive])
 
-CheckIntegrity(DATA, EXPECTED) <- (
+check_integrity(DATA, EXPECTED) <- (
     hash("sha256", DATA, COMPUTED),
     COMPUTED == EXPECTED
 )
 
-SignMessage(KEY, MSG, SIG) <- sign(KEY, MSG, SIG)
+sign_message(KEY, MSG, SIG) <- sign(KEY, MSG, SIG)
 
-VerifyMessage(KEY, MSG, SIG) <- verify(KEY, MSG, SIG)
+verify_message(KEY, MSG, SIG) <- verify(KEY, MSG, SIG)
 ```
 
 ---

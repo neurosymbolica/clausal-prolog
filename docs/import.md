@@ -114,12 +114,12 @@ This is safe because no predicate is queried during module load — `.clausal` f
 --8<-- "tests/fixtures/docs/import_sigs.txt:import_from_directive"
 ```
 
-This emits `from myapp.graphs.utils import ShortestPath, Reachable` in the generated Python code. The imported `PredicateMeta` classes land in module globals, where the compiler picks them up and wires dispatch automatically.
+This emits `from myapp.graphs.utils import ShortestPath, reachable` in the generated Python code. The imported `PredicateMeta` classes land in module globals, where the compiler picks them up and wires dispatch automatically.
 
 Imported predicates can be used in clause bodies just like locally-defined ones:
 
 ```clausal
-Connected(X, Y) <- Reachable(X, Y)
+connected(X, Y) <- reachable(X, Y)
 ```
 
 #### Aliases
@@ -128,17 +128,17 @@ Connected(X, Y) <- Reachable(X, Y)
 --8<-- "tests/fixtures/docs/import_sigs.txt:alias_directive"
 ```
 
-Generates `from myapp.graphs.utils import Reachable as Reach`. Use the alias name in clause bodies:
+Generates `from myapp.graphs.utils import reachable as reach`. Use the alias name in clause bodies:
 
 ```clausal
-Connected(X, Y) <- Reach(X, Y)
+connected(X, Y) <- reach(X, Y)
 ```
 
 Alias names must be **TitleCase** (multi-character). Single uppercase letters like `R` are treated as logic variables by the name resolver and will not work as aliases.
 
 #### Name isolation
 
-Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.Reachable"` rather than bare `"Reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
+Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.Reachable"` rather than bare `"reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
 
 #### Importing constants
 
@@ -170,7 +170,7 @@ it.
 This emits `import myapp.graphs.utils` in the generated Python code. The module object lands in globals. Predicates are accessed via qualified (dotted) names:
 
 ```clausal
-Connected(X, Y) <- myapp.graphs.utils.Reachable(X, Y)
+connected(X, Y) <- myapp.graphs.utils.reachable(X, Y)
 ```
 
 Qualified calls are resolved at compile time: the compiler walks the dotted attribute chain, finds the `PredicateMeta` class, and stores it under the dotted key `"myapp.graphs.utils.Reachable"` in compiled globals. At runtime, `_get_dispatch()` is called on that class — no attribute lookup overhead on every call.
@@ -347,26 +347,26 @@ the importer defined. The name isn't in the library's namespace, so the call
 fails at runtime:
 
 ```clausal
-# lib.clausal — the library knows nothing about Hook
-RunCheck(X) <- (Hook(X))
+# lib.clausal — the library knows nothing about hook
+run_check(X) <- (hook(X))
 ```
 
 ```clausal
 # caller.clausal
--import_from(lib, [RunCheck])
+-import_from(lib, [run_check])
 
-Hook(42),                          # defined HERE, in the caller
-TestDynamic(X) <- (RunCheck(X))    # asks the library to call Hook
+hook(42),                          # defined HERE, in the caller
+test_dynamic(X) <- (run_check(X))    # asks the library to call hook
 ```
 
-Querying `TestDynamic(X)` raises `Predicate Hook/1 not found` (a
+Querying `test_dynamic(X)` raises `Predicate hook/1 not found` (a
 `PredicateNotFoundError`, which is a `KeyError`). The message goes on to name
 the namespace it searched and list what `lib` *does* define — which is the
-point: the list is `RunCheck/1`, and `Hook` is not on it.
-`RunCheck` was compiled in `lib`'s namespace, where `Hook` does not exist — and
+point: the list is `run_check/1`, and `hook` is not on it.
+`run_check` was compiled in `lib`'s namespace, where `hook` does not exist — and
 Clausal never consults the caller's namespace to find it. A Prolog programmer
 coming from the flat, module-less style expects this to find the caller's
-`Hook/1`; in Clausal — as in a properly modularised SWI/SICStus program — it does
+`hook/1`; in Clausal — as in a properly modularised SWI/SICStus program — it does
 not.
 
 ### The idiom: pass the predicate as a goal
@@ -379,15 +379,15 @@ of relying on a global name being in scope:
 
 ```clausal
 # lib.clausal — the hook is a parameter, not a free name
-RunCheck(HOOK, X) <- (call_goal(HOOK, X))
+run_check(HOOK, X) <- (call_goal(HOOK, X))
 ```
 
 ```clausal
 # caller.clausal
--import_from(lib, [RunCheck])
+-import_from(lib, [run_check])
 
-Hook(42),
-TestHO(X) <- (RunCheck(Hook, X))   # pass our Hook in as a goal → binds X = 42
+hook(42),
+test_ho(X) <- (run_check(hook, X))   # pass our hook in as a goal → binds X = 42
 ```
 
 This is the right pattern whenever a generic library predicate must call back
@@ -400,7 +400,7 @@ bare `requirement/4` and hoping the caller defined one:
 # Generic, reusable: the requirement relation is passed in. Every
 # parameter below is a singleton on purpose — the body is elided; the
 # point of this sketch is the meaningful argument names themselves.
-Assess(SUBJECT, REQ_IDS, PROFILE, REQUIREMENT, LABELS, RESULT) <- (
+assess(SUBJECT, REQ_IDS, PROFILE, REQUIREMENT, LABELS, RESULT) <- (
     # ... evaluate each id in REQ_IDS by calling REQUIREMENT as a goal ...
 )
 ```
@@ -436,21 +436,21 @@ atom hold the exact same value.
 
 ```clausal
 # lib.clausal — declares its own `approved`
--module(lib, [approved, Check(X)])
+-module(lib, [approved, check(X)])
 
-Check(approved),
+check(approved),
 ```
 
 ```clausal
 # caller.clausal — separately declares the SAME spelling `approved`
--import_from(lib, [Check])
+-import_from(lib, [check])
 -private([approved])
 
-Ask() <- Check(approved)          # SUCCEEDS: `approved` is the same atom
+ask() <- check(approved)           # SUCCEEDS: `approved` is the same atom
                                   # everywhere, whichever file declares it
 ```
 
-`Ask()` succeeds: `Check`'s clause head and the goal `Check(approved)` both
+`Ask()` succeeds: `check`'s clause head and the goal `check(approved)` both
 carry the atom `approved` (the cell `("approved",)`, equal by value) — there is nothing to
 re-import for agreement's sake. (Importing it anyway, `-import_from(lib,
 [Check, approved])`, still works and is a reasonable style choice — it just

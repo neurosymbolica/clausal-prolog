@@ -190,7 +190,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | [DCGs](dcg.md) | Done — `>>` grammar rules, source-level rewriting, phrase/2,3, state threading |
 | [Module system](import.md) | Done — `-import_from`, `-import_module`, qualified calls, dotted name resolution |
 | Pipeline split | Done — `compiler_v2.compile_module()`, two-phase architecture |
-| [Term expansion](term_expansion.md) | Done — `TermExpansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection |
+| [Term expansion](term_expansion.md) | Done — `term_expansion/4`, `q()` quasi-quotation, imported TE rules, init/final injection |
 | Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation |
 | `clausal.modules` | Done — standard library package with `ModulesFinder`; [regex](regex.md) module, [log](logging.md) module (structured logging wrapping Python's `logging`), [date_time](date_time.md) module (relational date/time using Python `datetime` objects) |
 

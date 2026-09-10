@@ -547,13 +547,13 @@ At runtime `_disp_Color_1` is the dispatch closure. It calls `deref(args[0])`, c
 With call-site specialisation the same call becomes:
 
 ```python
-# base_globals["Color.bucket(pos=0, 'red')"] = <bucket fn>  (injected at compile time)
+# base_globals["color.bucket(pos=0, 'red')"] = <bucket fn>  (injected at compile time)
 StepGenerator(Color.bucket(pos=0, 'red'), this_generator, 'red', trail)
 ```
 
 One deref, one dict lookup, and the dispatch closure itself are all eliminated.
 
-The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier, but Python's `compile(ast_tree, ...)` resolves `ast.Name(id=k)` via a plain dict lookup on the function's globals, so any string works. `ast.unparse()` renders it verbatim, making generated code self-documenting.
+The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier, but Python's `compile(ast_tree, ...)` resolves `ast.Name(id=k)` via a plain dict lookup on the function's globals, so any string works. `ast.unparse()` renders it verbatim, making generated code self-documenting.
 
 ## Priority table
 
@@ -615,7 +615,7 @@ The globals key `"Color.bucket(pos=0, 'red')"` is not a valid Python identifier,
     **Key naming helpers:**
 
     ```python
-    _bucket_key("Color", 0, "red")            →  "Color.bucket(pos=0, 'red')"
+    _bucket_key("Color", 0, "red")            →  "color.bucket(pos=0, 'red')"
     _joint_bucket_key("Pair", 0, 1, "x", 2)  →  "Pair.bucket(pos=(0,1), ('x',2))"
     ```
 

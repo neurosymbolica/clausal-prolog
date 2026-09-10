@@ -7,13 +7,13 @@ The `uuid` module provides predicates for generating, converting, and inspecting
 ```clausal
 -import_from(uuid, [uuid_v4, uuid_str, uuid_version, is_uuid])
 
-MakeId(ID) <- (
+make_id(ID) <- (
     uuid_v4(U),
     uuid_str(U, ID)
 )
 
-Main <- (
-    MakeId(ID),
+main <- (
+    make_id(ID),
     ++print(f"Generated ID: {ID}")
 )
 ```
@@ -23,7 +23,7 @@ Or via [module import](import.md):
 ```clausal
 -import_module(uuid)
 
-Main <- (
+main <- (
     uuid.uuid_v4(U),
     uuid.uuid_str(U, S),
     ++print(S)

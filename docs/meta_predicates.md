@@ -123,19 +123,19 @@ safe_sum(XS, TOTAL) <- (
 
 ---
 
-## Call/N
+## call/N
 
 `call/1..8` invokes a goal closure with 0–7 extra arguments. `call_goal/1..8` are aliases.
 
 ```clausal
-apply(GOAL, X) <- Call(GOAL, X)
-apply2(GOAL, X, Y) <- Call(GOAL, X, Y)
+apply(GOAL, X) <- call(GOAL, X)
+apply2(GOAL, X, Y) <- call(GOAL, X, Y)
 ```
 
 These are primarily used with [lambdas](lambdas.md):
 
 ```clausal
-plus_one(R) <- Call((X <- (R == X + 1)), 5)
+plus_one(R) <- call((X <- (R == X + 1)), 5)
 ```
 
 ---

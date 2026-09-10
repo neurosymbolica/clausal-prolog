@@ -448,6 +448,11 @@ Python's bitwise operators are used for Boolean expressions:
 | `BoolEq(X, Y)` | Equivalence (iff) |
 | `BoolImpl(X, Y)` | Implication (X→Y) |
 
+`BoolEq` and `BoolImpl` are term constructors (Python classes), so a `.clausal`
+file names them in its import list — `-import_from(clausal.logic.clpb, [BoolEq, BoolImpl])`
+— the one place a TitleCase name is declared; bare in a clause they would be
+rejected as TitleCase.
+
 These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`, `BitXor`, and `Invert` nodes pass through `term_to_ast_expr` as structural terms and are walked by `_expr_to_bdd` at runtime.
 
 ??? abstract "BDD representation"
@@ -501,7 +506,9 @@ These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`
 
 **Half adder:**
 ```clausal
-HalfAdder(X, Y, SUM, CARRY) <- (
+-import_from(clausal.logic.clpb, [BoolEq])
+
+half_adder(X, Y, SUM, CARRY) <- (
     sat(BoolEq(SUM, X ^ Y)),
     sat(BoolEq(CARRY, X & Y))
 )
@@ -528,7 +535,7 @@ solve(X, Y) <- (
 
 **Pigeon-hole (unsatisfiable):**
 ```clausal
-PigeonHole() <- (
+pigeon_hole() <- (
     sat(P11 | P12),
     sat(P21 | P22),
     sat(P31 | P32),

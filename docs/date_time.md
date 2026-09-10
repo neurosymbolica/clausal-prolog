@@ -42,7 +42,7 @@ Unification uses Python's native `==`. Any datetime method can be called via [`+
 ```clausal
 -import_from(date_time, [date, datetime_string])
 
-IsoDate(Y, M, D, S) <- (
+iso_date(Y, M, D, S) <- (
     date(Y, M, D, DT),
     S is ++DT.isoformat()
 )
@@ -72,7 +72,7 @@ objects with a natural chronological order:
 ```clausal
 -import_from(date_time, [date])
 
-Earlier(A, B) <- (date(2020, 1, 1, A), date(2021, 1, 1, B), A < B)  # succeeds
+earlier(A, B) <- (date(2020, 1, 1, A), date(2021, 1, 1, B), A < B)  # succeeds
 ```
 
 The same values sort chronologically through `sort/2`, `msort/2`,
@@ -87,7 +87,7 @@ intercepts it and binds the error term:
 ```clausal
 -import_from(date_time, [date, datetime])
 
-CompareSafe(D, DT) <- catch(
+compare_safe(D, DT) <- catch(
     (D < DT),
     _Error,
     writeln_text(_Error)
@@ -222,7 +222,7 @@ Bidirectional ISO-8601 string conversion without a format argument:
 ```clausal
 -import_from(date_time, [date, date_between])
 
-WeekDates(START, END, D) <- date_between(START, END, D)
+week_dates(START, END, D) <- date_between(START, END, D)
 ```
 
 This is nondeterministic — it succeeds once for each date in the range via [backtracking](control.md).

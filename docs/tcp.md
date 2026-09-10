@@ -9,7 +9,7 @@ use them with `send`, `receive`, and `close`.
 ```clausal
 -import_from(py.tcp, [connect, send, receive, close])
 
-EchoClient(HOST, PORT, MESSAGE, RESPONSE) <- (
+echo_client(HOST, PORT, MESSAGE, RESPONSE) <- (
     connect(HOST, PORT, SOCKET),
     send(SOCKET, MESSAGE),
     receive(SOCKET, RESPONSE),
@@ -22,7 +22,7 @@ Or via [module import](import.md):
 ```clausal
 -import_module(py.tcp)
 
-Main <- (
+main <- (
     py.tcp.connect("localhost", 8080, S),
     py.tcp.send(S, "hello"),
     py.tcp.receive(S, REPLY),

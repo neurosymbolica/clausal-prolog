@@ -259,14 +259,14 @@ when the last goal in a clause body is a self-recursive `Call` and all preceding
 **Eligible pattern** — accumulator-style recursion:
 
 ```clausal
-AccSum([], ACC, ACC),
-AccSum([H, *T], ACC, RESULT) <- (
+acc_sum([], ACC, ACC),
+acc_sum([H, *T], ACC, RESULT) <- (
     NEWACC == ACC + H,
-    AccSum(T, NEWACC, RESULT)
+    acc_sum(T, NEWACC, RESULT)
 )
 ```
 
-Clause 2 qualifies: the prefix goals (`Evaluate`) are deterministic, and the tail call is to `AccSum` itself. The compiled code uses a `while True` loop:
+Clause 2 qualifies: the prefix goals (`Evaluate`) are deterministic, and the tail call is to `acc_sum` itself. The compiled code uses a `while True` loop:
 
 ```python
 def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
@@ -517,7 +517,7 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | Step | What happens |
 |---|---|
 | 0. Imports | `_process_imports()` — execute `-import_from` and `-import_module` directives, populating `module_dict`. Bare module names (e.g. `regex`) are resolved via `clausal.modules` fallback. |
-| 1. Term expansion | `run_term_expansion()` — apply `TermExpansion/4` rules to predicate nodes. See [Term Expansion](term_expansion.md) |
+| 1. Term expansion | `run_term_expansion()` — apply `term_expansion/4` rules to predicate nodes. See [Term Expansion](term_expansion.md) |
 | 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
 | 2. [Directives](directives.md) | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
 | 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |

@@ -13,19 +13,19 @@ Any `.clausal` file (see [Syntax](syntax.md)) can include test clauses of the fo
 A test passes if its body succeeds (produces at least one solution). Tests live alongside the predicates they exercise:
 
 ```clausal
-Fib(0, 0),
-Fib(1, 1),
-Fib(N, F) <- (
+fib(0, 0),
+fib(1, 1),
+fib(N, F) <- (
     N > 1,
     N1 == N - 1,
     N2 == N - 2,
-    Fib(N1, F1),
-    Fib(N2, F2),
+    fib(N1, F1),
+    fib(N2, F2),
     F == F1 + F2
 )
 
-test("fib(5) = 5") <- Fib(5, 5)
-test("fib(7) = 13") <- (Fib(7, F), F == 13)
+test("fib(5) = 5") <- fib(5, 5)
+test("fib(7) = 13") <- (fib(7, F), F == 13)
 ```
 
 ## Running `.clausal` tests standalone

@@ -71,14 +71,14 @@ Symbolic differentiation: `Diff(Expr, Var, Deriv)` computes the derivative of an
 Classic Sudoku solver using CLP(ℤ) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `all_different` constraints, then labels. Includes three sample puzzles.
 
 ```clausal
-Sudoku(ROWS) <- (
+sudoku(ROWS) <- (
     ROWS is [R1, R2, R3, R4, R5, R6, R7, R8, R9],
     flatten(ROWS, VS),
     in_domain(VS, 1, 9),
     maplist(all_different, ROWS),
     transpose(ROWS, COLUMNS),
     maplist(all_different, COLUMNS),
-    Blocks(R1, R2, R3), Blocks(R4, R5, R6), Blocks(R7, R8, R9)
+    blocks(R1, R2, R3), blocks(R4, R5, R6), blocks(R7, R8, R9)
 )
 ```
 
@@ -125,14 +125,14 @@ Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreter
 **Solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
 
 ```clausal
-Solve([], _PROGRAM_UNUSED),
-Solve([GOAL, *GOALS], PROGRAM) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
+solve([], _PROGRAM_UNUSED),
+solve([GOAL, *GOALS], PROGRAM) <- (
+    match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
-    Solve(ALL_GOALS, PROGRAM)
+    solve(ALL_GOALS, PROGRAM)
 )
 
-MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
+match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
     in_(CLAUSE, PROGRAM),
     copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
     GOAL is FRESH_HEAD
@@ -142,11 +142,11 @@ MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
 **SolveCount/3** — counts inference steps:
 
 ```clausal
-SolveCount([], _PROGRAM_UNUSED, 0),
-SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
+solve_count([], _PROGRAM_UNUSED, 0),
+solve_count([GOAL, *GOALS], PROGRAM, COUNT) <- (
+    match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
-    SolveCount(ALL_GOALS, PROGRAM, SUB_COUNT),
+    solve_count(ALL_GOALS, PROGRAM, SUB_COUNT),
     COUNT == SUB_COUNT + 1
 )
 ```
@@ -154,33 +154,33 @@ SolveCount([GOAL, *GOALS], PROGRAM, COUNT) <- (
 **SolveLimit/3** — depth-limited search. Each clause resolution consumes one unit of depth:
 
 ```clausal
-SolveLimit([], _PROGRAM_UNUSED, _MAX_UNUSED),
-SolveLimit([GOAL, *GOALS], PROGRAM, MAX) <- (
+solve_limit([], _PROGRAM_UNUSED, _MAX_UNUSED),
+solve_limit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
     MAX1 == MAX - 1,
-    MatchClause(GOAL, BODY, PROGRAM),
+    match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
-    SolveLimit(ALL_GOALS, PROGRAM, MAX1)
+    solve_limit(ALL_GOALS, PROGRAM, MAX1)
 )
 ```
 
 **SolveIterativeDeepening/2** — complete search via increasing depth limits. Finds solutions even in cyclic programs where naive DFS diverges:
 
 ```clausal
-SolveIterativeDeepening(GOALS, PROGRAM) <- (
+solve_iterative_deepening(GOALS, PROGRAM) <- (
     between(0, 1000, DEPTH),
-    SolveLimit(GOALS, PROGRAM, DEPTH)
+    solve_limit(GOALS, PROGRAM, DEPTH)
 )
 ```
 
 **SolveTree/3** — builds explicit proof trees. Each node is `[Goal, [subtrees...]]`:
 
 ```clausal
-SolveTree([], _PROGRAM_UNUSED, []),
-SolveTree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
-    SolveTree(BODY, PROGRAM, BODY_TREE),
-    SolveTree(GOALS, PROGRAM, GOALS_TREE)
+solve_tree([], _PROGRAM_UNUSED, []),
+solve_tree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
+    match_clause(GOAL, BODY, PROGRAM),
+    solve_tree(BODY, PROGRAM, BODY_TREE),
+    solve_tree(GOALS, PROGRAM, GOALS_TREE)
 )
 ```
 

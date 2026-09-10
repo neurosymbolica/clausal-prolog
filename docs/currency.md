@@ -27,7 +27,7 @@ total <- (eval_(0.1(euro), A), eval_(0.2(euro), B), eval_(A + B, T_UNUSED))   # 
 # round / display with an EXPLICIT mode — each line below is its own
 # independent predicate, not a continuation of the one above
 show  <- money_str(T_UNUSED, half_up, S_UNUSED)              # S = "0.30 EUR"
-euros <- money_round(SomeAmount, half_even, R_UNUSED) # R quantized to 2 dp, still a currency amount
+euros <- money_round(some_amount, half_even, R_UNUSED) # R quantized to 2 dp, still a currency amount
 sym   <- money_format(price, symbol, half_up, S_UNUSED)  # S = "€7.89"
 ```
 
