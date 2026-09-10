@@ -67,20 +67,6 @@ _CLAUSAL_PKG_DIR = os.path.join(
 _SITE_SEARCH_DEPTH = 12
 
 
-def _is_constant_name(name: str) -> bool:
-    """True for the module-constant lexical class (``_PI_``, ``_円周率_``).
-
-    Mirrors ``clausal.templating.term_rewriting._is_constant_name``; kept
-    local so this module stays free of a templating import.
-    """
-    return (
-        len(name) >= 3
-        and name[0] == "_" and name[-1] == "_"
-        and name[1] != "_" and name[-2] != "_"
-        and not name[1].isdigit()
-    )
-
-
 def _is_logic_var_name(name: str) -> bool:
     """True for a Clausal logic-variable spelling (``_x`` or ``ALLCAPS``).
 
@@ -90,8 +76,6 @@ def _is_logic_var_name(name: str) -> bool:
     test_var_classifier_conformance.
     """
     if name == "_" or name.startswith("__"):
-        return False
-    if _is_constant_name(name):
         return False
     if name.startswith("_"):
         return True

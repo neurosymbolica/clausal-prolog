@@ -32,7 +32,6 @@ from clausal.tools.prolog_operators import OperatorTable
 # the engine enforces (see _refuse_arrow_lambda_in_term_position).
 from clausal.templating.term_rewriting import (
     _is_arrow_adjacent as _engine_is_arrow_adjacent,
-    _is_constant_name as _engine_is_constant_name,
     _leftmost_usub as _engine_leftmost_usub,
 )
 from clausal.tools.prolog_dialect import (
@@ -498,20 +497,6 @@ def emit_module(pmodule: PModule, op_table: OperatorTable) -> str:
 
 # ── Clausal source → Prolog AST conversion ───────────────────────────
 
-def _is_constant_name(identifier: str) -> bool:
-    """True for the module-constant lexical class (``_PI_``, ``_円周率_``).
-
-    Mirrors ``term_rewriting._is_constant_name``; kept local so this module
-    stays free of an engine import.
-    """
-    return (
-        len(identifier) >= 3
-        and identifier[0] == "_" and identifier[-1] == "_"
-        and identifier[1] != "_" and identifier[-2] != "_"
-        and not identifier[1].isdigit()
-    )
-
-
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if identifier should be treated as a logic variable.
 
@@ -522,8 +507,6 @@ def _is_logic_var_name(identifier: str) -> bool:
     if identifier == "_":
         return True
     if identifier.startswith("__"):
-        return False
-    if _is_constant_name(identifier):
         return False
     if identifier.startswith("_"):
         return True
@@ -2529,8 +2512,6 @@ def _prefix_singletons(item: PItem) -> PItem:
             prefixed = "_" + node.name
             if prefixed in counts:
                 return node          # already another variable in this item
-            if _engine_is_constant_name(prefixed):
-                return node          # would not read back as a variable
             return PVar(prefixed, unit=node.unit)
 
     return _Renamer().visit(item)

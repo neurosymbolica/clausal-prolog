@@ -1,9 +1,16 @@
-"""All five _is_logic_var_name copies must agree — and none may claim _X_.
+"""All five _is_logic_var_name copies must agree, and the rule has no
+exceptions.
 
 The classifier is deliberately duplicated (predicate.py stays free of
 templating imports; desugar stays free of engine imports). This test is the
-lockstep guard: a corpus of spellings must classify identically everywhere,
-and constant-shaped names (_PI_) must be variables NOWHERE.
+lockstep guard: a corpus of spellings must classify identically everywhere.
+
+Since 2026-09-11 the rule is exactly two clauses -- underscore-led or
+capital-initial -- with nothing carved out of it. ``_PI_`` used to be the
+module-constant class and a variable NOWHERE; constants are spelled like
+atoms now, so it is an ordinary variable like any other underscore-led name.
+That is stated as a property below, not only as a corpus of spellings, so a
+new exception cannot be added without failing a test.
 
 Known, deliberate divergences pinned at the bottom: clausal_to_prolog treats
 bare `_` as a variable; desugar does not exclude dunders or `_`.
@@ -12,8 +19,7 @@ import re
 
 import pytest
 
-from clausal.templating.term_rewriting import (
-    _is_logic_var_name as tr_var, _is_constant_name)
+from clausal.templating.term_rewriting import _is_logic_var_name as tr_var
 from clausal.templating.desugar import _is_logic_var_name as ds_var
 from clausal.logic.goal_expansion import _is_logic_var_name as ge_var
 from clausal.logic.predicate import _is_logic_var_name as pr_var
@@ -38,7 +44,7 @@ NAME_POSITION = [
     ("FOO", True), ("X", True), ("N1", True), ("MAX_OF", True),
     ("_foo", True), ("_x", True),
     # And non-variables stay non-variables.
-    ("foo", False), ("in_", False), ("_PI_", False), ("__x", False),
+    ("foo", False), ("in_", False), ("_PI_", True), ("__x", False),
 ]
 
 
@@ -74,9 +80,12 @@ CORPUS = [
     # position.
     ("Foo", True), ("FooBar", True), ("N1x", True),
     ("foo", False), ("in_", False), ("名前", False),
-    # The new constant class: variables NOWHERE.
-    ("_PI_", False), ("_pi_", False), ("_MAX_RETRIES_", False),
-    ("_a_b_", False), ("_円周率_", False),
+    # These were the module-constant class until 2026-09-11, carved OUT of
+    # the variable namespace in all five copies. Constants are spelled like
+    # atoms now, so an underscore-led name is a variable whatever its last
+    # character is -- no exception, no fifth copy to keep in step.
+    ("_PI_", True), ("_pi_", True), ("_MAX_RETRIES_", True),
+    ("_a_b_", True), ("_円周率_", True),
 ]
 
 @pytest.mark.parametrize("spelling,expected", CORPUS)
@@ -84,98 +93,70 @@ def test_all_copies_agree(spelling, expected):
     got = [(fn.__module__, fn(spelling)) for fn in ALL]
     assert all(v == expected for _, v in got), got
 
-CONSTANT_SHAPE = [
-    ("_PI_", True), ("_a_b_", True), ("_円周率_", True),
-    ("_", False), ("__", False), ("___", False),
-    ("_X__", False), ("__X_", False),        # exactly one underscore each end
-    ("_1_", False),                          # interior must not start with a digit
-    ("PI_", False), ("_PI", False), ("PI", False),
-]
-
-@pytest.mark.parametrize("spelling,expected", CONSTANT_SHAPE)
-def test_constant_shape(spelling, expected):
-    assert _is_constant_name(spelling) == expected
-
 def test_pinned_divergences():
     # clausal_to_prolog: bare `_` is a variable there (translation context).
     assert cp_var("_") is True and tr_var("_") is False
     # desugar: no dunder exclusion (sugar-recognition context).
     assert ds_var("__x") is True and tr_var("__x") is False
 
-# Loose token-finder for the census guard: any ``_..._`` run bounded by
-# non-word characters. Deliberately looser than _is_constant_name (it does
-# not check interior length, leading digit, or doubled boundary
-# underscores) — candidates it finds are handed to _is_constant_name itself
-# to decide, so the census can never drift out of sync with the classifier
-# the way a hand-rolled equivalent-but-independent regex did (roborev
-# finding: the old pattern required a >=2-char interior and so missed
-# single-char constants like _X_/_a_).
-_CONSTANT_TOKEN_CANDIDATE = re.compile(
-    r"(?<![A-Za-z0-9_])_\w+_(?![A-Za-z0-9_])")
+# The census guard below used to be "no committed .clausal file contains a
+# _X_-shaped token unless its own -constants directive declares it", because
+# such a token was a name that LOOKED like a variable and was not one. That
+# hazard is gone: _X_ is now an ordinary variable, so there is nothing to
+# catch. What replaces it is the migration guard -- no committed file may
+# still DECLARE a constant the retired way, because such a file no longer
+# loads at all.
+_RETIRED_CONSTANT_DECL = re.compile(
+    r"^\s*-constants\(.*?(?<![A-Za-z0-9_])_[A-Za-z0-9\u0080-\uffff]"
+    r"[A-Za-z0-9_\u0080-\uffff]*_\s*=")
 
 
-def _constant_shaped_tokens(text):
-    return [m.group(0) for m in _CONSTANT_TOKEN_CANDIDATE.finditer(text)
-            if _is_constant_name(m.group(0))]
+def test_retired_constant_declaration_regex_matches_what_it_should():
+    """A positive control on the census mechanism itself, so the guard below
+    cannot pass by matching nothing. Without this, a typo in the pattern
+    turns the census into a test that reads every file and asserts nothing.
+    """
+    assert _RETIRED_CONSTANT_DECL.search("-constants(_PI_ = 3.14)")
+    assert _RETIRED_CONSTANT_DECL.search("  -constants(_A_ = 1, _B_ = 2)")
+    assert not _RETIRED_CONSTANT_DECL.search("-constants(pi = 3.14)")
+    assert not _RETIRED_CONSTANT_DECL.search("holds(_PI_),")
 
 
-def test_census_candidate_regex_delegates_to_classifier():
-    """Unit check on the census mechanism itself, independent of any
-    fixture corpus: the loose candidate regex plus _is_constant_name must
-    agree with the classifier on tokens the old, stricter regex got wrong
-    (single non-digit interior char) as well as ones it must still reject."""
-    assert _constant_shaped_tokens("x = _X_") == ["_X_"]
-    assert _constant_shaped_tokens("x = _a_") == ["_a_"]
-    assert _constant_shaped_tokens("x = _1_") == []
-    assert _constant_shaped_tokens("x = _X__") == []
-
-
-# Fixtures that legitimately DECLARE and use a -constants name, and so
-# legitimately contain constant-shaped tokens.  The census guard below
-# anticipated needing this ("a future fixture that legitimately declares and
-# uses a -constants name will need an explicit allowlist"); P3-2 task-2 is the
-# first thing to need it.  Keyed by (filename, token) rather than by file, so
-# an unrelated constant appearing in an allowlisted fixture is still flagged.
-#
-# Every entry must be a name the file's own -constants directive declares --
-# which is the property that makes it a constant rather than a
-# constant-shaped VARIABLE, the thing this census exists to catch.
-_DECLARED_CONSTANT_FIXTURES = {
-    # tests/test_constants.py::test_constants_rhs_can_construct_an_imported_
-    # functor -- a -constants RHS constructing an IMPORTED data functor, the
-    # shape that failed to load before P3-2 task-2's fix.
-    ("const_functor_importer.clausal", "_W_"),
-    ("const_functor_importer.clausal", "_P_"),
-    ("const_functor_importer.clausal", "_NEST_"),
-}
-
-
-def test_corpus_has_no_constant_shaped_variables():
-    """Census guard: no committed .clausal file contains a _X_-shaped token
-    unless its own -constants directive declares it.
-
-    The bar used to be simply "none exist yet"; it is now "none except
-    declared constants", enforced through ``_DECLARED_CONSTANT_FIXTURES``
-    above plus a check that each allowlisted token really is declared in the
-    file that carries it -- so the allowlist cannot be used to wave through a
-    constant-shaped VARIABLE, which is the thing this census exists to
-    catch."""
+def test_no_committed_file_declares_a_constant_the_retired_way():
+    """The retired spelling raises at load, so any file still using it is
+    already broken -- this finds it by reading rather than by loading, which
+    is what catches a fixture no test happens to import."""
     import pathlib
-    import re as _re
     root = pathlib.Path(__file__).resolve().parent.parent
     offenders = []
+    scanned = 0
     for p in root.rglob("*.clausal"):
         if ".claude" in p.relative_to(root).parts:
             continue
-        text = p.read_text()
-        for tok in _constant_shaped_tokens(text):
-            if (p.name, tok) in _DECLARED_CONSTANT_FIXTURES:
-                declared = any(
-                    line.lstrip().startswith("-constants(")
-                    and _re.search(_re.escape(tok) + r"\s*=", line)
-                    for line in text.splitlines()
-                )
-                assert declared, (p, tok)
-                continue
-            offenders.append((str(p), tok))
+        scanned += 1
+        for line in p.read_text().splitlines():
+            if _RETIRED_CONSTANT_DECL.search(line):
+                offenders.append((str(p.relative_to(root)), line.strip()))
+    assert scanned > 100, f"the census walked only {scanned} files"
     assert offenders == [], offenders
+
+
+def test_the_variable_rule_has_no_exceptions():
+    """The point of retiring _CONSTANT_: underscore-led (but not a dunder,
+    not bare _) or capital-initial IS the whole rule, in every copy.
+
+    Stated as a property rather than as a list of spellings, so a new
+    exception cannot be introduced while a hand-written corpus still passes.
+    """
+    for spelling in ["_PI_", "_MAX_RETRIES_", "_a_b_", "_円周率_", "_pi_",
+                     "_x", "_head", "_1_", "X", "Foo", "FOO", "N1",
+                     "foo", "in_", "名前", "PI_"]:
+        expected = (spelling != "_"
+                    and not spelling.startswith("__")
+                    and (spelling.startswith("_") or spelling[:1].isupper()))
+        for fn in ALL:
+            if fn is ds_var and (spelling == "_" or spelling.startswith("__")):
+                continue        # pinned divergence: desugar excludes neither
+            if fn is cp_var and spelling == "_":
+                continue        # pinned divergence: bare _ is a variable there
+            assert fn(spelling) == expected, (fn.__module__, spelling)

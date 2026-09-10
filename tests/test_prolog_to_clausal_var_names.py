@@ -10,12 +10,16 @@ tests/test_prolog_var_identity.py.
 The CONSEQUENCE did not go away, and is what this file is now about. Most
 ISO Prolog variable spellings are Clausal variable spellings, but not all:
 
-    _PI_     module-constant class      (one leading + one trailing _)
     __Foo    dunder                     (excluded from the variable class)
 
-Both are legal ISO variables. Translated verbatim they produce Clausal that
-either fails to load or -- worse -- means something else, from a `.pl` file
-that was perfectly well-formed.
+``_PI_`` was the second such case until 2026-09-11, when the module-constant
+class was retired: constants are spelled like atoms now, so one leading and
+one trailing underscore is an ordinary variable and crosses untouched. It is
+kept below as a positive control, because it is the spelling this file was
+originally written about.
+
+A dunder is a legal ISO variable. Translated verbatim it produces Clausal
+that fails to load, from a `.pl` file that was perfectly well-formed.
 
 The translator already holds the invariant that it never EMITS a name the
 loader reads as something other than what was meant; that is why a quoted
@@ -59,9 +63,8 @@ def test_the_mapping_does_not_rename_these_either():
 # ── Names that cannot cross are refused, naming the Prolog variable ───
 
 @pytest.mark.parametrize("name,why", [
-    ("_PI_", "constant"),
-    ("_MAX_RETRIES_", "constant"),
     ("__Foo", "dunder"),
+    ("__Bar", "dunder"),
     ("__", "dunder"),
 ])
 def test_variable_that_is_not_a_clausal_variable_is_refused(name, why):
@@ -94,9 +97,9 @@ def test_the_offered_remedy_is_a_real_one():
     remedy must produce a file that translates.
     """
     with pytest.raises(PrologTranslationError) as excinfo:
-        prolog_to_clausal("p(_PI_) :- q(_PI_).\n")
+        prolog_to_clausal("p(__Foo) :- q(__Foo).\n")
     offered = [q for q in re.findall(r"'([^']+)'", str(excinfo.value))
-               if q != "_PI_"]
+               if q != "__Foo"]
     assert offered, str(excinfo.value)
     for suggestion in offered:
         assert prolog_to_clausal(
@@ -106,20 +109,23 @@ def test_the_offered_remedy_is_a_real_one():
 
 def test_the_refusal_fires_in_arithmetic_position_too():
     """``_emit_expr`` is a second call site and had to be guarded separately."""
-    with pytest.raises(PrologTranslationError, match="_PI_"):
-        prolog_to_clausal("p(X) :- X is _PI_ + 1.\n")
+    with pytest.raises(PrologTranslationError, match="__Foo"):
+        prolog_to_clausal("p(X) :- X is __Foo + 1.\n")
 
 
 # ── Everything else still crosses ─────────────────────────────────────
 
 @pytest.mark.parametrize(
-    "name", ["X", "Foo", "FOO", "N0", "_x", "_X", "_Ignored", "X_", "_1_"])
+    "name", ["X", "Foo", "FOO", "N0", "_x", "_X", "_Ignored", "X_", "_1_",
+             "_PI_", "_MAX_RETRIES_"])
 def test_ordinary_variable_spellings_are_untouched(name):
     """Positive control: the guard must not swallow the normal case.
 
     A refusal test alone would pass on a translator that refused everything.
-    ``X_`` and ``_1_`` are here on purpose -- both are near the constant
-    class without being in it.
+    ``X_`` and ``_1_`` are here on purpose -- both were near the retired
+    constant class without being in it. ``_PI_`` and ``_MAX_RETRIES_`` were
+    IN it, and are here because they are the spellings this file was written
+    about: since 2026-09-11 they cross like any other variable.
     """
     assert _is_logic_var_name(name)
     assert prolog_to_clausal(f"p({name}) :- q({name}).\n").strip() == \
@@ -135,6 +141,6 @@ def test_anonymous_is_not_caught_by_the_guard():
 # ── Outbound ──────────────────────────────────────────────────────────
 
 def test_outbound_constants_directive_raises_not_implemented():
-    source = "-constants(_PI_ = 3.14159)\n\nfact(_PI_),\n"
+    source = "-constants(pi = 3.14159)\n\nfact(pi),\n"
     with pytest.raises(NotImplementedError, match="constants"):
         clausal_source_to_prolog(source)

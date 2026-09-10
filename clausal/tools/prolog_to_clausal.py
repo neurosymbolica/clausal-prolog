@@ -336,43 +336,29 @@ def _checked_var_name(prolog_name: str) -> str:
     # (it names nothing) and is handled by the reader, not by this rule.
     if name == "_" or _engine_is_logic_var_name(name):
         return name
-    if _is_constant_name_shape(name):
-        detail = ("Clausal reads one leading and one trailing underscore as a "
-                  "module CONSTANT, not a variable")
-        remedy = ("Rename the variable in the Prolog source -- dropping either "
-                  f"underscore ({name[1:]!r} or {name[:-1]!r}) makes it a "
-                  "variable again -- and translate again.")
-    else:
-        detail = ("Clausal excludes names beginning with a double underscore "
-                  "from the logic-variable class")
-        # Only offer the de-doubled spelling when it is itself a variable.
-        # ``__`` would reduce to ``_``, the ANONYMOUS variable, and renaming
-        # a named variable to the wildcard changes what the clause means --
-        # every occurrence would become independent.
-        single = name[1:]
-        remedy = (
-            "Rename the variable in the Prolog source to use a single "
-            f"leading underscore ({single!r}) and translate again."
-            if _engine_is_logic_var_name(single)
-            else "Rename the variable in the Prolog source to a single "
-                 "leading underscore followed by a letter, or to a "
-                 "capital-initial name, and translate again."
-        )
+    # Only one reason is left to reject a name here.  Until 2026-09-11 a
+    # second one existed -- one leading and one trailing underscore was the
+    # module-CONSTANT class -- but constants are spelled like atoms now, so
+    # ``_Pi_`` crosses as an ordinary variable and needs no diagnostic.
+    detail = ("Clausal excludes names beginning with a double underscore "
+              "from the logic-variable class")
+    # Only offer the de-doubled spelling when it is itself a variable.
+    # ``__`` would reduce to ``_``, the ANONYMOUS variable, and renaming
+    # a named variable to the wildcard changes what the clause means --
+    # every occurrence would become independent.
+    single = name[1:]
+    remedy = (
+        "Rename the variable in the Prolog source to use a single "
+        f"leading underscore ({single!r}) and translate again."
+        if _engine_is_logic_var_name(single)
+        else "Rename the variable in the Prolog source to a single "
+             "leading underscore followed by a letter, or to a "
+             "capital-initial name, and translate again."
+    )
     raise PrologTranslationError(
         f"Prolog variable {prolog_name!r} has no Clausal variable spelling: "
         f"{detail}, so the translated file would not load.\n" + remedy
     )
-
-
-def _is_constant_name_shape(name: str) -> bool:
-    """Constant-shaped, i.e. rejected for THAT reason rather than as a dunder.
-
-    Only used to pick which half of the diagnostic above to print; the
-    engine's ``_is_logic_var_name`` remains the authority on whether a name
-    is a variable at all.
-    """
-    return (len(name) >= 3 and name[0] == "_" and name[-1] == "_"
-            and name[1] != "_" and name[-2] != "_")
 
 
 class _PrologToClausal:

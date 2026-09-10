@@ -201,20 +201,6 @@ def _try_expand(goal: Any, ctx: _ExpansionContext) -> Any:
 # ── Regex goal expansion ────────────────────────────────────────────────────
 
 
-def _is_constant_name(name: str) -> bool:
-    """True for the module-constant lexical class (``_PI_``, ``_円周率_``).
-
-    Mirrors ``term_rewriting._is_constant_name``; kept local so this module
-    stays free of a templating import.
-    """
-    return (
-        len(name) >= 3
-        and name[0] == "_" and name[-1] == "_"
-        and name[1] != "_" and name[-2] != "_"
-        and not name[1].isdigit()
-    )
-
-
 def _is_logic_var_name(name: str) -> bool:
     """Check if a name follows the logic variable convention.
 
@@ -224,8 +210,6 @@ def _is_logic_var_name(name: str) -> bool:
     if name == "_":
         return False
     if name.startswith("__"):
-        return False
-    if _is_constant_name(name):
         return False
     if name.startswith("_"):
         return True

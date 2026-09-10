@@ -480,15 +480,17 @@ def _raise_reserved_truth_decl(name: str, directive: str) -> None:
 
 
 
-def _is_constant_name(identifier: str) -> bool:
-    """True for the module-constant lexical class: exactly one leading and
+def _is_retired_constant_spelling(identifier: str) -> bool:
+    """True for the RETIRED module-constant spelling: exactly one leading and
     one trailing underscore with a non-digit-initial interior (``_PI_``,
     ``_MAX_RETRIES_``, ``_円周率_``).
 
-    Carved OUT of the logic-variable namespace — every ``_is_logic_var_name``
-    copy excludes this shape (pinned by test_var_classifier_conformance).
-    ``_1_`` is rejected: a constant named ``1`` invites confusion with the
-    literal. See implementation_plans/module-level-constants.md.
+    Nothing classifies with this any more.  Until 2026-09-11 it was carved
+    out of the logic-variable namespace in all five copies of
+    ``_is_logic_var_name``; it survives in exactly one place, and only so
+    that ``_handle_constants_directive`` can recognise the old spelling and
+    say what to write instead.  A name of this shape is an ordinary
+    underscore-led VARIABLE everywhere else.
     """
     return (
         len(identifier) >= 3
@@ -595,14 +597,15 @@ def _is_logic_var_name(identifier: str) -> bool:
     ``_lint_titlecase``): this predicate is purely lexical and says nothing
     about position, so the two rules live in different places on purpose.
 
-    Constant-shaped names (``_PI_``) are excluded too — pinned by
-    test_var_classifier_conformance.
+    There are no other exceptions.  ``_PI_`` was the module-constant class
+    until 2026-09-11 and was carved out of all five copies of this predicate;
+    constants are spelled like atoms now, so an underscore-led name is a
+    variable whatever its last character is.  Pinned as a PROPERTY by
+    test_var_classifier_conformance, not merely as a corpus of spellings.
     """
     if identifier == "_":
         return False
     if identifier.startswith("__"):
-        return False
-    if _is_constant_name(identifier):
         return False
     if identifier.startswith("_"):
         return True
@@ -7456,12 +7459,12 @@ class EmbedTransformer(NodeTransformer):
         statements = []
         for kw in call_node.keywords:
             ident = kw.arg
-            # The retired spelling is checked FIRST and on its own. While the
-            # `_is_constant_name` carve-out still stands in the classifier,
-            # `_PI_` is not a logic-variable name and would therefore satisfy
-            # the atom-class test below -- the old spelling would keep
-            # loading, silently, until the carve-out goes.
-            if ident is not None and _is_constant_name(ident):
+            # The retired spelling is checked FIRST and on its own, so the
+            # message names the migration rather than the generic
+            # "not a constant name". `_PI_` is a logic VARIABLE now, so the
+            # atom-class test below would reject it either way -- but with
+            # advice that does not mention constants at all.
+            if ident is not None and _is_retired_constant_spelling(ident):
                 new = ident.strip("_").lower()
                 raise SyntaxError(
                     f"-constants: `{ident}` uses the retired constant "
