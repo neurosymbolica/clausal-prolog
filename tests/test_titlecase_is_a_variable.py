@@ -805,3 +805,223 @@ def test_the_repl_conjunction_path_notes_every_conjunct_up_front():
         '_clausal_star_query_(tree(Node), bar(f"{Node}"))')
     assert _lambda_params(thunk_last, "Node"), thunk_last
     assert _lambda_params(thunk_first, "Node"), thunk_first
+
+
+# ── A ``++`` escape inside a seam is Python, so its names are not variables ──
+#
+# READ THE TRACEBACK WITH CARE.  When this collection goes wrong the failure
+# is an ``UnboundLocalError`` reported on an EARLIER, entirely innocent line
+# -- the first plain-Python use of the name in the same function.  Python
+# decides locality for a whole function at compile time, so the seam's
+# ``(Name := $Var())`` further down is what made the earlier read local; the
+# line the traceback blames is the victim, not the cause.  The cause is
+# always the seam, however far below the reported line it sits.
+
+
+def test_a_python_escape_in_a_seam_does_not_capture_its_name_as_a_variable(
+        tmp_path):
+    """``--f(++Var())``: ``Var`` is Python, and must stay Python.
+
+    A ``++`` operand is verbatim Python by definition, so a capital-initial
+    name inside one is a module-namespace binding, not a logic variable.
+    Collecting it puts ``(Var := $Var())`` into the enclosing function, and
+    every plain-Python ``Var()`` in that function -- including ones written
+    ABOVE the seam -- then raises ``UnboundLocalError``.
+
+    The ANSWER is asserted, not merely the load: the escaped variable has to
+    reach the fact's argument and come back bound.
+    """
+    mod = _load(tmp_path, "esc_own_api", """
+        from clausal import Var
+        from clausal.logic.seam import once_bind, export
+        -private([h])
+        amount(h, 7),
+        def probe():
+            a = Var()
+            t = --amount(++h, ++Var())
+            return type(a).__name__, once_bind(t, globals()), export(t[2])
+    """)
+    assert mod.probe() == ("AttVar", True, 7)
+
+
+def test_the_escape_rule_is_not_specific_to_one_name(tmp_path):
+    """The same shape with a name the engine has never heard of.
+
+    Exempting ``Var`` by spelling would leave the hole open for every other
+    capital-initial Python name reachable from a ``++``; the rule is about
+    the POSITION, so an arbitrary imported class has to behave identically.
+    ``once_bind`` succeeding is the answer -- the escape evaluated to ``7``
+    in the module namespace, which it cannot do if the class it names had
+    been replaced by an unbound variable.
+    """
+    mod = _load(tmp_path, "esc_other", """
+        from fractions import Fraction
+        from clausal.logic.seam import once_bind
+        -private([h])
+        amount(h, 7),
+        def probe():
+            a = Fraction(1, 3)
+            t = --amount(++h, ++int(Fraction(14, 2)))
+            return a, once_bind(t, globals()), t[2]
+    """)
+    from fractions import Fraction
+    assert mod.probe() == (Fraction(1, 3), True, 7)
+
+
+def test_a_real_seam_variable_beside_an_escape_is_still_bound(tmp_path):
+    """The negative half: "collect nothing" must not pass.
+
+    One seam holding both -- a capital-initial name inside a ``++`` (skipped)
+    and a genuine seam variable outside one (collected, bound up front, and
+    readable as a plain Python local once the goal has run).
+    """
+    mod = _load(tmp_path, "esc_and_var", """
+        from clausal import Var
+        from clausal.logic.seam import once_bind, export
+        -private([h])
+        amount(1, 7),
+        def probe():
+            a = Var()
+            t = --amount(++len([Var]), N)
+            bound = once_bind(t, globals())
+            return type(a).__name__, bound, export(N)
+    """)
+    assert mod.probe() == ("AttVar", True, 7)
+
+
+def test_an_escape_naming_a_variable_of_the_same_seam_still_resolves(tmp_path):
+    """A ``++`` that names a variable the enclosing seam itself binds.
+
+    ``N`` is used OUTSIDE the escape as well, and THAT is what makes the
+    spelling a variable here -- so the thunk must capture the seam's own
+    ``N``, not look the name up in the module namespace and not mint a
+    second variable.  Skipping escape operands during collection must not
+    disturb that, which is why the assertion is on IDENTITY: the value the
+    escape produced is the very variable standing in the first argument, and
+    binding the term binds both.
+
+    (Identity rather than arithmetic on the value: a thunk is evaluated when
+    the term is BUILT, before anything has been unified, so ``++(N * 2)``
+    would be multiplying an unbound variable -- true on both sides of this
+    fix, and not what this test is about.)
+    """
+    mod = _load(tmp_path, "esc_enclosing", """
+        from clausal.logic.seam import once_bind, export
+        same(2, 2),
+        def probe():
+            t = --same(N, ++(N))
+            return (t[1] is t[2]), once_bind(t, globals()), export(N)
+    """)
+    assert mod.probe() == (True, True, 2)
+
+
+def test_an_fstring_in_a_seam_does_not_capture_its_names_either(tmp_path):
+    """The sibling verbatim-Python body, which had the identical defect.
+
+    An interpolation slot is Python exactly as a ``++`` operand is, and the
+    clause-scope collector has always skipped both.  Before this fix a seam
+    containing ``f"{Fraction(1, 2)}"`` made ``Fraction`` local to the
+    enclosing function and the plain-Python use above it died.
+    """
+    mod = _load(tmp_path, "esc_fstring", """
+        from fractions import Fraction
+        -private([h])
+        amount(h, 7),
+        def probe():
+            a = Fraction(1, 3)
+            t = --amount(++h, f"{Fraction(1, 2)}")
+            return a, t[2]
+    """)
+    from fractions import Fraction
+    assert mod.probe() == (Fraction(1, 3), "1/2")
+
+
+# ── The sibling paths, pinned either way ───────────────────────────────────
+
+def test_the_goal_position_seam_shares_the_escape_rule(tmp_path):
+    """``if``/``while``/a comprehension guard all reach the same collection
+    through ``_goal_seam``, so all of them carried the defect and all of them
+    are fixed by the one change.  Pinned here so a future divergence between
+    goal and term position is a failure rather than a discovery."""
+    mod = _load(tmp_path, "esc_goal", """
+        from clausal import Var
+        -private([h])
+        amount(1, 7),
+        def by_if():
+            a = Var()
+            if --amount(++len([Var]), N):
+                return type(a).__name__, N
+            return None
+        def by_while():
+            a = Var()
+            seen = []
+            while --amount(++len([Var]), N):
+                seen.append((type(a).__name__, N))
+                break
+            return seen
+        def by_for():
+            a = Var()
+            out = []
+            for N in --amount(++len([Var]), N):
+                out.append((type(a).__name__, N))
+            return out
+    """)
+    assert mod.by_if() == ("AttVar", 7)
+    assert mod.by_while() == [("AttVar", 7)]
+    assert mod.by_for() == [("AttVar", 7)]
+
+
+def test_the_block_form_never_had_the_defect(tmp_path):
+    """``with --{} as terms:`` is the one seam shape that does NOT compute a
+    fresh list at all -- it visits each root with a plain term transformer,
+    and a name inside a ``++`` never reaches ``visit_Name``.  So it was
+    already correct, and the point of pinning it is that it stays correct
+    rather than being "fixed" into some new shape."""
+    mod = _load(tmp_path, "esc_block", """
+        from clausal import Var
+        -private([h])
+        amount(h, 7),
+        def probe():
+            a = Var()
+            with --{} as terms:
+                amount(++h, ++Var())
+            return type(a).__name__, terms
+    """)
+    kind, terms = mod.probe()
+    # ``a`` is still a variable object: the block did not turn ``Var`` into a
+    # function-local, which is the whole failure mode.
+    assert kind == "AttVar"
+    # The block yields COMPILE-TIME term nodes, not runtime terms -- both
+    # escapes are still unevaluated Python thunks, which is exactly what a
+    # ``++`` operand must lower to.
+    assert len(terms) == 1
+    assert type(terms[0]).__name__ == "Call"
+    assert terms[0].func.name == "amount"
+    assert [type(a).__name__ for a in terms[0].args] == ["PyThunk", "PyThunk"]
+
+
+def test_a_nested_seam_inside_an_escape_still_hoists_its_variable(tmp_path):
+    """The carve-out the escape rule needs, pinned by ANSWER.
+
+    Inside a seam a ``++`` operand is hosted Python again, and there
+    ``--expr`` is a nested SEAM (not the variable marker, which is read only
+    where the thunk body is embedded verbatim).  So its operand is Clausal
+    text and ``N`` there is a variable -- one the ENCLOSING seam binds, so
+    that the inner seam reuses it rather than walrusing a fresh one inside
+    the lambda and shadowing the parameter the thunk was handed.
+
+    Skipping Python bodies wholesale breaks exactly this: the term would
+    carry a variable nobody outside the lambda can see, so ``N`` would come
+    back unbound instead of ``7``.
+    """
+    mod = _load(tmp_path, "esc_nested_seam", """
+        from clausal.logic.seam import once_bind, export
+        -private([h])
+        amount(h, 7),
+        def pick(v):
+            return v
+        def probe():
+            t = --amount(++h, ++pick(--N))
+            return once_bind(t, globals()), export(N)
+    """)
+    assert mod.probe() == (True, 7)

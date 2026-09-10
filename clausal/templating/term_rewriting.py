@@ -1425,18 +1425,29 @@ def _collect_logic_var_names(node, excluded, *,
       in a clause a ``--X`` inside a ``++`` is the variable MARKER, which is
       CHECKED against the clause's own variables and so must never be the
       thing that puts a name among them.
+    * ``"nested_seams"`` -- the same, for a SEAM.  Identical to ``"skip"``
+      but for one carve-out: inside a seam a ``++`` operand is hosted Python
+      again, and there ``--expr`` is a nested SEAM rather than a marker (see
+      ``_variable_marker_name``: the marker is read only where the thunk body
+      is embedded verbatim, with no Python visitor to hand it back to).  A
+      nested seam's operand is Clausal text, so its names are variables, and
+      they are hoisted to the enclosing seam deliberately -- that is what
+      lets the inner seam reuse the variable the outer one bound instead of
+      shadowing it inside the lambda.
     """
-    if python_bodies not in ("descend", "skip"):
+    if python_bodies not in ("descend", "skip", "nested_seams"):
         raise ValueError(f"unknown python_bodies mode: {python_bodies!r}")
     ordered: list[str] = []
     seen: set[str] = set()
 
     class _Collector(NodeVisitor):
         def _python_body(self, node):
-            """A verbatim-Python body: descend into it or ignore it,
-            according to *python_bodies*."""
+            """A verbatim-Python body: descend, ignore, or read only the
+            nested seams in it, according to *python_bodies*."""
             if python_bodies == "descend":
                 self.generic_visit(node)
+            elif python_bodies == "nested_seams":
+                _visit_nested_seam_operands(node, self)
 
         def visit_JoinedStr(self, joined):
             self._python_body(joined)
@@ -1459,6 +1470,31 @@ def _collect_logic_var_names(node, excluded, *,
 
     _Collector().visit(node)
     return ordered
+
+
+def _visit_nested_seam_operands(node, collector) -> None:
+    """Hand *collector* the operand of every ``--expr`` seam written inside
+    *node*, and nothing else.
+
+    *node* is verbatim Python -- the inside of a ``++`` escape, or an
+    f-string slot -- reached from a SEAM, so a ``--expr`` in it is a nested
+    seam whose operand is Clausal text again.  Anywhere in the body counts,
+    including inside a further escape, because the enclosing seam's Python
+    visitor walks the whole body and lowers every seam it finds there.
+
+    Re-entering *collector* rather than walking with a private rule is the
+    point: the nested operand is subject to the same treatment as the outer
+    one, so a ``++`` inside IT skips its Python in turn.
+    """
+    class _Finder(NodeVisitor):
+        def visit_UnaryOp(self, unary_op):
+            seam = _double_prefix_operand(unary_op, USub)
+            if seam is not None:
+                collector.visit(seam)
+                return
+            self.generic_visit(unary_op)
+
+    _Finder().visit(node)
 
 
 def _collect_constant_refs(node) -> list[str]:
@@ -5503,8 +5539,38 @@ class EmbedTransformer(NodeTransformer):
         # into the HOST PYTHON scope, so it must name exactly what
         # ``visit_Name`` will read as a variable -- otherwise one seam's
         # two sides disagree about a spelling.
+        #
+        # ``python_bodies`` is that agreement for the verbatim-Python
+        # bodies: ``visit_Name`` never sees inside a ``++`` operand or an
+        # f-string slot, because both lower to a lambda whose text is
+        # embedded as written.  Collecting through one made a Python name
+        # standing there -- ``--f(++Var())``, ``--f(f"{Fraction(1, 2)}")`` --
+        # a seam variable, and ``_var_bind`` then wrote ``(Var := $Var())``
+        # into the ENCLOSING FUNCTION.  Python decides locality per function,
+        # so an EARLIER, ordinary ``Var()`` in that same function started
+        # raising ``UnboundLocalError``.
+        #
+        # THE TRACEBACK LIES ABOUT WHERE THAT HAPPENS.  It points at the
+        # earlier line, which is the victim; the line that caused it is the
+        # seam below.  Anyone debugging this from the traceback alone will
+        # look in the wrong place.
+        #
+        # It is also the reading the CLAUSAL side already had: the same skip
+        # is what ``_clause_variable_names`` does for the sub-transformer's
+        # own clause scope, so before this the two halves of one seam
+        # disagreed -- the fresh list called the name a variable while the
+        # thunk correctly left it resolving in the module namespace.
+        #
+        # ``"nested_seams"`` rather than a plain skip because a ``--expr``
+        # written inside that Python IS a seam again (a marker only where
+        # there is no Python visitor), and its operand is Clausal text whose
+        # variables the enclosing seam binds ON PURPOSE -- that hoisting is
+        # what lets the inner seam reuse the outer one's variable instead of
+        # walrusing a fresh one inside the lambda, shadowing the parameter
+        # the thunk was handed.
         fresh = [n for n in _collect_logic_var_names(
-            expression, _clause_scope_exclusions(transformer._import_remap))
+            expression, _clause_scope_exclusions(transformer._import_remap),
+            python_bodies="nested_seams")
             if n not in outer]
         term_tf = transformer._make_term_transformer(seam=True)
         term_tf.seen_vars.update(outer)
