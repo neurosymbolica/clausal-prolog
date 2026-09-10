@@ -229,7 +229,11 @@ def _is_logic_var_name(name: str) -> bool:
         return False
     if name.startswith("_"):
         return True
-    return name.isupper()
+    # Capital initial (ISO): ``X``, ``FOO``, ``Foo``.  ``Foo`` joined
+    # this class on 2026-09-10 -- see term_rewriting._is_logic_var_name,
+    # which is the copy that carries the full rationale.  All five
+    # copies move together (test_var_classifier_conformance).
+    return name[:1].isupper()
 
 
 def _extract_static_pattern(goal: Call) -> str | None:

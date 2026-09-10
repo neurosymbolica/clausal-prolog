@@ -81,9 +81,11 @@ def _is_logic_var_name(identifier: str) -> bool:
         return False
     if identifier.startswith("_"):
         return True
-    # ALL-CAPS: str.isupper() is True iff all cased chars are uppercase AND
-    # there is at least one cased character — exactly what we want.
-    return identifier.isupper()
+    # Capital initial (ISO): ``X``, ``FOO``, ``Foo``.  ``Foo`` joined
+    # this class on 2026-09-10 -- see term_rewriting._is_logic_var_name,
+    # which is the copy that carries the full rationale.  All five
+    # copies move together (test_var_classifier_conformance).
+    return identifier[:1].isupper()
 
 
 def dotted_attr_chain(attr_node):

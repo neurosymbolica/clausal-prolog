@@ -26,7 +26,13 @@ CORPUS = [
     ("X", True), ("FOO", True), ("MAX_OF", True), ("N1", True),
     ("_x", True), ("_head", True), ("_名前", True),
     ("PI_", True), ("FOO_", True),          # trailing-only: still a variable
-    ("foo", False), ("Foo", False), ("in_", False), ("名前", False),
+    # ``Foo`` is a VARIABLE since 2026-09-10: a capital initial names a
+    # variable (ISO), in every one of the five copies.  It is still refused in
+    # FUNCTOR position, but that is the TitleCase lint's rule, not this
+    # classifier's -- this predicate is lexical and says nothing about
+    # position.
+    ("Foo", True), ("FooBar", True), ("N1x", True),
+    ("foo", False), ("in_", False), ("名前", False),
     # The new constant class: variables NOWHERE.
     ("_PI_", False), ("_pi_", False), ("_MAX_RETRIES_", False),
     ("_a_b_", False), ("_円周率_", False),
