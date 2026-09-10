@@ -1743,16 +1743,22 @@ def _refuse_double_quoted_functor(transformer, func_node):
     single_quoted = "'{}'".format(
         spelling.replace("\\", "\\\\").replace("'", "\\'"))
     # ...and the bare-name alternative only exists when the spelling IS a
-    # name.  `"a b"(1)` has no bare form.  Neither does `"Foo"(1)`: a
-    # CAPITAL-INITIAL name is a logic variable, and bare in functor position
-    # that is either refused outright (``Foo(1)``, the TitleCase lint) or
-    # silently something else (``FOO(1)``, the unit-annotation sugar) — so
+    # name AND is not read as a VARIABLE.  `"a b"(1)` has no bare form, and
+    # neither has `"Foo"(1)`: bare in functor position a variable-shaped
+    # name is either refused outright (``Foo(1)``, the TitleCase lint) or
+    # silently something else (``FOO(1)``, ``_p(1)`` -- the unit-annotation
+    # sugar, which dies much later in a message about SI prefixes).  So
     # offering `Foo(...)` would hand the author a second fault as the fix
-    # for the first.  Single-quoting is the whole answer there.  A
-    # leading-underscore name is not affected: ``_p(1)`` really is a call.
+    # for the first.  Single-quoting is the whole answer for all of them.
+    #
+    # The test is ``_is_logic_var_name``, not "capital initial": the
+    # callable-position carve-out in ``_reads_as_variable`` is TitleCase-
+    # only, so a LEADING-UNDERSCORE name in functor position really does
+    # read as a variable -- ``_p(N, X) <- (... _p(M, X))`` is refused by
+    # ``_check_var_shaped_predicate_names`` for exactly that reason.
     bare_hint = (f', or {spelling}(...) if it is a plain name'
                  if spelling.isidentifier()
-                 and not spelling[:1].isupper() else '')
+                 and not _is_logic_var_name(spelling) else '')
     _raise_located_syntax_error(
         f'a double-quoted string is never a functor (ISO 6.3.3): '
         f'write {single_quoted}(...) for the atom{bare_hint}',

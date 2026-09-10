@@ -142,19 +142,31 @@ def test_double_quoted_functor_is_still_refused_by_iso_633(
     assert "TitleCase" not in message
 
 
-def test_double_quoted_message_does_not_offer_a_bare_capitalised_name(
-        tmp_path):
-    """The ISO 6.3.3 message offers the bare spelling as an alternative when
-    the spelling is a plain name.  For a CAPITAL-INITIAL one it must not:
-    bare in functor position that is a logic variable, so the "fix" would be
-    a second fault.  ``"foo"(1)`` keeps the hint, as the control."""
+@pytest.mark.parametrize("name, spelling", [
+    ("hint_tc", "Foo"),      # refused by the TitleCase lint
+    ("hint_caps", "FOO"),    # silently the unit-annotation sugar
+    ("hint_us", "_p"),       # ditto -- the callable carve-out is TitleCase-only
+])
+def test_double_quoted_message_offers_no_bare_variable_shaped_name(
+        tmp_path, name, spelling):
+    """The message offers the bare spelling when it is a plain name.  For a
+    VARIABLE-shaped one it must not: bare in functor position that is either
+    refused outright or read as a Quantity, so the suggested fix would be a
+    second fault.  ``_p`` is the case a "capital initial" test would miss --
+    ``_reads_as_variable``'s callable carve-out covers TitleCase only, which
+    is why ``_p(N, X) <- (... _p(M, X))`` is refused as a variable read."""
     with pytest.raises(SyntaxError) as exc_info:
-        _load(tmp_path, "hintcap", '"Foo"(1),\n')
-    assert "Foo(...) if it is a plain name" not in str(exc_info.value)
-    assert "write 'Foo'(...) for the atom" in str(exc_info.value)
+        _load(tmp_path, name, f'"{spelling}"(1),\n')
+    message = str(exc_info.value)
+    assert f"write '{spelling}'(...) for the atom" in message
+    assert f"{spelling}(...) if it is a plain name" not in message
 
+
+def test_a_plain_lowercase_name_still_gets_the_bare_hint(tmp_path):
+    """The control: ``foo`` is not variable-shaped, so the bare form really
+    is the alternative and the hint stays."""
     with pytest.raises(SyntaxError) as exc_info:
-        _load(tmp_path, "hintlow", '"foo"(1),\n')
+        _load(tmp_path, "hint_low", '"foo"(1),\n')
     assert "foo(...) if it is a plain name" in str(exc_info.value)
 
 
