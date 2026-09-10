@@ -142,6 +142,69 @@ def test_double_quoted_functor_is_still_refused_by_iso_633(
     assert "TitleCase" not in message
 
 
+@pytest.mark.parametrize("name, text, shape", [
+    ("spacey_fact", "'foo bar'(1),\n", "fact"),
+    ("spacey_rule", "bar(3),\n'foo bar'(X) <- (bar(X))\n", "clause"),
+    ("spacey_dcg", "'foo bar'(X) >> ([X])\n", "DCG rule"),
+    ("keyword_rule", "bar(3),\n'class'(X) <- (bar(X))\n", "clause"),
+])
+def test_non_identifier_quoted_head_is_still_refused(
+        tmp_path, name, text, shape):
+    """A Clausal implementation limit, not an ISO rule, and out of scope
+    here: a head is compiled to a functor class whose name is emitted as
+    Python source.  Pinned so it cannot decay into a parse error blamed on
+    generated code the author never wrote — for every head shape, since
+    they now share one reading of the quoted functor."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, name, text)
+    message = str(exc_info.value)
+    assert "is not a plain name" in message
+    assert f"cannot head a {shape}" in message
+
+
+def test_a_quoted_dcg_head_names_the_same_predicate(tmp_path):
+    """A DCG head is a head: it reads the quoted functor as the other two
+    do, rather than falling through to hosted Python."""
+    mod = _load(tmp_path, "dcg", "'Foo'(X) >> ([X])\n")
+    assert _answers(mod, "Foo", 3) != []
+
+
+# ── The var-shaped-name guard still discriminates ─────────────────────────
+
+
+class TestVarShapedPredicateNameGuard:
+    """``_check_var_shaped_predicate_names`` rejects a predicate whose name
+    the same file ALSO reads as a variable, because a bare ``Foo(...)`` in a
+    body is a fresh Var rather than a call and the module global gets
+    rebound.  Quoting the functor removes the ambiguity at the call sites,
+    but it cannot remove it from a file that still writes the bare name
+    somewhere a value goes."""
+
+    def test_quoted_only_file_is_coherent_and_loads(self, tmp_path):
+        mod = _load(tmp_path, "quotedonly", """
+            'Foo'(1),
+            q(X) <- ('Foo'(X))
+        """)
+        assert _answers(mod, "q", 1) == [(1,)]
+
+    def test_quoted_head_plus_a_bare_variable_read_is_still_refused(
+            self, tmp_path):
+        with pytest.raises(SyntaxError) as exc_info:
+            _load(tmp_path, "quotedplusvar", """
+                'Foo'(1),
+                q(X) <- ('Foo'(X))
+                r(Foo) <- (Foo > 0)
+            """)
+        message = str(exc_info.value)
+        assert "also read as a logic variable" in message
+        assert "'Foo'" in message
+        assert "'AttVar' object is not callable" in message
+        assert "capital-initial name is a logic variable" in message
+
+
+# ── The ISO 6.3.3 hint must not name a second fault ───────────────────────
+
+
 @pytest.mark.parametrize("name, spelling", [
     ("hint_tc", "Foo"),      # refused by the TitleCase lint
     ("hint_caps", "FOO"),    # silently the unit-annotation sugar
@@ -168,33 +231,6 @@ def test_a_plain_lowercase_name_still_gets_the_bare_hint(tmp_path):
     with pytest.raises(SyntaxError) as exc_info:
         _load(tmp_path, "hint_low", '"foo"(1),\n')
     assert "foo(...) if it is a plain name" in str(exc_info.value)
-
-
-@pytest.mark.parametrize("name, text, shape", [
-    ("spacey_fact", "'foo bar'(1),\n", "fact"),
-    ("spacey_rule", "bar(3),\n'foo bar'(X) <- (bar(X))\n", "clause"),
-    ("spacey_dcg", "'foo bar'(X) >> ([X])\n", "DCG rule"),
-    ("keyword_rule", "bar(3),\n'class'(X) <- (bar(X))\n", "clause"),
-])
-def test_non_identifier_quoted_head_is_still_refused(
-        tmp_path, name, text, shape):
-    """A Clausal implementation limit, not an ISO rule, and out of scope
-    here: a head is compiled to a functor class whose name is emitted as
-    Python source.  Pinned so it cannot decay into a parse error blamed on
-    generated code the author never wrote — for every head shape, since
-    they now share one reading of the quoted functor."""
-    with pytest.raises(SyntaxError) as exc_info:
-        _load(tmp_path, name, text)
-    message = str(exc_info.value)
-    assert "is not a plain name" in message
-    assert f"cannot head a {shape}" in message
-
-
-def test_a_quoted_dcg_head_names_the_same_predicate(tmp_path):
-    """A DCG head is a head: it reads the quoted functor as the other two
-    do, rather than falling through to hosted Python."""
-    mod = _load(tmp_path, "dcg", "'Foo'(X) >> ([X])\n")
-    assert _answers(mod, "Foo", 3) != []
 
 
 # ── Reflection ────────────────────────────────────────────────────────────
@@ -248,34 +284,81 @@ class TestReify:
         assert reify_source('"foo"(1),\n') != []
 
 
-# ── The var-shaped-name guard still discriminates ─────────────────────────
+# ── A quoted entry in a declaration list is a real entry ───────────────────
 
 
-class TestVarShapedPredicateNameGuard:
-    """``_check_var_shaped_predicate_names`` rejects a predicate whose name
-    the same file ALSO reads as a variable, because a bare ``Foo(...)`` in a
-    body is a fresh Var rather than a call and the module global gets
-    rebound.  Quoting the functor removes the ambiguity at the call sites,
-    but it cannot remove it from a file that still writes the bare name
-    somewhere a value goes."""
+class TestQuotedDeclarationEntry:
+    """A quoted entry used to fall through to "other item shapes", which
+    registers NOTHING -- no class, no signature, hence no arity check --
+    while the file still loaded.  That was true of the lowercase spelling
+    before any of this, so it is not TitleCase's fault; but a capitalised
+    predicate has no bare spelling, so leaving it would have meant such a
+    predicate could be defined and never declared.
+    """
 
-    def test_quoted_only_file_is_coherent_and_loads(self, tmp_path):
-        mod = _load(tmp_path, "quotedonly", """
+    @pytest.mark.parametrize("name, entry, head", [
+        ("bare", "foo(A, B)", "foo(1),"),
+        ("quoted", "'foo'(A, B)", "'foo'(1),"),
+        ("quoted_tc", "'Foo'(A, B)", "'Foo'(1),"),
+    ])
+    def test_the_declared_arity_is_enforced_against_a_clause(
+            self, tmp_path, name, entry, head):
+        """The discriminating behaviour: a field-carrying entry fixes the
+        signature, and a clause that contradicts it is refused.  A dropped
+        entry shows up here as silence."""
+        with pytest.raises(SyntaxError, match=r"conflicts with the declaration"):
+            _load(tmp_path, f"arity_{name}",
+                  f"-module(m, [{entry}])\n{head}\n")
+
+    @pytest.mark.parametrize("name, entry, bound", [
+        ("bare_call", "foo(A, B)", "foo"),
+        ("bare_slash", "foo/2", "foo"),
+        ("quoted_call", "'foo'(A, B)", "foo"),
+        ("quoted_slash", "'foo'/2", "foo"),
+        ("quoted_tc_call", "'Foo'(A, B)", "Foo"),
+        ("quoted_tc_slash", "'Foo'/2", "Foo"),
+    ])
+    def test_a_clause_free_declaration_still_mints_the_predicate(
+            self, tmp_path, name, entry, bound):
+        """The second, independent discriminator: a declaration with no
+        clause at all binds the name.  It answered False for every quoted
+        spelling."""
+        mod = _load(tmp_path, f"mint_{name}", f"-module(m, [{entry}])\n")
+        assert bound in vars(mod)
+
+    def test_a_capitalised_predicate_can_be_exported_and_used(self, tmp_path):
+        mod = _load(tmp_path, "exported", """
+            -module(m, ['Foo'(X)])
             'Foo'(1),
-            q(X) <- ('Foo'(X))
         """)
-        assert _answers(mod, "q", 1) == [(1,)]
+        assert _answers(mod, "Foo", 1) == [(1,)]
 
-    def test_quoted_head_plus_a_bare_variable_read_is_still_refused(
-            self, tmp_path):
+    def test_private_takes_the_quoted_entry_in_both_spellings(self, tmp_path):
+        for name, entry in (("slash", "'Foo'/1"), ("call", "'Foo'(X)")):
+            mod = _load(tmp_path, f"priv_{name}",
+                        f"-private([{entry}])\n'Foo'(1),\n")
+            assert _answers(mod, "Foo", 1) == [(1,)]
+
+    @pytest.mark.parametrize("name, entry", [
+        ("dq_call", '"foo"(X)'),
+        ("dq_slash", '"foo"/1'),
+    ])
+    def test_a_double_quoted_entry_is_refused_by_iso_633(
+            self, tmp_path, name, entry):
+        with pytest.raises(SyntaxError,
+                           match=r"never a functor \(ISO 6\.3\.3\)"):
+            _load(tmp_path, name, f"-module(m, [{entry}])\n")
+
+    @pytest.mark.parametrize("name, entry", [
+        ("np_call", "'foo bar'(X)"),
+        ("np_slash", "'class'/1"),
+    ])
+    def test_a_non_plain_entry_is_refused_and_says_so(
+            self, tmp_path, name, entry):
+        """An entry mints the same class a head does, so it owes the same
+        limit — and it must SAY so rather than be quietly ignored."""
         with pytest.raises(SyntaxError) as exc_info:
-            _load(tmp_path, "quotedplusvar", """
-                'Foo'(1),
-                q(X) <- ('Foo'(X))
-                r(Foo) <- (Foo > 0)
-            """)
+            _load(tmp_path, name, f"-module(m, [{entry}])\n")
         message = str(exc_info.value)
-        assert "also read as a logic variable" in message
-        assert "'Foo'" in message
-        assert "'AttVar' object is not callable" in message
-        assert "capital-initial name is a logic variable" in message
+        assert "is not a plain name" in message
+        assert "cannot be declared" in message

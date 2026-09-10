@@ -1805,16 +1805,25 @@ def _quoted_head_functor_name(transformer, func_node, shape):
 
     *shape* is the word the second message uses for the construct
     (``"fact"``, ``"clause"``, ``"DCG rule"``), so the diagnostic names what
-    the author actually wrote.
+    the author actually wrote.  A ``-module``/``-private`` export ENTRY
+    passes *shape* ``None``: it mints the same class from the same spelling,
+    so it owes both checks, but it is not a head and must not be described
+    as one.
     """
     _refuse_double_quoted_functor(transformer, func_node)
     spelling = func_node.value
     if not spelling.isidentifier() or _keyword_module.iskeyword(spelling):
-        _raise_located_syntax_error(
-            f'{spelling!r} is not a plain name, so it cannot '
+        because = (
             f'head a {shape} (a body goal may name it, a {shape} '
             f'head may not): rename it, or give the {shape} a '
-            f'head that is a plain name',
+            f'head that is a plain name'
+            if shape is not None else
+            'be declared (a body goal may name it, a declaration entry '
+            'may not): rename it, or drop the entry and let the clauses '
+            'define the predicate'
+        )
+        _raise_located_syntax_error(
+            f'{spelling!r} is not a plain name, so it cannot {because}',
             func_node, transformer._source_lines, transformer._filename)
     name = Name(id=spelling, ctx=Load())
     copy_location(name, func_node)
@@ -3572,17 +3581,45 @@ def _predicate_export_spec(node):
     Returns ``None`` for any other node shape, so the caller falls through to
     its existing branches.  Same node shape ``_parse_pred_arity_args`` accepts
     for ``-dynamic``/``-table``/``-discontiguous``/``-shallow``.
+
+    The name may be QUOTED (``'Foo'/1``).  A functor is named by an atom and
+    a single-quoted token is one, so the two spellings mean the same entry --
+    and for a capital-initial predicate the quoted spelling is the ONLY one,
+    since bare ``Foo`` in that position is a logic variable.  Reading only the
+    bare form here made the quoted entry fall through to "other item shapes",
+    which registers nothing at all: no class, no signature, no arity check,
+    and no diagnostic either.  The caller applies the double-quote and
+    plain-name rules to it, exactly as it does for a head.
     """
     if (
         isinstance(node, BinOp)
         and isinstance(node.op, Div)
-        and isinstance(node.left, Name)
+        and isinstance(node.left, (Name, Constant))
         and isinstance(node.right, Constant)
         and isinstance(node.right.value, int)
         and node.right.value >= 0
     ):
+        if isinstance(node.left, Constant):
+            if not isinstance(node.left.value, str):
+                return None
+            return node.left, node.right.value
         return node.left.id, node.right.value
     return None
+
+
+def _resolved_export_spec(transformer, spec):
+    """Turn ``_predicate_export_spec``'s answer into ``(name, arity)``.
+
+    The reader hands back the quoted name's ``Constant`` NODE rather than a
+    string, because deciding what that spelling may be is the caller's job
+    and needs the node's position: the entry mints a functor class exactly
+    as a head does, so it owes the same ISO 6.3.3 refusal and the same
+    plain-name limit, attributed to the entry the author wrote.
+    """
+    name, arity = spec
+    if isinstance(name, Constant):
+        name = _quoted_head_functor_name(transformer, name, None).id
+    return name, arity
 
 
 def _parse_pred_arity_args(args, directive_name):
@@ -6949,7 +6986,8 @@ class EmbedTransformer(NodeTransformer):
                 _pred_export = _predicate_export_spec(export)
                 if _pred_export is not None:
                     transformer._declare_predicate_export(
-                        _pred_export, export, expr_stmt, statements,
+                        _resolved_export_spec(transformer, _pred_export),
+                        export, expr_stmt, statements,
                         "-module export list (name/arity)")
                     continue
                 if isinstance(export, Name) and _is_constant_name(export.id):
@@ -6978,7 +7016,25 @@ class EmbedTransformer(NodeTransformer):
                     statements.append(
                         _make_atom_str_assign_ast(export.id, expr_stmt)
                     )
-                elif isinstance(export, Call) and isinstance(export.func, Name):
+                elif isinstance(export, Call) and isinstance(
+                        export.func, (Name, Constant)):
+                    # ``'foo'(A, B)`` is the same entry as ``foo(A, B)`` --
+                    # an atom names the functor -- and for a capital-initial
+                    # predicate it is the only spelling, bare ``Foo`` there
+                    # being a logic variable.  Read only as a ``Name``, the
+                    # quoted entry fell through to "other item shapes" and
+                    # registered NOTHING: no class, no signature, and so no
+                    # arity check either, while the file still loaded.
+                    if isinstance(export.func, Constant):
+                        export = replace(
+                            Call(
+                                func=_quoted_head_functor_name(
+                                    transformer, export.func, None),
+                                args=list(export.args),
+                                keywords=list(export.keywords),
+                            ),
+                            export,
+                        )
                     functor_name = export.func.id
                     # Use raw Name ids as field names (not lowercased) so they
                     # match keyword arg names in clauses like fib(N=0, F=0).
@@ -7044,7 +7100,8 @@ class EmbedTransformer(NodeTransformer):
                 # ISO ``name/arity``: a PREDICATE entry (R6b) — see
                 # ``_declare_predicate_export``.
                 transformer._declare_predicate_export(
-                    _pred_export, item, expr_stmt, statements,
+                    _resolved_export_spec(transformer, _pred_export),
+                    item, expr_stmt, statements,
                     "-private declaration (name/arity)")
                 continue
             if isinstance(item, Name) and _is_constant_name(item.id):
