@@ -12,8 +12,8 @@ verb_phrase -->
 sentence -->
     noun_phrase, verb_phrase, noun_phrase.
 
-digit(Digit) -->
-    [Digit], {Digit >= 0}, {Digit =< 9}.
+digit(DIGIT) -->
+    [DIGIT], {DIGIT >= 0}, {DIGIT =< 9}.
 
 ab -->
     [a], ab.
@@ -24,17 +24,17 @@ ab -->
 ab -->
     [].
 
-look_ahead(Token), [Token] -->
-    [Token].
+look_ahead(TOKEN), [TOKEN] -->
+    [TOKEN].
 
 not_a -->
-    \+ [a], [_X_unused].
+    \+ [a], [_X_UNUSED].
 
-valid_sentence(Sentence) :-
-    phrase(sentence, Sentence).
+valid_sentence(SENTENCE) :-
+    phrase(sentence, SENTENCE).
 
-expr_dcg(Expression) -->
-    [Expression], {Expression = Expression + 0}.
+expr_dcg(EXPRESSION) -->
+    [EXPRESSION], {EXPRESSION = EXPRESSION + 0}.
 
 test('valid sentence') :-
     valid_sentence([the, dog, chases, the, cat]).

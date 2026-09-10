@@ -5,39 +5,39 @@ same_value(X, Y) :-
     X == Y.
 
 test('atom unifies with itself') :-
-    X = a,
-    X == a.
+    _x = a,
+    _x == a.
 
 test('var unifies with atom') :-
-    X = a,
-    X == a.
+    _x = a,
+    _x == a.
 
 test('var unifies with integer') :-
-    X = 42,
-    X == 42.
+    _x = 42,
+    _x == 42.
 
 test('var unifies with list') :-
-    X = [1, 2, 3],
-    X == [1, 2, 3].
+    _x = [1, 2, 3],
+    _x == [1, 2, 3].
 
 test('different atoms fail') :-
-    \+ (X = a, X = b, X == b).
+    \+ (_x = a, _x = b, _x == b).
 
 test('list unification') :-
-    X = [a],
-    X == [a].
+    _x = [a],
+    _x == [a].
 
 test('empty lists unify') :-
-    X = [],
-    X == [].
+    _x = [],
+    _x == [].
 
 test('different atoms: is not succeeds') :-
-    X = a,
-    dif(X, b).
+    _x = a,
+    dif(_x, b).
 
 test('same atom: is not fails') :-
-    X = a,
-    \+ dif(X, a).
+    _x = a,
+    \+ dif(_x, a).
 
 test('same atom ==') :-
     a == a.
@@ -49,8 +49,8 @@ test('same integer ==') :-
     42 == 42.
 
 test('bound var == value') :-
-    X = hello,
-    X == hello.
+    _x = hello,
+    _x == hello.
 
 test('different atoms !=') :-
     a \== b.
@@ -94,7 +94,7 @@ test('arithmetic term is structural: 1+2 != 3 in unify') :-
     \+ (X = 1 + 2, X = 3).
 
 test('var/atom is not: succeeds with constraint') :-
-    dif(_X_unused, a).
+    dif(_X_UNUSED, a).
 
 test('different numbers: 1 is not 2') :-
     dif(1, 2).
@@ -103,16 +103,16 @@ test('int == float (Python quirk)') :-
     1 == 1.0.
 
 test('two fresh vars: X == Y (CLP(FD) posts)') :-
-    _X_unused == _Y_unused.
+    _X_UNUSED == _Y_UNUSED.
 
 test('same var: X == X') :-
     X == X.
 
 test('var != atom raises catchable type_error') :-
-    catch((_X_unused \== a, false), _, true).
+    catch((_X_UNUSED \== a, false), _, true).
 
 test('two fresh vars: X != Y') :-
-    _X_unused \== _Y_unused.
+    _X_UNUSED \== _Y_UNUSED.
 
 test('structural_eq: a == a') :-
     structural_eq(a, a).
@@ -128,10 +128,10 @@ test('structural_eq: same var') :-
     structural_eq(X, Y).
 
 test('structural_eq: distinct unbound vars fail') :-
-    \+ structural_eq(_X_unused, _Y_unused).
+    \+ structural_eq(_X_UNUSED, _Y_UNUSED).
 
 test('structural_eq: unbound var vs atom fails') :-
-    \+ structural_eq(_X_unused, a).
+    \+ structural_eq(_X_UNUSED, a).
 
 test('structural_eq: nested lists') :-
     structural_eq([1, [2, 3]], [1, [2, 3]]).

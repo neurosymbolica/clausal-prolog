@@ -10,7 +10,7 @@ verb_phrase() >> (([chases] or ([sees] or [likes])))
 
 sentence() >> ('noun_phrase', 'verb_phrase', 'noun_phrase')
 
-digit(_digit) >> ([_digit], {_digit >= 0}, {_digit <= 9})
+digit(DIGIT) >> ([DIGIT], {DIGIT >= 0}, {DIGIT <= 9})
 
 ab() >> ([a], 'ab')
 
@@ -18,13 +18,13 @@ ab() >> ([b], 'ab')
 
 ab() >> ([])
 
-(look_ahead(_token), [_token]) >> ([_token])
+(look_ahead(TOKEN), [TOKEN]) >> ([TOKEN])
 
-not_a() >> (not [a], [_x_unused])
+not_a() >> (not [a], [_X_UNUSED])
 
-valid_sentence(_sentence) <- (phrase('sentence', _sentence))
+valid_sentence(SENTENCE) <- (phrase('sentence', SENTENCE))
 
-expr_dcg(_expression) >> ([_expression], {_expression is _expression + 0})
+expr_dcg(EXPRESSION) >> ([EXPRESSION], {EXPRESSION is EXPRESSION + 0})
 
 test('valid sentence') <- (valid_sentence([the, dog, chases, the, cat]))
 

@@ -1,21 +1,21 @@
 :- module(iso_list_operations, [test/1]).
 
-palindrome(Xs) :-
-    reverse(Xs, Xs).
+palindrome(XS) :-
+    reverse(XS, XS).
 
 sorted_asc([]).
 
 sorted_asc([_]).
 
-sorted_asc([A, B|Rest]) :-
+sorted_asc([A, B|REST]) :-
     A =< B,
-    sorted_asc([B|Rest]).
+    sorted_asc([B|REST]).
 
-is_permutation(Xs, Ys) :-
-    length(Xs, N),
-    length(Ys, N),
-    sort(Xs, S),
-    sort(Ys, S).
+is_permutation(XS, YS) :-
+    length(XS, N),
+    length(YS, N),
+    sort(XS, S),
+    sort(YS, S).
 
 test('in: found') :-
     member(b, [a, b, c]).
@@ -66,8 +66,8 @@ test('append both empty') :-
     append([], [], []).
 
 test('append binds result') :-
-    append([1], [2], R),
-    R == [1, 2].
+    append([1], [2], _r),
+    _r == [1, 2].
 
 test('length of 3') :-
     length([a, b, c], 3).
@@ -79,8 +79,8 @@ test('length one') :-
     length([42], 1).
 
 test('length binds') :-
-    length([1, 2, 3], N),
-    N == 3.
+    length([1, 2, 3], _n),
+    _n == 3.
 
 test('last element') :-
     last([1, 2, 3], 3).
@@ -101,9 +101,9 @@ test('reverse singleton') :-
     reverse([42], [42]).
 
 test('reverse involution') :-
-    reverse([1, 2, 3], R),
-    reverse(R, Rr),
-    Rr == [1, 2, 3].
+    reverse([1, 2, 3], _r),
+    reverse(_r, _rr),
+    _rr == [1, 2, 3].
 
 test('nth0 first') :-
     nth0(0, [a, b, c], a).

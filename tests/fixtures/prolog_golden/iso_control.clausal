@@ -28,17 +28,17 @@ safe_max(X, Y, X) <- (X >= Y)
 
 safe_max(X, Y, Y) <- (Y > X)
 
-test('conjunction binds two vars') <- (X is 1, Y is 2, X == 1, Y == 2)
+test('conjunction binds two vars') <- (_x is 1, _y is 2, _x == 1, _y == 2)
 
-test('conjunction fails if first fails') <- (not (a is b, _x_unused is 1))
+test('conjunction fails if first fails') <- (not (a is b, _x_UNUSED is 1))
 
-test('conjunction fails if second fails') <- (not (_x_unused is 1, a is b))
+test('conjunction fails if second fails') <- (not (_x_UNUSED is 1, a is b))
 
-test('triple conjunction') <- (X is 1, Y is 2, Z is 3, X + Y + Z == 6)
+test('triple conjunction') <- (_x is 1, _y is 2, _z is 3, _x + _y + _z == 6)
 
-test('disjunction first succeeds') <- ((X is 1 or X is 2))
+test('disjunction first succeeds') <- ((_x is 1 or _x is 2))
 
-test('disjunction first fails, second succeeds') <- ((a is b or _x_unused is 1))
+test('disjunction first fails, second succeeds') <- ((a is b or _x_UNUSED is 1))
 
 test('disjunction both fail') <- (not (a is b or c is d))
 
@@ -52,11 +52,11 @@ test('not: member present fails') <- (not not b in [a, b, c])
 
 test('double negation: not not (1=1)') <- (not not 1 is 1)
 
-test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') <- (((X is 1, Y is a) or (X is 2, Y is b)))
+test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') <- (((_x is 1, _y is a) or (_x is 2, _y is b)))
 
 test('not + member: d not in list') <- (not d in [a, b, c])
 
-test('conjunction + negation') <- (X is 5, not X is 3, X == 5)
+test('conjunction + negation') <- (_x is 5, not _x is 3, _x == 5)
 
 test('choose picks first') <- (choose(1, 2, 1))
 
@@ -64,11 +64,11 @@ test('choose picks second') <- (choose(1, 2, 2))
 
 test('choose with atoms') <- (choose(a, b, a))
 
-test('safe_max: first is larger') <- (safe_max(5, 3, M), M == 5)
+test('safe_max: first is larger') <- (safe_max(5, 3, _m), _m == 5)
 
-test('safe_max: second is larger') <- (safe_max(2, 7, M), M == 7)
+test('safe_max: second is larger') <- (safe_max(2, 7, _m), _m == 7)
 
-test('safe_max: equal') <- (safe_max(4, 4, M), M == 4)
+test('safe_max: equal') <- (safe_max(4, 4, _m), _m == 4)
 
 test('true succeeds (1 == 1)') <- (1 == 1)
 
@@ -80,7 +80,7 @@ test('disjunction yields 2 solutions') <- (findall(X, X is 1 or X is 2, L), L ==
 
 test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], (X is 1, Y is a) or (X is 2, Y is b), L), L == [[1, a], [2, b]])
 
-test('naf does not bind: not(X is a) fails') <- (not not _x_unused is a)
+test('naf does not bind: not(X is a) fails') <- (not not _x_UNUSED is a)
 
 test('color enumerates three') <- (findall(X, color(X), L), L == [red, green, blue])
 

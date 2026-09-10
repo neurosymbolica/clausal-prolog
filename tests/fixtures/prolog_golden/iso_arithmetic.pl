@@ -88,8 +88,8 @@ test('succ forward: succ(3,4)') :-
     succ(3, 4).
 
 test('succ backward: succ(X,4)=3') :-
-    succ(X, 4),
-    X == 3.
+    succ(_x, 4),
+    _x == 3.
 
 test('succ zero: succ(0,1)') :-
     succ(0, 1).
@@ -98,12 +98,12 @@ test('plus forward: 2+3=5') :-
     plus(2, 3, 5).
 
 test('plus backward x: X+3=5') :-
-    plus(X, 3, 5),
-    X == 2.
+    plus(_x, 3, 5),
+    _x == 2.
 
 test('plus backward y: 2+Y=5') :-
-    plus(2, Y, 5),
-    Y == 3.
+    plus(2, _y, 5),
+    _y == 3.
 
 test('between check: 3 in 1..5') :-
     between(1, 5, 3).
@@ -151,32 +151,32 @@ test('mixed int/float compare: 1 <= 1.0') :-
     1 =< 1.0.
 
 test('double 3 is 6') :-
-    double(3, Y),
-    Y == 6.
+    double(3, _y),
+    _y == 6.
 
 test('double 0 is 0') :-
-    double(0, Y),
-    Y == 0.
+    double(0, _y),
+    _y == 0.
 
 test('square 4 is 16') :-
-    square(4, Y),
-    Y == 16.
+    square(4, _y),
+    _y == 16.
 
 test('square 1 is 1') :-
-    square(1, Y),
-    Y == 1.
+    square(1, _y),
+    _y == 1.
 
 test('triangle 5 is 15') :-
-    triangle_number(5, T),
-    T == 15.
+    triangle_number(5, _t),
+    _t == 15.
 
 test('triangle 1 is 1') :-
-    triangle_number(1, T),
-    T == 1.
+    triangle_number(1, _t),
+    _t == 1.
 
 test('triangle 10 is 55') :-
-    triangle_number(10, T),
-    T == 55.
+    triangle_number(10, _t),
+    _t == 55.
 
 test('sign positive') :-
     sign(42, S),
@@ -195,7 +195,7 @@ test('sign float negative') :-
     S =:= -1.
 
 test('sign unbound fails') :-
-    \+ sign(_X_UNUSED, _).
+    \+ sign(_x_UNUSED, _).
 
 test('sign check mode: correct') :-
     sign(5, 1).
@@ -220,7 +220,7 @@ test('gcd negative: gcd(-12, 8) = 4') :-
     G == 4.
 
 test('gcd unbound fails') :-
-    \+ gcd(_X_UNUSED, 8, _).
+    \+ gcd(_x_UNUSED, 8, _).
 
 test('divmod 17 5 = (3, 2)') :-
     divmod_(17, 5, Q, R),
@@ -241,7 +241,7 @@ test('divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)') :-
     R == 1.
 
 test('divmod unbound fails') :-
-    \+ divmod_(_X_UNUSED, 5, _, _).
+    \+ divmod_(_x_UNUSED, 5, _, _).
 
 test('divmod check mode: correct') :-
     divmod_(17, 5, 3, 2).

@@ -32,28 +32,28 @@ safe_max(X, Y, Y) :-
     Y > X.
 
 test('conjunction binds two vars') :-
-    X = 1,
-    Y = 2,
-    X == 1,
-    Y == 2.
+    _x = 1,
+    _y = 2,
+    _x == 1,
+    _y == 2.
 
 test('conjunction fails if first fails') :-
-    \+ (a = b, _X_UNUSED = 1).
+    \+ (a = b, _x_UNUSED = 1).
 
 test('conjunction fails if second fails') :-
-    \+ (_X_UNUSED = 1, a = b).
+    \+ (_x_UNUSED = 1, a = b).
 
 test('triple conjunction') :-
-    X = 1,
-    Y = 2,
-    Z = 3,
-    X + Y + Z =:= 6.
+    _x = 1,
+    _y = 2,
+    _z = 3,
+    _x + _y + _z =:= 6.
 
 test('disjunction first succeeds') :-
-    X = 1 ; X = 2.
+    _x = 1 ; _x = 2.
 
 test('disjunction first fails, second succeeds') :-
-    a = b ; _X_UNUSED = 1.
+    a = b ; _x_UNUSED = 1.
 
 test('disjunction both fail') :-
     \+ (a = b ; c = d).
@@ -74,15 +74,15 @@ test('double negation: not not (1=1)') :-
     \+ \+ 1 = 1.
 
 test('and + or: (X=1 and Y=a) or (X=2 and Y=b)') :-
-    X = 1, Y = a ; X = 2, Y = b.
+    _x = 1, _y = a ; _x = 2, _y = b.
 
 test('not + member: d not in list') :-
     \+ member(d, [a, b, c]).
 
 test('conjunction + negation') :-
-    X = 5,
-    \+ X = 3,
-    X == 5.
+    _x = 5,
+    \+ _x = 3,
+    _x == 5.
 
 test('choose picks first') :-
     choose(1, 2, 1).
@@ -94,16 +94,16 @@ test('choose with atoms') :-
     choose(a, b, a).
 
 test('safe_max: first is larger') :-
-    safe_max(5, 3, M),
-    M == 5.
+    safe_max(5, 3, _m),
+    _m == 5.
 
 test('safe_max: second is larger') :-
-    safe_max(2, 7, M),
-    M == 7.
+    safe_max(2, 7, _m),
+    _m == 7.
 
 test('safe_max: equal') :-
-    safe_max(4, 4, M),
-    M == 4.
+    safe_max(4, 4, _m),
+    _m == 4.
 
 test('true succeeds (1 == 1)') :-
     1 == 1.
@@ -126,7 +126,7 @@ test('disjunction with conjunction: 2 solutions') :-
     L == [[1, a], [2, b]].
 
 test('naf does not bind: not(X is a) fails') :-
-    \+ \+ _X_UNUSED = a.
+    \+ \+ _x_UNUSED = a.
 
 test('color enumerates three') :-
     findall(X, color(X), L),

@@ -112,15 +112,17 @@ class TestInNotIn:
 
     def test_in_translates_to_member(self):
         # nv
-        # _x occurs once in this item, so the singleton post-pass
-        # underscore-prefixes it: X -> _X.
+        # _x crosses unchanged. It occurs once, so the singleton post-pass
+        # would underscore-prefix it -- but it is already underscore-led and
+        # is left alone. (These read `_X` while the exporter titlecased `_x`
+        # to `X` and the singleton pass then put an underscore back.)
         result = clausal_source_to_prolog("Test() <- (_x in [1, 2, 3])")
-        assert "member(_X, [1, 2, 3])" in result
+        assert "member(_x, [1, 2, 3])" in result
 
     def test_not_in_translates_to_negated_member(self):
         # nv
         result = clausal_source_to_prolog("Test() <- (_x not in [1, 2, 3])")
-        assert "\\+ member(_X, [1, 2, 3])" in result or "\\+(member(_X, [1, 2, 3]))" in result
+        assert "\\+ member(_x, [1, 2, 3])" in result or "\\+(member(_x, [1, 2, 3]))" in result
 
     # The PREDICATE spelling of membership. Clausal registers ``in_/2`` in
     # exactly one place -- clausal/logic/builtins/lists.py, ``_member__2`` --
@@ -133,12 +135,12 @@ class TestInNotIn:
     def test_in_call_form_translates_to_member(self):
         # nv
         result = clausal_source_to_prolog("Test() <- in_(_x, [1, 2, 3])")
-        assert "member(_X, [1, 2, 3])" in result
+        assert "member(_x, [1, 2, 3])" in result
 
     def test_in_call_form_does_not_emit_bare_in(self):
         # nv
         result = clausal_source_to_prolog("Test() <- in_(_x, [1, 2, 3])")
-        assert "in(_X" not in result.replace("member(_X", "")
+        assert "in(_x" not in result.replace("member(_x", "")
 
     def test_negated_in_call_form_matches_the_operator_form(self):
         """``not in_(X, L)`` and ``X not in L`` must lower the same way.
@@ -159,15 +161,15 @@ class TestInNotIn:
         # way, inside a parenthesised body).
         call_form = clausal_source_to_prolog(
             "Test() <- (not in_(_x, [1, 2, 3]))")
-        assert ("\\+ member(_X, [1, 2, 3])" in call_form
-                or "\\+(member(_X, [1, 2, 3]))" in call_form)
+        assert ("\\+ member(_x, [1, 2, 3])" in call_form
+                or "\\+(member(_x, [1, 2, 3]))" in call_form)
 
     def test_in_check_call_form_still_memberchk(self):
         """The sibling entry is unchanged: in_check/2 is memberchk/2, not
         member/2 -- pinned so the in_ repair cannot smear across it."""
         # nv
         result = clausal_source_to_prolog("Test() <- in_check(_x, [1, 2, 3])")
-        assert "memberchk(_X, [1, 2, 3])" in result
+        assert "memberchk(_x, [1, 2, 3])" in result
 
 
 class TestKeywordArgs:
@@ -336,8 +338,9 @@ class TestCLI:
         )
         assert result.returncode == 0
         content = out.read_text()
-        assert "bar(X) :-" in content
-        assert "baz(X)." in content
+        # Was bar(X)/baz(X): _x used to be uppercased on export.
+        assert "bar(_x) :-" in content
+        assert "baz(_x)." in content
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -472,3 +475,82 @@ class TestUnifiedCLI:
             capture_output=True, text=True,
         )
         assert result.returncode == 0, result.stdout + result.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Round-trip fidelity of variable names (2026-09-10)
+# ═══════════════════════════════════════════════════════════════════════
+
+#: The cases whose variables survive a full round trip intact. The other
+#: fixtures are excluded for reasons that have nothing to do with naming and
+#: were true before it changed:
+#:
+#:  - dcg_grammar declares the DCG state arguments `_s`/`_s0` explicitly and
+#:    the export writes `-->`, which hides them.
+#:  - the iso_* conformity files contain constructs the translator refuses
+#:    (if-then-else and friends), so the clauses holding some of their
+#:    variables never reach the golden at all.
+#:
+#: Narrow on purpose: a check that passed because it excluded everything
+#: interesting would be worse than none.
+_ROUND_TRIP_CASES = [
+    (FIXTURES / "edge_graph.clausal", GOLDEN / "edge_graph.clausal"),
+    (FIXTURES / "fibonacci.clausal", GOLDEN / "fibonacci.clausal"),
+    (FIXTURES / "meta_test.clausal", GOLDEN / "meta_test.clausal"),
+    (FIXTURES / "clpfd_queens.clausal", GOLDEN / "clpfd_queens.clausal"),
+]
+
+
+def _logic_var_names(text: str) -> set[str]:
+    """Every logic-variable name in some Clausal text.
+
+    Classification is delegated to the loader's own predicate rather than
+    guessed from the case of the first letter -- that rule has changed twice
+    and the test should follow it, not restate it.
+    """
+    import re
+    from clausal.templating.term_rewriting import _is_logic_var_name
+    body = re.sub(r"(?m)#.*$", "", text)
+    return {t for t in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", body)
+            if _is_logic_var_name(t)}
+
+
+@pytest.mark.parametrize(
+    "source_path,round_trip_path",
+    _ROUND_TRIP_CASES,
+    ids=[p[0].stem for p in _ROUND_TRIP_CASES],
+)
+def test_variable_names_survive_the_round_trip(source_path, round_trip_path):
+    """Clausal -> .pl -> Clausal returns the source's own variable names.
+
+    The two goldens either side of this are snapshots: they pin what the
+    translator emits, but a snapshot cannot tell a correct regeneration from
+    a wrong one -- it agrees with whatever produced it. This asserts a
+    PROPERTY across the pair instead, so regenerating both goldens from
+    broken code fails here.
+
+    It could not have been written before 2026-09-10: names were mangled
+    outbound and mangled differently inbound, so `NUMBERS` left as `Numbers`
+    and came back as `_numbers`, and the round trip lost every spelling.
+
+    One transformation is legitimate and is spelled out rather than waved
+    through: a variable occurring exactly once is underscore-prefixed on
+    export to silence the ISO singleton warning, so `X_UNUSED` returns as
+    `_X_UNUSED`. Everything else must come back identical.
+    """
+    source = _logic_var_names(source_path.read_text(encoding="utf-8"))
+    back = _logic_var_names(round_trip_path.read_text(encoding="utf-8"))
+
+    unchanged = source & back
+    prefixed = {name for name in source - back if "_" + name in back}
+    assert source - unchanged - prefixed == set(), (
+        f"variables lost in the round trip: "
+        f"{sorted(source - unchanged - prefixed)}")
+    assert back - unchanged - {"_" + n for n in prefixed} == set(), (
+        f"variables invented by the round trip: "
+        f"{sorted(back - unchanged - {'_' + n for n in prefixed})}")
+
+    # Positive control: this fixture must actually exercise the identity
+    # branch. Without it the test would pass on a translator that prefixed
+    # EVERY variable, since every name would land in `prefixed`.
+    assert unchanged, f"{source_path.name} exercises nothing"
