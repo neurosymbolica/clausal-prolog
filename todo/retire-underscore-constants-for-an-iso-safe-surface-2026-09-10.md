@@ -721,3 +721,33 @@ Next step for whoever picks this up: build the extensions with assertions
 (`Py_DEBUG`/`--with-pydebug` or at least `PYTHONMALLOC=debug`) and run the prefix, which turns
 a use-after-free into a diagnosed abort at the point of misuse rather than a segfault later.
 `PYTHONMALLOC=debug` alone is one command and worth trying first.
+
+## It is not attributable to any single change — 2026-09-11, final narrowing
+
+Every sub-change in `term_rewriting.py` was disabled INDIVIDUALLY, each edit asserted to have
+actually applied (one earlier round used `str.replace` with no assert and proved nothing —
+that is the fail-open shape again, in the bisect instrument itself):
+
+| disabled | result |
+| --- | --- |
+| the `visit_Name` constants branch (restored to the old behaviour) | still crashes |
+| the no-overwrite guard AND its pre-walk snapshot | still crashes |
+| both `-module`/`-private` atom-assign skips | still crashes |
+| the directive handler made UNREACHABLE at dispatch | still crashes |
+| the whole file reverted to the last commit | **clean** |
+
+So no single edit causes it, and the whole set does. With `gc.disable()` the same set is clean.
+The conclusion the measurements support is that this is a **latent GC-visible fault that a
+large enough perturbation of the transformer exposes**, not a defect in any one line — the
+changes shift allocation and collection timing, and something in a C extension is reachable by
+the collector after it should not be.
+
+`PYTHONMALLOC=debug` does NOT catch it before the segfault, which argues against a plain
+use-after-free of a Python-allocated block and for a raw `PyObject*` held in a C struct without
+a reference, dereferenced after collection.
+
+What that means for landing: **the committed half of this branch is unaffected and gated clean**
+(failure name set identical to the 144-name baseline). Only the uncommitted half is blocked, and
+it is blocked on a C-level defect that is worth finding on its own account, whoever it belongs
+to. A gdb backtrace on the crashing run, or a `--with-pydebug` interpreter, is the next step;
+guessing at more Python-side rearrangements is not.
