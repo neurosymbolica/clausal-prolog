@@ -20,6 +20,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from clausal._suffixes import CLAUSAL_SUFFIXES
 from clausal.fmt.cli import clausal_files
 from clausal.fmt.comments import CommentLeakError
 from clausal.fmt.verify import unified_diff
@@ -40,17 +41,34 @@ def default_rule_names() -> list[str]:
     are load-bearing, and a tool that applied it would be applying a known
     unsound rewrite.
     """
-    return sorted(
-        path.stem for path in RULES_DIR.glob("*.clausal")
+    return sorted({
+        path.stem
+        for suffix in CLAUSAL_SUFFIXES
+        for path in RULES_DIR.glob(f"*{suffix}")
         if not path.stem.startswith("_")
-    )
+    })
+
+
+def rule_path(name: str) -> Path | None:
+    """The file behind rule class *name*, or ``None`` if there is none.
+
+    The one place a rule name becomes a path.  ``.clausal`` and ``.seam`` are
+    aliases, so both spellings are tried, in ``CLAUSAL_SUFFIXES`` order — the
+    finder's own priority, so a directory holding both twins resolves the way
+    an import of the same stem would.
+    """
+    for suffix in CLAUSAL_SUFFIXES:
+        candidate = RULES_DIR / f"{name}{suffix}"
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def rule_paths(names: list[str]) -> list[Path]:
     paths = []
     for name in names:
-        path = RULES_DIR / f"{name}.clausal"
-        if not path.is_file():
+        path = rule_path(name)
+        if path is None:
             raise UnknownRule(
                 f"unknown rule class: {name} "
                 f"(available: {', '.join(default_rule_names())})"

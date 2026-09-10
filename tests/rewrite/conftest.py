@@ -28,6 +28,9 @@ def unnecessary_lambda_rules():
 @pytest.fixture(scope="session")
 def shipped_rules():
     """Every rule class a bare ``clausal-rewrite`` applies, in default order."""
-    from clausal.rewrite.cli import default_rule_names
+    from clausal.rewrite.cli import default_rule_names, rule_paths
 
-    return [RULES_DIR / f"{name}.clausal" for name in default_rule_names()]
+    # Through the CLI's own resolver, not a rebuilt path: a rule file spelled
+    # `.seam` is found by `default_rule_names` and must be found here too, or
+    # the whole rewrite suite would point at files that do not exist.
+    return rule_paths(default_rule_names())
