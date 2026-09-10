@@ -251,3 +251,47 @@ def test_a_seams_plus_plus_operand_keeps_the_seam_reading_of_dash_dash():
     # thunk.  Under a marker reading the ``--`` would have been stripped and
     # the operand would read the bare name instead.
     assert "$seam(Inner, globals())" in rendered, rendered
+
+
+# ── The marker sees the whole clause, like the bare name does ──────────────
+
+def test_two_markers_and_a_bare_name_in_one_thunk(tmp_path):
+    """More than one marker per thunk, mixed with a bare occurrence of a
+    marked name — the lambda has ONE parameter namespace, so a spelling that
+    is captured must be captured for every occurrence in the body."""
+    mod = _load(tmp_path, "two", """
+        -private([red, blue])
+        -module(cvmit_two, [p(S)])
+        tree(red),
+        sky(blue),
+        p(S) <- (tree(Node), sky(Match), S is f"{--Node}/{--Match}/{Node}")
+    """)
+    assert _answers(mod, "p") == [("red/blue/red",)]
+
+
+def test_a_marker_in_the_head_sees_what_the_body_binds(tmp_path):
+    """A clause is visited as one root per head argument and then the body,
+    so a HEAD thunk is lowered before the body's names would be known.  The
+    up-front note is what lets the marker in a head argument load at all --
+    without it this is the "no goal binds `Node`" error.
+
+    The ANSWER is an unbound variable, because head unification happens
+    before ``tree/1`` runs; the point is that the marker and the bare name
+    agree about that, rather than one of them refusing to load."""
+    marked = _load(tmp_path, "head_marked", """
+        -private([red])
+        -module(cvmit_head_marked, [p(S)])
+        tree(red),
+        p(f"{--Node}") <- (tree(Node))
+    """)
+    bare = _load(tmp_path, "head_bare", """
+        -private([red])
+        -module(cvmit_head_bare, [p(S)])
+        tree(red),
+        p(f"{Node}") <- (tree(Node))
+    """)
+    [(from_marked,)] = _answers(marked, "p")
+    [(from_bare,)] = _answers(bare, "p")
+    assert from_marked.startswith("_") and from_bare.startswith("_"), (
+        from_marked, from_bare)
+    assert "class" not in from_marked, from_marked
