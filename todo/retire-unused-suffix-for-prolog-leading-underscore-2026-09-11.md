@@ -84,8 +84,8 @@ Counted by walking the filesystem for `.clausal`/`.seam` files, matching identif
 | tree | seam files | occurrences | distinct names |
 | --- | --- | --- | --- |
 | engine (`/workspace/clausal`, `/workspace/clausal-bug-fix`) | 100 | 423 | 163 |
-| `/workspace/clausify` live corpus | **0** | 0 | 0 |
-| `/workspace/clausify/_reruns/**` frozen study snapshots | 58 | 322 | 35 |
+| the live sibling corpus | **0** | 0 | 0 |
+| frozen study snapshots under that tree | 58 | 322 | 35 |
 
 Top engine names: `X_UNUSED` ×55, `_x_UNUSED` ×39, `Y_UNUSED` ×25, `_X_UNUSED` ×11,
 `_OUT_UNUSED` ×10. Note that `_x_UNUSED` and `_X_UNUSED` are already belt-and-braces — they

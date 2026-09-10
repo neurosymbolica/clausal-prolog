@@ -64,7 +64,7 @@ them — a fact with a shelf life does not survive a handoff.
 | fact | how it was measured | result |
 | --- | --- | --- |
 | `-constants` usage in tracked seam sources | `git grep -l -- "-constants(" -- '*.clausal' '*.seam'` | **1** file: `tests/fixtures/const_functor_importer.clausal` |
-| `-constants` usage downstream | `grep -rl` over `/workspace/clausify`, `/workspace/clausify-executor-train`, `/workspace/clausify/kit` | **0** real sites (2 `.md` analysis docs only) |
+| `-constants` usage in the sibling trees | `grep -rl` over the three sibling checkouts | **0** real sites (2 `.md` analysis docs only) |
 | `++name` over a plain Python module global in a clause body | probe `cp_escape2.clausal`: `big(thing) <- (++max_fine > 4000)` and `small(thing) <- (++max_fine > 6000)` | **works** — 1 answer and 0 answers respectively (positive AND negative control) |
 | a declared atom binds a module global | probe `cp_collide.clausal` | `pi` global is `('pi',)` |
 | a declared atom CLOBBERS a same-named Python global | probe `cp_clobber.clausal`: `pi = 3.14` at module level plus atom `pi` in `-module` | global ends as `('pi',)`, **silently** — no diagnostic |
@@ -741,8 +741,8 @@ appears to. The shared clone does collect them; a worktree may not.
 
 Do NOT push to canonical or the box without an explicit per-landing go. When asking, state all
 three claims separately — engine suite, corpus loads, batch bodies — and name the tree each was
-measured on. This plan produces only the first; the other two belong to corpus-lane and
-harness-batch-lane, and neither is implied by a green engine suite.
+measured on. This plan produces only the first; the other two are measured elsewhere, and
+neither is implied by a green engine suite.
 
 ---
 
