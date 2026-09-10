@@ -59,7 +59,7 @@ Output looks like:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_output"
 ```
 
-This means `.clausal` tests and Python tests can run together in one `pytest` invocation. Imported Prolog `.pl` files with `test/1` clauses can also be tested — the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`; it is not PascalCased like other predicate names), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
+This means `.clausal` tests and Python tests can run together in one `pytest` invocation. Imported Prolog `.pl` files with `test/1` clauses can also be tested — the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`, as every predicate name does), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
 
 ## Running Python tests
 

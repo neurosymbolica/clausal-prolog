@@ -405,15 +405,23 @@ _BOOL_ALIAS_VALUES = {"True": True, "False": False}
 # The reified if-then-else goal.  ``if_`` is canonical — lower-case like every
 # other goal, trailing underscore to dodge the Python keyword, and the spelling
 # the reified-conditional literature uses (Neumerkel & Kral's ``if_/3``, see
-# docs/reified_ite.md).  ``If`` is the superseded spelling: every recogniser
-# below accepts it, the term pass warns once per site, and nothing in the
-# library emits it any more.
+# docs/reified_ite.md).  ``If`` was the superseded spelling; it is now a
+# load-time ERROR like any other TitleCase identifier, so no recogniser
+# accepts it and there is no deprecation arm left to warn from.  The lint
+# names the rename (``If`` -> ``if_``) rather than the ``++`` escape, even
+# though ``If`` is also a seeded AST node class — see
+# ``_TITLECASE_RENAMED_SPELLINGS``.
 ITE_NAME = "if_"
 _ITE_NAMES = frozenset({ITE_NAME})  # ``If`` is TitleCase: a load-time error, no arm
 
 #: The test-clause predicate (``clausal.testing``): predicates are lowercase,
-#: so it is ``test/1``.  ``Test/1`` is the superseded spelling — still
-#: collected and run, but linted once per file at load time like ``If``.
+#: so it is ``test/1``.  ``Test/1`` is the superseded spelling, and a file
+#: that spells it no longer LOADS — the TitleCase lint is an error — so
+#: neither the runner's ``test/1`` union nor ``_warn_deprecated_test_spelling``
+#: is reachable from source any more.  Both are retained only until the
+#: downstream migration is done, because import lists may still name the old
+#: spelling; the exit criterion is in
+#: ``todo/remove-Test-1-spelling-union-after-migration-2026-09-10.md``.
 TEST_NAME = "test"
 TEST_DEPRECATED_NAME = "Test"
 

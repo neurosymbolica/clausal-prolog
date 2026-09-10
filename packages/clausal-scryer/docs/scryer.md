@@ -137,7 +137,7 @@ s.query_all("reach(1, X).")
 # [{'X': 2}, {'X': 3}, {'X': 4}]
 ```
 
-`consult_clausal` translates the `.clausal` source to Prolog via `clausal_source_to_prolog` with the Scryer dialect, then loads it. All the usual translation rules apply: `PascalCase` becomes `snake_case`, `eval_/2` becomes `is`, `<=` becomes `=<`, etc.
+`consult_clausal` translates the `.clausal` source to Prolog via `clausal_source_to_prolog` with the Scryer dialect, then loads it. All the usual translation rules apply: predicate names cross unchanged, `eval_/2` becomes `is`, `<=` becomes `=<`, etc.
 
 ### Files
 

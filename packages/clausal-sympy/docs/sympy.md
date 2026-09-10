@@ -425,7 +425,10 @@ Function and constant names follow SymPy's conventions where possible:
 - **`abs_`**: capitalized — matches SymPy (they capitalized it because `abs` is a Python builtin)
 - **`inf`**: instead of SymPy's `oo` — readability
 - **`e`**: instead of SymPy's `E` — `E` is ALLCAPS so Clausal treats it as a logic variable
-- **Predicates**: capitalized (`Simplify`, `Diff`, `Solve`) — Clausal convention
+- **Predicates**: capitalized (`Simplify`, `Diff`, `Solve`) — these are Python
+  objects reached through the `-import_from(sympy, [...])` list, not Clausal
+  predicates; a name that arrives through an import list keeps its Python
+  spelling. Clausal's own predicates are lowercase.
 
 ---
 

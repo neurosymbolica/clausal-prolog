@@ -485,7 +485,7 @@ class _PrologToClausal:
             elem = self._emit_term(goal.args[0])
             lst = self._emit_term(goal.args[1])
             return f"{elem} in {lst}"
-        # Regular compound goal → PascalCase call
+        # Regular compound goal → a call under the same name
         return self._emit_term(goal)
 
     def _emit_disjunction(self, term: PTerm) -> str:
@@ -683,9 +683,10 @@ class _PrologToClausal:
         """Emit pred/N as a predicate indicator."""
         if isinstance(term, PCompound) and term.functor == "/" and len(term.args) == 2:
             name = self._emit_atom_name(term.args[0])
-            pascal = self._predicate_name(name, _indicator_arity(term.args[1]))
+            clausal_name = self._predicate_name(
+                name, _indicator_arity(term.args[1]))
             arity = self._emit_term(term.args[1])
-            return f"{pascal}/{arity}"
+            return f"{clausal_name}/{arity}"
         # Comma-separated list: (a/1, b/2)
         if isinstance(term, PCompound) and term.functor == ",":
             parts = self._flatten_conjunction(term)
@@ -943,7 +944,7 @@ class _PrologToClausal:
                 return f"not {operand}"
             return f"{clausal_op}{operand}"
 
-        # Regular compound: functor(args) → PascalCase(args)
+        # Regular compound: functor(args) → functor(args), name unchanged
         name = self._predicate_name(functor, len(args))
         if not args:
             return f"{name}()"

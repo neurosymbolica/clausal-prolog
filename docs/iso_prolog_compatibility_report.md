@@ -15,6 +15,15 @@
     See [Atoms vs strings](syntax.md#atoms-vs-strings) and
     [Strings as Lists](strings_as_lists.md) for the current model.
 
+    The **name-conversion table** below is superseded too, and is kept as
+    the record of what the translator did in March.  Predicate names now
+    cross unchanged (`foo_bar` stays `foo_bar`): TitleCase has no role in
+    Clausal, and a file spelling `FooBar` does not load.  A Prolog variable
+    gains a LEADING underscore rather than becoming ALLCAPS (`Head` ->
+    `_head`, `Xs` -> `_xs`, `_Ignored` -> `_ignored`), so the "Prefer
+    ALLCAPS for Variables" improvement below was not the road taken.  See
+    [Prolog translation](prolog_translation.md) for the current rules.
+
 ## Executive Summary
 
 Clausal has a comprehensive bidirectional Prolog translator (tokenizer, Pratt
