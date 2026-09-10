@@ -291,9 +291,18 @@ each be emitted as a name Clausal reads as something other than a predicate
 (a TitleCase identifier is a load-time error; the other two are logic
 variables).
 
-Variables keep their Prolog names if single-letter (`X`, `Y`), otherwise
-get a LEADING underscore: `Head` becomes `_head`, `Result` becomes
-`_result`.
+Variables keep their Prolog names — all of them, not just single letters.
+`X` stays `X`, `Head` stays `Head`, `_Ignored` stays `_Ignored`: a
+capital-initial identifier is a logic variable in Clausal exactly as it is in
+ISO Prolog. Until 2026-09-10 a multi-letter variable was lowercased and given
+a leading underscore (`Head` became `_head`), which was not injective —
+`Head` and `HEAD` both became `_head` — so a clause using both silently
+merged them into one variable.
+
+One spelling does not survive: a Prolog variable named `_PI_` arrives as
+`_PI_`, which is Clausal's [module constant](syntax.md#constants) class
+rather than a variable, and the module then fails to load rather than
+importing with a renamed variable.
 
 ---
 

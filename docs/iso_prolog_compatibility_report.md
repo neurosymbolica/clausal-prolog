@@ -17,11 +17,12 @@
 
     The **name-conversion table** below is superseded too, and is kept as
     the record of what the translator did in March.  Predicate names now
-    cross unchanged (`foo_bar` stays `foo_bar`): TitleCase has no role in
-    Clausal, and a file spelling `FooBar` does not load.  A Prolog variable
-    gains a LEADING underscore rather than becoming ALLCAPS (`Head` ->
-    `_head`, `Xs` -> `_xs`, `_Ignored` -> `_ignored`), so the "Prefer
-    ALLCAPS for Variables" improvement below was not the road taken.  See
+    cross unchanged (`foo_bar` stays `foo_bar`).  So do VARIABLE names, in
+    both directions, since 2026-09-10: `Head` stays `Head`, `Xs` stays `Xs`,
+    `_Ignored` stays `_Ignored`.  Capital-initial is a logic variable in
+    Clausal too, so neither the ALLCAPS rename proposed below nor the
+    leading-underscore rename that shipped instead has anything left to do —
+    and renaming was never injective, which is the reason it went.  See
     [Prolog translation](prolog_translation.md) for the current rules.
 
 ## Executive Summary

@@ -90,13 +90,40 @@ for item in pmodule.items:
 
 ### Variable names
 
+Variable names cross unchanged, in both directions.
+
 | Clausal | Prolog | Rule |
 |---|---|---|
-| `_x` | `X` | Strip leading underscore, uppercase |
-| `_head` | `Head` | Strip underscore, capitalize |
-| `RESULT` | `Result` | ALLCAPS → titlecase |
-| `X` | `X` | Single uppercase stays |
-| `_` | `_` | Anonymous stays |
+| `_x` | `_x` | names cross unchanged |
+| `Foo` | `Foo` | names cross unchanged |
+| `FOO` | `FOO` | names cross unchanged |
+| `N0` | `N0` | names cross unchanged |
+| `X` | `X` | names cross unchanged |
+| `_` | `_` | Anonymous stays anonymous |
+
+A capital-initial identifier names a logic variable in Clausal exactly as it
+does in ISO Prolog, and `_x` is a variable on both sides too, so a round trip
+returns the spelling you wrote.
+
+Until 2026-09-10 the translator renamed: `_head` → `Head`, `RESULT` →
+`Result` outbound, `Foo` → `_foo` inbound. That rule was not injective —
+`_result` and `RESULT` both became `Result` — so a per-clause table numbered
+the second arrival (`Result2`) to stop two variables merging into one. Both
+are gone. If you are comparing exported `.pl` against output from before that
+date, expect **every** variable to differ, and expect a variable that used to
+carry a disambiguating numeric suffix to lose it.
+
+Two consequences worth knowing:
+
+- A Prolog variable spelled `_PI_` now arrives as `_PI_`, which is Clausal's
+  [module constant](syntax.md#constants) class rather than a variable, and the
+  imported module fails to load with a diagnostic naming the remedy. It used
+  to be silently renamed to `_pi`. Renaming it back is not available without
+  giving up injectivity.
+- The singleton post-pass still runs, so a variable occurring exactly once in
+  an exported clause is emitted with a leading underscore (`RESULT` →
+  `_RESULT`) to silence the ISO singleton warning. A Clausal `_x`-style name
+  already has one and is left alone.
 
 ### Operators
 
