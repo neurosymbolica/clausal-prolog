@@ -71,7 +71,7 @@ Prolog can be read and written without transliteration.
 
 The three styles are **not** interchangeable in every position. In
 **functor** position — a clause head's functor, or a goal called in a body —
-a TitleCase name is a load-time error:
+a bare TitleCase name is a load-time error:
 
 ```python
 p(Foo) <- (bar(Foo))          # fine: Foo is a variable in term position
@@ -90,6 +90,27 @@ is refused.
 The remedy the error names is the `++` escape: a Python class is reached as
 `++ClassName`. A name bound by an `-import_from` list, and the injected
 `Undefined`, keep their binding in every position and are not affected.
+
+**The refusal is about the bare spelling only.** A functor is named by an
+[atom](#atoms), and a single-quoted token is an atom whatever its
+capitalisation — so quoting says "the atom `Foo`", not "the variable `Foo`",
+and every functor position accepts it:
+
+```python
+'Foo'(1),                     # the fact Foo(1) — Foo/1, not a variable
+'Foo'(X) <- (bar(X))          # a rule head for the same predicate
+p(X) <- ('Foo'(X))            # and a goal that calls it
+```
+
+This is ISO's own asymmetry: `'Foo'(1)` is a compound term there too, while
+the bare `Foo(1)` is a `syntax_error(variable_cannot_be_functor)`. As
+everywhere else, a **double**-quoted literal is not an atom spelling and
+never names a functor (ISO 6.3.3).
+
+One Clausal limit applies to heads and not to goals: a head's functor
+becomes a generated class name, so a quoted **head** must still spell a
+plain, non-keyword name. `'foo bar'(X)` and `'not'(X)` may be *called*; they
+may not be *defined*.
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's and Prolog's existing convention).
 
@@ -371,9 +392,11 @@ Inside a logical term:
 - `lowercase` identifiers that are not logic variable names are atoms
 
   (`TitleCase` was an atom spelling too until 2026-09-10. It is a
-  [logic variable](#logic-variables) now, so an atom is written lowercase.
-  A `TitleCase` name in *functor* position is a load-time error, not an
-  atom — see the asymmetry noted there.)
+  [logic variable](#logic-variables) now, so a *bare* atom is written
+  lowercase, and a bare `TitleCase` name in *functor* position is a
+  load-time error rather than an atom — see the asymmetry noted there.
+  Single-quoting is unaffected: `'Foo'` is the atom `Foo` in every
+  position, functor position included.)
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms"
