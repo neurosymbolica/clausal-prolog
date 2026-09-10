@@ -11,97 +11,97 @@
 
 # ── Basic auto-binding ──────────────────────────────────────────────────────
 
-ParseDate(S, YEAR, MONTH, DAY) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
+parse_date(S, YEAR, MONTH, DAY) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
 
 test("auto-bind date parsing") <- (
-    ParseDate("2026-03-16", Y, M, D) and
+    parse_date("2026-03-16", Y, M, D) and
     Y == "2026" and M == "03" and D == "16"
 )  # nv
 
-test("auto-bind no match fails") <- (not ParseDate("not-a-date", _, _, _))  # nv
+test("auto-bind no match fails") <- (not parse_date("not-a-date", _, _, _))  # nv
 
 # ── Auto-bind constrains already-bound variables ────────────────────────────
 
-IsYear(S, YEAR) <- match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
+is_year(S, YEAR) <- match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
 
-test("auto-bind output") <- (IsYear("2026-03-16", Y) and Y == "2026")  # nv
-test("auto-bind constrains correct") <- IsYear("2026-03-16", "2026")  # nv
-test("auto-bind constrains wrong fails") <- (not IsYear("2026-03-16", "1999"))  # nv
+test("auto-bind output") <- (is_year("2026-03-16", Y) and Y == "2026")  # nv
+test("auto-bind constrains correct") <- is_year("2026-03-16", "2026")  # nv
+test("auto-bind constrains wrong fails") <- (not is_year("2026-03-16", "1999"))  # nv
 
 # ── Auto-bind with search ──────────────────────────────────────────────────
 
-FindTag(TEXT, TAG) <- search(r"<(?P<TAG>\w+)>", TEXT)
+find_tag(TEXT, TAG) <- search(r"<(?P<TAG>\w+)>", TEXT)
 
-test("auto-bind search") <- (FindTag("text <bold> more", T) and T == "bold")  # nv
+test("auto-bind search") <- (find_tag("text <bold> more", T) and T == "bold")  # nv
 
 # ── Single group ────────────────────────────────────────────────────────────
 
-FirstWord(S, WORD) <- match(r"(?P<WORD>\w+)", S)
+first_word(S, WORD) <- match(r"(?P<WORD>\w+)", S)
 
-test("auto-bind single group") <- (FirstWord("hello world", W) and W == "hello")  # nv
+test("auto-bind single group") <- (first_word("hello world", W) and W == "hello")  # nv
 
 # ── Many groups ─────────────────────────────────────────────────────────────
 
-ParseUrl(S, SCHEME, HOST, PORT, PATH) <- match(r"(?P<SCHEME>https?)://(?P<HOST>[^:/]+):(?P<PORT>\d+)(?P<PATH>/\S*)", S)
+parse_url(S, SCHEME, HOST, PORT, PATH) <- match(r"(?P<SCHEME>https?)://(?P<HOST>[^:/]+):(?P<PORT>\d+)(?P<PATH>/\S*)", S)
 
 test("auto-bind many groups") <- (
-    ParseUrl("https://example.com:8080/api/v1", S, H, P, PA) and
+    parse_url("https://example.com:8080/api/v1", S, H, P, PA) and
     S == "https" and H == "example.com" and P == "8080" and PA == "/api/v1"
 )  # nv
 
 # ── Leading-underscore groups ──────────────────────────────────────────────
 
-ExtractWord(S, _word) <- match(r"(?P<_word>\w+)", S)
+extract_word(S, _word) <- match(r"(?P<_word>\w+)", S)
 
-test("leading underscore auto-bind") <- (ExtractWord("hello world", W) and W == "hello")  # nv
+test("leading underscore auto-bind") <- (extract_word("hello world", W) and W == "hello")  # nv
 
 # ── Mixed ALLCAPS and lowercase groups ──────────────────────────────────────
 
-ParseLog(LINE, LEVEL) <- match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR):\s+(?P<msg>.*)", LINE)
+parse_log(LINE, LEVEL) <- match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR):\s+(?P<msg>.*)", LINE)
 
-test("selective binding ALLCAPS only") <- (ParseLog("2026-03-16 ERROR: disk full", L) and L == "ERROR")  # nv
+test("selective binding ALLCAPS only") <- (parse_log("2026-03-16 ERROR: disk full", L) and L == "ERROR")  # nv
 
 # ── Lowercase regex-only groups (backreferences) ───────────────────────────
 
-HasRepeated(S) <- search(r"(?P<word>\w+)\s+(?P=word)", S)
+has_repeated(S) <- search(r"(?P<word>\w+)\s+(?P=word)", S)
 
-test("lowercase groups for backrefs") <- HasRepeated("the the cat")  # nv
-test("lowercase groups no repeat fails") <- (not HasRepeated("the cat sat"))  # nv
+test("lowercase groups for backrefs") <- has_repeated("the the cat")  # nv
+test("lowercase groups no repeat fails") <- (not has_repeated("the cat sat"))  # nv
 
 # ── Optional groups bind None ──────────────────────────────────────────────
 
-OptParse(S, A, B) <- match(r"(?P<A>\d+)(?:-(?P<B>\d+))?", S)
+opt_parse(S, A, B) <- match(r"(?P<A>\d+)(?:-(?P<B>\d+))?", S)
 
-test("optional group both present") <- (OptParse("42-99", A, B) and A == "42" and B == "99")  # nv
-test("optional group absent binds None") <- (OptParse("42", A, B) and A == "42" and B is None)  # nv
+test("optional group both present") <- (opt_parse("42-99", A, B) and A == "42" and B == "99")  # nv
+test("optional group absent binds None") <- (opt_parse("42", A, B) and A == "42" and B is None)  # nv
 
 # ── Typo in group name ──────────────────────────────────────────────────────
 # (Tested in Python test_regex.py — requires is_var() check not available as builtin)
 
 # ── Practical: log parser ──────────────────────────────────────────────────
 
-ParseLogFull(LINE, LEVEL, MSG) <- match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)", LINE)
+parse_log_full(LINE, LEVEL, MSG) <- match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)", LINE)
 
 test("log parser compact") <- (
-    ParseLogFull("ERROR: disk full", L, M) and
+    parse_log_full("ERROR: disk full", L, M) and
     L == "ERROR" and M == "disk full"
 )  # nv
 
 # ── Practical: backtracking + regex ─────────────────────────────────────────
 
-Line("2026-03-16 INFO started"),
-Line("2026-03-16 ERROR disk full"),
-Line("2026-03-16 INFO stopped"),
+line("2026-03-16 INFO started"),
+line("2026-03-16 ERROR disk full"),
+line("2026-03-16 INFO stopped"),
 
-ErrorMessage(MSG) <- (
-    Line(L) and
+error_message(MSG) <- (
+    line(L) and
     match(r"\S+ ERROR\s+(?P<MSG>.*)", L)
 )
 
-test("backtracking with regex") <- (ErrorMessage(M) and M == "disk full")  # nv
+test("backtracking with regex") <- (error_message(M) and M == "disk full")  # nv
 
 # ── Practical: tokenizer via findall ─────────────────────────────────────
 
-Token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
+token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
 
-test("tokenizer first token") <- (Token("x = 42 + y", T) and T == "x")  # nv
+test("tokenizer first token") <- (token("x = 42 + y", T) and T == "x")  # nv

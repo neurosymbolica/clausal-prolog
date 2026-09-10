@@ -81,7 +81,7 @@ class TestSmallRoundtripClausalProlog:
     @pytest.mark.parametrize("src", [
         "Foo(1, 2),",
         "Bar(X, Y) <- Baz(X, Y)",
-        "Edge(1, 2),\nEdge(2, 3),",
+        "edge(1, 2),\nedge(2, 3),",
     ])
     def test_roundtrip_ok(self, src):
         # nv
@@ -420,7 +420,7 @@ class TestCLIRoundtrip:
         from clausal.tools.translate import main
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
-            f.write("Foo(1, 2),\n")
+            f.write("foo(1, 2),\n")
             f.flush()
             code = main(["--roundtrip", "--dialect", "swi", f.name])
         assert code == 0
@@ -454,8 +454,8 @@ class TestCLIRoundtrip:
         code = main([str(GOLDEN / "edge_graph.pl"), "-o", str(outfile)])
         assert code == 0
         content = outfile.read_text()
-        assert "Edge" in content
-        assert "Reach" in content
+        assert "edge" in content
+        assert "reach" in content
 
     def test_translate_explicit_to_flag(self, tmp_path):
         # nv

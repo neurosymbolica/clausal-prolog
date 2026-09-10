@@ -108,10 +108,10 @@ def test_F003_user_defined_match_not_hijacked(tmp_path):
     # A11-F003 (fixed): regex expansion gated on object identity, not name.
     m = _load(tmp_path, '''
         match(A, B) <- (A is B)
-        Caller(X) <- match("hello", X)
+        caller(X) <- match("hello", X)
     ''', "f003")
     X = Var()
-    assert _values(m.Caller(X), X, m) == [mint("hello")]
+    assert _values(m.caller(X), X, m) == [mint("hello")]
 
 
 def test_F004_invalid_pattern_catchable(tmp_path):
@@ -119,10 +119,10 @@ def test_F004_invalid_pattern_catchable(tmp_path):
     m = _load(tmp_path, '''
         -private([caught])
         -import_from(regex, [match])
-        CatchRegex(R) <- catch(match("(", "x"), _, (R is caught))
+        catch_regex(R) <- catch(match("(", "x"), _, (R is caught))
     ''', "f004")
     R = Var()
-    out = _values(m.CatchRegex(R), R, m)
+    out = _values(m.catch_regex(R), R, m)
     assert out == [mint("caught")]
 
 
@@ -140,10 +140,10 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
     from clausal.terms import Compound
     m = _load(tmp_path, '''
         -import_from(regex, [match])
-        Bad(S) <- match(r"x", S, G, H)
+        bad(S) <- match(r"x", S, G, H)
     ''', "f005")
     with pytest.raises(LogicException) as excinfo:
-        list(solve(m.Bad("x"), module=m))
+        list(solve(m.bad("x"), module=m))
     term = excinfo.value.term
     assert isinstance(term, Compound) and term.functor == "error"
     inner = term.args[0]
@@ -167,10 +167,10 @@ def test_F007_dynamic_pattern_autobind_or_documented(tmp_path):
     # A11-F007 (fixed): dynamic patterns auto-bind present named groups.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
-        Dyn(P, S, YEAR) <- match(P, S)
+        dyn(P, S, YEAR) <- match(P, S)
     ''', "f007")
     Y = Var()
-    assert _values(m.Dyn(r"(?P<YEAR>\d+)", "2026", Y), Y, m) == ["2026"]
+    assert _values(m.dyn(r"(?P<YEAR>\d+)", "2026", Y), Y, m) == ["2026"]
 
 
 def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
@@ -180,11 +180,11 @@ def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
     # differently-instantiated Dyn calls in one derivation must both succeed.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
-        Dyn(P, S, YEAR) <- match(P, S)
-        Pair(X) <- (Dyn(r"x", "x", "one"), Dyn(r"x", "x", "two"), X is "ok")
+        dyn(P, S, YEAR) <- match(P, S)
+        pair(X) <- (dyn(r"x", "x", "one"), dyn(r"x", "x", "two"), X is "ok")
     ''', "f007b")
     X = Var()
-    assert _values(m.Pair(X), X, m) == [mint("ok")]
+    assert _values(m.pair(X), X, m) == [mint("ok")]
 
 
 def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
@@ -192,12 +192,12 @@ def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
     # activation too — two calls binding different years in one derivation.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
-        Dyn(P, S, YEAR) <- match(P, S)
-        Two(A, B) <- (Dyn(r"(?P<YEAR>\\d+)", "2025", A),
-                      Dyn(r"(?P<YEAR>\\d+)", "2026", B))
+        dyn(P, S, YEAR) <- match(P, S)
+        two(A, B) <- (dyn(r"(?P<YEAR>\\d+)", "2025", A),
+                      dyn(r"(?P<YEAR>\\d+)", "2026", B))
     ''', "f007c")
     A, B = Var(), Var()
-    got = [(deref(A), deref(B)) for _ in solve(m.Two(A, B), module=m)]
+    got = [(deref(A), deref(B)) for _ in solve(m.two(A, B), module=m)]
     assert got == [("2025", "2026")]
 
 
@@ -207,13 +207,13 @@ def test_F007_dynamic_autobind_gated_on_logic_var_names(tmp_path):
     # group name "(?P<year>...)" will NOT auto-bind.
     m = _load(tmp_path, '''
         -import_from(regex, [match])
-        Dyn(P, S, YEAR) <- match(P, S)
+        dyn(P, S, YEAR) <- match(P, S)
     ''', "f007d")
     # lowercase group: no binding attempted, so the conflicting value "x"
     # still succeeds.
-    assert len(list(solve(m.Dyn(r"(?P<year>\d+)", "2026", "x"), module=m))) == 1
+    assert len(list(solve(m.dyn(r"(?P<year>\d+)", "2026", "x"), module=m))) == 1
     # ALLCAPS group binds — and therefore conflicts with "x" here.
-    assert list(solve(m.Dyn(r"(?P<YEAR>\d+)", "2026", "x"), module=m)) == []
+    assert list(solve(m.dyn(r"(?P<YEAR>\d+)", "2026", "x"), module=m)) == []
 
 
 def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
@@ -221,10 +221,10 @@ def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
     group auto-binds Python None — Python-consistent, undocumented."""
     m = _load(tmp_path, '''
         -import_from(regex, [match])
-        OptG(S, TAG) <- match(r"(?P<TAG>\\d+)?x", S)
+        opt_g(S, TAG) <- match(r"(?P<TAG>\\d+)?x", S)
     ''', "f008")
     T = Var()
-    assert _values(m.OptG("x", T), T, m) == [None]
+    assert _values(m.opt_g("x", T), T, m) == [None]
 
 
 def test_F009_guard_findall_single_group_is_string(tmp_path):
@@ -270,7 +270,7 @@ def test_F010_keyword_head_reify_matches_runtime_order():
 def test_F011_anon_var_does_not_alias_user_underscore_one():
     # A11-F011 (fixed): anonymous vars use non-identifier #anonN names.
     from clausal.reflection import reify_source
-    clause = reify_source('Foo(_1, _, X) <- Bar(_1, _, X)\n')[0]
+    clause = reify_source('foo(_1, _, X) <- bar(_1, _, X)\n')[0]
     a0, a1 = clause.head.args[0], clause.head.args[1]
     assert a0 != a1  # user _1 and anonymous _ are distinct at runtime
 
@@ -278,8 +278,8 @@ def test_F011_anon_var_does_not_alias_user_underscore_one():
 def test_F012_reify_ast_preserves_lt_negative():
     # A11-F012 (fixed): only the top-level arrow is repaired.
     from clausal.reflection import reify_ast, reify_source
-    got = reify_ast(ast.parse('Foo(X) <- (X < -1)'))
-    want = reify_source('Foo(X) <- (X < -1)')[0]
+    got = reify_ast(ast.parse('foo(X) <- (X < -1)'))
+    want = reify_source('foo(X) <- (X < -1)')[0]
     assert type(got.goals[0]).__name__ == type(want.goals[0]).__name__ == "Lt"
 
 
@@ -287,9 +287,9 @@ def test_F013_dict_literal_pattern_matches(tmp_path):
     # A11-F013 (fixed): dict literals reify as raw dicts, matching patterns.
     m = _load(tmp_path, '''
         -import_from(reflection, [reified_clause])
-        DictPattern(SRC) <- reified_clause(SRC, Pt({"k": 5}) <- True)
+        dict_pattern(SRC) <- reified_clause(SRC, pt({"k": 5}) <- True)
     ''', "f013")
-    assert len(list(solve(m.DictPattern('Pt({"k": 5}),\n'), module=m))) == 1
+    assert len(list(solve(m.dict_pattern('pt({"k": 5}),\n'), module=m))) == 1
 
 
 def test_F014_reified_item_unbound_source_instantiation_error(tmp_path):
@@ -308,7 +308,7 @@ def test_guard_reified_item_enumerates(tmp_path):
         -import_from(reflection, [reified_item])
         AI(SRC, ITEM) <- reified_item(SRC, ITEM)
     ''', "reify")
-    src = 'Edge2(1, 2),\nConn(X, Y) <- Edge2(X, Y)\n'
+    src = 'edge2(1, 2),\nconn(X, Y) <- edge2(X, Y)\n'
     assert len(list(solve(m.AI(src, Var()), module=m))) == 2
 
 
@@ -469,8 +469,8 @@ def test_F022_var_mapping_injective():
     # A11-F022 (fixed): per-clause rename table disambiguates collisions.
     import re as _re
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
-    out = prolog_to_clausal("p(Foo, FOO) :- Foo = 1, FOO = 2.\n")
-    v1, v2 = _re.findall(r"P\((\w+), (\w+)\)", out)[0]
+    out = prolog_to_clausal("p(foo, FOO) :- foo = 1, FOO = 2.\n")
+    v1, v2 = _re.findall(r"p\((\w+), (\w+)\)", out)[0]
     assert v1 != v2
 
 
@@ -478,7 +478,7 @@ def test_F023_tuple_arg_arity_preserved():
     # A11-F023 (fixed): ,/2 in arg position emits a tuple.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("foo(a, (b, c)).\n")
-    assert "Foo(a, b , c)" not in out
+    assert "foo(a, b , c)" not in out
 
 
 def test_F024_arrow_rejected_in_term_position():
@@ -506,12 +506,12 @@ def test_F026_iso_operator_table_complete():
 def test_F027_bare_dynamic_directive():
     # A11-F027 (fixed): bare `:- dynamic p/1.` parses via 1150 fx op.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
-    assert "-dynamic(P/1)" in prolog_to_clausal(":- dynamic p/1.\n")
+    assert "-dynamic(p/1)" in prolog_to_clausal(":- dynamic p/1.\n")
 
 
 def test_F027_guard_paren_dynamic_directive():
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
-    assert "-dynamic(P/1)" in prolog_to_clausal(":- dynamic(p/1).\n")
+    assert "-dynamic(p/1)" in prolog_to_clausal(":- dynamic(p/1).\n")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -913,20 +913,20 @@ def test_F059_docs_quickstart_import_line(tmp_path):
     mod = _load(tmp_path, '''
         -import_from(py.units, [m, kg, s, newton, kilo, has_units, strip_units])
         T(V) <- strip_units(5(m), V)
-        Hu(R) <- (has_units(5(m), m), R is "yes")
-        HuBad(R) <- (has_units(5(m), s), R is "never")
+        hu(R) <- (has_units(5(m), m), R is "yes")
+        hu_bad(R) <- (has_units(5(m), s), R is "never")
     ''', "f059")  # must not raise ImportError
     r = Var()
-    assert [deref(r) for _ in call("Hu", r, module=_logic(mod))] == [mint("yes")]
+    assert [deref(r) for _ in call("hu", r, module=_logic(mod))] == [mint("yes")]
     r2 = Var()
-    assert [deref(r2) for _ in call("HuBad", r2, module=_logic(mod))] == []
+    assert [deref(r2) for _ in call("hu_bad", r2, module=_logic(mod))] == []
 
 
 def test_guard_units_mismatch_catchable(tmp_path):
     mod = _load(tmp_path, '''
         -private([caught])
-        -import_from(py.units, [metre, second])
-        T(R) <- catch(eval_(3(metre) + 2(second), Q), UnitsMismatch(_), (R is caught))
+        -import_from(py.units, [metre, second, UnitsMismatch])
+        T(R) <- catch(eval_(3(metre) + 2(second), Q), ++UnitsMismatch, (R is caught))
     ''', "unitsm")
     r = Var()
     out = [deref(r) for _ in call("T", r, module=_logic(mod))]

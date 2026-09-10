@@ -2,10 +2,10 @@
 # Final review M-a: the IMPORTER.  All three spellings of the same listing
 # must agree -- the bare class, the class-left indicator, and the str-left
 # indicator -- because they name one predicate.
--module(listing_import_user, [ListByName(), ListByClassIndicator(),
-                              ListByStrIndicator()])
+-module(listing_import_user, [list_by_name(), list_by_class_indicator(),
+                              list_by_str_indicator()])
 -import_from(tests.fixtures.listing_import_owner, [qq])
 
-ListByName() <- listing(qq)
-ListByClassIndicator() <- listing(qq/1)
-ListByStrIndicator() <- listing("qq"/1)
+list_by_name() <- listing(qq)
+list_by_class_indicator() <- listing(qq/1)
+list_by_str_indicator() <- listing("qq"/1)

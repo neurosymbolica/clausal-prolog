@@ -3,7 +3,7 @@
 
 -module(iso_type_checking, [test/1])
 
-IsBoundNumber(X) <- (nonvar(X), number(X))
+is_bound_number(X) <- (nonvar(X), number(X))
 
 test("var: unbound var succeeds") <- (var(_x_unused))
 
@@ -25,7 +25,7 @@ test("nonvar: list succeeds") <- (nonvar([1, 2]))
 
 test("atom: declared atom succeeds") <- (atom(hello))
 
-test("atom: declared atom Abc") <- (atom(abc))
+test("atom: declared atom abc") <- (atom(abc))
 
 test("atom: string fails") <- (not atom("hello"))
 
@@ -103,13 +103,13 @@ test("ground: empty list") <- (ground([]))
 
 test("ground: var fails") <- (not ground(_x_unused))
 
-test("is_bound_number: integer") <- (IsBoundNumber(42))
+test("is_bound_number: integer") <- (is_bound_number(42))
 
-test("is_bound_number: float") <- (IsBoundNumber(3.14))
+test("is_bound_number: float") <- (is_bound_number(3.14))
 
-test("is_bound_number: string fails") <- (not IsBoundNumber("42"))
+test("is_bound_number: string fails") <- (not is_bound_number("42"))
 
-test("is_bound_number: unbound fails") <- (not IsBoundNumber(_x_unused))
+test("is_bound_number: unbound fails") <- (not is_bound_number(_x_unused))
 
 test("is_str: float fails") <- (not atom(1.0))
 

@@ -1,9 +1,9 @@
 # Test fixture for eq/3 builtin integration
 # Simple wrapper that calls eq/3
 
-CheckEq(X, Y, TRUTH) <- eq(X, Y, TRUTH)
+check_eq(X, Y, TRUTH) <- eq(X, Y, TRUTH)
 
 
-test("eq true") <- (CheckEq(1, 1, TRUTH), TRUTH == True)  # nv
-test("eq false") <- (CheckEq(1, 2, TRUTH), TRUTH == False)  # nv
-test("eq string same") <- (CheckEq("a", "a", TRUTH), TRUTH == True)  # nv
+test("eq true") <- (check_eq(1, 1, TRUTH), TRUTH == True)  # nv
+test("eq false") <- (check_eq(1, 2, TRUTH), TRUTH == False)  # nv
+test("eq string same") <- (check_eq("a", "a", TRUTH), TRUTH == True)  # nv

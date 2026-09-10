@@ -408,7 +408,7 @@ class TestOptimization:
         assert deref(y) == F(0)
 
     def test_minimize_lp(self):
-        """Scheduling example from docs:
+        """scheduling example from docs:
         minimize 5X + 3Y subject to
             X + Y >= 10, 2X + Y <= 30, X + 3Y <= 40, X,Y >= 0"""
         # nv
@@ -1224,14 +1224,14 @@ class TestPythonicAliases:
         from clausal.logic.solve import call
         from clausal.testing import load_clausal_module
         import tempfile, os
-        src = 'Test(X) <- (rational(X), X == 1/3)\n'
+        src = 'test(X) <- (rational(X), X == 1/3)\n'
         with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
             f.write(src)
             path = f.name
         try:
             mod = load_clausal_module(path)
             x = Var()
-            for _ in call('Test', x, module=mod):
+            for _ in call('test', x, module=mod):
                 assert deref(x) == F(1, 3)
                 break
             else:
@@ -1245,14 +1245,14 @@ class TestPythonicAliases:
         from clausal.logic.solve import call
         from clausal.testing import load_clausal_module
         import tempfile, os
-        src = 'Test(X) <- (rational(X), 0 <= X, X <= 10, X == 5)\n'
+        src = 'test(X) <- (rational(X), 0 <= X, X <= 10, X == 5)\n'
         with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
             f.write(src)
             path = f.name
         try:
             mod = load_clausal_module(path)
             x = Var()
-            for _ in call('Test', x, module=mod):
+            for _ in call('test', x, module=mod):
                 assert deref(x) == F(5)
                 break
             else:
@@ -1267,7 +1267,7 @@ class TestPythonicAliases:
         from clausal.testing import load_clausal_module
         import tempfile, os
         src = '''
-TestEntailed(X) <- (
+test_entailed(X) <- (
     in_q(X, 0, 10),
     X <= 4,
     entailed(X <= 5)
@@ -1280,7 +1280,7 @@ TestEntailed(X) <- (
             mod = load_clausal_module(path)
             x = Var()
             found = False
-            for _ in call('TestEntailed', x, module=mod):
+            for _ in call('test_entailed', x, module=mod):
                 found = True
                 break
             assert found, "entailed(X <= 5) should succeed when X <= 4"
@@ -1294,7 +1294,7 @@ TestEntailed(X) <- (
         from clausal.testing import load_clausal_module
         import tempfile, os
         src = '''
-TestNotEntailed(X) <- (
+test_not_entailed(X) <- (
     in_q(X, 0, 10),
     X <= 4,
     entailed(X <= 3)
@@ -1307,7 +1307,7 @@ TestNotEntailed(X) <- (
             mod = load_clausal_module(path)
             x = Var()
             found = False
-            for _ in call('TestNotEntailed', x, module=mod):
+            for _ in call('test_not_entailed', x, module=mod):
                 found = True
                 break
             assert not found, "entailed(X <= 3) should fail when X could be 4"
@@ -1333,7 +1333,7 @@ class TestClausalIntegration:
 
     def test_two_var(self):
         # nv
-        result = self._run("TwoVar", 2)
+        result = self._run("two_var", 2)
         assert result is not None
         x, y = result
         assert x == F(3)
@@ -1341,7 +1341,7 @@ class TestClausalIntegration:
 
     def test_three_var(self):
         # nv
-        result = self._run("ThreeVar", 3)
+        result = self._run("three_var", 3)
         assert result is not None
         x, y, z = result
         assert x == F(11, 3)
@@ -1350,7 +1350,7 @@ class TestClausalIntegration:
 
     def test_rational_coeffs(self):
         # nv
-        result = self._run("RationalCoeffs", 2)
+        result = self._run("rational_coeffs", 2)
         assert result is not None
         x, y = result
         assert x == F(2)
@@ -1358,12 +1358,12 @@ class TestClausalIntegration:
 
     def test_feasible(self):
         # nv
-        result = self._run("Feasible", 2)
+        result = self._run("feasible", 2)
         assert result is not None  # just needs to succeed
 
     def test_infeasible(self):
         # nv
-        result = self._run("Infeasible", 1)
+        result = self._run("infeasible", 1)
         assert result is None  # must fail
 
     def test_lp_maximize(self):
@@ -1375,14 +1375,14 @@ class TestClausalIntegration:
 
     def test_scheduling_minimize(self):
         # nv
-        result = self._run("Scheduling", 3)
+        result = self._run("scheduling", 3)
         assert result is not None
         x, y, cost = result
         assert cost == F(30)
 
     def test_sup_inf(self):
         # nv
-        result = self._run("SupInf", 3)
+        result = self._run("sup_inf", 3)
         assert result is not None
         x, lo, hi = result
         assert lo == F(3)
@@ -1390,7 +1390,7 @@ class TestClausalIntegration:
 
     def test_bb_simple(self):
         # nv
-        result = self._run("BBSimple", 2)
+        result = self._run("bb_simple", 2)
         assert result is not None
         x, cost = result
         assert cost == F(2)
@@ -1398,7 +1398,7 @@ class TestClausalIntegration:
 
     def test_bb_sicstus(self):
         # nv
-        result = self._run("BBSicstus", 4)
+        result = self._run("bb_sicstus", 4)
         assert result is not None
         x, y, z, cost = result
         assert cost == F(4)

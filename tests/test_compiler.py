@@ -882,21 +882,21 @@ class TestNestedStarIntegration:
         tmp = tmp_path_factory.mktemp("nested_star")
         p = tmp / "nested_star.clausal"
         p.write_text(
-            "Extract([[HEAD, *TAIL], *ROWS], HEAD, TAIL, ROWS),\n"
+            "extract([[HEAD, *TAIL], *ROWS], HEAD, TAIL, ROWS),\n"
             "\n"
-            "First([HEAD, *_REST], HEAD),\n"
+            "first([HEAD, *_REST], HEAD),\n"
             "\n"
-            "Deep([[[X, *Y], *Z], *W], X, Y, Z, W),\n"
+            "deep([[[X, *Y], *Z], *W], X, Y, Z, W),\n"
             "\n"
             "transpose([], []),\n"
             "transpose([[], *_MORE], []),\n"
             "transpose(MATRIX, [HEADS, *REST_COLS]) <- (\n"
-            "    ExtractColumn(MATRIX, HEADS, TAILS),\n"
+            "    extract_column(MATRIX, HEADS, TAILS),\n"
             "    transpose(TAILS, REST_COLS)\n"
             ")\n"
-            "ExtractColumn([], [], []),\n"
-            "ExtractColumn([[HEAD, *TAIL], *ROWS], [HEAD, *REST_HEADS], [TAIL, *REST_TAILS]) <- (\n"
-            "    ExtractColumn(ROWS, REST_HEADS, REST_TAILS)\n"
+            "extract_column([], [], []),\n"
+            "extract_column([[HEAD, *TAIL], *ROWS], [HEAD, *REST_HEADS], [TAIL, *REST_TAILS]) <- (\n"
+            "    extract_column(ROWS, REST_HEADS, REST_TAILS)\n"
             ")\n"
         )
         mod = _load_module("nested_star", str(p))
@@ -927,51 +927,51 @@ class TestNestedStarIntegration:
     def test_extract_head_tail_rows(self):
         # nv
         h, t, r = Var(), Var(), Var()
-        for _ in call("Extract", [[10, 20, 30], [40, 50]], h, t, r, module=self.module):
+        for _ in call("extract", [[10, 20, 30], [40, 50]], h, t, r, module=self.module):
             assert deref(h) == 10
             assert deref(t) == [20, 30]
             assert deref(r) == [[40, 50]]
             return
-        pytest.fail("Extract did not match")
+        pytest.fail("extract did not match")
 
     def test_extract_single_element_inner(self):
         # nv
         h, t, r = Var(), Var(), Var()
-        for _ in call("Extract", [[42], [1, 2]], h, t, r, module=self.module):
+        for _ in call("extract", [[42], [1, 2]], h, t, r, module=self.module):
             assert deref(h) == 42
             assert deref(t) == []
             assert deref(r) == [[1, 2]]
             return
-        pytest.fail("Extract did not match")
+        pytest.fail("extract did not match")
 
     def test_extract_single_row(self):
         # nv
         h, t, r = Var(), Var(), Var()
-        for _ in call("Extract", [[5, 6, 7]], h, t, r, module=self.module):
+        for _ in call("extract", [[5, 6, 7]], h, t, r, module=self.module):
             assert deref(h) == 5
             assert deref(t) == [6, 7]
             assert deref(r) == []
             return
-        pytest.fail("Extract did not match")
+        pytest.fail("extract did not match")
 
     def test_first(self):
         # nv
         f = Var()
-        for _ in call("First", [7, 8, 9], f, module=self.module):
+        for _ in call("first", [7, 8, 9], f, module=self.module):
             assert deref(f) == 7
             return
-        pytest.fail("First did not match")
+        pytest.fail("first did not match")
 
     def test_deep_triple_nesting(self):
         # nv
         x, y, z, w = Var(), Var(), Var(), Var()
-        for _ in call("Deep", [[[1, 2, 3], [4, 5]], [6, 7]], x, y, z, w, module=self.module):
+        for _ in call("deep", [[[1, 2, 3], [4, 5]], [6, 7]], x, y, z, w, module=self.module):
             assert deref(x) == 1
             assert deref(y) == [2, 3]
             assert deref(z) == [[4, 5]]
             assert deref(w) == [[6, 7]]
             return
-        pytest.fail("Deep did not match")
+        pytest.fail("deep did not match")
 
     def test_transpose_2x3(self):
         # nv

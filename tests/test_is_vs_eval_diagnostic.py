@@ -80,7 +80,7 @@ def test_an_unhashable_expected_type_still_renders():
 SUM_LIST_SRC = """
 z(0),
 
-Test("term reaches a numeric builtin") <- (
+test("term reaches a numeric builtin") <- (
     R is 10000 // 4,
     sum_list([R], S),
     S == 2500
@@ -103,7 +103,7 @@ eff(R) <- (
     R is 2500 + 0
 ),
 
-Test("effective value") <- (
+test("effective value") <- (
     eff(2500)
 ),
 """
@@ -120,7 +120,7 @@ def test_nearest_solution_arith_term_names_the_operator(capsys, tmp_path):
 MIRROR_SRC = """
 eff(2500),
 
-Test("caller wrote the expression") <- (
+test("caller wrote the expression") <- (
     eff(2500 + 0)
 ),
 """
@@ -140,7 +140,7 @@ COMPOUND_SRC = """
 
 chain_assess("simple", verdict(beneficial_owner, 2500, [])),
 
-Test("ordinary near miss") <- (
+test("ordinary near miss") <- (
     chain_assess("simple", verdict(not_beneficial_owner, _BPS, _CITES))
 ),
 """
@@ -158,7 +158,7 @@ def test_ordinary_near_miss_says_nothing_about_arithmetic(capsys, tmp_path):
 NUMERIC_SRC = """
 eff(2500),
 
-Test("plain numeric near miss") <- (
+test("plain numeric near miss") <- (
     eff(2400)
 ),
 """
@@ -193,7 +193,7 @@ eff(R=RESULT) <- (
     RESULT is 2500 + 0
 ),
 
-Test("keyword argument") <- (
+test("keyword argument") <- (
     eff(R=2500)
 ),
 """

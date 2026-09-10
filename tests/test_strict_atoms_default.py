@@ -21,6 +21,7 @@ from clausal.logic.compiler_v2 import ClausalStrictAtomsDeprecationWarning
 from clausal.logic.predicate import PredicateMeta
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
+from clausal.templating import term_rewriting
 from clausal.templating.term_rewriting import EmbedTransformer
 
 
@@ -51,7 +52,7 @@ def test_implicit_atoms_mints_undeclared_bare_atom():
     source = (
         "-implicit_atoms\n"
         "\n"
-        "ColorImplicit(sad_implicit_red),\n"
+        "color_implicit(sad_implicit_red),\n"
     )
     mod = _load_inline_clausal("_sad_implicit_mints", source)
     assert predicate_builtins["sad_implicit_red"] == mint("sad_implicit_red")
@@ -63,7 +64,7 @@ def test_implicit_atoms_parenthesised_form():
     source = (
         "-implicit_atoms()\n"
         "\n"
-        "ColorImplicitParen(sad_implicit_paren_blue),\n"
+        "color_implicit_paren(sad_implicit_paren_blue),\n"
     )
     mod = _load_inline_clausal("_sad_implicit_paren", source)
     # THE FLIP: accepted atoms are arity-0 cells.
@@ -95,7 +96,7 @@ def test_strict_and_implicit_mutually_exclusive():
 def test_repl_transformer_injects_implicit_atoms():
     """A transformer in REPL mode seeds an ImplicitAtomsDeclaration so
     interactive cells auto-mint even under the strict file default."""
-    tree = ast.parse("Color(sad_repl_undeclared),\n")
+    tree = ast.parse("color(sad_repl_undeclared),\n")
     t = EmbedTransformer(implicit_atoms_default=True)
     t.visit(tree)
     assert any(
@@ -105,7 +106,7 @@ def test_repl_transformer_injects_implicit_atoms():
 
 def test_file_transformer_does_not_inject_implicit_atoms():
     """The default (file) transformer does NOT seed implicit mode."""
-    tree = ast.parse("Color(sad_file_undeclared),\n")
+    tree = ast.parse("color(sad_file_undeclared),\n")
     t = EmbedTransformer()
     t.visit(tree)
     assert not any(
@@ -115,7 +116,7 @@ def test_file_transformer_does_not_inject_implicit_atoms():
 
 def test_repl_transformer_respects_explicit_strict():
     """REPL mode must not override an explicit -strict_atoms in the cell."""
-    tree = ast.parse("-strict_atoms\nColor(sad_repl_strict),\n")
+    tree = ast.parse("-strict_atoms\ncolor(sad_repl_strict),\n")
     t = EmbedTransformer(implicit_atoms_default=True)
     t.visit(tree)
     assert not any(
@@ -126,7 +127,7 @@ def test_repl_transformer_respects_explicit_strict():
 def test_undeclared_bare_atom_raises_by_default():
     """With no directive, an undeclared bare atom is a NameError."""
     assert "sad_default_red" not in predicate_builtins
-    source = "ColorDefault(sad_default_red),\n"
+    source = "color_default(sad_default_red),\n"
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal("_sad_default_strict", source)
     msg = str(exc_info.value)
@@ -140,7 +141,7 @@ def test_implicit_atoms_still_mints_after_flip():
 
     THE FLIP: accepted atoms are arity-0 cells.
     """
-    source = "-implicit_atoms\nColorStill(sad_still_green),\n"
+    source = "-implicit_atoms\ncolor_still(sad_still_green),\n"
     mod = _load_inline_clausal("_sad_still_mints", source)
     assert mod.sad_still_green == mint("sad_still_green")
 
@@ -149,7 +150,7 @@ def test_strict_atoms_deprecation_warns_once_per_process():
     """`-strict_atoms` still enforces strict, and emits the deprecation
     warning at most once per process."""
     _compiler_v2._strict_atoms_deprecation_emitted = False  # reset guard
-    src = "-strict_atoms\n-module(m, [ok])\nUse(ok),\n"
+    src = "-strict_atoms\n-module(m, [ok])\nuse(ok),\n"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         _load_inline_clausal("_sad_dep_1", src)
@@ -353,6 +354,38 @@ class TestPredicateBuiltinsPoolSplit:
     (mirrors this file's own "unique name per test" discipline).
     """
 
+    @pytest.fixture(autouse=True)
+    def _titlecase_lint_as_warning(self, monkeypatch):
+        """These tests pin the pool-split DISTRUST of a bare runtime-table
+        name (``Add``, ``Mult``, ``Div``, ``Call``) in a strict module.
+        Every such name is TitleCase, which is a load-time SyntaxError
+        before the strict-atoms pass can run; the distrust clauses stay
+        for the deprecation window (see
+        todo/remove-bare-injected-titlecase-globals-after-deprecation-2026-09-09.md),
+        so this class demotes the lint to its warning form to reach them.
+        ``test_titlecase_spelling_is_rejected_before_the_pool_is_consulted``
+        below pins the default order."""
+        monkeypatch.setattr(
+            term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "warn")
+
+    def test_titlecase_spelling_is_rejected_before_the_pool_is_consulted(
+            self, monkeypatch):
+        """Under the default severity a bare ``Add`` never reaches the
+        strict-atoms diagnostic: the TitleCase lint raises first, naming
+        the ``++Add`` escape, and the pool is untouched."""
+        monkeypatch.setattr(
+            term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "error")
+        assert "Add" not in predicate_builtins
+        with pytest.raises(SyntaxError, match="`Add` is TitleCase") as ei:
+            _load_inline_clausal(
+                "_p8_pool_leak_titlecase",
+                "-module(pool_leak_titlecase, [chk(X)])\n"
+                "chk(X) <- (X == Add)\n",
+            )
+        assert "++Add" in str(ei.value)
+        assert "Add" not in predicate_builtins
+
+
     def test_todo_repro_undeclared_simple_ast_name_raises(self):
         """The todo's own repro, verbatim: a strict module with zero atom
         declarations, referencing ``Add`` bare in a clause body, must raise
@@ -363,8 +396,8 @@ class TestPredicateBuiltinsPoolSplit:
         with pytest.raises(NameError) as exc_info:
             _load_inline_clausal(
                 "_p8_pool_leak_probe",
-                "-module(pool_leak_probe, [Chk(X)])\n"
-                "Chk(X) <- (X == Add)\n",
+                "-module(pool_leak_probe, [chk(X)])\n"
+                "chk(X) <- (X == Add)\n",
             )
         msg = str(exc_info.value)
         assert "strict_atoms" in msg
@@ -463,13 +496,13 @@ class TestPredicateBuiltinsPoolSplit:
         mod = _load_inline_clausal(
             "_p8_call_functor",
             "-module(p8_call_functor, [Call(x, y)])\n"
-            "Result(V) <- (V is Call(1, 2))\n",
+            "result(V) <- (V is Call(1, 2))\n",
         )
         from clausal.logic.solve import call as _call
         from clausal.logic.variables import Var, deref, walk
 
         v = Var()
-        results = [walk(deref(v)) for _ in _call(mod.Result, v)]
+        results = [walk(deref(v)) for _ in _call(mod.result, v)]
         # A cell's slot 0 is the plain SPELLING.
         assert results == [("Call", 1, 2)]
         # Locally shadowed to the plain interned spelling (P3-2 Task 2,
@@ -503,7 +536,7 @@ class TestPredicateBuiltinsPoolSplit:
         mod = _load_module("_p8_qty_fixture_regress", path)
         n = Var()
         results = [
-            getattr(deref(n), "__name__", deref(n)) for _ in _call(mod.ChkTag, n)
+            getattr(deref(n), "__name__", deref(n)) for _ in _call(mod.chk_tag, n)
         ]
         assert results == [mint("tagged_")]
 
@@ -527,8 +560,8 @@ class TestPredicateBuiltinsPoolSplit:
             with pytest.raises(NameError) as exc_info:
                 _load_inline_clausal(
                     "_p8_synthetic_probe",
-                    "-module(p8_synthetic_probe, [Chk(X)])\n"
-                    f"Chk(X) <- (X == {name})\n",
+                    "-module(p8_synthetic_probe, [chk(X)])\n"
+                    f"chk(X) <- (X == {name})\n",
                 )
             msg = str(exc_info.value)
             assert "strict_atoms" in msg
@@ -559,12 +592,12 @@ class TestPredicateBuiltinsPoolSplit:
 
         mod = _load_inline_clausal(
             "_p8_seedorder_arith",
-            "-module(p8_seedorder_arith, [Times(N, R)])\n"
-            "Times(N, R) <- (R == N * 2)\n",
+            "-module(p8_seedorder_arith, [times(N, R)])\n"
+            "times(N, R) <- (R == N * 2)\n",
         )
         from clausal.logic.solve import call as _call
         from clausal.logic.variables import Var, deref
 
         r = Var()
-        results = [deref(r) for _ in _call(mod.Times, 5, r)]
+        results = [deref(r) for _ in _call(mod.times, 5, r)]
         assert results == [10]

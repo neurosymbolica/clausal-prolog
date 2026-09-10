@@ -1,12 +1,12 @@
 # Importer half of the imported-functor -constants pair.
 #
 # The -constants RHS constructs a functor this module IMPORTS rather than
-# declares.  Pre-fix that emitted a direct `Wrap(...)` call against a binding
+# declares.  Pre-fix that emitted a direct `wrap(...)` call against a binding
 # that is the owner's interned spelling, so the module failed to load with
 # `TypeError: 'str' object is not callable` from the -constants line.
--import_from(tests.fixtures.const_functor_owner, [Wrap, Pair])
+-import_from(tests.fixtures.const_functor_owner, [wrap, pair])
 -private([inner])
--constants(_W_ = Wrap(inner), _P_ = Pair(1, 2), _NEST_ = [Wrap(Pair(3, 4))])
+-constants(_W_ = wrap(inner), _P_ = pair(1, 2), _NEST_ = [wrap(pair(3, 4))])
 
 wrapped(X) <- (X is _W_)
 paired(X) <- (X is _P_)

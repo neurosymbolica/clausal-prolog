@@ -1,77 +1,77 @@
 # Doc snippet fixtures for docs/database_ops.md
 
 # --8<-- [start:quick_example]
--dynamic(Color/1)
+-dynamic(color/1)
 
-Color("red"),
-Color("blue"),
+color("red"),
+color("blue"),
 
 test("assert and query") <- (
-    assertz(Color("green")),
-    Color("green")
+    assertz(color("green")),
+    color("green")
 )  # nv
 # --8<-- [end:quick_example]
 
 # --8<-- [start:dynamic_directive]
--dynamic(Counter/1)
--dynamic(Cache/2)
+-dynamic(counter/1)
+-dynamic(cache/2)
 # --8<-- [end:dynamic_directive]
 
 # --8<-- [start:assertz_example]
--dynamic(Fact/1)
+-dynamic(fact/1)
 
-Fact("init"),
+fact("init"),
 
 test("assert") <- (
-    assertz(Fact(42)),
-    Fact(42)
+    assertz(fact(42)),
+    fact(42)
 )  # nv
 # --8<-- [end:assertz_example]
 
 # --8<-- [start:asserta_example]
--dynamic(Priority/1)
+-dynamic(priority/1)
 
-Priority("low"),
+priority("low"),
 
 test("assert first") <- (
-    asserta(Priority("high")),
-    Priority("high")
+    asserta(priority("high")),
+    priority("high")
 )  # nv
 # --8<-- [end:asserta_example]
 
 # --8<-- [start:retract_example]
--dynamic(Item/1)
+-dynamic(item/1)
 
-Item("a"),
-Item("b"),
-Item("c"),
+item("a"),
+item("b"),
+item("c"),
 
 test("retract") <- (
-    retract(Item("b")),
-    (not Item("b")),
-    Item("a"),
-    Item("c")
+    retract(item("b")),
+    (not item("b")),
+    item("a"),
+    item("c")
 )  # nv
 # --8<-- [end:retract_example]
 
 # --8<-- [start:retract_pattern]
--dynamic(Pair/2)
+-dynamic(pair/2)
 
-Pair("x", 1),
-Pair("y", 2),
-Pair("z", 3),
+pair("x", 1),
+pair("y", 2),
+pair("z", 3),
 
 test("retract by pattern") <- (
-    retract(Pair("y", _)),
-    (not Pair("y", 2))
+    retract(pair("y", _)),
+    (not pair("y", 2))
 )  # nv
 # --8<-- [end:retract_pattern]
 
 # --8<-- [start:abolish_table_example]
--table(MemoFib/2)
+-table(memo_fib/2)
 
-MemoFib(0, 0),
-MemoFib(1, 1),
+memo_fib(0, 0),
+memo_fib(1, 1),
 
-test("clear") <- abolish_table("MemoFib", 2)  # nv
+test("clear") <- abolish_table("memo_fib", 2)  # nv
 # --8<-- [end:abolish_table_example]

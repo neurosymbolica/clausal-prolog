@@ -6,13 +6,13 @@ freeze(X, Goal)
 
 --8<-- [start:freeze_2_ex2]
 # Guard: X must be positive when bound
-Guarded(X) <- (
+guarded(X) <- (
     freeze(X, X > 0),
     X is 5
 )
 # succeeds — 5 > 0
 
-Rejected(X) <- (
+rejected(X) <- (
     freeze(X, X > 0),
     X is -1
 )
@@ -21,14 +21,14 @@ Rejected(X) <- (
 
 --8<-- [start:freeze_2_ex3]
 # Deferred binding
-Deferred(Y) <- (
+deferred(Y) <- (
     freeze(X, Y is X),
     X is "hello"
 )
 # Y = "hello" — the frozen goal Y is X fires when X is bound
 
 # Multiple freezes on the same variable
-Multi(Y, Z) <- (
+multi(Y, Z) <- (
     freeze(X, Y is X),
     freeze(X, Z is X),
     X is 42
@@ -58,7 +58,7 @@ call_cleanup(Call, Cleanup)
 --8<-- [end:call_cleanup_2]
 
 --8<-- [start:call_cleanup_2_ex2]
-SafeQuery(GOAL) <- call_cleanup(
+safe_query(GOAL) <- call_cleanup(
     call_goal(GOAL),
     writeln_text("query finished")
 )

@@ -1,8 +1,9 @@
 """The reified if-then-else is spelled ``if_/3``.
 
-``If/3`` is the superseded spelling: still accepted everywhere ``if_`` is, but
-it warns at load time and nothing in the library emits it any more.  See
-``todo/rename-If-3-to-if_-3.md`` and ``docs/reified_ite.md``.
+``If/3`` is the superseded spelling: TitleCase, so a file carrying it no
+longer loads — the TitleCase lint raises at the site and names ``if_``.
+Nothing in the library emits it.  See ``todo/rename-If-3-to-if_-3.md`` and
+``docs/reified_ite.md``.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ def _load_quietly(name, src_text, tmp_path):
         return _load(name, src_text, tmp_path)
 
 
-CLASSIFY = 'Classify(X, LABEL) <- {ite}(X >= 0, LABEL is "positive", LABEL is "negative")\n'
+CLASSIFY = 'classify(X, LABEL) <- {ite}(X >= 0, LABEL is "positive", LABEL is "negative")\n'
 
 
 # ── The canonical spelling ───────────────────────────────────────────────────
@@ -45,10 +46,10 @@ class TestIfUnderscore:
         """# nv"""
         mod = _load("ifu_goal", CLASSIFY.format(ite="if_"), tmp_path)
         out = Var()
-        assert [deref(out) for _ in call("Classify", 5, out, module=mod)] == [
+        assert [deref(out) for _ in call("classify", 5, out, module=mod)] == [
             mint("positive")]
         out2 = Var()
-        assert [deref(out2) for _ in call("Classify", -3, out2, module=mod)] == [
+        assert [deref(out2) for _ in call("classify", -3, out2, module=mod)] == [
             mint("negative")]
 
     def test_does_not_warn(self, tmp_path, recwarn):
@@ -111,39 +112,35 @@ class TestIfUnderscore:
 
 
 class TestLegacyIf:
-    def test_still_compiles_and_runs(self, tmp_path):
-        """# nv"""
-        mod = _load_quietly("legacy_run", CLASSIFY.format(ite="If"), tmp_path)
-        out = Var()
-        assert [deref(out) for _ in call("Classify", 5, out, module=mod)] == [
-            mint("positive")]
+    """``If`` is TitleCase, so a file spelling it does not load: the
+    TitleCase lint raises a located SyntaxError at the first site, and the
+    rename it names is the keyword-safe ``if_``."""
 
-    def test_warns_naming_the_rewrite(self, tmp_path):
+    def test_is_a_syntax_error_naming_the_rewrite(self, tmp_path):
         """# nv"""
-        with pytest.warns(ClausalDeprecatedSpellingWarning,
-                          match=r"`If` -> `if_`"):
+        with pytest.raises(SyntaxError, match=r"`If` -> `if_`"):
             _load("legacy_warn", CLASSIFY.format(ite="If"), tmp_path)
 
-    def test_warning_locates_the_site(self, tmp_path):
+    def test_error_locates_the_site(self, tmp_path):
         """# nv"""
         src = "# leading comment\n" + CLASSIFY.format(ite="If")
-        with pytest.warns(ClausalDeprecatedSpellingWarning) as caught:
+        with pytest.raises(SyntaxError) as caught:
             _load("legacy_where", src, tmp_path)
-        message = str(caught[0].message)
+        message = str(caught.value)
         assert "legacy_where.clausal:2" in message
-        assert "Classify(X, LABEL)" in message  # the offending source line
+        assert "classify(X, LABEL)" in message  # the offending source line
 
-    def test_dcg_body_warns(self, tmp_path):
-        """A DCG body is rewritten before the term pass — it must still warn."""
+    def test_dcg_body_is_rejected(self, tmp_path):
+        """A DCG body is rewritten before the term pass — it must still be read."""
         # nv
         src = (
             "-module(x, [g(S0, S), x, y, z])\n"
             "g >> (If([x], [y], [z]))\n"
         )
-        with pytest.warns(ClausalDeprecatedSpellingWarning):
+        with pytest.raises(SyntaxError, match=r"`If` -> `if_`"):
             _load("legacy_dcg", src, tmp_path)
 
-    def test_edcg_body_warns(self, tmp_path):
+    def test_edcg_body_is_rejected(self, tmp_path):
         """Likewise for an EDCG body."""
         # nv
         src = (
@@ -154,7 +151,7 @@ class TestLegacyIf:
             "inc >> ([1] // counter)\n"
             "pick >> (If({1 == 1}, inc, (inc, inc)))\n"
         )
-        with pytest.warns(ClausalDeprecatedSpellingWarning):
+        with pytest.raises(SyntaxError, match=r"`If` -> `if_`"):
             _load("legacy_edcg", src, tmp_path)
 
 
@@ -162,11 +159,11 @@ class TestLegacyIf:
 
 
 class TestCanonicalOutput:
-    @pytest.mark.parametrize("ite", ["if_", "If"])
+    @pytest.mark.parametrize("ite", ["if_"])
     def test_renderer_emits_if_underscore(self, ite):
-        """Either spelling reifies to IfThenElse and renders back as ``if_``."""
+        """The spelling reifies to IfThenElse and renders back as ``if_``."""
         # nv
-        src = f"Pick(X, Y) <- (Y is {ite}(X > 0, 1, 2))\n"
+        src = f"pick(X, Y) <- (Y is {ite}(X > 0, 1, 2))\n"
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ClausalDeprecatedSpellingWarning)
             (clause,) = [item for item in reify_source(src)
@@ -180,7 +177,7 @@ class TestCanonicalOutput:
     def test_arity_error_names_the_new_spelling(self, tmp_path):
         """# nv"""
         with pytest.raises(SyntaxError, match=r"if_\(condition, then, else\)"):
-            _load_quietly("bad_arity", "c(X, L) <- If(X >= 0, L is 1)\n", tmp_path)
+            _load("bad_arity", "c(X, L) <- if_(X >= 0, L is 1)\n", tmp_path)
 
     def test_ternary_error_names_the_new_spelling(self, tmp_path):
         """# nv"""

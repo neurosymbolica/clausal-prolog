@@ -284,10 +284,10 @@ class TestFullTranslation:
     def test_edge_graph(self):
         # nv
         source = '''
-Edge(1, 2),
-Edge(2, 3),
-Reach(X, Y) <- Edge(X, Y)
-Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
+edge(1, 2),
+edge(2, 3),
+reach(X, Y) <- edge(X, Y)
+reach(X, Y) <- (edge(X, Z), reach(Z, Y))
 '''
         result = clausal_source_to_prolog(source)
         assert "edge(1, 2)." in result
@@ -299,14 +299,14 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
 
     def test_arithmetic(self):
         # nv
-        source = 'Double(X, Y) <- eval_(X * 2, Y)'
+        source = 'double(X, Y) <- eval_(X * 2, Y)'
         result = clausal_source_to_prolog(source)
         assert "double(X, Y) :-" in result
         assert "Y is X * 2" in result
 
     def test_negation(self):
         # nv
-        source = 'Safe(X) <- (not Danger(X))'
+        source = 'safe(X) <- (not danger(X))'
         result = clausal_source_to_prolog(source)
         assert "\\+ danger(X)" in result
 
@@ -321,62 +321,62 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
         # nv
         # Foo/1 needs a backing clause or the module-export post-pass
         # (Task 4) drops it as a declaration-only export.
-        source = '-module(my_mod, [Foo(X)])\nFoo(1),\n'
+        source = '-module(my_mod, [foo(X)])\nfoo(1),\n'
         result = clausal_source_to_prolog(source)
         assert ":- module(my_mod, [foo/1])." in result
 
     def test_unification(self):
         # nv
-        source = 'Id(X, Y) <- (X is Y)'
+        source = 'id(X, Y) <- (X is Y)'
         result = clausal_source_to_prolog(source)
         assert "X = Y" in result
 
     def test_disequality(self):
         # nv
-        source = 'Different(X, Y) <- (X is not Y)'
+        source = 'different(X, Y) <- (X is not Y)'
         result = clausal_source_to_prolog(source)
         assert "dif(X, Y)" in result or "X \\= Y" in result
 
     def test_simple_fact_no_args(self):
         # nv
-        source = 'Hello(),\n'
+        source = 'hello(),\n'
         result = clausal_source_to_prolog(source)
         assert "hello." in result
 
     def test_or_becomes_semicolon(self):
         # nv
-        source = 'Test() <- (a() or b())'
+        source = 'test() <- (a() or b())'
         result = clausal_source_to_prolog(source)
         assert ";" in result
 
     def test_comparison_operators(self):
         # nv
-        source = 'Check(X, Y) <- (X >= Y)'
+        source = 'check(X, Y) <- (X >= Y)'
         result = clausal_source_to_prolog(source)
         assert "X >= Y" in result
 
     def test_lte_becomes_prolog_lte(self):
         # nv
-        source = 'Check(X, Y) <- (X <= Y)'
+        source = 'check(X, Y) <- (X <= Y)'
         result = clausal_source_to_prolog(source)
         assert "X =< Y" in result
 
     def test_structural_eq(self):
         # nv
-        source = 'Same(X, Y) <- (X == Y)'
+        source = 'same(X, Y) <- (X == Y)'
         result = clausal_source_to_prolog(source)
         assert "X == Y" in result
 
     def test_structural_neq(self):
         # nv
-        source = 'Diff(X, Y) <- (X != Y)'
+        source = 'diff(X, Y) <- (X != Y)'
         result = clausal_source_to_prolog(source)
         assert "X \\== Y" in result
 
     def test_variable_naming(self):
         """Variables follow clausal → Prolog naming conventions."""
         # nv
-        source = 'Foo(_x, _head, RESULT) <- Bar(_x, _head, RESULT)'
+        source = 'foo(_x, _head, RESULT) <- bar(_x, _head, RESULT)'
         result = clausal_source_to_prolog(source)
         assert "foo(X, Head, Result)" in result
         assert "bar(X, Head, Result)" in result
@@ -385,40 +385,40 @@ Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
         # nv -- a str literal DENOTES AN ATOM (R2); "hello world" needs
         # quoting only because of the space, and is a QUOTED ATOM, not a
         # double-quoted char list. See TestStrLiteralIsAtom below.
-        source = 'Test("hello world"),\n'
+        source = 'test("hello world"),\n'
         result = clausal_source_to_prolog(source)
         assert "'hello world'" in result
         assert '"hello world"' not in result
 
     def test_integer_literals(self):
         # nv
-        source = 'Edge(1, 2),\n'
+        source = 'edge(1, 2),\n'
         result = clausal_source_to_prolog(source)
         assert "edge(1, 2)." in result
 
     def test_empty_list(self):
         # nv
-        source = 'Foo([]),\n'
+        source = 'foo([]),\n'
         result = clausal_source_to_prolog(source)
         assert "[]" in result
 
     def test_list_literal(self):
         # nv
-        source = 'Foo([1, 2, 3]),\n'
+        source = 'foo([1, 2, 3]),\n'
         result = clausal_source_to_prolog(source)
         assert "[1, 2, 3]" in result
 
     def test_builtin_name_mapping(self):
         """Builtin names map correctly."""
         # nv
-        source = 'Test() <- findall(X, Member(X, L), R)'
+        source = 'test() <- findall(X, member(X, L), R)'
         result = clausal_source_to_prolog(source)
         assert "findall" in result
         assert "member" in result
 
     def test_import_from_directive(self):
         # nv
-        source = '-import_from(tests.fixtures.importable_utils, [Helper, Double])'
+        source = '-import_from(tests.fixtures.importable_utils, [helper, double])'
         result = clausal_source_to_prolog(source)
         assert ":- use_module(" in result
         assert "tests/fixtures/importable_utils" in result
@@ -436,7 +436,7 @@ class TestPrologAstConversion:
 
     def test_simple_fact(self):
         # nv
-        source = 'Edge(1, 2),\n'
+        source = 'edge(1, 2),\n'
         pmod = clausal_source_to_prolog_ast(source)
         assert len(pmod.items) == 1
         item = pmod.items[0]
@@ -447,7 +447,7 @@ class TestPrologAstConversion:
 
     def test_rule_has_body(self):
         # nv
-        source = 'Reach(X, Y) <- Edge(X, Y)'
+        source = 'reach(X, Y) <- edge(X, Y)'
         pmod = clausal_source_to_prolog_ast(source)
         assert len(pmod.items) == 1
         item = pmod.items[0]
@@ -464,7 +464,7 @@ class TestPrologAstConversion:
 
     def test_variables_converted(self):
         # nv
-        source = 'Foo(_x, _head),\n'
+        source = 'foo(_x, _head),\n'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         assert isinstance(item, PClause)
@@ -478,7 +478,7 @@ class TestPrologAstConversion:
 
     def test_list_with_star_unpack(self):
         # nv
-        source = 'Foo([H, *T]),\n'
+        source = 'foo([H, *T]),\n'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         head = item.head
@@ -488,7 +488,7 @@ class TestPrologAstConversion:
 
     def test_negation_becomes_naf(self):
         # nv
-        source = 'Safe(X) <- (not Danger(X))'
+        source = 'safe(X) <- (not danger(X))'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         body = item.body
@@ -497,7 +497,7 @@ class TestPrologAstConversion:
 
     def test_eval_becomes_is(self):
         # nv
-        source = 'Double(X, Y) <- eval_(X * 2, Y)'
+        source = 'double(X, Y) <- eval_(X * 2, Y)'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         body = item.body
@@ -506,7 +506,7 @@ class TestPrologAstConversion:
 
     def test_and_becomes_conjunction(self):
         # nv
-        source = 'Test() <- (a() and b())'
+        source = 'test() <- (a() and b())'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         body = item.body
@@ -515,7 +515,7 @@ class TestPrologAstConversion:
 
     def test_or_becomes_disjunction(self):
         # nv
-        source = 'Test() <- (a() or b())'
+        source = 'test() <- (a() or b())'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         body = item.body
@@ -535,7 +535,7 @@ class TestEvalBuiltinExport:
     def test_eval_exports_as_is(self):
         # nv
         from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
-        out = clausal_source_to_prolog("AddOne(X, Y) <- eval_(X + 1, Y)\n")
+        out = clausal_source_to_prolog("add_one(X, Y) <- eval_(X + 1, Y)\n")
         assert "Y is X + 1" in out, out
         assert "eval_" not in out, out
 
@@ -569,36 +569,36 @@ class TestStrLiteralIsAtom:
     """`_convert_constant`'s str branch emits an ATOM, not a char list."""
 
     def test_plain_str_literal_emits_bare_atom(self):
-        out = clausal_source_to_prolog('Ok(X) <- (X is "hello")\n')
+        out = clausal_source_to_prolog('ok(X) <- (X is "hello")\n')
         assert "X = hello." in out, out
         assert '"hello"' not in out, out
 
     def test_str_literal_is_a_patom_in_the_ast(self):
-        pmod = clausal_source_to_prolog_ast('Ok(X) <- (X is "hello")\n')
+        pmod = clausal_source_to_prolog_ast('ok(X) <- (X is "hello")\n')
         rhs = pmod.items[0].body.args[1]
         assert isinstance(rhs, PAtom), rhs
         assert rhs.name == "hello"
 
     def test_str_literal_needing_quotes_is_quoted(self):
-        out = clausal_source_to_prolog('Ok(X) <- (X is "a b")\n')
+        out = clausal_source_to_prolog('ok(X) <- (X is "a b")\n')
         assert "X = 'a b'." in out, out
 
     def test_str_literal_in_argument_position(self):
-        out = clausal_source_to_prolog('Fact(X) <- p("k", X)\n')
+        out = clausal_source_to_prolog('fact(X) <- p("k", X)\n')
         assert "p(k, X)" in out, out
 
     def test_test_clause_head_name_becomes_quoted_atom(self):
         # The G3 driver addresses test clauses BY NAME; head and generated
         # name list come from one emission source, so they move together.
-        out = clausal_source_to_prolog('Test("fib 0") <- fib(0, 0)\n')
+        out = clausal_source_to_prolog('test("fib 0") <- fib(0, 0)\n')
         assert "test('fib 0')" in out, out
 
     def test_dict_key_and_value_both_become_atoms(self):
-        out = clausal_source_to_prolog('Ok(X) <- (X is {"label": "hi there"})\n')
+        out = clausal_source_to_prolog('ok(X) <- (X is {"label": "hi there"})\n')
         assert "attribute(label, 'hi there')" in out, out
 
     def test_dcg_terminal_list_of_str_becomes_atoms(self):
-        out = clausal_source_to_prolog('Greeting() >> (["hello", "world"])\n')
+        out = clausal_source_to_prolog('greeting() >> (["hello", "world"])\n')
         assert "[hello, world]" in out, out
 
 
@@ -673,7 +673,7 @@ class TestBytesLiteralUnchanged:
     """
 
     def test_bytes_literal_emission_is_untouched(self):
-        out = clausal_source_to_prolog('Ok(X) <- (X is b"abc")')
+        out = clausal_source_to_prolog('ok(X) <- (X is b"abc")')
         assert out.strip() == "ok(X) :-\n    X = 'b\\'abc\\''."
 
 
@@ -688,10 +688,10 @@ class TestBracketAtomLiteralIsFaithful:
 
     @pytest.mark.parametrize("literal", ["[]", "{}"])
     def test_emitted_bare_with_no_warning(self, literal):
-        out = clausal_source_to_prolog('Ok(K) <- (K is %r)' % literal)
+        out = clausal_source_to_prolog('ok(K) <- (K is %r)' % literal)
         assert "WARNING" not in out, out
         assert f"K = {literal}" in out, out
 
     def test_strict_mode_accepts_it(self):
-        out = clausal_source_to_prolog('Ok(K) <- (K is "[]")', strict=True)
+        out = clausal_source_to_prolog('ok(K) <- (K is "[]")', strict=True)
         assert "K = []" in out, out

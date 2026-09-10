@@ -46,25 +46,25 @@ def test_F095_first_arg_index_coalesces_str_and_charlist():
     # Register fixtures inline. We need 5+ clauses to cross _INDEX_THRESHOLD=4.
     # Three scalar pads (on ints), one str-headed, one list-headed.
     source = """\
-PadHelper(1),
+pad_helper(1),
 
-TestPred(1),
-TestPred(2),
-TestPred(3),
-TestPred("abc"),
-TestPred(['a', 'b', 'c']),
+test_pred(1),
+test_pred(2),
+test_pred(3),
+test_pred("abc"),
+test_pred(['a', 'b', 'c']),
 """
     mod = load_inline_clausal("c15_f095_indexing", source).__dict__["$module"]
 
     # Test 1: Unbound Var caller should enumerate all 5 clauses.
     x = Var()
     solutions_from_var = []
-    for _ in call("TestPred", x, module=mod):
+    for _ in call("test_pred", x, module=mod):
         v = deref(x)
         solutions_from_var.append((type(v).__name__, v))
 
     assert len(solutions_from_var) == 5, (
-        f"TestPred(Var) should enumerate 5 clauses (three ints, one str, one list). "
+        f"test_pred(Var) should enumerate 5 clauses (three ints, one str, one list). "
         f"Got {len(solutions_from_var)} solutions: {solutions_from_var}."
     )
 
@@ -87,16 +87,16 @@ TestPred(['a', 'b', 'c']),
     # (list_dispatch.py) now also skips lifting a ground list literal, for
     # exactly this reason — see that function's docstring for the full
     # trace. Fixed: todo/done/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md.
-    n_str_caller = sum(1 for _ in call("TestPred", mint("abc"), module=mod))
+    n_str_caller = sum(1 for _ in call("test_pred", mint("abc"), module=mod))
     assert n_str_caller == 1, (
-        f"TestPred('abc') returned {n_str_caller} solutions; expected 1 "
+        f"test_pred('abc') returned {n_str_caller} solutions; expected 1 "
         f"(same-type str-headed clause only; §1b/R8: a str no longer "
         f"reaches a list-headed clause)."
     )
 
-    n_list_caller = sum(1 for _ in call("TestPred", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_list_caller = sum(1 for _ in call("test_pred", [mint("a"), mint("b"), mint("c")], module=mod))
     assert n_list_caller == 1, (
-        f"TestPred(['a','b','c']) returned {n_list_caller} solutions; "
+        f"test_pred(['a','b','c']) returned {n_list_caller} solutions; "
         f"expected 1 (same-type list-headed clause only; §1b/R8: a list "
         f"no longer reaches a str-headed clause)."
     )

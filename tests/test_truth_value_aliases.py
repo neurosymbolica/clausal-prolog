@@ -102,8 +102,8 @@ def test_spellings_unify_across_the_divide():
         "g(True),\n"
         "g(False),\n"
         "g(Undefined),\n"
-        'Test("lower fact, upper query") <- (f(True), f(False), f(Undefined)),\n'
-        'Test("upper fact, lower query") <- (g(true), g(false), g(undefined)),\n',
+        'test("lower fact, upper query") <- (f(True), f(False), f(Undefined)),\n'
+        'test("upper fact, lower query") <- (g(true), g(false), g(undefined)),\n',
     )
     results = _run_all(mod)
     assert results and all(ok for _, ok in results), results
@@ -120,9 +120,9 @@ def test_true_and_false_in_goal_position():
         "_alias_goal_position",
         "-private([p(X)])\n"
         "p(1),\n"
-        'Test("true is the unit") <- (true, p(1), true),\n'
-        'Test("false fails") <- (not (false)),\n'
-        'Test("false truncates a conjunction") <- (not ((p(1), false))),\n',
+        'test("true is the unit") <- (true, p(1), true),\n'
+        'test("false fails") <- (not (false)),\n'
+        'test("false truncates a conjunction") <- (not ((p(1), false))),\n',
     )
     results = _run_all(mod)
     assert results and all(ok for _, ok in results), results
@@ -156,8 +156,8 @@ def test_alias_dict_keys_match_canonical_keys():
         "_alias_dict_keys",
         "-private([d(X)])\n"
         "d({true: 1, false: 2, undefined: 3}),\n"
-        'Test("canonical keys unify") <- d({True: 1, False: 2, Undefined: 3}),\n'
-        'Test("read back through aliases") <- '
+        'test("canonical keys unify") <- d({True: 1, False: 2, Undefined: 3}),\n'
+        'test("read back through aliases") <- '
         "(d(D), D[true] == 1, D[false] == 2, D[undefined] == 3),\n",
     )
     results = _run_all(mod)

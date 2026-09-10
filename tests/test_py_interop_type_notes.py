@@ -7,7 +7,7 @@ where a timedelta is required.  During the diagnostic re-run the guard now
 records what it rejected, and the note lands in the failure report.
 See ``todo/done/C1-ill-typed-interop-calls-are-silent-failures.md``.
 
-Normal (non-diagnostic) runs are unchanged: the goal still just fails.
+normal (non-diagnostic) runs are unchanged: the goal still just fails.
 """
 
 from __future__ import annotations
@@ -176,7 +176,7 @@ def test_diagnose_failure_survives_broken_interop_import(
     p = write(tmp_path, "plain.clausal", """
     prc("alpha", 10),
 
-    Test("fails plainly") <- (
+    test("fails plainly") <- (
         prc("beta", _N)
     ),
     """)
@@ -191,7 +191,7 @@ def test_diagnose_failure_survives_broken_interop_import(
 DATE_ADD_INT_SRC = """
 -import_from(date_time, [date_add, date])
 
-Test("window end computes") <- (
+test("window end computes") <- (
     D is date(2024, 1, 1),
     date_add(D, 90, END),
     END is not _
@@ -213,7 +213,7 @@ window_end(START, END) <- (
     date_add(START, 90, END)
 ),
 
-Test("window end via helper") <- (
+test("window end via helper") <- (
     D is date(2024, 1, 1),
     window_end(D, END),
     END is not _
@@ -233,7 +233,7 @@ def test_note_survives_descent_into_user_predicate(capsys, tmp_path):
 CONSTRUCT_REJECT_SRC = """
 -import_from(date_time, [date])
 
-Test("month 13") <- (
+test("month 13") <- (
     D is date(2024, 13, 1),
     D is not _
 ),
@@ -256,7 +256,7 @@ def test_constructor_rejection_noted(capsys, tmp_path):
 UNBOUND_TD_SRC = """
 -import_from(date_time, [date_add, date])
 
-Test("unbound timedelta is a mode, not a type error") <- (
+test("unbound timedelta is a mode, not a type error") <- (
     D is date(2024, 1, 1),
     date_add(D, TD, END),
     END is not _

@@ -71,7 +71,7 @@ f(X) <- (
 TEST_LOAD_SRC = """
 -import_from(m, [f])
 
-Test("t") <- (
+test("t") <- (
     f(2)
 )
 """

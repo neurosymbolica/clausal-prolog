@@ -42,12 +42,12 @@ class TestByteListCanonicaliser:
 
 # Four+ clauses so the first-arg index actually builds (_INDEX_THRESHOLD == 4).
 _SRC = """\
-Helper(1),
+helper(1),
 
-Code(b"red") <- (Helper(1))
-Code(b"green") <- (Helper(1))
-Code(b"blue") <- (Helper(1))
-Code(b"cyan") <- (Helper(1))
+code(b"red") <- (helper(1))
+code(b"green") <- (helper(1))
+code(b"blue") <- (helper(1))
+code(b"cyan") <- (helper(1))
 """
 
 
@@ -59,10 +59,10 @@ class TestBytesIndexBuckets:
 
     def _clauses(self):
         return [
-            Clause(head=Compound("Code", (b"red",)), body=[True]),
-            Clause(head=Compound("Code", (b"green",)), body=[True]),
-            Clause(head=Compound("Code", (b"blue",)), body=[True]),
-            Clause(head=Compound("Code", (b"cyan",)), body=[True]),
+            Clause(head=Compound("code", (b"red",)), body=[True]),
+            Clause(head=Compound("code", (b"green",)), body=[True]),
+            Clause(head=Compound("code", (b"blue",)), body=[True]),
+            Clause(head=Compound("code", (b"cyan",)), body=[True]),
         ]
 
     def test_index_builds_with_bytes_literal_buckets(self):
@@ -74,7 +74,7 @@ class TestBytesIndexBuckets:
     def test_intlist_head_canonicalises_into_bytes_bucket(self):
         # nv  — an int-list-literal head buckets under the same key as bytes
         clauses = self._clauses() + [
-            Clause(head=Compound("Code", ([97, 97],)), body=[True])  # == b"aa"
+            Clause(head=Compound("code", ([97, 97],)), body=[True])  # == b"aa"
         ]
         index = _build_first_arg_index(clauses, 1)
         assert b"aa" in index["buckets"]
@@ -85,9 +85,9 @@ class TestBytesDispatchBuckets:
         # nv  — list(b"green") == [103,114,101,101,110]; >=4 clauses so the
         # index is built and the int-list caller must land in the b"green" bucket
         mod = _load_inline("bytes_idx_a", _SRC)
-        assert sum(1 for _ in call("Code", list(b"green"), module=mod)) == 1
+        assert sum(1 for _ in call("code", list(b"green"), module=mod)) == 1
 
     def test_non_matching_intlist_matches_nothing(self):
         # nv
         mod = _load_inline("bytes_idx_b", _SRC)
-        assert sum(1 for _ in call("Code", [1, 2, 3], module=mod)) == 0
+        assert sum(1 for _ in call("code", [1, 2, 3], module=mod)) == 0

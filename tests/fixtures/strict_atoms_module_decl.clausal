@@ -4,4 +4,4 @@
 -strict_atoms
 -module(strict_atoms_module_decl, [phase3strict_module_green])
 
-ColorStrictModuleDecl(phase3strict_module_green),
+color_strict_module_decl(phase3strict_module_green),

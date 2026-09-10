@@ -173,7 +173,7 @@ def test_strict_atoms_undeclared_atom_raises():
     source = (
         "-strict_atoms\n"
         "\n"
-        "ColorStrictUndeclared(phase3strict_undeclared_red),\n"
+        "color_strict_undeclared(phase3strict_undeclared_red),\n"
     )
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal("_strict_atoms_undeclared_test", source)
@@ -287,7 +287,7 @@ def test_strict_atoms_global_atom_builtin_compiles():
         "tests.fixtures.strict_atoms_global_atom",
     )
     # Predicate compiled; LookupStrictGlobal must be a PredicateMeta.
-    assert isinstance(mod.LookupStrictGlobal, PredicateMeta)
+    assert isinstance(mod.lookup_strict_global, PredicateMeta)
 
 
 def test_strict_atoms_empty_file_compiles():
@@ -298,7 +298,7 @@ def test_strict_atoms_empty_file_compiles():
         "strict_atoms_empty.clausal",
         "tests.fixtures.strict_atoms_empty",
     )
-    assert isinstance(mod.Ok, PredicateMeta)
+    assert isinstance(mod.ok, PredicateMeta)
 
 
 def test_strict_atoms_multiple_undeclared_reported_together():
@@ -311,8 +311,8 @@ def test_strict_atoms_multiple_undeclared_reported_together():
     source = (
         "-strict_atoms\n"
         "\n"
-        "ColorMultiAlpha(phase3strict_multi_alpha),\n"
-        "ColorMultiBeta(phase3strict_multi_beta),\n"
+        "color_multi_alpha(phase3strict_multi_alpha),\n"
+        "color_multi_beta(phase3strict_multi_beta),\n"
     )
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal("_strict_atoms_multi_test", source)
@@ -620,8 +620,8 @@ def test_declared_atoms_unify_across_module_and_private():
     # deref INSIDE the loop -- call()'s generator undoes trail bindings on
     # backtrack past the last yield, so reading the Var after the generator
     # is exhausted (list(...) then deref) sees it unbound again.
-    vals_a = [deref(out_a) for _ in call("TagFromModuleDecl", out_a, module=lm_a)]
-    vals_b = [deref(out_b) for _ in call("TagFromPrivateDecl", out_b, module=lm_b)]
+    vals_a = [deref(out_a) for _ in call("tag_from_module_decl", out_a, module=lm_a)]
+    vals_b = [deref(out_b) for _ in call("tag_from_private_decl", out_b, module=lm_b)]
     assert len(vals_a) == 1 and len(vals_b) == 1
     val_a, val_b = vals_a[0], vals_b[0]
     assert val_a == mint("atompivot_cross_tag")
@@ -638,14 +638,14 @@ def test_bare_atom_arrives_as_the_arity_0_cell_at_python_seam():
     gets back after ``deref``).  THE FLIP inverts the P3-1 pin that it was
     a plain ``str``."""
     source = (
-        "-module(atompivot_seam_test, [Seam(X), atompivot_seam_red])\n"
+        "-module(atompivot_seam_test, [seam(X), atompivot_seam_red])\n"
         "\n"
-        "Seam(atompivot_seam_red),\n"
+        "seam(atompivot_seam_red),\n"
     )
     mod = _load_inline_clausal("_atompivot_seam", source)
     lm = mod.__dict__["$module"]
     out = Var()
-    results = [deref(out) for _ in call("Seam", out, module=lm)]
+    results = [deref(out) for _ in call("seam", out, module=lm)]
     assert len(results) == 1
     val = results[0]
     assert val == mint("atompivot_seam_red")
@@ -660,11 +660,11 @@ def test_strictness_preserved_across_the_lowering_flip():
     with pytest.raises(NameError):
         _load_inline_clausal(
             "_atompivot_strict_still_raises",
-            "Seam(atompivot_undeclared_atom),\n",
+            "seam(atompivot_undeclared_atom),\n",
         )
     mod = _load_inline_clausal(
         "_atompivot_implicit_lifts",
-        "-implicit_atoms\n\nSeamImplicit(atompivot_implicit_atom),\n",
+        "-implicit_atoms\n\nseam_implicit(atompivot_implicit_atom),\n",
     )
     assert mod.atompivot_implicit_atom == mint("atompivot_implicit_atom")
 
@@ -677,14 +677,14 @@ def test_true_lowers_to_truth_value_not_atom():
     produce now that atoms lower to str Constants too -- the two branches
     must stay distinguishable)."""
     source = (
-        "-module(atompivot_truth_test, [TruthProbe(X)])\n"
+        "-module(atompivot_truth_test, [truth_probe(X)])\n"
         "\n"
-        "TruthProbe(true),\n"
+        "truth_probe(true),\n"
     )
     mod = _load_inline_clausal("_atompivot_truth", source)
     lm = mod.__dict__["$module"]
     out = Var()
-    results = [deref(out) for _ in call("TruthProbe", out, module=lm)]
+    results = [deref(out) for _ in call("truth_probe", out, module=lm)]
     assert len(results) == 1
     val = results[0]
     assert val is True

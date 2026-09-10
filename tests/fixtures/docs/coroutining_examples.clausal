@@ -27,7 +27,7 @@ test("when ground") <- (
 
 # --8<-- [start:setup_call_cleanup_3_ex2]
 # Basic pattern: open/use/close
-ProcessFile(PATH, RESULT) <- setup_call_cleanup(
+process_file(PATH, RESULT) <- setup_call_cleanup(
     HANDLE is ++open(PATH),
     (DATA is ++HANDLE.read(), RESULT is DATA),
     ++HANDLE.close()

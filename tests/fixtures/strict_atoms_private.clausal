@@ -4,4 +4,4 @@
 -strict_atoms
 -private([phase3strict_private_orange])
 
-ColorStrictPrivate(phase3strict_private_orange),
+color_strict_private(phase3strict_private_orange),

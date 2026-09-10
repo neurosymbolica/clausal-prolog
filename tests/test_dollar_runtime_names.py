@@ -153,19 +153,19 @@ class TestDollarTwinsAreBound:
 
 _EMIT_SOURCE = (
     "-allow_singletons\n"
-    "-module(dollar_emit_probe, [Speed(V), Fresh(L), Esc(X, Y), Dct(D), "
-    "Sett(S), Fs(X, S), Arith(X, Y), Go(Y), Lam(F), Lam0(F)])\n"
+    "-module(dollar_emit_probe, [speed(V), fresh(L), esc(X, Y), dct(D), "
+    "sett(S), fs(X, S), arith(X, Y), go(Y), lam(F), lam0(F)])\n"
     "-import_from(py.units, [m])\n"
-    "Speed(V) <- (V == 5(m))\n"
-    "Fresh(L) <- (L == [A, B])\n"
-    "Esc(X, Y) <- (Y == ++(X + 1))\n"
-    "Dct(D) <- (D == {'a': 1})\n"
-    "Sett(S) <- (S == {1, 2})\n"
-    "Fs(X, S) <- (S == f\"v={X}\")\n"
-    "Arith(X, Y) <- (Y is X + 1)\n"
-    "Go(Y) <- (Arith(1, Y))\n"
-    "Lam(F) <- (F is ((X) <- (X + 1)))\n"
-    "Lam0(F) <- (F is (() <- (42)))\n"
+    "speed(V) <- (V == 5(m))\n"
+    "fresh(L) <- (L == [A, B])\n"
+    "esc(X, Y) <- (Y == ++(X + 1))\n"
+    "dct(D) <- (D == {'a': 1})\n"
+    "sett(S) <- (S == {1, 2})\n"
+    "fs(X, S) <- (S == f\"v={X}\")\n"
+    "arith(X, Y) <- (Y is X + 1)\n"
+    "go(Y) <- (arith(1, Y))\n"
+    "lam(F) <- (F is ((X) <- (X + 1)))\n"
+    "lam0(F) <- (F is (() <- (42)))\n"
 )
 
 
@@ -194,11 +194,11 @@ class TestCompiledPredicateCodeEmitsDollarNames:
         temp_fixture_module(
             "dollar_codegen_probe",
             "-allow_singletons\n"
-            "-module(dollar_codegen_probe, [Fresh(L), Arith(X, Y), "
-            "Pair(A, B, P)])\n"
-            "Fresh(L) <- (L == [A, B])\n"
-            "Arith(X, Y) <- (Y == X + 1)\n"
-            "Pair(A, B, (A, B)),\n",
+            "-module(dollar_codegen_probe, [fresh(L), arith(X, Y), "
+            "pair(A, B, P)])\n"
+            "fresh(L) <- (L == [A, B])\n"
+            "arith(X, Y) <- (Y == X + 1)\n"
+            "pair(A, B, (A, B)),\n",
         )
         src = capture_predicate_codegen("tests.fixtures.dollar_codegen_probe")
         names = _generated_names(src)
@@ -224,16 +224,16 @@ class TestBareAliasesStayForTheDeprecationWindow:
         the bare alias in the module namespace this round."""
         mod = _load_inline(
             "_dollar_bare_var_probe",
-            "-module(dollar_bare_var_probe, [Mk(X), Chk(X)])\n"
-            "Mk(X) <- (X == ++Var())\n"
-            "Chk(1),\n",
+            "-module(dollar_bare_var_probe, [mk(X), chk(X)])\n"
+            "mk(X) <- (X == ++Var())\n"
+            "chk(1),\n",
         )
         from clausal.logic.variables import deref, is_var
         # ``++Var()`` hands back a fresh, unbound variable.
         X = Var()
-        answers = [is_var(deref(X)) for _ in solve(mod.Mk(X), mod)]
+        answers = [is_var(deref(X)) for _ in solve(mod.mk(X), mod)]
         assert answers == [True]
-        assert len(list(solve(mod.Chk(Var()), mod))) == 1
+        assert len(list(solve(mod.chk(Var()), mod))) == 1
 
 
 # ── (c) the collision class the change removes ──────────────────────────────
@@ -241,34 +241,36 @@ class TestBareAliasesStayForTheDeprecationWindow:
 _COLLIDING = {
     # user predicate spelled like a simple_ast node class / injected name
     # (``==`` is arithmetic evaluation; ``is`` is unification)
-    "Sub": "Sub(X, Y) <- (Y == X - 1)\nGo(Y) <- (Sub(5, Y))\n",
-    "Add": "Add(X, Y) <- (Y == X - 1)\nGo(Y) <- (Add(5, Y))\n",
-    "Call": "Call(X) <- (X == 4)\nGo(Y) <- (Call(Y))\n",
-    "Node": "Node(4),\nGo(Y) <- (Node(Y))\n",
-    "Module": "Module(4),\nGo(Y) <- (Module(Y))\n",
-    "Var": "Var(4),\nGo(Y) <- (Var(Y))\n",
-    "Predicate": "Predicate(4),\nGo(Y) <- (Predicate(Y))\n",
-    "Quantity": "Quantity(4),\nGo(Y) <- (Quantity(Y))\n",
-    "LoadName": "LoadName(4),\nGo(Y) <- (LoadName(Y))\n",
+    "Sub": "Sub(X, Y) <- (Y == X - 1)\ngo(Y) <- (Sub(5, Y))\n",
+    "Add": "Add(X, Y) <- (Y == X - 1)\ngo(Y) <- (Add(5, Y))\n",
+    "Call": "Call(X) <- (X == 4)\ngo(Y) <- (Call(Y))\n",
+    "Node": "Node(4),\ngo(Y) <- (Node(Y))\n",
+    "Var": "Var(4),\ngo(Y) <- (Var(Y))\n",
+    "Module": "Module(4),\ngo(Y) <- (Module(Y))\n",
+    "Predicate": "Predicate(4),\ngo(Y) <- (Predicate(Y))\n",
+    "Quantity": "Quantity(4),\ngo(Y) <- (Quantity(Y))\n",
+    "LoadName": "LoadName(4),\ngo(Y) <- (LoadName(Y))\n",
 }
 
 
 class TestUserPredicateNamedLikeARuntimeClass:
+    """A user predicate spelled like a runtime class cannot collide with it
+    any more: TitleCase in a Clausal position is a load-time SyntaxError,
+    and the message names the ``++`` escape, the one way a Python class is
+    reached from a clause."""
+
     @pytest.mark.parametrize("name", sorted(_COLLIDING))
-    def test_loads_and_runs(self, name):
+    def test_titlecase_spelling_is_a_syntax_error_naming_the_escape(
+            self, name):
         body = _COLLIDING[name]
         arity = 2 if name in ("Sub", "Add") else 1
         head = f"{name}(X, Y)" if arity == 2 else f"{name}(X)"
-        mod = _load_inline(
-            f"_dollar_collide_{name}",
-            f"-module(dollar_collide_{name}, [{head}, Go(Y)])\n{body}",
-        )
-        from clausal.logic.variables import deref
-        # Read the binding inside the loop -- backtracking unwinds the
-        # trail once the generator is exhausted.
-        Y = Var()
-        answers = [deref(Y) for _ in solve(mod.Go(Y), mod)]
-        assert answers == [4]
+        with pytest.raises(SyntaxError, match=rf"`{name}` is TitleCase") as ei:
+            _load_inline(
+                f"_dollar_collide_{name}",
+                f"-module(dollar_collide_{name}, [{head}, go(Y)])\n{body}",
+            )
+        assert f"++{name}" in str(ei.value)
 
     def test_lowercase_spelling_never_collided(self):
         mod = _load_inline(
@@ -350,21 +352,16 @@ class TestWithDollarTwinsIsLoudOnConflict:
 
 
 class TestUserPredicateNamedPredicateMeta:
-    def test_loads_and_runs(self):
-        """The class-minting template names the metaclass; only THAT
-        reference may be re-spelled ``$PredicateMeta`` -- a user head spelled
-        ``PredicateMeta`` keeps its own name everywhere else in the block."""
-        mod = _load_inline(
-            "_dollar_collide_PredicateMeta",
-            "-module(dollar_collide_PredicateMeta, [PredicateMeta(X), Go(Y)])\n"
-            "PredicateMeta(4),\nGo(Y) <- (PredicateMeta(Y))\n",
-        )
-        from clausal.logic.variables import deref
-        from clausal.logic.predicate import PredicateMeta as RealMeta
-        assert isinstance(mod.PredicateMeta, RealMeta)  # the user's predicate
-        assert vars(mod)["$PredicateMeta"] is RealMeta  # the engine's twin
-        Y = Var()
-        assert [deref(Y) for _ in solve(mod.Go(Y), mod)] == [4]
+    def test_titlecase_head_is_a_syntax_error(self):
+        """A user head spelled ``PredicateMeta`` is TitleCase, so it does
+        not load; the class-minting template's metaclass reference is the
+        only ``PredicateMeta`` a module block can carry."""
+        with pytest.raises(SyntaxError, match="`PredicateMeta` is TitleCase"):
+            _load_inline(
+                "_dollar_collide_PredicateMeta",
+                "-module(dollar_collide_PredicateMeta, [PredicateMeta(X), go(Y)])\n"
+                "PredicateMeta(4),\ngo(Y) <- (PredicateMeta(Y))\n",
+            )
 
     def test_template_rewrites_only_the_metaclass_reference(self):
         from clausal.templating.term_rewriting import _make_functor_class_ast
@@ -389,18 +386,25 @@ class TestMintingGuardOnlyForTwinnedHeads:
         with pytest.raises(TypeError, match="'NoneType' object is not callable"):
             _load_inline(
                 "_dollar_guard_none_binding",
-                "-module(dollar_guard_none_binding, [Go(Y)])\n"
-                "foo = None\nfoo(4),\nGo(Y) <- (foo(Y))\n",
+                "-module(dollar_guard_none_binding, [go(Y)])\n"
+                "foo = None\nfoo(4),\ngo(Y) <- (foo(Y))\n",
             )
 
-    def test_guard_is_emitted_for_a_twinned_head_only(self):
+    def test_twinned_head_cannot_be_written(self):
+        """The only heads that carry a ``$`` twin are the runtime classes,
+        and those are TitleCase — a load-time SyntaxError now, so the guard
+        is unreachable from source.  A lowercase head gets no guard."""
+        with pytest.raises(SyntaxError, match="`Node` is TitleCase"):
+            _transformed_source(
+                "-allow_singletons\n-module(dollar_guard_probe, [Node(X)])\n"
+                "Node(1),\n"
+            )
         src = _transformed_source(
-            "-allow_singletons\n-module(dollar_guard_probe, [Node(X), Speed(V)])\n"
-            "Node(1),\nSpeed(2),\n"
+            "-allow_singletons\n-module(dollar_guard_probe, [speed(V)])\n"
+            "speed(2),\n"
         )
-        assert "Node is globals().get('$Node')" in src
-        assert "Speed is globals().get('$Speed')" not in src
         assert "globals().get('$Speed')" not in src
+        assert "globals().get('$speed')" not in src
 
 
 class TestReplGoalPathEmitsDollarNames:
@@ -426,11 +430,11 @@ class TestReifierReadsEveryDollarSpellingBack:
         assert "$" not in repr(clauses)
         # The unit sugar is a PyThunk whose body names $Quantity; the
         # escape's CODE reads back bare, exactly as before the twins.
-        speed = next(c for c in clauses if c.head.name == "Speed")
+        speed = next(c for c in clauses if c.head.name == "speed")
         assert speed.goals[0].right.code == "Quantity(5, m)"
-        assert rendered["Speed"] == "Speed(V) <- (V == ++Quantity(5, m))"
-        assert rendered["Lam"] == "Lam(F) <- (F is ((X,) <-(X + 1)))"
-        assert rendered["Lam0"] == "Lam0(F) <- (F is (() <-(42)))"
+        assert rendered["speed"] == "speed(V) <- (V == ++Quantity(5, m))"
+        assert rendered["lam"] == "lam(F) <- (F is ((X,) <-(X + 1)))"
+        assert rendered["lam0"] == "lam0(F) <- (F is (() <-(42)))"
         assert not any("$" in r for r in rendered.values()), rendered
 
 

@@ -4,11 +4,11 @@
 # Verifies that deep unfolding produces correct results identical
 # to shallow specialization.
 
--import_from(clausal.examples.metainterpreters, [Solve, SolveCount])
+-import_from(clausal.examples.metainterpreters, [solve, solve_count])
 
 # ── Object Program ────────────────────────────────────────────────────────────
 
-NatnumProgram(PROGRAM) <- (
+natnum_program(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", X]], [["natnum", X]]]
@@ -17,29 +17,29 @@ NatnumProgram(PROGRAM) <- (
 
 # ── Shallow specialization (baseline) ────────────────────────────────────────
 
--specialize(Solve, NatnumProgram, alias=ShallowNatnum)
+-specialize(solve, natnum_program, alias=shallow_natnum)
 
 # ── Deep specialization ──────────────────────────────────────────────────────
 
--specialize(Solve, NatnumProgram, alias=DeepNatnum, depth=5)
+-specialize(solve, natnum_program, alias=deep_natnum, depth=5)
 
 # ── Deep specialization with counting MI ─────────────────────────────────────
 
--specialize(SolveCount, NatnumProgram, alias=DeepCountNatnum, depth=3)
+-specialize(solve_count, natnum_program, alias=deep_count_natnum, depth=3)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 # Shallow baseline tests.
-test("shallow natnum(0)") <- ShallowNatnum([["natnum", 0]])  # nv
-test("shallow natnum(s(0))") <- ShallowNatnum([["natnum", ["s", 0]]])  # nv
-test("shallow natnum(s(s(0)))") <- ShallowNatnum([["natnum", ["s", ["s", 0]]]])  # nv
+test("shallow natnum(0)") <- shallow_natnum([["natnum", 0]])  # nv
+test("shallow natnum(s(0))") <- shallow_natnum([["natnum", ["s", 0]]])  # nv
+test("shallow natnum(s(s(0)))") <- shallow_natnum([["natnum", ["s", ["s", 0]]]])  # nv
 
 # Deep unfolding tests — should produce identical results.
-test("deep natnum(0)") <- DeepNatnum([["natnum", 0]])  # nv
-test("deep natnum(s(0))") <- DeepNatnum([["natnum", ["s", 0]]])  # nv
-test("deep natnum(s(s(0)))") <- DeepNatnum([["natnum", ["s", ["s", 0]]]])  # nv
+test("deep natnum(0)") <- deep_natnum([["natnum", 0]])  # nv
+test("deep natnum(s(0))") <- deep_natnum([["natnum", ["s", 0]]])  # nv
+test("deep natnum(s(s(0)))") <- deep_natnum([["natnum", ["s", ["s", 0]]]])  # nv
 
 # Deep counting — verify counts are preserved.
-test("deep count natnum(0) = 1") <- DeepCountNatnum([["natnum", 0]], 1)  # nv
-test("deep count natnum(s(0)) = 2") <- DeepCountNatnum([["natnum", ["s", 0]]], 2)  # nv
-test("deep count natnum(s(s(0))) = 3") <- DeepCountNatnum([["natnum", ["s", ["s", 0]]]], 3)  # nv
+test("deep count natnum(0) = 1") <- deep_count_natnum([["natnum", 0]], 1)  # nv
+test("deep count natnum(s(0)) = 2") <- deep_count_natnum([["natnum", ["s", 0]]], 2)  # nv
+test("deep count natnum(s(s(0))) = 3") <- deep_count_natnum([["natnum", ["s", ["s", 0]]]], 3)  # nv

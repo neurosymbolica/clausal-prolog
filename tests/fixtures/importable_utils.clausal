@@ -1,12 +1,12 @@
--module(importable_utils, [Double(X, R), Helper(X, Y)])
+-module(importable_utils, [double(X, R), helper(X, Y)])
 
-Double(0, 0),
-Double(1, 2),
-Double(2, 4),
-Double(3, 6),
+double(0, 0),
+double(1, 2),
+double(2, 4),
+double(3, 6),
 
-Helper(X, Y) <- Double(X, Y)
+helper(X, Y) <- double(X, Y)
 
-test("double 0") <- Double(0, 0)  # nv
-test("double 2 is 4") <- Double(2, 4)  # nv
-test("helper delegates") <- (Helper(2, Y), Y == 4)  # nv
+test("double 0") <- double(0, 0)  # nv
+test("double 2 is 4") <- double(2, 4)  # nv
+test("helper delegates") <- (helper(2, Y), Y == 4)  # nv

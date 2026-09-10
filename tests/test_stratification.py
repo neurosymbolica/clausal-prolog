@@ -38,47 +38,47 @@ def load(tmp_path_factory):
 
 UNTABLED_CYCLE = """-allow_singletons
 
-Pu() <- (not Qu())
-Qu() <- (not Pu())
+pu() <- (not qu())
+qu() <- (not pu())
 """
 
-TABLED_CYCLE = """-table(Win/1)
+TABLED_CYCLE = """-table(win/1)
 
-Move(1, 2),
-Move(2, 1),
+move(1, 2),
+move(2, 1),
 
-Win(X) <- (Move(X, Y), not Win(Y))
+win(X) <- (move(X, Y), not win(Y))
 """
 
 STRATIFIED_NAF = """
-Item(1),
-Item(2),
-Danger(2),
+item(1),
+item(2),
+danger(2),
 
-Safe(X) <- (Item(X), not Danger(X))
+safe(X) <- (item(X), not danger(X))
 """
 
 SELF_NEGATION = """
-Item(1),
+item(1),
 
-Odd(X) <- (Item(X), not Odd(X))
+odd(X) <- (item(X), not odd(X))
 """
 
-POSITIVE_CYCLE = """-table(Reach/2)
+POSITIVE_CYCLE = """-table(reach/2)
 
-Edge(1, 2),
-Edge(2, 1),
+edge(1, 2),
+edge(2, 1),
 
-Reach(X, Y) <- Edge(X, Y)
-Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
+reach(X, Y) <- edge(X, Y)
+reach(X, Y) <- (edge(X, Z), reach(Z, Y))
 """
 
-MIXED_TABLING = """-table(Ta/1)
+MIXED_TABLING = """-table(ta/1)
 
-Seed(1),
+seed(1),
 
-Ta(X) <- (Seed(X), not Ub(X))
-Ub(X) <- (Seed(X), not Ta(X))
+ta(X) <- (seed(X), not ub(X))
+ub(X) <- (seed(X), not ta(X))
 """
 
 
@@ -88,21 +88,21 @@ class TestNonStratifiedDetection:
         _, strat = load("untabled_cycle", UNTABLED_CYCLE)
         assert len(strat) == 1
         msg = str(strat[0].message)
-        assert "Pu/0" in msg and "Qu/0" in msg
+        assert "pu/0" in msg and "qu/0" in msg
         assert "not" in msg
         assert "-table" in msg  # points at the WFS remedy
 
     def test_self_negation_warns(self, load):
         _, strat = load("self_neg", SELF_NEGATION)
         assert len(strat) == 1
-        assert "Odd/1" in str(strat[0].message)
+        assert "odd/1" in str(strat[0].message)
 
     def test_mixed_tabling_warns(self, load):
         """A negation cycle with an UNTABLED member still misbehaves —
         the diagnostic names the untabled predicates."""
         _, strat = load("mixed", MIXED_TABLING)
         assert len(strat) == 1
-        assert "Ub/1" in str(strat[0].message)
+        assert "ub/1" in str(strat[0].message)
 
 
 class TestStratifiedSilence:
@@ -156,17 +156,17 @@ class TestUnitGraphAnalysis:
 
 
 OR_BODY_CYCLE = """
-Seed(1),
+seed(1),
 
-Pa(X) <- (Seed(X) or not Pb(X))
-Pb(X) <- (Seed(X), not Pa(X))
+pa(X) <- (seed(X) or not pb(X))
+pb(X) <- (seed(X), not pa(X))
 """
 
 ITE_TEST_CYCLE = """
-Seed(1),
+seed(1),
 
-Qa(X) <- if_(Qb(X), Seed(X), Seed(X))
-Qb(X) <- (Seed(X), not Qa(X))
+qa(X) <- if_(qb(X), seed(X), seed(X))
+qb(X) <- (seed(X), not qa(X))
 """
 
 
@@ -177,11 +177,11 @@ class TestCompositeBodies:
         _, strat = load("or_cycle", OR_BODY_CYCLE)
         assert len(strat) == 1
         msg = str(strat[0].message)
-        assert "Pa/1" in msg and "Pb/1" in msg
+        assert "pa/1" in msg and "pb/1" in msg
 
     def test_ite_test_edge_warns(self, load):
         """An if-else test is a negative dependency for its else branch."""
         _, strat = load("ite_cycle", ITE_TEST_CYCLE)
         assert len(strat) == 1
         msg = str(strat[0].message)
-        assert "Qa/1" in msg and "Qb/1" in msg
+        assert "qa/1" in msg and "qb/1" in msg

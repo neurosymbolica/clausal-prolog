@@ -105,13 +105,13 @@ class TestStructTablingParity:
         def build(mod):
             return (n, Var())
 
-        plain = _answers(_ST_PLAIN, "Nats", build, [1])
-        tagged = _answers(_ST_TAGGED, "Nats", build, [1])
+        plain = _answers(_ST_PLAIN, "nats", build, [1])
+        tagged = _answers(_ST_TAGGED, "nats", build, [1])
         assert plain == tagged
         assert len(plain) == 1
 
     def test_nats_chain_shape_is_canonical(self):
-        """Nats(3, L) => cons(3, cons(2, cons(1, nil))) in both halves.
+        """nats(3, L) => cons(3, cons(2, cons(1, nil))) in both halves.
 
         P3-1 atom pivot (§1b): the chain's tail ``nil`` is the interned str
         "nil" in both halves, not a wrapped ("nil",) atom-class shape --
@@ -121,18 +121,18 @@ class TestStructTablingParity:
             return (3, Var())
 
         expected = ("cons", 3, ("cons", 2, ("cons", 1, mint("nil"))))
-        plain = _answers(_ST_PLAIN, "Nats", build, [1])
-        tagged = _answers(_ST_TAGGED, "Nats", build, [1])
+        plain = _answers(_ST_PLAIN, "nats", build, [1])
+        tagged = _answers(_ST_TAGGED, "nats", build, [1])
         assert plain == [(expected,)]
         assert tagged == [(expected,)]
 
     def test_nats_open_query_is_deterministic_both_halves(self):
-        """Nats/2 has exactly one answer per N -- an open query drained to
+        """nats/2 has exactly one answer per N -- an open query drained to
         exhaustion must yield exactly one solution on both halves."""
         for module_name in (_ST_PLAIN, _ST_TAGGED):
             mod = _fixture(module_name)
             L = Var()
-            results = list(call("Nats", 4, L, module=_logic_module(mod)))
+            results = list(call("nats", 4, L, module=_logic_module(mod)))
             assert len(results) == 1, module_name
 
     def test_nats_ground_query_success_parity(self):
@@ -148,31 +148,31 @@ class TestStructTablingParity:
         """
         plain_mod = _fixture(_ST_PLAIN)
         chain = ("cons", 3, ("cons", 2, ("cons", 1, plain_mod.nil)))
-        assert len(list(call("Nats", 3, chain, module=_logic_module(plain_mod)))) == 1
+        assert len(list(call("nats", 3, chain, module=_logic_module(plain_mod)))) == 1
 
         tagged_mod = _fixture(_ST_TAGGED)
         cell_chain = ("cons", 3, ("cons", 2, ("cons", 1, tagged_mod.nil)))
-        assert len(list(call("Nats", 3, cell_chain, module=_logic_module(tagged_mod)))) == 1
+        assert len(list(call("nats", 3, cell_chain, module=_logic_module(tagged_mod)))) == 1
 
     def test_nats_ground_query_failure_parity(self):
         """A caller-supplied chain with the wrong head value fails on both."""
         plain_mod = _fixture(_ST_PLAIN)
         # R6: a cell chain on this half too -- see the success twin above.
         bad_chain = ("cons", 99, ("cons", 2, ("cons", 1, plain_mod.nil)))
-        assert list(call("Nats", 3, bad_chain, module=_logic_module(plain_mod))) == []
+        assert list(call("nats", 3, bad_chain, module=_logic_module(plain_mod))) == []
 
         tagged_mod = _fixture(_ST_TAGGED)
         bad_cell_chain = ("cons", 99, ("cons", 2, ("cons", 1, tagged_mod.nil)))
-        assert list(call("Nats", 3, bad_cell_chain, module=_logic_module(tagged_mod))) == []
+        assert list(call("nats", 3, bad_cell_chain, module=_logic_module(tagged_mod))) == []
 
     def test_must_fail_negative_n_fails_both_halves(self):
-        """Neither clause head matches a negative N: Nats(0, nil) needs N=0,
+        """Neither clause head matches a negative N: nats(0, nil) needs N=0,
         the recursive clause's ``N > 0`` guard rejects it too."""
         def build(mod):
             return (-1, Var())
 
-        assert _answers(_ST_PLAIN, "Nats", build, [1]) == []
-        assert _answers(_ST_TAGGED, "Nats", build, [1]) == []
+        assert _answers(_ST_PLAIN, "nats", build, [1]) == []
+        assert _answers(_ST_TAGGED, "nats", build, [1]) == []
 
 
 # ── tagged_shapes / tagged_shapes_tagged (reused fixture) ───────────────────
@@ -334,7 +334,7 @@ def _time_struct_tabling(fixture_path, n=_TIMING_N, reps=_TIMING_REPS):
         lm = mod.__dict__["$module"]
         nil = mod.nil
         L = Var()
-        for _t in call("Nats", n, L, module=lm):
+        for _t in call("nats", n, L, module=lm):
             node = deref(L)
             length = 0
             # Equality, never identity (spec §5.2): the atom in the built

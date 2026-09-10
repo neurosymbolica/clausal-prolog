@@ -63,7 +63,7 @@ BINDINGS_SRC = """
 prc("alpha", 10),
 prc("beta", 20),
 
-Test("later goal fails after a binding") <- (
+test("later goal fails after a binding") <- (
     prc("alpha", NUM),
     prc("gamma", NUM)
 ),
@@ -72,7 +72,7 @@ Test("later goal fails after a binding") <- (
 ERROR_SRC = """
 prc("alpha", 10),
 
-Test("raises") <- (
+test("raises") <- (
     prc("alpha", NUM),
     atom_length(NUM, LEN),
     LEN > 0
@@ -82,7 +82,7 @@ Test("raises") <- (
 PASSING_SRC = """
 prc("alpha", 10),
 
-Test("passes") <- (
+test("passes") <- (
     prc("alpha", NUM),
     NUM > 5
 ),

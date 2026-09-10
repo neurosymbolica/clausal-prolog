@@ -80,7 +80,7 @@ def loaded():
 
     def _spy(clauses_, functor, arity, db_, ctx_template):
         result = _orig_sweep(clauses_, functor, arity, db_, ctx_template)
-        if functor == "Cnt" and arity == 3:
+        if functor == "cnt" and arity == 3:
             captured.append((ctx_template, len(clauses_)))
         return result
 
@@ -97,7 +97,7 @@ def loaded():
         for key in ("a", "b"):
             k = Var()
             results[key] = [deref(k)
-                            for _ in call("Cnt", mint(key), 4, k, module=lm)]
+                            for _ in call("cnt", mint(key), 4, k, module=lm)]
     finally:
         predicate_mod._sweep_tro_eligible = _orig_sweep
 
@@ -111,7 +111,7 @@ def loaded():
 class TestTroLiftRecomputeCacheScope:
     def test_correct_answers_for_both_lift_eligible_tro_buckets(self, loaded):
         """Both recursive buckets ("a": 2 prefix goals, "b": 3 prefix
-        goals before the tail call) must independently count Cnt(key, 4, X)
+        goals before the tail call) must independently count cnt(key, 4, X)
         down to X=0. A cross-bucket plan mix-up would misplace the
         tail-call split and either crash the compile or bind the wrong
         value -- not merely disagree by coincidence."""

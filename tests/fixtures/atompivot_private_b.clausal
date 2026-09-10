@@ -7,4 +7,4 @@
 
 -private([atompivot_cross_tag])
 
-TagFromPrivateDecl(atompivot_cross_tag),
+tag_from_private_decl(atompivot_cross_tag),

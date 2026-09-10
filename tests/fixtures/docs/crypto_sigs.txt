@@ -30,7 +30,7 @@ derive("password", "salt", 100000, 64, HASH)
 -import_from(py.hash, [hash])
 -import_from(py.files, [read_file_to_string])
 
-FileHash(PATH, HASH) <- (
+file_hash(PATH, HASH) <- (
     read_file_to_string(PATH, CONTENT),
     hash("sha256", CONTENT, HASH)
 )
@@ -39,7 +39,7 @@ FileHash(PATH, HASH) <- (
 --8<-- [start:api_signing]
 -import_from(py.hmac, [sign])
 
-SignedRequest(KEY, BODY, SIGNATURE) <- (
+signed_request(KEY, BODY, SIGNATURE) <- (
     sign("sha256", KEY, BODY, SIGNATURE)
 )
 --8<-- [end:api_signing]
@@ -47,5 +47,5 @@ SignedRequest(KEY, BODY, SIGNATURE) <- (
 --8<-- [start:password_hashing]
 -import_from(py.pbkdf2, [derive])
 
-HashPassword(PASSWORD, SALT, HASH) <- derive(PASSWORD, SALT, 100000, HASH)
+hash_password(PASSWORD, SALT, HASH) <- derive(PASSWORD, SALT, 100000, HASH)
 --8<-- [end:password_hashing]

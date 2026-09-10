@@ -397,22 +397,22 @@ class TestCompiledPredicateCreation:
     # concrete list (no star), Clause 2 recurses with a fresh unbound TAIL forever.
 
     def test_split_unbound_list(self):
-        """Split(L, A, B) with L unbound → L is a SegList inside the solution."""
+        """split(L, A, B) with L unbound → L is a SegList inside the solution."""
         # nv
         mod = self.mstar
         lst = Var()
         a, b = Var(), Var()
-        lst_types = [type(deref(lst)) for _ in call("Split", lst, a, b, module=mod)]
+        lst_types = [type(deref(lst)) for _ in call("split", lst, a, b, module=mod)]
         assert lst_types == [SegList]
 
     def test_split_unbound_list_then_ground(self):
-        """Inside Split(L, A, B) solution, unify L=[1,2,3] enumerates splits."""
+        """Inside split(L, A, B) solution, unify L=[1,2,3] enumerates splits."""
         # nv
         mod = self.mstar
         lst = Var()
         a, b = Var(), Var()
         all_splits = []
-        for trail in call("Split", lst, a, b, module=mod):
+        for trail in call("split", lst, a, b, module=mod):
             sl = deref(lst)
             assert isinstance(sl, SegList)
             for _ in _seglist_unify_gen(sl, [1, 2, 3], trail):

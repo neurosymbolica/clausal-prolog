@@ -4,4 +4,4 @@
 
 -module(global_atoms_owner, [phase2import_yellow])
 
-ColorOwner(phase2import_yellow),
+color_owner(phase2import_yellow),

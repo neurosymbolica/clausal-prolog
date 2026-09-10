@@ -2,31 +2,31 @@
 
 -module(iso_control, [test/1])
 
-Parent(a, b),
+parent(a, b),
 
-Parent(b, c),
+parent(b, c),
 
-Parent(c, d),
+parent(c, d),
 
-Parent(a, e),
+parent(a, e),
 
-Ancestor(A, D) <- (Parent(A, D))
+ancestor(A, D) <- (parent(A, D))
 
-Ancestor(A, D) <- (Parent(A, Z), Ancestor(Z, D))
+ancestor(A, D) <- (parent(A, Z), ancestor(Z, D))
 
-Color(red),
+color(red),
 
-Color(green),
+color(green),
 
-Color(blue),
+color(blue),
 
-Choose(X, _, X),
+choose(X, _, X),
 
-Choose(_, Y, Y),
+choose(_, Y, Y),
 
-SafeMax(X, Y, X) <- (X >= Y)
+safe_max(X, Y, X) <- (X >= Y)
 
-SafeMax(X, Y, Y) <- (Y > X)
+safe_max(X, Y, Y) <- (Y > X)
 
 test('conjunction binds two vars') <- (X is 1, Y is 2, X == 1, Y == 2)
 
@@ -58,17 +58,17 @@ test('not + member: d not in list') <- (not d in [a, b, c])
 
 test('conjunction + negation') <- (X is 5, not X is 3, X == 5)
 
-test('choose picks first') <- (Choose(1, 2, 1))
+test('choose picks first') <- (choose(1, 2, 1))
 
-test('choose picks second') <- (Choose(1, 2, 2))
+test('choose picks second') <- (choose(1, 2, 2))
 
-test('choose with atoms') <- (Choose(a, b, a))
+test('choose with atoms') <- (choose(a, b, a))
 
-test('safe_max: first is larger') <- (SafeMax(5, 3, M), M == 5)
+test('safe_max: first is larger') <- (safe_max(5, 3, M), M == 5)
 
-test('safe_max: second is larger') <- (SafeMax(2, 7, M), M == 7)
+test('safe_max: second is larger') <- (safe_max(2, 7, M), M == 7)
 
-test('safe_max: equal') <- (SafeMax(4, 4, M), M == 4)
+test('safe_max: equal') <- (safe_max(4, 4, M), M == 4)
 
 test('true succeeds (1 == 1)') <- (1 == 1)
 
@@ -82,10 +82,10 @@ test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], (X is 1, Y
 
 test('naf does not bind: not(X is a) fails') <- (not not _x_unused is a)
 
-test('color enumerates three') <- (findall(X, Color(X), L), L == [red, green, blue])
+test('color enumerates three') <- (findall(X, color(X), L), L == [red, green, blue])
 
-test('ancestor: direct parent') <- (Ancestor(a, b))
+test('ancestor: direct parent') <- (ancestor(a, b))
 
-test('ancestor: transitive') <- (Ancestor(a, d))
+test('ancestor: transitive') <- (ancestor(a, d))
 
-test('ancestor of a yields all descendants') <- (findall(D, Ancestor(a, D), L), sort(L, S), S == [b, c, d, e])
+test('ancestor of a yields all descendants') <- (findall(D, ancestor(a, D), L), sort(L, S), S == [b, c, d, e])

@@ -3,9 +3,9 @@
 # todo/term-expansion-compile-time-predicate-synthesis.md: this used to load
 # with marker/1 existing but EMPTY.
 -module(expansion_nested_var, [ marker(K), key(X),
-                                TermExpansion(A, B, S, T), stays, income ])
+                                term_expansion(A, B, S, T), stays, income ])
 
-TermExpansion(q(key(KEY)), [q(marker(KEY))], STATE, STATE) <- True
+term_expansion(q(key(KEY)), [q(marker(KEY))], STATE, STATE) <- True
 
 key(stays),
 key(income),

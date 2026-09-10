@@ -3,4 +3,4 @@
 # from Python with a foreign (cross-module) atom argument.
 -import_module(qualified_atom_vocab)
 
-KnownCurrency(qualified_atom_vocab.euro),
+known_currency(qualified_atom_vocab.euro),

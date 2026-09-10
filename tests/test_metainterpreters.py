@@ -34,34 +34,34 @@ def _module(mod):
 def _terms(mod):
     """Cell CONSTRUCTORS for the module's object-level data functors.
 
-    P3-2 Task 2 (THE FLIP, R6): ``Natnum``/``succ``/``Edge``/``Path`` are
+    P3-2 Task 2 (THE FLIP, R6): ``natnum``/``succ``/``Edge``/``Path`` are
     ``-private`` DATA functors, so the module's own clauses build them as
     cells and their names bind interned SPELLINGS, not classes -- a Python
-    caller can no longer construct one by calling ``mod.Natnum``.  Returning
+    caller can no longer construct one by calling ``mod.natnum``.  Returning
     builders instead of classes keeps every call site below reading as the
     term it constructs while handing the engine the shape its clauses match.
     """
     d = mod.__dict__
-    assert d["Natnum"] == mint("Natnum")  # R6: the binding IS the atom
+    assert d["natnum"] == mint("natnum")  # R6: the binding IS the atom
     return (
-        lambda *args: ("Natnum", *args),
+        lambda *args: ("natnum", *args),
         lambda *args: ("succ", *args),
-        lambda *args: ("Edge", *args),
-        lambda *args: ("Path", *args),
+        lambda *args: ("edge", *args),
+        lambda *args: ("path", *args),
     )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _solve_bindings(mod, goals_val, program_pred="NatnumProgram"):
-    """Call Solve(goals, program) and return list of deref'd goals per solution."""
+def _solve_bindings(mod, goals_val, program_pred="natnum_program"):
+    """Call solve(goals, program) and return list of deref'd goals per solution."""
     m = _module(mod)
     p = Var()
     results = []
     for _ in call(program_pred, p, module=m):
         prog = _deref_walk(p)
-        for _ in call("Solve", goals_val, prog, module=m):
+        for _ in call("solve", goals_val, prog, module=m):
             results.append(_deref_walk(goals_val))
     return results
 
@@ -72,7 +72,7 @@ def _solve_bindings(mod, goals_val, program_pred="NatnumProgram"):
 class TestSolveBindings:
 
     def test_natnum_binds_variable(self, mod):
-        """Solve [natnum(X)] should enumerate X = 0, succ(0), succ(succ(0)), ..."""
+        """solve [natnum(X)] should enumerate X = 0, succ(0), succ(succ(0)), ..."""
         # nv
         Natnum, succ, _, _ = _terms(mod)
         m = _module(mod)
@@ -80,10 +80,10 @@ class TestSolveBindings:
         x = Var()
         goal = [Natnum(x)]
         results = []
-        for _ in call("NatnumProgram", p, module=m):
+        for _ in call("natnum_program", p, module=m):
             prog = deref(p)
             count = 0
-            for _ in call("Solve", goal, prog, module=m):
+            for _ in call("solve", goal, prog, module=m):
                 results.append(_deref_walk(x))
                 count += 1
                 if count >= 4:
@@ -94,7 +94,7 @@ class TestSolveBindings:
         assert results[3] == succ(succ(succ(0)))
 
     def test_edge_binds_destination(self, mod):
-        """Solve [edge(a, Y)] should enumerate Y = b."""
+        """solve [edge(a, Y)] should enumerate Y = b."""
         # nv
         _, _, Edge, _ = _terms(mod)
         m = _module(mod)
@@ -102,14 +102,14 @@ class TestSolveBindings:
         y = Var()
         goal = [Edge(mint("a"), y)]
         results = []
-        for _ in call("GraphProgram", p, module=m):
+        for _ in call("graph_program", p, module=m):
             prog = deref(p)
-            for _ in call("Solve", goal, prog, module=m):
+            for _ in call("solve", goal, prog, module=m):
                 results.append(_deref_walk(y))
         assert mint("b") in results
 
     def test_path_binds_destination(self, mod):
-        """Solve [path(a, Y)] should find Y = b, c, d."""
+        """solve [path(a, Y)] should find Y = b, c, d."""
         # nv
         _, _, _, Path = _terms(mod)
         m = _module(mod)
@@ -117,10 +117,10 @@ class TestSolveBindings:
         y = Var()
         goal = [Path(mint("a"), y)]
         results = []
-        for _ in call("GraphProgram", p, module=m):
+        for _ in call("graph_program", p, module=m):
             prog = deref(p)
             count = 0
-            for _ in call("Solve", goal, prog, module=m):
+            for _ in call("solve", goal, prog, module=m):
                 results.append(_deref_walk(y))
                 count += 1
                 if count >= 5:
@@ -140,8 +140,8 @@ class TestSolveCount:
         m = _module(mod)
         p = Var()
         count = Var()
-        for _ in call("NatnumProgram", p, module=m):
-            for _ in call("SolveCount", [Natnum(0)], deref(p), count, module=m):
+        for _ in call("natnum_program", p, module=m):
+            for _ in call("solve_count", [Natnum(0)], deref(p), count, module=m):
                 assert deref(count) == 1
                 return
         pytest.fail("no solution")
@@ -153,8 +153,8 @@ class TestSolveCount:
         m = _module(mod)
         p = Var()
         count = Var()
-        for _ in call("GraphProgram", p, module=m):
-            for _ in call("SolveCount", [Path(mint("a"), mint("c"))], deref(p), count, module=m):
+        for _ in call("graph_program", p, module=m):
+            for _ in call("solve_count", [Path(mint("a"), mint("c"))], deref(p), count, module=m):
                 assert deref(count) == 4
                 return
         pytest.fail("no solution")
@@ -171,8 +171,8 @@ class TestSolveLimit:
         Natnum, _, _, _ = _terms(mod)
         m = _module(mod)
         p = Var()
-        for _ in call("NatnumProgram", p, module=m):
-            results = list(call("SolveLimit", [Natnum(0)], deref(p), 0, module=m))
+        for _ in call("natnum_program", p, module=m):
+            results = list(call("solve_limit", [Natnum(0)], deref(p), 0, module=m))
             assert results == []
             return
         pytest.fail("no program")
@@ -184,12 +184,12 @@ class TestSolveLimit:
         m = _module(mod)
         p = Var()
         goal = [Natnum(succ(succ(succ(0))))]
-        for _ in call("NatnumProgram", p, module=m):
+        for _ in call("natnum_program", p, module=m):
             prog = deref(p)
             # depth 3 should fail
-            assert list(call("SolveLimit", goal, prog, 3, module=m)) == []
+            assert list(call("solve_limit", goal, prog, 3, module=m)) == []
             # depth 4 should succeed
-            assert len(list(call("SolveLimit", goal, prog, 4, module=m))) > 0
+            assert len(list(call("solve_limit", goal, prog, 4, module=m))) > 0
             return
         pytest.fail("no program")
 
@@ -205,9 +205,9 @@ class TestSolveIterativeDeepening:
         _, _, _, Path = _terms(mod)
         m = _module(mod)
         p = Var()
-        for _ in call("CyclicProgram", p, module=m):
+        for _ in call("cyclic_program", p, module=m):
             results = []
-            for _ in call("SolveIterativeDeepening",
+            for _ in call("solve_iterative_deepening",
                           [Path(mint("a"), mint("b"))], deref(p), module=m):
                 results.append(True)
                 break  # just need one solution
@@ -228,8 +228,8 @@ class TestSolveTree:
         m = _module(mod)
         p = Var()
         tree = Var()
-        for _ in call("NatnumProgram", p, module=m):
-            for _ in call("SolveTree", [Natnum(0)], deref(p), tree, module=m):
+        for _ in call("natnum_program", p, module=m):
+            for _ in call("solve_tree", [Natnum(0)], deref(p), tree, module=m):
                 t = _deref_walk(tree)
                 assert t == [[Natnum(0), []]]
                 return
@@ -242,8 +242,8 @@ class TestSolveTree:
         m = _module(mod)
         p = Var()
         tree = Var()
-        for _ in call("NatnumProgram", p, module=m):
-            for _ in call("SolveTree", [Natnum(succ(0))], deref(p), tree, module=m):
+        for _ in call("natnum_program", p, module=m):
+            for _ in call("solve_tree", [Natnum(succ(0))], deref(p), tree, module=m):
                 t = _deref_walk(tree)
                 assert len(t) == 1  # one goal in the list
                 node = t[0]
@@ -261,8 +261,8 @@ class TestSolveTree:
         m = _module(mod)
         p = Var()
         tree = Var()
-        for _ in call("GraphProgram", p, module=m):
-            for _ in call("SolveTree", [Path(mint("a"), mint("c"))], deref(p), tree, module=m):
+        for _ in call("graph_program", p, module=m):
+            for _ in call("solve_tree", [Path(mint("a"), mint("c"))], deref(p), tree, module=m):
                 t = _deref_walk(tree)
                 # Top-level: one node for path(a,c)
                 assert len(t) == 1

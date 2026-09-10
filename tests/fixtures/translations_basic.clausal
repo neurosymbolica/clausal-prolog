@@ -1,8 +1,8 @@
 -private([hello, th])
 -translations(th, {
     append(LIST, ELEMENT, NEWLIST): ต่อท้าย(รายการ, สมาชิก, รายการใหม่),
-    Member(ELEMENT, LIST): สมาชิกของ(สมาชิก, รายการ),
-    Greeting(NAME, MESSAGE): ทักทาย(ชื่อ, ข้อความ),
+    member(ELEMENT, LIST): สมาชิกของ(สมาชิก, รายการ),
+    greeting(NAME, MESSAGE): ทักทาย(ชื่อ, ข้อความ),
 })
 
 -translations(th, {
@@ -10,16 +10,16 @@
     hello: สวัสดี,
 })
 
-Greeting(hello, "world"),
-Greeting("Mike", "hi"),
+greeting(hello, "world"),
+greeting("Mike", "hi"),
 
 test("translate produces string") <- (
-    translate(th, Greeting(hello, "world"), STRING),
+    translate(th, greeting(hello, "world"), STRING),
     is_str(STRING)
 )  # nv
 
 test("translate produces nonempty") <- (
-    translate(th, Greeting(hello, "world"), STRING),
+    translate(th, greeting(hello, "world"), STRING),
     length(STRING, LENGTH),
     LENGTH > 0
 )  # nv

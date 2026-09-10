@@ -389,7 +389,7 @@ class TestShorterHeadAfterLongerIsRefused:
     def test_edcg_visible_arity_head_still_loads(self, tmp_path):
         """``r(1),`` against a class minted at /3 is at the VISIBLE arity."""
         mod = _load(tmp_path, "merge_edcg", """
-            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_acc(cnt, V_, in_, out_, {out_ is in_ + V_})
             -edcg_pred(r, 1, [cnt])
 
             r(1),
@@ -624,7 +624,7 @@ class TestTheRemedyPrintsTheTemplateEdit:
         of what it prints are then applied, and both load.
         """
         msg = self._msg(tmp_path, "remedy_minted", """
-            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_acc(cnt, V_, in_, out_, {out_ is in_ + V_})
             -edcg_pred(r, 1, [cnt])
 
             r(1, 2, 3, 4),
@@ -644,13 +644,13 @@ class TestTheRemedyPrintsTheTemplateEdit:
 
         # both printed edits are edits that work
         self._loads(tmp_path, "remedy_minted_head", """
-            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_acc(cnt, V_, in_, out_, {out_ is in_ + V_})
             -edcg_pred(r, 1, [cnt])
 
             r(1),
         """)
         self._loads(tmp_path, "remedy_minted_decl", """
-            -edcg_acc(cnt, V_, In_, Out_, {Out_ is In_ + V_})
+            -edcg_acc(cnt, V_, in_, out_, {out_ is in_ + V_})
             -edcg_pred(r, 4, [cnt])
 
             r(1, 2, 3, 4),

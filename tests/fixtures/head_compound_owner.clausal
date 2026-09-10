@@ -1,9 +1,9 @@
 # Fixture for tests/test_head_match_imported_compound.py.
-# Declares a compound functor Wrap/1 and an atom 'direct' that an
+# Declares a compound functor wrap/1 and an atom 'direct' that an
 # importer module can use in rule and fact head positions.
 
--module(head_compound_owner, [Wrap(SUB),
-                              Item(REQ_ID, STATUS, DETAIL),
-                              Met(SUB),
+-module(head_compound_owner, [wrap(SUB),
+                              item(REQ_ID, STATUS, DETAIL),
+                              met(SUB),
                               direct])
 

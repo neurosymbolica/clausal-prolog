@@ -4,4 +4,4 @@
 
 -private([phase2priv_orange])
 
-ColorPrivA(phase2priv_orange),
+color_priv_a(phase2priv_orange),

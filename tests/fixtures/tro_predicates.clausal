@@ -4,81 +4,81 @@
 # sum_(List, Accumulator, Result): sum elements of List starting from Accumulator.
 # TRO-eligible: prefix is deterministic (eager `eval_/2`), tail call is self-recursive.
 
-AccSum([], ACC, ACC),
-AccSum([H, *T], ACC, RESULT) <- (
+acc_sum([], ACC, ACC),
+acc_sum([H, *T], ACC, RESULT) <- (
     eval_(ACC + H, NEWACC),
-    AccSum(T, NEWACC, RESULT)
+    acc_sum(T, NEWACC, RESULT)
 )
 
-test("accsum empty") <- (AccSum([], 0, R) and R == 0)  # nv
-test("accsum one") <- (AccSum([5], 0, R) and R == 5)  # nv
-test("accsum three") <- (AccSum([1, 2, 3], 0, R) and R == 6)  # nv
-test("accsum ten") <- (AccSum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0, R) and R == 55)  # nv
+test("accsum empty") <- (acc_sum([], 0, R) and R == 0)  # nv
+test("accsum one") <- (acc_sum([5], 0, R) and R == 5)  # nv
+test("accsum three") <- (acc_sum([1, 2, 3], 0, R) and R == 6)  # nv
+test("accsum ten") <- (acc_sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0, R) and R == 55)  # nv
 
 # ── Accumulator reverse ─────────────────────────────────────────────────────
-# AccReverse builds a reversed list via accumulator pattern.
+# acc_reverse builds a reversed list via accumulator pattern.
 # Tail call arg [H, *ACC] contains StarUnpack — TRO handles this via
 # term_to_ast_expr which generates _build_star_list() at snapshot time.
 
-AccReverse([], ACC, ACC),
-AccReverse([H, *T], ACC, RESULT) <- (
+acc_reverse([], ACC, ACC),
+acc_reverse([H, *T], ACC, RESULT) <- (
     ACC2 is [H, *ACC],
-    AccReverse(T, ACC2, RESULT)
+    acc_reverse(T, ACC2, RESULT)
 )
 
-test("accrev empty") <- (AccReverse([], [], R) and R == [])  # nv
-test("accrev one") <- (AccReverse([1], [], R) and R == [1])  # nv
-test("accrev three") <- (AccReverse([1, 2, 3], [], R) and R == [3, 2, 1])  # nv
+test("accrev empty") <- (acc_reverse([], [], R) and R == [])  # nv
+test("accrev one") <- (acc_reverse([1], [], R) and R == [1])  # nv
+test("accrev three") <- (acc_reverse([1, 2, 3], [], R) and R == [3, 2, 1])  # nv
 
 # ── Counter-based recursion ─────────────────────────────────────────────────
-# CountDown(N, Accumulator, Result): count down from N, collecting values.
+# count_down(N, Accumulator, Result): count down from N, collecting values.
 
-CountDown(0, ACC, [0, *ACC]),
-CountDown(N, ACC, RESULT) <- (
+count_down(0, ACC, [0, *ACC]),
+count_down(N, ACC, RESULT) <- (
     N > 0,
     eval_(N - 1, N1),
-    CountDown(N1, [N, *ACC], RESULT)
+    count_down(N1, [N, *ACC], RESULT)
 )
 
-test("countdown zero") <- (CountDown(0, [], R) and R == [0])  # nv
-test("countdown three") <- (CountDown(3, [], R) and R == [0, 1, 2, 3])  # nv
+test("countdown zero") <- (count_down(0, [], R) and R == [0])  # nv
+test("countdown three") <- (count_down(3, [], R) and R == [0, 1, 2, 3])  # nv
 
 # ── length with accumulator ─────────────────────────────────────────────────
 
-AccLength([], N, N),
-AccLength([_, *T], ACC, N) <- (
+acc_length([], N, N),
+acc_length([_, *T], ACC, N) <- (
     eval_(ACC + 1, ACC1),
-    AccLength(T, ACC1, N)
+    acc_length(T, ACC1, N)
 )
 
-test("acclen empty") <- (AccLength([], 0, N) and N == 0)  # nv
-test("acclen three") <- (AccLength([1, 2, 3], 0, N) and N == 3)  # nv
+test("acclen empty") <- (acc_length([], 0, N) and N == 0)  # nv
+test("acclen three") <- (acc_length([1, 2, 3], 0, N) and N == 3)  # nv
 
 # ── Factorial with accumulator ──────────────────────────────────────────────
 
-AccFactorial(0, ACC, ACC),
-AccFactorial(N, ACC, RESULT) <- (
+acc_factorial(0, ACC, ACC),
+acc_factorial(N, ACC, RESULT) <- (
     N > 0,
     eval_(ACC * N, NEWACC),
     eval_(N - 1, N1),
-    AccFactorial(N1, NEWACC, RESULT)
+    acc_factorial(N1, NEWACC, RESULT)
 )
 
-test("fact zero") <- (AccFactorial(0, 1, R) and R == 1)  # nv
-test("fact five") <- (AccFactorial(5, 1, R) and R == 120)  # nv
-test("fact ten") <- (AccFactorial(10, 1, R) and R == 3628800)  # nv
+test("fact zero") <- (acc_factorial(0, 1, R) and R == 1)  # nv
+test("fact five") <- (acc_factorial(5, 1, R) and R == 120)  # nv
+test("fact ten") <- (acc_factorial(10, 1, R) and R == 3628800)  # nv
 
 # ── Non-TRO predicate (nondeterministic prefix) for comparison ──────────────
 # This predicate has a predicate call before the tail call, so TRO must NOT apply.
 
-Helper(1),
-Helper(2),
-Helper(3),
+helper(1),
+helper(2),
+helper(3),
 
-CollectHelpers(0, ACC, ACC),
-CollectHelpers(N, ACC, RESULT) <- (
+collect_helpers(0, ACC, ACC),
+collect_helpers(N, ACC, RESULT) <- (
     N > 0,
-    Helper(V),
+    helper(V),
     eval_(N - 1, N1),
-    CollectHelpers(N1, [V, *ACC], RESULT)
+    collect_helpers(N1, [V, *ACC], RESULT)
 )

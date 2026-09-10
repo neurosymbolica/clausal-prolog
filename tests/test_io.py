@@ -596,7 +596,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_test.clausal"
         src.write_text(
-            "Greet(_name) <- writeln_text(f\"Hello, {_name}!\")\n"
+            "greet(_name) <- writeln_text(f\"hello, {_name}!\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -606,18 +606,18 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("Greet", mint("World"), module=logic_mod))
+            results = list(call("greet", mint("World"), module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
-        assert buf.getvalue() == "Hello, World!\n"
+        assert buf.getvalue() == "hello, World!\n"
 
     def test_write_fstring_from_clausal(self, tmp_path):
         """F-string with multiple vars works in .clausal."""
         # nv
         src = tmp_path / "io_fstr.clausal"
         src.write_text(
-            "ShowPair(_a, _b) <- writeln_text(f\"{_a} and {_b}\")\n"
+            "show_pair(_a, _b) <- writeln_text(f\"{_a} and {_b}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -627,7 +627,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowPair", mint("cats"), mint("dogs"), module=logic_mod))
+            results = list(call("show_pair", mint("cats"), mint("dogs"), module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
@@ -638,7 +638,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_len.clausal"
         src.write_text(
-            "ShowLen(_l) <- writeln_text(f\"length is {len(_l)}\")\n"
+            "show_len(_l) <- writeln_text(f\"length is {len(_l)}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -648,7 +648,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowLen", [1, 2, 3], module=logic_mod))
+            results = list(call("show_len", [1, 2, 3], module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
@@ -659,7 +659,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_arith.clausal"
         src.write_text(
-            "ShowNext(_n) <- writeln_text(f\"next is {_n + 1}\")\n"
+            "show_next(_n) <- writeln_text(f\"next is {_n + 1}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -669,7 +669,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowNext", 5, module=logic_mod))
+            results = list(call("show_next", 5, module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
@@ -680,7 +680,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_upper.clausal"
         src.write_text(
-            "ShowUpper(_s) <- writeln_text(f\"{_s.upper()}\")\n"
+            "show_upper(_s) <- writeln_text(f\"{_s.upper()}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -690,7 +690,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowUpper", mint("hello"), module=logic_mod))
+            results = list(call("show_upper", mint("hello"), module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
@@ -701,10 +701,10 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_bt.clausal"
         src.write_text(
-            "Color('red'),\n"
-            "Color('green'),\n"
-            "Color('blue'),\n"
-            "ShowColors(_x) <- (Color(_x), writeln(_x))\n"
+            "color('red'),\n"
+            "color('green'),\n"
+            "color('blue'),\n"
+            "show_colors(_x) <- (color(_x), writeln(_x))\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -714,7 +714,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowColors", Var(), module=logic_mod))
+            results = list(call("show_colors", Var(), module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 3
@@ -725,7 +725,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_spec.clausal"
         src.write_text(
-            "ShowFloat(_x) <- writeln_text(f\"{_x:.2f}\")\n"
+            "show_float(_x) <- writeln_text(f\"{_x:.2f}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -735,7 +735,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("ShowFloat", 3.14159, module=logic_mod))
+            results = list(call("show_float", 3.14159, module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1
@@ -746,7 +746,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_novar.clausal"
         src.write_text(
-            "Hello() <- writeln_text(f\"hello world\")\n"
+            "hello() <- writeln_text(f\"hello world\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -756,7 +756,7 @@ class TestClausalIntegration:
         old = sys.stdout
         sys.stdout = buf
         try:
-            results = list(call("Hello", module=logic_mod))
+            results = list(call("hello", module=logic_mod))
         finally:
             sys.stdout = old
         assert len(results) == 1

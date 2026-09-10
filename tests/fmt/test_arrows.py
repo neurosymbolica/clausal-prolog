@@ -1,4 +1,4 @@
-"""The arrow ledger: which ``Compare(Lt, USub)`` nodes are really arrows.
+"""The arrow ledger: which ``compare(Lt, USub)`` nodes are really arrows.
 
 ``head <- body`` and ``head < -body`` parse to the SAME tree.  The engine tells
 them apart by source spacing alone -- the ``<`` must sit immediately before the
@@ -96,9 +96,9 @@ def test_a_formatted_lambda_still_runs(tmp_path):
     from clausal.import_hook import _load_module
 
     source = (
-        "-module(fmt_arrow_probe, [Doubles(A, B)])\n"
+        "-module(fmt_arrow_probe, [doubles(A, B)])\n"
         "\n"
-        "Doubles(XS, YS) <- (\n"
+        "doubles(XS, YS) <- (\n"
         "    maplist(((X, Y) <- (Y == X * 2)), XS, YS)\n"
         ")\n"
     )
@@ -108,7 +108,7 @@ def test_a_formatted_lambda_still_runs(tmp_path):
     from clausal.logic.variables import Var, deref
 
     out = Var()
-    solutions = list(module.Doubles([1, 2, 3], out))
+    solutions = list(module.doubles([1, 2, 3], out))
     assert solutions, "the formatted lambda no longer solves"
 
 

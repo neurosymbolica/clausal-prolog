@@ -5,20 +5,20 @@
 append([], YS, YS),
 append([H, *XS], YS, [H, *ZS]) <- append(XS, YS, ZS)
 
-Member(X, [X, *_]),
-Member(X, [_, *T]) <- Member(X, T)
+member(X, [X, *_]),
+member(X, [_, *T]) <- member(X, T)
 
-Factorial(0, 1),
-Factorial(N, F) <- (
+factorial(0, 1),
+factorial(N, F) <- (
     N > 0,
     N1 == N - 1,
-    Factorial(N1, F1),
+    factorial(N1, F1),
     F == N * F1
 )
 
 test("append works") <- (append([1], [2, 3], R), R is [1, 2, 3])  # nv
-test("member works") <- Member(2, [1, 2, 3])  # nv
-test("factorial works") <- (Factorial(5, F), F is 120)  # nv
+test("member works") <- member(2, [1, 2, 3])  # nv
+test("factorial works") <- (factorial(5, F), F is 120)  # nv
 
 # --- dynamic_predicates ---
 
@@ -32,8 +32,8 @@ test("counter exists") <- counter(0)  # nv
 
 # --- correctness_tests ---
 
-MyAppend([], YS, YS),
-MyAppend([H, *XS], YS, [H, *ZS]) <- MyAppend(XS, YS, ZS)
+my_append([], YS, YS),
+my_append([H, *XS], YS, [H, *ZS]) <- my_append(XS, YS, ZS)
 
-test("append nil") <- (MyAppend([], [1, 2], R), R is [1, 2])  # nv
-test("append cons") <- (MyAppend([1], [2, 3], R), R is [1, 2, 3])  # nv
+test("append nil") <- (my_append([], [1, 2], R), R is [1, 2])  # nv
+test("append cons") <- (my_append([1], [2, 3], R), R is [1, 2, 3])  # nv

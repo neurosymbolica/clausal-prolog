@@ -151,9 +151,9 @@ class TestNotNarrowed:
         variable, not a clause head, so the two sets never meet."""
         module = _load(tmp_path, "unitsugar", """
             -import_from(py.units, [metre])
-            Test <- (N == 5, eval_(N(metre), D), D == 5(metre))
+            test <- (N == 5, eval_(N(metre), D), D == 5(metre))
         """)
-        assert any(True for _ in call("Test", module=module.__dict__["$module"]))
+        assert any(True for _ in call("test", module=module.__dict__["$module"]))
 
     def test_var_shaped_head_calling_a_lowercase_predicate_still_loads(
             self, tmp_path):
@@ -168,12 +168,12 @@ class TestNotNarrowed:
 
     def test_a_non_variable_name_may_be_recursive(self, tmp_path):
         module = _load(tmp_path, "titlecase", """
-            Countdown(N, X) <- (N > 0, M == N - 1, Countdown(M, X))
-            Countdown(N, X) <- (N <= 0, X == N)
+            countdown(N, X) <- (N > 0, M == N - 1, countdown(M, X))
+            countdown(N, X) <- (N <= 0, X == N)
         """)
         x = Var()
         logic_module = module.__dict__["$module"]
-        assert any(True for _ in call("Countdown", 3, x, module=logic_module))
+        assert any(True for _ in call("countdown", 3, x, module=logic_module))
         assert deref(x) == 0
 
 
@@ -208,8 +208,8 @@ class TestVarShapedImport:
             FOO(X) <- (X == 1)
         """)
         module = _load(tmp_path, "xuse2", """
-            -import_from(tests_vspn_xlib2, [alias(FOO, Foo)])
-            q(X) <- Foo(X)
+            -import_from(tests_vspn_xlib2, [alias(FOO, foo)])
+            q(X) <- foo(X)
         """)
         x = Var()
         assert any(True for _ in call("q", x, module=module.__dict__["$module"]))

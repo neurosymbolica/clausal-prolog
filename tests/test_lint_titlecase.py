@@ -19,6 +19,21 @@ from clausal.templating.term_rewriting import (
 )
 
 
+#: The severity the engine ships with.  Read at import, before any test's
+#: monkeypatch — ``test_default_severity_is_error`` pins it.
+_SHIPPED_SEVERITY = term_rewriting.TITLECASE_IDENTIFIER_SEVERITY
+
+
+@pytest.fixture(autouse=True)
+def _lint_as_warning(monkeypatch):
+    """The lint's WALK — which positions it reads, which names it exempts,
+    which remedy it names — is exercised through its warning form, so every
+    test here demotes the severity.  The error form (the default) is pinned
+    by the ``Severity`` tests below, which set it back explicitly."""
+    monkeypatch.setattr(
+        term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "warn")
+
+
 def _load(tmp_path, name, text):
     path = tmp_path / f"{name}.clausal"
     path.write_text(textwrap.dedent(text).lstrip())
@@ -123,11 +138,71 @@ def test_import_from_list_names_are_declared_not_warned(tmp_path):
     assert ws == []
 
 
-def test_severity_flips_to_error(tmp_path, monkeypatch):
+# --- Severity: the shipped default is an error ------------------------------
+#
+# The positive control for the gate itself.  A TitleCase name in a Clausal
+# position stops the file from loading, at the identifier's site, with the
+# rename (or the ``++`` escape) in the message; the lowercase spelling of
+# the same file loads.
+
+def test_default_severity_is_error():
+    assert _SHIPPED_SEVERITY == "error"
+
+
+def _as_error(monkeypatch):
     monkeypatch.setattr(
         term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "error")
-    with pytest.raises(SyntaxError, match="`Foo` is TitleCase"):
-        _load(tmp_path, "l", "Foo(1),\n")
+
+
+def test_titlecase_head_fails_to_load_naming_old_and_new(tmp_path, monkeypatch):
+    _as_error(monkeypatch)
+    with pytest.raises(SyntaxError) as ei:
+        _load(tmp_path, "sev_head", "bar(1),\nFoo(X) <- (bar(X))\n")
+    err = ei.value
+    assert "`Foo` is TitleCase" in str(err)
+    assert "Rename `Foo` -> `foo`" in str(err)
+    assert err.filename.endswith("sev_head.clausal") and err.lineno == 2
+    assert "Foo(X) <- (bar(X))" in (err.text or "")
+
+
+def test_lowercase_head_loads(tmp_path, monkeypatch):
+    _as_error(monkeypatch)
+    mod = _load(tmp_path, "sev_ok", "bar(1),\nfoo(X) <- (bar(X))\n")
+    assert mod.foo is not None
+
+
+def test_bare_python_class_in_body_fails_naming_the_escape(
+        tmp_path, monkeypatch):
+    _as_error(monkeypatch)
+    with pytest.raises(SyntaxError) as ei:
+        _load(tmp_path, "sev_cls",
+              "from fractions import Fraction\nq(X) <- (X is Fraction(1, 3))\n")
+    assert "`Fraction` is a Python class; reach it as `++Fraction`" in str(
+        ei.value)
+    assert "Rename" not in str(ei.value)
+
+
+def test_escaped_python_class_in_body_loads(tmp_path, monkeypatch):
+    _as_error(monkeypatch)
+    mod = _load(tmp_path, "sev_esc",
+                "from fractions import Fraction\n"
+                "q(X) <- (X is ++Fraction(1, 3))\n")
+    assert mod.q is not None
+
+
+@pytest.mark.parametrize("old, new, text", [
+    ("If", "if_", "c(X, L) <- If(X >= 0, L is 1, L is 2)\n"),
+    ("Test", "test", 'Test("one") <- (1 == 1)\n'),
+])
+def test_renamed_spelling_names_the_rename_not_the_escape(
+        tmp_path, monkeypatch, old, new, text):
+    """``If`` is also a seeded AST node class; the language renamed the
+    spelling, so the remedy is ``if_``, never ``++If``."""
+    _as_error(monkeypatch)
+    with pytest.raises(SyntaxError) as ei:
+        _load(tmp_path, f"sev_{new}", text)
+    assert f"Rename `{old}` -> `{new}`" in str(ei.value)
+    assert f"`{old}` is a Python class" not in str(ei.value)
 
 
 @pytest.mark.parametrize("ident, expected", [

@@ -77,11 +77,11 @@ class TestFullVocabulary:
         with open(p, "w") as f:
             f.write("-import_from(germany, [mark])\n"
                     "-import_from(currency, [currency_end])\n"
-                    "Test(E) <- currency_end(mark, E)\n")
+                    "test(E) <- currency_end(mark, E)\n")
         mod = _load_module("dates", p).__dict__["$module"]
         v = Var()
         got = None
-        for _ in call("Test", v, module=mod):
+        for _ in call("test", v, module=mod):
             got = deref(v); break
         assert got == "2002-05-15"
 
@@ -95,12 +95,12 @@ class TestFullVocabulary:
             f.write("-implicit_atoms\n"  # half_up is a bare atom, not declared
                     "-import_from(germany, [mark])\n"
                     "-import_from(currency, [money_str])\n"
-                    "Test(S) <- (eval_(19.99(mark), A), eval_(0.01(mark), B), "
+                    "test(S) <- (eval_(19.99(mark), A), eval_(0.01(mark), B), "
                     "eval_(A + B, C), money_str(C, half_up, S))\n")
         mod = _load_module("hist", p).__dict__["$module"]
         v = Var()
         got = None
-        for _ in call("Test", v, module=mod):
+        for _ in call("test", v, module=mod):
             got = deref(v); break
         assert got == "20.00 DEM"
 
@@ -127,13 +127,13 @@ class TestFullVocabulary:
             f.write("-implicit_atoms\n"  # half_up is a bare atom, not declared
                     "-import_from(thailand, [baht])\n"
                     "-import_from(currency, [money_str])\n"
-                    "Test(S) <- (eval_(19.99(baht), A), eval_(0.01(baht), B), "
+                    "test(S) <- (eval_(19.99(baht), A), eval_(0.01(baht), B), "
                     "eval_(A + B, C), money_str(C, half_up, S))\n")
         mod = _load_module("vocab", p).__dict__["$module"]
         from clausal.logic.variables import Var, deref
         v = Var()
         got = None
-        for _ in call("Test", v, module=mod):
+        for _ in call("test", v, module=mod):
             got = deref(v); break
         assert got == "20.00 THB"
 

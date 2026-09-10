@@ -2,7 +2,7 @@
 
 -module(iso_unification, [test/1])
 
-SameValue(X, Y) <- (X is Y, X == Y)
+same_value(X, Y) <- (X is Y, X == Y)
 
 test('atom unifies with itself') <- (X is a, X == a)
 
@@ -34,11 +34,11 @@ test('different atoms !=') <- (a != b)
 
 test('same atom != fails') <- (not a != a)
 
-test('same_value: integers') <- (SameValue(42, 42))
+test('same_value: integers') <- (same_value(42, 42))
 
-test('same_value: strings') <- (SameValue(hello, hello))
+test('same_value: strings') <- (same_value(hello, hello))
 
-test('same_value: lists') <- (SameValue([1, 2], [1, 2]))
+test('same_value: lists') <- (same_value([1, 2], [1, 2]))
 
 test('integer unifies with itself') <- (X is 1, X == 1)
 
@@ -68,20 +68,20 @@ test('var != atom raises catchable type_error') <- (catch((_x_unused != a, False
 
 test('two fresh vars: X != Y') <- (_x_unused != _y_unused)
 
-test('structural_eq: a == a') <- (StructuralEq(a, a))
+test('structural_eq: a == a') <- (structural_eq(a, a))
 
-test('structural_eq: a != b fails') <- (not StructuralEq(a, b))
+test('structural_eq: a != b fails') <- (not structural_eq(a, b))
 
-test('structural_eq: 42 == 42') <- (StructuralEq(42, 42))
+test('structural_eq: 42 == 42') <- (structural_eq(42, 42))
 
-test('structural_eq: same var') <- (X is Y, StructuralEq(X, Y))
+test('structural_eq: same var') <- (X is Y, structural_eq(X, Y))
 
-test('structural_eq: distinct unbound vars fail') <- (not StructuralEq(_x_unused, _y_unused))
+test('structural_eq: distinct unbound vars fail') <- (not structural_eq(_x_unused, _y_unused))
 
-test('structural_eq: unbound var vs atom fails') <- (not StructuralEq(_x_unused, a))
+test('structural_eq: unbound var vs atom fails') <- (not structural_eq(_x_unused, a))
 
-test('structural_eq: nested lists') <- (StructuralEq([1, [2, 3]], [1, [2, 3]]))
+test('structural_eq: nested lists') <- (structural_eq([1, [2, 3]], [1, [2, 3]]))
 
-test('structural_eq: distinct lists fail') <- (not StructuralEq([1, 2], [1, 3]))
+test('structural_eq: distinct lists fail') <- (not structural_eq([1, 2], [1, 3]))
 
-test('structural_neq: same var fails') <- (X is Y, not not StructuralEq(X, Y))
+test('structural_neq: same var fails') <- (X is Y, not not structural_eq(X, Y))

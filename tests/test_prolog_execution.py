@@ -197,7 +197,7 @@ def assert_known_divergence(clausal_outcome, scryer_outcome, *, case: str, spec_
 # emitted text below. This is verbatim the §1.2/§1.3 witness, re-run against the
 # current translator and the real engines in this session.
 
-_EQ_SOURCE = "Eq(A, B) <- (A == B)\n"
+_EQ_SOURCE = "eq(A, B) <- (A == B)\n"
 _EQ_PL = _translate(_EQ_SOURCE)
 assert _EQ_PL.strip() == "eq(A, B) :-\n    A == B."  # pin the shape this matrix depends on
 
@@ -209,19 +209,19 @@ class TestEqStructuralShapeMatrix:
         # 2500 == 2500.0: Clausal's arithmetic equality succeeds; ISO structural
         # `==` is type-sensitive and says false.
         mod = _load_clausal(tmp_path, "eq1", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.Eq(2500, 2500.0))
+        clausal = _run_clausal(lambda: mod.eq(2500, 2500.0))
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(2500, 2500.0).")
         assert_known_divergence(clausal, scryer, case="eq(2500, 2500.0)", spec_section="§1.2/§1.3")
 
     def test_ground_ground_atom_equal(self, tmp_path):
         mod = _load_clausal(tmp_path, "eq2", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.Eq("foo", "foo"))
+        clausal = _run_clausal(lambda: mod.eq("foo", "foo"))
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, foo).")
         assert_agreement(clausal, scryer, case="eq(foo, foo)")
 
     def test_ground_ground_atom_unequal(self, tmp_path):
         mod = _load_clausal(tmp_path, "eq3", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.Eq("foo", "bar"))
+        clausal = _run_clausal(lambda: mod.eq("foo", "bar"))
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, bar).")
         assert_agreement(clausal, scryer, case="eq(foo, bar)")
 
@@ -229,7 +229,7 @@ class TestEqStructuralShapeMatrix:
         # eq(V, 1257000): Clausal BINDS V; ISO `==` cannot bind and says false.
         mod = _load_clausal(tmp_path, "eq4", _EQ_SOURCE)
         v = Var()
-        clausal = _run_clausal(lambda: mod.Eq(v, 1257000), v)
+        clausal = _run_clausal(lambda: mod.eq(v, 1257000), v)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, 1257000).")
         assert clausal == ("succeeds", (1257000,))  # the bound value itself, per §1.2
         assert_known_divergence(clausal, scryer, case="eq(V, 1257000)", spec_section="§1.2/§1.3")
@@ -238,7 +238,7 @@ class TestEqStructuralShapeMatrix:
         # eq(V, foo): Clausal RAISES type_error(evaluable, foo); ISO `==` says false.
         mod = _load_clausal(tmp_path, "eq5", _EQ_SOURCE)
         v = Var()
-        clausal = _run_clausal(lambda: mod.Eq(v, "foo"), v)
+        clausal = _run_clausal(lambda: mod.eq(v, "foo"), v)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, foo).")
         assert clausal[0] == "raises"
         assert_known_divergence(clausal, scryer, case="eq(V, foo)", spec_section="§1.2/§1.3")
@@ -247,14 +247,14 @@ class TestEqStructuralShapeMatrix:
         # eq(1257000, V): symmetric to the V-first row; Clausal binds, ISO says false.
         mod = _load_clausal(tmp_path, "eq6", _EQ_SOURCE)
         v = Var()
-        clausal = _run_clausal(lambda: mod.Eq(1257000, v), v)
+        clausal = _run_clausal(lambda: mod.eq(1257000, v), v)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(1257000, _).")
         assert clausal == ("succeeds", (1257000,))
         assert_known_divergence(clausal, scryer, case="eq(1257000, V)", spec_section="§1.2/§1.3")
 
     def test_unbound_unbound(self, tmp_path):
         mod = _load_clausal(tmp_path, "eq7", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.Eq(Var(), Var()))
+        clausal = _run_clausal(lambda: mod.eq(Var(), Var()))
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, _).")
         assert_known_divergence(clausal, scryer, case="eq(V, W)", spec_section="§1.2/§1.3")
 
@@ -266,9 +266,9 @@ class TestEqStructuralShapeMatrix:
 # `Chk` is §1.5's bound-operand witness, showing the defect is not only about mode.
 
 _WITNESS_SOURCE = (
-    "Taxable(TOTAL, ALLOW, AFTER) <- (AFTER == TOTAL - ALLOW)\n"
-    "Allow(A, F) <- (A == F)\n"
-    "Chk(X) <- (X == 2500)\n"
+    "taxable(TOTAL, ALLOW, AFTER) <- (AFTER == TOTAL - ALLOW)\n"
+    "allow(A, F) <- (A == F)\n"
+    "chk(X) <- (X == 2500)\n"
 )
 _WITNESS_PL = _translate(_WITNESS_SOURCE)
 
@@ -281,7 +281,7 @@ class TestTaxWitnessWorkedExample:
         # ground and raises instantiation_error on the unbound output arg.
         mod = _load_clausal(tmp_path, "witness1", _WITNESS_SOURCE)
         after = Var()
-        clausal = _run_clausal(lambda: mod.Taxable(1257000, 257000, after), after)
+        clausal = _run_clausal(lambda: mod.taxable(1257000, 257000, after), after)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "taxable(1257000, 257000, After).")
         assert clausal == ("succeeds", (1000000,))
         assert_known_divergence(
@@ -293,7 +293,7 @@ class TestTaxWitnessWorkedExample:
         # happily checks it -- this is the row that hides the defect from any
         # gate that only ever calls with all outputs pre-filled.
         mod = _load_clausal(tmp_path, "witness2", _WITNESS_SOURCE)
-        clausal = _run_clausal(lambda: mod.Taxable(1257000, 257000, 1000000))
+        clausal = _run_clausal(lambda: mod.taxable(1257000, 257000, 1000000))
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "taxable(1257000, 257000, 1000000).")
         assert_agreement(clausal, scryer, case="taxable(1257000, 257000, 1000000) [bound]")
 
@@ -302,7 +302,7 @@ class TestTaxWitnessWorkedExample:
         # cannot bind and fails.
         mod = _load_clausal(tmp_path, "witness3", _WITNESS_SOURCE)
         a = Var()
-        clausal = _run_clausal(lambda: mod.Allow(a, 1257000), a)
+        clausal = _run_clausal(lambda: mod.allow(a, 1257000), a)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "allow(A, 1257000).")
         assert clausal == ("succeeds", (1257000,))
         assert_known_divergence(clausal, scryer, case="allow(A, 1257000)", spec_section="§1.4")
@@ -311,13 +311,13 @@ class TestTaxWitnessWorkedExample:
         # §1.5: even with BOTH operands bound, int-vs-float flips the verdict --
         # Clausal succeeds (arithmetic equality); ISO `==` is type-sensitive.
         mod = _load_clausal(tmp_path, "witness4", _WITNESS_SOURCE)
-        clausal = _run_clausal(lambda: mod.Chk(2500.0))
+        clausal = _run_clausal(lambda: mod.chk(2500.0))
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "chk(2500.0).")
         assert_known_divergence(clausal, scryer, case="chk(2500.0)", spec_section="§1.5")
 
     def test_chk_bound_int_agrees(self, tmp_path):
         mod = _load_clausal(tmp_path, "witness5", _WITNESS_SOURCE)
-        clausal = _run_clausal(lambda: mod.Chk(2500))
+        clausal = _run_clausal(lambda: mod.chk(2500))
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "chk(2500).")
         assert_agreement(clausal, scryer, case="chk(2500)")
 
@@ -379,20 +379,20 @@ class TestDateOrderingWitness:
 # reports "diverges" cannot masquerade as one that correctly distinguishes agreement
 # from divergence (see docs memory: "Always include a known-green control").
 
-_SAME_SOURCE = "Same(X, Y) <- (X is Y)\n"
+_SAME_SOURCE = "same(X, Y) <- (X is Y)\n"
 _SAME_PL = _translate(_SAME_SOURCE)
 
 
 class TestKnownCorrectLoweringControl:
     def test_same_agrees_when_equal(self, tmp_path):
         mod = _load_clausal(tmp_path, "same1", _SAME_SOURCE)
-        clausal = _run_clausal(lambda: mod.Same(5, 5))
+        clausal = _run_clausal(lambda: mod.same(5, 5))
         scryer = _run_scryer(tmp_path, _SAME_PL, "same(5, 5).")
         assert_agreement(clausal, scryer, case="same(5, 5)")
 
     def test_same_agrees_when_unequal(self, tmp_path):
         mod = _load_clausal(tmp_path, "same2", _SAME_SOURCE)
-        clausal = _run_clausal(lambda: mod.Same(5, 6))
+        clausal = _run_clausal(lambda: mod.same(5, 6))
         scryer = _run_scryer(tmp_path, _SAME_PL, "same(5, 6).")
         assert_agreement(clausal, scryer, case="same(5, 6)")
 
@@ -421,7 +421,7 @@ profile_key(harm),
 """
 
 _ASKER_CLAUSAL = """-import_from(keys, [profile_key])
-Hit(K) <- (K is "exception_f", profile_key(K))
+hit(K) <- (K is "exception_f", profile_key(K))
 """
 
 
@@ -431,7 +431,7 @@ def _run_scryer_multifile(tmp_path, files: dict, query: str):
     ``files`` maps file name -> Prolog text; ``harness.pl`` is the entry point
     Scryer is pointed at, and the others sit beside it so its ``use_module``
     directives resolve by relative path -- exactly how the exporter stages a
-    domain on disk. Same output classification as :func:`_run_scryer`.
+    domain on disk. same output classification as :func:`_run_scryer`.
     """
     for name, text in files.items():
         (tmp_path / name).write_text(text)
@@ -468,7 +468,7 @@ class TestStrLiteralUnifiesWithImportedAtom:
         try:
             asker = _load_clausal(tmp_path, "asker", _ASKER_CLAUSAL)
             var = Var()
-            clausal = _run_clausal(lambda: asker.Hit(var), var)
+            clausal = _run_clausal(lambda: asker.hit(var), var)
         finally:
             sys.path.remove(str(tmp_path))
 
@@ -490,7 +490,7 @@ class TestStrLiteralUnifiesWithImportedAtom:
                 _ASKER_CLAUSAL, module_path="asker", module_signatures=sigs),
         }, "hit(_).")
 
-        assert_agreement(clausal, scryer, case='Hit(K), K is "exception_f"')
+        assert_agreement(clausal, scryer, case='hit(K), K is "exception_f"')
 
 
 # ── Class G: a str literal containing newlines must still consult ─────────────
@@ -505,7 +505,7 @@ class TestStrLiteralUnifiesWithImportedAtom:
 
 _VERBATIM_PROSE = (
     "TABLE 1 - Section 1(j)(2)(A) –Married Individuals Filing Joint Returns\n"
-    "If Taxable Income Is: The Tax Is:\n"
+    "If taxable Income Is: The Tax Is:\n"
     "Not over $23,850 10% of the taxable income\n"
     "Over $23,850 but $2,385 plus 12% of\n"
     "not over $96,950 the excess over $23,850\n"
@@ -515,7 +515,7 @@ _VERBATIM_PROSE = (
 class TestNewlineBearingLiteralConsults:
 
     def test_multiline_verbatim_literal_consults_in_scryer(self, tmp_path):
-        source = "Verbatim(%r),\n" % _VERBATIM_PROSE
+        source = "verbatim(%r),\n" % _VERBATIM_PROSE
         pl = _translate(source)
         assert len(_VERBATIM_PROSE) > 8000, "witness must be multi-KB"
         # The emitted clause is ONE line: no raw newline escaped from the atom.
@@ -541,7 +541,7 @@ class TestNewlineBearingLiteralConsults:
 # agreement and goes RED the day the two sides part again.
 
 _NIL_SOURCE = """empty_list([]),
-Hit(K) <- (K is "[]", empty_list(K))
+hit(K) <- (K is "[]", empty_list(K))
 """
 
 
@@ -550,7 +550,7 @@ class TestBracketAtomLiteralAgrees:
     def test_bracket_atom_literal_agrees(self, tmp_path):
         mod = _load_clausal(tmp_path, "nil1", _NIL_SOURCE)
         var = Var()
-        clausal = _run_clausal(lambda: mod.Hit(var), var)
+        clausal = _run_clausal(lambda: mod.hit(var), var)
         # The engine's own answer: the atom `[]` is the empty list.
         assert clausal == ("succeeds", ([],)), clausal
 
@@ -558,7 +558,7 @@ class TestBracketAtomLiteralAgrees:
             tmp_path, {"harness.pl": _translate(_NIL_SOURCE)}, "hit(_).")
         assert scryer == ("succeeds", None), scryer
 
-        assert_agreement(clausal, scryer, case='Hit(K), K is "[]", empty_list(K)')
+        assert_agreement(clausal, scryer, case='hit(K), K is "[]", empty_list(K)')
 
 
 # ── chars mode: a string IS its char list, on both sides ─────────────────────
@@ -572,8 +572,8 @@ class TestBracketAtomLiteralAgrees:
 
 _STRING_EQ_SOURCE = """-double_quotes(chars)
 -private([a, b])
-Hit(X) <- (X is "ab", X == [a, b])
-Hit2(X) <- (X is [a, b], X == "ab")
+hit(X) <- (X is "ab", X == [a, b])
+hit2(X) <- (X is [a, b], X == "ab")
 """
 
 
@@ -581,15 +581,15 @@ class TestStringIsItsCharListInEquality:
 
     def test_string_equals_its_char_list_both_directions(self, tmp_path):
         mod = _load_clausal(tmp_path, "streq1", _STRING_EQ_SOURCE)
-        for pred, case in ((mod.Hit, 'Hit(X), X is "ab", X == [a, b]'),
-                           (mod.Hit2, 'Hit2(X), X is [a, b], X == "ab"')):
+        for pred, case in ((mod.hit, 'hit(X), X is "ab", X == [a, b]'),
+                           (mod.hit2, 'hit2(X), X is [a, b], X == "ab"')):
             var = Var()
             clausal = _run_clausal(lambda: pred(var), var)
             assert clausal[0] == "succeeds", (case, clausal)
 
         pl = _translate(_STRING_EQ_SOURCE)
         assert ":- set_prolog_flag(double_quotes, chars)." in pl
-        for query, case in (("hit(_).", 'Hit(X), X is "ab", X == [a, b]'),
-                            ("hit2(_).", 'Hit2(X), X is [a, b], X == "ab"')):
+        for query, case in (("hit(_).", 'hit(X), X is "ab", X == [a, b]'),
+                            ("hit2(_).", 'hit2(X), X is [a, b], X == "ab"')):
             scryer = _run_scryer_multifile(tmp_path, {"harness.pl": pl}, query)
             assert scryer == ("succeeds", None), (case, scryer)

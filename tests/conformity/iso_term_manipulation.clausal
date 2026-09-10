@@ -12,7 +12,7 @@
 
 -module(iso_term_manipulation, [test(DESC)])
 
--private([a, Hello])
+-private([a, hello])
 
 # ── functor/3 — construction mode ────────────────────────────────────────────
 
@@ -24,9 +24,9 @@ test("construct atom: functor(T, a, 0)") <- (
 # ── functor/3 — decomposition of atoms ───────────────────────────────────────
 # Strings are atoms; functor/3 can decompose them
 
-test("decompose atom: functor('Hello', Name, Arity)") <- (
-    functor(Hello, _n, _a),
-    _n == Hello,
+test("decompose atom: functor('hello', Name, Arity)") <- (
+    functor(hello, _n, _a),
+    _n == hello,
     _a == 0
 )  # nv
 
@@ -62,9 +62,9 @@ test("decompose atom: 'a' =.. X") <- (
     _x == [a]
 )  # nv
 
-test("decompose string: 'Hello' =.. X") <- (
-    unpack(Hello, _x),
-    _x == [Hello]
+test("decompose string: 'hello' =.. X") <- (
+    unpack(hello, _x),
+    _x == [hello]
 )  # nv
 
 # ── numeric-literal decomposition (migrated from .py) ──────────────────────

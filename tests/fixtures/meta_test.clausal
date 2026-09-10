@@ -1,4 +1,4 @@
-Squares(NUMBERS, SQUARES) <- (
+squares(NUMBERS, SQUARES) <- (
     findall(
         SQUARE,
         (in_(X, NUMBERS), SQUARE == X * X),
@@ -6,7 +6,7 @@ Squares(NUMBERS, SQUARES) <- (
     )
 )
 
-Positives(NUMBERS, POSITIVES) <- (
+positives(NUMBERS, POSITIVES) <- (
     findall(
         X,
         (in_(X, NUMBERS), X > 0),
@@ -14,7 +14,7 @@ Positives(NUMBERS, POSITIVES) <- (
     )
 )
 
-UniqueMembers(NUMBERS, UNIQUE) <- (
+unique_members(NUMBERS, UNIQUE) <- (
     setof(
         X,
         in_(X, NUMBERS),
@@ -22,16 +22,16 @@ UniqueMembers(NUMBERS, UNIQUE) <- (
     )
 )
 
-AllPositive(NUMBERS) <- (
+all_positive(NUMBERS) <- (
     forall(in_(X, NUMBERS), X > 0)
 )
 
 
-test("squares") <- (Squares([1, 2, 3], SQUARES), SQUARES == [1, 4, 9])  # nv
-test("positives") <- (Positives([-1, 2, -3, 4], POSITIVES), POSITIVES == [2, 4])  # nv
-test("unique members") <- (UniqueMembers([1, 2, 1, 3, 2], UNIQUE), UNIQUE == [1, 2, 3])  # nv
-test("all positive") <- AllPositive([1, 2, 3])  # nv
-test("all positive fails: [1,-2,3]") <- (not AllPositive([1, -2, 3]))  # nv
+test("squares") <- (squares([1, 2, 3], SQUARES), SQUARES == [1, 4, 9])  # nv
+test("positives") <- (positives([-1, 2, -3, 4], POSITIVES), POSITIVES == [2, 4])  # nv
+test("unique members") <- (unique_members([1, 2, 1, 3, 2], UNIQUE), UNIQUE == [1, 2, 3])  # nv
+test("all positive") <- all_positive([1, 2, 3])  # nv
+test("all positive fails: [1,-2,3]") <- (not all_positive([1, -2, 3]))  # nv
 
 # ── findall/3 direct tests (migrated from test_meta.py) ────────────────────
 

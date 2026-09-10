@@ -1,15 +1,16 @@
+-import_from(clausal.logic.clpb, [BoolEq])  # the term constructor is a Python class: declared in the import list
 # CLP(B) circuit integration fixture
 #
-# HalfAdder: SUM = X XOR Y, CARRY = X AND Y
-# FullAdder: built from two half adders
-# PigeonHole: 3 pigeons, 2 holes — unsatisfiable
+# half_adder: SUM = X XOR Y, CARRY = X AND Y
+# full_adder: built from two half adders
+# pigeon_hole: 3 pigeons, 2 holes — unsatisfiable
 
-HalfAdder(X, Y, SUM, CARRY) <- (
+half_adder(X, Y, SUM, CARRY) <- (
     sat(BoolEq(SUM, X ^ Y)),
     sat(BoolEq(CARRY, X & Y))
 )
 
-FullAdder(X, Y, CARRY_IN, SUM, CARRY_OUT) <- (
+full_adder(X, Y, CARRY_IN, SUM, CARRY_OUT) <- (
     sat(BoolEq(SUM_STAGE1, X ^ Y)),
     sat(BoolEq(CARRY_STAGE1, X & Y)),
     sat(BoolEq(SUM, SUM_STAGE1 ^ CARRY_IN)),
@@ -20,7 +21,7 @@ FullAdder(X, Y, CARRY_IN, SUM, CARRY_OUT) <- (
 # 3 pigeons into 2 holes: each pigeon in exactly one hole,
 # each hole has at most one pigeon.
 # PIGEON_I_HOLE_J = pigeon I in hole J
-PigeonHole() <- (
+pigeon_hole() <- (
     sat(PIGEON_1_HOLE_1 | PIGEON_1_HOLE_2),          # pigeon 1 in some hole
     sat(PIGEON_2_HOLE_1 | PIGEON_2_HOLE_2),           # pigeon 2 in some hole
     sat(PIGEON_3_HOLE_1 | PIGEON_3_HOLE_2),           # pigeon 3 in some hole
@@ -33,8 +34,8 @@ PigeonHole() <- (
     bool_labeling([PIGEON_1_HOLE_1, PIGEON_1_HOLE_2, PIGEON_2_HOLE_1, PIGEON_2_HOLE_2, PIGEON_3_HOLE_1, PIGEON_3_HOLE_2])
 )
 
-test("half adder 0 0") <- (HalfAdder(0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv
-test("half adder 1 0") <- (HalfAdder(1, 0, SUM, CARRY), SUM == 1, CARRY == 0)  # nv
-test("half adder 1 1") <- (HalfAdder(1, 1, SUM, CARRY), SUM == 0, CARRY == 1)  # nv
-test("full adder 1 1 1") <- (FullAdder(1, 1, 1, SUM, CARRY), SUM == 1, CARRY == 1)  # nv
-test("full adder 0 0 0") <- (FullAdder(0, 0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv
+test("half adder 0 0") <- (half_adder(0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv
+test("half adder 1 0") <- (half_adder(1, 0, SUM, CARRY), SUM == 1, CARRY == 0)  # nv
+test("half adder 1 1") <- (half_adder(1, 1, SUM, CARRY), SUM == 0, CARRY == 1)  # nv
+test("full adder 1 1 1") <- (full_adder(1, 1, 1, SUM, CARRY), SUM == 1, CARRY == 1)  # nv
+test("full adder 0 0 0") <- (full_adder(0, 0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv

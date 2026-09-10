@@ -115,8 +115,8 @@ class TestBakeInReadsTheRow:
                 unlocked.append((functor, arity))
         # Force one: clearing ``locked`` after the fact is what a later
         # recompile of a still-open predicate looks like.
-        db.row("Parent", 2).locked = False
-        unlocked.append(("Parent", 2))
+        db.row("parent", 2).locked = False
+        unlocked.append(("parent", 2))
         for functor, arity in list(db._clauses):
             fn = db.get_dispatch(functor, arity)
             if fn is None:
@@ -134,7 +134,7 @@ class TestBakeInReadsTheRow:
         mod = _load_module(
             "_t4_bakein_answers", os.path.join(FIXTURES, "family.clausal"))
         who = Var()
-        got = sorted(deref(who) for _ in call(mod.Ancestor, mint("tom"), who))
+        got = sorted(deref(who) for _ in call(mod.ancestor, mint("tom"), who))
         assert got == [mint("ann"), mint("bob"), mint("liz"), mint("pat")]
 
 
@@ -251,5 +251,5 @@ class TestBackendSeam:
         assert sorted(baseline.__dict__["$module"].db._clauses) == sorted(
             db._clauses)
         who = Var()
-        assert sorted(deref(who) for _ in call(with_seam.Ancestor, mint("tom"), who)) \
+        assert sorted(deref(who) for _ in call(with_seam.ancestor, mint("tom"), who)) \
             == [mint("ann"), mint("bob"), mint("liz"), mint("pat")]

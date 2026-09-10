@@ -1,7 +1,7 @@
 # === Meta-Interpreter Specialization ===
 
 # --8<-- [start:count_natnum_test]
-test("count natnum(s(s(0)))") <- SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)
+test("count natnum(s(s(0)))") <- solve_count_natnum([["natnum", ["s", ["s", 0]]]], 3)
 # --8<-- [end:count_natnum_test]
 
 # --8<-- [start:specialize_factorial]

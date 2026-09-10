@@ -87,14 +87,14 @@ class TestRegistry:
     def test_additive_merge(self):
         # nv
         register_predicate("th", "append", "ต่อท้าย", 3)
-        register_predicate("th", "Member", "สมาชิกของ", 2)
+        register_predicate("th", "member", "สมาชิกของ", 2)
         assert translate_predicate("th", "append", 3) is not None
-        assert translate_predicate("th", "Member", 2) is not None
+        assert translate_predicate("th", "member", 2) is not None
 
     def test_get_all_predicates(self):
         # nv
         register_predicate("th", "append", "ต่อท้าย", 3)
-        register_predicate("th", "Member", "สมาชิกของ", 2)
+        register_predicate("th", "member", "สมาชิกของ", 2)
         register_predicate("ja", "append", "追加", 3)
         entries = get_all_predicates("th")
         assert len(entries) == 2
@@ -154,8 +154,8 @@ class TestDisplayLocale:
 
     def test_predicate_meta_with_locale(self):
         # nv
-        Greeting = make_predicate("Greeting", ["NAME", "MESSAGE"])
-        register_predicate("th", "Greeting", "ทักทาย", 2)
+        Greeting = make_predicate("greeting", ["NAME", "MESSAGE"])
+        register_predicate("th", "greeting", "ทักทาย", 2)
         t = Greeting(NAME="hello", MESSAGE="world")
         s = term_str(t, TermStyle(locale="th"))
         assert "ทักทาย" in s
@@ -245,17 +245,17 @@ class TestTranslateBuiltin:
     def test_nested_translation(self):
         # nv
         from clausal.logic.builtins.translations_builtin import _translate__3
-        register_predicate("th", "Member", "สมาชิกของ", 2)
+        register_predicate("th", "member", "สมาชิกของ", 2)
         trail = Trail()
         result_var = Var()
-        t = Compound("append", ("x", Compound("Member", ("a", "b")), []))
+        t = Compound("append", ("x", Compound("member", ("a", "b")), []))
         gen = _translate__3(mint("th"), t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
         assert "ต่อท้าย" in result
         assert "สมาชิกของ" in result
         assert "append" not in result
-        assert "Member" not in result
+        assert "member" not in result
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -284,11 +284,11 @@ class TestDirectiveIntegration:
         assert entry.translated_functor == "ต่อท้าย"
         assert entry.arg_map["LIST"] == "รายการ"
 
-        entry2 = translate_predicate("th", "Member", 2)
+        entry2 = translate_predicate("th", "member", 2)
         assert entry2 is not None
         assert entry2.translated_functor == "สมาชิกของ"
 
-        entry3 = translate_predicate("th", "Greeting", 2)
+        entry3 = translate_predicate("th", "greeting", 2)
         assert entry3 is not None
         assert entry3.translated_functor == "ทักทาย"
 

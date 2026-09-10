@@ -703,7 +703,7 @@ class TestLambdaImport:
         raw Python TypeError.
 
         A tuple-head arrow whose head contains a non-logic-variable name (e.g.
-        the mixed-case ``St`` — logic vars must be ALL-CAPS or ``_leading``)
+        the mixed-case ``st`` — logic vars must be ALL-CAPS or ``_leading``)
         does NOT parse as a lambda; it degrades to a ``Predicate`` rule literal.
         Passing that to call_goal used to surface a raw
         ``node_class.__call__() takes ... positional arguments but N were given``
@@ -718,7 +718,7 @@ class TestLambdaImport:
             "\n"
             "loc(K, V) <- (K is \"a\", V is 1)\n"
             "\n"
-            "run(_r) <- call_goal(((K, V, St) <- loc(K, V)), \"a\", 1, _r)\n"
+            "run(_r) <- call_goal(((K, V, st) <- loc(K, V)), \"a\", 1, _r)\n"
         )
 
         from clausal.import_hook import _load_module

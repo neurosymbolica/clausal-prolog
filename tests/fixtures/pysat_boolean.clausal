@@ -3,59 +3,59 @@
 
 # ── Basic constraint blocks ─────────────────────────────────────────────────
 
-XorSolve(X, Y) <- (
+xor_solve(X, Y) <- (
     pysat.cadical(X ^ Y),
     pysat.solve([X, Y]),
 )
 
-test("xor 2 solutions") <- (count_all(XorSolve(_, _), N), N == 2)  # nv
-test("xor solution 0,1") <- XorSolve(0, 1)  # nv
-test("xor solution 1,0") <- XorSolve(1, 0)  # nv
+test("xor 2 solutions") <- (count_all(xor_solve(_, _), N), N == 2)  # nv
+test("xor solution 0,1") <- xor_solve(0, 1)  # nv
+test("xor solution 1,0") <- xor_solve(1, 0)  # nv
 
-AndSolve(X, Y) <- (
+and_solve(X, Y) <- (
     pysat.cadical(X & Y),
     pysat.solve([X, Y]),
 )
 
-test("and forces both 1") <- (AndSolve(X, Y), X == 1, Y == 1)  # nv
-test("and 1 solution") <- (count_all(AndSolve(_, _), N), N == 1)  # nv
+test("and forces both 1") <- (and_solve(X, Y), X == 1, Y == 1)  # nv
+test("and 1 solution") <- (count_all(and_solve(_, _), N), N == 1)  # nv
 
-OrSolve(X, Y) <- (
+or_solve(X, Y) <- (
     pysat.cadical(X | Y),
     pysat.solve([X, Y]),
 )
 
-test("or 3 solutions") <- (count_all(OrSolve(_, _), N), N == 3)  # nv
-test("or excludes 0,0") <- (not(OrSolve(0, 0)))  # nv
+test("or 3 solutions") <- (count_all(or_solve(_, _), N), N == 3)  # nv
+test("or excludes 0,0") <- (not(or_solve(0, 0)))  # nv
 
 # ── Negation ────────────────────────────────────────────────────────────────
 
-NegSolve(X) <- (
+neg_solve(X) <- (
     pysat.cadical(~X),
     pysat.solve([X]),
 )
 
-test("not forces 0") <- (NegSolve(X), X == 0)  # nv
+test("not forces 0") <- (neg_solve(X), X == 0)  # nv
 
 # ── Equality / disequality ──────────────────────────────────────────────────
 
-EqSolve(X, Y) <- (
+eq_solve(X, Y) <- (
     pysat.cadical(X == Y),
     pysat.solve([X, Y]),
 )
 
-test("eq 2 solutions") <- (count_all(EqSolve(_, _), N), N == 2)  # nv
-test("eq 0,0") <- EqSolve(0, 0)  # nv
-test("eq 1,1") <- EqSolve(1, 1)  # nv
+test("eq 2 solutions") <- (count_all(eq_solve(_, _), N), N == 2)  # nv
+test("eq 0,0") <- eq_solve(0, 0)  # nv
+test("eq 1,1") <- eq_solve(1, 1)  # nv
 
-NeqSolve(X, Y) <- (
+neq_solve(X, Y) <- (
     pysat.cadical(X != Y),
     pysat.solve([X, Y]),
 )
 
-test("neq 2 solutions") <- (count_all(NeqSolve(_, _), N), N == 2)  # nv
-test("neq 0,1") <- NeqSolve(0, 1)  # nv
-test("neq 1,0") <- NeqSolve(1, 0)  # nv
+test("neq 2 solutions") <- (count_all(neq_solve(_, _), N), N == 2)  # nv
+test("neq 0,1") <- neq_solve(0, 1)  # nv
+test("neq 1,0") <- neq_solve(1, 0)  # nv
 
 # ── Unsatisfiable ───────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ test("unsat x and not x") <- (
 
 # ── Combined disjunctions ──────────────────────────────────────────────────
 
-ForcesY(X, Y) <- (
+forces_y(X, Y) <- (
     pysat.cadical((
         X | Y,
         ~X | Y,
@@ -74,8 +74,8 @@ ForcesY(X, Y) <- (
     pysat.solve([X, Y]),
 )
 
-test("combined forces Y=1") <- (ForcesY(_, Y), Y == 1)  # nv
-test("combined 2 solutions") <- (count_all(ForcesY(_, _), N), N == 2)  # nv
+test("combined forces Y=1") <- (forces_y(_, Y), Y == 1)  # nv
+test("combined 2 solutions") <- (count_all(forces_y(_, _), N), N == 2)  # nv
 
 # ── Counting ────────────────────────────────────────────────────────────────
 
@@ -93,34 +93,34 @@ test("count or") <- (
 
 # ── Cardinality ─────────────────────────────────────────────────────────────
 
-AtMostOneSolve(X, Y, Z) <- (
+at_most_one_solve(X, Y, Z) <- (
     pysat.at_most([X, Y, Z], 1),
     pysat.solve([X, Y, Z]),
 )
 
-test("at_most 1 of 3: 4 solutions") <- (count_all(AtMostOneSolve(_, _, _), N), N == 4)  # nv
+test("at_most 1 of 3: 4 solutions") <- (count_all(at_most_one_solve(_, _, _), N), N == 4)  # nv
 
-AtLeastTwoSolve(X, Y, Z) <- (
+at_least_two_solve(X, Y, Z) <- (
     pysat.at_least([X, Y, Z], 2),
     pysat.solve([X, Y, Z]),
 )
 
-test("at_least 2 of 3: 4 solutions") <- (count_all(AtLeastTwoSolve(_, _, _), N), N == 4)  # nv
+test("at_least 2 of 3: 4 solutions") <- (count_all(at_least_two_solve(_, _, _), N), N == 4)  # nv
 
-ExactlyTwoSolve(X, Y, Z) <- (
+exactly_two_solve(X, Y, Z) <- (
     pysat.exactly([X, Y, Z], 2),
     pysat.solve([X, Y, Z]),
 )
 
-test("exactly 2 of 3: 3 solutions") <- (count_all(ExactlyTwoSolve(_, _, _), N), N == 3)  # nv
+test("exactly 2 of 3: 3 solutions") <- (count_all(exactly_two_solve(_, _, _), N), N == 3)  # nv
 
-ExactlyZero(X, Y) <- (
+exactly_zero(X, Y) <- (
     pysat.exactly([X, Y], 0),
     pysat.solve([X, Y]),
 )
 
-test("exactly 0: both false") <- (ExactlyZero(X, Y), X == 0, Y == 0)  # nv
-test("exactly 0: 1 solution") <- (count_all(ExactlyZero(_, _), N), N == 1)  # nv
+test("exactly 0: both false") <- (exactly_zero(X, Y), X == 0, Y == 0)  # nv
+test("exactly 0: 1 solution") <- (count_all(exactly_zero(_, _), N), N == 1)  # nv
 
 # ── Pigeonhole (UNSAT) ─────────────────────────────────────────────────────
 
@@ -137,13 +137,13 @@ test("pigeonhole 3-into-2 unsat") <- (
 
 # ── Combined cardinality + clauses ──────────────────────────────────────────
 
-ExactlyOneCombined(X, Y, Z) <- (
+exactly_one_combined(X, Y, Z) <- (
     pysat.cadical(X | Y | Z),
     pysat.at_most([X, Y, Z], 1),
     pysat.solve([X, Y, Z]),
 )
 
-test("combined exactly-one 3 solutions") <- (count_all(ExactlyOneCombined(_, _, _), N), N == 3)  # nv
+test("combined exactly-one 3 solutions") <- (count_all(exactly_one_combined(_, _, _), N), N == 3)  # nv
 
 # ── Graph coloring (integration) ───────────────────────────────────────────
 
@@ -151,7 +151,7 @@ test("combined exactly-one 3 solutions") <- (count_all(ExactlyOneCombined(_, _, 
 # Each node has vars for R, G, B; exactly one color per node,
 # adjacent nodes can't share a color.
 
-TriangleColor(AR, AG, AB, BR, BG, BB, CR, CG, CB) <- (
+triangle_color(AR, AG, AB, BR, BG, BB, CR, CG, CB) <- (
     pysat.exactly([AR, AG, AB], 1),
     pysat.exactly([BR, BG, BB], 1),
     pysat.exactly([CR, CG, CB], 1),
@@ -176,4 +176,4 @@ TriangleColor(AR, AG, AB, BR, BG, BB, CR, CG, CB) <- (
     pysat.solve([AR, AG, AB, BR, BG, BB, CR, CG, CB]),
 )
 
-test("triangle coloring 6 solutions") <- (count_all(TriangleColor(_, _, _, _, _, _, _, _, _), N), N == 6)  # nv
+test("triangle coloring 6 solutions") <- (count_all(triangle_color(_, _, _, _, _, _, _, _, _), N), N == 6)  # nv

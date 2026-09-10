@@ -120,16 +120,16 @@ def test_F032_head_list_unify_input_ground_segstring():
 
 
 def test_F034_head_list_unify_output_walks_segstring_star_val():
-    """Output-mode reconstruction should walk a SegString-bound star_val,
+    """Output-mode reconstruction should walk a seg_string-bound star_val,
     not append it as a single opaque element.
 
     The output-mode helper branches `star_val` on ``list`` (extend),
     ``SegList`` (walk-and-extend), and ``Var`` (rebuild with VarSeg).
-    It has no SegString branch — a SegString-bound star_val falls
+    It has no seg_string branch — a seg_string-bound star_val falls
     into the catch-all ``else`` and is appended whole. A head
-    ``foo([H, *T])`` whose T is bound to ``SegString(['hello'])``
-    therefore produces ``['h', SegString(['hello'])]`` instead of
-    walking the SegString into chars (as the parallel SegList branch
+    ``foo([H, *T])`` whose T is bound to ``seg_string(['hello'])``
+    therefore produces ``['h', seg_string(['hello'])]`` instead of
+    walking the seg_string into chars (as the parallel SegList branch
     would do) or, under "input type wins", into a str.
     """
     from clausal.logic.variables import Var, unify, Trail, deref
@@ -230,7 +230,7 @@ def test_F041_body_multi_star_unify_non_ground_segstring():
 
 
 def test_F047_multi_star_head_guard_segstring():
-    """Multi-star head pattern ``Bracket([*A, X, Y, *B], X, Y, A, B)``
+    """Multi-star head pattern ``bracket([*A, X, Y, *B], X, Y, A, B)``
     invoked with a SegString target should yield the same solutions as
     the str/list controls — not silently zero.
 
@@ -246,24 +246,24 @@ def test_F047_multi_star_head_guard_segstring():
     from clausal.terms import SegString, VarSeg
     from tests.audit_2026_05_25._helpers import load_inline_clausal
 
-    src = "Bracket([*A, X, Y, *B], X, Y, A, B),\n"
+    src = "bracket([*A, X, Y, *B], X, Y, A, B),\n"
     mod = load_inline_clausal("c03_f047_bracket", src).__dict__["$module"]
 
     # Control 1: ground str — walks via (list, str) isinstance arm.
     X1, Y1, A1, B1 = Var(), Var(), Var(), Var()
-    n_str = sum(1 for _ in call("Bracket", "abc", X1, Y1, A1, B1, module=mod))
+    n_str = sum(1 for _ in call("bracket", "abc", X1, Y1, A1, B1, module=mod))
     assert n_str > 0, (
-        f"control: Bracket(\"abc\") should yield >0 solutions; "
+        f"control: bracket(\"abc\") should yield >0 solutions; "
         f"got {n_str}. If this fails, the fixture is broken."
     )
 
     # Control 2: ground list — symmetric.
     X2, Y2, A2, B2 = Var(), Var(), Var(), Var()
     n_list = sum(
-        1 for _ in call("Bracket", ["a", "b", "c"], X2, Y2, A2, B2, module=mod)
+        1 for _ in call("bracket", ["a", "b", "c"], X2, Y2, A2, B2, module=mod)
     )
     assert n_list > 0, (
-        f"control: Bracket(['a','b','c']) should yield >0 solutions; "
+        f"control: bracket(['a','b','c']) should yield >0 solutions; "
         f"got {n_list}. If this fails, the fixture is broken."
     )
 
@@ -272,7 +272,7 @@ def test_F047_multi_star_head_guard_segstring():
     assert ss_ground.is_ground() and ss_ground.__walk__() == "abc"
     X3, Y3, A3, B3 = Var(), Var(), Var(), Var()
     n_ss_ground = sum(
-        1 for _ in call("Bracket", ss_ground, X3, Y3, A3, B3, module=mod)
+        1 for _ in call("bracket", ss_ground, X3, Y3, A3, B3, module=mod)
     )
 
     # Probe 2: non-ground SegString — semantically "a" + ?X + "c";
@@ -281,18 +281,18 @@ def test_F047_multi_star_head_guard_segstring():
     ss_partial = SegString(["a", VarSeg(XV), "c"])
     X4, Y4, A4, B4 = Var(), Var(), Var(), Var()
     n_ss_partial = sum(
-        1 for _ in call("Bracket", ss_partial, X4, Y4, A4, B4, module=mod)
+        1 for _ in call("bracket", ss_partial, X4, Y4, A4, B4, module=mod)
     )
 
     assert n_ss_ground == n_str, (
-        f"Bracket(SegString(['abc'])) yielded {n_ss_ground} solutions; "
+        f"bracket(SegString(['abc'])) yielded {n_ss_ground} solutions; "
         f"expected the same count as the str control ({n_str}) since "
         f"the SegString walks to 'abc'. The multi-star head guard at "
         f"head_match.py:857-872 has no SegString normalisation, so the "
         f"target falls through and the multi-star arm is skipped."
     )
     assert n_ss_partial > 0, (
-        f"Bracket(SegString(['a', VarSeg(X), 'c'])) yielded "
+        f"bracket(SegString(['a', VarSeg(X), 'c'])) yielded "
         f"{n_ss_partial} solutions; expected >0 since the goal is "
         f"logically satisfiable. The multi-star head guard silently "
         f"drops the SegString."

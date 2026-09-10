@@ -1,4 +1,4 @@
-"""Tests for V2-17 Definite Clause Grammars (DCGs).
+"""Tests for V2-17 Definite Clause grammars (DCGs).
 
 DCG rules use ``>>`` syntax and compile to ordinary predicates with two
 extra state arguments (input list, remaining list) threaded through the body.
@@ -90,7 +90,7 @@ class TestAtomHeadDispatch:
         assert not _succeeds("phrase", r(ve(foo)), [mint("atom")], module=mod)
 
     def test_plain_rule_atom_head_dispatch(self, tmp_path):
-        """Core (non-DCG) regression: plain ``<-`` rule with atom heads."""
+        """core (non-DCG) regression: plain ``<-`` rule with atom heads."""
         src = (
             "-module(x, [r(T, O), foo, bar])\n"
             "r(foo, O) <- (O is 1)\n"
@@ -658,7 +658,7 @@ class TestStateThreading:
     # -- Tree leaf counting --
 
     def test_count_leaves_single(self, tmp_path):
-        """Count leaves in a single-leaf tree."""
+        """count leaves in a single-leaf tree."""
         # nv
         src = (
             '-module(tc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
@@ -675,7 +675,7 @@ class TestStateThreading:
             assert deref(n) == 1
 
     def test_count_leaves_two(self, tmp_path):
-        """Count leaves in a two-leaf tree: [leaf, leaf]."""
+        """count leaves in a two-leaf tree: [leaf, leaf]."""
         # nv
         src = (
             '-module(tc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
@@ -692,7 +692,7 @@ class TestStateThreading:
             assert deref(n) == 2
 
     def test_count_leaves_nested(self, tmp_path):
-        """Count leaves in nested tree: [leaf, [leaf, leaf]] = 3."""
+        """count leaves in nested tree: [leaf, [leaf, leaf]] = 3."""
         # nv
         src = (
             '-module(tc3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
@@ -1161,7 +1161,7 @@ class TestPrologImportInlineGoals:
         )
         # A single {Goal} must be emitted braced, not as a bare non-terminal.
         assert "{eval_(1, N)}" in src
-        cls = mod.module_dict["Count"]
+        cls = mod.module_dict["count"]
         # [x] is an ATOM terminal; query with the module's interned ``x`` atom.
         xatom = mod.module_dict["x"]
         n = Var()
@@ -1175,7 +1175,7 @@ class TestPrologImportInlineGoals:
         )
         # A conjunction body is emitted as the parenthesised form ``{(A, B)}``.
         assert "{(D >= 0, D <= 9)}" in src
-        cls = mod.module_dict["Bounded"]
+        cls = mod.module_dict["bounded"]
         # In range: accepted.
         assert _succeeds("phrase", cls(Var()), [5], module=mod)
         # BOTH guards enforced: [12] rejected (the >= 0 / <= 9 pair).

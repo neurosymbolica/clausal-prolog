@@ -4,8 +4,8 @@
 
 --8<-- [start:metainterp_graph_test]
 test("tree path(a,c) transitive") <- (
-    GraphProgram(P),
-    TreeSolve(P, path("a", "c")),
+    graph_program(P),
+    tree_solve(P, path("a", "c")),
     TREE is solve_tree(P, path("a", "c")),
     nonvar(TREE)
 )
@@ -13,9 +13,9 @@ test("tree path(a,c) transitive") <- (
 
 --8<-- [start:metainterp_tree_display]
 TREE is [
-[Natnum(succ(succ(0))), [
-  [Natnum(succ(0)), [
-    [Natnum(0), []]
+[natnum(succ(succ(0))), [
+  [natnum(succ(0)), [
+    [natnum(0), []]
   ]]
 ]]
 ]
@@ -51,14 +51,14 @@ clausal/examples/fibonacci.clausal::fib(5) = 5 PASSED
 # === examples.md ===
 
 --8<-- [start:fib_definition]
-Fib(N=0, F=0),
-Fib(N=1, F=1),
-Fib(N, F) <- (N > 1, F is Fib(N - 1) + Fib(N - 2))
+fib(N=0, F=0),
+fib(N=1, F=1),
+fib(N, F) <- (N > 1, F is fib(N - 1) + fib(N - 2))
 --8<-- [end:fib_definition]
 
 --8<-- [start:fib_test]
 # in_ your .clausal file
-test("fib 10") <- Fib(10, 55)
+test("fib 10") <- fib(10, 55)
 --8<-- [end:fib_test]
 
 # === architecture.md ===
@@ -111,7 +111,7 @@ phrase(digit(D), [5])    # D = 5
 # === files.md ===
 
 --8<-- [start:directory_listing]
-print_entries(DIR) <- (DirectoryEntries(DIR, ENTRY), writeln_text(ENTRY), fail)
+print_entries(DIR) <- (directory_entries(DIR, ENTRY), writeln_text(ENTRY), fail)
 --8<-- [end:directory_listing]
 
 # === reified_ite.md ===
@@ -123,7 +123,7 @@ if_(condition, then_goal, else_goal)
 # === python_integration.md ===
 
 --8<-- [start:python_escape_example]
-Item(1), Item(2), Item(3),
-Doubled(R) <- (Item(X), R is ++(X * 2))
-test("doubled") <- Doubled(4)
+item(1), item(2), item(3),
+doubled(R) <- (item(X), R is ++(X * 2))
+test("doubled") <- doubled(4)
 --8<-- [end:python_escape_example]

@@ -133,7 +133,7 @@ SIBLING_USE_SRC = """
 
 local_ref(art_1_2),
 
-Test("citation record resolves") <- (
+test("citation record resolves") <- (
     local_ref(REF),
     citation(REF, METADATA)
 ),
@@ -180,7 +180,7 @@ NOTHING_SRC = """
 
 local_ref(art_1_2),
 
-Test("absent predicate") <- (
+test("absent predicate") <- (
     local_ref(REF),
     zzz_quux(REF, OUT)
 ),
@@ -226,7 +226,7 @@ def test_module_defining_nothing_says_so():
 
 
 BUILTIN_SRC = """
-Test("builtin at the wrong arity") <- (
+test("builtin at the wrong arity") <- (
     atom_length("abc", LEN, EXTRA)
 ),
 """
@@ -256,7 +256,7 @@ class TestBuiltinArity:
 NEAR_MISS_SRC = """
 exceeds_limit(10),
 
-Test("near miss on the name") <- (
+test("near miss on the name") <- (
     within_limit(10)
 ),
 """

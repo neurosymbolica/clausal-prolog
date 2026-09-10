@@ -8,14 +8,14 @@
 -allow_singletons
 
 # --- Two-variable linear system ---
-TwoVar(X, Y) <- (
+two_var(X, Y) <- (
     in_q([X, Y], 0, 10),
     X + Y == 10,
     X == 3
 )
 
 # --- Three equations in three unknowns ---
-ThreeVar(X, Y, Z) <- (
+three_var(X, Y, Z) <- (
     in_q([X, Y, Z], -100, 100),
     X + Y + Z == 6,
     X - Y == 2,
@@ -23,14 +23,14 @@ ThreeVar(X, Y, Z) <- (
 )
 
 # --- Rational coefficients ---
-RationalCoeffs(X, Y) <- (
+rational_coeffs(X, Y) <- (
     in_q([X, Y], -10, 10),
     1/2 * X + 1/3 * Y == 1,
     Y == 0
 )
 
 # --- Feasibility ---
-Feasible(X, Y) <- (
+feasible(X, Y) <- (
     in_q([X, Y], 0, 100),
     X + Y <= 8,
     X <= 5,
@@ -38,7 +38,7 @@ Feasible(X, Y) <- (
 )
 
 # --- Infeasibility ---
-Infeasible(X) <- (
+infeasible(X) <- (
     in_q(X, 0, 10),
     X >= 6,
     X <= 4
@@ -53,8 +53,8 @@ LP(X, Y, OBJ) <- (
     maximize(30*X + 50*Y, OBJ)
 )
 
-# --- Scheduling minimize ---
-Scheduling(X, Y, COST) <- (
+# --- scheduling minimize ---
+scheduling(X, Y, COST) <- (
     in_q([X, Y], 0, 100),
     X + Y >= 10,
     2*X + Y <= 30,
@@ -63,7 +63,7 @@ Scheduling(X, Y, COST) <- (
 )
 
 # --- sup/inf without binding ---
-SupInf(X, LO, HI) <- (
+sup_inf(X, LO, HI) <- (
     in_q(X, 0, 100),
     X <= 10,
     X >= 3,
@@ -72,14 +72,14 @@ SupInf(X, LO, HI) <- (
 )
 
 # --- int_minimize integer optimization ---
-BBSimple(X, COST) <- (
+bb_simple(X, COST) <- (
     in_q(X, 0, 10),
     X >= 3/2,
     int_minimize([X], X, COST)
 )
 
 # --- int_minimize multi-variable ---
-BBSicstus(X, Y, Z, COST) <- (
+bb_sicstus(X, Y, Z, COST) <- (
     in_q([X, Y, Z], 0, 100),
     X >= Y + Z,
     Y >= 2,

@@ -36,19 +36,19 @@ class TestTableStoreCompletion:
 
     def test_left_rec_table_complete(self):
         lm = _module(_load("tabled_left_rec"))
-        list(call("Path", 1, Var(), module=lm))
+        list(call("path", 1, Var(), module=lm))
         for entry in lm.db.table_store.values():
             assert entry.status == "complete"
 
     def test_same_gen_table_complete(self):
         lm = _module(_load("tabled_same_gen"))
-        list(call("Sg", Var(), Var(), module=lm))
+        list(call("sg", Var(), Var(), module=lm))
         for entry in lm.db.table_store.values():
             assert entry.status == "complete"
 
     def test_mutual_rec_table_complete(self):
         lm = _module(_load("tabled_mutual_rec"))
-        list(call("ReachA", 1, Var(), module=lm))
+        list(call("reach_a", 1, Var(), module=lm))
         for entry in lm.db.table_store.values():
             assert entry.status == "complete"
 
@@ -58,5 +58,5 @@ class TestIsTabled:
 
     def test_mutual_rec_both_tabled(self):
         lm = _module(_load("tabled_mutual_rec"))
-        assert lm.db.is_tabled("ReachA", 2)
-        assert lm.db.is_tabled("ReachB", 2)
+        assert lm.db.is_tabled("reach_a", 2)
+        assert lm.db.is_tabled("reach_b", 2)

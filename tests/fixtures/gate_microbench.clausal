@@ -1,7 +1,7 @@
 # Microbench fixture for P3-2 Task 4 fix round 1 (reviewer Important-2):
 # a NON-tabled predicate that recurses over a cons-cell chain carried in
-# its own INDEXED (position-0) argument.  Pad1/Pad2/Pad3/nil/cons(_H, T)
-# give Depth/2 five distinct position-0 keys, comfortably crossing
+# its own INDEXED (position-0) argument.  pad1/pad2/pad3/nil/cons(_H, T)
+# give depth/2 five distinct position-0 keys, comfortably crossing
 # _INDEX_THRESHOLD (4), so dispatch genuinely indexes on position 0 and
 # _runtime_arg_key (and the deep-groundness gate) runs once per
 # recursive step -- exactly the shape the reviewer's Important-2 finding
@@ -10,17 +10,17 @@
 -module(gate_microbench, [
     cons(_H, T),
     nil,
-    Pad1,
-    Pad2,
-    Pad3,
-    Depth(S, N),
+    pad1,
+    pad2,
+    pad3,
+    depth(S, N),
 ])
 
-Depth(Pad1, 0),
-Depth(Pad2, 0),
-Depth(Pad3, 0),
-Depth(nil, 0),
-Depth(cons(_H, T), N) <- (
-    Depth(T, N1),
+depth(pad1, 0),
+depth(pad2, 0),
+depth(pad3, 0),
+depth(nil, 0),
+depth(cons(_H, T), N) <- (
+    depth(T, N1),
     N == N1 + 1
 )

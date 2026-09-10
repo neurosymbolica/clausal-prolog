@@ -48,11 +48,11 @@ Init <- (
     exec("app", "CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT)")
 )
 
-AddNote(BODY) <- exec("app", "INSERT INTO notes (body) VALUES (?)", [BODY])
+add_note(BODY) <- exec("app", "INSERT INTO notes (body) VALUES (?)", [BODY])
 
-AllNotes(ID, BODY) <- query("app", "SELECT id, body FROM notes", (ID, BODY))
+all_notes(ID, BODY) <- query("app", "SELECT id, body FROM notes", (ID, BODY))
 
-SearchNotes(TERM, BODY) <- (
+search_notes(TERM, BODY) <- (
     query("app", "SELECT body FROM notes WHERE body LIKE ?", [TERM], BODY)
 )
 --8<-- [end:crud_example]
@@ -70,7 +70,7 @@ Setup <- (
     exec("hr", "INSERT INTO emp VALUES ('Bob', 2)")
 )
 
-EmpDept(EMP, DEPT) <- (
+emp_dept(EMP, DEPT) <- (
     Setup,
     query("hr",
         "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id",
@@ -81,7 +81,7 @@ EmpDept(EMP, DEPT) <- (
 --8<-- [start:schema_example]
 -import_from(sqlite, [connect, table, column])
 
-Describe(DB) <- (
+describe(DB) <- (
     table(DB, TABLE),
     ++print(f"\n{TABLE}:"),
     column(DB, TABLE, COL, TYPE),

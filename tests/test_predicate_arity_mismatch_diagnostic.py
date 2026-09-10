@@ -55,7 +55,7 @@ CITATIONS = """
     citation(art_1_2, "Reg-Z Article 1(2)", meta),
     cite(art_1_2),
 
-    Test("citation record resolves") <- (
+    test("citation record resolves") <- (
         cite(REF),
         citation(REF, METADATA)
     ),
@@ -104,7 +104,7 @@ class TestTheMessage:
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
-            Test("both arities") <- citation({call_args}),
+            test("both arities") <- citation({call_args}),
         """, name=f"argboth{passes}.clausal")
         assert f"citation takes 3 arguments, but this call passes {passes}" in out
 
@@ -151,7 +151,7 @@ class TestForwardReference:
         out = _report(tmp_path, """
             -private([art_1_2, meta])
 
-            Test("forward") <- citation(REF, META),
+            test("forward") <- citation(REF, META),
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
         """)
@@ -172,7 +172,7 @@ class TestOtherGoalPositions:
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
-            Test("g") <- {goal},
+            test("g") <- {goal},
         """, name=name)
 
     def test_inside_negation(self, tmp_path):
@@ -212,7 +212,7 @@ class TestHigherOrderFamily:
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
             citepair(art_1_2, meta),
 
-            Test("g") <- {goal},
+            test("g") <- {goal},
         """, name=name)
 
     # The goal receives the element and nothing else.
@@ -264,7 +264,7 @@ class TestHigherOrderFamily:
 
             cite_one(art_1_2),
 
-            Test("ok1") <- maplist(cite_one, [art_1_2]),
+            test("ok1") <- maplist(cite_one, [art_1_2]),
         """, name="arghook1.clausal")
         assert "PASSED" in out
 
@@ -388,7 +388,7 @@ class TestTermConstructionUnaffected:
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
             arcm_shape(REF, N) <- functor(citation(REF), N, _),
 
-            Test("partial term") <- (arcm_shape(art_1_2, N), N == "citation"),
+            test("partial term") <- (arcm_shape(art_1_2, N), N == "citation"),
         """)
         assert "PASSED" in out
 
@@ -446,7 +446,7 @@ class TestCorrectCallsUnaffected:
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
-            Test("ok") <- citation(REF, LABEL, META),
+            test("ok") <- citation(REF, LABEL, META),
         """)
         assert "PASSED" in out
 
@@ -586,7 +586,7 @@ class TestDynamicDeclaredArity:
         out = _report(tmp_path, """
             -dynamic(dfact/3)
 
-            Test("dyn wrong arity") <- dfact(_A, _B),
+            test("dyn wrong arity") <- dfact(_A, _B),
         """, name="argdyn.clausal")
         assert "dfact takes 3 arguments, but this call passes 2" in out
         assert "positional argument" not in out
@@ -597,7 +597,7 @@ class TestDynamicDeclaredArity:
         out = _report(tmp_path, """
             -dynamic(dfact/3)
 
-            Test("dyn empty") <- dfact(_A, _B, _C),
+            test("dyn empty") <- dfact(_A, _B, _C),
         """, name="argdynok.clausal")
         assert "TypeError" not in out
         assert "takes 3 arguments" not in out     # failed, not refused
@@ -608,7 +608,7 @@ class TestDynamicDeclaredArity:
         out = _report(tmp_path, """
             -dynamic(dfact/3)
 
-            Test("dyn assertz") <- (assertz(dfact(1, 2, 3)), dfact(_A, _B)),
+            test("dyn assertz") <- (assertz(dfact(1, 2, 3)), dfact(_A, _B)),
         """, name="argdynz.clausal")
         assert "dfact takes 3 arguments, but this call passes 2" in out
         assert "positional argument" not in out
@@ -618,7 +618,7 @@ class TestDynamicDeclaredArity:
         out = _report(tmp_path, """
             -dynamic(dfact/3)
 
-            Test("dyn maplist") <- maplist(dfact, [1]),
+            test("dyn maplist") <- maplist(dfact, [1]),
         """, name="argdynho.clausal")
         assert "dfact takes 3 arguments, but this call passes 1" in out
         assert "positional argument" not in out
@@ -701,7 +701,7 @@ class TestRuntimeFunnels:
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
-            Test("timed") <- time_goal(citation),
+            test("timed") <- time_goal(citation),
         """, "arcmtime.clausal")
         assert "citation takes 3 arguments" in out
         assert "passes 0" in out
@@ -716,7 +716,7 @@ class TestRuntimeFunnels:
         out = _report(tmp_path, """
             arcmp_five(A, B, C, S0, S) <- (S0 == S),
 
-            Test("phrased") <- phrase(arcmp_five, [], []),
+            test("phrased") <- phrase(arcmp_five, [], []),
         """, "arcmphrase.clausal")
         assert "arcmp_five takes 5 arguments" in out
         assert "passes 2" in out
@@ -731,7 +731,7 @@ class TestRuntimeFunnels:
         out = _report(tmp_path, """
             greeting >> (["hello", "world"])
 
-            Test("greets") <- phrase(greeting, ["hello", "world"]),
+            test("greets") <- phrase(greeting, ["hello", "world"]),
         """, "arcmdcg.clausal")
         assert "PASSED" in out
 
@@ -1022,7 +1022,7 @@ class TestTwoAritiesInOneFile:
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
             citation(art_1_2, meta),
 
-            Test("citation record resolves") <- citation(REF, METADATA),
+            test("citation record resolves") <- citation(REF, METADATA),
         """, name="argremedy.clausal")
         assert "citation/2 conflicts" in out
         assert "citation/3" in out

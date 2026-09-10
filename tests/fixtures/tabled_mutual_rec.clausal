@@ -1,44 +1,44 @@
--table(ReachA/2)
--table(ReachB/2)
+-table(reach_a/2)
+-table(reach_b/2)
 
-LinkA(1, 2),
-LinkA(3, 4),
-LinkB(2, 3),
-LinkB(4, 1),
+link_a(1, 2),
+link_a(3, 4),
+link_b(2, 3),
+link_b(4, 1),
 
-ReachA(X, Y) <- LinkA(X, Y)
-ReachA(X, Y) <- (
-    ReachB(X, Z),
-    LinkA(Z, Y)
+reach_a(X, Y) <- link_a(X, Y)
+reach_a(X, Y) <- (
+    reach_b(X, Z),
+    link_a(Z, Y)
 )
 
-ReachB(X, Y) <- LinkB(X, Y)
-ReachB(X, Y) <- (
-    ReachA(X, Z),
-    LinkB(Z, Y)
+reach_b(X, Y) <- link_b(X, Y)
+reach_b(X, Y) <- (
+    reach_a(X, Z),
+    link_b(Z, Y)
 )
 
 
-test("reach a 1 2") <- ReachA(1, 2)  # nv
-test("reach b 2 3") <- ReachB(2, 3)  # nv
-test("reach a transitive 1 4") <- ReachA(1, 4)  # nv
-test("reach b transitive 2 1") <- ReachB(2, 1)  # nv
+test("reach a 1 2") <- reach_a(1, 2)  # nv
+test("reach b 2 3") <- reach_b(2, 3)  # nv
+test("reach a transitive 1 4") <- reach_a(1, 4)  # nv
+test("reach b transitive 2 1") <- reach_b(2, 1)  # nv
 
 # ── Migrated from test_slg_termination.py::TestMutualRecursion ────────────
 
 test("reach_a from 1 yields {2, 4}") <- (
-    findall(Y, ReachA(1, Y), L),
+    findall(Y, reach_a(1, Y), L),
     sort(L, S),
     S == [2, 4]
 )  # nv
 test("reach_b from 2 yields {1, 3}") <- (
-    findall(Y, ReachB(2, Y), L),
+    findall(Y, reach_b(2, Y), L),
     sort(L, S),
     S == [1, 3]
 )  # nv
 test("reach_a from 3 yields {2, 4}") <- (
-    findall(Y, ReachA(3, Y), L),
+    findall(Y, reach_a(3, Y), L),
     sort(L, S),
     S == [2, 4]
 )  # nv
-test("mutual cycle terminates") <- ReachA(1, _)  # nv
+test("mutual cycle terminates") <- reach_a(1, _)  # nv

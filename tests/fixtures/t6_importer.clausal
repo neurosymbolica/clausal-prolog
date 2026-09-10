@@ -16,9 +16,9 @@ home("importer"),
 
 # The dotted spelling of the same cross-module goal the qualified cell
 # ``(":", "tests.fixtures.t6_exporter", ("p", X))`` names — the parity oracle.
-DottedP(X) <- tests.fixtures.t6_exporter.p(X)
+dotted_p(X) <- tests.fixtures.t6_exporter.p(X)
 
-CallHost1(G) <- call(G),
-CallHost2(G, A) <- call(G, A),
-CallHost3(G, A, B) <- call(G, A, B),
-CallHost4(G, A, B, C) <- call(G, A, B, C),
+call_host1(G) <- call(G),
+call_host2(G, A) <- call(G, A),
+call_host3(G, A, B) <- call(G, A, B),
+call_host4(G, A, B, C) <- call(G, A, B, C),

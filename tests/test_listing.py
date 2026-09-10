@@ -374,8 +374,8 @@ class TestListingDivIndicatorArgument:
                 _sys.stdout = saved
             return buf.getvalue()
 
-        out_class = _capture("DebugFibByClass")
-        out_indicator = _capture("DebugFibByIndicator")
+        out_class = _capture("debug_fib_by_class")
+        out_indicator = _capture("debug_fib_by_indicator")
         assert out_indicator == out_class
         assert "fib/2" in out_class
         assert "3 clause(s)" in out_class
@@ -439,10 +439,10 @@ class TestListingAnImportedPredicateByIndicator:
     def test_all_three_spellings_are_byte_identical_from_the_importer(self):
         import tests.fixtures.listing_import_user as user
 
-        by_name = self._capture(user, "ListByName")
+        by_name = self._capture(user, "list_by_name")
         assert "qq/1" in by_name and "2 clause(s)" in by_name
-        assert self._capture(user, "ListByClassIndicator") == by_name
-        assert self._capture(user, "ListByStrIndicator") == by_name
+        assert self._capture(user, "list_by_class_indicator") == by_name
+        assert self._capture(user, "list_by_str_indicator") == by_name
 
 
 class TestListingIndicatorInstantiation:
@@ -483,7 +483,7 @@ class TestListingIndicatorInstantiation:
 
 
 class TestListingSpecializedAliasByIndicator:
-    """P3-3 Task 7's ``-specialize`` alias (``SolveCountNatnum/2``, 3
+    """P3-3 Task 7's ``-specialize`` alias (``solve_count_natnum/2``, 3
     clauses — Task 7's own review confirmed the row) listed through its
     ``Name/Arity`` cell, exercising ``listing/1`` against a REAL module
     database rather than a hand-built one."""
@@ -493,8 +493,8 @@ class TestListingSpecializedAliasByIndicator:
 
         db = specialize_natnum.__clausal_module__.db
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, ("/", mint("SolveCountNatnum"), 2))
-        assert "SolveCountNatnum/2" in output
+        output = _run_listing(dispatch, ("/", mint("solve_count_natnum"), 2))
+        assert "solve_count_natnum/2" in output
         assert "3 clause(s)" in output
 
 

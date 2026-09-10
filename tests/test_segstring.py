@@ -601,7 +601,7 @@ class TestClauseLevelStringPatterns:
     """End-to-end tests using existing clausal modules with string patterns."""
 
     def test_head_tail_string(self):
-        """HeadTail from list_edge_cases works on strings (Phase 5b)."""
+        """head_tail from list_edge_cases works on strings (Phase 5b)."""
         # nv
         import os
         from clausal.import_hook import _load_module
@@ -612,7 +612,7 @@ class TestClauseLevelStringPatterns:
         mod = _load_module("lec_segstr", fixture).__dict__["$module"]
         H, T = Var(), Var()
         results = []
-        for _ in call("HeadTail", "hello", H, T, module=mod):
+        for _ in call("head_tail", "hello", H, T, module=mod):
             results.append((deref(H), deref(T)))
         # THE FLIP (spec §6.2): the head of a string is a CHAR ATOM, the
         # tail a str slice (R-S2).

@@ -1,13 +1,13 @@
-# Test fixture: specialize SolveCount with natnum program.
+# Test fixture: specialize solve_count with natnum program.
 #
-# Uses -specialize directive to produce SolveCountNatnum — a specialized
+# Uses -specialize directive to produce solve_count_natnum — a specialized
 # counting MI with MI overhead removed.  The MI pattern is auto-detected.
 
--import_from(clausal.examples.metainterpreters, [SolveCount])
+-import_from(clausal.examples.metainterpreters, [solve_count])
 
 # ── Object Program ────────────────────────────────────────────────────────────
 
-NatnumProgram(PROGRAM) <- (
+natnum_program(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", X]], [["natnum", X]]]
@@ -16,18 +16,18 @@ NatnumProgram(PROGRAM) <- (
 
 # ── Specialization ────────────────────────────────────────────────────────────
 
--specialize(SolveCount, NatnumProgram, alias=SolveCountNatnum)
+-specialize(solve_count, natnum_program, alias=solve_count_natnum)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 test("specialized count natnum(0) = 1") <- (
-    SolveCountNatnum([["natnum", 0]], 1)
+    solve_count_natnum([["natnum", 0]], 1)
 )  # nv
 
 test("specialized count natnum(s(0)) = 2") <- (
-    SolveCountNatnum([["natnum", ["s", 0]]], 2)
+    solve_count_natnum([["natnum", ["s", 0]]], 2)
 )  # nv
 
 test("specialized count natnum(s(s(0))) = 3") <- (
-    SolveCountNatnum([["natnum", ["s", ["s", 0]]]], 3)
+    solve_count_natnum([["natnum", ["s", ["s", 0]]]], 3)
 )  # nv

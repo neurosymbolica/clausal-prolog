@@ -1,3 +1,3 @@
--table(Pn/1)
+-table(pn/1)
 
-Pn(X) <- (Y == X + 1, not Pn(Y))
+pn(X) <- (Y == X + 1, not pn(Y))

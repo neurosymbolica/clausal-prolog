@@ -3,10 +3,10 @@
 # body goals, so the throwing call must sit in an intermediate predicate of
 # the importing module — a call nested inside catch(...) is never
 # specialised.
--module(callsite_throw_lib, [ThrowCat(P, C)])
+-module(callsite_throw_lib, [throw_cat(P, C)])
 
-ThrowCat(P, "a") <- (P == 1)
-ThrowCat(P, "b") <- (P == 2, throw("boom"))
-ThrowCat(P, "c") <- (P == 3)
-ThrowCat(P, "d") <- (P == 4)
-ThrowCat(P, "e") <- (P == 5)
+throw_cat(P, "a") <- (P == 1)
+throw_cat(P, "b") <- (P == 2, throw("boom"))
+throw_cat(P, "c") <- (P == 3)
+throw_cat(P, "d") <- (P == 4)
+throw_cat(P, "e") <- (P == 5)

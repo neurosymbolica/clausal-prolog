@@ -1,12 +1,12 @@
--table(Win/1)
+-table(win/1)
 
-Move("a", "b"),
-Move("b", "a"),
-Move("a", "c"),
+move("a", "b"),
+move("b", "a"),
+move("a", "c"),
 
-Win(X) <- (Move(X, Y), not Win(Y))
+win(X) <- (move(X, Y), not win(Y))
 
 
-test("move a to b") <- Move("a", "b")  # nv
-test("move b to a") <- Move("b", "a")  # nv
-test("win a") <- Win("a")  # nv
+test("move a to b") <- move("a", "b")  # nv
+test("move b to a") <- move("b", "a")  # nv
+test("win a") <- win("a")  # nv

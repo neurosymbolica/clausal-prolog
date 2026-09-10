@@ -959,7 +959,7 @@ class TestClpbFixture:
         from clausal.logic.solve import call
         s_, c_ = Var(), Var()
         results = []
-        for _ in call("HalfAdder", 0, 0, s_, c_, module=self.logic_mod):
+        for _ in call("half_adder", 0, 0, s_, c_, module=self.logic_mod):
             results.append((deref(s_), deref(c_)))
         assert len(results) >= 1
         assert results[0] == (0, 0)
@@ -969,7 +969,7 @@ class TestClpbFixture:
         from clausal.logic.solve import call
         s_, c_ = Var(), Var()
         results = []
-        for _ in call("HalfAdder", 1, 1, s_, c_, module=self.logic_mod):
+        for _ in call("half_adder", 1, 1, s_, c_, module=self.logic_mod):
             results.append((deref(s_), deref(c_)))
         assert len(results) >= 1
         assert results[0] == (0, 1)
@@ -979,7 +979,7 @@ class TestClpbFixture:
         from clausal.logic.solve import call
         s_, cout_ = Var(), Var()
         results = []
-        for _ in call("FullAdder", 1, 1, 1, s_, cout_, module=self.logic_mod):
+        for _ in call("full_adder", 1, 1, 1, s_, cout_, module=self.logic_mod):
             results.append((deref(s_), deref(cout_)))
         assert len(results) >= 1
         assert results[0] == (1, 1)
@@ -987,7 +987,7 @@ class TestClpbFixture:
     def test_pigeon_hole_unsat(self):
         # nv
         from clausal.logic.solve import call
-        results = list(call("PigeonHole", module=self.logic_mod))
+        results = list(call("pigeon_hole", module=self.logic_mod))
         assert len(results) == 0
 
 

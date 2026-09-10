@@ -351,7 +351,7 @@ def test_hide_without_module_raises_syntax_error():
     file is a compile-time error (the simplest sound rule: the mangled
     spelling embeds the module name, and there is no principled identity
     to mangle into without one)."""
-    source = "-hide([hide_no_module_atom])\n\nProbe(hide_no_module_atom),\n"
+    source = "-hide([hide_no_module_atom])\n\nprobe(hide_no_module_atom),\n"
     with pytest.raises(SyntaxError, match="-hide requires a preceding -module"):
         _load_inline_clausal("_hide_no_module_test", source)
 
@@ -362,10 +362,10 @@ def test_hide_entries_must_be_bare_atoms():
     through Python's own module scoping, so hiding does not apply to
     them."""
     source = (
-        "-module(hide_bad_shape_test, [Probe(X)])\n"
+        "-module(hide_bad_shape_test, [probe(X)])\n"
         "-hide([foo(A, B)])\n"
         "\n"
-        "Probe(1),\n"
+        "probe(1),\n"
     )
     with pytest.raises(SyntaxError, match="-hide entries must be bare atoms"):
         _load_inline_clausal("_hide_bad_shape_test", source)
@@ -469,15 +469,15 @@ def test_hide_entries_count_as_declared_for_strictness():
     the claim with a minimal, self-contained fixture."""
     source = (
         "-strict_atoms\n"
-        "-module(hide_strict_test, [Probe(X)])\n"
+        "-module(hide_strict_test, [probe(X)])\n"
         "-hide([hide_strict_secret])\n"
         "\n"
-        "Probe(hide_strict_secret),\n"
+        "probe(hide_strict_secret),\n"
     )
     mod = _load_inline_clausal("_hide_strict_interplay_test", source)
     lm = mod.__dict__["$module"]
     out = Var()
-    vals = [deref(out) for _ in call("Probe", out, module=lm)]
+    vals = [deref(out) for _ in call("probe", out, module=lm)]
     assert vals == [mint(mangle("hide_strict_test", "hide_strict_secret"))]
 
 
@@ -487,10 +487,10 @@ def test_hide_does_not_satisfy_strictness_for_other_undeclared_atoms():
     strict file is still a compile-time ``NameError``."""
     source = (
         "-strict_atoms\n"
-        "-module(hide_strict_neg_test, [Probe(X)])\n"
+        "-module(hide_strict_neg_test, [probe(X)])\n"
         "-hide([hide_strict_secret_declared])\n"
         "\n"
-        "Probe(hide_strict_secret_undeclared),\n"
+        "probe(hide_strict_secret_undeclared),\n"
     )
     with pytest.raises(NameError):
         _load_inline_clausal("_hide_strict_interplay_neg_test", source)

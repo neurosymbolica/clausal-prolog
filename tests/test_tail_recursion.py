@@ -380,7 +380,7 @@ class TestTroCorrectness(unittest.TestCase):
         self.assertEqual(len(results), 1)
 
     def test_accumulator_sum(self):
-        """AccSum([H|T], Acc, R) <- AccSum(T, Acc+H, R)."""
+        """acc_sum([H|T], Acc, R) <- acc_sum(T, Acc+H, R)."""
         # nv
         class ASum(metaclass=PredicateMeta):
             _fields = ('list', 'acc', 'result')
@@ -694,15 +694,15 @@ class TestTroImportHook(unittest.TestCase):
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
         # Verify key predicates exist
-        self.assertIn('AccSum', mod.__dict__)
-        self.assertIn('AccFactorial', mod.__dict__)
+        self.assertIn('acc_sum', mod.__dict__)
+        self.assertIn('acc_factorial', mod.__dict__)
 
     def test_fixture_accsum_correct(self):
-        """AccSum via import hook produces correct results."""
+        """acc_sum via import hook produces correct results."""
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccSum = mod.__dict__['AccSum']
+        AccSum = mod.__dict__['acc_sum']
         r = Var()
         trail = Trail()
         for _ in call(AccSum, [1, 2, 3, 4, 5], 0, r, trail=trail):
@@ -712,11 +712,11 @@ class TestTroImportHook(unittest.TestCase):
             self.fail("No solutions")
 
     def test_fixture_factorial_correct(self):
-        """AccFactorial via import hook produces correct results."""
+        """acc_factorial via import hook produces correct results."""
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccFactorial = mod.__dict__['AccFactorial']
+        AccFactorial = mod.__dict__['acc_factorial']
         r = Var()
         trail = Trail()
         for _ in call(AccFactorial, 10, 1, r, trail=trail):
@@ -730,7 +730,7 @@ class TestTroImportHook(unittest.TestCase):
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccLength = mod.__dict__['AccLength']
+        AccLength = mod.__dict__['acc_length']
 
         counting_cls, counter = _make_counting_sg()
         restore = _patch_sg(counting_cls, AccLength)
@@ -755,11 +755,11 @@ class TestTroGroundnessDispatch(unittest.TestCase):
     """Test TRO across groundness-dispatch bucket boundaries."""
 
     def test_mynthof_tro_across_buckets(self):
-        """MyNthOf-style predicate: TRO restarts land in different bucket."""
+        """my_nth_of-style predicate: TRO restarts land in different bucket."""
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/deep_index.clausal')
-        MyNthOf = mod.__dict__['MyNthOf']
+        MyNthOf = mod.__dict__['my_nth_of']
 
         # Correctness
         r = Var()
@@ -768,14 +768,14 @@ class TestTroGroundnessDispatch(unittest.TestCase):
             self.assertEqual(deref(r), 30)
             break
         else:
-            self.fail("No solutions for MyNthOf(2, [10,20,30], E)")
+            self.fail("No solutions for my_nth_of(2, [10,20,30], E)")
 
     def test_mynthof_tro_allocations(self):
-        """MyNthOf uses O(1) StepGenerators via dispatch-level TRO."""
+        """my_nth_of uses O(1) StepGenerators via dispatch-level TRO."""
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/deep_index.clausal')
-        MyNthOf = mod.__dict__['MyNthOf']
+        MyNthOf = mod.__dict__['my_nth_of']
 
         counting_cls, counter = _make_counting_sg()
         restore = _patch_sg(counting_cls, MyNthOf)
@@ -795,11 +795,11 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
     """Test runtime ground-check fallback for head-decomposition vars."""
 
     def test_acclength_with_unbound_list(self):
-        """AccLength with unbound first arg falls back to StepGenerator (no TRO)."""
+        """acc_length with unbound first arg falls back to StepGenerator (no TRO)."""
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccLength = mod.__dict__['AccLength']
+        AccLength = mod.__dict__['acc_length']
 
         # Call with unbound first arg — should produce solutions via
         # StepGenerator fallback, not break due to TRO.

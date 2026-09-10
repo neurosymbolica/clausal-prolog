@@ -41,7 +41,7 @@ join({scheme: "https", host: "example.com", path: "/api"}, URL)
 -import_from(py.url, [encode, join])
 -import_from(py.http, [json_get])
 
-SearchApi(QUERY, RESULTS) <- (
+search_api(QUERY, RESULTS) <- (
     encode(QUERY, SAFE_QUERY),
     atom_concat("https://api.example.com/search?q=", SAFE_QUERY, URL),
     json_get(URL, RESULTS)
@@ -51,7 +51,7 @@ SearchApi(QUERY, RESULTS) <- (
 --8<-- [start:health_check]
 -import_from(py.http, [request])
 
-HealthCheck(URL) <- (
+health_check(URL) <- (
     request({"url": URL, "timeout": 5}, STATUS, _),
     STATUS == 200
 )

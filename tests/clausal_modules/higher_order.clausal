@@ -2,83 +2,83 @@
 #
 # maplist/2, maplist/3, include/3, exclude/3, foldl/4
 
-# Doubles/2 — double each element via maplist/3 + lambda
-Doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
+# doubles/2 — double each element via maplist/3 + lambda
+doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 
-# AllPositive/1 — check all positive via maplist/2 + lambda
-AllPositive(XS) <- maplist((X <- (X > 0)), XS)
+# all_positive/1 — check all positive via maplist/2 + lambda
+all_positive(XS) <- maplist((X <- (X > 0)), XS)
 
-# KeepPositive/2 — filter positive via include/3
-KeepPositive(XS, PS) <- include((X <- (X > 0)), XS, PS)
+# keep_positive/2 — filter positive via include/3
+keep_positive(XS, PS) <- include((X <- (X > 0)), XS, PS)
 
-# RemoveNegative/2 — filter out negative via exclude/3
-RemoveNegative(XS, RS) <- exclude((X <- (X < 0)), XS, RS)
+# remove_negative/2 — filter out negative via exclude/3
+remove_negative(XS, RS) <- exclude((X <- (X < 0)), XS, RS)
 
-# SumListFold/2 — sum via foldl/4
-SumListFold(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
+# sum_list_fold/2 — sum via foldl/4
+sum_list_fold(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
 
-# ProductList/2 — product via foldl/4
-ProductList(XS, P) <- foldl(((E, A, R) <- (R == A * E)), XS, 1, P)
+# product_list/2 — product via foldl/4
+product_list(XS, P) <- foldl(((E, A, R) <- (R == A * E)), XS, 1, P)
 
-# Squares/2 — square each element via maplist/3
-Squares(XS, YS) <- maplist(((X, Y) <- (Y == X * X)), XS, YS)
+# squares/2 — square each element via maplist/3
+squares(XS, YS) <- maplist(((X, Y) <- (Y == X * X)), XS, YS)
 
-# KeepEven/2 — filter even numbers via include
-KeepEven(XS, ES) <- include((X <- (X % 2 == 0)), XS, ES)
+# keep_even/2 — filter even numbers via include
+keep_even(XS, ES) <- include((X <- (X % 2 == 0)), XS, ES)
 
-# RemoveEven/2 — filter out even numbers via exclude
-RemoveEven(XS, OS) <- exclude((X <- (X % 2 == 0)), XS, OS)
+# remove_even/2 — filter out even numbers via exclude
+remove_even(XS, OS) <- exclude((X <- (X % 2 == 0)), XS, OS)
 
-# NegateList/2 — negate each element
-NegateList(XS, YS) <- maplist(((X, Y) <- (Y == 0 - X)), XS, YS)
+# negate_list/2 — negate each element
+negate_list(XS, YS) <- maplist(((X, Y) <- (Y == 0 - X)), XS, YS)
 
-# CountFold/2 — count elements via foldl (ignore element, just increment)
-CountFold(XS, N) <- foldl(((ELEM_UNUSED, A, R) <- (R == A + 1)), XS, 0, N)
+# count_fold/2 — count elements via foldl (ignore element, just increment)
+count_fold(XS, N) <- foldl(((ELEM_UNUSED, A, R) <- (R == A + 1)), XS, 0, N)
 
-# MaxFold/3 — find max starting from an initial value
-MaxFold(XS, INIT, M) <- foldl(((E, A, R) <- (
+# max_fold/3 — find max starting from an initial value
+max_fold(XS, INIT, M) <- foldl(((E, A, R) <- (
     (E >= A and R is E) or (A > E and R is A)
 )), XS, INIT, M)
 
 
 # ── Test clauses (migrated from test_clausal_modules.py::TestHigherOrder*) ─
 
-test("doubles 1..3") <- (Doubles([1, 2, 3], R), R == [2, 4, 6])  # nv
-test("doubles empty") <- (Doubles([], R), R == [])  # nv
-test("doubles negative") <- (Doubles([-1, 0, 5], R), R == [-2, 0, 10])  # nv
+test("doubles 1..3") <- (doubles([1, 2, 3], R), R == [2, 4, 6])  # nv
+test("doubles empty") <- (doubles([], R), R == [])  # nv
+test("doubles negative") <- (doubles([-1, 0, 5], R), R == [-2, 0, 10])  # nv
 
-test("HO all_positive succeeds") <- AllPositive([1, 2, 3])  # nv
-test("HO all_positive fails") <- (not AllPositive([1, -2, 3]))  # nv
-test("HO all_positive empty (vacuously true)") <- AllPositive([])  # nv
+test("HO all_positive succeeds") <- all_positive([1, 2, 3])  # nv
+test("HO all_positive fails") <- (not all_positive([1, -2, 3]))  # nv
+test("HO all_positive empty (vacuously true)") <- all_positive([])  # nv
 
-test("keep_positive mixed") <- (KeepPositive([1, -2, 3, -4], R), R == [1, 3])  # nv
-test("keep_positive none") <- (KeepPositive([-1, -2], R), R == [])  # nv
-test("keep_positive all") <- (KeepPositive([5, 10], R), R == [5, 10])  # nv
+test("keep_positive mixed") <- (keep_positive([1, -2, 3, -4], R), R == [1, 3])  # nv
+test("keep_positive none") <- (keep_positive([-1, -2], R), R == [])  # nv
+test("keep_positive all") <- (keep_positive([5, 10], R), R == [5, 10])  # nv
 
-test("remove_negative mixed") <- (RemoveNegative([1, -2, 3, -4], R), R == [1, 3])  # nv
-test("remove_negative none") <- (RemoveNegative([1, 2, 3], R), R == [1, 2, 3])  # nv
+test("remove_negative mixed") <- (remove_negative([1, -2, 3, -4], R), R == [1, 3])  # nv
+test("remove_negative none") <- (remove_negative([1, 2, 3], R), R == [1, 2, 3])  # nv
 
-test("sum_list_fold 1..3 = 6") <- (SumListFold([1, 2, 3], R), R == 6)  # nv
-test("sum_list_fold empty = 0") <- (SumListFold([], R), R == 0)  # nv
-test("sum_list_fold single = 42") <- (SumListFold([42], R), R == 42)  # nv
+test("sum_list_fold 1..3 = 6") <- (sum_list_fold([1, 2, 3], R), R == 6)  # nv
+test("sum_list_fold empty = 0") <- (sum_list_fold([], R), R == 0)  # nv
+test("sum_list_fold single = 42") <- (sum_list_fold([42], R), R == 42)  # nv
 
-test("product_list 2 3 4 = 24") <- (ProductList([2, 3, 4], R), R == 24)  # nv
-test("product_list empty = 1") <- (ProductList([], R), R == 1)  # nv
-test("product_list with zero = 0") <- (ProductList([5, 0, 3], R), R == 0)  # nv
+test("product_list 2 3 4 = 24") <- (product_list([2, 3, 4], R), R == 24)  # nv
+test("product_list empty = 1") <- (product_list([], R), R == 1)  # nv
+test("product_list with zero = 0") <- (product_list([5, 0, 3], R), R == 0)  # nv
 
-test("HO squares") <- (Squares([1, 2, 3, 4], R), R == [1, 4, 9, 16])  # nv
+test("HO squares") <- (squares([1, 2, 3, 4], R), R == [1, 4, 9, 16])  # nv
 
-test("keep_even") <- (KeepEven([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
-test("keep_even none") <- (KeepEven([1, 3, 5], R), R == [])  # nv
+test("keep_even") <- (keep_even([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
+test("keep_even none") <- (keep_even([1, 3, 5], R), R == [])  # nv
 
-test("remove_even") <- (RemoveEven([1, 2, 3, 4, 5], R), R == [1, 3, 5])  # nv
+test("remove_even") <- (remove_even([1, 2, 3, 4, 5], R), R == [1, 3, 5])  # nv
 
-test("negate_list") <- (NegateList([1, -2, 3], R), R == [-1, 2, -3])  # nv
-test("negate_list empty") <- (NegateList([], R), R == [])  # nv
+test("negate_list") <- (negate_list([1, -2, 3], R), R == [-1, 2, -3])  # nv
+test("negate_list empty") <- (negate_list([], R), R == [])  # nv
 
-test("count_fold 4") <- (CountFold([10, 20, 30, 40], R), R == 4)  # nv
-test("count_fold empty = 0") <- (CountFold([], R), R == 0)  # nv
+test("count_fold 4") <- (count_fold([10, 20, 30, 40], R), R == 4)  # nv
+test("count_fold empty = 0") <- (count_fold([], R), R == 0)  # nv
 
-test("max_fold 9") <- (MaxFold([3, 7, 2, 9, 1], 0, R), R == 9)  # nv
-test("max_fold single") <- (MaxFold([5], 0, R), R == 5)  # nv
-test("max_fold init wins") <- (MaxFold([1, 2], 100, R), R == 100)  # nv
+test("max_fold 9") <- (max_fold([3, 7, 2, 9, 1], 0, R), R == 9)  # nv
+test("max_fold single") <- (max_fold([5], 0, R), R == 5)  # nv
+test("max_fold init wins") <- (max_fold([1, 2], 100, R), R == 100)  # nv

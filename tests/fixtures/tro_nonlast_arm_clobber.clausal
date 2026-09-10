@@ -1,7 +1,7 @@
 # Fixture for the signal-mode TRO flag-clobber regression
 # (todo/tro-signal-flag-clobbered-by-later-match-arms.md).
 #
-# Prc/3 has a NON-last tail-recursive clause followed by a trailing clause
+# prc/3 has a NON-last tail-recursive clause followed by a trailing clause
 # that ALWAYS yields (X is N).  In signal mode the recursive clause sets the
 # shared $tro_state flag and falls through; the trailing clause then yields a
 # solution WHILE the flag is pending.  A sibling call to the same predicate
@@ -11,16 +11,16 @@
 # Padding clauses at key positions "p".."s" push the clause count over the
 # index threshold so signal-mode groundness dispatch (not loop-mode) is used
 # for the "k"/"w" buckets.
--module(tro_nonlast_arm_clobber, [Prc(K, N, X), Drv(X)])
+-module(tro_nonlast_arm_clobber, [prc(K, N, X), drv(X)])
 
-Prc("k", N, X) <- (N > 0, M is N - 1, Prc("k", M, X))
-Prc("k", N, X) <- (X is N)
-Prc("w", N, X) <- (X is N)
-Prc("p", N, X) <- (X is N)
-Prc("q", N, X) <- (X is N)
-Prc("r", N, X) <- (X is N)
-Prc("s", N, X) <- (X is N)
+prc("k", N, X) <- (N > 0, M is N - 1, prc("k", M, X))
+prc("k", N, X) <- (X is N)
+prc("w", N, X) <- (X is N)
+prc("p", N, X) <- (X is N)
+prc("q", N, X) <- (X is N)
+prc("r", N, X) <- (X is N)
+prc("s", N, X) <- (X is N)
 
-# Driver: the sibling Prc("w", 0, _) re-enters dispatch while the first
+# Driver: the sibling prc("w", 0, _) re-enters dispatch while the first
 # goal's tail-call flag is still pending, triggering the clobber.
-Drv(X) <- (Prc("k", 2, X), Prc("w", 0, _))
+drv(X) <- (prc("k", 2, X), prc("w", 0, _))

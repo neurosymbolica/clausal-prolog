@@ -101,11 +101,11 @@ class TestMultiStarPassthrough:
         return sl
 
     def test_split_ground_seglist(self):
-        """Split([*A, *B], A, B) with a ground SegList [1, 2, 3]."""
+        """split([*A, *B], A, B) with a ground SegList [1, 2, 3]."""
         # nv
         sl = self._ground_seglist([1, 2, 3])
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("Split", sl, a, b, module=self.mod)]
+        results = [(deref(a), deref(b)) for _ in call("split", sl, a, b, module=self.mod)]
         assert results == [
             ([], [1, 2, 3]),
             ([1], [2, 3]),
@@ -114,12 +114,12 @@ class TestMultiStarPassthrough:
         ]
 
     def test_split3_ground_seglist(self):
-        """Split3([X, *A, *B], X, A, B) with a ground SegList [10, 20, 30]."""
+        """split3([X, *A, *B], X, A, B) with a ground SegList [10, 20, 30]."""
         # nv
         sl = self._ground_seglist([10, 20, 30])
         x, a, b = Var(), Var(), Var()
         results = [(deref(x), deref(a), deref(b))
-                   for _ in call("Split3", sl, x, a, b, module=self.mod)]
+                   for _ in call("split3", sl, x, a, b, module=self.mod)]
         assert results == [
             (10, [], [20, 30]),
             (10, [20], [30]),
@@ -127,12 +127,12 @@ class TestMultiStarPassthrough:
         ]
 
     def test_around_ground_seglist(self):
-        """Around([*A, X, *B], X, [A, B]) with a ground SegList."""
+        """around([*A, X, *B], X, [A, B]) with a ground SegList."""
         # nv
         sl = self._ground_seglist([1, 2, 3])
         x, p = Var(), Var()
         results = [(deref(x), deref(p))
-                   for _ in call("Around", sl, x, p, module=self.mod)]
+                   for _ in call("around", sl, x, p, module=self.mod)]
         assert results == [
             (1, [[], [2, 3]]),
             (2, [[1], [3]]),
@@ -145,7 +145,7 @@ class TestMultiStarPassthrough:
         sl = SegList([ConcreteSeg([1, 2]), ConcreteSeg([3])])
         assert sl.is_ground()
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("Split", sl, a, b, module=self.mod)]
+        results = [(deref(a), deref(b)) for _ in call("split", sl, a, b, module=self.mod)]
         assert results == [
             ([], [1, 2, 3]),
             ([1], [2, 3]),
@@ -159,7 +159,7 @@ class TestMultiStarPassthrough:
         sl = SegList([VarSeg(Var()), VarSeg(Var())])
         assert not sl.is_ground()
         a, b = Var(), Var()
-        results = list(call("Split", sl, a, b, module=self.mod))
+        results = list(call("split", sl, a, b, module=self.mod))
         # Phase 3: no solutions for non-ground SegList (no error)
         assert results == []
 
@@ -173,7 +173,7 @@ class TestBodyStarPassthrough:
         self.mod = _load_clausal_module("body_star.clausal")
 
     def test_head_tail_ground_seglist(self):
-        """HeadTail(ground_seglist, H, T) — body Is pattern against SegList."""
+        """head_tail(ground_seglist, H, T) — body Is pattern against SegList."""
         # nv
         v = Var()
         trail = Trail()
@@ -183,11 +183,11 @@ class TestBodyStarPassthrough:
 
         h, t = Var(), Var()
         results = [(deref(h), deref(t))
-                   for _ in call("HeadTail", sl, h, t, module=self.mod)]
+                   for _ in call("head_tail", sl, h, t, module=self.mod)]
         assert results == [(1, [2, 3])]
 
     def test_init_last_ground_seglist(self):
-        """InitLast(ground_seglist, INIT, LAST) — trailing-star body pattern."""
+        """init_last(ground_seglist, INIT, LAST) — trailing-star body pattern."""
         # nv
         v = Var()
         trail = Trail()
@@ -197,7 +197,7 @@ class TestBodyStarPassthrough:
 
         init, last = Var(), Var()
         results = [(deref(init), deref(last))
-                   for _ in call("InitLast", sl, init, last, module=self.mod)]
+                   for _ in call("init_last", sl, init, last, module=self.mod)]
         assert results == [([1, 2], 3)]
 
 

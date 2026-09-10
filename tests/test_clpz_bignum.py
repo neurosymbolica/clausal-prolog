@@ -438,7 +438,7 @@ class TestSumScalarBignum:
 
 class TestBignumIntegration:
     """End-to-end checks: the wrap_tabled_fib fixture under CLP(Z) must
-    return correct bignum results for N well past Fib(92)."""
+    return correct bignum results for N well past fib(92)."""
 
     def _run_wrap_fib(self, n):
         from clausal.testing import load_clausal_module
@@ -448,24 +448,24 @@ class TestBignumIntegration:
         lm = mod.__dict__["$module"]
         trail = Trail()
         r = Var()
-        for _ in call("Wrap", n, r, module=lm, trail=trail):
+        for _ in call("wrap", n, r, module=lm, trail=trail):
             return deref(r)
         return None
 
     def test_wrap_fib_92_int64_boundary(self):
-        """Fib(92) is the largest value still fitting in int64."""
+        """fib(92) is the largest value still fitting in int64."""
         assert self._run_wrap_fib(92) == 7540113804746346429
 
     def test_wrap_fib_93_first_bignum(self):
-        """Fib(93) is the first value above int64 — used to overflow."""
+        """fib(93) is the first value above int64 — used to overflow."""
         assert self._run_wrap_fib(93) == 12200160415121876738
 
     def test_wrap_fib_100(self):
-        """Fib(100) — 21 digits, well past int64."""
+        """fib(100) — 21 digits, well past int64."""
         assert self._run_wrap_fib(100) == 354224848179261915075
 
     def test_wrap_fib_200(self):
-        """Fib(200) — 42 digits."""
+        """fib(200) — 42 digits."""
         assert self._run_wrap_fib(200) == \
             280571172992510140037611932413038677189525
 

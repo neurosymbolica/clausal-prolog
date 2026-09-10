@@ -397,11 +397,11 @@ pairs(S, PAIR) <- findall(r"(\w+)=(\w+)", S, PAIR)
         """findall solutions participate in Clausal backtracking."""
         # nv
         mod = _load("rf4", r"""
-Line("errors: 3 warnings: 5"),
-Line("errors: 0 warnings: 1"),
+line("errors: 3 warnings: 5"),
+line("errors: 0 warnings: 1"),
 
 nonzero_error_count(COUNT) <- (
-    Line(L) and
+    line(L) and
     findall(r"errors: (\d+)", L, COUNT) and
     COUNT != "0"
 )
@@ -570,12 +570,12 @@ token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
         """Regex extraction + Clausal backtracking."""
         # nv
         mod = _load("ex3", r"""
-Line("2026-03-16 INFO started"),
-Line("2026-03-16 ERROR disk full"),
-Line("2026-03-16 INFO stopped"),
+line("2026-03-16 INFO started"),
+line("2026-03-16 ERROR disk full"),
+line("2026-03-16 INFO stopped"),
 
 error_message(MSG) <- (
-    Line(L) and
+    line(L) and
     match(r"\S+ ERROR\s+(?P<MSG>.*)", L)
 )
 """, tmp_path)

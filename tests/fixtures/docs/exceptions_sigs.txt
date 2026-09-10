@@ -1,22 +1,22 @@
 # === Syntax ===
 
 --8<-- [start:throw_1]
-Throw(error(type_error(integer, foo), context))
+throw(error(type_error(integer, foo), context))
 --8<-- [end:throw_1]
 
 --8<-- [start:catch_2]
-Catch(Goal, ERROR)
+catch(Goal, ERROR)
 --8<-- [end:catch_2]
 
 --8<-- [start:catch_2_ex2]
 # Catch any exception
-Catch(Goal, ERROR)
+catch(Goal, ERROR)
 
 # Catch a specific Python exception by class
-Catch(++(some_python_call()), ValueError(MSG))
+catch(++(some_python_call()), ++ValueError(MSG))
 
 # Catch a structured logic error
-Catch(Goal, error(type_error(_, _), _))
+catch(Goal, error(type_error(_, _), _))
 --8<-- [end:catch_2_ex2]
 
 --8<-- [start:catch_recover_3]
@@ -26,7 +26,7 @@ catch_recover(Goal, ERROR, Recovery)
 --8<-- [start:catch_3]
 catch(
     ++(some_python_call()),
-    ValueError(MSG),
+    ++ValueError(MSG),
     handle_error(MSG)
 )
 --8<-- [end:catch_3]
@@ -38,7 +38,7 @@ catch(
 # Logic exception: throw(my_error(42))  →  ERROR = my_error(42)
 # Python exception: ValueError("bad")  →  ERROR = ValueError("bad")
 
-Catch(Goal, ERROR)          # always catches, binds ERROR
+catch(Goal, ERROR)          # always catches, binds ERROR
 catch_recover(Goal, ERROR, Recovery)  # catches, binds ERROR, runs Recovery
 catch(Goal, my_error(N), Recovery)   # selective: re-raises if no match
 --8<-- [end:unified_exception_representation]
@@ -55,7 +55,7 @@ check_int(X, R) <- catch(
 
 --8<-- [start:logicexception_ex2]
 safe_parse(S, R) <- (
-    Catch(++(int(S)), ValueError(_)),
+    catch(++(int(S)), ++ValueError(_)),
     R is "parse error"
 )
 --8<-- [end:logicexception_ex2]
@@ -72,13 +72,13 @@ logged_op(X, Y, R) <- catch_recover(
 logged_div(X, Y, R) <- catch(
     (R == X / Y),
     E,
-    (write_text(E), Throw(E))
+    (write_text(E), throw(E))
 )
 --8<-- [end:logicexception_ex4]
 
 --8<-- [start:logicexception_ex5]
 safe_run(GOAL, R) <- (
-    Catch(call_goal(GOAL), _),
+    catch(call_goal(GOAL), _),
     R is "ok"
 )
 --8<-- [end:logicexception_ex5]

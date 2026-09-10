@@ -424,20 +424,22 @@ class TestReverseSyntax:
         ids=[p[0].stem for p in ALL_REVERSE],
     )
     def test_uses_clausal_conventions(self, pl_path, golden_clausal_path):
-        """Output uses PascalCase predicates and clausal arrow syntax."""
+        """Output uses lowercase predicates and clausal arrow syntax."""
         # nv
         golden = golden_clausal_path.read_text(encoding="utf-8")
         lines = [l.strip() for l in golden.split("\n") if l.strip() and not l.strip().startswith("#")]
         if not lines:
             pytest.skip("Empty output")
-        # At least one line should have a PascalCase predicate or a fact comma
-        has_pascal = any(
-            l[0].isupper() for l in lines
-            if l and l[0].isalpha()
-        )
+        # No clause line starts with a TitleCase name: that spelling does not
+        # load, so the translator must never emit it.
+        titlecase = [
+            l for l in lines
+            if l[0].isupper() and any(c.islower() for c in l.split("(")[0])
+        ]
+        assert not titlecase, titlecase
         has_arrow = any("<-" in l for l in lines)
         has_comma = any(l.rstrip().endswith(",") for l in lines)
-        assert has_pascal or has_arrow or has_comma, (
+        assert has_arrow or has_comma, (
             "Output doesn't look like clausal syntax"
         )
 

@@ -149,13 +149,13 @@ def test_bare_lowercase_true_loads():
     """The reproduction from the todo, inverted.  ``true`` used to list five
     remedies none of which was the right answer; it is now an alias and the
     file simply loads."""
-    mod = _load_inline_clausal("_truth_alias_true_test", "Flag(true),\n")
+    mod = _load_inline_clausal("_truth_alias_true_test", "flag(true),\n")
     assert mod is not None
 
 
 def test_bare_null_names_the_Undefined_literal():
     with pytest.raises(NameError) as exc_info:
-        _load_inline_clausal("_truth_literal_null_test", "Tri(null),\n")
+        _load_inline_clausal("_truth_literal_null_test", "tri(null),\n")
     assert "did you mean `Undefined`?" in str(exc_info.value)
 
 
@@ -163,7 +163,7 @@ def test_bare_unknown_still_names_the_Undefined_literal():
     """The pre-rename name is a diagnostic, not an alias — it must land the
     author on ``Undefined`` rather than silently working."""
     with pytest.raises(NameError) as exc_info:
-        _load_inline_clausal("_truth_literal_unknown_test", "Tri(unknown),\n")
+        _load_inline_clausal("_truth_literal_unknown_test", "tri(unknown),\n")
     assert "did you mean `Undefined`?" in str(exc_info.value)
 
 
@@ -173,7 +173,7 @@ def test_mixed_undeclared_keeps_both_hint_and_remedies():
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal(
             "_truth_literal_mixed_test",
-            "Flag(null),\nColor(truthlit_mixed_beta),\n",
+            "flag(null),\ncolor(truthlit_mixed_beta),\n",
         )
     msg = str(exc_info.value)
     assert "did you mean `Undefined`?" in msg
@@ -193,7 +193,7 @@ def test_ordinary_undeclared_atom_message_is_unchanged():
     are all ordinary atoms."""
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal(
-            "_truth_literal_plain_test", "Color(truthlit_plain_red),\n"
+            "_truth_literal_plain_test", "color(truthlit_plain_red),\n"
         )
     msg = str(exc_info.value)
     assert "did you mean" not in msg
@@ -208,7 +208,7 @@ def test_dict_key_true_loads():
     """``{true: 1}`` used to raise from its own site with its own message.  The
     alias is resolved in key position too, so it now loads."""
     mod = _load_inline_clausal(
-        "_truth_alias_dictkey_test", "Row({true: 1}),\n"
+        "_truth_alias_dictkey_test", "row({true: 1}),\n"
     )
     assert mod is not None
 
@@ -218,7 +218,7 @@ def test_dict_key_null_names_the_Undefined_literal():
     mistakes."""
     with pytest.raises(NameError) as exc_info:
         _load_inline_clausal(
-            "_truth_literal_dictkey_null_test", "Row({null: 1}),\n"
+            "_truth_literal_dictkey_null_test", "row({null: 1}),\n"
         )
     assert "did you mean `Undefined`?" in str(exc_info.value)
 

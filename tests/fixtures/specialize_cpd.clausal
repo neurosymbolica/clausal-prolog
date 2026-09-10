@@ -3,18 +3,18 @@
 # Uses -specialize with cpd=True to produce deforested specialized predicates.
 # Verifies that CPD produces correct results for natnum, graph, and counting.
 
--import_from(clausal.examples.metainterpreters, [Solve, SolveCount, SolveLimit])
+-import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit])
 
 # ── Object Programs ──────────────────────────────────────────────────────────
 
-NatnumProgram(PROGRAM) <- (
+natnum_program(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", X]], [["natnum", X]]]
     ]
 )
 
-GraphProgram(PROGRAM) <- (
+graph_program(PROGRAM) <- (
     PROGRAM is [
         [["edge", "a", "b"], []],
         [["edge", "b", "c"], []],
@@ -26,37 +26,37 @@ GraphProgram(PROGRAM) <- (
 
 # ── CPD Specializations ──────────────────────────────────────────────────────
 
--specialize(Solve, NatnumProgram, alias=CpdNatnum, cpd=True)
--specialize(Solve, GraphProgram, alias=CpdGraph, cpd=True)
--specialize(SolveCount, NatnumProgram, alias=CpdCountNatnum, cpd=True)
--specialize(SolveLimit, NatnumProgram, alias=CpdLimitNatnum, cpd=True)
+-specialize(solve, natnum_program, alias=cpd_natnum, cpd=True)
+-specialize(solve, graph_program, alias=cpd_graph, cpd=True)
+-specialize(solve_count, natnum_program, alias=cpd_count_natnum, cpd=True)
+-specialize(solve_limit, natnum_program, alias=cpd_limit_natnum, cpd=True)
 
 # ── Natnum Tests ─────────────────────────────────────────────────────────────
 
-test("cpd natnum(0)") <- CpdNatnum([["natnum", 0]])  # nv
+test("cpd natnum(0)") <- cpd_natnum([["natnum", 0]])  # nv
 
-test("cpd natnum(s(0))") <- CpdNatnum([["natnum", ["s", 0]]])  # nv
+test("cpd natnum(s(0))") <- cpd_natnum([["natnum", ["s", 0]]])  # nv
 
-test("cpd natnum(s(s(s(0))))") <- CpdNatnum([["natnum", ["s", ["s", ["s", 0]]]]])  # nv
+test("cpd natnum(s(s(s(0))))") <- cpd_natnum([["natnum", ["s", ["s", ["s", 0]]]]])  # nv
 
 # ── Graph Tests ──────────────────────────────────────────────────────────────
 
-test("cpd path(a,b)") <- CpdGraph([["path", "a", "b"]])  # nv
+test("cpd path(a,b)") <- cpd_graph([["path", "a", "b"]])  # nv
 
-test("cpd path(a,c)") <- CpdGraph([["path", "a", "c"]])  # nv
+test("cpd path(a,c)") <- cpd_graph([["path", "a", "c"]])  # nv
 
-test("cpd path(a,d)") <- CpdGraph([["path", "a", "d"]])  # nv
+test("cpd path(a,d)") <- cpd_graph([["path", "a", "d"]])  # nv
 
-test("cpd edge(b,c)") <- CpdGraph([["edge", "b", "c"]])  # nv
+test("cpd edge(b,c)") <- cpd_graph([["edge", "b", "c"]])  # nv
 
 # ── Count Tests ──────────────────────────────────────────────────────────────
 
-test("cpd count natnum(0) = 1") <- CpdCountNatnum([["natnum", 0]], 1)  # nv
+test("cpd count natnum(0) = 1") <- cpd_count_natnum([["natnum", 0]], 1)  # nv
 
-test("cpd count natnum(s(0)) = 2") <- CpdCountNatnum([["natnum", ["s", 0]]], 2)  # nv
+test("cpd count natnum(s(0)) = 2") <- cpd_count_natnum([["natnum", ["s", 0]]], 2)  # nv
 
-test("cpd count natnum(s(s(0))) = 3") <- CpdCountNatnum([["natnum", ["s", ["s", 0]]]], 3)  # nv
+test("cpd count natnum(s(s(0))) = 3") <- cpd_count_natnum([["natnum", ["s", ["s", 0]]]], 3)  # nv
 
 # ── Limit Tests ──────────────────────────────────────────────────────────────
 
-test("cpd limit natnum(s(s(0))) max=10") <- CpdLimitNatnum([["natnum", ["s", ["s", 0]]]], 10)  # nv
+test("cpd limit natnum(s(s(0))) max=10") <- cpd_limit_natnum([["natnum", ["s", ["s", 0]]]], 10)  # nv

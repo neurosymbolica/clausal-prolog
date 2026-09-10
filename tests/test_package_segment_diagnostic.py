@@ -85,7 +85,7 @@ def two_dirs_on_path(tmp_path):
         importlib.invalidate_caches()
 
 
-def _pkg(root, *segments, exports="Aid/1"):
+def _pkg(root, *segments, exports="aid/1"):
     """A package directory ``root/seg/…`` carrying an ``__init__.clausal``."""
     d = root
     for seg in segments:
@@ -136,7 +136,7 @@ class TestHyphenatedDirectory:
         so ``exc.name`` is a strict prefix of the declared path."""
         pkg = _pkg(on_path, "eu", "state-aid")
         (pkg / "reg_w_scheme.clausal").write_text(
-            "-module(reg_w_scheme, [RegWScheme/1])\nRegWScheme(1),\n")
+            "-module(reg_w_scheme, [reg_w_scheme/1])\nreg_w_scheme(1),\n")
 
         # ``RegWScheme``, not ``G``: an ALL-CAPS imported name is refused at load
         # time as a logic-variable name (term_rewriting's
@@ -180,9 +180,9 @@ class TestHyphenatedDirectory:
 class TestHyphenatedSourceFile:
 
     def test_a_hyphenated_clausal_file_is_named_as_the_reason(self, on_path):
-        pkg = _pkg(on_path, "eu", exports="Eu/1")
+        pkg = _pkg(on_path, "eu", exports="eux/1")
         (pkg / "state-aid.clausal").write_text(
-            "-module(state_aid, [Aid/1])\nAid(1),\n")
+            "-module(state_aid, [aid/1])\naid(1),\n")
 
         msg = _flat(str(_load_error(
             on_path, "-import_from(eu.state_aid, [Aid])\n")))
@@ -200,7 +200,7 @@ class TestHyphenatedSourceFile:
 class TestGenuinelyAbsentModule:
 
     def test_absent_module_keeps_the_missing_module_sentence(self, on_path):
-        _pkg(on_path, "eu", exports="Eu/1")
+        _pkg(on_path, "eu", exports="eux/1")
         msg = _flat(str(_load_error(
             on_path, "-import_from(eu.no_such_thing, [Aid])\n")))
 
@@ -214,7 +214,7 @@ class TestGenuinelyAbsentModule:
     def test_absent_intermediate_segment_says_where_it_stopped(self, on_path):
         """A prefix miss with nothing to point at still names the segment
         rather than blaming the whole dotted path."""
-        _pkg(on_path, "eu", exports="Eu/1")
+        _pkg(on_path, "eu", exports="eux/1")
         msg = _flat(str(_load_error(
             on_path, "-import_from(eu.nope.deeper, [Aid])\n")))
 
@@ -295,7 +295,7 @@ class TestMisnamedPathEntryScan:
         assert self._scan("eu.state_aid") is None
 
     def test_ignores_files_that_are_not_importable_sources(self, on_path):
-        _pkg(on_path, "eu", exports="Eu/1")
+        _pkg(on_path, "eu", exports="eux/1")
         (on_path / "eu" / "state-aid.txt").write_text("notes\n")
         importlib.import_module("eu")
 

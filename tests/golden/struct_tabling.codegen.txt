@@ -1,5 +1,5 @@
-# module: tests.fixtures.struct_tabling  predicates: Nats
-def Nats__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+# module: tests.fixtures.struct_tabling  predicates: nats
+def nats__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -31,7 +31,7 @@ def Nats__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 if $unify(_v3, ('cons', _v2, _v4), trail):
                     if $fd_gt(_v2, 0, trail):
                         if $fd_eq(_v5, $Sub(left=_v2, right=1), trail):
-                            _gen0 = StepGenerator($dispatch_at(Nats, 2), _proceed, this_generator, this_generator, _v5, _v4, trail)
+                            _gen0 = StepGenerator($dispatch_at(nats, 2), _proceed, this_generator, this_generator, _v5, _v4, trail)
                             _st0 = (yield (_gen0, None))
                             while _st0 is not $DONE:
                                 _st0 = (yield (_gen0, None))

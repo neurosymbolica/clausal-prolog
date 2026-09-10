@@ -12,130 +12,130 @@
 -module(list_patterns_edge_cases, [test(DESC)])
 
 -private([
-    CaptureAll(LIST, ALL),
-    ThreeAndRest(LIST, A, B, C, REST),
-    ExactlyTwo(LIST, A, B),
-    IsEmpty(LIST),
-    HeadTail(LIST, HEAD, TAIL),
-    AllSame(A, B, C),
-    HeadIs(H, LIST),
-    Bookend(LIST),
-    IgnoreFirstTwo(A, B, C, D),
-    First(LIST, HEAD),
-    Second(LIST, SECOND),
-    HasPair(LIST),
-    MemberOfPair(X, LIST),
-    Const(X, Y),
-    Split(LIST, A, B),
-    Split3(LIST, X, A, B),
-    Around(LIST, X, SLICES),
-    Split3way(LIST, A, B, C),
-    Bracket(LIST, X, Y, A, B),
+    capture_all(LIST, ALL),
+    three_and_rest(LIST, A, B, C, REST),
+    exactly_two(LIST, A, B),
+    is_empty(LIST),
+    head_tail(LIST, HEAD, TAIL),
+    all_same(A, B, C),
+    head_is(H, LIST),
+    bookend(LIST),
+    ignore_first_two(A, B, C, D),
+    first(LIST, HEAD),
+    second(LIST, SECOND),
+    has_pair(LIST),
+    member_of_pair(X, LIST),
+    const(X, Y),
+    split(LIST, A, B),
+    split3(LIST, X, A, B),
+    around(LIST, X, SLICES),
+    split3way(LIST, A, B, C),
+    bracket(LIST, X, Y, A, B),
 ])
 
 # ── Phase 1 ─────────────────────────────────────────────────────────────────
 
-CaptureAll([*ALL], ALL),
-ThreeAndRest([A, B, C, *REST], A, B, C, REST),
-ExactlyTwo([A, B], A, B),
-IsEmpty([]),
-HeadTail([HEAD, *TAIL], HEAD, TAIL),
+capture_all([*ALL], ALL),
+three_and_rest([A, B, C, *REST], A, B, C, REST),
+exactly_two([A, B], A, B),
+is_empty([]),
+head_tail([HEAD, *TAIL], HEAD, TAIL),
 
 # ── Phase 2 ─────────────────────────────────────────────────────────────────
 
-AllSame(X, X, X),
-HeadIs(X, [X, *_]),
-Bookend([X, *_, X]),
-Bookend([X_UNUSED]),
+all_same(X, X, X),
+head_is(X, [X, *_]),
+bookend([X, *_, X]),
+bookend([X_UNUSED]),
 
 # ── Phase 3 ─────────────────────────────────────────────────────────────────
 
-IgnoreFirstTwo(_, _, X, X),
-First([HEAD, *_], HEAD),
-Second([_, SECOND, *_], SECOND),
-HasPair([_, _, *_]),
-MemberOfPair(X, [X, _]),
-MemberOfPair(X, [_, X]),
-Const(_, 42),
+ignore_first_two(_, _, X, X),
+first([HEAD, *_], HEAD),
+second([_, SECOND, *_], SECOND),
+has_pair([_, _, *_]),
+member_of_pair(X, [X, _]),
+member_of_pair(X, [_, X]),
+const(_, 42),
 
 # ── Phase 4 (multi-star) ───────────────────────────────────────────────────
 
-Split([*A, *B], A, B),
-Split3([X, *A, *B], X, A, B),
-Around([*A, X, *B], X, [A, B]),
-Split3way([*A, *B, *C], A, B, C),
-Bracket([*A, X, Y, *B], X, Y, A, B),
+split([*A, *B], A, B),
+split3([X, *A, *B], X, A, B),
+around([*A, X, *B], X, [A, B]),
+split3way([*A, *B, *C], A, B, C),
+bracket([*A, X, Y, *B], X, Y, A, B),
 
 # ═══ Phase 1 tests ═══════════════════════════════════════════════════════════
 
 test("capture_all: empty list → ALL=[]") <- (
-    CaptureAll([], ALL),
+    capture_all([], ALL),
     ALL == []
 )  # nv
 test("capture_all: [1,2,3] → ALL=[1,2,3]") <- (
-    CaptureAll([1, 2, 3], ALL),
+    capture_all([1, 2, 3], ALL),
     ALL == [1, 2, 3]
 )  # nv
 test("capture_all: singleton") <- (
-    CaptureAll([42], ALL),
+    capture_all([42], ALL),
     ALL == [42]
 )  # nv
 
 test("three_and_rest: 5 elements") <- (
-    ThreeAndRest([10, 20, 30, 40, 50], A, B, C, REST),
+    three_and_rest([10, 20, 30, 40, 50], A, B, C, REST),
     A == 10, B == 20, C == 30, REST == [40, 50]
 )  # nv
 test("three_and_rest: exactly 3 → REST=[]") <- (
-    ThreeAndRest([10, 20, 30], A_UNUSED, B_UNUSED, C_UNUSED, REST),
+    three_and_rest([10, 20, 30], A_UNUSED, B_UNUSED, C_UNUSED, REST),
     REST == []
 )  # nv
 test("three_and_rest: too short → no solution") <- (
-    not ThreeAndRest([10, 20], _, _, _, _)
+    not three_and_rest([10, 20], _, _, _, _)
 )  # nv
 
 test("exactly_two: 2 elements") <- (
-    ExactlyTwo([1, 2], A, B),
+    exactly_two([1, 2], A, B),
     A == 1, B == 2
 )  # nv
-test("exactly_two: too short fails") <- (not ExactlyTwo([1], _, _))  # nv
-test("exactly_two: too long fails") <- (not ExactlyTwo([1, 2, 3], _, _))  # nv
+test("exactly_two: too short fails") <- (not exactly_two([1], _, _))  # nv
+test("exactly_two: too long fails") <- (not exactly_two([1, 2, 3], _, _))  # nv
 
-test("is_empty: [] succeeds") <- IsEmpty([])  # nv
-test("is_empty: [1] fails") <- (not IsEmpty([1]))  # nv
+test("is_empty: [] succeeds") <- is_empty([])  # nv
+test("is_empty: [1] fails") <- (not is_empty([1]))  # nv
 
 test("head_tail: [1,2,3] → H=1, T=[2,3]") <- (
-    HeadTail([1, 2, 3], H, T),
+    head_tail([1, 2, 3], H, T),
     H == 1, T == [2, 3]
 )  # nv
 test("head_tail: singleton → H=99, T=[]") <- (
-    HeadTail([99], H, T),
+    head_tail([99], H, T),
     H == 99, T == []
 )  # nv
-test("head_tail: [] fails") <- (not HeadTail([], _, _))  # nv
+test("head_tail: [] fails") <- (not head_tail([], _, _))  # nv
 
 # length/2 / append/3 / last/2 non-edge cases live in iso_list_operations.clausal.
 
 # ═══ Phase 2 tests ═══════════════════════════════════════════════════════════
 
-test("all_same: all equal succeeds") <- AllSame(5, 5, 5)  # nv
-test("all_same: unequal fails") <- (not AllSame(5, 5, 6))  # nv
+test("all_same: all equal succeeds") <- all_same(5, 5, 5)  # nv
+test("all_same: unequal fails") <- (not all_same(5, 5, 6))  # nv
 test("all_same: query mode binds all") <- (
-    AllSame(42, 42, X),
+    all_same(42, 42, X),
     X == 42
 )  # nv
 
-test("head_is: head matches") <- HeadIs(1, [1, 2, 3])  # nv
-test("head_is: wrong head fails") <- (not HeadIs(99, [1, 2, 3]))  # nv
+test("head_is: head matches") <- head_is(1, [1, 2, 3])  # nv
+test("head_is: wrong head fails") <- (not head_is(99, [1, 2, 3]))  # nv
 test("head_is: query binds head") <- (
-    HeadIs(X, [10, 20]),
+    head_is(X, [10, 20]),
     X == 10
 )  # nv
 
-test("bookend: singleton") <- Bookend([1])  # nv
-test("bookend: first == last") <- Bookend([1, 2, 3, 1])  # nv
-test("bookend: differing ends fail") <- (not Bookend([1, 2, 3, 4]))  # nv
-test("bookend: two equal") <- Bookend([5, 5])  # nv
-test("bookend: two different fail") <- (not Bookend([1, 2]))  # nv
+test("bookend: singleton") <- bookend([1])  # nv
+test("bookend: first == last") <- bookend([1, 2, 3, 1])  # nv
+test("bookend: differing ends fail") <- (not bookend([1, 2, 3, 4]))  # nv
+test("bookend: two equal") <- bookend([5, 5])  # nv
+test("bookend: two different fail") <- (not bookend([1, 2]))  # nv
 
 # Note: general append/3 and last/2 cases live in iso_list_operations.clausal.
 # The only case retained here is the list-pattern-sensitive one:
@@ -147,98 +147,98 @@ test("last: nested list element (pattern-sensitive)") <- last([1, [2, 3]], [2, 3
 
 # ═══ Phase 3 tests ═══════════════════════════════════════════════════════════
 
-test("ignore_first_two: third == fourth succeeds") <- IgnoreFirstTwo("a", "b", 7, 7)  # nv
-test("ignore_first_two: mismatch fails") <- (not IgnoreFirstTwo("a", "b", 7, 8))  # nv
+test("ignore_first_two: third == fourth succeeds") <- ignore_first_two("a", "b", 7, 7)  # nv
+test("ignore_first_two: mismatch fails") <- (not ignore_first_two("a", "b", 7, 8))  # nv
 test("ignore_first_two: query binds") <- (
-    IgnoreFirstTwo("a", "b", 42, X),
+    ignore_first_two("a", "b", 42, X),
     X == 42
 )  # nv
 
-test("has_pair: 3 elements succeed") <- HasPair([1, 2, 3])  # nv
+test("has_pair: 3 elements succeed") <- has_pair([1, 2, 3])  # nv
 test("first: extracts head") <- (
-    First([10, 20], R),
+    first([10, 20], R),
     R == 10
 )  # nv
 test("second: exact 2 elements") <- (
-    Second([10, 20], R),
+    second([10, 20], R),
     R == 20
 )  # nv
-test("second: singleton fails") <- (not Second([10], _))  # nv
+test("second: singleton fails") <- (not second([10], _))  # nv
 test("member_of_pair: [1,1] yields 2 solutions") <- (
-    findall(T_UNUSED, MemberOfPair(1, [1, 1]), L),
+    findall(T_UNUSED, member_of_pair(1, [1, 1]), L),
     length(L, 2)
 )  # nv
 test("const: numeric input gives 42") <- (
-    Const(999, R),
+    const(999, R),
     R == 42
 )  # nv
 test("const: list input gives 42") <- (
-    Const([1, 2, 3], R),
+    const([1, 2, 3], R),
     R == 42
 )  # nv
 
 # ═══ Phase 4 tests (multi-star backtracking) ═════════════════════════════════
 
 test("split: [1..5] yields 6 splits") <- (
-    findall([A, B], Split([1, 2, 3, 4, 5], A, B), L),
+    findall([A, B], split([1, 2, 3, 4, 5], A, B), L),
     length(L, 6),
     [[], [1, 2, 3, 4, 5]] in L,
     [[1, 2, 3, 4, 5], []] in L
 )  # nv
 
 test("split3: singleton → X=42, A=[], B=[]") <- (
-    findall([X, A, B], Split3([42], X, A, B), L),
+    findall([X, A, B], split3([42], X, A, B), L),
     L == [[42, [], []]]
 )  # nv
 test("split3: [1,2] yields 2 solutions") <- (
-    findall([X, A, B], Split3([1, 2], X, A, B), L),
+    findall([X, A, B], split3([1, 2], X, A, B), L),
     length(L, 2),
     [1, [], [2]] in L,
     [1, [2], []] in L
 )  # nv
-test("split3: [] fails") <- (not Split3([], _, _, _))  # nv
+test("split3: [] fails") <- (not split3([], _, _, _))  # nv
 
 test("around: [1] → X=1, slices=[[],[]]") <- (
-    findall([X, P], Around([1], X, P), L),
+    findall([X, P], around([1], X, P), L),
     L == [[1, [[], []]]]
 )  # nv
 test("around: [1,2,1] yields 3 solutions") <- (
-    findall([X, P], Around([1, 2, 1], X, P), L),
+    findall([X, P], around([1, 2, 1], X, P), L),
     length(L, 3),
     [1, [[], [2, 1]]] in L,
     [2, [[1], [1]]] in L,
     [1, [[1, 2], []]] in L
 )  # nv
-test("around: [] fails") <- (not Around([], _, _))  # nv
+test("around: [] fails") <- (not around([], _, _))  # nv
 
 test("split3way: [1] yields 3 solutions") <- (
-    findall([A, B, C], Split3way([1], A, B, C), L),
+    findall([A, B, C], split3way([1], A, B, C), L),
     length(L, 3),
     [[], [], [1]] in L,
     [[], [1], []] in L,
     [[1], [], []] in L
 )  # nv
 test("split3way: [1,2,3] yields 10 solutions") <- (
-    findall([A, B, C], Split3way([1, 2, 3], A, B, C), L),
+    findall([A, B, C], split3way([1, 2, 3], A, B, C), L),
     length(L, 10)
 )  # nv
 
 test("bracket: [1,2,3,4] yields 3 solutions") <- (
-    findall([X, Y, A, B], Bracket([1, 2, 3, 4], X, Y, A, B), L),
+    findall([X, Y, A, B], bracket([1, 2, 3, 4], X, Y, A, B), L),
     length(L, 3),
     [1, 2, [], [3, 4]] in L,
     [2, 3, [1], [4]] in L,
     [3, 4, [1, 2], []] in L
 )  # nv
-test("bracket: too short fails") <- (not Bracket([1], _, _, _, _))  # nv
+test("bracket: too short fails") <- (not bracket([1], _, _, _, _))  # nv
 test("bracket: exactly 2 → single solution") <- (
-    findall([X, Y, A, B], Bracket([1, 2], X, Y, A, B), L),
+    findall([X, Y, A, B], bracket([1, 2], X, Y, A, B), L),
     L == [[1, 2, [], []]]
 )  # nv
 
 # Backtracking cleanup regression: confirms each split partitions [1,2,3].
 test("split backtracking: 4 splits, each partitions the list") <- (
-    findall([A, B], Split([1, 2, 3], A, B), L),
+    findall([A, B], split([1, 2, 3], A, B), L),
     length(L, 4),
     [[], [1, 2, 3]] in L,
     [[1], [2, 3]] in L,

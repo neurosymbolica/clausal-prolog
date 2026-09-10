@@ -1,10 +1,10 @@
--table(Win/1)
+-table(win/1)
 
-Move(1, 2),
-Move(2, 1),
+move(1, 2),
+move(2, 1),
 
-Win(X) <- (Move(X, Y), not Win(Y))
+win(X) <- (move(X, Y), not win(Y))
 
 
-test("move 1 2") <- Move(1, 2)  # nv
-test("move 2 1") <- Move(2, 1)  # nv
+test("move 1 2") <- move(1, 2)  # nv
+test("move 2 1") <- move(2, 1)  # nv

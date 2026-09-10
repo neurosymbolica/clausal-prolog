@@ -71,7 +71,7 @@ class TestBasicImport:
         """)
         mod = _load_prolog_module("_pl_test_facts", path)
         lm = mod.__clausal_module__
-        clauses = lm.db.clauses_for("Edge", 2)
+        clauses = lm.db.clauses_for("edge", 2)
         assert len(clauses) == 3
 
     def test_facts_queryable(self, tmp_path):
@@ -83,7 +83,7 @@ class TestBasicImport:
         """)
         mod = _load_prolog_module("_pl_test_facts2", path)
         lm = mod.__clausal_module__
-        results = list(call("Score", Var(), module=lm))
+        results = list(call("score", Var(), module=lm))
         assert len(results) == 3
 
     def test_rule_with_body(self, tmp_path):
@@ -97,7 +97,7 @@ class TestBasicImport:
         mod = _load_prolog_module("_pl_test_rule", path)
         lm = mod.__clausal_module__
         x, y = Var(), Var()
-        results = [(deref(x), deref(y)) for _ in call("Path", x, y, module=lm)]
+        results = [(deref(x), deref(y)) for _ in call("path", x, y, module=lm)]
         # Should find path(1,2), path(2,3), path(1,3)
         assert (1, 2) in results
         assert (1, 3) in results
@@ -118,7 +118,7 @@ class TestArithmetic:
         mod = _load_prolog_module("_pl_test_arith", path)
         lm = mod.__clausal_module__
         y = Var()
-        results = [deref(y) for _ in call("Double", 3, y, module=lm)]
+        results = [deref(y) for _ in call("double", 3, y, module=lm)]
         assert results == [6]
 
     def test_comparison(self, tmp_path):
@@ -128,8 +128,8 @@ class TestArithmetic:
         """)
         mod = _load_prolog_module("_pl_test_cmp", path)
         lm = mod.__clausal_module__
-        assert list(call("Positive", 5, module=lm))
-        assert not list(call("Positive", -1, module=lm))
+        assert list(call("positive", 5, module=lm))
+        assert not list(call("positive", -1, module=lm))
 
     def test_unification(self, tmp_path):
         # nv
@@ -138,8 +138,8 @@ class TestArithmetic:
         """)
         mod = _load_prolog_module("_pl_test_unif", path)
         lm = mod.__clausal_module__
-        assert list(call("Same", 42, 42, module=lm))
-        assert not list(call("Same", 42, 99, module=lm))
+        assert list(call("same", 42, 42, module=lm))
+        assert not list(call("same", 42, 99, module=lm))
 
 
 # ── TestPycacheCreation ───────────────────────────────────────────────────────
@@ -208,7 +208,7 @@ class TestPycacheCacheHit:
         mod2 = _load_prolog_module("_pl_test_cachehit3_b", path)
 
         lm2 = mod2.__clausal_module__
-        results = list(call("Animal", Var(), module=lm2))
+        results = list(call("animal", Var(), module=lm2))
         assert len(results) == 2
 
 
@@ -226,7 +226,7 @@ class TestPycacheInvalidation:
         """)
         mod1 = _load_prolog_module("_pl_test_invalid", path)
         lm1 = mod1.__clausal_module__
-        assert len(lm1.db.clauses_for("Item", 1)) == 2
+        assert len(lm1.db.clauses_for("item", 1)) == 2
 
         # Modify source — add a third fact (also bump mtime).
         (tmp_path / "_pl_test_invalid.pl").write_text(textwrap.dedent("""\
@@ -240,7 +240,7 @@ class TestPycacheInvalidation:
 
         mod2 = _load_prolog_module("_pl_test_invalid_2", path)
         lm2 = mod2.__clausal_module__
-        assert len(lm2.db.clauses_for("Item", 1)) == 3
+        assert len(lm2.db.clauses_for("item", 1)) == 3
 
 
 # ── TestRecursiveImport ───────────────────────────────────────────────────────
@@ -264,7 +264,7 @@ class TestRecursiveImport:
         """)
         mod = _load_prolog_module("_pl_test_main", main_path)
         lm = mod.__clausal_module__
-        results = list(call("UsesHelper", Var(), module=lm))
+        results = list(call("uses_helper", Var(), module=lm))
         assert len(results) == 2
 
     def test_imported_facts_accessible(self, tmp_path):
@@ -280,7 +280,7 @@ class TestRecursiveImport:
         mod = _load_prolog_module("_pl_test_main2", main_path)
         lm = mod.__clausal_module__
         z = Var()
-        results = [deref(z) for _ in call("MyVal", z, module=lm)]
+        results = [deref(z) for _ in call("my_val", z, module=lm)]
         assert 100 in results
         assert 200 in results
 
@@ -380,7 +380,7 @@ class TestDCG:
         mod = _load_prolog_module("_pl_test_dcg", path)
         lm = mod.__clausal_module__
         s0, s1 = Var(), Var()
-        results = list(call("Greeting", s0, s1, module=lm))
+        results = list(call("greeting", s0, s1, module=lm))
         assert results  # DCG predicate should have at least one solution
 
 
@@ -400,18 +400,18 @@ class TestDynamic:
         lm = mod.__clausal_module__
 
         # Verify initial clause.
-        results_before = list(call("Item", Var(), module=lm))
+        results_before = list(call("item", Var(), module=lm))
         assert len(results_before) == 1
 
         # assertz a new clause — dynamic predicates should stay mutable.
-        assert lm.db.is_dynamic("Item", 1)
+        assert lm.db.is_dynamic("item", 1)
 
 
 # ── TestFinderIntegration ─────────────────────────────────────────────────────
 
 
 class TestEdgeCases:
-    """Edge cases: empty files, comments-only, encoding errors."""
+    """edge cases: empty files, comments-only, encoding errors."""
 
     def test_empty_pl_file(self, tmp_path):
         # nv
@@ -451,7 +451,7 @@ class TestFinderIntegration:
         mod = importlib.import_module("pltest_auto")
         assert hasattr(mod, '__clausal_module__')
         lm = mod.__clausal_module__
-        assert len(lm.db.clauses_for("Fact", 1)) == 2
+        assert len(lm.db.clauses_for("fact", 1)) == 2
 
 
 # ── TestGoldenPrologImport ────────────────────────────────────────────────────
@@ -510,10 +510,10 @@ class TestGoldenPrologImport:
 class TestPrologTestClauseSpelling:
     """A ``.pl`` file's ``test/1`` clauses are the runner's ``test/1``.
 
-    Predicate names cross the seam through ``snake_to_pascal`` unless they
-    are mapped; ``test`` is mapped to itself so the generated source says
-    ``test(...)``, not the deprecated ``Test(...)``, and importing a Prolog
-    file never warns the author about a spelling they did not write.
+    Predicate names cross the seam unchanged unless they are mapped;
+    ``test`` is mapped to itself so the generated source says ``test(...)``,
+    never the retired ``Test(...)``, and importing a Prolog file never
+    reports a spelling the author did not write.
     """
 
     PL = (

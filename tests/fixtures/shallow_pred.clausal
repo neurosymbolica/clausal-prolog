@@ -1,10 +1,10 @@
--module(shallow_pred, [Color(Name, Hue)])
--shallow([Color/2])
+-module(shallow_pred, [color(name, hue)])
+-shallow([color/2])
 
-Color("sky", "blue"),
-Color("grass", "green"),
-Color("sun", "yellow"),
+color("sky", "blue"),
+color("grass", "green"),
+color("sun", "yellow"),
 
-test("color sky") <- Color("sky", "blue")  # nv
-test("color grass") <- Color("grass", "green")  # nv
-test("color sun") <- Color("sun", "yellow")  # nv
+test("color sky") <- color("sky", "blue")  # nv
+test("color grass") <- color("grass", "green")  # nv
+test("color sun") <- color("sun", "yellow")  # nv

@@ -1,39 +1,39 @@
 # Doc snippet fixtures for docs/lists.md
 
 # --8<-- [start:partition_example]
-Partition([], _, [], []) <- True
-Partition([X, *XS], PRED, [X, *YES], NO) <- (
+partition([], _, [], []) <- True
+partition([X, *XS], PRED, [X, *YES], NO) <- (
     call(PRED, X),
-    Partition(XS, PRED, YES, NO)
+    partition(XS, PRED, YES, NO)
 )
-Partition([X, *XS], PRED, YES, [X, *NO]) <- (
+partition([X, *XS], PRED, YES, [X, *NO]) <- (
     not call(PRED, X),
-    Partition(XS, PRED, YES, NO)
+    partition(XS, PRED, YES, NO)
 )
 # --8<-- [end:partition_example]
 
 # Validates list syntax patterns from docs/lists.md
-HeadTail([HEAD, *TAIL], HEAD, TAIL) <- True
-FirstTwo([A, B, *REST], A, B, REST) <- True
+head_tail([HEAD, *TAIL], HEAD, TAIL) <- True
+first_two([A, B, *REST], A, B, REST) <- True
 
 test("head/tail destructuring") <- (
-    HeadTail([1, 2, 3], HEAD, TAIL),
+    head_tail([1, 2, 3], HEAD, TAIL),
     HEAD == 1,
     TAIL == [2, 3]
 )  # nv
 
 test("first two + rest") <- (
-    FirstTwo([10, 20, 30, 40], A, B, REST),
+    first_two([10, 20, 30, 40], A, B, REST),
     A == 10,
     B == 20,
     REST == [30, 40]
 )  # nv
 
 # Validates the partition example
-IsPositive(X) <- (X > 0)
+is_positive(X) <- (X > 0)
 
 test("partition positives") <- (
-    Partition([-1, 2, -3, 4], IsPositive, YES, NO),
+    partition([-1, 2, -3, 4], is_positive, YES, NO),
     YES == [2, 4],
     NO == [-1, -3]
 )  # nv

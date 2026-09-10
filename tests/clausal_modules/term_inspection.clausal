@@ -2,33 +2,33 @@
 #
 # copy_term/2, term_variables/2, numbervars/3
 
-# CopyFresh/2 — copy a term, returning the fresh copy
-CopyFresh(TERM, COPY) <- copy_term(TERM, COPY)
+# copy_fresh/2 — copy a term, returning the fresh copy
+copy_fresh(TERM, COPY) <- copy_term(TERM, COPY)
 
-# HasNoVars/1 — succeed if term contains no unbound vars
-HasNoVars(TERM) <- (
+# has_no_vars/1 — succeed if term contains no unbound vars
+has_no_vars(TERM) <- (
     term_variables(TERM, VARS),
     VARS is []
 )
 
-# CountVars/2 — count unbound vars in a term
-CountVars(TERM, COUNT) <- (
+# count_vars/2 — count unbound vars in a term
+count_vars(TERM, COUNT) <- (
     term_variables(TERM, VARS),
     length(VARS, COUNT)
 )
 
-# NumberAndCount/3 — number vars starting from START, return END
-NumberAndCount(TERM, START, END) <- numbervars(TERM, START, END)
+# number_and_count/3 — number vars starting from START, return END
+number_and_count(TERM, START, END) <- numbervars(TERM, START, END)
 
-# CopyShared/3 — copy a compound f(X, X); the two fresh vars should be identical
-CopyShared(TERM, FIRST, SECOND) <- (
+# copy_shared/3 — copy a compound f(X, X); the two fresh vars should be identical
+copy_shared(TERM, FIRST, SECOND) <- (
     copy_term(TERM, COPY),
     arg(1, COPY, FIRST),
     arg(2, COPY, SECOND)
 )
 
-# VarList/2 — collect vars from a list
-VarList(LIST, VARS) <- term_variables(LIST, VARS)
+# var_list/2 — collect vars from a list
+var_list(LIST, VARS) <- term_variables(LIST, VARS)
 
 
 # ── Test clauses (migrated from test_term_inspection.py) ──────────────────
@@ -48,24 +48,24 @@ test("copy_term: ground list copies as-is") <- (
     C == [1, 2, 3]
 )  # nv
 
-test("term_variables: ground integer has no vars") <- HasNoVars(42)  # nv
+test("term_variables: ground integer has no vars") <- has_no_vars(42)  # nv
 
-test("term_variables: ground atom has no vars") <- HasNoVars("hello")  # nv
+test("term_variables: ground atom has no vars") <- has_no_vars("hello")  # nv
 
-test("term_variables: ground list has no vars") <- HasNoVars([1, 2, 3])  # nv
+test("term_variables: ground list has no vars") <- has_no_vars([1, 2, 3])  # nv
 
 test("term_variables: single unbound var yields length 1") <- (
-    CountVars(X_UNUSED, N),
+    count_vars(X_UNUSED, N),
     N == 1
 )  # nv
 
 test("term_variables: bound var not collected") <- (
     X is 42,
-    CountVars(X, N),
+    count_vars(X, N),
     N == 0
 )  # nv
 
 test("term_variables: ground list with no vars") <- (
-    CountVars([1, 2, 3], N),
+    count_vars([1, 2, 3], N),
     N == 0
 )  # nv

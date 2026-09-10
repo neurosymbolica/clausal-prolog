@@ -3,16 +3,16 @@
 
 # ── Basic BV constraints ────────────────────────────────────────────────────
 
-SmallBV(X) <- (
+small_bv(X) <- (
     z3.bitvector(4, X < 3),
     z3.label([X]),
 )
 
-test("bv4 < 3 has 3 solutions") <- (count_all(SmallBV(_), N), N == 3)  # nv
+test("bv4 < 3 has 3 solutions") <- (count_all(small_bv(_), N), N == 3)  # nv
 
 # ── Bitwise AND ─────────────────────────────────────────────────────────────
 
-Mask(X, R) <- (
+mask(X, R) <- (
     z3.bitvector(8, (
         X == 171,
         X & 240 == R,
@@ -20,11 +20,11 @@ Mask(X, R) <- (
     z3.label([R]),
 )
 
-test("bv mask 0xAB & 0xF0") <- (Mask(_, R), R == 160)  # nv
+test("bv mask 0xAB & 0xF0") <- (mask(_, R), R == 160)  # nv
 
 # ── Arithmetic wraparound ───────────────────────────────────────────────────
 
-Wrap(R) <- (
+wrap(R) <- (
     z3.bitvector(8, (
         X == 200,
         Y == 100,
@@ -33,21 +33,21 @@ Wrap(R) <- (
     z3.label([R]),
 )
 
-test("bv8 wraparound 200+100") <- (Wrap(R), R == 44)  # nv
+test("bv8 wraparound 200+100") <- (wrap(R), R == 44)  # nv
 
 # ── Extract ─────────────────────────────────────────────────────────────────
 
-UpperNibble(R) <- (
+upper_nibble(R) <- (
     z3.bitvector(8, X == 171),
     z3.extract(7, 4, X, R),
     z3.label([R]),
 )
 
-test("bv extract upper nibble") <- (UpperNibble(R), R == 10)  # nv
+test("bv extract upper nibble") <- (upper_nibble(R), R == 10)  # nv
 
 # ── Concat ──────────────────────────────────────────────────────────────────
 
-ConcatNibbles(R) <- (
+concat_nibbles(R) <- (
     z3.bitvector(4, (
         X == 10,
         Y == 11,
@@ -56,24 +56,24 @@ ConcatNibbles(R) <- (
     z3.label([R]),
 )
 
-test("bv concat 0xA 0xB") <- (ConcatNibbles(R), R == 171)  # nv
+test("bv concat 0xA 0xB") <- (concat_nibbles(R), R == 171)  # nv
 
 # ── Zero extend ─────────────────────────────────────────────────────────────
 
-ZExt(R) <- (
+z_ext(R) <- (
     z3.bitvector(4, X == 5),
     z3.zero_extend(X, 4, R),
     z3.label([R]),
 )
 
-test("bv zero extend 4->8") <- (ZExt(R), R == 5)  # nv
+test("bv zero extend 4->8") <- (z_ext(R), R == 5)  # nv
 
 # ── Sign extend ─────────────────────────────────────────────────────────────
 
-SExt(R) <- (
+s_ext(R) <- (
     z3.bitvector(4, X == 15),
     z3.sign_extend(X, 4, R),
     z3.label([R]),
 )
 
-test("bv sign extend -1 to 8bit") <- (SExt(R), R == 255)  # nv
+test("bv sign extend -1 to 8bit") <- (s_ext(R), R == 255)  # nv

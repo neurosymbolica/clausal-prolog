@@ -5,7 +5,7 @@
 
 # ── Basic constraint posting and labeling ───────────────────────────────────
 
-Solve(X, Y) <- (
+solve(X, Y) <- (
     z3.integer((
         1 <= X <= 3,
         1 <= Y <= 3,
@@ -14,23 +14,23 @@ Solve(X, Y) <- (
     z3.label([X, Y]),
 )
 
-test("integer solve x+y=4") <- (Solve(X, Y), X == 1, Y == 3)  # nv
-test("integer solve x+y=4 second") <- (Solve(X, Y), X == 2, Y == 2)  # nv
-test("integer solve x+y=4 third") <- (Solve(X, Y), X == 3, Y == 1)  # nv
-test("integer solve count") <- (count_all(Solve(_, _), N), N == 3)  # nv
+test("integer solve x+y=4") <- (solve(X, Y), X == 1, Y == 3)  # nv
+test("integer solve x+y=4 second") <- (solve(X, Y), X == 2, Y == 2)  # nv
+test("integer solve x+y=4 third") <- (solve(X, Y), X == 3, Y == 1)  # nv
+test("integer solve count") <- (count_all(solve(_, _), N), N == 3)  # nv
 
 # ── Chained comparison domain ───────────────────────────────────────────────
 
-Domain(X) <- (
+domain(X) <- (
     z3.integer((0 <= X <= 4)),
     z3.label([X]),
 )
 
-test("integer domain 0..4") <- (count_all(Domain(_), N), N == 5)  # nv
+test("integer domain 0..4") <- (count_all(domain(_), N), N == 5)  # nv
 
 # ── Inequality ──────────────────────────────────────────────────────────────
 
-NotTwo(X) <- (
+not_two(X) <- (
     z3.integer((
         0 <= X <= 3,
         X != 2,
@@ -38,12 +38,12 @@ NotTwo(X) <- (
     z3.label([X]),
 )
 
-test("integer neq") <- (count_all(NotTwo(_), N), N == 3)  # nv
-test("integer neq excludes 2") <- (not(NotTwo(2)))  # nv
+test("integer neq") <- (count_all(not_two(_), N), N == 3)  # nv
+test("integer neq excludes 2") <- (not(not_two(2)))  # nv
 
 # ── Arithmetic expression ───────────────────────────────────────────────────
 
-DoubleIs4(X) <- (
+double_is4(X) <- (
     z3.integer((
         0 <= X <= 10,
         X * 2 == 4,
@@ -51,11 +51,11 @@ DoubleIs4(X) <- (
     z3.label([X]),
 )
 
-test("integer 2x=4") <- (DoubleIs4(X), X == 2)  # nv
+test("integer 2x=4") <- (double_is4(X), X == 2)  # nv
 
 # ── All different ───────────────────────────────────────────────────────────
 
-AllDiff(X, Y, Z) <- (
+all_diff(X, Y, Z) <- (
     z3.integer((
         1 <= X <= 3,
         1 <= Y <= 3,
@@ -65,7 +65,7 @@ AllDiff(X, Y, Z) <- (
     z3.label([X, Y, Z]),
 )
 
-test("all_different 6 solutions") <- (count_all(AllDiff(_, _, _), N), N == 6)  # nv
+test("all_different 6 solutions") <- (count_all(all_diff(_, _, _), N), N == 6)  # nv
 
 # ── Satisfiability check ───────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ test("z3 minimize") <- (
 
 # ── Optimize + label ───────────────────────────────────────────────────────
 
-Schedule(T1, T2, T3, COST) <- (
+schedule(T1, T2, T3, COST) <- (
     z3.integer((
         0 <= T1 <= 100,
         0 <= T2 <= 100,
@@ -113,4 +113,4 @@ Schedule(T1, T2, T3, COST) <- (
     z3.optimize_label([T1, T2, T3], T3, COST, "minimize"),
 )
 
-test("schedule minimize") <- (Schedule(T1, T2, T3, COST), T1 == 0, T2 == 5, T3 == 8, COST == 8)  # nv
+test("schedule minimize") <- (schedule(T1, T2, T3, COST), T1 == 0, T2 == 5, T3 == 8, COST == 8)  # nv

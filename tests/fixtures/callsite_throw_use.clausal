@@ -1,5 +1,5 @@
--import_from(tests.fixtures.callsite_throw_lib, [ThrowCat])
+-import_from(tests.fixtures.callsite_throw_lib, [throw_cat])
 
-Mid(R) <- (ThrowCat(2, "b"), R is "no_throw")
-CatchIt(R) <- catch(Mid(R), "boom", R is "caught")
-PassThru(R) <- (ThrowCat(1, "a"), R is "ok")
+mid(R) <- (throw_cat(2, "b"), R is "no_throw")
+catch_it(R) <- catch(mid(R), "boom", R is "caught")
+pass_thru(R) <- (throw_cat(1, "a"), R is "ok")

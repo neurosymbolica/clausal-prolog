@@ -364,7 +364,7 @@ class TestBodyStarInClausalFile:
         h, t = Var(), Var()
         results = [
             (deref(h), deref(t))
-            for _ in call("HeadTail", [1, 2, 3], h, t, module=mod)
+            for _ in call("head_tail", [1, 2, 3], h, t, module=mod)
         ]
         assert results == [(1, [2, 3])]
 
@@ -375,7 +375,7 @@ class TestBodyStarInClausalFile:
         h, t = Var(), Var()
         results = [
             (deref(h), deref(t))
-            for _ in call("HeadTail", [42], h, t, module=mod)
+            for _ in call("head_tail", [42], h, t, module=mod)
         ]
         assert results == [(42, [])]
 
@@ -384,7 +384,7 @@ class TestBodyStarInClausalFile:
         # nv
         mod = _load_clausal_module("body_star.clausal")
         h, t = Var(), Var()
-        results = list(call("HeadTail", [], h, t, module=mod))
+        results = list(call("head_tail", [], h, t, module=mod))
         assert results == []
 
     def test_init_last_body_decon(self):
@@ -397,7 +397,7 @@ class TestBodyStarInClausalFile:
         init, last = Var(), Var()
         results = [
             (deref(init), deref(last))
-            for _ in call("InitLast", [1, 2, 3], init, last, module=mod)
+            for _ in call("init_last", [1, 2, 3], init, last, module=mod)
         ]
         assert results == [([1, 2], 3)]
 
@@ -408,7 +408,7 @@ class TestBodyStarInClausalFile:
         init, last = Var(), Var()
         results = [
             (deref(init), deref(last))
-            for _ in call("InitLast", [7], init, last, module=mod)
+            for _ in call("init_last", [7], init, last, module=mod)
         ]
         assert results == [([], 7)]
 
@@ -417,7 +417,7 @@ class TestBodyStarInClausalFile:
         # nv
         mod = _load_clausal_module("body_star.clausal")
         init, last = Var(), Var()
-        results = list(call("InitLast", [], init, last, module=mod))
+        results = list(call("init_last", [], init, last, module=mod))
         assert results == []
 
     def test_sandwich_body_decon(self):
@@ -430,7 +430,7 @@ class TestBodyStarInClausalFile:
         h, mid, t = Var(), Var(), Var()
         results = [
             (deref(h), deref(mid), deref(t))
-            for _ in call("Sandwich", [1, 2, 3, 4], h, mid, t, module=mod)
+            for _ in call("sandwich", [1, 2, 3, 4], h, mid, t, module=mod)
         ]
         assert results == [(1, [2, 3], 4)]
 
@@ -441,7 +441,7 @@ class TestBodyStarInClausalFile:
         h, mid, t = Var(), Var(), Var()
         results = [
             (deref(h), deref(mid), deref(t))
-            for _ in call("Sandwich", [1, 2], h, mid, t, module=mod)
+            for _ in call("sandwich", [1, 2], h, mid, t, module=mod)
         ]
         assert results == [(1, [], 2)]
 
@@ -453,7 +453,7 @@ class TestBodyStarInClausalFile:
         # nv
         mod = _load_clausal_module("body_star.clausal")
         all_ = Var()
-        results = [deref(all_) for _ in call("CaptureBody", [1, 2, 3], all_, module=mod)]
+        results = [deref(all_) for _ in call("capture_body", [1, 2, 3], all_, module=mod)]
         assert results == [[1, 2, 3]]
 
     def test_capture_all_body_empty(self):
@@ -461,7 +461,7 @@ class TestBodyStarInClausalFile:
         # nv
         mod = _load_clausal_module("body_star.clausal")
         all_ = Var()
-        results = [deref(all_) for _ in call("CaptureBody", [], all_, module=mod)]
+        results = [deref(all_) for _ in call("capture_body", [], all_, module=mod)]
         assert results == [[]]
 
     def test_body_decon_then_use(self):
@@ -472,7 +472,7 @@ class TestBodyStarInClausalFile:
         # nv
         mod = _load_clausal_module("body_star.clausal")
         s = Var()
-        results = [deref(s) for _ in call("SumTail", [10, 20, 30, 40], s, module=mod)]
+        results = [deref(s) for _ in call("sum_tail", [10, 20, 30, 40], s, module=mod)]
         assert results == [3]
 
     def test_body_decon_chain(self):
@@ -483,7 +483,7 @@ class TestBodyStarInClausalFile:
         # nv
         mod = _load_clausal_module("body_star.clausal")
         x = Var()
-        results = [deref(x) for _ in call("Second", [10, 20, 30], x, module=mod)]
+        results = [deref(x) for _ in call("second", [10, 20, 30], x, module=mod)]
         assert results == [20]
 
     def test_body_construct_and_decon(self):
@@ -495,7 +495,7 @@ class TestBodyStarInClausalFile:
         # nv
         mod = _load_clausal_module("body_star.clausal")
         y = Var()
-        results = [deref(y) for _ in call("WrapUnwrap", 42, y, module=mod)]
+        results = [deref(y) for _ in call("wrap_unwrap", 42, y, module=mod)]
         assert results == [42]
 
 
@@ -517,7 +517,7 @@ class TestBodyMultiStarDeconstruction:
         a, b = Var(), Var()
         results = [
             (deref(a), deref(b))
-            for _ in call("BodySplit", [1, 2, 3], a, b, module=mod)
+            for _ in call("body_split", [1, 2, 3], a, b, module=mod)
         ]
         assert results == [
             ([], [1, 2, 3]),
@@ -533,7 +533,7 @@ class TestBodyMultiStarDeconstruction:
         a, b = Var(), Var()
         results = [
             (deref(a), deref(b))
-            for _ in call("BodySplit", [], a, b, module=mod)
+            for _ in call("body_split", [], a, b, module=mod)
         ]
         assert results == [([], [])]
 
@@ -544,7 +544,7 @@ class TestBodyMultiStarDeconstruction:
         a, b = Var(), Var()
         results = [
             (deref(a), deref(b))
-            for _ in call("BodySplit", [1], a, b, module=mod)
+            for _ in call("body_split", [1], a, b, module=mod)
         ]
         assert results == [([], [1]), ([1], [])]
 

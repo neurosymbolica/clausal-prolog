@@ -98,7 +98,7 @@ def _load(name, src):
     return _load_module(name, p).__dict__["$module"]
 
 
-def _succeeds(mod, pred="Test"):
+def _succeeds(mod, pred="test"):
     return any(True for _ in call(pred, module=mod))
 
 
@@ -107,7 +107,7 @@ class TestCurrencyClausalIntegration:
         # 0.1(euro) + 0.2(euro) == 0.3(euro): passes ONLY with exact Decimal math.
         mod = _load("cur_bare",
             "-import_from(european_union, [euro])\n"
-            "Test <- (eval_(0.1(euro), A), eval_(0.2(euro), B), "
+            "test <- (eval_(0.1(euro), A), eval_(0.2(euro), B), "
             "eval_(A + B, C), eval_(0.3(euro), D), C == D)\n")
         assert _succeeds(mod)
 
@@ -115,7 +115,7 @@ class TestCurrencyClausalIntegration:
         # european_union.euro must parse in n(Unit) position (the _is_unit_expr fix).
         mod = _load("cur_qual",
             "-import_module(european_union)\n"
-            "Test <- (eval_(7.89(european_union.euro), A), "
+            "test <- (eval_(7.89(european_union.euro), A), "
             "eval_(1.23(european_union.euro), B), eval_(A + B, C), "
             "eval_(9.12(european_union.euro), D), C == D)\n")
         assert _succeeds(mod)
@@ -125,22 +125,22 @@ class TestCurrencyClausalIntegration:
         mod = _load("cur_mismatch",
             "-import_from(european_union, [euro])\n"
             "-import_from(united_states, [dollar])\n"
-            "Test <- (eval_(1.00(euro), A), eval_(1.00(dollar), B), eval_(A + B, C))\n")
+            "test <- (eval_(1.00(euro), A), eval_(1.00(dollar), B), eval_(A + B, C))\n")
         with pytest.raises(UnitsMismatch):
-            list(call("Test", module=mod))
+            list(call("test", module=mod))
 
     def test_has_units_with_qualified_currency(self):
         mod = _load("cur_has_units",
             "-import_from(py.units, [has_units])\n"
             "-import_from(european_union, [euro])\n"
             "-import_module(european_union)\n"
-            "Test <- (eval_(7.89(euro), A), has_units(A, european_union.euro))\n")
+            "test <- (eval_(7.89(euro), A), has_units(A, european_union.euro))\n")
         assert _succeeds(mod)
 
     def test_bare_and_qualified_currency_are_same_object(self):
         mod = _load("cur_identity",
             "-import_from(european_union, [euro])\n"
             "-import_module(european_union)\n"
-            "Test <- (eval_(1.10(euro), A), eval_(2.20(european_union.euro), B), "
+            "test <- (eval_(1.10(euro), A), eval_(2.20(european_union.euro), B), "
             "eval_(A + B, C), eval_(3.30(euro), D), C == D)\n")
         assert _succeeds(mod)

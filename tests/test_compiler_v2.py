@@ -162,14 +162,14 @@ class TestV2PipelineEquivalence:
     """Test that v2 pipeline produces same query results as v1."""
 
     def test_edge_graph(self):
-        """Edge graph fixture: basic facts + rules."""
+        """edge graph fixture: basic facts + rules."""
         # nv
         path = os.path.join(FIXTURES_DIR, "edge_graph.clausal")
         md = _load_via_v2(path, "_v2_edge_graph")
         lm = md["$module"]
 
         x = Var()
-        vals = sorted(_call_collect("Edge", 1, x, module=lm))
+        vals = sorted(_call_collect("edge", 1, x, module=lm))
         assert vals == [2, 3]
 
     def test_fibonacci(self):
@@ -180,7 +180,7 @@ class TestV2PipelineEquivalence:
         lm = md["$module"]
 
         f = Var()
-        results = _call_collect("Fib", 5, f, module=lm)
+        results = _call_collect("fib", 5, f, module=lm)
         assert len(results) >= 1
         assert results[0] == 5
 
@@ -190,7 +190,7 @@ class TestV2PipelineEquivalence:
         path = os.path.join(FIXTURES_DIR, "dynamic_pred.clausal")
         md = _load_via_v2(path, "_v2_dynamic_pred")
         lm = md["$module"]
-        assert lm.db.is_dynamic("Color", 2)
+        assert lm.db.is_dynamic("color", 2)
 
     def test_facts_only(self):
         """Facts-only fixture (edge_graph has facts + rules)."""
@@ -199,7 +199,7 @@ class TestV2PipelineEquivalence:
         md = _load_via_v2(path, "_v2_edge_graph2")
         lm = md["$module"]
         a, b = Var(), Var()
-        count = sum(1 for _ in call("Edge", a, b, module=lm))
+        count = sum(1 for _ in call("edge", a, b, module=lm))
         assert count == 3
 
     def test_tabled_fib(self):
@@ -208,10 +208,10 @@ class TestV2PipelineEquivalence:
         path = os.path.join(FIXTURES_DIR, "tabled_fib.clausal")
         md = _load_via_v2(path, "_v2_tabled_fib")
         lm = md["$module"]
-        assert lm.db.is_tabled("Fib", 2)
+        assert lm.db.is_tabled("fib", 2)
 
         f = Var()
-        results = _call_collect("Fib", 10, f, module=lm)
+        results = _call_collect("fib", 10, f, module=lm)
         assert len(results) >= 1
         assert results[0] == 55
 
@@ -221,7 +221,7 @@ class TestV2PipelineEquivalence:
         path = os.path.join(FIXTURES_DIR, "shallow_pred.clausal")
         md = _load_via_v2(path, "_v2_shallow_pred")
         lm = md["$module"]
-        assert lm.db.is_shallow("Color", 2)
+        assert lm.db.is_shallow("color", 2)
 
     def test_dcg_grammar(self):
         """DCG grammar fixture."""
@@ -262,6 +262,6 @@ class TestV2CompileModule:
         # nv
         path = os.path.join(FIXTURES_DIR, "dynamic_pred.clausal")
         md = _load_via_v2(path, "_v2_dynamic_pred2")
-        Color = md.get("Color")
+        Color = md.get("color")
         assert Color is not None and isinstance(Color, PredicateMeta)
         assert not Color._locked

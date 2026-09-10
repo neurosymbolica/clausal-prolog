@@ -4,7 +4,7 @@ failing ``.clausal`` file test.
 ``ClausalItem.runtest`` runs failures through ``diagnose_failure`` (see
 ``test_pytest_plugin_diagnostics.py``); ``DocItem`` — the collector for
 ```` ```clausal ```` blocks in ``docs/*.md`` — still raised a bare
-``Test(...) has no solutions``, the same missing signal on the collector that
+``test(...) has no solutions``, the same missing signal on the collector that
 fires whenever a tutorial example rots.  The block's compile buffer used to be
 unlinked before any item ran, which is why the diagnosis had no source to
 quote; blocks now live in a session-scoped directory so the report can name
@@ -69,7 +69,7 @@ FAILING_MD = """
 prc("alpha", 10),
 prc("beta", 20),
 
-Test("later goal fails after a binding") <- (
+test("later goal fails after a binding") <- (
     prc("alpha", NUM),
     prc("gamma", NUM)
 ),
@@ -82,7 +82,7 @@ PASSING_MD = """
 ```clausal
 prc("alpha", 10),
 
-Test("passes") <- (
+test("passes") <- (
     prc("alpha", NUM),
     NUM > 5
 ),
@@ -95,7 +95,7 @@ ERROR_MD = """
 ```clausal
 prc("alpha", 10),
 
-Test("raises") <- (
+test("raises") <- (
     prc("alpha", NUM),
     atom_length(NUM, LEN),
     LEN > 0

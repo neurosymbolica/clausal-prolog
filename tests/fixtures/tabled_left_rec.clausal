@@ -1,20 +1,20 @@
--table(Path/2)
+-table(path/2)
 
-Edge(1, 2),
-Edge(2, 3),
-Edge(3, 4),
+edge(1, 2),
+edge(2, 3),
+edge(3, 4),
 
-Path(X, Y) <- Edge(X, Y)
-Path(X, Y) <- (
-    Path(X, Z),
-    Edge(Z, Y)
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (
+    path(X, Z),
+    edge(Z, Y)
 )
 
 
-test("left recursive path all from 1") <- (findall(TARGET, Path(1, TARGET), TARGETS), sort(TARGETS, [2, 3, 4]))  # nv
-test("left recursive path 3 to 4") <- Path(3, 4)  # nv
-test("path multi-hop 1 to 4") <- Path(1, 4)  # nv
-test("path no backward 4 to 1 fails") <- (not Path(4, 1))  # nv
-# Note: `findall([X,Y], Path(X,Y), L)` with both args unbound observes
+test("left recursive path all from 1") <- (findall(TARGET, path(1, TARGET), TARGETS), sort(TARGETS, [2, 3, 4]))  # nv
+test("left recursive path 3 to 4") <- path(3, 4)  # nv
+test("path multi-hop 1 to 4") <- path(1, 4)  # nv
+test("path no backward 4 to 1 fails") <- (not path(4, 1))  # nv
+# Note: `findall([X,Y], path(X,Y), L)` with both args unbound observes
 # stale tabled-dispatch (V2-2/V2-4b interaction); coverage of the
 # all-pairs case stays in tests/test_slg_termination.py for now.

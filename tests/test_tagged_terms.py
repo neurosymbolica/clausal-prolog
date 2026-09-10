@@ -1508,9 +1508,9 @@ class TestCellHeadReachability:
         """
         importer = _load_head_compound_importer()
         src = capture_predicate_codegen(
-            "tests.fixtures.head_compound_importer", ["CheckIndexed"])
-        assert "case [['Wrap', " in src, src
-        assert "case [['Item', " in src, src
+            "tests.fixtures.head_compound_importer", ["check_indexed"])
+        assert "case [['wrap', " in src, src
+        assert "case [['item', " in src, src
         del importer
 
     def test_the_imported_functor_answers_are_unchanged(self):
@@ -1518,11 +1518,11 @@ class TestCellHeadReachability:
         lm = importer.__dict__["$module"]
         R = Var()
         assert [deref(R) for _t in
-                call("CheckIndexed", ("Wrap", mint("direct")), R, module=lm)] \
+                call("check_indexed", ("wrap", mint("direct")), R, module=lm)] \
             == [mint("first"), mint("second"), mint("fallback")]
         R2 = Var()
         assert [deref(R2) for _t in
-                call("CheckIndexed", 42, R2, module=lm)] == [mint("fallback")]
+                call("check_indexed", 42, R2, module=lm)] == [mint("fallback")]
 
 
 class TestLiveCellHeadArg:

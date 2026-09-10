@@ -508,40 +508,40 @@ class TestEdgeCases:
 class TestClausalInline:
     def test_uuid4_in_clausal(self, tmp_path):
         # nv
-        mod = _load("ui1", 'Test <- (uuid_v4(_u) and is_uuid(_u))\n', tmp_path)
-        assert _succeeds("Test", module=mod)
+        mod = _load("ui1", 'test <- (uuid_v4(_u) and is_uuid(_u))\n', tmp_path)
+        assert _succeeds("test", module=mod)
 
     def test_uuid_str_roundtrip_clausal(self, tmp_path):
         # nv
-        mod = _load("ui2", 'Test <- (uuid_v4(_u) and uuid_str(_u, _s) and uuid_str(_u2, _s) and uuid_str(_u2, _s2) and _s == _s2)\n', tmp_path)
-        assert _succeeds("Test", module=mod)
+        mod = _load("ui2", 'test <- (uuid_v4(_u) and uuid_str(_u, _s) and uuid_str(_u2, _s) and uuid_str(_u2, _s2) and _s == _s2)\n', tmp_path)
+        assert _succeeds("test", module=mod)
 
     def test_uuid3_clausal(self, tmp_path):
         # nv
-        mod = _load("ui3", 'Test <- (uuid_v3("dns", "example.com", _u) and uuid_version(_u, 3))\n', tmp_path)
-        assert _succeeds("Test", module=mod)
+        mod = _load("ui3", 'test <- (uuid_v3("dns", "example.com", _u) and uuid_version(_u, 3))\n', tmp_path)
+        assert _succeeds("test", module=mod)
 
     def test_uuid5_clausal(self, tmp_path):
         # nv
-        mod = _load("ui4", 'Test <- (uuid_v5("url", "test", _u) and uuid_version(_u, 5))\n', tmp_path)
-        assert _succeeds("Test", module=mod)
+        mod = _load("ui4", 'test <- (uuid_v5("url", "test", _u) and uuid_version(_u, 5))\n', tmp_path)
+        assert _succeeds("test", module=mod)
 
     def test_uuid_int_clausal(self, tmp_path):
         # nv
-        mod = _load("ui5", 'Test <- (uuid_v4(_u) and uuid_int(_u, _n) and uuid_int(_u2, _n) and uuid_int(_u2, _n2) and _n == _n2)\n', tmp_path)
-        assert _succeeds("Test", module=mod)
+        mod = _load("ui5", 'test <- (uuid_v4(_u) and uuid_int(_u, _n) and uuid_int(_u2, _n) and uuid_int(_u2, _n2) and _n == _n2)\n', tmp_path)
+        assert _succeeds("test", module=mod)
 
     def test_uuid_hex_clausal(self, tmp_path):
         # nv
-        mod = _load("ui6", 'Test <- (uuid_v4(_u) and uuid_hex(_u, _h) and uuid_hex(_u2, _h) and uuid_hex(_u2, _h2) and _h == _h2)\n', tmp_path)
-        assert _succeeds("Test", module=mod)
+        mod = _load("ui6", 'test <- (uuid_v4(_u) and uuid_hex(_u, _h) and uuid_hex(_u2, _h) and uuid_hex(_u2, _h2) and _h == _h2)\n', tmp_path)
+        assert _succeeds("test", module=mod)
 
 
 # ── .clausal fixture integration ─────────────────────────────────────────
 
 
 class TestFixtureIntegration:
-    """Load the uuid_basic.clausal fixture and run its Test predicates."""
+    """Load the uuid_basic.clausal fixture and run its test predicates."""
 
     @pytest.fixture(autouse=True)
     def _load_fixture(self):

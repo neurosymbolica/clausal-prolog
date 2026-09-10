@@ -2,15 +2,15 @@
 
 -module(iso_list_operations, [test/1])
 
-Palindrome(_xs) <- (reverse(_xs, _xs))
+palindrome(_xs) <- (reverse(_xs, _xs))
 
-SortedAsc([]),
+sorted_asc([]),
 
-SortedAsc([_]),
+sorted_asc([_]),
 
-SortedAsc([A, B, *_rest]) <- (A <= B, SortedAsc([B, *_rest]))
+sorted_asc([A, B, *_rest]) <- (A <= B, sorted_asc([B, *_rest]))
 
-IsPermutation(_xs, _ys) <- (length(_xs, N), length(_ys, N), sort(_xs, S), sort(_ys, S))
+is_permutation(_xs, _ys) <- (length(_xs, N), length(_ys, N), sort(_xs, S), sort(_ys, S))
 
 test('in: found') <- (b in [a, b, c])
 
@@ -120,33 +120,33 @@ test('min_list') <- (min_list([3, 1, 4, 1, 5], 1))
 
 test('max_list singleton') <- (max_list([42], 42))
 
-test('palindrome: empty') <- (Palindrome([]))
+test('palindrome: empty') <- (palindrome([]))
 
-test('palindrome: single') <- (Palindrome([1]))
+test('palindrome: single') <- (palindrome([1]))
 
-test('palindrome: aba') <- (Palindrome([1, 2, 1]))
+test('palindrome: aba') <- (palindrome([1, 2, 1]))
 
-test('palindrome: abba') <- (Palindrome([1, 2, 2, 1]))
+test('palindrome: abba') <- (palindrome([1, 2, 2, 1]))
 
-test('not palindrome: ab') <- (not Palindrome([1, 2]))
+test('not palindrome: ab') <- (not palindrome([1, 2]))
 
-test('sorted_asc: empty') <- (SortedAsc([]))
+test('sorted_asc: empty') <- (sorted_asc([]))
 
-test('sorted_asc: single') <- (SortedAsc([1]))
+test('sorted_asc: single') <- (sorted_asc([1]))
 
-test('sorted_asc: ascending') <- (SortedAsc([1, 2, 3]))
+test('sorted_asc: ascending') <- (sorted_asc([1, 2, 3]))
 
-test('sorted_asc: not descending') <- (not SortedAsc([3, 2, 1]))
+test('sorted_asc: not descending') <- (not sorted_asc([3, 2, 1]))
 
-test('sorted_asc: equal elements') <- (SortedAsc([2, 2, 2]))
+test('sorted_asc: equal elements') <- (sorted_asc([2, 2, 2]))
 
-test('is_permutation: same list') <- (IsPermutation([1, 2, 3], [1, 2, 3]))
+test('is_permutation: same list') <- (is_permutation([1, 2, 3], [1, 2, 3]))
 
-test('is_permutation: reordered') <- (IsPermutation([3, 1, 2], [1, 2, 3]))
+test('is_permutation: reordered') <- (is_permutation([3, 1, 2], [1, 2, 3]))
 
-test('not permutation: different lengths') <- (not IsPermutation([1, 2], [1, 2, 3]))
+test('not permutation: different lengths') <- (not is_permutation([1, 2], [1, 2, 3]))
 
-test('is_permutation: empty') <- (IsPermutation([], []))
+test('is_permutation: empty') <- (is_permutation([], []))
 
 test('in_ enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), L == [1, 2, 3])
 

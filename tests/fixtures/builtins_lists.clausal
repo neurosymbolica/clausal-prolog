@@ -2,69 +2,69 @@
 # Each wrapper exercises a single builtin so Python tests can call it by name.
 
 # in_/2, in_check/2
-HasMember(ELEMENT, LIST) <- in_(ELEMENT, LIST)
-HasMemberCheck(ELEMENT, LIST) <- in_check(ELEMENT, LIST)
+has_member(ELEMENT, LIST) <- in_(ELEMENT, LIST)
+has_member_check(ELEMENT, LIST) <- in_check(ELEMENT, LIST)
 
 # append/3
-Concat(LEFT, RIGHT, RESULT) <- append(LEFT, RIGHT, RESULT)
+concat(LEFT, RIGHT, RESULT) <- append(LEFT, RIGHT, RESULT)
 
-# Split(PREFIX, SUFFIX, WHOLE): WHOLE = PREFIX ++ SUFFIX
-Split(PREFIX, SUFFIX, WHOLE) <- append(PREFIX, SUFFIX, WHOLE)
+# split(PREFIX, SUFFIX, WHOLE): WHOLE = PREFIX ++ SUFFIX
+split(PREFIX, SUFFIX, WHOLE) <- append(PREFIX, SUFFIX, WHOLE)
 
 # length/2
-ListLength(LIST, N) <- length(LIST, N)
+list_length(LIST, N) <- length(LIST, N)
 
 # last/2
-ListLast(LIST, ELEMENT) <- last(LIST, ELEMENT)
+list_last(LIST, ELEMENT) <- last(LIST, ELEMENT)
 
 # reverse/2
-ListReverse(LIST, REVERSED) <- reverse(LIST, REVERSED)
+list_reverse(LIST, REVERSED) <- reverse(LIST, REVERSED)
 
 # list_item/3 (0-based)
-Get0(LIST, INDEX, ELEMENT) <- list_item(INDEX, LIST, ELEMENT)
+get0(LIST, INDEX, ELEMENT) <- list_item(INDEX, LIST, ELEMENT)
 
 # flatten/2
-Flat(LIST, RESULT) <- flatten(LIST, RESULT)
+flat(LIST, RESULT) <- flatten(LIST, RESULT)
 
 # msort/2 (stable sort, keeps duplicates), sort/2 (removes duplicates)
-SortedWithDups(LIST, RESULT) <- msort(LIST, RESULT)
-SortedUnique(LIST, RESULT) <- sort(LIST, RESULT)
+sorted_with_dups(LIST, RESULT) <- msort(LIST, RESULT)
+sorted_unique(LIST, RESULT) <- sort(LIST, RESULT)
 
 # permutation/2
-Perms(LIST, RESULT) <- permutation(LIST, RESULT)
+perms(LIST, RESULT) <- permutation(LIST, RESULT)
 
 # select/3: select element from list leaving rest
-Pick(ELEMENT, LIST, REST) <- select(ELEMENT, LIST, REST)
+pick(ELEMENT, LIST, REST) <- select(ELEMENT, LIST, REST)
 
 # subtract/3, intersection/3, union/3
-ListDiff(LEFT, RIGHT, RESULT) <- subtract(LEFT, RIGHT, RESULT)
-ListInter(LEFT, RIGHT, RESULT) <- intersection(LEFT, RIGHT, RESULT)
-ListUnion(LEFT, RIGHT, RESULT) <- union(LEFT, RIGHT, RESULT)
+list_diff(LEFT, RIGHT, RESULT) <- subtract(LEFT, RIGHT, RESULT)
+list_inter(LEFT, RIGHT, RESULT) <- intersection(LEFT, RIGHT, RESULT)
+list_union(LEFT, RIGHT, RESULT) <- union(LEFT, RIGHT, RESULT)
 
 # list_to_set/2: remove duplicates preserving order
-Dedup(LIST, RESULT) <- list_to_set(LIST, RESULT)
+dedup(LIST, RESULT) <- list_to_set(LIST, RESULT)
 
 # sum_list/2, max_list/2, min_list/2
-Total(LIST, SUM) <- sum_list(LIST, SUM)
-Maximum(LIST, MAX) <- max_list(LIST, MAX)
-Minimum(LIST, MIN) <- min_list(LIST, MIN)
+total(LIST, SUM) <- sum_list(LIST, SUM)
+maximum(LIST, MAX) <- max_list(LIST, MAX)
+minimum(LIST, MIN) <- min_list(LIST, MIN)
 
 # pairs_keys_values/3, pairs_keys/2, pairs_values/2
-MakePairs(KEYS, VALUES, PAIRS) <- pairs_keys_values(PAIRS, KEYS, VALUES)
-KeysOf(PAIRS, KEYS) <- pairs_keys(PAIRS, KEYS)
-ValuesOf(PAIRS, VALUES) <- pairs_values(PAIRS, VALUES)
+make_pairs(KEYS, VALUES, PAIRS) <- pairs_keys_values(PAIRS, KEYS, VALUES)
+keys_of(PAIRS, KEYS) <- pairs_keys(PAIRS, KEYS)
+values_of(PAIRS, VALUES) <- pairs_values(PAIRS, VALUES)
 
 
-test("has member") <- HasMember(2, [1, 2, 3])  # nv
-test("append") <- (Concat([1, 2], [3, 4], RESULT), RESULT == [1, 2, 3, 4])  # nv
-test("length") <- (ListLength([1, 2, 3], N), N == 3)  # nv
-test("last") <- (ListLast([1, 2, 3], ELEMENT), ELEMENT == 3)  # nv
-test("reverse") <- (ListReverse([1, 2, 3], RESULT), RESULT == [3, 2, 1])  # nv
-test("get item") <- (Get0([10, 20, 30], 1, ELEMENT), ELEMENT == 20)  # nv
-test("flatten") <- (Flat([1, [2, 3], [4, [5]]], RESULT), RESULT == [1, 2, 3, 4, 5])  # nv
-test("sorted with dups") <- (SortedWithDups([3, 1, 2, 1], RESULT), RESULT == [1, 1, 2, 3])  # nv
-test("sorted unique") <- (SortedUnique([3, 1, 2, 1], RESULT), RESULT == [1, 2, 3])  # nv
-test("sum list") <- (Total([1, 2, 3, 4], SUM), SUM == 10)  # nv
-test("max list") <- (Maximum([3, 1, 4, 1, 5], MAX), MAX == 5)  # nv
-test("min list") <- (Minimum([3, 1, 4, 1, 5], MIN), MIN == 1)  # nv
-test("dedup") <- (Dedup([1, 2, 1, 3, 2], RESULT), RESULT == [1, 2, 3])  # nv
+test("has member") <- has_member(2, [1, 2, 3])  # nv
+test("append") <- (concat([1, 2], [3, 4], RESULT), RESULT == [1, 2, 3, 4])  # nv
+test("length") <- (list_length([1, 2, 3], N), N == 3)  # nv
+test("last") <- (list_last([1, 2, 3], ELEMENT), ELEMENT == 3)  # nv
+test("reverse") <- (list_reverse([1, 2, 3], RESULT), RESULT == [3, 2, 1])  # nv
+test("get item") <- (get0([10, 20, 30], 1, ELEMENT), ELEMENT == 20)  # nv
+test("flatten") <- (flat([1, [2, 3], [4, [5]]], RESULT), RESULT == [1, 2, 3, 4, 5])  # nv
+test("sorted with dups") <- (sorted_with_dups([3, 1, 2, 1], RESULT), RESULT == [1, 1, 2, 3])  # nv
+test("sorted unique") <- (sorted_unique([3, 1, 2, 1], RESULT), RESULT == [1, 2, 3])  # nv
+test("sum list") <- (total([1, 2, 3, 4], SUM), SUM == 10)  # nv
+test("max list") <- (maximum([3, 1, 4, 1, 5], MAX), MAX == 5)  # nv
+test("min list") <- (minimum([3, 1, 4, 1, 5], MIN), MIN == 1)  # nv
+test("dedup") <- (dedup([1, 2, 1, 3, 2], RESULT), RESULT == [1, 2, 3])  # nv

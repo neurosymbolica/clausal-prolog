@@ -27,7 +27,7 @@ is_uuid(U)
 --8<-- [start:session_tokens]
 -import_from(uuid, [uuid_v4, uuid_str])
 
-NewSession(USERID, TOKEN) <- (
+new_session(USERID, TOKEN) <- (
     uuid_v4(U),
     uuid_str(U, TOKEN)
 )
@@ -36,7 +36,7 @@ NewSession(USERID, TOKEN) <- (
 --8<-- [start:deterministic_ids]
 -import_from(uuid, [uuid_v5, uuid_str])
 
-ResourceId(TYPE, NAME, ID) <- (
+resource_id(TYPE, NAME, ID) <- (
     uuid_v5("url", NAME, U),
     uuid_str(U, ID)
 )

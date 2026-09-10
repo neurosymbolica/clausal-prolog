@@ -148,30 +148,30 @@ class TestDynamicImport:
     def test_dynamic_predicate_is_unlocked(self):
         # nv
         mod = _load_fixture("dynamic_pred.clausal")
-        color_cls = mod.__dict__["Color"]
+        color_cls = mod.__dict__["color"]
         assert isinstance(color_cls, PredicateMeta)
         assert not color_cls._locked
 
     def test_dynamic_predicate_allows_runtime_assertz(self):
         # nv
         mod = _load_fixture("dynamic_pred.clausal")
-        color_cls = mod.__dict__["Color"]
+        color_cls = mod.__dict__["color"]
         logic_mod = mod.__dict__["$module"]
-        initial_count = len(logic_mod.db.clauses_for("Color", 2))
+        initial_count = len(logic_mod.db.clauses_for("color", 2))
         color_cls._assertz(Clause(head=color_cls("fire", "red"), body=[]))
         assert len(color_cls._clauses) == initial_count + 1
 
     def test_static_predicate_is_locked(self):
         # nv
         mod = _load_fixture("static_pred.clausal")
-        fact_cls = mod.__dict__["Fact"]
+        fact_cls = mod.__dict__["fact"]
         assert isinstance(fact_cls, PredicateMeta)
         assert fact_cls._locked
 
     def test_static_predicate_rejects_runtime_assertz(self):
         # nv
         mod = _load_fixture("static_pred.clausal")
-        fact_cls = mod.__dict__["Fact"]
+        fact_cls = mod.__dict__["fact"]
         with pytest.raises(RuntimeError, match="locked"):
             fact_cls._assertz(Clause(head=fact_cls("c", 3), body=[]))
 
@@ -179,13 +179,13 @@ class TestDynamicImport:
         # nv
         mod = _load_fixture("dynamic_pred.clausal")
         logic_mod = mod.__dict__["$module"]
-        assert logic_mod.db.is_dynamic("Color", 2)
+        assert logic_mod.db.is_dynamic("color", 2)
 
     def test_static_not_dynamic_on_db(self):
         # nv
         mod = _load_fixture("static_pred.clausal")
         logic_mod = mod.__dict__["$module"]
-        assert not logic_mod.db.is_dynamic("Fact", 2)
+        assert not logic_mod.db.is_dynamic("fact", 2)
 
 
 # ── Database mark_shallow ─────────────────────────────────────────────────────
@@ -245,12 +245,12 @@ class TestShallowDirectiveParsing:
         # nv
         mod = _load_fixture("shallow_pred.clausal")
         logic_mod = mod.__dict__["$module"]
-        assert logic_mod.db.is_shallow("Color", 2)
+        assert logic_mod.db.is_shallow("color", 2)
 
     def test_shallow_predicate_is_queryable(self):
         # nv
         from clausal.logic.solve import call
         mod = _load_fixture("shallow_pred.clausal", "shallow_pred_q")
         logic_mod = mod.__dict__["$module"]
-        results = list(call("Color", mint("sky"), mint("blue"), module=logic_mod))
+        results = list(call("color", mint("sky"), mint("blue"), module=logic_mod))
         assert len(results) == 1

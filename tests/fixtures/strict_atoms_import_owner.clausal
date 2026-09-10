@@ -3,4 +3,4 @@
 
 -module(strict_atoms_import_owner, [phase3strict_import_yellow])
 
-ColorStrictImportOwner(phase3strict_import_yellow),
+color_strict_import_owner(phase3strict_import_yellow),

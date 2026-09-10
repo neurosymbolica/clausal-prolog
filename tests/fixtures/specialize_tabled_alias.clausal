@@ -3,14 +3,14 @@
 # must be refused at step 4b (`_validate_directive_targets` →
 # `_refuse_untablable_target`), which runs BEFORE step 6b installs the
 # specialized dispatch, so the refusal cannot half-install anything.
--import_from(clausal.examples.metainterpreters, [SolveCount])
+-import_from(clausal.examples.metainterpreters, [solve_count])
 
-NatnumProgram(PROGRAM) <- (
+natnum_program(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", X]], [["natnum", X]]]
     ]
 )
 
--specialize(SolveCount, NatnumProgram, alias=SolveCountTabled)
--table(SolveCountTabled/2)
+-specialize(solve_count, natnum_program, alias=solve_count_tabled)
+-table(solve_count_tabled/2)

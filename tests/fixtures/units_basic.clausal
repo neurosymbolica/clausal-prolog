@@ -1,4 +1,5 @@
 -import_from(py.units, [
+    UnitsMismatch,
     metre, kilogram, second, ampere, kelvin,
     kilometre, centimetre, gram, minute, hour,
     newton, joule, watt, hertz, pascal,
@@ -341,13 +342,14 @@ test("constraint accepts correct unit after arithmetic") <- (
     has_units(V, metre)
 )  # nv
 
-# catch/3 and Python exceptions: UnitsMismatch raised from ++ escapes is
-# catchable as UnitsMismatch(Msg) — ClassName(Message) compound form.
+# catch/3 and Python exceptions: a UnitsMismatch raised from a ++ escape is
+# caught by a ++ catcher: ++UnitsMismatch(MSG) matches by isinstance and
+# binds MSG to the message; the class comes in through the import list.
 
 test("catch add mismatch") <- (
     catch(
         ++(metre(1) + second(1)),
-        UnitsMismatch(_),
+        ++UnitsMismatch,
         1 == 1
     )
 )  # nv
@@ -355,7 +357,7 @@ test("catch add mismatch") <- (
 test("catch mul no error") <- (
     catch(
         ++(metre(3) * second(2)),
-        UnitsMismatch(_),
+        ++UnitsMismatch,
         1 == 2
     )
 )  # nv
@@ -363,7 +365,7 @@ test("catch mul no error") <- (
 test("catch extracts message") <- (
     catch(
         ++(metre(5) + kilogram(2)),
-        UnitsMismatch(MSG),
+        ++UnitsMismatch(MSG),
         MSG == MSG
     )
 )  # nv

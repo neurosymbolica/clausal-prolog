@@ -36,38 +36,38 @@ _MATCHERS = """\
 ])
 
 # decompose: name every operator node reachable in a source
-OpName(SRC, NAME) <- (
+op_name(SRC, NAME) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
     op_node(SUB, NAME, _)
 )
 
 # decompose: capture operands too
-OpParts(SRC, NAME, ARGS) <- (
+op_parts(SRC, NAME, ARGS) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
     op_node(SUB, NAME, ARGS)
 )
 
 # match-by-class (NAME bound): succeeds only where a GtE node is present
-HasGtE(SRC) <- (
+has_gt_e(SRC) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
     op_node(SUB, "GtE", _)
 )
 
 # a whole Clause is bound but is not an operator node -> op_node fails
-ClauseIsOp(SRC, NAME) <- (
+clause_is_op(SRC, NAME) <- (
     reified_clause(SRC, CLAUSE),
     op_node(CLAUSE, NAME, _)
 )
 
 # construct: build a Gt node from a class name + operands
-BuildGt(NEW, L, R) <- op_node(NEW, "Gt", [L, R])
+build_gt(NEW, L, R) <- op_node(NEW, "Gt", [L, R])
 
 # operator-swap: decompose a GtE node and rebuild it as a Gt over the same
 # operands — the pure-Clausal match->rewrite this builtin exists for
-SwapGtEtoGt(SRC, NEW) <- (
+swap_gt_eto_gt(SRC, NEW) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
     op_node(SUB, "GtE", ARGS),
@@ -75,25 +75,25 @@ SwapGtEtoGt(SRC, NEW) <- (
 )
 
 # construct: an unknown class name fails cleanly
-BuildBogus(NEW) <- op_node(NEW, "Bogus", [1, 2])
+build_bogus(NEW) <- op_node(NEW, "Bogus", [1, 2])
 
 # decompose with an explicit [L, R] list pattern (binds both operands)
-GtEParts(SRC, L, R) <- (
+gt_e_parts(SRC, L, R) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
     op_node(SUB, "GtE", [L, R])
 )
 
 # generic construct: caller supplies class name + operand list
-BuildNode(NEW, NAME, ARGS) <- op_node(NEW, NAME, ARGS)
+build_node(NEW, NAME, ARGS) <- op_node(NEW, NAME, ARGS)
 
 # construct with an operand bound *before* op_node runs -> shallow-deref stores
 # the value, so the built node renders
-BuildBound(NEW, V) <- (V is 5, op_node(NEW, "Negate", [V]))
+build_bound(NEW, V) <- (V is 5, op_node(NEW, "Negate", [V]))
 
 # construct with an operand bound *after* op_node runs -> the renderer follows
 # the binding (renderer-deref fix), so this also renders
-BuildLate(NEW) <- (op_node(NEW, "Gt", [X, 1]), X is 5)
+build_late(NEW) <- (op_node(NEW, "Gt", [X, 1]), X is 5)
 """
 
 
@@ -117,17 +117,17 @@ def _solutions(functor, *args, module):
 class TestDecompose:
     def test_names_a_relational_node(self, matchers):
         name = Var()
-        sols = _solutions("OpName", "Small(X) <- (X >= 1)\n", name, module=matchers)
+        sols = _solutions("op_name", "small(X) <- (X >= 1)\n", name, module=matchers)
         assert [n for (n,) in sols] == [mint("GtE")]
 
     def test_names_arithmetic_and_relational_nodes(self, matchers):
         name = Var()
-        sols = _solutions("OpName", "Big(X) <- (X + 1 >= 10)\n", name, module=matchers)
+        sols = _solutions("op_name", "big(X) <- (X + 1 >= 10)\n", name, module=matchers)
         assert {n for (n,) in sols} == {mint("GtE"), mint("Add")}
 
     def test_captures_operands_in_field_order(self, matchers):
         name, args = Var(), Var()
-        sols = _solutions("OpParts", "Small(X) <- (X >= 1)\n", name, args, module=matchers)
+        sols = _solutions("op_parts", "small(X) <- (X >= 1)\n", name, args, module=matchers)
         assert len(sols) == 1
         nm, operands = sols[0]
         assert nm == mint("GtE")
@@ -136,22 +136,22 @@ class TestDecompose:
         assert deref(operands[1]) == 1
 
     def test_match_by_class_name_succeeds(self, matchers):
-        sols = _solutions("HasGtE", "Small(X) <- (X >= 1)\n", module=matchers)
+        sols = _solutions("has_gt_e", "small(X) <- (X >= 1)\n", module=matchers)
         assert len(sols) == 1
 
     def test_match_by_class_name_rejects_other_operator(self, matchers):
         # a Lt-only body has no GtE node
-        sols = _solutions("HasGtE", "Tiny(X) <- (X < 1)\n", module=matchers)
+        sols = _solutions("has_gt_e", "tiny(X) <- (X < 1)\n", module=matchers)
         assert sols == []
 
     def test_non_operator_node_fails_cleanly(self, matchers):
         name = Var()
-        sols = _solutions("ClauseIsOp", "Small(X) <- (X >= 1)\n", name, module=matchers)
+        sols = _solutions("clause_is_op", "small(X) <- (X >= 1)\n", name, module=matchers)
         assert sols == []
 
     def test_list_pattern_binds_both_operands(self, matchers):
         left, right = Var(), Var()
-        sols = _solutions("GtEParts", "Small(X) <- (X >= 1)\n", left, right, module=matchers)
+        sols = _solutions("gt_e_parts", "small(X) <- (X >= 1)\n", left, right, module=matchers)
         assert len(sols) == 1
         l, r = sols[0]
         assert deref(r) == 1  # right operand is the integer literal 1
@@ -159,7 +159,7 @@ class TestDecompose:
     def test_unary_and_comparison_named_together(self, matchers):
         # `X is -Y` reifies as Unify(left=X, right=Negate(operand=Y))
         name = Var()
-        sols = _solutions("OpName", "Neg(X, Y) <- (X is -Y)\n", name, module=matchers)
+        sols = _solutions("op_name", "neg(X, Y) <- (X is -Y)\n", name, module=matchers)
         assert [n for (n,) in sols] == [mint("Unify"), mint("Negate")]
 
     def test_compare_chain_excluded_but_its_inner_nodes_named(self, matchers):
@@ -168,7 +168,7 @@ class TestDecompose:
         # left/right pair, so it has no decompose/construct shape here. Its
         # inner Lt nodes ARE operator nodes.
         name = Var()
-        sols = _solutions("OpName", "Mid(X) <- (1 < X < 10)\n", name, module=matchers)
+        sols = _solutions("op_name", "mid(X) <- (1 < X < 10)\n", name, module=matchers)
         names = [n for (n,) in sols]
         assert mint("CompareChain") not in names
         assert names == [mint("Lt"), mint("Lt")]
@@ -197,7 +197,7 @@ class TestConstruct:
     def test_builds_a_gt_node(self, matchers):
         new = Var()
         nodes = []
-        for _ in call("BuildGt", new, 3, 4, module=matchers):
+        for _ in call("build_gt", new, 3, 4, module=matchers):
             nodes.append(deref(new))  # capture before backtracking undoes it
         assert len(nodes) == 1
         node = nodes[0]
@@ -206,22 +206,22 @@ class TestConstruct:
 
     def test_unknown_class_name_fails_cleanly(self, matchers):
         new = Var()
-        sols = list(call("BuildBogus", new, module=matchers))
+        sols = list(call("build_bogus", new, module=matchers))
         assert sols == []
 
     def test_wrong_arity_operand_list_fails_cleanly(self, matchers):
         new = Var()
         # Gt is binary; a one-element operand list cannot build it
-        assert list(call("BuildNode", new, mint("Gt"), [1], module=matchers)) == []
+        assert list(call("build_node", new, mint("Gt"), [1], module=matchers)) == []
 
     def test_non_list_operands_fail_cleanly(self, matchers):
         new = Var()
-        assert list(call("BuildNode", new, mint("Gt"), 5, module=matchers)) == []
+        assert list(call("build_node", new, mint("Gt"), 5, module=matchers)) == []
 
     def test_builds_a_unary_node(self, matchers):
         new = Var()
         rendered = []
-        for _ in call("BuildNode", new, mint("Negate"), [5], module=matchers):
+        for _ in call("build_node", new, mint("Negate"), [5], module=matchers):
             node = deref(new)
             assert isinstance(node, simple_ast.Negate)
             assert node.operand == 5
@@ -234,7 +234,7 @@ class TestConstruct:
         # case, tracked separately).
         new, v = Var(), Var()
         rendered = []
-        for _ in call("BuildBound", new, v, module=matchers):
+        for _ in call("build_bound", new, v, module=matchers):
             rendered.append(R.render_source(deref(new)))
         assert rendered == ["-5"]
 
@@ -243,7 +243,7 @@ class TestConstruct:
         # renderer dereferences it (see the renderer-deref follow-up).
         new = Var()
         rendered = []
-        for _ in call("BuildLate", new, module=matchers):
+        for _ in call("build_late", new, module=matchers):
             rendered.append(R.render_source(deref(new)))
         assert rendered == ["5 > 1"]
 
@@ -269,7 +269,7 @@ class TestConstruct:
 
         new = Var()
         sources = []
-        for _ in call("BuildGt", new, 1, 2, module=matchers):
+        for _ in call("build_gt", new, 1, 2, module=matchers):
             sources.append(R.render_source(deref(new)))  # render before backtracking
         assert sources == ["1 > 2"]
         # re-reifies to a Gt of the same operands
@@ -284,7 +284,7 @@ class TestOperatorSwap:
         over the very same operands, entirely in Clausal."""
         new = Var()
         rendered = []
-        for _ in call("SwapGtEtoGt", "Small(X) <- (X >= 1)\n", new, module=matchers):
+        for _ in call("swap_gt_eto_gt", "small(X) <- (X >= 1)\n", new, module=matchers):
             node = deref(new)
             assert isinstance(node, simple_ast.Gt)
             rendered.append(R.render_source(node))

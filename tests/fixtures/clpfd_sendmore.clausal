@@ -1,4 +1,4 @@
-Sendmoney(S, E, N, D, M, O, R, Y) <- (
+sendmoney(S, E, N, D, M, O, R, Y) <- (
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
     S != 0,
@@ -13,11 +13,11 @@ Sendmoney(S, E, N, D, M, O, R, Y) <- (
 )
 
 test("SEND+MORE=MONEY solution is 9567+1085=10652") <- (
-    Sendmoney(9, 5, 6, 7, 1, 0, 8, 2)
+    sendmoney(9, 5, 6, 7, 1, 0, 8, 2)
 )  # nv
 
 test("SEND+MORE=MONEY has exactly one solution") <- (
-    findall([S, E, N, D, M, O, R, Y], Sendmoney(S, E, N, D, M, O, R, Y), SOLUTIONS),
+    findall([S, E, N, D, M, O, R, Y], sendmoney(S, E, N, D, M, O, R, Y), SOLUTIONS),
     length(SOLUTIONS, 1)
 )  # nv
 

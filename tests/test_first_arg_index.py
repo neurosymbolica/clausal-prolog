@@ -122,7 +122,7 @@ class TestExtractFirstArgKey:
         assert _extract_first_arg_key(c, 1) is None
 
     def test_atom_reference_key_from_unify(self):
-        """A keyword-atom fact (``Color(C=Red)``) compiles to a Var head with a
+        """A keyword-atom fact (``color(C=Red)``) compiles to a Var head with a
         ``Unify(field_var, LoadName('Red'))`` body.  When ``Red`` resolves (via
         the threaded compile-time *env*) to a ``PredicateMeta`` atom, the
         extracted key must be the 0-arity atom key ``('Red', 0)`` — matching
@@ -140,11 +140,11 @@ class TestExtractFirstArgKey:
         """
         # nv — regression for map_coloring private-atom-fact indexing bug
         from clausal.terms import LoadName
-        red = make_predicate("Red", [])
+        red = make_predicate("red", [])
         v = Var()
-        c = Clause(head=Compound("Color", (v,)),
-                   body=[Unify(left=v, right=LoadName(name="Red"))])
-        assert _extract_first_arg_key(c, 1, env={"Red": red}) == ("Red", 0)
+        c = Clause(head=Compound("color", (v,)),
+                   body=[Unify(left=v, right=LoadName(name="red"))])
+        assert _extract_first_arg_key(c, 1, env={"red": red}) == ("red", 0)
 
     def test_atom_reference_key_from_unify_unresolvable_without_env(self):
         """Without a compile-time *env* (or when the name isn't in it), the
@@ -156,8 +156,8 @@ class TestExtractFirstArgKey:
         """
         from clausal.terms import LoadName
         v = Var()
-        c = Clause(head=Compound("Color", (v,)),
-                   body=[Unify(left=v, right=LoadName(name="Red"))])
+        c = Clause(head=Compound("color", (v,)),
+                   body=[Unify(left=v, right=LoadName(name="red"))])
         assert _extract_first_arg_key(c, 1) is _INDEX_VAR
         assert _extract_first_arg_key(c, 1, env=None) is _INDEX_VAR
         assert _extract_first_arg_key(c, 1, env={}) is _INDEX_VAR
@@ -271,14 +271,14 @@ class TestCellIndexKey:
         """
         from clausal.logic.compiler.arg_index import _runtime_arg_key, _INDEX_VAR
         v = Var()
-        assert _runtime_arg_key(("Wrap", v)) is _INDEX_VAR
+        assert _runtime_arg_key(("wrap", v)) is _INDEX_VAR
         # Nested one level deeper: the Var is inside an inner cell.
-        assert _runtime_arg_key(("Item", "r", ("Met", v), "d")) is _INDEX_VAR
+        assert _runtime_arg_key(("item", "r", ("met", v), "d")) is _INDEX_VAR
         # P3-3 Task 4 fold-in: the class-instance (``is_term_instance``)
         # analog of this gap, parked at P3-2 fix round 1 and wired here --
         # the repro from
         # todo/done/first-arg-index-partially-ground-instance-keys-into-bucket-2026-09-05.md.
-        Wrap = make_predicate("Wrap", ["sub"])
+        Wrap = make_predicate("wrap", ["sub"])
         assert _runtime_arg_key(Wrap(sub=Var())) is _INDEX_VAR
 
     def test_a_fully_ground_cell_still_keys_normally(self):
@@ -286,14 +286,14 @@ class TestCellIndexKey:
         anywhere inside it must still key normally -- the deep-groundness
         gate must not degrade the common case to an unindexed scan."""
         from clausal.logic.compiler.arg_index import _runtime_arg_key
-        assert _runtime_arg_key(("Wrap", "direct")) == ("Wrap", 1)
-        assert _runtime_arg_key(("Item", "r", ("Met", "direct"), "d")) == ("Item", 3)
-        Wrap = make_predicate("Wrap", ["sub"])
-        assert _runtime_arg_key(Wrap(sub="direct")) == ("Wrap", 1)
+        assert _runtime_arg_key(("wrap", "direct")) == ("wrap", 1)
+        assert _runtime_arg_key(("item", "r", ("met", "direct"), "d")) == ("item", 3)
+        Wrap = make_predicate("wrap", ["sub"])
+        assert _runtime_arg_key(Wrap(sub="direct")) == ("wrap", 1)
         # ... and the gate is opt-out, exactly as it is for a cell: a
         # predicate/position whose lifted arms carry no literal sub-value
         # passes ``deep_gate=False`` and keeps the O(1) key.
-        assert _runtime_arg_key(Wrap(sub=Var()), deep_gate=False) == ("Wrap", 1)
+        assert _runtime_arg_key(Wrap(sub=Var()), deep_gate=False) == ("wrap", 1)
 
 
 class TestImportedAtomIndexKey:
@@ -521,7 +521,7 @@ class TestGroundnessWalkCompleteness:
         NON-tabled predicate that recurses over a cons-cell chain carried
         in its OWN indexed (position-0) argument
         (tests/fixtures/gate_microbench.clausal, also used by the
-        fix-round-1 bench transcript, task4-bench.txt).  Correctness (the
+        fix-round-1 bench transcript, task4-bench.txt).  correctness (the
         depth comes back right) and boundedness (it completes quickly for
         a chain far deeper than the walk's node budget) in one test.
         """
@@ -546,7 +546,7 @@ class TestGroundnessWalkCompleteness:
         chain = build_chain(depth)
         N = Var()
         t0 = time.perf_counter()
-        got = [deref(N) for _t in call("Depth", chain, N, module=lm)]
+        got = [deref(N) for _t in call("depth", chain, N, module=lm)]
         elapsed = time.perf_counter() - t0
         assert got == [depth], got
         # Generous bound (this runs in ~0.01-0.1s on ordinary hardware) --
@@ -593,42 +593,42 @@ class TestDeepGateFlagComputation:
             _lifted_head_arg_needs_deep_gate,
         )
         from clausal.terms import LoadName, LoadAttr
-        assert _lifted_head_arg_needs_deep_gate(LoadName(name="Pad1")) is False
+        assert _lifted_head_arg_needs_deep_gate(LoadName(name="pad1")) is False
         assert _lifted_head_arg_needs_deep_gate(
             LoadAttr(object=LoadName(name="m"), attr="atom")
         ) is False
 
     def test_a_fresh_var_cell_needs_no_gate(self):
-        """``Wrap(SUB)`` with SUB a genuine fresh Var in the clause --
+        """``wrap(SUB)`` with SUB a genuine fresh Var in the clause --
         the compiled pattern captures SUB, it does not compare it -- no
         literal anywhere below the functor tag."""
         from clausal.logic.compiler.list_dispatch import (
             _lifted_head_arg_needs_deep_gate,
         )
-        assert _lifted_head_arg_needs_deep_gate(("Wrap", Var())) is False
+        assert _lifted_head_arg_needs_deep_gate(("wrap", Var())) is False
 
     def test_a_ground_cell_needs_the_gate(self):
-        """``Wrap(direct)`` -- a real value below the functor tag compiles
+        """``wrap(direct)`` -- a real value below the functor tag compiles
         to a MatchValue: the exact hazard this round exists for."""
         from clausal.logic.compiler.list_dispatch import (
             _lifted_head_arg_needs_deep_gate,
         )
-        assert _lifted_head_arg_needs_deep_gate(("Wrap", "direct")) is True
+        assert _lifted_head_arg_needs_deep_gate(("wrap", "direct")) is True
 
     def test_call_loadname_fresh_var_arg_needs_no_gate(self):
         """The source-shaped compound reference (``Call(LoadName, args)``)
         with a fresh-Var argument -- the shape a genuine
-        ``Wrap(SUB)`` compiles to before any resolution."""
+        ``wrap(SUB)`` compiles to before any resolution."""
         from clausal.logic.compiler.list_dispatch import (
             _lifted_head_arg_needs_deep_gate,
         )
         from clausal.terms import Call, LoadName
         v = Var()
-        term = Call(func=LoadName(name="Wrap"), args=[v], kwargs=[])
+        term = Call(func=LoadName(name="wrap"), args=[v], kwargs=[])
         assert _lifted_head_arg_needs_deep_gate(term) is False
 
     def test_call_loadname_atom_arg_needs_the_gate(self):
-        """``Wrap(direct)`` in its PRE-resolution ``Call(LoadName)`` shape
+        """``wrap(direct)`` in its PRE-resolution ``Call(LoadName)`` shape
         -- ``direct`` is a nested bare atom reference, which DOES count
         as a literal once it is not the whole indexed value itself (the
         asymmetry ``test_a_bare_atom_needs_no_gate`` pins at the top
@@ -638,7 +638,7 @@ class TestDeepGateFlagComputation:
         )
         from clausal.terms import Call, LoadName
         term = Call(
-            func=LoadName(name="Wrap"),
+            func=LoadName(name="wrap"),
             args=[LoadName(name="direct")], kwargs=[],
         )
         assert _lifted_head_arg_needs_deep_gate(term) is True
@@ -671,7 +671,7 @@ class TestDeepGateFlagComputation:
             _lifted_head_arg_needs_deep_gate,
         )
         from clausal.logic.predicate import make_predicate
-        Wrap = make_predicate("Wrap", ["sub"])
+        Wrap = make_predicate("wrap", ["sub"])
         assert _lifted_head_arg_needs_deep_gate(Wrap(sub=1)) is True
         assert _lifted_head_arg_needs_deep_gate(Wrap(sub=Var())) is False
 
@@ -727,25 +727,25 @@ class TestDeepGateWiredThroughCompiler:
         from clausal.terms import Call, LoadName
 
         db = Database()
-        for name in ("Pad1", "Pad2", "Pad3"):
+        for name in ("pad1", "pad2", "pad3"):
             db.assertz(Clause(
-                head=Compound("Depth", (Call(func=LoadName(name=name), args=[], kwargs=[]), 0)),
+                head=Compound("depth", (Call(func=LoadName(name=name), args=[], kwargs=[]), 0)),
                 body=[True],
             ))
-        db.assertz(Clause(head=Compound("Depth", ("nil", 0)), body=[True]))
+        db.assertz(Clause(head=Compound("depth", ("nil", 0)), body=[True]))
         h, t, n1 = Var(), Var(), Var()
         db.assertz(Clause(
-            head=Compound("Depth", (("cons", h, t), Var())),
+            head=Compound("depth", (("cons", h, t), Var())),
             body=[Unify(left=Var(), right=n1)],
         ))
-        plans = self._plans_for("Depth", 2, db)
+        plans = self._plans_for("depth", 2, db)
         pos0_plans = [pl for pl in plans if pl[0] == 0]
         assert pos0_plans, plans
         for pos, idx_dict, dflt_fn, deep_gate in pos0_plans:
             assert deep_gate is False, (pos, deep_gate)
 
     def test_lifted_literal_cell_position_flags_on(self):
-        """The Tagged/2 shape (a ground-atom cell fact) built directly:
+        """The tagged/2 shape (a ground-atom cell fact) built directly:
         one bucket's lifted clause carries a real value below its functor
         tag -- the compiled plan's flag must be True."""
         from clausal.logic.database import Clause, Database
@@ -754,7 +754,7 @@ class TestDeepGateWiredThroughCompiler:
         for i in range(3):
             db.assertz(Clause(head=Compound("Boxed", (i, "pad")), body=[True]))
         db.assertz(Clause(
-            head=Compound("Boxed", (("Wrap", "direct"), "boxed")),
+            head=Compound("Boxed", (("wrap", "direct"), "boxed")),
             body=[True],
         ))
         plans = self._plans_for("Boxed", 2, db)
@@ -770,7 +770,7 @@ class TestDeepGateWiredThroughCompiler:
         from clausal.logic.database import Clause, Database
         from clausal.logic.predicate import make_predicate
 
-        Wrap = make_predicate("Wrap", ["sub"])
+        Wrap = make_predicate("wrap", ["sub"])
         db = Database()
         for i in range(3):
             db.assertz(Clause(head=Compound("Boxed2", (i, "pad")), body=[True]))
@@ -798,8 +798,8 @@ class TestLiftClauseAtPos:
         from clausal.terms import LoadName
         from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
         v = Var()
-        c = Clause(head=Compound("Color", (v,)),
-                   body=[Unify(left=v, right=LoadName(name="Red"))])
+        c = Clause(head=Compound("color", (v,)),
+                   body=[Unify(left=v, right=LoadName(name="red"))])
         lifted = _lift_clause_at_pos(c, 0)
         # Unchanged: head still a Var, body Unify retained.
         assert lifted.head.args[0] is v
@@ -984,7 +984,7 @@ class TestIndexedDispatchSimple:
         assert results == []
 
     def test_mixed_var_and_specific(self):
-        """Default (var-headed) clauses interleave with specific clauses."""
+        """default (var-headed) clauses interleave with specific clauses."""
         # clauses: f(1, a), f(X, b), f(2, c), f(3, d), f(X, e)
         # All ground values normalized to Var+Unify for output-mode queries.
         # nv
@@ -1301,7 +1301,7 @@ class TestEdgeCases:
 
 
 class TestAtomInListHead:
-    """Atoms (zero-arity PredicateMeta classes) appearing inside a list
+    """atoms (zero-arity PredicateMeta classes) appearing inside a list
     pattern in the clause head — regression for the indexer-driven bucket
     compile that emitted the atom class into an ``ast.Constant`` node and
     triggered ``TypeError: got an invalid type in Constant: PredicateMeta``.
@@ -1412,7 +1412,7 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
         for i, val in zip((1, 2, 3, 4), (100, 200, 300, 400)):
             n_var, l_var = Var(), Var()
             wrap_call = Call(
-                func=LoadName(name="Wrap"),
+                func=LoadName(name="wrap"),
                 args=(LoadName(name=f"c.CONST{i}"),),
                 kwargs=(),
             )
@@ -1425,8 +1425,8 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
             ))
 
         globals_ = {f"c.CONST{i}": v for i, v in zip((1, 2, 3, 4), (100, 200, 300, 400))}
-        globals_["Wrap"] = "Wrap"
-        globals_[FUNCTOR_SIGNATURES_KEY] = {"Wrap": ("x",)}
+        globals_["wrap"] = "wrap"
+        globals_[FUNCTOR_SIGNATURES_KEY] = {"wrap": ("x",)}
 
         fn = compile_predicate_trampoline("level", 2, clauses, None, globals_=globals_)
 
@@ -1434,7 +1434,7 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
         # index (4 distinct int keys) over position-1's single-key cell
         # bucket, so the broken nested pattern is never exercised here --
         # this direction is (and must stay) correct.
-        results = _trampoline_solutions(fn, [3, ("Wrap", 300)])
+        results = _trampoline_solutions(fn, [3, ("wrap", 300)])
         assert len(results) == 1
 
         # Position 0 unbound: no info there, so dispatch is forced through
@@ -1442,7 +1442,7 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
         # CURRENT (broken) behavior: 0 solutions. Correct behavior (once
         # the todo's fix lands) would be 1, binding the Var to 3.
         v = Var()
-        results = _trampoline_solutions(fn, [v, ("Wrap", 300)])
+        results = _trampoline_solutions(fn, [v, ("wrap", 300)])
         assert results == [], (
             "if this now finds a solution, the head_match non-str gap "
             "(todo/imported-non-atom-constant-head-args-unreachable-"
@@ -1474,7 +1474,7 @@ class TestCellAtomHeadReference:
         for i, colour in enumerate(colours, start=1):
             n_var, l_var = Var(), Var()
             wrap_call = Call(
-                func=LoadName(name="Wrap"),
+                func=LoadName(name="wrap"),
                 args=(LoadName(name=colour),),
                 kwargs=(),
             )
@@ -1486,7 +1486,7 @@ class TestCellAtomHeadReference:
                 ],
             ))
         globals_ = {c: binding_of(c) for c in colours}
-        globals_["Wrap"] = "Wrap"
+        globals_["wrap"] = "wrap"
         return clauses, globals_
 
     def test_nested_cell_atom_reference_matches_when_position_forced(self):
@@ -1494,19 +1494,19 @@ class TestCellAtomHeadReference:
 
         # The Stage B binding shape for a declared atom: the arity-0 cell.
         clauses, globals_ = self._clauses_and_globals(lambda c: (c,))
-        globals_[FUNCTOR_SIGNATURES_KEY] = {"Wrap": ("x",)}
+        globals_[FUNCTOR_SIGNATURES_KEY] = {"wrap": ("x",)}
         fn = compile_predicate_trampoline(
             "level", 2, clauses, None, globals_=globals_)
 
         # Position 0 unbound: dispatch is forced through position 1's cell
         # bucket, so the nested-reference pattern is what decides the match.
         v = Var()
-        results = _trampoline_solutions(fn, [v, ("Wrap", ("blue",))])
-        assert results == [(3, ("Wrap", ("blue",)))]
+        results = _trampoline_solutions(fn, [v, ("wrap", ("blue",))])
+        assert results == [(3, ("wrap", ("blue",)))]
 
         # A cell atom no clause carries still fails.
         v = Var()
-        assert _trampoline_solutions(fn, [v, ("Wrap", ("teal",))]) == []
+        assert _trampoline_solutions(fn, [v, ("wrap", ("teal",))]) == []
 
     def test_nested_str_atom_reference_still_matches(self):
         """Stage A additivity: today's ``str`` atom binding keeps taking the
@@ -1514,15 +1514,15 @@ class TestCellAtomHeadReference:
         from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
 
         clauses, globals_ = self._clauses_and_globals(lambda c: c)
-        globals_[FUNCTOR_SIGNATURES_KEY] = {"Wrap": ("x",)}
+        globals_[FUNCTOR_SIGNATURES_KEY] = {"wrap": ("x",)}
         fn = compile_predicate_trampoline(
             "level", 2, clauses, None, globals_=globals_)
 
         v = Var()
-        results = _trampoline_solutions(fn, [v, ("Wrap", "blue")])
-        assert results == [(3, ("Wrap", "blue"))]
+        results = _trampoline_solutions(fn, [v, ("wrap", "blue")])
+        assert results == [(3, ("wrap", "blue"))]
 
         # ... and the CELL shape must NOT match a str-atom clause (Stage A
         # keeps ``("blue",)`` and ``"blue"`` distinct — spec §6.2).
         v = Var()
-        assert _trampoline_solutions(fn, [v, ("Wrap", ("blue",))]) == []
+        assert _trampoline_solutions(fn, [v, ("wrap", ("blue",))]) == []

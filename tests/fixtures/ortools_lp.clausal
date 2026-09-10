@@ -20,7 +20,7 @@ test("glop minimize 3x+5y s.t. x+y>=10") <- (
     VAL > 29.9, VAL < 30.1
 )  # nv
 
-Diet(BREAD, MILK, COST) <- (
+diet(BREAD, MILK, COST) <- (
     ortools.lp.var(BREAD, 0.0, 10.0),
     ortools.lp.var(MILK, 0.0, 10.0),
     ortools.glop((
@@ -31,10 +31,10 @@ Diet(BREAD, MILK, COST) <- (
     ortools.lp.solve([BREAD, MILK])
 )
 
-test("diet problem has a solution") <- Diet(BREAD_UNUSED, MILK_UNUSED, COST_UNUSED)  # nv
+test("diet problem has a solution") <- diet(BREAD_UNUSED, MILK_UNUSED, COST_UNUSED)  # nv
 
 test("diet problem cost is non-negative") <- (
-    Diet(BREAD_UNUSED, MILK_UNUSED, COST),
+    diet(BREAD_UNUSED, MILK_UNUSED, COST),
     COST >= 0
 )  # nv
 

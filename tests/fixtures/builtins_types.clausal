@@ -5,35 +5,35 @@
 # float_/1 is now registered as float_/1
 
 # var/1, nonvar/1
-CheckVar(X) <- var(X)
-CheckNonvar(X) <- nonvar(X)
+check_var(X) <- var(X)
+check_nonvar(X) <- nonvar(X)
 
 # is_str/1, number/1, integer/1
-CheckAtom(X) <- is_str(X)
-CheckNumber(X) <- number(X)
-CheckInteger(X) <- integer(X)
-CheckString(X) <- is_str(X)
+check_atom(X) <- is_str(X)
+check_number(X) <- number(X)
+check_integer(X) <- integer(X)
+check_string(X) <- is_str(X)
 
 # compound/1, callable_/1, is_list/1, ground/1
-CheckCompound(X) <- compound(X)
-CheckCallable(X) <- callable_(X)
-CheckList(X) <- is_list(X)
-CheckGround(X) <- ground(X)
+check_compound(X) <- compound(X)
+check_callable(X) <- callable_(X)
+check_list(X) <- is_list(X)
+check_ground(X) <- ground(X)
 
-# Classify/2: produce a type tag for a bound value
-Classify(X, "integer") <- integer(X)
-Classify(X, "atom") <- is_str(X)
-Classify(X, "list") <- is_list(X)
-Classify(X, "compound") <- compound(X)
+# classify/2: produce a type tag for a bound value
+classify(X, "integer") <- integer(X)
+classify(X, "atom") <- is_str(X)
+classify(X, "list") <- is_list(X)
+classify(X, "compound") <- compound(X)
 
 
-test("is var") <- CheckVar(X_UNUSED)  # nv
-test("is bound") <- CheckNonvar(42)  # nv
-test("is atom") <- CheckAtom("hello")  # nv
-test("is number") <- CheckNumber(42)  # nv
-test("is integer") <- CheckInteger(5)  # nv
-test("is list") <- CheckList([1, 2, 3])  # nv
-test("is ground") <- CheckGround(42)  # nv
-test("classify integer") <- Classify(42, "integer")  # nv
-test("classify atom") <- Classify("hi", "atom")  # nv
-test("classify list") <- Classify([1, 2], "list")  # nv
+test("is var") <- check_var(X_UNUSED)  # nv
+test("is bound") <- check_nonvar(42)  # nv
+test("is atom") <- check_atom("hello")  # nv
+test("is number") <- check_number(42)  # nv
+test("is integer") <- check_integer(5)  # nv
+test("is list") <- check_list([1, 2, 3])  # nv
+test("is ground") <- check_ground(42)  # nv
+test("classify integer") <- classify(42, "integer")  # nv
+test("classify atom") <- classify("hi", "atom")  # nv
+test("classify list") <- classify([1, 2], "list")  # nv

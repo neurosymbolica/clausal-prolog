@@ -488,7 +488,7 @@ class TestTabledFib:
         m = _load("tabled_fib")
         F = Var()
         results = []
-        for trail in call("Fib", 10, F, module=_module(m)):
+        for trail in call("fib", 10, F, module=_module(m)):
             results.append(deref(F))
         assert results == [55]
 
@@ -497,7 +497,7 @@ class TestTabledFib:
         m = _load("tabled_fib")
         F = Var()
         results = []
-        for trail in call("Fib", 0, F, module=_module(m)):
+        for trail in call("fib", 0, F, module=_module(m)):
             results.append(deref(F))
         assert results == [0]
 
@@ -506,7 +506,7 @@ class TestTabledFib:
         m = _load("tabled_fib")
         F = Var()
         results = []
-        for trail in call("Fib", 1, F, module=_module(m)):
+        for trail in call("fib", 1, F, module=_module(m)):
             results.append(deref(F))
         assert results == [1]
 
@@ -518,28 +518,28 @@ class TestTabledFib:
 
         # First query
         F = Var()
-        list(call("Fib", 5, F, module=_module(m)))
+        list(call("fib", 5, F, module=_module(m)))
         assert len(db.table_store) > 0
 
         # Second query should hit cache
         F2 = Var()
         results = []
-        for trail in call("Fib", 5, F2, module=_module(m)):
+        for trail in call("fib", 5, F2, module=_module(m)):
             results.append(deref(F2))
         assert results == [5]
 
     def test_fib_ground_query_success(self):
-        """Fib(5, 5) should succeed."""
+        """fib(5, 5) should succeed."""
         # nv
         m = _load("tabled_fib")
-        results = list(call("Fib", 5, 5, module=_module(m)))
+        results = list(call("fib", 5, 5, module=_module(m)))
         assert len(results) == 1
 
     def test_fib_ground_query_failure(self):
-        """Fib(5, 6) should fail (5 != 6)."""
+        """fib(5, 6) should fail (5 != 6)."""
         # nv
         m = _load("tabled_fib")
-        results = list(call("Fib", 5, 6, module=_module(m)))
+        results = list(call("fib", 5, 6, module=_module(m)))
         assert len(results) == 0
 
 
@@ -571,18 +571,18 @@ class TestStructTabling:
         m = _load("struct_tabling")
         L = Var()
         results = []
-        for trail in call("Nats", 0, L, module=_module(m)):
+        for trail in call("nats", 0, L, module=_module(m)):
             results.append(deref(L))
             break
         assert results == [m.nil]
 
     def test_nats_chain_shape(self):
-        """Nats(3, L) builds cons(3, cons(2, cons(1, nil))) -- one answer."""
+        """nats(3, L) builds cons(3, cons(2, cons(1, nil))) -- one answer."""
         # nv
         m = _load("struct_tabling")
         L = Var()
         results = []
-        for trail in call("Nats", 3, L, module=_module(m)):
+        for trail in call("nats", 3, L, module=_module(m)):
             results.append(deref(L))
             break
         node = results[0]
@@ -595,7 +595,7 @@ class TestStructTabling:
         assert values == [3, 2, 1]
 
     def test_nats_open_query_determinism(self):
-        """Nats/2 is functionally deterministic: an OPEN query (L unbound)
+        """nats/2 is functionally deterministic: an OPEN query (L unbound)
         drained to exhaustion (no break) must yield exactly one solution.
         This is the property bench_struct_tabling's break-after-first shape
         relies on. test_nats_chain_shape's break-based check can't assert
@@ -607,7 +607,7 @@ class TestStructTabling:
         # nv
         m = _load("struct_tabling")
         L = Var()
-        results = list(call("Nats", 3, L, module=_module(m)))
+        results = list(call("nats", 3, L, module=_module(m)))
         assert len(results) == 1
 
     def test_nats_break_drops_table(self):
@@ -621,7 +621,7 @@ class TestStructTabling:
         m = _load("struct_tabling")
         db = _module(m).db
         L = Var()
-        for trail in call("Nats", 5, L, module=_module(m)):
+        for trail in call("nats", 5, L, module=_module(m)):
             deref(L)
             break
         assert len(db.table_store) == 0
@@ -636,12 +636,12 @@ class TestStructTabling:
         db = _module(m).db
 
         L = Var()
-        list(call("Nats", 5, L, module=_module(m)))
+        list(call("nats", 5, L, module=_module(m)))
         assert len(db.table_store) > 0
 
         L2 = Var()
         results = []
-        for trail in call("Nats", 5, L2, module=_module(m)):
+        for trail in call("nats", 5, L2, module=_module(m)):
             results.append(deref(L2))
             break
         assert len(results) == 1
@@ -654,21 +654,21 @@ class TestStructTabling:
         assert length == 5
 
     def test_nats_ground_query_success(self):
-        """Nats(3, cons(3, cons(2, cons(1, nil)))) should succeed."""
+        """nats(3, cons(3, cons(2, cons(1, nil)))) should succeed."""
         # nv
         m = _load("struct_tabling")
         # R6: the caller hands in the CELL chain the module's clauses build.
         chain = ("cons", 3, ("cons", 2, ("cons", 1, m.nil)))
-        results = list(call("Nats", 3, chain, module=_module(m)))
+        results = list(call("nats", 3, chain, module=_module(m)))
         assert len(results) == 1
 
     def test_nats_ground_query_failure(self):
-        """Nats(3, cons(99, ...)) should fail (wrong head value)."""
+        """nats(3, cons(99, ...)) should fail (wrong head value)."""
         # nv
         m = _load("struct_tabling")
         # R6: cell chain, as in the success twin above.
         chain = ("cons", 99, ("cons", 2, ("cons", 1, m.nil)))
-        results = list(call("Nats", 3, chain, module=_module(m)))
+        results = list(call("nats", 3, chain, module=_module(m)))
         assert len(results) == 0
 
 
@@ -682,7 +682,7 @@ class TestTabledPath:
         m = _load("tabled_path")
         X = Var()
         results = set()
-        for trail in call("Path", 1, X, module=_module(m)):
+        for trail in call("path", 1, X, module=_module(m)):
             results.add(deref(X))
         # From 1: can reach 2, 3, and 1 (via cycle)
         assert results == {1, 2, 3}
@@ -693,7 +693,7 @@ class TestTabledPath:
         m = _load("tabled_path")
         X, Y = Var(), Var()
         results = set()
-        for trail in call("Path", X, Y, module=_module(m)):
+        for trail in call("path", X, Y, module=_module(m)):
             results.add((deref(X), deref(Y)))
         expected = {(a, b) for a in [1, 2, 3] for b in [1, 2, 3]}
         assert results == expected
@@ -703,7 +703,7 @@ class TestTabledPath:
         m = _load("tabled_path")
         X = Var()
         results = set()
-        for trail in call("Path", 2, X, module=_module(m)):
+        for trail in call("path", 2, X, module=_module(m)):
             results.add(deref(X))
         assert results == {1, 2, 3}
 
@@ -712,21 +712,21 @@ class TestTabledPath:
         m = _load("tabled_path")
         X = Var()
         results = set()
-        for trail in call("Path", 3, X, module=_module(m)):
+        for trail in call("path", 3, X, module=_module(m)):
             results.add(deref(X))
         assert results == {1, 2, 3}
 
     def test_path_ground_true(self):
         # nv
         m = _load("tabled_path")
-        results = list(call("Path", 1, 3, module=_module(m)))
+        results = list(call("path", 1, 3, module=_module(m)))
         assert len(results) >= 1
 
     def test_path_ground_self(self):
         """path(1, 1) should succeed via the cycle."""
         # nv
         m = _load("tabled_path")
-        results = list(call("Path", 1, 1, module=_module(m)))
+        results = list(call("path", 1, 1, module=_module(m)))
         assert len(results) >= 1
 
     def test_table_entry_complete_after_query(self):
@@ -735,7 +735,7 @@ class TestTabledPath:
         m = _load("tabled_path")
         db = _module(m).db
         X = Var()
-        list(call("Path", 1, X, module=_module(m)))
+        list(call("path", 1, X, module=_module(m)))
         for entry in db.table_store.values():
             assert entry.status == "complete"
 
@@ -802,21 +802,21 @@ class TestImportHookTabling:
         # nv
         m = _load("tabled_fib")
         db = _module(m).db
-        assert db.is_tabled("Fib", 2)
+        assert db.is_tabled("fib", 2)
 
     def test_tabled_predicate_wrapped(self):
         # nv
         m = _load("tabled_path")
         db = _module(m).db
-        assert db.is_tabled("Path", 2)
-        assert not db.is_tabled("Edge", 2)
+        assert db.is_tabled("path", 2)
+        assert not db.is_tabled("edge", 2)
 
     def test_non_tabled_predicate_still_works(self):
         # nv
         m = _load("tabled_path")
         X = Var()
         results = []
-        for trail in call("Edge", 1, X, module=_module(m)):
+        for trail in call("edge", 1, X, module=_module(m)):
             results.append(deref(X))
         assert sorted(results) == [2]
 
@@ -832,7 +832,7 @@ class TestAbolishTable:
         db = _module(m).db
 
         F = Var()
-        list(call("Fib", 5, F, module=_module(m)))
+        list(call("fib", 5, F, module=_module(m)))
         assert len(db.table_store) > 0
 
         db.abolish_all_tables()
@@ -840,7 +840,7 @@ class TestAbolishTable:
 
         F2 = Var()
         results = []
-        for trail in call("Fib", 5, F2, module=_module(m)):
+        for trail in call("fib", 5, F2, module=_module(m)):
             results.append(deref(F2))
         assert results == [5]
         assert len(db.table_store) > 0
@@ -854,39 +854,39 @@ class TestMultipleTabled:
         # nv
         fixture = os.path.join(FIXTURES, "_test_multi_tabled.clausal")
         with open(fixture, "w") as f:
-            f.write("""-table(Anc/2)
--table(Desc/2)
+            f.write("""-table(anc/2)
+-table(desc/2)
 
-Parent(1, 2),
-Parent(2, 3),
-Parent(3, 4),
+parent(1, 2),
+parent(2, 3),
+parent(3, 4),
 
-Anc(X, Y) <- Parent(X, Y)
-Anc(X, Y) <- (
-    Parent(X, Z),
-    Anc(Z, Y)
+anc(X, Y) <- parent(X, Y)
+anc(X, Y) <- (
+    parent(X, Z),
+    anc(Z, Y)
 )
 
-Desc(X, Y) <- Anc(Y, X)
+desc(X, Y) <- anc(Y, X)
 """)
         try:
             from clausal.import_hook import _load_module
             m = _load_module("_test_multi_tabled", fixture)
             lm = _module(m)
-            assert lm.db.is_tabled("Anc", 2)
-            assert lm.db.is_tabled("Desc", 2)
+            assert lm.db.is_tabled("anc", 2)
+            assert lm.db.is_tabled("desc", 2)
 
-            # Test Anc: ancestors of 1 are 2, 3, 4
+            # Test anc: ancestors of 1 are 2, 3, 4
             Y = Var()
             results = set()
-            for trail in call("Anc", 1, Y, module=lm):
+            for trail in call("anc", 1, Y, module=lm):
                 results.add(deref(Y))
             assert results == {2, 3, 4}
 
-            # Test Desc: descendants of 4 are 1, 2, 3
+            # Test desc: descendants of 4 are 1, 2, 3
             X = Var()
             results = set()
-            for trail in call("Desc", 4, X, module=lm):
+            for trail in call("desc", 4, X, module=lm):
                 results.add(deref(X))
             assert results == {1, 2, 3}
         finally:

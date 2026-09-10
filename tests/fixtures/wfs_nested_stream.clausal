@@ -1,7 +1,7 @@
--table(Aa/1)
--table(Bb/1)
--table(Cc/1)
+-table(aa/1)
+-table(bb/1)
+-table(cc/1)
 
-Cc(1) <- (not Cc(1))
-Bb(X) <- Cc(X)
-Aa(X) <- Bb(X)
+cc(1) <- (not cc(1))
+bb(X) <- cc(X)
+aa(X) <- bb(X)

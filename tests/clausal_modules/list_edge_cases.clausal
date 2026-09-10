@@ -1,37 +1,37 @@
 # Edge case predicates for list patterns Phases 1-4
 
 # Phase 1: [*ALL] — star captures everything
-CaptureAll([*ALL], ALL),
+capture_all([*ALL], ALL),
 
 # Phase 1: multiple fixed before star
-ThreeAndRest([A, B, C, *REST], A, B, C, REST),
+three_and_rest([A, B, C, *REST], A, B, C, REST),
 
 # Phase 1: fixed only, no star — exact length match
-ExactlyTwo([A, B], A, B),
+exactly_two([A, B], A, B),
 
 # Phase 1: empty list match
-IsEmpty([]),
+is_empty([]),
 
 # Phase 2: repeated var in multiple non-list positions
-AllSame(X, X, X),
+all_same(X, X, X),
 
-# Phase 2: repeated var fails when values differ — uses same predicate AllSame
+# Phase 2: repeated var fails when values differ — uses same predicate all_same
 
 # Phase 2: triple repeat across list and non-list
-HeadIs(X, [X, *_]),
+head_is(X, [X, *_]),
 
 # Phase 3: multiple _ in non-list positions
-IgnoreFirstTwo(_, _, X, X),
+ignore_first_two(_, _, X, X),
 
 # Phase 3: _ as star — [*_] matches any list
 is_list([*_]),
 
 # Phase 4: two fixed elements between two stars
-Bracket([*A, X, Y, *B], X, Y, A, B),
+bracket([*A, X, Y, *B], X, Y, A, B),
 
 # Phase 4: single star still works after multi-star additions (regression)
-HeadTail([HEAD, *TAIL], HEAD, TAIL),
+head_tail([HEAD, *TAIL], HEAD, TAIL),
 
 # Phase 2: palindrome-like — first and last same via repeated var
-Bookend([X, *_, X]),
-Bookend([X_UNUSED]),
+bookend([X, *_, X]),
+bookend([X_UNUSED]),

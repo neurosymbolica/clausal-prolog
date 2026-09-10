@@ -1,4 +1,5 @@
 -import_from(py.units, [
+    UnitsMismatch,
     bit, byte,
     kilobyte, megabyte, gigabyte, terabyte,
     kilobit, megabit, gigabit,
@@ -188,7 +189,7 @@ test("constraint rejects length for bit slot") <- (
 test("catch bit plus metre mismatch") <- (
     catch(
         ++(bit(1) + metre(1)),
-        UnitsMismatch(_),
+        ++UnitsMismatch,
         1 == 1
     )
 )  # nv

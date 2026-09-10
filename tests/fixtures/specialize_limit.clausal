@@ -1,34 +1,34 @@
-# Test fixture: specialize SolveLimit with natnum program.
+# Test fixture: specialize solve_limit with natnum program.
 
--import_from(clausal.examples.metainterpreters, [SolveLimit])
+-import_from(clausal.examples.metainterpreters, [solve_limit])
 
-NatnumProgram(PROGRAM) <- (
+natnum_program(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", X]], [["natnum", X]]]
     ]
 )
 
--specialize(SolveLimit, NatnumProgram, alias=SolveLimitNatnum)
+-specialize(solve_limit, natnum_program, alias=solve_limit_natnum)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 test("limit natnum(0) depth 1 ok") <- (
-    SolveLimitNatnum([["natnum", 0]], 1)
+    solve_limit_natnum([["natnum", 0]], 1)
 )  # nv
 
 test("limit natnum(s(0)) depth 1 fails") <- (
-    not SolveLimitNatnum([["natnum", ["s", 0]]], 1)
+    not solve_limit_natnum([["natnum", ["s", 0]]], 1)
 )  # nv
 
 test("limit natnum(s(0)) depth 2 ok") <- (
-    SolveLimitNatnum([["natnum", ["s", 0]]], 2)
+    solve_limit_natnum([["natnum", ["s", 0]]], 2)
 )  # nv
 
 test("limit natnum(s(s(0))) depth 2 fails") <- (
-    not SolveLimitNatnum([["natnum", ["s", ["s", 0]]]], 2)
+    not solve_limit_natnum([["natnum", ["s", ["s", 0]]]], 2)
 )  # nv
 
 test("limit natnum(s(s(0))) depth 3 ok") <- (
-    SolveLimitNatnum([["natnum", ["s", ["s", 0]]]], 3)
+    solve_limit_natnum([["natnum", ["s", ["s", 0]]]], 3)
 )  # nv

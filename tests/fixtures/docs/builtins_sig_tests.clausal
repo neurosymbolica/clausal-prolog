@@ -83,14 +83,14 @@ test("gensym exists") <- gensym('test_', _)  # nv
 
 # ── Runtime Database ─────────────────────────────────────────────────────────
 
--dynamic(DbFact/1)
+-dynamic(db_fact/1)
 
-DbFact("initial"),
+db_fact("initial"),
 
 test("assertz/retract exist") <- (
-    assertz(DbFact("added")),
-    DbFact("added"),
-    retract(DbFact("added"))
+    assertz(db_fact("added")),
+    db_fact("added"),
+    retract(db_fact("added"))
 )  # nv
 
 # ── Attributed Variables ─────────────────────────────────────────────────────

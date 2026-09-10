@@ -7,12 +7,12 @@ sequence.
 
 For a predicate like:
 
-    MyLen([], 0)
-    MyLen([_, *TAIL], N) <- (MyLen(TAIL, N1), eval_(N1 + 1, N))
+    my_len([], 0)
+    my_len([_, *TAIL], N) <- (my_len(TAIL, N1), eval_(N1 + 1, N))
 
 the generated code should look roughly like:
 
-    def MyLen__2(this_generator, _tramp_parent, arg0, arg1, trail):
+    def my_len__2(this_generator, _tramp_parent, arg0, arg1, trail):
         _d0 = deref(arg0)
         _d1 = deref(arg1)
         if isinstance(_d0, list):
@@ -46,8 +46,8 @@ FRAGILITY NOTES
 
 TestDeepIndexBehavioral
   • Tests load tests/fixtures/deep_index.clausal via load_clausal_module().
-    The fixture file defines MyLen, MyAppend, MyMember, MyLast, MyProduct,
-    MySumList, MyMax, MyNthOf, MyPrefix.  If those predicates are renamed or
+    The fixture file defines my_len, my_append, my_member, my_last, my_product,
+    my_sum_list, my_max, MyNthOf, my_prefix.  If those predicates are renamed or
     removed the corresponding tests must be updated.
   • Bindings are read INSIDE the for-loop over call() — deref() after list()
     would return unbound Vars since trail bindings are undone on exhaustion.
@@ -234,29 +234,29 @@ class TestDeepIndexBehavioral:
         # nv
         from clausal.logic.solve import call
         n = Var()
-        results = [deref(n) for _ in call("MyLen", [], n, module=lm)]
+        results = [deref(n) for _ in call("my_len", [], n, module=lm)]
         assert results == [0]
 
     def test_mylen_three(self, lm):
         # nv
         from clausal.logic.solve import call
         n = Var()
-        results = [deref(n) for _ in call("MyLen", [1, 2, 3], n, module=lm)]
+        results = [deref(n) for _ in call("my_len", [1, 2, 3], n, module=lm)]
         assert results == [3]
 
     def test_mylen_five(self, lm):
         # nv
         from clausal.logic.solve import call
         n = Var()
-        results = [deref(n) for _ in call("MyLen", [10, 20, 30, 40, 50], n, module=lm)]
+        results = [deref(n) for _ in call("my_len", [10, 20, 30, 40, 50], n, module=lm)]
         assert results == [5]
 
     def test_mylen_deterministic(self, lm):
-        """MyLen with ground list produces exactly one solution."""
+        """my_len with ground list produces exactly one solution."""
         # nv
         from clausal.logic.solve import call
         n = Var()
-        assert len(list(call("MyLen", [1, 2], n, module=lm))) == 1
+        assert len(list(call("my_len", [1, 2], n, module=lm))) == 1
 
     # ── MyAppend ───────────────────────────────────────────────────────────────
 
@@ -264,21 +264,21 @@ class TestDeepIndexBehavioral:
         # nv
         from clausal.logic.solve import call
         r = Var()
-        results = [deref(r) for _ in call("MyAppend", [], [1, 2], r, module=lm)]
+        results = [deref(r) for _ in call("my_append", [], [1, 2], r, module=lm)]
         assert results == [[1, 2]]
 
     def test_myappend_two_plus_two(self, lm):
         # nv
         from clausal.logic.solve import call
         r = Var()
-        results = [deref(r) for _ in call("MyAppend", [1, 2], [3, 4], r, module=lm)]
+        results = [deref(r) for _ in call("my_append", [1, 2], [3, 4], r, module=lm)]
         assert results == [[1, 2, 3, 4]]
 
     def test_myappend_nil_right(self, lm):
         # nv
         from clausal.logic.solve import call
         r = Var()
-        results = [deref(r) for _ in call("MyAppend", [1, 2], [], r, module=lm)]
+        results = [deref(r) for _ in call("my_append", [1, 2], [], r, module=lm)]
         assert results == [[1, 2]]
 
     def test_myappend_split_enumerates_all(self, lm):
@@ -287,7 +287,7 @@ class TestDeepIndexBehavioral:
         from clausal.logic.solve import call
         a, b = Var(), Var()
         splits = [(list(deref(a)), list(deref(b)))
-                  for _ in call("MyAppend", a, b, [1, 2, 3], module=lm)]
+                  for _ in call("my_append", a, b, [1, 2, 3], module=lm)]
         assert splits == [
             ([], [1, 2, 3]),
             ([1], [2, 3]),
@@ -300,25 +300,25 @@ class TestDeepIndexBehavioral:
     def test_mymember_present(self, lm):
         # nv
         from clausal.logic.solve import call
-        assert list(call("MyMember", 2, [1, 2, 3], module=lm))
+        assert list(call("my_member", 2, [1, 2, 3], module=lm))
 
     def test_mymember_absent(self, lm):
         # nv
         from clausal.logic.solve import call
-        assert not list(call("MyMember", 99, [1, 2, 3], module=lm))
+        assert not list(call("my_member", 99, [1, 2, 3], module=lm))
 
     def test_mymember_enumerate(self, lm):
         # nv
         from clausal.logic.solve import call
         x = Var()
-        results = [deref(x) for _ in call("MyMember", x, [10, 20, 30], module=lm)]
+        results = [deref(x) for _ in call("my_member", x, [10, 20, 30], module=lm)]
         assert results == [10, 20, 30]
 
     def test_mymember_duplicates(self, lm):
         # nv
         from clausal.logic.solve import call
         x = Var()
-        results = [deref(x) for _ in call("MyMember", x, [1, 1, 2], module=lm)]
+        results = [deref(x) for _ in call("my_member", x, [1, 1, 2], module=lm)]
         assert results == [1, 1, 2]
 
     # ── MyLast ─────────────────────────────────────────────────────────────────
@@ -327,21 +327,21 @@ class TestDeepIndexBehavioral:
         # nv
         from clausal.logic.solve import call
         x = Var()
-        results = [deref(x) for _ in call("MyLast", [5], x, module=lm)]
+        results = [deref(x) for _ in call("my_last", [5], x, module=lm)]
         assert results == [5]
 
     def test_mylast_three(self, lm):
         # nv
         from clausal.logic.solve import call
         x = Var()
-        results = [deref(x) for _ in call("MyLast", [1, 2, 3], x, module=lm)]
+        results = [deref(x) for _ in call("my_last", [1, 2, 3], x, module=lm)]
         assert results == [3]
 
     def test_mylast_deterministic(self, lm):
         # nv
         from clausal.logic.solve import call
         x = Var()
-        assert len(list(call("MyLast", [1, 2, 3], x, module=lm))) == 1
+        assert len(list(call("my_last", [1, 2, 3], x, module=lm))) == 1
 
     # ── MySumList ──────────────────────────────────────────────────────────────
 
@@ -349,14 +349,14 @@ class TestDeepIndexBehavioral:
         # nv
         from clausal.logic.solve import call
         s = Var()
-        results = [deref(s) for _ in call("MySumList", [], s, module=lm)]
+        results = [deref(s) for _ in call("my_sum_list", [], s, module=lm)]
         assert results == [0]
 
     def test_mysumlist_ten(self, lm):
         # nv
         from clausal.logic.solve import call
         s = Var()
-        results = [deref(s) for _ in call("MySumList", list(range(1, 11)), s, module=lm)]
+        results = [deref(s) for _ in call("my_sum_list", list(range(1, 11)), s, module=lm)]
         assert results == [55]
 
     # ── MyMax ──────────────────────────────────────────────────────────────────
@@ -365,14 +365,14 @@ class TestDeepIndexBehavioral:
         # nv
         from clausal.logic.solve import call
         m = Var()
-        results = [deref(m) for _ in call("MyMax", [3], m, module=lm)]
+        results = [deref(m) for _ in call("my_max", [3], m, module=lm)]
         assert results == [3]
 
     def test_mymax_three(self, lm):
         # nv
         from clausal.logic.solve import call
         m = Var()
-        results = [deref(m) for _ in call("MyMax", [3, 1, 4], m, module=lm)]
+        results = [deref(m) for _ in call("my_max", [3, 1, 4], m, module=lm)]
         assert results == [4]
 
     # ── MyProduct ─────────────────────────────────────────────────────────────
@@ -381,14 +381,14 @@ class TestDeepIndexBehavioral:
         # nv
         from clausal.logic.solve import call
         p = Var()
-        results = [deref(p) for _ in call("MyProduct", [], p, module=lm)]
+        results = [deref(p) for _ in call("my_product", [], p, module=lm)]
         assert results == [1]
 
     def test_myproduct_five(self, lm):
         # nv
         from clausal.logic.solve import call
         p = Var()
-        results = [deref(p) for _ in call("MyProduct", [1, 2, 3, 4, 5], p, module=lm)]
+        results = [deref(p) for _ in call("my_product", [1, 2, 3, 4, 5], p, module=lm)]
         assert results == [120]
 
     # ── MyPrefix — backtracking ────────────────────────────────────────────────
@@ -397,14 +397,14 @@ class TestDeepIndexBehavioral:
         # nv
         from clausal.logic.solve import call
         p = Var()
-        prefixes = [list(deref(p)) for _ in call("MyPrefix", p, [1, 2], module=lm)]
+        prefixes = [list(deref(p)) for _ in call("my_prefix", p, [1, 2], module=lm)]
         assert prefixes == [[], [1], [1, 2]]
 
     def test_myprefix_no_extra_solutions(self, lm):
         # nv
         from clausal.logic.solve import call
         p = Var()
-        assert len(list(call("MyPrefix", p, [1, 2], module=lm))) == 3
+        assert len(list(call("my_prefix", p, [1, 2], module=lm))) == 3
 
 
 # ── Structural tests ───────────────────────────────────────────────────────────

@@ -1,21 +1,21 @@
 # Importing module for the call-site direct-bucket regression: every ground
 # call below targets an imported (locked, indexed) predicate from inside a
 # compiled clause, so it compiles to a direct bucket reference.
--import_from(tests.fixtures.callsite_bucket_lib, [BucketCat, BucketSteps])
+-import_from(tests.fixtures.callsite_bucket_lib, [bucket_cat, bucket_steps])
 
-GroundFirst() <- BucketCat(1, "a")
-# Multi-clause caller: distinguishes a missing terminal DONE under the
+ground_first() <- bucket_cat(1, "a")
+# multi-clause caller: distinguishes a missing terminal DONE under the
 # pure-Python trampoline too (whose fallback driver converts a premature
 # generator return into exhaustion, silently truncating LATER solutions —
 # single-solution callers cannot observe that).
-Multi(R) <- (BucketCat(1, "a"), R is "one")
-Multi(R) <- (BucketCat(2, "b"), R is "two")
-GroundMiddle() <- BucketCat(3, "c")
-GroundLast() <- BucketCat(5, "e")
-GroundMiss() <- BucketCat(2, "a")
-GroundTail(N) <- BucketSteps(N, "even")
+multi(R) <- (bucket_cat(1, "a"), R is "one")
+multi(R) <- (bucket_cat(2, "b"), R is "two")
+ground_middle() <- bucket_cat(3, "c")
+ground_last() <- bucket_cat(5, "e")
+ground_miss() <- bucket_cat(2, "a")
+ground_tail(N) <- bucket_steps(N, "even")
 
-test("imported ground, first clause") <- BucketCat(1, "a")  # nv
-test("imported ground, middle clause") <- BucketCat(3, "c")  # nv
-test("imported ground, last clause") <- BucketCat(5, "e")  # nv
-test("imported ground, tail-call re-dispatch") <- BucketSteps(6, "even")  # nv
+test("imported ground, first clause") <- bucket_cat(1, "a")  # nv
+test("imported ground, middle clause") <- bucket_cat(3, "c")  # nv
+test("imported ground, last clause") <- bucket_cat(5, "e")  # nv
+test("imported ground, tail-call re-dispatch") <- bucket_steps(6, "even")  # nv

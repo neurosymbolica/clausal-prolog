@@ -5,11 +5,11 @@ todo/tro-signal-flag-clobbered-by-later-match-arms.md — a signal-mode TRO
 clause sets the shared ``$tro_state`` flag and falls through; a later match
 arm that yields a solution suspends the bucket generator while the flag is
 still pending.  Any re-entry into the same predicate during that suspension
-(here, the sibling ``Prc("w", 0, _)`` conjunct) resets ``$tro_state[0]`` at
+(here, the sibling ``prc("w", 0, _)`` conjunct) resets ``$tro_state[0]`` at
 its dispatch-loop entry, destroying the pending tail call — the enclosing
 loop then sees ``False`` and drops the tail, silently losing solutions.
 
-Before the fix ``Drv(X)`` returned 1 solution instead of 3.
+Before the fix ``drv(X)`` returned 1 solution instead of 3.
 """
 
 from __future__ import annotations
@@ -35,20 +35,20 @@ def prc_mod():
 def _prc_solutions(mod, k, n):
     lm = mod.__dict__["$module"]
     x = Var()
-    return sorted((deref(x) for _ in call("Prc", k, n, x, module=lm)), key=repr)
+    return sorted((deref(x) for _ in call("prc", k, n, x, module=lm)), key=repr)
 
 
 def _drv_solutions(mod):
     lm = mod.__dict__["$module"]
     x = Var()
-    return sorted((deref(x) for _ in call("Drv", x, module=lm)), key=repr)
+    return sorted((deref(x) for _ in call("drv", x, module=lm)), key=repr)
 
 
 class TestTroNonLastArmClobber:
     def test_tro_is_active(self, prc_mod):
         """Guard against a vacuous pass: the fixture must actually compile the
         recursive clause in signal-mode TRO (bucket carries ``$tro_state``)."""
-        prc = prc_mod.__dict__["Prc"]
+        prc = prc_mod.__dict__["prc"]
         for idx_dict in getattr(prc, "_index_plans", {}).values():
             for wrapper in idx_dict.values():
                 for cell in wrapper.__closure__ or ():
@@ -63,7 +63,7 @@ class TestTroNonLastArmClobber:
 
     def test_sibling_reentry_preserves_solutions(self, prc_mod):
         """THE regression: a deterministic sibling goal after the recursive
-        call must not drop any solutions.  Drv(X) := Prc("k",2,X), Prc("w",0,_)
+        call must not drop any solutions.  drv(X) := prc("k",2,X), prc("w",0,_)
         — the sibling re-enters dispatch while the tail flag is pending."""
         alone = _prc_solutions(prc_mod, mint("k"), 2)
         drv = _drv_solutions(prc_mod)

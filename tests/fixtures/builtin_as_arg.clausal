@@ -1,40 +1,40 @@
 # Test passing builtin predicates as arguments to meta-predicates.
 
-KeepNumbers(XS, NS) <- (
+keep_numbers(XS, NS) <- (
     include(number, XS, NS)
 )
 
-Incremented(XS, YS) <- (
+incremented(XS, YS) <- (
     maplist(succ, XS, YS)
 )
 
-AllNumbers(XS) <- (
+all_numbers(XS) <- (
     maplist(number, XS)
 )
 
-KeepInts(XS, INTS) <- (
+keep_ints(XS, INTS) <- (
     include(integer, XS, INTS)
 )
 
 test("filter keeps numbers") <- (
-    KeepNumbers([1, "a", 2, "b", 3.0], RESULT),
+    keep_numbers([1, "a", 2, "b", 3.0], RESULT),
     RESULT == [1, 2, 3.0],
 )  # nv
 
 test("map succ") <- (
-    Incremented([0, 1, 2], RESULT),
+    incremented([0, 1, 2], RESULT),
     RESULT == [1, 2, 3],
 )  # nv
 
 test("map check all numbers") <- (
-    AllNumbers([1, 2, 3])
+    all_numbers([1, 2, 3])
 )  # nv
 
 test("map check not all numbers fails") <- (
-    not AllNumbers([1, "a", 3])
+    not all_numbers([1, "a", 3])
 )  # nv
 
 test("filter ints from mixed") <- (
-    KeepInts([1, 2.5, 3, "x"], RESULT),
+    keep_ints([1, 2.5, 3, "x"], RESULT),
     RESULT == [1, 3],
 )  # nv

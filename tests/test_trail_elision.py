@@ -212,55 +212,55 @@ class TestTrailElisionBehavioral:
         """Predicate with distinct first-arg keys returns correct values."""
         # nv
         mod = _load_module("""\
-Color(1, "warm"),
-Color(2, "cool"),
-Color(3, "cool"),
+color(1, "warm"),
+color(2, "cool"),
+color(3, "cool"),
 """)
         x = Var()
-        results = [deref(x) for _ in call("Color", 1, x, module=mod)]
+        results = [deref(x) for _ in call("color", 1, x, module=mod)]
         assert results == [mint("warm")]
 
         x = Var()
-        results = [deref(x) for _ in call("Color", 2, x, module=mod)]
+        results = [deref(x) for _ in call("color", 2, x, module=mod)]
         assert results == [mint("cool")]
 
     def test_each_bucket_returns_exactly_one_solution(self):
         """Each distinct first-arg key yields exactly one solution (deterministic)."""
         # nv
         mod = _load_module("""\
-Map(1, "one"),
-Map(2, "two"),
-Map(3, "three"),
-Map(4, "four"),
+map(1, "one"),
+map(2, "two"),
+map(3, "three"),
+map(4, "four"),
 """)
         for key, expected in [(1, mint("one")), (2, mint("two")),
                               (3, mint("three")), (4, mint("four"))]:
             x = Var()
-            results = [deref(x) for _ in call("Map", key, x, module=mod)]
-            assert results == [expected], f"Map({key}, X) failed"
+            results = [deref(x) for _ in call("map", key, x, module=mod)]
+            assert results == [expected], f"map({key}, X) failed"
 
     def test_backtracking_past_elided_clause_undoes_bindings(self):
         """Bindings from an elided-trail clause are undone when the caller
         backtracks past the predicate call.
 
-        Try/2 calls Color/2 for each key. After each call, the binding
-        from Color's head unification must be undone before the next call.
+        Try/2 calls color/2 for each key. After each call, the binding
+        from color's head unification must be undone before the next call.
         """
         # nv
         mod = _load_module("""\
-Color(1, "warm"),
-Color(2, "cool"),
-Color(3, "cool"),
+color(1, "warm"),
+color(2, "cool"),
+color(3, "cool"),
 
-Attempt(1, R) <- Color(1, R)
-Attempt(2, R) <- Color(2, R)
-Attempt(3, R) <- Color(3, R)
+attempt(1, R) <- color(1, R)
+attempt(2, R) <- color(2, R)
+attempt(3, R) <- color(3, R)
 """)
         # Call Try for each key — verifies that previous Color bindings
         # don't leak into subsequent calls.
         for key, expected in [(1, mint("warm")), (2, mint("cool")), (3, mint("cool"))]:
             r = Var()
-            results = [deref(r) for _ in call("Attempt", key, r, module=mod)]
+            results = [deref(r) for _ in call("attempt", key, r, module=mod)]
             assert results == [expected]
 
     def test_var_binding_undone_between_calls(self):
@@ -268,9 +268,9 @@ Attempt(3, R) <- Color(3, R)
         the call completes, so a subsequent call can rebind it."""
         # nv
         mod = _load_module("""\
-Fact(1, 10),
-Fact(2, 20),
-Fact(3, 30),
+fact(1, 10),
+fact(2, 20),
+fact(3, 30),
 """)
         # Use the same Var across multiple calls — each call should produce
         # its own binding independently because the trail is rewound.
@@ -278,34 +278,34 @@ Fact(3, 30),
         trail = Trail()
         mark = trail.mark()
 
-        results = [deref(x) for _ in call("Fact", 1, x, module=mod)]
+        results = [deref(x) for _ in call("fact", 1, x, module=mod)]
         assert results == [10]
 
         trail.undo(mark)
-        results = [deref(x) for _ in call("Fact", 2, x, module=mod)]
+        results = [deref(x) for _ in call("fact", 2, x, module=mod)]
         assert results == [20]
 
         trail.undo(mark)
-        results = [deref(x) for _ in call("Fact", 3, x, module=mod)]
+        results = [deref(x) for _ in call("fact", 3, x, module=mod)]
         assert results == [30]
 
     def test_dup_guard_clause_in_single_bucket(self):
         """A clause with duplicate head vars (dup_guard) in a single-clause
-        bucket: Same(X, X) succeeds when both args unify."""
+        bucket: same(X, X) succeeds when both args unify."""
         # nv
         mod = _load_module("""\
-Same(1, 1),
-Same(2, 2),
-Same(3, 3),
+same(1, 1),
+same(2, 2),
+same(3, 3),
 """)
         # Same(1, 1) should succeed
         x = Var()
-        results = [deref(x) for _ in call("Same", 1, x, module=mod)]
+        results = [deref(x) for _ in call("same", 1, x, module=mod)]
         assert results == [1]
 
         # Same(2, 2) should succeed
         x = Var()
-        results = [deref(x) for _ in call("Same", 2, x, module=mod)]
+        results = [deref(x) for _ in call("same", 2, x, module=mod)]
         assert results == [2]
 
     def test_dup_guard_failure_in_single_bucket(self):
@@ -313,42 +313,42 @@ Same(3, 3),
         fails and the caller correctly undoes bindings."""
         # nv
         mod = _load_module("""\
-Same(1, 1),
-Same(2, 2),
+same(1, 1),
+same(2, 2),
 """)
         # Same(1, 2) should fail: bucket for key 1 has Same(1,1)
         # The dup_guard unify(1, 2) fails, so no solutions.
         x = Var()
-        results = [deref(x) for _ in call("Same", 1, x, module=mod)]
+        results = [deref(x) for _ in call("same", 1, x, module=mod)]
         assert results == [1]  # Same(1, X) matches Same(1, 1) -> X=1
 
         # Same(1, 2): the dup_guard checks second arg matches first.
         # Calling with ground args: 1 and 2 don't unify.
-        results = list(call("Same", 1, 2, module=mod))
+        results = list(call("same", 1, 2, module=mod))
         assert results == []  # fails — no solutions
 
         # Same(2, 2) should succeed
-        results = list(call("Same", 2, 2, module=mod))
+        results = list(call("same", 2, 2, module=mod))
         assert len(results) == 1
 
     def test_nested_calls_through_elided_predicates(self):
-        """Chain of calls through two elided-trail predicates."""
+        """chain of calls through two elided-trail predicates."""
         # nv
         mod = _load_module("""\
-Left(1, 10),
-Left(2, 20),
+left(1, 10),
+left(2, 20),
 
-Right(10, 100),
-Right(20, 200),
+right(10, 100),
+right(20, 200),
 
-Chain(N, R) <- (Left(N, M), Right(M, R))
+chain(N, R) <- (left(N, M), right(M, R))
 """)
         r = Var()
-        results = [deref(r) for _ in call("Chain", 1, r, module=mod)]
+        results = [deref(r) for _ in call("chain", 1, r, module=mod)]
         assert results == [100]
 
         r = Var()
-        results = [deref(r) for _ in call("Chain", 2, r, module=mod)]
+        results = [deref(r) for _ in call("chain", 2, r, module=mod)]
         assert results == [200]
 
     def test_single_clause_predicate_no_index(self):
@@ -356,10 +356,10 @@ Chain(N, R) <- (Left(N, M), Right(M, R))
         so no indexing, but trail elision doesn't apply either."""
         # nv
         mod = _load_module("""\
-Only(X, Y) <- (Y == X + 1)
+only(X, Y) <- (Y == X + 1)
 """)
         y = Var()
-        results = [deref(y) for _ in call("Only", 5, y, module=mod)]
+        results = [deref(y) for _ in call("only", 5, y, module=mod)]
         assert results == [6]
 
     def test_mixed_ground_and_var_heads_no_elision(self):
@@ -367,18 +367,18 @@ Only(X, Y) <- (Y == X + 1)
         trail elision does NOT apply — verify correctness is maintained."""
         # nv
         mod = _load_module("""\
-Lookup(1, 10),
-Lookup(2, 20),
-Lookup(X, 0),
+lookup(1, 10),
+lookup(2, 20),
+lookup(X, 0),
 """)
         # Key 1 matches both Lookup(1, 10) and Lookup(X, 0)
         v = Var()
-        results = [deref(v) for _ in call("Lookup", 1, v, module=mod)]
+        results = [deref(v) for _ in call("lookup", 1, v, module=mod)]
         assert results == [10, 0]
 
         # Key 3 matches only Lookup(X, 0)
         v = Var()
-        results = [deref(v) for _ in call("Lookup", 3, v, module=mod)]
+        results = [deref(v) for _ in call("lookup", 3, v, module=mod)]
         assert results == [0]
 
     def test_multiple_solutions_non_elided_predicate(self):
@@ -386,18 +386,18 @@ Lookup(X, 0),
         per key, and backtracking undoes bindings correctly."""
         # nv
         mod = _load_module("""\
-Info(1, "specific_1"),
-Info(2, "specific_2"),
-Info(X, "default"),
+info(1, "specific_1"),
+info(2, "specific_2"),
+info(X, "default"),
 """)
         v = Var()
-        results = [deref(v) for _ in call("Info", 1, v, module=mod)]
+        results = [deref(v) for _ in call("info", 1, v, module=mod)]
         assert results == [mint("specific_1"), mint("default")]
 
         v = Var()
-        results = [deref(v) for _ in call("Info", 2, v, module=mod)]
+        results = [deref(v) for _ in call("info", 2, v, module=mod)]
         assert results == [mint("specific_2"), mint("default")]
 
         v = Var()
-        results = [deref(v) for _ in call("Info", 99, v, module=mod)]
+        results = [deref(v) for _ in call("info", 99, v, module=mod)]
         assert results == [mint("default")]

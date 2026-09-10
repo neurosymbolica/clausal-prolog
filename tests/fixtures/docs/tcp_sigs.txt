@@ -29,7 +29,7 @@ receive(SOCKET, DATA)         # fails if no data within 5 seconds
 --8<-- [start:tcp_client_example]
 -import_from(py.tcp, [connect, send, receive, close])
 
-TcpRequest(HOST, PORT, REQUEST, RESPONSE) <- (
+tcp_request(HOST, PORT, REQUEST, RESPONSE) <- (
     connect(HOST, PORT, S),
     send(S, REQUEST),
     receive(S, RESPONSE),
@@ -40,7 +40,7 @@ TcpRequest(HOST, PORT, REQUEST, RESPONSE) <- (
 --8<-- [start:echo_server_example]
 -import_from(py.tcp, [listen, accept, send, receive, close])
 
-EchoServer(PORT) <- (
+echo_server(PORT) <- (
     listen("0.0.0.0", PORT, SERVER),
     accept(SERVER, CLIENT),
     receive(CLIENT, DATA),

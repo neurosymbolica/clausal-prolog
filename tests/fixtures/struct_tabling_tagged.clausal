@@ -14,13 +14,13 @@
 -module(struct_tabling_tagged, [
     cons(H, T),
     nil,
-    Nats(N, L),
+    nats(N, L),
 ])
--table(Nats/2)
+-table(nats/2)
 
-Nats(0, nil),
-Nats(N, cons(N, T)) <- (
+nats(0, nil),
+nats(N, cons(N, T)) <- (
     N > 0,
     N1 == N - 1,
-    Nats(N1, T)
+    nats(N1, T)
 )

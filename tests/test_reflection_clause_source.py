@@ -37,14 +37,14 @@ _MATCHERS = """\
 ])
 
 # render a clause of a source text back to text
-Source(SRC, TEXT) <- (
+source(SRC, TEXT) <- (
     reified_clause(SRC, CLAUSE),
     clause_source(CLAUSE, TEXT)
 )
 
 # the auditor flow this builtin exists for: rewrite a clause structurally,
 # then quote the result — all in Clausal
-SwappedSource(SRC, TEXT) <- (
+swapped_source(SRC, TEXT) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
     op_node(SUB, "GtE", ARGS),
@@ -54,10 +54,10 @@ SwappedSource(SRC, TEXT) <- (
 )
 
 # TERM unbound -> instantiation_error
-Unbound(TEXT) <- clause_source(_, TEXT)
+unbound(TEXT) <- clause_source(_, TEXT)
 
 # a rendered text that does not match a bound TEXT -> clean failure
-Mismatch(SRC, TEXT) <- (
+mismatch(SRC, TEXT) <- (
     reified_clause(SRC, CLAUSE),
     clause_source(CLAUSE, TEXT)
 )
@@ -82,14 +82,14 @@ def _solutions(functor, *args, module):
 
 def test_renders_a_rule_clause(matchers):
     text = Var()
-    sols = _solutions("Source", "Small(X) <- (X >= 1)\n", text, module=matchers)
-    assert [t for (t,) in sols] == ["Small(X) <- (X >= 1)"]
+    sols = _solutions("source", "small(X) <- (X >= 1)\n", text, module=matchers)
+    assert [t for (t,) in sols] == ["small(X) <- (X >= 1)"]
 
 
 def test_renders_a_fact(matchers):
     text = Var()
-    sols = _solutions("Source", "Edge(1, 2),\n", text, module=matchers)
-    assert [t for (t,) in sols] == ["Edge(1, 2),"]
+    sols = _solutions("source", "edge(1, 2),\n", text, module=matchers)
+    assert [t for (t,) in sols] == ["edge(1, 2),"]
 
 
 def test_quotes_a_rebuilt_clause(matchers):
@@ -97,28 +97,28 @@ def test_quotes_a_rebuilt_clause(matchers):
     the rebuilt clause — a term that never came from source text."""
     text = Var()
     sols = _solutions(
-        "SwappedSource", "Small(X) <- (X >= 1)\n", text, module=matchers)
-    assert [t for (t,) in sols] == ["Small(X) <- (X > 1)"]
+        "swapped_source", "small(X) <- (X >= 1)\n", text, module=matchers)
+    assert [t for (t,) in sols] == ["small(X) <- (X > 1)"]
 
 
 def test_unbound_term_raises_instantiation_error(matchers):
     text = Var()
     with pytest.raises(LogicException, match="instantiation_error"):
-        _solutions("Unbound", text, module=matchers)
+        _solutions("unbound", text, module=matchers)
 
 
 def test_bound_text_mismatch_fails_cleanly(matchers):
     # TEXT is a genuine STRING (what render_source answers), so the mismatching
     # value is a Python ``str`` — it must not unify with the rendered text.
     sols = _solutions(
-        "Mismatch", "Edge(1, 2),\n", "not the source", module=matchers)
+        "mismatch", "edge(1, 2),\n", "not the source", module=matchers)
     assert sols == []
 
 
 def test_bound_text_match_succeeds(matchers):
     # The other side of the same position: the rendered STRING unifies with an
     # equal ``str``.  Without this the mismatch row above passes vacuously.
-    sols = _solutions("Mismatch", "Edge(1, 2),\n", "Edge(1, 2),", module=matchers)
+    sols = _solutions("mismatch", "edge(1, 2),\n", "edge(1, 2),", module=matchers)
     assert len(sols) == 1
 
 
@@ -129,7 +129,7 @@ def test_rendered_text_re_reifies(matchers):
 
     text = Var()
     [(rendered,)] = _solutions(
-        "Source", "Path(A, B) <- (Edge(A, B),)\n", text, module=matchers)
+        "source", "path(A, B) <- (edge(A, B),)\n", text, module=matchers)
     (again,) = [i for i in reify_source(rendered + "\n")
                 if isinstance(i, Clause)]
-    assert deref(again.head).name == "Path"
+    assert deref(again.head).name == "path"

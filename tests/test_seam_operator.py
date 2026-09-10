@@ -56,12 +56,12 @@ class TestSeamBuildsCells:
 
     def test_a_titlecase_name_is_an_atom_not_a_variable(self):
         mod = _load_inline("_seam_title", (
-            "-module(_seam_title, [verdict(A, B), Foo])\n"
+            "-module(_seam_title, [verdict(A, B), foo])\n"
             "-double_quotes(chars)\n"
             "def build():\n"
-            "    return --verdict(Foo, 1)\n"
+            "    return --verdict(foo, 1)\n"
         ))
-        assert mod.build() == ("verdict", ("Foo",), 1)
+        assert mod.build() == ("verdict", ("foo",), 1)
 
     def test_the_built_term_unifies_with_the_engine_s_own(self):
         from clausal.logic.solve import call

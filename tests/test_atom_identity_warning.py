@@ -134,16 +134,16 @@ class TestAtomsAreGlobal:
 # ── End-to-end two-module package: the OLD "no solution" repro now succeeds ──
 
 _LIB_SRC = textwrap.dedent("""\
-    -module(atomlib, [approved, Check(X)])
+    -module(atomlib, [approved, check(X)])
 
-    Check(approved),
+    check(approved),
 """)
 
 _CALLER_SRC = textwrap.dedent("""\
-    -import_from(atomid_pkg.atomlib, [Check])
+    -import_from(atomid_pkg.atomlib, [check])
     -private([approved])
 
-    Ask() <- Check(approved)
+    ask() <- check(approved)
 """)
 
 _DRIVER = textwrap.dedent("""\
@@ -154,11 +154,11 @@ _DRIVER = textwrap.dedent("""\
     import atomid_pkg.caller as caller
 
     lm = caller.__dict__["$module"]
-    # Ask/0 calls Check(approved) where `approved` is the CALLER's local
-    # declaration and Check comes from atomlib whose clause head carries
+    # ask/0 calls check(approved) where `approved` is the CALLER's local
+    # declaration and check comes from atomlib whose clause head carries
     # atomlib's `approved` -- pre-pivot these were distinct classes and the
     # query had no solution; post-pivot both are the same global str.
-    solutions = list(call("Ask", module=lm))
+    solutions = list(call("ask", module=lm))
     print("SOLUTION_COUNT", len(solutions))
 """)
 

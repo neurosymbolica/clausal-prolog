@@ -7,22 +7,22 @@ color(NAME, TEMP)        # neither ground    -> full scan either way
 # --8<-- [end:color_query_modes]
 
 # --8<-- [start:compound_keys]
-Shape(circle(R), R) <- true
-Shape(rect(W, H), W) <- true
-Shape(triangle(A, B, C), A) <- true
-Shape(sq(S), S) <- true
+shape(circle(R), R) <- true
+shape(rect(W, H), W) <- true
+shape(triangle(A, B, C), A) <- true
+shape(sq(S), S) <- true
 # --8<-- [end:compound_keys]
 
 # --8<-- [start:compound_dispatch]
-Shape(circle(42), Q)  ->  _runtime_arg_key(circle(42)) = ("circle", 1)
+shape(circle(42), Q)  ->  _runtime_arg_key(circle(42)) = ("circle", 1)
                          idx_dict[("circle", 1)] -> circle bucket
                          Q unified with 42
 # --8<-- [end:compound_dispatch]
 
 # --8<-- [start:flat_joint_example]
-Combo(fire, dry, hot)   Combo(fire, wet, cold)
-Combo(ice,  dry, cold)  Combo(ice,  wet, hot)
-Combo(wind, dry, hot)   Combo(wind, wet, cold)
+combo(fire, dry, hot)   combo(fire, wet, cold)
+combo(ice,  dry, cold)  combo(ice,  wet, hot)
+combo(wind, dry, hot)   combo(wind, wet, cold)
 # --8<-- [end:flat_joint_example]
 
 # --8<-- [start:flat_joint_dispatch]

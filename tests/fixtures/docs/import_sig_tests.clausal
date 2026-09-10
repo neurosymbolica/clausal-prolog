@@ -1,8 +1,8 @@
 # Companion tests for docs/import.md signature blocks.
 
 # --- import_from_directive ---
--import_from(tests.fixtures.importable_utils, [Helper])
+-import_from(tests.fixtures.importable_utils, [helper])
 
-UseImported(X, Y) <- Helper(X, Y)
+use_imported(X, Y) <- helper(X, Y)
 
-test("import_from works") <- (UseImported(2, Y), Y == 4)  # nv
+test("import_from works") <- (use_imported(2, Y), Y == 4)  # nv

@@ -42,13 +42,13 @@
 # === Atom-identity Directives (GLOBAL_ATOMS_DEFAULT.md) ===
 
 --8<-- [start:module_with_atoms]
--module(traffic, [Phase(X), red, amber, green])
+-module(traffic, [phase(X), red, amber, green])
 --8<-- [end:module_with_atoms]
 
 --8<-- [start:module_data_functor]
--module(shapes, [Point(X, Y), kind(S, K), point])
+-module(shapes, [point(X, Y), kind(S, K), point])
 
-kind(Point(X_UNUSED, Y_UNUSED), point),
+kind(point(X_UNUSED, Y_UNUSED), point),
 --8<-- [end:module_data_functor]
 
 --8<-- [start:module_predicate_export_vocab]
@@ -69,13 +69,13 @@ verdict(ok, cited),
 
 --8<-- [start:strict_atoms]
 -strict_atoms
--module(immigration_rules, [Eligible(X), Denied(X, Reason)])
+-module(immigration_rules, [eligible(X), denied(X, Reason)])
 -private([visa_type, application_status])
 -import_from(atoms, [ok, error, pending])
 --8<-- [end:strict_atoms]
 
 --8<-- [start:hide]
--module(vault, [Check(X)])
+-module(vault, [check(X)])
 -hide([vault_secret])
 --8<-- [end:hide]
 

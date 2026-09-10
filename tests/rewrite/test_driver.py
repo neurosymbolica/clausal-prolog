@@ -158,7 +158,7 @@ def test_runaway_rule_hits_the_bound(tmp_path, head_fold_rules):
         -double_quotes(chars)
         -import_from(reflection, [Clause])
 
-        RewriteClause(Clause(H, G, P), Clause(H, G, P)),
+        rewrite_clause(Clause(H, G, P), Clause(H, G, P)),
         """))
     with pytest.raises(RewriteError, match="20"):
         rewrite_source("p(X) <- (m(X))\n", [runaway])
@@ -176,7 +176,7 @@ def test_a_rule_that_invents_a_goal_is_refused_loudly(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
-        RewriteClause(Clause(H, [G], P), Clause(H, [G, Goal("extra", [], [])], P)),
+        rewrite_clause(Clause(H, [G], P), Clause(H, [G, Goal("extra", [], [])], P)),
         """))
     with pytest.raises(RewriteError, match="splice"):
         rewrite_source("p(X) <- (m(X))\n", [inventive])
@@ -197,7 +197,7 @@ def test_a_rule_that_puts_a_lambda_in_the_head_is_refused(tmp_path):
         -import_from(reflection, [Clause, Goal])
 
         # carry the lambda term out of the body goal and into the head
-        RewriteClause(Clause(Goal(NAME, ARGS, KW), [Goal(_, [LAM], _)], POS), Clause(Goal(NAME, [*ARGS, LAM], KW), [], POS)),
+        rewrite_clause(Clause(Goal(NAME, ARGS, KW), [Goal(_, [LAM], _)], POS), Clause(Goal(NAME, [*ARGS, LAM], KW), [], POS)),
         """))
     with pytest.raises(RewriteError, match="lambda"):
         rewrite_source("p(X) <- (m(((Y) <- q(Y))))\n", [lambda_head])
@@ -215,7 +215,7 @@ def test_a_head_that_cannot_be_rendered_at_all_is_refused(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
-        RewriteClause(Clause(Goal(NAME, ARGS, KW), GOALS, POS), Clause(HEAD2, GOALS, POS)) <- (
+        rewrite_clause(Clause(Goal(NAME, ARGS, KW), GOALS, POS), Clause(HEAD2, GOALS, POS)) <- (
             LAM is ((X) <- p(X)),
             HEAD2 is Goal(NAME, [*ARGS, LAM], KW)
         )
@@ -239,11 +239,11 @@ def _rename_rule(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
-        RewriteClause(Clause(H, GOALS, P), Clause(H, GOALS2, P)) <- (
-            RenameGoal(GOALS, GOALS2)
+        rewrite_clause(Clause(H, GOALS, P), Clause(H, GOALS2, P)) <- (
+            rename_goal(GOALS, GOALS2)
         )
-        RenameGoal([Goal("old", A, K), *GS], [Goal("new", A, K), *GS]),
-        RenameGoal([G, *GS], [G, *GS2]) <- RenameGoal(GS, GS2)
+        rename_goal([Goal("old", A, K), *GS], [Goal("new", A, K), *GS]),
+        rename_goal([G, *GS], [G, *GS2]) <- rename_goal(GS, GS2)
         """))
     return [rule]
 
@@ -301,7 +301,7 @@ def test_equal_count_reorder_is_refused(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [Clause])
 
-        RewriteClause(Clause(H, [G1, G2], P), Clause(H, [G2, G1], P)),
+        rewrite_clause(Clause(H, [G1, G2], P), Clause(H, [G2, G1], P)),
         """))
     with pytest.raises(RewriteError, match="REORDER"):
         rewrite_source("p(X) <- (m(X), r(X))\n", [swap])
@@ -314,7 +314,7 @@ def test_modification_with_count_change_is_refused(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
-        RewriteClause(Clause(H, [Goal("old", A, K), _], P), Clause(H, [Goal("new", A, K)], P)),
+        rewrite_clause(Clause(H, [Goal("old", A, K), _], P), Clause(H, [Goal("new", A, K)], P)),
         """))
     with pytest.raises(RewriteError, match="splice"):
         rewrite_source("p(X) <- (old(X), m(X))\n", [mixed])
@@ -328,7 +328,7 @@ def test_modified_goal_that_is_not_a_goal_is_refused(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
 
-        RewriteClause(Clause(H, [G], P), Clause(H, [[G, Goal("extra", [], [])]], P)),
+        rewrite_clause(Clause(H, [G], P), Clause(H, [[G, Goal("extra", [], [])]], P)),
         """))
     with pytest.raises(RewriteError, match="not a plain Goal"):
         rewrite_source("p(X) <- (m(X))\n", [grouping])

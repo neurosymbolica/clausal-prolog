@@ -80,7 +80,7 @@ SOLVE_TIME_SRC = """
 
     grounds({ground_a: cite(art_9)}),
 
-    Test("grounds are defined with citations") <- (
+    test("grounds are defined with citations") <- (
         grounds(GROUNDS)
     ),
 """
@@ -128,7 +128,7 @@ class TestSolveTimeRaise:
 
             grounds({ground_a: cite(a9)}),
 
-            Test("aliased import") <- (
+            test("aliased import") <- (
                 grounds(GROUNDS)
             ),
         """)
@@ -143,7 +143,7 @@ class TestSolveTimeRaise:
 
             grounds({ground_a: cite(1)}),
 
-            Test("no existing import") <- (
+            test("no existing import") <- (
                 grounds(GROUNDS)
             ),
         """)
@@ -167,7 +167,7 @@ class TestLoadTimeRaise:
 
         grounds(REF),
 
-        Test("grounds are defined with citations") <- (
+        test("grounds are defined with citations") <- (
             grounds(GROUNDS)
         ),
     """
@@ -194,7 +194,7 @@ class TestTermClassShape:
 
         grounds([cite(art_9)]),
 
-        Test("grounds are defined with citations") <- (
+        test("grounds are defined with citations") <- (
             grounds(GROUNDS)
         ),
     """
@@ -216,7 +216,7 @@ class TestUndecidableStaysBare:
 
         grounds({ground_a: zzz_nobody_exports_this(1)}),
 
-        Test("no owner anywhere") <- (
+        test("no owner anywhere") <- (
             grounds(GROUNDS)
         ),
     """

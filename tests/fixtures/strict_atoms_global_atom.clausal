@@ -5,6 +5,6 @@
 
 -strict_atoms
 
-LookupStrictGlobal(_atom) <- (
+lookup_strict_global(_atom) <- (
     global_atom("phase3strict_global_red", _atom),
 )

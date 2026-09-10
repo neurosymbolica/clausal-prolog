@@ -24,7 +24,7 @@ from clausal.logic.variables import Var, deref, is_var, walk
 # load would mint distinct functor classes that never unify with the first).
 
 FIXTURE = '''
--import_from(clausal.examples.metainterpreters, [Solve, SolveCount, SolveLimit, SolveTree])
+-import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit, solve_tree])
 -private([kab(KA)])
 
 # ── A03-F001: TRO with nondeterministic prefix goals ──────────────────
@@ -160,29 +160,29 @@ tfee(DAYS, FEE) <- (DAYS >= 25, FEE == 75)
 tfee(DAYS, FEE) <- (DAYS >= 0, DAYS < 25, FEE == 3 * DAYS)
 
 # ── tabled ITE / NAF ──────────────────────────────────────────────────
--table(Path/2)
-Edge(1, 2),
-Edge(2, 3),
-Edge(3, 1),
-Path(PA, PB) <- Edge(PA, PB)
-Path(PA, PB) <- (Edge(PA, PC), Path(PC, PB))
-CheckPath(CX, RESULT) <- if_(Path(1, CX), RESULT is "reachable", RESULT is "unreachable")
-NotPath(NX) <- (not Path(1, NX))
+-table(path/2)
+edge(1, 2),
+edge(2, 3),
+edge(3, 1),
+path(PA, PB) <- edge(PA, PB)
+path(PA, PB) <- (edge(PA, PC), path(PC, PB))
+check_path(CX, RESULT) <- if_(path(1, CX), RESULT is "reachable", RESULT is "unreachable")
+not_path(NX) <- (not path(1, NX))
 
 # ── specialization ────────────────────────────────────────────────────
-MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
+match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
     CLAUSE in PROGRAM,
     copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
     GOAL is FRESH_HEAD,
 )
 
-NatProg(PROGRAM) <- (
+nat_prog(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", NX2]], [["natnum", NX2]]]
     ]
 )
-GraphProg(PROGRAM) <- (
+graph_prog(PROGRAM) <- (
     PROGRAM is [
         [["edge", "a", "b"], []],
         [["edge", "b", "c"], []],
@@ -191,7 +191,7 @@ GraphProg(PROGRAM) <- (
         [["path", GX, GY], [["edge", GX, GZ], ["path", GZ, GY]]]
     ]
 )
-ConstProg(PROGRAM) <- (
+const_prog(PROGRAM) <- (
     PROGRAM is [
         [["f", 1], []],
         [["g"], [["f", 2]]]
@@ -199,59 +199,59 @@ ConstProg(PROGRAM) <- (
 )
 # A03-F008 (goal-side bindings): inlining f(GVX) against fact f(1) binds the
 # GOAL-side var — the binding must reach the enclosing clause head.
-GvProg(PROGRAM) <- (
+gv_prog(PROGRAM) <- (
     PROGRAM is [
         [["f", 1], []],
         [["gv", GVX], [["f", GVX]]]
     ]
 )
 # ... and a later sibling goal sharing the goal-side var (q(GSX, GSR)).
-GsProg(PROGRAM) <- (
+gs_prog(PROGRAM) <- (
     PROGRAM is [
         [["f", 1], []],
         [["q", 1, "ok"], []],
         [["gs", GSX, GSR], [["f", GSX], ["q", GSX, GSR]]]
     ]
 )
-FactProg(PROGRAM) <- (
+fact_prog(PROGRAM) <- (
     PROGRAM is [
         [["fact", 0, 1], []],
         [["fact", FN, FF], [["gt", FN, 0], ["sub", FN, 1, FN1], ["fact", FN1, FF1], ["mul", FN, FF1, FF]]]
     ]
 )
 
-# A03-F007: MI with goals BETWEEN MatchClause and the recursive call. The
+# A03-F007: MI with goals BETWEEN match_clause and the recursive call. The
 # generic MI is exercised here; the -specialize is refused loudly (A03-D003)
 # and is asserted in a dedicated per-test module so it doesn't abort this
 # whole shared fixture's load.
-SolveGuard([], _PROGRAM, _LIM),
-SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
+solve_guard([], _PROGRAM, _LIM),
+solve_guard([GOAL, *GOALS], PROGRAM, LIM) <- (
+    match_clause(GOAL, BODY, PROGRAM),
     LIM > 0,
     append(BODY, GOALS, ALL_GOALS),
     LIM1 == LIM - 1,
-    SolveGuard(ALL_GOALS, PROGRAM, LIM1),
+    solve_guard(ALL_GOALS, PROGRAM, LIM1),
 )
 
 # A03-F008: deep unfolding vs single-clause functor with constant arg
--specialize(Solve, ConstProg, alias=ConstShallow)
--specialize(Solve, ConstProg, alias=ConstDeep, depth=5)
--specialize(Solve, GvProg, alias=GvDeep, depth=5)
--specialize(Solve, GsProg, alias=GsDeep, depth=5)
+-specialize(solve, const_prog, alias=const_shallow)
+-specialize(solve, const_prog, alias=const_deep, depth=5)
+-specialize(solve, gv_prog, alias=gv_deep, depth=5)
+-specialize(solve, gs_prog, alias=gs_deep, depth=5)
 
 # A03-F009: CPD + counting-extension chaining
--specialize(SolveCount, GraphProg, alias=CountGraph)
--specialize(SolveCount, GraphProg, alias=CountGraphCPD, cpd=True)
--specialize(Solve, GraphProg, alias=GraphSpec)
--specialize(Solve, GraphProg, alias=GraphCPD, cpd=True)
+-specialize(solve_count, graph_prog, alias=count_graph)
+-specialize(solve_count, graph_prog, alias=count_graph_cpd, cpd=True)
+-specialize(solve, graph_prog, alias=graph_spec)
+-specialize(solve, graph_prog, alias=graph_cpd, cpd=True)
 
 # regression guards: limit (pre-match), tree (split), residual builtins
--specialize(SolveLimit, NatProg, alias=LimNat)
-# A03-F009 guard: CPD SolveLimit exercises the pre-match chaining path (the
-# post-match count path is CountGraphCPD). Must match the non-CPD depth cutoff.
--specialize(SolveLimit, NatProg, alias=LimNatCPD, cpd=True)
--specialize(SolveTree, GraphProg, alias=TreeGraph)
--specialize(Solve, FactProg, alias=FactSpec)
+-specialize(solve_limit, nat_prog, alias=lim_nat)
+# A03-F009 guard: CPD solve_limit exercises the pre-match chaining path (the
+# post-match count path is count_graph_cpd). Must match the non-CPD depth cutoff.
+-specialize(solve_limit, nat_prog, alias=lim_nat_cpd, cpd=True)
+-specialize(solve_tree, graph_prog, alias=tree_graph)
+-specialize(solve, fact_prog, alias=fact_spec)
 '''
 
 
@@ -593,34 +593,34 @@ class TestF005F006FindallFamily:
 # asserted here in a dedicated module rather than the shared fixture (whose
 # whole load would otherwise abort).
 _SOLVEGUARD_SPEC_FIXTURE = '''
-MatchClause(GOAL, FRESH_BODY, PROGRAM) <- (
+match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
     CLAUSE in PROGRAM,
     copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
     GOAL is FRESH_HEAD,
 )
-NatProg(PROGRAM) <- (
+nat_prog(PROGRAM) <- (
     PROGRAM is [
         [["natnum", 0], []],
         [["natnum", ["s", NX2]], [["natnum", NX2]]]
     ]
 )
-SolveGuard([], _PROGRAM, _LIM),
-SolveGuard([GOAL, *GOALS], PROGRAM, LIM) <- (
-    MatchClause(GOAL, BODY, PROGRAM),
+solve_guard([], _PROGRAM, _LIM),
+solve_guard([GOAL, *GOALS], PROGRAM, LIM) <- (
+    match_clause(GOAL, BODY, PROGRAM),
     LIM > 0,
     append(BODY, GOALS, ALL_GOALS),
     LIM1 == LIM - 1,
-    SolveGuard(ALL_GOALS, PROGRAM, LIM1),
+    solve_guard(ALL_GOALS, PROGRAM, LIM1),
 )
--specialize(SolveGuard, NatProg, alias=SolveGuardNat)
+-specialize(solve_guard, nat_prog, alias=solve_guard_nat)
 '''
 
 
 class TestF007SpecializationDropsMidBodyGoals:
     def test_generic_mi_respects_guard(self, mod):
-        prog = _program(mod, mod.NatProg)
-        assert not has_sol(mod, mod.SolveGuard(NAT3, prog, 1))
-        assert has_sol(mod, mod.SolveGuard(NAT3, prog, 10))
+        prog = _program(mod, mod.nat_prog)
+        assert not has_sol(mod, mod.solve_guard(NAT3, prog, 1))
+        assert has_sol(mod, mod.solve_guard(NAT3, prog, 10))
 
     def test_midbody_goal_specialize_refused(self, tmp_path):
         # A03-F007/D003: a non-MI goal (LIM > 0) between MatchClause and the
@@ -637,52 +637,52 @@ class TestF007SpecializationDropsMidBodyGoals:
 
 class TestF008DeepUnfoldConstantCheck:
     def test_generic_and_shallow_spec_fail(self, mod):
-        prog = _program(mod, mod.ConstProg)
-        assert not has_sol(mod, mod.Solve([[mint("g")]], prog))
-        assert not has_sol(mod, mod.ConstShallow([[mint("g")]]))
+        prog = _program(mod, mod.const_prog)
+        assert not has_sol(mod, mod.solve([[mint("g")]], prog))
+        assert not has_sol(mod, mod.const_shallow([[mint("g")]]))
 
     def test_deep_spec_fails_like_generic(self, mod):
-        assert not has_sol(mod, mod.ConstDeep([[mint("g")]]))
+        assert not has_sol(mod, mod.const_deep([[mint("g")]]))
 
     # A03-F008 remaining case: var-goal-arg vs const-head-arg. Inlining
     # f(GV) against fact f(1) binds the GOAL-side var GV, but the binding
     # had no channel back to the enclosing clause head — it surfaced
     # unbound AND gv(2) wrongly succeeded.
     def test_deep_spec_propagates_goal_side_binding(self, mod):
-        prog = _program(mod, mod.GvProg)
+        prog = _program(mod, mod.gv_prog)
         V1, V2 = Var(), Var()
-        assert sols(mod, mod.Solve([[mint("gv"), V1]], prog), V1) == [(1,)]
-        assert sols(mod, mod.GvDeep([[mint("gv"), V2]]), V2) == [(1,)]
+        assert sols(mod, mod.solve([[mint("gv"), V1]], prog), V1) == [(1,)]
+        assert sols(mod, mod.gv_deep([[mint("gv"), V2]]), V2) == [(1,)]
 
     def test_deep_spec_rejects_conflicting_goal_side_const(self, mod):
-        prog = _program(mod, mod.GvProg)
-        assert not has_sol(mod, mod.Solve([[mint("gv"), 2]], prog))
-        assert not has_sol(mod, mod.GvDeep([[mint("gv"), 2]]))
+        prog = _program(mod, mod.gv_prog)
+        assert not has_sol(mod, mod.solve([[mint("gv"), 2]], prog))
+        assert not has_sol(mod, mod.gv_deep([[mint("gv"), 2]]))
 
     def test_deep_spec_goal_side_binding_reaches_later_sibling_goal(self, mod):
-        prog = _program(mod, mod.GsProg)
+        prog = _program(mod, mod.gs_prog)
         X1, R1, X2, R2 = Var(), Var(), Var(), Var()
-        gen = sols(mod, mod.Solve([[mint("gs"), X1, R1]], prog), X1, R1)
-        spec = sols(mod, mod.GsDeep([[mint("gs"), X2, R2]]), X2, R2)
+        gen = sols(mod, mod.solve([[mint("gs"), X1, R1]], prog), X1, R1)
+        spec = sols(mod, mod.gs_deep([[mint("gs"), X2, R2]]), X2, R2)
         assert spec == gen == [(1, mint("ok"))]
-        assert not has_sol(mod, mod.GsDeep([[mint("gs"), 2, Var()]]))
+        assert not has_sol(mod, mod.gs_deep([[mint("gs"), 2, Var()]]))
 
 
 class TestF009CpdExtensionChaining:
     def test_plain_cpd_matches_generic(self, mod):
-        prog = _program(mod, mod.GraphProg)
+        prog = _program(mod, mod.graph_prog)
         Y1, Y2, Y3 = Var(), Var(), Var()
-        gen = sorted(sols(mod, mod.Solve([[mint("path"), mint("a"), Y1]], prog), Y1))
-        spec = sorted(sols(mod, mod.GraphSpec([[mint("path"), mint("a"), Y2]]), Y2))
-        cpd = sorted(sols(mod, mod.GraphCPD([[mint("path"), mint("a"), Y3]]), Y3))
+        gen = sorted(sols(mod, mod.solve([[mint("path"), mint("a"), Y1]], prog), Y1))
+        spec = sorted(sols(mod, mod.graph_spec([[mint("path"), mint("a"), Y2]]), Y2))
+        cpd = sorted(sols(mod, mod.graph_cpd([[mint("path"), mint("a"), Y3]]), Y3))
         assert spec == gen == [(mint("b"),), (mint("c"),), (mint("d"),)]
         assert cpd == gen
 
     def test_counting_spec_matches_generic(self, mod):
-        prog = _program(mod, mod.GraphProg)
+        prog = _program(mod, mod.graph_prog)
         Y1, C1, Y2, C2 = Var(), Var(), Var(), Var()
-        gen = sorted(sols(mod, mod.SolveCount([[mint("path"), mint("a"), Y1]], prog, C1), Y1, C1))
-        spec = sorted(sols(mod, mod.CountGraph([[mint("path"), mint("a"), Y2]], C2), Y2, C2))
+        gen = sorted(sols(mod, mod.solve_count([[mint("path"), mint("a"), Y1]], prog, C1), Y1, C1))
+        spec = sorted(sols(mod, mod.count_graph([[mint("path"), mint("a"), Y2]], C2), Y2, C2))
         assert spec == gen == [(mint("b"), 2), (mint("c"), 4), (mint("d"), 4)]
 
     def test_cpd_counting_matches_generic(self, mod):
@@ -690,7 +690,7 @@ class TestF009CpdExtensionChaining:
         # increment per inlined step (single per-level template splice, not a
         # re-chain of the accumulated body), so counts equal the generic MI.
         Y, C = Var(), Var()
-        got = sorted(sols(mod, mod.CountGraphCPD([[mint("path"), mint("a"), Y]], C), Y, C))
+        got = sorted(sols(mod, mod.count_graph_cpd([[mint("path"), mint("a"), Y]], C), Y, C))
         assert got == [(mint("b"), 2), (mint("c"), 4), (mint("d"), 4)]
 
     def test_cpd_limit_matches_non_cpd(self, mod):
@@ -698,28 +698,28 @@ class TestF009CpdExtensionChaining:
         # ``MAX1 == MAX - 1``) must telescope one guard+decrement per level, so
         # the CPD depth cutoff matches the non-CPD specialization exactly.
         for depth, expected in ((2, False), (3, False), (4, True), (9, True)):
-            assert has_sol(mod, mod.LimNatCPD(NAT3, depth)) is expected
-            assert has_sol(mod, mod.LimNat(NAT3, depth)) is expected
+            assert has_sol(mod, mod.lim_nat_cpd(NAT3, depth)) is expected
+            assert has_sol(mod, mod.lim_nat(NAT3, depth)) is expected
 
 
 class TestSpecializationRegressionGuards:
     def test_limit_pre_match_goals_preserved(self, mod):
-        prog = _program(mod, mod.NatProg)
-        assert not has_sol(mod, mod.SolveLimit(NAT3, prog, 2))
-        assert not has_sol(mod, mod.LimNat(NAT3, 2))
-        assert has_sol(mod, mod.SolveLimit(NAT3, prog, 9))
-        assert has_sol(mod, mod.LimNat(NAT3, 9))
+        prog = _program(mod, mod.nat_prog)
+        assert not has_sol(mod, mod.solve_limit(NAT3, prog, 2))
+        assert not has_sol(mod, mod.lim_nat(NAT3, 2))
+        assert has_sol(mod, mod.solve_limit(NAT3, prog, 9))
+        assert has_sol(mod, mod.lim_nat(NAT3, 9))
 
     def test_split_style_proof_trees_equal(self, mod):
-        prog = _program(mod, mod.GraphProg)
+        prog = _program(mod, mod.graph_prog)
         Y1, T1, Y2, T2 = Var(), Var(), Var(), Var()
-        gen = [str(x) for x in sols(mod, mod.SolveTree([[mint("path"), mint("a"), Y1]], prog, T1), Y1, T1)]
-        spec = [str(x) for x in sols(mod, mod.TreeGraph([[mint("path"), mint("a"), Y2]], T2), Y2, T2)]
+        gen = [str(x) for x in sols(mod, mod.solve_tree([[mint("path"), mint("a"), Y1]], prog, T1), Y1, T1)]
+        spec = [str(x) for x in sols(mod, mod.tree_graph([[mint("path"), mint("a"), Y2]], T2), Y2, T2)]
         assert spec == gen
 
     def test_residual_builtin_dispatch(self, mod):
         F = Var()
-        assert sols(mod, mod.FactSpec([[mint("fact"), 4, F]]), F) == [(24,)]
+        assert sols(mod, mod.fact_spec([[mint("fact"), 4, F]]), F) == [(24,)]
 
 
 # ── control constructs / ITE / TCO — regression guards ───────────────────────
@@ -794,10 +794,10 @@ class TestIteGuards:
 
     def test_tabled_ite_and_naf(self, mod):
         R1, R2 = Var(), Var()
-        assert sols(mod, mod.CheckPath(2, R1), R1) == [(mint("reachable"),)]
-        assert sols(mod, mod.CheckPath(99, R2), R2) == [(mint("unreachable"),)]
-        assert sols(mod, mod.NotPath(2)) == []
-        assert sols(mod, mod.NotPath(99)) == [()]
+        assert sols(mod, mod.check_path(2, R1), R1) == [(mint("reachable"),)]
+        assert sols(mod, mod.check_path(99, R2), R2) == [(mint("unreachable"),)]
+        assert sols(mod, mod.not_path(2)) == []
+        assert sols(mod, mod.not_path(99)) == [()]
 
 
 class TestContinuationTcoGuards:

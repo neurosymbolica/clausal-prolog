@@ -17,5 +17,5 @@ fib(N, F) <- (
     F == F1 + F2
 )
 
-DebugFibByClass() <- listing(fib)
-DebugFibByIndicator() <- listing(fib/2)
+debug_fib_by_class() <- listing(fib)
+debug_fib_by_indicator() <- listing(fib/2)

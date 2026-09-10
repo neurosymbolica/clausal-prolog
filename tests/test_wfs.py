@@ -1,4 +1,4 @@
-"""Tests for V2-7: Well-Founded Semantics (WFS)."""
+"""Tests for V2-7: Well-Founded semantics (WFS)."""
 
 import os
 import pytest
@@ -354,7 +354,7 @@ class TestPositiveTablingRegression:
         m = _load("tabled_fib")
         F = Var()
         results = []
-        for trail in call("Fib", 10, F, module=_module(m)):
+        for trail in call("fib", 10, F, module=_module(m)):
             results.append(deref(F))
         assert results == [55]
 
@@ -364,7 +364,7 @@ class TestPositiveTablingRegression:
         m = _load("tabled_path")
         Y = Var()
         results = []
-        for t in call("Path", 1, Y, module=_module(m)):
+        for t in call("path", 1, Y, module=_module(m)):
             results.append(deref(Y))
         assert sorted(results) == [1, 2, 3]
 
@@ -409,7 +409,7 @@ class TestWfsSymmetricWin:
         # Query win(1) and win(2)
         X = Var()
         results = []
-        for t in call("Win", X, module=lm):
+        for t in call("win", X, module=lm):
             results.append(deref(X))
 
         # With WFS, the symmetric cycle means both are conditional/undefined.
@@ -417,7 +417,7 @@ class TestWfsSymmetricWin:
         # The table should have entries with non-empty conditions.
         table_store = db.table_store
         # Find the win table entries
-        win_entries = [(k, v) for k, v in table_store.items() if k[0] == "Win"]
+        win_entries = [(k, v) for k, v in table_store.items() if k[0] == "win"]
         # Check that answers exist and are conditional (undefined)
         for key, entry in win_entries:
             assert entry.status == "complete"
@@ -447,7 +447,7 @@ class TestWfsAsymmetricWin:
 
         X = Var()
         results = []
-        for t in call("Win", X, module=lm):
+        for t in call("win", X, module=lm):
             results.append(deref(X))
 
         # win("a") should be in results (true: via move("a","c"), not win("c"))
@@ -475,7 +475,7 @@ class TestNoNegationCycle:
         # This test just confirms fib with no negation works.
         F = Var()
         results = []
-        for trail in call("Fib", 5, F, module=lm):
+        for trail in call("fib", 5, F, module=lm):
             results.append(deref(F))
         assert results == [5]
 
@@ -492,7 +492,7 @@ class TestQueryWfs:
         from clausal.terms import Call as TermCall, LoadName
         N = Var()
         F = Var()
-        goal = TermCall(func=LoadName(name="Fib"), args=[N, F], kwargs=[])
+        goal = TermCall(func=LoadName(name="fib"), args=[N, F], kwargs=[])
         # Bind N to 5
         trail = Trail()
         unify(N, 5, trail)
@@ -512,7 +512,7 @@ class TestQueryWfs:
 # false-by-[], the other unconditionally true).
 
 
-def _win_goal(arg, name="Win"):
+def _win_goal(arg, name="win"):
     from clausal.terms import Call as TermCall, LoadName
     return TermCall(func=LoadName(name=name), args=[arg], kwargs=[])
 
@@ -630,7 +630,7 @@ class TestQueryWfsUndefinedSurface:
         for v in (1, 2):
             lm = _module(_load("wfs_win"))
             results = self._q(lm, v)
-            assert len(results) == 1, f"Win({v}) lost its undefined answer"
+            assert len(results) == 1, f"win({v}) lost its undefined answer"
             assert results[0]["_truth"] is Undefined
 
     def test_ground_after_unbound_consistent(self):
@@ -640,7 +640,7 @@ class TestQueryWfsUndefinedSurface:
         self._q(lm)
         for v in (1, 2):
             results = self._q(lm, v)
-            assert len(results) == 1, f"Win({v}) reported [] (reads as false)"
+            assert len(results) == 1, f"win({v}) reported [] (reads as false)"
             assert results[0]["_truth"] is Undefined
 
     def test_ground_then_ground_consistent(self):
@@ -652,14 +652,14 @@ class TestQueryWfsUndefinedSurface:
         assert len(r2) == 1 and r2[0]["_truth"] is Undefined
 
     def test_no_unconditional_answer_ever_stored(self):
-        """Guards finding 2d: no order of asking mints an unconditional Win answer."""
+        """Guards finding 2d: no order of asking mints an unconditional win answer."""
         # nv
         lm = _module(_load("wfs_win"))
         self._q(lm)
         self._q(lm, 1)
         self._q(lm, 2)
         for (f, _a, _k), entry in lm.db.table_store.items():
-            if f != "Win":
+            if f != "win":
                 continue
             for i in range(len(entry.answers)):
                 assert entry.truth_value(i) is Undefined
@@ -670,7 +670,7 @@ class TestQueryWfsUndefinedSurface:
         # nv
         lm = _module(_load("wfs_win"))
         X = Var()
-        results = query_wfs(Compound("Win", (X,)), {"X": X}, lm, Trail())
+        results = query_wfs(Compound("win", (X,)), {"X": X}, lm, Trail())
         assert len(results) == 2
         assert all(r["_truth"] is Undefined for r in results)
 
@@ -683,9 +683,9 @@ class TestQueryWfsUndefinedSurface:
         partner = {1: 2, 2: 1}
         for x, r in by_x.items():
             delays = r["_delays"]
-            assert delays, f"Win({x}) is Undefined but has no reachable delays"
+            assert delays, f"win({x}) is Undefined but has no reachable delays"
             assert any(
-                dn.functor == "Win" and dn.frozen_args == (partner[x],)
+                dn.functor == "win" and dn.frozen_args == (partner[x],)
                 for dn in delays
             )
 
@@ -695,7 +695,7 @@ class TestQueryWfsUndefinedSurface:
         N = Var()
         F = Var()
         from clausal.terms import Call as TermCall, LoadName
-        goal = TermCall(func=LoadName(name="Fib"), args=[N, F], kwargs=[])
+        goal = TermCall(func=LoadName(name="fib"), args=[N, F], kwargs=[])
         trail = Trail()
         unify(N, 5, trail)
         results = query_wfs(goal, {"F": F}, lm, trail)
@@ -714,12 +714,12 @@ class TestQueryWfsUndefinedSurface:
 
 class TestWfsDisjunctiveDerivations:
     def test_fact_beats_cycle_var_mode(self):
-        """Wf(1) <- fact; Wf on a 2-cycle: Wf(1)=True, Wf(2)=False."""
+        """wf(1) <- fact; wf on a 2-cycle: wf(1)=True, wf(2)=False."""
         # nv
         lm = _module(_load("wfs_fact_cycle"))
         X = Var()
         from clausal.terms import Call as TermCall, LoadName
-        goal = TermCall(func=LoadName(name="Wf"), args=[X], kwargs=[])
+        goal = TermCall(func=LoadName(name="wf"), args=[X], kwargs=[])
         results = query_wfs(goal, {"X": X}, lm, Trail())
         assert [(r["X"], r["_truth"]) for r in results] == [(1, True)]
 
@@ -731,9 +731,9 @@ class TestWfsDisjunctiveDerivations:
             Y = Var()
             t = Trail()
             unify(Y, val, t)
-            goal = TermCall(func=LoadName(name="Wf"), args=[Y], kwargs=[])
+            goal = TermCall(func=LoadName(name="wf"), args=[Y], kwargs=[])
             results = query_wfs(goal, {}, lm, t)
-            assert len(results) == want, f"Wf({val})"
+            assert len(results) == want, f"wf({val})"
             if results:
                 assert results[0]["_truth"] is True
 
@@ -770,60 +770,60 @@ def _q(lm, name, val=None):
 
 
 class TestWfsPositiveNegativeMix:
-    """Pw(1) via fact; Pw(6) via `not Qw(6)`; Qw(6) reads Pw back positively.
+    """pw(1) via fact; pw(6) via `not qw(6)`; qw(6) reads pw back positively.
 
-    wfs_posneg_true (Qw(6) <- Pw(Z), Z < 5): Qw(6) is TRUE via Pw(1), so
-    Pw(6) is definitively FALSE — it must not surface at all, in any order.
-    wfs_posneg_undef (Z > 5): Qw(6) depends on the conditional Pw(6) —
+    wfs_posneg_true (qw(6) <- pw(Z), Z < 5): qw(6) is TRUE via pw(1), so
+    pw(6) is definitively FALSE — it must not surface at all, in any order.
+    wfs_posneg_undef (Z > 5): qw(6) depends on the conditional pw(6) —
     everything in the loop is Undefined, in any order. The second program
-    needs POSITIVE delay propagation: Qw's derivation consumes the
-    conditional Pw(6) answer and must inherit its delays."""
+    needs POSITIVE delay propagation: qw's derivation consumes the
+    conditional pw(6) answer and must inherit its delays."""
 
     def test_true_program_pw_first(self):
         # nv
         lm = _module(_load("wfs_posneg_true"))
-        assert _q(lm, "Pw") == [(1, True)]
-        assert _q(lm, "Qw", 6) == [True]
-        assert _q(lm, "Pw") == [(1, True)]
+        assert _q(lm, "pw") == [(1, True)]
+        assert _q(lm, "qw", 6) == [True]
+        assert _q(lm, "pw") == [(1, True)]
 
     def test_true_program_qw_first(self):
         # nv
         lm = _module(_load("wfs_posneg_true"))
-        assert _q(lm, "Qw", 6) == [True]
-        assert _q(lm, "Pw") == [(1, True)]
+        assert _q(lm, "qw", 6) == [True]
+        assert _q(lm, "pw") == [(1, True)]
 
     def test_undef_program_pw_first(self):
         # nv
         lm = _module(_load("wfs_posneg_undef"))
-        assert _q(lm, "Pw") == [(1, True), (6, Undefined)]
-        assert _q(lm, "Qw", 6) == [Undefined]
+        assert _q(lm, "pw") == [(1, True), (6, Undefined)]
+        assert _q(lm, "qw", 6) == [Undefined]
 
     def test_undef_program_qw_first(self):
         # nv
         lm = _module(_load("wfs_posneg_undef"))
-        assert _q(lm, "Qw", 6) == [Undefined]
-        assert _q(lm, "Pw") == [(1, True), (6, Undefined)]
+        assert _q(lm, "qw", 6) == [Undefined]
+        assert _q(lm, "pw") == [(1, True), (6, Undefined)]
 
     def test_no_failed_row_reported_true(self):
         """A row invalidated after streaming must not default to True."""
         # nv
         lm = _module(_load("wfs_posneg_true"))
-        for x, truth in _q(lm, "Pw"):
+        for x, truth in _q(lm, "pw"):
             assert truth is not False  # False rows are dropped, never shown
         # And the table really does hold the falsified row:
         for (f, _a, _k), e in lm.db.table_store.items():
-            if f == "Pw" and len(e.answers) == 2:
+            if f == "pw" and len(e.answers) == 2:
                 truths = {e.truth_value(i) for i in range(len(e.answers))}
                 assert truths == {True, False}
 
 
 class TestWfsSpawnTermination:
     def test_growing_ground_negation_terminates(self):
-        """not Pn(X+1) spawns; the depth cap makes it delay past the cap
+        """not pn(X+1) spawns; the depth cap makes it delay past the cap
         instead of dying in a bare RecursionError."""
         # nv
         lm = _module(_load("wfs_growing_neg"))
-        assert _q(lm, "Pn", 1) == [Undefined]
+        assert _q(lm, "pn", 1) == [Undefined]
 
 
 class TestWfsAbandonedRootResolution:
@@ -838,13 +838,13 @@ class TestWfsAbandonedRootResolution:
         Y = Var()
         t = Trail()
         unify(Y, "b", t)
-        res = query_wfs(_goal("Win", Y), {}, lm, t)
+        res = query_wfs(_goal("win", Y), {}, lm, t)
         assert res == []  # win("b") is definitively false, not Undefined
 
 
 def solve_first(lm, X):
     from clausal.logic.solve import solve
-    return solve(_goal("Win", X), lm, Trail())
+    return solve(_goal("win", X), lm, Trail())
 
 
 class TestQueryWfsGoalShapes:
@@ -857,7 +857,7 @@ class TestQueryWfsGoalShapes:
             from clausal.import_hook import _load_module
             src = (
                 "-import_module(wfs_win)\n\n"
-                "ProbeQ(X) <- wfs_win.Win(X)\n"
+                "probe_q(X) <- wfs_win.Win(X)\n"
             )
             p = tmp_path / "wfs_importer_q.clausal"
             p.write_text(src)
@@ -866,7 +866,7 @@ class TestQueryWfsGoalShapes:
             from clausal.terms import Call as TermCall, LoadName, LoadAttr
             X = Var()
             goal = TermCall(
-                func=LoadAttr(object=LoadName(name="wfs_win"), attr="Win"),
+                func=LoadAttr(object=LoadName(name="wfs_win"), attr="win"),
                 args=[X], kwargs=[])
             res = query_wfs(goal, {"X": X}, lm, Trail())
             assert len(res) == 2
@@ -887,8 +887,8 @@ class TestQueryWfsGoalShapes:
         t = Trail()
         unify(N, 10, t)
         # populate the table
-        list(call("Fib", N, F, module=lm))
-        goal = TermCall(func=LoadName(name="Fib"), args=[N],
+        list(call("fib", N, F, module=lm))
+        goal = TermCall(func=LoadName(name="fib"), args=[N],
                         kwargs=[Keyword(name="RESULT", value=F)])
         entry, goal_args = _tabled_entry_for_goal(goal, lm, t)
         assert entry is not None
@@ -949,15 +949,15 @@ class TestResolutionMatchesNafSemantics:
 
 class TestNestedStreamingAttribution:
     def test_undefined_propagates_through_two_positive_hops(self):
-        """Aa <- Bb <- Cc with Cc unfounded: when Bb streams its conditional
+        """aa <- Bb <- Cc with Cc unfounded: when Bb streams its conditional
         answer, a deeper leader (Cc) can still be parked on the stack —
-        attribution must go to the leader below Bb's OWN position (Aa), not
+        attribution must go to the leader below Bb's OWN position (aa), not
         blindly to stack[-2]. All three atoms are Undefined."""
         # nv
         lm = _module(_load("wfs_nested_stream"))
-        assert _q(lm, "Aa") == [(1, Undefined)]
-        assert _q(lm, "Bb") == [(1, Undefined)]
-        assert _q(lm, "Cc") == [(1, Undefined)]
+        assert _q(lm, "aa") == [(1, Undefined)]
+        assert _q(lm, "bb") == [(1, Undefined)]
+        assert _q(lm, "cc") == [(1, Undefined)]
 
 
 class TestSpawnDepthBudget:
@@ -967,7 +967,7 @@ class TestSpawnDepthBudget:
         recursion limit, not a magic 32."""
         # nv
         lm = _module(_load("wfs_bounded_chain"))
-        assert _q(lm, "Pb", 1) == [True]
+        assert _q(lm, "pb", 1) == [True]
 
 
 class TestGoalShapeEdges:
@@ -992,14 +992,14 @@ class TestGoalShapeEdges:
         try:
             from clausal.import_hook import _load_module
             p = tmp_path / "wfs_impfrom.clausal"
-            p.write_text("-import_from(wfs_win, [Win])\n\nUsesF(X) <- Win(X)\n")
+            p.write_text("-import_from(wfs_win, [win])\n\nuses_f(X) <- win(X)\n")
             lm = _load_module("wfs_impfrom", str(p)).__dict__["$module"]
-            assert _q(lm, "Win") == [(1, Undefined), (2, Undefined)]
+            assert _q(lm, "win") == [(1, Undefined), (2, Undefined)]
         finally:
             sys.path.remove(FIXTURES)
 
     def test_nested_dotted_qualified_goal(self, tmp_path):
-        """pkg.sub.mod.Win(X) — the dotted chain resolves through
+        """pkg.sub.mod.win(X) — the dotted chain resolves through
         sys.modules to the exporting module's table."""
         # nv
         import sys
@@ -1012,7 +1012,7 @@ class TestGoalShapeEdges:
                     str(pkg / "winmod.clausal"))
         (tmp_path / "nested_imp.clausal").write_text(
             "-import_module(pkgn.subn.winmod)\n\n"
-            "UsesN(X) <- pkgn.subn.winmod.Win(X)\n")
+            "uses_n(X) <- pkgn.subn.winmod.Win(X)\n")
         sys.path.insert(0, str(tmp_path))
         try:
             from clausal.import_hook import _load_module
@@ -1026,7 +1026,7 @@ class TestGoalShapeEdges:
                         object=LoadAttr(object=LoadName(name="pkgn"),
                                         attr="subn"),
                         attr="winmod"),
-                    attr="Win"),
+                    attr="win"),
                 args=[X], kwargs=[])
             res = query_wfs(goal, {"X": X}, lm, Trail())
             assert [(r["X"], r["_truth"]) for r in res] == [
@@ -1052,23 +1052,23 @@ class TestRootLeadConditionalDeferral:
         return [deref(X) for _ in call(name, X, module=lm)]
 
     def test_invalidated_answer_never_reaches_root_caller(self):
-        """wfs_posneg_true: Qw(6) is TRUE via Pw(1), so Pw(6) is FALSE.
+        """wfs_posneg_true: qw(6) is TRUE via pw(1), so pw(6) is FALSE.
         The first (streamed) call and the second (complete-path) call must
         return the SAME set — the complete-path one, [1]."""
         # nv
         lm = _module(_load("wfs_posneg_true"))
-        first = self._all(lm, "Pw")
-        second = self._all(lm, "Pw")
+        first = self._all(lm, "pw")
+        second = self._all(lm, "pw")
         assert first == second == [1]
 
     def test_surviving_undefined_answers_still_delivered(self):
-        """wfs_posneg_undef: Pw(6) survives resolution as Undefined — the
+        """wfs_posneg_undef: pw(6) survives resolution as Undefined — the
         deferral must deliver it after completion, not drop it. Both calls
         agree on the set."""
         # nv
         lm = _module(_load("wfs_posneg_undef"))
-        first = self._all(lm, "Pw")
-        second = self._all(lm, "Pw")
+        first = self._all(lm, "pw")
+        second = self._all(lm, "pw")
         assert sorted(first) == sorted(second) == [1, 6]
 
     def test_relead_replays_conditional_rows_into_the_deferral(self):
@@ -1085,16 +1085,16 @@ class TestRootLeadConditionalDeferral:
         completion is finished at its leader's own exit — so the state the
         replay loop is DEFINED over is set up directly, the way the other
         unit tests in this file fabricate table entries.  Without the
-        replay-deferral branch this streams the doomed Pw(6) row to the
+        replay-deferral branch this streams the doomed pw(6) row to the
         caller before resolution kills it, and the assertion fails.
         """
         # nv
         lm = _module(_load("wfs_posneg_true"))
         X = Var()
-        assert [deref(X) for _ in call("Pw", X, module=lm)] == [1]
+        assert [deref(X) for _ in call("pw", X, module=lm)] == [1]
 
         entries = {f: e for (f, _a, _k), e in lm.db.table_store.items()}
-        pw = entries["Pw"]
+        pw = entries["pw"]
         assert [a[0] for a in pw.answers] == [1, 6]
         assert pw.conditions[1] is _FAILED          # resolution killed Pw(6)
 
@@ -1103,10 +1103,10 @@ class TestRootLeadConditionalDeferral:
         # is what root-exit resolution will consult again.
         pw.status = "evaluating"
         pw.conditions[1] = frozenset({frozenset(
-            {DelayedNegation("Qw", 1, (6,), (6,))})})
+            {DelayedNegation("qw", 1, (6,), (6,))})})
 
         Y = Var()
-        full = [deref(Y) for _ in call("Pw", Y, module=lm)]
+        full = [deref(Y) for _ in call("pw", Y, module=lm)]
         assert full == [1], (
             "the replayed conditional row must be deferred and then dropped "
             f"by resolution, not streamed — got {full!r}"
@@ -1122,17 +1122,17 @@ class TestRootLeadConditionalDeferral:
         from clausal.import_hook import _load_module
         p = tmp_path / "wfs_stream_probe.clausal"
         p.write_text(
-            "-table(Cnt/1)\n\n"
-            "Cnt(0),\n"
-            "Cnt(N) <- (Cnt(M), M < 3, N == M + 1)\n"
+            "-table(cnt/1)\n\n"
+            "cnt(0),\n"
+            "cnt(N) <- (cnt(M), M < 3, N == M + 1)\n"
         )
         lm = _load_module("wfs_stream_probe", str(p)).__dict__["$module"]
         X = Var()
-        it = call("Cnt", X, module=lm)
+        it = call("cnt", X, module=lm)
         next(it)
         first_val = deref(X)
         entries = [e for (f, _a, _k), e in lm.db.table_store.items()
-                   if f == "Cnt"]
+                   if f == "cnt"]
         assert entries, "table entry must exist while streaming"
         assert entries[0].status == "evaluating", (
             "unconditional answers must stream before the fixpoint completes"
@@ -1148,28 +1148,28 @@ class TestRootLeadConditionalDeferral:
 
 _XMNAF_COUNTER = [0]
 
-_XMNAF_SYM_LIB = """-module({name}, [Win(X)])
--table(Win/1)
+_XMNAF_SYM_LIB = """-module({name}, [win(X)])
+-table(win/1)
 
-Move(1, 2),
-Move(2, 1),
+move(1, 2),
+move(2, 1),
 
-Win(X) <- (Move(X, Y), not Win(Y))
+win(X) <- (move(X, Y), not win(Y))
 """
 
-_XMNAF_ASYM_LIB = """-module({name}, [Win(X)])
--table(Win/1)
+_XMNAF_ASYM_LIB = """-module({name}, [win(X)])
+-table(win/1)
 
-Move(1, 2),
-Move(2, 3),
+move(1, 2),
+move(2, 3),
 
-Win(X) <- (Move(X, Y), not Win(Y))
+win(X) <- (move(X, Y), not win(Y))
 """
 
-_XMNAF_USE = """-import_from({lib}, [Win])
--table(Res/1)
+_XMNAF_USE = """-import_from({lib}, [win])
+-table(res/1)
 
-Res(X) <- (not Win(X))
+res(X) <- (not win(X))
 """
 
 
@@ -1191,11 +1191,11 @@ def _load_xmnaf_pair(tmp_path, lib_src, use_src=_XMNAF_USE):
 
 class TestCrossModuleTabledNaf:
     def test_symmetric_cycle_stays_undefined_across_modules(self, tmp_path):
-        """The repro: Res(X) <- (not Win(X)) with Win imported from the
+        """The repro: res(X) <- (not win(X)) with win imported from the
         module that tables it.  The single-module twin yields Undefined;
         the cross-module version must too — NOT definite false ([])."""
         _lib, use = _load_xmnaf_pair(tmp_path, _XMNAF_SYM_LIB)
-        assert _q(use, "Res", 1) == [Undefined]
+        assert _q(use, "res", 1) == [Undefined]
 
     def test_symmetric_cycle_delay_names_the_partner(self, tmp_path):
         """The Undefined answer carries a delay naming the negated
@@ -1204,10 +1204,10 @@ class TestCrossModuleTabledNaf:
         Y = Var()
         t = Trail()
         unify(Y, 1, t)
-        res = query_wfs(_goal("Res", Y), {}, use, t)
+        res = query_wfs(_goal("res", Y), {}, use, t)
         assert len(res) == 1
         assert res[0]["_truth"] is Undefined
-        assert ("Win", (1,)) in {(d.functor, d.frozen_args)
+        assert ("win", (1,)) in {(d.functor, d.frozen_args)
                                  for d in res[0]["_delays"]}
 
     def test_single_module_twin_undefined(self, tmp_path):
@@ -1218,46 +1218,46 @@ class TestCrossModuleTabledNaf:
         name = f"xmnaf_single_{os.getpid()}_{_XMNAF_COUNTER[0]}"
         p = tmp_path / f"{name}.clausal"
         p.write_text(
-            "-table(Win/1)\n-table(Res/1)\n\n"
-            "Move(1, 2),\nMove(2, 1),\n\n"
-            "Win(X) <- (Move(X, Y), not Win(Y))\n"
-            "Res(X) <- (not Win(X))\n")
+            "-table(win/1)\n-table(res/1)\n\n"
+            "move(1, 2),\nmove(2, 1),\n\n"
+            "win(X) <- (move(X, Y), not win(Y))\n"
+            "res(X) <- (not win(X))\n")
         lm = _module(_load_module(name, str(p)))
-        assert _q(lm, "Res", 1) == [Undefined]
+        assert _q(lm, "res", 1) == [Undefined]
 
     def test_definite_cross_module_negation_stays_definite(self, tmp_path):
-        """Acyclic lib (Move 1→2→3): Win(2) true, Win(1)/Win(3) false.
+        """Acyclic lib (move 1→2→3): win(2) true, win(1)/win(3) false.
         Cross-module negation over a DEFINITE predicate must keep definite
-        answers — Res(2) fails outright, Res(1)/Res(3) are True (never
+        answers — res(2) fails outright, res(1)/res(3) are True (never
         Undefined)."""
         _lib, use = _load_xmnaf_pair(tmp_path, _XMNAF_ASYM_LIB)
-        assert _q(use, "Res", 2) == []
-        assert _q(use, "Res", 1) == [True]
-        assert _q(use, "Res", 3) == [True]
+        assert _q(use, "res", 2) == []
+        assert _q(use, "res", 1) == [True]
+        assert _q(use, "res", 3) == [True]
 
     def test_naf_over_imported_untabled_predicate_unchanged(self, tmp_path):
         """Negating an imported UNTABLED predicate keeps plain NAF — both
         the compile-time decision and the observable answers."""
         from clausal.logic.compiler.tabled_naf import _is_tabled_naf
         from clausal.terms import Call as TermCall, LoadName
-        lib_src = "-module({name}, [Move(X, Y)])\n\nMove(1, 2),\nMove(2, 3),\n"
-        use_src = ("-import_from({lib}, [Move])\n\n"
-                   "NoMove(X, Y) <- (not Move(X, Y))\n")
+        lib_src = "-module({name}, [move(X, Y)])\n\nmove(1, 2),\nmove(2, 3),\n"
+        use_src = ("-import_from({lib}, [move])\n\n"
+                   "no_move(X, Y) <- (not move(X, Y))\n")
         _lib, use = _load_xmnaf_pair(tmp_path, lib_src, use_src)
-        naf_goal = TermCall(func=LoadName(name="Move"),
+        naf_goal = TermCall(func=LoadName(name="move"),
                             args=[Var(), Var()], kwargs=[])
         assert _is_tabled_naf(naf_goal, use.db) is False
         A, B = Var(), Var()
         t = Trail()
         unify(A, 1, t)
         unify(B, 3, t)
-        goal = TermCall(func=LoadName(name="NoMove"), args=[A, B], kwargs=[])
+        goal = TermCall(func=LoadName(name="no_move"), args=[A, B], kwargs=[])
         assert [r["_truth"] for r in query_wfs(goal, {}, use, t)] == [True]
         t2 = Trail()
         C, D = Var(), Var()
         unify(C, 1, t2)
         unify(D, 2, t2)
-        goal2 = TermCall(func=LoadName(name="NoMove"), args=[C, D], kwargs=[])
+        goal2 = TermCall(func=LoadName(name="no_move"), args=[C, D], kwargs=[])
         assert query_wfs(goal2, {}, use, t2) == []
 
     def test_compile_decision_true_for_imported_tabled(self, tmp_path):
@@ -1266,7 +1266,7 @@ class TestCrossModuleTabledNaf:
         from clausal.logic.compiler.tabled_naf import _is_tabled_naf
         from clausal.terms import Call as TermCall, LoadName
         lib, use = _load_xmnaf_pair(tmp_path, _XMNAF_SYM_LIB)
-        naf_goal = TermCall(func=LoadName(name="Win"), args=[Var()], kwargs=[])
+        naf_goal = TermCall(func=LoadName(name="win"), args=[Var()], kwargs=[])
         assert _is_tabled_naf(naf_goal, lib.db) is True   # home db: unchanged
         assert _is_tabled_naf(naf_goal, use.db) is True   # importer db: the fix
 

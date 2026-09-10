@@ -5,4 +5,4 @@
 # binds its interned spelling here, so an importer gets a str, not a class --
 # which is exactly the shape a -constants RHS in the importer has to cope
 # with.
--module(const_functor_owner, [Wrap(SUB), Pair(LEFT, RIGHT)])
+-module(const_functor_owner, [wrap(SUB), pair(LEFT, RIGHT)])

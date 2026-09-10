@@ -105,19 +105,19 @@ def load(tmp_path_factory):
 
 class TestOracles:
     def test_queens6_count(self, load):
-        m = load("queens", path="/workspace/clausal-bug-fix/tests/fixtures/clpfd_queens.clausal")
+        m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.clausal"))
         qs = [Var() for _ in range(6)]
-        assert sum(1 for _ in m.SafeQueens(6, qs)) == 4
+        assert sum(1 for _ in m.safe_queens(6, qs)) == 4
 
     def test_queens8_count(self, load):
-        m = load("queens", path="/workspace/clausal-bug-fix/tests/fixtures/clpfd_queens.clausal")
+        m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.clausal"))
         qs = [Var() for _ in range(8)]
-        assert sum(1 for _ in m.SafeQueens(8, qs)) == 92
+        assert sum(1 for _ in m.safe_queens(8, qs)) == 92
 
     def test_sendmore_unique(self, load):
-        m = load("sendmore", path="/workspace/clausal-bug-fix/tests/fixtures/clpfd_sendmore.clausal")
+        m = load("sendmore", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_sendmore.clausal"))
         vs = [Var() for _ in range(8)]
-        sols = [tuple(deref(v) for v in vs) for _ in m.Sendmoney(*vs)]
+        sols = [tuple(deref(v) for v in vs) for _ in m.sendmoney(*vs)]
         assert sols == [(9, 5, 6, 7, 1, 0, 8, 2)]
 
 
@@ -205,14 +205,14 @@ class TestNeExpressionBlindness:
 
     def test_compiled_ne_expr(self, load):
         m = load("ne_expr", source="""
-Bad(X, Y) <- (X + 1 != Y, X is 1, Y is 2)
+bad(X, Y) <- (X + 1 != Y, X is 1, Y is 2)
 
-Good(X, Y) <- (X + 1 != Y, X is 1, Y is 5)
+good(X, Y) <- (X + 1 != Y, X is 1, Y is 5)
 """)
         x, y = Var(), Var()
-        assert sum(1 for _ in m.Bad(x, y)) == 0
+        assert sum(1 for _ in m.bad(x, y)) == 0
         x, y = Var(), Var()
-        assert sum(1 for _ in m.Good(x, y)) == 1
+        assert sum(1 for _ in m.good(x, y)) == 1
 
     def test_ne_ground_expr_at_post_ok(self):
         # _resolve evaluates ground expressions before posting — correct today.
@@ -241,10 +241,10 @@ class TestOutputModeLinearEq:
 
     def test_compiled_reverse_double(self, load):
         m = load("dbl", source="""
-Double(X, Y) <- (Y == 2 * X)
+double(X, Y) <- (Y == 2 * X)
 """)
         x = Var()
-        got = [deref(x) for _ in m.Double(x, 8)]
+        got = [deref(x) for _ in m.double(x, 8)]
         assert got == [4]
 
     def test_bounded_output_mode_works(self):
@@ -259,10 +259,10 @@ Double(X, Y) <- (Y == 2 * X)
 
     def test_input_mode_works(self, load):
         m = load("dbl", source="""
-Double(X, Y) <- (Y == 2 * X)
+double(X, Y) <- (Y == 2 * X)
 """)
         y = Var()
-        assert [deref(y) for _ in m.Double(3, y)] == [6]
+        assert [deref(y) for _ in m.double(3, y)] == [6]
 
 
 # ── A06-F003 / A06-F004: double-precision over-pruning (UNSOUND) ─────────────

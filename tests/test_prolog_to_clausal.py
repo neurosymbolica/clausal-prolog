@@ -76,7 +76,7 @@ class TestEmitTerm:
     def test_compound(self):
         # nv
         result = emit_clausal_term(PCompound("foo_bar", (PVar("X"),)))
-        assert result == "FooBar(X)"
+        assert result == "foo_bar(X)"
 
     def test_negation(self):
         # nv
@@ -103,7 +103,7 @@ class TestEmitItem:
     def test_fact(self):
         # nv
         result = emit_clausal_item(PClause(PCompound("edge", (PNumber(1), PNumber(2)))))
-        assert result == "Edge(1, 2),"
+        assert result == "edge(1, 2),"
 
     def test_rule(self):
         # nv
@@ -111,7 +111,7 @@ class TestEmitItem:
             PCompound("reach", (PVar("X"), PVar("Y"))),
             PCompound("edge", (PVar("X"), PVar("Y"))),
         ))
-        assert result == "Reach(X, Y) <- (Edge(X, Y))"
+        assert result == "reach(X, Y) <- (edge(X, Y))"
 
     def test_rule_with_conjunction(self):
         # nv
@@ -123,7 +123,7 @@ class TestEmitItem:
             PCompound("reach", (PVar("X"), PVar("Y"))),
             body,
         ))
-        assert result == "Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))"
+        assert result == "reach(X, Y) <- (edge(X, Z), reach(Z, Y))"
 
     def test_dcg_rule(self):
         # nv
@@ -131,7 +131,7 @@ class TestEmitItem:
             PAtom("greeting"),
             PList((PString("hello"), PString("world")), None),
         ))
-        assert result == 'Greeting() >> (["hello", "world"])'
+        assert result == 'greeting() >> (["hello", "world"])'
 
     def test_directive_module(self):
         # nv
@@ -145,7 +145,7 @@ class TestEmitItem:
         result = emit_clausal_item(PDirective(
             PCompound("dynamic", (PCompound("/", (PAtom("color"), PNumber(2))),)),
         ))
-        assert result == "-dynamic(Color/2)"
+        assert result == "-dynamic(color/2)"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -163,10 +163,10 @@ reach(X, Y) :- edge(X, Y).
 reach(X, Y) :- edge(X, Z), reach(Z, Y).
 """
         result = prolog_to_clausal(src)
-        assert "Edge(1, 2)," in result
-        assert "Edge(2, 3)," in result
-        assert "Reach(X, Y) <- (Edge(X, Y))" in result
-        assert "Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))" in result
+        assert "edge(1, 2)," in result
+        assert "edge(2, 3)," in result
+        assert "reach(X, Y) <- (edge(X, Y))" in result
+        assert "reach(X, Y) <- (edge(X, Z), reach(Z, Y))" in result
 
     def test_arithmetic(self):
         # nv
@@ -250,13 +250,13 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
         # nv
         src = ":- module(test, [foo/2, bar/1])."
         result = prolog_to_clausal(src)
-        assert "-module(test, [Foo/2, Bar/1])" in result
+        assert "-module(test, [foo/2, bar/1])" in result
 
     def test_dynamic_directive(self):
         # nv
         src = ":- dynamic(color/2)."
         result = prolog_to_clausal(src)
-        assert "-dynamic(Color/2)" in result
+        assert "-dynamic(color/2)" in result
 
     def test_use_module(self):
         # nv
@@ -294,11 +294,13 @@ greeting --> ["hello", "world"].
 
 
 class TestNamingConventions:
-    def test_snake_to_pascal(self):
+    def test_snake_case_crosses_unchanged(self):
         # nv
-        src = "all_different([1, 2, 3])."
+        src = "all_different([1, 2, 3]).\nfoo_bar(1)."
         result = prolog_to_clausal(src)
         assert "all_different" in result
+        assert "foo_bar(1)" in result
+        assert "FooBar" not in result
 
     def test_variable_conversion(self):
         # nv
@@ -326,13 +328,13 @@ class TestDialects:
         # nv
         src = "edge(1, 2)."
         result = prolog_to_clausal(src, dialect=Dialect.swi())
-        assert "Edge(1, 2)," in result
+        assert "edge(1, 2)," in result
 
     def test_iso_default(self):
         # nv
         src = "edge(1, 2)."
         result = prolog_to_clausal(src, dialect=Dialect.iso())
-        assert "Edge(1, 2)," in result
+        assert "edge(1, 2)," in result
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -480,4 +482,4 @@ class TestPredicateCollidingAtomIsNotDeclaredPrivate:
         # The sweep is every position, not just goal position.
         out = prolog_to_clausal("p(foo) :-\n    q(r(foo(1))).\n")
         assert "-private([foo])" not in out, out
-        assert "P('foo')" in out, out
+        assert "p('foo')" in out, out

@@ -3,14 +3,14 @@
 
 # ── Basic real constraints ──────────────────────────────────────────────────
 
-Bounded(X) <- (
+bounded(X) <- (
     z3.real((
         0 <= X <= 10,
     )),
     z3.label([X]),
 )
 
-test("real bounded sat") <- Bounded(_)  # nv
+test("real bounded sat") <- bounded(_)  # nv
 
 # ── Minimize ────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@
 
 test('construct atom: functor(T, a, 0)') <- (functor(T, a, 0), T == a)
 
-test('decompose atom: functor(\'Hello\', Name, Arity)') <- (functor(hello, N, A), N == hello, A == 0)
+test('decompose atom: functor(\'hello\', Name, Arity)') <- (functor(hello, N, A), N == hello, A == 0)
 
 test('decompose empty atom') <- (functor('', N, A), N is '', A == 0)
 
@@ -14,7 +14,7 @@ test('construct atom from list: T =.. [\'a\']') <- (unpack(T, [a]), T == a)
 
 test('decompose atom: \'a\' =.. X') <- (unpack(a, X), X == [a])
 
-test('decompose string: \'Hello\' =.. X') <- (unpack(hello, X), X == [hello])
+test('decompose string: \'hello\' =.. X') <- (unpack(hello, X), X == [hello])
 
 test('decompose int: functor(1, N, A)') <- (functor(1, _n_unused, A), A == 0)
 

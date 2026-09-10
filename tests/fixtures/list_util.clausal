@@ -49,49 +49,49 @@ test("split_with consecutive") <- (split_with(0, [1, 0, 0, 2], RESULT), RESULT =
 
 # ── take_while/3 ──────────────────────────────────────────────────────────────
 
-IsPositive(X) <- (X > 0)
+is_positive(X) <- (X > 0)
 
-test("take_while basic") <- (take_while(IsPositive, [1, 2, -3, 4], RESULT), RESULT == [1, 2])  # nv
-test("take_while none match") <- (take_while(IsPositive, [-1, 2, 3], RESULT), RESULT == [])  # nv
-test("take_while all match") <- (take_while(IsPositive, [1, 2, 3], RESULT), RESULT == [1, 2, 3])  # nv
+test("take_while basic") <- (take_while(is_positive, [1, 2, -3, 4], RESULT), RESULT == [1, 2])  # nv
+test("take_while none match") <- (take_while(is_positive, [-1, 2, 3], RESULT), RESULT == [])  # nv
+test("take_while all match") <- (take_while(is_positive, [1, 2, 3], RESULT), RESULT == [1, 2, 3])  # nv
 
 # ── drop_while/3 ──────────────────────────────────────────────────────────────
 
-test("drop_while basic") <- (drop_while(IsPositive, [1, 2, -3, 4], RESULT), RESULT == [-3, 4])  # nv
-test("drop_while none match") <- (drop_while(IsPositive, [-1, 2, 3], RESULT), RESULT == [-1, 2, 3])  # nv
-test("drop_while all match") <- (drop_while(IsPositive, [1, 2, 3], RESULT), RESULT == [])  # nv
+test("drop_while basic") <- (drop_while(is_positive, [1, 2, -3, 4], RESULT), RESULT == [-3, 4])  # nv
+test("drop_while none match") <- (drop_while(is_positive, [-1, 2, 3], RESULT), RESULT == [-1, 2, 3])  # nv
+test("drop_while all match") <- (drop_while(is_positive, [1, 2, 3], RESULT), RESULT == [])  # nv
 
 # ── span/4 ───────────────────────────────────────────────────────────────────
 
-test("span basic") <- (span(IsPositive, [1, 2, -3, 4], MATCHING, REST), MATCHING == [1, 2], REST == [-3, 4])  # nv
+test("span basic") <- (span(is_positive, [1, 2, -3, 4], MATCHING, REST), MATCHING == [1, 2], REST == [-3, 4])  # nv
 
 # ── group_by/3 ─────────────────────────────────────────────────────────────────
 
-Identity(X, X) <- True
+identity(X, X) <- True
 
-test("group_by identity") <- (group_by(Identity, [1, 1, 2, 2, 2, 3], RESULT), RESULT == [[1, 1], [2, 2, 2], [3]])  # nv
+test("group_by identity") <- (group_by(identity, [1, 1, 2, 2, 2, 3], RESULT), RESULT == [[1, 1], [2, 2, 2], [3]])  # nv
 
 # ── sort_by/3 ─────────────────────────────────────────────────────────────────
 
-MyNeg(X, Y) <- (Y is ++(-X))
+my_neg(X, Y) <- (Y is ++(-X))
 
-test("sort_by negate") <- (sort_by(MyNeg, [1, 3, 2], RESULT), RESULT == [3, 2, 1])  # nv
-test("sort_by empty") <- (sort_by(MyNeg, [], RESULT), RESULT == [])  # nv
+test("sort_by negate") <- (sort_by(my_neg, [1, 3, 2], RESULT), RESULT == [3, 2, 1])  # nv
+test("sort_by empty") <- (sort_by(my_neg, [], RESULT), RESULT == [])  # nv
 
 # ── max_by/3 ──────────────────────────────────────────────────────────────────
 
-test("max_by negate") <- (max_by(MyNeg, [3, 1, 2], RESULT), RESULT == 1)  # nv
-test("max_by single") <- (max_by(Identity, [42], RESULT), RESULT == 42)  # nv
+test("max_by negate") <- (max_by(my_neg, [3, 1, 2], RESULT), RESULT == 1)  # nv
+test("max_by single") <- (max_by(identity, [42], RESULT), RESULT == 42)  # nv
 
 # ── min_by/3 ──────────────────────────────────────────────────────────────────
 
-test("min_by negate") <- (min_by(MyNeg, [3, 1, 2], RESULT), RESULT == 3)  # nv
-test("min_by single") <- (min_by(Identity, [42], RESULT), RESULT == 42)  # nv
+test("min_by negate") <- (min_by(my_neg, [3, 1, 2], RESULT), RESULT == 3)  # nv
+test("min_by single") <- (min_by(identity, [42], RESULT), RESULT == 42)  # nv
 
 # ── filter_map/3 ──────────────────────────────────────────────────────────────
 
-DoublePositive(X, Y) <- (X > 0, Y is ++(X * 2))
+double_positive(X, Y) <- (X > 0, Y is ++(X * 2))
 
-test("filter_map basic") <- (filter_map(DoublePositive, [1, -2, 3, -4], RESULT), RESULT == [2, 6])  # nv
-test("filter_map all pass") <- (filter_map(DoublePositive, [1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
-test("filter_map none pass") <- (filter_map(DoublePositive, [-1, -2], RESULT), RESULT == [])  # nv
+test("filter_map basic") <- (filter_map(double_positive, [1, -2, 3, -4], RESULT), RESULT == [2, 6])  # nv
+test("filter_map all pass") <- (filter_map(double_positive, [1, 2, 3], RESULT), RESULT == [2, 4, 6])  # nv
+test("filter_map none pass") <- (filter_map(double_positive, [-1, -2], RESULT), RESULT == [])  # nv

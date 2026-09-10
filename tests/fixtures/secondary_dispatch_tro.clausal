@@ -9,25 +9,25 @@
 # never-indexed position, guarded by evaluated ==) and passes K/J through, so
 # an unbound-K call routes to the SIGNAL-mode fallback and the signalled tail
 # call must be re-dispatched by the secondary dispatch.
--module(secondary_dispatch_tro, [Hop(K, J, N, OUT), Hop2(K, J, N, OUT)])
+-module(secondary_dispatch_tro, [hop(K, J, N, OUT), hop2(K, J, N, OUT)])
 
-Hop("a", 1, N, OUT) <- (N == 0, OUT is ["a1"])
-Hop("b", 1, N, OUT) <- (N == 0, OUT is ["b1"])
-Hop("c", 1, N, OUT) <- (N == 0, OUT is ["c1"])
-Hop("a", 2, N, OUT) <- (N == 0, OUT is ["a2"])
-Hop("b", 2, N, OUT) <- (N == 0, OUT is ["b2"])
-Hop("c", 2, N, OUT) <- (N == 0, OUT is ["c2"])
-Hop(K, J, N, OUT) <- (N > 0, M is N - 1, Hop(K, J, M, OUT))
-Hop(K_UNUSED, J_UNUSED, N, OUT) <- (N < 0, OUT is ["neg"])
+hop("a", 1, N, OUT) <- (N == 0, OUT is ["a1"])
+hop("b", 1, N, OUT) <- (N == 0, OUT is ["b1"])
+hop("c", 1, N, OUT) <- (N == 0, OUT is ["c1"])
+hop("a", 2, N, OUT) <- (N == 0, OUT is ["a2"])
+hop("b", 2, N, OUT) <- (N == 0, OUT is ["b2"])
+hop("c", 2, N, OUT) <- (N == 0, OUT is ["c2"])
+hop(K, J, N, OUT) <- (N > 0, M is N - 1, hop(K, J, M, OUT))
+hop(K_UNUSED, J_UNUSED, N, OUT) <- (N < 0, OUT is ["neg"])
 
-# Hop2: same hierarchical shape, but the recursive clause BINDS the level-0
+# hop2: same hierarchical shape, but the recursive clause BINDS the level-0
 # key — the re-dispatched tail call must land in a level-0 bucket, not the
 # fallback (the other branch of the secondary TRO loop).
-Hop2("a", 1, N, OUT) <- (N == 0, OUT is ["a1"])
-Hop2("b", 1, N, OUT) <- (N == 0, OUT is ["b1"])
-Hop2("c", 1, N, OUT) <- (N == 0, OUT is ["c1"])
-Hop2("a", 2, N, OUT) <- (N == 0, OUT is ["a2"])
-Hop2("b", 2, N, OUT) <- (N == 0, OUT is ["b2"])
-Hop2("c", 2, N, OUT) <- (N == 0, OUT is ["c2"])
-Hop2(K_UNUSED, J_UNUSED, N, OUT) <- (N > 0, M is N - 1, Hop2("a", 1, M, OUT))
-Hop2(K_UNUSED, J_UNUSED, N, OUT) <- (N < 0, OUT is ["neg"])
+hop2("a", 1, N, OUT) <- (N == 0, OUT is ["a1"])
+hop2("b", 1, N, OUT) <- (N == 0, OUT is ["b1"])
+hop2("c", 1, N, OUT) <- (N == 0, OUT is ["c1"])
+hop2("a", 2, N, OUT) <- (N == 0, OUT is ["a2"])
+hop2("b", 2, N, OUT) <- (N == 0, OUT is ["b2"])
+hop2("c", 2, N, OUT) <- (N == 0, OUT is ["c2"])
+hop2(K_UNUSED, J_UNUSED, N, OUT) <- (N > 0, M is N - 1, hop2("a", 1, M, OUT))
+hop2(K_UNUSED, J_UNUSED, N, OUT) <- (N < 0, OUT is ["neg"])

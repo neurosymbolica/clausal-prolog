@@ -1,29 +1,29 @@
-SafeQueens(N, QUEENS) <- (
+safe_queens(N, QUEENS) <- (
     in_domain(QUEENS, 1, N),
     all_different(QUEENS),
     label(QUEENS),
-    CheckDiagonals(QUEENS)
+    check_diagonals(QUEENS)
 )
 
-CheckDiagonals([]),
+check_diagonals([]),
 
-CheckDiagonals([QUEEN, *REST]) <- (
-    SafeFrom(QUEEN, REST, 1),
-    CheckDiagonals(REST)
+check_diagonals([QUEEN, *REST]) <- (
+    safe_from(QUEEN, REST, 1),
+    check_diagonals(REST)
 )
 
-SafeFrom(QUEEN_UNUSED, [], DISTANCE_UNUSED),
+safe_from(QUEEN_UNUSED, [], DISTANCE_UNUSED),
 
-SafeFrom(QUEEN, [HEAD, *TAIL], DISTANCE) <- (
+safe_from(QUEEN, [HEAD, *TAIL], DISTANCE) <- (
     QUEEN != HEAD,
     DIFFERENCE1 == QUEEN - HEAD,
     DIFFERENCE2 == HEAD - QUEEN,
     DIFFERENCE1 != DISTANCE,
     DIFFERENCE2 != DISTANCE,
     NEXT_DISTANCE == DISTANCE + 1,
-    SafeFrom(QUEEN, TAIL, NEXT_DISTANCE)
+    safe_from(QUEEN, TAIL, NEXT_DISTANCE)
 )
 
 
-test("queens 1") <- (length(QUEENS, 1), SafeQueens(1, QUEENS), length(QUEENS, 1))  # nv
-test("queens 4 valid") <- (length(QUEENS, 4), SafeQueens(4, QUEENS), length(QUEENS, 4))  # nv
+test("queens 1") <- (length(QUEENS, 1), safe_queens(1, QUEENS), length(QUEENS, 1))  # nv
+test("queens 4 valid") <- (length(QUEENS, 4), safe_queens(4, QUEENS), length(QUEENS, 4))  # nv

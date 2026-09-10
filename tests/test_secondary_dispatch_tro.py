@@ -36,7 +36,7 @@ def _solutions(mod, *args):
     lm = mod.__dict__["$module"]
     vals = [Var() if a is None else a for a in args]
     return sorted(term_str(deref(vals[-1]), quoted=False)
-                  for _ in call("Hop", *vals, module=lm))
+                  for _ in call("hop", *vals, module=lm))
 
 
 BASE_SOLUTIONS = ["[a1]", "[a2]", "[b1]", "[b2]", "[c1]", "[c2]"]
@@ -48,7 +48,7 @@ class TestSecondaryDispatchTro:
         analysis changes and this stops holding, the TRO coverage below
         silently stops exercising the secondary path."""
         # nv
-        hop = hop_mod.__dict__["Hop"]
+        hop = hop_mod.__dict__["hop"]
         assert getattr(hop, "_index_plans_hierarchical", None)
 
     def test_tro_is_active(self, hop_mod):
@@ -56,7 +56,7 @@ class TestSecondaryDispatchTro:
         predicate's base_globals carry $tro_state only when the sweep
         selected it. Guards against the test passing vacuously."""
         # nv
-        hop = hop_mod.__dict__["Hop"]
+        hop = hop_mod.__dict__["hop"]
         for idx_dict in hop._index_plans.values():
             for wrapper in idx_dict.values():
                 for cell in wrapper.__closure__ or ():
@@ -93,17 +93,17 @@ def _solutions2(mod, *args):
     lm = mod.__dict__["$module"]
     vals = [Var() if a is None else a for a in args]
     return sorted(term_str(deref(vals[-1]), quoted=False)
-                  for _ in call("Hop2", *vals, module=lm))
+                  for _ in call("hop2", *vals, module=lm))
 
 
 class TestSecondaryDispatchTroBucketLanding:
-    """Hop2's recursive clause binds the level-0 key, so the re-dispatched
+    """hop2's recursive clause binds the level-0 key, so the re-dispatched
     tail call must land in a level-0 bucket — the other branch of the
-    secondary TRO loop (Hop only re-enters the fallback)."""
+    secondary TRO loop (hop only re-enters the fallback)."""
 
     def test_strategy_is_hierarchical(self, hop_mod):
         # nv
-        hop2 = hop_mod.__dict__["Hop2"]
+        hop2 = hop_mod.__dict__["hop2"]
         assert getattr(hop2, "_index_plans_hierarchical", None)
 
     def test_redispatch_lands_in_bucket(self, hop_mod):

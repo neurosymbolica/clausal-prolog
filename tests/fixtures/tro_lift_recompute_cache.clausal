@@ -14,12 +14,12 @@
 # recompute path the fix targets. Compiling "a" then "b" back-to-back
 # gives the old bug its best chance: "a"'s lifted clauses are freed right
 # before "b"'s are built.
--module(tro_lift_recompute_cache, [Cnt(K, N, X)])
+-module(tro_lift_recompute_cache, [cnt(K, N, X)])
 
-Cnt("a", N, X) <- (N > 0, M is N - 1, Cnt("a", M, X))
-Cnt("a", N, X) <- (X is N)
-Cnt("b", N, X) <- (N > 0, M is N - 1, Cnt("b", M, X))
-Cnt("b", N, X) <- (X is N)
-Cnt("c", N, X) <- (X is N)
-Cnt("d", N, X) <- (X is N)
-Cnt("e", N, X) <- (X is N)
+cnt("a", N, X) <- (N > 0, M is N - 1, cnt("a", M, X))
+cnt("a", N, X) <- (X is N)
+cnt("b", N, X) <- (N > 0, M is N - 1, cnt("b", M, X))
+cnt("b", N, X) <- (X is N)
+cnt("c", N, X) <- (X is N)
+cnt("d", N, X) <- (X is N)
+cnt("e", N, X) <- (X is N)

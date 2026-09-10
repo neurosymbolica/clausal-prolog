@@ -2,63 +2,63 @@
 #
 # Arrow syntax, variable capture, conjunction bodies, predicate calls
 
-# ApplyVal/2 — basic lambda: identity via call_goal
-ApplyVal(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
+# apply_val/2 — basic lambda: identity via call_goal
+apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
-# AddOne/2 — lambda with arithmetic
-AddOne(X, Y) <- call_goal((V <- (Y == V + 1)), X)
+# add_one/2 — lambda with arithmetic
+add_one(X, Y) <- call_goal((V <- (Y == V + 1)), X)
 
-# AddZ/3 — captured variable from enclosing clause
-AddZ(Z, X, RESULT) <- call_goal((V <- (RESULT == V + Z)), X)
+# add_z/3 — captured variable from enclosing clause
+add_z(Z, X, RESULT) <- call_goal((V <- (RESULT == V + Z)), X)
 
-# DoubleVal/2 — two-arg lambda
-DoubleVal(X, Y) <- call_goal(((A, B) <- (B == A * 2)), X, Y)
+# double_val/2 — two-arg lambda
+double_val(X, Y) <- call_goal(((A, B) <- (B == A * 2)), X, Y)
 
-# ZeroArg/1 — zero-arg lambda
-ZeroArg(RESULT) <- call_goal((() <- (RESULT is 42)))
+# zero_arg/1 — zero-arg lambda
+zero_arg(RESULT) <- call_goal((() <- (RESULT is 42)))
 
-# Transform/2 — lambda with conjunction body
-Transform(X, Y) <- call_goal(((V, R) <- ((T == V + 1) and (R == T * 2))), X, Y)
+# transform/2 — lambda with conjunction body
+transform(X, Y) <- call_goal(((V, R) <- ((T == V + 1) and (R == T * 2))), X, Y)
 
-# CaptureTwo/4 — captures two variables from enclosing clause
-CaptureTwo(A, B, X, RESULT) <- (
+# capture_two/4 — captures two variables from enclosing clause
+capture_two(A, B, X, RESULT) <- (
     call_goal((V <- (RESULT == V + A + B)), X)
 )
 
-# ApplyPred/2 — lambda calling a predicate defined in same module
-Helper(X, Y) <- (Y == X * 10)
-ApplyPred(X, Y) <- call_goal((V <- (Helper(V, Y))), X)
+# apply_pred/2 — lambda calling a predicate defined in same module
+helper(X, Y) <- (Y == X * 10)
+apply_pred(X, Y) <- call_goal((V <- (helper(V, Y))), X)
 
-# AllColors/1 — findall with multi-solution predicate
-Color("red"),
-Color("green"),
-Color("blue"),
+# all_colors/1 — findall with multi-solution predicate
+color("red"),
+color("green"),
+color("blue"),
 
-AllColors(COLORS) <- (
-    findall(C, (Color(C)), COLORS)
+all_colors(COLORS) <- (
+    findall(C, (color(C)), COLORS)
 )
 
 
 # ── Test clauses (migrated from test_clausal_modules.py::TestLambda*) ─────
 
-test("apply_val: int") <- (ApplyVal(R, 42), R == 42)  # nv
-test("apply_val: string") <- (ApplyVal(R, "hello"), R == "hello")  # nv
+test("apply_val: int") <- (apply_val(R, 42), R == 42)  # nv
+test("apply_val: string") <- (apply_val(R, "hello"), R == "hello")  # nv
 
-test("add_one: 5+1=6") <- (AddOne(5, R), R == 6)  # nv
-test("add_one: -1+1=0") <- (AddOne(-1, R), R == 0)  # nv
+test("add_one: 5+1=6") <- (add_one(5, R), R == 6)  # nv
+test("add_one: -1+1=0") <- (add_one(-1, R), R == 0)  # nv
 
-test("add_z: 3 + 10 = 13") <- (AddZ(3, 10, R), R == 13)  # nv
-test("add_z: 0 + 7 = 7") <- (AddZ(0, 7, R), R == 7)  # nv
+test("add_z: 3 + 10 = 13") <- (add_z(3, 10, R), R == 13)  # nv
+test("add_z: 0 + 7 = 7") <- (add_z(0, 7, R), R == 7)  # nv
 
-test("double_val: 5 * 2 = 10") <- (DoubleVal(5, R), R == 10)  # nv
+test("double_val: 5 * 2 = 10") <- (double_val(5, R), R == 10)  # nv
 
-test("zero_arg: returns 42") <- (ZeroArg(R), R == 42)  # nv
+test("zero_arg: returns 42") <- (zero_arg(R), R == 42)  # nv
 
-test("transform: (5+1)*2 = 12") <- (Transform(5, R), R == 12)  # nv
-test("transform: (0+1)*2 = 2") <- (Transform(0, R), R == 2)  # nv
+test("transform: (5+1)*2 = 12") <- (transform(5, R), R == 12)  # nv
+test("transform: (0+1)*2 = 2") <- (transform(0, R), R == 2)  # nv
 
-test("capture_two: 5 + 10 + 20 = 35") <- (CaptureTwo(10, 20, 5, R), R == 35)  # nv
+test("capture_two: 5 + 10 + 20 = 35") <- (capture_two(10, 20, 5, R), R == 35)  # nv
 
-test("apply_pred: 3 * 10 = 30") <- (ApplyPred(3, R), R == 30)  # nv
+test("apply_pred: 3 * 10 = 30") <- (apply_pred(3, R), R == 30)  # nv
 
-test("all_colors") <- (AllColors(R), R == ["red", "green", "blue"])  # nv
+test("all_colors") <- (all_colors(R), R == ["red", "green", "blue"])  # nv

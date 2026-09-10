@@ -1,32 +1,32 @@
 -private([a, b, bird, cat, chases, dog, hello, likes, sees, the, world])
 
--module(dcg_grammar, [Sentence/2, NounPhrase/2, VerbPhrase/2, Greeting/2, Digit/3, Ab/2, LookAhead/3, NotA/2, ExprDcg/3, ValidSentence/1])
+-module(dcg_grammar, [sentence/2, noun_phrase/2, verb_phrase/2, greeting/2, digit/3, ab/2, look_ahead/3, not_a/2, expr_dcg/3, valid_sentence/1])
 
-Greeting() >> ([hello, world])
+greeting() >> ([hello, world])
 
-NounPhrase() >> (([the, dog] or ([the, cat] or [a, bird])))
+noun_phrase() >> (([the, dog] or ([the, cat] or [a, bird])))
 
-VerbPhrase() >> (([chases] or ([sees] or [likes])))
+verb_phrase() >> (([chases] or ([sees] or [likes])))
 
-Sentence() >> ('noun_phrase', 'verb_phrase', 'noun_phrase')
+sentence() >> ('noun_phrase', 'verb_phrase', 'noun_phrase')
 
-Digit(_digit) >> ([_digit], {_digit >= 0}, {_digit <= 9})
+digit(_digit) >> ([_digit], {_digit >= 0}, {_digit <= 9})
 
-Ab() >> ([a], 'ab')
+ab() >> ([a], 'ab')
 
-Ab() >> ([b], 'ab')
+ab() >> ([b], 'ab')
 
-Ab() >> ([])
+ab() >> ([])
 
-(LookAhead(_token), [_token]) >> ([_token])
+(look_ahead(_token), [_token]) >> ([_token])
 
-NotA() >> (not [a], [_x_unused])
+not_a() >> (not [a], [_x_unused])
 
-ValidSentence(_sentence) <- (phrase('sentence', _sentence))
+valid_sentence(_sentence) <- (phrase('sentence', _sentence))
 
-ExprDcg(_expression) >> ([_expression], {_expression is _expression + 0})
+expr_dcg(_expression) >> ([_expression], {_expression is _expression + 0})
 
-test('valid sentence') <- (ValidSentence([the, dog, chases, the, cat]))
+test('valid sentence') <- (valid_sentence([the, dog, chases, the, cat]))
 
 test('greeting') <- (phrase('greeting', [hello, world]))
 
@@ -34,4 +34,4 @@ test('noun phrase dog') <- (phrase('noun_phrase', [the, dog]))
 
 test('verb phrase chases') <- (phrase('verb_phrase', [chases]))
 
-test('digit 3') <- (phrase(Digit(3), [3]))
+test('digit 3') <- (phrase(digit(3), [3]))

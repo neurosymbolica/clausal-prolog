@@ -34,47 +34,47 @@ _MATCHERS = """\
     Clause, Goal, Variable,
 ])
 
-ShapeXY(SRC) <- reified_clause(SRC, MyPred(A, B) <- (Goalx(A), Goaly(B)))
+shape_xy(SRC) <- reified_clause(SRC, my_pred(A, B) <- (goalx(A), goaly(B)))
 
-CaptureFirstArg(SRC, A) <- reified_clause(SRC, MyPred(A, _) <- GOALS)
+capture_first_arg(SRC, A) <- reified_clause(SRC, my_pred(A, _) <- GOALS)
 
-CaptureBody(SRC, GOALS) <- reified_clause(SRC, MyPred(_, _) <- GOALS)
+capture_body(SRC, GOALS) <- reified_clause(SRC, my_pred(_, _) <- GOALS)
 
-FactWithAtom(SRC) <- reified_clause(SRC, Tagged(_, ok) <- True)
+fact_with_atom(SRC) <- reified_clause(SRC, tagged(_, ok) <- True)
 
-OperatorBody(SRC) <- reified_clause(SRC, Positive(A) <- (A > 0))
+operator_body(SRC) <- reified_clause(SRC, positive(A) <- (A > 0))
 
-NestedCompound(SRC) <- reified_clause(SRC, Holds(State(A)) <- Check(A))
+nested_compound(SRC) <- reified_clause(SRC, holds(state(A)) <- check(A))
 
-NegationBody(SRC) <- reified_clause(SRC, Free(A) <- (not Busy(A)))
+negation_body(SRC) <- reified_clause(SRC, free(A) <- (not busy(A)))
 
 # Sugar goal inside a multi-goal body (exercises conjunction recursion).
-TwoGoalBody(SRC) <- (
-    reified_clause(SRC, MyPred(_, _) <- GOALS),
+two_goal_body(SRC) <- (
+    reified_clause(SRC, my_pred(_, _) <- GOALS),
     GOALS is [_, _]
 )
 
 # Outside reflection arguments the arrow stays a runtime Predicate node.
-Foo(0),
-Bar(0),
-KeepRaw(T) <- (T is (Foo(A) <- Bar(A)))
+foo(0),
+bar(0),
+keep_raw(T) <- (T is (foo(A) <- bar(A)))
 """
 
 _TARGET = """\
-MyPred(X, Y) <- (Goalx(X), Goaly(Y))
-Tagged(1, ok),
-Positive(N) <- (N > 0)
-Holds(State(W)) <- Check(W)
-Free(Q) <- (not Busy(Q))
+my_pred(X, Y) <- (goalx(X), goaly(Y))
+tagged(1, ok),
+positive(N) <- (N > 0)
+holds(state(W)) <- check(W)
+free(Q) <- (not busy(Q))
 """
 
-_CROSSED = "MyPred(X, Y) <- (Goalx(Y), Goaly(X))\n"
-_RENAMED = "MyPred(P, Q) <- (Goalx(P), Goaly(Q))\n"
-_NEGATIVE = "Positive(N) <- (N < 0)\n"
+_CROSSED = "my_pred(X, Y) <- (goalx(Y), goaly(X))\n"
+_RENAMED = "my_pred(P, Q) <- (goalx(P), goaly(Q))\n"
+_NEGATIVE = "positive(N) <- (N < 0)\n"
 # THE FLIP (spec §7): ``"ok"`` is an ATOM under the default
 # ``-double_quotes(atom)`` -- the source has to DECLARE the chars mode for
 # its ``"ok"`` to be the string this negative case is about.
-_STRING_NOT_ATOM = '-double_quotes(chars)\nTagged(1, "ok"),\n'
+_STRING_NOT_ATOM = '-double_quotes(chars)\ntagged(1, "ok"),\n'
 
 
 @pytest.fixture(scope="module")
@@ -91,13 +91,13 @@ def _succeeds(functor, *args, module):
 
 class TestShapeMatching:
     def test_matches_target_clause(self, matchers):
-        assert _succeeds("ShapeXY", _TARGET, module=matchers)
+        assert _succeeds("shape_xy", _TARGET, module=matchers)
 
     def test_matches_alpha_renamed_clause(self, matchers):
-        assert _succeeds("ShapeXY", _RENAMED, module=matchers)
+        assert _succeeds("shape_xy", _RENAMED, module=matchers)
 
     def test_rejects_crossed_variables(self, matchers):
-        assert not _succeeds("ShapeXY", _CROSSED, module=matchers)
+        assert not _succeeds("shape_xy", _CROSSED, module=matchers)
 
 
 class TestCapture:
@@ -105,7 +105,7 @@ class TestCapture:
         from clausal.reflection import Variable
 
         captured = Var()
-        for _ in call("CaptureFirstArg", _TARGET, captured, module=matchers):
+        for _ in call("capture_first_arg", _TARGET, captured, module=matchers):
             break
         value = deref(captured)
         assert isinstance(value, Variable)
@@ -115,35 +115,35 @@ class TestCapture:
         from clausal.reflection import Goal
 
         goals = Var()
-        for _ in call("CaptureBody", _TARGET, goals, module=matchers):
+        for _ in call("capture_body", _TARGET, goals, module=matchers):
             break
         value = deref(goals)
         assert isinstance(value, list)
-        assert [g.name for g in value] == ["Goalx", "Goaly"]
+        assert [g.name for g in value] == ["goalx", "goaly"]
         assert all(isinstance(g, Goal) for g in value)
 
 
 class TestPatternForms:
     def test_fact_pattern_with_atom_argument(self, matchers):
-        assert _succeeds("FactWithAtom", _TARGET, module=matchers)
+        assert _succeeds("fact_with_atom", _TARGET, module=matchers)
 
     def test_atom_pattern_rejects_string_literal(self, matchers):
-        assert not _succeeds("FactWithAtom", _STRING_NOT_ATOM, module=matchers)
+        assert not _succeeds("fact_with_atom", _STRING_NOT_ATOM, module=matchers)
 
     def test_operator_body_pattern(self, matchers):
-        assert _succeeds("OperatorBody", _TARGET, module=matchers)
+        assert _succeeds("operator_body", _TARGET, module=matchers)
 
     def test_operator_body_rejects_different_operator(self, matchers):
-        assert not _succeeds("OperatorBody", _NEGATIVE, module=matchers)
+        assert not _succeeds("operator_body", _NEGATIVE, module=matchers)
 
     def test_nested_compound_argument(self, matchers):
-        assert _succeeds("NestedCompound", _TARGET, module=matchers)
+        assert _succeeds("nested_compound", _TARGET, module=matchers)
 
     def test_negation_body_pattern(self, matchers):
-        assert _succeeds("NegationBody", _TARGET, module=matchers)
+        assert _succeeds("negation_body", _TARGET, module=matchers)
 
     def test_sugar_goal_inside_conjunction(self, matchers):
-        assert _succeeds("TwoGoalBody", _TARGET, module=matchers)
+        assert _succeeds("two_goal_body", _TARGET, module=matchers)
 
 
 class TestBoundary:
@@ -151,6 +151,6 @@ class TestBoundary:
         from clausal.pythonic_ast.nodes import Predicate
 
         term = Var()
-        for _ in call("KeepRaw", term, module=matchers):
+        for _ in call("keep_raw", term, module=matchers):
             break
         assert isinstance(deref(term), Predicate)

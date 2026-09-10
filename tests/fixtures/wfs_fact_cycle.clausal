@@ -1,7 +1,7 @@
--table(Wf/1)
+-table(wf/1)
 
-Edge(1, 2),
-Edge(2, 1),
+edge(1, 2),
+edge(2, 1),
 
-Wf(X) <- (Edge(X, Y), not Wf(Y))
-Wf(1),
+wf(X) <- (edge(X, Y), not wf(Y))
+wf(1),

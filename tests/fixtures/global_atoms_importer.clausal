@@ -4,4 +4,4 @@
 
 -import_from(tests.fixtures.global_atoms_owner, [phase2import_yellow])
 
-ColorImporter(phase2import_yellow),
+color_importer(phase2import_yellow),

@@ -140,7 +140,7 @@ def test_F003_guard_plain_dcg_sequence(tmp_path):
 def test_F003_guard_edcg_accumulator_with_plain_call(tmp_path):
     """A single plain-DCG call between accumulator pushes threads correctly."""
     m = _load(tmp_path, """
-        -edcg_acc(cnt, V_, In_, Out_, {Out_ == In_ + V_})
+        -edcg_acc(cnt, V_, in_, out_, {out_ == in_ + V_})
         w >> (["w"])
         -edcg_pred(q, 0, [cnt, dcg])
         q >> ([1] // cnt, w, [2] // cnt)
@@ -317,7 +317,7 @@ def test_F007_dump_source_arrow_fidelity(tmp_path):
 
 def test_F008_te_doc_quick_example(tmp_path):
     m = _load(tmp_path, """
-        TermExpansion(
+        term_expansion(
             q(fact(X)),
             [q(fact(X)), q(logged_fact(X))],
             STATE, STATE
@@ -332,7 +332,7 @@ def test_F008_te_doc_quick_example(tmp_path):
 
 def test_F008_te_doc_suppression_example(tmp_path):
     m = _load(tmp_path, """
-        TermExpansion(q(debug(X)), [], STATE, STATE) <- True
+        term_expansion(q(debug(X)), [], STATE, STATE) <- True
         debug("x"),
         keep(1),
     """)
@@ -344,7 +344,7 @@ def test_F008_te_doc_suppression_example(tmp_path):
 def test_F008_guard_te_var_pattern_one_to_many(tmp_path):
     """The tested-and-working TE idiom: a plain variable pattern."""
     m = _load(tmp_path, """
-        TermExpansion(TERM, [TERM, TERM], STATE, STATE) <- True
+        term_expansion(TERM, [TERM, TERM], STATE, STATE) <- True
         color("red"),
     """)
     lm = _logic(m)
@@ -561,8 +561,8 @@ def test_F017_guard_titlecase_alias_works(tmp_path):
     lib.write_text('twice(X, Y) <- (Y == X * 2)\n')
     _load_module("a10_f017b_lib", str(lib))
     m = _load(tmp_path, """
-        -import_from(a10_f017b_lib, [alias(twice, Dbl)])
-        use(A, B) <- Dbl(A, B)
+        -import_from(a10_f017b_lib, [alias(twice, dbl)])
+        use(A, B) <- dbl(A, B)
     """)
     b = Var()
     assert _values(m.use(4, b), b) == [8]

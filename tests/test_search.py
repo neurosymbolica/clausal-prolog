@@ -368,7 +368,7 @@ class TestFibonacci:
     def _fib(self, n: int, mod: Module) -> int:
         x = Var()
         t = Trail()
-        results = [deref(x) for _ in call("Fib", n, x, module=mod, trail=t)]
+        results = [deref(x) for _ in call("fib", n, x, module=mod, trail=t)]
         assert len(results) >= 1
         return results[0]
 
@@ -412,7 +412,7 @@ class TestFibonacci:
         # nv
         mod = _make_fib_module()
         x = Var()
-        results = list(call("Fib", -1, x, module=mod))
+        results = list(call("fib", -1, x, module=mod))
         assert results == []
 
 
@@ -799,73 +799,73 @@ class TestAnonymousVar:
         return _load_clausal_module("anon.clausal")
 
     def test_first_extracts_head(self):
-        """First([H, *_], H) — _ ignores the tail."""
+        """first([H, *_], H) — _ ignores the tail."""
         # nv
         mod = self._anon_mod()
         r = Var()
-        results = [deref(r) for _ in call("First", [10, 20, 30], r, module=mod)]
+        results = [deref(r) for _ in call("first", [10, 20, 30], r, module=mod)]
         assert results == [10]
 
     def test_has_pair_succeeds(self):
-        """HasPair([_, _, *_]) — list with at least 2 elements."""
+        """has_pair([_, _, *_]) — list with at least 2 elements."""
         # nv
         mod = self._anon_mod()
-        assert list(call("HasPair", [1, 2], module=mod)) != []
+        assert list(call("has_pair", [1, 2], module=mod)) != []
 
     def test_has_pair_fails_singleton(self):
-        """HasPair fails on a 1-element list."""
+        """has_pair fails on a 1-element list."""
         # nv
         mod = self._anon_mod()
-        assert list(call("HasPair", [1], module=mod)) == []
+        assert list(call("has_pair", [1], module=mod)) == []
 
     def test_has_pair_fails_empty(self):
         # nv
         mod = self._anon_mod()
-        assert list(call("HasPair", [], module=mod)) == []
+        assert list(call("has_pair", [], module=mod)) == []
 
     def test_second_extracts_second(self):
-        """Second([_, S, *_], S) — _ ignores first element and rest."""
+        """second([_, S, *_], S) — _ ignores first element and rest."""
         # nv
         mod = self._anon_mod()
         r = Var()
-        results = [deref(r) for _ in call("Second", [10, 20, 30], r, module=mod)]
+        results = [deref(r) for _ in call("second", [10, 20, 30], r, module=mod)]
         assert results == [20]
 
     def test_const_ignores_input(self):
-        """Const(_, 42) — any input yields 42."""
+        """const(_, 42) — any input yields 42."""
         # nv
         mod = self._anon_mod()
         r = Var()
-        results = [deref(r) for _ in call("Const", "anything", r, module=mod)]
+        results = [deref(r) for _ in call("const", "anything", r, module=mod)]
         assert results == [42]
 
     def test_const_ignores_input_var(self):
-        """Const(_, 42) with Var input."""
+        """const(_, 42) with Var input."""
         # nv
         mod = self._anon_mod()
         x, r = Var(), Var()
-        results = [deref(r) for _ in call("Const", x, r, module=mod)]
+        results = [deref(r) for _ in call("const", x, r, module=mod)]
         assert results == [42]
 
     def test_member_of_pair_first(self):
-        """MemberOfPair(X, [X, _]) — X matches first position."""
+        """member_of_pair(X, [X, _]) — X matches first position."""
         # nv
         mod = self._anon_mod()
-        results = list(call("MemberOfPair", 1, [1, 2], module=mod))
+        results = list(call("member_of_pair", 1, [1, 2], module=mod))
         assert len(results) >= 1
 
     def test_member_of_pair_second(self):
-        """MemberOfPair(X, [_, X]) — X matches second position."""
+        """member_of_pair(X, [_, X]) — X matches second position."""
         # nv
         mod = self._anon_mod()
-        results = list(call("MemberOfPair", 2, [1, 2], module=mod))
+        results = list(call("member_of_pair", 2, [1, 2], module=mod))
         assert len(results) >= 1
 
     def test_member_of_pair_neither_fails(self):
-        """MemberOfPair(X, [A, B]) fails if X is neither A nor B."""
+        """member_of_pair(X, [A, B]) fails if X is neither A nor B."""
         # nv
         mod = self._anon_mod()
-        results = list(call("MemberOfPair", 3, [1, 2], module=mod))
+        results = list(call("member_of_pair", 3, [1, 2], module=mod))
         assert results == []
 
     def test_last_anon_head_still_works(self):
@@ -884,27 +884,27 @@ class TestMultiStarPatterns:
         return _load_clausal_module("multistar.clausal")
 
     def test_split_empty(self):
-        """Split([], A, B) → A=[], B=[] (one solution)."""
+        """split([], A, B) → A=[], B=[] (one solution)."""
         # nv
         mod = self._ms_mod()
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("Split", [], a, b, module=mod)]
+        results = [(deref(a), deref(b)) for _ in call("split", [], a, b, module=mod)]
         assert results == [([], [])]
 
     def test_split_singleton(self):
-        """Split([1], A, B) → two solutions."""
+        """split([1], A, B) → two solutions."""
         # nv
         mod = self._ms_mod()
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("Split", [1], a, b, module=mod)]
+        results = [(deref(a), deref(b)) for _ in call("split", [1], a, b, module=mod)]
         assert results == [([], [1]), ([1], [])]
 
     def test_split_three(self):
-        """Split([1,2,3], A, B) → 4 solutions (all splits)."""
+        """split([1,2,3], A, B) → 4 solutions (all splits)."""
         # nv
         mod = self._ms_mod()
         a, b = Var(), Var()
-        results = [(deref(a), deref(b)) for _ in call("Split", [1, 2, 3], a, b, module=mod)]
+        results = [(deref(a), deref(b)) for _ in call("split", [1, 2, 3], a, b, module=mod)]
         assert results == [
             ([], [1, 2, 3]),
             ([1], [2, 3]),
@@ -913,13 +913,13 @@ class TestMultiStarPatterns:
         ]
 
     def test_split3_fixed_head(self):
-        """Split3([X, *A, *B], X, A, B) — first element fixed."""
+        """split3([X, *A, *B], X, A, B) — first element fixed."""
         # nv
         mod = self._ms_mod()
         x, a, b = Var(), Var(), Var()
         results = [
             (deref(x), deref(a), deref(b))
-            for _ in call("Split3", [10, 20, 30], x, a, b, module=mod)
+            for _ in call("split3", [10, 20, 30], x, a, b, module=mod)
         ]
         assert results == [
             (10, [], [20, 30]),
@@ -928,13 +928,13 @@ class TestMultiStarPatterns:
         ]
 
     def test_around(self):
-        """Around([*A, X, *B], X, [A, B]) — find element at every position."""
+        """around([*A, X, *B], X, [A, B]) — find element at every position."""
         # nv
         mod = self._ms_mod()
         x, p = Var(), Var()
         results = [
             (deref(x), deref(p))
-            for _ in call("Around", [1, 2, 3], x, p, module=mod)
+            for _ in call("around", [1, 2, 3], x, p, module=mod)
         ]
         assert results == [
             (1, [[], [2, 3]]),
@@ -943,13 +943,13 @@ class TestMultiStarPatterns:
         ]
 
     def test_split3way(self):
-        """Split3way([*A, *B, *C], A, B, C) — all 3-way partitions."""
+        """split3way([*A, *B, *C], A, B, C) — all 3-way partitions."""
         # nv
         mod = self._ms_mod()
         a, b, c = Var(), Var(), Var()
         results = [
             (deref(a), deref(b), deref(c))
-            for _ in call("Split3way", [1, 2], a, b, c, module=mod)
+            for _ in call("split3way", [1, 2], a, b, c, module=mod)
         ]
         assert results == [
             ([], [], [1, 2]),
@@ -961,13 +961,13 @@ class TestMultiStarPatterns:
         ]
 
     def test_split3way_empty(self):
-        """Split3way([], A, B, C) → one solution: all empty."""
+        """split3way([], A, B, C) → one solution: all empty."""
         # nv
         mod = self._ms_mod()
         a, b, c = Var(), Var(), Var()
         results = [
             (deref(a), deref(b), deref(c))
-            for _ in call("Split3way", [], a, b, c, module=mod)
+            for _ in call("split3way", [], a, b, c, module=mod)
         ]
         assert results == [([], [], [])]
 
@@ -978,5 +978,5 @@ class TestMultiStarPatterns:
         mod = self._ms_mod()
         lst, a, b = Var(), Var(), Var()
         # Yields one solution: lst bound to SegList([VarSeg(a), VarSeg(b)])
-        solutions = [type(deref(lst)) for _ in call("Split", lst, a, b, module=mod)]
+        solutions = [type(deref(lst)) for _ in call("split", lst, a, b, module=mod)]
         assert solutions == [SegList]

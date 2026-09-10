@@ -62,7 +62,7 @@ class TestFinderDirectoryBranch:
         pkg_b = tmp_path / "a" / "b"
         pkg_b.mkdir(parents=True)
         init = pkg_b / "__init__.clausal"
-        init.write_text("-module(b, [Ping])\nPing(1),\n")
+        init.write_text("-module(b, [ping])\nping(1),\n")
 
         spec = PredicateFinder().find_spec("a.b", path=[str(tmp_path / "a")])
 
@@ -87,10 +87,10 @@ class TestFinderDirectoryBranch:
         """When both ``b.clausal`` and ``b/__init__.clausal`` exist, the flat
         file wins so existing flat-module resolution is unchanged."""
         # nv
-        (tmp_path / "b.clausal").write_text("-module(b, [Ping])\nPing(1),\n")
+        (tmp_path / "b.clausal").write_text("-module(b, [ping])\nping(1),\n")
         pkg_b = tmp_path / "b"
         pkg_b.mkdir()
-        (pkg_b / "__init__.clausal").write_text("-module(b, [Ping])\nPing(2),\n")
+        (pkg_b / "__init__.clausal").write_text("-module(b, [ping])\nping(2),\n")
 
         spec = PredicateFinder().find_spec("b", path=[str(tmp_path)])
 
@@ -104,7 +104,7 @@ class TestFinderDirectoryBranch:
 
         pkg = tmp_path / "json"
         pkg.mkdir()
-        (pkg / "__init__.clausal").write_text("-module(json, [Ping])\nPing(1),\n")
+        (pkg / "__init__.clausal").write_text("-module(json, [ping])\nping(1),\n")
 
         with pytest.warns(ClausalLintWarning, match="json"):
             spec = PredicateFinder().find_spec("json", path=[str(tmp_path)])
@@ -122,16 +122,16 @@ class TestPackageInitEndToEnd:
         pkg = on_path / "a" / "b"
         pkg.mkdir(parents=True)
         (pkg / "__init__.clausal").write_text(
-            "-module(b, [Ping(X)])\nPing(1),\nPing(2),\n"
+            "-module(b, [ping(X)])\nping(1),\nping(2),\n"
         )
         (on_path / "use_dir.clausal").write_text(
-            "-import_from(a.b, [Ping])\nUsePing(X) <- Ping(X)\n"
+            "-import_from(a.b, [ping])\nuse_ping(X) <- ping(X)\n"
         )
 
         mod = importlib.import_module("use_dir")
         logic_mod = mod.__dict__["$module"]
-        assert len(list(call("UsePing", 1, module=logic_mod))) == 1
-        assert list(call("UsePing", 9, module=logic_mod)) == []
+        assert len(list(call("use_ping", 1, module=logic_mod))) == 1
+        assert list(call("use_ping", 9, module=logic_mod)) == []
 
     def test_directory_package_executes_init_and_sets_dunder_path(self, on_path):
         """Importing the package directly executes the init's clauses (it is a
@@ -140,7 +140,7 @@ class TestPackageInitEndToEnd:
         # nv
         pkg = on_path / "a" / "b"
         pkg.mkdir(parents=True)
-        (pkg / "__init__.clausal").write_text("-module(b, [Ping(X)])\nPing(1),\n")
+        (pkg / "__init__.clausal").write_text("-module(b, [ping(X)])\nping(1),\n")
 
         mod = importlib.import_module("a.b")
         # __path__ marks it a package (a namespace package would set this too)...
@@ -148,7 +148,7 @@ class TestPackageInitEndToEnd:
         # ...but only a real clausal load runs the init: a namespace package
         # would have neither ``$module`` nor the executed predicate.
         logic_mod = mod.__dict__["$module"]
-        assert len(list(call("Ping", 1, module=logic_mod))) == 1
+        assert len(list(call("ping", 1, module=logic_mod))) == 1
 
     def test_reexport_through_init(self, on_path):
         """``a/b/__init__.clausal`` re-exports ``a.b.c``; a consumer importing
@@ -156,30 +156,30 @@ class TestPackageInitEndToEnd:
         # nv
         pkg = on_path / "a" / "b"
         pkg.mkdir(parents=True)
-        (pkg / "__init__.clausal").write_text("-import_from(a.b.c, [Qux])\n")
-        (pkg / "c.clausal").write_text("-module(c, [Qux(X)])\nQux(7),\n")
+        (pkg / "__init__.clausal").write_text("-import_from(a.b.c, [qux])\n")
+        (pkg / "c.clausal").write_text("-module(c, [qux(X)])\nqux(7),\n")
         (on_path / "use_reexport.clausal").write_text(
-            "-import_from(a.b, [Qux])\nUseQ(X) <- Qux(X)\n"
+            "-import_from(a.b, [qux])\nuse_q(X) <- qux(X)\n"
         )
 
         mod = importlib.import_module("use_reexport")
         logic_mod = mod.__dict__["$module"]
-        assert len(list(call("UseQ", 7, module=logic_mod))) == 1
+        assert len(list(call("use_q", 7, module=logic_mod))) == 1
 
     def test_submodule_resolves_with_init_present(self, on_path):
         """``a.b.c`` resolves directly even when ``a/b/`` has an ``__init__``."""
         # nv
         pkg = on_path / "a" / "b"
         pkg.mkdir(parents=True)
-        (pkg / "__init__.clausal").write_text("-module(b, [Marker(X)])\nMarker(1),\n")
-        (pkg / "c.clausal").write_text("-module(c, [Qux(X)])\nQux(3),\n")
+        (pkg / "__init__.clausal").write_text("-module(b, [marker(X)])\nmarker(1),\n")
+        (pkg / "c.clausal").write_text("-module(c, [qux(X)])\nqux(3),\n")
         (on_path / "use_sub.clausal").write_text(
-            "-import_from(a.b.c, [Qux])\nUseQ(X) <- Qux(X)\n"
+            "-import_from(a.b.c, [qux])\nuse_q(X) <- qux(X)\n"
         )
 
         mod = importlib.import_module("use_sub")
         logic_mod = mod.__dict__["$module"]
-        assert len(list(call("UseQ", 3, module=logic_mod))) == 1
+        assert len(list(call("use_q", 3, module=logic_mod))) == 1
 
     def test_submodule_resolves_without_init(self, on_path):
         """``ns.leaf.mod`` resolves as a namespace-package submodule with no
@@ -187,23 +187,23 @@ class TestPackageInitEndToEnd:
         # nv
         leaf = on_path / "ns" / "leaf"
         leaf.mkdir(parents=True)
-        (leaf / "mod.clausal").write_text("-module(mod, [Res(X)])\nRes(5),\n")
+        (leaf / "mod.clausal").write_text("-module(mod, [res(X)])\nres(5),\n")
         (on_path / "use_ns.clausal").write_text(
-            "-import_from(ns.leaf.mod, [Res])\nUseR(X) <- Res(X)\n"
+            "-import_from(ns.leaf.mod, [res])\nuse_r(X) <- res(X)\n"
         )
 
         mod = importlib.import_module("use_ns")
         logic_mod = mod.__dict__["$module"]
-        assert len(list(call("UseR", 5, module=logic_mod))) == 1
+        assert len(list(call("use_r", 5, module=logic_mod))) == 1
 
     def test_flat_module_unchanged(self, on_path):
         """A flat ``snap.clausal`` still resolves as module ``snap``."""
         # nv
-        (on_path / "snap.clausal").write_text("-module(snap, [Ping(X)])\nPing(1),\n")
+        (on_path / "snap.clausal").write_text("-module(snap, [ping(X)])\nping(1),\n")
         (on_path / "use_flat.clausal").write_text(
-            "-import_from(snap, [Ping])\nUsePing(X) <- Ping(X)\n"
+            "-import_from(snap, [ping])\nuse_ping(X) <- ping(X)\n"
         )
 
         mod = importlib.import_module("use_flat")
         logic_mod = mod.__dict__["$module"]
-        assert len(list(call("UsePing", 1, module=logic_mod))) == 1
+        assert len(list(call("use_ping", 1, module=logic_mod))) == 1

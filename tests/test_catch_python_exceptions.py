@@ -17,7 +17,8 @@ Contract pinned here:
   `exc.args` — binding `M` to the real message;
 - SELECTIVITY: a `++TypeError` catcher does NOT swallow a `ValueError`, and a
   `++`-catcher does NOT match a logic `throw/1` ball;
-- the transliterated structural shape (`ValueError(M)`) keeps working.
+- the transliterated structural shape (`ValueError(M)`) is TitleCase in a
+  Clausal position and no longer loads: the lint names `++ValueError`.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from clausal.logic.variables import deref
 
 _SRC = """\
 -module(cpe, [ raise_ve(X), c_class(R), c_inst(M), c_wrong(R), c_super(R),
-               c_structural(M), c_logic(R), c_inst_wrong(R),
+               c_logic(R), c_inst_wrong(R),
                c_logic_super(R) ])
 
 raise_ve(X) <- (X is ++int("nope"))
@@ -43,7 +44,6 @@ c_class(R) <- (catch(raise_ve(_A), ++ValueError, R is "caught"))
 c_inst(M) <- (catch(raise_ve(_B), ++ValueError(M), true))
 c_wrong(R) <- (catch(raise_ve(_C), ++TypeError, R is "swallowed"))
 c_super(R) <- (catch(raise_ve(_D), ++Exception, R is "caught_super"))
-c_structural(M) <- (catch(raise_ve(_E), ValueError(M), true))
 c_logic(R) <- (catch(throw("oops"), ++ValueError, R is "swallowed"))
 c_logic_super(R) <- (catch(throw("oops"), ++Exception, R is "swallowed"))
 c_inst_wrong(R) <- (catch(raise_ve(_F), ++TypeError(_M2), R is "swallowed"))
@@ -90,10 +90,16 @@ def test_superclass_catcher_matches_by_isinstance(mod):
     assert _solutions(mod.c_super(r), r) == [mint("caught_super")]
 
 
-def test_structural_shape_still_matches(mod):
-    m = Var()
-    [msg] = _solutions(mod.c_structural(m), m)
-    assert msg == "invalid literal for int() with base 10: 'nope'"
+def test_structural_titlecase_catcher_is_a_syntax_error(tmp_path):
+    """The transliterated shape ``ValueError(M)`` cannot be written any more:
+    it is TitleCase in a Clausal position, and the error names the escape."""
+    src = tmp_path / "cpe_struct.clausal"
+    src.write_text(
+        "-module(cpe_struct, [raise_ve(X), c_structural(M)])\n"
+        "raise_ve(X) <- (X is ++int(\"nope\"))\n"
+        "c_structural(M) <- (catch(raise_ve(_E), ValueError(M), true))\n")
+    with pytest.raises(SyntaxError, match="reach it as `\\+\\+ValueError`"):
+        _load_module("cpe_struct", str(src))
 
 
 def test_python_catcher_does_not_match_a_logic_ball(mod):

@@ -2,11 +2,11 @@
 
 -module(iso_arithmetic, [test/1])
 
-Double(X, Y) <- (Y == X * 2)
+double(X, Y) <- (Y == X * 2)
 
-Square(X, Y) <- (Y == X * X)
+square(X, Y) <- (Y == X * X)
 
-TriangleNumber(N, T) <- (T == N * (N + 1) // 2)
+triangle_number(N, T) <- (T == N * (N + 1) // 2)
 
 test('addition: 1+2=3') <- (1 + 2 == 3)
 
@@ -96,19 +96,19 @@ test('mixed int/float compare: not 1 < 1.0') <- (not 1 < 1.0)
 
 test('mixed int/float compare: 1 <= 1.0') <- (1 <= 1.0)
 
-test('double 3 is 6') <- (Double(3, Y), Y == 6)
+test('double 3 is 6') <- (double(3, Y), Y == 6)
 
-test('double 0 is 0') <- (Double(0, Y), Y == 0)
+test('double 0 is 0') <- (double(0, Y), Y == 0)
 
-test('square 4 is 16') <- (Square(4, Y), Y == 16)
+test('square 4 is 16') <- (square(4, Y), Y == 16)
 
-test('square 1 is 1') <- (Square(1, Y), Y == 1)
+test('square 1 is 1') <- (square(1, Y), Y == 1)
 
-test('triangle 5 is 15') <- (TriangleNumber(5, T), T == 15)
+test('triangle 5 is 15') <- (triangle_number(5, T), T == 15)
 
-test('triangle 1 is 1') <- (TriangleNumber(1, T), T == 1)
+test('triangle 1 is 1') <- (triangle_number(1, T), T == 1)
 
-test('triangle 10 is 55') <- (TriangleNumber(10, T), T == 55)
+test('triangle 10 is 55') <- (triangle_number(10, T), T == 55)
 
 test('sign positive') <- (sign(42, S), S == 1)
 

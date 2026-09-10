@@ -35,7 +35,7 @@ chain_assess(SUBJ, verdict(beneficial_owner, 2500, [cite(art52)])) <- (
     chain_subject(SUBJ)
 ),
 
-Test("public interface resolves on the parallel_below_threshold fixture") <- (
+test("public interface resolves on the parallel_below_threshold fixture") <- (
     chain_subject("parallel_below_threshold"),
     chain_assess("parallel_below_threshold",
         verdict(not_beneficial_owner, _BPS, _CITES))
@@ -45,7 +45,7 @@ Test("public interface resolves on the parallel_below_threshold fixture") <- (
 FIRST_GOAL_SRC = """
 chain_subject("simple"),
 
-Test("first conjunct fails") <- (
+test("first conjunct fails") <- (
     chain_subject("absent"),
     chain_subject("simple")
 ),
@@ -55,7 +55,7 @@ BINDINGS_SRC = """
 prc("alpha", 10),
 prc("beta", 20),
 
-Test("later goal fails after a binding") <- (
+test("later goal fails after a binding") <- (
     prc("alpha", NUM),
     prc("gamma", NUM)
 ),
@@ -64,7 +64,7 @@ Test("later goal fails after a binding") <- (
 PASSING_SRC = """
 prc("alpha", 10),
 
-Test("passes") <- (
+test("passes") <- (
     prc("alpha", NUM),
     NUM > 5
 ),
@@ -73,7 +73,7 @@ Test("passes") <- (
 ERROR_SRC = """
 prc("alpha", 10),
 
-Test("raises") <- (
+test("raises") <- (
     prc("alpha", NUM),
     atom_length(NUM, LEN),
     LEN > 0
@@ -110,7 +110,7 @@ def test_line_number_reported(capsys, tmp_path):
     main([str(p)])
     out = capsys.readouterr().out
     lineno = BO_SRC.lstrip().splitlines().index(
-        'Test("public interface resolves on the parallel_below_threshold fixture") <- ('
+        'test("public interface resolves on the parallel_below_threshold fixture") <- ('
     ) + 1
     assert f"bo.clausal:{lineno} :: public interface resolves" in out
 
@@ -160,7 +160,7 @@ def test_predicate_with_no_solutions_at_all(capsys, tmp_path):
     p = write(tmp_path, "none.clausal", """
         chk(X) <- (X > 0, X < 0),
 
-        Test("never") <- (
+        test("never") <- (
             chk(5)
         ),
     """)
@@ -180,7 +180,7 @@ def test_long_goal_is_wrapped_at_argument_boundaries(capsys, tmp_path):
             bo_chain_subject(SUBJ)
         ),
 
-        Test("public interface resolves") <- (
+        test("public interface resolves") <- (
             bo_chain_subject("parallel_below_threshold"),
             bo_chain_assess("parallel_below_threshold",
                 bo_verdict(not_beneficial_owner, _EFFECTIVE_OWNERSHIP_BPS, _CITATIONS))
@@ -201,7 +201,7 @@ def test_side_effecting_test_is_flagged(capsys, tmp_path):
     p = write(tmp_path, "sfx.clausal", """
         -dynamic(seen/1)
 
-        Test("side effects") <- (
+        test("side effects") <- (
             assertz(seen(1)),
             1 == 2
         ),
@@ -214,7 +214,7 @@ def test_side_effecting_test_is_flagged(capsys, tmp_path):
 
 def test_diagnostic_output_is_not_polluted_by_test_writes(capsys, tmp_path):
     p = write(tmp_path, "noisy.clausal", """
-        Test("noisy") <- (
+        test("noisy") <- (
             writeln("NOISE-FROM-BODY"),
             1 == 2
         ),
@@ -307,7 +307,7 @@ def test_runaway_probe_is_bounded(capsys, tmp_path, monkeypatch):
             spin(X)
         ),
 
-        Test("probe would loop") <- (
+        test("probe would loop") <- (
             chk(bravo, okay)
         ),
     """)
@@ -371,7 +371,7 @@ make(T) <- (
     T is ++(__import__("clausal.terms", fromlist=["Compound"]).Compound("cite", (1,)))
 ),
 
-Test("citation term mismatch") <- (
+test("citation term mismatch") <- (
     make(T2),
     T2 is cite(_)
 ),
@@ -403,7 +403,7 @@ def test_no_confusion_note_without_a_declared_class(capsys, tmp_path):
         T is ++(__import__("clausal.terms", fromlist=["Compound"]).Compound("zote", (1,)))
     ),
 
-    Test("undeclared functor mismatch") <- (
+    test("undeclared functor mismatch") <- (
         make(T2),
         T2 is 42
     ),

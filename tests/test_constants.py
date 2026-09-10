@@ -210,9 +210,9 @@ def test_structured_rhs_nesting_and_mixing(tmp_path):
     declared atom, a functor call, and a nested list — all inside one
     list — exactly the "nested arbitrarily" requirement."""
     m = _load(tmp_path, "s5", """
-        -module(s5, [Point(X, Y)])
+        -module(s5, [point(X, Y)])
         -private([tag])
-        -constants(_BASE_ = 10, _ALL_ = [_BASE_ * 2, tag, Point(1, 2), [3, 4]])
+        -constants(_BASE_ = 10, _ALL_ = [_BASE_ * 2, tag, point(1, 2), [3, 4]])
         got(X) <- (X is _ALL_)
     """)
     v = Var()
@@ -222,31 +222,31 @@ def test_structured_rhs_nesting_and_mixing(tmp_path):
     # P3-2 Task 2 (THE FLIP, R6): ``Point`` is a data functor, so the
     # constant's functor value is the cell ``("Point", 1, 2)`` -- slots, not
     # attributes.
-    assert result[2] == ("Point", 1, 2)
+    assert result[2] == ("point", 1, 2)
     assert result[3] == [3, 4]
 
 
 def test_structured_functor_constant_declared_above_works(tmp_path):
-    """-module(m, [Point(X, Y)]) precedes -constants: the emitted functor
-    class statement executes first (source order), so Point is already a
+    """-module(m, [point(X, Y)]) precedes -constants: the emitted functor
+    class statement executes first (source order), so point is already a
     bound module global by the time the -constants assignment runs."""
     m = _load(tmp_path, "s6", """
-        -module(s6, [Point(X, Y)])
-        -constants(_ORIGIN_ = Point(0, 0))
+        -module(s6, [point(X, Y)])
+        -constants(_ORIGIN_ = point(0, 0))
         origin(X) <- (X is _ORIGIN_)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("origin", v, module=m.__dict__["$module"])]
     # R6: a cell, as in test_structured_rhs_nesting_and_mixing above.
-    assert result == ("Point", 0, 0)
+    assert result == ("point", 0, 0)
 
 
 def test_structured_functor_constant_undeclared_functor_is_syntax_error(tmp_path):
-    """Nothing above -constants declares Point (no -module/-private/-dynamic,
+    """Nothing above -constants declares point (no -module/-private/-dynamic,
     no import) — a located, remedy-bearing SyntaxError, not a NameError at
     exec time and not a silently-wrong Call-node embedding."""
     with pytest.raises(SyntaxError, match="not a declared functor") as exc_info:
-        _load(tmp_path, "s7", "-constants(_P_ = Point(0, 0))\np(X) <- (X is 1)\n")
+        _load(tmp_path, "s7", "-constants(_P_ = point(0, 0))\np(X) <- (X is 1)\n")
     exc = exc_info.value
     assert exc.filename == str(tmp_path / "s7.clausal")
     assert exc.lineno == 1
@@ -636,13 +636,13 @@ def test_constants_rhs_can_construct_an_imported_functor():
 
     The importer mints no class for an imported functor, and post-R6 the
     owner's name is its interned spelling by the time the import runs — so
-    the RHS's old direct ``Wrap(...)`` call raised
+    the RHS's old direct ``wrap(...)`` call raised
     ``TypeError: 'str' object is not callable`` from the ``-constants`` line
     and the module failed to LOAD.  The construction is routed through
     ``constants.constant_functor_term`` now, which decides on the binding
     shape at exec time and builds the cell the rest of the module speaks.
 
-    Nesting is covered too (``[Wrap(Pair(3, 4))]``): the recursion has to
+    Nesting is covered too (``[wrap(pair(3, 4))]``): the recursion has to
     reach an imported functor inside a structured RHS, not only at the top.
     """
     import pathlib
@@ -660,9 +660,9 @@ def test_constants_rhs_can_construct_an_imported_functor():
         v = Var()
         return [deref(v) for _ in call(goal, v, module=lm)]
 
-    assert one("wrapped") == [("Wrap", mint("inner"))]
-    assert one("paired") == [("Pair", 1, 2)]
-    assert one("nested") == [[("Wrap", ("Pair", 3, 4))]]
+    assert one("wrapped") == [("wrap", mint("inner"))]
+    assert one("paired") == [("pair", 1, 2)]
+    assert one("nested") == [[("wrap", ("pair", 3, 4))]]
 
 
 def _load_const_functor_owner():
@@ -686,20 +686,20 @@ def test_constants_rhs_functor_over_arity_is_a_load_error(tmp_path):
     ``ClausalTermConstructionError``, wherever a class does exist).
     """
     _load_const_functor_owner()
-    with pytest.raises(SyntaxError, match=r"Wrap/1"):
+    with pytest.raises(SyntaxError, match=r"wrap/1"):
         _load(tmp_path, "cfo1", """
-            -import_from(tests.fixtures.const_functor_owner, [Wrap])
-            -constants(_BAD_ = Wrap(1, 2))
+            -import_from(tests.fixtures.const_functor_owner, [wrap])
+            -constants(_BAD_ = wrap(1, 2))
             p(X) <- (X is _BAD_)
         """)
 
 
 def test_constants_rhs_functor_unknown_field_is_a_load_error(tmp_path):
     _load_const_functor_owner()
-    with pytest.raises(SyntaxError, match=r"Pair/2"):
+    with pytest.raises(SyntaxError, match=r"pair/2"):
         _load(tmp_path, "cfo2", """
-            -import_from(tests.fixtures.const_functor_owner, [Pair])
-            -constants(_BAD_ = Pair(NOPE=1))
+            -import_from(tests.fixtures.const_functor_owner, [pair])
+            -constants(_BAD_ = pair(NOPE=1))
             p(X) <- (X is _BAD_)
         """)
 
@@ -710,7 +710,7 @@ def test_constants_rhs_functor_partial_construction_is_a_load_error(tmp_path):
     _load_const_functor_owner()
     with pytest.raises(SyntaxError, match=r"unfilled"):
         _load(tmp_path, "cfo3", """
-            -import_from(tests.fixtures.const_functor_owner, [Pair])
-            -constants(_BAD_ = Pair(1))
+            -import_from(tests.fixtures.const_functor_owner, [pair])
+            -constants(_BAD_ = pair(1))
             p(X) <- (X is _BAD_)
         """)

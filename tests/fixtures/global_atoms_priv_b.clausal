@@ -2,4 +2,4 @@
 # Phase 2 fixture: bare reference auto-mints the global atom (companion to
 # global_atoms_priv_a.clausal).
 
-ColorPrivB(phase2priv_orange),
+color_priv_b(phase2priv_orange),

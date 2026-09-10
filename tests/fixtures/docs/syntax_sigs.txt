@@ -28,10 +28,10 @@ greeting("hello world"),
 
 --8<-- [start:atoms_global_default]
 # module_a.clausal — bare reference, no -module/-private listing
-ColorA(red),
+color_a(red),
 
 # module_b.clausal — bare reference, no -module/-private listing
-ColorB(red),
+color_b(red),
 
 # Both files' `red` are the same atom, global by spelling.
 # In Python:

@@ -1,6 +1,6 @@
 """An operator-node head argument must match the same under argument indexing.
 
-A structural head argument (``Kind(A + B, plus_)``) is hoisted at assert time
+A structural head argument (``kind(A + B, plus_)``) is hoisted at assert time
 into a body ``Unify`` (``clausal.logic.database._normalize_structural_head_args``),
 where runtime ``unify`` — i.e. ``BinOp.__unify__`` — decides the match and
 correctly ignores the non-semantic ``position`` field.
@@ -48,28 +48,28 @@ EXAMPLES_DIR = os.path.join(
 # Deliberately unlike symbolic_diff: no recursion, no arithmetic evaluation,
 # no numeric literals in any head.
 INDEXED_SRC = """\
--module(opidx, [Kind(TERM, NAME), Chk(N)])
+-module(opidx, [kind(TERM, NAME), chk(N)])
 -private([p, q, plus_, minus_, times_, other_])
 
-Kind(A + B, plus_) <- (number(1))
-Kind(A - B, minus_) <- (number(1))
-Kind(A * B, times_) <- (number(1))
-Kind(9, other_) <- (number(1))
+kind(A + B, plus_) <- (number(1))
+kind(A - B, minus_) <- (number(1))
+kind(A * B, times_) <- (number(1))
+kind(9, other_) <- (number(1))
 
-Chk(N) <- Kind(p + q, N)
+chk(N) <- kind(p + q, N)
 """
 
 # The same predicate one clause below the indexing threshold: this is the
 # control, it always worked, and the indexed version must agree with it.
 UNINDEXED_SRC = """\
--module(opnoidx, [Kind(TERM, NAME), Chk(N)])
+-module(opnoidx, [kind(TERM, NAME), chk(N)])
 -private([p, q, plus_, minus_, other_])
 
-Kind(A + B, plus_) <- (number(1))
-Kind(A - B, minus_) <- (number(1))
-Kind(9, other_) <- (number(1))
+kind(A + B, plus_) <- (number(1))
+kind(A - B, minus_) <- (number(1))
+kind(9, other_) <- (number(1))
 
-Chk(N) <- Kind(p + q, N)
+chk(N) <- kind(p + q, N)
 """
 
 
@@ -100,25 +100,25 @@ class TestOperatorHeadUnderArgIndexing:
     def test_indexed_operator_head_matches(self, indexed):
         """The bug: raises NameError '$headlit_<id>' instead of matching."""
         n = Var()
-        got = [deref(n) for _ in solve(indexed.Chk(n))]
+        got = [deref(n) for _ in solve(indexed.chk(n))]
         assert got == [mint("plus_")]
 
     def test_indexed_agrees_with_unindexed(self, indexed, unindexed):
         a, b = Var(), Var()
-        got_idx = [deref(a) for _ in solve(indexed.Chk(a))]
-        got_plain = [deref(b) for _ in solve(unindexed.Chk(b))]
+        got_idx = [deref(a) for _ in solve(indexed.chk(a))]
+        got_plain = [deref(b) for _ in solve(unindexed.chk(b))]
         assert got_idx == got_plain
 
     def test_distinct_operators_still_discriminate(self, indexed):
         """Guard against an over-broad fix: a * b must not match the + clause."""
         n = Var()
-        goal = indexed.Kind(Mult(left=indexed.p, right=indexed.q), n)
+        goal = indexed.kind(Mult(left=indexed.p, right=indexed.q), n)
         got = [deref(n) for _ in solve(goal)]
         assert got == [mint("times_")]
 
     def test_non_operator_clause_unaffected(self, indexed):
         n = Var()
-        got = [deref(n) for _ in solve(indexed.Kind(9, n))]
+        got = [deref(n) for _ in solve(indexed.kind(9, n))]
         assert got == [mint("other_")]
 
 

@@ -64,12 +64,12 @@ def test_clausal_pattern_matches_unify_goal_and_extracts_sides(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal, Variable, Atom])
 
-        UnifySides((A is B), A, B),
+        unify_sides((A is B), A, B),
         """)
     clause = _reify_stmt("r(K, S) <- (m(K, M), S is unknown(M))\n")
     left, right = Var(), Var()
     hits = 0
-    for _ in call("UnifySides", clause.goals[1], left, right, module=module):
+    for _ in call("unify_sides", clause.goals[1], left, right, module=module):
         hits += 1
         assert deref(left) == Variable("S")
         assert deref(right) == Goal("unknown", [Variable("M")], [])
@@ -82,13 +82,13 @@ def test_reified_subterm_walks_goal_lists_and_finds_variables(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [reified_subterm, Variable])
 
-        OccursIn(X, V) <- reified_subterm(X, V)
+        occurs_in(X, V) <- reified_subterm(X, V)
         """)
     clause = _reify_stmt("r(K, S) <- (m(K, M), S is unknown(M))\n")
     rest = [clause.goals[0]]  # the body minus the unify goal
 
     def occurs(container, name):
-        for _ in call("OccursIn", container, Variable(name), module=module):
+        for _ in call("occurs_in", container, Variable(name), module=module):
             return True
         return False
 
@@ -114,14 +114,14 @@ def test_occurs_check_sees_into_a_freshly_built_term(tmp_path):
         -double_quotes(chars)
         -import_from(reflection, [reified_subterm, Goal, Variable])
 
-        Rebuild(Goal(NAME, ARGS, KW), Goal(NAME, ARGS, KW)),
+        rebuild(Goal(NAME, ARGS, KW), Goal(NAME, ARGS, KW)),
 
-        SeesDirect(H, N) <- reified_subterm(H, Variable(N))
-        SeesRebuilt(H, N) <- (Rebuild(H, H2), reified_subterm(H2, Variable(N)))
+        sees_direct(H, N) <- reified_subterm(H, Variable(N))
+        sees_rebuilt(H, N) <- (rebuild(H, H2), reified_subterm(H2, Variable(N)))
         """)
     head = _reify_stmt("star(P, [a, *T]) <- (helper(P), T is [b])\n").head
-    assert any(True for _ in call("SeesDirect", head, "T", module=module))
-    assert any(True for _ in call("SeesRebuilt", head, "T", module=module))
+    assert any(True for _ in call("sees_direct", head, "T", module=module))
+    assert any(True for _ in call("sees_rebuilt", head, "T", module=module))
 
 
 def test_render_of_mutated_clause_emits_valid_clausal():
@@ -166,30 +166,30 @@ def test_engine_accepts_bare_reference_where_lambda_is_accepted(tmp_path):
         add_one(X, Y) <- (Y == X + 1)
         add_step(X, ACC, OUT) <- (OUT == ACC + X)
 
-        MapLambda(L, R) <- maplist(((X, Y) <- add_one(X, Y)), L, R)
-        MapBare(L, R) <- maplist(add_one, L, R)
+        map_lambda(L, R) <- maplist(((X, Y) <- add_one(X, Y)), L, R)
+        map_bare(L, R) <- maplist(add_one, L, R)
 
-        FoldLambda(L, R) <- foldl(((X, A, O) <- add_step(X, A, O)), L, 0, R)
-        FoldBare(L, R) <- foldl(add_step, L, 0, R)
+        fold_lambda(L, R) <- foldl(((X, A, O) <- add_step(X, A, O)), L, 0, R)
+        fold_bare(L, R) <- foldl(add_step, L, 0, R)
         """)
-    assert _solutions(module, "MapLambda", [1, 2, 3], Var()) == \
-        _solutions(module, "MapBare", [1, 2, 3], Var()) == [([1, 2, 3], [2, 3, 4])]
-    assert _solutions(module, "FoldLambda", [1, 2, 3], Var()) == \
-        _solutions(module, "FoldBare", [1, 2, 3], Var()) == [([1, 2, 3], 6)]
+    assert _solutions(module, "map_lambda", [1, 2, 3], Var()) == \
+        _solutions(module, "map_bare", [1, 2, 3], Var()) == [([1, 2, 3], [2, 3, 4])]
+    assert _solutions(module, "fold_lambda", [1, 2, 3], Var()) == \
+        _solutions(module, "fold_bare", [1, 2, 3], Var()) == [([1, 2, 3], 6)]
 
 
 def test_engine_accepts_bare_reference_through_user_call_goal(tmp_path):
     """Equivalence is call_goal's, not a builtin whitelist's: a user-defined
     higher-order predicate sees the same behavior from both forms."""
     module = _clausal_module(tmp_path, "_spike_eta_user", """\
-        Twice(G, X, Z) <- (call_goal(G, X, Y), call_goal(G, Y, Z))
+        twice(G, X, Z) <- (call_goal(G, X, Y), call_goal(G, Y, Z))
         add_one(X, Y) <- (Y == X + 1)
 
-        UserLambda(X, Z) <- Twice(((A, B) <- add_one(A, B)), X, Z)
-        UserBare(X, Z) <- Twice(add_one, X, Z)
+        user_lambda(X, Z) <- twice(((A, B) <- add_one(A, B)), X, Z)
+        user_bare(X, Z) <- twice(add_one, X, Z)
         """)
-    assert _solutions(module, "UserLambda", 5, Var()) == \
-        _solutions(module, "UserBare", 5, Var()) == [(5, 7)]
+    assert _solutions(module, "user_lambda", 5, Var()) == \
+        _solutions(module, "user_bare", 5, Var()) == [(5, 7)]
 
 
 def test_engine_accepts_bare_dotted_reference(tmp_path):
@@ -202,11 +202,11 @@ def test_engine_accepts_bare_dotted_reference(tmp_path):
     module = _clausal_module(tmp_path, "_spike_eta_dotted", """\
         -import_module(etahelper)
 
-        DotLambda(L, R) <- maplist(((X, Y) <- etahelper.bump(X, Y)), L, R)
-        DotBare(L, R) <- maplist(etahelper.bump, L, R)
+        dot_lambda(L, R) <- maplist(((X, Y) <- etahelper.bump(X, Y)), L, R)
+        dot_bare(L, R) <- maplist(etahelper.bump, L, R)
         """)
-    assert _solutions(module, "DotLambda", [1, 2], Var()) == \
-        _solutions(module, "DotBare", [1, 2], Var()) == [([1, 2], [2, 3])]
+    assert _solutions(module, "dot_lambda", [1, 2], Var()) == \
+        _solutions(module, "dot_bare", [1, 2], Var()) == [([1, 2], [2, 3])]
 
 
 def test_engine_lambda_param_shadows_the_enclosing_binding(tmp_path):
@@ -215,11 +215,11 @@ def test_engine_lambda_param_shadows_the_enclosing_binding(tmp_path):
     module = _clausal_module(tmp_path, "_spike_eta_shadow", """\
         big(X) <- (X > 3)
 
-        ShadowCase(L, R) <- (X is 99, maplist((X <- big(X)), L), R is "yes")
-        BareCase(L, R) <- (X is 99, maplist(big, L), R is "yes")
+        shadow_case(L, R) <- (X is 99, maplist((X <- big(X)), L), R is "yes")
+        bare_case(L, R) <- (X is 99, maplist(big, L), R is "yes")
         """)
-    assert _solutions(module, "ShadowCase", [4, 5], Var()) == \
-        _solutions(module, "BareCase", [4, 5], Var()) == [([4, 5], mint("yes"))]
+    assert _solutions(module, "shadow_case", [4, 5], Var()) == \
+        _solutions(module, "bare_case", [4, 5], Var()) == [([4, 5], mint("yes"))]
 
 
 def test_forwarding_lambda_reifies_as_lambda_node_with_atom_params():

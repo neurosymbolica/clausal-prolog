@@ -36,12 +36,12 @@ def mi_module():
 
 
 class TestAnalyzeSolve:
-    """Vanilla MI: Solve/2."""
+    """Vanilla MI: solve/2."""
 
     def test_pattern_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
-        assert pattern.name == "Solve"
+        pattern = analyze_mi(mi_module.solve)
+        assert pattern.name == "solve"
         assert pattern.arity == 2
         assert pattern.goal_arg == 0
         assert pattern.program_arg == 1
@@ -50,38 +50,38 @@ class TestAnalyzeSolve:
 
     def test_has_base_and_recursive(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         assert pattern.base_clause is not None
         assert pattern.recursive_clause is not None
 
     def test_no_pre_match_goals(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         assert pattern.pre_match_goals == []
 
     def test_no_post_match_goals(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         assert pattern.post_match_goals == []
 
     def test_match_clause_found(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         assert pattern.match_clause_index == 0
 
     def test_append_found(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         assert pattern.append_index == 1
 
     def test_one_recursive_call(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         assert len(pattern.recursive_call_indices) == 1
 
     def test_variables_extracted(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         assert pattern.goal_var is not None
         assert pattern.goals_var is not None
         assert pattern.body_var is not None
@@ -90,12 +90,12 @@ class TestAnalyzeSolve:
 
 
 class TestAnalyzeSolveCount:
-    """Inference-counting MI: SolveCount/3."""
+    """Inference-counting MI: solve_count/3."""
 
     def test_pattern_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
-        assert pattern.name == "SolveCount"
+        pattern = analyze_mi(mi_module.solve_count)
+        assert pattern.name == "solve_count"
         assert pattern.arity == 3
         assert pattern.goal_arg == 0
         assert pattern.program_arg == 1
@@ -105,19 +105,19 @@ class TestAnalyzeSolveCount:
     def test_post_match_goals(self, mi_module):
         """COUNT == SUB_COUNT + 1 is a post-match goal."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         assert len(pattern.post_match_goals) == 1
         from clausal.pythonic_ast.nodes import ArithEq
         assert isinstance(pattern.post_match_goals[0], ArithEq)
 
 
 class TestAnalyzeSolveLimit:
-    """Depth-limited MI: SolveLimit/3."""
+    """Depth-limited MI: solve_limit/3."""
 
     def test_pattern_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
-        assert pattern.name == "SolveLimit"
+        pattern = analyze_mi(mi_module.solve_limit)
+        assert pattern.name == "solve_limit"
         assert pattern.arity == 3
         assert pattern.goal_arg == 0
         assert pattern.program_arg == 1
@@ -127,7 +127,7 @@ class TestAnalyzeSolveLimit:
     def test_pre_match_goals(self, mi_module):
         """MAX > 0 and MAX1 == MAX - 1 are pre-match goals."""
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         assert len(pattern.pre_match_goals) == 2
         from clausal.pythonic_ast.nodes import Gt, ArithEq
         assert isinstance(pattern.pre_match_goals[0], Gt)
@@ -135,12 +135,12 @@ class TestAnalyzeSolveLimit:
 
 
 class TestAnalyzeSolveTree:
-    """Proof-tree MI: SolveTree/3."""
+    """Proof-tree MI: solve_tree/3."""
 
     def test_pattern_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
-        assert pattern.name == "SolveTree"
+        pattern = analyze_mi(mi_module.solve_tree)
+        assert pattern.name == "solve_tree"
         assert pattern.arity == 3
         assert pattern.goal_arg == 0
         assert pattern.program_arg == 1
@@ -149,32 +149,32 @@ class TestAnalyzeSolveTree:
 
     def test_no_append(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
+        pattern = analyze_mi(mi_module.solve_tree)
         assert pattern.append_index is None
 
     def test_two_recursive_calls(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
+        pattern = analyze_mi(mi_module.solve_tree)
         assert len(pattern.recursive_call_indices) == 2
 
     def test_no_pre_post_match_goals(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
+        pattern = analyze_mi(mi_module.solve_tree)
         assert pattern.pre_match_goals == []
         assert pattern.post_match_goals == []
 
 
 class TestAnalyzeSolveIterativeDeepening:
-    """Iterative deepening MI: SolveIterativeDeepening/2.
+    """Iterative deepening MI: solve_iterative_deepening/2.
 
-    This MI is not a standard MI pattern (it delegates to SolveLimit).
+    This MI is not a standard MI pattern (it delegates to solve_limit).
     analyze_mi should raise CannotSpecialize.
     """
 
     def test_cannot_specialize(self, mi_module):
         # nv
         with pytest.raises(CannotSpecialize):
-            analyze_mi(mi_module.SolveIterativeDeepening)
+            analyze_mi(mi_module.solve_iterative_deepening)
 
 
 class TestAnalyzeExplicitProgramArg:
@@ -182,13 +182,13 @@ class TestAnalyzeExplicitProgramArg:
 
     def test_explicit_program_arg(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveCount, program_arg=1)
+        pattern = analyze_mi(mi_module.solve_count, program_arg=1)
         assert pattern.program_arg == 1
 
     def test_invalid_program_arg(self, mi_module):
         # nv
         with pytest.raises(CannotSpecialize):
-            analyze_mi(mi_module.SolveCount, program_arg=5)
+            analyze_mi(mi_module.solve_count, program_arg=5)
 
 
 # ── Phase 1: Core Unfolder ───────────────────────────────────────────────────
@@ -217,11 +217,11 @@ def _make_graph_program():
 
 
 class TestSpecializeSolve:
-    """Specialize vanilla Solve/2 with natnum program."""
+    """Specialize vanilla solve/2 with natnum program."""
 
     def test_clause_count(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveNatnum")
         # 1 base + 2 object clauses = 3
         assert len(pred_cls._clauses) == 3
@@ -229,7 +229,7 @@ class TestSpecializeSolve:
     def test_field_count(self, mi_module):
         """Specialized predicate drops PROGRAM field."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveNatnum2")
         assert len(pred_cls._fields) == 1  # just GOALS
         assert "GOALS" in pred_cls._fields
@@ -237,7 +237,7 @@ class TestSpecializeSolve:
     def test_solve_natnum_0(self, mi_module):
         """SolveNatnum([["natnum", 0]]) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveNatnum3", module_dict,
@@ -248,7 +248,7 @@ class TestSpecializeSolve:
     def test_solve_natnum_s0(self, mi_module):
         """SolveNatnum([["natnum", ["s", 0]]]) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveNatnum4", module_dict,
@@ -259,7 +259,7 @@ class TestSpecializeSolve:
     def test_solve_natnum_ss0(self, mi_module):
         """SolveNatnum([["natnum", ["s", ["s", 0]]]]) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveNatnum5", module_dict,
@@ -269,18 +269,18 @@ class TestSpecializeSolve:
 
 
 class TestSpecializeSolveGraph:
-    """Specialize vanilla Solve/2 with graph program."""
+    """Specialize vanilla solve/2 with graph program."""
 
     def test_clause_count(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_graph_program(), "SolveGraph")
         # 1 base + 5 object clauses = 6
         assert len(pred_cls._clauses) == 6
 
     def test_solve_edge(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_graph_program(), "SolveGraph2", module_dict,
@@ -290,7 +290,7 @@ class TestSpecializeSolveGraph:
 
     def test_solve_path_direct(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_graph_program(), "SolveGraph3", module_dict,
@@ -300,7 +300,7 @@ class TestSpecializeSolveGraph:
 
     def test_solve_path_transitive(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_graph_program(), "SolveGraph4", module_dict,
@@ -310,7 +310,7 @@ class TestSpecializeSolveGraph:
 
     def test_solve_no_path(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_graph_program(), "SolveGraph5", module_dict,
@@ -324,21 +324,21 @@ class TestSpecializeSolveCount:
 
     def test_clause_count(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveCountNatnum")
         # 1 base + 2 object clauses = 3
         assert len(pred_cls._clauses) == 3
 
     def test_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveCountNatnum2")
         assert pred_cls._fields == ("GOALS", "COUNT")
 
     def test_count_natnum_0(self, mi_module):
         """SolveCountNatnum([["natnum", 0]], COUNT) → COUNT = 1."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveCountNatnum3", module_dict,
@@ -349,7 +349,7 @@ class TestSpecializeSolveCount:
     def test_count_natnum_s0(self, mi_module):
         """SolveCountNatnum([["natnum", ["s", 0]]], COUNT) → COUNT = 2."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveCountNatnum4", module_dict,
@@ -362,7 +362,7 @@ class TestSpecializeSolveCount:
     def test_count_natnum_ss0(self, mi_module):
         """SolveCountNatnum([["natnum", ["s", ["s", 0]]]], COUNT) → COUNT = 3."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveCountNatnum5", module_dict,
@@ -378,7 +378,7 @@ class TestSpecializeSolveCountGraph:
 
     def test_count_edge(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_graph_program(), "SolveCountGraph", module_dict,
@@ -390,7 +390,7 @@ class TestSpecializeSolveCountGraph:
 
     def test_count_path_direct(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_graph_program(), "SolveCountGraph2", module_dict,
@@ -402,7 +402,7 @@ class TestSpecializeSolveCountGraph:
 
     def test_count_path_transitive(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_graph_program(), "SolveCountGraph3", module_dict,
@@ -418,20 +418,20 @@ class TestSpecializeSolveLimit:
 
     def test_clause_count(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveLimitNatnum")
         assert len(pred_cls._clauses) == 3
 
     def test_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveLimitNatnum2")
         assert pred_cls._fields == ("GOALS", "MAX_DEPTH")
 
     def test_limit_natnum_s0_depth1_fails(self, mi_module):
         """Depth 1 is not enough for natnum(s(0)) → should fail."""
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveLimitNatnum3", module_dict,
@@ -444,7 +444,7 @@ class TestSpecializeSolveLimit:
     def test_limit_natnum_s0_depth2_succeeds(self, mi_module):
         """Depth 2 is enough for natnum(s(0)) → should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveLimitNatnum4", module_dict,
@@ -456,7 +456,7 @@ class TestSpecializeSolveLimit:
 
     def test_limit_natnum_ss0_depth2_fails(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveLimitNatnum5", module_dict,
@@ -468,7 +468,7 @@ class TestSpecializeSolveLimit:
 
     def test_limit_natnum_ss0_depth3_succeeds(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveLimitNatnum6", module_dict,
@@ -484,20 +484,20 @@ class TestSpecializeSolveTree:
 
     def test_clause_count(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
+        pattern = analyze_mi(mi_module.solve_tree)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveTreeNatnum")
         assert len(pred_cls._clauses) == 3
 
     def test_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
+        pattern = analyze_mi(mi_module.solve_tree)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveTreeNatnum2")
         assert pred_cls._fields == ("GOALS", "TREE")
 
     def test_tree_natnum_0(self, mi_module):
         """SolveTreeNatnum([["natnum", 0]], TREE) → TREE = [[["natnum", 0], []]]."""
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
+        pattern = analyze_mi(mi_module.solve_tree)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveTreeNatnum3", module_dict,
@@ -511,7 +511,7 @@ class TestSpecializeSolveTree:
     def test_tree_natnum_s0(self, mi_module):
         """Nested proof tree for natnum(s(0))."""
         # nv
-        pattern = analyze_mi(mi_module.SolveTree)
+        pattern = analyze_mi(mi_module.solve_tree)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveTreeNatnum4", module_dict,
@@ -531,9 +531,9 @@ class TestEquivalence:
     """Verify specialized MI produces same results as unspecialized."""
 
     def test_solve_natnum_equivalence(self, mi_module):
-        """All natnum solutions match between Solve and specialized."""
+        """All natnum solutions match between solve and specialized."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveEquiv1", module_dict,
@@ -545,16 +545,16 @@ class TestEquivalence:
             [["natnum", ["s", ["s", 0]]]],
         ]:
             spec_results = list(_query(pred_cls, goal, module_dict))
-            mi_results = list(_query_mi(mi_module.Solve, goal, _make_natnum_program()))
+            mi_results = list(_query_mi(mi_module.solve, goal, _make_natnum_program()))
             assert len(spec_results) == len(mi_results), (
                 f"Mismatch for goal {goal}: "
                 f"specialized={len(spec_results)}, MI={len(mi_results)}"
             )
 
     def test_solve_count_equivalence(self, mi_module):
-        """Count values match between SolveCount and specialized."""
+        """Count values match between solve_count and specialized."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "SolveCountEquiv1", module_dict,
@@ -670,18 +670,18 @@ class TestHasResidualGoals:
 
 
 class TestSpecializeSolveFactorial:
-    """Specialize vanilla Solve/2 with factorial program (has builtins)."""
+    """Specialize vanilla solve/2 with factorial program (has builtins)."""
 
     def test_clause_count(self, mi_module):
         """1 base + 2 object clauses + 1 catch-all = 4."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_factorial_program(), "SolveFactorial")
         assert len(pred_cls._clauses) == 4
 
     def test_fields(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_factorial_program(), "SolveFactorial2")
         assert "GOALS" in pred_cls._fields
         assert "PROGRAM" not in pred_cls._fields
@@ -689,7 +689,7 @@ class TestSpecializeSolveFactorial:
     def test_factorial_0(self, mi_module):
         """factorial(0, 1) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveFactorial3", module_dict,
@@ -700,7 +700,7 @@ class TestSpecializeSolveFactorial:
     def test_factorial_1(self, mi_module):
         """factorial(1, 1) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveFactorial4", module_dict,
@@ -711,7 +711,7 @@ class TestSpecializeSolveFactorial:
     def test_factorial_3(self, mi_module):
         """factorial(3, 6) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveFactorial5", module_dict,
@@ -722,7 +722,7 @@ class TestSpecializeSolveFactorial:
     def test_factorial_5(self, mi_module):
         """factorial(5, 120) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveFactorial6", module_dict,
@@ -733,7 +733,7 @@ class TestSpecializeSolveFactorial:
     def test_factorial_wrong_result_fails(self, mi_module):
         """factorial(3, 7) should fail."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveFactorial7", module_dict,
@@ -748,7 +748,7 @@ class TestSpecializeSolveCountFactorial:
     def test_clause_count(self, mi_module):
         """1 base + 2 object clauses + 1 catch-all = 4."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveCountFactorial",
         )
@@ -757,7 +757,7 @@ class TestSpecializeSolveCountFactorial:
     def test_count_factorial_0(self, mi_module):
         """factorial(0, 1) needs 1 step."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveCountFactorial2",
@@ -771,7 +771,7 @@ class TestSpecializeSolveCountFactorial:
     def test_count_factorial_3(self, mi_module):
         """factorial(3, 6) needs 4 steps (1 per recursive clause + base case)."""
         # nv
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveCountFactorial3",
@@ -792,11 +792,11 @@ class TestSpecializeSolveCountFactorial:
 
 
 class TestSpecializeSolveEvenOdd:
-    """Specialize Solve/2 with even/odd program (has arithmetic builtins)."""
+    """Specialize solve/2 with even/odd program (has arithmetic builtins)."""
 
     def test_even_0(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_even_odd_program(), "SolveEven", module_dict,
@@ -806,7 +806,7 @@ class TestSpecializeSolveEvenOdd:
 
     def test_even_2(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_even_odd_program(), "SolveEven2", module_dict,
@@ -816,7 +816,7 @@ class TestSpecializeSolveEvenOdd:
 
     def test_even_4(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_even_odd_program(), "SolveEven3", module_dict,
@@ -826,7 +826,7 @@ class TestSpecializeSolveEvenOdd:
 
     def test_odd_1_fails(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_even_odd_program(), "SolveEven4", module_dict,
@@ -836,7 +836,7 @@ class TestSpecializeSolveEvenOdd:
 
     def test_odd_3_fails(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_even_odd_program(), "SolveEven5", module_dict,
@@ -846,12 +846,12 @@ class TestSpecializeSolveEvenOdd:
 
 
 class TestSpecializeSolveMixed:
-    """Specialize Solve/2 with mixed program (known + residual goals)."""
+    """Specialize solve/2 with mixed program (known + residual goals)."""
 
     def test_double_3(self, mi_module):
         """double(3, 6) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_mixed_program(), "SolveMixed", module_dict,
@@ -862,7 +862,7 @@ class TestSpecializeSolveMixed:
     def test_quadruple_3(self, mi_module):
         """quadruple(3, 12) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_mixed_program(), "SolveMixed2", module_dict,
@@ -873,7 +873,7 @@ class TestSpecializeSolveMixed:
     def test_quadruple_wrong_fails(self, mi_module):
         """quadruple(3, 10) should fail."""
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_mixed_program(), "SolveMixed3", module_dict,
@@ -887,14 +887,14 @@ class TestNoResidualNoCatchAll:
 
     def test_natnum_no_catchall(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveNatnumNoCatch")
         # 1 base + 2 object = 3 (no catch-all)
         assert len(pred_cls._clauses) == 3
 
     def test_graph_no_catchall(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_graph_program(), "SolveGraphNoCatch")
         # 1 base + 5 object = 6 (no catch-all)
         assert len(pred_cls._clauses) == 6
@@ -922,7 +922,7 @@ class TestCustomGoalMap:
             [["compute", x, y], [["double_it", x, y]]],
         ]
 
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, program, "SolveCustom", module_dict,
@@ -944,7 +944,7 @@ class TestEquivalenceWithResidual:
         """Specialized factorial should produce correct results."""
         # nv
         program = _make_factorial_program()
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, program, "SolveFactorialEquiv", module_dict,
@@ -964,7 +964,7 @@ class TestEquivalenceWithResidual:
         from clausal.logic.solve import call
 
         program = _make_factorial_program()
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, program, "SolveFactorialEquiv2", module_dict,
@@ -986,7 +986,7 @@ class TestSolveLimitWithResidual:
     def test_limit_factorial_0_depth1(self, mi_module):
         """Depth 1 should suffice for factorial(0, 1) (just the base clause)."""
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveLimitFactorial",
@@ -1000,7 +1000,7 @@ class TestSolveLimitWithResidual:
     def test_limit_factorial_1_depth2_fails(self, mi_module):
         """Depth 2 is not enough for factorial(1, 1) — needs gt, sub, factorial(0,1), mul."""
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveLimitFactorial2",
@@ -1014,7 +1014,7 @@ class TestSolveLimitWithResidual:
     def test_limit_factorial_1_high_depth(self, mi_module):
         """With high depth limit, factorial(1, 1) should succeed."""
         # nv
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         module_dict = {}
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveLimitFactorial3",
@@ -1209,7 +1209,7 @@ class TestSpecializeDeep:
         """At max_depth=0, deep unfolder produces same clauses as shallow."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_natnum_program()
 
         # Shallow specialization.
@@ -1228,7 +1228,7 @@ class TestSpecializeDeep:
         """Deep-specialized natnum should still produce correct results."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_natnum_program()
         module_dict = {}
         pred_cls = specialize_mi_deep(
@@ -1242,7 +1242,7 @@ class TestSpecializeDeep:
         """Deep-specialized natnum: s(0) should succeed."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_natnum_program()
         module_dict = {}
         pred_cls = specialize_mi_deep(
@@ -1256,7 +1256,7 @@ class TestSpecializeDeep:
         """Deep-specialized factorial(0, 1) should succeed."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_factorial_program()
         module_dict = {}
         pred_cls = specialize_mi_deep(
@@ -1273,7 +1273,7 @@ class TestSpecializeDeep:
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
 
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_factorial_program()
         module_dict = {}
         pred_cls = specialize_mi_deep(
@@ -1287,10 +1287,10 @@ class TestSpecializeDeep:
         assert 1 in results
 
     def test_deep_count_natnum(self, mi_module):
-        """Deep-specialized SolveCount with natnum: counting preserved."""
+        """Deep-specialized solve_count with natnum: counting preserved."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         program = _make_natnum_program()
         module_dict = {}
         pred_cls = specialize_mi_deep(
@@ -1304,10 +1304,10 @@ class TestSpecializeDeep:
         assert all(isinstance(r, int) for r in results)
 
     def test_deep_graph_path(self, mi_module):
-        """Deep-specialized Solve with graph: paths still found."""
+        """Deep-specialized solve with graph: paths still found."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_graph_program()
         module_dict = {}
         pred_cls = specialize_mi_deep(
@@ -1324,7 +1324,7 @@ class TestSpecializeDeep:
         """Unfolding should not exceed max_depth."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_natnum_program()
 
         # Very low depth — should still produce valid (if not deeply inlined) code.
@@ -1339,7 +1339,7 @@ class TestSpecializeDeep:
         # nv
         from clausal.logic.specialization import specialize_mi_deep
 
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_natnum_program()
         module_dict_s = {}
         module_dict_d = {}
@@ -1369,7 +1369,7 @@ class TestSpecializeDeep:
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
 
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_factorial_program()
         module_dict_s = {}
         module_dict_d = {}
@@ -1401,7 +1401,7 @@ class TestEmbeddingTermination:
         """Natnum is self-recursive; deep unfolding should terminate."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_natnum_program()
         # If embedding check fails, this would loop forever.
         pred_cls = specialize_mi_deep(
@@ -1413,7 +1413,7 @@ class TestEmbeddingTermination:
         """Factorial is self-recursive; deep unfolding should terminate."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_factorial_program()
         pred_cls = specialize_mi_deep(
             pattern, program, "TermFactorial", max_depth=20,
@@ -1424,7 +1424,7 @@ class TestEmbeddingTermination:
         """Graph program has edge/path mutual reference; should terminate."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_graph_program()
         pred_cls = specialize_mi_deep(
             pattern, program, "TermGraph", max_depth=20,
@@ -1435,7 +1435,7 @@ class TestEmbeddingTermination:
         """Even/odd recursive program should terminate deep unfolding."""
         # nv
         from clausal.logic.specialization import specialize_mi_deep
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         program = _make_even_odd_program()
         pred_cls = specialize_mi_deep(
             pattern, program, "TermEven", max_depth=20,
@@ -1585,11 +1585,11 @@ class TestConjunctionMemoTable:
 
 
 class TestCpdSolveNatnum:
-    """CPD on vanilla Solve/2 with natnum program."""
+    """CPD on vanilla solve/2 with natnum program."""
 
     def test_more_clauses_than_shallow(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_natnum_program(), "SolveSh1")
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd1")
         assert len(cpd._clauses) >= len(shallow._clauses)
@@ -1597,21 +1597,21 @@ class TestCpdSolveNatnum:
     def test_natnum_0(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd2")
         assert sum(1 for _ in call(cpd, [["natnum", 0]])) == 1
 
     def test_natnum_s_0(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd3")
         assert sum(1 for _ in call(cpd, [["natnum", ["s", 0]]])) == 1
 
     def test_natnum_s_s_s_0(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd4")
         assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", ["s", 0]]]]])) == 1
 
@@ -1619,7 +1619,7 @@ class TestCpdSolveNatnum:
         """CPD produces same results as Phase 1 for various natnum inputs."""
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_natnum_program(), "SolveSh5")
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd5")
         for n in range(6):
@@ -1633,11 +1633,11 @@ class TestCpdSolveNatnum:
 
 
 class TestCpdSolveGraph:
-    """CPD on vanilla Solve/2 with graph program."""
+    """CPD on vanilla solve/2 with graph program."""
 
     def test_more_clauses_than_shallow(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_graph_program(), "SolveGSh1")
         cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd1")
         assert len(cpd._clauses) > len(shallow._clauses)
@@ -1645,28 +1645,28 @@ class TestCpdSolveGraph:
     def test_path_a_b(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd2")
         assert sum(1 for _ in call(cpd, [["path", "a", "b"]])) == 1
 
     def test_path_a_c(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd3")
         assert sum(1 for _ in call(cpd, [["path", "a", "c"]])) == 1
 
     def test_path_a_d(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd4")
         assert sum(1 for _ in call(cpd, [["path", "a", "d"]])) == 1
 
     def test_edge_a_b(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd5")
         assert sum(1 for _ in call(cpd, [["edge", "a", "b"]])) == 1
 
@@ -1674,7 +1674,7 @@ class TestCpdSolveGraph:
         """CPD produces same results as Phase 1 for all graph queries."""
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_graph_program(), "SolveGSh6")
         cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd6")
         queries = [
@@ -1689,13 +1689,13 @@ class TestCpdSolveGraph:
 
 
 class TestCpdSolveCount:
-    """CPD on SolveCount/3 with natnum — tests post-match chaining."""
+    """CPD on solve_count/3 with natnum — tests post-match chaining."""
 
     def test_count_natnum_0(self, mi_module):
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd1")
         v = Var()
         for _ in call(cpd, [["natnum", 0]], v):
@@ -1705,7 +1705,7 @@ class TestCpdSolveCount:
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd2")
         v = Var()
         for _ in call(cpd, [["natnum", ["s", 0]]], v):
@@ -1716,7 +1716,7 @@ class TestCpdSolveCount:
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         shallow = specialize_mi(pattern, _make_natnum_program(), "SCSh3")
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd3")
         for n in range(6):
@@ -1734,19 +1734,19 @@ class TestCpdSolveCount:
 
 
 class TestCpdSolveLimit:
-    """CPD on SolveLimit/3 — tests pre-match chaining."""
+    """CPD on solve_limit/3 — tests pre-match chaining."""
 
     def test_limit_passes(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd1")
         assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", 0]]]], 10)) == 1
 
     def test_limit_fails(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd2")
         assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", ["s", 0]]]]], 2)) == 0
 
@@ -1754,7 +1754,7 @@ class TestCpdSolveLimit:
         """CPD limit behavior matches Phase 1 for various depths and limits."""
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.SolveLimit)
+        pattern = analyze_mi(mi_module.solve_limit)
         shallow = specialize_mi(pattern, _make_natnum_program(), "SLSh3")
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd3")
         for depth in range(5):
@@ -1774,7 +1774,7 @@ class TestCpdFactorial:
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(pattern, _make_factorial_program(), "SolveFactCpd1")
         for n, expected in [(0, 1), (1, 1), (3, 6), (5, 120)]:
             r = Var()
@@ -1785,7 +1785,7 @@ class TestCpdFactorial:
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_factorial_program(), "SolveFactSh2")
         cpd = specialize_mi_cpd(pattern, _make_factorial_program(), "SolveFactCpd2")
         for n in [0, 1, 2, 3, 4, 5]:
@@ -1805,7 +1805,7 @@ class TestCpdEvenOdd:
     def test_even_equivalence(self, mi_module):
         # nv
         from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_even_odd_program(), "SolveEvSh1")
         cpd = specialize_mi_cpd(pattern, _make_even_odd_program(), "SolveEvCpd1")
         for n in range(10):
@@ -1819,7 +1819,7 @@ class TestCpdTermination:
 
     def test_natnum_terminates(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(
             pattern, _make_natnum_program(), "SolveTerm1", max_depth=20,
         )
@@ -1827,7 +1827,7 @@ class TestCpdTermination:
 
     def test_graph_terminates(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(
             pattern, _make_graph_program(), "SolveTerm2", max_depth=20,
         )
@@ -1835,7 +1835,7 @@ class TestCpdTermination:
 
     def test_factorial_terminates(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(
             pattern, _make_factorial_program(), "SolveTerm3", max_depth=20,
         )
@@ -1843,7 +1843,7 @@ class TestCpdTermination:
 
     def test_even_terminates(self, mi_module):
         # nv
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         cpd = specialize_mi_cpd(
             pattern, _make_even_odd_program(), "SolveTerm4", max_depth=20,
         )
@@ -1866,7 +1866,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.database import Database
 
         db = Database(module_dict={"__name__": "t7_caller"})
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "T7RowNatnum", db=db,
         )
@@ -1879,7 +1879,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.database import Database
 
         db = Database(module_dict={"__name__": "t7_sig"})
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         specialize_mi(
             pattern, _make_natnum_program(), "T7SigNatnum", db=db,
         )
@@ -1889,7 +1889,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.database import Database
 
         db = Database(module_dict={"__name__": "t7_clauses"})
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "T7ClausesNatnum", db=db,
         )
@@ -1901,7 +1901,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.specialization import SPECIALIZE_AUTHOR_PREFIX
 
         db = Database(module_dict={"__name__": "t7_stamp"})
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         specialize_mi(
             pattern, _make_natnum_program(), "T7StampNatnum", db=db,
         )
@@ -1920,7 +1920,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.database import Database
 
         db = Database(module_dict={"__name__": "t7_again"})
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         specialize_mi(pattern, _make_natnum_program(), "T7AgainNatnum", db=db)
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "T7AgainNatnum", db=db,
@@ -1943,7 +1943,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.database import WRITE_LOAD_CLAUSES
         from clausal.logic.specialization import SPECIALIZE_AUTHOR_PREFIX
 
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "T7NoDbNatnum",
         )
@@ -1965,7 +1965,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.specialization import specialize_mi_deep
 
         db = Database(module_dict={"__name__": "t7_variants"})
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
         deep = specialize_mi_deep(
             pattern, _make_natnum_program(), "T7DeepNatnum", db=db, max_depth=3,
         )
@@ -1982,7 +1982,7 @@ class TestSpecializedPredicateIsARow:
         from clausal.logic.solve import call
 
         db = Database(module_dict={"__name__": "t7_answers"})
-        pattern = analyze_mi(mi_module.SolveCount)
+        pattern = analyze_mi(mi_module.solve_count)
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "T7AnswerNatnum", db=db,
         )
@@ -2015,7 +2015,7 @@ class TestSpecializedPredicateIsARow:
 
         db = Database(module_dict={"__name__": "t7_chain"})
         module_dict = db.module_dict
-        pattern = analyze_mi(mi_module.Solve)
+        pattern = analyze_mi(mi_module.solve)
 
         inner = specialize_mi(
             pattern, _make_natnum_program(), "T7Inner", module_dict, db=db,

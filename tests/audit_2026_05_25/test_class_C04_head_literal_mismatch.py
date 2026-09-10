@@ -1,15 +1,15 @@
 """C4 — Head-pattern literal mismatch (rule heads with str literals).
 
 1 bug finding (F046), now FIXED by the narrow head_match.py change: str is
-split out of the MatchValue tuple at head_match.py and emitted as a wildcard
+split out of the match_value tuple at head_match.py and emitted as a wildcard
 capture + a same-type-short-circuit unify guard (`_scap == "abc" or
 unify(_scap, "abc", trail)`), mirroring the list-literal path. This routes the
 comparison through unify() so a char-list caller honours the strings-as-lists
 contract, while keeping the fast `==` path for same-type str callers.
 
-Background on the original bug: Quux("abc") <- (real_body) used to compile to
-MatchValue(Constant("abc")). Python's match uses == for MatchValue, so a caller
-Quux(['a','b','c']) silently failed despite the strings-as-lists contract.
+Background on the original bug: quux("abc") <- (real_body) used to compile to
+match_value(constant("abc")). Python's match uses == for match_value, so a caller
+quux(['a','b','c']) silently failed despite the strings-as-lists contract.
 Only str-literal heads in rules with non-True bodies hit this — facts
 (including <- (True) rules) dodge it via the _normalize_dataclass_fact
 elaborator at database.py:332-361, and list-literal heads already went through
@@ -43,28 +43,28 @@ def test_F046_str_head_no_longer_matches_charlist_caller():
     side of a str.
 
     Registers four clauses via inline .clausal source:
-    - Fact `Foo("abc")` — handled by the elaborator dodge
-    - Fact `Bar(['a', 'b', 'c'])` — handled by elaboration + list path
-    - Rule `Quux("abc") <- (Helper(1))` — the (retired) F046 surface
-    - Rule `Zorp(['a','b','c']) <- (Helper(1))` — list-literal head
-    - Plus `Helper(1)` so the rule bodies succeed
+    - Fact `foo("abc")` — handled by the elaborator dodge
+    - Fact `bar(['a', 'b', 'c'])` — handled by elaboration + list path
+    - Rule `quux("abc") <- (helper(1))` — the (retired) F046 surface
+    - Rule `zorp(['a','b','c']) <- (helper(1))` — list-literal head
+    - Plus `helper(1)` so the rule bodies succeed
 
-    1. Foo("abc") — control (fact, str-head, str-caller) -> 1
-    2. Foo(['a','b','c']) — cross-type, RETIRED (fact, str-head, list-caller) -> 0
-    3. Bar("abc") — cross-type, RETIRED (fact, list-head, str-caller) -> 0
-    4. Bar(['a','b','c']) — control (fact, list-head, list-caller) -> 1
-    5. Quux("abc") — control (rule, str-head, str-caller) -> 1
-    6. Quux(['a','b','c']) — cross-type, RETIRED (rule, str-head, list-caller) -> 0
-    7. Zorp("abc") — cross-type, still 1 (rule, list-head, str-caller) -> 1
-    8. Zorp(['a','b','c']) — control (rule, list-head, list-caller) -> 1
+    1. foo("abc") — control (fact, str-head, str-caller) -> 1
+    2. foo(['a','b','c']) — cross-type, RETIRED (fact, str-head, list-caller) -> 0
+    3. bar("abc") — cross-type, RETIRED (fact, list-head, str-caller) -> 0
+    4. bar(['a','b','c']) — control (fact, list-head, list-caller) -> 1
+    5. quux("abc") — control (rule, str-head, str-caller) -> 1
+    6. quux(['a','b','c']) — cross-type, RETIRED (rule, str-head, list-caller) -> 0
+    7. zorp("abc") — cross-type, still 1 (rule, list-head, str-caller) -> 1
+    8. zorp(['a','b','c']) — control (rule, list-head, list-caller) -> 1
 
-    Call #6 — Quux(['a','b','c']) — was the F046 bug surface (0 solutions
+    Call #6 — quux(['a','b','c']) — was the F046 bug surface (0 solutions
     before the historical fix, 1 after it, back to 0 post-retirement): a
     str-literal RULE HEAD compiles to a wildcard-capture + `unify()` guard
     (head_match.py), and `unify()` itself no longer accepts a list where
     it holds a str, so this specific combination is retired.
 
-    Call #7 — Zorp("abc") — is DIFFERENT and NOT retired: a list-literal
+    Call #7 — zorp("abc") — is DIFFERENT and NOT retired: a list-literal
     RULE HEAD compiles through a SEPARATE mechanism
     (`_head_list_unify_input` in `clausal/logic/runtime/list_unify.py`),
     which destructures a str target NATIVELY (via Python str indexing/
@@ -75,67 +75,67 @@ def test_F046_str_head_no_longer_matches_charlist_caller():
     built on the retired do_unify cross-type branch) — see
     ``tests/test_dcg.py``'s cons-rule-retirement-vs-DCG audit note for the
     fuller rationale. Empirically re-verified against the rebuilt
-    extension (2026-09-04): Foo/Bar/Quux's cross-type calls all go to 0,
-    Zorp("abc") alone stays at 1.
+    extension (2026-09-04): foo/bar/quux's cross-type calls all go to 0,
+    zorp("abc") alone stays at 1.
     """
     # Register fixtures inline.
     source = """\
-Foo("abc"),
-Bar(['a', 'b', 'c']),
+foo("abc"),
+bar(['a', 'b', 'c']),
 
-Helper(1),
+helper(1),
 
-Quux("abc") <- (Helper(1))
-Zorp(['a', 'b', 'c']) <- (Helper(1))
+quux("abc") <- (helper(1))
+zorp(['a', 'b', 'c']) <- (helper(1))
 """
     mod = load_inline_clausal("c04_f046_heads", source).__dict__["$module"]
 
     # Collect all 8 solution counts.
-    n_foo_str = sum(1 for _ in call("Foo", mint("abc"), module=mod))
-    n_foo_list = sum(1 for _ in call("Foo", [mint("a"), mint("b"), mint("c")], module=mod))
-    n_bar_str = sum(1 for _ in call("Bar", mint("abc"), module=mod))
-    n_bar_list = sum(1 for _ in call("Bar", [mint("a"), mint("b"), mint("c")], module=mod))
-    n_quux_str = sum(1 for _ in call("Quux", mint("abc"), module=mod))
-    n_quux_list = sum(1 for _ in call("Quux", [mint("a"), mint("b"), mint("c")], module=mod))
-    n_zorp_str = sum(1 for _ in call("Zorp", "abc", module=mod))
-    n_zorp_list = sum(1 for _ in call("Zorp", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_foo_str = sum(1 for _ in call("foo", mint("abc"), module=mod))
+    n_foo_list = sum(1 for _ in call("foo", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_bar_str = sum(1 for _ in call("bar", mint("abc"), module=mod))
+    n_bar_list = sum(1 for _ in call("bar", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_quux_str = sum(1 for _ in call("quux", mint("abc"), module=mod))
+    n_quux_list = sum(1 for _ in call("quux", [mint("a"), mint("b"), mint("c")], module=mod))
+    n_zorp_str = sum(1 for _ in call("zorp", "abc", module=mod))
+    n_zorp_list = sum(1 for _ in call("zorp", [mint("a"), mint("b"), mint("c")], module=mod))
 
     # P3-1 \u00a71b: same-type combinations still return 1; cross-type
     # (str-head/list-caller or list-head/str-caller) now return 0.
     assert n_foo_str == 1, (
-        f"Fact Foo(\"abc\") called with \"abc\" returned {n_foo_str} "
+        f"Fact foo(\"abc\") called with \"abc\" returned {n_foo_str} "
         f"solutions; expected 1 (control, same-type)"
     )
     assert n_foo_list == 0, (
-        f"Fact Foo(\"abc\") called with ['a','b','c'] returned "
+        f"Fact foo(\"abc\") called with ['a','b','c'] returned "
         f"{n_foo_list} solutions; expected 0 (cross-type, RETIRED by \u00a71b)"
     )
     assert n_bar_str == 0, (
-        f"Fact Bar(['a','b','c']) called with \"abc\" returned {n_bar_str} "
+        f"Fact bar(['a','b','c']) called with \"abc\" returned {n_bar_str} "
         f"solutions; expected 0 (cross-type, RETIRED by \u00a71b)"
     )
     assert n_bar_list == 1, (
-        f"Fact Bar(['a','b','c']) called with ['a','b','c'] returned "
+        f"Fact bar(['a','b','c']) called with ['a','b','c'] returned "
         f"{n_bar_list} solutions; expected 1 (control, same-type)"
     )
     assert n_quux_str == 1, (
-        f"Rule Quux(\"abc\") <- Helper(1) called with \"abc\" returned "
+        f"Rule quux(\"abc\") <- helper(1) called with \"abc\" returned "
         f"{n_quux_str} solutions; expected 1 (control, same-type)"
     )
     assert n_quux_list == 0, (
-        f"Rule Quux(\"abc\") <- Helper(1) called with ['a','b','c'] "
+        f"Rule quux(\"abc\") <- helper(1) called with ['a','b','c'] "
         f"returned {n_quux_list} solutions; expected 0 (cross-type, "
         f"RETIRED by \u00a71b — the str-literal head's unify guard still "
         f"runs unify(_scap0, 'abc', trail), which now declines a list)"
     )
     assert n_zorp_str == 1, (
-        f"Rule Zorp(['a','b','c']) <- Helper(1) called with the STRING "
+        f"Rule zorp(['a','b','c']) <- helper(1) called with the STRING "
         f"\"abc\" returned {n_zorp_str} solutions; expected 1 -- THE FLIP "
         f"(spec §6.2) makes a string and its char-atom list one term, and "
         f"the head list holds char atoms"
     )
     assert n_zorp_list == 1, (
-        f"Rule Zorp(['a','b','c']) <- Helper(1) called with "
+        f"Rule zorp(['a','b','c']) <- helper(1) called with "
         f"['a','b','c'] returned {n_zorp_list} solutions; expected 1 "
         f"(control, same-type)"
     )
@@ -151,24 +151,24 @@ def test_F046_str_literal_dispatch_table_charlist_caller_retired():
     clause; that was the retired cross-type behaviour.)
     """
     source = """\
-Helper(1),
+helper(1),
 
-Color("red") <- (Helper(1))
-Color("green") <- (Helper(1))
-Color("blue") <- (Helper(1))
+color("red") <- (helper(1))
+color("green") <- (helper(1))
+color("blue") <- (helper(1))
 """
     mod = load_inline_clausal("c04_f046_dispatch", source).__dict__["$module"]
 
     # P3-1 \u00a71b: char-list callers no longer match a str-literal head.
-    assert sum(1 for _ in call("Color", list("red"), module=mod)) == 0
-    assert sum(1 for _ in call("Color", list("green"), module=mod)) == 0
-    assert sum(1 for _ in call("Color", list("blue"), module=mod)) == 0
+    assert sum(1 for _ in call("color", list("red"), module=mod)) == 0
+    assert sum(1 for _ in call("color", list("green"), module=mod)) == 0
+    assert sum(1 for _ in call("color", list("blue"), module=mod)) == 0
     # str callers (control, same-type) still match.
-    assert sum(1 for _ in call("Color", mint("red"), module=mod)) == 1
-    assert sum(1 for _ in call("Color", mint("green"), module=mod)) == 1
+    assert sum(1 for _ in call("color", mint("red"), module=mod)) == 1
+    assert sum(1 for _ in call("color", mint("green"), module=mod)) == 1
     # A char-list still matches nothing for a non-matching clause either.
-    assert sum(1 for _ in call("Color", list("purple"), module=mod)) == 0
-    assert sum(1 for _ in call("Color", [mint("x")], module=mod)) == 0
+    assert sum(1 for _ in call("color", list("purple"), module=mod)) == 0
+    assert sum(1 for _ in call("color", [mint("x")], module=mod)) == 0
 
 
 def test_F046_segstring_caller_against_str_head():
@@ -186,22 +186,22 @@ def test_F046_segstring_caller_against_str_head():
     # ``-double_quotes(chars)``; that is what this test is about.
     source = """\
 -double_quotes(chars)
-Helper(1),
+helper(1),
 
-Quux("abc") <- (Helper(1))
+quux("abc") <- (helper(1))
 """
     mod = load_inline_clausal("c04_f046_segstring", source).__dict__["$module"]
 
     # Ground SegString caller — matches via the `==` disjunct.
     ground = SegString(["abc"])
-    assert sum(1 for _ in call("Quux", ground, module=mod)) == 1
+    assert sum(1 for _ in call("quux", ground, module=mod)) == 1
 
     # Partial SegString caller `a<X>c` — the unify disjunct enumerates the
     # split against "abc", binding X to "b". The binding lives on the trail
     # only inside the solution scope, so read it during iteration.
     x = Var()
     partial = SegString(["a", VarSeg(x), "c"])
-    bindings = [walk(x) for _ in call("Quux", partial, module=mod)]
+    bindings = [walk(x) for _ in call("quux", partial, module=mod)]
     assert bindings == ["b"], (
         f"partial SegString caller a<X>c vs head \"abc\": expected exactly "
         f"one solution binding X='b', got bindings={bindings!r}"
@@ -230,12 +230,12 @@ def test_F046_str_head_compiles_to_unify_guard_not_matchvalue():
     # spelling of the same text takes the ``_acap0`` guard instead.
     source = """\
 -double_quotes(chars)
-Helper(1),
+helper(1),
 
-Quux("abc") <- (Helper(1))
+quux("abc") <- (helper(1))
 """
     mod = load_inline_clausal("c04_f046_compile", source).__dict__["$module"]
-    clause = mod.db._clauses[("Quux", 1)][0]
+    clause = mod.db._clauses[("quux", 1)][0]
 
     case = compile_head_to_match_case(
         head=clause.head,
@@ -263,7 +263,7 @@ Quux("abc") <- (Helper(1))
 
 
 def test_F048_compound_str_head_inner_arg_hoisted_to_body_unify():
-    """F048: a compound head `Quux(foo("abc"))` does not specialise its inner str
+    """F048: a compound head `quux(foo("abc"))` does not specialise its inner str
     literal into a head MatchValue.
 
     Nested structural literals in a head are now *hoisted* into a body
@@ -280,12 +280,12 @@ def test_F048_compound_str_head_inner_arg_hoisted_to_body_unify():
     from clausal.terms import Unify
 
     source = """\
-Helper(1),
+helper(1),
 
-Quux(foo("abc")) <- (Helper(1))
+quux(foo("abc")) <- (helper(1))
 """
     mod = load_inline_clausal("c04_f048_compound", source).__dict__["$module"]
-    clause = mod.db._clauses[("Quux", 1)][0]
+    clause = mod.db._clauses[("quux", 1)][0]
 
     # The inner foo("abc") is hoisted out of the head into a body Unify goal.
     unifies = [g for g in clause.body if isinstance(g, Unify)]
@@ -323,18 +323,18 @@ def test_F046_bytes_literal_head_matches_int_list():
     cross into the bytes domain.
     """
     source = """\
-Helper(1),
+helper(1),
 
-Quux(b"abc") <- (Helper(1))
+quux(b"abc") <- (helper(1))
 """
     mod = load_inline_clausal("c04_f046_bytes", source).__dict__["$module"]
 
     # Same-type bytes caller matches (fast == path).
-    assert sum(1 for _ in call("Quux", b"abc", module=mod)) == 1
+    assert sum(1 for _ in call("quux", b"abc", module=mod)) == 1
     # bytes-as-lists: the int-code list form now matches (was 0 pre-feature).
-    assert sum(1 for _ in call("Quux", [97, 98, 99], module=mod)) == 1
+    assert sum(1 for _ in call("quux", [97, 98, 99], module=mod)) == 1
     # No str/bytes cross-unification: a str caller must NOT match.
-    assert sum(1 for _ in call("Quux", mint("abc"), module=mod)) == 0
+    assert sum(1 for _ in call("quux", mint("abc"), module=mod)) == 0
 
 
 def test_F046_same_type_str_fast_path():
@@ -344,12 +344,12 @@ def test_F046_same_type_str_fast_path():
     relying on the unify() fallback.
     """
     source = """\
-Helper(1),
+helper(1),
 
-Quux("hello") <- (Helper(1))
+quux("hello") <- (helper(1))
 """
     mod = load_inline_clausal("c04_f046_fastpath", source).__dict__["$module"]
 
-    assert sum(1 for _ in call("Quux", mint("hello"), module=mod)) == 1
+    assert sum(1 for _ in call("quux", mint("hello"), module=mod)) == 1
     # A different str does not match.
-    assert sum(1 for _ in call("Quux", mint("world"), module=mod)) == 0
+    assert sum(1 for _ in call("quux", mint("world"), module=mod)) == 0

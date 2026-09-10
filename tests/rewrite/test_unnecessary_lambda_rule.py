@@ -36,9 +36,9 @@ def _reify(source):
 
 
 def _rewrite(rules_module, source):
-    """The first ``RewriteClause`` solution for the statement, or ``None``."""
+    """The first ``rewrite_clause`` solution for the statement, or ``None``."""
     out = Var()
-    for _ in call("RewriteClause", _reify(source), out, module=rules_module):
+    for _ in call("rewrite_clause", _reify(source), out, module=rules_module):
         return _deref_walk(out)
     return None
 
@@ -124,7 +124,7 @@ def test_reduces_when_param_shadows_an_enclosing_variable(rules):
         # multi-goal lambda body
         "t(L) <- (maplist((X <- (p(X), q(X))), L))\n",
         # closure capture: Y comes from the enclosing clause
-        "t(X, Y) <- (call_goal((V <- (Helper(V, Y))), X))\n",
+        "t(X, Y) <- (call_goal((V <- (helper(V, Y))), X))\n",
         # a genuine less-than-negative comparison, left untouched
         "t(A, B) <- (check(A < -B))\n",
         # an operator body is a computation, not a forward

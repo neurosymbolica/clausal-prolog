@@ -169,14 +169,14 @@ class TestPyThunkMultiSolution:
         # nv
         src = tmp_path / "interop_multi_sol.clausal"
         src.write_text(
-            "Item(1),\n"
-            "Item(2),\n"
-            "Item(3),\n"
-            "Doubled(_r) <- (Item(_x), _r is ++(_x * 2))\n"
+            "item(1),\n"
+            "item(2),\n"
+            "item(3),\n"
+            "doubled(_r) <- (item(_x), _r is ++(_x * 2))\n"
         )
         mod = _load_module("interop_multi_sol", str(src))
         logic_mod = mod.__dict__["$module"]
-        results = _call_and_capture("Doubled", module=logic_mod)
+        results = _call_and_capture("doubled", module=logic_mod)
         assert results == [2, 4, 6]
 
     def test_thunk_no_vars(self, tmp_path):

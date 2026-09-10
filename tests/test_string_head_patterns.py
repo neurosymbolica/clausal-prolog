@@ -42,7 +42,7 @@ class TestHeadTailString:
         # nv
         H, T = Var(), Var()
         results = []
-        for _ in call("HeadTail", "abc", H, T, module=edge_mod):
+        for _ in call("head_tail", "abc", H, T, module=edge_mod):
             results.append((deref(H), deref(T)))
         # THE FLIP (spec §6.2): the head is a CHAR ATOM, the tail a str slice.
         assert results == [(char_atom("a"), "bc")]
@@ -51,7 +51,7 @@ class TestHeadTailString:
         # nv
         H, T = Var(), Var()
         results = []
-        for _ in call("HeadTail", "a", H, T, module=edge_mod):
+        for _ in call("head_tail", "a", H, T, module=edge_mod):
             results.append((deref(H), deref(T)))
         assert results == [(char_atom("a"), "")]
 
@@ -59,7 +59,7 @@ class TestHeadTailString:
         """Empty string has no head — should fail."""
         # nv
         H, T = Var(), Var()
-        assert list(call("HeadTail", "", H, T, module=edge_mod)) == []
+        assert list(call("head_tail", "", H, T, module=edge_mod)) == []
 
 
 class TestCaptureAllString:
@@ -67,7 +67,7 @@ class TestCaptureAllString:
         # nv
         A = Var()
         results = []
-        for _ in call("CaptureAll", "hello", A, module=edge_mod):
+        for _ in call("capture_all", "hello", A, module=edge_mod):
             results.append(deref(A))
         # THE FLIP (spec §6.2): a star over a string captures a str slice.
         assert results == ["hello"]
@@ -76,7 +76,7 @@ class TestCaptureAllString:
         # nv
         A = Var()
         results = []
-        for _ in call("CaptureAll", "", A, module=edge_mod):
+        for _ in call("capture_all", "", A, module=edge_mod):
             results.append(deref(A))
         assert results == [""]
 
@@ -86,7 +86,7 @@ class TestThreeAndRestString:
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
         results = []
-        for _ in call("ThreeAndRest", "abcde", A, B, C, R, module=edge_mod):
+        for _ in call("three_and_rest", "abcde", A, B, C, R, module=edge_mod):
             results.append((deref(A), deref(B), deref(C), deref(R)))
         # THE FLIP (spec §6.2): fixed elements are CHAR ATOMS, the rest a str.
         assert results == [
@@ -97,14 +97,14 @@ class TestThreeAndRestString:
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
         results = []
-        for _ in call("ThreeAndRest", "abc", A, B, C, R, module=edge_mod):
+        for _ in call("three_and_rest", "abc", A, B, C, R, module=edge_mod):
             results.append((deref(A), deref(B), deref(C), deref(R)))
         assert results == [(char_atom("a"), char_atom("b"), char_atom("c"), "")]
 
     def test_too_short_fails(self, edge_mod):
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
-        assert list(call("ThreeAndRest", "ab", A, B, C, R, module=edge_mod)) == []
+        assert list(call("three_and_rest", "ab", A, B, C, R, module=edge_mod)) == []
 
 
 class TestExactlyTwoString:
@@ -112,15 +112,15 @@ class TestExactlyTwoString:
         # nv
         X, Y = Var(), Var()
         results = []
-        for _ in call("ExactlyTwo", "ab", X, Y, module=edge_mod):
+        for _ in call("exactly_two", "ab", X, Y, module=edge_mod):
             results.append((deref(X), deref(Y)))
         assert results == [(char_atom("a"), char_atom("b"))]
 
     def test_wrong_length_fails(self, edge_mod):
         # nv
         X, Y = Var(), Var()
-        assert list(call("ExactlyTwo", "abc", X, Y, module=edge_mod)) == []
-        assert list(call("ExactlyTwo", "a", X, Y, module=edge_mod)) == []
+        assert list(call("exactly_two", "abc", X, Y, module=edge_mod)) == []
+        assert list(call("exactly_two", "a", X, Y, module=edge_mod)) == []
 
 
 class TestIsEmptyString:
@@ -128,15 +128,15 @@ class TestIsEmptyString:
         # nv — THE FLIP (spec §6.2): `""` unifies with `[]`, so IsEmpty's
         # literal `[]` fact head matches the empty STRING. (Under P3-1 a
         # `str` was an atom and this failed; the inversion is deliberate.)
-        assert len(list(call("IsEmpty", "", module=edge_mod))) == 1
+        assert len(list(call("is_empty", "", module=edge_mod))) == 1
 
     def test_nonempty_string_fails(self, edge_mod):
         # nv — "x" is the one-element list [('x',)], not [].
-        assert list(call("IsEmpty", "x", module=edge_mod)) == []
+        assert list(call("is_empty", "x", module=edge_mod)) == []
 
     def test_atom_does_not_match_empty_list_head(self, edge_mod):
         # nv — the ATOM `''` is a cell, not a list; it never matches `[]`.
-        assert list(call("IsEmpty", mint(""), module=edge_mod)) == []
+        assert list(call("is_empty", mint(""), module=edge_mod)) == []
 
 
 # ── Recursive predicates on strings ────────────────────────────────────────
@@ -187,7 +187,7 @@ class TestStringPreservation:
         # nv
         H, T = Var(), Var()
         results = []
-        for _ in call("HeadTail", "abc", H, T, module=edge_mod):
+        for _ in call("head_tail", "abc", H, T, module=edge_mod):
             results.append(deref(T))
         assert results == ["bc"]
         assert isinstance(results[0], str), f"T should be str, got {type(results[0])}"
@@ -196,7 +196,7 @@ class TestStringPreservation:
         # nv
         A = Var()
         results = []
-        for _ in call("CaptureAll", "hello", A, module=edge_mod):
+        for _ in call("capture_all", "hello", A, module=edge_mod):
             results.append(deref(A))
         assert results == ["hello"]
         assert isinstance(results[0], str)
@@ -205,7 +205,7 @@ class TestStringPreservation:
         # nv
         A, B, C, R = Var(), Var(), Var(), Var()
         results = []
-        for _ in call("ThreeAndRest", "abcde", A, B, C, R, module=edge_mod):
+        for _ in call("three_and_rest", "abcde", A, B, C, R, module=edge_mod):
             results.append(deref(R))
         assert results == ["de"]
         assert isinstance(results[0], str)
@@ -216,7 +216,7 @@ class TestStringPreservation:
         H, T = Var(), Var()
         results = []
         for _ in call(
-            "HeadTail", [mint("a"), mint("b"), mint("c")], H, T, module=edge_mod
+            "head_tail", [mint("a"), mint("b"), mint("c")], H, T, module=edge_mod
         ):
             results.append((deref(H), deref(T)))
         assert results == [(mint("a"), [mint("b"), mint("c")])]

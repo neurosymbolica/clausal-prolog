@@ -2,7 +2,7 @@
 
 # ── Table constraint ────────────────────────────────────────────────────────
 
-TableSolve(X, Y) <- (
+table_solve(X, Y) <- (
     z3.integer((
         0 <= X <= 10,
         0 <= Y <= 10,
@@ -11,8 +11,8 @@ TableSolve(X, Y) <- (
     z3.label([X, Y]),
 )
 
-test("table 3 solutions") <- (count_all(TableSolve(_, _), N), N == 3)  # nv
-test("table first row") <- TableSolve(1, 2)  # nv
-test("table second row") <- TableSolve(3, 4)  # nv
-test("table third row") <- TableSolve(5, 6)  # nv
-test("table excludes others") <- (not(TableSolve(2, 3)))  # nv
+test("table 3 solutions") <- (count_all(table_solve(_, _), N), N == 3)  # nv
+test("table first row") <- table_solve(1, 2)  # nv
+test("table second row") <- table_solve(3, 4)  # nv
+test("table third row") <- table_solve(5, 6)  # nv
+test("table excludes others") <- (not(table_solve(2, 3)))  # nv

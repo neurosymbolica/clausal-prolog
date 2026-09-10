@@ -65,18 +65,18 @@ def assert_round_trips(src):
 
 class TestFacts:
     @pytest.mark.parametrize("src", [
-        "Edge(1, 2),\n",
-        "Item('widget', 2.5),\n",
-        "Status(ok, 1),\n",
-        "Temp(-40),\n",
-        "Rule(X, Y),\n",
+        "edge(1, 2),\n",
+        "item('widget', 2.5),\n",
+        "status(ok, 1),\n",
+        "temp(-40),\n",
+        "rule(X, Y),\n",
     ])
     def test_fact_round_trips(self, src):
         assert_round_trips(src)
 
     @pytest.mark.parametrize("src,expected", [
-        ("Edge(1, 2),\n", "Edge(1, 2),"),
-        ("Status(ok, 1),\n", "Status(ok, 1),"),
+        ("edge(1, 2),\n", "edge(1, 2),"),
+        ("status(ok, 1),\n", "status(ok, 1),"),
         ("per_se(a, b),\n", "per_se(a, b),"),
     ])
     def test_fact_surface_is_bare_head_comma(self, src, expected):
@@ -94,10 +94,10 @@ class TestFacts:
 
 class TestRules:
     @pytest.mark.parametrize("src", [
-        "Connected(X, Y) <- Edge(X, Y)\n",
-        "Grandparent(X, Z) <- (Parent(X, Y), Parent(Y, Z))\n",
-        "Reachable(X) <- Edge(_, _)\n",
-        "Three(A) <- (Pa(A), Qa(A), Ra(A))\n",
+        "connected(X, Y) <- edge(X, Y)\n",
+        "grandparent(X, Z) <- (parent(X, Y), parent(Y, Z))\n",
+        "reachable(X) <- edge(_, _)\n",
+        "three(A) <- (pa(A), qa(A), ra(A))\n",
     ])
     def test_rule_round_trips(self, src):
         assert_round_trips(src)
@@ -105,21 +105,21 @@ class TestRules:
 
 class TestOperators:
     @pytest.mark.parametrize("src", [
-        "Positive(N) <- (N > 0)\n",
-        "AtLeast(N) <- (N >= 10)\n",
-        "Eq(N) <- (N == 0)\n",
-        "Neq(N) <- (N != 0)\n",
-        "Sum(X, Y, Z) <- (Z is X + Y)\n",
-        "Prod(X, Y, Z) <- (Z is X * Y)\n",
-        "Diff(X, Y, Z) <- (Z is X - Y)\n",
-        "Unify2(X, Y) <- (X is Y)\n",
-        "Dif2(X, Y) <- (X is not Y)\n",
-        "Free(A) <- (not Busy(A))\n",
-        "Either(A) <- (Pa(A) or Qa(A))\n",
-        "Both(A) <- (Pa(A) and Qa(A))\n",
-        "Neg(X, Y) <- (Y is -X)\n",
-        "ConsTail(T) <- Head([a, b | T])\n",
-        "StarTail(T) <- Head([a, b, *T])\n",
+        "positive(N) <- (N > 0)\n",
+        "at_least(N) <- (N >= 10)\n",
+        "eq(N) <- (N == 0)\n",
+        "neq(N) <- (N != 0)\n",
+        "sum(X, Y, Z) <- (Z is X + Y)\n",
+        "prod(X, Y, Z) <- (Z is X * Y)\n",
+        "diff(X, Y, Z) <- (Z is X - Y)\n",
+        "unify2(X, Y) <- (X is Y)\n",
+        "dif2(X, Y) <- (X is not Y)\n",
+        "free(A) <- (not busy(A))\n",
+        "either(A) <- (pa(A) or qa(A))\n",
+        "both(A) <- (pa(A) and qa(A))\n",
+        "neg(X, Y) <- (Y is -X)\n",
+        "cons_tail(T) <- head([a, b | T])\n",
+        "star_tail(T) <- head([a, b, *T])\n",
     ])
     def test_operator_round_trips(self, src):
         assert_round_trips(src)
@@ -127,10 +127,10 @@ class TestOperators:
 
 class TestCompoundAndKwargs:
     @pytest.mark.parametrize("src", [
-        "Holds(State(A)) <- Check(A)\n",
-        "Deep(Pp(Qq(Rr(X)))) <- Base(X)\n",
-        "WithList(Pp([1, 2, 3])),\n",
-        "Nested([Pp(X), Qq(Y)]),\n",
+        "holds(state(A)) <- check(A)\n",
+        "deep(pp(qq(rr(X)))) <- base(X)\n",
+        "with_list(pp([1, 2, 3])),\n",
+        "nested([pp(X), qq(Y)]),\n",
     ])
     def test_compound_round_trips(self, src):
         assert_round_trips(src)
@@ -138,7 +138,7 @@ class TestCompoundAndKwargs:
 
 class TestIfThenElse:
     @pytest.mark.parametrize("src", [
-        "Pick(X, Y) <- (Y is if_(X > 0, 1, 2))\n",
+        "pick(X, Y) <- (Y is if_(X > 0, 1, 2))\n",
     ])
     def test_ite_round_trips(self, src):
         assert_round_trips(src)
@@ -146,8 +146,8 @@ class TestIfThenElse:
 
 class TestEscapes:
     @pytest.mark.parametrize("src", [
-        "Calc(X, Y) <- (Y is ++(X + 1))\n",
-        "Calc2(X, Y, Z) <- (Z is ++(X * Y + 1))\n",
+        "calc(X, Y) <- (Y is ++(X + 1))\n",
+        "calc2(X, Y, Z) <- (Z is ++(X * Y + 1))\n",
     ])
     def test_escape_round_trips(self, src):
         assert_round_trips(src)
@@ -155,8 +155,8 @@ class TestEscapes:
 
 class TestSubscript:
     @pytest.mark.parametrize("src", [
-        "Get(P, I) <- (I is P[flags])\n",
-        "GetDotted(P, I) <- (I is P[a.b.c])\n",
+        "get(P, I) <- (I is P[flags])\n",
+        "get_dotted(P, I) <- (I is P[a.b.c])\n",
     ])
     def test_subscript_round_trips(self, src):
         assert_round_trips(src)
@@ -169,14 +169,14 @@ class TestSubscript:
         docs/superpowers/specs/2026-07-29-dot-attribute-access-design.md.
         """
         # nv
-        dotted = only_clause("GetDot(P, I) <- (I is P.flags)\n")
-        bracket = only_clause("GetDot(P, I) <- (I is P[flags])\n")
+        dotted = only_clause("get_dot(P, I) <- (I is P.flags)\n")
+        bracket = only_clause("get_dot(P, I) <- (I is P[flags])\n")
         assert strip_positions(dotted) == strip_positions(bracket)
 
     def test_read_once_lowering_is_idempotent(self):
         """Rendering a lowered clause and re-reifying must not re-lower it."""
         # nv
-        original = only_clause("Twice(P, I) <- (Chk(P.k), I is P.k)\n")
+        original = only_clause("twice(P, I) <- (chk(P.k), I is P.k)\n")
         once = render_source(original)
         twice = render_source(only_clause(once + "\n"))
         assert once == twice
@@ -186,8 +186,8 @@ class TestSubscript:
 
 class TestDictLiteral:
     @pytest.mark.parametrize("src", [
-        "Merge(A, B) <- (A is {**B, foo: B})\n",
-        "Merge2(A, B, C) <- (A is {**B, foo: C, bar: B})\n",
+        "merge(A, B) <- (A is {**B, foo: B})\n",
+        "merge2(A, B, C) <- (A is {**B, foo: C, bar: B})\n",
     ])
     def test_dict_literal_round_trips(self, src):
         assert_round_trips(src)
@@ -241,19 +241,19 @@ class TestDictLiteral:
 
 class TestArrowLambda:
     @pytest.mark.parametrize("src", [
-        "Run0(C) <- run(( () <- base()), C)\n",
-        "Run1(C) <- run((X <- base(X)), C)\n",
-        "RunN(C) <- run(((ID, PR) <- req(ID, PR)), C)\n",
-        "RunBody(C) <- run((X <- (Y is X + 1)), C)\n",
-        "RunTwo(C) <- run((X <- p(X)), (Y <- q(Y)), C)\n",
+        "run0(C) <- run(( () <- base()), C)\n",
+        "run1(C) <- run((X <- base(X)), C)\n",
+        "run_n(C) <- run(((ID, PR) <- req(ID, PR)), C)\n",
+        "run_body(C) <- run((X <- (Y is X + 1)), C)\n",
+        "run_two(C) <- run((X <- p(X)), (Y <- q(Y)), C)\n",
     ])
     def test_arrow_lambda_round_trips(self, src):
         assert_round_trips(src)
 
     @pytest.mark.parametrize("src", [
         # A genuine `X < -N` comparison must NOT be tightened into a lambda arrow.
-        "Cmp(X) <- (X < -1)\n",
-        "CmpVar(X, Y) <- (X < -Y)\n",
+        "cmp(X) <- (X < -1)\n",
+        "cmp_var(X, Y) <- (X < -Y)\n",
     ])
     def test_spaced_comparison_not_arrow(self, src):
         assert_round_trips(src)
@@ -261,8 +261,8 @@ class TestArrowLambda:
 
 class TestFormatString:
     @pytest.mark.parametrize("src", [
-        'Greet(Name, M) <- (M is f"hi {Name}")\n',
-        'Msg(X, S) <- (S is f"val={X}")\n',
+        'greet(name, M) <- (M is f"hi {name}")\n',
+        'msg(X, S) <- (S is f"val={X}")\n',
     ])
     def test_format_string_round_trips(self, src):
         assert_round_trips(src)
@@ -270,17 +270,17 @@ class TestFormatString:
 
 class TestCompareChain:
     @pytest.mark.parametrize("src", [
-        "Range(X) <- (0 < X < 10)\n",
-        "Range2(X) <- (0 <= X <= 10)\n",
-        "Mixed(X) <- (0 < X <= 10)\n",
-        "Four(X, Y) <- (0 < X < Y < 100)\n",
-        "Eqs(X, Y) <- (X == Y == 3)\n",
-        "Chained(X, Y) <- (X is Y is 3)\n",
-        "Member(X, L) <- (0 < X in L)\n",
+        "range(X) <- (0 < X < 10)\n",
+        "range2(X) <- (0 <= X <= 10)\n",
+        "mixed(X) <- (0 < X <= 10)\n",
+        "four(X, Y) <- (0 < X < Y < 100)\n",
+        "eqs(X, Y) <- (X == Y == 3)\n",
+        "chained(X, Y) <- (X is Y is 3)\n",
+        "member(X, L) <- (0 < X in L)\n",
         # An operand that is itself an expression, and a negated operand — the
         # rendered `<` must stay a comparison, never tighten into a `<-` arrow.
-        "Expr(X, Y) <- (0 < X + 1 < Y)\n",
-        "NegOperand(X) <- (-5 < X < 5)\n",
+        "expr(X, Y) <- (0 < X + 1 < Y)\n",
+        "neg_operand(X) <- (-5 < X < 5)\n",
     ])
     def test_compare_chain_round_trips(self, src):
         assert_round_trips(src)
@@ -288,8 +288,8 @@ class TestCompareChain:
     def test_chain_surface_is_a_single_chain(self):
         # Hand-written from the language's own syntax: a chain renders as ONE
         # Python comparison chain, not a conjunction of two comparisons.
-        rendered = render_source(only_clause("Range(X) <- (0 < X < 10)\n"))
-        assert rendered == "Range(X) <- (0 < X < 10)", rendered
+        rendered = render_source(only_clause("range(X) <- (0 < X < 10)\n"))
+        assert rendered == "range(X) <- (0 < X < 10)", rendered
 
     def test_unlinked_chain_raises(self):
         # A mutated chain whose adjacent operands no longer agree
@@ -325,20 +325,20 @@ class TestCompareChain:
 
 class TestSetLiteral:
     @pytest.mark.parametrize("src", [
-        "Has(S) <- (S is {a})\n",
-        "Has3(S) <- (S is {a, b, c})\n",
-        "HasInts(S) <- (S is {1, 2, 3})\n",
-        "HasMixed(S, X) <- (S is {1, 'two', X})\n",
-        "HasSplat(S, T) <- (S is {a, *T})\n",
-        "HasNested(S, X) <- (S is {Pp(X), b})\n",
+        "has(S) <- (S is {a})\n",
+        "has3(S) <- (S is {a, b, c})\n",
+        "has_ints(S) <- (S is {1, 2, 3})\n",
+        "has_mixed(S, X) <- (S is {1, 'two', X})\n",
+        "has_splat(S, T) <- (S is {a, *T})\n",
+        "has_nested(S, X) <- (S is {pp(X), b})\n",
     ])
     def test_set_literal_round_trips(self, src):
         assert_round_trips(src)
 
     def test_set_surface_is_braces(self):
         # Hand-written surface: a set literal is `{...}`, not `set([...])`.
-        rendered = render_source(only_clause("HasInts(S) <- (S is {1, 2})\n"))
-        assert rendered == "HasInts(S) <- (S is {1, 2})", rendered
+        rendered = render_source(only_clause("has_ints(S) <- (S is {1, 2})\n"))
+        assert rendered == "has_ints(S) <- (S is {1, 2})", rendered
 
     def test_empty_set_literal_raises(self):
         # There is no empty-set surface: `{}` is a dict, and ast.unparse emits
@@ -354,22 +354,22 @@ class TestPlainConstants:
     @pytest.mark.parametrize("src", [
         # `ast.Constant` payloads the reifier yields as themselves. bool/int/
         # float/complex/str were already covered; None and bytes were not.
-        "Nil(X) <- (X is None)\n",
-        "NilArg(X) <- Chk(X, None)\n",
-        "Bytes(X) <- (X is b'ab')\n",
-        "BytesArg(X) <- Chk(X, b'\\x00')\n",
+        "nil(X) <- (X is None)\n",
+        "nil_arg(X) <- chk(X, None)\n",
+        "bytes(X) <- (X is b'ab')\n",
+        "bytes_arg(X) <- chk(X, b'\\x00')\n",
         # `...` reifies but does not *compile* (the goal compiler rejects it), so
         # it is not live surface — still, render inverts reify, so it must
         # round-trip rather than raise.
-        "Dots(X) <- (X is ...)\n",
+        "dots(X) <- (X is ...)\n",
     ])
     def test_constant_round_trips(self, src):
         assert_round_trips(src)
 
     @pytest.mark.parametrize("src,expected", [
-        ("Nil(X) <- (X is None)\n", "Nil(X) <- (X is None)"),
-        ("Bytes(X) <- (X is b'ab')\n", "Bytes(X) <- (X is b'ab')"),
-        ("Dots(X) <- (X is ...)\n", "Dots(X) <- (X is ...)"),
+        ("nil(X) <- (X is None)\n", "nil(X) <- (X is None)"),
+        ("bytes(X) <- (X is b'ab')\n", "bytes(X) <- (X is b'ab')"),
+        ("dots(X) <- (X is ...)\n", "dots(X) <- (X is ...)"),
     ])
     def test_constant_surface(self, src, expected):
         assert render_source(only_clause(src)) == expected
@@ -381,11 +381,11 @@ class TestInertPythonExprNodes:
     reachable surface, so the renderer must round-trip them."""
 
     @pytest.mark.parametrize("src", [
-        "Aw(L, M) <- (M is await L)\n",
-        "AwExpr(L, M) <- (M is await Pp(L))\n",
-        "Yi(M) <- (M is (yield))\n",
-        "YiVal(X, M) <- (M is (yield X))\n",
-        "YiFrom(X, M) <- (M is (yield from X))\n",
+        "aw(L, M) <- (M is await L)\n",
+        "aw_expr(L, M) <- (M is await pp(L))\n",
+        "yi(M) <- (M is (yield))\n",
+        "yi_val(X, M) <- (M is (yield X))\n",
+        "yi_from(X, M) <- (M is (yield from X))\n",
     ])
     def test_inert_node_round_trips(self, src):
         assert_round_trips(src)
@@ -602,7 +602,7 @@ class TestPromotedStrSeqFields:
 
 class TestComprehensions:
 
-    DECLARED_LOOP_VAR = "-private([x])\n\nSq(L, M) <- (M is [x * x for x in L])\n"
+    DECLARED_LOOP_VAR = "-private([x])\n\nsq(L, M) <- (M is [x * x for x in L])\n"
 
     def test_a_declared_loop_var_compiles_runs_and_reifies_a_ListComp(self, tmp_path):
         """The reachability the exclusion list used to deny.
@@ -620,7 +620,7 @@ class TestComprehensions:
 
         result = Var()
         bindings = []
-        for _ in module.Sq([1, 2, 3], result):
+        for _ in module.sq([1, 2, 3], result):
             bindings.append(deref(result))
 
         assert len(bindings) == 1, "the clause must yield exactly one solution"
@@ -631,7 +631,7 @@ class TestComprehensions:
 
     def test_the_reachable_clause_round_trips(self):
         """It raised `RenderError: cannot render operator node: ListComp`."""
-        assert_round_trips("Sq(L, M) <- (M is [x * x for x in L]),\n")
+        assert_round_trips("sq(L, M) <- (M is [x * x for x in L]),\n")
 
     @pytest.mark.parametrize("src", [
         "L1(L, M) <- (M is [x * x for x in L]),\n",
@@ -815,12 +815,12 @@ def test_corpus_clause_round_trips(path):
 class TestCorruptionGuards:
     def test_lambda_in_clause_head_round_trips(self):
         # C1: a lambda arrow-as-term in HEAD position must not leak the sentinel.
-        assert_round_trips("Holds((X <- p(X))) <- Check(1)\n")
+        assert_round_trips("holds((X <- p(X))) <- check(1)\n")
 
     def test_nested_unary_plus_not_confused_with_escape(self):
         # C2: `+(+X)` must not silently collapse to the `++X` escape surface.
         # It either round-trips faithfully or raises RenderError — never corrupts.
-        clause = only_clause("Calc(X, Y) <- (Y is +(+X))\n")
+        clause = only_clause("calc(X, Y) <- (Y is +(+X))\n")
         try:
             rendered = render_source(clause)
         except RenderError:
@@ -833,14 +833,14 @@ class TestCorruptionGuards:
     def test_render_source_of_standalone_lambda_term(self):
         # I1: rendering a lambda sub-term directly (the auditor's use case) must
         # not leak the sentinel marker.
-        clause = only_clause("Ho(F) <- run((X <- base(X)), F)\n")
+        clause = only_clause("ho(F) <- run((X <- base(X)), F)\n")
         lambda_term = clause.goals[0].args[0]
         rendered = render_source(lambda_term)
         assert "__clausal_lambda_arrow__" not in rendered, (
             f"sentinel leaked in standalone lambda render: {rendered!r}"
         )
         # And it must re-parse to the same lambda structure.
-        reparsed = only_clause(f"Wrap(G) <- run({rendered}, G)\n")
+        reparsed = only_clause(f"wrap(G) <- run({rendered}, G)\n")
         assert strip_positions(reparsed.goals[0].args[0]) == strip_positions(lambda_term)
 
     def test_escape_with_invalid_code_raises_render_error(self):
@@ -862,8 +862,8 @@ class TestCorruptionGuards:
         (predicate) name still refuses: there is no quoted call syntax.
         """
         assert render_source(Atom("has space")) == "'has space'"
-        assert (render_source(Goal("Weird", [Atom("has space")], []))
-                == "Weird('has space')")
+        assert (render_source(Goal("weird", [Atom("has space")], []))
+                == "weird('has space')")
         # ...and it round-trips as an atom, not as a string.
         clause = only_clause("W('has space'),\n")
         assert render_source(clause) == "W('has space'),"

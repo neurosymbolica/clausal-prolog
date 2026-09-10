@@ -38,7 +38,7 @@ test("nonvar: list succeeds") :-
 test("atom: declared atom succeeds") :-
     atom(hello).
 
-test("atom: declared atom Abc") :-
+test("atom: declared atom abc") :-
     atom(abc).
 
 test("atom: string fails") :-

@@ -4,7 +4,7 @@ test('construct atom: functor(T, a, 0)') :-
     functor(T, a, 0),
     T == a.
 
-test('decompose atom: functor(\'Hello\', Name, Arity)') :-
+test('decompose atom: functor(\'hello\', Name, Arity)') :-
     functor(hello, N, A),
     N == hello,
     A == 0.
@@ -27,7 +27,7 @@ test('decompose atom: \'a\' =.. X') :-
     unpack(a, X),
     X == [a].
 
-test('decompose string: \'Hello\' =.. X') :-
+test('decompose string: \'hello\' =.. X') :-
     unpack(hello, X),
     X == [hello].
 

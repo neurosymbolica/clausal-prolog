@@ -1,7 +1,7 @@
 """Tests for ISO Prolog-compatible operators and quoted atom translation.
 
 Tests that:
-  - The ``prolog`` module provides ISO-compatible TruncDiv, TruncMod, Rem
+  - The ``prolog`` module provides ISO-compatible trunc_div, TruncMod, Rem
   - The translator emits prolog.TruncDiv() for Prolog's ``//``
   - The translator quotes Prolog atoms as Python string literals
   - End-to-end: .pl files with ``//``, ``mod``, atoms import and execute
@@ -126,7 +126,7 @@ class TestTranslatorAtomQuoting:
         # nv
         src = "color(red)."
         result = prolog_to_clausal(src)
-        assert "Color(red)," in result
+        assert "color(red)," in result
         assert "'red'" not in result
 
     def test_true_false_not_in_private(self):
@@ -148,7 +148,7 @@ class TestTranslatorAtomQuoting:
         # nv
         src = "foo_bar(1, 2)."
         result = prolog_to_clausal(src)
-        assert "FooBar(1, 2)," in result
+        assert "foo_bar(1, 2)," in result
 
 
 # ── End-to-end: .pl import with atoms and ISO operators ───────────────────
@@ -187,7 +187,7 @@ class TestEndToEnd:
         mod = _load_prolog_module("_plop_atoms", path)
         lm = mod.__clausal_module__
         v = Var()
-        results = [deref(v) for _ in call("Color", v, module=lm)]
+        results = [deref(v) for _ in call("color", v, module=lm)]
         assert {type(r).__name__ for r in results} == {"tuple"}
         assert set(results) == {mint("red"), mint("green"), mint("blue")}
 
@@ -202,7 +202,7 @@ class TestEndToEnd:
         r = Var()
         # ISO: -7 // 2 = -3 (truncate toward zero)
         # Python: -7 // 2 = -4 (floor)
-        results = [deref(r) for _ in call("TruncDiv", -7, 2, r, module=lm)]
+        results = [deref(r) for _ in call("trunc_div", -7, 2, r, module=lm)]
         assert results == [-3]
 
     def test_iso_mod(self, tmp_path):
@@ -215,7 +215,7 @@ class TestEndToEnd:
         lm = mod.__clausal_module__
         r = Var()
         # ISO/SWI: -7 mod 3 = 2 (sign follows the divisor; A11-F020)
-        results = [deref(r) for _ in call("MyMod", -7, 3, r, module=lm)]
+        results = [deref(r) for _ in call("my_mod", -7, 3, r, module=lm)]
         assert results == [2]
 
     def test_mixed_atoms_and_arithmetic(self, tmp_path):
@@ -233,6 +233,6 @@ class TestEndToEnd:
         assert hasattr(mod, 'zero')
         assert hasattr(mod, 'negative')
         # Correct atom matches succeed.
-        assert list(call("Classify", 5, mod.positive, module=lm))
-        assert list(call("Classify", 0, mod.zero, module=lm))
-        assert list(call("Classify", -3, mod.negative, module=lm))
+        assert list(call("classify", 5, mod.positive, module=lm))
+        assert list(call("classify", 0, mod.zero, module=lm))
+        assert list(call("classify", -3, mod.negative, module=lm))

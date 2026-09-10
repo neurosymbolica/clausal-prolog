@@ -19,17 +19,17 @@ count_to(N, NUMBERS) <- (
     findall(X, between(1, N, X), NUMBERS)
 )
 
-Test("between 1 to 3") <- (findall(X, between(1, 3, X), ELEMENTS), ELEMENTS == [1, 2, 3])  # v
-Test("succ forward") <- (succ(3, Y), Y == 4)  # v
-Test("succ backward") <- (succ(X, 5), X == 4)  # v
-Test("plus forward") <- (plus(2, 3, Z), Z == 5)  # v
-Test("plus backward lhs") <- (plus(X, 3, 7), X == 4)  # v
-Test("plus backward rhs") <- (plus(2, X, 7), X == 5)  # v
-Test("abs positive") <- (abs_(5, RESULT), RESULT == 5)  # v
-Test("abs negative") <- (abs_(-3, RESULT), RESULT == 3)  # v
-Test("max basic") <- (max_(3, 5, RESULT), RESULT == 5)  # v
-Test("min basic") <- (min_(3, 5, RESULT), RESULT == 3)  # v
-Test("count to 3") <- (count_to(3, NUMBERS), NUMBERS == [1, 2, 3])  # v
-Test("in range") <- in_range(1, 5, 3)  # v
-Test("successor") <- (successor(4, Y), Y == 5)  # v
-Test("predecessor") <- (predecessor(5, X), X == 4)  # v
+test("between 1 to 3") <- (findall(X, between(1, 3, X), ELEMENTS), ELEMENTS == [1, 2, 3])  # v
+test("succ forward") <- (succ(3, Y), Y == 4)  # v
+test("succ backward") <- (succ(X, 5), X == 4)  # v
+test("plus forward") <- (plus(2, 3, Z), Z == 5)  # v
+test("plus backward lhs") <- (plus(X, 3, 7), X == 4)  # v
+test("plus backward rhs") <- (plus(2, X, 7), X == 5)  # v
+test("abs positive") <- (abs_(5, RESULT), RESULT == 5)  # v
+test("abs negative") <- (abs_(-3, RESULT), RESULT == 3)  # v
+test("max basic") <- (max_(3, 5, RESULT), RESULT == 5)  # v
+test("min basic") <- (min_(3, 5, RESULT), RESULT == 3)  # v
+test("count to 3") <- (count_to(3, NUMBERS), NUMBERS == [1, 2, 3])  # v
+test("in range") <- in_range(1, 5, 3)  # v
+test("successor") <- (successor(4, Y), Y == 5)  # v
+test("predecessor") <- (predecessor(5, X), X == 4)  # v

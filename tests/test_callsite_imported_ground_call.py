@@ -37,29 +37,29 @@ def use_mod():
 class TestImportedGroundCallSite:
     def test_first_clause(self, use_mod):
         # nv
-        assert len(list(call("GroundFirst", module=use_mod))) == 1
+        assert len(list(call("ground_first", module=use_mod))) == 1
 
     def test_middle_clause(self, use_mod):
         # nv
-        assert len(list(call("GroundMiddle", module=use_mod))) == 1
+        assert len(list(call("ground_middle", module=use_mod))) == 1
 
     def test_last_clause(self, use_mod):
         # nv
-        assert len(list(call("GroundLast", module=use_mod))) == 1
+        assert len(list(call("ground_last", module=use_mod))) == 1
 
     def test_ground_miss_terminates_with_no_solutions(self, use_mod):
         # nv
-        assert list(call("GroundMiss", module=use_mod)) == []
+        assert list(call("ground_miss", module=use_mod)) == []
 
     def test_tail_call_redispatches(self, use_mod):
         """The bucket's TRO tail call must re-dispatch, not be dropped."""
         # nv
-        assert len(list(call("GroundTail", 6, module=use_mod))) == 1
+        assert len(list(call("ground_tail", 6, module=use_mod))) == 1
 
     def test_tail_call_redispatch_failure_terminates(self, use_mod):
         # 7 → 5 → 3 → 1, and BucketSteps(1, "even") has no solution.
         # nv
-        assert list(call("GroundTail", 7, module=use_mod)) == []
+        assert list(call("ground_tail", 7, module=use_mod)) == []
 
 
 @pytest.fixture(scope="module")
@@ -79,32 +79,32 @@ class TestImportedTabledCallSite:
     def _lib(self):
         import sys
         lib = sys.modules["tests.fixtures.callsite_tabled_lib"]
-        return lib.__dict__["TCat"], lib.__dict__["$module"]
+        return lib.__dict__["t_cat"], lib.__dict__["$module"]
 
     def test_fixture_is_actually_tabled(self, tabled_use_mod):
         # Guard against the silent-no-op dangling -table directive.
         # nv
         _, lib_lm = self._lib()
-        assert lib_lm.db.is_tabled("TCat", 2)
+        assert lib_lm.db.is_tabled("t_cat", 2)
 
     def test_direct_call_dedups(self, tabled_use_mod):
         """Control: the wrapped dispatch dedups the two "a"-clause answers."""
         # nv
-        assert len(list(call("TCat", 1, mint("a"), module=tabled_use_mod))) == 1
+        assert len(list(call("t_cat", 1, mint("a"), module=tabled_use_mod))) == 1
 
     def test_ground_call_site_respects_tabling(self, tabled_use_mod):
         """The compiled ground call site must see the same deduped answers."""
         # nv
-        assert len(list(call("TabledGround", module=tabled_use_mod))) == 1
+        assert len(list(call("tabled_ground", module=tabled_use_mod))) == 1
 
     def test_tabled_callee_not_specialised(self, tabled_use_mod):
         """No bucket refs may exist for a tabled callee."""
         # nv
         tcat, _ = self._lib()
         assert getattr(tcat, "_index_plans", {}) == {}
-        caller = tabled_use_mod.module_dict["TabledGround"]
+        caller = tabled_use_mod.module_dict["tabled_ground"]
         caller_globals = caller._dispatch_fn.__globals__
-        assert not any("TCat.bucket(" in k for k in caller_globals)
+        assert not any("t_cat.bucket(" in k for k in caller_globals)
 
 
 class TestImportedGroundCallSiteMultiSolution:
@@ -118,7 +118,7 @@ class TestImportedGroundCallSiteMultiSolution:
         from clausal.logic.variables import Var, deref
         r = Var()
         results = sorted(
-            deref(r) for _ in call("Multi", r, module=use_mod)
+            deref(r) for _ in call("multi", r, module=use_mod)
         )
         assert results == [mint("one"), mint("two")]
 
@@ -142,30 +142,30 @@ class TestImportedJointGroundCallSite:
         # nv
         import sys
         lib = sys.modules["tests.fixtures.callsite_joint_lib"]
-        assert getattr(lib.__dict__["JCat"], "_index_plans_joint", None)
-        caller = joint_use_mod.module_dict["JBoth"]
+        assert getattr(lib.__dict__["j_cat"], "_index_plans_joint", None)
+        caller = joint_use_mod.module_dict["j_both"]
         # The compiled clause must reference the JOINT gkey (joint hints are
         # preferred over single-position ones) — co_names pins the emission,
         # not just the globals injection.
         assert any(
-            ".JCat.bucket(pos=(" in n
+            ".j_cat.bucket(pos=(" in n
             for n in caller._dispatch_fn.__code__.co_names
         )
 
     def test_joint_ground_hit(self, joint_use_mod):
         # nv
-        assert len(list(call("JBoth", module=joint_use_mod))) == 1
+        assert len(list(call("j_both", module=joint_use_mod))) == 1
 
     def test_joint_ground_miss_terminates(self, joint_use_mod):
         # nv
-        assert list(call("JMiss", module=joint_use_mod)) == []
+        assert list(call("j_miss", module=joint_use_mod)) == []
 
     def test_joint_multi_clause_caller(self, joint_use_mod):
         # nv
         from clausal.logic.variables import Var, deref
         r = Var()
         results = sorted(
-            deref(r) for _ in call("JTwo", r, module=joint_use_mod)
+            deref(r) for _ in call("j_two", r, module=joint_use_mod)
         )
         assert results == [mint("one"), mint("two")]
 
@@ -187,12 +187,12 @@ class TestImportedCallSiteExceptions:
         # nv
         from clausal.logic.variables import Var, deref
         r = Var()
-        results = [deref(r) for _ in call("CatchIt", r, module=throw_use_mod)]
+        results = [deref(r) for _ in call("catch_it", r, module=throw_use_mod)]
         assert results == [mint("caught")]
 
     def test_non_throwing_bucket_unaffected(self, throw_use_mod):
         # nv
         from clausal.logic.variables import Var, deref
         r = Var()
-        results = [deref(r) for _ in call("PassThru", r, module=throw_use_mod)]
+        results = [deref(r) for _ in call("pass_thru", r, module=throw_use_mod)]
         assert results == [mint("ok")]

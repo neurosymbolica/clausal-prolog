@@ -43,11 +43,11 @@ def _atom_names(snapshots):
 class TestQuantityHeadLiteral:
     def test_input_mode_single_clause(self, mod):
         N = Var()
-        assert _atom_names(_collect("Chk", [N], N, module=mod)) == [(mint("short_"),)]
+        assert _atom_names(_collect("chk", [N], N, module=mod)) == [(mint("short_"),)]
 
     def test_output_mode_binds_quantity(self, mod):
         A = Var()
-        sols = _collect("Amt", [A], A, module=mod)
+        sols = _collect("amt", [A], A, module=mod)
         assert len(sols) == 1
         (q,) = sols[0]
         assert isinstance(q, Quantity)
@@ -55,11 +55,11 @@ class TestQuantityHeadLiteral:
 
     def test_input_mode_selects_among_clauses(self, mod):
         N = Var()
-        assert _atom_names(_collect("Pick", [N], N, module=mod)) == [(mint("long_"),)]
+        assert _atom_names(_collect("pick", [N], N, module=mod)) == [(mint("long_"),)]
 
     def test_output_mode_enumerates_all_clauses(self, mod):
         A, N = Var(), Var()
-        sols = _collect("Sel", [A, N], A, N, module=mod)
+        sols = _collect("sel", [A, N], A, N, module=mod)
         quantities = [q for q, _ in sols]
         assert quantities == [
             Quantity(2, {metre: 1}),
@@ -69,7 +69,7 @@ class TestQuantityHeadLiteral:
 
     def test_quantity_nested_in_head_list(self, mod):
         N = Var()
-        assert _atom_names(_collect("ChkPack", [N], N, module=mod)) == [(mint("packed_"),)]
+        assert _atom_names(_collect("chk_pack", [N], N, module=mod)) == [(mint("packed_"),)]
 
 
 class TestOtherPyThunkHeadLiterals:
@@ -78,15 +78,15 @@ class TestOtherPyThunkHeadLiterals:
 
     def test_currency_head_literal(self, mod):
         N = Var()
-        assert _atom_names(_collect("ChkPrice", [N], N, module=mod)) == [(mint("pricey_"),)]
+        assert _atom_names(_collect("chk_price", [N], N, module=mod)) == [(mint("pricey_"),)]
 
     def test_fstring_head_literal(self, mod):
         N = Var()
-        assert _atom_names(_collect("ChkTag", [N], N, module=mod)) == [(mint("tagged_"),)]
+        assert _atom_names(_collect("chk_tag", [N], N, module=mod)) == [(mint("tagged_"),)]
 
     def test_python_escape_head_literal(self, mod):
         N = Var()
-        assert _atom_names(_collect("ChkEsc", [N], N, module=mod)) == [(mint("escd_"),)]
+        assert _atom_names(_collect("chk_esc", [N], N, module=mod)) == [(mint("escd_"),)]
 
 
 class TestQuantityClauseInIndexedPredicate:
@@ -96,14 +96,14 @@ class TestQuantityClauseInIndexedPredicate:
 
     def test_scalar_bucket_query_still_works(self, mod):
         N = Var()
-        assert _atom_names(_collect("PickMix", [N], N, module=mod)) == [(mint("two_"),)]
+        assert _atom_names(_collect("pick_mix", [N], N, module=mod)) == [(mint("two_"),)]
 
     def test_quantity_clause_matches_alongside_indexed_clauses(self, mod):
         N = Var()
-        assert _atom_names(_collect("PickQty", [N], N, module=mod)) == [(mint("qty_"),)]
+        assert _atom_names(_collect("pick_qty", [N], N, module=mod)) == [(mint("qty_"),)]
 
     def test_output_mode_enumerates_mixed_clauses(self, mod):
         K, N = Var(), Var()
-        names = _atom_names(_collect("Mix", [N], K, N, module=mod))
+        names = _atom_names(_collect("mix", [N], K, N, module=mod))
         assert names == [(mint("one_"),), (mint("two_"),), (mint("three_"),),
                          (mint("qty_"),)]

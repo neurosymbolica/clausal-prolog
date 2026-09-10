@@ -7,56 +7,56 @@
 
 # ── Pure list predicates ─────────────────────────────────────────────────────
 
-MyAppend([], YS, YS),
-MyAppend([H, *XS], YS, [H, *ZS]) <- MyAppend(XS, YS, ZS)
+my_append([], YS, YS),
+my_append([H, *XS], YS, [H, *ZS]) <- my_append(XS, YS, ZS)
 
-MyLength([], 0),
-MyLength([_, *T], N) <- (MyLength(T, N1) and N == N1 + 1)
+my_length([], 0),
+my_length([_, *T], N) <- (my_length(T, N1) and N == N1 + 1)
 
-MyMember(X, [X, *_]),
-MyMember(X, [_, *T]) <- MyMember(X, T)
+my_member(X, [X, *_]),
+my_member(X, [_, *T]) <- my_member(X, T)
 
 # ── Pure arithmetic ──────────────────────────────────────────────────────────
 
-MyFact(0, 1),
-MyFact(N, F) <- (
+my_fact(0, 1),
+my_fact(N, F) <- (
     N > 0,
     N1 == N - 1,
-    MyFact(N1, F1),
+    my_fact(N1, F1),
     F == N * F1
 )
 
 # ── Graph traversal (acyclic — no tabling needed) ────────────────────────────
 
-GEdge("a", "b"),
-GEdge("b", "c"),
-GEdge("c", "d"),
-GEdge("b", "d")
+g_edge("a", "b"),
+g_edge("b", "c"),
+g_edge("c", "d"),
+g_edge("b", "d")
 
-GPath(X, Y) <- GEdge(X, Y)
-GPath(X, Y) <- (GEdge(X, Z) and GPath(Z, Y))
+g_path(X, Y) <- g_edge(X, Y)
+g_path(X, Y) <- (g_edge(X, Z) and g_path(Z, Y))
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 # List operations
-test("append nil-nil") <- (MyAppend([], [], R) and R is [])  # nv
-test("append nil-list") <- (MyAppend([], [1, 2], R) and R is [1, 2])  # nv
-test("append list-list") <- (MyAppend([1, 2], [3, 4], R) and R is [1, 2, 3, 4])  # nv
-test("length empty") <- (MyLength([], N) and N == 0)  # nv
-test("length three") <- (MyLength([1, 2, 3], N) and N == 3)  # nv
-test("member first") <- MyMember(1, [1, 2, 3])  # nv
-test("member last") <- MyMember(3, [1, 2, 3])  # nv
+test("append nil-nil") <- (my_append([], [], R) and R is [])  # nv
+test("append nil-list") <- (my_append([], [1, 2], R) and R is [1, 2])  # nv
+test("append list-list") <- (my_append([1, 2], [3, 4], R) and R is [1, 2, 3, 4])  # nv
+test("length empty") <- (my_length([], N) and N == 0)  # nv
+test("length three") <- (my_length([1, 2, 3], N) and N == 3)  # nv
+test("member first") <- my_member(1, [1, 2, 3])  # nv
+test("member last") <- my_member(3, [1, 2, 3])  # nv
 test("member all") <- (
-    findall(X, MyMember(X, [10, 20, 30]), BAG) and BAG is [10, 20, 30]
+    findall(X, my_member(X, [10, 20, 30]), BAG) and BAG is [10, 20, 30]
 )  # nv
 
 # Arithmetic
-test("factorial 0") <- (MyFact(0, F) and F == 1)  # nv
-test("factorial 5") <- (MyFact(5, F) and F == 120)  # nv
-test("factorial 10") <- (MyFact(10, F) and F == 3628800)  # nv
+test("factorial 0") <- (my_fact(0, F) and F == 1)  # nv
+test("factorial 5") <- (my_fact(5, F) and F == 120)  # nv
+test("factorial 10") <- (my_fact(10, F) and F == 3628800)  # nv
 
 # Graph
-test("direct edge") <- GPath("a", "b")  # nv
-test("transitive path") <- GPath("a", "d")  # nv
-test("reachable b from a") <- GPath("a", "b")  # nv
-test("reachable c from a") <- GPath("a", "c")  # nv
+test("direct edge") <- g_path("a", "b")  # nv
+test("transitive path") <- g_path("a", "d")  # nv
+test("reachable b from a") <- g_path("a", "b")  # nv
+test("reachable c from a") <- g_path("a", "c")  # nv

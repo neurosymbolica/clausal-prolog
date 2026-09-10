@@ -44,7 +44,7 @@ def _load(name, src):
     return _load_module(name, p).__dict__["$module"]
 
 
-def _succeeds(mod, pred="Test"):
+def _succeeds(mod, pred="test"):
     return any(True for _ in call(pred, module=mod))
 
 
@@ -100,38 +100,39 @@ class TestMoneyConstructorsAndAccessors:
         mod = _load("money_ctor",
             "-import_from(currency, [money])\n"
             "-import_from(european_union, [euro])\n"
-            "Test <- (money(\"7.89\", euro, A), eval_(7.89(euro), B), A == B)\n")
+            "test <- (money(\"7.89\", euro, A), eval_(7.89(euro), B), A == B)\n")
         assert _succeeds(mod)
 
 
 class TestCurrencyPrecisionErrorCatch:
-    """catch/3 can catch CurrencyPrecisionError raised by money/3."""
+    """catch/3 can catch the CurrencyPrecisionError raised by money/3 through a ++ catcher."""
 
     def test_uncaught_precision_error_propagates(self):
         """money/3 with over-precise string propagates as LogicException without catch/3."""
         mod = _load("nocatch_precision",
             "-import_from(currency, [money])\n"
             "-import_from(european_union, [euro])\n"
-            "Test <- money(\"7.891\", euro, _X)\n")
+            "test <- money(\"7.891\", euro, _X)\n")
         with pytest.raises(LogicException):
-            list(call("Test", module=mod))
+            list(call("test", module=mod))
 
 
 class TestMoneyPrecisionCatchable:
-    """Prove the real requirement: CurrencyPrecisionError is catchable via catch/3."""
+    """Prove the real requirement: CurrencyPrecisionError is catchable via catch/3 (++ catcher)."""
 
     def test_money_precision_error_is_catchable(self):
         mod = _load("money_catch",
             "-import_from(currency, [money])\n"
             "-import_from(european_union, [euro])\n"
-            "Test <- catch(money(\"7.891\", euro, X), CurrencyPrecisionError(M), 1 == 1)\n")
+            "-import_from(clausal.terms, [CurrencyPrecisionError])\n"
+            "test <- catch(money(\"7.891\", euro, X), ++CurrencyPrecisionError, 1 == 1)\n")
         assert _succeeds(mod)          # the precision error is caught; recovery succeeds
 
     def test_valid_money_needs_no_catch(self):
         mod = _load("money_ok",
             "-import_from(currency, [money])\n"
             "-import_from(european_union, [euro])\n"
-            "Test <- money(\"7.89\", euro, X)\n")
+            "test <- money(\"7.89\", euro, X)\n")
         assert _succeeds(mod)
 
 

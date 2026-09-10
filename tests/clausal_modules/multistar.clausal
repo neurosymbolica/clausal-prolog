@@ -1,13 +1,13 @@
 # Multi-star list patterns
 
-# Split/3: enumerate all ways to split a list into two parts
-Split([*A, *B], A, B),
+# split/3: enumerate all ways to split a list into two parts
+split([*A, *B], A, B),
 
-# Split3/4: first element fixed, rest split into two
-Split3([X, *A, *B], X, A, B),
+# split3/4: first element fixed, rest split into two
+split3([X, *A, *B], X, A, B),
 
-# Around/3: find element X with prefix A and suffix B
-Around([*A, X, *B], X, [A, B]),
+# around/3: find element X with prefix A and suffix B
+around([*A, X, *B], X, [A, B]),
 
-# Split3way/4: split a list into three parts
-Split3way([*A, *B, *C], A, B, C),
+# split3way/4: split a list into three parts
+split3way([*A, *B, *C], A, B, C),

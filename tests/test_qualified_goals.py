@@ -327,7 +327,7 @@ class TestQualifiedDottedParity:
         by_cell = [deref(X)
                    for _ in solve((":", EXPORTER, ("p", X)), mods.importer)]
         by_dotted = [deref(Y)
-                     for _ in solve(mods.importer_py.DottedP(Y), mods.importer)]
+                     for _ in solve(mods.importer_py.dotted_p(Y), mods.importer)]
         assert by_cell == by_dotted == [11, 12]
 
     def test_the_two_spellings_answer_alike_as_goal_nodes(self, mods):
@@ -403,7 +403,7 @@ class TestQualifiedCallN:
             self, mods):
         X = Var()
         assert [deref(X) for _ in pcall(
-            "CallHost1", (":", EXPORTER, ("p", X)),
+            "call_host1", (":", EXPORTER, ("p", X)),
             module=mods.importer)] == [11, 12]
 
     def test_the_atom_spelling_agrees_with_the_cell_spelling(self, mods):
@@ -411,9 +411,9 @@ class TestQualifiedCallN:
         with both spellings ANSWERING rather than both raising."""
         X, Y = Var(), Var()
         by_cell = [deref(X) for _ in pcall(
-            "CallHost1", (":", EXPORTER, ("p", X)), module=mods.importer)]
+            "call_host1", (":", EXPORTER, ("p", X)), module=mods.importer)]
         by_atom = [deref(Y) for _ in pcall(
-            "CallHost3", mint(":"), EXPORTER, ("p", Y),
+            "call_host3", mint(":"), EXPORTER, ("p", Y),
             module=mods.importer)]
         assert by_cell == by_atom == [11, 12]
 
@@ -422,9 +422,9 @@ class TestQualifiedCallN:
         """Locality again, this time through call/N."""
         X, Y = Var(), Var()
         qualified = [deref(X) for _ in pcall(
-            "CallHost1", (":", EXPORTER, ("p", X)), module=mods.importer)]
+            "call_host1", (":", EXPORTER, ("p", X)), module=mods.importer)]
         local = [deref(Y) for _ in pcall(
-            "CallHost1", ("p", Y), module=mods.importer)]
+            "call_host1", ("p", Y), module=mods.importer)]
         assert qualified == [11, 12]
         assert local == [1, 2]
 
@@ -436,16 +436,16 @@ class TestQualifiedCallN:
         assert mods.exporter.db.get_dispatch("libp", 1) is None
         X = Var()
         assert [deref(X) for _ in pcall(
-            "CallHost1", (":", EXPORTER, ("libp", X)),
+            "call_host1", (":", EXPORTER, ("libp", X)),
             module=mods.importer)] == [31, 32]
 
     def test_a_qualified_goal_with_an_atom_inner_goal_runs(self, mods):
-        assert len(list(pcall("CallHost1", (":", EXPORTER, mint("ready")),
+        assert len(list(pcall("call_host1", (":", EXPORTER, mint("ready")),
                               module=mods.importer))) == 1
 
     def test_an_unresolvable_module_raises_out_of_call(self, mods):
         with pytest.raises(LogicException) as exc_info:
-            list(pcall("CallHost1", (":", "t6_nope", ("p", Var())),
+            list(pcall("call_host1", (":", "t6_nope", ("p", Var())),
                        module=mods.importer))
         inner, context = _error_term(exc_info.value)
         assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
@@ -454,7 +454,7 @@ class TestQualifiedCallN:
     def test_a_control_construct_under_a_qualification_is_refused_by_call(
             self, mods):
         with pytest.raises(LogicException) as exc_info:
-            list(pcall("CallHost1",
+            list(pcall("call_host1",
                        (":", EXPORTER, (",", ("p", 11), ("p", 12))),
                        module=mods.importer))
         inner, _context = _error_term(exc_info.value)
@@ -463,7 +463,7 @@ class TestQualifiedCallN:
     def test_a_qualified_goal_naming_nothing_fails_silently(self, mods):
         """The §4.2 contract: a name that resolves to nothing FAILS, and a
         resolvable module does not change that."""
-        assert list(pcall("CallHost1", (":", EXPORTER, ("nosuch", Var())),
+        assert list(pcall("call_host1", (":", EXPORTER, ("nosuch", Var())),
                           module=mods.importer)) == []
 
     def test_call_over_a_qualified_cell_with_extras_dispatches_in_the_exporting_db(
@@ -475,11 +475,11 @@ class TestQualifiedCallN:
         silently (P3-3 Task 6 fix round 1, ruling R-A)."""
         X = Var()
         assert [deref(X) for _ in pcall(
-            "CallHost2", (":", EXPORTER, mint("p")), X,
+            "call_host2", (":", EXPORTER, mint("p")), X,
             module=mods.importer)] == [11, 12]
         B = Var()
         assert [deref(B) for _ in pcall(
-            "CallHost2", (":", EXPORTER, ("pair", 11)), B,
+            "call_host2", (":", EXPORTER, ("pair", 11)), B,
             module=mods.importer)] == [12]
 
     def test_the_atom_spelling_with_extras_agrees(self, mods):
@@ -487,10 +487,10 @@ class TestQualifiedCallN:
         folds to the same goal as ``call((":", M, G), X)``."""
         X, Y = Var(), Var()
         by_cell = [deref(X) for _ in pcall(
-            "CallHost2", (":", EXPORTER, ("pair", 11)), X,
+            "call_host2", (":", EXPORTER, ("pair", 11)), X,
             module=mods.importer)]
         by_atom = [deref(Y) for _ in pcall(
-            "CallHost4", mint(":"), EXPORTER, ("pair", 11), Y,
+            "call_host4", mint(":"), EXPORTER, ("pair", 11), Y,
             module=mods.importer)]
         assert by_cell == by_atom == [12]
 
@@ -498,15 +498,15 @@ class TestQualifiedCallN:
         """Locality holds once the extras have folded, too."""
         X = Var()
         assert [deref(X) for _ in pcall(
-            "CallHost2", (":", EXPORTER, mint("p")), X,
+            "call_host2", (":", EXPORTER, mint("p")), X,
             module=mods.importer)] == [11, 12]
         Y = Var()
         assert [deref(Y) for _ in pcall(
-            "CallHost2", mint("p"), Y, module=mods.importer)] == [1, 2]
+            "call_host2", mint("p"), Y, module=mods.importer)] == [1, 2]
 
     def test_an_unresolvable_module_with_extras_still_raises(self, mods):
         with pytest.raises(LogicException) as exc_info:
-            list(pcall("CallHost2", (":", "t6_nope", mint("p")), Var(),
+            list(pcall("call_host2", (":", "t6_nope", mint("p")), Var(),
                        module=mods.importer))
         inner, context = _error_term(exc_info.value)
         assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
@@ -566,7 +566,7 @@ WFS_UNDEF = "tests.fixtures.t6_wfs_undefined"
 
 @pytest.fixture
 def undef():
-    """A module whose tabled ``Win/1`` is WFS-*Undefined* for every answer.
+    """A module whose tabled ``win/1`` is WFS-*Undefined* for every answer.
 
     ``wfs_win.clausal`` is the suite's canonical symmetric win cycle; it is
     loaded here under a dotted name so the same goal can be asked with a str
@@ -594,12 +594,12 @@ class TestQueryWfsModuleResolution:
         TypeError out of ``_coerce_module("dotted.name")``."""
         lm = undef.__dict__["$module"]
         X, Y = Var(), Var()
-        assert (self._truths(("Win", X), WFS_UNDEF, X)
-                == self._truths(("Win", Y), lm, Y))
+        assert (self._truths(("win", X), WFS_UNDEF, X)
+                == self._truths(("win", Y), lm, Y))
 
     def test_the_str_designator_reports_the_real_truth_values(self, undef):
         X = Var()
-        rows = self._truths(("Win", X), WFS_UNDEF, X)
+        rows = self._truths(("win", X), WFS_UNDEF, X)
         assert len(rows) == 2
         assert all(t is Undefined for _v, t in rows)
 
@@ -610,8 +610,8 @@ class TestQueryWfsModuleResolution:
         Undefined answer of a moduleless qualified goal read as True."""
         lm = undef.__dict__["$module"]
         X, Y = Var(), Var()
-        moduleless = self._truths((":", WFS_UNDEF, ("Win", X)), None, X)
-        with_module = self._truths(("Win", Y), lm, Y)
+        moduleless = self._truths((":", WFS_UNDEF, ("win", X)), None, X)
+        with_module = self._truths(("win", Y), lm, Y)
         assert moduleless == with_module
         assert len(moduleless) == 2
         assert all(t is Undefined for _v, t in moduleless)
@@ -620,13 +620,13 @@ class TestQueryWfsModuleResolution:
             self, undef, mods):
         """The same, asked from a module that has never heard of the exporter."""
         X = Var()
-        rows = self._truths((":", WFS_UNDEF, ("Win", X)), mods.importer, X)
+        rows = self._truths((":", WFS_UNDEF, ("win", X)), mods.importer, X)
         assert len(rows) == 2
         assert all(t is Undefined for _v, t in rows)
 
     def test_the_delays_survive_the_resolution_too(self, undef):
         X = Var()
-        rows = query_wfs((":", WFS_UNDEF, ("Win", X)), {"x": X}, None)
+        rows = query_wfs((":", WFS_UNDEF, ("win", X)), {"x": X}, None)
         assert all(r["_delays"] for r in rows), (
             "an Undefined answer carries a non-empty delay set")
 

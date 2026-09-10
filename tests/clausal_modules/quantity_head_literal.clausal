@@ -4,68 +4,68 @@
 # is captured as an opaque head literal and the clause never matches.
 
 # THE FLIP (2026-09-06-atoms-as-cells-strings §7): the only ``"..."`` literals
-# below are ``Tagd``'s f-string head literal and the ``ChkTag`` caller that has
+# below are ``tagd``'s f-string head literal and the ``chk_tag`` caller that has
 # to match it -- an f-string evaluates to a STRING, so this file means chars.
 -double_quotes(chars)
--module(quantity_head_literal, [Len(AMOUNT, NAME), Chk(N), Amt(A),
-                                Sel(AMOUNT, NAME), Pick(N),
-                                Pack(L, N), ChkPack(N),
-                                Mix(K, NAME), PickMix(N), PickQty(N),
-                                Price(AMOUNT, NAME), ChkPrice(N),
-                                Tagd(TAG, NAME), ChkTag(N),
-                                Esc(V, NAME), ChkEsc(N)])
+-module(quantity_head_literal, [len(AMOUNT, NAME), chk(N), amt(A),
+                                sel(AMOUNT, NAME), pick(N),
+                                pack(L, N), chk_pack(N),
+                                mix(K, NAME), pick_mix(N), pick_qty(N),
+                                price(AMOUNT, NAME), chk_price(N),
+                                tagd(TAG, NAME), chk_tag(N),
+                                esc(V, NAME), chk_esc(N)])
 -import_from(py.units, [m])
 -import_from(european_union, [euro])
 -private([short_, long_, tiny_, packed_, one_, two_, three_, qty_,
           pricey_, tagged_, escd_])
 
 # One ruled clause, quantity in the head — the filed repro.
-Len(5(m), short_) <- (number(1))
+len(5(m), short_) <- (number(1))
 
 # Input mode: ground quantity built in a body goal.
-Chk(N) <- Len(5(m), N)
+chk(N) <- len(5(m), N)
 
 # Output mode: the head quantity must bind into an unbound caller arg.
-Amt(A) <- Len(A, short_)
+amt(A) <- len(A, short_)
 
 # Multiple clauses with distinct quantities — exercises the indexed/bucket
 # compilation path (and the Phase 8 Unify re-lift).
-Sel(2(m), tiny_) <- (number(1))
-Sel(5(m), short_) <- (number(1))
-Sel(50(m), long_) <- (number(1))
+sel(2(m), tiny_) <- (number(1))
+sel(5(m), short_) <- (number(1))
+sel(50(m), long_) <- (number(1))
 
-Pick(N) <- Sel(50(m), N)
+pick(N) <- sel(50(m), N)
 
 # Quantity nested inside a head list.
-Pack([5(m)], packed_) <- (number(1))
+pack([5(m)], packed_) <- (number(1))
 
-ChkPack(N) <- Pack([5(m)], N)
+chk_pack(N) <- pack([5(m)], N)
 
 # Mixed predicate: >= _INDEX_THRESHOLD clauses with scalar index keys plus one
 # quantity clause. The scalar keys build argument-index buckets; the quantity
 # clause keys as _INDEX_VAR and is merged into every bucket, where
 # _lift_clause_at_pos must NOT lift its hoisted Unify(Var, PyThunk) back into
 # the head (the thunk's $headlit global is never collected for buckets).
-Mix(1, one_) <- (number(1))
-Mix(2, two_) <- (number(1))
-Mix(3, three_) <- (number(1))
-Mix(5(m), qty_) <- (number(1))
+mix(1, one_) <- (number(1))
+mix(2, two_) <- (number(1))
+mix(3, three_) <- (number(1))
+mix(5(m), qty_) <- (number(1))
 
-PickMix(N) <- Mix(2, N)
+pick_mix(N) <- mix(2, N)
 
-PickQty(N) <- Mix(5(m), N)
+pick_qty(N) <- mix(5(m), N)
 
 # Currency spelling of the same head literal (also a PyThunk).
-Price(7.89(euro), pricey_) <- (number(1))
+price(7.89(euro), pricey_) <- (number(1))
 
-ChkPrice(N) <- Price(7.89(euro), N)
+chk_price(N) <- price(7.89(euro), N)
 
 # Non-quantity PyThunks directly in head position: the hoist is type-keyed,
 # so f-strings and ++() escapes take the same path.
-Tagd(f"v{0}", tagged_) <- (number(1))
+tagd(f"v{0}", tagged_) <- (number(1))
 
-ChkTag(N) <- Tagd("v0", N)
+chk_tag(N) <- tagd("v0", N)
 
-Esc(++(2 + 3), escd_) <- (number(1))
+esc(++(2 + 3), escd_) <- (number(1))
 
-ChkEsc(N) <- Esc(5, N)
+chk_esc(N) <- esc(5, N)

@@ -37,7 +37,7 @@ def bench_fib(n: int = 25) -> int:
     from clausal.logic.variables import Var, deref
 
     F = Var()
-    for _ in fib.Fib(n, F):
+    for _ in fib.fib(n, F):
         return int(deref(F))
     raise RuntimeError(f"Fib({n}) produced no solutions")
 
@@ -53,7 +53,7 @@ def bench_nqueens(n: int = 8) -> int:
 
     count = 0
     QS = Var()
-    for _ in nq.Queens(n, QS):
+    for _ in nq.queens(n, QS):
         count += 1
     return count
 
@@ -73,7 +73,7 @@ def bench_qsort(list_size: int = 20, reps: int = 200) -> int:
     result_len = 0
     for _ in range(reps):
         SORTED = Var()
-        for _ in srt.Qsort(lst, SORTED):
+        for _ in srt.qsort(lst, SORTED):
             result_len = len(_deref_walk(deref(SORTED)))
             break
     return result_len
@@ -93,7 +93,7 @@ def bench_graph(reps: int = 500) -> int:
     total = 0
     for _ in range(reps):
         Y, PATH = Var(), Var()
-        for _ in g.Path(1, Y, PATH):
+        for _ in g.path(1, Y, PATH):
             total += 1
     return total
 
@@ -367,11 +367,11 @@ def bench_thunk_atoms(n: int = 100_000) -> int:
         "-private([a, b, c, d, e])\n"
         "-allow_singletons\n"
         "\n"
-        "ThunkLoop(0, _L, S, S),\n"
-        "ThunkLoop(N, L, ACC, S) <- (N > 0, K is ++len(L), ACC1 == ACC + K,\n"
-        "                            M == N - 1, ThunkLoop(M, L, ACC1, S)),\n"
+        "thunk_loop(0, _L, S, S),\n"
+        "thunk_loop(N, L, ACC, S) <- (N > 0, K is ++len(L), ACC1 == ACC + K,\n"
+        "                            M == N - 1, thunk_loop(M, L, ACC1, S)),\n"
         "\n"
-        "ThunkAtoms(N, S) <- (ThunkLoop(N, [a, b, c, d, e], 0, S)),\n"
+        "thunk_atoms(N, S) <- (thunk_loop(N, [a, b, c, d, e], 0, S)),\n"
     )
     with tempfile.NamedTemporaryFile(
         suffix=".clausal", mode="w", delete=False
@@ -385,7 +385,7 @@ def bench_thunk_atoms(n: int = 100_000) -> int:
     lm = pymod.__dict__["$module"]
 
     S = Var()
-    for _ in call("ThunkAtoms", n, S, module=lm):
+    for _ in call("thunk_atoms", n, S, module=lm):
         return int(deref(S))
     raise RuntimeError(f"ThunkAtoms({n}) produced no solutions")
 

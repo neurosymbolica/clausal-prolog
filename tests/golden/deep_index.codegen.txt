@@ -1,5 +1,5 @@
-# module: tests.fixtures.deep_index  predicates: MyAppend, MyLast, MyLen, MyMax, MyMaxOf, MyMember, MyNthOf, MyPrefix, MyProduct, MySumList, test
-def MyAppend__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
+# module: tests.fixtures.deep_index  predicates: my_append, my_last, my_len, my_max, my_max_of, my_member, my_nth_of, my_prefix, my_product, my_sum_list, test
+def my_append__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     _d2 = $deref(arg2)
@@ -30,7 +30,7 @@ def MyAppend__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, tra
                 _lr0 = $head_list_unify_input(_lcap0, [_v3], _v4, [], trail)
                 _lr1 = $head_list_unify_input(_lcap1, [_v3], _v5, [], trail)
                 if _lr0 is not False and _lr1 is not False:
-                    _gen0 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, _v4, _v2, _v5, trail)
+                    _gen0 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, _v4, _v2, _v5, trail)
                     _st0 = (yield (_gen0, None))
                     while _st0 is not $DONE:
                         if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v3], _v4, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v3], _v5, [], trail)):
@@ -46,7 +46,7 @@ def MyAppend__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, tra
 
 # ----
 
-def MyLast__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+def my_last__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -75,7 +75,7 @@ def MyLast__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v9 = $Var()
                 _lr0 = $head_list_unify_input(_lcap0, [_v8], _v9, [], trail)
                 if _lr0 is not False:
-                    _gen1 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, _v9, _v7, trail)
+                    _gen1 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, _v9, _v7, trail)
                     _st1 = (yield (_gen1, None))
                     while _st1 is not $DONE:
                         if _lr0 is not None or $head_list_unify_output(_lcap0, [_v8], _v9, [], trail):
@@ -91,7 +91,7 @@ def MyLast__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def MyLen__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+def my_len__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -122,7 +122,7 @@ def MyLen__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _lr0 = $head_list_unify_input(_lcap0, [_v13], _v14, [], trail)
                 if _lr0 is not False:
                     _v15 = $Var()
-                    _gen2 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, _v14, _v15, trail)
+                    _gen2 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, _v14, _v15, trail)
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
                         _m3 = trail.mark()
@@ -141,7 +141,7 @@ def MyLen__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def MyMax__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+def my_max__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -171,10 +171,10 @@ def MyMax__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _lr0 = $head_list_unify_input(_lcap0, [_v18], _v19, [], trail)
                 if _lr0 is not False:
                     _v20 = $Var()
-                    _gen3 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, _v19, _v20, trail)
+                    _gen3 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, _v19, _v20, trail)
                     _st3 = (yield (_gen3, None))
                     while _st3 is not $DONE:
-                        _gen0 = StepGenerator($dispatch_at(MyMaxOf, 3), this_generator, this_generator, this_generator, _v18, _v20, _v17, trail)
+                        _gen0 = StepGenerator($dispatch_at(my_max_of, 3), this_generator, this_generator, this_generator, _v18, _v20, _v17, trail)
                         _st0 = (yield (_gen0, None))
                         while _st0 is not $DONE:
                             if _lr0 is not None or $head_list_unify_output(_lcap0, [_v18], _v19, [], trail):
@@ -191,7 +191,7 @@ def MyMax__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def MyMaxOf__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
+def my_max_of__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     _d2 = $deref(arg2)
@@ -227,7 +227,7 @@ def MyMaxOf__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trai
 
 # ----
 
-def MyMember__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+def my_member__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -257,7 +257,7 @@ def MyMember__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v29 = $Var()
                 _lr0 = $head_list_unify_input(_lcap0, [_v28], _v29, [], trail)
                 if _lr0 is not False:
-                    _gen1 = StepGenerator($dispatch_at(MyMember, 2), this_generator, this_generator, this_generator, _v27, _v29, trail)
+                    _gen1 = StepGenerator($dispatch_at(my_member, 2), this_generator, this_generator, this_generator, _v27, _v29, trail)
                     _st1 = (yield (_gen1, None))
                     while _st1 is not $DONE:
                         if _lr0 is not None or $head_list_unify_output(_lcap0, [_v28], _v29, [], trail):
@@ -273,7 +273,7 @@ def MyMember__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def MyNthOf__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
+def my_nth_of__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
     while True:
         _d0 = $deref(arg0)
         _d1 = $deref(arg1)
@@ -313,7 +313,7 @@ def MyNthOf__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trai
                         if $fd_gt(_v33, 0, trail):
                             _m3 = trail.mark()
                             if $unify(_v37, $present($deref(_v33) - 1), trail):
-                                _gen4 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, _v37, _v36, _v34, trail)
+                                _gen4 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, _v37, _v36, _v34, trail)
                                 _st4 = (yield (_gen4, None))
                                 while _st4 is not $DONE:
                                     if _lr0 is not None or $head_list_unify_output(_lcap0, [_v35], _v36, [], trail):
@@ -336,7 +336,7 @@ def MyNthOf__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trai
 
 # ----
 
-def MyPrefix__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+def my_prefix__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -365,7 +365,7 @@ def MyPrefix__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _lr0 = $head_list_unify_input(_lcap0, [_v40], _v41, [], trail)
                 _lr1 = $head_list_unify_input(_lcap1, [_v40], _v42, [], trail)
                 if _lr0 is not False and _lr1 is not False:
-                    _gen0 = StepGenerator($dispatch_at(MyPrefix, 2), this_generator, this_generator, this_generator, _v41, _v42, trail)
+                    _gen0 = StepGenerator($dispatch_at(my_prefix, 2), this_generator, this_generator, this_generator, _v41, _v42, trail)
                     _st0 = (yield (_gen0, None))
                     while _st0 is not $DONE:
                         if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v40], _v41, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v40], _v42, [], trail)):
@@ -381,7 +381,7 @@ def MyPrefix__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def MyProduct__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+def my_product__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -412,7 +412,7 @@ def MyProduct__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _lr0 = $head_list_unify_input(_lcap0, [_v46], _v47, [], trail)
                 if _lr0 is not False:
                     _v48 = $Var()
-                    _gen2 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, _v47, _v48, trail)
+                    _gen2 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, _v47, _v48, trail)
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
                         _m3 = trail.mark()
@@ -431,7 +431,7 @@ def MyProduct__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 
 # ----
 
-def MySumList__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+def my_sum_list__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
     _d0 = $deref(arg0)
     _d1 = $deref(arg1)
     match (_d0, _d1):
@@ -462,7 +462,7 @@ def MySumList__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _lr0 = $head_list_unify_input(_lcap0, [_v52], _v53, [], trail)
                 if _lr0 is not False:
                     _v54 = $Var()
-                    _gen2 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, _v53, _v54, trail)
+                    _gen2 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, _v53, _v54, trail)
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
                         _m3 = trail.mark()
@@ -490,7 +490,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylen empty',), trail):
                     _v55 = $Var()
-                    _gen5 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [], _v55, trail)
+                    _gen5 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [], _v55, trail)
                     _st5 = (yield (_gen5, None))
                     while _st5 is not $DONE:
                         if $fd_eq(_v55, 0, trail):
@@ -509,7 +509,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylen one element',), trail):
                     _v56 = $Var()
-                    _gen6 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [42], _v56, trail)
+                    _gen6 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [42], _v56, trail)
                     _st6 = (yield (_gen6, None))
                     while _st6 is not $DONE:
                         if $fd_eq(_v56, 1, trail):
@@ -528,7 +528,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylen three elements',), trail):
                     _v57 = $Var()
-                    _gen7 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v57, trail)
+                    _gen7 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v57, trail)
                     _st7 = (yield (_gen7, None))
                     while _st7 is not $DONE:
                         if $fd_eq(_v57, 3, trail):
@@ -547,7 +547,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylen five elements',), trail):
                     _v58 = $Var()
-                    _gen8 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v58, trail)
+                    _gen8 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v58, trail)
                     _st8 = (yield (_gen8, None))
                     while _st8 is not $DONE:
                         if $fd_eq(_v58, 5, trail):
@@ -568,7 +568,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     _v59 = $Var()
                     _v60 = $Var()
                     _v61 = $Var()
-                    _gen9 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [_v59, _v60], _v61, trail)
+                    _gen9 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [_v59, _v60], _v61, trail)
                     _st9 = (yield (_gen9, None))
                     while _st9 is not $DONE:
                         if $fd_eq(_v61, 2, trail):
@@ -587,7 +587,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myappend nil left',), trail):
                     _v62 = $Var()
-                    _gen10 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [1, 2], _v62, trail)
+                    _gen10 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [], [1, 2], _v62, trail)
                     _st10 = (yield (_gen10, None))
                     while _st10 is not $DONE:
                         if $fd_eq(_v62, [1, 2], trail):
@@ -606,7 +606,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myappend nil right',), trail):
                     _v63 = $Var()
-                    _gen11 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [], _v63, trail)
+                    _gen11 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1, 2], [], _v63, trail)
                     _st11 = (yield (_gen11, None))
                     while _st11 is not $DONE:
                         if $fd_eq(_v63, [1, 2], trail):
@@ -625,7 +625,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myappend both empty',), trail):
                     _v64 = $Var()
-                    _gen12 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [], _v64, trail)
+                    _gen12 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [], [], _v64, trail)
                     _st12 = (yield (_gen12, None))
                     while _st12 is not $DONE:
                         if $fd_eq(_v64, [], trail):
@@ -644,7 +644,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myappend one plus two',), trail):
                     _v65 = $Var()
-                    _gen13 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], [2, 3], _v65, trail)
+                    _gen13 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1], [2, 3], _v65, trail)
                     _st13 = (yield (_gen13, None))
                     while _st13 is not $DONE:
                         if $fd_eq(_v65, [1, 2, 3], trail):
@@ -663,7 +663,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myappend two plus two',), trail):
                     _v66 = $Var()
-                    _gen14 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [3, 4], _v66, trail)
+                    _gen14 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1, 2], [3, 4], _v66, trail)
                     _st14 = (yield (_gen14, None))
                     while _st14 is not $DONE:
                         if $fd_eq(_v66, [1, 2, 3, 4], trail):
@@ -683,7 +683,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, ('myappend split nil prefix',), trail):
                     _v67 = $Var()
                     _v68 = $Var()
-                    _gen15 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, _v67, _v68, [1, 2], trail)
+                    _gen15 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, _v67, _v68, [1, 2], trail)
                     _st15 = (yield (_gen15, None))
                     while _st15 is not $DONE:
                         if $fd_eq(_v67, [], trail):
@@ -703,7 +703,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myappend split cons prefix',), trail):
                     _v69 = $Var()
-                    _gen16 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], _v69, [1, 2, 3], trail)
+                    _gen16 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1], _v69, [1, 2, 3], trail)
                     _st16 = (yield (_gen16, None))
                     while _st16 is not $DONE:
                         if $fd_eq(_v69, [2, 3], trail):
@@ -721,7 +721,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if $unify(_acap0, ('mymember first element',), trail):
-                    _gen17 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 1, [1, 2, 3], trail)
+                    _gen17 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 1, [1, 2, 3], trail)
                     _st17 = (yield (_gen17, None))
                     while _st17 is not $DONE:
                         _st17 = (yield (_gen17, None))
@@ -737,7 +737,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if $unify(_acap0, ('mymember last element',), trail):
-                    _gen18 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 3, [1, 2, 3], trail)
+                    _gen18 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 3, [1, 2, 3], trail)
                     _st18 = (yield (_gen18, None))
                     while _st18 is not $DONE:
                         _st18 = (yield (_gen18, None))
@@ -753,7 +753,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if $unify(_acap0, ('mymember middle element',), trail):
-                    _gen19 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 2, [1, 2, 3], trail)
+                    _gen19 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 2, [1, 2, 3], trail)
                     _st19 = (yield (_gen19, None))
                     while _st19 is not $DONE:
                         _st19 = (yield (_gen19, None))
@@ -769,7 +769,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if $unify(_acap0, ('mymember singleton list',), trail):
-                    _gen20 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 7, [7], trail)
+                    _gen20 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 7, [7], trail)
                     _st20 = (yield (_gen20, None))
                     while _st20 is not $DONE:
                         _st20 = (yield (_gen20, None))
@@ -787,7 +787,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, ('mymember absent',), trail):
 
                     def _naf_gen_fn249(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
-                        _gen21 = StepGenerator($dispatch_at(MyMember, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
+                        _gen21 = StepGenerator($dispatch_at(my_member, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
                         _st21 = (yield (_gen21, None))
                         while _st21 is not $DONE:
                             yield (_naf_proceed, None)
@@ -819,7 +819,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     _fa_m6 = trail.mark()
 
                     def _fa_gen22():
-                        for _ in $tramp_call($dispatch_at(MyMember, 2), (_v70, [10, 20, 30]), trail):
+                        for _ in $tramp_call($dispatch_at(my_member, 2), (_v70, [10, 20, 30]), trail):
                             yield None
                         return None
                         yield None
@@ -853,7 +853,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     _fa_m7 = trail.mark()
 
                     def _fa_gen23():
-                        for _ in $tramp_call($dispatch_at(MyMember, 2), (_v72, [1, 1, 2]), trail):
+                        for _ in $tramp_call($dispatch_at(my_member, 2), (_v72, [1, 1, 2]), trail):
                             yield None
                         return None
                         yield None
@@ -880,7 +880,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylast singleton',), trail):
                     _v74 = $Var()
-                    _gen24 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [5], _v74, trail)
+                    _gen24 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [5], _v74, trail)
                     _st22 = (yield (_gen24, None))
                     while _st22 is not $DONE:
                         if $fd_eq(_v74, 5, trail):
@@ -899,7 +899,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylast two elements',), trail):
                     _v75 = $Var()
-                    _gen25 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2], _v75, trail)
+                    _gen25 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [1, 2], _v75, trail)
                     _st23 = (yield (_gen25, None))
                     while _st23 is not $DONE:
                         if $fd_eq(_v75, 2, trail):
@@ -918,7 +918,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylast three elements',), trail):
                     _v76 = $Var()
-                    _gen26 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v76, trail)
+                    _gen26 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v76, trail)
                     _st24 = (yield (_gen26, None))
                     while _st24 is not $DONE:
                         if $fd_eq(_v76, 3, trail):
@@ -937,7 +937,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mylast five elements',), trail):
                     _v77 = $Var()
-                    _gen27 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v77, trail)
+                    _gen27 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v77, trail)
                     _st25 = (yield (_gen27, None))
                     while _st25 is not $DONE:
                         if $fd_eq(_v77, 5, trail):
@@ -956,7 +956,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myproduct empty',), trail):
                     _v78 = $Var()
-                    _gen28 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [], _v78, trail)
+                    _gen28 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [], _v78, trail)
                     _st26 = (yield (_gen28, None))
                     while _st26 is not $DONE:
                         if $fd_eq(_v78, 1, trail):
@@ -975,7 +975,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myproduct singleton',), trail):
                     _v79 = $Var()
-                    _gen29 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [5], _v79, trail)
+                    _gen29 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [5], _v79, trail)
                     _st27 = (yield (_gen29, None))
                     while _st27 is not $DONE:
                         if $fd_eq(_v79, 5, trail):
@@ -994,7 +994,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myproduct three',), trail):
                     _v80 = $Var()
-                    _gen30 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [2, 3, 4], _v80, trail)
+                    _gen30 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [2, 3, 4], _v80, trail)
                     _st28 = (yield (_gen30, None))
                     while _st28 is not $DONE:
                         if $fd_eq(_v80, 24, trail):
@@ -1013,7 +1013,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myproduct with zero',), trail):
                     _v81 = $Var()
-                    _gen31 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 0, 99], _v81, trail)
+                    _gen31 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [1, 0, 99], _v81, trail)
                     _st29 = (yield (_gen31, None))
                     while _st29 is not $DONE:
                         if $fd_eq(_v81, 0, trail):
@@ -1032,7 +1032,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('myproduct five values',), trail):
                     _v82 = $Var()
-                    _gen32 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v82, trail)
+                    _gen32 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v82, trail)
                     _st30 = (yield (_gen32, None))
                     while _st30 is not $DONE:
                         if $fd_eq(_v82, 120, trail):
@@ -1051,7 +1051,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mysumlist empty',), trail):
                     _v83 = $Var()
-                    _gen33 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [], _v83, trail)
+                    _gen33 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [], _v83, trail)
                     _st31 = (yield (_gen33, None))
                     while _st31 is not $DONE:
                         if $fd_eq(_v83, 0, trail):
@@ -1070,7 +1070,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mysumlist singleton',), trail):
                     _v84 = $Var()
-                    _gen34 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [7], _v84, trail)
+                    _gen34 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [7], _v84, trail)
                     _st32 = (yield (_gen34, None))
                     while _st32 is not $DONE:
                         if $fd_eq(_v84, 7, trail):
@@ -1089,7 +1089,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mysumlist three',), trail):
                     _v85 = $Var()
-                    _gen35 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v85, trail)
+                    _gen35 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v85, trail)
                     _st33 = (yield (_gen35, None))
                     while _st33 is not $DONE:
                         if $fd_eq(_v85, 6, trail):
@@ -1108,7 +1108,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mysumlist ten values',), trail):
                     _v86 = $Var()
-                    _gen36 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], _v86, trail)
+                    _gen36 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], _v86, trail)
                     _st34 = (yield (_gen36, None))
                     while _st34 is not $DONE:
                         if $fd_eq(_v86, 55, trail):
@@ -1127,7 +1127,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mysumlist negative',), trail):
                     _v87 = $Var()
-                    _gen37 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [-1, -2, -3], _v87, trail)
+                    _gen37 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [-1, -2, -3], _v87, trail)
                     _st35 = (yield (_gen37, None))
                     while _st35 is not $DONE:
                         if $fd_eq(_v87, -6, trail):
@@ -1146,7 +1146,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mymax singleton',), trail):
                     _v88 = $Var()
-                    _gen38 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3], _v88, trail)
+                    _gen38 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [3], _v88, trail)
                     _st36 = (yield (_gen38, None))
                     while _st36 is not $DONE:
                         if $fd_eq(_v88, 3, trail):
@@ -1165,7 +1165,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mymax two ascending',), trail):
                     _v89 = $Var()
-                    _gen39 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [1, 5], _v89, trail)
+                    _gen39 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [1, 5], _v89, trail)
                     _st37 = (yield (_gen39, None))
                     while _st37 is not $DONE:
                         if $fd_eq(_v89, 5, trail):
@@ -1184,7 +1184,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mymax two descending',), trail):
                     _v90 = $Var()
-                    _gen40 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [5, 1], _v90, trail)
+                    _gen40 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [5, 1], _v90, trail)
                     _st38 = (yield (_gen40, None))
                     while _st38 is not $DONE:
                         if $fd_eq(_v90, 5, trail):
@@ -1203,7 +1203,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mymax three',), trail):
                     _v91 = $Var()
-                    _gen41 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3, 1, 4], _v91, trail)
+                    _gen41 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [3, 1, 4], _v91, trail)
                     _st39 = (yield (_gen41, None))
                     while _st39 is not $DONE:
                         if $fd_eq(_v91, 4, trail):
@@ -1222,7 +1222,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mymax all equal',), trail):
                     _v92 = $Var()
-                    _gen42 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [2, 2, 2], _v92, trail)
+                    _gen42 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [2, 2, 2], _v92, trail)
                     _st40 = (yield (_gen42, None))
                     while _st40 is not $DONE:
                         if $fd_eq(_v92, 2, trail):
@@ -1241,7 +1241,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mynthof first',), trail):
                     _v93 = $Var()
-                    _gen43 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 0, [10, 20, 30], _v93, trail)
+                    _gen43 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, 0, [10, 20, 30], _v93, trail)
                     _st41 = (yield (_gen43, None))
                     while _st41 is not $DONE:
                         if $fd_eq(_v93, 10, trail):
@@ -1260,7 +1260,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mynthof second',), trail):
                     _v94 = $Var()
-                    _gen44 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 1, [10, 20, 30], _v94, trail)
+                    _gen44 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, 1, [10, 20, 30], _v94, trail)
                     _st42 = (yield (_gen44, None))
                     while _st42 is not $DONE:
                         if $fd_eq(_v94, 20, trail):
@@ -1279,7 +1279,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, ('mynthof third',), trail):
                     _v95 = $Var()
-                    _gen45 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 2, [10, 20, 30], _v95, trail)
+                    _gen45 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, 2, [10, 20, 30], _v95, trail)
                     _st43 = (yield (_gen45, None))
                     while _st43 is not $DONE:
                         if $fd_eq(_v95, 30, trail):
@@ -1297,7 +1297,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if $unify(_acap0, ('myprefix empty of three',), trail):
-                    _gen46 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [], [1, 2, 3], trail)
+                    _gen46 = StepGenerator($dispatch_at(my_prefix, 2), _proceed, this_generator, this_generator, [], [1, 2, 3], trail)
                     _st44 = (yield (_gen46, None))
                     while _st44 is not $DONE:
                         _st44 = (yield (_gen46, None))
@@ -1313,7 +1313,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if $unify(_acap0, ('myprefix singleton',), trail):
-                    _gen47 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1], [1, 2, 3], trail)
+                    _gen47 = StepGenerator($dispatch_at(my_prefix, 2), _proceed, this_generator, this_generator, [1], [1, 2, 3], trail)
                     _st45 = (yield (_gen47, None))
                     while _st45 is not $DONE:
                         _st45 = (yield (_gen47, None))
@@ -1329,7 +1329,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if $unify(_acap0, ('myprefix full',), trail):
-                    _gen48 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1, 2, 3], [1, 2, 3], trail)
+                    _gen48 = StepGenerator($dispatch_at(my_prefix, 2), _proceed, this_generator, this_generator, [1, 2, 3], [1, 2, 3], trail)
                     _st46 = (yield (_gen48, None))
                     while _st46 is not $DONE:
                         _st46 = (yield (_gen48, None))
@@ -1353,7 +1353,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     _fa_m8 = trail.mark()
 
                     def _fa_gen49():
-                        for _ in $tramp_call($dispatch_at(MyPrefix, 2), (_v96, [1, 2]), trail):
+                        for _ in $tramp_call($dispatch_at(my_prefix, 2), (_v96, [1, 2]), trail):
                             yield None
                         return None
                         yield None
@@ -1382,7 +1382,7 @@ def test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylen empty',), trail):
                 _v55 = $Var()
-                _gen50 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [], _v55, trail)
+                _gen50 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [], _v55, trail)
                 _st47 = (yield (_gen50, None))
                 while _st47 is not $DONE:
                     if $fd_eq(_v55, 0, trail):
@@ -1397,7 +1397,7 @@ def test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylen one element',), trail):
                 _v56 = $Var()
-                _gen51 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [42], _v56, trail)
+                _gen51 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [42], _v56, trail)
                 _st48 = (yield (_gen51, None))
                 while _st48 is not $DONE:
                     if $fd_eq(_v56, 1, trail):
@@ -1412,7 +1412,7 @@ def test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylen three elements',), trail):
                 _v57 = $Var()
-                _gen52 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v57, trail)
+                _gen52 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v57, trail)
                 _st49 = (yield (_gen52, None))
                 while _st49 is not $DONE:
                     if $fd_eq(_v57, 3, trail):
@@ -1427,7 +1427,7 @@ def test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylen five elements',), trail):
                 _v58 = $Var()
-                _gen53 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v58, trail)
+                _gen53 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v58, trail)
                 _st50 = (yield (_gen53, None))
                 while _st50 is not $DONE:
                     if $fd_eq(_v58, 5, trail):
@@ -1444,7 +1444,7 @@ def test__p0_b4__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 _v59 = $Var()
                 _v60 = $Var()
                 _v61 = $Var()
-                _gen54 = StepGenerator($dispatch_at(MyLen, 2), this_generator, this_generator, this_generator, [_v59, _v60], _v61, trail)
+                _gen54 = StepGenerator($dispatch_at(my_len, 2), this_generator, this_generator, this_generator, [_v59, _v60], _v61, trail)
                 _st51 = (yield (_gen54, None))
                 while _st51 is not $DONE:
                     if $fd_eq(_v61, 2, trail):
@@ -1459,7 +1459,7 @@ def test__p0_b5__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myappend nil left',), trail):
                 _v62 = $Var()
-                _gen55 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [1, 2], _v62, trail)
+                _gen55 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [], [1, 2], _v62, trail)
                 _st52 = (yield (_gen55, None))
                 while _st52 is not $DONE:
                     if $fd_eq(_v62, [1, 2], trail):
@@ -1474,7 +1474,7 @@ def test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myappend nil right',), trail):
                 _v63 = $Var()
-                _gen56 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [], _v63, trail)
+                _gen56 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1, 2], [], _v63, trail)
                 _st53 = (yield (_gen56, None))
                 while _st53 is not $DONE:
                     if $fd_eq(_v63, [1, 2], trail):
@@ -1489,7 +1489,7 @@ def test__p0_b7__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myappend both empty',), trail):
                 _v64 = $Var()
-                _gen57 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [], [], _v64, trail)
+                _gen57 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [], [], _v64, trail)
                 _st54 = (yield (_gen57, None))
                 while _st54 is not $DONE:
                     if $fd_eq(_v64, [], trail):
@@ -1504,7 +1504,7 @@ def test__p0_b8__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myappend one plus two',), trail):
                 _v65 = $Var()
-                _gen58 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], [2, 3], _v65, trail)
+                _gen58 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1], [2, 3], _v65, trail)
                 _st55 = (yield (_gen58, None))
                 while _st55 is not $DONE:
                     if $fd_eq(_v65, [1, 2, 3], trail):
@@ -1519,7 +1519,7 @@ def test__p0_b9__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myappend two plus two',), trail):
                 _v66 = $Var()
-                _gen59 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1, 2], [3, 4], _v66, trail)
+                _gen59 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1, 2], [3, 4], _v66, trail)
                 _st56 = (yield (_gen59, None))
                 while _st56 is not $DONE:
                     if $fd_eq(_v66, [1, 2, 3, 4], trail):
@@ -1535,7 +1535,7 @@ def test__p0_b10__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, ('myappend split nil prefix',), trail):
                 _v67 = $Var()
                 _v68 = $Var()
-                _gen60 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, _v67, _v68, [1, 2], trail)
+                _gen60 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, _v67, _v68, [1, 2], trail)
                 _st57 = (yield (_gen60, None))
                 while _st57 is not $DONE:
                     if $fd_eq(_v67, [], trail):
@@ -1551,7 +1551,7 @@ def test__p0_b11__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myappend split cons prefix',), trail):
                 _v69 = $Var()
-                _gen61 = StepGenerator($dispatch_at(MyAppend, 3), this_generator, this_generator, this_generator, [1], _v69, [1, 2, 3], trail)
+                _gen61 = StepGenerator($dispatch_at(my_append, 3), this_generator, this_generator, this_generator, [1], _v69, [1, 2, 3], trail)
                 _st58 = (yield (_gen61, None))
                 while _st58 is not $DONE:
                     if $fd_eq(_v69, [2, 3], trail):
@@ -1565,7 +1565,7 @@ def test__p0_b12__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     match (_d0,):
         case [_acap0]:
             if $unify(_acap0, ('mymember first element',), trail):
-                _gen62 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 1, [1, 2, 3], trail)
+                _gen62 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 1, [1, 2, 3], trail)
                 _st59 = (yield (_gen62, None))
                 while _st59 is not $DONE:
                     _st59 = (yield (_gen62, None))
@@ -1577,7 +1577,7 @@ def test__p0_b13__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     match (_d0,):
         case [_acap0]:
             if $unify(_acap0, ('mymember last element',), trail):
-                _gen63 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 3, [1, 2, 3], trail)
+                _gen63 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 3, [1, 2, 3], trail)
                 _st60 = (yield (_gen63, None))
                 while _st60 is not $DONE:
                     _st60 = (yield (_gen63, None))
@@ -1589,7 +1589,7 @@ def test__p0_b14__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     match (_d0,):
         case [_acap0]:
             if $unify(_acap0, ('mymember middle element',), trail):
-                _gen64 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 2, [1, 2, 3], trail)
+                _gen64 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 2, [1, 2, 3], trail)
                 _st61 = (yield (_gen64, None))
                 while _st61 is not $DONE:
                     _st61 = (yield (_gen64, None))
@@ -1601,7 +1601,7 @@ def test__p0_b15__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     match (_d0,):
         case [_acap0]:
             if $unify(_acap0, ('mymember singleton list',), trail):
-                _gen65 = StepGenerator($dispatch_at(MyMember, 2), _proceed, this_generator, this_generator, 7, [7], trail)
+                _gen65 = StepGenerator($dispatch_at(my_member, 2), _proceed, this_generator, this_generator, 7, [7], trail)
                 _st62 = (yield (_gen65, None))
                 while _st62 is not $DONE:
                     _st62 = (yield (_gen65, None))
@@ -1615,7 +1615,7 @@ def test__p0_b16__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, ('mymember absent',), trail):
 
                 def _naf_gen_fn357(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
-                    _gen66 = StepGenerator($dispatch_at(MyMember, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
+                    _gen66 = StepGenerator($dispatch_at(my_member, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
                     _st63 = (yield (_gen66, None))
                     while _st63 is not $DONE:
                         yield (_naf_proceed, None)
@@ -1643,7 +1643,7 @@ def test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 _fa_m10 = trail.mark()
 
                 def _fa_gen67():
-                    for _ in $tramp_call($dispatch_at(MyMember, 2), (_v70, [10, 20, 30]), trail):
+                    for _ in $tramp_call($dispatch_at(my_member, 2), (_v70, [10, 20, 30]), trail):
                         yield None
                     return None
                     yield None
@@ -1673,7 +1673,7 @@ def test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 _fa_m11 = trail.mark()
 
                 def _fa_gen68():
-                    for _ in $tramp_call($dispatch_at(MyMember, 2), (_v72, [1, 1, 2]), trail):
+                    for _ in $tramp_call($dispatch_at(my_member, 2), (_v72, [1, 1, 2]), trail):
                         yield None
                     return None
                     yield None
@@ -1696,7 +1696,7 @@ def test__p0_b19__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylast singleton',), trail):
                 _v74 = $Var()
-                _gen69 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [5], _v74, trail)
+                _gen69 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [5], _v74, trail)
                 _st64 = (yield (_gen69, None))
                 while _st64 is not $DONE:
                     if $fd_eq(_v74, 5, trail):
@@ -1711,7 +1711,7 @@ def test__p0_b20__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylast two elements',), trail):
                 _v75 = $Var()
-                _gen70 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2], _v75, trail)
+                _gen70 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [1, 2], _v75, trail)
                 _st65 = (yield (_gen70, None))
                 while _st65 is not $DONE:
                     if $fd_eq(_v75, 2, trail):
@@ -1726,7 +1726,7 @@ def test__p0_b21__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylast three elements',), trail):
                 _v76 = $Var()
-                _gen71 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v76, trail)
+                _gen71 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v76, trail)
                 _st66 = (yield (_gen71, None))
                 while _st66 is not $DONE:
                     if $fd_eq(_v76, 3, trail):
@@ -1741,7 +1741,7 @@ def test__p0_b22__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mylast five elements',), trail):
                 _v77 = $Var()
-                _gen72 = StepGenerator($dispatch_at(MyLast, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v77, trail)
+                _gen72 = StepGenerator($dispatch_at(my_last, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v77, trail)
                 _st67 = (yield (_gen72, None))
                 while _st67 is not $DONE:
                     if $fd_eq(_v77, 5, trail):
@@ -1756,7 +1756,7 @@ def test__p0_b23__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myproduct empty',), trail):
                 _v78 = $Var()
-                _gen73 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [], _v78, trail)
+                _gen73 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [], _v78, trail)
                 _st68 = (yield (_gen73, None))
                 while _st68 is not $DONE:
                     if $fd_eq(_v78, 1, trail):
@@ -1771,7 +1771,7 @@ def test__p0_b24__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myproduct singleton',), trail):
                 _v79 = $Var()
-                _gen74 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [5], _v79, trail)
+                _gen74 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [5], _v79, trail)
                 _st69 = (yield (_gen74, None))
                 while _st69 is not $DONE:
                     if $fd_eq(_v79, 5, trail):
@@ -1786,7 +1786,7 @@ def test__p0_b25__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myproduct three',), trail):
                 _v80 = $Var()
-                _gen75 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [2, 3, 4], _v80, trail)
+                _gen75 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [2, 3, 4], _v80, trail)
                 _st70 = (yield (_gen75, None))
                 while _st70 is not $DONE:
                     if $fd_eq(_v80, 24, trail):
@@ -1801,7 +1801,7 @@ def test__p0_b26__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myproduct with zero',), trail):
                 _v81 = $Var()
-                _gen76 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 0, 99], _v81, trail)
+                _gen76 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [1, 0, 99], _v81, trail)
                 _st71 = (yield (_gen76, None))
                 while _st71 is not $DONE:
                     if $fd_eq(_v81, 0, trail):
@@ -1816,7 +1816,7 @@ def test__p0_b27__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('myproduct five values',), trail):
                 _v82 = $Var()
-                _gen77 = StepGenerator($dispatch_at(MyProduct, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v82, trail)
+                _gen77 = StepGenerator($dispatch_at(my_product, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5], _v82, trail)
                 _st72 = (yield (_gen77, None))
                 while _st72 is not $DONE:
                     if $fd_eq(_v82, 120, trail):
@@ -1831,7 +1831,7 @@ def test__p0_b28__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mysumlist empty',), trail):
                 _v83 = $Var()
-                _gen78 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [], _v83, trail)
+                _gen78 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [], _v83, trail)
                 _st73 = (yield (_gen78, None))
                 while _st73 is not $DONE:
                     if $fd_eq(_v83, 0, trail):
@@ -1846,7 +1846,7 @@ def test__p0_b29__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mysumlist singleton',), trail):
                 _v84 = $Var()
-                _gen79 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [7], _v84, trail)
+                _gen79 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [7], _v84, trail)
                 _st74 = (yield (_gen79, None))
                 while _st74 is not $DONE:
                     if $fd_eq(_v84, 7, trail):
@@ -1861,7 +1861,7 @@ def test__p0_b30__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mysumlist three',), trail):
                 _v85 = $Var()
-                _gen80 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v85, trail)
+                _gen80 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [1, 2, 3], _v85, trail)
                 _st75 = (yield (_gen80, None))
                 while _st75 is not $DONE:
                     if $fd_eq(_v85, 6, trail):
@@ -1876,7 +1876,7 @@ def test__p0_b31__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mysumlist ten values',), trail):
                 _v86 = $Var()
-                _gen81 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], _v86, trail)
+                _gen81 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], _v86, trail)
                 _st76 = (yield (_gen81, None))
                 while _st76 is not $DONE:
                     if $fd_eq(_v86, 55, trail):
@@ -1891,7 +1891,7 @@ def test__p0_b32__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mysumlist negative',), trail):
                 _v87 = $Var()
-                _gen82 = StepGenerator($dispatch_at(MySumList, 2), this_generator, this_generator, this_generator, [-1, -2, -3], _v87, trail)
+                _gen82 = StepGenerator($dispatch_at(my_sum_list, 2), this_generator, this_generator, this_generator, [-1, -2, -3], _v87, trail)
                 _st77 = (yield (_gen82, None))
                 while _st77 is not $DONE:
                     if $fd_eq(_v87, -6, trail):
@@ -1906,7 +1906,7 @@ def test__p0_b33__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mymax singleton',), trail):
                 _v88 = $Var()
-                _gen83 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3], _v88, trail)
+                _gen83 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [3], _v88, trail)
                 _st78 = (yield (_gen83, None))
                 while _st78 is not $DONE:
                     if $fd_eq(_v88, 3, trail):
@@ -1921,7 +1921,7 @@ def test__p0_b34__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mymax two ascending',), trail):
                 _v89 = $Var()
-                _gen84 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [1, 5], _v89, trail)
+                _gen84 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [1, 5], _v89, trail)
                 _st79 = (yield (_gen84, None))
                 while _st79 is not $DONE:
                     if $fd_eq(_v89, 5, trail):
@@ -1936,7 +1936,7 @@ def test__p0_b35__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mymax two descending',), trail):
                 _v90 = $Var()
-                _gen85 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [5, 1], _v90, trail)
+                _gen85 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [5, 1], _v90, trail)
                 _st80 = (yield (_gen85, None))
                 while _st80 is not $DONE:
                     if $fd_eq(_v90, 5, trail):
@@ -1951,7 +1951,7 @@ def test__p0_b36__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mymax three',), trail):
                 _v91 = $Var()
-                _gen86 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [3, 1, 4], _v91, trail)
+                _gen86 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [3, 1, 4], _v91, trail)
                 _st81 = (yield (_gen86, None))
                 while _st81 is not $DONE:
                     if $fd_eq(_v91, 4, trail):
@@ -1966,7 +1966,7 @@ def test__p0_b37__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mymax all equal',), trail):
                 _v92 = $Var()
-                _gen87 = StepGenerator($dispatch_at(MyMax, 2), this_generator, this_generator, this_generator, [2, 2, 2], _v92, trail)
+                _gen87 = StepGenerator($dispatch_at(my_max, 2), this_generator, this_generator, this_generator, [2, 2, 2], _v92, trail)
                 _st82 = (yield (_gen87, None))
                 while _st82 is not $DONE:
                     if $fd_eq(_v92, 2, trail):
@@ -1981,7 +1981,7 @@ def test__p0_b38__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mynthof first',), trail):
                 _v93 = $Var()
-                _gen88 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 0, [10, 20, 30], _v93, trail)
+                _gen88 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, 0, [10, 20, 30], _v93, trail)
                 _st83 = (yield (_gen88, None))
                 while _st83 is not $DONE:
                     if $fd_eq(_v93, 10, trail):
@@ -1996,7 +1996,7 @@ def test__p0_b39__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mynthof second',), trail):
                 _v94 = $Var()
-                _gen89 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 1, [10, 20, 30], _v94, trail)
+                _gen89 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, 1, [10, 20, 30], _v94, trail)
                 _st84 = (yield (_gen89, None))
                 while _st84 is not $DONE:
                     if $fd_eq(_v94, 20, trail):
@@ -2011,7 +2011,7 @@ def test__p0_b40__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, ('mynthof third',), trail):
                 _v95 = $Var()
-                _gen90 = StepGenerator($dispatch_at(MyNthOf, 3), this_generator, this_generator, this_generator, 2, [10, 20, 30], _v95, trail)
+                _gen90 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, 2, [10, 20, 30], _v95, trail)
                 _st85 = (yield (_gen90, None))
                 while _st85 is not $DONE:
                     if $fd_eq(_v95, 30, trail):
@@ -2025,7 +2025,7 @@ def test__p0_b41__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     match (_d0,):
         case [_acap0]:
             if $unify(_acap0, ('myprefix empty of three',), trail):
-                _gen91 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [], [1, 2, 3], trail)
+                _gen91 = StepGenerator($dispatch_at(my_prefix, 2), _proceed, this_generator, this_generator, [], [1, 2, 3], trail)
                 _st86 = (yield (_gen91, None))
                 while _st86 is not $DONE:
                     _st86 = (yield (_gen91, None))
@@ -2037,7 +2037,7 @@ def test__p0_b42__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     match (_d0,):
         case [_acap0]:
             if $unify(_acap0, ('myprefix singleton',), trail):
-                _gen92 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1], [1, 2, 3], trail)
+                _gen92 = StepGenerator($dispatch_at(my_prefix, 2), _proceed, this_generator, this_generator, [1], [1, 2, 3], trail)
                 _st87 = (yield (_gen92, None))
                 while _st87 is not $DONE:
                     _st87 = (yield (_gen92, None))
@@ -2049,7 +2049,7 @@ def test__p0_b43__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
     match (_d0,):
         case [_acap0]:
             if $unify(_acap0, ('myprefix full',), trail):
-                _gen93 = StepGenerator($dispatch_at(MyPrefix, 2), _proceed, this_generator, this_generator, [1, 2, 3], [1, 2, 3], trail)
+                _gen93 = StepGenerator($dispatch_at(my_prefix, 2), _proceed, this_generator, this_generator, [1, 2, 3], [1, 2, 3], trail)
                 _st88 = (yield (_gen93, None))
                 while _st88 is not $DONE:
                     _st88 = (yield (_gen93, None))
@@ -2069,7 +2069,7 @@ def test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 _fa_m12 = trail.mark()
 
                 def _fa_gen94():
-                    for _ in $tramp_call($dispatch_at(MyPrefix, 2), (_v96, [1, 2]), trail):
+                    for _ in $tramp_call($dispatch_at(my_prefix, 2), (_v96, [1, 2]), trail):
                         yield None
                     return None
                     yield None

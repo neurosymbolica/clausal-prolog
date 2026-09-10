@@ -77,17 +77,17 @@ basic_config(+Opts)
 --8<-- [start:basic_usage]
 -import_from(log, [get_logger, info, warning, set_level])
 
-Init(L) <- (
+init(L) <- (
     get_logger("myapp", L),
     set_level(L, "info"),
     info(L, "Application started")
 )
 
-ProcessItem(L, ITEM) <- (
+process_item(L, ITEM) <- (
     ITEM > 0,
     info(L, f"Processing item {ITEM}")
 )
-ProcessItem(L, ITEM) <- (
+process_item(L, ITEM) <- (
     ITEM =< 0,
     warning(L, f"Skipping invalid item {ITEM}")
 )
@@ -99,7 +99,7 @@ ProcessItem(L, ITEM) <- (
     stream_handler, file_handler, set_formatter, add_handler
 ])
 
-SetupLogging(L) <- (
+setup_logging(L) <- (
     get_logger("myapp", L),
     set_level(L, "debug"),
     file_handler("/var/log/myapp.log", FH),

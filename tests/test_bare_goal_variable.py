@@ -1,11 +1,11 @@
 """A bare logic variable in goal position is rejected with a clean,
 located compile-time error (todo/attvar-in-goal-position.md).
 
-All Clausal logic variables are ``AttVar`` instances (``Var = AttVar``),
+All Clausal logic variables are ``att_var`` instances (``Var = att_var``),
 so a bare variable used as a goal reaches ``terms_to_goalop`` as an
-``AttVar``.  Before the fix it fell through to the generic
+``att_var``.  Before the fix it fell through to the generic
 ``NotImplementedError: terms_to_goalop: goal shape not yet supported
-(AttVar): AttVar(_0)`` internal-shape crash.  The author-facing
+(att_var): att_var(_0)`` internal-shape crash.  The author-facing
 behaviour is now a clear, located error naming the predicate and
 pointing at ``call/1`` for an intended meta-call.
 """
@@ -51,7 +51,7 @@ def test_bare_var_goal_load_error_is_located(tmp_path):
         "    R == X - 2,\n"
         "    R\n"
         ")\n"
-        'Test("attvar in goal position") <- (go(R), R == 3)\n'
+        'test("attvar in goal position") <- (go(R), R == 3)\n'
     )
     with pytest.raises(Exception) as exc:
         load_clausal_module(str(src))

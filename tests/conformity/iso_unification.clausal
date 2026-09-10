@@ -16,7 +16,7 @@
 
 -private([
     same_value(X, Y),
-    a, b, Hello
+    a, b, hello
 ])
 
 # Unify two values and confirm structural equality.
@@ -70,8 +70,8 @@ test("same atom ==") <- (a == a)  # nv
 test("different atoms == fails") <- (a != b)  # nv
 test("same integer ==") <- (42 == 42)  # nv
 test("bound var == value") <- (
-    _x is Hello,
-    _x == Hello
+    _x is hello,
+    _x == hello
 )  # nv
 
 # ── != (structural inequality) ───────────────────────────────────────────────
@@ -82,7 +82,7 @@ test("same atom != fails") <- (not (a != a))  # nv
 # ── same_value/2 (private helper) ─────────────────────────────────────────
 
 test("same_value: integers") <- same_value(42, 42)  # nv
-test("same_value: strings") <- same_value(Hello, Hello)  # nv
+test("same_value: strings") <- same_value(hello, hello)  # nv
 test("same_value: lists") <- same_value([1, 2], [1, 2])  # nv
 
 # ── Additional `is` (unification) cases ────────────────────────────────────

@@ -56,13 +56,13 @@ class TestSourceLocations:
         src.write_text(
             "# line 1\n"
             "# line 2\n"
-            "DivZero(X) <- (X is ++(1 / 0))\n"
+            "div_zero(X) <- (X is ++(1 / 0))\n"
         )
         mod = _load_module("g_divzero", str(src))
         logic_mod = mod.__dict__["$module"]
 
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("DivZero", None, module=logic_mod))
+            list(call("div_zero", None, module=logic_mod))
 
         # Diagnostic: walk the entire traceback so we can see exactly
         # which frames the compiled body produces.
@@ -71,7 +71,7 @@ class TestSourceLocations:
         diag = "\n".join(
             f"  {fr.filename}:{fr.lineno} in {fr.name}" for fr in frames
         )
-        lineno = _compiled_funcdef_lineno(exc_info.value, "DivZero")
+        lineno = _compiled_funcdef_lineno(exc_info.value, "div_zero")
         # Body goal is on line 3; expect compiled frame to report line 3.
         assert lineno == 3, (
             f"expected compiled traceback to point at line 3 "
@@ -103,10 +103,10 @@ class TestSourceLocationsG6:
     def test_evaluate_raises(self, tmp_path):
         from clausal.logic.solve import call
 
-        logic_mod, _ = _build(tmp_path, "g_eval", "EvalRaise(X) <- eval_(++([][0]), X)\n")
+        logic_mod, _ = _build(tmp_path, "g_eval", "eval_raise(X) <- eval_(++([][0]), X)\n")
         with pytest.raises(IndexError) as exc_info:
-            list(call("EvalRaise", None, module=logic_mod))
-        _assert_frame_line(exc_info.value, "EvalRaise", 3)
+            list(call("eval_raise", None, module=logic_mod))
+        _assert_frame_line(exc_info.value, "eval_raise", 3)
 
     def test_reified_ite_then_branch_raises(self, tmp_path):
         from clausal.logic.solve import call
@@ -114,11 +114,11 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_reified_ite",
-            "ReifiedITE(X) <- if_(1 == 1, (X is ++(1/0)), X is 0)\n",
+            "reified_ite(X) <- if_(1 == 1, (X is ++(1/0)), X is 0)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("ReifiedITE", None, module=logic_mod))
-        _assert_frame_line(exc_info.value, "ReifiedITE", 3)
+            list(call("reified_ite", None, module=logic_mod))
+        _assert_frame_line(exc_info.value, "reified_ite", 3)
 
     def test_general_ite_cond_raises(self, tmp_path):
         from clausal.logic.solve import call
@@ -127,11 +127,11 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_general_ite",
-            "GeneralITE(X) <- if_(++(1/0) == 1, X is 1, X is 2)\n",
+            "general_ite(X) <- if_(++(1/0) == 1, X is 1, X is 2)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("GeneralITE", None, module=logic_mod))
-        _assert_frame_line(exc_info.value, "GeneralITE", 3)
+            list(call("general_ite", None, module=logic_mod))
+        _assert_frame_line(exc_info.value, "general_ite", 3)
 
     def test_catch_goal_raises(self, tmp_path):
         from clausal.logic.solve import call
@@ -141,11 +141,11 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_catch_goal",
-            'CatchGoal(X) <- catch((X is ++(1/0)), "unrelated", X is 0)\n',
+            'catch_goal(X) <- catch((X is ++(1/0)), "unrelated", X is 0)\n',
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("CatchGoal", None, module=logic_mod))
-        _assert_frame_line(exc_info.value, "CatchGoal", 3)
+            list(call("catch_goal", None, module=logic_mod))
+        _assert_frame_line(exc_info.value, "catch_goal", 3)
 
     def test_findall_inner_raises(self, tmp_path):
         from clausal.logic.solve import call
@@ -153,11 +153,11 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_findall",
-            "FindAllRaise(BAG) <- findall(Y, (Y is ++(1/0)), BAG)\n",
+            "find_all_raise(BAG) <- findall(Y, (Y is ++(1/0)), BAG)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("FindAllRaise", None, module=logic_mod))
-        _assert_frame_line(exc_info.value, "FindAllRaise", 3)
+            list(call("find_all_raise", None, module=logic_mod))
+        _assert_frame_line(exc_info.value, "find_all_raise", 3)
 
     def test_goal_lambda_body_raises(self, tmp_path):
         """The goal-lambda's compiled ``FunctionDef`` (``_lambdaN``) is
@@ -169,10 +169,10 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_lambda",
-            "LambdaRaise(X) <- call_goal((V <- (V is ++(1/0))), X)\n",
+            "lambda_raise(X) <- call_goal((V <- (V is ++(1/0))), X)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("LambdaRaise", None, module=logic_mod))
+            list(call("lambda_raise", None, module=logic_mod))
         _assert_frame_line(exc_info.value, "_lambda", 3)
 
     def test_sub_predicate_call_raises(self, tmp_path):
@@ -186,9 +186,9 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_subcall",
-            "Callee(X) <- (X is ++(1/0))\n"
-            "Caller(X) <- Callee(X)\n",
+            "callee(X) <- (X is ++(1/0))\n"
+            "caller(X) <- callee(X)\n",
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("Caller", None, module=logic_mod))
-        _assert_frame_line(exc_info.value, "Callee", 3)
+            list(call("caller", None, module=logic_mod))
+        _assert_frame_line(exc_info.value, "callee", 3)

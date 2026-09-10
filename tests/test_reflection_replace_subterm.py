@@ -194,7 +194,7 @@ class TestReifiedClauseRewrite:
 ])
 
 # swap a `>=` node to `>` over the same operands, rebuilding the clause in place
-SwapGtEtoGt(SRC, NEWCLAUSE) <- (
+swap_gt_eto_gt(SRC, NEWCLAUSE) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, OLD),
     op_node(OLD, "GtE", ARGS),
@@ -211,10 +211,10 @@ SwapGtEtoGt(SRC, NEWCLAUSE) <- (
         return mod.__dict__["$module"]
 
     def test_relop_swap_is_position_preserving(self, matchers):
-        src = "Small(P) <- (get(P, k, V), V >= 1)\n"
+        src = "small(P) <- (get(P, k, V), V >= 1)\n"
         new_clause = Var()
         rendered = []
-        for _ in call("SwapGtEtoGt", src, new_clause, module=matchers):
+        for _ in call("swap_gt_eto_gt", src, new_clause, module=matchers):
             rendered.append(R.render_source(deref(new_clause)))
         # exactly one relop; `get(...)` stays first, `V >= 1` becomes `V > 1`
-        assert rendered == ["Small(P) <- ((get(P, k, V), V > 1))"]
+        assert rendered == ["small(P) <- ((get(P, k, V), V > 1))"]

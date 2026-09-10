@@ -37,9 +37,9 @@ def _reify(source):
 
 
 def _rewrite(rules_module, source):
-    """The first ``RewriteClause`` solution for the statement, or ``None``."""
+    """The first ``rewrite_clause`` solution for the statement, or ``None``."""
     out = Var()
-    for _ in call("RewriteClause", _reify(source), out, module=rules_module):
+    for _ in call("rewrite_clause", _reify(source), out, module=rules_module):
         return _deref_walk(out)
     return None
 

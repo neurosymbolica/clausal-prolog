@@ -17,7 +17,7 @@ throw(+Term)
 --8<-- [end:throw_1]
 
 --8<-- [start:catch_2]
-Catch(+Goal, ?Error)
+catch(+Goal, ?Error)
 --8<-- [end:catch_2]
 
 --8<-- [start:catch_recover_3]

@@ -24,7 +24,7 @@ test("soft all satisfiable") <- (
 
 # ── Optimize label ──────────────────────────────────────────────────────────
 
-MinSchedule(T1, T2, T3, COST) <- (
+min_schedule(T1, T2, T3, COST) <- (
     z3.integer((
         0 <= T1 <= 100,
         0 <= T2 <= 100,
@@ -35,9 +35,9 @@ MinSchedule(T1, T2, T3, COST) <- (
     z3.optimize_label([T1, T2, T3], T3, COST, "minimize"),
 )
 
-test("optimize label minimize") <- (MinSchedule(0, 5, 8, 8))  # nv
+test("optimize label minimize") <- (min_schedule(0, 5, 8, 8))  # nv
 
-MaxObj(COST) <- (
+max_obj(COST) <- (
     z3.integer((
         0 <= X <= 10,
         0 <= Y <= 10,
@@ -46,4 +46,4 @@ MaxObj(COST) <- (
     z3.optimize_label([X, Y], X + Y, COST, "maximize"),
 )
 
-test("optimize label maximize") <- (MaxObj(COST), COST == 15)  # nv
+test("optimize label maximize") <- (max_obj(COST), COST == 15)  # nv

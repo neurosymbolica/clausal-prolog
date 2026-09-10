@@ -418,6 +418,7 @@ class TestBDDInternals:
 
 CLAUSAL_FIXTURE = """
 -module(a07_clpb, [xor_pair(X, Y), count_or(N), taut_dm(T), adder(X, Y, S, C), psolve(X, Y)])
+-import_from(clausal.logic.clpb, [BoolEq])
 
 xor_pair(X, Y) <- (
     sat(X ^ Y),

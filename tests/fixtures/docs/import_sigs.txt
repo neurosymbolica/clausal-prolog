@@ -13,8 +13,8 @@
 # --8<-- [end:import_module_directive]
 
 # --8<-- [start:qualified_name_errors]
-Bad(X) <- X.foo(X)      # SyntaxError: Logic variable 'X' cannot appear
-Bad(X) <- mod.X(X)      # SyntaxError: Logic variable 'X' cannot appear
+bad(X) <- X.foo(X)      # SyntaxError: Logic variable 'X' cannot appear
+bad(X) <- mod.X(X)      # SyntaxError: Logic variable 'X' cannot appear
 # --8<-- [end:qualified_name_errors]
 
 # --8<-- [start:qualified_constant_access]

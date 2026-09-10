@@ -8,4 +8,4 @@
 
 -module(atompivot_module_a, [atompivot_cross_tag])
 
-TagFromModuleDecl(atompivot_cross_tag),
+tag_from_module_decl(atompivot_cross_tag),
