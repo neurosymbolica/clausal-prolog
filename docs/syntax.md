@@ -40,7 +40,7 @@ Example:
 
 ## Logic variables
 
-Two conventions are recognised:
+Three conventions are recognised:
 
 **Leading single underscore** — any identifier whose first character is `_`, excluding dunders (`__`) and the bare anonymous variable `_`:
 
@@ -54,7 +54,41 @@ _x, _head, _rest   # logic variables (leading-underscore style)
 X, HEAD, REST, N1, MAX_OF   # logic variables (ALL-CAPS style)
 ```
 
-Both styles may be used in the same file. ALL_CAPS is the preferred style for new code; leading-underscore is available when a lowercase variable name is desired.
+**TitleCase** — an initial capital followed by at least one lowercase letter:
+
+```python
+Foo, Total, FooBar   # logic variables (TitleCase style, the ISO Prolog spelling)
+```
+
+All three styles may be used in the same file, and a name in any of them is
+a logic variable wherever a **value** goes. ALL_CAPS is the preferred style
+for new code; leading-underscore is available when a lowercase variable name
+is desired; TitleCase is the ISO Prolog spelling and is accepted so that
+Prolog can be read and written without transliteration.
+
+### One asymmetry: TitleCase in functor position
+
+The three styles are **not** interchangeable in every position. In
+**functor** position — a clause head's functor, or a goal called in a body —
+a TitleCase name is a load-time error:
+
+```python
+p(Foo) <- (bar(Foo))          # fine: Foo is a variable in term position
+Foo(X) <- (bar(X))            # SyntaxError: Foo is TitleCase
+p(X) <- (bar(Fraction(1, 3))) # SyntaxError: reach the class as ++Fraction
+```
+
+The reason is that a variable in functor position does not mean `call/N` in
+Clausal — it is the [unit-literal sugar](#unit-literal-sugar--nunit), so
+`X(newton)` builds a quantity rather than calling `X`. If TitleCase were a
+variable there too, a bare Python class in a clause body would stop being a
+clear load error and quietly become a units expression that fails much later.
+So `FOO(3)` remains legal units sugar with a computed unit, while `Foo(3)`
+is refused.
+
+The remedy the error names is the `++` escape: a Python class is reached as
+`++ClassName`. A name bound by an `-import_from` list, and the injected
+`Undefined`, keep their binding in every position and are not affected.
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's and Prolog's existing convention).
 
@@ -66,13 +100,29 @@ variables respectively.
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
-This is a deliberate departure from Prolog, where variables start with an uppercase letter (`Foo`, `Bar`). In Python, TitleCase names are conventionally class names, so Clausal reserves TitleCase for atoms and compound-term functors (`Red`, `point(X, Y)`); predicates themselves are lowercase (`findall`, `in_`, `length`). Reusing TitleCase for variables as well would create ambiguity: in `Foo(Bar)`, is `Bar` the atom `Bar` or a logic variable? ALL-CAPS resolves this cleanly — `findall(X, in_(X, LIST), BAG)` is unambiguous.
+Clausal originally departed from Prolog here, reserving TitleCase for atoms
+and functors on the grounds that in `Foo(Bar)` it would be ambiguous whether
+`Bar` was an atom or a variable. That worked example is now resolved the
+other way, and the ambiguity it feared does not arise: **position** decides,
+not spelling. In `Foo(Bar)` the argument `Bar` is a logic variable, and the
+functor `Foo` is refused outright — so there is no shape in which one
+TitleCase name could be read two ways.
 
-Why ALL-CAPS works well:
-- Python programmers already associate titlecase with class names — static, global, noun-like. This is actually close to how atoms and predicates behave, not variables.
-- ALL-CAPS is used in many languages for constants and distinguished names; here it marks the variable role in the logic sense.
-- Single letters like `X`, `Y`, `N` are universally understood as logic variables from mathematics.
-- Leading underscore (`_x`) aligns with ISO Prolog's `_Var` convention, making translation between Clausal and Prolog more natural. See [Prolog Translation](prolog_translation.md) for the full variable naming mapping.
+Why the extra style is worth having:
+- It is the ISO Prolog spelling, so Prolog sources read and translate
+  without transliterating every variable. See
+  [Prolog Translation](prolog_translation.md) for the full mapping.
+- ALL-CAPS remains available and is still the preferred style for new
+  Clausal code: single letters like `X`, `Y`, `N` are universally understood
+  as logic variables from mathematics, and ALL-CAPS marks the variable role
+  unmistakably to a reader who also writes Python.
+- Leading underscore (`_x`) is available when a lowercase-looking variable
+  name reads better.
+
+The one cost is that a TitleCase name no longer looks like a Python class to
+a reader skimming a clause. The functor rule above is what keeps that from
+becoming a silent error: the position where a class name would actually be
+*used* is exactly the position that still refuses it.
 
 ### Singleton variables and `_UNUSED`
 
@@ -317,7 +367,12 @@ Pick a different name.
 ## Atoms
 
 Inside a logical term:
-- identifiers in `TitleCase` or `lowercase` that are not logic variable names are atoms
+- `lowercase` identifiers that are not logic variable names are atoms
+
+  (`TitleCase` was an atom spelling too until 2026-09-10. It is a
+  [logic variable](#logic-variables) now, so an atom is written lowercase.
+  A `TitleCase` name in *functor* position is a load-time error, not an
+  atom — see the asymmetry noted there.)
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms"
@@ -1232,7 +1287,7 @@ Three main reasons:
 
 2. **Term representation efficiency.** Compound terms are most efficiently represented as instances of generated classes (enabling `match`/`case` to work directly on them). Atoms need to be class objects for structural matching. Allowing arbitrary Python objects as functors requires a boxing wrapper, which is heavier.
 
-3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker (ALL-CAPS or leading underscore) avoids confusion without requiring explicit `declare` statements.
+3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker — a capital initial (`X`, `FOO`, `Foo`) or a leading underscore (`_x`) — avoids confusion without requiring explicit `declare` statements.
 
 The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely needed. Explicit is better than implicit.
 
