@@ -1743,13 +1743,60 @@ def _refuse_double_quoted_functor(transformer, func_node):
     single_quoted = "'{}'".format(
         spelling.replace("\\", "\\\\").replace("'", "\\'"))
     # ...and the bare-name alternative only exists when the spelling IS a
-    # name.  `"a b"(1)` has no bare form.
+    # name.  `"a b"(1)` has no bare form.  Neither does `"Foo"(1)`: a
+    # CAPITAL-INITIAL name is a logic variable, and bare in functor position
+    # that is either refused outright (``Foo(1)``, the TitleCase lint) or
+    # silently something else (``FOO(1)``, the unit-annotation sugar) — so
+    # offering `Foo(...)` would hand the author a second fault as the fix
+    # for the first.  Single-quoting is the whole answer there.  A
+    # leading-underscore name is not affected: ``_p(1)`` really is a call.
     bare_hint = (f', or {spelling}(...) if it is a plain name'
-                 if spelling.isidentifier() else '')
+                 if spelling.isidentifier()
+                 and not spelling[:1].isupper() else '')
     _raise_located_syntax_error(
         f'a double-quoted string is never a functor (ISO 6.3.3): '
         f'write {single_quoted}(...) for the atom{bare_hint}',
         func_node, transformer._source_lines, transformer._filename)
+
+
+def _quoted_head_functor_name(transformer, func_node, shape):
+    """Read a QUOTED head functor as the ``Name`` the atom stands for.
+
+    ``'foo'(1),`` and ``'foo'(X) <- (...)`` name the predicate ``foo/1``, the
+    same way the body goal ``'foo'(X)`` does — a functor is named by an atom
+    (ISO 13211-1), and a single-quoted token is an atom whatever its
+    capitalisation, so ``'Foo'(1),`` is ``Foo/1`` while the bare ``Foo(1)``
+    remains a variable in functor position and is refused.
+
+    Both head shapes go through here so the refusals cannot drift apart
+    between a fact and a rule for the same predicate, and so neither drifts
+    from the body reading in ``TermTransformer.visit_Call``:
+
+    * ISO 6.3.3 — a double-quoted literal is not an atom spelling and can
+      never name a functor (``_refuse_double_quoted_functor``);
+    * a head, unlike a body goal, is compiled to a functor CLASS whose name
+      is emitted as Python source (``_make_functor_class_ast`` parses it),
+      so the spelling has to be a plain name.  This is an implementation
+      limit rather than an ISO rule, but it has to be stated HERE: with no
+      check the generated source fails to parse and the author is shown
+      CPython's complaint about a line of code they never wrote.
+
+    *shape* is the word the second message uses for the construct
+    (``"fact"``, ``"clause"``, ``"DCG rule"``), so the diagnostic names what
+    the author actually wrote.
+    """
+    _refuse_double_quoted_functor(transformer, func_node)
+    spelling = func_node.value
+    if not spelling.isidentifier() or _keyword_module.iskeyword(spelling):
+        _raise_located_syntax_error(
+            f'{spelling!r} is not a plain name, so it cannot '
+            f'head a {shape} (a body goal may name it, a {shape} '
+            f'head may not): rename it, or give the {shape} a '
+            f'head that is a plain name',
+            func_node, transformer._source_lines, transformer._filename)
+    name = Name(id=spelling, ctx=Load())
+    copy_location(name, func_node)
+    return name
 
 
 def _atom_as_functor_message(name, filename, lineno, owner=None):
@@ -5887,11 +5934,14 @@ class EmbedTransformer(NodeTransformer):
         CLAUSAL subtrees *nodes* (see ClausalTitleCaseIdentifierWarning),
         once per (file, identifier).
 
-        POSITION.  Only the ``func`` of a ``Call`` is read — a clause head's
-        functor, and a goal called in a body, at any nesting depth (so the
-        ``Fraction`` of ``bar(Fraction(1, 3))`` is reached even though the
-        call sits in an argument).  A capital-initial name standing anywhere
-        a VALUE goes is a logic variable since 2026-09-10
+        POSITION.  Only the ``func`` of a ``Call`` is read, and only when it
+        is a bare ``Name`` — a clause head's functor, and a goal called in a
+        body, at any nesting depth (so the ``Fraction`` of
+        ``bar(Fraction(1, 3))`` is reached even though the call sits in an
+        argument).  A QUOTED callable (``'Foo'(1)``) is an atom, not an
+        identifier, and is not linted: ISO names a functor with any atom, so
+        only the bare spelling is refused.  A capital-initial name standing
+        anywhere a VALUE goes is a logic variable since 2026-09-10
         (``_is_logic_var_name``) and is not linted at all.  ``root_is_functor``
         marks the two callers that hand over a bare ``Name`` which IS a
         functor — the zero-arity fact heads ``flag,`` and ``flag`` — since
@@ -5915,7 +5965,9 @@ class EmbedTransformer(NodeTransformer):
           applies, so a spaced ``+ +Foo`` that compiles as Clausal is linted
           as Clausal): Python code by definition, the very place a TitleCase
           class name belongs;
-        * string literals and f-strings: text, not identifiers;
+        * string literals and f-strings: text, not identifiers — including a
+          string used as the CALLABLE (``'Foo'(1)``), which is a quoted atom
+          naming the predicate ``Foo/1``, not the identifier ``Foo``;
         * a name bound by an ``-import_from`` list (or its ``alias(...)``
           local name) — see ``_titlecase_prepass``;
         * ``_TITLECASE_EXEMPT_NAMES`` (``Undefined``).
@@ -5953,18 +6005,31 @@ class EmbedTransformer(NodeTransformer):
                     report(ident, node)
 
         def walk_(node, functor_position=False):
-            # ``'Foo'(...)``: a string literal as the callable is sugar for
-            # the name ``Foo`` (``visit_Call`` rewrites it AFTER this walk
-            # ran on the raw tree), so the string is read as the identifier
-            # it names; the report is located on the call.
-            if (isinstance(node, Call) and isinstance(node.func, Constant)
-                    and isinstance(node.func.value, str)):
-                consider(node.func.value, node)
-                for child in node.args:
-                    walk_(child)
-                for kw in node.keywords:
-                    walk_(kw.value)
-                return
+            # Text, not identifiers — and that holds in FUNCTOR position too,
+            # which is where ``'Foo'(1)`` lands: the generic ``Call`` arm
+            # below hands the callable over with ``functor_position=True``
+            # and it stops here.  A single-quoted token is an ATOM by
+            # construction (its spelling is data), and ISO names a functor
+            # with any atom, so the capitalisation rule further down — which
+            # decides what a BARE token means — has nothing to say about it.
+            # ``'Foo'(1)`` is the predicate ``Foo/1``; the bare ``Foo(1)``
+            # stays refused, which is ISO's own asymmetry
+            # (``variable_cannot_be_functor``).
+            #
+            # This arm used to read the string as the identifier it names and
+            # lint it, on the grounds that the sugar would otherwise bypass
+            # the gate.  That was right while TitleCase had no legitimate
+            # reading anywhere, and wrong from the moment a capital-initial
+            # BARE name became a logic variable: quoting then became the only
+            # way to SAY the atom, so linting it refused the very spelling
+            # the rest of the language had just made necessary.
+            #
+            # Nothing is bypassed by allowing it.  ``"Foo"(1)`` is refused one
+            # layer down by ``_refuse_double_quoted_functor`` (ISO 6.3.3) —
+            # which the lint used to pre-empt, so that case now gets its own
+            # message instead of advice about renaming an identifier — and a
+            # quoted fact head still has to be a plain name, because its
+            # functor class name is emitted as Python source.
             if isinstance(node, (Constant, JoinedStr)) or _is_escape(node):
                 return
             if isinstance(node, Name):
@@ -6325,27 +6390,11 @@ class EmbedTransformer(NodeTransformer):
                     # same ISO 6.3.3 refusal — otherwise `"foo"(1),` would
                     # load as a fact for foo/1 while `"foo"(X)` in a body is
                     # refused, and the head would quietly change meaning
-                    # when the double_quotes default flips to chars.
-                    _refuse_double_quoted_functor(transformer, func)
-                    # A fact head is compiled to a functor CLASS whose name
-                    # is emitted as Python source (``_make_functor_class_ast``
-                    # parses it), so — unlike a body goal, which may name
-                    # any atom — the spelling has to be a plain name.  With
-                    # no check the generated source fails to parse, and the
-                    # author is shown CPython's complaint about a line of
-                    # code they never wrote.
-                    spelling = func.value
-                    if (not spelling.isidentifier()
-                            or _keyword_module.iskeyword(spelling)):
-                        _raise_located_syntax_error(
-                            f'{spelling!r} is not a plain name, so it cannot '
-                            f'head a fact (a body goal may name it, a fact '
-                            f'head may not): rename it, or give the fact a '
-                            f'head that is a plain name',
-                            func, transformer._source_lines,
-                            transformer._filename)
-                    func = Name(id=spelling, ctx=Load())
-                    copy_location(func, single_element.func)
+                    # when the double_quotes default flips to chars — plus
+                    # the plain-name limit a head carries and a body goal
+                    # does not.  Shared with the rule head below.
+                    func = _quoted_head_functor_name(
+                        transformer, func, "fact")
                 return transformer._build_fact_statements(
                     func.id,
                     single_element.args,
@@ -6384,6 +6433,21 @@ class EmbedTransformer(NodeTransformer):
                         pushback = pb_part.elts
                         lhs = head_part
 
+                # A quoted head functor reads here as it does for a fact and
+                # for a ``<-`` rule — a DCG head is a head, and leaving it
+                # out would make ``'Foo'(X) >> (...)`` the one head shape
+                # that still dies at exec instead of naming its own fault.
+                if (isinstance(lhs, Call) and isinstance(lhs.func, Constant)
+                        and isinstance(lhs.func.value, str)):
+                    lhs = replace(
+                        Call(
+                            func=_quoted_head_functor_name(
+                                transformer, lhs.func, "DCG rule"),
+                            args=list(lhs.args),
+                            keywords=list(lhs.keywords),
+                        ),
+                        lhs,
+                    )
                 # Extract functor name and user args from the head.
                 if isinstance(lhs, Call) and isinstance(lhs.func, Name):
                     functor_name = lhs.func.id
@@ -6455,6 +6519,25 @@ class EmbedTransformer(NodeTransformer):
                 # Module-level predicate definition: functor_call<-body
                 transformer._lint_titlecase(expr_stmt.value)
                 _, body_expr = arrow
+                # ``'foo'(X) <- (...)``: the head functor named by a quoted
+                # ATOM, the shape a fact head and a body goal both already
+                # accept.  Normalise it to the bare ``Name`` the atom stands
+                # for BEFORE the extraction below, so a rule head reads the
+                # same as the fact head for the same predicate.  Without
+                # this the statement fell through to hosted Python and died
+                # at exec with ``'str' object is not callable`` — or, with
+                # variables in the head, a ``NameError`` naming one of them.
+                if (isinstance(left, Call) and isinstance(left.func, Constant)
+                        and isinstance(left.func.value, str)):
+                    left = replace(
+                        Call(
+                            func=_quoted_head_functor_name(
+                                transformer, left.func, "clause"),
+                            args=list(left.args),
+                            keywords=list(left.keywords),
+                        ),
+                        left,
+                    )
                 # Extract functor name and positional/keyword field names from the
                 # original (pre-transformation) head Python AST.
                 if isinstance(left, Call) and isinstance(left.func, Name):

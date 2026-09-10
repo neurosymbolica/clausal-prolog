@@ -142,16 +142,47 @@ def test_double_quoted_functor_is_still_refused_by_iso_633(
     assert "TitleCase" not in message
 
 
-def test_non_identifier_quoted_fact_head_is_still_refused(tmp_path):
-    """A Clausal implementation limit, not an ISO rule, and out of scope
-    here: a fact head is compiled to a functor class whose name is emitted
-    as Python source.  Pinned so it cannot decay into a parse error blamed
-    on generated code the author never wrote."""
+def test_double_quoted_message_does_not_offer_a_bare_capitalised_name(
+        tmp_path):
+    """The ISO 6.3.3 message offers the bare spelling as an alternative when
+    the spelling is a plain name.  For a CAPITAL-INITIAL one it must not:
+    bare in functor position that is a logic variable, so the "fix" would be
+    a second fault.  ``"foo"(1)`` keeps the hint, as the control."""
     with pytest.raises(SyntaxError) as exc_info:
-        _load(tmp_path, "spacey", "'foo bar'(1),\n")
+        _load(tmp_path, "hintcap", '"Foo"(1),\n')
+    assert "Foo(...) if it is a plain name" not in str(exc_info.value)
+    assert "write 'Foo'(...) for the atom" in str(exc_info.value)
+
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, "hintlow", '"foo"(1),\n')
+    assert "foo(...) if it is a plain name" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("name, text, shape", [
+    ("spacey_fact", "'foo bar'(1),\n", "fact"),
+    ("spacey_rule", "bar(3),\n'foo bar'(X) <- (bar(X))\n", "clause"),
+    ("spacey_dcg", "'foo bar'(X) >> ([X])\n", "DCG rule"),
+    ("keyword_rule", "bar(3),\n'class'(X) <- (bar(X))\n", "clause"),
+])
+def test_non_identifier_quoted_head_is_still_refused(
+        tmp_path, name, text, shape):
+    """A Clausal implementation limit, not an ISO rule, and out of scope
+    here: a head is compiled to a functor class whose name is emitted as
+    Python source.  Pinned so it cannot decay into a parse error blamed on
+    generated code the author never wrote — for every head shape, since
+    they now share one reading of the quoted functor."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, name, text)
     message = str(exc_info.value)
-    assert "'foo bar' is not a plain name" in message
-    assert "cannot head a fact" in message
+    assert "is not a plain name" in message
+    assert f"cannot head a {shape}" in message
+
+
+def test_a_quoted_dcg_head_names_the_same_predicate(tmp_path):
+    """A DCG head is a head: it reads the quoted functor as the other two
+    do, rather than falling through to hosted Python."""
+    mod = _load(tmp_path, "dcg", "'Foo'(X) >> ([X])\n")
+    assert _answers(mod, "Foo", 3) != []
 
 
 # ── The var-shaped-name guard still discriminates ─────────────────────────

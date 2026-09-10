@@ -102,8 +102,14 @@ def test_the_tree_has_clausal_files_to_check():
 
 @pytest.mark.parametrize("text, names", [
     ("Foo(1),\n", {"Foo"}),
-    ("'Bar'(1),\n", {"Bar"}),                    # the string-callable sugar
-    ("baz(1),\ngo(X) <- ('Qux'(X))\n", {"Qux"}),
+    ("baz(1),\ngo(X) <- (Qux(X))\n", {"Qux"}),
+    # ...and the matching NEGATIVE control.  A single-quoted functor is an
+    # ATOM, which ISO lets name anything, so the census must stay silent
+    # about it — otherwise this instrument would report the whole tree as
+    # offending the moment a file spells a capitalised predicate the one
+    # unambiguous way (see test_quoted_atom_functor.py).
+    ("'Bar'(1),\n", set()),
+    ("baz(1),\ngo(X) <- ('Qux'(X))\n", set()),
 ])
 def test_the_lint_still_sees_a_titlecase_head(tmp_path, text, names):
     """Positive control on the instrument: the census is the lint."""

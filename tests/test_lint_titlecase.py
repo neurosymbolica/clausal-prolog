@@ -196,19 +196,25 @@ def test_escaped_python_class_in_body_loads(tmp_path, monkeypatch):
     assert mod.q is not None
 
 
-@pytest.mark.parametrize("text", [
-    "'Foo'(1),\n",                       # a fact through the string-callable sugar
-    "bar(1),\ngo(X) <- ('Foo'(X))\n",     # a body goal through it
+@pytest.mark.parametrize("name, text", [
+    ("fact", "'Foo'(1),\n"),                    # a fact through the sugar
+    ("body", "'Foo'(1),\ngo(X) <- ('Foo'(X))\n"),   # a body goal through it
+    ("head", "bar(1),\n'Foo'(X) <- (bar(X))\n"),    # a rule head through it
 ])
-def test_string_callable_sugar_is_linted(tmp_path, monkeypatch, text):
-    """``'Foo'(...)`` is sugar for the name ``Foo``; it is rewritten AFTER the
-    lint reads the raw tree, so the lint must read the string callable
-    itself or the sugar bypasses the gate."""
+def test_string_callable_sugar_is_not_linted(tmp_path, monkeypatch, name, text):
+    """A QUOTED callable is an atom, and the lint is about IDENTIFIERS.
+
+    ``'Foo'(...)`` was linted as though it were the name ``Foo`` while
+    TitleCase had no legitimate reading anywhere, so the sugar looked like a
+    way around the gate.  Once a capital-initial BARE name became a logic
+    variable, quoting became the only way to SAY the atom ``Foo`` — and ISO
+    names a functor with an atom whatever its capitalisation, so this is the
+    legal spelling rather than a bypass.  See test_quoted_atom_functor.py
+    for the answers these files then give; here the point is only that the
+    lint stays out of it, at the severity that ships.
+    """
     _as_error(monkeypatch)
-    with pytest.raises(SyntaxError) as ei:
-        _load(tmp_path, "sev_sugar", text)
-    assert "`Foo` is TitleCase" in str(ei.value)
-    assert "Rename `Foo` -> `foo`" in str(ei.value)
+    assert _load(tmp_path, f"sev_sugar_{name}", text) is not None
 
 
 def test_string_callable_sugar_lowercase_still_works(tmp_path, monkeypatch):
