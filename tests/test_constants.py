@@ -770,3 +770,58 @@ def test_declared_atom_constant_dict_key_still_works(tmp_path):
     v = Var()
     [result] = [deref(v) for _ in call("lookup", v, module=m.__dict__["$module"])]
     assert isinstance(result, DictTerm)
+
+
+# ── The lowercase spelling (2026-09-11) ───────────────────────────────────────
+#
+# A constant is spelled like an atom now and its value is reached with the
+# explicit ``++name`` escape.  See
+# docs/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md.
+
+
+def test_lowercase_constant_name_is_accepted(tmp_path):
+    """A constant is spelled like an atom now: lowercase, no underscores."""
+    m = _load(tmp_path, "c_lower", """
+        -constants(max_fine = 5000)
+    """)
+    assert m.max_fine == 5000
+
+
+def test_underscored_constant_spelling_is_refused(tmp_path):
+    """The retired spelling fails loudly, and the message says what to write."""
+    with pytest.raises(SyntaxError) as excinfo:
+        _load(tmp_path, "c_old", """
+            -constants(_MAX_FINE_ = 5000)
+        """)
+    message = str(excinfo.value)
+    assert "_MAX_FINE_" in message
+    assert "max_fine" in message, "the message must offer the new spelling"
+
+
+def test_capital_initial_constant_name_is_refused(tmp_path):
+    """A capital initial is a logic variable everywhere now, with no
+    exceptions -- so it cannot name a constant either."""
+    with pytest.raises(SyntaxError, match="capital-initial"):
+        _load(tmp_path, "c_caps", """
+            -constants(MaxFine = 5000)
+        """)
+
+
+def test_underscore_led_constant_name_is_refused(tmp_path):
+    """The other half of the variable rule, so the two tests together pin
+    the constant class as its exact complement."""
+    with pytest.raises(SyntaxError, match="underscore-led"):
+        _load(tmp_path, "c_under", """
+            -constants(_max_fine = 5000)
+        """)
+
+
+def test_an_uncased_script_can_name_a_constant(tmp_path):
+    """The constant class is the COMPLEMENT of the variable rule, not
+    ``islower()``.  An uncased script has no lowercase form either, so an
+    ``islower()`` test would refuse this name while offering no alternative
+    -- it is not a variable, so no leading underscore would help."""
+    m = _load(tmp_path, "c_jp", """
+        -constants(円周率 = 3.14159)
+    """)
+    assert getattr(m, "円周率") == 3.14159

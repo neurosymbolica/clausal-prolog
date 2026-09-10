@@ -498,6 +498,24 @@ def _is_constant_name(identifier: str) -> bool:
     )
 
 
+def _is_constant_declaration_name(identifier: str) -> bool:
+    """True for a name a ``-constants`` declaration may bind.
+
+    Since 2026-09-11 a constant is spelled like an atom, so that the
+    logic-variable rule (underscore-led or capital-initial) has no exceptions
+    left.  The value is reached with the explicit ``++name`` escape, never by
+    a bare load; see ``_handle_constants_directive``.
+
+    "Spelled like an atom" is stated as the COMPLEMENT of the variable rule,
+    not as ``islower()``.  An uncased script has no lowercase form either, so
+    ``islower()`` would refuse ``円周率`` while offering no other spelling --
+    it is not a variable, so no leading underscore would help.  Deriving the
+    class from ``_is_logic_var_name`` keeps the two exhaustive by
+    construction: every identifier is one or the other.
+    """
+    return identifier.isidentifier() and not _is_logic_var_name(identifier)
+
+
 def _raise_undeclared_constant(identifier: str, node=None, source_lines=None,
                                 filename=None) -> None:
     """Shared message for a constant-shaped reference nothing declares.
@@ -7468,14 +7486,20 @@ class EmbedTransformer(NodeTransformer):
         return replace(Pass(), expr_stmt)
 
     def _handle_constants_directive(transformer, args, expr_stmt):
-        """Process ``-constants(_PI_ = 3.14159, _MAX_ = _PI_ * 2)``.
+        """Process ``-constants(pi = 3.14159, max = pi * 2)``.
 
         Declarations arrive as keyword arguments on the directive call. Each
         lowers to ``<name> = $check_constant_ground('<name>', <rhs>)`` at
         module level, so the value is bound (and gated for groundness) before
-        any clause statement executes; references are plain Name loads and the
-        value lands inside clause terms — folding, without a Var anywhere.
-        See implementation_plans/module-level-constants.md.
+        any clause statement executes.
+
+        Since 2026-09-11 the name is spelled like an atom and the value is
+        reached with the explicit ``++name`` escape — an ordinary Python
+        module-global lookup, so a constant is LATE-BOUND rather than folded
+        into the clause term at construction. A bare name in term position is
+        an atom, which is why a name may not be both (see ``visit_Module``).
+        See implementation_plans/module-level-constants.md and
+        docs/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md.
 
         Interactive sessions (IPython/REPL) reject this directive outright:
         each cell gets a fresh transformer, so ``_constants`` is forgotten
@@ -7496,20 +7520,35 @@ class EmbedTransformer(NodeTransformer):
         if args or not getattr(call_node, 'keywords', None):
             raise SyntaxError(
                 "-constants takes name = value pairs: "
-                "-constants(_PI_ = 3.14159, _MAX_ = 3)")
+                "-constants(pi = 3.14159, max_retries = 3)")
         statements = []
         for kw in call_node.keywords:
             ident = kw.arg
-            if ident is None or not _is_constant_name(ident):
+            # The retired spelling is checked FIRST and on its own. While the
+            # `_is_constant_name` carve-out still stands in the classifier,
+            # `_PI_` is not a logic-variable name and would therefore satisfy
+            # the atom-class test below -- the old spelling would keep
+            # loading, silently, until the carve-out goes.
+            if ident is not None and _is_constant_name(ident):
+                new = ident.strip("_").lower()
                 raise SyntaxError(
-                    f"-constants: {ident!r} is not a constant name — "
-                    f"constants spell with exactly one leading and one "
-                    f"trailing underscore, e.g. _PI_")
+                    f"-constants: `{ident}` uses the retired constant "
+                    f"spelling; constants are lowercase names now, and "
+                    f"the value is reached with the ++ escape. Write "
+                    f"`-constants({new} = ...)` and `++{new}` at every "
+                    f"use site.")
+            if ident is None or not _is_constant_declaration_name(ident):
+                raise SyntaxError(
+                    f"-constants: {ident!r} is not a constant name — a "
+                    f"constant is spelled like an atom, which is to say "
+                    f"anything the logic-variable rule does not claim: not "
+                    f"underscore-led and not capital-initial. "
+                    f"e.g. -constants(max_fine = 5000)")
             if ident in transformer._constants:
                 raise SyntaxError(
                     f"-constants: `{ident}` is already bound (earlier "
                     f"-constants or an import)")
-            if ident[1:-1].endswith("_UNUSED"):
+            if ident.endswith("_UNUSED"):
                 # Decided edge (todo/done/module-level-constants-open-
                 # questions.md #3): legal, but visually collides with the
                 # singleton-suppression suffix.
