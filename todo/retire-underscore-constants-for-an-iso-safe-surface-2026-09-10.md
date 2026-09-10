@@ -698,3 +698,26 @@ The working copy of the four changed engine files is preserved at
 `/home/node/.claude/jobs/af5b4bbe/tmp/wip/`. **Do not land this half until the segfault is
 understood.** A latent refcount bug in a C extension that a Python-side allocation change merely
 perturbs is a live possibility and would be worth finding on its own account.
+
+## The segfault is GC-VISIBLE — narrowed further, 2026-09-11 (late)
+
+Two more measurements, both controls rather than inferences:
+
+- **Disabling the garbage collector makes it disappear.** The same 87-file prefix, same order,
+  with `gc.disable()` in a `pytest_configure` hook: exit 1 and the two standing failures, no
+  crash. So the fault is something the collector traverses — a freed object still reachable
+  from a container, or a missing incref, in one of the C extensions. Python-side changes only
+  move WHEN a collection happens.
+- **The crashing test is
+  `tests/test_clpb.py::TestBoolHook::test_bind_to_invalid_int`**, not the `test_clpb.py` file
+  label the `-q` progress dots suggested — those lag the file heading, and reading them cost
+  two wrong bisects. It passes alone (115 tests in that file pass alone) and needs the long
+  prefix.
+- **The baseline does NOT crash even under aggressive GC** (`gc.set_threshold(1, 1, 1)`, same
+  87 files): exit 1. So "latent bug my change merely perturbs" is a HYPOTHESIS, not something
+  measured — the honest statement is that the branch triggers it and the baseline does not.
+
+Next step for whoever picks this up: build the extensions with assertions
+(`Py_DEBUG`/`--with-pydebug` or at least `PYTHONMALLOC=debug`) and run the prefix, which turns
+a use-after-free into a diagnosed abort at the point of misuse rather than a segfault later.
+`PYTHONMALLOC=debug` alone is one command and worth trying first.
