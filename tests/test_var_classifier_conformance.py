@@ -21,6 +21,47 @@ from clausal.tools.clausal_to_prolog import _is_logic_var_name as cp_var
 
 ALL = [tr_var, ds_var, ge_var, pr_var, cp_var]
 
+# The NAME-position classifier is duplicated for the same reason the variable
+# one is (clausal_to_prolog stays free of a templating import), so it gets the
+# same lockstep gate -- without one the pair can drift exactly as the five
+# below could.
+from clausal.templating.term_rewriting import (          # noqa: E402
+    _is_var_in_name_position as tr_name)
+from clausal.tools.clausal_to_prolog import (            # noqa: E402
+    _is_var_in_name_position as cp_name)
+
+NAME_POSITION = [
+    # Capital-initial WITH a lowercase letter is a name here, not a variable:
+    # a callable, or a component of a qualified name.
+    ("Foo", False), ("FooBar", False), ("Metre", False), ("TruncDiv", False),
+    # Everything that was a variable before 2026-09-10 still is.
+    ("FOO", True), ("X", True), ("N1", True), ("MAX_OF", True),
+    ("_foo", True), ("_x", True),
+    # And non-variables stay non-variables.
+    ("foo", False), ("in_", False), ("_PI_", False), ("__x", False),
+]
+
+
+@pytest.mark.parametrize("spelling,expected", NAME_POSITION)
+def test_name_position_copies_agree(spelling, expected):
+    got = [(fn.__module__, fn(spelling)) for fn in (tr_name, cp_name)]
+    assert all(v == expected for _, v in got), got
+
+
+def test_name_position_is_the_variable_rule_minus_titlecase():
+    """Stated as a property, so a new spelling cannot satisfy the corpus
+    above while breaking the relationship the two rules are meant to have."""
+    for spelling, _ in CORPUS + NAME_POSITION:
+        titlecase = (spelling[:1].isupper()
+                     and any(c.islower() for c in spelling))
+        assert tr_name(spelling) == (tr_var(spelling) and not titlecase), spelling
+
+
+def test_name_position_pinned_divergence():
+    """clausal_to_prolog's bare-``_`` divergence is inherited, not restated:
+    the name-position rule is built on the local variable classifier."""
+    assert cp_name("_") is True and tr_name("_") is False
+
 # (spelling, is_variable) — spellings where all five copies must agree.
 CORPUS = [
     ("X", True), ("FOO", True), ("MAX_OF", True), ("N1", True),

@@ -559,3 +559,60 @@ def test_warning_is_not_attributed_to_the_rewriter(tmp_path):
     assert _named(ws) == ["Foo"]
     base = os.path.basename(ws[0].filename)
     assert base not in ("term_rewriting.py", "ast.py"), ws[0].filename
+
+
+# --- Declaration directives name PREDICATES, so they are functor positions --
+#
+# Narrowing the walk to ``Call.func`` dropped these: a ``pred/arity`` spec is
+# a ``BinOp(Name, Div, Constant)`` and a ``-private``/``-module`` list entry is
+# a bare ``Name``, so neither is syntactically a call -- but every one of them
+# NAMES A PREDICATE OR ATOM the module declares, which is the functor position
+# the rule is about.  (Contrast ``-constants(_L_ = [Foo, bar])`` above, whose
+# list holds TERMS.)
+
+@pytest.mark.parametrize("source", [
+    "-dynamic(Foo/1)\n",
+    "-dynamic([Foo/1, bar/2])\n",          # the single-list spelling
+])
+def test_pred_arity_directive_spec_warns(tmp_path, source):
+    ws = _titlecase_warnings(tmp_path, "pa" + str(abs(hash(source))), source)
+    assert _named(ws) == ["Foo"]
+
+
+@pytest.mark.parametrize("source", [
+    "-table(Foo/2)\n",
+    "-discontiguous(Foo/1)\n",
+])
+def test_pred_arity_directive_spec_warns_before_its_own_refusal(
+        tmp_path, source):
+    """``-table``/``-discontiguous`` additionally require the target to be
+    defined, so the load stops either way.  As with ``-constants`` above, the
+    lint runs on the raw arguments FIRST, so it is the warning -- not the
+    load -- that this pins; under the shipped error severity that warning is
+    the SyntaxError, and it is the one the author sees."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        with pytest.raises(SyntaxError):
+            _load(tmp_path, "pax" + str(abs(hash(source))), source)
+    ws = [w for w in rec
+          if issubclass(w.category, ClausalTitleCaseIdentifierWarning)]
+    assert _named(ws) == ["Foo"]
+
+
+@pytest.mark.parametrize("source", [
+    "-module(m, [Foo])\n",
+    "-module(m, [])\n-private([Foo])\n",
+    "-module(m, [])\n-hide([Foo])\n",
+])
+def test_declaration_list_entry_warns(tmp_path, source):
+    ws = _titlecase_warnings(tmp_path, "dl" + str(abs(hash(source))), source)
+    assert _named(ws) == ["Foo"]
+
+
+def test_lowercase_declarations_are_still_silent(tmp_path):
+    """The control: the new directive walk must not warn on ordinary names."""
+    assert _titlecase_warnings(
+        tmp_path, "decl_ok",
+        "-module(m, [foo, bar(X)])\n"
+        "-private([baz])\n"
+        "-dynamic(foo/0)\n") == []

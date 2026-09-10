@@ -194,26 +194,22 @@ class TestTitleCaseAliases:
             list(call("speed", Var(), module=mod.__dict__["$module"]))
         assert "Metre" in str(ei.value)
 
-    def test_the_supported_import_list_spelling_still_resolves_and_warns(self):
+    def test_the_supported_import_list_spelling_still_resolves_and_warns(
+            self, tmp_path):
         """The other half, and the one that matters for real files: the
         retired spelling in an ``-import_from`` list is untouched -- it still
         binds, still resolves at the use site, and still names the rename."""
         import textwrap
-        import tempfile
-        import os
         from clausal.import_hook import _load_module
-        src = textwrap.dedent("""
+        path = tmp_path / "tc_unit_ok.clausal"
+        path.write_text(textwrap.dedent("""
             -import_from(py.units, [Metre])
             -module(tc_unit_ok, [speed(X)])
             speed(X) <- (X is 5.0(Metre))
-        """).lstrip()
-        d = tempfile.mkdtemp()
-        path = os.path.join(d, "tc_unit_ok.clausal")
-        with open(path, "w") as fh:
-            fh.write(src)
+        """).lstrip())
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter("always")
-            _load_module("_titlecase_unit_import_ok", path)
+            _load_module("_titlecase_unit_import_ok", str(path))
         assert any("Metre" in str(w.message) and "metre" in str(w.message)
                    for w in rec), [str(w.message) for w in rec]
 

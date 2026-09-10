@@ -216,3 +216,41 @@ class TestVarShapedImport:
         x = Var()
         assert any(True for _ in call("q", x, module=module.__dict__["$module"]))
         assert deref(x) == 1
+
+
+def test_capital_initial_clash_says_capital_initial_not_all_caps(
+        tmp_path, monkeypatch):
+    """The message must describe the rule the NAME actually matches.
+
+    Since 2026-09-10 a capital-initial name is a logic variable, so ``Foo``
+    reaches this check too -- and telling its author that "an ALL-CAPS name
+    is a logic variable" states a rule they can see ``Foo`` does not match,
+    which reads as a bug in the message rather than a fault in their code.
+
+    Reached with the TitleCase lint demoted: at the shipped error severity
+    the lint refuses a TitleCase functor first, which is the better message
+    and the one a user normally gets.
+    """
+    from clausal.templating import term_rewriting
+    monkeypatch.setattr(
+        term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "warn")
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, "capinit", """
+            Foo(1),
+            bar(X) <- (X == Foo)
+        """)
+    message = str(exc_info.value)
+    assert "capital-initial name is a logic variable" in message
+    assert "ALL-CAPS" not in message
+    assert "'Foo'" in message
+
+
+def test_all_caps_clash_still_says_all_caps(tmp_path):
+    """The control: the existing wording is unchanged for the names it
+    always described."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load(tmp_path, "allcapsclash", """
+            FOO(1),
+            bar(X) <- (X == FOO)
+        """)
+    assert "ALL-CAPS name is a logic variable" in str(exc_info.value)

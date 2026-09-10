@@ -787,3 +787,41 @@ class TestRegexAutoBindFixture:
     def test_fixture(self, name):
         # nv
         assert _succeeds("test", name, module=self.mod)
+
+
+class TestCapitalInitialAutoBinding:
+    """Named-group auto-binding follows the VARIABLE rule, whatever it is.
+
+    The gate has always been "the group name is spelled like a Clausal logic
+    variable".  On 2026-09-10 a capital initial became one, so TitleCase
+    group names auto-bind too.  This is the deliberate reading, not an
+    accident of the widening: the alternative -- a group named ``Year``
+    NOT binding a clause variable named ``Year`` -- would make the gate
+    disagree with the language about what a variable is.
+
+    No existing file can be affected: a TitleCase name was a load-time error
+    everywhere before that date, so no clause could name such a variable.
+    """
+
+    def test_titlecase_group_auto_binds(self, tmp_path):
+        mod = _load("tcab1", r"""
+parse_year(S, Year) <- match(r"(?P<Year>\d{4})", S)
+""", tmp_path)
+        assert _first("parse_year", "2026", module=mod) == "2026"
+
+    def test_titlecase_group_constrains_a_bound_input(self, tmp_path):
+        """Same two-way behaviour the ALLCAPS groups have."""
+        mod = _load("tcab2", r"""
+is_year(S, Year) <- match(r"(?P<Year>\d{4})-\d{2}", S)
+""", tmp_path)
+        assert _succeeds("is_year", "2026-03", "2026", module=mod)
+        assert not _succeeds("is_year", "2026-03", "1999", module=mod)
+
+    def test_lowercase_group_still_does_not_bind(self, tmp_path):
+        """The gate still EXCLUDES lowercase: it is the variable rule, not
+        "any name".  ``year`` is an atom spelling, so the group stays
+        regex-only and the clause variable is left untouched."""
+        mod = _load("tcab3", r"""
+parse_year(S, Out) <- (match(r"(?P<year>\d{4})", S), Out is 0)
+""", tmp_path)
+        assert _first("parse_year", "2026", module=mod) == 0

@@ -15,6 +15,7 @@ repository as well.
 import ast
 import os
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -53,9 +54,6 @@ def _clausal_files() -> list[Path]:
 
 
 CORPUS = _clausal_files()
-
-import sys as _sys
-test_corpus_module = _sys.modules[__name__]
 
 
 def _ids(paths: list[Path]) -> list[str]:
@@ -171,9 +169,10 @@ def test_a_root_living_under_a_skip_name_still_yields_its_files(tmp_path, monkey
     root.mkdir(parents=True)
     (root / "a.clausal").write_text("p(1),\n")
     monkeypatch.setenv("CLAUSAL_FMT_CORPUS", str(root))
-    monkeypatch.setattr(test_corpus_module, "REPO", tmp_path / "nonexistent")
+    this_module = sys.modules[__name__]
+    monkeypatch.setattr(this_module, "REPO", tmp_path / "nonexistent")
 
-    found = test_corpus_module._clausal_files()
+    found = this_module._clausal_files()
     assert [p.name for p in found] == ["a.clausal"]
 
 
@@ -186,7 +185,8 @@ def test_a_skip_directory_INSIDE_the_root_is_still_skipped(tmp_path, monkeypatch
     (root / "keep.clausal").write_text("p(1),\n")
     (root / "build" / "generated.clausal").write_text("p(2),\n")
     monkeypatch.setenv("CLAUSAL_FMT_CORPUS", str(root))
-    monkeypatch.setattr(test_corpus_module, "REPO", tmp_path / "nonexistent")
+    this_module = sys.modules[__name__]
+    monkeypatch.setattr(this_module, "REPO", tmp_path / "nonexistent")
 
-    found = test_corpus_module._clausal_files()
+    found = this_module._clausal_files()
     assert [p.name for p in found] == ["keep.clausal"]

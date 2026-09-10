@@ -695,3 +695,40 @@ class TestBracketAtomLiteralIsFaithful:
     def test_strict_mode_accepts_it(self):
         out = clausal_source_to_prolog('ok(K) <- (K is "[]")', strict=True)
         assert "K = []" in out, out
+
+
+def test_titlecase_unit_name_still_lowers_as_a_quantity():
+    """A unit is a NAME position, in the translator as in the engine.
+
+    ``-import_from(py.units, [Metre])`` is the SUPPORTED deprecation-window
+    spelling and still resolves, so ``5.0(Metre)`` is a quantity: the
+    magnitude survives and the unit is discarded into a note, exactly as the
+    lowercase spelling is.  Reading the unit NAME as a logic variable made
+    ``_try_quantity`` return None, and the clause exported as the
+    unrepresentable ``X = ???(_Metre)`` under a bogus "compound unit
+    expression" refusal -- a working quantity silently exported as something
+    else."""
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    out = clausal_source_to_prolog(
+        "-import_from(py.units, [Metre])\n"
+        "-module(tc_unit, [speed(X)])\n"
+        "speed(X) <- (X is 5.0(Metre))\n"
+    )
+    text = out if isinstance(out, str) else str(out)
+    assert "X = 5.0" in text, text
+    assert "???" not in text, text
+    assert "compound unit expression" not in text, text
+    assert "Metre" in text  # kept as the unit note
+
+
+def test_lowercase_unit_name_lowers_the_same_way():
+    """The control, so the assertion above cannot pass by accident."""
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    out = clausal_source_to_prolog(
+        "-import_from(py.units, [metre])\n"
+        "-module(tc_unit_lc, [speed(X)])\n"
+        "speed(X) <- (X is 5.0(metre))\n"
+    )
+    text = out if isinstance(out, str) else str(out)
+    assert "X = 5.0" in text, text
+    assert "???" not in text, text
