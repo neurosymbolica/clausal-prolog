@@ -113,7 +113,7 @@ class TestF035QuotedFunctorHeads:
     def test_plain_quoted_functor_still_accepted(self):
         # 'foo' names the same atom as foo — a plain identifier head is fine.
         out = prolog_to_clausal("'foo'(x).")
-        assert "Foo(x)," in out
+        assert "foo(x)," in out
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -126,12 +126,12 @@ class TestF026BagofWitness:
         # Clausal bagof/setof never group by free variables, which is ISO's
         # behaviour when the variable is ^-quantified — drop the quantifier.
         out = prolog_to_clausal("q(L) :- bagof(X, Y^p(X,Y), L).")
-        assert "bagof(X, P(X, Y), L)" in out
+        assert "bagof(X, p(X, Y), L)" in out
         assert "^" not in out
 
     def test_setof_nested_witnesses_stripped(self):
         out = prolog_to_clausal("q(L) :- setof(X, A^B^p(X, A, B), L).")
-        assert "setof(X, P(X, A, B), L)" in out
+        assert "setof(X, p(X, A, B), L)" in out
         assert "^" not in out
 
     def test_caret_outside_bagof_rejected(self):

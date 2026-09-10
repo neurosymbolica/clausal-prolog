@@ -144,7 +144,7 @@ def test_witness_fixture_on_the_old_spelling_does_not_load():
     with pytest.raises(SyntaxError) as ei:
         load_clausal_module(p)
     assert "Rename `Test` -> `test`" in str(ei.value)
-    assert ei.value.lineno == 5
+    assert ei.value.lineno == 6
     assert [(r.name, r.passed) for r in run_file(p).results] == [("<load>", False)]
 
 

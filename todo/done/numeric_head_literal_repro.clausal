@@ -5,36 +5,36 @@
 
 # --- numeric literals in head, queried as var: BUG (no solution) ---
 fine_int(DAYS, 20000) <- (DAYS >= 40)
-Test("int literal head, query as var")   <- (fine_int(50, F), F == 20000)
+test("int literal head, query as var")   <- (fine_int(50, F), F == 20000)
 
 fine_flt(DAYS, 3.5)   <- (DAYS >= 40)
-Test("float literal head, query as var") <- (fine_flt(50, F), F == 3.5)
+test("float literal head, query as var") <- (fine_flt(50, F), F == 3.5)
 
 # position-independence: int literal in first / middle arg
 first_lit(20000, DAYS) <- (DAYS >= 40)
-Test("int literal first arg, query as var") <- (first_lit(F, 50), F == 20000)
+test("int literal first arg, query as var") <- (first_lit(F, 50), F == 20000)
 
 mid_lit(A, 7, B) <- (A >= 1, B == A + 1)
-Test("int literal middle arg, query as var") <- (mid_lit(3, M, R), M == 7, R == 4)
+test("int literal middle arg, query as var") <- (mid_lit(3, M, R), M == 7, R == 4)
 
 # not caused by the guard: trivial body still fails
 triv(DAYS, 99) <- (DAYS is DAYS)
-Test("int literal head, trivial body") <- (triv(50, X), X == 99)
+test("int literal head, trivial body") <- (triv(50, X), X == 99)
 
 # --- textual literals in head, queried as var: OK ---
 elig_dq(P, "yes") <- (P == "alice")
-Test("dq-string literal head, query as var") <- (elig_dq("alice", S), S is "yes")
+test("dq-string literal head, query as var") <- (elig_dq("alice", S), S is "yes")
 
 elig_sq(P, 'yes') <- (P == "alice")
-Test("sq-atom literal head, query as var")   <- (elig_sq("alice", S), S is 'yes')
+test("sq-atom literal head, query as var")   <- (elig_sq("alice", S), S is 'yes')
 
-Test("dq and sq unify") <- ("yes" is 'yes')
+test("dq and sq unify") <- ("yes" is 'yes')
 
 # --- controls: literal supplied directly (input mode) and bare fact: OK ---
-Test("int literal given directly") <- fine_int(50, 20000)
+test("int literal given directly") <- fine_int(50, 20000)
 fact_int(50, 20000),
-Test("bare fact, query as var")    <- (fact_int(50, F), F == 20000)
+test("bare fact, query as var")    <- (fact_int(50, F), F == 20000)
 
 # --- the workaround: bind numeric output in the body: OK ---
 fine_ok(DAYS, FINE) <- (DAYS >= 40, FINE == 20000)
-Test("workaround: body-bound numeric output") <- (fine_ok(50, F), F == 20000)
+test("workaround: body-bound numeric output") <- (fine_ok(50, F), F == 20000)

@@ -176,7 +176,7 @@ class TestTitleCaseAliases:
             _load_module("_titlecase_unit_witness", str(p))
         assert "`Metre` is TitleCase" in str(ei.value)
         assert "Rename `Metre` -> `metre`" in str(ei.value)
-        assert ei.value.lineno == 7
+        assert ei.value.lineno == 8
 
     def test_alias_table_is_complete(self):
         """Every entry names a real lowercase unit; every unit has an entry."""

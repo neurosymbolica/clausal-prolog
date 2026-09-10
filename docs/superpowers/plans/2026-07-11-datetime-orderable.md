@@ -397,7 +397,7 @@ objects with a natural chronological order:
 ```clausal
 -import_from(date_time, [date])
 
-Earlier(A, B) <- (date(2020, 1, 1, A), date(2021, 1, 1, B), A < B)  # succeeds
+earlier(A, B) <- (date(2020, 1, 1, A), date(2021, 1, 1, B), A < B)  # succeeds
 ```
 
 The same values sort chronologically through `sort/2`, `msort/2`,

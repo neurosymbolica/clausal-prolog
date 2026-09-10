@@ -329,7 +329,7 @@ class TestMigrationRegression:
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
-        te = make_predicate("TermExpansion", ("a", "b", "c", "d"))
+        te = make_predicate("term_expansion", ("a", "b", "c", "d"))
         head = te(a=1, b=2, c=3, d=4)
         pred_node = SimpleNamespace(head=head)
         assert _is_term_expansion_clause(pred_node)

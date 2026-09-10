@@ -900,7 +900,7 @@ def test_row_27_a_pl_file_loads_its_strings_as_strings(tmp_path):
     assert "-double_quotes(chars)" in source
     mod = _load_inline_clausal("_flip_row27", source)
     X = Var()
-    assert _answers(("P", X), mod, X) == [("ab",)]
+    assert _answers(("p", X), mod, X) == [("ab",)]
 
 
 # ── Rows 28-30: reader, bytecode cache, listing ─────────────────────────────
