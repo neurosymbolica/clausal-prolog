@@ -1087,6 +1087,14 @@ class _StarQueryTransformer(ast.NodeTransformer):
         tt = TermTransformer()
 
         if isinstance(inner, ast.Tuple):
+            # The conjuncts are several outermost roots sharing ONE variable
+            # scope, so note them all before visiting any.  ``visit``'s
+            # auto-note fires per root and accumulates, which made a thunk in
+            # conjunct 1 decided before conjunct 2's names were known:
+            # ``*(bar(f"{Node}"), tree(Node))`` captured nothing and formatted
+            # the module-namespace class, while the same query written the
+            # other way round captured ``Node`` and formatted the binding.
+            tt.note_clause_scope(*inner.elts)
             elts = [tt.visit(e) for e in inner.elts]
             goal_ast = elts[0]
             for elt in elts[1:]:

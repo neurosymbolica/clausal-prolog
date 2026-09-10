@@ -2455,20 +2455,31 @@ class TermTransformer(NodeTransformer):
 
         Accumulates, so it is safe to call more than once and in any order.
         That is what lets ``visit`` call it automatically on every outermost
-        root, covering shapes with no dedicated site (queries, seams, the
-        ``--{}`` block form), while the three sites that hold a whole clause
-        note it up front.
+        root; the auto-note is sufficient ONLY where one transformer visits
+        exactly one root, which is the single-goal query and the ``--`` seam.
 
-        Those three sites are REQUIRED, not an optimisation, and each is
-        marked at its call: ``visit``'s auto-note fires once per outermost
-        root, and a clause is visited as several roots -- each head argument,
-        then the body -- so a thunk in the HEAD would otherwise see only the
-        roots visited before it.  The three are the arrow rule, the DCG rule
-        and the bodyless fact.  (An earlier version of this docstring
-        described those sites while none of them existed; the mechanism read
-        as done and was not.  If a fourth clause shape is added, it needs a
-        call here too -- the auto-note alone makes POSITION decide, which is
-        the fault this whole mechanism removes.)
+        Everywhere else the call here is REQUIRED, not an optimisation, and
+        each is marked at its call site.  ``visit``'s auto-note fires once
+        per outermost root, so wherever a transformer visits SEVERAL roots
+        that share one variable scope, a thunk in root 1 is decided before
+        root 2's names are known -- and the fault is silent, because the two
+        readings differ only in what the thunk formats.  The five sites:
+
+        * the arrow rule, the DCG rule and the bodyless fact -- a clause is
+          visited as one root per head argument, then the body, so a thunk
+          in the HEAD would otherwise see only earlier arguments;
+        * the ``--{}`` block form -- one root per statement in the block;
+        * the REPL conjunction path (``import_hook._StarQueryTransformer``)
+          -- one root per conjunct.
+
+        (Two earlier versions of this docstring claimed coverage the code
+        did not have: first describing the three clause sites while none
+        existed, then calling the auto-note sufficient for the ``--{}``
+        block and the REPL while both were multi-root.  A claim here is
+        worth nothing unless it has been read against the call sites.  If a
+        new multi-root shape is added it needs a call too -- the auto-note
+        alone makes POSITION decide, which is the fault this whole mechanism
+        removes.)
 
         A sub-transformer SHARES the set rather than noting afresh: see the
         ``clause_var_names`` argument to ``TermTransformer`` and to
@@ -8223,11 +8234,17 @@ class EmbedTransformer(NodeTransformer):
                 *(stmt.value for stmt in with_statement.body
                   if isinstance(stmt, Expr)))
             term_transformer = transformer._make_term_transformer()
-            elements = [
-                term_transformer.visit(stmt.value)
-                for stmt in with_statement.body
-                if isinstance(stmt, Expr)
-            ]
+            roots = [stmt.value for stmt in with_statement.body
+                     if isinstance(stmt, Expr)]
+            # Every statement in the block is one outermost root sharing ONE
+            # variable scope, so note them all before visiting any -- see the
+            # arrow rule for why.  The auto-note in ``visit`` accumulates per
+            # root, which made the reading of a thunk depend on where in the
+            # block it was written: ``f"{Node}"`` before ``tree(Node)``
+            # formatted the module-namespace class, and the reverse order the
+            # binding, with nothing to say the two blocks differed.
+            term_transformer.note_clause_scope(*roots)
+            elements = [term_transformer.visit(root) for root in roots]
             return replace(
                 Assign(
                     targets=[first.optional_vars],
