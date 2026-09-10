@@ -107,10 +107,14 @@ the bare `Foo(1)` is a `syntax_error(variable_cannot_be_functor)`. As
 everywhere else, a **double**-quoted literal is not an atom spelling and
 never names a functor (ISO 6.3.3).
 
-One Clausal limit applies to heads and not to goals: a head's functor
-becomes a generated class name, so a quoted **head** must still spell a
-plain, non-keyword name. `'foo bar'(X)` and `'not'(X)` may be *called*; they
-may not be *defined*.
+A declaration list takes the quoted spelling too, which is how such a
+predicate is exported — `-module(m, ['Foo'(X)])`, or the ISO arity form
+`-module(m, ['Foo'/1])` — and `-private` reads it the same way.
+
+One Clausal limit applies to anything that *names* a predicate — a head or a
+declaration entry — and not to goals: the name becomes a generated class
+name, so it must spell a plain, non-keyword name. `'foo bar'(X)` and
+`'not'(X)` may be *called*; they may not be *defined* or *declared*.
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's and Prolog's existing convention).
 
