@@ -7906,22 +7906,16 @@ class EmbedTransformer(NodeTransformer):
             if isinstance(item, Name):
                 # Map local name → "module.path.Name" for dotted globals key
                 local_name = item.id
-                if _is_constant_name(local_name):
-                    # Imported constant: the ImportFrom emitted below binds
-                    # the owner's ground value as a module global here; use
-                    # sites resolve through the constants branch of
-                    # ``visit_Name`` (a plain Name load), not the predicate
-                    # remap — so no ``_import_remap``/``_imported_functors``
-                    # bookkeeping for this name.
-                    if local_name in transformer._constants:
-                        raise SyntaxError(
-                            f"-import_from: `{local_name}` is already bound "
-                            f"by an earlier -constants or import in this "
-                            f"file; use alias({local_name}, _OTHER_)"
-                        )
-                    transformer._constants.add(local_name)
-                    aliases.append(alias(name=local_name))
-                    continue
+                # There is no imported-constant branch here (2026-09-11).  A
+                # constant name is atom-shaped now, so the importer cannot
+                # tell a constant from an atom or a predicate in the owner
+                # module -- that is the OWNER's fact and the name no longer
+                # carries it.  Every imported name takes the ordinary path
+                # below, whose ImportFrom binds the owner's module global,
+                # which is all ``++name`` needs to reach a constant.  The
+                # cost: importing a constant and then CALLING it fails at
+                # solve time rather than at load time, exactly as it already
+                # did for an imported atom.
                 # Same unreachability as the ``alias(…)`` form below: a
                 # var-shaped local binding is read as a logic variable by
                 # ``visit_Name`` before the remap is ever consulted, so the
@@ -7970,25 +7964,10 @@ class EmbedTransformer(NodeTransformer):
             ):
                 orig_name = item.args[0].id
                 local_name = item.args[1].id
-                if _is_constant_name(orig_name) or _is_constant_name(local_name):
-                    # Constant alias: both sides must be constant-shaped —
-                    # an alias mixing a constant with a predicate name would
-                    # otherwise silently pick one binding path or the other.
-                    if not (_is_constant_name(orig_name)
-                            and _is_constant_name(local_name)):
-                        raise SyntaxError(
-                            "constant imports must alias to a constant "
-                            "name (alias(_PI_, _MYPI_))"
-                        )
-                    if local_name in transformer._constants:
-                        raise SyntaxError(
-                            f"-import_from: `{local_name}` is already bound "
-                            f"by an earlier -constants or import in this "
-                            f"file; use alias({orig_name}, _OTHER_)"
-                        )
-                    transformer._constants.add(local_name)
-                    aliases.append(alias(name=orig_name, asname=local_name))
-                    continue
+                # No constant-alias branch either -- see the bare-name form
+                # above.  ``alias(max_fine, cap)`` is an ordinary rename now,
+                # and the shape-matching rule it used to enforce ("a constant
+                # must alias to a constant") has nothing left to match on.
                 # A10-F017: a logic-var-shaped alias (e.g. ``T``) is
                 # unreachable — visit_Name treats it as a variable before the
                 # remap fires, so the call site later fails with a cryptic

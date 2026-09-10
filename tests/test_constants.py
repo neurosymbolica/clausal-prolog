@@ -977,3 +977,38 @@ def test_distinct_names_do_not_collide(tmp_path):
         holds(pi),
     """)
     assert m.max_fine == 5000
+
+
+def test_an_imported_constant_is_reached_through_the_escape(tmp_path):
+    """An imported constant takes the ordinary imported-name path now.
+
+    The importer cannot tell a constant from an atom or a predicate in
+    another module -- that is the OWNER's fact and the name no longer says
+    so -- but the emitted ImportFrom binds the owner's module global here,
+    which is all ``++name`` needs.
+    """
+    _load(tmp_path, "own_c1", "-constants(max_fine = 5000)\n")
+    m = _load(tmp_path, "use_c1", """
+        -module(use_c1, [big/1, small/1, thing])
+        -import_from(tc_own_c1, [max_fine])
+
+        big(thing) <- (++max_fine > 4000)
+        small(thing) <- (++max_fine > 6000)
+    """)
+    mod = m.__dict__["$module"]
+    assert len(list(call("big", m.thing, module=mod))) == 1
+    assert len(list(call("small", m.thing, module=mod))) == 0
+
+
+def test_an_imported_constant_under_an_alias(tmp_path):
+    """The alias form carries the value across too."""
+    _load(tmp_path, "own_c2", "-constants(max_fine = 5000)\n")
+    m = _load(tmp_path, "use_c2", """
+        -module(use_c2, [limit/1])
+        -import_from(tc_own_c2, [alias(max_fine, cap)])
+
+        limit(X) <- (X is ++cap)
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("limit", v,
+                                   module=m.__dict__["$module"])] == [5000]
