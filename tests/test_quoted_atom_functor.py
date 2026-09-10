@@ -197,6 +197,57 @@ def test_a_quoted_dcg_head_names_the_same_predicate(tmp_path):
     assert _answers(mod, "Foo", 3) != []
 
 
+# ── Reflection ────────────────────────────────────────────────────────────
+
+
+class TestReify:
+    """``reify_source`` models more shapes than the compiler accepts, but
+    not this one, and the reason is measurable rather than a matter of
+    taste: reflection runs the same ``visit_Expr``, which mints the functor
+    class by ``parse()``-ing its name.  So the plain-name limit binds it
+    too, and the right answer is the attributed message rather than
+    CPython's."""
+
+    def test_a_quoted_titlecase_head_reifies_as_a_clause(self):
+        from clausal.reflection import Clause, reify_source
+        items = reify_source("'Foo'(X) <- (bar(X))\n")
+        assert [type(i).__name__ for i in items] == ["Clause"]
+        assert isinstance(items[0], Clause)
+
+    @pytest.mark.parametrize("src", [
+        "'foo bar'(1),\n",
+        "'foo bar'(X) <- (bar(X))\n",
+        "'class'(X) >> ([X])\n",
+    ])
+    def test_a_non_plain_head_raises_the_ATTRIBUTED_message(self, src):
+        """Not "invalid syntax ... (<unknown>, line 4)" -- that is what an
+        exemption here produces, because the class name still reaches
+        ``parse()``."""
+        from clausal.reflection import ReifyError, reify_source
+        with pytest.raises(ReifyError) as exc_info:
+            reify_source(src)
+        message = str(exc_info.value)
+        assert "is not a plain name" in message
+        assert "invalid syntax" not in message
+
+    @pytest.mark.parametrize("src", [
+        "p(X) <- ('foo bar'(X))\n",
+        "p(X) <- ('class'(X))\n",
+    ])
+    def test_the_same_spelling_in_a_BODY_still_reifies(self, src):
+        """A goal names an atom and mints no class, so nothing stops it --
+        the asymmetry mirrors the representation, it is not an oversight."""
+        from clausal.reflection import reify_source
+        assert [type(i).__name__ for i in reify_source(src)] == ["Clause"]
+
+    def test_a_double_quoted_head_still_reifies(self):
+        """The ISO 6.3.3 refusal IS reify-exempt -- its reason (an atom
+        spelling) is one reflection does not care about.  Pinned so the two
+        rules stay distinguishable."""
+        from clausal.reflection import reify_source
+        assert reify_source('"foo"(1),\n') != []
+
+
 # ── The var-shaped-name guard still discriminates ─────────────────────────
 
 

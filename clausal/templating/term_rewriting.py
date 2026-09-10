@@ -1787,6 +1787,22 @@ def _quoted_head_functor_name(transformer, func_node, shape):
       check the generated source fails to parse and the author is shown
       CPython's complaint about a line of code they never wrote.
 
+      NOT exempt under ``_reify``, unlike the ISO 6.3.3 refusal above, and
+      the difference is not a judgement call: ``reify_source`` runs this
+      very ``visit_Expr``, which calls ``_make_functor_class_ast``, which
+      ``parse()``s the emitted class name.  So reflection DOES emit the
+      class, and exempting the check just moves the failure downstream --
+      measured, ``'foo bar'(X) <- (bar(X))`` then raises ``ReifyError:
+      invalid syntax. Perhaps you forgot a comma? (<unknown>, line 4)``,
+      the unattributed CPython complaint this check exists to replace.  The
+      contract in ``_refuse_double_quoted_functor`` is about rules whose
+      REASON does not apply to reflection; this one's reason applies to
+      reflection literally.  A quoted fact head has raised here under
+      ``reify`` since the check was written, so refusing the rule and DCG
+      heads the same way makes the three agree rather than adding a case.
+      A BODY goal is legitimately more permissive: it names an atom and
+      mints no class, so ``p(X) <- ('foo bar'(X))`` reifies.
+
     *shape* is the word the second message uses for the construct
     (``"fact"``, ``"clause"``, ``"DCG rule"``), so the diagnostic names what
     the author actually wrote.
