@@ -730,6 +730,7 @@ def test_truth_value_spelling_as_a_constant_dict_key(tmp_path):
     handles the truth-value spellings.
     """
     from clausal.terms import DictTerm
+    built = {}
     for tag, key in (("lower", "undefined"), ("canon", "Undefined")):
         m = _load(tmp_path, f"tvkey_{tag}", f"""
             -constants(_D_ = {{{key}: 1}})
@@ -739,6 +740,23 @@ def test_truth_value_spelling_as_a_constant_dict_key(tmp_path):
         [result] = [deref(v) for _ in call("lookup", v,
                                            module=m.__dict__["$module"])]
         assert isinstance(result, DictTerm), (tag, result)
+        built[tag] = result
+    # WHICH KEY, not merely that a dict was built -- the bug was about the key
+    # object, and an isinstance check passes with the wrong one.  The
+    # invariant is the sibling comment's in ``_visit_dict_key``: the two
+    # spellings must not build dicts that fail to unify.
+    assert list(built["lower"].keys()) == list(built["canon"].keys()), built
+    # And the same dict written in an ordinary CLAUSE agrees, which is the
+    # cross-path half -- ``-constants`` has its own key transform, and the
+    # two must not drift.
+    m2 = _load(tmp_path, "tvkey_clause", """
+        lookup(X) <- (X is {undefined: 1})
+    """)
+    v = Var()
+    [from_clause] = [deref(v) for _ in call("lookup", v,
+                                            module=m2.__dict__["$module"])]
+    assert list(from_clause.keys()) == list(built["lower"].keys()), (
+        from_clause, built["lower"])
 
 
 def test_declared_atom_constant_dict_key_still_works(tmp_path):

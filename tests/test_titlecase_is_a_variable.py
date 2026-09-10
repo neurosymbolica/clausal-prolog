@@ -555,7 +555,126 @@ def test_a_bare_titlecase_arrow_head_inside_a_term_is_a_lambda(tmp_path):
             outcomes.append("succeeded")
         except TypeError as exc:
             outcomes.append(("TypeError", "functor, arity" in str(exc)))
-    # Both spellings agree -- which is the property that matters.  Linting
-    # only the TitleCase arm would make one clause mean two things depending
-    # on how its head is spelled, the very divergence this change removes.
+    # The CONCRETE outcome, not merely that the two arms match: both arms
+    # succeeding, or the message losing "functor, arity", would still agree
+    # and would still have passed.
+    assert outcomes == [("TypeError", True), ("TypeError", True)], outcomes
+    # And they agree -- linting only the TitleCase arm would make one clause
+    # mean two things depending on how its head is spelled, the very
+    # divergence this change removes.
     assert outcomes[0] == outcomes[1], outcomes
+
+
+# ── The clause scope reaches every thunk position ─────────────────────────
+#
+# ``_clause_var_names`` decides whether a thunk captures a name or leaves it
+# to the module namespace.  It is only correct if EVERY thunk position sees
+# the whole clause -- otherwise position decides the reading, which is the
+# fault the mechanism exists to remove.  The head cases are asserted on the
+# DECISION rather than on a rendered value: a head thunk is forced while the
+# body has not run, so the value is an unbound variable either way, and a
+# same-named Python local in the clause function makes an uncaptured name
+# close over that variable too.  Both mask the defect end-to-end; neither
+# masks it here.
+
+def _excluded_at_thunks(monkeypatch, tmp_path, name, source):
+    """Whether *name* was excluded from capture, at each thunk lowered."""
+    from clausal.templating import term_rewriting
+    decisions = []
+    real = term_rewriting.TermTransformer._python_scope_exclusions
+
+    def spy(transformer):
+        result = real(transformer)
+        decisions.append(name in result)
+        return result
+
+    monkeypatch.setattr(
+        term_rewriting.TermTransformer, "_python_scope_exclusions", spy)
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("ignore")
+        _load(tmp_path, f"excl_{abs(hash(source))}", source)
+    return decisions
+
+
+def test_a_thunk_in_the_HEAD_sees_the_variables_the_body_binds(
+        tmp_path, monkeypatch):
+    """``q(f"{Node}") <- (tree(Node))``: ``Node`` is a clause variable, so
+    the head thunk must capture it, not leave it to the AST node class."""
+    decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -module(ttiav_headscope, [q(S)])
+        tree(7),
+        q(f"{Node}") <- (tree(Node))
+    """)
+    assert decisions and not any(decisions), decisions
+
+
+def test_a_thunk_in_one_head_argument_sees_another_argument(
+        tmp_path, monkeypatch):
+    """Within a head, argument order must not decide it either."""
+    for source in (
+        '-module(ttiav_ha, [r(S, N)])\ntree(7),\nr(f"{Node}", Node) <- (tree(Node))\n',
+        '-module(ttiav_hb, [r(N, S)])\ntree(7),\nr(Node, f"{Node}") <- (tree(Node))\n',
+    ):
+        decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", source)
+        assert decisions and not any(decisions), (source, decisions)
+
+
+def test_a_thunk_in_a_DCG_head_sees_the_body(tmp_path, monkeypatch):
+    decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -module(ttiav_dcgscope, [])
+        tree(7),
+        d(f"{Node}") >> (tree(Node))
+    """)
+    assert decisions and not any(decisions), decisions
+
+
+def test_a_thunk_in_a_FACT_argument_sees_the_other_arguments(
+        tmp_path, monkeypatch):
+    """A fact has no body, but its arguments are still one scope."""
+    decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -module(ttiav_factscope, [])
+        f(Node, f"{Node}"),
+    """)
+    assert decisions and not any(decisions), decisions
+
+
+def test_a_thunk_in_a_LAMBDA_body_sees_the_enclosing_clause(
+        tmp_path, monkeypatch):
+    """The sub-transformer must SHARE the set, not start a fresh one --
+    otherwise one spelling means two things depending only on whether it
+    sits inside a lambda, which is the divergence the sibling test names."""
+    decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -module(ttiav_lamscope, [p(S)])
+        tree(7),
+        p(S) <- (tree(Node), S is (_x <- (f"{Node}")))
+    """)
+    assert decisions and not any(decisions), decisions
+
+
+def test_the_namespace_name_is_still_excluded_when_no_clause_binds_it(
+        tmp_path, monkeypatch):
+    """The negative control on the same instrument: without this, deleting
+    the exclusion entirely would pass every test above."""
+    decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -module(ttiav_nsexcl, [p(S)])
+        p(S) <- (S is f"{Node}")
+    """)
+    assert decisions and all(decisions), decisions
+
+
+def test_head_and_body_thunks_agree_across_all_three_spellings(tmp_path):
+    """The user-visible half: whatever a head thunk renders, it must render
+    the same for a colliding name, an ordinary one and an ALL_CAPS one."""
+    rendered = {}
+    for spelling in ("Node", "Nodex", "NODE"):
+        mod = _load(tmp_path, f"agree_{spelling}", f"""
+            -module(ttiav_agree_{spelling}, [q(S)])
+            tree(7),
+            q(f"{{{spelling}}}") <- (tree({spelling}))
+        """)
+        [(answer,)] = _answers(mod, "q")
+        rendered[spelling] = answer
+    # A head thunk is forced before the body binds, so an unbound variable is
+    # the right answer -- for all three.  What must never appear is a class.
+    assert all(r.startswith("_") for r in rendered.values()), rendered
+    assert not any("class" in r for r in rendered.values()), rendered
