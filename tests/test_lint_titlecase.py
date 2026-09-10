@@ -279,3 +279,106 @@ def test_goal_seam_operand_still_warns(tmp_path):
         "foo(1),\ndef run():\n    if --Bar(X):\n        return X\n"
         "    return None\n")
     assert _named(ws) == ["Bar"]
+
+
+# --- Every Clausal position the lint reads --------------------------------
+#
+# One test per call site of ``_lint_titlecase``: the ``--`` goal seams
+# (``if``/``for``/``while``), the ``with --{}`` block, a DCG rule, a query,
+# a directive keyword argument and a directive list.
+
+def _titlecase_warnings_cell(text):
+    """Transform *text* as a REPL cell (a bare ``EmbedTransformer`` on the
+    parse tree, no load) and return the TitleCase warnings.  For shapes a
+    ``.clausal`` MODULE cannot hold as Python (a ``*(...)`` query) or whose
+    directive needs runtime state a bare cell never has."""
+    import ast
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        term_rewriting.EmbedTransformer().visit(ast.parse(text))
+    return [w for w in rec
+            if issubclass(w.category, ClausalTitleCaseIdentifierWarning)]
+
+
+def test_for_goal_seam_operand_warns(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "s_for",
+        "bar(1),\ndef run():\n    out = []\n    for X in --Foo(X):\n"
+        "        out.append(X)\n    return out\n")
+    assert _named(ws) == ["Foo"]
+
+
+def test_while_goal_seam_operand_warns(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "s_while",
+        "bar(1),\ndef run():\n    while --Foo(X):\n        break\n")
+    assert _named(ws) == ["Foo"]
+
+
+def test_with_dash_block_warns(tmp_path):
+    ws = _titlecase_warnings(
+        tmp_path, "s_with",
+        "with --{} as clauses:\n    Foo(1)\n    bar(2)\n")
+    assert _named(ws) == ["Foo"]
+
+
+def test_dcg_rule_warns(tmp_path):
+    ws = _titlecase_warnings(tmp_path, "s_dcg", "Foo(X) >> ([X])\n")
+    assert _named(ws) == ["Foo"]
+
+
+def test_star_query_warns():
+    assert _named(_titlecase_warnings_cell("*(Foo(X))\n")) == ["Foo"]
+
+
+def test_directive_keyword_argument_warns():
+    ws = _titlecase_warnings_cell(
+        "-specialize(solve, natnum_program, alias=Foo)\n")
+    assert _named(ws) == ["Foo"]
+
+
+def test_constants_directive_list_warns_before_the_directive_rejects_it(
+        tmp_path):
+    """The lint runs on the directive's raw arguments before the directive
+    handler does, so it names ``Foo`` even though ``-constants`` then
+    rejects an RHS that references an undeclared name."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        with pytest.raises(SyntaxError, match="-constants"):
+            _load(tmp_path, "s_const", "-constants(_L_ = [Foo, bar])\n")
+    ws = [w for w in rec
+          if issubclass(w.category, ClausalTitleCaseIdentifierWarning)]
+    assert _named(ws) == ["Foo"]
+
+
+# --- Names the file's own Python binds get the ``++`` remedy ---------------
+
+@pytest.mark.parametrize("name, binding", [
+    ("Point", "from collections import namedtuple\n"
+              "Point = namedtuple('Point', 'x y')\n"),
+    ("Rate", "Rate: int = 3\n"),
+    ("Mk", "def Mk():\n    return 1\n"),
+    ("AMk", "async def AMk():\n    return 1\n"),
+    ("Helper", "class Helper:\n    pass\n"),
+    ("Frac", "from fractions import Fraction as Frac\n"),
+])
+def test_python_bound_name_suggests_the_escape(tmp_path, name, binding):
+    ws = _titlecase_warnings(
+        tmp_path, f"pb_{name}", binding + f"q(P) <- (P is {name})\n")
+    assert _named(ws) == [name]
+    assert f"reach it as `++{name}`" in str(ws[0].message)
+    assert "Rename" not in str(ws[0].message)
+
+
+# --- The warning is attributed outside the lint's own frames ---------------
+
+def test_warning_is_not_attributed_to_the_rewriter(tmp_path):
+    """The message carries the ``.clausal`` site; the Python-side
+    attribution must not point into the lint helpers (or the stdlib
+    ``ast`` walker driving them), which is where a fixed ``stacklevel``
+    inside a recursive walk lands."""
+    import os
+    ws = _titlecase_warnings(tmp_path, "attr", "Foo(1),\n")
+    assert _named(ws) == ["Foo"]
+    base = os.path.basename(ws[0].filename)
+    assert base not in ("term_rewriting.py", "ast.py"), ws[0].filename

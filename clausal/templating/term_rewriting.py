@@ -1,7 +1,9 @@
 from ast import *
 from collections import Counter
 from copy import deepcopy
+import ast as _ast_module  # the star-import above hides the module itself
 import keyword as _keyword_module  # `keyword` is ast.keyword here
+import os as _os
 import re
 import sys
 
@@ -1012,6 +1014,52 @@ def _is_unit_expr(node) -> bool:
     if isinstance(node, BinOp) and isinstance(node.op, (Pow, Mult, Div)):
         return _is_unit_expr(node.left) and _is_unit_expr(node.right)
     return False
+
+
+def _hosted_python_bindings(module):
+    """Every name *module*'s hosted Python binds, in tree order: an
+    import (``import x as name``, ``from m import name``), a ``def`` /
+    ``async def`` / ``class`` of that name, and the ``Name`` targets of an
+    assignment or annotated assignment (``Point = namedtuple(...)``,
+    ``Rate: int = 3``, ``A, B = ...``).  Clause statements are expressions
+    and bind nothing here, so the result is exactly the Python namespace
+    the file builds for itself."""
+    out: list[str] = []
+    for node in walk(module):
+        if isinstance(node, alias):
+            out.append(node.asname or node.name.split(".")[0])
+        elif isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+            out.append(node.name)
+        elif isinstance(node, (Assign, AnnAssign)):
+            targets = node.targets if isinstance(node, Assign) else [node.target]
+            for target in targets:
+                for sub in walk(target):
+                    if isinstance(sub, Name) and isinstance(sub.ctx, Store):
+                        out.append(sub.id)
+    return out
+
+
+_REWRITER_FRAME_FILES = frozenset({
+    _os.path.basename(__file__),
+    _os.path.basename(_ast_module.__file__),
+})
+
+
+def _stacklevel_outside_rewriter() -> int:
+    """The ``stacklevel`` that attributes a ``warnings.warn`` issued from
+    inside the rewriter to the first frame that is neither this module nor
+    the stdlib ``ast`` walker driving it (``NodeTransformer.visit`` /
+    ``generic_visit``) — the code that asked for the compile — rather than
+    to whichever recursive helper happened to call ``warn``.  Counted from
+    the caller's frame, so pass the result straight to ``warn``."""
+    frame = sys._getframe(1)
+    level = 1
+    while (frame.f_back is not None
+           and _os.path.basename(frame.f_code.co_filename)
+           in _REWRITER_FRAME_FILES):
+        frame = frame.f_back
+        level += 1
+    return level
 
 
 def _binds_name(module, name: str) -> bool:
@@ -4093,8 +4141,9 @@ class EmbedTransformer(NodeTransformer):
         # TitleCase-identifier lint state (see ``_lint_titlecase``): the
         # identifiers already reported (once per file), the names an
         # ``-import_from`` list binds (exempt), and the TitleCase names the
-        # file's hosted Python binds itself (their remedy is the ``++``
-        # escape, like an injected runtime class).
+        # file's hosted Python binds itself — imports, defs, classes,
+        # assignments (their remedy is the ``++`` escape, like an injected
+        # runtime class).
         transformer._titlecase_seen: set[str] = set()
         transformer._titlecase_imported: set[str] = set()
         transformer._titlecase_python_bound: set[str] = set()
@@ -5098,9 +5147,10 @@ class EmbedTransformer(NodeTransformer):
         consults: the names an ``-import_from`` list binds (exempt at every
         use — a name the file imports is the exporter's to spell), and the
         TitleCase names the file's hosted Python binds itself (``from
-        fractions import Fraction``, ``class Helper``), which ARE Python
-        classes here, so a Clausal-position use of one is told to reach it
-        as ``++Name`` rather than to rename it."""
+        fractions import Fraction``, ``class Helper``, ``Point =
+        namedtuple(...)``, ``def Mk``), which ARE Python objects here, so a
+        Clausal-position use of one is told to reach it as ``++Name``
+        rather than to rename it."""
         for stmt in module.body:
             if (isinstance(stmt, Expr) and isinstance(stmt.value, UnaryOp)
                     and isinstance(stmt.value.op, USub)
@@ -5116,13 +5166,7 @@ class EmbedTransformer(NodeTransformer):
                             for arg in item.args:
                                 if isinstance(arg, Name):
                                     transformer._titlecase_imported.add(arg.id)
-        for node in walk(module):
-            if isinstance(node, alias):
-                bound = node.asname or node.name.split(".")[0]
-            elif isinstance(node, ClassDef):
-                bound = node.name
-            else:
-                continue
+        for bound in _hosted_python_bindings(module):
             if _is_titlecase_identifier(bound):
                 transformer._titlecase_python_bound.add(bound)
 
@@ -5214,7 +5258,7 @@ class EmbedTransformer(NodeTransformer):
                     msg, node, transformer._source_lines,
                     transformer._filename)
             warnings.warn(msg, ClausalTitleCaseIdentifierWarning,
-                          stacklevel=2)
+                          stacklevel=_stacklevel_outside_rewriter())
 
         for node in nodes:
             if node is not None:
