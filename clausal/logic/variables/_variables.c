@@ -527,9 +527,16 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static void
 Trail_dealloc(TrailObject *self)
 {
+    /* Untrack BEFORE clearing weakrefs.  PyObject_ClearWeakRefs runs the
+     * weakref callbacks -- arbitrary Python code (clpb's trail finalizer
+     * among them) -- and Python code can run a pending GC collection.  With
+     * this object still tracked at refcount 0, the collector sees it as
+     * garbage, tp_clear()s it and deallocates it a second time; the rest
+     * of this function then operates on freed memory (2026-09-11, SIGSEGV
+     * in PyObject_GC_UnTrack).  Same order as CPython's subtype_dealloc. */
+    PyObject_GC_UnTrack(self);
     if (self->weakrefs)
         PyObject_ClearWeakRefs((PyObject *)self);
-    PyObject_GC_UnTrack(self);
     for (Py_ssize_t i = 0; i < self->length; i++) {
         TrailEntry *e = &self->entries[i];
         if (e->kind == TRAIL_BINDING) {

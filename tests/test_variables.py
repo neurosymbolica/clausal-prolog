@@ -16,6 +16,8 @@ Covers:
 """
 
 import gc
+import os
+import subprocess
 import sys
 import unittest
 
@@ -694,6 +696,42 @@ class TestEdgeCases(unittest.TestCase):
         t = Trail()
         unify(x, 1, t)
         self.assertFalse(is_var(x))
+
+
+# Driver for TestTrailDeallocWeakrefCallback, run in a subprocess because the
+# failure mode is a hard crash.  A weakref callback on a Trail (clpb registers
+# one per trail) is arbitrary Python, and Python code can run a pending GC
+# collection.  With the dying Trail still GC-tracked at refcount 0, that
+# collection reports it unreachable, tp_clear()s it and deallocates it a
+# second time; Trail_dealloc then continues on freed memory (2026-09-11,
+# SIGSEGV in PyObject_GC_UnTrack).  The fix untracks before clearing weakrefs.
+_TRAIL_FINALIZER_DRIVER = r"""
+import gc, sys, weakref
+sys.path.insert(0, {root!r})
+from clausal.logic.variables import Trail
+found = []
+def finalizer():
+    # A collection landing inside the Trail's weakref callback.
+    found.append(gc.collect())
+gc.collect()
+t = Trail()
+weakref.finalize(t, finalizer)
+del t                        # refcount death -> Trail_dealloc -> callback
+print(found)
+"""
+
+
+class TestTrailDeallocWeakrefCallback(unittest.TestCase):
+    def test_collection_inside_weakref_callback_does_not_see_the_dying_trail(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        code = _TRAIL_FINALIZER_DRIVER.format(root=root)
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                           text=True, timeout=120)
+        self.assertEqual(r.returncode, 0,
+                         f"driver died rc={r.returncode}\n{r.stderr[-2000:]}")
+        # 0 unreachable objects: the dying Trail was never offered to the
+        # collector.  With the old order it reports 1 (the Trail itself).
+        self.assertEqual(r.stdout.strip(), "[0]", r.stdout + r.stderr[-2000:])
 
 
 if __name__ == "__main__":
