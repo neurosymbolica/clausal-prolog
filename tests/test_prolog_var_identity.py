@@ -15,7 +15,11 @@ regression would get wrong again:
   ``Result``; two distinct variables in one clause silently became one, and
   a per-clause rename table was bolted on to number the loser ``Result2``.
   Identity cannot collide, so the numbering is gone — and the way to notice
-  it coming back is to count distinct names, not to read them.
+  it coming back is to count distinct names, not to read them.  The
+  emission-level cases live with the defect that produced them, in
+  test_prolog_fix_review.py::TestF022VarRenameInjective; what is here is the
+  function-level property over a set of names, which that class does not
+  state.
 * **Round-trip fidelity.** Out to ``.pl`` and back returns the source
   spelling, for every shape the old mangler treated differently.
 * **The wildcard.** ``_`` is the one name where identity might be wrong.
@@ -58,30 +62,25 @@ def test_import_mangling_is_injective():
     assert len(set(mapped)) == len(SHAPES), dict(zip(SHAPES, mapped))
 
 
-def test_previously_colliding_pair_stays_distinct_through_the_export():
-    """``_result`` and ``RESULT`` in one clause survive as two variables.
-
-    This is the centrepiece.  Under the old mangler the emitted clause read
-    ``p(Result, Result2) :- q(Result, Result2).`` — correct only because the
-    uniquifier renamed the second one.  Under identity no rename happens, so
-    the assertion is on both the answer and the count.
-    """
-    emitted = clausal_source_to_prolog("p(_result, RESULT) <- q(_result, RESULT)")
-    assert "p(_result, RESULT) :-" in emitted
-    assert "q(_result, RESULT)" in emitted
-    assert len(set(_prolog_var_names(emitted))) == 2, emitted
+# The ``_result``/``RESULT`` pair itself is pinned where the defect was filed,
+# in test_prolog_fix_review.py::TestF022VarRenameInjective — including the
+# three-way ``_x``/``X``/``_X`` collision and the one-variable-stays-one
+# converse. Not repeated here.
 
 
 def test_no_variable_acquires_a_numeric_disambiguation_suffix():
     """A near-collision must not be renumbered.
 
     ``FOO`` was emitted as ``Foo2`` — a suffix it never carried in the source,
-    invented only because ``Foo`` had already claimed ``Foo``.  Nothing in the
-    emitted clause may now differ from the source spelling.
+    invented only because ``Foo`` had already claimed ``Foo``.  This is the
+    pair F022 could not have covered: it was written when TitleCase was a
+    load-time error rather than a variable, so ``Foo`` beside ``FOO`` was not
+    a shape anyone could write.
     """
     emitted = clausal_source_to_prolog("p(Foo, FOO) <- q(Foo, FOO)")
     assert "p(Foo, FOO) :-" in emitted
     assert "Foo2" not in emitted
+    assert len(set(_prolog_var_names(emitted))) == 2, emitted
 
 
 # ── Round-trip fidelity ───────────────────────────────────────────────

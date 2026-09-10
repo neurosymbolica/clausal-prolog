@@ -36,32 +36,72 @@ from clausal.tools.prolog_parser import parse
 
 
 class TestF022VarRenameInjective:
+    """F022's property outlived F022's mechanism.
+
+    The defect: ``clausal_var_to_prolog`` was non-injective (``_result`` and
+    ``RESULT`` both -> ``Result``), so two variables in one clause merged into
+    one and the clause changed meaning. The fix was a per-clause rename table
+    that numbered the second arrival — ``Result2``.
+
+    Since 2026-09-10 names cross the boundary unchanged, so the mapping is
+    injective by construction and the table is gone. Every assertion below
+    still asks the same question — do distinct variables stay distinct? — and
+    the answers changed from disambiguated spellings to the source spellings.
+    They are kept, rather than deleted as "testing the identity function",
+    because injectivity is the property F022 was about and a future
+    reintroduced rename is exactly what they should catch.
+
+    Distinctness is asserted by COUNTING as well as by spelling: an assertion
+    that merely names the expected variables would pass on an emission that
+    also invented a third.
+    """
+
+    @staticmethod
+    def _vars(text):
+        import re
+        return re.findall(r"(?<![A-Za-z0-9_])(_[A-Za-z0-9_]*|[A-Z][A-Za-z0-9_]*)",
+                          text)
+
     def test_distinct_vars_stay_distinct(self):
         out = clausal_source_to_prolog(
             "P(_result, RESULT) <- (_result == 1, RESULT == 2)"
         )
-        # Both map to base name "Result"; the second must be disambiguated.
-        assert "p(Result, Result2)" in out
+        # Was "p(Result, Result2)": both mapped to the base name "Result" and
+        # the second had to be disambiguated. Neither is renamed now.
+        assert "p(_result, RESULT)" in out
+        assert len(set(self._vars(out))) == 2, out
 
     def test_three_way_collision(self):
         out = clausal_source_to_prolog("P(_x, X, _X) <- (Q(_x, X, _X))")
         head = out.splitlines()[0]
-        # _x → X, X → X (collides), _X → X (collides): three distinct names.
-        assert "p(X, X2, X3)" in head
+        # Was "p(X, X2, X3)": _x -> X, X -> X, _X -> X, three collisions
+        # resolved by numbering. Three distinct names either way — the point
+        # is that they are now the three the source wrote.
+        assert "p(_x, X, _X)" in head
+        assert len(set(self._vars(head))) == 3, head
 
-    def test_rename_table_resets_per_clause(self):
+    def test_no_translator_state_leaks_between_clauses(self):
+        """Renamed from test_rename_table_resets_per_clause.
+
+        The table it named is gone, but the property it protected is not: a
+        variable name means nothing across top-level items, so the second
+        clause must not see the first one's names. With no state left to leak
+        this holds by construction — which is worth an assertion precisely
+        because a future rename would have to reintroduce the state.
+        """
         out = clausal_source_to_prolog(
             "P(_result) <- (Q(_result))\nR(RESULT) <- (Q(RESULT))"
         )
-        # No cross-clause leakage: each clause gets the plain base name.
-        assert "p(Result)" in out
-        assert "r(Result)" in out
-        assert "Result2" not in out
+        assert "p(_result)" in out
+        assert "r(RESULT)" in out
+        assert "2" not in out
 
     def test_same_var_same_name_within_clause(self):
+        """The converse of injectivity, and the reason it cannot be got by
+        simply numbering every occurrence: one variable must stay ONE."""
         out = clausal_source_to_prolog("P(_head, _head) <- (Q(_head))")
-        assert "p(Head, Head)" in out
-        assert "q(Head)" in out
+        assert "p(_head, _head)" in out
+        assert "q(_head)" in out
 
     def test_anonymous_stays_anonymous(self):
         out = clausal_source_to_prolog("P(_, _) <- (Q(_))")
