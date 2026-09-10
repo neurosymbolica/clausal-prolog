@@ -799,10 +799,20 @@ know:
   any depth, so the marker would be a second meaning for one spelling. The
   `with --{}` *block* form is not a seam operand — its statements are
   Clausal terms — and markers do work there.
-- **Not in a format spec.** A format spec captures no clause variables on
-  either spelling, so `f"{N:>{--W}}"` is a load error rather than a marker
-  that would quietly resolve `W` in the module namespace. Put the marker in
-  a value slot, or format inside a `++` escape.
+- **Not in a format spec.** A format spec is a STRING, not a term position —
+  it describes how to render a value, it does not name one. So neither
+  spelling captures a clause variable there, and that is deliberate rather
+  than a gap: `f"{N:>{W}}"` resolves `W` in the module namespace, exactly as
+  the surrounding Python would.
+
+  The marker, however, promises that it cannot be silently misread, so
+  `f"{N:>{--W}}"` is a **load error** rather than a marker that quietly does
+  nothing. Put the marker in a value slot — `f"{--Node:>8}"` is fine, the
+  restriction is on the spec, not on formatting — or do the whole formatting
+  inside a `++` escape.
+
+  The asymmetry is the point: the bare spelling behaves as Python does, and
+  the marker refuses rather than pretend.
 
 
 ---
