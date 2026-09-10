@@ -25,6 +25,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 | `--expr` | Python expression embedded inside a logic term |
 | `++expr` | In a Python context: logic term inside a Python expression. In a `.clausal` context: evaluate Python expression at search time |
 | `~~expr` | Capture expression as a `simple_ast` AST node (works anywhere) |
+| `--X` *inside a thunk* | The Clausal variable `X` — see [Marking a variable inside a thunk](#marking-a-variable-inside-a-thunk--x) |
 
 `--` was chosen because:
 - it doesn't introduce a new keyword or clobber any identifier
@@ -762,6 +763,39 @@ Under the hood, f-strings in `.clausal` files are compiled to deferred `PyThunk`
 Simple variable references like `f"{X}"` and `f"{NAME}"` work correctly. Format specs (`:.2f`, `:>10`, etc.) and conversions (`!r`, `!s`) are fully supported. Python expressions inside f-strings (like `f"{len(L)}"` or `f"{S.upper()}"`) also work — the entire f-string is wrapped in a lambda that receives dereferenced values.
 
 ---
+
+### Marking a variable inside a thunk — `--X`
+
+An f-string slot and a `++` operand are verbatim Python, so a name written
+there could mean either the clause's logic variable or a binding in the
+module namespace. Written bare, the reading is decided for you: a name the
+clause uses as a variable elsewhere is captured, and any other name resolves
+in the module namespace when the thunk runs.
+
+`--X` states it instead. Inside an f-string slot or a `++` operand, `--X`
+means **the Clausal variable `X`**:
+
+```clausal
+label(S) <- (tree(Node), S is f"{--Node}")
+shout(S) <- (tree(Node), S is ++str(--Node).upper())
+```
+
+This is purely additive — bare `X` keeps working exactly as before, and both
+spellings give the same answer wherever the marker is accepted. Three things
+are worth knowing:
+
+- **It is recognised anywhere inside the slot or operand**, not only at the
+  top: a thunk body is usually a call, and `++len(--List)` is the shape that
+  matters. As everywhere else, the two `-` must be adjacent — `- -X` is
+  double negation, which is also how `a <- -b` stays an arrow.
+- **It is checked.** If no goal outside a thunk uses the name, `--X` is a
+  load-time error naming both readings. A bare `X` cannot be checked this
+  way, because a bare name the clause does not bind is a legitimate
+  reference to the module namespace; a marked one is not.
+- **Only an identifier that is a variable spelling is a marker.** `--total`
+  is the double negation it always was, and inside a `--` seam the marker is
+  not recognised at all, because there `--expr` is already the seam itself.
+
 
 ## [Python interop](python_integration.md) — `++()` escape
 

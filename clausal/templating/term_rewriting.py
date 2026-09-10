@@ -744,6 +744,85 @@ def _python_escape_operand(node):
     return _double_prefix_operand(node, UAdd)
 
 
+def _variable_marker_name(node):
+    """``--X`` → ``"X"`` when ``X`` is a logic-variable spelling, else ``None``.
+
+    The explicit half of thunk capture.  Inside an f-string slot or a ``++``
+    operand the body is verbatim Python, so a bare ``X`` there is captured as
+    a clause variable by NAME, decided against a module-namespace exclusion
+    set -- the machinery five rounds of defects were spent on.  ``--X`` says
+    it outright and is CHECKED against the clause's own variables, which the
+    bare spelling cannot be: a bare name the clause does not bind is a legal,
+    intended reference to the module namespace.
+
+    Only a bare ``Name`` counts.  That is what keeps the marker clear of the
+    ``--`` SEAM, whose operand is an arbitrary term (``--{}`` takes a
+    ``Dict``), and it is what makes the reading exact: the marker names a
+    variable, and only an identifier can name one.  A non-variable spelling
+    (``--total``) is left as the Python double negation it always was.
+
+    Adjacency does the disambiguating, via ``_double_prefix_operand``: it is
+    the only thing separating ``a < --b`` from ``a <- -b``, which parse to
+    the identical tree.
+    """
+    operand = _double_prefix_operand(node, USub)
+    if (isinstance(operand, Name) and isinstance(operand.ctx, Load)
+            and _is_logic_var_name(operand.id)):
+        return operand.id
+    return None
+
+
+def _collect_marked_var_names(node) -> list[str]:
+    """Names written with the explicit ``--X`` marker, first-occurrence order.
+
+    ANYWHERE within *node*, not only at its top.  That is the deliberate
+    choice: a thunk body is almost always a call, so a top-only rule would
+    make the marker unwritable in ``f"{str(Node).upper()}"`` or
+    ``++len(Node)`` -- the very places a reader most needs telling which
+    names are variables.  Top-only would have been unambiguous for free
+    (the arrow form needs a ``Compare`` wrapper, so it cannot BE the top),
+    but adjacency already settles that case wherever it appears, and it
+    settles it the same way at every depth.
+
+    A marked name is collected unconditionally: no exclusion set is
+    consulted, because saying "this is the clause's variable" is the whole
+    point of writing the marker.  The walk does not descend into a marker,
+    so ``----X`` is not two markers.
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    class _Collector(NodeVisitor):
+        def visit_UnaryOp(self, unary_op):
+            name = _variable_marker_name(unary_op)
+            if name is None:
+                self.generic_visit(unary_op)
+                return
+            if name not in seen:
+                seen.add(name)
+                ordered.append(name)
+
+    _Collector().visit(node)
+    return ordered
+
+
+def _strip_variable_markers(node):
+    """A COPY of *node* with every ``--X`` marker replaced by plain ``X``.
+
+    A copy, not an in-place rewrite: the same tree is walked again by the
+    reifier and by ``_lint_titlecase``, and a thunk body that had quietly
+    lost its ``--`` would make the source and the model disagree about what
+    was written.
+    """
+    class _Stripper(NodeTransformer):
+        def visit_UnaryOp(self, unary_op):
+            if _variable_marker_name(unary_op) is not None:
+                return unary_op.operand.operand
+            return self.generic_visit(unary_op)
+
+    return _Stripper().visit(deepcopy(node))
+
+
 def _clause_scope_exclusions(import_remap) -> frozenset:
     """TitleCase names a CLAUSAL context must not treat as logic variables.
 
@@ -2508,6 +2587,45 @@ class TermTransformer(NodeTransformer):
         finally:
             transformer._visit_depth -= 1
 
+    def _marked_var_names(transformer, subtrees, node) -> list[str]:
+        """The ``--X`` markers in *subtrees*, checked against this clause.
+
+        The marker is an ASSERTION -- "``X`` is this clause's logic
+        variable" -- and unlike the bare spelling it can be checked, because
+        a bare name the clause does not bind is a legal reference to the
+        module namespace while a marked one cannot be anything.  So a marked
+        name absent from the clause scope is a load-time error rather than a
+        fresh unbound ``Var`` silently formatted as ``_7``, or a class
+        silently formatted as ``<class '...'>``.  Being loud about it is the
+        entire reason the marker is worth having over the bare name; a
+        marker that merely agreed would be a synonym.
+
+        NOT recognised where the thunk body is handed back to a Python
+        visitor -- i.e. inside a seam.  There a ``++`` operand is hosted
+        Python again, and ``--expr`` is already THE SEAM, nesting to any
+        depth (see ``EmbedTransformer.visit_UnaryOp``).  Giving one spelling
+        a second, narrower meaning in that one context would not be
+        additive, and the seam transformer holds no clause scope to check
+        against either.
+        """
+        if transformer._python_visitor is not None:
+            return []
+        marked: list[str] = []
+        for subtree in subtrees:
+            for name in _collect_marked_var_names(subtree):
+                if name not in marked:
+                    marked.append(name)
+        for name in marked:
+            if name not in transformer._clause_var_names:
+                _raise_located_syntax_error(
+                    f"`--{name}` marks `{name}` as this clause's logic "
+                    f"variable, but no goal outside a thunk uses that name, "
+                    f"so it would be captured unbound. Bind `{name}` in the "
+                    f"clause, or write `{name}` without the marker to reach "
+                    f"the module namespace binding of that name.",
+                    node, transformer._source_lines, transformer._filename)
+        return marked
+
     def _clause_scope_exclusions(transformer) -> frozenset:
         """This file's clause-scope exclusions -- see the module function."""
         return _clause_scope_exclusions(transformer._import_remap)
@@ -2821,8 +2939,26 @@ class TermTransformer(NodeTransformer):
                         seen.add(name)
                         var_names.append(name)
 
+        # ``--X`` — the EXPLICIT spelling of the same capture.  Read from the
+        # slot VALUES only, exactly where the implicit rule reads, so that
+        # the two spellings answer alike everywhere: a format spec captures
+        # nothing on either.
+        expression = node
+        marked = transformer._marked_var_names(
+            [v.value for v in node.values if isinstance(v, FormattedValue)],
+            node)
+        if marked:
+            expression = deepcopy(node)
+            for v in expression.values:
+                if isinstance(v, FormattedValue):
+                    v.value = _strip_variable_markers(v.value)
+            for name in marked:
+                if name not in seen:
+                    seen.add(name)
+                    var_names.append(name)
+
         return _build_py_thunk_ast(
-            transformer, node, node, var_names, thunk_cls="FStringThunk",
+            transformer, node, expression, var_names, thunk_cls="FStringThunk",
         )
 
     def visit_Set(transformer, set_expr):
@@ -2898,6 +3034,14 @@ class TermTransformer(NodeTransformer):
             expression = escaped
             var_names = _collect_logic_var_names(
                 expression, transformer._python_scope_exclusions())
+            # ``--X`` — the explicit spelling of the same capture.  Collected
+            # from the ORIGINAL operand and stripped before the seam's Python
+            # visitor runs, for the same reason the names above are read
+            # there: what the author wrote is what the marker is about.
+            marked = transformer._marked_var_names([escaped], unary_op)
+            if marked:
+                expression = _strip_variable_markers(escaped)
+                var_names += [n for n in marked if n not in var_names]
             if transformer._python_visitor is not None:
                 # A seam's ``++`` operand is Python-hosted code again, so it
                 # may itself contain ``--`` (nesting to any depth).  The
