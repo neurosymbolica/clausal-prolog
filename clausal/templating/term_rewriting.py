@@ -720,7 +720,46 @@ def _clause_scope_exclusions(import_remap) -> frozenset:
         n for n in (import_remap or ()) if _is_titlecase_identifier(n))
 
 
-def _python_scope_exclusions(import_remap, python_bound) -> frozenset:
+def _clause_variable_names(node, excluded) -> set:
+    """Names *node* uses as logic variables OUTSIDE any verbatim-Python body.
+
+    The question a thunk has to answer is "does the surrounding clause use
+    this spelling as a variable?", and the surrounding clause is the whole
+    clause -- not the part the walk has reached, which would make one clause
+    mean two things depending on goal order.
+
+    ``++`` operands and f-strings are skipped on purpose.  A name appearing
+    ONLY inside a thunk is not evidence that the clause treats it as a
+    variable; it is the ``++Fraction(1, 3)`` case, where the author means the
+    module-namespace binding.  A name used outside one is evidence, and that
+    is what makes ``tree(Node), f"{Node}"`` format the binding rather than
+    ``<class '...nodes.Node'>``.
+    """
+    found: set = set()
+
+    class _Collector(NodeVisitor):
+        def visit_JoinedStr(self, node):
+            return                      # verbatim Python: not evidence
+
+        def visit_UnaryOp(self, node):
+            if (isinstance(node.op, UAdd)
+                    and isinstance(node.operand, UnaryOp)
+                    and isinstance(node.operand.op, UAdd)):
+                return                  # ``++`` escape: not evidence
+            self.generic_visit(node)
+
+        def visit_Name(self, name):
+            ident = name.id
+            if (ident != "_" and _is_logic_var_name(ident)
+                    and ident not in excluded):
+                found.add(ident)
+
+    _Collector().visit(node)
+    return found
+
+
+def _python_scope_exclusions(import_remap, python_bound,
+                             clause_vars=frozenset()) -> frozenset:
     """Names a VERBATIM-PYTHON context (a ``++`` operand, an f-string slot)
     must not capture as lambda parameters: they resolve in the MODULE
     NAMESPACE when the thunk runs, so capturing one shadows the real binding
@@ -743,10 +782,11 @@ def _python_scope_exclusions(import_remap, python_bound) -> frozenset:
     reads ``Fraction`` as a VARIABLE while ``++Fraction(1, 3)`` reads it as
     the class, so one rule cannot serve both scopes.
     """
-    return (_clause_scope_exclusions(import_remap)
-            | frozenset(n for n in (python_bound or ())
-                        if _is_titlecase_identifier(n))
-            | _module_namespace_class_names())
+    return ((_clause_scope_exclusions(import_remap)
+             | frozenset(n for n in (python_bound or ())
+                         if _is_titlecase_identifier(n))
+             | _module_namespace_class_names())
+            - frozenset(clause_vars))
 
 
 _MODULE_NAMESPACE_CLASS_NAMES: frozenset | None = None
@@ -1658,6 +1698,13 @@ class TermTransformer(NodeTransformer):
         transformer._titlecase_python_bound = (
             titlecase_python_bound if titlecase_python_bound is not None
             else set())
+        # Names THIS clause uses as logic variables outside any thunk body,
+        # accumulated by ``visit`` on each outermost call (see
+        # ``note_clause_scope``).  A verbatim-Python thunk consults it so a
+        # clause variable is captured even when its spelling collides with
+        # something in the module namespace.
+        transformer._clause_var_names: set[str] = set()
+        transformer._visit_depth = 0
         # Reflection models MORE than compiles: ``reify_source`` reuses this
         # transformer but must keep accepting shapes the compiler refuses —
         # e.g. a logic-variable comprehension target, pinned by the renderer
@@ -2352,6 +2399,34 @@ class TermTransformer(NodeTransformer):
             clauses=list_ast(clauses, list_comprehension),
         )
 
+    def note_clause_scope(transformer, *nodes):
+        """Record which names *nodes* use as logic variables outside thunks.
+
+        Accumulates, so it is safe to call more than once and in any order --
+        which is what lets ``visit`` call it automatically for every clause
+        shape (fact, query, DCG, seam) without each call site remembering,
+        while the two sites that hold a head AND a body can note both up
+        front so a thunk in the HEAD still sees the body's variables.
+        """
+        excluded = transformer._clause_scope_exclusions()
+        for node in nodes:
+            if node is not None:
+                transformer._clause_var_names |= _clause_variable_names(
+                    node, excluded)
+
+    def visit(transformer, node):
+        # The OUTERMOST visit is the clause (or term) root: note its variable
+        # names before rewriting anything, so a thunk lowered part-way
+        # through the walk already knows what the whole clause binds.
+        # Depth-counted because ``generic_visit`` recurses through here.
+        if transformer._visit_depth == 0:
+            transformer.note_clause_scope(node)
+        transformer._visit_depth += 1
+        try:
+            return super().visit(node)
+        finally:
+            transformer._visit_depth -= 1
+
     def _clause_scope_exclusions(transformer) -> frozenset:
         """This file's clause-scope exclusions -- see the module function."""
         return _clause_scope_exclusions(transformer._import_remap)
@@ -2359,7 +2434,8 @@ class TermTransformer(NodeTransformer):
     def _python_scope_exclusions(transformer) -> frozenset:
         """This file's Python-scope exclusions -- see the module function."""
         return _python_scope_exclusions(
-            transformer._import_remap, transformer._titlecase_python_bound)
+            transformer._import_remap, transformer._titlecase_python_bound,
+            transformer._clause_var_names)
 
     def _reads_as_variable(transformer, identifier: str) -> bool:
         """The EFFECTIVE variable reading of *identifier* in this file.
@@ -7146,8 +7222,18 @@ class EmbedTransformer(NodeTransformer):
             if aliased in _BOOL_ALIAS_VALUES:
                 return replace(Constant(value=_BOOL_ALIAS_VALUES[aliased]), key)
             key = replace(Name(id=aliased, ctx=key.ctx), key)
+        # The EFFECTIVE reading, mirroring the twin in ``_visit_dict_key``
+        # -- which moved to it and left this copy behind.  ``Undefined`` is
+        # capital-initial now, so the lexical rule called it a variable, this
+        # branch was skipped, and ``-constants(_D_ = {undefined: 1})`` was
+        # refused with "``Undefined`` is a logic-variable name".  The alias
+        # fold just above rewrites a lowercase ``undefined`` key to
+        # ``Name("Undefined")`` first, so BOTH spellings were affected --
+        # including the one this method's docstring promises to handle.
         if (isinstance(key, Name) and key.id != "_"
-                and not _is_logic_var_name(key.id)
+                and not (_is_logic_var_name(key.id)
+                         and key.id not in _clause_scope_exclusions(
+                             transformer._import_remap))
                 and key.id not in transformer._constants):
             transformer._bare_atom_refs.add(key.id)
             return replace(
