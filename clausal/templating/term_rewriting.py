@@ -645,11 +645,13 @@ def _suggest_non_var_name(identifier: str) -> str:
 # on each CLAUSAL subtree as ``visit_Expr`` (and the ``--`` seam visitors)
 # recognise it, never on the hosted Python around them.
 
-#: Severity of the TitleCase-identifier lint: ``"warn"`` emits one
-#: ``ClausalTitleCaseIdentifierWarning`` per (file, identifier); ``"error"``
-#: raises a located ``SyntaxError`` at the identifier's first site.  Flip
-#: this one constant to promote the lint.
-TITLECASE_IDENTIFIER_SEVERITY = "warn"
+#: Severity of the TitleCase-identifier lint: ``"error"`` raises a located
+#: ``SyntaxError`` at the identifier's first site; ``"warn"`` emits one
+#: ``ClausalTitleCaseIdentifierWarning`` per (file, identifier) instead.
+#: It is an error: a TitleCase name in a Clausal position is a spelling the
+#: language has retired, and a file carrying one does not load.  Flip this
+#: one constant to demote the lint.
+TITLECASE_IDENTIFIER_SEVERITY = "error"
 
 #: TitleCase spellings the lint deliberately leaves alone.  ``Undefined`` is
 #: the canonical spelling of the third truth value — an injected runtime

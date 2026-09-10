@@ -53,6 +53,6 @@ class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
     assignments, imports, ``def``/``class`` bodies, plain calls) is where a
     TitleCase class belongs and where ``++`` is Python's double unary plus,
     so it is never read.  The severity is ``TITLECASE_IDENTIFIER_SEVERITY``
-    (``"warn"`` today; set it to ``"error"`` and the same sites raise a
-    load-time ``SyntaxError``).
+    (``"error"``: the same sites raise a load-time ``SyntaxError``; set it
+    to ``"warn"`` and this warning is emitted instead).
     """
