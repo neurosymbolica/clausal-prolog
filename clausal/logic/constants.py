@@ -115,12 +115,20 @@ def _freeze(value):
     ``SetTerm`` needs no freezing at all: it is backed by a ``frozenset``
     with no public mutator, immutable by construction.
 
-    Compound-term (functor / ``PredicateMeta``) instances are the one
-    deliberate exception to recursion: their field interiors are left
-    shared, unfrozen — see the Constants section of docs/syntax.md for the
-    documented boundary (a functor constant's *fields* can still be mutated
-    if a field itself holds a mutable value, e.g. ``Container([1, 2, 3])``).
+    A compound-term (functor / ``PredicateMeta``) INSTANCE is converted to
+    its cell, and its fields are frozen like any other interior.  This is
+    not an optimisation, it is the type correction that makes the docstring
+    claim above true: post-R6 a clause-body literal ``point(0, 0)`` builds
+    the cell ``("point", 0, 0)``, while a ``-constant_value`` RHS runs
+    before ``_process_declarations`` has unbound the functor class and so
+    calls it, producing an instance.  The two do not unify, which was
+    invisible while a bare reference folded through the clause builder (it
+    converted on the way in) and became visible the moment ``++name`` --
+    which hands the stored object straight to the goal -- was the only way
+    to read a constant.
     """
+    import clausal.logic.cells as _cells                       # noqa: PLC0415
+    from clausal.logic.predicate import term_field_names       # noqa: PLC0415
     if isinstance(value, (_FrozenList, _FrozenDict, _FrozenSet)):
         return value  # already frozen
     if isinstance(value, DictTerm):
@@ -132,7 +140,9 @@ def _freeze(value):
     if isinstance(value, SetTerm):
         return value  # frozenset-backed already; no public mutator
     if is_term_instance(value):
-        return value  # functor instance: field interiors stay shared
+        return _cells.make_cell(
+            type(value).__name__,
+            *(_freeze(getattr(value, f)) for f in term_field_names(value)))
     if isinstance(value, tuple):
         return tuple(_freeze(v) for v in value)
     if isinstance(value, list):

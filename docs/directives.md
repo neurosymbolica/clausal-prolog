@@ -95,7 +95,7 @@ The list may also contain bare atoms:
 
 An atom may appear in both `-module` and `-private`. The first listing processed wins and the second is a no-op — and since both resolve to the same global atom, the duplication is redundant rather than conflicting.
 
-A [constant](#-constants) used to be listable in `-private` as pure documentation ("this one is an implementation detail"), a recorded no-op. That lapsed on 2026-09-11: a constant is spelled like an atom now, so a listed name *is* an atom, and the listing would rebind the module global and destroy the constant. Listing a declared constant in `-module`, `-private` or `-hide` is a load-time error. If both readings are wanted, keep the declaration and write the atom quoted — `pi` is the constant, `'pi'` is the atom.
+A [constant](#-constant_value) used to be listable in `-private` as pure documentation ("this one is an implementation detail"), a recorded no-op. It declares the ATOM now, which is a stronger reading and the intended one: a constant is spelled like an atom, so `pi` written bare is the atom `("pi",)` and `++pi` is the value, and one name carries both in one file. The declaration keeps the module global; the atom listing does not bind over it.
 
 ---
 
@@ -250,12 +250,12 @@ functor vocabulary; it does not suppress qualified-name resolution failures. A
 dotted reference that *does* resolve to a real data functor is unaffected
 either way.
 
-**A [`-constants`](#-constants) RHS stays checked.** A functor call inside a
+**A [`-constant_value`](#-constant_value) RHS stays checked.** A functor call inside a
 structured constant's right-hand side is not covered by the flag: it must
-name a functor already declared (or imported) above the `-constants`
+name a functor already declared (or imported) above the `-constant_value`
 directive regardless of `-implicit_functors`, or compilation raises a
 `SyntaxError` naming the fix (declare it with `-module`/`-private`/
-`-dynamic` before `-constants`, or import it). `-constants` compiles its RHS
+`-dynamic` first, or import it). `-constant_value` compiles its RHS
 before any predicate body runs and needs the same functor known at that
 earlier point either way — OWA construction elsewhere in the module does
 not reach back and relax this check.
@@ -409,7 +409,7 @@ matters. See [Compiler](compiler.md) for details on the two compilation modes.
 
 ## Constants Directive
 
-### -constants
+### -constant_value
 
 **Problem**: A magic number like `3.14159` or `3` repeated across several clauses is a
 maintenance hazard — rename the meaning, and every occurrence has to be found and checked by
@@ -417,7 +417,8 @@ hand. Prolog has no answer to this beyond a fact plus an extra goal (`is_pi(PI),
 R**2`); Clausal gives constants their own lexical class instead.
 
 ```clausal
--constants(pi = 3.14159, max_retries = 3)
+-constant_value(pi, 3.14159)
+-constant_value(max_retries, 3)
 
 area(R, AREA) <- (AREA == ++pi * R**2)
 
@@ -427,9 +428,30 @@ test("area of radius 2") <- (
 )
 ```
 
-`-constants(name = value, ...)` declares one or more module-level constants — identifiers
-spelled like atoms, which is to say anything the logic-variable rule does not claim (`pi`,
-`max_retries`, `円周率`; see [Constants in the
+### -constant_value_units
+
+```clausal
+-import_from(european_union, [euro])
+-constant_value_units(max_fine, 5000, euro)
+
+applies(X) <- (fine(X, F), F > ++max_fine)
+```
+
+`-constant_value_units(name, value, units)` is the same declaration with the unit kept **out**
+of the value. It binds `name = Quantity(value, units)` — the identical object the
+`5000 (euro)` annotation sugar builds — so the unit travels with the constant instead of being
+repeated at every use site. *units* is a unit expression: a name, or names combined with `*`,
+`/` and `**`.
+
+The two directives are a family, which is why they are positional rather than keyword
+arguments: `-constants(a = 1, b = 2)` had no room for a third argument on one of its pairs.
+One line per constant also reads better in a diff.
+
+### -constant_value (details)
+
+`-constant_value(name, value)` declares one module-level constant — a name spelled like an
+atom, which is to say anything the logic-variable rule does not claim (`pi`, `max_retries`,
+`円周率`; see [Constants in the
 syntax reference](syntax.md#constants) for the full lexical rule). Every reference to a
 declared constant is replaced by its value at compile time — there is no runtime lookup, and
 the substitution applies uniformly, head position included.
@@ -445,11 +467,11 @@ RHS builds the same real Clausal term the identical literal would build in a cla
 declared-above ordering rule a functor call needs and the frozen/immutable-value guarantee.
 
 !!! warning "`++` RHS values can be machine-dependent"
-    `-constants(n_workers = ++os.cpu_count())` is legal — but it binds a different value on
+    `-constant_value(n_workers, ++os.cpu_count())` is legal — but it binds a different value on
     a different machine. `++()` is evaluated once, at load time; nothing about it guarantees
     reproducibility across environments.
 
-**A file may carry more than one `-constants` directive** — a later one can reference a
+**One constant per directive** — a later one can reference a
 constant an earlier one declared, exactly like a later `name = value` pair within one directive
 can.
 

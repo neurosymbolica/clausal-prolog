@@ -259,7 +259,8 @@ constant. That combination is a load-time error; write the atom quoted instead.
 ### Declaring
 
 ```clausal
--constants(pi = 3.14159, max_retries = 3)
+-constant_value(pi, 3.14159)
+-constant_value(max_retries, 3)
 
 area(R, AREA) <- (AREA == ++pi * R**2)
 
@@ -269,13 +270,13 @@ test("area of radius 2") <- (
 )
 ```
 
-Declarations are keyword arguments on the `-constants(...)` directive. A file may carry more
-than one `-constants(...)` directive — a later one can reference a constant an earlier one
-declared, same as multiple `name = value` pairs in one directive can. The right-hand side
+One constant per directive, positionally. A later `-constant_value` may reference a constant
+an earlier one declared. The right-hand side
 accepts:
 
 - scalar literals (`3.14159`, `"eur"`, `True`),
-- a previously-declared constant (`-constants(base = 10, limit = base * 4 + 2)`),
+- a previously-declared constant (`-constant_value(base, 10)
+- a previously-declared constant (`-constant_value(limit, base * 4 + 2)`),
 - a declared atom,
 - unary/binary arithmetic over those,
 - a `++(expr)` escape, evaluated as raw Python **at load time**, and
@@ -283,15 +284,15 @@ accepts:
   mixing any of the above at any depth:
 
 ```clausal
--constants(pi = ++__import__('math').pi)
+-constant_value(pi, ++__import__('math').pi)
 ```
 
 !!! warning "`++` RHS values can be machine-dependent"
     `++(expr)` is evaluated once, when the file loads — nothing stops it from calling
     something that isn't reproducible across machines or runs:
-    `-constants(n_workers = ++os.cpu_count())` is legal, and will bind a different value on
+    `-constant_value(n_workers, ++os.cpu_count())` is legal, and will bind a different value on
     a different machine. This is a documented caveat, not a guardrail — if reproducibility
-    matters, don't reach for `++` in a `-constants` RHS.
+    matters, don't reach for `++` in a `-constant_value` RHS.
 
 ### Structured constants
 
@@ -302,12 +303,10 @@ build in a clause body, with the same unification semantics — not a Python val
 -module(m, [point(X, Y)])
 -private([mn, mx, red, green])
 
--constants(
-    country_codes = ['au', 'al', 'za'],
-    origin = point(0, 0),
-    limits = {mn: 1, mx: 99},
-    flags = {red, green},
-)
+-constant_value(country_codes, ['au', 'al', 'za'])
+-constant_value(origin, point(0, 0))
+-constant_value(limits, {mn: 1, mx: 99})
+-constant_value(flags, {red, green})
 ```
 
 Lists, tuples, sets, and dicts lower through the same construction a clause body's literal of
@@ -316,7 +315,7 @@ a functor call (`point(0, 0)`) constructs a real instance of that functor's clas
 structured constant unifies exactly as the equivalent literal would, indexes the same way, and
 carries no extra runtime cost per reference.
 
-**A functor used in a structured RHS must already be declared *above* the `-constants`
+**A functor used in a structured RHS must already be declared *above* the `-constant_value`
 directive** — via `-module`, `-private`, `-dynamic`, an earlier RULE clause (`point(X, Y) <- (...)`)
 defining it, an earlier properly-terminated bodyless FACT (`point(1, 2),` — the trailing comma is
 what makes it a fact at all; `point(1, 2)` with no comma is a bare, unregistered expression
@@ -327,12 +326,12 @@ located, load-time `SyntaxError` naming the remedy:
 
 ```text
 SyntaxError: -constants: `p` RHS calls `point(...)`, which is not a declared functor above
-this -constants directive — declare it with -module/-private/-dynamic before -constants, or
+this -constant_value directive — declare it with -module/-private/-dynamic first, or
 import it with -import_from/-import_module
 ```
 
 Every declaration must still be **fully ground** — no unbound logic variable may appear
-anywhere in the computed value, structured RHS included: `-constants(l = [1, X, 3])` is a
+anywhere in the computed value, structured RHS included: `-constant_value(l, [1, X, 3])` is a
 located, load-time `SyntaxError`, not a freshly-minted `Var`. (An unground value that only a
 `++()` escape could produce still hits the runtime `ConstantNotGroundError` backstop, before
 any clause compiles.) A `++()` escape is legal as an *element* inside a structured RHS
@@ -383,16 +382,16 @@ Referencing a name that nothing declares is the ordinary strict-atoms `NameError
 any other undeclared bare name gets. There is no constants-specific diagnostic any more: the
 name no longer says it is a constant, so nothing can tell a mistyped `max_fien` from an
 ordinary Python helper. Inside a `++()` or f-string escape the body is verbatim Python, so a
-free name there fails as a Python `NameError` — at load time in a `-constants` RHS, which is
+free name there fails as a Python `NameError` — at load time in a `-constant_value` RHS, which is
 evaluated at module level, and when the goal runs in a clause body.
 
 ### Importing
 
-Constants export automatically — every `-constants` declaration is a public module global, so
-there is nothing to list in `-module` or `-private`. Listing one there is a `SyntaxError`, but
-for a sharper reason than it used to be: a listed lowercase name is an *atom*, and the atom
-listing would rebind the module global and destroy the constant. Import with the same
-directives used for predicates:
+Constants export automatically — every `-constant_value` declaration is a public module
+global, so there is nothing to list in `-module` or `-private`. Listing the name there is not
+an error, though: it declares the ATOM of the same spelling, which is the intended pairing —
+`pi` the atom and `++pi` the value, in one file. Import with the same directives used for
+predicates:
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"

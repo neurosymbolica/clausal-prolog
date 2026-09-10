@@ -527,8 +527,7 @@ def unnameable_instance_cell_functor(term: Any) -> "str | None":
     rests on a premise with one hole in it: post-R6 a ``.clausal`` data
     functor's name binds its interned spelling, but the ``-module`` rewrite's
     class block runs at EXEC time, before ``_process_declarations`` rebinds
-    the name -- so a ``-constants`` right-hand side (``-constants(_ORIGIN_ =
-    Point(0, 0))``) is evaluated through the class and yields exactly the
+    the name -- so a ``-constants`` right-hand side (``-constant_value(_ORIGIN_, Point(0, 0))``) is evaluated through the class and yields exactly the
     instance the ruling says cannot exist.
 
     Emitting a class construction for it produces code that cannot run: the

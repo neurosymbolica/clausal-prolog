@@ -605,10 +605,10 @@ class TestTheNilAtomInAKeyPosition:
         mod = _load_inline_clausal(
             "_fix3_constants_nil",
             "-private([a])\n"
-            "-constants(c_d = {'[]': 1, a: 2})\n"
-            "-constants(c_e = {[]: 3})\n"
-            "c1(c_d),\n"
-            "c2(c_e),\n",
+            "-constant_value(c_d, {'[]': 1, a: 2})\n"
+            "-constant_value(c_e, {[]: 3})\n"
+            "c1(++c_d),\n"
+            "c2(++c_e),\n",
         )
         X = Var()
         (d,), = _answers(("c1", X), mod, X)
@@ -628,11 +628,14 @@ class TestTheNilAtomInAKeyPosition:
         mod = _load_inline_clausal(
             "_fix4_constants_ref_nil",
             "-private([a])\n"
-            "-constants(c_n = [], c_s = \"\", c_d = {c_n: 1, a: 2})\n"
-            "-constants(c_e = {c_s: 3}, c_f = {\"\": 4})\n"
-            "c1(c_d),\n"
-            "c2(c_e),\n"
-            "c3(c_f),\n"
+            "-constant_value(c_n, [])\n"
+            "-constant_value(c_s, \"\")\n"
+            "-constant_value(c_d, {c_n: 1, a: 2})\n"
+            "-constant_value(c_e, {c_s: 3})\n"
+            "-constant_value(c_f, {\"\": 4})\n"
+            "c1(++c_d),\n"
+            "c2(++c_e),\n"
+            "c3(++c_f),\n"
             "c4(D) <- (D is {\"\": 1}),\n",
         )
         X = Var()

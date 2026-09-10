@@ -141,6 +141,6 @@ def test_anonymous_is_not_caught_by_the_guard():
 # ── Outbound ──────────────────────────────────────────────────────────
 
 def test_outbound_constants_directive_raises_not_implemented():
-    source = "-constants(pi = 3.14159)\n\nfact(pi),\n"
-    with pytest.raises(NotImplementedError, match="constants"):
+    source = "-constant_value(pi, 3.14159)\n\nfact(pi),\n"
+    with pytest.raises(NotImplementedError, match="constant_value"):
         clausal_source_to_prolog(source)

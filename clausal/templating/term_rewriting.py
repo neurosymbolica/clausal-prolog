@@ -2790,29 +2790,19 @@ class TermTransformer(NodeTransformer):
             identifier = _TRUTH_ALIASES[identifier]
             if identifier in _BOOL_ALIAS_VALUES:
                 return replace(Constant(value=_BOOL_ALIAS_VALUES[identifier]), name)
-        # Declared or imported constant: a module global holding a ground
-        # value, bound before any clause statement executes.  A plain Name
-        # load embeds the value in the clause term at construction, so the
-        # clause builder converts it the way it converts any literal -- a
-        # functor instance becomes its cell form.
+        # A bare name is NEVER the constant (operator's rule, 2026-09-11):
+        # ``pi`` is the atom, ``++pi`` is the value, and one name carries
+        # both without conflict.  So there is no constants branch here --
+        # a declared constant name takes the ordinary atom path below,
+        # which compiles a DECLARED atom straight to its cell literal
+        # ``("pi",)`` and never consults the module global.  The global is
+        # left holding the value, which is what ``++pi`` reads.
         #
-        # This branch is NOT redundant with the bare-atom path below, and
-        # measuring that is what put it back after 2026-09-11 first deleted
-        # it.  The fall-through emits ``$LoadName``, whose whole job is to
-        # resolve LATER (so an atom declared further down the file still
-        # works), and which therefore hands back the raw Python object with
-        # no term conversion: ``-constants(origin = point(0, 0))`` reached
-        # the clause as a ``point`` INSTANCE instead of ``('point', 0, 0)``.
-        # A scalar constant showed nothing, because an int converts to
-        # itself -- only the structured cases moved.
-        #
-        # The 2026-09-11 rulings are untouched by this: they are about the
-        # SPELLING (atom-shaped) and about ``++name`` being the late-bound
-        # retrieval.  Both still hold -- see
-        # ``test_bare_name_folds_and_the_escape_looks_up``, which pins the
-        # two binding times against each other.
-        if identifier in transformer.constants:
-            return replace(Name(id=identifier, ctx=load), name)
+        # Two things had to move for that to be true, both in compiler_v2:
+        # the -module/-private atom binding must not clobber a declared
+        # constant's global, and the bare-atom-reference pass must not
+        # accept a constant's global as evidence that the name is declared.
+        # See ``_process_declarations`` and ``_process_bare_atom_refs``.
         # Anonymous variable: each _ is a fresh Var, never reused.
         if identifier == "_":
             return replace(
@@ -6227,10 +6217,16 @@ class EmbedTransformer(NodeTransformer):
         # route through ``$text`` -- unless the file binds ``str`` itself, in
         # which case its own binding wins and nothing is rewritten.
         transformer._str_shadowed = _binds_name(module, "str")
+        # Snapshot the file's OWN Python bindings before the walk. Read
+        # afterwards it would include generated code -- the -module rewrite
+        # emits an assignment for every declared atom, so `pi` would look
+        # like a hosted binding and the constant/atom pair this design is
+        # built around would be refused. See _check_constant_name_is_free.
+        transformer._hosted_names = set(_hosted_python_bindings(module))
         transformer._titlecase_prepass(module)
         result = transformer.generic_visit(module)
         transformer._check_var_shaped_predicate_names()
-        transformer._check_constant_atom_collision()
+        transformer._check_constant_name_is_free()
         transformer._settle_atom_functor_sites()
         if transformer._bare_atom_refs:
             transformer._module_items.append(
@@ -6243,38 +6239,49 @@ class EmbedTransformer(NodeTransformer):
             transformer._module_items.append(ImplicitAtomsItem())
         return result
 
-    def _check_constant_atom_collision(transformer):
-        """Refuse a name DECLARED both as a constant and as a bare atom.
+    def _check_constant_name_is_free(transformer):
+        """A constant declaration must not overwrite an existing binding.
 
-        A name can be a constant and an atom -- that combination is fine and
-        supported.  ``pi`` is the constant and ``'pi'`` is the atom, the
-        quoted form being the same atom ``global_atom/2`` yields, and the two
-        live side by side in one file.
+        ``-constant_value(name, ...)`` lowers to a module-level assignment,
+        so it writes into the file's own Python namespace. Left unchecked it
+        silently replaces whatever was there: an import (``-constant_value(
+        math, 3)``), a helper ``def``, a functor class, an imported
+        predicate. The value would be right and every OTHER use of that name
+        would quietly become the constant.
 
-        What cannot work is DECLARING the atom bare, in ``-module``,
-        ``-private`` or ``-hide``.  Such a listing rebinds the module global
-        to the atom in ``compiler_v2._process_declarations``, which runs
-        AFTER the module body -- so the value ``-constants`` bound, gated for
-        groundness and froze is silently overwritten.  Measured: the global
-        ends as ``('pi',)``, and even ``++pi`` then yields the atom instead
-        of the value.  Silence is the problem, so this is a load-time error.
+        An ATOM of the same spelling is the one deliberate exception, and
+        the reason this check exists as a whitelist rather than a plain "is
+        it bound": ``pi`` the atom and ``++pi`` the constant are meant to
+        coexist, and ``_process_declarations`` is what keeps the atom from
+        binding over the value.
 
-        Checked here rather than in the directive handlers because either
-        declaration may come first; ``visit_Module`` is the first point at
-        which both sets are complete.
+        Checked once the whole module has been walked, because a ``def``
+        BELOW the declaration overwrites it just as surely as one above.
         """
-        clashes = sorted(transformer._constants & transformer._atoms)
+        if not transformer._constants:
+            return
+        hosted = {}
+        for name in getattr(transformer, "_hosted_names", ()):
+            hosted.setdefault(name, "hosted Python (an import, def, class "
+                                     "or assignment)")
+        for name in transformer._seen_functors:
+            hosted.setdefault(name, "a functor or predicate declared in this "
+                                    "file")
+        for name in transformer._imported_functors:
+            hosted.setdefault(name, "an -import_from entry")
+        clashes = sorted(n for n in transformer._constants if n in hosted)
         if not clashes:
             return
+        first = clashes[0]
         names = ", ".join(f"`{n}`" for n in clashes)
         subject = f"{names} are" if len(clashes) > 1 else f"{names} is"
         raise SyntaxError(
-            f"{subject} declared as a constant AND listed as a bare atom. "
-            f"The atom listing rebinds the module global after the file has "
-            f"run, so the constant would be silently destroyed. A name CAN "
-            f"be both — drop it from the -module/-private/-hide list and "
-            f"write the atom quoted, as '{clashes[0]}', which reaches it "
-            f"without touching the global; or rename one of the two.")
+            f"-constant_value: {subject} already bound by {hosted[first]}. "
+            f"A constant declaration writes a module global, so it would "
+            f"overwrite that binding and every other use of the name would "
+            f"silently become the constant. Rename the constant. (An ATOM "
+            f"of the same spelling is fine and is the intended case: `{first}` "
+            f"the atom and `++{first}` the constant coexist.)")
 
     def _settle_atom_functor_sites(transformer):
         """Decide every deferred "atom applied as a functor" candidate.
@@ -6924,8 +6931,19 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_implicit_atoms_directive(args, expr_stmt)
         if name == "allow_singletons":
             return transformer._handle_allow_singletons_directive(args, expr_stmt)
+        if name == "constant_value":
+            return transformer._handle_constant_value_directive(
+                args, expr_stmt)
+        if name == "constant_value_units":
+            return transformer._handle_constant_value_directive(
+                args, expr_stmt, with_units=True)
         if name == "constants":
-            return transformer._handle_constants_directive(args, expr_stmt)
+            raise SyntaxError(
+                "-constants(name = value, ...) is retired. Declare one "
+                "constant per directive: -constant_value(pi, 3.14159), or "
+                "-constant_value_units(max_fine, 5000, euro) to keep the "
+                "unit out of the value. The keyword form could not have a "
+                "family, and one line per constant reads better in a diff.")
         if name == "implicit_functors":
             return transformer._handle_implicit_functors_directive(args, expr_stmt)
         if name == "double_quotes":
@@ -6936,7 +6954,7 @@ class EmbedTransformer(NodeTransformer):
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
             f"-strict_atoms, -implicit_atoms, -allow_singletons, "
-            f"-constants, -implicit_functors, -double_quotes)"
+            f"-constant_value, -implicit_functors, -double_quotes)"
         )
 
     def _handle_double_quotes_directive(transformer, args, expr_stmt):
@@ -7081,11 +7099,20 @@ class EmbedTransformer(NodeTransformer):
                     # atom key via ``$intern_atom`` — see
                     # ``_make_atom_str_assign_ast``) sees the atom without
                     # waiting for post-exec processing.
+                    # NOT emitted for a name this file has already declared
+                    # with ``-constant_value``: the assignment would bind the
+                    # atom over the constant's module global, which is what
+                    # ``++name`` reads. In the other declaration order the
+                    # constant's own assignment runs later and overwrites
+                    # this one, so the constant wins the global either way --
+                    # and a DECLARED atom compiles to its cell literal, so it
+                    # never needed the binding.
                     transformer._atoms.add(export.id)
                     exports_info.append(export.id)
-                    statements.append(
-                        _make_atom_str_assign_ast(export.id, expr_stmt)
-                    )
+                    if export.id not in transformer._constants:
+                        statements.append(
+                            _make_atom_str_assign_ast(export.id, expr_stmt)
+                        )
                 elif isinstance(export, Call) and isinstance(
                         export.func, (Name, Constant)):
                     # ``'foo'(A, B)`` is the same entry as ``foo(A, B)`` --
@@ -7180,9 +7207,12 @@ class EmbedTransformer(NodeTransformer):
                 # see the matching comment in ``_handle_module_directive``.
                 transformer._atoms.add(item.id)
                 private_info.append(item.id)
-                statements.append(
-                    _make_atom_str_assign_ast(item.id, expr_stmt)
-                )
+                # Skipped for a name already declared with -constant_value;
+                # see the matching guard in ``_handle_module_directive``.
+                if item.id not in transformer._constants:
+                    statements.append(
+                        _make_atom_str_assign_ast(item.id, expr_stmt)
+                    )
             elif isinstance(item, Call) and isinstance(item.func, Name):
                 functor_name = item.func.id
                 field_names = [
@@ -7437,122 +7467,130 @@ class EmbedTransformer(NodeTransformer):
         transformer._allow_singletons = True
         return replace(Pass(), expr_stmt)
 
-    def _handle_constants_directive(transformer, args, expr_stmt):
-        """Process ``-constants(pi = 3.14159, max = pi * 2)``.
+    def _handle_constant_value_directive(transformer, args, expr_stmt,
+                                         with_units=False):
+        """Process ``-constant_value(pi, 3.14159)`` and
+        ``-constant_value_units(max_fine, 5000, euro)``.
 
-        Declarations arrive as keyword arguments on the directive call. Each
-        lowers to ``<name> = $check_constant_ground('<name>', <rhs>)`` at
-        module level, so the value is bound (and gated for groundness) before
-        any clause statement executes.
+        One constant per directive, positionally, so the two forms are a
+        FAMILY -- which the old keyword form could not be, and which reads
+        one line per constant in a diff.
 
-        Since 2026-09-11 the name is spelled like an atom and the value is
-        reached with the explicit ``++name`` escape — an ordinary Python
-        module-global lookup, so a constant is LATE-BOUND rather than folded
-        into the clause term at construction. A bare name in term position is
-        an atom, which is why a name may not be both (see ``visit_Module``).
-        See implementation_plans/module-level-constants.md and
-        docs/superpowers/plans/2026-09-11-retire-underscore-constant-spelling.md.
+        Each lowers to ``<name> = $check_constant_ground('<name>', <rhs>)``
+        at module level, so the value is bound (and gated for groundness)
+        before any clause statement executes, followed by a
+        ``$register_module_constant`` call backing ``constant_value/2``.
+        The units form wraps the value in ``$Quantity(<value>, <units>)``,
+        so the module global holds ``Quantity(5000, euro)`` -- the same
+        object the ``5000 (euro)`` annotation sugar builds.
+
+        The name is spelled like an atom and the value is reached with the
+        explicit ``++name`` escape. A bare ``pi`` in term position is the
+        ATOM ``("pi",)``, never the value, so one name carries both readings
+        without conflict; see ``visit_Name`` and
+        ``compiler_v2._process_declarations``.
 
         Interactive sessions (IPython/REPL) reject this directive outright:
         each cell gets a fresh transformer, so ``_constants`` is forgotten
-        between cells — a constant declared in one cell would raise the
-        undeclared-constant SyntaxError from the next. Half-working (bind in
-        the declaring cell, forget it in the next) is worse than a clear
-        refusal, so this is checked before any of the usual validation.
+        between cells. Half-working (bind in the declaring cell, forget it in
+        the next) is worse than a clear refusal, so this is checked before
+        any of the usual validation.
         """
+        spelling = "-constant_value_units" if with_units else "-constant_value"
+        arity = 3 if with_units else 2
+        example = ("-constant_value_units(max_fine, 5000, euro)" if with_units
+                   else "-constant_value(pi, 3.14159)")
         if transformer._interactive:
             raise SyntaxError(
-                "-constants is not supported interactively yet; declare "
-                "constants in a .clausal module and import it")
-        call_node = expr_stmt.value.operand  # the Call under the USub
-        # Bare ``-constants`` (no parens) hands a Name operand here, not a
-        # Call — it has no ``keywords`` attribute at all. getattr (mirroring
-        # -specialize's defence against the same shape) turns that into the
-        # ordinary usage error below instead of an AttributeError.
-        if args or not getattr(call_node, 'keywords', None):
+                f"{spelling} is not supported interactively yet; declare "
+                f"constants in a .clausal module and import it")
+        if len(args) != arity:
             raise SyntaxError(
-                "-constants takes name = value pairs: "
-                "-constants(pi = 3.14159, max_retries = 3)")
+                f"{spelling} takes {arity} arguments, a name then a value"
+                + (" then a unit expression" if with_units else "")
+                + f": {example}")
+        name_node = args[0]
+        if not isinstance(name_node, Name):
+            raise SyntaxError(
+                f"{spelling}: the first argument names the constant and must "
+                f"be a bare name: {example}; got `{unparse(name_node)}`")
+        ident = name_node.id
+        if _is_retired_constant_spelling(ident):
+            new = ident.strip("_").lower()
+            raise SyntaxError(
+                f"{spelling}: `{ident}` uses the retired constant spelling; "
+                f"constants are lowercase names now, and the value is "
+                f"reached with the ++ escape. Write "
+                f"`{spelling}({new}, ...)` and `++{new}` at every use site.")
+        if not _is_constant_declaration_name(ident):
+            raise SyntaxError(
+                f"{spelling}: {ident!r} is not a constant name — a constant "
+                f"is spelled like an atom, which is to say anything the "
+                f"logic-variable rule does not claim: not underscore-led and "
+                f"not capital-initial. e.g. {example}")
+        if ident in transformer._constants:
+            raise SyntaxError(
+                f"{spelling}: `{ident}` is already bound (an earlier "
+                f"constant declaration or an import)")
+        if ident.endswith("_UNUSED"):
+            # Decided edge (todo/done/module-level-constants-open-
+            # questions.md #3): legal, but visually collides with the
+            # singleton-suppression suffix.
+            import warnings  # noqa: PLC0415
+            warnings.warn(
+                f"{spelling}: `{ident}` ends in _UNUSED, which reads as the "
+                f"unused-variable marker; consider another name",
+                ClausalLintWarning, stacklevel=2)
+        value_node = args[1]
+        rhs = transformer._transform_constant_rhs(value_node, ident)
+        if with_units:
+            unit_node = args[2]
+            if not _is_unit_expr(unit_node):
+                raise SyntaxError(
+                    f"{spelling}: `{unparse(unit_node)}` is not a unit "
+                    f"expression — a unit is a name, or names combined with "
+                    f"`*`, `/` and `**`: {example}")
+            rhs = replace(
+                Call(func=replace(Name(id="$Quantity", ctx=load), value_node),
+                     args=[rhs, unit_node], keywords=[]),
+                value_node)
+        transformer._constants.add(ident)
         statements = []
-        for kw in call_node.keywords:
-            ident = kw.arg
-            # The retired spelling is checked FIRST and on its own, so the
-            # message names the migration rather than the generic
-            # "not a constant name". `_PI_` is a logic VARIABLE now, so the
-            # atom-class test below would reject it either way -- but with
-            # advice that does not mention constants at all.
-            if ident is not None and _is_retired_constant_spelling(ident):
-                new = ident.strip("_").lower()
-                raise SyntaxError(
-                    f"-constants: `{ident}` uses the retired constant "
-                    f"spelling; constants are lowercase names now, and "
-                    f"the value is reached with the ++ escape. Write "
-                    f"`-constants({new} = ...)` and `++{new}` at every "
-                    f"use site.")
-            if ident is None or not _is_constant_declaration_name(ident):
-                raise SyntaxError(
-                    f"-constants: {ident!r} is not a constant name — a "
-                    f"constant is spelled like an atom, which is to say "
-                    f"anything the logic-variable rule does not claim: not "
-                    f"underscore-led and not capital-initial. "
-                    f"e.g. -constants(max_fine = 5000)")
-            if ident in transformer._constants:
-                raise SyntaxError(
-                    f"-constants: `{ident}` is already bound (earlier "
-                    f"-constants or an import)")
-            if ident.endswith("_UNUSED"):
-                # Decided edge (todo/done/module-level-constants-open-
-                # questions.md #3): legal, but visually collides with the
-                # singleton-suppression suffix.
-                import warnings  # noqa: PLC0415
-                warnings.warn(
-                    f"-constants: `{ident}` ends in _UNUSED, which reads as "
-                    f"the unused-variable marker; consider another name",
-                    ClausalLintWarning, stacklevel=2)
-            rhs = transformer._transform_constant_rhs(kw.value, ident)
-            transformer._constants.add(ident)
-            assign = replace(
-                Assign(
-                    targets=[replace(Name(id=ident, ctx=store), kw.value)],
-                    value=replace(
-                        Call(
-                            func=replace(
-                                Name(id="$check_constant_ground", ctx=load),
-                                kw.value),
-                            args=[replace(Constant(value=ident), kw.value),
-                                  rhs],
-                            keywords=[],
-                        ), kw.value),
-                ), expr_stmt)
-            fix_missing_locations(assign)
-            statements.append(assign)
-            # Record (name, value) on $module for module_constant/3
-            # reflection (docs/builtins.md). $module is ALREADY BOUND by
-            # the time this statement executes (set before
-            # exec_with_import_diagnostics runs — see _run_v2_pipeline
-            # in import_hook.py) — but it is only a THROWAWAY placeholder
-            # Module at this point
-            # (compile_module below builds the real one afterward and
-            # swaps it in); _run_v2_pipeline carries the registrations
-            # across that swap (``logic_module.constants.update(
-            # dummy_logic_module.constants)``) precisely because they land
-            # here first. `ident` is already bound (by the Assign just
-            # above) to the gated, frozen value.
-            register = replace(
-                Expr(value=replace(
+        assign = replace(
+            Assign(
+                targets=[replace(Name(id=ident, ctx=store), value_node)],
+                value=replace(
                     Call(
                         func=replace(
-                            Name(id="$register_module_constant", ctx=load),
-                            kw.value),
-                        args=[replace(Name(id="$module", ctx=load), kw.value),
-                              replace(Constant(value=ident), kw.value),
-                              replace(Name(id=ident, ctx=load), kw.value)],
+                            Name(id="$check_constant_ground", ctx=load),
+                            value_node),
+                        args=[replace(Constant(value=ident), value_node), rhs],
                         keywords=[],
-                    ), kw.value),
-                ), expr_stmt)
-            fix_missing_locations(register)
-            statements.append(register)
-        return statements if len(statements) > 1 else statements[0]
+                    ), value_node),
+            ), expr_stmt)
+        fix_missing_locations(assign)
+        statements.append(assign)
+        # Record (name, value) on $module for constant_value/2 reflection.
+        # $module is ALREADY BOUND here but is a THROWAWAY placeholder
+        # Module; _run_v2_pipeline carries the registrations across the swap
+        # (``logic_module.constants.update(dummy_logic_module.constants)``)
+        # precisely because they land here first.
+        register = replace(
+            Expr(value=replace(
+                Call(
+                    func=replace(
+                        Name(id="$register_module_constant", ctx=load),
+                        value_node),
+                    args=[replace(Name(id="$module", ctx=load), value_node),
+                          replace(Constant(value=ident), value_node),
+                          replace(Name(id=ident, ctx=load), value_node)],
+                    keywords=[],
+                ), value_node),
+            ), expr_stmt)
+        fix_missing_locations(register)
+        statements.append(register)
+        return statements
+
 
     def _transform_constant_rhs(transformer, node, ident):
         """Validate and return the Python AST for a -constants RHS.
@@ -7588,9 +7626,9 @@ class EmbedTransformer(NodeTransformer):
             # ISO/XSB truth-value spellings fold the same way they do in
             # ordinary term position (visit_Name / _TRUTH_ALIASES) — a
             # -constants RHS is a term position too. Without this,
-            # ``-constants(_B_ = true)`` raised "neither a previously
+            # ``-constant_value(b, true)`` raised "neither a previously
             # declared constant nor a declared atom" while the equivalent
-            # ``-constants(_B_ = True)`` (and a dict KEY spelled ``true``,
+            # ``-constant_value(b, True)`` (and a dict KEY spelled ``true``,
             # via _transform_constant_dict_key) already worked — one
             # spelling of the same value should not be RHS-illegal while
             # the other is legal.
@@ -7749,7 +7787,7 @@ class EmbedTransformer(NodeTransformer):
         # The EFFECTIVE reading, mirroring the twin in ``_visit_dict_key``
         # -- which moved to it and left this copy behind.  ``Undefined`` is
         # capital-initial now, so the lexical rule called it a variable, this
-        # branch was skipped, and ``-constants(_D_ = {undefined: 1})`` was
+        # branch was skipped, and ``-constant_value(d, {undefined: 1})`` was
         # refused with "``Undefined`` is a logic-variable name".  The alias
         # fold just above rewrites a lowercase ``undefined`` key to
         # ``Name("Undefined")`` first, so BOTH spellings were affected --
@@ -7796,7 +7834,7 @@ class EmbedTransformer(NodeTransformer):
         # in practice a reference to an earlier constant, possibly under
         # arithmetic or a ``++`` escape.  It cannot be folded statically, and
         # a ``-constants`` list value is FROZEN, so
-        # ``-constants(_N_ = [], _D_ = {_N_: 1})`` handed the plain dict
+        # ``-constant_value(n, [])`` + ``-constant_value(d, {n: 1})`` handed the plain dict
         # literal an unhashable ``_FrozenList`` and raised a raw, unlocated
         # ``TypeError`` at load -- before ``DictTerm`` (which folds every nil
         # spelling) ever saw the key.  Fold at exec time instead, through

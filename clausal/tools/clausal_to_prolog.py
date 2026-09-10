@@ -1143,11 +1143,22 @@ class _ClausalToProlog:
             return None
         if name == "double_quotes":
             return self._convert_double_quotes_directive(call)
-        if name == "constants":
+        if name in ("constants", "constant_value", "constant_value_units"):
+            # The eventual answer is `constant_value/2` -- Markus Triska's
+            # name for the cross-implementation convention -- emitted either
+            # as the declared LITERAL (runs anywhere, needs no prelude) or
+            # as the operator form with an expansion prelude. Neither is
+            # built, and the packaging of the prelude is unsolved in both
+            # reference systems, so this still refuses rather than emitting
+            # something that parses and does not run. See
+            # todo/retire-underscore-constants-for-an-iso-safe-surface-
+            # 2026-09-10.md.
             raise NotImplementedError(
-                "clausal_to_prolog: -constants files are not translatable "
-                "yet — Prolog has no constants; inlining is tracked in "
-                "implementation_plans/module-level-constants.md")
+                f"clausal_to_prolog: -{name} files are not translatable "
+                "yet — a constant must export as its literal value or "
+                "through a constant_value/2 expansion prelude; see "
+                "todo/retire-underscore-constants-for-an-iso-safe-surface"
+                "-2026-09-10.md")
         if name in ("dynamic", "discontiguous", "table"):
             return self._convert_meta_directive(name, call)
         # Generic directive

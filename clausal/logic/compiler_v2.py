@@ -1434,6 +1434,16 @@ def _process_bare_atom_refs(
             continue
         for name in item.names:
             existing = module_dict.get(name, _MISSING)
+            if name in _module_constants(module_dict):
+                # A declared constant's global is a VALUE, not evidence that
+                # the name is a declared atom. Without this, `-constants(pi
+                # = 5000)` alone would make a bare `pi` resolve to 5000 --
+                # the very thing the operator's rule says a bare name never
+                # does -- because the branch below trusts any bound name.
+                # Declare the atom as well if the file writes it bare.
+                if name not in local_names and effective_strict:
+                    undeclared.append(name)
+                continue
             if existing is not _MISSING:
                 # A leaked-pool-atom shape is an ATOM whose spelling is its
                 # own name and which is STILL EQUAL to what the process pool
@@ -1591,6 +1601,17 @@ def _predicate_functor_names(predicate_nodes: list, module_items: list) -> set:
     return names
 
 
+def _module_constants(module_dict: dict) -> dict:
+    """The ``-constants`` declarations this module has executed so far.
+
+    Read off the logic module's own registry (``register_module_constant``
+    populates it as each declaration runs, which is before any of the
+    compile steps here). Returns an empty mapping when there is no module or
+    no registry, so callers can test membership unconditionally.
+    """
+    return getattr(module_dict.get("$module"), "constants", None) or {}
+
+
 def _process_declarations(module_items: list, module_dict: dict,
                           predicate_functors: set = frozenset()) -> None:
     """Process -module and -private declarations: bind declared names.
@@ -1661,7 +1682,16 @@ def _process_declarations(module_items: list, module_dict: dict,
                     # ``_make_atom_str_assign_ast``'s docstring for the
                     # matching guard on the OTHER direction (an atom must
                     # not clobber a real predicate either).
-                    if not isinstance(module_dict.get(entry), PredicateMeta):
+                    # A declared CONSTANT wins its global too, for the same
+                    # reason a predicate does: -constants bound, gated and
+                    # froze a value there, and ``++name`` reads that slot.
+                    # Binding the atom over it would destroy the constant
+                    # silently -- and cost nothing in exchange, since a
+                    # DECLARED atom compiles to its cell literal at every
+                    # reference site and never reads this binding.
+                    # ``pi`` is the atom, ``++pi`` is the value.
+                    if (not isinstance(module_dict.get(entry), PredicateMeta)
+                            and entry not in _module_constants(module_dict)):
                         module_dict[entry] = predicate_builtins.setdefault(
                             entry, _mint_atom(entry)
                         )

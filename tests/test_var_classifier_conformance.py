@@ -107,8 +107,8 @@ def test_pinned_divergences():
 # still DECLARE a constant the retired way, because such a file no longer
 # loads at all.
 _RETIRED_CONSTANT_DECL = re.compile(
-    r"^\s*-constants\(.*?(?<![A-Za-z0-9_])_[A-Za-z0-9\u0080-\uffff]"
-    r"[A-Za-z0-9_\u0080-\uffff]*_\s*=")
+    r"^\s*-constant_value(?:_units)?\(\s*_[A-Za-z0-9\u0080-\uffff]"
+    r"[A-Za-z0-9_\u0080-\uffff]*_\s*,")
 
 
 def test_retired_constant_declaration_regex_matches_what_it_should():
@@ -116,9 +116,11 @@ def test_retired_constant_declaration_regex_matches_what_it_should():
     cannot pass by matching nothing. Without this, a typo in the pattern
     turns the census into a test that reads every file and asserts nothing.
     """
-    assert _RETIRED_CONSTANT_DECL.search("-constants(_PI_ = 3.14)")
-    assert _RETIRED_CONSTANT_DECL.search("  -constants(_A_ = 1, _B_ = 2)")
-    assert not _RETIRED_CONSTANT_DECL.search("-constants(pi = 3.14)")
+    assert _RETIRED_CONSTANT_DECL.search("-constant_value(_PI_, 3.14)")
+    assert _RETIRED_CONSTANT_DECL.search("  -constant_value(_A_, 1)")
+    assert _RETIRED_CONSTANT_DECL.search(
+        "-constant_value_units(_MAX_, 5000, euro)")
+    assert not _RETIRED_CONSTANT_DECL.search("-constant_value(pi, 3.14)")
     assert not _RETIRED_CONSTANT_DECL.search("holds(_PI_),")
 
 

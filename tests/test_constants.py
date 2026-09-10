@@ -22,7 +22,7 @@ def _values(module, goal_name, *args):
 
 def test_scalar_constant_in_arithmetic(tmp_path):
     m = _load(tmp_path, "a", """
-        -constants(c_pi = 3.14159)
+        -constant_value(c_pi, 3.14159)
         area(R, A) <- (A is ++(c_pi * R * R))
     """)
     [a] = _values(m, "area", 2.0)
@@ -31,8 +31,8 @@ def test_scalar_constant_in_arithmetic(tmp_path):
 
 def test_constant_as_plain_argument(tmp_path):
     m = _load(tmp_path, "b", """
-        -constants(c_max = 3)
-        limit(c_max),
+        -constant_value(c_max, 3)
+        limit(++c_max),
         got(X) <- limit(X)
     """)
     v = Var()
@@ -42,8 +42,9 @@ def test_constant_as_plain_argument(tmp_path):
 
 def test_constant_from_prior_constant_and_arithmetic(tmp_path):
     m = _load(tmp_path, "c", """
-        -constants(c_base = 10, c_limit = c_base * 4 + 2)
-        lim(c_limit),
+        -constant_value(c_base, 10)
+        -constant_value(c_limit, c_base * 4 + 2)
+        lim(++c_limit),
     """)
     v = Var()
     assert [deref(v) for _ in call("lim", v, module=m.__dict__["$module"])] == [42]
@@ -51,8 +52,8 @@ def test_constant_from_prior_constant_and_arithmetic(tmp_path):
 
 def test_plusplus_rhs(tmp_path):
     m = _load(tmp_path, "d", """
-        -constants(c_pi = ++__import__('math').pi)
-        pi(c_pi),
+        -constant_value(c_pi, ++__import__('math').pi)
+        pi(++c_pi),
     """)
     import math
     v = Var()
@@ -70,7 +71,7 @@ def test_plusplus_rhs_undeclared_name_is_a_load_time_name_error(tmp_path):
     a constants-specific remedy.
     """
     with pytest.raises(NameError, match="c_b"):
-        _load(tmp_path, "d2", "-constants(c_a = ++(c_b * 2))\np(c_a),\n")
+        _load(tmp_path, "d2", "-constant_value(c_a, ++(c_b * 2))\np(++c_a),\n")
 
 
 def test_plusplus_rhs_declared_earlier_constant_still_works(tmp_path):
@@ -78,8 +79,9 @@ def test_plusplus_rhs_declared_earlier_constant_still_works(tmp_path):
     later ++ RHS — by exec time it is already a bound module global. Keeps
     the existing passing ``++`` RHS behaviour green alongside the new scan."""
     m = _load(tmp_path, "d3", """
-        -constants(c_base = 10, c_scaled = ++(c_base * 2))
-        scaled(c_scaled),
+        -constant_value(c_base, 10)
+        -constant_value(c_scaled, ++(c_base * 2))
+        scaled(++c_scaled),
     """)
     v = Var()
     assert [deref(v) for _ in call("scaled", v, module=m.__dict__["$module"])] == [20]
@@ -90,8 +92,8 @@ def test_plusplus_rhs_comprehension_target_matching_constant_shape_is_not_flagge
     variable is locally bound, not a reference to any module global, even
     when it happens to be constant-shaped."""
     m = _load(tmp_path, "d4", """
-        -constants(c_total = ++(sum(c_item for c_item in range(5))))
-        total(c_total),
+        -constant_value(c_total, ++sum((c_item for c_item in range(5))))
+        total(++c_total),
     """)
     v = Var()
     assert [deref(v) for _ in call("total", v, module=m.__dict__["$module"])] == [10]
@@ -122,38 +124,51 @@ def test_constant_usable_inside_arrow_lambda_body(tmp_path):
     time — not just silently accepted — so this checks both a passing and a
     failing comparison against the same declared threshold."""
     m = _load(tmp_path, "m", """
-        -constants(c_k = 5)
-        p(R) <- call_goal((X <- (X > c_k)), R)
+        -constant_value(c_k, 5)
+        p(R) <- call_goal((X <- (X > ++c_k)), R)
     """)
     module = m.__dict__["$module"]
     assert list(call("p", 7, module=module))       # 7 > 5: folded value used, solves
     assert list(call("p", 3, module=module)) == []  # 3 > 5: same fold, correctly fails
 
 
-def test_bare_constants_directive_raises_usage_syntax_error(tmp_path):
-    """IMPORTANT: ``-constants`` with no parens hands a bare Name operand to
-    _handle_constants_directive, which used to assume a Call and blow up
-    with ``AttributeError: 'Name' object has no attribute 'keywords'``
-    instead of the ordinary usage SyntaxError every other malformed
-    ``-constants(...)`` gets."""
-    with pytest.raises(SyntaxError, match="-constants takes name = value pairs"):
-        _load(tmp_path, "e3", "-constants\np(X) <- (X == 1)\n")
+def test_the_retired_keyword_directive_says_what_replaced_it(tmp_path):
+    """``-constants(name = value, ...)`` is retired in favour of the
+    -constant_value family. Both the bare and the parenthesised spellings
+    reach the same message, so a file written the old way is told what to
+    write rather than failing on argument shape."""
+    for source in ("-constants\np(X) <- (X == 1)\n",
+                   "-constants(pi = 3.14)\np(X) <- (X == 1)\n"):
+        with pytest.raises(SyntaxError, match="-constant_value"):
+            _load(tmp_path, "e3", source)
+
+
+def test_the_directive_family_rejects_a_wrong_argument_count(tmp_path):
+    with pytest.raises(SyntaxError, match="takes 2 arguments"):
+        _load(tmp_path, "e4", "-constant_value(pi)\np(X) <- (X == 1)\n")
+    with pytest.raises(SyntaxError, match="takes 3 arguments"):
+        _load(tmp_path, "e5", "-constant_value_units(f, 1)\np(X) <- (X == 1)\n")
+
+
+def test_the_units_form_refuses_something_that_is_not_a_unit(tmp_path):
+    with pytest.raises(SyntaxError, match="not a unit expression"):
+        _load(tmp_path, "e6",
+              "-constant_value_units(f, 1, \"euro\")\np(X) <- (X == 1)\n")
 
 
 def test_unground_rhs_raises_at_load(tmp_path):
     from clausal.logic.constants import ConstantNotGroundError
     with pytest.raises(ConstantNotGroundError):
         _load(tmp_path, "f", """
-            -constants(c_v = ++__import__('clausal.logic.variables',
-                                           fromlist=['Var']).Var())
-            p(c_v),
+            -constant_value(c_v, ++__import__('clausal.logic.variables', fromlist=['Var']).Var())
+            p(++c_v),
         """)
 
 
 def test_structured_list_constant(tmp_path):
     m = _load(tmp_path, "s1", """
-        -constants(c_codes = ['au', 'al', 'za'])
-        codes(X) <- (X is c_codes)
+        -constant_value(c_codes, ['au', 'al', 'za'])
+        codes(X) <- (X is ++c_codes)
     """)
     v = Var()
     assert [deref(v) for _ in call("codes", v, module=m.__dict__["$module"])] == \
@@ -162,8 +177,8 @@ def test_structured_list_constant(tmp_path):
 
 def test_structured_tuple_constant(tmp_path):
     m = _load(tmp_path, "s2", """
-        -constants(c_pair = (1, 2))
-        pair(X) <- (X is c_pair)
+        -constant_value(c_pair, (1, 2))
+        pair(X) <- (X is ++c_pair)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("pair", v, module=m.__dict__["$module"])]
@@ -175,8 +190,8 @@ def test_structured_set_constant(tmp_path):
     from clausal.terms import SetTerm
     m = _load(tmp_path, "s3", """
         -private([red, green])
-        -constants(c_flags = {red, green})
-        flags(X) <- (X is c_flags)
+        -constant_value(c_flags, {red, green})
+        flags(X) <- (X is ++c_flags)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("flags", v, module=m.__dict__["$module"])]
@@ -189,8 +204,8 @@ def test_structured_dict_constant(tmp_path):
     from clausal.terms import DictTerm
     m = _load(tmp_path, "s4", """
         -private([mn, mx])
-        -constants(c_limits = {mn: 1, mx: 99})
-        limits(X) <- (X is c_limits)
+        -constant_value(c_limits, {mn: 1, mx: 99})
+        limits(X) <- (X is ++c_limits)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("limits", v, module=m.__dict__["$module"])]
@@ -206,8 +221,9 @@ def test_structured_rhs_nesting_and_mixing(tmp_path):
     m = _load(tmp_path, "s5", """
         -module(s5, [point(X, Y)])
         -private([tag])
-        -constants(c_base = 10, c_all = [c_base * 2, tag, point(1, 2), [3, 4]])
-        got(X) <- (X is c_all)
+        -constant_value(c_base, 10)
+        -constant_value(c_all, [c_base * 2, tag, point(1, 2), [3, 4]])
+        got(X) <- (X is ++c_all)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("got", v, module=m.__dict__["$module"])]
@@ -226,8 +242,8 @@ def test_structured_functor_constant_declared_above_works(tmp_path):
     bound module global by the time the -constants assignment runs."""
     m = _load(tmp_path, "s6", """
         -module(s6, [point(X, Y)])
-        -constants(c_origin = point(0, 0))
-        origin(X) <- (X is c_origin)
+        -constant_value(c_origin, point(0, 0))
+        origin(X) <- (X is ++c_origin)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("origin", v, module=m.__dict__["$module"])]
@@ -240,7 +256,7 @@ def test_structured_functor_constant_undeclared_functor_is_syntax_error(tmp_path
     no import) — a located, remedy-bearing SyntaxError, not a NameError at
     exec time and not a silently-wrong Call-node embedding."""
     with pytest.raises(SyntaxError, match="not a declared functor") as exc_info:
-        _load(tmp_path, "s7", "-constants(c_p = point(0, 0))\np(X) <- (X is 1)\n")
+        _load(tmp_path, "s7", "-constant_value(c_p, point(0, 0))\np(X) <- (X is 1)\n")
     exc = exc_info.value
     assert exc.filename == str(tmp_path / "s7.clausal")
     assert exc.lineno == 1
@@ -248,7 +264,7 @@ def test_structured_functor_constant_undeclared_functor_is_syntax_error(tmp_path
 
 def test_structured_rhs_dict_splat_rejected_and_located(tmp_path):
     with pytest.raises(SyntaxError, match="dict-splat") as exc_info:
-        _load(tmp_path, "s7b", "-constants(c_d = {**{1: 2}})\np(X) <- (X is 1)\n")
+        _load(tmp_path, "s7b", "-constant_value(c_d, {**{1: 2}})\np(X) <- (X is 1)\n")
     exc = exc_info.value
     assert exc.filename == str(tmp_path / "s7b.clausal")
     assert exc.lineno == 1
@@ -258,7 +274,7 @@ def test_structured_rhs_generic_unsupported_shape_is_located(tmp_path):
     """The final fallthrough (an RHS shape none of the dedicated branches
     handle, e.g. a comparison expression) is a located SyntaxError too."""
     with pytest.raises(SyntaxError, match="unsupported RHS") as exc_info:
-        _load(tmp_path, "s7c", "-constants(c_x = (1 < 2))\np(X) <- (X is 1)\n")
+        _load(tmp_path, "s7c", "-constant_value(c_x, 1 < 2)\np(X) <- (X is 1)\n")
     exc = exc_info.value
     assert exc.filename == str(tmp_path / "s7c.clausal")
     assert exc.lineno == 1
@@ -266,7 +282,7 @@ def test_structured_rhs_generic_unsupported_shape_is_located(tmp_path):
 
 def test_structured_rhs_logic_var_rejected(tmp_path):
     with pytest.raises(SyntaxError) as exc_info:
-        _load(tmp_path, "s8", "-constants(c_l = [1, X, 3])\np(Y) <- (Y is 1)\n")
+        _load(tmp_path, "s8", "-constant_value(c_l, [1, X, 3])\np(Y) <- (Y is 1)\n")
     exc = exc_info.value
     assert "logic-variable" in str(exc)
     assert exc.filename == str(tmp_path / "s8.clausal")
@@ -275,7 +291,7 @@ def test_structured_rhs_logic_var_rejected(tmp_path):
 
 def test_structured_rhs_anonymous_var_rejected(tmp_path):
     with pytest.raises(SyntaxError, match="logic-variable"):
-        _load(tmp_path, "s9", "-constants(c_l = [1, _, 3])\np(X) <- (X is 1)\n")
+        _load(tmp_path, "s9", "-constant_value(c_l, [1, _, 3])\np(X) <- (X is 1)\n")
 
 
 def test_structured_rhs_plusplus_element(tmp_path):
@@ -283,8 +299,8 @@ def test_structured_rhs_plusplus_element(tmp_path):
     falls out naturally because container branches recurse through the
     same _transform_constant_rhs that already has the ++ branch."""
     m = _load(tmp_path, "s10", """
-        -constants(c_l = [1, ++(2 + 3), 3])
-        got(X) <- (X is c_l)
+        -constant_value(c_l, [1, ++(2 + 3), 3])
+        got(X) <- (X is ++c_l)
     """)
     v = Var()
     assert [deref(v) for _ in call("got", v, module=m.__dict__["$module"])] == \
@@ -300,13 +316,13 @@ def test_structured_constant_module_global_and_reflection_registry_share_object(
     that applies to any bound global, not something -constants controls —
     so identity is pinned at the one place this codebase actually promises
     it: the constant's own storage.)"""
-    m = _load(tmp_path, "s11", "-constants(c_l = [1, 2, 3])\n")
+    m = _load(tmp_path, "s11", "-constant_value(c_l, [1, 2, 3])\n")
     assert m.__dict__["c_l"] is m.__dict__["$module"].constants["c_l"]
 
 
 def test_structured_list_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
     m = _load(tmp_path, "s12", """
-        -constants(c_l = [1, 2, 3])
+        -constant_value(c_l, [1, 2, 3])
         bad(X) <- (X is ++(c_l.append(4)))
     """)
     v = Var()
@@ -318,7 +334,7 @@ def test_structured_list_constant_mutation_via_plusplus_raises_typeerror(tmp_pat
 
 def test_structured_dict_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
     m = _load(tmp_path, "s13", """
-        -constants(c_d = {"k": 1})
+        -constant_value(c_d, {'k': 1})
         bad(X) <- (X is ++(c_d.data.__setitem__("k", 2)))
     """)
     v = Var()
@@ -331,7 +347,7 @@ def test_structured_dict_constant_ior_mutation_raises_typeerror(tmp_path):
     """dict.__ior__ (the ``|=`` operator) mutates in place — a distinct
     code path from __setitem__, and easy to miss when blocking mutators."""
     m = _load(tmp_path, "s13b", """
-        -constants(c_d = {"a": 1})
+        -constant_value(c_d, {'a': 1})
         bad(X) <- (X is ++(c_d.data.__ior__({"b": 2})))
     """)
     v = Var()
@@ -346,7 +362,7 @@ def test_plusplus_set_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
     literal, which lowers to the already-immutable SetTerm instead) goes
     through the same freeze pass and is protected the same way."""
     m = _load(tmp_path, "s14", """
-        -constants(c_s = ++set([1, 2, 3]))
+        -constant_value(c_s, ++set([1, 2, 3]))
         bad(X) <- (X is ++(c_s.add(4)))
     """)
     v = Var()
@@ -357,7 +373,7 @@ def test_plusplus_set_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
 def test_structured_set_literal_constant_is_already_immutable_by_construction(tmp_path):
     """A source-level {...} set literal lowers to SetTerm (frozenset-backed,
     no public mutator at all) — freezing has nothing to do here."""
-    m = _load(tmp_path, "s15", "-private([tag])\n-constants(c_s = {tag})\n")
+    m = _load(tmp_path, "s15", "-private([tag])\n-constant_value(c_s, {tag})\n")
     value = m.__dict__["c_s"]
     assert not hasattr(value, "add") and not hasattr(value, "discard")
 
@@ -371,8 +387,8 @@ def test_clause_solution_list_constant_is_frozen_not_just_the_global(tmp_path):
     cached answer."""
     from clausal.logic.constants import _FrozenList
     m = _load(tmp_path, "s16b", """
-        -constants(c_l = [1, 2, 3])
-        get(X) <- (X is c_l)
+        -constant_value(c_l, [1, 2, 3])
+        get(X) <- (X is ++c_l)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("get", v, module=m.__dict__["$module"])]
@@ -384,8 +400,8 @@ def test_clause_solution_list_constant_is_frozen_not_just_the_global(tmp_path):
 def test_clause_solution_dict_constant_backing_is_frozen(tmp_path):
     from clausal.logic.constants import _FrozenDict
     m = _load(tmp_path, "s16c", """
-        -constants(c_d = {"k": 1})
-        get(X) <- (X is c_d)
+        -constant_value(c_d, {'k': 1})
+        get(X) <- (X is ++c_d)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("get", v, module=m.__dict__["$module"])]
@@ -401,7 +417,7 @@ def test_mutable_copy_escape_route_via_deepcopy(tmp_path):
     leaving the constant itself untouched."""
     import copy
     from clausal.logic.constants import _FrozenList
-    m = _load(tmp_path, "s16d", "-constants(c_l = [1, 2, 3])\n")
+    m = _load(tmp_path, "s16d", "-constant_value(c_l, [1, 2, 3])\n")
     original = m.__dict__["c_l"]
     working_copy = copy.deepcopy(original)
     assert type(working_copy) is list
@@ -416,7 +432,7 @@ def test_mutable_copy_escape_route_via_deepcopy(tmp_path):
 
 def test_frozen_containers_pickle_round_trip_to_plain_containers(tmp_path):
     import pickle
-    m = _load(tmp_path, "s16e", "-constants(c_l = [1, 2, 3])\n")
+    m = _load(tmp_path, "s16e", "-constant_value(c_l, [1, 2, 3])\n")
     original = m.__dict__["c_l"]
     restored = pickle.loads(pickle.dumps(original))
     assert type(restored) is list
@@ -429,7 +445,7 @@ def test_plusplus_frozenset_constant_is_returned_unwrapped(tmp_path):
     """A ++()-escape-built frozenset is already immutable AND hashable —
     _freeze must return it as-is, not wrap it in the mutable-set-derived
     _FrozenSet (which is unhashable, a downgrade)."""
-    m = _load(tmp_path, "s16f", "-constants(c_fs = ++frozenset({1, 2}))\n")
+    m = _load(tmp_path, "s16f", "-constant_value(c_fs, ++frozenset({1, 2}))\n")
     value = m.__dict__["c_fs"]
     assert type(value) is frozenset
     assert value == frozenset({1, 2})
@@ -442,10 +458,12 @@ def test_true_false_undefined_as_constant_values(tmp_path):
     RHS spellings, not just their canonical True/False/Undefined forms."""
     from clausal.terms import Undefined
     m = _load(tmp_path, "s16g", """
-        -constants(c_b = true, c_f = false, c_u = undefined)
-        got_b(X) <- (X is c_b)
-        got_f(X) <- (X is c_f)
-        got_u(X) <- (X is c_u)
+        -constant_value(c_b, true)
+        -constant_value(c_f, false)
+        -constant_value(c_u, undefined)
+        got_b(X) <- (X is ++c_b)
+        got_f(X) <- (X is ++c_f)
+        got_u(X) <- (X is ++c_u)
     """)
     module = m.__dict__["$module"]
     v = Var()
@@ -460,8 +478,8 @@ def test_frozen_list_unifies_with_equal_plain_list_literal(tmp_path):
     """Unification behavior of a frozen container is identical to a
     literal: structural equality, not identity."""
     m = _load(tmp_path, "s16", """
-        -constants(c_l = [1, 2, 3])
-        matches(X) <- (c_l is [X, 2, 3])
+        -constant_value(c_l, [1, 2, 3])
+        matches(X) <- (++c_l is [X, 2, 3])
     """)
     v = Var()
     assert [deref(v) for _ in call("matches", v, module=m.__dict__["$module"])] == [1]
@@ -471,25 +489,26 @@ def test_multiple_constants_directives(tmp_path):
     """Two -constants directives in one file; the second references the
     first's constant. (Already worked pre-2026-08-25 — pinned directly.)"""
     m = _load(tmp_path, "s17", """
-        -constants(c_base = 10)
-        -constants(c_double = c_base * 2)
-        got(X) <- (X is c_double)
+        -constant_value(c_base, 10)
+        -constant_value(c_double, c_base * 2)
+        got(X) <- (X is ++c_double)
     """)
     v = Var()
     assert [deref(v) for _ in call("got", v, module=m.__dict__["$module"])] == [20]
 
 
-def test_module_export_list_rejects_constant_names(tmp_path):
-    """The -module-specific "cannot list constant" message is gone with the
-    shape that triggered it; the collision check gives the accurate one,
-    because a listed lowercase name IS an atom."""
-    with pytest.raises(SyntaxError, match="constant AND listed as a bare atom"):
-        _load(tmp_path, "h", "-module(h, [c_pi])\n-constants(c_pi = 3.14)\n")
+def test_module_export_list_may_list_a_constant_name(tmp_path):
+    """It is not a rejection any more: the listing declares the ATOM, the
+    declaration binds the VALUE, and the two coexist. -module used to refuse
+    a constant-shaped export outright."""
+    m = _load(tmp_path, "h",
+              "-module(h, [c_pi])\n-constant_value(c_pi, 3.14)\n")
+    assert m.c_pi == 3.14
 
 
 def test_non_constant_shaped_declaration_rejected(tmp_path):
     with pytest.raises(SyntaxError, match="constant name"):
-        _load(tmp_path, "i", "-constants(PI = 3.14)\np(X) <- (X == 1)\n")
+        _load(tmp_path, "i", "-constant_value(PI, 3.14)\np(X) <- (X == 1)\n")
 
 
 def test_comprehension_target_matching_constant_shape_is_not_flagged(tmp_path):
@@ -517,7 +536,7 @@ def test_walrus_target_matching_constant_shape_is_not_flagged(tmp_path):
 
 
 def test_import_constant_direct(tmp_path):
-    _load(tmp_path, "own1", "-constants(c_pi = 3.14159)\npi(c_pi),\n")
+    _load(tmp_path, "own1", "-constant_value(c_pi, 3.14159)\npi(++c_pi),\n")
     m = _load(tmp_path, "use1", """
         -import_from(tc_own1, [c_pi])
         twopi(X) <- (X is ++(c_pi * 2))
@@ -528,7 +547,7 @@ def test_import_constant_direct(tmp_path):
 
 
 def test_import_constant_alias(tmp_path):
-    _load(tmp_path, "own2", "-constants(c_pi = 3.14159)\n")
+    _load(tmp_path, "own2", "-constant_value(c_pi, 3.14159)\n")
     m = _load(tmp_path, "use2", """
         -import_from(tc_own2, [alias(c_pi, c_mypi)])
         p(c_mypi),
@@ -538,7 +557,7 @@ def test_import_constant_alias(tmp_path):
 
 
 def test_qualified_constant_access(tmp_path):
-    _load(tmp_path, "own4", "-constants(c_pi = 3.14159)\n")
+    _load(tmp_path, "own4", "-constant_value(c_pi, 3.14159)\n")
     m = _load(tmp_path, "use4", """
         -import_module(tc_own4)
         p(X) <- (X is ++(tc_own4.c_pi + 0))
@@ -558,30 +577,28 @@ def test_qualified_constant_access(tmp_path):
 
 
 def test_import_constant_direct_collides_with_local_constant_rejected(tmp_path):
-    _load(tmp_path, "own7", "-constants(c_pi = 3.14159)\n")
+    _load(tmp_path, "own7", "-constant_value(c_pi, 3.14159)\n")
     with pytest.raises(SyntaxError, match="already bound"):
         _load(tmp_path, "use7", """
-            -constants(c_pi = 3)
+            -constant_value(c_pi, 3)
             -import_from(tc_own7, [c_pi])
         """)
 
 
-def test_constant_in_private_is_now_the_collision_error(tmp_path):
-    """A DELIBERATELY DROPPED behaviour, pinned so the drop is visible.
-
-    -private used to accept a constant-shaped name as documentation ("this
-    one is an implementation detail"), a recorded no-op. A listed lowercase
-    name is an atom, and there is no lexical way to tell the two apart any
-    more, so the listing now collides with the declaration and the file is
-    refused. Write the atom quoted if both readings are wanted.
-    """
-    with pytest.raises(SyntaxError, match="constant AND listed as a bare atom"):
-        _load(tmp_path, "pdoc1", """
-            -constants(c_pi = 3.14159)
-            -private([helper, c_pi])
-            helper,
-            q(X) <- (X is c_pi)
-        """)
+def test_a_private_listing_declares_the_atom_and_leaves_the_value(tmp_path):
+    """-private used to accept a constant-shaped name as documentation, a
+    recorded no-op. It declares the ATOM now, which is a stronger and more
+    useful reading -- and the constant keeps the module global."""
+    m = _load(tmp_path, "pdoc1", """
+        -private([helper, c_pi])
+        -constant_value(c_pi, 3.14159)
+        helper,
+        q(X) <- (X is ++c_pi)
+    """)
+    v = Var()
+    assert [deref(v) for _ in call("q", v, module=m.__dict__["$module"])] == \
+        [3.14159]
+    assert m.c_pi == 3.14159
 
 
 def test_private_declaration_no_longer_carries_a_constants_list():
@@ -594,14 +611,14 @@ def test_private_declaration_no_longer_carries_a_constants_list():
     assert priv.args == [["helper", "other"]]
 
 
-def test_module_export_list_still_rejects_constants(tmp_path):
-    """Still refused with the directives in the other order -- the check
-    runs once the whole module has been walked."""
-    with pytest.raises(SyntaxError, match="constant AND listed as a bare atom"):
-        _load(tmp_path, "pdoc3", """
-            -constants(c_pi = 3.14)
-            -module(pdoc3, [c_pi])
-        """)
+def test_the_export_listing_works_in_either_order(tmp_path):
+    """The declaration before the listing, and after: whichever runs second
+    must not bind over the other."""
+    m = _load(tmp_path, "pdoc3", """
+        -constant_value(c_pi, 3.14)
+        -module(pdoc3, [c_pi])
+    """)
+    assert m.c_pi == 3.14
 
 
 def test_constants_rhs_can_construct_an_imported_functor():
@@ -663,8 +680,8 @@ def test_constants_rhs_functor_over_arity_is_a_load_error(tmp_path):
     with pytest.raises(SyntaxError, match=r"wrap/1"):
         _load(tmp_path, "cfo1", """
             -import_from(tests.fixtures.const_functor_owner, [wrap])
-            -constants(c_bad = wrap(1, 2))
-            p(X) <- (X is c_bad)
+            -constant_value(c_bad, wrap(1, 2))
+            p(X) <- (X is ++c_bad)
         """)
 
 
@@ -673,8 +690,8 @@ def test_constants_rhs_functor_unknown_field_is_a_load_error(tmp_path):
     with pytest.raises(SyntaxError, match=r"pair/2"):
         _load(tmp_path, "cfo2", """
             -import_from(tests.fixtures.const_functor_owner, [pair])
-            -constants(c_bad = pair(NOPE=1))
-            p(X) <- (X is c_bad)
+            -constant_value(c_bad, pair(NOPE=1))
+            p(X) <- (X is ++c_bad)
         """)
 
 
@@ -685,8 +702,8 @@ def test_constants_rhs_functor_partial_construction_is_a_load_error(tmp_path):
     with pytest.raises(SyntaxError, match=r"unfilled"):
         _load(tmp_path, "cfo3", """
             -import_from(tests.fixtures.const_functor_owner, [pair])
-            -constants(c_bad = pair(1))
-            p(X) <- (X is c_bad)
+            -constant_value(c_bad, pair(1))
+            p(X) <- (X is ++c_bad)
         """)
 
 
@@ -707,8 +724,8 @@ def test_truth_value_spelling_as_a_constant_dict_key(tmp_path):
     built = {}
     for tag, key in (("lower", "undefined"), ("canon", "Undefined")):
         m = _load(tmp_path, f"tvkey_{tag}", f"""
-            -constants(c_d = {{{key}: 1}})
-            lookup(X) <- (X is c_d)
+            -constant_value(c_d, {{{key}: 1}})
+            lookup(X) <- (X is ++c_d)
         """)
         v = Var()
         [result] = [deref(v) for _ in call("lookup", v,
@@ -738,8 +755,8 @@ def test_declared_atom_constant_dict_key_still_works(tmp_path):
     from clausal.terms import DictTerm
     m = _load(tmp_path, "tvkey_ctl", """
         -private([alpha])
-        -constants(c_d = {alpha: 1})
-        lookup(X) <- (X is c_d)
+        -constant_value(c_d, {alpha: 1})
+        lookup(X) <- (X is ++c_d)
     """)
     v = Var()
     [result] = [deref(v) for _ in call("lookup", v, module=m.__dict__["$module"])]
@@ -756,7 +773,7 @@ def test_declared_atom_constant_dict_key_still_works(tmp_path):
 def test_lowercase_constant_name_is_accepted(tmp_path):
     """A constant is spelled like an atom now: lowercase, no underscores."""
     m = _load(tmp_path, "c_lower", """
-        -constants(max_fine = 5000)
+        -constant_value(max_fine, 5000)
     """)
     assert m.max_fine == 5000
 
@@ -765,7 +782,7 @@ def test_underscored_constant_spelling_is_refused(tmp_path):
     """The retired spelling fails loudly, and the message says what to write."""
     with pytest.raises(SyntaxError) as excinfo:
         _load(tmp_path, "c_old", """
-            -constants(_MAX_FINE_ = 5000)
+            -constant_value(_MAX_FINE_, 5000)
         """)
     message = str(excinfo.value)
     assert "_MAX_FINE_" in message
@@ -777,7 +794,7 @@ def test_capital_initial_constant_name_is_refused(tmp_path):
     exceptions -- so it cannot name a constant either."""
     with pytest.raises(SyntaxError, match="capital-initial"):
         _load(tmp_path, "c_caps", """
-            -constants(MaxFine = 5000)
+            -constant_value(MaxFine, 5000)
         """)
 
 
@@ -786,7 +803,7 @@ def test_underscore_led_constant_name_is_refused(tmp_path):
     the constant class as its exact complement."""
     with pytest.raises(SyntaxError, match="underscore-led"):
         _load(tmp_path, "c_under", """
-            -constants(_max_fine = 5000)
+            -constant_value(_max_fine, 5000)
         """)
 
 
@@ -796,7 +813,7 @@ def test_an_uncased_script_can_name_a_constant(tmp_path):
     ``islower()`` test would refuse this name while offering no alternative
     -- it is not a variable, so no leading underscore would help."""
     m = _load(tmp_path, "c_jp", """
-        -constants(円周率 = 3.14159)
+        -constant_value(円周率, 3.14159)
     """)
     assert getattr(m, "円周率") == 3.14159
 
@@ -811,7 +828,7 @@ def test_constant_is_reached_through_the_escape(tmp_path):
     """
     m = _load(tmp_path, "c_escape", """
         -module(c_escape, [big/1, small/1, thing])
-        -constants(max_fine = 5000)
+        -constant_value(max_fine, 5000)
 
         big(thing) <- (++max_fine > 4000)
         small(thing) <- (++max_fine > 6000)
@@ -820,7 +837,7 @@ def test_constant_is_reached_through_the_escape(tmp_path):
     assert len(list(call("small", m.thing, module=m.__dict__["$module"]))) == 0
 
 
-def test_bare_name_folds_and_the_escape_looks_up(tmp_path):
+def test_a_bare_name_is_the_atom_and_the_escape_is_the_value(tmp_path):
     """The two spellings differ in BINDING TIME, and both work.
 
     A bare reference to a bound module global is folded into the clause term
@@ -836,8 +853,8 @@ def test_bare_name_folds_and_the_escape_looks_up(tmp_path):
     name unconditionally.
     """
     m = _load(tmp_path, "c_bind", """
-        -module(c_bind, [bare/1, escaped/1])
-        -constants(max_fine = 5000)
+        -module(c_bind, [bare/1, escaped/1, max_fine])
+        -constant_value(max_fine, 5000)
 
         bare(max_fine),
         escaped(X) <- (X is ++max_fine)
@@ -848,10 +865,12 @@ def test_bare_name_folds_and_the_escape_looks_up(tmp_path):
         v = Var()
         return [deref(v) for _ in call(goal, v, module=mod)]
 
-    assert ask("bare") == [5000]
-    assert ask("escaped") == [5000]
+    assert ask("bare") == [("max_fine",)], "the bare name is the atom"
+    assert ask("escaped") == [5000], "++ is the value"
+    # And the escape is a LOOKUP, not a fold: rebinding the global moves it.
+    # The atom cannot move -- it was compiled into the clause as a literal.
     m.max_fine = 9999
-    assert ask("bare") == [5000], "a bare reference folded at construction"
+    assert ask("bare") == [("max_fine",)]
     assert ask("escaped") == [9999], "++ resolves the global at solve time"
 
 
@@ -862,72 +881,55 @@ def test_a_mistyped_constant_reference_is_the_strict_atoms_error(tmp_path):
     with pytest.raises(NameError) as excinfo:
         _load(tmp_path, "c_typo", """
             -module(c_typo, [holds/1])
-            -constants(max_fine = 5000)
+            -constant_value(max_fine, 5000)
 
             holds(max_fien),
         """)
     assert "max_fien" in str(excinfo.value)
 
 
-def test_declaring_a_name_as_both_a_constant_and_a_bare_atom_is_refused(tmp_path):
-    """The one combination that cannot work.
+def test_one_name_is_the_atom_bare_and_the_constant_through_the_escape(tmp_path):
+    """The operator's rule, 2026-09-11, and the point of the whole design.
 
-    A ``-module``/``-private`` atom listing rebinds the module global to the
-    atom AFTER the module body has run, so the constant that -constants
-    bound, gated and froze is silently overwritten -- measured: the global
-    ends as ``('pi',)`` and even ``++pi`` yields the atom rather than the
-    value.  Refused rather than resolved.
-    """
-    with pytest.raises(SyntaxError) as excinfo:
-        _load(tmp_path, "c_clash", """
-            -module(c_clash, [holds/1, pi])
-            -constants(pi = 5000)
+    ``pi`` written bare is the ATOM; ``++pi`` is the constant's value. One
+    name carries both readings in one file with no conflict, and the atom is
+    the SAME atom ``global_atom/2`` yields -- so nothing about writing the
+    constant makes the atom a second-class spelling.
 
-            holds(pi),
-        """)
-    message = str(excinfo.value)
-    assert "pi" in message
-    assert "constant" in message and "atom" in message
-
-
-def test_the_collision_is_refused_in_the_other_order_too(tmp_path):
-    """-constants before the listing, and after: the check runs once the
-    whole module has been walked, so it cannot depend on statement order."""
-    with pytest.raises(SyntaxError, match="pi"):
-        _load(tmp_path, "c_clash2", """
-            -constants(pi = 5000)
-            -module(c_clash2, [holds/1, pi])
-
-            holds(pi),
-        """)
-
-
-def test_a_private_atom_listing_collides_the_same_way(tmp_path):
-    """-private rebinds the global exactly as -module does."""
-    with pytest.raises(SyntaxError, match="pi"):
-        _load(tmp_path, "c_clash3", """
-            -module(c_clash3, [holds/1])
-            -private([pi])
-            -constants(pi = 5000)
-
-            holds(pi),
-        """)
-
-
-def test_a_name_can_be_a_constant_AND_an_atom_via_the_quoted_form(tmp_path):
-    """The operator's point, and it holds: only the BARE atom declaration
-    collides.  The quoted form reaches the atom without touching the module
-    global, so one name carries both readings in one file -- ``pi`` is the
-    constant, ``'pi'`` is the atom, and the quoted one is the same atom
-    ``global_atom/2`` yields.
+    Two things in ``compiler_v2`` are what make it true, and either one
+    regressing shows up here: the -module atom listing must not bind over
+    the constant's module global, and a DECLARED atom must compile to its
+    cell literal rather than reading that global.
     """
     m = _load(tmp_path, "c_both", """
-        -module(c_both, [constant_is/1, atom_is/1, agrees/0])
-        -constants(pi = 5000)
+        -module(c_both, [constant_is/1, atom_is/1, agrees/0, pi])
+        -constant_value(pi, 5000)
 
-        constant_is(pi),
-        atom_is('pi'),
+        constant_is(X) <- (X is ++pi)
+        atom_is(pi),
         agrees <- (global_atom("pi", A), atom_is(A))
+    """)
+    mod = m.__dict__["$module"]
+
+    def ask(goal):
+        v = Var()
+        return [deref(v) for _ in call(goal, v, module=mod)]
+
+    assert ask("constant_is") == [5000], "++pi is the value"
+    assert ask("atom_is") == [("pi",)], "bare pi is the atom"
+    assert len(list(call("agrees", module=mod))) == 1, (
+        "the bare form must be the same atom global_atom/2 yields")
+
+
+def test_the_two_readings_hold_in_either_declaration_order(tmp_path):
+    """The constant declared before the -module listing, and after: neither
+    binding may win by being later in the file."""
+    m = _load(tmp_path, "c_both2", """
+        -constant_value(pi, 5000)
+        -module(c_both2, [constant_is/1, atom_is/1, pi])
+
+        constant_is(X) <- (X is ++pi)
+        atom_is(pi),
     """)
     mod = m.__dict__["$module"]
 
@@ -937,18 +939,56 @@ def test_a_name_can_be_a_constant_AND_an_atom_via_the_quoted_form(tmp_path):
 
     assert ask("constant_is") == [5000]
     assert ask("atom_is") == [("pi",)]
-    assert len(list(call("agrees", module=mod))) == 1, (
-        "the quoted form must be the same atom global_atom/2 yields")
 
 
-def test_distinct_names_do_not_collide(tmp_path):
-    """The negative control: without it, a check that refuses EVERYTHING
-    passes every test above."""
+def test_a_private_atom_listing_works_the_same_way(tmp_path):
+    """-private binds the atom exactly as -module does, and must leave the
+    constant's global alone in the same way."""
+    m = _load(tmp_path, "c_both3", """
+        -module(c_both3, [constant_is/1, atom_is/1])
+        -private([pi])
+        -constant_value(pi, 5000)
+
+        constant_is(X) <- (X is ++pi)
+        atom_is(pi),
+    """)
+    mod = m.__dict__["$module"]
+
+    def ask(goal):
+        v = Var()
+        return [deref(v) for _ in call(goal, v, module=mod)]
+
+    assert ask("constant_is") == [5000]
+    assert ask("atom_is") == [("pi",)]
+
+
+def test_a_constant_name_used_bare_must_still_be_declared_as_an_atom(tmp_path):
+    """Declaring a constant does NOT declare the atom.
+
+    A conservative reading of the rule, flagged as such: ``-constant_value``
+    could reasonably imply the atom, but starting strict leaves that
+    relaxation available later, while starting permissive could not be
+    tightened without breaking files. The diagnostic is the ordinary
+    strict-atoms one, which says exactly what to add.
+    """
+    with pytest.raises(NameError, match="pi"):
+        _load(tmp_path, "c_undeclared", """
+            -module(c_undeclared, [atom_is/1])
+            -constant_value(pi, 5000)
+
+            atom_is(pi),
+        """)
+
+
+def test_distinct_names_do_not_interact(tmp_path):
+    """The negative control for the pair above: a constant and an unrelated
+    atom must not need each other, so a check that refused or accepted
+    everything would show here."""
     m = _load(tmp_path, "c_noclash", """
-        -module(c_noclash, [holds/1, pi])
-        -constants(max_fine = 5000)
+        -module(c_noclash, [holds/1, other]) 
+        -constant_value(max_fine, 5000)
 
-        holds(pi),
+        holds(other),
     """)
     assert m.max_fine == 5000
 
@@ -961,7 +1001,7 @@ def test_an_imported_constant_is_reached_through_the_escape(tmp_path):
     so -- but the emitted ImportFrom binds the owner's module global here,
     which is all ``++name`` needs.
     """
-    _load(tmp_path, "own_c1", "-constants(max_fine = 5000)\n")
+    _load(tmp_path, "own_c1", "-constant_value(max_fine, 5000)\n")
     m = _load(tmp_path, "use_c1", """
         -module(use_c1, [big/1, small/1, thing])
         -import_from(tc_own_c1, [max_fine])
@@ -976,7 +1016,7 @@ def test_an_imported_constant_is_reached_through_the_escape(tmp_path):
 
 def test_an_imported_constant_under_an_alias(tmp_path):
     """The alias form carries the value across too."""
-    _load(tmp_path, "own_c2", "-constants(max_fine = 5000)\n")
+    _load(tmp_path, "own_c2", "-constant_value(max_fine, 5000)\n")
     m = _load(tmp_path, "use_c2", """
         -module(use_c2, [limit/1])
         -import_from(tc_own_c2, [alias(max_fine, cap)])
@@ -998,7 +1038,7 @@ def test_a_constant_named_like_the_unused_marker_warns(tmp_path):
     with _warnings.catch_warnings(record=True) as caught:
         _warnings.simplefilter("always")
         m = _load(tmp_path, "c_unused", """
-            -constants(item_UNUSED = 3)
+            -constant_value(item_UNUSED, 3)
         """)
     assert m.item_UNUSED == 3
     messages = [str(w.message) for w in caught
@@ -1015,8 +1055,133 @@ def test_an_ordinary_constant_name_does_not_warn(tmp_path):
     with _warnings.catch_warnings(record=True) as caught:
         _warnings.simplefilter("always")
         _load(tmp_path, "c_quiet", """
-            -constants(item_count = 3)
+            -constant_value(item_count, 3)
         """)
     assert not [w for w in caught
                 if issubclass(w.category, ClausalLintWarning)
                 and "_UNUSED" in str(w.message)]
+
+
+# ── The -constant_value_units/3 form ──────────────────────────────────────────
+
+
+def test_units_form_binds_a_quantity(tmp_path):
+    """``-constant_value_units(max_fine, 5000, euro)`` binds
+    ``max_fine = Quantity(5000, euro)`` -- the unit kept out of the value,
+    which is the whole reason the 3-arity form exists.
+
+    The value is the same object the ``5000 (euro)`` annotation sugar builds:
+    both lower to ``$Quantity(<value>, <unit>)``.
+    """
+    m = _load(tmp_path, "cvu", """
+        -module(cvu, [cost/1])
+        -import_from(european_union, [euro])
+        -constant_value_units(max_fine, 5000, euro)
+
+        cost(X) <- (X is ++max_fine)
+    """)
+    v = Var()
+    [q] = [deref(v) for _ in call("cost", v, module=m.__dict__["$module"])]
+    assert q == m.max_fine
+    # Same shape the annotation sugar produces for the same source pair.
+    sugar = _load(tmp_path, "cvu_sugar", """
+        -module(cvu_sugar, [cost/1])
+        -import_from(european_union, [euro])
+
+        cost(5000 (euro)),
+    """)
+    v = Var()
+    [from_sugar] = [deref(v) for _ in call("cost", v,
+                                           module=sugar.__dict__["$module"])]
+    assert q == from_sugar, (q, from_sugar)
+
+
+# ── A declaration must not overwrite an existing binding ──────────────────────
+
+
+@pytest.mark.parametrize("label,source", [
+    ("an import", "-module(m, [q/0])\nimport math\n"
+                  "-constant_value(math, 3)\nq <- (1 == 1)\n"),
+    # BELOW the declaration on purpose: a def further down the file
+    # overwrites it just as surely as one above, so the check cannot be made
+    # at the directive's own position.
+    ("a def below it", "-module(m, [q/0])\n-constant_value(helper, 3)\n"
+                       "def helper(): return 1\nq <- (1 == 1)\n"),
+    ("a predicate", "-module(m, [q/0, helper/1])\n-constant_value(helper, 3)\n"
+                    "helper(1),\nq <- (1 == 1)\n"),
+])
+def test_a_constant_may_not_overwrite_an_existing_binding(tmp_path, label,
+                                                          source):
+    """A constant declaration writes a module global. Left unchecked it
+    silently replaces an import, a helper, or a predicate class -- the value
+    would be right and every OTHER use of the name would quietly become the
+    constant."""
+    with pytest.raises(SyntaxError, match="already bound"):
+        _load(tmp_path, "ovw", source)
+
+
+def test_an_atom_of_the_same_name_is_not_an_overwrite(tmp_path):
+    """The negative control, and the intended case: sharing the spelling
+    with an ATOM is exactly what this design is for, so the guard must be a
+    whitelist rather than a plain "is the name bound"."""
+    m = _load(tmp_path, "ovw_ok", """
+        -module(ovw_ok, [q/1, pi])
+        -constant_value(pi, 3.14)
+
+        q(pi),
+    """)
+    assert m.pi == 3.14
+
+
+# ── constant_value/2 ──────────────────────────────────────────────────────────
+
+
+def test_constant_value_2_reflects_a_declaration(tmp_path):
+    """``constant_value(Name, Value)`` -- Markus Triska's name for the
+    cross-implementation convention. ``Name`` is an ATOM, not a string."""
+    m = _load(tmp_path, "cvref", """
+        -module(cvref, [look/1, absent/0, enumerate/2, cvref_pi,
+                        cvref_missing])
+        -constant_value(cvref_pi, 3.14159)
+
+        look(V) <- constant_value(cvref_pi, V)
+        absent <- constant_value(cvref_missing, _)
+        enumerate(N, V) <- constant_value(N, V)
+    """)
+    mod = m.__dict__["$module"]
+    v = Var()
+    assert [deref(v) for _ in call("look", v, module=mod)] == [3.14159]
+    assert len(list(call("absent", module=mod))) == 0, (
+        "a name nothing declares must fail, not error")
+    n, v2 = Var(), Var()
+    pairs = [(deref(n), deref(v2))
+             for _ in call("enumerate", n, v2, module=mod)]
+    assert (("cvref_pi",), 3.14159) in pairs, pairs
+
+
+def test_constant_value_2_reads_the_name_as_an_atom(tmp_path):
+    """The NAME POSITION speaks atoms in and atoms out (spec §6.4).
+
+    Written with the double-quoted spelling deliberately: under the engine
+    default ``-double_quotes(atom)`` that IS an atom, so it matches -- and
+    the same source under ``-double_quotes(chars)`` is a string, which names
+    no constant and fails. Both halves asserted, because the first alone
+    would pass on an implementation that ignored the argument's type.
+    """
+    m = _load(tmp_path, "cvref2", """
+        -module(cvref2, [by_quoted/0, cvref2_pi])
+        -constant_value(cvref2_pi, 3.14159)
+
+        by_quoted <- constant_value("cvref2_pi", _)
+    """)
+    assert len(list(call("by_quoted", module=m.__dict__["$module"]))) == 1
+
+    chars = _load(tmp_path, "cvref3", """
+        -module(cvref3, [by_string/0, cvref3_pi])
+        -double_quotes(chars)
+        -constant_value(cvref3_pi, 3.14159)
+
+        by_string <- constant_value("cvref3_pi", _)
+    """)
+    assert len(list(call("by_string", module=chars.__dict__["$module"]))) == 0, (
+        "a string names no constant")

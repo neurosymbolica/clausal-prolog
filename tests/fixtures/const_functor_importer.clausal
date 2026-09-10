@@ -9,7 +9,9 @@
 # with the ++ escape.  `w`, `p` and `nest` are constants; `inner` is an atom.
 -import_from(tests.fixtures.const_functor_owner, [wrap, pair])
 -private([inner])
--constants(w = wrap(inner), p = pair(1, 2), nest = [wrap(pair(3, 4))])
+-constant_value(w, wrap(inner))
+-constant_value(p, pair(1, 2))
+-constant_value(nest, [wrap(pair(3, 4))])
 
 wrapped(X) <- (X is ++w)
 paired(X) <- (X is ++p)

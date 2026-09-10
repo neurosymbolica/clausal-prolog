@@ -244,7 +244,7 @@ def is_nil(term) -> bool:
     ``()`` are one term, and so is any SUBCLASS instance of those that holds
     nothing.  The subclass case is not hypothetical: a ``-constants`` list
     value is frozen to a ``_FrozenList`` (``clausal.logic.constants``), so
-    ``-constants(_N_ = [])`` names an empty list that is not exactly a
+    ``-constant_value(_N_, [])`` names an empty list that is not exactly a
     ``list`` — an exact-``type`` test made it a DIFFERENT term from the ``[]``
     every other path produces, and an unhashable one in a key position.
 

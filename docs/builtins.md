@@ -595,23 +595,52 @@ way for a strict-default file to obtain a global atom it does not list. See
 
 ---
 
+### `constant_value/2`
+
+```text
+constant_value(Name, Value)
+```
+
+The constant *Name* names. `Name` is an **atom**; `Value` is its frozen ground value.
+
+This is Markus Triska's name for the cross-implementation convention (2026-09-10), so the
+spelling and arity are not Clausal's to vary: an exported `.pl` and any expansion prelude must
+use exactly this.
+
+```clausal
+-module(m, [retry_limit/1, max_retries])
+-constant_value(max_retries, 3)
+
+retry_limit(N) <- constant_value(max_retries, N)
+```
+
+!!! warning "Scope: program-wide, not module-implicit"
+    In a Prolog system there is one program, so `constant_value/2` is a fact about it. Clausal
+    has modules, and the module-implicit reading would need the **calling** module — which a
+    builtin does not get: the registry hands dispatch functions their arguments and a trail,
+    and nothing else. So this enumerates every loaded Clausal module's own declarations,
+    exactly as `module_constant(-Module, +Name, ?Value)` does. Two modules declaring the same
+    constant name both answer. Use [`module_constant/3`](#module_constant3) when the module
+    matters.
+
 ### `module_constant/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:module_constant_3"
 ```
-Reflect on a module's own [`-constants`](directives.md#-constants) declarations. `Module` is the
-Python module object a `-import_module(...)` directive binds — the same object a qualified
-constant reference like `other_module.pi` resolves against; `Name` is the constant's
-declaration spelling as a string (`"max_retries"`); `Value` is the
+Reflect on a module's own [`-constant_value`](directives.md#-constant_value) declarations,
+naming the module explicitly. `Module` is the Python module object a `-import_module(...)`
+directive binds — the same object a qualified constant reference like `other_module.pi`
+resolves against; `Name` is the constant's declaration spelling as an **atom**
+(`max_retries`); `Value` is the
 constant's frozen value — the identical object the declaring module's own clause bodies embed.
 
 ```clausal
 -module(m, [])
--constants(max_retries = 3)
+-constant_value(max_retries, 3)
 ```
 ```clausal
 -import_module(m)
-retry_limit(N) <- module_constant(m, "max_retries", N)
+retry_limit(N) <- module_constant(m, max_retries, N)
 ```
 
 Four modes, following directly from which of `Module`/`Name` are bound:

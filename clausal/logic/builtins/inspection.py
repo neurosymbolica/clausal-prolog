@@ -743,6 +743,36 @@ def _module_constants_dict(py_module):
     return logic_module.constants
 
 
+@_builtin("constant_value", 2)
+def _constant_value__2(name, value, trail, k):
+    """constant_value(Name, Value) — the constant *Name* names.
+
+    ``Name`` is an ATOM (the NAME POSITION speaks atoms in and atoms out,
+    spec §6.4); ``Value`` is its frozen ground value.
+
+    This is Markus Triska's name for the cross-implementation convention
+    (2026-09-10), so the spelling and arity are not ours to vary: an
+    exported `.pl` and any expansion prelude must use exactly this.
+
+    **Scope, and the one compromise.** In a Prolog system there is one
+    program, so ``constant_value/2`` is a fact about it. Clausal has
+    modules, and the module-implicit reading would need the CALLING
+    module -- which a builtin does not get: the registry hands dispatch
+    functions their arguments and a trail, and nothing else. So this
+    enumerates every loaded Clausal module's own declarations, exactly as
+    ``module_constant(-Module, +Name, ?Value)`` does. Two modules that
+    declare the same constant name both answer, in load order. Use
+    ``module_constant/3`` when the module matters.
+
+    Modes:
+
+      (+Name, ?Value): the value(s) declared under that name.
+      (-Name, ?Value): enumerate every declared constant.
+    """
+    m = Var()
+    yield from _module_constant__3(m, name, value, trail, k)
+
+
 @_builtin("module_constant", 3)
 def _module_constant__3(m, name, value, trail, k):
     """module_constant(Module, Name, Value) — reflect on a module's own
