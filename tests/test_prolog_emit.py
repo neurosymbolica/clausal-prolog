@@ -44,25 +44,23 @@ class TestNaming:
         # nv
         assert snake_to_pascal("copy_term") == "CopyTerm"
 
-    def test_var_leading_underscore(self):
-        # nv
-        assert clausal_var_to_prolog("_x") == "X"
+    def test_var_names_are_re_exported_from_clausal_to_prolog(self):
+        """The five var-mangling cases that were here are gone.
 
-    def test_var_allcaps(self):
-        # nv
-        assert clausal_var_to_prolog("RESULT") == "Result"
+        They pinned ``_x`` -> ``X`` and ``RESULT`` -> ``Result``; they also
+        duplicated tests/test_prolog_dialect.py verbatim (DUPLICATE_TESTS.md
+        recorded the pairing).  Both functions are the identity now, so an
+        emission test asserting ``f(x) == x`` had no subject.  Injectivity,
+        round-trip fidelity and the wildcard are pinned in
+        tests/test_prolog_var_identity.py instead.
 
-    def test_var_single_letter(self):
-        # nv
-        assert clausal_var_to_prolog("X") == "X"
-
-    def test_var_anon(self):
-        # nv
-        assert clausal_var_to_prolog("_") == "_"
-
-    def test_var_lowercase_leading(self):
-        # nv
-        assert clausal_var_to_prolog("_head") == "Head"
+        What this file can still say that the others cannot: the exporter
+        re-exports the pair, and it is the SAME pair — an emitter that grew a
+        private mangler of its own would slip past a dialect-module test.
+        """
+        from clausal.tools import prolog_dialect
+        assert clausal_var_to_prolog is prolog_dialect.clausal_var_to_prolog
+        assert prolog_var_to_clausal is prolog_dialect.prolog_var_to_clausal
 
 
 # ── emit_term ────────────────────────────────────────────────────────
@@ -373,13 +371,21 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
         result = clausal_source_to_prolog(source)
         assert "X \\== Y" in result
 
-    def test_variable_naming(self):
-        """Variables follow clausal → Prolog naming conventions."""
+    def test_variable_names_cross_unchanged(self):
+        """Variables keep their spelling through a full source translation.
+
+        Was: ``foo(X, Head, Result)`` — ``_x`` uppercased, ``_head``
+        titlecased, ``RESULT`` titlecased.  Every one of those spellings is a
+        logic variable on both sides of the boundary, so translating them was
+        renaming for its own sake, and the rename was not even injective.
+        Each name here occurs twice, so the singleton post-pass does not fire
+        and what is left is the naming rule alone.
+        """
         # nv
         source = 'foo(_x, _head, RESULT) <- bar(_x, _head, RESULT)'
         result = clausal_source_to_prolog(source)
-        assert "foo(X, Head, Result)" in result
-        assert "bar(X, Head, Result)" in result
+        assert "foo(_x, _head, RESULT)" in result
+        assert "bar(_x, _head, RESULT)" in result
 
     def test_string_literals(self):
         # nv -- a str literal DENOTES AN ATOM (R2); "hello world" needs
@@ -463,18 +469,28 @@ class TestPrologAstConversion:
         assert isinstance(item, PDirective)
 
     def test_variables_converted(self):
+        """Names cross unchanged; the singleton post-pass still fires.
+
+        The two passes used to compound: ``_x`` became ``X``, which no longer
+        carried a leading underscore, so the singleton pass put one back and
+        the argument arrived as ``_X``.  Identity removes the first step, and
+        a Clausal ``_x``-style name is now already underscore-led — the
+        singleton pass leaves it alone rather than double-prefixing it.
+
+        The pass itself is NOT dead, so an ALL-CAPS singleton is included:
+        it has no leading underscore of its own and still gets one, which is
+        what silences the ISO singleton warning it exists to silence.
+        """
         # nv
-        source = 'foo(_x, _head),\n'
+        source = 'foo(_x, _head, RESULT),\n'
         pmod = clausal_source_to_prolog_ast(source)
         item = pmod.items[0]
         assert isinstance(item, PClause)
         head = item.head
         assert isinstance(head, PCompound)
-        # _x → PVar("X"), _head → PVar("Head"), then both are singletons
-        # (each occurs once in this item) so the singleton post-pass
-        # underscore-prefixes them: PVar("_X"), PVar("_Head").
-        assert head.args[0] == PVar("_X")
-        assert head.args[1] == PVar("_Head")
+        assert head.args[0] == PVar("_x")
+        assert head.args[1] == PVar("_head")
+        assert head.args[2] == PVar("_RESULT")
 
     def test_list_with_star_unpack(self):
         # nv

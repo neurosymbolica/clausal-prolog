@@ -2485,10 +2485,14 @@ def _prefix_singletons(item: PItem) -> PItem:
     variables exactly once (a fact-head "any value" position, e.g.
     ``schedule_by_criteria(high, no_accepted_medical_use, DEPENDENCE,
     schedule_i)``), relying on Prolog's convention that a leading ``_``
-    silences the warning. clausal_var_to_prolog renames ``DEPENDENCE`` to
-    ``Dependence``, which un-silences it purely as an artifact of
-    translation — this pass restores the silence at emission time without
-    touching source semantics (a rename only; unification is unaffected).
+    silences the warning. ``DEPENDENCE`` crosses unchanged and carries no
+    leading underscore, so Scryer would warn on it — this pass adds one at
+    emission time without touching source semantics (a rename only;
+    unification is unaffected). It used to have a second job: names were
+    mangled on the way out, and ``clausal_var_to_prolog`` turned a Clausal
+    ``_x``-style singleton into ``X``, un-silencing a warning the source had
+    deliberately silenced. Names cross unchanged now, so ALL-CAPS singletons
+    are what this pass is still for.
 
     Counted over *item* alone (clause head+body together, a fact's args,
     or a DCG rule's head+body): the same per-item scope convert_module
@@ -2496,9 +2500,9 @@ def _prefix_singletons(item: PItem) -> PItem:
     name has no meaning across top-level items in the first place.
     The anonymous variable (``_``) is exempt — every occurrence is already
     independent, so it is never "a singleton" in the sense that matters
-    here. A name already spelled with a leading underscore (a Clausal
-    ``_x``-style singleton, which clausal_var_to_prolog may leave
-    underscore-led in edge cases) is left as-is rather than double-prefixed.
+    here. A name already spelled with a leading underscore (every Clausal
+    ``_x``-style singleton, now that names cross unchanged) is left as-is
+    rather than double-prefixed.
 
     A plain AST rewrite, applied per item by construction: walking every
     PVar in the item's subterms means DCG hidden args, nested compounds,

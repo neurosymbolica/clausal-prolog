@@ -105,65 +105,34 @@ class TestSnakeToPascal:
         assert snake_to_pascal("Foo") == "Foo"
 
 
-class TestClausalVarToProlog:
-    def test_leading_underscore(self):
-        # nv
-        assert clausal_var_to_prolog("_x") == "X"
+class TestVarNamesAreIdentity:
+    """Two regression pins against the mangler that used to live here.
 
-    def test_allcaps(self):
-        # nv
-        assert clausal_var_to_prolog("RESULT") == "Result"
+    The class used to hold fourteen one-name cases pinning a rename
+    (``_x`` -> ``X``, ``Foo`` -> ``_foo``).  Under identity most of them read
+    ``assert f(x) == x``, which passes for any implementation — including one
+    with the call site deleted — so they were dropped.  The four kept below
+    are the ones that still DISCRIMINATE: each returns something different
+    under the old rule.  The properties that replaced the rest (injectivity,
+    round-trip fidelity, the wildcard) are in
+    tests/test_prolog_var_identity.py.
+    """
 
-    def test_single_letter(self):
-        # nv
-        assert clausal_var_to_prolog("X") == "X"
+    def test_leading_underscore_is_not_stripped_and_capitalised(self):
+        # was "X"
+        assert clausal_var_to_prolog("_x") == "_x"
 
-    def test_anon(self):
-        # nv
-        assert clausal_var_to_prolog("_") == "_"
+    def test_allcaps_is_not_titlecased(self):
+        # was "Result"
+        assert clausal_var_to_prolog("RESULT") == "RESULT"
 
-    def test_lowercase_leading(self):
-        # nv
-        assert clausal_var_to_prolog("_head") == "Head"
+    def test_inbound_titlecase_is_not_lowercased_and_prefixed(self):
+        # was "_foo"
+        assert prolog_var_to_clausal("Foo") == "Foo"
 
-    def test_mixed_leading(self):
-        # nv
-        assert clausal_var_to_prolog("_foo") == "Foo"
-
-    def test_head_leading(self):
-        # _head -> strip underscore -> head -> capitalize -> Head
-        # nv
-        assert clausal_var_to_prolog("_head") == "Head"
-
-    def test_single_upper(self):
-        # nv
-        assert clausal_var_to_prolog("Y") == "Y"
-
-
-class TestPrologVarToClausal:
-    def test_single_upper(self):
-        # nv
-        assert prolog_var_to_clausal("X") == "X"
-
-    def test_titlecase(self):
-        # nv
-        assert prolog_var_to_clausal("Foo") == "_foo"
-
-    def test_head(self):
-        # nv
-        assert prolog_var_to_clausal("Head") == "_head"
-
-    def test_leading_underscore(self):
-        # nv
-        assert prolog_var_to_clausal("_Ignored") == "_ignored"
-
-    def test_anon(self):
-        # nv
-        assert prolog_var_to_clausal("_") == "_"
-
-    def test_result(self):
-        # nv
-        assert prolog_var_to_clausal("Result") == "_result"
+    def test_inbound_underscore_capital_keeps_its_capital(self):
+        # was "_ignored"
+        assert prolog_var_to_clausal("_Ignored") == "_Ignored"
 
 
 class TestResolveName:

@@ -32,17 +32,23 @@ class TestEmitTerm:
         # nv
         assert emit_clausal_term(PVar("X")) == "X"
 
-    def test_variable_titlecase(self):
-        # nv
-        assert emit_clausal_term(PVar("Head")) == "_head"
-
     def test_variable_anonymous(self):
         # nv
         assert emit_clausal_term(PVar("_")) == "_"
 
-    def test_variable_named_underscore(self):
+    def test_variable_names_are_emitted_verbatim_and_stay_distinct(self):
+        """Every Prolog variable spelling emits as itself.
+
+        Replaces two cases that pinned the old rename (``Head`` -> ``_head``,
+        ``_Ignored`` -> ``_ignored``).  Stated as distinctness rather than as
+        four ``x == x`` lines, because the old rule sent ``Head`` and ``HEAD``
+        to the same ``_head`` and that is the failure worth guarding.
+        """
         # nv
-        assert emit_clausal_term(PVar("_Ignored")) == "_ignored"
+        names = ["Head", "HEAD", "_Ignored", "_ignored", "N0", "X"]
+        emitted = [emit_clausal_term(PVar(n)) for n in names]
+        assert emitted == names
+        assert len(set(emitted)) == len(names)
 
     def test_integer(self):
         # nv
@@ -365,19 +371,17 @@ class TestNamingConventions:
         # spelling merely containing the suggested one.
         assert f"to {new!r}" in msg
 
-    def test_variable_conversion(self):
-        # nv
-        src = "foo(Head, Tail)."
-        result = prolog_to_clausal(src)
-        assert "_head" in result
-        assert "_tail" in result
+    def test_variable_names_survive_the_import(self):
+        """A whole fact, asserted whole.
 
-    def test_single_letter_var(self):
+        Was two substring tests pinning ``Head`` -> ``_head`` and (vacuously,
+        before and after) that ``X`` contains ``X``.  Asserting the entire
+        emitted line instead means a rename table that renumbered ``HEAD`` to
+        ``Head_2`` could not slip past on a substring match.
+        """
         # nv
-        src = "foo(X, Y)."
-        result = prolog_to_clausal(src)
-        assert "X" in result
-        assert "Y" in result
+        src = "foo(Head, HEAD, Tail, X, _y, _)."
+        assert prolog_to_clausal(src) == "foo(Head, HEAD, Tail, X, _y, _),\n"
 
     def test_anonymous_var(self):
         # nv

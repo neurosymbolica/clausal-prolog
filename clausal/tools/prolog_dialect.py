@@ -119,53 +119,48 @@ def snake_to_pascal(name: str) -> str:
 
 
 def clausal_var_to_prolog(name: str) -> str:
-    """Convert clausal variable names to Prolog convention.
+    """Return *name* unchanged: Clausal and Prolog variables are spelled alike.
 
-    _x       -> X          (strip leading underscore, uppercase)
-    _foo     -> Foo        (strip underscore, capitalize)
-    _head    -> Head       (strip underscore, titlecase)
-    RESULT   -> Result     (ALLCAPS -> titlecase)
-    X        -> X          (single uppercase letter stays)
-    _        -> _          (anonymous stays)
+    A capital-initial identifier (``Foo``, ``FOO``, ``N0``, ``X``) names a
+    logic variable in Clausal exactly as it does in ISO Prolog, and ``_x`` is
+    a variable on both sides too, so there is nothing to translate.  ``_``
+    stays ``_`` and stays anonymous.
+
+    This used to titlecase and strip: ``_head`` -> ``Head``, ``RESULT`` ->
+    ``Result``.  That rule was **non-injective** — ``_result`` and ``RESULT``
+    both landed on ``Result`` — so two distinct variables in one clause
+    silently merged, and a per-clause rename table existed only to number the
+    loser (``Result2``).  Identity cannot collide, so the rename table went
+    with it.  Kept as a function rather than inlined at its one call site
+    because it is the documented name of the outbound convention and is
+    exported (``clausal_to_prolog.__all__``); the pair with
+    :func:`prolog_var_to_clausal` is what makes the round trip readable.
     """
-    if name == "_":
-        return "_"
-    if name.startswith("_") and not name.startswith("__"):
-        name = name[1:]
-    # Titlecase: first letter upper, rest lower
-    if name.isupper() and len(name) > 1:
-        return name[0] + name[1:].lower()
-    if name[0].islower():
-        return name[0].upper() + name[1:]
     return name
 
 
 def prolog_var_to_clausal(name: str) -> str:
-    """Convert Prolog variable names to clausal convention.
+    """Return *name* unchanged — the inverse of :func:`clausal_var_to_prolog`.
 
-    X        -> X          (single uppercase stays — it's ALLCAPS)
-    Foo      -> _foo       (titlecase -> leading underscore lowercase)
-    Head     -> _head      (titlecase -> leading underscore lowercase)
-    _Ignored -> _ignored   (leading underscore, lowercase)
-    _        -> _          (anonymous stays)
-    Foo_     -> _foo       (trailing underscore(s) stripped — a variable
-                            must never land on Clausal's _x_ constant
-                            spelling)
-    _PI_     -> _pi        (same: constant-shaped input is de-constant-ed)
+    Every ISO Prolog variable spelling (capital-initial, or ``_``-led) is
+    already a Clausal variable spelling, so an inbound variable keeps its
+    name and the round trip is lossless.
+
+    This used to lowercase and prefix: ``Foo`` -> ``_foo``.  Like the
+    outbound rule it was non-injective (``Foo`` and ``FOO`` both -> ``_foo``)
+    and needed the same per-clause uniquifier behind it.
+
+    One guard died with the mangling and is worth naming, because it did not
+    become unnecessary — it became unreachable.  The old rule lowercased, so
+    Prolog ``_PI_`` arrived as ``_pi_``, which is Clausal's *module constant*
+    lexical class rather than a variable; trailing underscores were therefore
+    stripped.  Under identity ``_PI_`` simply stays ``_PI_``, which is still
+    constant-shaped — but it now fails LOUDLY at load ("undeclared constant")
+    instead of being quietly renamed, and stripping is no longer something
+    this function can do without breaking injectivity.  See
+    tests/test_prolog_var_identity.py.
     """
-    if name == "_":
-        return "_"
-    if name.startswith("_"):
-        candidate = "_" + name[1:].lower()
-    elif len(name) == 1 and name.isupper():
-        return name
-    else:
-        candidate = "_" + name.lower()
-    # Clausal reserves one-underscore-each-end spellings for constants;
-    # a translated VARIABLE must never land on that class.
-    while len(candidate) > 1 and candidate.endswith("_"):
-        candidate = candidate[:-1]
-    return candidate if candidate != "_" else "_v"
+    return name
 
 
 # ── Builtin name mapping ────────────────────────────────────────────
