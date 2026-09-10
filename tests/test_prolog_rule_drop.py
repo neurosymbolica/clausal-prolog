@@ -424,8 +424,9 @@ class TestRecoveredRuleResolvesInScryer:
 
     def test_recovered_implements_rule_appears_in_output(self):
         out = clausal_source_to_prolog(self.CITATIONS_STYLE_SRC, strict=True)
-        assert "implements(Cite) :-" in out
-        assert "cite_marker(Cite)" in out
+        # Was "implements(Cite) :-": CITE used to be titlecased on export.
+        assert "implements(CITE) :-" in out
+        assert "cite_marker(CITE)" in out
 
     def test_recovered_implements_rule_resolves_a_call(self, tmp_path):
         """Before the fix: implements/1 was declared-but-undefined, so
@@ -452,7 +453,10 @@ class TestRecoveredRuleResolvesInScryer:
             "cite_marker(eu_dir_2014_24_art_57),\n"
         )
         pl_source = clausal_source_to_prolog(src_without_rule, strict=True)
-        assert "implements(Cite) :-" not in pl_source
+        # Spelled the way the exporter spells it NOW. A negative assertion
+        # against a name the translator can no longer produce would pass on
+        # any output at all, including the rule being present.
+        assert "implements(" not in pl_source
         stdout, stderr = self._run_scryer_query(
             tmp_path, pl_source, "implements(eu_dir_2014_24_art_57)."
         )

@@ -61,16 +61,16 @@ class TestNegatedMembershipRefusal:
         # (a) a list display
         ("p(K) <- (K not in [a, b, c])\n", "\\+ member(K, [a, b, c])"),
         # (b) a variable bound clause-locally from a list literal
-        ("p(K) <- (XS is [a, b], K not in XS)\n", "\\+ member(K, Xs)"),
+        ("p(K) <- (XS is [a, b], K not in XS)\n", "\\+ member(K, XS)"),
         # (b) a variable bound clause-locally by a list-producing goal
-        ("p(K) <- (findall(X, q(X), XS), K not in XS)\n", "\\+ member(K, Xs)"),
-        ("p(K, L) <- (msort(L, XS), K not in XS)\n", "\\+ member(K, Xs)"),
-        ("p(K, L) <- (sort(L, XS), K not in XS)\n", "\\+ member(K, Xs)"),
+        ("p(K) <- (findall(X, q(X), XS), K not in XS)\n", "\\+ member(K, XS)"),
+        ("p(K, L) <- (msort(L, XS), K not in XS)\n", "\\+ member(K, XS)"),
+        ("p(K, L) <- (sort(L, XS), K not in XS)\n", "\\+ member(K, XS)"),
         # sort/4: `@<` is not Python-parseable, so Clausal spells the order
         # argument as a string.
-        ('p(K, L) <- (sort(0, "@<", L, XS), K not in XS)\n', "\\+ member(K, Xs)"),
-        ("p(K, G) <- (setof(X, q(X), XS), K not in XS)\n", "\\+ member(K, Xs)"),
-        ("p(K, G) <- (bagof(X, q(X), XS), K not in XS)\n", "\\+ member(K, Xs)"),
+        ('p(K, L) <- (sort(0, "@<", L, XS), K not in XS)\n', "\\+ member(K, XS)"),
+        ("p(K, G) <- (setof(X, q(X), XS), K not in XS)\n", "\\+ member(K, XS)"),
+        ("p(K, G) <- (bagof(X, q(X), XS), K not in XS)\n", "\\+ member(K, XS)"),
     ])
     def test_provably_list_rhs_still_translates(self, src, expected):
         out = clausal_source_to_prolog(src, strict=True)
@@ -156,7 +156,7 @@ class TestMembershipPolarityAsymmetry:
             f"p(K, {self.SUSPECT_RHS}) <- (K in {self.SUSPECT_RHS})\n",
             strict=True,
         )
-        assert "member(K, Profile)" in out
+        assert "member(K, PROFILE)" in out
 
     def test_negated_membership_over_same_rhs_refuses(self):
         assert _refusals(

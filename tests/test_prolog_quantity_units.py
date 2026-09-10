@@ -69,9 +69,11 @@ def test_variable_magnitude_quantity():
     """
     out = _tr("p(X) <- ( X == DEPOSIT(baht) )", decl="p(X)")
     assert "baht" not in _code(out)
-    # the magnitude survives as a variable (renamed by the usual singleton
-    # mapping -- DEPOSIT occurs once, so it emits as _Deposit)
-    assert "eposit" in out
+    # The magnitude survives as a variable. DEPOSIT occurs once, so the
+    # singleton pass underscore-prefixes it; the NAME is unchanged (it used
+    # to be titlecased to _Deposit as well, which is why this asserted the
+    # case-free substring "eposit").
+    assert "_DEPOSIT" in out
     # no VARIABLE functor in the CODE (the note legitimately says "(baht)")
     assert "(" not in _code(out).split("X == ")[1].split("\n")[0]
 
@@ -143,7 +145,7 @@ def test_discarded_units_ride_a_TRAILING_comment_on_their_own_line():
 
 def test_variable_magnitude_is_noted_too():
     out = _tr("p(X) <- ( X == DEPOSIT(baht) )")
-    assert "% Clausal units: _Deposit (baht)" in out
+    assert "% Clausal units: _DEPOSIT (baht)" in out
 
 
 def test_negative_magnitude_keeps_its_sign_in_the_note():

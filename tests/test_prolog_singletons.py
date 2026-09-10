@@ -4,9 +4,13 @@ WITNESS = "schedule_by_criteria(high, no_accepted_medical_use, DEPENDENCE, sched
 
 
 def test_head_singleton_emits_underscore_prefixed():
+    # Was "_Dependence": the name used to be titlecased on the way out as
+    # well as underscore-prefixed here. Names cross unchanged now, so the
+    # prefix is the only thing this pass contributes -- which is the
+    # subject.
     out = clausal_source_to_prolog(WITNESS, strict=True)
-    assert "_Dependence" in out
-    assert " Dependence" not in out
+    assert "_DEPENDENCE" in out
+    assert " DEPENDENCE" not in out
 
 
 def test_multi_occurrence_var_unchanged():
@@ -18,7 +22,7 @@ def test_body_singleton_also_prefixed():
     out = clausal_source_to_prolog(
         "p(X) <- (q(X, TEMP), r(X))\n", strict=True
     )
-    assert "_Temp" in out and " Temp" not in out
+    assert "_TEMP" in out and " TEMP" not in out
 
 
 def test_anonymous_stays_anonymous():
@@ -27,5 +31,14 @@ def test_anonymous_stays_anonymous():
 
 
 def test_underscore_source_singleton_not_double_prefixed():
+    """The case is stronger than it was, not weaker.
+
+    ``_only`` used to be titlecased to ``Only`` first, losing its underscore,
+    so this pass put one back and the test checked it had not put on two.
+    The name keeps its own underscore now, so the pass has to recognise it
+    and leave it alone -- the guard is doing real work rather than being
+    given nothing to double.
+    """
     out = clausal_source_to_prolog("p(_only, X, X),\n", strict=True)
-    assert "_Only" in out and "__Only" not in out
+    assert "p(_only, X, X)." in out
+    assert "__only" not in out

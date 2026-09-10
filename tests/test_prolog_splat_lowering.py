@@ -12,7 +12,9 @@ OVERRIDE_KEY = """override_key(DICT, KEY, VALUE, NEW_DICT) <- (
 
 def test_is_rhs_splat_lowers_to_attrs_put():
     out = clausal_source_to_prolog(OVERRIDE_KEY, strict=True)
-    assert "attrs_put(Dict, [attribute(Key, Value)], New_dict)" in out
+    # Variable names cross unchanged; this used to read
+    # "attrs_put(Dict, [attribute(Key, Value)], New_dict)".
+    assert "attrs_put(DICT, [attribute(KEY, VALUE)], NEW_DICT)" in out
     assert "**" not in out and "is" not in out.split(":-")[1]
 
 
@@ -20,7 +22,7 @@ def test_multiple_pairs_sorted():
     out = clausal_source_to_prolog(
         "p(D, OUT) <- (OUT is {**D, zeta: 1, alpha: 2})\n", strict=True
     )
-    assert "attrs_put(D, [attribute(alpha, 2), attribute(zeta, 1)], Out)" in out
+    assert "attrs_put(D, [attribute(alpha, 2), attribute(zeta, 1)], OUT)" in out
 
 
 def test_multi_splat_still_untranslatable():
