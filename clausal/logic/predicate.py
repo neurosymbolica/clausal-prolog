@@ -51,7 +51,17 @@ _PLACEHOLDER_FIELD_RE = re.compile(r"\Aarg_\d+\Z")
 
 # Directory of the ``clausal`` package, used to skip engine frames when
 # attributing a source site to user code.
-_CLAUSAL_PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#: The engine package's directory, with a TRAILING SEPARATOR.
+#:
+#: The separator is the whole point: a bare prefix compare would count a
+#: SIBLING whose name merely starts with this one as engine-internal.  That is
+#: not hypothetical here — the extension distributions install alongside the
+#: package (``…/site-packages/clausal`` and ``…/site-packages/clausal_jax``),
+#: so ``clausal_jax/x.py``.startswith(``…/clausal``) is True and a frame from
+#: one of them would be SKIPPED while looking for the user's call site, which
+#: attributes a diagnostic to whatever lies further up the stack instead.
+_CLAUSAL_PKG_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "")
 
 # How far to walk the stack looking for a user frame before giving up.
 _SITE_SEARCH_DEPTH = 12
