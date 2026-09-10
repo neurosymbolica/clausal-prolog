@@ -1149,16 +1149,20 @@ def _binds_name(module, name: str) -> bool:
 def _collect_logic_var_names(node, include_titlecase=True) -> list[str]:
     """Collect logic variable names from an AST node in first-occurrence order.
 
-    ``include_titlecase=False`` for a ``++`` Python escape.  A collected name
-    becomes a PARAMETER of the lambda the escape compiles to, bound to a
-    fresh clause variable — so collecting ``Fraction`` out of
-    ``++Fraction(1, 3)`` shadows the Python class with an unbound ``Var`` and
-    the escape dies at search time with ``'AttVar' object is not callable``.
-    That is the very failure the TitleCase lint tells the author to fix BY
-    writing ``++Fraction``, so the remedy has to keep working: inside a ``++``
-    escape the code is Python by definition, and a capital-initial name there
-    is a Python name.  The lint has always skipped ``++`` operands for the
-    same reason.
+    ``include_titlecase=False`` for the two VERBATIM-PYTHON contexts: a
+    ``++`` escape operand and an f-string interpolation slot.  A collected
+    name becomes a PARAMETER of the lambda those compile to, bound to a fresh
+    clause variable — so collecting ``Fraction`` out of ``++Fraction(1, 3)``
+    or ``f"{Fraction(1, 3)}"`` shadows the Python class with an unbound
+    ``Var``, and it dies at search time with ``'AttVar' object is not
+    callable``.  For ``++`` that is the very failure the TitleCase lint tells
+    the author to fix BY writing ``++Fraction``; for an f-string there is no
+    diagnostic at all, because the lint skips ``JoinedStr``.  Both are Python
+    by definition, and a capital-initial name in Python is a Python name.
+
+    NOT passed by the unit-annotation sugar, deliberately: the magnitude
+    expression of ``(A + Foo)(metre)`` is CLAUSAL, so a TitleCase name there
+    is a clause variable and must be captured.
     """
     ordered: list[str] = []
     seen: set[str] = set()
@@ -2502,11 +2506,22 @@ class TermTransformer(NodeTransformer):
         ``thunk.fn(deref(_v0), deref(_v1), ...)``.
         """
         # Collect logic variable names from f-string interpolation values only.
+        #
+        # ``include_titlecase=False`` for the same reason as a ``++`` operand,
+        # and it is the same machinery: both lower to a lambda whose
+        # PARAMETERS are the collected names, so collecting ``Fraction`` out
+        # of ``f"{Fraction(1, 3)}"`` shadows the module global with an unbound
+        # ``Var`` and the interpolation dies at query time with
+        # ``'AttVar' object is not callable``.  An interpolation slot is
+        # Python by definition, exactly like a ``++`` operand -- and
+        # ``_lint_titlecase`` returns early on ``JoinedStr``, so there is no
+        # load-time diagnostic to fall back on either.
         var_names = []
         seen: set[str] = set()
         for v in node.values:
             if isinstance(v, FormattedValue):
-                for name in _collect_logic_var_names(v.value):
+                for name in _collect_logic_var_names(
+                        v.value, include_titlecase=False):
                     if name not in seen:
                         seen.add(name)
                         var_names.append(name)
@@ -4726,6 +4741,12 @@ class EmbedTransformer(NodeTransformer):
         why = (
             "a leading underscore marks a logic variable"
             if name.startswith("_")
+            # Capital-initial WITH a lowercase letter reaches here too since
+            # 2026-09-10; saying "an ALL-CAPS name" of ``Foo`` describes a
+            # rule the reader can see their name does not match, which reads
+            # as a bug in the message rather than a fault in the code.
+            else "a capital-initial name is a logic variable"
+            if _is_titlecase_identifier(name)
             else "an ALL-CAPS name is a logic variable"
         )
         where = ""
@@ -5316,6 +5337,41 @@ class EmbedTransformer(NodeTransformer):
             if _is_titlecase_identifier(bound):
                 transformer._titlecase_python_bound.add(bound)
 
+    #: Directives whose arguments NAME predicates and atoms this module
+    #: declares.  Their entries are functor positions even though none of
+    #: them is syntactically a call: a ``pred/arity`` spec parses as
+    #: ``BinOp(Name, Div, Constant)`` and a list entry as a bare ``Name``, so
+    #: narrowing the lint walk to ``Call.func`` dropped every one of them.
+    #: ``-constants`` is deliberately absent: its list holds TERMS.
+    _DECLARATION_DIRECTIVES = frozenset({
+        "module", "private", "hide",
+        "dynamic", "discontiguous", "table", "shallow",
+    })
+
+    def _lint_titlecase_declared_names(transformer, args):
+        """Lint the predicate/atom NAMES a declaration directive lists.
+
+        Handles the three shapes those directives accept, at the one nesting
+        level they use: a bare ``Name`` (``-private([foo])``), a
+        ``pred/arity`` spec (``-dynamic(foo/2)``), and a call
+        (``-module(m, [foo(A)])``, whose functor the ordinary walk reads).
+        A list wrapper is transparent -- both the positional and the
+        single-list spellings reach the same entries.
+        """
+        def each(node):
+            if isinstance(node, List):
+                for element in node.elts:
+                    each(element)
+            elif (isinstance(node, BinOp) and isinstance(node.op, Div)
+                    and isinstance(node.left, Name)):
+                transformer._lint_titlecase(node.left, root_is_functor=True)
+            elif isinstance(node, Name):
+                transformer._lint_titlecase(node, root_is_functor=True)
+            else:
+                transformer._lint_titlecase(node)
+        for arg in args:
+            each(arg)
+
     def _lint_titlecase(transformer, *nodes, root_is_functor=False):
         """Lint every TitleCase ``Name`` in FUNCTOR position within the
         CLAUSAL subtrees *nodes* (see ClausalTitleCaseIdentifierWarning),
@@ -5712,7 +5768,9 @@ class EmbedTransformer(NodeTransformer):
                 # is not an identifier of the program, and the whole of an
                 # ``-import_*`` is a module path plus names that are the
                 # exporter's to spell.
-                if directive_name not in ("import_module", "import_from"):
+                if directive_name in transformer._DECLARATION_DIRECTIVES:
+                    transformer._lint_titlecase_declared_names(directive_args)
+                elif directive_name not in ("import_module", "import_from"):
                     transformer._lint_titlecase(
                         *directive_args,
                         *(kw.value for kw in neg.operand.keywords))
@@ -5821,6 +5879,9 @@ class EmbedTransformer(NodeTransformer):
                     functor_name = lhs.id
                     orig_pos_args = []
                     orig_kw_args = []
+                    # Zero-arity DCG head -- same bare-``Name`` functor
+                    # position as the arrow rule above.
+                    transformer._lint_titlecase(lhs, root_is_functor=True)
                 else:
                     return transformer.generic_visit(expr_stmt)
 
@@ -5890,6 +5951,15 @@ class EmbedTransformer(NodeTransformer):
                     functor_name = left.id
                     orig_pos_args = []
                     orig_kw_args = []
+                    # A ZERO-ARITY head is a functor position like any other
+                    # head, but it is a bare ``Name`` rather than a ``Call``,
+                    # so the whole-node walk above reaches it as a term and
+                    # says nothing.  Without this, ``Foo <- (...)`` LOADED and
+                    # registered a predicate named ``Foo`` with no lint at
+                    # all -- the one invariant this change was required to
+                    # keep, escaping through the one head shape that is not a
+                    # call.
+                    transformer._lint_titlecase(left, root_is_functor=True)
                 else:
                     return transformer.generic_visit(expr_stmt)
 
