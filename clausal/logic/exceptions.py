@@ -169,6 +169,20 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
     from clausal.logic.variables import deref, unify  # noqa: PLC0415
 
     catcher = deref(catcher)
+    # A Python exception raised inside a module predicate reaches the
+    # catcher chain wrapped (``_catchable_dispatch``: ``LogicException(
+    # python_error_term(exc)) from exc``).  The wrapper carries the
+    # transliterated ``ClassName(Message)`` term — a TitleCase spelling no
+    # catcher can be written in any more — so a ``++`` catcher must see the
+    # ORIGINAL exception: unwrap exactly that shape (a non-logic cause whose
+    # class name is the wrapper's functor) and match the Python arms on it.
+    cause = getattr(exc, "__cause__", None)
+    if (isinstance(exc, LogicException)
+            and isinstance(cause, BaseException)
+            and not isinstance(cause, LogicException)
+            and getattr(getattr(exc, "term", None), "functor", None)
+                == type(cause).__name__):
+        exc = cause
     if isinstance(catcher, type) and issubclass(catcher, BaseException):
         # A ++ catcher is the PYTHON side of the boundary only: a logic
         # throw/1 ball travels as a LogicException, which subclasses

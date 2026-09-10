@@ -1,6 +1,6 @@
 """clausal.rewrite -- Clausal-hosted term rewriting with comment survival.
 
-A rewrite rule is an ordinary Clausal predicate, ``RewriteClause(IN, OUT)``,
+A rewrite rule is an ordinary Clausal predicate, ``rewrite_clause(IN, OUT)``,
 matching the reified vocabulary of :mod:`clausal.reflection`.  Rules live in
 ``rules/*.clausal`` and are written the way any other Clausal predicate is
 written: patterns over ``Clause`` / ``Goal`` / ``Variable`` / ``Atom`` terms,

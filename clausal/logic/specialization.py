@@ -1,7 +1,7 @@
 """clausal.logic.specialization — Meta-interpreter specialization via partial deduction.
 
 Specializes a meta-interpreter (MI) with respect to a known object program,
-producing residual clauses with MI overhead (MatchClause, append, copy_term)
+producing residual clauses with MI overhead (match_clause, append, copy_term)
 removed and extensions (counting, depth, proof trees) woven in.
 
 Two entry points:
@@ -62,9 +62,9 @@ class MIPattern:
     extra_args: list[int]           # indices of extra fields (count, depth, tree)
     base_clause: Clause             # the [] base case
     recursive_clause: Clause        # the [GOAL, *GOALS] case
-    pre_match_goals: list           # goals before MatchClause
+    pre_match_goals: list           # goals before match_clause
     post_match_goals: list          # goals after last MI-related call
-    match_clause_index: int         # index of MatchClause call in recursive body
+    match_clause_index: int         # index of match_clause call in recursive body
     append_index: int | None        # index of append call (None for split style)
     recursive_call_indices: list[int]  # indices of recursive MI calls in body
     recursive_call_style: str       # "tail" or "split"
@@ -72,7 +72,7 @@ class MIPattern:
     # Variables from the recursive clause (populated during analysis)
     goal_var: Any = None            # GOAL variable from [GOAL, *GOALS]
     goals_var: Any = None           # GOALS variable from [GOAL, *GOALS]
-    body_var: Any = None            # BODY variable from MatchClause
+    body_var: Any = None            # BODY variable from match_clause
     all_goals_var: Any = None       # ALL_GOALS variable from append (tail style)
     program_var: Any = None         # PROGRAM variable in recursive clause head
 
@@ -151,13 +151,13 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     program_field_name = fields[program_arg]
     program_var = getattr(head, program_field_name)
 
-    # Find MatchClause call in body.
-    match_idx = _find_call(body, "MatchClause")
+    # Find match_clause call in body.
+    match_idx = _find_call(body, "match_clause")
     if match_idx is None:
-        raise CannotSpecialize(f"{name}: no MatchClause call in recursive body")
+        raise CannotSpecialize(f"{name}: no match_clause call in recursive body")
 
     match_call = body[match_idx]
-    # MatchClause(GOAL, BODY, PROGRAM) — extract BODY variable.
+    # match_clause(GOAL, BODY, PROGRAM) — extract BODY variable.
     body_var = match_call.args[1]
 
     # Find append call (for tail-recursive style).
@@ -189,7 +189,7 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
         all_goals_var = append_call.args[2]  # append(BODY, GOALS, ALL_GOALS)
 
     # Classify pre-match and post-match goals.
-    # Pre-match: goals before MatchClause that aren't MatchClause/append/recursive.
+    # Pre-match: goals before match_clause that aren't match_clause/append/recursive.
     mi_indices = {match_idx}
     if append_idx is not None:
         mi_indices.add(append_idx)
@@ -201,7 +201,7 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     post_match_goals = [body[i] for i in range(last_mi_idx + 1, len(body))
                         if i not in mi_indices]
 
-    # A03-F007: goals sitting BETWEEN MatchClause and the last MI-related goal
+    # A03-F007: goals sitting BETWEEN match_clause and the last MI-related goal
     # (the recursive call) that are not themselves MI-related fall into neither
     # pre_match nor post_match — they would be silently dropped from every
     # specialized clause (e.g. the ``LIM > 0`` depth guard in a bounded
@@ -212,10 +212,10 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     if mid_dropped:
         raise CannotSpecialize(
             f"{name}/{arity}: goal at body position {mid_dropped[0]} "
-            f"({body[mid_dropped[0]]!r}) sits between MatchClause and the "
+            f"({body[mid_dropped[0]]!r}) sits between match_clause and the "
             f"recursive call but is not MI-related; specialization would "
             f"silently drop it. Mid-body goals are not yet supported — move it "
-            f"before MatchClause or after the recursive call, or specialize a "
+            f"before match_clause or after the recursive call, or specialize a "
             f"variant without it."
         )
 
@@ -530,7 +530,7 @@ def _unfold_tail(
     MI recursive clause (conceptually):
         MI([GOAL, *GOALS], PROGRAM, ...extra) <- (
             ...pre_match,
-            MatchClause(GOAL, BODY, PROGRAM),
+            match_clause(GOAL, BODY, PROGRAM),
             append(BODY, GOALS, ALL_GOALS),
             ...post_match,
             MI(ALL_GOALS, PROGRAM, ...extra')
@@ -638,7 +638,7 @@ def _unfold_split(
 
     This is for SolveTree-style MIs with two recursive calls:
         MI([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
-            MatchClause(GOAL, BODY, PROGRAM),
+            match_clause(GOAL, BODY, PROGRAM),
             MI(BODY, PROGRAM, BODY_TREE),
             MI(GOALS, PROGRAM, GOALS_TREE)
         )

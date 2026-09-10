@@ -1,20 +1,20 @@
-"""term_expansion — Apply TermExpansion rules to module items.
+"""term_expansion — Apply term_expansion rules to module items.
 
-TermExpansion/4 clauses match module-level items (Predicate nodes) and
+term_expansion/4 clauses match module-level items (Predicate nodes) and
 produce rewritten or additional items.  Expansion sits between Phase A
 (EmbedTransformer) and Phase B (compile_module) of the pipeline.
 
 Protocol::
 
-    TermExpansion(TERM, EXPANSION, MODULE_BEFORE, MODULE_AFTER)
+    term_expansion(TERM, EXPANSION, MODULE_BEFORE, MODULE_AFTER)
 
 - TERM: runtime Predicate node being expanded
 - EXPANSION: single Predicate, list of Predicates, or the atom ``none`` (suppress)
-- MODULE_BEFORE: ``ModuleExpansionState(InitList, FinalList, UserState)``
+- MODULE_BEFORE: ``module_expansion_state(InitList, FinalList, UserState)``
 - MODULE_AFTER: same, updated
 
 Module state is threaded through all items left-to-right.  Items that
-match no TermExpansion rule pass through unchanged.  TermExpansion clauses
+match no term_expansion rule pass through unchanged.  term_expansion clauses
 themselves are not expanded.
 """
 
@@ -35,14 +35,14 @@ _NONE_ATOM = _mint("none")
 
 
 def _is_term_expansion_clause(pred_node) -> bool:
-    """True if pred_node defines a TermExpansion/4 clause."""
+    """True if pred_node defines a term_expansion/4 clause."""
     head = pred_node.head
     from clausal.terms import Call, LoadName
     if isinstance(head, Call) and isinstance(head.func, LoadName):
-        return head.func.name == "TermExpansion" and len(head.args) == 4
+        return head.func.name == "term_expansion" and len(head.args) == 4
     # Also check PredicateMeta instances
     if isinstance(type(head), PredicateMeta):
-        return functor_arity(head) == ("TermExpansion", 4)
+        return functor_arity(head) == ("term_expansion", 4)
     return False
 
 
@@ -50,17 +50,17 @@ def run_term_expansion(
     predicate_nodes: list,
     module_dict: dict,
 ) -> list:
-    """Apply TermExpansion rules to predicate nodes.
+    """Apply term_expansion rules to predicate nodes.
 
-    Separates TermExpansion clauses from regular items, compiles the
+    Separates term_expansion clauses from regular items, compiles the
     expansion rules, then applies them to each regular item.
 
     Also checks ``module_dict`` for imported modules whose LogicModule
-    carries ``_te_predicate_nodes`` — these are TermExpansion clauses
+    carries ``_te_predicate_nodes`` — these are term_expansion clauses
     from ``-import_from`` directives processed earlier in the pipeline.
 
     Returns the (possibly rewritten) list of predicate nodes.  If no
-    TermExpansion clauses exist, returns predicate_nodes unchanged
+    term_expansion clauses exist, returns predicate_nodes unchanged
     (zero overhead).
 
     Parameters
@@ -75,7 +75,7 @@ def run_term_expansion(
     list
         Expanded list of predicate nodes.
     """
-    # Step 1: Separate TermExpansion clauses from regular items.
+    # Step 1: Separate term_expansion clauses from regular items.
     expansion_clauses = []
     regular_items = []
     for node in predicate_nodes:
@@ -84,32 +84,32 @@ def run_term_expansion(
         else:
             regular_items.append(node)
 
-    # Step 1b: Check for imported TermExpansion rules.
+    # Step 1b: Check for imported term_expansion rules.
     imported_te_clauses = _collect_imported_te_clauses(module_dict)
 
     # Step 2: If no expansion clauses (local or imported), return unchanged.
     if not expansion_clauses and not imported_te_clauses:
         return predicate_nodes
 
-    # Step 3: Compile TermExpansion clauses into a mini logic module.
+    # Step 3: Compile term_expansion clauses into a mini logic module.
     # Imported rules come first (lower priority), then local rules.
     all_te_clauses = imported_te_clauses + expansion_clauses
     expansion_module = _compile_expansion_rules(all_te_clauses, module_dict)
 
     # Store local TE predicate nodes for downstream importers.
-    # Attach to both the LogicModule and the TermExpansion class (if present)
-    # so that -import_from(mod, [TermExpansion]) can pick them up.
+    # Attach to both the LogicModule and the term_expansion class (if present)
+    # so that -import_from(mod, [term_expansion]) can pick them up.
     if expansion_clauses:
         lm = module_dict.get("$module")
         if lm is not None:
             lm._te_predicate_nodes = list(expansion_clauses)
-        te_cls = module_dict.get("TermExpansion")
+        te_cls = module_dict.get("term_expansion")
         if isinstance(te_cls, PredicateMeta):
             te_cls._te_predicate_nodes = list(expansion_clauses)
 
-    # Step 4: Initialize module state: ModuleExpansionState([], [], "nil")
+    # Step 4: Initialize module state: module_expansion_state([], [], "nil")
     # Use the same class from the expansion module so unification works.
-    mod_cls = expansion_module.module_dict["ModuleExpansionState"]
+    mod_cls = expansion_module.module_dict["module_expansion_state"]
     module_state = mod_cls([], [], "nil")
 
     # Step 5: Expand each regular item.
@@ -131,16 +131,16 @@ def run_term_expansion(
 
 
 def _collect_imported_te_clauses(module_dict: dict) -> list:
-    """Collect TermExpansion predicate nodes from imported modules.
+    """Collect term_expansion predicate nodes from imported modules.
 
     Checks two sources:
     1. Python modules in ``module_dict`` whose ``$module`` LogicModule
        carries ``_te_predicate_nodes``.
-    2. PredicateMeta classes named ``TermExpansion`` that carry
+    2. PredicateMeta classes named ``term_expansion`` that carry
        ``_te_predicate_nodes`` (set when a module with TE rules is loaded).
 
     This allows both ``-import_module(mod)`` and
-    ``-import_from(mod, [TermExpansion])`` to provide expansion rules.
+    ``-import_from(mod, [term_expansion])`` to provide expansion rules.
     """
     import types
     seen = set()  # avoid duplicates
@@ -155,10 +155,10 @@ def _collect_imported_te_clauses(module_dict: dict) -> list:
                 if te_nodes and id(te_nodes) not in seen:
                     seen.add(id(te_nodes))
                     result.extend(te_nodes)
-        # Case 2: imported TermExpansion PredicateMeta class
+        # Case 2: imported term_expansion PredicateMeta class
         elif (
             isinstance(value, PredicateMeta)
-            and getattr(value, "__name__", "") == "TermExpansion"
+            and getattr(value, "__name__", "") == "term_expansion"
         ):
             te_nodes = getattr(value, "_te_predicate_nodes", None)
             if te_nodes and id(te_nodes) not in seen:
@@ -169,8 +169,8 @@ def _collect_imported_te_clauses(module_dict: dict) -> list:
 
 
 def _make_module_state(init_list, final_list, user_state):
-    """Create a ModuleExpansionState(Init, Final, State) term."""
-    module_cls = make_predicate("ModuleExpansionState", ["init", "final", "state"])
+    """Create a module_expansion_state(Init, Final, State) term."""
+    module_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
     return module_cls(init_list, final_list, user_state)
 
 
@@ -179,7 +179,7 @@ def _collect_functor_arities(node, out: dict, seen: set) -> None:
     reachable from *node* (term-instances, lists, and pythonic_ast Nodes are
     all descended). Names are ordinary lowercase functor identifiers — the
     quasi-quote ``q`` wrapper is already stripped to plain Call data by the
-    time TermExpansion clauses reach here."""
+    time term_expansion clauses reach here."""
     from clausal.pythonic_ast.nodes import Call as _Call, LoadName as _LoadName
     from clausal.logic.predicate import is_term_instance, term_field_names
 
@@ -215,7 +215,7 @@ def _collect_functor_arities(node, out: dict, seen: set) -> None:
 
 
 def _compile_expansion_rules(expansion_clauses, module_dict):
-    """Compile TermExpansion clauses into a mini LogicModule."""
+    """Compile term_expansion clauses into a mini LogicModule."""
     from clausal.logic.database import Module as LogicModule
     from clausal.logic.builtins import structural_unify
 
@@ -224,13 +224,13 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     # destructured in TE clause bodies.  C-level unify only handles Var/list/tuple.
     lm.module_dict["unify"] = structural_unify
 
-    # Create the TermExpansion PredicateMeta class.
-    te_cls = make_predicate("TermExpansion", ["term", "expansion", "module_before", "module_after"])
-    lm.module_dict["TermExpansion"] = te_cls
+    # Create the term_expansion PredicateMeta class.
+    te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"])
+    lm.module_dict["term_expansion"] = te_cls
 
-    # Also ensure ModuleExpansionState class exists for state threading.
-    mod_cls = make_predicate("ModuleExpansionState", ["init", "final", "state"])
-    lm.module_dict["ModuleExpansionState"] = mod_cls
+    # Also ensure module_expansion_state class exists for state threading.
+    mod_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
+    lm.module_dict["module_expansion_state"] = mod_cls
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
     # the (quasi-quoted) expansion patterns — e.g. a brand-new ``logged_fact``
@@ -250,7 +250,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
         lm.define_predicate(pred_node)
 
     # Compile the expansion predicate.
-    functor, arity = "TermExpansion", 4
+    functor, arity = "term_expansion", 4
     clauses = lm.db.clauses_for(functor, arity)
     if clauses:
         compile_predicate_trampoline(
@@ -262,7 +262,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
 
 
 def _expand_item(item, expansion_module, module_state):
-    """Try to expand a single item using TermExpansion rules.
+    """Try to expand a single item using term_expansion rules.
 
     Returns (expanded_result, new_module_state).
     expanded_result is:
@@ -293,7 +293,7 @@ def _expand_item(item, expansion_module, module_state):
 
 
 def _try_te_match(item, match_target, expansion_module, module_state, wrap_head):
-    """Solve TermExpansion(match_target, Expansion, S0, S) once.
+    """Solve term_expansion(match_target, Expansion, S0, S) once.
 
     Returns (expanded_result, new_state) on a match, or None if no clause
     matched *match_target*. When *wrap_head* is True the expansion terms are
@@ -306,7 +306,7 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     state_after = Var()
     found = False
     for _trail in call(
-        "TermExpansion", match_target, expansion_var, module_state, state_after,
+        "term_expansion", match_target, expansion_var, module_state, state_after,
         module=expansion_module,
     ):
         expansion = deref(expansion_var)   # committed choice: first solution

@@ -33,7 +33,7 @@ from clausal.tools.prolog_ast import (
 from clausal.tools.prolog_operators import OperatorTable
 from clausal.tools.prolog_dialect import (
     Dialect,
-    snake_to_pascal, prolog_var_to_clausal,
+    prolog_var_to_clausal,
     BUILTIN_NAME_MAP,
 )
 from clausal.tools.prolog_parser import parse
@@ -1022,7 +1022,12 @@ class _PrologToClausal:
     # ── Name conversion helpers ──────────────────────────────────────
 
     def _predicate_name(self, prolog_name: str, arity: int | None = None) -> str:
-        """Convert a Prolog predicate/functor name to clausal PascalCase.
+        """Convert a Prolog predicate/functor name to its Clausal spelling.
+
+        Clausal predicate names are lowercase like Prolog's, so an unmapped
+        name crosses the seam unchanged (``edge`` stays ``edge``).  The
+        translator used to PascalCase here; TitleCase is now a load-time
+        error in a Clausal position, so that spelling would not load.
 
         ``arity`` disambiguates Prolog names shared by Clausal predicates of
         different arity (``catch/3`` vs ``catch_error/2``); pass it wherever
@@ -1035,8 +1040,8 @@ class _PrologToClausal:
         clausal_name = _REVERSE_BUILTIN_MAP.get(prolog_name)
         if clausal_name is not None:
             return clausal_name
-        # Fall back to snake_to_pascal
-        name = snake_to_pascal(prolog_name)
+        # Unmapped names cross unchanged.
+        name = prolog_name
         # A functor whose converted name is not a plain Python identifier
         # (quoted atoms like 'hello world', operator soup from unmapped
         # user ops, keyword collisions like `none` → None) cannot become a

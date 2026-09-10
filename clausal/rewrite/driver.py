@@ -170,7 +170,7 @@ def _first_rewrite(rules, reified_clause):
     """The first rule with something to say about this clause."""
     for rule, module in rules:
         out = Var()
-        for _ in call("RewriteClause", reified_clause, out, module=module):
+        for _ in call("rewrite_clause", reified_clause, out, module=module):
             return _deref_walk(out), rule
     return None
 
