@@ -1369,6 +1369,53 @@ def _quote_of_positioned(transformer, node):
             exc.msg, node, transformer._source_lines, transformer._filename)
 
 
+def _refuse_double_quoted_functor(transformer, func_node):
+    """Refuse a DOUBLE-quoted string used as a functor (ISO 6.3.3).
+
+    A functor is named by an atom, and under the strings design (spec §7) a
+    double-quoted literal is not an atom spelling — in `chars` mode it is a
+    char list, which cannot name anything.  Refusing it in every mode
+    (rather than only after the flip) means the diagnostic is the same
+    before and after, and no module quietly changes meaning when the default
+    moves.  A `None` answer from the quote map means the quote is unknown
+    (no source lines: the REPL, a programmatic AST) and the sugar keeps its
+    pre-strings behaviour.
+
+    ``_quote_of_positioned`` is called unconditionally, ``reify`` included:
+    the mixed-quote-style error it can raise is a WELL-FORMEDNESS rule, and
+    "reflection models more than it compiles" means more legal shapes, never
+    malformed input.  `"a" 'b'` has no meaning to model — gating that call on
+    ``_reify`` made ``reify_source`` answer with the atom ``ab``, silently
+    inventing one of the two readings (fix round 2).  The FUNCTOR refusal,
+    by contrast, IS compile-only and so IS exempt under ``reify=True``: it
+    rejects a well-formed literal for a reason (ISO 6.3.3) that reflection
+    does not care about, and a file must not become un-reifiable over it.
+    See the ``_reify`` contract in ``TermTransformer``'s class docstring.
+
+    Both places a string literal is read as a callable go through here — a
+    body goal (``TermTransformer.visit_Call``) and a trailing-comma fact
+    head (``EmbedTransformer.visit_Expr``) — so the refusal cannot drift
+    apart between the head and the body of the same predicate.
+    """
+    quote = _quote_of_positioned(transformer, func_node)
+    if quote != '"' or transformer._reify:
+        return
+    spelling = func_node.value
+    # The suggestion is source text, so it has to survive being re-read: a
+    # spelling containing a quote or a backslash needs them escaped or the
+    # "fix" would not parse.
+    single_quoted = "'{}'".format(
+        spelling.replace("\\", "\\\\").replace("'", "\\'"))
+    # ...and the bare-name alternative only exists when the spelling IS a
+    # name.  `"a b"(1)` has no bare form.
+    bare_hint = (f', or {spelling}(...) if it is a plain name'
+                 if spelling.isidentifier() else '')
+    _raise_located_syntax_error(
+        f'a double-quoted string is never a functor (ISO 6.3.3): '
+        f'write {single_quoted}(...) for the atom{bare_hint}',
+        func_node, transformer._source_lines, transformer._filename)
+
+
 def _atom_as_functor_message(name, filename, lineno, owner=None):
     """The refusal for a declared ATOM applied with arguments.
 
@@ -1627,43 +1674,11 @@ class TermTransformer(NodeTransformer):
         # A string literal used as the callable, e.g. '+'(a, b), is sugar for a
         # name reference whose identifier is that string.
         if isinstance(call.func, Constant) and isinstance(call.func.value, str):
-            # ...but only the ATOM spelling.  ISO 6.3.3: a functor is named by
-            # an atom, and under the strings design (spec §7) a double-quoted
-            # literal is not an atom spelling — in `chars` mode it is a char
-            # list, which cannot name anything.  Refusing it in every mode
-            # (rather than only after the flip) means the diagnostic is the
-            # same before and after, and no module quietly changes meaning
-            # when the default moves.  A `None` answer means the quote is
-            # unknown (no source lines: the REPL, a programmatic AST) and the
-            # sugar keeps its pre-strings behaviour.
-            # Unconditional, ``reify`` included: the mixed-quote-style error
-            # this can raise is a WELL-FORMEDNESS rule, and "reflection models
-            # more than it compiles" means more legal shapes, never malformed
-            # input.  `"a" 'b'` has no meaning to model — gating this call on
-            # ``_reify`` made ``reify_source`` answer with the atom ``ab``,
-            # silently inventing one of the two readings (fix round 2).
-            quote = _quote_of_positioned(transformer, call.func)
-            # The FUNCTOR refusal, by contrast, IS compile-only and so IS
-            # exempt under ``reify=True``: it rejects a well-formed literal
-            # for a reason (ISO 6.3.3) that reflection does not care about,
-            # and a file must not become un-reifiable over it.  See the
-            # ``_reify`` contract in the class docstring.
-            if quote == '"' and not transformer._reify:
-                spelling = call.func.value
-                # The suggestion is source text, so it has to survive being
-                # re-read: a spelling containing a quote or a backslash needs
-                # them escaped or the "fix" would not parse.
-                single_quoted = "'{}'".format(
-                    spelling.replace("\\", "\\\\").replace("'", "\\'"))
-                # ...and the bare-name alternative only exists when the
-                # spelling IS a name.  `"a b"(1)` has no bare form.
-                bare_hint = (f', or {spelling}(...) if it is a plain name'
-                             if spelling.isidentifier() else '')
-                _raise_located_syntax_error(
-                    f'a double-quoted string is never a functor (ISO 6.3.3): '
-                    f'write {single_quoted}(...) for the atom{bare_hint}',
-                    call.func, transformer._source_lines,
-                    transformer._filename)
+            # ...but only the ATOM spelling — see
+            # ``_refuse_double_quoted_functor`` for the ISO 6.3.3 rule, the
+            # ``reify`` contract, and why the refusal is shared with the
+            # fact-head reading of the same sugar.
+            _refuse_double_quoted_functor(transformer, call.func)
             func_node = transformer._visit_call_func(
                 replace(Name(id=call.func.value, ctx=load), call.func)
             )
@@ -5540,7 +5555,30 @@ class EmbedTransformer(NodeTransformer):
                 transformer._lint_titlecase(single_element)
                 func = single_element.func
                 if isinstance(func, Constant):
-                    func = Name(id=func.value, ctx=Load())
+                    # The head reads as the body form does, so it owes the
+                    # same ISO 6.3.3 refusal — otherwise `"foo"(1),` would
+                    # load as a fact for foo/1 while `"foo"(X)` in a body is
+                    # refused, and the head would quietly change meaning
+                    # when the double_quotes default flips to chars.
+                    _refuse_double_quoted_functor(transformer, func)
+                    # A fact head is compiled to a functor CLASS whose name
+                    # is emitted as Python source (``_make_functor_class_ast``
+                    # parses it), so — unlike a body goal, which may name
+                    # any atom — the spelling has to be a plain name.  With
+                    # no check the generated source fails to parse, and the
+                    # author is shown CPython's complaint about a line of
+                    # code they never wrote.
+                    spelling = func.value
+                    if (not spelling.isidentifier()
+                            or _keyword_module.iskeyword(spelling)):
+                        _raise_located_syntax_error(
+                            f'{spelling!r} is not a plain name, so it cannot '
+                            f'head a fact (a body goal may name it, a fact '
+                            f'head may not): rename it, or give the fact a '
+                            f'head that is a plain name',
+                            func, transformer._source_lines,
+                            transformer._filename)
+                    func = Name(id=spelling, ctx=Load())
                     copy_location(func, single_element.func)
                 return transformer._build_fact_statements(
                     func.id,

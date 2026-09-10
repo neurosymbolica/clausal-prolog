@@ -132,6 +132,54 @@ def test_double_quoted_functor_refusal_is_positioned():
     assert "6.3.3" in str(exc_info.value)
 
 
+def test_double_quoted_string_as_a_fact_head_is_refused():
+    """The refusal covers the HEAD of a trailing-comma fact, not just a
+    functor nested in an argument.
+
+    ``'foo'(1),`` reads as the fact ``foo(1),`` (the string-callable sugar,
+    the same reading a body goal gives it), so the head owes the same ISO
+    6.3.3 rule as the body — otherwise ``"foo"(1),`` would load as a fact
+    for foo/1 while ``"foo"(X)`` in a body is refused, and the head would
+    quietly change meaning when the ``double_quotes`` default flips to
+    ``chars`` and the literal stops naming anything.
+    """
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal("_dq_fact_head", '"foo"(1),\n')
+    assert "6.3.3" in str(exc_info.value)
+    assert exc_info.value.lineno == 1
+
+
+@pytest.mark.parametrize("spelling", ["foo bar", "class", "lambda"])
+def test_fact_head_sugar_requires_a_plain_name(spelling):
+    """A fact head is compiled to a functor class whose name is emitted as
+    Python source, so — unlike a body goal, which may name any atom — the
+    sugar's spelling has to be a plain name there.
+
+    Without the check the generated source fails to parse and the author is
+    shown CPython's complaint about a line of code they never wrote
+    (``invalid syntax (<unknown>, line 4)``).
+    """
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_inline_clausal("_fact_head_name", "'%s'(1),\n" % spelling)
+    message = str(exc_info.value)
+    assert "plain name" in message
+    assert repr(spelling) in message
+    assert exc_info.value.lineno == 1
+
+
+@pytest.mark.parametrize("spelling", ["foo bar", "class", "lambda"])
+def test_the_same_spelling_is_still_a_legal_body_goal(spelling):
+    """The asymmetry is deliberate and is pinned here: the restriction is
+    the fact HEAD's, so a goal may still name a quoted atom that is not a
+    plain name.  Were this to start failing, the guard above has
+    over-reached from the head into the body."""
+    mod = _load_inline_clausal(
+        "_body_goal_name",
+        "body_goal_probe(X) <- ('%s'(X)),\n" % spelling,
+    )
+    assert mod is not None
+
+
 def test_double_quoted_atom_argument_is_still_an_atom():
     """The refusal is about the FUNCTOR position only: in ``atom`` mode both
     spellings of the literal are the same ATOM in argument position."""
