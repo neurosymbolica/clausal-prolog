@@ -295,3 +295,92 @@ def test_a_marker_in_the_head_sees_what_the_body_binds(tmp_path):
     assert from_marked.startswith("_") and from_bare.startswith("_"), (
         from_marked, from_bare)
     assert "class" not in from_marked, from_marked
+
+
+# ── The promise holds everywhere the marker can be typed ───────────────────
+
+def test_a_marker_in_a_format_spec_is_a_load_error(tmp_path):
+    """The one position where the marker could be SILENTLY misread.
+
+    A nested slot in a format spec is a `JoinedStr` on
+    ``FormattedValue.format_spec``, and nothing walks ``format_spec``: not
+    the implicit collector, not the marker collector, not the stripper.  So
+    a marker there reached the lambda body as literal ``--Match`` and found
+    the module-namespace class, dying at QUERY time with ``bad operand type
+    for unary -: 'type'`` and no load diagnostic at all.
+
+    The marker is sold as the spelling that cannot be silently misread, so
+    the position where it could be is refused at load time.  Refused rather
+    than made to work, because the BARE spelling captures nothing in a
+    format spec either; honouring only the marker would split the two
+    spellings apart in exactly the place a reader reaches for the marker."""
+    with pytest.raises(SyntaxError) as excinfo:
+        _load(tmp_path, "spec_marker", """
+            -private([red])
+            -module(cvmit_spec_marker, [p(S)])
+            tree(red),
+            width(5),
+            p(S) <- (tree(Node), width(Width), S is f"{Node:>{--Width}}")
+        """)
+    message = str(excinfo.value)
+    assert "--Width" in message, message
+    assert "format spec" in message, message
+    assert "spec_marker.clausal, line 5" in message, message
+
+
+def test_the_format_spec_refusal_fires_on_an_unbindable_name_too(tmp_path):
+    """The shape that used to die at query time as `'type'`: `Match` is a
+    module-namespace class and no goal binds it, so neither the marker's own
+    check nor anything else would have spoken."""
+    with pytest.raises(SyntaxError) as excinfo:
+        _load(tmp_path, "spec_class", """
+            -private([red])
+            -module(cvmit_spec_class, [p(S)])
+            tree(red),
+            p(S) <- (tree(Node), S is f"{Node:>{--Match}}")
+        """)
+    assert "--Match" in str(excinfo.value)
+
+
+def test_a_marker_in_the_value_slot_of_a_formatted_value_still_works(
+        tmp_path):
+    """The refusal is scoped to the SPEC.  A marker in the value slot of a
+    slot that also carries a spec is untouched -- pinned so the refusal
+    cannot widen into the position the feature is for."""
+    mod = _load(tmp_path, "spec_value_ok", """
+        -private([red])
+        -module(cvmit_spec_value_ok, [p(S)])
+        tree(red),
+        p(S) <- (tree(Node), S is f"{--Node:>5}")
+    """)
+    assert _answers(mod, "p") == [("  red",)]
+
+
+# ── The block form bears markers; the inline seam does not ─────────────────
+
+def test_the_dash_dash_block_form_bears_a_marker():
+    """`with --{} as clauses:` is a block DELIMITER, not a seam operand: its
+    statements are Clausal terms, not hosted Python handed back to a Python
+    visitor, so there is no competing reading of `--` inside a thunk there.
+    The marker is live, and this pins that rather than leaving it to
+    whichever transformer flag happened to be set."""
+    from clausal.templating.term_rewriting import EmbedTransformer, unparse
+    tree = ast.parse(
+        'with --{} as clauses:\n    tree(Node)\n    bar(f"{--Node}")\n')
+    ast.fix_missing_locations(tree)
+    out = EmbedTransformer().visit(tree)
+    ast.fix_missing_locations(out)
+    rendered = unparse(out)
+    # Stripped to the bare name and captured as a lambda parameter.
+    assert "lambda Node: f'{Node}'" in rendered, rendered
+
+
+def test_the_block_forms_marker_is_checked_like_any_other():
+    """And the check travels with it -- the block's statements are one
+    scope, so a marked name no statement binds is the same load error."""
+    from clausal.templating.term_rewriting import EmbedTransformer
+    tree = ast.parse('with --{} as clauses:\n    bar(f"{--Node}")\n')
+    ast.fix_missing_locations(tree)
+    with pytest.raises(SyntaxError) as excinfo:
+        EmbedTransformer().visit(tree)
+    assert "--Node" in str(excinfo.value)

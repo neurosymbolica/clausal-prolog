@@ -2587,6 +2587,48 @@ class TermTransformer(NodeTransformer):
         finally:
             transformer._visit_depth -= 1
 
+    def _refuse_markers_in_format_specs(transformer, joined) -> None:
+        """Refuse ``--X`` inside an f-string FORMAT SPEC.
+
+        A nested slot in a format spec (``f"{N:>{--W}}"``) is a ``JoinedStr``
+        hanging off ``FormattedValue.format_spec``, and nothing walks
+        ``format_spec`` -- not the implicit collector, not the marker
+        collector, not the stripper.  So a marker written there is not
+        captured, not stripped, and (the part that matters) not CHECKED: it
+        reaches the lambda body as literal ``--W`` and resolves in the module
+        namespace at search time.  ``f"{N:>{--Match}}"`` died with ``bad
+        operand type for unary -: 'type'`` -- having found the AST node class
+        -- at query time, with no load diagnostic anywhere.
+
+        That is the marker failing at the single thing it promises over the
+        bare name.  The bare spelling has the same hole (a format spec
+        captures nothing on either side, which is why ``f"{N:>{W}}"`` is
+        broken too), and that is precisely why a reader would reach for the
+        explicit marker there and be worse off.  Refusing keeps the promise
+        without inventing an asymmetry between the two spellings.
+
+        Only where the marker is recognised at all -- inside a seam the
+        ``--`` is not a marker, so there is no promise to keep.
+        """
+        if transformer._python_visitor is not None:
+            return
+        for value in joined.values:
+            if not isinstance(value, FormattedValue):
+                continue
+            if value.format_spec is None:
+                continue
+            stray = _collect_marked_var_names(value.format_spec)
+            if stray:
+                name = stray[0]
+                _raise_located_syntax_error(
+                    f"`--{name}` is not supported inside an f-string format "
+                    f"spec. A format spec captures no clause variables — "
+                    f"neither `{name}` nor `--{name}` — so the marker could "
+                    f"not be honoured there. Write the marker in a VALUE "
+                    f"slot, or do the whole formatting in a `++` escape, "
+                    f"where `--{name}` is honoured.",
+                    joined, transformer._source_lines, transformer._filename)
+
     def _marked_var_names(transformer, subtrees, node) -> list[str]:
         """The ``--X`` markers in *subtrees*, checked against this clause.
 
@@ -2940,22 +2982,33 @@ class TermTransformer(NodeTransformer):
                         var_names.append(name)
 
         # ``--X`` — the EXPLICIT spelling of the same capture.  Read from the
-        # slot VALUES only, exactly where the implicit rule reads, so that
-        # the two spellings answer alike everywhere: a format spec captures
-        # nothing on either.
+        # slot VALUES, exactly where the implicit rule reads.  A FORMAT SPEC
+        # is refused rather than read: neither spelling is captured there
+        # (nothing walks ``format_spec``), so a marker in one would survive
+        # into the lambda body verbatim and resolve in the module namespace
+        # -- ``f"{N:>{--Match}}"`` died at QUERY time with ``bad operand type
+        # for unary -: 'type'``, having silently found the class.  The marker
+        # is sold as the spelling that cannot be silently misread, so the one
+        # position where it could be is a load error, not a quiet no-op.
+        transformer._refuse_markers_in_format_specs(node)
         expression = node
         marked = transformer._marked_var_names(
             [v.value for v in node.values if isinstance(v, FormattedValue)],
             node)
         if marked:
+            # Every marked name is ALREADY in ``var_names``: the marker is
+            # refused unless the name is a clause variable,
+            # ``_python_scope_exclusions`` subtracts the clause variables,
+            # and the implicit collector above walked the UNSTRIPPED values,
+            # where the marked ``Name`` is an ordinary reachable child.  So
+            # the marker adds no capture power -- it adds the CHECK.  Stated
+            # rather than coded around, because a merge loop here reads as
+            # though names could arrive by this route alone and they cannot.
+            assert all(n in var_names for n in marked), (marked, var_names)
             expression = deepcopy(node)
             for v in expression.values:
                 if isinstance(v, FormattedValue):
                     v.value = _strip_variable_markers(v.value)
-            for name in marked:
-                if name not in seen:
-                    seen.add(name)
-                    var_names.append(name)
 
         return _build_py_thunk_ast(
             transformer, node, expression, var_names, thunk_cls="FStringThunk",
@@ -3040,8 +3093,11 @@ class TermTransformer(NodeTransformer):
             # there: what the author wrote is what the marker is about.
             marked = transformer._marked_var_names([escaped], unary_op)
             if marked:
+                # Already captured -- see the same assertion in
+                # ``visit_JoinedStr`` for why the marker cannot add a name
+                # the implicit collector above did not already take.
+                assert all(n in var_names for n in marked), (marked, var_names)
                 expression = _strip_variable_markers(escaped)
-                var_names += [n for n in marked if n not in var_names]
             if transformer._python_visitor is not None:
                 # A seam's ``++`` operand is Python-hosted code again, so it
                 # may itself contain ``--`` (nesting to any depth).  The
