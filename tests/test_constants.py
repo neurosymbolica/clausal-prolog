@@ -825,3 +825,71 @@ def test_an_uncased_script_can_name_a_constant(tmp_path):
         -constants(円周率 = 3.14159)
     """)
     assert getattr(m, "円周率") == 3.14159
+
+
+def test_constant_is_reached_through_the_escape(tmp_path):
+    """The whole point of the lowercase spelling: ++name retrieves.
+
+    Both a succeeding and a failing comparison, so the test cannot pass by
+    the value simply being absent -- a missing global raises rather than
+    quietly answering zero times, but a WRONG value would satisfy only one
+    of the two.
+    """
+    m = _load(tmp_path, "c_escape", """
+        -module(c_escape, [big/1, small/1, thing])
+        -constants(max_fine = 5000)
+
+        big(thing) <- (++max_fine > 4000)
+        small(thing) <- (++max_fine > 6000)
+    """)
+    assert len(list(call("big", m.thing, module=m.__dict__["$module"]))) == 1
+    assert len(list(call("small", m.thing, module=m.__dict__["$module"]))) == 0
+
+
+def test_bare_name_folds_and_the_escape_looks_up(tmp_path):
+    """The two spellings differ in BINDING TIME, and both work.
+
+    A bare reference to a bound module global is folded into the clause term
+    when the clause statement executes; ``++name`` builds a thunk that
+    resolves the global at solve time.  Rebinding the global afterwards
+    therefore moves one answer and not the other -- which is the whole
+    reason ``++name`` is the spelling to reach for: it is what makes a
+    constant late-bound, so that changing it in ONE place changes every use.
+
+    This is not special to ``-constants``: it is what a bare reference to any
+    bound Python global in a seam already does.  See
+    ``compiler_v2._process_bare_atom_refs``, which trusts an already-bound
+    name unconditionally.
+    """
+    m = _load(tmp_path, "c_bind", """
+        -module(c_bind, [bare/1, escaped/1])
+        -constants(max_fine = 5000)
+
+        bare(max_fine),
+        escaped(X) <- (X is ++max_fine)
+    """)
+    mod = m.__dict__["$module"]
+
+    def ask(goal):
+        v = Var()
+        return [deref(v) for _ in call(goal, v, module=mod)]
+
+    assert ask("bare") == [5000]
+    assert ask("escaped") == [5000]
+    m.max_fine = 9999
+    assert ask("bare") == [5000], "a bare reference folded at construction"
+    assert ask("escaped") == [9999], "++ resolves the global at solve time"
+
+
+def test_a_mistyped_constant_reference_is_the_strict_atoms_error(tmp_path):
+    """The undeclared-constant diagnostic is gone with the shape that
+    triggered it; a bare name nothing binds is the ordinary strict-atoms
+    error, which is uniform with every other undeclared name."""
+    with pytest.raises(NameError) as excinfo:
+        _load(tmp_path, "c_typo", """
+            -module(c_typo, [holds/1])
+            -constants(max_fine = 5000)
+
+            holds(max_fien),
+        """)
+    assert "max_fien" in str(excinfo.value)

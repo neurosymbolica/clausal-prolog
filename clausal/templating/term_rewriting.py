@@ -516,41 +516,6 @@ def _is_constant_declaration_name(identifier: str) -> bool:
     return identifier.isidentifier() and not _is_logic_var_name(identifier)
 
 
-def _raise_undeclared_constant(identifier: str, node=None, source_lines=None,
-                                filename=None) -> None:
-    """Shared message for a constant-shaped reference nothing declares.
-
-    Raised both from ``visit_Name`` (ordinary term position) and from
-    ``_build_py_thunk_ast`` (the ``++``/f-string/unit-sugar raw-Python
-    escapes — their body never passes through ``visit_Name``, so it would
-    otherwise silently fall through to a Python ``NameError`` at solve time
-    instead of a load-time ``SyntaxError``).
-
-    *node*/*source_lines*/*filename* mirror ``_arrow_body_error``: every raise
-    site holds the offending AST node, so the coordinates are already in
-    hand.  Setting filename/lineno on the ``SyntaxError`` (rather than only
-    naming the site inside the message) is what qualifies it for
-    ``clausal_syntax_diagnostics``'s caret/window enrichment — see
-    syntax_diagnostics.py, which requires ``exc.filename == filename`` and a
-    valid ``exc.lineno``.
-    """
-    lineno = getattr(node, "lineno", None)
-    col = getattr(node, "col_offset", None)
-    text = None
-    if source_lines and lineno and 1 <= lineno <= len(source_lines):
-        text = source_lines[lineno - 1]
-    msg = (
-        f"`{identifier}` is a constant name (one leading and one "
-        f"trailing underscore) but nothing declares it. Declare "
-        f"-constants({identifier} = <ground value>) before this "
-        f"clause, or import it: -import_from(mod, [{identifier}]) — "
-        f"or if you meant a logic variable, drop one of the underscores "
-        f"(`_x` or `x_`)."
-    )
-    if lineno is None:
-        raise SyntaxError(msg)
-    raise SyntaxError(
-        msg, (filename, lineno, (col + 1) if col is not None else None, text))
 
 
 def _raise_constant_rhs_logic_var(identifier: str, node=None, source_lines=None,
@@ -561,8 +526,8 @@ def _raise_constant_rhs_logic_var(identifier: str, node=None, source_lines=None,
     Groundness is required at COMPILE time for a -constants RHS — not only
     at the runtime ``$check_constant_ground`` gate, which exists as a
     backstop for values a ``++()`` escape can construct outside the parser's
-    view. Raised here so the error is located (mirrors
-    ``_raise_undeclared_constant``) instead of silently minting a fresh Var
+    view. Raised here so the error is located instead of silently minting a
+    fresh Var
     (which would then only surface, unlocated, as a ConstantNotGroundError
     once the module finishes loading).
     """
@@ -588,8 +553,8 @@ def _raise_located_syntax_error(msg: str, node, source_lines=None,
     """Raise *msg* as a ``SyntaxError`` located at *node*.
 
     The generic located raiser: shared by every ``-constants`` RHS
-    validation error that isn't one of the two dedicated raisers above
-    (``_raise_undeclared_constant``, ``_raise_constant_rhs_logic_var``) —
+    validation error that isn't the dedicated raiser above
+    (``_raise_constant_rhs_logic_var``) —
     the dict-splat rejection, the undeclared-functor error, the generic
     unsupported-RHS fallthrough in
     ``EmbedTransformer._transform_constant_rhs`` — and by the visit-site
@@ -1515,51 +1480,6 @@ def _visit_nested_seam_operands(node, collector) -> None:
     _Finder().visit(node)
 
 
-def _collect_constant_refs(node) -> list[str]:
-    """Collect FREE constant-shaped (``_X_``) names, in first-occurrence order.
-
-    Mirrors ``_collect_logic_var_names`` but for the constants class — used
-    by ``_build_py_thunk_ast`` to validate the raw-Python escapes (``++()``,
-    f-strings, unit sugar), whose body is embedded verbatim as a Python
-    lambda and so never passes through ``visit_Name``.
-
-    "Free" excludes any identifier locally bound *within this same escape
-    subtree* — a comprehension target (``_ITEM_`` in ``[x for _ITEM_ in
-    ...]``) or a walrus target (``(_X_ := ...)``) is a plain ``Store``-ctx
-    ``Name`` node reachable by the same walk, not a reference to a module
-    global, so it must never be flagged as an undeclared constant. Two
-    passes: first collect every ``Store``-ctx identifier anywhere in the
-    subtree (its local-binding set), then collect ``Load``-ctx
-    constant-shaped names that are not in that set.
-    """
-    bound: set[str] = set()
-
-    class _BindCollector(NodeVisitor):
-        def visit_Name(self, name):
-            if isinstance(name.ctx, Store):
-                bound.add(name.id)
-            self.generic_visit(name)
-
-    _BindCollector().visit(node)
-
-    ordered: list[str] = []
-    seen: set[str] = set()
-
-    class _Collector(NodeVisitor):
-        def visit_Name(self, name):
-            ident = name.id
-            if (
-                isinstance(name.ctx, Load)
-                and _is_constant_name(ident)
-                and ident not in bound
-                and ident not in seen
-            ):
-                seen.add(ident)
-                ordered.append(ident)
-            self.generic_visit(name)
-
-    _Collector().visit(node)
-    return ordered
 
 
 # The lint warning classes live in clausal.lint_warnings (no imports there)
@@ -1687,14 +1607,14 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     *node* is used for source locations.  *expression* is the lambda body AST.
     *var_names* is the ordered list of logic variable names.
     """
-    # Constant-shaped free names in the thunk body never pass through
-    # visit_Name either (the body is embedded verbatim as a Python lambda),
-    # so an undeclared one would otherwise silently defer to a Python
-    # NameError at solve time instead of a load-time SyntaxError.
-    for ident in _collect_constant_refs(expression):
-        if ident not in transformer.constants:
-            _raise_undeclared_constant(
-                ident, node, transformer._source_lines, transformer._filename)
+    # There is no constant-reference scan here any more (2026-09-11).  A
+    # constant name is atom-shaped now, so it is indistinguishable from any
+    # other free Python name in a verbatim body -- ``math``, a helper, a
+    # comprehension target -- and a scan by shape would either claim all of
+    # them or none.  A mistyped ``++max_fien`` therefore fails as a Python
+    # NameError when the clause runs, not as a load-time SyntaxError.  That
+    # is the cost of spelling a constant like an atom, and it is the same
+    # deal every other name in a ``++`` escape already had.
     # An f-string / ``++()`` use is an occurrence for the singleton lint —
     # these names never pass through visit_Name, so bump the counter here.
     # Exact multiplicity within one thunk body is not needed; one bump per
@@ -2867,16 +2787,12 @@ class TermTransformer(NodeTransformer):
             identifier = _TRUTH_ALIASES[identifier]
             if identifier in _BOOL_ALIAS_VALUES:
                 return replace(Constant(value=_BOOL_ALIAS_VALUES[identifier]), name)
-        # Declared or imported constant: a module global holding a ground
-        # value, bound before any clause statement executes. A plain Name
-        # load embeds the value in the clause term — indexing sees the
-        # literal, no Var is involved.
-        if identifier in transformer.constants:
-            return replace(Name(id=identifier, ctx=load), name)
-        if _is_constant_name(identifier):
-            _raise_undeclared_constant(
-                identifier, name, transformer._source_lines,
-                transformer._filename)
+        # A constant is NOT reached from term position any more (2026-09-11).
+        # Its name is atom-shaped, so a bare load here is an atom and nothing
+        # else; the value is reached with the explicit ``++name`` escape,
+        # which is ordinary Python and resolves the module global at solve
+        # time.  A name declared BOTH ways is refused in ``visit_Module``,
+        # because the atom rebinding would otherwise silently win.
         # Anonymous variable: each _ is a fresh Var, never reused.
         if identifier == "_":
             return replace(
@@ -7659,22 +7575,15 @@ class EmbedTransformer(NodeTransformer):
         if (isinstance(node, UnaryOp) and isinstance(node.op, UAdd)
                 and isinstance(node.operand, UnaryOp)
                 and isinstance(node.operand.op, UAdd)):
-            # ++expr: raw Python, load-time eval. The operand never passes
-            # through visit_Name (same reason as _build_py_thunk_ast's
-            # f-string/++ escapes elsewhere), so an undeclared constant
-            # reference inside it would otherwise fall through to a raw
-            # NameError at exec time instead of a located, load-time
-            # SyntaxError. Declared-earlier constants (transformer._constants
-            # at this point in the file) are legal here — by exec time they
-            # are already-bound module globals. Legal as a structured RHS's
-            # ELEMENT too (this branch is reached the same way whether
-            # ``node`` is the whole RHS or an element/key/value/arg a
-            # container branch below recursed into).
-            for ident in _collect_constant_refs(node.operand.operand):
-                if ident not in transformer._constants:
-                    _raise_undeclared_constant(
-                        ident, node, transformer._source_lines,
-                        transformer._filename)
+            # ++expr: raw Python, load-time eval.  Declared-earlier
+            # constants are legal here — by exec time they are already-bound
+            # module globals.  Legal as a structured RHS's ELEMENT too (this
+            # branch is reached the same way whether ``node`` is the whole
+            # RHS or an element/key/value/arg a container branch recursed
+            # into).  There is no undeclared-reference scan: see
+            # ``_build_py_thunk_ast`` for why a constant name can no longer
+            # be recognised by shape.  An undeclared one is a NameError from
+            # the module-level exec, which is still load time.
             return node.operand.operand
         if isinstance(node, UnaryOp):
             return replace(UnaryOp(op=node.op, operand=transformer.
