@@ -409,8 +409,7 @@ _BOOL_ALIAS_VALUES = {"True": True, "False": False}
 # below accepts it, the term pass warns once per site, and nothing in the
 # library emits it any more.
 ITE_NAME = "if_"
-ITE_DEPRECATED_NAME = "If"
-_ITE_NAMES = frozenset({ITE_NAME, ITE_DEPRECATED_NAME})
+_ITE_NAMES = frozenset({ITE_NAME})  # ``If`` is TitleCase: a load-time error, no arm
 
 #: The test-clause predicate (``clausal.testing``): predicates are lowercase,
 #: so it is ``test/1``.  ``Test/1`` is the superseded spelling — still
@@ -666,8 +665,7 @@ _TITLECASE_EXEMPT_NAMES = frozenset({"Undefined"})
 #: class seeded into every module namespace, so without this list the lint
 #: would tell a user writing the old ``If(...)`` to reach it as ``++If`` —
 #: a Python class they never meant.  The remedy for these is the rename.
-_TITLECASE_RENAMED_SPELLINGS = frozenset({ITE_DEPRECATED_NAME,
-                                          TEST_DEPRECATED_NAME})
+_TITLECASE_RENAMED_SPELLINGS = frozenset({"If", TEST_DEPRECATED_NAME})
 
 
 def _is_titlecase_identifier(identifier: str) -> bool:
@@ -1597,35 +1595,6 @@ class TermTransformer(NodeTransformer):
         finally:
             transformer._suppress_bare_atom_collection = prev
 
-    def _warn_deprecated_ite_spelling(transformer, call):
-        """Lint one ``If(...)`` site (see ClausalDeprecatedSpellingWarning).
-
-        Every surface path funnels through ``visit_Call`` eventually.  The DCG
-        body rewriter runs first, but it rebuilds the node with the author's
-        own spelling rather than normalising to ``if_``, so an ``If`` inside a
-        grammar body is warned about here too instead of being laundered
-        upstream.  Message shape follows ``EmbedTransformer._site``.
-        """
-        import warnings  # noqa: PLC0415
-        lineno = getattr(call, "lineno", None)
-        if transformer._filename:
-            where = f"{transformer._filename}:{lineno or '?'}"
-        else:
-            where = f"line {lineno}" if lineno else "unknown site"
-        snippet = ""
-        lines = transformer._source_lines
-        if lines and lineno and 1 <= lineno <= len(lines):
-            snippet = " — " + lines[lineno - 1].strip()
-        warnings.warn(
-            f"{where}{snippet}: `{ITE_DEPRECATED_NAME}` is the old spelling of "
-            f"the reified if-then-else. Rename "
-            f"`{ITE_DEPRECATED_NAME}` -> `{ITE_NAME}` "
-            f"({ITE_NAME}(COND, THEN, ELSE)); the old spelling still works but "
-            f"will be removed in a future release",
-            ClausalDeprecatedSpellingWarning,
-            stacklevel=2,
-        )
-
     def visit_Call(transformer, call):
         visit = transformer.visit
 
@@ -1640,10 +1609,9 @@ class TermTransformer(NodeTransformer):
         ):
             return visit(call.args[0])
 
-        # if_(cond, then, else) → IfExpr node.  ``If`` is the old spelling.
+        # if_(cond, then, else) → IfExpr node.  (``If``, the old spelling,
+        # is TitleCase and never reaches here: the lint raises first.)
         if isinstance(call.func, Name) and call.func.id in _ITE_NAMES:
-            if call.func.id == ITE_DEPRECATED_NAME:
-                transformer._warn_deprecated_ite_spelling(call)
             if call.keywords or len(call.args) != 3:
                 raise SyntaxError(
                     f"{ITE_NAME}() takes exactly 3 positional arguments: "
@@ -4969,7 +4937,7 @@ class EmbedTransformer(NodeTransformer):
     def _warn_deprecated_test_spelling(transformer, functor_name, arity, node):
         """Lint a ``Test(...)`` clause head (see ClausalDeprecatedSpellingWarning).
 
-        The counterpart of ``_warn_deprecated_ite_spelling`` for the
+        The one-per-file lint for the
         test-clause predicate: ``test/1`` is the spelling, ``Test/1`` the
         old one.  A test file holds many such clauses, so — unlike the
         per-site ``If`` lint — this fires ONCE per file, at the first
@@ -5235,6 +5203,24 @@ class EmbedTransformer(NodeTransformer):
                     and isinstance(node.operand.op, UAdd))
 
         def walk_(node):
+            # ``'Foo'(...)``: a string literal as the callable is sugar for
+            # the name ``Foo`` (``visit_Call`` rewrites it AFTER this walk
+            # ran on the raw tree), so the string is read as the identifier
+            # it names; the report is located on the call.
+            if (isinstance(node, Call) and isinstance(node.func, Constant)
+                    and isinstance(node.func.value, str)):
+                ident = node.func.value
+                if (ident not in transformer._titlecase_seen
+                        and ident not in _TITLECASE_EXEMPT_NAMES
+                        and _is_titlecase_identifier(ident)):
+                    transformer._titlecase_seen.add(ident)
+                    if ident not in transformer._titlecase_imported:
+                        report(ident, node)
+                for child in node.args:
+                    walk_(child)
+                for kw in node.keywords:
+                    walk_(kw.value)
+                return
             if isinstance(node, (Constant, JoinedStr)) or _is_escape(node):
                 return
             if isinstance(node, Name):
@@ -5540,16 +5526,27 @@ class EmbedTransformer(NodeTransformer):
                 )
             case Tuple(elts=[single_element], ctx=Load()) if (
                 isinstance(single_element, Call)
-                and isinstance(single_element.func, Name)
+                and (isinstance(single_element.func, Name)
+                     or (isinstance(single_element.func, Constant)
+                         and isinstance(single_element.func.value, str)))
                 and transformer._scope_depth == 0
             ):
                 # Trailing-comma fact: ``edge(1, 2),`` — build via shared helper.
+                # ``'edge'(1, 2),`` is the string-callable sugar for the same
+                # name (the form a body goal already accepts); read as a
+                # fact here so the lint sees it — otherwise the tuple falls
+                # through as hosted Python and dies at exec with a
+                # misleading ``'str' object is not callable``.
                 transformer._lint_titlecase(single_element)
+                func = single_element.func
+                if isinstance(func, Constant):
+                    func = Name(id=func.value, ctx=Load())
+                    copy_location(func, single_element.func)
                 return transformer._build_fact_statements(
-                    single_element.func.id,
+                    func.id,
                     single_element.args,
                     single_element.keywords,
-                    single_element.func,
+                    func,
                     single_element,
                     expr_stmt,
                 )

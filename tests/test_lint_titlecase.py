@@ -190,6 +190,40 @@ def test_escaped_python_class_in_body_loads(tmp_path, monkeypatch):
     assert mod.q is not None
 
 
+@pytest.mark.parametrize("text", [
+    "'Foo'(1),\n",                       # a fact through the string-callable sugar
+    "bar(1),\ngo(X) <- ('Foo'(X))\n",     # a body goal through it
+])
+def test_string_callable_sugar_is_linted(tmp_path, monkeypatch, text):
+    """``'Foo'(...)`` is sugar for the name ``Foo``; it is rewritten AFTER the
+    lint reads the raw tree, so the lint must read the string callable
+    itself or the sugar bypasses the gate."""
+    _as_error(monkeypatch)
+    with pytest.raises(SyntaxError) as ei:
+        _load(tmp_path, "sev_sugar", text)
+    assert "`Foo` is TitleCase" in str(ei.value)
+    assert "Rename `Foo` -> `foo`" in str(ei.value)
+
+
+def test_string_callable_sugar_lowercase_still_works(tmp_path, monkeypatch):
+    """The sugar itself is untouched: ``'bar'(X)`` in a body calls bar/1."""
+    _as_error(monkeypatch)
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    mod = _load(tmp_path, "sev_sugar_ok", "bar(1),\ngo(X) <- ('bar'(X))\n")
+    x = Var()
+    assert [deref(x) for _ in call("go", x, module=mod.__dict__["$module"])] == [1]
+
+
+def test_string_callable_sugar_fact_lowercase_loads(tmp_path, monkeypatch):
+    """``'foo'(1),`` reads as the fact ``foo(1),`` (it used to fall through
+    as hosted Python and die at exec with ``'str' object is not callable``)."""
+    _as_error(monkeypatch)
+    from clausal.logic.solve import call
+    mod = _load(tmp_path, "sev_sugar_fact", "'foo'(1),\n")
+    assert len(list(call("foo", 1, module=mod.__dict__["$module"]))) == 1
+
+
 @pytest.mark.parametrize("old, new, text", [
     ("If", "if_", "c(X, L) <- If(X >= 0, L is 1, L is 2)\n"),
     ("Test", "test", 'Test("one") <- (1 == 1)\n'),

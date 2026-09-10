@@ -1051,13 +1051,19 @@ class _PrologToClausal:
         # emitted as a name the Clausal loader rejects (TitleCase has no
         # role there; the lint is an error).  This translator must never
         # EMIT one, so refuse here and name the spelling that loads.
-        if name[:1].isupper() and any(c.islower() for c in name):
+        # The same for ANY initial capital: ``'FOO'`` / ``'X1'`` would be
+        # emitted as variable-shaped names.
+        if name[:1].isupper() and not _is_plain_atom_name(name):
+            suggested = (_titlecase_to_snake(name)
+                         if any(c.islower() for c in name) else name.lower())
+            shape = ("TitleCase" if any(c.islower() for c in name)
+                     else "capitalised (variable-shaped)")
             raise PrologTranslationError(
-                f"Prolog functor {prolog_name!r} is TitleCase, which has no "
-                f"role in Clausal (predicates and functors are lowercase; "
-                f"a file spelling {name!r} does not load).\n"
-                f"Rename it in the Prolog source to "
-                f"{_titlecase_to_snake(name)!r} and translate again."
+                f"Prolog functor {prolog_name!r} is {shape}, which has no "
+                f"role as a Clausal predicate or functor name (those are "
+                f"lowercase; a file spelling {name!r} does not load).\n"
+                f"Rename it in the Prolog source to {suggested!r} and "
+                f"translate again."
             )
         # A functor whose converted name is not a plain Python identifier
         # (quoted atoms like 'hello world', operator soup from unmapped

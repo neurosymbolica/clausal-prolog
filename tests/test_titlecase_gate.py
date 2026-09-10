@@ -14,6 +14,7 @@ the transformer, so it runs everywhere.
 from __future__ import annotations
 
 import pathlib
+import re
 import warnings
 
 import pytest
@@ -44,18 +45,38 @@ def _clausal_files():
             yield p
 
 
+_NAMED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)` is TitleCase")
+
+#: Fixtures kept on ANOTHER deliberate load error (each asserted by its own
+#: test); the transformer stops there, and the lint had already read every
+#: clause before the failing one.  Anything else that fails to parse is
+#: re-raised — a silently truncated census would prove nothing.
+_OTHER_LOAD_ERROR_WITNESSES = {
+    "tests/fixtures/lambda_in_term_position_witness.clausal",
+}
+
+
 def _titlecase_names(path: pathlib.Path) -> set[str]:
-    """Every TitleCase identifier the lint reports for *path*."""
+    """Every TitleCase identifier the lint reports for *path*.
+
+    Any SyntaxError that is NOT the lint's own is re-raised: a file the
+    transformer stops on part-way would truncate the census silently.
+    """
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
         try:
             _parse_clausal_source(path.read_text(), str(path))
-        except SyntaxError:
-            # A file that does not parse for another reason is somebody
-            # else's test; the lint still ran up to the failure.
-            pass
-    return {str(w.message).split("`")[1] for w in rec
-            if issubclass(w.category, ClausalTitleCaseIdentifierWarning)}
+        except SyntaxError as exc:
+            rel = path.relative_to(_ROOT).as_posix() if _ROOT in path.parents else ""
+            if not _NAMED.search(str(exc)) and rel not in _OTHER_LOAD_ERROR_WITNESSES:
+                raise
+    names = set()
+    for w in rec:
+        if issubclass(w.category, ClausalTitleCaseIdentifierWarning):
+            m = _NAMED.search(str(w.message))
+            assert m, str(w.message)
+            names.add(m.group(1))
+    return names
 
 
 @pytest.fixture(autouse=True)
@@ -71,11 +92,16 @@ def test_the_tree_has_clausal_files_to_check():
     assert any("packages" in p.parts for p in files)
 
 
-def test_the_lint_still_sees_a_titlecase_head(tmp_path):
+@pytest.mark.parametrize("text, names", [
+    ("Foo(1),\n", {"Foo"}),
+    ("'Bar'(1),\n", {"Bar"}),                    # the string-callable sugar
+    ("baz(1),\ngo(X) <- ('Qux'(X))\n", {"Qux"}),
+])
+def test_the_lint_still_sees_a_titlecase_head(tmp_path, text, names):
     """Positive control on the instrument: the census is the lint."""
     p = tmp_path / "probe.clausal"
-    p.write_text("Foo(1),\n")
-    assert _titlecase_names(p) == {"Foo"}
+    p.write_text(text)
+    assert _titlecase_names(p) == names
 
 
 def test_no_titlecase_identifier_in_any_clausal_position():

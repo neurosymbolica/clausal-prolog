@@ -321,6 +321,8 @@ class TestNamingConventions:
         ("'Foo'(x).", "Foo", "foo"),
         ("'FooBar'(1, 2).", "FooBar", "foo_bar"),
         ("p(X) :- 'Bar'(X).", "Bar", "bar"),
+        ("'FOO'(x).", "FOO", "foo"),          # ALL-CAPS reads as a variable
+        ("'X1'(a).", "X1", "x1"),            # so does an initial capital alone
     ])
     def test_titlecase_functor_is_refused_naming_the_rename(self, pl, old, new):
         """A quoted TitleCase functor would be emitted as a name the Clausal
@@ -332,7 +334,7 @@ class TestNamingConventions:
         msg = str(ei.value)
         assert f"'{old}'" in msg or f"`{old}`" in msg or old in msg
         assert new in msg
-        assert "TitleCase" in msg
+        assert "TitleCase" in msg or "variable-shaped" in msg
 
     def test_variable_conversion(self):
         # nv
