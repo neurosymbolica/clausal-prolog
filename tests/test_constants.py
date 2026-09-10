@@ -986,3 +986,37 @@ def test_an_imported_constant_under_an_alias(tmp_path):
     v = Var()
     assert [deref(v) for _ in call("limit", v,
                                    module=m.__dict__["$module"])] == [5000]
+
+
+def test_a_constant_named_like_the_unused_marker_warns(tmp_path):
+    """The name check for the singleton-suppression suffix had to move with
+    the spelling: it used to read ``ident[1:-1]``, which assumed the leading
+    and trailing underscores were there to strip. Nothing else covered it.
+    """
+    import warnings as _warnings
+    from clausal.lint_warnings import ClausalLintWarning
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        m = _load(tmp_path, "c_unused", """
+            -constants(item_UNUSED = 3)
+        """)
+    assert m.item_UNUSED == 3
+    messages = [str(w.message) for w in caught
+                if issubclass(w.category, ClausalLintWarning)]
+    assert any("item_UNUSED" in msg and "_UNUSED" in msg
+               for msg in messages), messages
+
+
+def test_an_ordinary_constant_name_does_not_warn(tmp_path):
+    """Negative control: without it the test above passes on a directive
+    that warns about every name it is given."""
+    import warnings as _warnings
+    from clausal.lint_warnings import ClausalLintWarning
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        _load(tmp_path, "c_quiet", """
+            -constants(item_count = 3)
+        """)
+    assert not [w for w in caught
+                if issubclass(w.category, ClausalLintWarning)
+                and "_UNUSED" in str(w.message)]

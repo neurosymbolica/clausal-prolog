@@ -755,6 +755,36 @@ capitalisation-related, and is wider than constants — any hosted-Python global
 matches a declared atom is affected. Task 3 refuses the specific constant/atom case; the general
 case needs its own todo and its own decision (error, or warn, or documented precedence).
 
+## Corrections made while executing this plan
+
+Three of the plan's premises did not survive contact with the code. They are recorded here
+rather than edited away, because each was found by a measurement the plan itself called for.
+
+**1. "A bare name is an atom" was wrong, and Task 2 could not deliver it.**
+`compiler_v2._process_bare_atom_refs` trusts ANY already-bound module global unconditionally,
+so a bare reference to a plain Python `max_fine = 5000` in a seam already yields `5000` with no
+`-constants` directive anywhere. Deleting the `visit_Name` branch does not change that. What
+actually separates the two spellings is BINDING TIME, and both work: a bare reference folds at
+clause construction, `++name` resolves at solve time. Rebinding the global afterwards moves one
+answer and not the other. So `++name` is what delivers the late-binding ruling — the reason to
+reach for it is not that the bare form is unavailable.
+
+**2. The `visit_Name` branch is NOT redundant, and deleting it was a regression.**
+Measured after the fact: the fall-through emits `$LoadName`, whose job is to resolve LATER so
+that an atom declared further down the file still works, and which therefore hands back the raw
+Python object with no term conversion. `-constants(origin = point(0, 0))` reached the clause as
+a `point` INSTANCE instead of `('point', 0, 0)`. Only structured values moved — an int converts
+to itself — and the two tests that caught it were green at the baseline. The branch is restored.
+The lesson generalises: "this branch is redundant with that one" is a claim about two code
+paths, and the way to check it is to unparse both, not to reason about them.
+
+**3. Task 3's rule was too strong. A name CAN be a constant and an atom.**
+The operator said so and the measurement agreed: with `-constants(pi = 5000)` and no atom
+listing, `pi` is the constant and `'pi'` is the atom, and the quoted form unifies with what
+`global_atom("pi", A)` yields. The one combination that cannot work is DECLARING the atom bare
+in `-module`/`-private`/`-hide`, because that listing rebinds the module global after the file
+has run and silently destroys the constant. Only that is refused.
+
 ## Self-review notes
 
 - **Spec coverage:** the spec's "Definition of done" lists `-constant_value(name, value)`

@@ -143,19 +143,24 @@ def test_singleton_prefix_does_not_collide_with_a_live_variable():
     assert len(set(_prolog_var_names(emitted))) == 2, emitted
 
 
-def test_singleton_prefix_declines_rather_than_building_a_constant_name():
-    """``X_`` is a legal Clausal variable; ``_X_`` is a module constant.
+def test_singleton_prefix_now_applies_to_a_trailing_underscore_name():
+    """``X_`` is a legal Clausal variable, and so is ``_X_`` since 2026-09-11.
 
-    Prefixing a trailing-underscore singleton emits a name that is not a
-    variable on the way back, so a file that loaded fine exports to a `.pl`
-    whose re-import will not load. The inbound trailing-underscore strip used
-    to absorb this; nothing does now, so the pass must not create it.
+    This test used to assert the opposite. ``_X_`` was the module-constant
+    class, so prefixing a trailing-underscore singleton built a name that was
+    NOT a variable on the way back -- a file that loaded fine exported to a
+    `.pl` whose re-import would not load -- and the pass declined for that
+    one shape. Retiring the constant spelling removed the hazard, so the
+    guard went and the pass treats ``X_`` like any other singleton.
+
+    The round trip is still asserted, because that is what the guard was
+    protecting: the emitted name must read back as the same variable. It is
+    ``_X_`` rather than ``X_`` on the way back, which is the singleton pass
+    doing its job, exactly as ``RESULT`` comes back as ``_RESULT``.
     """
     emitted = clausal_source_to_prolog("p(X_, Y) <- (q(Y))")
-    assert "p(X_, Y) :-" in emitted, emitted
-    assert "_X_" not in emitted, emitted
-    # and the round trip survives
-    assert prolog_to_clausal(emitted).strip() == "p(X_, Y) <- (q(Y))"
+    assert "p(_X_, Y) :-" in emitted, emitted
+    assert prolog_to_clausal(emitted).strip() == "p(_X_, Y) <- (q(Y))"
 
 
 def test_singleton_prefixing_still_happens_when_it_is_safe():
