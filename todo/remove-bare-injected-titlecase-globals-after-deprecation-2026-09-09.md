@@ -100,3 +100,9 @@ first checking that no test or downstream tree triggers it.
 - `Undefined` stays bare (ruling).
 - The `$`-prefixed engine helpers (`$unify`, `$deref`, `$mint`, ...) are
   unaffected; they never had bare aliases.
+
+**Wart observed at landing (2026-09-10):** a USER predicate whose head is spelled exactly like a
+node class (`Sub(A, B) <- …`) mints and runs correctly, but `dollar_ref`'s identity fallback
+emits a `RuntimeWarning` naming the mismatch on top of the TitleCase-lint warning. Only reachable
+through an already-deprecated TitleCase head; disappears with the bare aliases at the end of
+the window. Not worth a fix before then.
