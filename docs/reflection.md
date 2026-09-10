@@ -28,8 +28,8 @@ head_name(SRC, NAME) <- (
 
 ```python
 >>> from clausal.logic.solve import call
->>> src = "Edge(1, 2),\nConnected(X, Y) <- Edge(X, Y)\n"
->>> # HeadName(src, NAME) enumerates "Edge", "Connected"
+>>> src = "edge(1, 2),\nconnected(X, Y) <- edge(X, Y)\n"
+>>> # head_name(src, NAME) enumerates "edge", "connected"
 ```
 
 ---
@@ -56,7 +56,7 @@ Inside clauses:
 | `IfThenElse(CONDITION, THEN, OTHERWISE)` | A reified `If/3`. |
 
 Python literals stay raw: numbers, strings, lists, tuples, and dicts appear
-as themselves, so `Path([1, 2, 3])` reifies with the plain list `[1, 2, 3]`
+as themselves, so `path([1, 2, 3])` reifies with the plain list `[1, 2, 3]`
 as its argument.
 
 **Operator nodes stay raw.** Arithmetic, comparison, and boolean operator
@@ -127,8 +127,8 @@ non-`Goal` terms (raw operator nodes, literals), which conveniently skips them
 in call-graph sweeps.
 
 Because `NAME` is an atom, a matcher can write it as a literal in ordinary
-(`-double_quotes(atom)`) source — `goal_functor(GOAL, "Edge", _)` matches an
-`Edge/…` call. Destructuring `Goal(NAME, _, _)` directly gives you the raw
+(`-double_quotes(atom)`) source — `goal_functor(GOAL, "edge", _)` matches an
+`edge/…` call. Destructuring `Goal(NAME, _, _)` directly gives you the raw
 spelling *string* instead; the two do not unify with each other, so a matcher
 should use one form throughout.
 
@@ -262,10 +262,10 @@ undefined_call(SRC, NAME) <- (
 
 A clause body is a plain list of goals, so [DCGs](dcg.md) match goal
 *sequences* directly — the right tool for "a body that starts with an
-`Edge/2` call":
+`edge/2` call":
 
 ```clausal
-edge_goal >> ([GOAL], {goal_functor(GOAL, "Edge", _)})
+edge_goal >> ([GOAL], {goal_functor(GOAL, "edge", _)})
 any_goal >> ([_])
 any_goals >> ([])
 any_goals >> (any_goal, any_goals)

@@ -122,7 +122,7 @@ Meta-predicate examples: `Squares` (findall/3), `Positives` (bagof/3), `UniqueMe
 
 Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[Head, Body]` clause pairs, where terms use the convention `["functor", arg1, arg2, ...]`. [`copy_term/2`](term_inspection.md) provides fresh variable copies at each resolution step.
 
-**Solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
+**solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
 
 ```clausal
 solve([], _PROGRAM_UNUSED),
@@ -139,7 +139,7 @@ match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
 )
 ```
 
-**SolveCount/3** — counts inference steps:
+**solve_count/3** — counts inference steps:
 
 ```clausal
 solve_count([], _PROGRAM_UNUSED, 0),
@@ -151,7 +151,7 @@ solve_count([GOAL, *GOALS], PROGRAM, COUNT) <- (
 )
 ```
 
-**SolveLimit/3** — depth-limited search. Each clause resolution consumes one unit of depth:
+**solve_limit/3** — depth-limited search. Each clause resolution consumes one unit of depth:
 
 ```clausal
 solve_limit([], _PROGRAM_UNUSED, _MAX_UNUSED),
@@ -164,7 +164,7 @@ solve_limit([GOAL, *GOALS], PROGRAM, MAX) <- (
 )
 ```
 
-**SolveIterativeDeepening/2** — complete search via increasing depth limits. Finds solutions even in cyclic programs where naive DFS diverges:
+**solve_iterative_deepening/2** — complete search via increasing depth limits. Finds solutions even in cyclic programs where naive DFS diverges:
 
 ```clausal
 solve_iterative_deepening(GOALS, PROGRAM) <- (
@@ -173,7 +173,7 @@ solve_iterative_deepening(GOALS, PROGRAM) <- (
 )
 ```
 
-**SolveTree/3** — builds explicit proof trees. Each node is `[Goal, [subtrees...]]`:
+**solve_tree/3** — builds explicit proof trees. Each node is `[Goal, [subtrees...]]`:
 
 ```clausal
 solve_tree([], _PROGRAM_UNUSED, []),
@@ -184,7 +184,7 @@ solve_tree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
 )
 ```
 
-Three sample programs are included: natural numbers (`NatnumProgram`), an acyclic graph (`GraphProgram`), and a cyclic graph (`CyclicProgram`) that demonstrates iterative deepening's advantage over plain DFS.
+Three sample programs are included: natural numbers (`natnum_program`), an acyclic graph (`graph_program`), and a cyclic graph (`cyclic_program`) that demonstrates iterative deepening's advantage over plain DFS.
 
 *See: [Meta-Interpreters tutorial](metainterpreters.md), [Builtins](builtins.md) (copy_term, in_, append, between)*
 

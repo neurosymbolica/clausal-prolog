@@ -12,10 +12,10 @@ Translate a `.clausal` source string to Prolog text:
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 
 source = '''
-Edge(1, 2),
-Edge(2, 3),
-Reach(X, Y) <- Edge(X, Y)
-Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
+edge(1, 2),
+edge(2, 3),
+reach(X, Y) <- edge(X, Y)
+reach(X, Y) <- (edge(X, Z), reach(Z, Y))
 '''
 
 print(clausal_source_to_prolog(source))
@@ -60,7 +60,7 @@ For programmatic access, stop at the AST stage:
 ```python
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog_ast
 
-pmodule = clausal_source_to_prolog_ast("Edge(1, 2),\n")
+pmodule = clausal_source_to_prolog_ast("edge(1, 2),\n")
 # PModule(items=(PClause(head=PCompound('edge', (PNumber(1), PNumber(2)))),))
 ```
 
@@ -194,13 +194,13 @@ print(prolog_to_clausal(source))
 Output:
 
 ```python
-Edge(1, 2),
+edge(1, 2),
 
-Edge(2, 3),
+edge(2, 3),
 
-Reach(X, Y) <- (Edge(X, Y))
+reach(X, Y) <- (edge(X, Y))
 
-Reach(X, Y) <- (Edge(X, Z), Reach(Z, Y))
+reach(X, Y) <- (edge(X, Z), reach(Z, Y))
 ```
 
 ### Dialect selection

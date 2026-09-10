@@ -129,16 +129,25 @@ def python_error_term(exc: Exception) -> Compound:
 
     Produces ``ClassName(Message)`` — a Compound whose functor is the
     exception class name and whose single argument is the message string.
-    This allows .clausal code to match Python exceptions the same way as
-    logic ``throw/1`` terms::
+    The functor is TitleCase, so no ``.clausal`` catcher can be WRITTEN
+    against it (TitleCase in a Clausal position is a load-time error); the
+    term is observable only through a catch-all variable, or via the
+    ``.term`` of the ``LogicException`` it travels in::
 
-        catch(Goal, UnitsMismatch(MSG), Recovery)
-        catch(Goal, _, Recovery)   % any exception
-        Catch(Goal, UnitsMismatch(MSG))
+        catch(Goal, _, Recovery)           % any exception
+        catch(Goal, E, (write(E), fail))   % E = ValueError("...")
+
+    A Python exception is caught by CLASS with a ``++`` catcher — the class
+    reached through the module's import list or a builtin — which
+    :func:`catch_match` matches against the live exception object::
+
+        catch(Goal, ++ValueError, Recovery)        % isinstance, subclasses in
+        catch(Goal, ++ValueError(M), Recovery)     % also binds M to the message
 
     This transliteration discards the exception OBJECT, so it cannot serve a
-    ``++`` catcher — those are handled by :func:`catch_match`, which receives
-    the live exception alongside this structural term.
+    ``++`` catcher on its own — :func:`catch_match` receives the live
+    exception alongside this structural term (and unwraps the module-predicate
+    boundary wrapper for it).
     """
     return Compound(type(exc).__name__, (str(exc),))
 

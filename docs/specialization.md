@@ -21,7 +21,7 @@ Clausal ships five MIs ported from Triska's [acomip](https://www.metalevel.at/ac
 | `solve` | `(GOALS, PROGRAM)` | None — vanilla |
 | `solve_count` | `(GOALS, PROGRAM, COUNT)` | Counts inference steps |
 | `solve_limit` | `(GOALS, PROGRAM, MAX_DEPTH)` | Depth-bounded search |
-| `SolveIterativeDeepening` | `(GOALS, PROGRAM)` | Complete search via iterative deepening |
+| `solve_iterative_deepening` | `(GOALS, PROGRAM)` | Complete search via iterative deepening |
 | `solve_tree` | `(GOALS, PROGRAM, TREE)` | Builds proof trees |
 
 Object programs are represented as lists of `[Head, BodyGoals]` pairs, where terms use list form: `f(A, B)` becomes `["f", A, B]`.
@@ -84,10 +84,10 @@ The MI pattern (goal-list arg, program arg, extra args, recursive style) is reco
 Given the natnum program, `solve` is specialized to:
 
 ```
-SolveNatnum([], )                                              # base case
-SolveNatnum([["natnum", 0], *GOALS]) <- SolveNatnum(GOALS)     # fact
-SolveNatnum([["natnum", ["s", X]], *GOALS]) <-                  # rule
-    SolveNatnum([["natnum", X], *GOALS])
+solve_natnum([], )                                              # base case
+solve_natnum([["natnum", 0], *GOALS]) <- solve_natnum(GOALS)     # fact
+solve_natnum([["natnum", ["s", X]], *GOALS]) <-                  # rule
+    solve_natnum([["natnum", X], *GOALS])
 ```
 
 The `match_clause`/`append` machinery is gone. One clause per object clause, plus the base case.
@@ -95,13 +95,13 @@ The `match_clause`/`append` machinery is gone. One clause per object clause, plu
 ### Counting MI (solve_count)
 
 ```
-SolveCountNatnum([], 0)
-SolveCountNatnum([["natnum", 0], *GOALS], COUNT) <- (
-    SolveCountNatnum(GOALS, SUB_COUNT),
+solve_count_natnum([], 0)
+solve_count_natnum([["natnum", 0], *GOALS], COUNT) <- (
+    solve_count_natnum(GOALS, SUB_COUNT),
     COUNT == SUB_COUNT + 1
 )
-SolveCountNatnum([["natnum", ["s", X]], *GOALS], COUNT) <- (
-    SolveCountNatnum([["natnum", X], *GOALS], SUB_COUNT),
+solve_count_natnum([["natnum", ["s", X]], *GOALS], COUNT) <- (
+    solve_count_natnum([["natnum", X], *GOALS], SUB_COUNT),
     COUNT == SUB_COUNT + 1
 )
 ```
@@ -149,8 +149,8 @@ With `cpd=True`, the specializer applies **deforestation** — eliminating inter
 ### Before CPD (Phase 1 output)
 
 ```
-SolveGraph([["path", X, Y], *GOALS]) <-
-    SolveGraph([["edge", X, Z], ["path", Z, Y], *GOALS])
+solve_graph([["path", X, Y], *GOALS]) <-
+    solve_graph([["edge", X, Z], ["path", Z, Y], *GOALS])
 ```
 
 The body constructs a 3+ element list at runtime, only to immediately decompose it via pattern matching.
@@ -158,9 +158,9 @@ The body constructs a 3+ element list at runtime, only to immediately decompose 
 ### After CPD
 
 ```
-SolveGraph([["path", "a", Y], *GOALS]) <- SolveGraph([["path", "b", Y], *GOALS])
-SolveGraph([["path", "b", Y], *GOALS]) <- SolveGraph([["path", "c", Y], *GOALS])
-SolveGraph([["path", "b", Y], *GOALS]) <- SolveGraph([["path", "d", Y], *GOALS])
+solve_graph([["path", "a", Y], *GOALS]) <- solve_graph([["path", "b", Y], *GOALS])
+solve_graph([["path", "b", Y], *GOALS]) <- solve_graph([["path", "c", Y], *GOALS])
+solve_graph([["path", "b", Y], *GOALS]) <- solve_graph([["path", "d", Y], *GOALS])
 ```
 
 The intermediate list is eliminated — edge matching is inlined directly into the clause heads.

@@ -22,20 +22,12 @@ All three arguments are required.
 
 ### The old spelling, `If/3`
 
-`if_` was once spelled `If`. The old spelling still compiles — every
-recogniser accepts it — but it warns at load time
-(`ClausalDeprecatedSpellingWarning`, naming the file, line and rewrite) and
-will be removed in a future release. Nothing in the library emits it any more:
-the [reifier](reflection.md)'s renderer writes `if_`, so a round-trip through
+`if_` was once spelled `If`.  That spelling is TitleCase, which has no role in
+Clausal code, so a file carrying it no longer loads: the TitleCase lint raises
+a located `SyntaxError` at the first `If(...)` naming the rewrite
+(`If` -> `if_`).  Nothing in the library emits it: the
+[reifier](reflection.md)'s renderer writes `if_`, so a round-trip through
 `reify_source`/`render_source` migrates a clause for you.
-
-To silence the lint while you migrate:
-
-```python
-import warnings
-from clausal.templating.term_rewriting import ClausalDeprecatedSpellingWarning
-warnings.filterwarnings("ignore", category=ClausalDeprecatedSpellingWarning)
-```
 
 ### Examples
 

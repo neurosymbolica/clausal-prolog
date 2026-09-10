@@ -92,17 +92,17 @@ The base case: an empty goal list means all goals are proved. The recursive case
 **Querying it:**
 
 ```python
-from clausal.examples.metainterpreters import NatnumProgram, GraphProgram
-from clausal.examples.metainterpreters import Solve, Natnum, succ, Path, Edge
+from clausal.examples.metainterpreters import natnum_program, graph_program
+from clausal.examples.metainterpreters import solve, natnum, succ, path, edge
 
 # Does natnum(s(s(0))) hold?
-p = next(NatnumProgram.query())
-result = list(Solve.query(goals=[Natnum(succ(succ(0)))], program=p))
+p = next(natnum_program.query())
+result = list(solve.query(goals=[natnum(succ(succ(0)))], program=p))
 # → one solution (the proof succeeds)
 
 # Is there a path from a to c?
-g = next(GraphProgram.query())
-result = list(Solve.query(goals=[Path("a", "c")], program=g))
+g = next(graph_program.query())
+result = list(solve.query(goals=[path("a", "c")], program=g))
 # → one solution
 ```
 
@@ -152,15 +152,15 @@ solve_limit([GOAL, *GOALS], PROGRAM, MAX) <- (
 )
 ```
 
-Each resolution step decrements the depth counter. when `MAX` reaches zero, the guard `MAX > 0` fails, cutting off that branch.
+Each resolution step decrements the depth counter. When `MAX` reaches zero, the guard `MAX > 0` fails, cutting off that branch.
 
 **Examples:**
 
 ```
-SolveLimit([Natnum(succ(0))], P, 1)     → fails  (needs 2 steps)
-SolveLimit([Natnum(succ(0))], P, 2)     → succeeds
-SolveLimit([Path("a","c")], P, 3)       → fails  (needs 4 steps)
-SolveLimit([Path("a","c")], P, 4)       → succeeds
+solve_limit([natnum(succ(0))], P, 1)     → fails  (needs 2 steps)
+solve_limit([natnum(succ(0))], P, 2)     → succeeds
+solve_limit([path("a","c")], P, 3)       → fails  (needs 4 steps)
+solve_limit([path("a","c")], P, 4)       → succeeds
 ```
 
 ---
@@ -213,10 +213,10 @@ Each node in the tree is `[Goal, SubTree]` where `SubTree` is the proof tree for
 **Example: `path("a","c")`**
 
 ```
-Path("a", "c")
-└─ Edge("a", "b")          ← leaf (fact)
-└─ Path("b", "c")
-   └─ Edge("b", "c")       ← leaf (fact)
+path("a", "c")
+└─ edge("a", "b")          ← leaf (fact)
+└─ path("b", "c")
+   └─ edge("b", "c")       ← leaf (fact)
 ```
 
 In Clausal list notation:
@@ -228,9 +228,9 @@ In Clausal list notation:
 **Example: `natnum(s(s(0)))`**
 
 ```
-Natnum(succ(succ(0)))
-└─ Natnum(succ(0))
-   └─ Natnum(0)             ← leaf (fact)
+natnum(succ(succ(0)))
+└─ natnum(succ(0))
+   └─ natnum(0)             ← leaf (fact)
 ```
 
 ```clausal
