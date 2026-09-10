@@ -1,52 +1,52 @@
 -module(graph, [
-    Path(X, Y, PATH),
-    Reachable(X, Y),
-    Connected(X, Y)
+    path(X, Y, PATH),
+    reachable(X, Y),
+    connected(X, Y)
 ])
 
 -private([
-    Edge(X, Y),
-    PathAcc(FROM, TO, VISITED, PATH)
+    edge(X, Y),
+    path_acc(FROM, TO, VISITED, PATH)
 ])
 
 # Sample directed graph.
 
-Edge(X=1, Y=2),
-Edge(2, 3),
-Edge(3, 4),
-Edge(4, 5),
-Edge(2, 5),
-Edge(5, 6),
-Edge(6, 3),
+edge(X=1, Y=2),
+edge(2, 3),
+edge(3, 4),
+edge(4, 5),
+edge(2, 5),
+edge(5, 6),
+edge(6, 3),
 
-# Path finding with cycle detection via visited set.
+# path finding with cycle detection via visited set.
 
-Path(X, Y, PATH) <- PathAcc(X, Y, [X], PATH)
+path(X, Y, PATH) <- path_acc(X, Y, [X], PATH)
 
-PathAcc(FROM=0, TO=0, VISITED=[], PATH=[]),
-PathAcc(X, X, _, [X]),
-PathAcc(X, Y, VISITED, [X, *REST]) <- (
-    Edge(X, Z),
+path_acc(FROM=0, TO=0, VISITED=[], PATH=[]),
+path_acc(X, X, _, [X]),
+path_acc(X, Y, VISITED, [X, *REST]) <- (
+    edge(X, Z),
     Z not in VISITED,
-    PathAcc(Z, Y, [Z, *VISITED], REST)
+    path_acc(Z, Y, [Z, *VISITED], REST)
 )
 
-Reachable(X, Y) <- Path(X, Y, _)
+reachable(X, Y) <- path(X, Y, _)
 
-Connected(X, Y) <- Edge(X, Y)
-Connected(X, Y) <- Edge(Y, X)
+connected(X, Y) <- edge(X, Y)
+connected(X, Y) <- edge(Y, X)
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("edge 1->2 exists") <- Edge(1, 2)
-test("edge 2->3 exists") <- Edge(2, 3)
-test("1 reaches 5") <- Reachable(1, 5)
-test("1 reaches 6") <- Reachable(1, 6)
-test("1 reaches 4") <- Reachable(1, 4)
-test("2 reaches 6") <- Reachable(2, 6)
-test("5 cannot reach 1") <- (not Reachable(5, 1))
-test("connected 1-2") <- Connected(1, 2)
-test("connected 2-1") <- Connected(2, 1)
-test("path 1 to 5 via shortcut") <- Path(1, 5, [1, 2, 5])
-test("path starts with source") <- (Path(1, 6, PATH), PATH is [1, *_])
-test("path 2 to 6 terminates despite cycle") <- Path(2, 6, _)
+test("edge 1->2 exists") <- edge(1, 2)
+test("edge 2->3 exists") <- edge(2, 3)
+test("1 reaches 5") <- reachable(1, 5)
+test("1 reaches 6") <- reachable(1, 6)
+test("1 reaches 4") <- reachable(1, 4)
+test("2 reaches 6") <- reachable(2, 6)
+test("5 cannot reach 1") <- (not reachable(5, 1))
+test("connected 1-2") <- connected(1, 2)
+test("connected 2-1") <- connected(2, 1)
+test("path 1 to 5 via shortcut") <- path(1, 5, [1, 2, 5])
+test("path starts with source") <- (path(1, 6, PATH), PATH is [1, *_])
+test("path 2 to 6 terminates despite cycle") <- path(2, 6, _)

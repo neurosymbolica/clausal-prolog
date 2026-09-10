@@ -40,7 +40,7 @@
 # The head must additionally be SUBSTITUTABLE: built only from shapes
 # the substitution descends all the way through.  That is a legality
 # condition like the others, and it has to be checked BEFORE anything
-# is built -- see the note on Substitutable/1 below for why a check on
+# is built -- see the note on substitutable/1 below for why a check on
 # the rewritten head cannot work.
 #
 # KNOWN CAVEAT: folding moves the binding from body time to head
@@ -53,14 +53,14 @@
     Clause, Goal, Variable, Atom,
 ])
 
-RewriteClause(Clause(HEAD, GOALS, POS), Clause(HEAD2, REST, POS)) <- (
-    SelectGoal(GOALS, GOAL, REST),
-    UnifySides(GOAL, Variable(N), TERM),
+rewrite_clause(Clause(HEAD, GOALS, POS), Clause(HEAD2, REST, POS)) <- (
+    select_goal(GOALS, GOAL, REST),
+    unify_sides(GOAL, Variable(N), TERM),
     reified_subterm(HEAD, Variable(N)),
     not reified_subterm(TERM, Variable(N)),
-    Foldable(TERM),
-    Substitutable(HEAD),
-    SubstTerm(HEAD, N, TERM, HEAD2)
+    foldable(TERM),
+    substitutable(HEAD),
+    subst_term(HEAD, N, TERM, HEAD2)
 )
 
 # Pick one top-level conjunct and keep the rest in order.  Only
@@ -68,86 +68,86 @@ RewriteClause(Clause(HEAD, GOALS, POS), Clause(HEAD2, REST, POS)) <- (
 # or-block is an Or node, and neither is looked inside -- which IS the
 # "top-level conjunct" clause of the legality rule, expressed by what
 # this predicate declines to enumerate.
-SelectGoal([G, *GS], G, GS),
-SelectGoal([G, *GS], X, [G, *RS]) <- SelectGoal(GS, X, RS)
+select_goal([G, *GS], G, GS),
+select_goal([G, *GS], X, [G, *RS]) <- select_goal(GS, X, RS)
 
 # `V is TERM` either way round.  Both orders match when both sides are
 # variables; the legality goals prune, and the driver takes the first
 # survivor.
-UnifySides((A is B), A, B),
-UnifySides((A is B), B, A),
+unify_sides((A is B), A, B),
+unify_sides((A is B), B, A),
 
 # Constructor shapes only.
-Foldable(Goal(_, ARGS, [])) <- FoldableList(ARGS)
-Foldable(Atom(_)),
-Foldable(Variable(_)),
+foldable(Goal(_, ARGS, [])) <- foldable_list(ARGS)
+foldable(Atom(_)),
+foldable(Variable(_)),
 # A `++escape` used as a goal ALWAYS SUCCEEDS -- it is evaluated for its
 # value, not its truth -- so a type test has to unify that value with
 # True to mean anything.
-Foldable(X) <- (
+foldable(X) <- (
     PRIMITIVE is ++isinstance(X, (int, str, bool)),
     PRIMITIVE is True
 )
 # `[*XS]` alone is NOT a list test: a string unifies with it too, and
 # binds XS to the whole string, so the list case walks into every
 # string term and does not come back.  Gate it on a real list.
-Foldable(X) <- (
+foldable(X) <- (
     ISLIST is ++isinstance(X, list),
     ISLIST is True,
-    FoldableList(X)
+    foldable_list(X)
 )
 
-FoldableList([]),
-FoldableList([X, *XS]) <- (Foldable(X), FoldableList(XS))
+foldable_list([]),
+foldable_list([X, *XS]) <- (foldable(X), foldable_list(XS))
 
-# The head must be built only from shapes SubstTerm descends all the
+# The head must be built only from shapes subst_term descends all the
 # way through.  This is a PRE-condition, and it has to be: an occurs
 # check cannot see into a term a rule just built -- reified_subterm
 # finds a variable in the head it was handed and does NOT find it in
-# the same head after SubstTerm rebuilds it -- so "substitute, then
+# the same head after subst_term rebuilds it -- so "substitute, then
 # check nothing was missed" passes vacuously.  It did, and a clause
 # with a star-unpacked list head came out with that element unbound.
 # tests/rewrite/test_reflection_contract.py pins the behavior.
-Substitutable(Variable(_)),
-Substitutable(Atom(_)),
-Substitutable(Goal(_, ARGS, KW)) <- (
-    SubstitutableList(ARGS),
-    SubstitutableList(KW)
+substitutable(Variable(_)),
+substitutable(Atom(_)),
+substitutable(Goal(_, ARGS, KW)) <- (
+    substitutable_list(ARGS),
+    substitutable_list(KW)
 )
-Substitutable(X) <- (
+substitutable(X) <- (
     ISLIST is ++isinstance(X, list),
     ISLIST is True,
-    SubstitutableList(X)
+    substitutable_list(X)
 )
-Substitutable(X) <- (
+substitutable(X) <- (
     PRIMITIVE is ++isinstance(X, (int, float, str, bool)),
     PRIMITIVE is True
 )
 
-SubstitutableList([]),
-SubstitutableList([X, *XS]) <- (Substitutable(X), SubstitutableList(XS))
+substitutable_list([]),
+substitutable_list([X, *XS]) <- (substitutable(X), substitutable_list(XS))
 
 # Substitution over the head.  The clauses are guarded so they do not
 # overlap; the last one returns anything else unchanged, and is only
-# ever reached for the leaves Substitutable/1 already vouched for.
-SubstTerm(Variable(N), N, T, T),
-SubstTerm(Variable(M), N, _, Variable(M)) <- (M != N)
-SubstTerm(Goal(NAME, ARGS, KW), N, T, Goal(NAME, ARGS2, KW2)) <- (
-    SubstList(ARGS, N, T, ARGS2),
-    SubstList(KW, N, T, KW2)
+# ever reached for the leaves substitutable/1 already vouched for.
+subst_term(Variable(N), N, T, T),
+subst_term(Variable(M), N, _, Variable(M)) <- (M != N)
+subst_term(Goal(NAME, ARGS, KW), N, T, Goal(NAME, ARGS2, KW2)) <- (
+    subst_list(ARGS, N, T, ARGS2),
+    subst_list(KW, N, T, KW2)
 )
-SubstTerm(X, N, T, X2) <- (
+subst_term(X, N, T, X2) <- (
     ISLIST is ++isinstance(X, list),
     ISLIST is True,
-    SubstList(X, N, T, X2)
+    subst_list(X, N, T, X2)
 )
-SubstTerm(X, _, _, X) <- (
+subst_term(X, _, _, X) <- (
     STRUCTURED is ++isinstance(X, (Variable, Goal, list)),
     STRUCTURED is False
 )
 
-SubstList([], _, _, []),
-SubstList([A, *AS], N, T, [A2, *AS2]) <- (
-    SubstTerm(A, N, T, A2),
-    SubstList(AS, N, T, AS2)
+subst_list([], _, _, []),
+subst_list([A, *AS], N, T, [A2, *AS2]) <- (
+    subst_term(A, N, T, A2),
+    subst_list(AS, N, T, AS2)
 )

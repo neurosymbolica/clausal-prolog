@@ -1,19 +1,19 @@
 -module(nqueens, [
-    Queens(N, QS)
+    queens(N, QS)
 ])
 
 -private([
     numlist(LOW, HIGH, NS),
-    Safe(QS),
-    NoAttack(Q, QS, D)
+    safe(QS),
+    no_attack(Q, QS, D)
 ])
 
-# ── Queens/2 — find a safe placement of N queens ──────────────────────────────
+# ── queens/2 — find a safe placement of N queens ──────────────────────────────
 
-Queens(N, QS) <- (
+queens(N, QS) <- (
     numlist(1, N, COLS),
     permutation(COLS, QS),
-    Safe(QS)
+    safe(QS)
 )
 
 # ── numlist/3 — generate [Low..High] ──────────────────────────────────────────
@@ -28,28 +28,28 @@ numlist(LOW, HIGH, [LOW, *REST]) <- (
     numlist(NEXT, HIGH, REST)
 )
 
-# ── Safe/1 — no two queens attack each other diagonally ───────────────────────
+# ── safe/1 — no two queens attack each other diagonally ───────────────────────
 
-Safe(QS=[]),
+safe(QS=[]),
 
-Safe([Q, *QS]) <- (
-    NoAttack(Q, QS, 1),
-    Safe(QS)
+safe([Q, *QS]) <- (
+    no_attack(Q, QS, 1),
+    safe(QS)
 )
 
-# ── NoAttack/3 — queen Q doesn't attack any queen in QS at distance D+ ───────
+# ── no_attack/3 — queen Q doesn't attack any queen in QS at distance D+ ───────
 
-NoAttack(Q=0, QS=[], D=0),
+no_attack(Q=0, QS=[], D=0),
 
-NoAttack(_, [], _),
+no_attack(_, [], _),
 
-NoAttack(Q, [Q1, *QS], D) <- (
+no_attack(Q, [Q1, *QS], D) <- (
     DIFF1 == Q1 - Q,
     DIFF2 == Q - Q1,
     DIFF1 != D,
     DIFF2 != D,
     D1 == D + 1,
-    NoAttack(Q, QS, D1)
+    no_attack(Q, QS, D1)
 )
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
@@ -58,15 +58,15 @@ test("numlist 1 to 3") <- numlist(1, 3, [1, 2, 3])
 test("numlist 1 to 1") <- numlist(1, 1, [1])
 test("numlist empty when low > high") <- numlist(5, 3, [])
 
-test("empty board is safe") <- Safe([])
-test("single queen is safe") <- Safe([1])
-test("[2,4,1,3] is safe") <- Safe([2, 4, 1, 3])
-test("[1,2] is unsafe") <- (not Safe([1, 2]))
-test("[1,3] is safe (no diagonal)") <- Safe([1, 3])
+test("empty board is safe") <- safe([])
+test("single queen is safe") <- safe([1])
+test("[2,4,1,3] is safe") <- safe([2, 4, 1, 3])
+test("[1,2] is unsafe") <- (not safe([1, 2]))
+test("[1,3] is safe (no diagonal)") <- safe([1, 3])
 
-test("no queens, no attack") <- NoAttack(1, [], 1)
-test("1-queens") <- Queens(1, [1])
-test("4-queens has a solution") <- Queens(4, _)
+test("no queens, no attack") <- no_attack(1, [], 1)
+test("1-queens") <- queens(1, [1])
+test("4-queens has a solution") <- queens(4, _)
 
 # 4-queens solution 1:
 #
@@ -76,7 +76,7 @@ test("4-queens has a solution") <- Queens(4, _)
 #   . . Q .      row 4: queen in column 3
 #
 test("4-queens solution 1") <- (
-    Queens(4, QS),
+    queens(4, QS),
     QS is [2, 4, 1, 3]
 )
 
@@ -88,6 +88,6 @@ test("4-queens solution 1") <- (
 #   . Q . .      row 4: queen in column 2
 #
 test("4-queens solution 2") <- (
-    Queens(4, QS),
+    queens(4, QS),
     QS is [3, 1, 4, 2]
 )

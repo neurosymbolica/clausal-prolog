@@ -49,27 +49,27 @@
 # =====================================================================
 -import_from(reflection, [Clause, Goal, Atom])
 
-RewriteClause(Clause(HEAD, GOALS, POS), Clause(HEAD, GOALS2, POS)) <- (
-    ReduceOneGoal(GOALS, GOALS2)
+rewrite_clause(Clause(HEAD, GOALS, POS), Clause(HEAD, GOALS2, POS)) <- (
+    reduce_one_goal(GOALS, GOALS2)
 )
 
 # Pick ONE top-level conjunct and rewrite it, keeping the rest in
-# place.  Only plain Goal conjuncts are offered to EtaGoal: an
+# place.  Only plain Goal conjuncts are offered to eta_goal: an
 # or-group is a list/Or node and a negation is a Not node, and neither
 # unifies with the Goal pattern -- which IS the "top-level conjunct"
 # clause of the legality rule, expressed by what declines to match.
-ReduceOneGoal([G, *GS], [G2, *GS]) <- EtaGoal(G, G2)
-ReduceOneGoal([G, *GS], [G, *GS2]) <- ReduceOneGoal(GS, GS2)
+reduce_one_goal([G, *GS], [G2, *GS]) <- eta_goal(G, G2)
+reduce_one_goal([G, *GS], [G, *GS2]) <- reduce_one_goal(GS, GS2)
 
 # Same goal, one direct argument eta-reduced.  Keyword arguments of
 # the containing goal ride through untouched (and are not searched:
 # a lambda passed by keyword stays as written).
-EtaGoal(Goal(NAME, ARGS, KW), Goal(NAME, ARGS2, KW)) <- (
-    ReduceOneArg(ARGS, ARGS2)
+eta_goal(Goal(NAME, ARGS, KW), Goal(NAME, ARGS2, KW)) <- (
+    reduce_one_arg(ARGS, ARGS2)
 )
 
-ReduceOneArg([A, *AS], [A2, *AS]) <- EtaArg(A, A2)
-ReduceOneArg([A, *AS], [A, *AS2]) <- ReduceOneArg(AS, AS2)
+reduce_one_arg([A, *AS], [A2, *AS]) <- eta_arg(A, A2)
+reduce_one_arg([A, *AS], [A, *AS2]) <- reduce_one_arg(AS, AS2)
 
 # The reduction itself.  The Lambda vocabulary is not exported to
 # Clausal (op_node/3 deliberately excludes it), so the node test and
@@ -77,22 +77,22 @@ ReduceOneArg([A, *AS], [A, *AS2]) <- ReduceOneArg(AS, AS2)
 # type-checked by module and name, exactly the class reification
 # builds.  An escape used as a goal always succeeds, so each test
 # unifies its VALUE with True to mean anything (see head_fold).
-EtaArg(LAM, Atom(CALLEE)) <- (
+eta_arg(LAM, Atom(CALLEE)) <- (
     ISLAMBDA is ++(type(LAM).__module__ == "clausal.pythonic_ast.nodes" and type(LAM).__name__ == "Lambda"),
     ISLAMBDA is True,
     PLAIN is ++all(type(p).__name__ == "PosOrKwParam" and p.annotation is None and p.default is None for p in LAM.params.params),
     PLAIN is True,
     NAMES is ++[p.name for p in LAM.params.params],
-    Distinct(NAMES),
+    distinct(NAMES),
     BODY is ++LAM.body,
     BODY is Goal(CALLEE, ARGS, []),
-    Forwards(NAMES, ARGS)
+    forwards(NAMES, ARGS)
 )
 
 # The body's arguments are the params: pairwise identical (the SAME
 # name N binds the param and the Atom), same order, same count.
-Forwards([], []),
-Forwards([N, *NS], [Atom(N), *AS]) <- Forwards(NS, AS)
+forwards([], []),
+forwards([N, *NS], [Atom(N), *AS]) <- forwards(NS, AS)
 
-Distinct([]),
-Distinct([N, *NS]) <- (not (N in NS), Distinct(NS))
+distinct([]),
+distinct([N, *NS]) <- (not (N in NS), distinct(NS))

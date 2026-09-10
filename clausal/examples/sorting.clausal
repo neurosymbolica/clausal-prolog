@@ -1,34 +1,34 @@
 -module(sorting, [
-    NaiveSort(LIST, SORTED),
-    Qsort(LIST, SORTED)
+    naive_sort(LIST, SORTED),
+    qsort(LIST, SORTED)
 ])
 
 -private([
-    IsSorted(XS),
+    is_sorted(XS),
     partition(PIVOT, LIST, LO, HI)
 ])
 
 # ── Naive sort (permutation sort) ─────────────────────────────────────────────
 
-NaiveSort(LIST, SORTED) <- (
+naive_sort(LIST, SORTED) <- (
     permutation(LIST, SORTED),
-    IsSorted(SORTED)
+    is_sorted(SORTED)
 )
 
-IsSorted(XS=[]),
-IsSorted([_]),
-IsSorted([A, B, *REST]) <- (
+is_sorted(XS=[]),
+is_sorted([_]),
+is_sorted([A, B, *REST]) <- (
     A <= B,
-    IsSorted([B, *REST])
+    is_sorted([B, *REST])
 )
 
 # ── Quicksort ─────────────────────────────────────────────────────────────────
 
-Qsort(LIST=[], SORTED=[]),
-Qsort([PIVOT, *REST], SORTED) <- (
+qsort(LIST=[], SORTED=[]),
+qsort([PIVOT, *REST], SORTED) <- (
     partition(PIVOT, REST, LO, HI),
-    Qsort(LO, SORTED_LO),
-    Qsort(HI, SORTED_HI),
+    qsort(LO, SORTED_LO),
+    qsort(HI, SORTED_HI),
     append(SORTED_LO, [PIVOT, *SORTED_HI], SORTED)
 )
 
@@ -45,23 +45,23 @@ partition(PIVOT, [H, *T], LO, [H, *HI]) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("empty list is sorted") <- IsSorted([])
-test("single element is sorted") <- IsSorted([1])
-test("[1,2] is sorted") <- IsSorted([1, 2])
-test("[1,2,3] is sorted") <- IsSorted([1, 2, 3])
-test("[2,1] is not sorted") <- (not IsSorted([2, 1]))
-test("[1,3,2] is not sorted") <- (not IsSorted([1, 3, 2]))
+test("empty list is sorted") <- is_sorted([])
+test("single element is sorted") <- is_sorted([1])
+test("[1,2] is sorted") <- is_sorted([1, 2])
+test("[1,2,3] is sorted") <- is_sorted([1, 2, 3])
+test("[2,1] is not sorted") <- (not is_sorted([2, 1]))
+test("[1,3,2] is not sorted") <- (not is_sorted([1, 3, 2]))
 test("partition empty") <- partition(5, [], [], [])
 test("partition all low") <- partition(5, [1, 2, 3], [1, 2, 3], [])
 test("partition all high") <- partition(5, [6, 7, 8], [], [6, 7, 8])
 test("partition mixed") <- partition(5, [3, 7, 1, 9], [3, 1], [7, 9])
-test("naive sort empty") <- NaiveSort([], [])
-test("naive sort single") <- NaiveSort([1], [1])
-test("naive sort pair") <- NaiveSort([2, 1], [1, 2])
-test("naive sort triple") <- NaiveSort([3, 1, 2], [1, 2, 3])
-test("qsort empty") <- Qsort([], [])
-test("qsort single") <- Qsort([1], [1])
-test("qsort already sorted") <- Qsort([1, 2, 3], [1, 2, 3])
-test("qsort reversed") <- Qsort([3, 2, 1], [1, 2, 3])
-test("qsort with duplicates") <- Qsort([3, 1, 2, 1], [1, 1, 2, 3])
-test("qsort five elements") <- Qsort([5, 3, 8, 1, 4], [1, 3, 4, 5, 8])
+test("naive sort empty") <- naive_sort([], [])
+test("naive sort single") <- naive_sort([1], [1])
+test("naive sort pair") <- naive_sort([2, 1], [1, 2])
+test("naive sort triple") <- naive_sort([3, 1, 2], [1, 2, 3])
+test("qsort empty") <- qsort([], [])
+test("qsort single") <- qsort([1], [1])
+test("qsort already sorted") <- qsort([1, 2, 3], [1, 2, 3])
+test("qsort reversed") <- qsort([3, 2, 1], [1, 2, 3])
+test("qsort with duplicates") <- qsort([3, 1, 2, 1], [1, 1, 2, 3])
+test("qsort five elements") <- qsort([5, 3, 8, 1, 4], [1, 3, 4, 5, 8])

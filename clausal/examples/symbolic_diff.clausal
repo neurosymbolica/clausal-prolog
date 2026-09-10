@@ -1,55 +1,55 @@
 -module(symbolic_diff, [
-    Diff(EXPR, VAR, DERIV)
+    diff(EXPR, VAR, DERIV)
 ])
--private([Vx, Vy])
+-private([vx, vy])
 
 # Symbolic differentiation.
 # Arithmetic operators (+, *, **) are structural terms in clause heads and
 # predicate call arguments — they are matched/constructed, not evaluated.
 
-# Diff(Vx)/dVx = 1
-Diff(EXPR=0, VAR=0, DERIV=0),
-Diff(X, X, 1),
+# diff(vx)/dVx = 1
+diff(EXPR=0, VAR=0, DERIV=0),
+diff(X, X, 1),
 
-# Constant number: Diff(c)/dVx = 0
-Diff(C, _, 0) <- number(C)
+# Constant number: diff(c)/dVx = 0
+diff(C, _, 0) <- number(C)
 
-# Different variable: Diff(Vy)/dVx = 0
-# Variables are represented as atoms (Vx, Vy), so guard with atom/1 — not
+# Different variable: diff(vy)/dVx = 0
+# Variables are represented as atoms (vx, vy), so guard with atom/1 — not
 # is_str/1, which is for Python strings and correctly rejects an atom.
-Diff(Y, X, 0) <- (
+diff(Y, X, 0) <- (
     atom(Y),
     Y is not X
 )
 
-# sum_: Diff(a+b)/dVx = da/dVx + db/dVx
-Diff(A + B, X, DA + DB) <- (
-    Diff(A, X, DA),
-    Diff(B, X, DB)
+# sum_: diff(a+b)/dVx = da/dVx + db/dVx
+diff(A + B, X, DA + DB) <- (
+    diff(A, X, DA),
+    diff(B, X, DB)
 )
 
-# Product (Leibniz rule): Diff(a*b)/dVx = a*db + b*da
-Diff(A * B, X, A*DB + B*DA) <- (
-    Diff(A, X, DA),
-    Diff(B, X, DB)
+# Product (Leibniz rule): diff(a*b)/dVx = a*db + b*da
+diff(A * B, X, A*DB + B*DA) <- (
+    diff(A, X, DA),
+    diff(B, X, DB)
 )
 
-# Power rule: Diff(e^n)/dVx = n * e^(n-1) * de/dVx
-Diff(E ** N, X, N * E**N1 * DE) <- (
+# Power rule: diff(e^n)/dVx = n * e^(n-1) * de/dVx
+diff(E ** N, X, N * E**N1 * DE) <- (
     number(N),
     N1 == N - 1,
-    Diff(E, X, DE)
+    diff(E, X, DE)
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("dx/dx = 1") <- Diff(Vx, Vx, 1)
-test("d(5)/dx = 0") <- Diff(5, Vx, 0)
-test("d(3)/dy = 0") <- Diff(3, Vy, 0)
-test("d(y)/dx = 0") <- Diff(Vy, Vx, 0)
-test("d(x+x)/dx") <- Diff(Vx + Vx, Vx, 1 + 1)
-test("d(x+5)/dx") <- Diff(Vx + 5, Vx, 1 + 0)
-test("d(x*x)/dx") <- Diff(Vx * Vx, Vx, Vx*1 + Vx*1)
-test("d(x^2)/dx") <- Diff(Vx**2, Vx, 2 * Vx**1 * 1)
-test("d(x^3)/dx") <- Diff(Vx**3, Vx, 3 * Vx**2 * 1)
-test("d(3*x)/dx") <- Diff(3 * Vx, Vx, 3*1 + Vx*0)
+test("dx/dx = 1") <- diff(vx, vx, 1)
+test("d(5)/dx = 0") <- diff(5, vx, 0)
+test("d(3)/dy = 0") <- diff(3, vy, 0)
+test("d(y)/dx = 0") <- diff(vy, vx, 0)
+test("d(x+x)/dx") <- diff(vx + vx, vx, 1 + 1)
+test("d(x+5)/dx") <- diff(vx + 5, vx, 1 + 0)
+test("d(x*x)/dx") <- diff(vx * vx, vx, vx*1 + vx*1)
+test("d(x^2)/dx") <- diff(vx**2, vx, 2 * vx**1 * 1)
+test("d(x^3)/dx") <- diff(vx**3, vx, 3 * vx**2 * 1)
+test("d(3*x)/dx") <- diff(3 * vx, vx, 3*1 + vx*0)

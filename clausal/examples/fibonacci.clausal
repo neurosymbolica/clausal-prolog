@@ -1,26 +1,26 @@
 -module(fibonacci, [
-    Fib(N, F)
+    fib(N, F)
 ])
 
-Fib(N=0, F=0),
-Fib(1, 1),
-Fib(N, F) <- (
+fib(N=0, F=0),
+fib(1, 1),
+fib(N, F) <- (
     N > 1,
     N1 == N - 1,
     N2 == N - 2,
-    Fib(N1, F1),
-    Fib(N2, F2),
+    fib(N1, F1),
+    fib(N2, F2),
     F == F1 + F2
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test("fib(0) = 0") <- Fib(0, 0)
-test("fib(1) = 1") <- Fib(1, 1)
-test("fib(2) = 1") <- Fib(2, 1)
-test("fib(3) = 2") <- Fib(3, 2)
-test("fib(4) = 3") <- Fib(4, 3)
-test("fib(5) = 5") <- Fib(5, 5)
-test("fib(6) = 8") <- Fib(6, 8)
-test("fib(7) = 13") <- (Fib(7, F), F == 13)
-test("fib(8) = 21") <- Fib(8, 21)
+test("fib(0) = 0") <- fib(0, 0)
+test("fib(1) = 1") <- fib(1, 1)
+test("fib(2) = 1") <- fib(2, 1)
+test("fib(3) = 2") <- fib(3, 2)
+test("fib(4) = 3") <- fib(4, 3)
+test("fib(5) = 5") <- fib(5, 5)
+test("fib(6) = 8") <- fib(6, 8)
+test("fib(7) = 13") <- (fib(7, F), F == 13)
+test("fib(8) = 21") <- fib(8, 21)

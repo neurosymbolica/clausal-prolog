@@ -1,4 +1,4 @@
-# Sudoku solver using CLP(FD) constraints.
+# sudoku solver using CLP(FD) constraints.
 # Ported from Markus Triska's sudoku.pl (https://www.metalevel.at/sudoku/)
 # Public domain.
 
@@ -9,59 +9,59 @@ transpose([], []),
 transpose([[], *_REST_UNUSED], []),
 
 transpose(MATRIX, [HEADS, *REST_COLS]) <- (
-    ExtractColumn(MATRIX, HEADS, TAILS),
+    extract_column(MATRIX, HEADS, TAILS),
     transpose(TAILS, REST_COLS)
 )
 
 # Extract the first element of each row.
-ExtractColumn([], [], []),
+extract_column([], [], []),
 
-ExtractColumn([
+extract_column([
     [HEAD, *TAIL], *ROWS],
     [HEAD, *REST_HEADS],
     [TAIL, *REST_TAILS]
 ) <- (
-    ExtractColumn(ROWS, REST_HEADS, REST_TAILS)
+    extract_column(ROWS, REST_HEADS, REST_TAILS)
 )
 
 # ── 3x3 block constraints ───────────────────────────────────────────────────
 
-Blocks([], [], []),
+blocks([], [], []),
 
-Blocks(
+blocks(
     [N1, N2, N3, *NS1],
     [N4, N5, N6, *NS2],
     [N7, N8, N9, *NS3]
 ) <- (
     all_different([N1, N2, N3, N4, N5, N6, N7, N8, N9]),
-    Blocks(NS1, NS2, NS3)
+    blocks(NS1, NS2, NS3)
 )
 
 # ── Constraint posting ──────────────────────────────────────────────────────
 
-Sudoku(ROWS) <- (
+sudoku(ROWS) <- (
     ROWS is [R1, R2, R3, R4, R5, R6, R7, R8, R9],
     flatten(ROWS, VS),
     in_domain(VS, 1, 9),
     maplist(all_different, ROWS),
     transpose(ROWS, COLUMNS),
     maplist(all_different, COLUMNS),
-    Blocks(R1, R2, R3),
-    Blocks(R4, R5, R6),
-    Blocks(R7, R8, R9)
+    blocks(R1, R2, R3),
+    blocks(R4, R5, R6),
+    blocks(R7, R8, R9)
 )
 
-# ── Solve: post constraints + label ─────────────────────────────────────────
+# ── solve: post constraints + label ─────────────────────────────────────────
 
-Solve(ROWS) <- (
-    Sudoku(ROWS),
+solve(ROWS) <- (
+    sudoku(ROWS),
     flatten(ROWS, VS),
     label(VS)
 )
 
 # ── Sample problems ─────────────────────────────────────────────────────────
 
-Problem(1, [[1,_,_,8,_,4,_,_,_],
+problem(1, [[1,_,_,8,_,4,_,_,_],
             [_,2,_,_,_,_,4,5,6],
             [_,_,3,2,_,5,_,_,_],
             [_,_,_,4,_,_,8,_,5],
@@ -71,7 +71,7 @@ Problem(1, [[1,_,_,8,_,4,_,_,_],
             [_,_,_,1,2,3,_,8,_],
             [2,_,5,_,_,_,_,_,9]]),
 
-Problem(2, [[_,_,2,_,3,_,1,_,_],
+problem(2, [[_,_,2,_,3,_,1,_,_],
             [_,4,_,_,_,_,_,3,_],
             [1,_,5,_,_,_,_,8,2],
             [_,_,_,2,_,_,6,5,_],
@@ -81,7 +81,7 @@ Problem(2, [[_,_,2,_,3,_,1,_,_],
             [_,9,3,1,_,_,_,6,_],
             [_,_,7,_,6,_,5,_,_]]),
 
-Problem(3, [[1,_,_,_,_,_,_,_,_],
+problem(3, [[1,_,_,_,_,_,_,_,_],
             [_,_,2,7,4,_,_,_,_],
             [_,_,_,5,_,_,_,_,4],
             [_,3,_,_,_,_,_,_,_],
@@ -91,7 +91,7 @@ Problem(3, [[1,_,_,_,_,_,_,_,_],
             [_,_,_,_,_,_,_,7,1],
             [_,_,_,_,_,1,_,3,_]]),
 
-Problem(4, [[5,3,_,_,7,_,_,_,_],
+problem(4, [[5,3,_,_,7,_,_,_,_],
             [6,_,_,1,9,5,_,_,_],
             [_,9,8,_,_,_,_,6,_],
             [8,_,_,_,6,_,_,_,3],
@@ -110,20 +110,20 @@ test("transpose 2x3") <- (
     RESULT is [[1,4],[2,5],[3,6]]
 )
 
-test("blocks base case") <- Blocks([], [], [])
+test("blocks base case") <- blocks([], [], [])
 
 test("blocks one block") <- (
-    Blocks([1,2,3], [4,5,6], [7,8,9])
+    blocks([1,2,3], [4,5,6], [7,8,9])
 )
 
 test("problem 1 has a solution") <- (
-    Problem(1, ROWS),
-    Solve(ROWS)
+    problem(1, ROWS),
+    solve(ROWS)
 )
 
 test("problem 1 full solution") <- (
-    Problem(1, ROWS),
-    Solve(ROWS),
+    problem(1, ROWS),
+    solve(ROWS),
     ROWS is [[1,5,6,8,9,4,3,2,7],
              [9,2,8,7,3,1,4,5,6],
              [4,7,3,2,6,5,9,1,8],
@@ -136,23 +136,23 @@ test("problem 1 full solution") <- (
 )
 
 test("problem 2 has a solution") <- (
-    Problem(2, ROWS),
-    Solve(ROWS)
+    problem(2, ROWS),
+    solve(ROWS)
 )
 
 test("problem 3 has a solution") <- (
-    Problem(3, ROWS),
-    Solve(ROWS)
+    problem(3, ROWS),
+    solve(ROWS)
 )
 
 test("problem 4 has exactly three solutions") <- (
-    findall(ROWS, (Problem(4, ROWS) and Solve(ROWS)), SOLUTIONS),
+    findall(ROWS, (problem(4, ROWS) and solve(ROWS)), SOLUTIONS),
     length(SOLUTIONS, 3)
 )
 
 test("problem 4 solution 1") <- (
-    Problem(4, ROWS),
-    Solve(ROWS),
+    problem(4, ROWS),
+    solve(ROWS),
     ROWS is [[5,3,4,6,7,8,1,9,2],
              [6,7,2,1,9,5,3,4,8],
              [1,9,8,3,4,2,5,6,7],
@@ -165,8 +165,8 @@ test("problem 4 solution 1") <- (
 )
 
 test("problem 4 solution 2") <- (
-    Problem(4, ROWS),
-    Solve(ROWS),
+    problem(4, ROWS),
+    solve(ROWS),
     ROWS is [[5,3,4,6,7,8,1,9,2],
              [6,7,2,1,9,5,3,4,8],
              [1,9,8,3,4,2,7,6,5],
@@ -179,8 +179,8 @@ test("problem 4 solution 2") <- (
 )
 
 test("problem 4 solution 3") <- (
-    Problem(4, ROWS),
-    Solve(ROWS),
+    problem(4, ROWS),
+    solve(ROWS),
     ROWS is [[5,3,4,6,7,8,9,1,2],
              [6,7,2,1,9,5,3,4,8],
              [1,9,8,3,4,2,5,6,7],
