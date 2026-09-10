@@ -162,21 +162,60 @@ class TestPrintedLabel:
 
 
 class TestTitleCaseAliases:
-    def test_bare_titlecase_unit_name_is_a_syntax_error(self):
-        """The deprecation-window witness: a TitleCase unit name used BARE
-        (outside an ``-import_from`` list, where the alias still resolves)
-        is TitleCase in a Clausal position and does not load.
+    def test_bare_titlecase_unit_name_is_a_variable_and_only_fails_at_query(
+            self):
+        """The deprecation-window witness, and the one DIAGNOSTIC LOSS of the
+        2026-09-10 TitleCase-is-a-variable change -- asserted here so it
+        cannot change unnoticed, and so the cost is visible if anyone wants
+        it back.
+
+        A TitleCase unit name used BARE (outside an ``-import_from`` list,
+        where the alias still resolves) sits in a unit-annotation ARGUMENT.
+        That is a TERM position, so it now reads as a logic variable: the
+        file LOADS, and the retired spelling surfaces only when the clause
+        runs, as a plain ``NameError`` out of the Python the unit sugar
+        embeds -- naming neither the rename nor the deprecation.  It used to
+        be a located load-time SyntaxError saying
+        ``Rename `Metre` -> `metre```.
+
+        Restoring the old diagnostic would mean teaching the lint to read
+        unit-annotation arguments specifically; nothing rules that today, so
+        the behaviour is pinned rather than special-cased.
+
         Fixture: tests/fixtures/titlecase_unit_spelling_witness.clausal."""
-        # nv
         import pathlib
         from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var
         p = (pathlib.Path(__file__).parent / "fixtures"
              / "titlecase_unit_spelling_witness.clausal")
-        with pytest.raises(SyntaxError) as ei:
-            _load_module("_titlecase_unit_witness", str(p))
-        assert "`Metre` is TitleCase" in str(ei.value)
-        assert "Rename `Metre` -> `metre`" in str(ei.value)
-        assert ei.value.lineno == 8
+        mod = _load_module("_titlecase_unit_witness", str(p))  # loads now
+        with pytest.raises(NameError) as ei:
+            list(call("speed", Var(), module=mod.__dict__["$module"]))
+        assert "Metre" in str(ei.value)
+
+    def test_the_supported_import_list_spelling_still_resolves_and_warns(self):
+        """The other half, and the one that matters for real files: the
+        retired spelling in an ``-import_from`` list is untouched -- it still
+        binds, still resolves at the use site, and still names the rename."""
+        import textwrap
+        import tempfile
+        import os
+        from clausal.import_hook import _load_module
+        src = textwrap.dedent("""
+            -import_from(py.units, [Metre])
+            -module(tc_unit_ok, [speed(X)])
+            speed(X) <- (X is 5.0(Metre))
+        """).lstrip()
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "tc_unit_ok.clausal")
+        with open(path, "w") as fh:
+            fh.write(src)
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            _load_module("_titlecase_unit_import_ok", path)
+        assert any("Metre" in str(w.message) and "metre" in str(w.message)
+                   for w in rec), [str(w.message) for w in rec]
 
     def test_alias_table_is_complete(self):
         """Every entry names a real lowercase unit; every unit has an entry."""

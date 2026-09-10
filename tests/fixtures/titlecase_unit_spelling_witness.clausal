@@ -1,8 +1,17 @@
 # clausal: no-collect
 # Deprecation-window witness: the retired TitleCase spelling of an SI unit
 # used BARE (not through an -import_from list, where the alias still
-# resolves for the window).  TitleCase has no role in Clausal code, so this
-# file must NOT load — the TitleCase lint raises a located SyntaxError at
-# line 8 naming the rename.  Asserted by tests/test_units_lowercase_names.py.
+# resolves for the window).
+#
+# Since 2026-09-10 a capital-initial name in TERM position is a logic
+# variable, and a unit-annotation argument IS a term position, so this file
+# now LOADS and the retired spelling is only caught at query time -- as a
+# plain `NameError: name 'Metre' is not defined` from the Python the unit
+# sugar embeds, naming neither the rename nor the deprecation.  That loss of
+# a load-time diagnostic is asserted (not merely tolerated) by
+# tests/test_units_lowercase_names.py, so it cannot change unnoticed.
+#
+# The SUPPORTED spelling -- the name in an -import_from(py.units, ...) list --
+# is unaffected: it still resolves and still warns with the rename.
 -import_from(py.units, [metre])
 speed(X) <- (X is 5.0(Metre))

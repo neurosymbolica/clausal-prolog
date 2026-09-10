@@ -1,8 +1,12 @@
 """The TitleCase gate, measured: no Clausal source in this repository — the
 engine's own ``.clausal`` files, every fixture under ``tests/`` and every
 optional package under ``packages/`` — carries a TitleCase identifier in a
-Clausal position, except the two deprecation-window witnesses that exist to
+FUNCTOR position, except the deprecation-window witness that exists to
 assert the error.
+
+Since 2026-09-10 the lint is functor-only (a capital initial in term
+position is a logic variable), so this census measures functor positions.
+That is the census that matters: a TitleCase term is now ordinary code.
 
 The count is taken by the lint itself (``_parse_clausal_source`` under the
 warning severity, so one load reports every offending name), not by a grep:
@@ -29,9 +33,13 @@ _SKIP_PARTS = {".git", "__pycache__", ".claude", "node_modules"}
 
 #: The deprecation-window witnesses: kept on the retired spelling ON PURPOSE,
 #: each asserted by the test that owns it.
+#: The unit witness dropped off this list on 2026-09-10: its ``5.0(Metre)``
+#: puts the retired spelling in a unit-annotation ARGUMENT, which is a term
+#: position, so it reads as a logic variable and the lint -- now functor-only
+#: -- says nothing about it.  The file is clean by this census's measure; what
+#: it witnesses now is asserted by tests/test_units_lowercase_names.py.
 _WITNESSES = {
     "tests/fixtures/titlecase_test_spelling_witness.clausal": {"Test"},
-    "tests/fixtures/titlecase_unit_spelling_witness.clausal": {"Metre"},
 }
 
 

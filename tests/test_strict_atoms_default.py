@@ -370,9 +370,15 @@ class TestPredicateBuiltinsPoolSplit:
 
     def test_titlecase_spelling_is_rejected_before_the_pool_is_consulted(
             self, monkeypatch):
-        """Under the default severity a bare ``Add`` never reaches the
-        strict-atoms diagnostic: the TitleCase lint raises first, naming
-        the ``++Add`` escape, and the pool is untouched."""
+        """Under the default severity a bare ``Add`` in FUNCTOR position
+        never reaches the strict-atoms diagnostic: the TitleCase lint raises
+        first, naming the ``++Add`` escape, and the pool is untouched.
+
+        The probe used to spell this ``X == Add`` -- a TERM position, which
+        since 2026-09-10 reads ``Add`` as a logic variable and so reaches
+        neither the lint nor the pool.  See
+        ``test_titlecase_in_term_position_is_a_variable_not_a_pool_lookup``
+        below for what that spelling does now."""
         monkeypatch.setattr(
             term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "error")
         assert "Add" not in predicate_builtins
@@ -380,29 +386,44 @@ class TestPredicateBuiltinsPoolSplit:
             _load_inline_clausal(
                 "_p8_pool_leak_titlecase",
                 "-module(pool_leak_titlecase, [chk(X)])\n"
-                "chk(X) <- (X == Add)\n",
+                "chk(X) <- (bar(X), Add(X))\n",
             )
         assert "++Add" in str(ei.value)
         assert "Add" not in predicate_builtins
 
 
-    def test_todo_repro_undeclared_simple_ast_name_raises(self):
-        """The todo's own repro, verbatim: a strict module with zero atom
-        declarations, referencing ``Add`` bare in a clause body, must raise
-        the strict-atoms diagnostic -- not silently resolve to
-        ``clausal.pythonic_ast.nodes.Add``."""
+    def test_titlecase_in_term_position_is_a_variable_not_a_pool_lookup(self):
+        """The todo's own repro, re-stated for the 2026-09-10 rule.
+
+        The leak it reported was ``chk(X) <- (X == Add)`` silently resolving
+        ``Add`` to ``clausal.pythonic_ast.nodes.Add``.  That is still closed,
+        and now closed twice over: a capital-initial name in TERM position is
+        a LOGIC VARIABLE, so the atom pool is never consulted at all.  The
+        binding it produces is a fresh variable, not the runtime class, and
+        the pool stays clean -- which is the property the todo asked for.
+
+        The strict-atoms distrust check itself is unchanged and still pinned,
+        by the two synthetic-name tests below: every spelling that can still
+        REACH it is lowercase, because every writable ``runtime_builtins``
+        entry is TitleCase and TitleCase no longer reaches it."""
         assert "Add" not in predicate_builtins
         assert runtime_builtins["Add"] is simple_ast.Add
-        with pytest.raises(NameError) as exc_info:
-            _load_inline_clausal(
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            mod = _load_inline_clausal(
                 "_p8_pool_leak_probe",
                 "-module(pool_leak_probe, [chk(X)])\n"
                 "chk(X) <- (X == Add)\n",
             )
-        msg = str(exc_info.value)
-        assert "strict_atoms" in msg
-        assert "Add" in msg
-        # The pool must not have been polluted by the (failed) reference.
+        # It is a variable: the singleton lint -- which is keyed on the
+        # variable classifier -- names it.
+        assert any("`Add`" in str(w.message)
+                   for w in rec
+                   if issubclass(w.category,
+                                 term_rewriting.ClausalSingletonWarning)), [
+            str(w.message) for w in rec]
+        # And it did NOT become the runtime class, nor pollute the pool.
+        assert getattr(mod, "Add", None) is not simple_ast.Add
         assert "Add" not in predicate_builtins
 
     def test_declaring_the_colliding_name_as_atom_compiles_and_unifies_globally(
@@ -440,47 +461,69 @@ class TestPredicateBuiltinsPoolSplit:
         todo's point), a legitimate declaration then succeeds, and a THIRD,
         still-undeclared module fails AFTER the pool carries the spelling
         -- proving per-module declaredness, not first-loader-wins."""
-        with pytest.raises(NameError):
-            _load_inline_clausal(
-                "_p8_mult_before",
-                "-module(p8_mult_before, [Q(X)])\n"
-                "Q(X) <- (X == Mult)\n",
+        # A LOWERCASE synthetic runtime name, for the same reason the
+        # synthetic-name test below uses one: since 2026-09-10 every
+        # TitleCase spelling in term position is a logic variable and so
+        # cannot reach the distrust check at all, and every writable
+        # ``runtime_builtins`` entry is TitleCase.  The check is keyed on
+        # membership, not on casing, so a lowercase entry exercises exactly
+        # the same path the ``Mult`` spelling used to.
+        name = "p8_mult_synthetic_runtime_name"
+        assert name not in runtime_builtins
+        runtime_builtins[name] = object()
+        try:
+            with pytest.raises(NameError):
+                _load_inline_clausal(
+                    "_p8_mult_before",
+                    "-module(p8_mult_before, [Q(X)])\n"
+                    f"Q(X) <- (X == {name})\n",
+                )
+            mod_owner = _load_inline_clausal(
+                "_p8_mult_owner",
+                "-module(p8_mult_owner, [P(X)])\n"
+                f"-private([{name}])\n"
+                f"P({name}),\n",
             )
-        mod_owner = _load_inline_clausal(
-            "_p8_mult_owner",
-            "-module(p8_mult_owner, [P(X)])\n"
-            "-private([Mult])\n"
-            "P(Mult),\n",
-        )
-        assert mod_owner.Mult == mint("Mult")
+            assert getattr(mod_owner, name) == mint(name)
 
-        with pytest.raises(NameError) as exc_info:
-            _load_inline_clausal(
-                "_p8_mult_after",
-                "-module(p8_mult_after, [R(X)])\n"
-                "R(X) <- (X == Mult)\n",
-            )
-        msg = str(exc_info.value)
-        assert "strict_atoms" in msg
-        assert "Mult" in msg
+            with pytest.raises(NameError) as exc_info:
+                _load_inline_clausal(
+                    "_p8_mult_after",
+                    "-module(p8_mult_after, [R(X)])\n"
+                    f"R(X) <- (X == {name})\n",
+                )
+            msg = str(exc_info.value)
+            assert "strict_atoms" in msg
+            assert name in msg
+        finally:
+            runtime_builtins.pop(name, None)
+            predicate_builtins.pop(name, None)
 
     def test_dict_key_path_also_rejects_simple_ast_name(self):
         """``import_hook._make_intern_atom`` (the dict-key path) counterpart:
         the same leak shape existed there too (``{Div: 1}[Div]`` resolved
         via the runtime class), so the split's identity check was applied
         to both consumers, not just ``_process_bare_atom_refs``."""
-        assert "Div" not in predicate_builtins
-        with pytest.raises(NameError) as exc_info:
-            _load_inline_clausal(
-                "_p8_div_dictkey",
-                "-module(p8_div_dictkey, [Q(X)])\n"
-                "Q(X) <- (X == {Div: 1}[Div])\n",
-            )
-        msg = str(exc_info.value)
-        assert "strict_atoms" in msg
-        assert "Div" in msg
-        assert "dict key" in msg
-        assert "Div" not in predicate_builtins
+        # Lowercase synthetic name -- see the load-order test above for why
+        # the TitleCase spelling can no longer reach this path.
+        name = "p8_div_synthetic_runtime_name"
+        assert name not in predicate_builtins
+        assert name not in runtime_builtins
+        runtime_builtins[name] = object()
+        try:
+            with pytest.raises(NameError) as exc_info:
+                _load_inline_clausal(
+                    "_p8_div_dictkey",
+                    "-module(p8_div_dictkey, [Q(X)])\n"
+                    f"Q(X) <- (X == {{{name}: 1}}[{name}])\n",
+                )
+            msg = str(exc_info.value)
+            assert "strict_atoms" in msg
+            assert name in msg
+            assert "dict key" in msg
+            assert name not in predicate_builtins
+        finally:
+            runtime_builtins.pop(name, None)
 
     def test_functor_declaration_shadows_simple_ast_name_locally(self):
         """§7.2 answer (P3-2 Task 2 report, carried into Task 8's scope): a
@@ -552,7 +595,11 @@ class TestPredicateBuiltinsPoolSplit:
         bare-referencing it still raises -- exactly the reviewer's probe."""
         from clausal.import_hook import runtime_builtins
 
-        name = "P8SyntheticFutureRuntimeName"
+        # Lowercase: a TitleCase spelling in term position is a logic
+        # variable since 2026-09-10 and never reaches the distrust check.
+        # The check is keyed on ``runtime_builtins`` membership, not on
+        # casing, so this probes exactly what the reviewer's ruling asked.
+        name = "p8_synthetic_future_runtime_name"
         sentinel = object()
         assert name not in runtime_builtins  # sanity: genuinely novel
         runtime_builtins[name] = sentinel
