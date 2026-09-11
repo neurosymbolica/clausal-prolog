@@ -2060,16 +2060,51 @@ def _dim_name(k) -> str:
     return k._name if hasattr(k, "_name") else str(k)
 
 
-def _dims_str(dims: dict) -> str:
-    """Human-readable dimension string, e.g. 'm·s^-2'."""
+def _dims_str(dims: dict, *, qualify: frozenset = frozenset()) -> str:
+    """Human-readable dimension string, e.g. 'm·s^-2'.
+
+    Keys whose NAME is in *qualify* are rendered with their ISO code
+    (``dollar (AUD)``) so two same-named dimensions can be told apart.
+    Only those: the trigger for qualifying is computed over a whole
+    rendering, but the effect must land on the component that actually
+    collides and nowhere else. ``AUD/second`` against ``USD/second`` shares
+    one identical ``second``, which was never ambiguous and must render the
+    same on both sides (corpus-lane, 2026-09-11).
+
+    A qualified key with no code is left bare rather than given an
+    identity: ``id()`` differs between runs of the same program, which
+    defeats log diffing, makes two reports of one fault look like two, and
+    cannot be pinned by a test. ``_require_same_dims`` says the ambiguity
+    remains in words instead -- the same sentence every time.
+    """
     if not dims:
         return "1"
     parts = []
     for k in sorted(dims, key=_dim_name):
         v = dims[k]
         name = _dim_name(k)
+        code = getattr(k, "iso_code", None) if name in qualify else None
+        if code:
+            name = f"{name} ({code})"
         parts.append(name if v == 1 else f"{name}^{v}")
     return "·".join(parts)
+
+
+def _colliding_dim_names(a: dict, b: dict) -> frozenset:
+    """Names carried by DIFFERENT dimension objects on the two sides.
+
+    A name present on both sides for the same object is not a collision --
+    it is the shared part of a compound, and qualifying it adds noise to
+    the half of the message that was never in doubt.
+    """
+    def by_name(dims):
+        out = {}
+        for k in dims:
+            out.setdefault(_dim_name(k), set()).add(id(k))
+        return out
+    left, right = by_name(a), by_name(b)
+    return frozenset(n for n in left.keys() & right.keys()
+                     if left[n] != right[n])
 
 
 def _to_decimal(x):
@@ -2223,10 +2258,40 @@ class Quantity:
                 f"with plain value {other!r}"
             )
         if self._dims != other._dims:
+            left, right = _dims_str(self._dims), _dims_str(other._dims)
+            note = ""
+            if left == right:
+                # The dims DIFFER but render the same, so the message would
+                # report a true error in a form indistinguishable from an
+                # engine bug -- "dollar vs dollar" -- and send its reader
+                # looking in the wrong place. 25 of the 153 distinct currency
+                # names are shared by two or more ISO codes (dollar 22,
+                # franc 17, pound 12), and the confusion this catches is
+                # exactly the one a name collision causes, so the diagnostic
+                # cannot be the thing that collides. Triggered by the
+                # collision rather than by currency: two differently-named
+                # units need no code, and adding one there is noise.
+                collide = _colliding_dim_names(self._dims, other._dims)
+                left = _dims_str(self._dims, qualify=collide)
+                right = _dims_str(other._dims, qualify=collide)
+                if left == right:
+                    # Nothing carried a code to tell them apart. Say so in
+                    # words rather than printing an address: the same
+                    # sentence every run, which a log diff and a test can
+                    # both rely on.
+                    #
+                    # Unreachable on today's vocabulary, but by accident and
+                    # not by construction: the 31 base dimension names in
+                    # clausal/modules/units.py are SI plus `bit`, and their
+                    # intersection with the 153 currency names is empty, so
+                    # every same-named pair is currency-vs-currency and every
+                    # currency has a code. `pound` is a currency name twelve
+                    # times over and there is no `pound` mass unit yet -- the
+                    # first non-SI mass unit anyone adds makes this live.
+                    note = (" — these are different dimensions that share a "
+                            "name")
             raise UnitsMismatch(
-                f"Unit mismatch for {op}: "
-                f"{_dims_str(self._dims)} vs {_dims_str(other._dims)}"
-            )
+                f"Unit mismatch for {op}: {left} vs {right}{note}")
 
     @staticmethod
     def _merge_dims(a: dict, b: dict, sign: int) -> dict:

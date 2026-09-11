@@ -486,3 +486,101 @@ def test_the_exporter_refuses_every_named_minor_unit():
             _export(f"-import_from({row['jurisdiction']}, "
                     f"[{row['name']}, {minor_name}])\n"
                     f"pay(5000({minor_name})),\n")
+
+
+# ── a mismatch must SAY which is which ───────────────────────────────────────
+#
+# `australia.cent + united_states.cent` correctly raised UnitsMismatch and
+# said "dollar vs dollar" — a true error in a form indistinguishable from an
+# engine bug, on exactly the case the AUD widening exists to catch. 25 of the
+# 153 distinct currency names are shared by two or more ISO codes (dollar 22,
+# franc 17, pound 12), so it is the diagnostic for the whole family.
+# Found by corpus-lane, 2026-09-11.
+
+
+def _mismatch_sides(left, right):
+    from clausal.terms import UnitsMismatch
+    with pytest.raises(UnitsMismatch) as exc:
+        left + right
+    text = str(exc.value)
+    assert " vs " in text, text
+    return text.rsplit(": ", 1)[1].split(" vs ")
+
+
+def test_same_named_currencies_are_distinguished_in_the_message():
+    from clausal.modules.countries.australia import cent as au_cent
+    from clausal.modules.countries.united_states import cent as us_cent
+    left, right = _mismatch_sides(1 * au_cent, 1 * us_cent)
+    assert left != right, f"both sides rendered as {left!r}"
+    assert "AUD" in left and "USD" in right, (left, right)
+
+
+def test_every_ambiguous_currency_name_renders_distinguishably():
+    """Over the whole shared-name family, not one pair. A renderer that can
+    produce two identical sides has failed whatever the names happen to be."""
+    from collections import Counter
+    from clausal.terms import Quantity
+    import importlib
+    from clausal.modules.countries import _data
+
+    by_name = Counter(r["name"] for r in _data.CURRENCIES)
+    shared = [n for n, k in by_name.items() if k > 1]
+    assert shared, "positive control: some currency names ARE shared"
+
+    for name in shared:
+        rows = [r for r in _data.CURRENCIES if r["name"] == name][:2]
+        units = [getattr(importlib.import_module(
+            f"clausal.modules.countries.{r['jurisdiction']}"), r["name"])
+            for r in rows]
+        left, right = _mismatch_sides(Quantity(1, units[0]),
+                                      Quantity(1, units[1]))
+        assert left != right, f"{name}: both sides rendered as {left!r}"
+
+
+def test_an_unambiguous_mismatch_keeps_its_plain_message():
+    """The negative control, and the reason this is conditional: the common
+    case is two differently-named units, where a code adds noise and nothing
+    else. Disambiguation is triggered by the collision, not by currency."""
+    from clausal.modules.countries.european_union import euro
+    from clausal.modules.countries.united_states import dollar
+    left, right = _mismatch_sides(Quantity(1, euro), Quantity(1, dollar))
+    assert (left, right) == ("euro", "dollar")
+
+
+def test_a_compound_mismatch_qualifies_only_the_colliding_component():
+    """The trigger is computed on the whole rendering; the effect must land
+    only on the parts that actually collide. `second` is the SAME dimension
+    object on both sides — it was never ambiguous and qualifying it violates
+    the rule the qualification exists to serve (corpus-lane, 2026-09-11)."""
+    from clausal.terms import Quantity
+    from clausal.modules.countries.australia import dollar as aud
+    from clausal.modules.countries.united_states import dollar as usd
+    from clausal.modules.units import second
+    left, right = _mismatch_sides(Quantity(1, {aud: 1, second: -1}),
+                                  Quantity(1, {usd: 1, second: -1}))
+    assert "(AUD)" in left and "(USD)" in right
+    shared_left = [p for p in left.split("·") if p.startswith("second")]
+    shared_right = [p for p in right.split("·") if p.startswith("second")]
+    assert shared_left == shared_right == ["second^-1"], (left, right)
+
+
+def test_the_mismatch_message_is_identical_across_runs():
+    """An error message that differs between runs of identical code defeats
+    log diffing and makes two reports of one fault look like two faults. A
+    memory address does exactly that, so no message may contain one. Run in
+    fresh interpreters, because within one process an id is stable and the
+    defect is invisible."""
+    import subprocess, sys
+    program = (
+        "from clausal.terms import Quantity, UnitsMismatch\n"
+        "from clausal.modules.countries.australia import dollar as a\n"
+        "from clausal.modules.countries.united_states import dollar as u\n"
+        "from clausal.modules.units import second\n"
+        "try:\n"
+        "    Quantity(1, {a: 1, second: -1}) + Quantity(1, {u: 1, second: -1})\n"
+        "except UnitsMismatch as e:\n"
+        "    print(e)\n")
+    seen = {subprocess.run([sys.executable, "-c", program], check=True,
+                           capture_output=True, text=True).stdout
+            for _ in range(3)}
+    assert len(seen) == 1, f"message varies between runs: {seen}"
