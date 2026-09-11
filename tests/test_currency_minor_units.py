@@ -1080,3 +1080,38 @@ def test_the_lint_fires_once_per_identifier(tmp_path):
         other_ratio_bps(50),
     """)
     assert len(w) == 2, w
+
+
+def test_the_lint_is_BLIND_to_a_literal_under_an_unscaled_functor(tmp_path):
+    """The limit, pinned — and it is the case the lint was first MOTIVATED by,
+    which is why it is a test and not a footnote.
+
+    `crr_leverage_ratio` has a scale-named fact at :93 that no longer decides
+    anything, and the 3% floor that DOES decide is a bare `300` in an argument
+    of `check_ratio_gte/6` at :111. The functor claims no scale, so nothing in
+    the source keys the literal to one and the lint cannot see it.
+
+    The consequence is the sharp one (corpus-lane, 2026-09-11): converting :93
+    silences the domain while the deciding literal is untouched. **The lint
+    emptying is not "this domain is done."** Self-emptying is a real property
+    and a real progress signal for the sites it CAN see; it is not a
+    completeness claim.
+    """
+    warned = _lint_warnings(tmp_path, "blind", """
+        -implicit_atoms
+        minimum_leverage_bps(300),
+        ratio_ok(P) <- check_ratio_gte(P, tier1, total, 300, below, ok)
+    """)
+    assert warned == [w for w in warned if "minimum_leverage_bps" in w]
+    assert len(warned) == 1, "only the scale-NAMED site is seen"
+
+
+def test_body_position_is_reached_so_the_name_is_the_discriminator(tmp_path):
+    """The control that makes the test above a statement about NAMES rather
+    than about positions: same argument slot, scale-named functor, warns."""
+    warned = _lint_warnings(tmp_path, "blind_ctl", """
+        -implicit_atoms
+        ratio_ok(P) <- ( check_ratio_gte(P, tier1, total, 300, below, ok),
+                         floor_bps(300) )
+    """)
+    assert len(warned) == 1 and "floor_bps" in warned[0], warned

@@ -408,3 +408,43 @@ Noise floor: **two** warnings across the full engine suite, both true positives 
 Asked of corpus-lane, for when it reaches canonical and not before: a load census counting
 warnings per domain. That is the migration's real size in the shape now ruled for, and being
 a count of BINDINGS rather than names it will differ from the 139 in both directions.
+
+## CORRECTION to the section above: the lint misses the site it was motivated by
+
+Measured by corpus-lane and reproduced here. On `crr_leverage_ratio` the lint warns at `:93`,
+the scale-named fact that no longer decides anything, and is **silent at `:111`**, which is
+`check_ratio_gte(P, tier1, total, 300, ...)` — the 3% floor that does decide. The
+discriminator is the FUNCTOR'S name, so a bare literal in an argument of a functor claiming
+no scale is invisible. A control in the same argument slot with a scale-named functor does
+warn, so body position is reached and the name really is the test.
+
+**So the paragraph above that cites `leverage_ratio.clausal:111` as the motivation is wrong,
+and it is wrong in the way that matters**: converting `:93` silences the domain while the
+deciding literal is untouched. The self-emptying property — designed as the progress signal —
+would empty on a domain whose defect is untouched. corpus-lane's phrase for it is the right
+one: **the right verdict about the wrong site**, the same failure the constants-only
+instrument had, moved one step later.
+
+How I got it wrong is worth more than the fix: I inferred the SHAPE of `:111` from a
+description of its ROLE ("the floor is the bare literal 300 at :111") and assumed a
+scale-named fact. Same family as "a census of names is never evidence about bindings" —
+a description of what a site DOES is not evidence about what it LOOKS like.
+
+Pinned by `test_the_lint_is_BLIND_to_a_literal_under_an_unscaled_functor` and its
+position control, so the limit is a test rather than a footnote. Docs carry a
+"What it cannot see, and why that matters" section saying plainly that an emptied
+list is not a completeness claim.
+
+**The harder half, unbuilt and worth designing when ratios land** (corpus-lane's analysis,
+which I agree with): a literal under an unscaled functor has nothing in the source to key on.
+The promising signal is the CALLEE'S PARAMETER — if `check_ratio_gte/6`'s fourth parameter
+were declared to take a ratio, the literal would be checkable at the call site. A same-value
+or same-file heuristic is not promising: it learns the cases it was built from. The
+parameter-side version is also the one that would make the migration mean something, because
+it checks the site that decides.
+
+**corpus-lane's static prediction, for checking the load census against when this lands:**
+76 (file, identifier) pairs across 23 domains, 1 under `eval/` — 15 `us/snap`, 12 `th/visa`,
+10 `au/merger_clearance`, 5 each `au/corps_act_disclosure` and
+`eu/procurement/selection_criteria/tests`, 3 each for five more. A materially different load
+census means one of the two instruments is wrong, and the difference is the finding.

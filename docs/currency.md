@@ -248,7 +248,7 @@ The second is the one to keep in mind: not a wrong number, a **reversed answer**
 `ClausalScaleInNameWarning`, once per (file, identifier):
 
 ```text
-leverage_ratio.clausal:111: `minimum_leverage_bps` names a scale but carries a bare
+leverage_ratio.clausal:93: `minimum_leverage_bps` names a scale but carries a bare
 number — the scale exists only in the identifier, where nothing can check it. Declare
 the amount with -constant_number_currency (or -constant_number_units) and use it here,
 so the unit is a fact the engine holds.
@@ -258,6 +258,27 @@ It fires on both shapes: a **fact** with a bare literal argument, and a `-consta
 declaration whose name claims a scale but which takes no unit. A site that has been
 converted carries a quantity rather than a literal and goes quiet, so the lint is a
 **migration worklist, not a permanent complaint**.
+
+### What it cannot see, and why that matters
+
+The discriminator is the **functor's name**. A bare literal in an argument of a functor that
+claims no scale is invisible:
+
+```text
+minimum_leverage_bps(300),                                   warns
+ratio_ok(P) <- check_ratio_gte(P, tier1, total, 300, …)      SILENT — 300 is the floor
+```
+
+Both lines are from one real domain, and the second is the one that decides; the first is a
+fact nothing reads any more. So **an emptied warning list is not "this domain is done"** —
+converting the site the lint names can silence a domain whose deciding literal is untouched.
+Self-emptying is a genuine progress signal for the sites the lint *can* see, and it is not a
+completeness claim.
+
+Closing that gap needs a signal the source does not currently carry. The promising one is the
+**callee's parameter**: if `check_ratio_gte/6`'s fourth parameter were itself declared to
+take a ratio, the literal would be checkable at the call. A same-value or same-file heuristic
+is not — it learns the cases it was built from.
 
 The money suffixes are derived from the currency vocabulary — every curated minor-unit word
 plus its plural — so giving a currency a minor unit extends the lint with no second edit.
