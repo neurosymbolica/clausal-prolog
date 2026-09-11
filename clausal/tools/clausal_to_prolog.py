@@ -605,6 +605,19 @@ class _ClausalToProlog:
         #: the module before any statement is converted -- the import that
         #: names a unit is EARLIER in the file than the use that reveals it.
         self._unit_atoms: set[str] = set()
+        #: Declared constants, name -> already-converted Prolog term, in file
+        #: order. A constant has no Prolog representation of its own: ISO's
+        #: evaluable-functor set is fixed and ``++/1`` is not in it, so an
+        #: emitted NAME raises type_error(evaluable, ...) in every conformant
+        #: system (measured against Scryer and Trealla, 2026-09-10). The value
+        #: is known here -- the declaration is in the same file -- so use sites
+        #: get the value instead. See tests/test_prolog_constant_fold.py.
+        self._constants: dict[str, PTerm] = {}
+        #: True only while converting a ``-constant_value`` RHS. A bare name
+        #: means the ATOM everywhere else (2026-09-11 rule), and must NOT be
+        #: folded; inside the directive's own RHS it means an earlier
+        #: constant, which is that directive's grammar.
+        self._in_constant_rhs: bool = False
         self._lossy: list[str] = []
         self._all_lossy: list[str] = []
         self._all_warnings: list[str] = []
@@ -1143,7 +1156,10 @@ class _ClausalToProlog:
             return None
         if name == "double_quotes":
             return self._convert_double_quotes_directive(call)
-        if name in ("constants", "constant_value", "constant_value_units"):
+        if name in ("constant_value", "constant_value_units"):
+            self._collect_constant(name, call)
+            return None          # folded at the use sites; nothing to emit
+        if name in ("constants",):
             # The eventual answer is `constant_value/2` -- Markus Triska's
             # name for the cross-implementation convention -- emitted either
             # as the declared LITERAL (runs anywhere, needs no prelude) or
@@ -1614,8 +1630,86 @@ class _ClausalToProlog:
             return PAtom(value)
         return PString(value)
 
+    def _collect_constant(self, directive: str, call: python_ast.Call) -> None:
+        """Record a ``-constant_value`` / ``-constant_value_units`` declaration.
+
+        The value is converted NOW, in file order, so a later declaration may
+        refer to an earlier one and every use site gets a fully resolved term.
+        Nothing is emitted: a constant exists in the exported program only as
+        the literal it folds to.
+
+        The units form loses its unit. Prolog has no unit system, and the
+        exporter already discards units from an inline ``5000(euro)`` literal
+        the same way -- this follows that precedent rather than inventing a
+        policy, but it is recorded as LOSSY so it is never silent.
+        """
+        args = call.args if isinstance(call, python_ast.Call) else ()
+        expected = 3 if directive == "constant_value_units" else 2
+        if len(args) != expected or not isinstance(args[0], python_ast.Name):
+            # Malformed: the engine refuses this at load time, so a file that
+            # reaches the translator should not contain one. Do not guess.
+            self._add_warning(f"-{directive}(...)")
+            return
+        name = args[0].id
+        previous = self._in_constant_rhs
+        self._in_constant_rhs = True
+        try:
+            value = self._fold_arithmetic(self._convert_expr(args[1]))
+        finally:
+            self._in_constant_rhs = previous
+        if directive == "constant_value_units":
+            unit = args[2]
+            unit_text = (unit.id if isinstance(unit, python_ast.Name)
+                         else python_ast.unparse(unit))
+            note = (f"unit discarded: -constant_value_units({name}, ..., "
+                    f"{unit_text}) -> {name} folds to its magnitude only")
+            self._add_lossy(note)
+            # ...and EMITTED, not merely recorded. `_add_lossy` is a
+            # write-only channel today (nothing reads `_all_lossy`), and an
+            # inline `5000(euro)` at least sits next to its use in the source
+            # -- a constant's unit is declared far away and would otherwise
+            # vanish without trace from a file about money.
+            self._items.append(PComment(f"LOSSY: {note}"))
+        self._constants[name] = value
+
+    #: Arithmetic that folds over numeric literals. Deliberately NOT a general
+    #: evaluator: the translator must never execute the file it is translating,
+    #: so a ``++`` escape in a constant RHS is not run, and anything it cannot
+    #: fold is left as an expression (which Prolog evaluates identically in an
+    #: arithmetic context).
+    _FOLDABLE = {
+        "+": lambda a, b: a + b, "-": lambda a, b: a - b,
+        "*": lambda a, b: a * b,
+    }
+
+    def _fold_arithmetic(self, term: PTerm) -> PTerm:
+        """Collapse arithmetic over numeric literals to a single number.
+
+        ``base * 4 + 2`` with ``base`` already folded to 10 becomes 42, not the
+        compound ``10 * 4 + 2``. The compound would evaluate identically under
+        ``>`` and ``is``, but a constant also reaches TERM positions
+        (``p(++limit)``), where the engine binds 42 and an unfolded expression
+        would bind a compound -- a real divergence between the exported program
+        and the one it was translated from.
+        """
+        if not isinstance(term, PCompound) or len(term.args) != 2:
+            return term
+        fn = self._FOLDABLE.get(term.functor)
+        if fn is None:
+            return term
+        left = self._fold_arithmetic(term.args[0])
+        right = self._fold_arithmetic(term.args[1])
+        if (isinstance(left, PNumber) and isinstance(right, PNumber)
+                and left.unit is None and right.unit is None):
+            return PNumber(fn(left.value, right.value))
+        return PCompound(term.functor, (left, right))
+
     def _convert_name(self, name: str) -> PTerm:
         """Convert a Python name to PVar or PAtom."""
+        if self._in_constant_rhs and name in self._constants:
+            # Only inside a ``-constant_value`` RHS. Everywhere else a bare
+            # name is the ATOM and folding it would be wrong.
+            return self._constants[name]
         if name == "_":
             return PVar("_")
         # ``Undefined`` — the Kleene (K3) third truth value builtin — maps OUTBOUND
@@ -1814,10 +1908,16 @@ class _ClausalToProlog:
                 return PNumber(-inner.value, unit=inner.unit)
             return PCompound("-", (inner,))
         if isinstance(node.op, python_ast.UAdd):
-            # ++expr is Python interop escape — untranslatable
+            # ++expr is the Python interop escape. Over a DECLARED CONSTANT it
+            # folds to the value; over anything else the value is not known at
+            # export time, so it stays untranslatable rather than emitting
+            # something plausible.
             if (isinstance(node.operand, python_ast.UnaryOp)
                     and isinstance(node.operand.op, python_ast.UAdd)):
-                self._add_warning("++(" + python_ast.unparse(node.operand.operand) + ")")
+                inner = node.operand.operand
+                if isinstance(inner, python_ast.Name) and inner.id in self._constants:
+                    return self._constants[inner.id]
+                self._add_warning("++(" + python_ast.unparse(inner) + ")")
                 return PAtom("???")
             return self._convert_expr(node.operand)
         if isinstance(node.op, python_ast.Invert):

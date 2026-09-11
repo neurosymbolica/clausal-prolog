@@ -140,7 +140,24 @@ def test_anonymous_is_not_caught_by_the_guard():
 
 # ── Outbound ──────────────────────────────────────────────────────────
 
-def test_outbound_constants_directive_raises_not_implemented():
-    source = "-constant_value(pi, 3.14159)\n\nfact(pi),\n"
-    with pytest.raises(NotImplementedError, match="constant_value"):
-        clausal_source_to_prolog(source)
+def test_outbound_constant_value_folds_rather_than_refusing():
+    """This asserted a REFUSAL until the literal-fold landed the same day.
+
+    The refusal was right while nothing resolved a constant for export: an
+    emitted name raises type_error(evaluable, ...) in every conformant
+    system. Now the value is substituted, so the file translates. The fold
+    itself is covered in tests/test_prolog_constant_fold.py, including a run
+    in real Scryer; this is the outbound-direction sanity check that lives
+    beside its inbound twin.
+    """
+    out = clausal_source_to_prolog(
+        "-constant_value(pi, 3.14159)\n\narea(R, A) <- (A is ++pi * R * R)\n")
+    assert "3.14159" in out, out
+    assert "???" not in out, out
+
+
+def test_outbound_retired_constants_directive_still_refuses():
+    """The retired keyword form has no fold: it never reaches the engine, so
+    the translator has no declaration to read."""
+    with pytest.raises(NotImplementedError, match="constants"):
+        clausal_source_to_prolog("-constants(_PI_ = 3.14159)\n\nfact(a),\n")
