@@ -9,6 +9,8 @@ constant (list/dict/set) must not be mutable from the Python side (most
 commonly reached through a ``++`` escape holding a reference to the shared
 term). See ``_freeze`` below and the Constants section of docs/syntax.md.
 """
+from decimal import Decimal
+
 from clausal.logic.variables import Var
 from clausal.logic.predicate import is_term_instance
 from clausal.terms import DictTerm, SetTerm
@@ -303,7 +305,8 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     return (functor, *slots)
 
 
-def register_constant_units(module, name: str, number, units) -> None:
+def register_constant_units(module, name: str, number, units,
+                            value=None) -> None:
     """Record what a ``-constant_number_units`` declaration SAID.
 
     *number* and *units* are the declared pair, lowered at compile time —
@@ -312,7 +315,21 @@ def register_constant_units(module, name: str, number, units) -> None:
     becomes ``Quantity(2592000, second)`` and both the 30 and the ``day`` are
     unrecoverable. Backs ``constant_number_units/3`` (operator's ruling,
     2026-09-11: the predicate reports the DECLARED pair).
+
+    *value* is the constant itself, and settles the NUMERIC KIND of what is
+    recorded: **the declared magnitude is kept in the same kind the value
+    uses.** A currency amount is an exact ``Decimal``, so the float the AST
+    carried for ``19.99`` is converted rather than stored — otherwise the
+    one channel whose whole job is fidelity to the declaration would be the
+    one place money went binary. ``Decimal(str(f))`` (never ``Decimal(f)``)
+    is exact for any literal a human wrote, since ``repr`` round-trips.
+
+    Nothing else is touched: an ``int`` is already exact, and a non-currency
+    float (``1.5 hour``) has no exactness claim to keep.
     """
+    if isinstance(number, float) and isinstance(getattr(value, "value", None),
+                                                Decimal):
+        number = Decimal(str(number))
     module.constant_units[name] = (number, units)
 
 

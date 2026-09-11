@@ -179,31 +179,117 @@ amount_value <- (eval_(7.89(euro), A), strip_units(A, V_UNUSED))   # V = Decimal
 
 ---
 
-## There is no minor-unit currency, and there will not be
+## Minor units — `cent`
 
-**Never model an amount in cents, pence or centimes. Use the base currency with a decimal
-amount.** Ruled 2026-09-11.
+**Ruled 2026-09-11.** This supersedes an earlier ruling of the same day, "there is no
+minor-unit currency, and there will not be"; [what changed](#what-changed-and-why) is
+recorded below rather than deleted.
 
-```text
--constant_number_units(threshold, 50000.00, euro)      # yes
--constant_number_units(threshold_cents, 5000000, ?)    # no: there is no `cent` unit
+A minor unit is an **ordinary scaled unit** of its base currency, defined in the same
+jurisdiction module as the currency itself — the same shape as `kilometre` against `metre`:
+
+```clausal
+-import_from(united_states, [dollar, cent])
+
+# what the filing SAID, in the unit it said it in
+-constant_number_units(sga_monthly, 155000, cent)
 ```
 
-Three reasons, in order of how much trouble each saves:
+```text
+stored            Quantity(Decimal('1550.00'), dollar)   one representation, always
+constant_value/2  Quantity(Decimal('1550.00'), dollar)
+constant_number_units/3   155000, cent                   what the declaration said
+```
 
-1. **`cent` is ambiguous.** Euros have cents, dollars have cents, and they are not the same
-   amount. A quantity tagged `cent` does not say which currency it belongs to, so the unit
-   carries less information than the base-currency form, not more.
-2. **A minor unit defined as a scaled major one would silently rescale.** Every non-base unit
-   in the library normalises to its base (`day` is `Quantity(86400, second)`), so a `cent`
-   defined as 1/100 euro would turn a declared `5000 cent` into `50` — a 100x error introduced
-   by the very mechanism meant to prevent one.
-3. **It would put money in floats.** The rescale is a division, and the numeric type follows
-   the unit's own factor: `gram` is `Quantity(0.001, kilogram)` with a *float* factor, so
-   `7 gram` becomes `0.007`. Storing money in integer minor units exists precisely to keep
-   money out of binary floating point; a `cent` unit would reintroduce it.
+The point is that the declaration names the **currency and the scale where the engine can
+see both**, instead of encoding them in the parameter's identifier —
+`sga_monthly_amount_cents` — where only a human can read them. A scale in a name is
+documentation the engine cannot check; a declared unit is a fact it can.
 
-Decimal amounts are exact here, which is what makes the base-currency form sufficient:
+After declaration the constant simply **is** a dollar amount, which is what makes minor and
+major amounts add with no conversion logic and no mixed-dimension arithmetic:
+
+```clausal
+-import_from(european_union, [euro, cent])
+
+total(T) <- (eval_(5000 (cent), A), eval_(10.00 (euro), B), eval_(A + B, T))   # 60.00(euro)
+```
+
+Being an ordinary unit, `cent` works in a declaration, in the `155000 (cent)` annotation
+sugar and in arithmetic — there is no special case anywhere, and nothing to remember about
+where the spelling is legal.
+
+### Which currencies have one
+
+`european_union.cent` and `united_states.cent` (operator, 2026-09-11). Minor-unit *names* are
+not in ISO 4217 — the standard carries only the number of decimal places — so they are
+curated data, added per currency as a rulebase needs one. See `MINOR_UNITS` in
+[`scripts/gen_currencies.py`](#extending-the-vocabulary).
+
+`cent` is **jurisdiction-scoped exactly as `dinar` is**: bare-import one, qualify the other.
+A cent of one currency still never adds to a cent of another.
+
+```clausal
+-import_from(united_states, [dollar, cent])
+-import_module(european_union)
+
+us(A) <- eval_(5000 (cent), A)                       # 50.00(dollar)
+eu(A) <- eval_(5000 (european_union.cent), A)        # 50.00(euro)
+```
+
+### The factor is derived, never written
+
+`_make_minor_unit(dollar)` builds `Quantity(Decimal(1).scaleb(-dollar.scale), {dollar: 1})`.
+Two properties are load-bearing:
+
+* the factor comes from the currency's **own ISO scale**, so it cannot drift from the scale
+  the rounding and formatting paths use: `_make_minor_unit` on a scale-3 currency yields
+  a factor of `Decimal('0.001')`, not `0.01`, without anyone restating the scale; and
+* it is a **`Decimal`**, built with `scaleb` rather than written as a literal. `gram` is
+  `Quantity(1e-3, {kilogram: 1})` — a *float* factor, which is why `7 gram` is `0.007` in
+  binary floating point. A factor is the one place money could get back into floats.
+
+A **scale-0 currency has no minor unit** and asking for one raises: 16 currencies (yen, won,
+…) have no subunit in circulation, and one invented at scale 0 would make `1 minor` equal
+`1 yen`.
+
+### The gate this makes possible
+
+Because `/3` reports the **declared** pair, a parameter whose name ends `_cents` but whose
+declaration does not say a minor unit is now a *mechanically checkable* defect. That is the
+"documented but not represented" problem closed — and eventually the suffix disappears from
+the name entirely, because the declaration carries it.
+
+### Known divergence: the Prolog exporter
+
+`clausal_to_prolog` discards units and folds a constant to **its declared magnitude**, so
+`-constant_number_units(sga_monthly, 155000, cent)` exports as `155000`, not `1550.00`. This
+is pre-existing behaviour for every scaled unit (`30 day` exports as `30`, though the engine
+stores 2592000 seconds) and it is recorded in the output as a `LOSSY:` comment — but for
+money it is a 100× error. **Do not export a rulebase that declares constants in minor units**
+until the exporter resolves scaled units; see
+`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`.
+
+### What changed, and why
+
+The earlier ruling gave three reasons against a minor unit. The first is **answered** by
+naming the currency in the unit; the other two were **measured on this tree and do not
+hold**:
+
+1. *`cent` is ambiguous — euros have cents, dollars have cents.* Answered: `cent` lives in
+   its jurisdiction module, so `united_states.cent` and `european_union.cent` are distinct
+   units that never add, by the rule that already governs `dinar`.
+2. *A scaled minor unit would silently rescale `5000 cent` to `50`.* It rescales — to
+   `Decimal('50.00') euro`, which is the correct amount and the single representation the
+   design wants. The 100× error described was a misreading: normalisation multiplies by the
+   factor.
+3. *It would put money in floats.* Measured false: the currency constructor coerces through
+   `Decimal(str(f))`, so even `Quantity(0.01, {dollar: 1})` stores `Decimal('0.01')`. The
+   float hazard `gram` demonstrates is real for physical units and blocked for currency —
+   and `_make_minor_unit` never writes a factor literal anyway.
+
+Decimal amounts in the **base** currency remain exact and remain correct — minor units record
+what a source *said*, they do not make the base form insufficient:
 
 ```clausal
 -import_from(european_union, [euro])
@@ -217,10 +303,11 @@ Use [`eval_/2`](arithmetic.md) for arithmetic on amounts, not `==`: CLP constrai
 operate on `Quantity` objects and will raise `type_error`. Comparisons (`>`, `=<`) work
 directly.
 
-**The same rule covers ratios.** There is no `percent` or `basis_point` unit either, and for
-the same first reason — write the ratio as a plain decimal (`0.0525`), not `525` of a scaled
-unit. A scale encoded in a name is documentation the engine cannot check; a decimal is a
-number the engine can.
+**Ratios are not covered by this.** There is still no `percent` or `basis_point` unit —
+write the ratio as a plain decimal (`0.0525`), not `525` of a scaled unit. The minor-unit
+mechanism generalises to them unchanged, and doing so is parked in
+`todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md`; until it lands, a
+scale encoded in a ratio's NAME is documentation the engine cannot check.
 
 **And durations are not units at all** — see [`date_add/3` and `days_between/3`](builtins.md).
 A statutory "within 30 days" is a relation between two dates, not a quantity: months vary in
@@ -392,11 +479,22 @@ and one self-contained module per jurisdiction. Jurisdictions are registered
 (so no manual alias edits, unlike earlier versions).
 
 To add or correct a currency, edit the generator (its scale-exception sets, `REGIONAL`,
-`OVERRIDE_NAME`/`OVERRIDE_SYMBOL`) and rerun it:
+`OVERRIDE_NAME`/`OVERRIDE_SYMBOL`) and rerun it. To give a currency a
+[minor unit](#minor-units--cent), add its ISO code to the generator's `MINOR_UNITS` table
+with the subunit's NAME — the factor is never written there, `_make_minor_unit` derives it
+from the currency's own scale:
+
+```python
+MINOR_UNITS = {"EUR": "cent", "USD": "cent", "GBP": "penny"}   # ISO code -> subunit name
+```
 
 ```bash
 python scripts/gen_currencies.py   # rewrites _data.py + the jurisdiction modules
 ```
+
+(Minor-unit names are curated because ISO 4217 does not carry them — it gives only the
+number of decimal places. A currency with no entry simply has no minor unit, which is the
+honest state for one whose subunit a rulebase has never needed to write.)
 
 For a one-off currency not covered by the generator, hand-add a module and append its name
 to `JURISDICTIONS` in `_data.py`:

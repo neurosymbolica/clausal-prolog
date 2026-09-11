@@ -7715,6 +7715,11 @@ class EmbedTransformer(NodeTransformer):
                                 replace(Constant(value=_literal_number(args[1])),
                                         value_node),
                                 replace(Constant(value=units_term), value_node),
+                                # The VALUE, so the declared magnitude can be
+                                # recorded in the same numeric kind the value
+                                # uses -- see register_constant_units. The
+                                # module global is already assigned above.
+                                replace(Name(id=ident, ctx=load), value_node),
                             ],
                             keywords=[],
                         ), value_node),

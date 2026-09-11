@@ -59,6 +59,14 @@ SPECIAL_HOME = {"EUR": "european_union"}
 OVERRIDE_NAME = {"GBP": "sterling", "VES": "bolivar"}
 OVERRIDE_SYMBOL = {"BHD": "BD"}
 
+# Minor-unit NAMES are curated here because ISO 4217 does not carry them: the
+# standard gives only the NUMBER of decimal places (the `scale` field), not the
+# word for the subunit. Currencies whose minor unit a rulebase actually writes
+# get an entry; the rest simply have no minor unit name, which is honest --
+# EUR and USD only (operator, 2026-09-11). The FACTOR is never written here:
+# `_make_minor_unit` derives it from the currency's own scale.
+MINOR_UNITS = {"EUR": "cent", "USD": "cent"}
+
 
 def iso_scale(code):
     return 0 if code in ISO_SCALE0 else 3 if code in ISO_SCALE3 else 2
@@ -238,7 +246,18 @@ def main():
         title = j.replace("_", " ").title()
         with open(os.path.join(OUT, f"{j}.py"), "w", encoding="utf-8") as f:
             f.write(f'"""{title} — {", ".join(r["name"] for r in items)}."""\n')
-            f.write("from clausal.modules.countries._currency import _make_currency\n\n")
+            minor = [r for r in items if r["code"] in MINOR_UNITS]
+            for r in minor:
+                # A minor unit shares the jurisdiction module's namespace with
+                # the currencies, so a subunit word that is also a currency
+                # word in the same jurisdiction would silently shadow one.
+                assert MINOR_UNITS[r["code"]] not in {i["name"] for i in items}, (
+                    f'minor unit {MINOR_UNITS[r["code"]]!r} collides with a '
+                    f'currency name in {j}')
+            imports = "_make_currency"
+            if minor:
+                imports += ", _make_minor_unit"
+            f.write(f"from clausal.modules.countries._currency import {imports}\n\n")
             for r in items:
                 args = (f'{py(r["name"])}, iso_code={py(r["code"])}, '
                         f'scale={r["scale"]}, symbol={py(r["symbol"])}, '
@@ -246,6 +265,8 @@ def main():
                 if r["historical"]:
                     args += ", historical=True"
                 f.write(f'{r["name"]} = _make_currency({args})\n')
+            for r in minor:
+                f.write(f'{MINOR_UNITS[r["code"]]} = _make_minor_unit({r["name"]})\n')
 
     cur = sum(1 for r in recs if not r["historical"])
     print(f"wrote _data.py + {len(jurisdictions)} modules; "

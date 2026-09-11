@@ -228,3 +228,38 @@ unit-carrying values, not `==`. `docs/arithmetic.md` says so ("CLP constraints d
 Quantity objects"), and `++a == ++b` on two amounts raises `type_error(integer, Quantity)` from
 clpfd. Comparisons (`>`, `=<`) work directly. Worth stating because `==` is the idiom for
 ordinary arithmetic, so it is the one a reader reaches for first — I did.
+
+## SUPERSEDED 2026-09-11 (later the same day): minor currency units EXIST
+
+The section above — "RULED 2026-09-11: no minor-unit currency, no ratio units, ever" — is
+**no longer the ruling for currency.** `cent` is implemented, as an ordinary scaled unit of
+its base currency, in `clausal/modules/countries/{european_union,united_states}.py`. See
+`docs/currency.md#minor-units--cent` and `tests/test_currency_minor_units.py`.
+
+The operator's refinement answers the first reason and the other two were **measured false on
+this tree**, which is why it changed:
+
+1. *`cent` is ambiguous.* Answered by putting the currency in scope, not in the name:
+   `cent` lives in its jurisdiction module, so `united_states.cent` and `european_union.cent`
+   are distinct units that never add — the rule that already governs `dinar`.
+2. *A scaled minor unit would rescale, 5000 cent -> 50.* It rescales to
+   `Decimal('50.00') euro`, which is the CORRECT amount: normalisation multiplies by the
+   factor. The "100x error" above was a misreading of the direction.
+3. *It would put money in floats.* Measured false: the currency constructor coerces through
+   `Decimal(str(f))`, so even `Quantity(0.01, {dollar: 1})` stores `Decimal('0.01')`. The
+   `gram` hazard is real for physical units and blocked for currency. `_make_minor_unit`
+   derives the factor from the currency's own ISO scale with `scaleb` and never writes a
+   literal, so there is no factor to get wrong.
+
+**Ratios are NOT superseded by this** — there is still no `percent` or `basis_point`, and the
+generalisation is parked in
+`todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md`.
+
+**Durations are NOT superseded either** — still date arithmetic, not units.
+
+So of the three gates the section above declared closed, the first is now closed the other
+way: by adding the unit.
+
+    cent (35 params)     -> DECLARE in cent; the value is base currency with decimals
+    bps/percent (21)     -> still plain decimal ratios (todo above)
+    days/months (13)     -> still date predicates, not units
