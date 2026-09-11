@@ -440,3 +440,8 @@ JURISDICTIONS = [
     "zambia",
     "zimbabwe",
 ]
+
+MINOR_UNITS = {
+    "EUR": "cent",
+    "USD": "cent",
+}

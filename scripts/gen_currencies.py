@@ -238,6 +238,14 @@ def main():
         for j in jurisdictions:
             f.write(f"    {py(j)},\n")
         f.write("]\n")
+        # Readable without importing any jurisdiction module -- the Prolog
+        # exporter needs the minor-unit NAMES to refuse a quantity it cannot
+        # export faithfully, and importing 181 modules to learn two strings
+        # would be absurd.
+        f.write("\nMINOR_UNITS = {\n")
+        for code in sorted(MINOR_UNITS):
+            f.write(f"    {py(code)}: {py(MINOR_UNITS[code])},\n")
+        f.write("}\n")
 
     by_j = defaultdict(list)
     for r in recs:

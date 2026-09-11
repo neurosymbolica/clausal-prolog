@@ -56,3 +56,22 @@ class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
     (``"error"``: the same sites raise a load-time ``SyntaxError``; set it
     to ``"warn"`` and this warning is emitted instead).
     """
+
+
+class ClausalCurrencyLiteralWarning(ClausalLintWarning):
+    """A money amount written as a float literal carrying enough significant
+    digits that the literal may already have been rounded.
+
+    There is no decimal literal syntax, so ``155000.99`` is a Python float
+    before any currency code sees it. Measured on this code path: a decimal
+    with **15 or fewer significant digits always survives** the
+    ``float -> Decimal(str(f))`` round trip; 16 digits loses about 12% of
+    amounts, 17 about 83%, 18 about 98%. So the band is a HAZARD and not a
+    certainty -- roughly one 17-digit amount in six is still intact -- which
+    is why this says the amount *may* not be the one written. What was
+    written is unrecoverable by then, but the band is knowable, and saying so
+    is the difference between a loud problem and a silent wrong amount.
+
+    Money only. A physical measurement makes no exact-decimal claim, and
+    warning there would fire on every float in the corpus.
+    """

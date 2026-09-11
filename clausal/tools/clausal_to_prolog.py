@@ -497,6 +497,66 @@ def emit_module(pmodule: PModule, op_table: OperatorTable) -> str:
 
 # ── Clausal source → Prolog AST conversion ───────────────────────────
 
+def _base_unit_names() -> frozenset[str]:
+    """Every unit NAME whose declared magnitude is also the stored magnitude.
+
+    A unit that carries a FACTOR rescales: ``day`` is ``Quantity(86400,
+    second)`` and ``cent`` is ``Quantity(Decimal('0.01'), dollar)``, so the
+    number in the declaration is not the number the engine holds. A unit that
+    is a ``_UnitsPredicate`` carries no factor -- base dimensions (``metre``,
+    ``second``) and factor-1 derived units (``newton``) alike -- and neither
+    does a currency, which is a base dimension of its own.
+
+    Reading the engine's unit vocabulary is not executing the file being
+    translated: these are names resolved against static data, exactly as the
+    import directives already are.
+    """
+    from clausal.modules import units as _units                 # noqa: PLC0415
+    from clausal.modules.countries import _data                 # noqa: PLC0415
+    names = {n for n, v in vars(_units).items()
+             if isinstance(v, _units._UnitsPredicate)}
+    names |= {r["name"] for r in _data.CURRENCIES}
+    return frozenset(names)
+
+
+def _is_known_scaled_unit(name: str) -> bool:
+    """True for a unit name KNOWN to carry a factor, so that dropping it
+    changes the magnitude: ``cent``, ``day``, ``kilometre``, ``gram``…
+
+    Deliberately the opposite polarity to `_base_unit_names`, which the
+    DECLARATION path uses. A declaration in a scaled unit had zero occurrences
+    anywhere when this landed, so refusing everything not known to be safe
+    costs nothing there. The inline ``5000(euro)`` form is used throughout the
+    corpus and the tests, and it has been exported this way since the
+    2026-09-08 ruling -- so here an unrecognised name (a user-defined unit, or
+    the still-supported TitleCase ``Metre`` alias) keeps working, and only the
+    known hazard is refused. Under-refusing in the direction of the
+    established behaviour, rather than breaking exports to close a hole that
+    nothing in the corpus reaches.
+    """
+    from clausal.modules import units as _units                 # noqa: PLC0415
+    from clausal.modules.countries import _data                 # noqa: PLC0415
+    from clausal.terms import Quantity                          # noqa: PLC0415
+    scaled = {n for n, v in vars(_units).items()
+              if isinstance(v, Quantity) and v.dims}
+    scaled |= set(_data.MINOR_UNITS.values())
+    return name in scaled or name.lower() in scaled
+
+
+def _unit_leaf_names(node) -> list[str]:
+    """The NAMES a unit expression mentions, in order. Exponents are skipped;
+    a qualified ``european_union.euro`` contributes ``euro``."""
+    if isinstance(node, python_ast.Name):
+        return [node.id]
+    if isinstance(node, python_ast.Attribute):
+        return [node.attr]
+    if isinstance(node, python_ast.BinOp):
+        return (_unit_leaf_names(node.left) + _unit_leaf_names(node.right))
+    if isinstance(node, python_ast.UnaryOp):
+        return _unit_leaf_names(node.operand)
+    return []                       # a numeric exponent names no unit
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if identifier should be treated as a logic variable.
 
@@ -762,14 +822,41 @@ class _ClausalToProlog:
         func = node.func
         if isinstance(func, python_ast.Constant) and isinstance(
                 func.value, (int, float)) and not isinstance(func.value, bool):
+            self._refuse_scaled_unit(node, unit.id)
             self._add_lossy(f"unit discarded: {func.value}({unit.id}) -> {func.value}")
             return PNumber(func.value, unit=unit.id)
         if isinstance(func, python_ast.Name) and _is_var_in_name_position(func.id):
+            self._refuse_scaled_unit(node, unit.id)
             self._add_lossy(f"unit discarded: {func.id}({unit.id}) -> {func.id}")
             lowered = self._convert_expr(func)
             return (PVar(lowered.name, unit=unit.id)
                     if isinstance(lowered, PVar) else lowered)
         return None
+
+    def _refuse_scaled_unit(self, node, unit_name: str) -> None:
+        """Refuse an inline quantity whose unit carries a FACTOR.
+
+        The SECOND shape a minor-unit amount takes: `pay(155000(cent))`
+        reaches this lowering rather than `_collect_constant`, and dropping
+        the unit keeps the WRITTEN magnitude, not the one the engine holds
+        once a unit rescales. Refusing one shape and not the other would
+        leave a hole in the middle of the guarantee (corpus-lane,
+        2026-09-11).
+
+        Called only once the node is known to BE a quantity -- an ordinary
+        call like `implements(k1)` reaches `_try_quantity` too and leaves by
+        the `return None` below, so a check placed before that returns a
+        refusal for every one-argument predicate call in the corpus.
+        """
+        if _is_known_scaled_unit(unit_name):
+            raise NotImplementedError(
+                f"clausal_to_prolog: {python_ast.unparse(node)} is a quantity "
+                f"in a scaled unit ({unit_name}), and units are discarded on "
+                f"export -- which keeps the written magnitude, not the one "
+                f"the engine holds once a unit rescales. Write the amount in "
+                f"a base unit, or fix the exporter to convert to the base "
+                f"magnitude; see todo/exporter-folds-scaled-units-to-the-"
+                f"wrong-magnitude-2026-09-11.md")
 
     def _collect_unit_atoms(self, tree: python_ast.Module) -> None:
         """Pre-pass: every unit atom named by a Quantity literal in this module.
@@ -1661,6 +1748,29 @@ class _ClausalToProlog:
             unit = args[2]
             unit_text = (unit.id if isinstance(unit, python_ast.Name)
                          else python_ast.unparse(unit))
+            # A SCALED unit's declared magnitude is not the stored one, so
+            # folding it emits a number the engine never held -- `155000 cent`
+            # became `155000` where the engine holds 1550.00 dollar, a 100x
+            # money error announced only by a comment. Refuse instead: loud,
+            # dated and recoverable, where a wrong magnitude in an exported
+            # legal program is none of those. Ruled 2026-09-11, after three
+            # censuses agreed nothing declares a constant in a scaled unit
+            # today; see todo/exporter-folds-scaled-units-to-the-wrong-
+            # magnitude-2026-09-11.md for the fix that lifts this.
+            base = _base_unit_names()
+            scaled = [n for n in _unit_leaf_names(unit) if n not in base]
+            if scaled:
+                raise NotImplementedError(
+                    f"clausal_to_prolog: -constant_number_units({name}, ..., "
+                    f"{unit_text}) declares a constant in a scaled unit "
+                    f"({', '.join(sorted(set(scaled)))}), and the exporter "
+                    f"folds a constant to its DECLARED magnitude -- which is "
+                    f"not the magnitude the engine holds once a unit "
+                    f"rescales. Declare the constant in a base unit "
+                    f"(a currency, or metre/second/kilogram...), or fix the "
+                    f"exporter to fold to the base magnitude; see "
+                    f"todo/exporter-folds-scaled-units-to-the-wrong-"
+                    f"magnitude-2026-09-11.md")
             note = (f"unit discarded: -constant_number_units({name}, ..., "
                     f"{unit_text}) -> {name} folds to its magnitude only")
             self._add_lossy(note)

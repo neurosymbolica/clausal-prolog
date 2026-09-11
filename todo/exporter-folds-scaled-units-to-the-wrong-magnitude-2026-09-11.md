@@ -51,3 +51,83 @@ Option 2 is the one worth costing. Whichever is chosen, delete the pinning test 
 docs warning as part of it.
 
 **Do not export a rulebase that declares constants in minor units until this is settled.**
+
+---
+
+## RESOLVED (partly) 2026-09-11: option 1 landed — it REFUSES
+
+The operator ruled option 1 the same day, after three independent censuses agreed the cost is
+zero today:
+
+* **corpus source** (iso-export-lane, corpus b6f2c367, 74 roster domains / 931 files): the
+  only unit-bearing literals are `euro` 34, `baht` 7, `dollar` 5 — all BASE currencies. Zero
+  occurrences of `cent`, `satang`, `penny`, `day`, `hour`, `minute`, `week`, `month`, `year`,
+  `kilometre`, `km`, `gram`, `kg`, `tonne`. `-constant_number_units` appears zero times in
+  the corpus and zero times in kit.
+* **corpus exports** (same lane, the `% Clausal units:` comments across 754 staged `.pl`):
+  `euro` 23, `baht` 9, `dollar` 4, nothing else. The two censuses agree, which is the point
+  of running both — a scaled unit reaching the exporter by an ungrepped path would show in
+  the second.
+* **engine tree** (me): the only exporter test declaring a united constant uses `euro`.
+
+`_collect_constant` now raises `NotImplementedError` when any leaf of the declared unit
+expression is not a base unit. `_base_unit_names()` is the `_UnitsPredicate` names in
+`clausal/modules/units.py` (base dimensions AND factor-1 derived units like `newton`) plus
+every currency name — precisely the units whose declared magnitude IS the stored magnitude.
+An unknown name is refused rather than assumed base.
+
+Tests in `tests/test_currency_minor_units.py`; the characterisation test that pinned the old
+100× fold is deleted, as its own message instructed.
+
+**Option 2 is still the fix and this is still open.** corpus-lane's framing is the one to
+keep: the refusal costs nothing *today* and stops being free the moment the constants
+migration starts, because that migration is exactly what creates the first corpus constant.
+A domain that is both on the migration list and on the ISO publish list is blocked until the
+exporter folds to the BASE magnitude. Everything in the "Ask" section above still applies —
+the exporter can resolve the jurisdiction from the `-import_from` it already reads.
+
+### The inline shape, found after option 1 landed
+
+corpus-lane, same day, verified on this tree: option 1 as first written covered the
+DECLARATION and left the identical defect open on the inline quantity literal.
+
+    -constant_number_units(m, 155000, cent)   ->  NotImplementedError    refused
+    pay(155000(cent))                         ->  pay(155000).           EMITTED
+
+Both shapes hold `Quantity(Decimal('1550.00'), dollar)` in the engine. `_try_quantity` kept
+the magnitude and dropped the unit for every unit, base or scaled — correct under the
+2026-09-08 ruling while the written magnitude IS the stored one, wrong the moment the unit
+carries a factor. Same predicate, second data shape; the first fix did not reach it.
+
+Now refused too, at the one point where the inline unit is attached, with the same base-unit
+test. Both refusals lift together when option 2 lands.
+
+Nothing was exposed: corpus inline quantity literals name `euro` (36), `baht` (9) and
+`dollar` (5), nothing scaled.
+
+**The lesson for the next fix here: this predicate has two data shapes.** A change that
+reads only one of them covers half the surface, and the half it misses looks identical from
+the outside.
+
+### The two refusals have OPPOSITE polarity, deliberately
+
+Worth knowing before editing either, because they look like the same check and are not:
+
+    declaration path   refuse unless the unit is KNOWN BASE      (_base_unit_names)
+    inline path        refuse only if the unit is KNOWN SCALED   (_is_known_scaled_unit)
+
+A declaration in a scaled unit had zero occurrences anywhere when this landed, so refusing
+everything not known to be safe costs nothing there. The inline `5000(euro)` form is used
+throughout the corpus and the tests and has exported this way since the 2026-09-08 ruling —
+refusing unknown names there broke 15 tests on the first attempt, including the
+still-supported TitleCase `Metre` alias and four `iso_type_checking` fixture roundtrips. So
+the inline check under-refuses in the direction of the established behaviour: an unrecognised
+name keeps working, only the known hazard is refused.
+
+When option 2 lands, both become the same conversion and the asymmetry goes away.
+
+**One more trap, paid for once.** `_try_quantity` is reached by every one-argument call, not
+only by quantities — it identifies a quantity and returns None for anything else. A check
+placed before that identification refuses `implements(k1)`. `test_ordinary_predicate_call_is_untouched`
+in `tests/test_prolog_quantity_units.py` catches it; the guard belongs inside the branches
+that have already established the node IS a quantity.

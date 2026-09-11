@@ -154,6 +154,41 @@ When the check fires, do one of three things (the error message says so):
 2. **round explicitly** — `money_round(V, Mode, Out)` after deciding the rounding;
 3. **use `money_precise`** for a deliberately sub-scale amount.
 
+### Float literals are exact to 15 significant digits
+
+There is no decimal literal syntax: `1550.00` in a `.clausal` file is a Python float before
+any currency code sees it. That is safe far further than it sounds, because the currency path
+coerces through `Decimal(str(f))` — never `Decimal(f)` — and **measured on this code path, a
+decimal with 15 or fewer significant digits always survives**. Past that it is a hazard, not
+a certainty: over 40,000 random two-decimal amounts per row, 16 digits lost 11.77%, 17 lost
+83.11%, 18 lost 98.25%. About one 17-digit amount in six still comes through intact, which is
+why the warning says the amount *may* not be the one written.
+
+At two decimal places that covers every amount below about ten trillion. Above it, the amount
+may already have been rounded by the tokenizer, and nothing downstream can recover what was
+written — so the currency constructor warns
+([`ClausalCurrencyLiteralWarning`](#errors-and-catch3)) whenever a float magnitude carries 16
+or more significant digits. It cannot detect the loss; it detects the band in which loss is
+possible, which is the difference between a loud problem and a silent wrong amount.
+
+**The exact spelling for a large amount is a [minor unit](#minor-units--cent)**, because the
+magnitude is then an integer and an integer is exact at any size:
+
+```text
+     12345678901234565 cent  ->  123456789012345.65   exact
+    123456789012345.65 euro  ->  123456789012345.66   one cent high, and warns
+```
+
+The euro line is not a rounding that happens later — `123456789012345.65` cannot be *written*
+as a float literal at all. The parser produces the nearest float, whose `repr` is
+`123456789012345.66`, so the source text is gone before any currency code runs. Its
+neighbours `.63` and `.68` lose a cent the same way, while `.67` and `.69` happen to survive
+intact; which amounts fall on which side is not something a reader can predict, and that is
+the point of warning on the whole band.
+
+`money/3` takes the amount as a **string**, which is exact by construction and is the other
+way to write one:
+
 ### `money/3` and `money_precise/3` — string constructors
 
 `money(Text, Currency, Out)` builds an amount from a decimal **string** (exact, and
@@ -260,14 +295,35 @@ declaration does not say a minor unit is now a *mechanically checkable* defect. 
 "documented but not represented" problem closed — and eventually the suffix disappears from
 the name entirely, because the declaration carries it.
 
-### Known divergence: the Prolog exporter
+### The Prolog exporter refuses a scaled unit
 
-`clausal_to_prolog` discards units and folds a constant to **its declared magnitude**, so
-`-constant_number_units(sga_monthly, 155000, cent)` exports as `155000`, not `1550.00`. This
-is pre-existing behaviour for every scaled unit (`30 day` exports as `30`, though the engine
-stores 2592000 seconds) and it is recorded in the output as a `LOSSY:` comment — but for
-money it is a 100× error. **Do not export a rulebase that declares constants in minor units**
-until the exporter resolves scaled units; see
+`clausal_to_prolog` folds a constant to its declared magnitude and discards the unit, which is
+faithful for a **base** unit (a currency, `metre`, `second`, or a factor-1 derived unit like
+`newton`) and wrong for a **scaled** one. `-constant_number_units(sga_monthly, 155000, cent)`
+would export as `155000` where the engine holds `Decimal('1550.00') dollar` — a 100× money
+error. So it **refuses** rather than folding:
+
+```text
+NotImplementedError: clausal_to_prolog: -constant_number_units(sga_monthly, ..., cent)
+declares a constant in a scaled unit (cent), and the exporter folds a constant to its
+DECLARED magnitude -- which is not the magnitude the engine holds once a unit rescales.
+Declare the constant in a base unit ...
+```
+
+The same refusal covers `30 day` and `5 kilometre`: the defect was never currency-specific —
+`day` is `Quantity(86400, second)`, so the exported `30` was never the 2592000 the engine
+holds. It also covers the **inline** form, `pay(155000(cent))`, which reaches a different
+lowering and had the identical defect; refusing one shape and not the other would leave a
+hole in the middle of the guarantee. The two checks have opposite polarity on purpose — a
+declaration is refused unless its unit is known to be a base unit, while an inline quantity
+is refused only if its unit is known to be scaled, because that form is used throughout the
+corpus and an unrecognised name there must keep working. Ruled 2026-09-11, after three independent censuses agreed nothing declares a constant
+in a scaled unit today, so the refusal costs nothing and stops being free once the corpus
+constants migration starts.
+
+To export such a constant, declare it in the base unit — or lift the refusal by teaching the
+exporter to fold to the base magnitude, which it can do: the `-import_from` it is already
+converting says where the unit name resolves. See
 `todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`.
 
 ### What changed, and why
@@ -384,7 +440,7 @@ currency_end(mark, E)       # E = "2002-05-15";  euro's end is None (still curre
 
 ## Errors and `catch/3`
 
-Two catchable exceptions.  Both are Python classes, so a `.clausal` file names
+Two catchable exceptions, and one warning.  Both exceptions are Python classes, so a `.clausal` file names
 them in its import list and catches them with a `++` catcher (see
 [Clausal exceptions](exceptions.md)): the bare class `++CurrencyPrecisionError`
 matches by `isinstance`; the instance form `++UnitsMismatch(M)` also binds `M`
@@ -409,6 +465,16 @@ catch(eval_(A + B, C), ++UnitsMismatch(M), 1 == 1)
 An uncaught `CurrencyPrecisionError` / `UnitsMismatch` aborts the query. Note a currency
 mismatch is a *hard error*, not a silent failure — you must handle it if a rule may see
 mixed currencies.
+
+### And one warning
+
+**`ClausalCurrencyLiteralWarning`** (`clausal.lint_warnings`) — a float money magnitude
+carrying 16 or more significant digits, i.e. one in the band where
+[the written literal may already have been rounded](#float-literals-are-exact-to-15-significant-digits).
+Not an exception and not catchable with `catch/3`: nothing has gone wrong *yet* and the
+amount may be perfectly correct — it is the only signal available, because by the time the
+currency code runs there is a float and no record of what was typed. Silence it the way the
+other lints are silenced, with `warnings.filterwarnings` on the class.
 
 ---
 
