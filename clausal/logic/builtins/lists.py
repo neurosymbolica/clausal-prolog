@@ -710,11 +710,21 @@ def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
+        import numbers                                        # noqa: PLC0415
         from clausal.terms import Quantity                    # noqa: PLC0415
 
         def _summable(v):
+            # `numbers.Number`, not `(int, float)`. The pre-validation added
+            # with the first-element seeding narrowed what sum_list accepts:
+            # the old `sum()` took anything that ADDS, which includes
+            # `Fraction` and `Decimal`, and `(int, float)` excludes both.
+            # That regressed one domain to a `type_error(number, Fraction(..))`
+            # at SOLVE time — and `Decimal` is the worse half, being the
+            # magnitude of every currency amount, so any rulebase summing
+            # stripped money would have raised. `bool` stays out, matching
+            # `number/1` and the offender check this replaced.
             return (isinstance(v, Quantity)
-                    or (isinstance(v, (int, float))
+                    or (isinstance(v, numbers.Number)
                         and not isinstance(v, bool)))
 
         values = [deref(x) for x in items]

@@ -1606,3 +1606,56 @@ def test_the_refusal_names_the_directive_that_was_WRITTEN():
         other = ("constant_number_currency" if directive.endswith("units")
                  else "constant_number_units")
         assert f"-{other}(cap" not in text, f"names the other directive: {text}"
+
+
+def test_sum_list_still_accepts_every_numeric_kind(tmp_path):
+    """REGRESSION, found on canonical by harness-batch-lane's answer diff.
+
+    `06290b23` added pre-validation to `sum_list/2` so that a single
+    non-numeric element could not be returned unchanged by the new
+    first-element seeding. The predicate it validated with was
+    `isinstance(v, (int, float))` — which excludes `Fraction` and `Decimal`,
+    both of which the old `sum()` accepted because they simply add.
+
+    It surfaced as `type_error(number, Fraction(49...))` on one domain, at
+    SOLVE time rather than load time, on the axis I ranked second while
+    predicting zero. `Decimal` is the worse half and nothing caught it: it is
+    the magnitude of every currency amount, so any rulebase summing stripped
+    money would have raised.
+    """
+    from fractions import Fraction
+    m = _load(tmp_path, "numkinds", """
+        -module(numkinds, [fracs/1, decs/1, ints/1])
+
+        fracs(S) <- sum_list([++__import__("fractions").Fraction(1, 2),
+                              ++__import__("fractions").Fraction(1, 3)], S)
+        decs(S)  <- sum_list([++__import__("decimal").Decimal("1.10"),
+                              ++__import__("decimal").Decimal("2.20")], S)
+        ints(S)  <- sum_list([1, 2, 3], S)
+    """)
+    mod = m.__dict__["$module"]
+
+    def one(goal):
+        v = Var()
+        [r] = [deref(v) for _ in call(goal, v, module=mod)]
+        return r
+
+    assert one("fracs") == Fraction(5, 6)
+    assert one("decs") == Decimal("3.30")
+    assert one("ints") == 6
+
+
+def test_sum_list_still_rejects_a_genuine_non_number(tmp_path):
+    """The negative control: the pre-validation exists so a one-element list
+    of a non-number is not returned unchanged by the seeding. Widening it back
+    must not remove that."""
+    from clausal.logic.exceptions import LogicException
+    m = _load(tmp_path, "notnum", """
+        -module(notnum, [bad/1])
+        -implicit_atoms
+
+        bad(S) <- sum_list([foo], S)
+    """)
+    with pytest.raises(LogicException, match="type_error"):
+        v = Var()
+        list(call("bad", v, module=m.__dict__["$module"]))
