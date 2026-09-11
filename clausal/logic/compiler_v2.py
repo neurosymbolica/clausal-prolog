@@ -536,10 +536,34 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                     # Dotted key for compiler resolution (e.g. "py.sympy.inf").
                     module_dict[f"{item.module}.{name_spec}"] = (
                         _imported_reference(mod, name_spec, value))
-            # Also store the module object under the user-facing name so
-            # that dotted-name resolution (e.g. ``uuid.Uuid4``) works in
-            # the compiler's _inject_resolved_targets.
-            module_dict[item.module] = mod
+            # Store the module object under its user-facing name so that
+            # dotted-name resolution works in the compiler's
+            # ``_inject_resolved_targets`` -- but ONLY for a dotted path.
+            #
+            # BUG #2 (corpus `_tools/split_domain.py:1049`, reproduced at
+            # engine level 2026-09-11): a SINGLE-SEGMENT module name is also a
+            # valid Clausal identifier, so this binding shadows a profile key
+            # or atom of the same spelling. The name holds a Python MODULE
+            # while a bare key is the interned atom ``('currency',)`` -- two
+            # different kinds of thing in one namespace slot, so the collision
+            # is SILENT: the lookup finds nothing and the rule answers
+            # ``unknown([key])``. `currency` is simultaneously a kit module
+            # and an invoice's own currency field, and the corpus held the
+            # hazard off by emitting imports in a fixed ORDER, with a
+            # regression test pinning the order.
+            #
+            # A dotted path binds under a key like ``py.units``, which is not
+            # a writable identifier and so cannot collide. Keeping it there
+            # preserves every use that depends on this (five tests in
+            # imported-atom/functor resolution) and drops only the form that
+            # shadows -- measured both ways: removing it entirely fails those
+            # five, restricting it to dotted paths fails nothing.
+            #
+            # An author who wants the module wants ``-import_module``, which
+            # binds it and is untouched. Each directive now does what its name
+            # says: ``-import_from`` binds the names it lists.
+            if "." in item.module:
+                module_dict[item.module] = mod
         elif isinstance(item, ImportModuleItem):
             mod = _resolve_module(item.module)
             # Store the top-level name (e.g., "foo" for "foo.bar.baz").
