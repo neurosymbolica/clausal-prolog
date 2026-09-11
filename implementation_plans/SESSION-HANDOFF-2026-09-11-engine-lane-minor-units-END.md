@@ -556,3 +556,85 @@ a null prediction on), `number/1` accepting a `Quantity` (changes a branch only 
 meets data that could carry one), and the currency renames (should fail LOUD; their instrument
 reports a load failure as a no-score row carrying the exception type, so that case is visible
 rather than folded into a score).
+
+---
+
+# BUG #2 — CLOSED, on canonical at `64f04898`
+
+    -import_from(currency, [currency_code])
+    inv({currency: eur}),
+    look(C) <- (inv(I), get(I, currency, C))
+
+    before  []        after  [('eur',)]
+
+`_process_imports` bound the module object under its user-facing name for dotted-name
+resolution. That name holds a Python MODULE; a bare profile key is the interned atom
+`('currency',)`. Two different KINDS of thing in one namespace slot, which is why the
+collision was SILENT rather than a redefinition error — the lookup found nothing and the rule
+answered `unknown([key])`. The corpus held it off by emitting imports in a fixed ORDER, with a
+regression test pinning the order.
+
+**Only a SINGLE-SEGMENT name can collide** — the only form that is also a writable Clausal
+identifier. A dotted path binds under `py.units`, which nothing can write. Kept for dotted,
+dropped for single-segment.
+
+Measured both ways rather than argued: **removing the binding entirely fails 5 tests** in
+imported-atom/functor resolution (it is load-bearing), **restricting it to dotted paths fails
+nothing** — plus the positive control, because a green suite says nothing broke, not that the
+bug is fixed.
+
+Each directive now does what its name says: `-import_from` binds the names it lists,
+`-import_module` binds the module. The operator ruled the one affected shape (`uuid.X` after
+importing only names) can be renamed; nothing depends on it.
+
+## Three claims, on the tree that carries them
+
+| axis | who | result |
+| --- | --- | --- |
+| engine suite | me | 144 failed / 15973 passed / 1 error — name set identical to the `946d7296` baseline |
+| export bytes | iso-export-lane | 0 across 1560 files, raw and normalised, both trees content-pinned |
+| domain answers | harness-batch-lane | 82 unchanged, 0 moved, zero torn — `64f04898/so1789092742`, 106 commits from `820dc66f` |
+
+**Measured on BOTH execution paths.** The clone sweep at `6d609eb1` ran the interpreted
+trampoline (the clone has 12 loadable extensions to canonical's 13); this one ran the
+compiled path. Same 82 answers, no row moved on either.
+
+`eu/peppol_einvoicing` was run ALONE first — 59/59 — because corpus-lane's census makes it the
+only surviving module-name/profile-key pair in the corpus, so it is the one domain where the
+change has anything to act on. Retiring the shape with a named mechanism before the broad run
+means a later move would have moved WITHOUT one, which changes how hard to chase it. Worth
+doing whenever a census has already named the candidate.
+
+## The week's most reusable finding, and it is about reporting
+
+**The reportable unit is not the number — it is the number plus what the instrument could not
+see.** This landing's gap (the fix measured only on the interpreted path) was findable ONLY
+because harness-batch-lane volunteered that the clone lacked the compiled trampoline. Reported
+as "82 unchanged, clean", it would have been a null that was silent on the axis that mattered,
+and nobody would have known to look.
+
+Three instances from three lanes in one week makes it a practice rather than an anecdote:
+that caveat; the fingerprint runner that hardcoded the default engine path while its
+measurement took one as an argument; and "clone `9fd8e7f9` is a weaker pin than it looks,
+because the arm was a DIRECTORY with 42 modified files". Caveats are not politeness, they are
+load-bearing — a reader who knows something you do not can only act on a limitation if you
+state it.
+
+The question that finds this class: **has the CHANGE been measured, or the INTERACTION?** A
+null covering the change says nothing about the pairing, and where two implementations share
+one contract — a C wrapper and a Python twin — the pairing is where a difference hides
+without either side being wrong.
+
+## Still open
+
+- **Option 2 for the exporter** — fold to the BASE magnitude. Load-bearing since the "follow
+  statutes" ruling. Export stays LOSSY: it fixes the magnitude, not the unit.
+- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, corpus-lane's blocker.
+- **peppol** as a separate migration; its BR-CO tolerance is a read-the-standard question.
+- **CLP units via a side channel** — `todo/clp-units-side-channel-2026-09-12.md`, earmarked
+  for a fable agent. NOTE recorded there and in its commit: the "extract the rule from a
+  Prolog definition" half has NO basis in this repo, and the only real `library(clpfd)` source
+  on the machine is SICStus's — wrong semantics for us, and commercially licensed.
+- **corpus-lane** retires the import-order mitigation and RE-POINTS its regression test at the
+  new guarantee rather than deleting it.
+- **Box** is the only tree still on the old vocabulary.
