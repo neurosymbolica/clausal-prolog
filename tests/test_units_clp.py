@@ -241,3 +241,95 @@ class TestInference:
     def test_non_numeric_leaf_is_not_engaged(self):
         from clausal.logic.units_clp import has_units_material
         assert not has_units_material(_bin(Add, Quantity(3, M), "banana"))
+
+
+def is_var_unbound(v):
+    from clausal.logic.variables import is_var
+    return is_var(deref(v))
+
+
+class TestShadowLink:
+    def test_shadow_created_once_and_trailed(self):
+        from clausal.logic.units_clp import shadow_for, LINK_KEY
+        t = Trail()
+        x = Var()
+        mark = t.mark()
+        s = shadow_for(x, M, t)
+        assert shadow_for(x, M, t) is s
+        assert get_attr(x, UNITS_KEY).shadow is s
+        assert get_attr(s, LINK_KEY).user is x
+        t.undo(mark)
+        assert get_attr(x, UNITS_KEY) is None and get_attr(s, LINK_KEY) is None
+
+    def test_binding_shadow_binds_user_to_quantity(self):
+        from clausal.logic.units_clp import shadow_for
+        t = Trail()
+        x = Var()
+        s = shadow_for(x, M, t)
+        assert unify(s, 5, t)
+        assert deref(x) == Quantity(5, M)
+
+    def test_binding_shadow_to_fraction_gives_exact_currency(self):
+        from clausal.logic.units_clp import shadow_for
+        t = Trail()
+        x = Var()
+        s = shadow_for(x, {euro: 1}, t)
+        assert unify(s, Fraction(1, 3), t)
+        v = deref(x)
+        assert v.dims == {euro: 1} and type(v.value) is Fraction and v.value == Fraction(1, 3)
+
+    def test_binding_user_to_quantity_binds_shadow(self):
+        from clausal.logic.units_clp import shadow_for
+        t = Trail()
+        x = Var()
+        s = shadow_for(x, {euro: 1}, t)
+        assert unify(x, Quantity(Decimal("1550.00"), {euro: 1}), t)
+        assert deref(s) == 1550 and type(deref(s)) is int
+
+    def test_binding_user_to_wrong_dims_fails_whole_unification(self):
+        from clausal.logic.units_clp import shadow_for
+        t = Trail()
+        x = Var()
+        s = shadow_for(x, M, t)
+        assert not unify(x, Quantity(5, S), t)
+        assert is_var_unbound(x) and is_var_unbound(s)
+
+    def test_two_united_vars_unify_merges_shadows(self):
+        from clausal.logic.units_clp import shadow_for
+        t = Trail()
+        x, y = Var(), Var()
+        sx, sy = shadow_for(x, M, t), shadow_for(y, M, t)
+        assert unify(x, y, t)
+        assert unify(sx, 7, t)
+        assert deref(y) == Quantity(7, M) and deref(sy) == 7
+
+    def test_shadow_bound_to_foreign_var_transfers_link(self):
+        from clausal.logic.units_clp import shadow_for, LINK_KEY
+        t = Trail()
+        x, w = Var(), Var()
+        s = shadow_for(x, M, t)
+        assert unify(s, w, t)
+        assert get_attr(w, LINK_KEY).user is x
+        assert unify(w, 9, t)
+        assert deref(x) == Quantity(9, M)
+
+    def test_strip_replaces_quantities_and_united_vars(self):
+        from clausal.logic.units_clp import analyse, strip
+        t = Trail()
+        x = Var()
+        tree = _bin(Sub, Quantity(Decimal("1550.00"), {euro: 1}), Quantity(Decimal("0.01"), {euro: 1}))
+        _, _, env = analyse(x, tree, "(==)/2")
+        l2, r2 = strip(x, env, t), strip(tree, env, t)
+        assert get_attr(x, UNITS_KEY).shadow is l2
+        assert isinstance(r2, Sub) and r2.left == 1550 and type(r2.left) is int
+        assert r2.right == Fraction(1, 100) and type(r2.right) is Fraction
+
+    def test_backtracking_undoes_shadow_binding(self):
+        from clausal.logic.units_clp import shadow_for
+        t = Trail()
+        x = Var()
+        s = shadow_for(x, M, t)
+        mark = t.mark()
+        assert unify(s, 5, t)
+        t.undo(mark)
+        assert is_var_unbound(x) and is_var_unbound(s)

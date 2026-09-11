@@ -364,3 +364,77 @@ def ground_dims(tree: Any) -> dict:
     d = a._known(tree)
     a._push(tree, d)
     return d
+
+
+# ── shadows ──────────────────────────────────────────────────────────────────
+
+class Link:
+    """What a shadow knows: the user's variable and the dims to reattach."""
+    __slots__ = ("user", "dims")
+
+    def __init__(self, user, dims: dict) -> None:
+        self.user = user
+        self.dims = dict(dims)
+
+    def __repr__(self) -> str:
+        return f"Link({self.user!r}, {self.dims!r})"
+
+
+def shadow_for(var, dims: dict, trail: Trail):
+    """The bare variable the solver sees for united *var*; created (and
+    trailed) on first use."""
+    state = get_attr(var, UNITS_KEY)
+    if state is not None and state.shadow is not None:
+        return state.shadow
+    shadow = Var()
+    put_attr(var, UNITS_KEY, UnitState(dims, shadow=shadow), trail)
+    put_attr(shadow, LINK_KEY, Link(var, dims), trail)
+    return shadow
+
+
+def _link_hook(link: Link, bound_to, trail: Trail) -> bool:
+    """The shadow was bound. A number reattaches the dims onto the user's
+    variable — exactly as the solver produced it, through ``present_number``,
+    never converted to Decimal; another variable inherits the link, or is
+    equated with the other link's user."""
+    _ensure_imports()
+    bound_to = deref(bound_to)
+    if is_var(bound_to):
+        other = get_attr(bound_to, LINK_KEY)
+        if other is None:
+            put_attr(bound_to, LINK_KEY, link, trail)
+            return True
+        if other.user is link.user:
+            return True
+        return unify(link.user, other.user, trail)
+    if not _is_plain_number(bound_to):
+        return False
+    value = present_number(bound_to)
+    user = deref(link.user)
+    if is_var(user):
+        return unify(user, _Quantity(value, link.dims), trail)
+    return (isinstance(user, _Quantity) and dict(user.dims) == link.dims
+            and user.value == value)
+
+
+register_attr_hook(LINK_KEY, _link_hook)
+
+
+# ── strip ────────────────────────────────────────────────────────────────────
+
+def strip(x: Any, env: dict[int, dict], trail: Trail) -> Any:
+    """Rebuild *x* with every Quantity replaced by its solver number and every
+    united Var (non-empty dims in *env*) replaced by its shadow. A Var whose
+    dims are empty is a bare number already and stays itself."""
+    _ensure_imports()
+    x = deref(x)
+    if isinstance(x, _Quantity):
+        return to_solver_number(x.value)
+    if is_var(x):
+        dims = env.get(x._id, {})
+        return shadow_for(x, dims, trail) if dims else x
+    if isinstance(x, _BINARY):
+        return type(x)(left=strip(x.left, env, trail), right=strip(x.right, env, trail))
+    if isinstance(x, _Negate):
+        return type(x)(operand=strip(x.operand, env, trail))
+    return x

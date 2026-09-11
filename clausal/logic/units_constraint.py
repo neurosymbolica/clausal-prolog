@@ -31,13 +31,18 @@ class UnitState:
     """Dimensional constraint for an unbound variable.
 
     Immutable for trail safety — constrain_var_dims always creates a new
-    instance rather than mutating an existing one.
+    instance rather than mutating an existing one. ``shadow`` is the bare
+    variable a CLP solver sees in this variable's place (see
+    ``clausal.logic.units_clp``); None until the variable first takes part
+    in a constraint. Equality is by dims only: two states with the same
+    dims are the same constraint whether or not a shadow exists yet.
     """
 
-    __slots__ = ("dims",)
+    __slots__ = ("dims", "shadow")
 
-    def __init__(self, dims: dict) -> None:
+    def __init__(self, dims: dict, shadow=None) -> None:
         self.dims = {k: v for k, v in dims.items() if v != 0}
+        self.shadow = shadow
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, UnitState) and self.dims == other.dims
@@ -81,6 +86,11 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
 
     *attr_value* — the UnitState carried by the variable being bound.
     *bound_to*   — the value (or variable) the AttVar was unified with.
+
+    With a shadow present, a Quantity binding is forwarded to the shadow
+    through the CLP dispatch (``fd_eq``, not ``unify``, so an FD shadow
+    meeting a rational is promoted exactly as a plain var would be), and
+    two united variables unifying equate their shadows the same way.
     """
     # Import here to avoid circular imports at module load time.
     from clausal.terms import Quantity
@@ -89,7 +99,12 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
 
     if isinstance(bound_to, Quantity):
         # Binding to a ground measurement — check dimensions match.
-        return bound_to.dims == attr_value.dims
+        if bound_to.dims != attr_value.dims:
+            return False
+        if attr_value.shadow is not None:
+            from clausal.logic.clpfd import fd_eq  # noqa: PLC0415  (module-level: C wrapper when loaded)
+            return fd_eq(attr_value.shadow, to_solver_number(bound_to.value), trail)
+        return True
 
     if is_var(bound_to):
         # Unified with another variable — transfer or check constraint.
@@ -98,7 +113,16 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
             put_attr(bound_to, UNITS_KEY, attr_value, trail)
             return True
         # Both constrained — dims must be identical (no intersection for units).
-        return other.dims == attr_value.dims
+        if other.dims != attr_value.dims:
+            return False
+        if attr_value.shadow is not None and other.shadow is not None:
+            if attr_value.shadow is other.shadow:
+                return True
+            from clausal.logic.clpfd import fd_eq  # noqa: PLC0415
+            return fd_eq(attr_value.shadow, other.shadow, trail)
+        if attr_value.shadow is not None:
+            put_attr(bound_to, UNITS_KEY, attr_value, trail)   # inherit the shadow
+        return True
 
     if isinstance(bound_to, (int, float)) and not isinstance(bound_to, bool):
         # Plain number allowed only for a dimensionless constraint.
