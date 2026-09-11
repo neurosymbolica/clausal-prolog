@@ -1,4 +1,4 @@
 """Djibouti — franc."""
 from clausal.modules.countries._currency import _make_currency
 
-franc = _make_currency("franc", iso_code="DJF", scale=0, symbol="DJF", start="1977-06-27", end=None)
+djf = _make_currency("franc", iso_code="DJF", scale=0, symbol="DJF", start="1977-06-27", end=None)

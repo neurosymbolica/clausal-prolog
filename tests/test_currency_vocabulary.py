@@ -10,7 +10,8 @@ import tempfile
 
 import pytest
 
-from clausal.modules.countries._data import CURRENCIES, JURISDICTIONS
+from clausal.modules.countries._data import (
+    CURRENCIES, CURRENCY_BINDINGS, JURISDICTIONS)
 
 # Authoritative ISO 4217 minor-unit exceptions; everything else is 2.
 ISO_SCALE0 = {"BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG",
@@ -27,7 +28,7 @@ class TestFullVocabulary:
         problems = []
         for r in CURRENCIES:
             mod = importlib.import_module(f"clausal.modules.countries.{r['jurisdiction']}")
-            obj = getattr(mod, r["name"], None)
+            obj = getattr(mod, CURRENCY_BINDINGS[r["code"]], None)
             if obj is None:
                 problems.append(("missing", r)); continue
             if not (obj.is_currency and obj.iso_code == r["code"]
@@ -45,14 +46,18 @@ class TestFullVocabulary:
     def test_no_jurisdiction_name_collisions(self):
         keys = [(r["jurisdiction"], r["name"]) for r in CURRENCIES]
         assert len(keys) == len(set(keys)), "duplicate (jurisdiction, name)"
+        # And the stronger property the ISO-code binding buys: an identifier
+        # names ONE currency program-wide, not one per jurisdiction.
+        bound = [CURRENCY_BINDINGS[r["code"]] for r in CURRENCIES]
+        assert len(bound) == len(set(bound)), "an identifier is bound twice"
         assert {r["jurisdiction"] for r in CURRENCIES} == set(JURISDICTIONS)
 
     def test_historical_currencies_flagged_with_dates(self):
         import importlib
         # a euro predecessor: readable base word (no collision), dated, historical
-        mark = importlib.import_module("clausal.modules.countries.germany").mark
-        assert mark.historical is True and mark.iso_code == "DEM"
-        assert mark.end is not None and mark.start is not None
+        dem = importlib.import_module("clausal.modules.countries.germany").dem
+        assert dem.historical is True and dem.iso_code == "DEM"
+        assert dem.end is not None and dem.start is not None
         # current currencies are not historical and are open-ended
         from clausal.modules.countries.european_union import euro
         assert euro.historical is False and euro.end is None
@@ -75,9 +80,9 @@ class TestFullVocabulary:
         d = tempfile.mkdtemp()
         p = os.path.join(d, "dates.clausal")
         with open(p, "w") as f:
-            f.write("-import_from(germany, [mark])\n"
+            f.write("-import_from(germany, [dem])\n"
                     "-import_from(currency, [currency_end])\n"
-                    "test(E) <- currency_end(mark, E)\n")
+                    "test(E) <- currency_end(dem, E)\n")
         mod = _load_module("dates", p).__dict__["$module"]
         v = Var()
         got = None
@@ -93,9 +98,9 @@ class TestFullVocabulary:
         p = os.path.join(d, "hist.clausal")
         with open(p, "w") as f:
             f.write("-implicit_atoms\n"  # half_up is a bare atom, not declared
-                    "-import_from(germany, [mark])\n"
+                    "-import_from(germany, [dem])\n"
                     "-import_from(currency, [money_str])\n"
-                    "test(S) <- (eval_(19.99(mark), A), eval_(0.01(mark), B), "
+                    "test(S) <- (eval_(19.99(dem), A), eval_(0.01(dem), B), "
                     "eval_(A + B, C), money_str(C, half_up, S))\n")
         mod = _load_module("hist", p).__dict__["$module"]
         v = Var()
@@ -105,14 +110,19 @@ class TestFullVocabulary:
         assert got == "20.00 DEM"
 
     def test_spot_check_known_currencies(self):
-        # (jurisdiction, name, code, scale)
+        # (jurisdiction, identifier, code, scale) -- a deliberate mix of the
+        # two naming outcomes: a word kept because it names exactly one
+        # CURRENT currency, and an ISO code where the word is shared.
         expect = [
-            ("thailand", "baht", "THB", 2),
-            ("south_korea", "won", "KRW", 0),
-            ("kuwait", "dinar", "KWD", 3),
-            ("india", "rupee", "INR", 2),
-            ("switzerland", "franc", "CHF", 2),
-            ("united_kingdom", "sterling", "GBP", 2),
+            ("thailand", "baht", "THB", 2),          # unique word, kept
+            ("united_kingdom", "sterling", "GBP", 2),  # unique word, kept
+            ("turkiye", "lira", "TRY", 2),           # sole CURRENT lira, kept
+            ("south_korea", "krw", "KRW", 0),        # `won` also DPRK's
+            ("kuwait", "kwd", "KWD", 3),             # `dinar` shared by eight
+            ("bahrain", "bhd", "BHD", 3),
+            ("india", "inr", "INR", 2),              # `rupee` shared by six
+            ("switzerland", "chf", "CHF", 2),        # `franc` shared by ten
+            ("united_states", "usd", "USD", 2),
         ]
         for j, name, code, scale in expect:
             obj = getattr(importlib.import_module(f"clausal.modules.countries.{j}"), name)
@@ -139,6 +149,6 @@ class TestFullVocabulary:
 
     def test_zero_scale_currency_rejects_fraction(self):
         from clausal.terms import Quantity, CurrencyPrecisionError
-        from clausal.modules.countries.south_korea import won
+        from clausal.modules.countries.south_korea import krw
         with pytest.raises(CurrencyPrecisionError):
-            Quantity(1000.5, won)
+            Quantity(1000.5, krw)

@@ -23,24 +23,24 @@ class TestCurrencyVocabulary:
 
     def test_scale_variety(self):
         from clausal.modules.countries.japan import yen
-        from clausal.modules.countries.bahrain import dinar
+        from clausal.modules.countries.bahrain import bhd
         assert yen.scale == 0
-        assert dinar.scale == 3
+        assert bhd.scale == 3
 
     def test_all_starter_currencies_defined(self):
         from clausal.modules.countries.european_union import euro
-        from clausal.modules.countries.united_states import dollar
+        from clausal.modules.countries.united_states import usd
         from clausal.modules.countries.united_kingdom import sterling
         from clausal.modules.countries.japan import yen
-        from clausal.modules.countries.bahrain import dinar
-        seen = {c.iso_code for c in (euro, dollar, sterling, yen, dinar)}
+        from clausal.modules.countries.bahrain import bhd
+        seen = {c.iso_code for c in (euro, usd, sterling, yen, bhd)}
         assert seen == {"EUR", "USD", "GBP", "JPY", "BHD"}
 
     def test_distinct_currencies_are_distinct_dimensions(self):
         from clausal.modules.countries.european_union import euro
-        from clausal.modules.countries.united_states import dollar
-        assert euro is not dollar
-        assert euro._dims != dollar._dims
+        from clausal.modules.countries.united_states import usd
+        assert euro is not usd
+        assert euro._dims != usd._dims
 
 
 class TestCurrencyDecimalConstruction:
@@ -68,9 +68,9 @@ class TestCurrencyDecimalConstruction:
 
     def test_cross_currency_addition_raises(self):
         from clausal.terms import Quantity, UnitsMismatch
-        from clausal.modules.countries.united_states import dollar
+        from clausal.modules.countries.united_states import usd
         with pytest.raises(UnitsMismatch):
-            _ = self._euro(1.00) + Quantity(1.00, dollar)
+            _ = self._euro(1.00) + Quantity(1.00, usd)
 
     def test_currency_plus_plain_number_raises(self):
         from clausal.terms import UnitsMismatch
@@ -121,11 +121,11 @@ class TestCurrencyClausalIntegration:
         assert _succeeds(mod)
 
     def test_cross_currency_addition_fails_in_clausal(self):
-        # euro + dollar must raise UnitsMismatch (dimension safety end-to-end).
+        # euro + usd must raise UnitsMismatch (dimension safety end-to-end).
         mod = _load("cur_mismatch",
             "-import_from(european_union, [euro])\n"
-            "-import_from(united_states, [dollar])\n"
-            "test <- (eval_(1.00(euro), A), eval_(1.00(dollar), B), eval_(A + B, C))\n")
+            "-import_from(united_states, [usd])\n"
+            "test <- (eval_(1.00(euro), A), eval_(1.00(usd), B), eval_(A + B, C))\n")
         with pytest.raises(UnitsMismatch):
             list(call("test", module=mod))
 

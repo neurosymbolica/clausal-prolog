@@ -2,7 +2,7 @@
 
 Exact-decimal money for legal/financial rulebases. A currency amount is a
 [`Quantity`](units.md) whose **magnitude is a `decimal.Decimal`** (never a binary
-float) and whose **dimension is a currency** (`euro`, `dollar`, …). Currencies are
+float) and whose **dimension is a currency** (`euro`, `usd`, …). Currencies are
 units *base dimensions*, so all of dimensional analysis applies: euros add only to
 euros, money scales only by dimensionless numbers, and mixing currencies is an error —
 with **no implicit conversion** (exchange rates are not constants).
@@ -39,6 +39,17 @@ Each currency is defined **once**, in its home **jurisdiction module**, and refe
 from there. Jurisdiction modules are spelled out (`european_union`, `united_states`, …) —
 never ISO country codes (`is`/`in`/`as` collide with reserved words).
 
+**A currency's identifier names exactly one currency, program-wide.** The everyday word is
+kept when it belongs to a single *current* currency — `euro`, `yen`, `baht`, `sterling`,
+`lira` — and replaced by the lowercase **ISO 4217 code** when several currencies share it:
+`dollar` is the word of 22 current currencies, so it is not bound at all and the US dollar is
+`usd`, Australia's `aud`; `dinar` belongs to eight, so Bahrain's is `bhd` and Kuwait's `kwd`.
+120 of 254 currencies are named by their code, 134 keep their word.
+
+The word survives as the currency's *display* name either way — a judgment says "500.00
+dollar", not "500.00 USD" — so this changes the identifier a rulebase **writes**, not the
+word the system **prints**.
+
 **Single-currency rulebase** — import the bare name and never write the prefix:
 
 ```clausal
@@ -50,16 +61,16 @@ budget is 1000000(yen)          # a Japanese statute means Japanese yen
 
 ```clausal
 -import_from(european_union, [euro])
--import_from(united_states, [dollar])
+-import_from(united_states, [usd])
 -import_module(european_union)        # enables the qualified form below
 
 eu_price is 10.00(euro)
-us_price is 12.00(united_states.dollar)   # qualified — same object as the bare `dollar`
+us_price is 12.00(united_states.usd)   # qualified — same object as the bare `usd`
 ```
 
 Two references to the **same** currency (bare-imported or module-qualified) are the same
 dimension and add freely. Two **different** currencies are distinct dimensions and never
-add — `euro + dollar` raises [`UnitsMismatch`](#errors-and-catch3).
+add — `euro + usd` raises [`UnitsMismatch`](#errors-and-catch3).
 
 ### The vocabulary
 
@@ -70,21 +81,21 @@ currency name is the everyday word (`baht`, `rupee`, `won`, `franc`, `peso`, `di
 | Import | Currency | ISO | Minor units (scale) | Symbol |
 |--------|----------|-----|---------------------|--------|
 | `european_union` | `euro` | EUR | 2 | € |
-| `united_states` | `dollar` | USD | 2 | $ |
+| `united_states` | `usd` | USD | 2 | $ |
 | `united_kingdom` | `sterling` | GBP | 2 | £ |
 | `japan` | `yen` | JPY | 0 | ¥ |
-| `bahrain` | `dinar` | BHD | 3 | BD |
+| `bahrain` | `bhd` | BHD | 3 | BD |
 | `thailand` | `baht` | THB | 2 | THB |
 | `south_korea` | `won` | KRW | 0 | ₩ |
-| `kuwait` | `dinar` | KWD | 3 | KWD |
+| `kuwait` | `kwd` | KWD | 3 | KWD |
 
 (examples — the same-named `dinar` in `bahrain`/`kuwait`/`jordan`/… are **distinct**
 currencies, kept apart by their jurisdiction module.) The home jurisdiction is the
 currency's issuer, so a country using another's currency references the issuer — an
-Ecuadorian rulebase (legal tender: US dollar) imports `dollar` from `united_states`. Shared
+Ecuadorian rulebase (legal tender: US dollar) imports `usd` from `united_states`. Shared
 regional currencies live in a regional module: `european_union.euro`,
-`west_african_cfa.franc` (XOF), `central_african_cfa.franc` (XAF), `cfp_franc.franc` (XPF),
-`east_caribbean.dollar` (XCD).
+`west_african_cfa.xof` (XOF), `central_african_cfa.xaf` (XAF), `cfp_franc.xpf` (XPF),
+`east_caribbean.xcd` (XCD).
 
 The full table is generated data — see
 [`clausal/modules/countries/_data.py`](#extending-the-vocabulary). Scales come from ISO 4217
@@ -104,7 +115,7 @@ discriminated: the **current** one keeps the plain word, and older ones take the
 distinguishing term from their official name, or a date range when only the date differs:
 
 ```clausal
--import_from(germany, [mark])            # Deutsche Mark (1948–2002), historical
+-import_from(germany, [dem])            # Deutsche Mark (1948–2002), historical
 -import_from(zimbabwe, [gold, dollar_1980_2008, dollar_2009_2024])
 -import_from(angola,  [kwanza, new_kwanza, readjusted_kwanza])
 -import_from(venezuela, [bolivar, bolivar_1871_2008, bolivar_2008_2018])
@@ -224,7 +235,7 @@ A minor unit is an **ordinary scaled unit** of its base currency, defined in the
 jurisdiction module as the currency itself — the same shape as `kilometre` against `metre`:
 
 ```clausal
--import_from(united_states, [dollar, usd_cent])
+-import_from(united_states, [usd, usd_cent])
 
 # what the filing SAID, in the unit it said it in
 -constant_number_units(sga_monthly, 155000, usd_cent)
@@ -273,7 +284,7 @@ curated word table, not written per currency.
 This is not decoration. It closes two holes by construction:
 
 * `-import_from(european_union, [euro, eur_cent])` followed by
-  `-import_from(united_states, [dollar, usd_cent])` used to bind `cent` **twice, silently,
+  `-import_from(united_states, [usd, usd_cent])` used to bind `cent` **twice, silently,
   last-one-wins** — and a rulebase computing throughout in what it believed were euro cents
   would be holding dollars and never raise, because nothing would ever meet a euro amount to
   mismatch against. Two minor units can now be imported into one file.
@@ -290,20 +301,20 @@ the currencies a corpus census found carrying a minor-unit scale in identifier n
 Names are **singular**, as every unit name in the vocabulary is (`metre`, not `metres`): GBP's
 subunit is `penny`, even where a rulebase spells its own identifiers `_pence`.
 
-A minor unit is **jurisdiction-scoped exactly as `dinar` is**: bare-import one, qualify the other.
-A cent of one currency still never adds to a cent of another.
+A minor unit is **jurisdiction-scoped**, and since a shared word is not bound bare, the
+identifier already says which. A cent of one currency still never adds to a cent of another.
 
 ```clausal
--import_from(united_states, [dollar, usd_cent])
+-import_from(united_states, [usd, usd_cent])
 -import_module(european_union)
 
-us(A) <- eval_(5000 (eur_cent), A)                       # 50.00(dollar)
-eu(A) <- eval_(5000 (eur_cent), A)        # 50.00(euro)
+us(A) <- eval_(5000 (usd_cent), A)        # 50.00(dollar)
+eu(A) <- eval_(5000 (european_union.eur_cent), A)   # 50.00(euro)
 ```
 
 ### The factor is derived, never written
 
-`_make_minor_unit(dollar)` builds `Quantity(Decimal(1).scaleb(-dollar.scale), {dollar: 1})`.
+`_make_minor_unit(usd)` builds `Quantity(Decimal(1).scaleb(-usd.scale), {usd: 1})`.
 Two properties are load-bearing:
 
 * the factor comes from the currency's **own ISO scale**, so it cannot drift from the scale
@@ -371,7 +382,7 @@ hold**:
    design wants. The 100× error described was a misreading: normalisation multiplies by the
    factor.
 3. *It would put money in floats.* Measured false: the currency constructor coerces through
-   `Decimal(str(f))`, so even `Quantity(0.01, {dollar: 1})` stores `Decimal('0.01')`. The
+   `Decimal(str(f))`, so even `Quantity(0.01, {usd: 1})` stores `Decimal('0.01')`. The
    float hazard `gram` demonstrates is real for physical units and blocked for currency —
    and `_make_minor_unit` never writes a factor literal anyway.
 
@@ -407,7 +418,7 @@ Inherited unchanged from [units](units.md); currency just fixes the magnitude to
 | Operation | Behaviour |
 |-----------|-----------|
 | `euro + euro`, `euro - euro` | same currency required; **full precision kept** (no rounding) |
-| `euro + dollar` | `UnitsMismatch` — different currencies never combine |
+| `euro + usd` | `UnitsMismatch` — different currencies never combine |
 | `euro + 5` | `UnitsMismatch` — a currency amount and a plain number never add |
 | `euro * 3`, `euro * 0.2` | scale by a dimensionless number → euro (the `0.2` is coerced to Decimal) |
 | `euro / 3` | division keeps full precision — e.g. `10.00(euro) / 3` = `3.333…(euro)` |
@@ -524,7 +535,7 @@ currencies.
 
 **3. Migrating from the old `currency.<code>` atoms.** A common legacy pattern exposes ISO
 alpha-3 codes as atoms (`currency.eur`, plus `all`/`try_` escapes). Replace them:
-- `currency.eur` → `euro` (from `european_union`); `currency.usd` → `dollar`
+- `currency.eur` → `euro` (from `european_union`); `currency.usd` → `usd`
   (`united_states`); `currency.gbp` → `sterling` (`united_kingdom`); `currency.jpy` → `yen`
   (`japan`); the `try_`/`all` escapes disappear entirely.
 - A bare number that was *implicitly* an amount in a given currency becomes `N(currency)`.

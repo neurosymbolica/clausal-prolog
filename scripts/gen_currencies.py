@@ -63,6 +63,37 @@ OVERRIDE_SYMBOL = {"BHD": "BD"}
 # standard gives only the NUMBER of decimal places (the `scale` field), not the
 # word for the subunit. Currencies whose minor unit a rulebase actually writes
 # get an entry; the rest simply have no minor unit name, which is honest --
+def currency_bindings(records):
+    """The identifier each currency is BOUND to in its jurisdiction module.
+
+    A currency keeps its everyday word when that word names exactly one
+    CURRENT currency; otherwise it is bound by its lowercase ISO 4217 code.
+    `dinar` is the word of eight current currencies, so it names none of them
+    and bahrain's is `bhd`, kuwait's `kwd`. `euro`, `yen` and `baht` are
+    unshared and are untouched (operator, 2026-09-11).
+
+    Keeping the word for a SOLE CURRENT user is the convention this generator
+    already applies within a jurisdiction -- "the current currency keeps the
+    plain word" -- extended across them. It earns its place twice over: a
+    legal text says "lira", not "TRY", and `try` is a Python keyword that
+    could never be an identifier at all. TRY is the only current lira, so the
+    code is never needed.
+
+    The word survives as the currency's `_name` either way: this changes the
+    identifier a rulebase WRITES, not the word the system PRINTS.
+    """
+    users = {}
+    for r in records:
+        users.setdefault(r["name"], []).append(r)
+    out = {}
+    for r in records:
+        sharers = users[r["name"]]
+        current = [x for x in sharers if not x["historical"]]
+        sole = len(current) == 1 and current[0]["code"] == r["code"]
+        out[r["code"]] = r["name"] if (len(sharers) == 1 or sole) else r["code"].lower()
+    return out
+
+
 # Curated subunit WORDS, one per currency whose minor unit a rulebase writes.
 # EUR and USD first (operator, 2026-09-11), widened the same day to AUD, THB
 # and GBP after a corpus census found 139 identifiers carrying a minor-unit
@@ -263,6 +294,7 @@ def main():
         seen.add(key)
     jurisdictions = sorted({r["jurisdiction"] for r in recs})
 
+    bindings = currency_bindings(recs)
     fields = ("jurisdiction", "name", "code", "scale", "symbol", "historical",
               "start", "end")
     with open(os.path.join(OUT, "_data.py"), "w", encoding="utf-8") as f:
@@ -279,6 +311,14 @@ def main():
         # exporter needs the minor-unit NAMES to refuse a quantity it cannot
         # export faithfully, and importing 181 modules to learn two strings
         # would be absurd.
+        f.write("\n#: The identifier each currency is BOUND to: its everyday\n"
+                "#: word when that word names exactly one CURRENT currency,\n"
+                "#: otherwise its lowercase ISO 4217 code. The word survives\n"
+                "#: as `_name` for display either way.\n")
+        f.write("CURRENCY_BINDINGS = {\n")
+        for code in sorted(bindings):
+            f.write(f"    {py(code)}: {py(bindings[code])},\n")
+        f.write("}\n")
         f.write("\n#: Curated subunit WORDS (ISO 4217 carries the scale, "
                 "not the word).\n")
         f.write("MINOR_UNIT_WORDS = {\n")
@@ -318,9 +358,10 @@ def main():
                         f'start={py(r["start"])}, end={py(r["end"])}')
                 if r["historical"]:
                     args += ", historical=True"
-                f.write(f'{r["name"]} = _make_currency({args})\n')
+                f.write(f'{bindings[r["code"]]} = _make_currency({args})\n')
             for r in minor:
-                f.write(f'{MINOR_UNITS[r["code"]]} = _make_minor_unit({r["name"]})\n')
+                f.write(f'{MINOR_UNITS[r["code"]]} = '
+                        f'_make_minor_unit({bindings[r["code"]]})\n')
 
     cur = sum(1 for r in recs if not r["historical"])
     print(f"wrote _data.py + {len(jurisdictions)} modules; "

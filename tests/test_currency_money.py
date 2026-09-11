@@ -7,7 +7,7 @@ import pytest
 from clausal.terms import Quantity, CurrencyPrecisionError
 from clausal.modules.countries.european_union import euro
 from clausal.modules.countries.japan import yen
-from clausal.modules.countries.bahrain import dinar
+from clausal.modules.countries.bahrain import bhd
 
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
@@ -70,7 +70,7 @@ class TestConstructionPrecisionCheck:
         assert Quantity(7, yen).value == Decimal("7")
 
     def test_three_scale_currency_ok(self):
-        assert Quantity(Decimal("1.234"), dinar).value == Decimal("1.234")
+        assert Quantity(Decimal("1.234"), bhd).value == Decimal("1.234")
 
     def test_arithmetic_intermediate_is_exempt(self):
         # A computed currency result (dims passed as a dict) must NOT be checked.

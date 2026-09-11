@@ -515,7 +515,10 @@ def _base_unit_names() -> frozenset[str]:
     from clausal.modules.countries import _data                 # noqa: PLC0415
     names = {n for n, v in vars(_units).items()
              if isinstance(v, _units._UnitsPredicate)}
-    names |= {r["name"] for r in _data.CURRENCIES}
+    # The BINDINGS, not the words: a shared word is not bound at all, so
+    # source writes `usd`, and a set keyed on "dollar" would refuse it as a
+    # scaled unit while silently accepting a word nothing can name.
+    names |= set(_data.CURRENCY_BINDINGS.values())
     return frozenset(names)
 
 
