@@ -106,8 +106,12 @@ def test_pinned_divergences():
 # catch. What replaces it is the migration guard -- no committed file may
 # still DECLARE a constant the retired way, because such a file no longer
 # loads at all.
+# Both directives in the family. `-constant_number_units` is spelled `number`
+# because only numbers carry units (2026-09-11); a pattern that still said
+# `_units` after `value` would silently stop matching it -- which is why the
+# control below asserts a hit for EACH directive, not just for one.
 _RETIRED_CONSTANT_DECL = re.compile(
-    r"^\s*-constant_value(?:_units)?\(\s*_[A-Za-z0-9\u0080-\uffff]"
+    r"^\s*-constant_(?:value|number_units)\(\s*_[A-Za-z0-9\u0080-\uffff]"
     r"[A-Za-z0-9_\u0080-\uffff]*_\s*,")
 
 
@@ -119,7 +123,7 @@ def test_retired_constant_declaration_regex_matches_what_it_should():
     assert _RETIRED_CONSTANT_DECL.search("-constant_value(_PI_, 3.14)")
     assert _RETIRED_CONSTANT_DECL.search("  -constant_value(_A_, 1)")
     assert _RETIRED_CONSTANT_DECL.search(
-        "-constant_value_units(_MAX_, 5000, euro)")
+        "-constant_number_units(_MAX_, 5000, euro)")
     assert not _RETIRED_CONSTANT_DECL.search("-constant_value(pi, 3.14)")
     assert not _RETIRED_CONSTANT_DECL.search("holds(_PI_),")
 

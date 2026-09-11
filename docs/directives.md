@@ -428,17 +428,19 @@ test("area of radius 2") <- (
 )
 ```
 
-### -constant_value_units
+### -constant_number_units
 
 ```clausal
 -import_from(european_union, [euro])
--constant_value_units(max_fine, 5000, euro)
+-constant_number_units(max_fine, 5000, euro)
 
 applies(X) <- (fine(X, F), F > ++max_fine)
 ```
 
-`-constant_value_units(name, value, units)` is the same declaration with the unit kept **out**
-of the value. It binds `name = Quantity(value, units)` — the identical object the
+`-constant_number_units(name, number, units)` is the same declaration with the unit kept **out**
+of the value. It is spelled `number`, not `value`, because **only numbers carry units** — a
+non-numeric value is refused at load time, naming the directive. Reflect on one with
+[`constant_number_units/3`](builtins.md#constant_number_units3). It binds `name = Quantity(value, units)` — the identical object the
 `5000 (euro)` annotation sugar builds — so the unit travels with the constant instead of being
 repeated at every use site. *units* is a unit expression: a name, or names combined with `*`,
 `/` and `**`.

@@ -125,7 +125,7 @@ def test_a_united_constant_exports_its_magnitude_and_says_so():
     inventing a policy -- but it must not drop the unit SILENTLY."""
     out = clausal_source_to_prolog(
         "-import_from(european_union, [euro])\n"
-        "-constant_value_units(max_fine, 5000, euro)\n"
+        "-constant_number_units(max_fine, 5000, euro)\n"
         "\n"
         "applies(X) <- (fine(X, F), F > ++max_fine)\n")
     assert "5000" in out, out

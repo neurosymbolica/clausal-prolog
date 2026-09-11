@@ -773,6 +773,86 @@ def _constant_value__2(name, value, trail, k):
     yield from _module_constant__3(m, name, value, trail, k)
 
 
+@_builtin("constant_number_units", 3)
+def _constant_number_units__3(name, number, units, trail, k):
+    """constant_number_units(Name, Number, Units) — a UNITED constant.
+
+    ``Name`` is an atom, ``Number`` the magnitude, ``Units`` the unit
+    expression. Named for what it can hold: only NUMBERS carry units
+    (operator, 2026-09-11), which is why this is not
+    ``constant_value_units/3``.
+
+    A constant declared WITHOUT units has no solution here — it has a value
+    but no units, and ``constant_value/2`` is the predicate that relates it.
+    So this fails rather than answering with a dimensionless marker, which is
+    the ordinary Prolog reading of "there is no such relation".
+
+    ``Units`` is built from the quantity's dimensions in a canonical order
+    (sorted by unit name), so the same quantity always yields the same term:
+    a single unit at exponent 1 is the bare atom (``euro``), a negative
+    exponent divides (``metre / second``), any other exponent uses ``**``
+    (``metre ** 2``).
+
+    Modes:
+
+      (+Name, ?Number, ?Units): the constant's magnitude and units.
+      (-Name, ?Number, ?Units): enumerate every united constant.
+    """
+    from clausal.terms import Quantity                     # noqa: PLC0415
+    m = Var()
+    value = Var()
+    for _ in _module_constant__3(m, name, value, trail, k):
+        q = deref(value)
+        if not isinstance(q, Quantity):
+            continue                       # unitless: no units to relate
+        dims = dict(q.dims)
+        if not dims:
+            continue                       # dimensionless is not "has units"
+        mark = trail.mark()
+        if (unify(number, q.value, trail)
+                and unify(units, _units_term(dims), trail)):
+            yield None
+        trail.undo(mark)
+
+
+def _units_term(dims: dict):
+    """The canonical Clausal term for a quantity's dimensions.
+
+    Deterministic by construction: units are taken in name order, so the term
+    does not depend on dict insertion order and two equal quantities always
+    produce equal terms.
+    """
+    from clausal.terms import _dim_name                    # noqa: PLC0415
+
+    def atom_for(key):
+        return mint(_dim_name(key))
+
+    positive, negative = [], []
+    for key in sorted(dims, key=_dim_name):
+        exponent = dims[key]
+        base = atom_for(key)
+        if exponent in (1, -1):
+            (positive if exponent == 1 else negative).append(base)
+        else:
+            power = abs(exponent)
+            term = ("**", base, power)
+            (positive if exponent > 0 else negative).append(term)
+
+    def product(parts):
+        head = parts[0]
+        for part in parts[1:]:
+            head = ("*", head, part)
+        return head
+
+    if not positive:
+        # No positive exponents: 1 / <units>, e.g. per-second.
+        return ("/", 1, product(negative))
+    result = product(positive)
+    if negative:
+        result = ("/", result, product(negative))
+    return result
+
+
 @_builtin("module_constant", 3)
 def _module_constant__3(m, name, value, trail, k):
     """module_constant(Module, Name, Value) — reflect on a module's own

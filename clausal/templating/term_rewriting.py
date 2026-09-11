@@ -500,6 +500,19 @@ def _is_retired_constant_spelling(identifier: str) -> bool:
     )
 
 
+def _is_certainly_not_a_number(node) -> bool:
+    """True when *node* CANNOT be a number, decided from the AST alone.
+
+    Deliberately one-sided: it answers True only for shapes that are already
+    a value of another kind (a non-numeric literal, or a container display).
+    Anything whose value depends on running code -- a ``++`` escape, a name --
+    answers False and is left to the units layer, which sees the real value.
+    """
+    if isinstance(node, Constant):
+        return not isinstance(node.value, (int, float)) or isinstance(node.value, bool)
+    return isinstance(node, (List, Dict, Set, Tuple, JoinedStr))
+
+
 def _is_constant_declaration_name(identifier: str) -> bool:
     """True for a name a ``-constants`` declaration may bind.
 
@@ -6934,14 +6947,14 @@ class EmbedTransformer(NodeTransformer):
         if name == "constant_value":
             return transformer._handle_constant_value_directive(
                 args, expr_stmt)
-        if name == "constant_value_units":
+        if name == "constant_number_units":
             return transformer._handle_constant_value_directive(
                 args, expr_stmt, with_units=True)
         if name == "constants":
             raise SyntaxError(
                 "-constants(name = value, ...) is retired. Declare one "
                 "constant per directive: -constant_value(pi, 3.14159), or "
-                "-constant_value_units(max_fine, 5000, euro) to keep the "
+                "-constant_number_units(max_fine, 5000, euro) to keep the "
                 "unit out of the value. The keyword form could not have a "
                 "family, and one line per constant reads better in a diff.")
         if name == "implicit_functors":
@@ -7470,7 +7483,7 @@ class EmbedTransformer(NodeTransformer):
     def _handle_constant_value_directive(transformer, args, expr_stmt,
                                          with_units=False):
         """Process ``-constant_value(pi, 3.14159)`` and
-        ``-constant_value_units(max_fine, 5000, euro)``.
+        ``-constant_number_units(max_fine, 5000, euro)``.
 
         One constant per directive, positionally, so the two forms are a
         FAMILY -- which the old keyword form could not be, and which reads
@@ -7496,9 +7509,9 @@ class EmbedTransformer(NodeTransformer):
         the next) is worse than a clear refusal, so this is checked before
         any of the usual validation.
         """
-        spelling = "-constant_value_units" if with_units else "-constant_value"
+        spelling = "-constant_number_units" if with_units else "-constant_value"
         arity = 3 if with_units else 2
-        example = ("-constant_value_units(max_fine, 5000, euro)" if with_units
+        example = ("-constant_number_units(max_fine, 5000, euro)" if with_units
                    else "-constant_value(pi, 3.14159)")
         if transformer._interactive:
             raise SyntaxError(
@@ -7542,6 +7555,20 @@ class EmbedTransformer(NodeTransformer):
                 f"unused-variable marker; consider another name",
                 ClausalLintWarning, stacklevel=2)
         value_node = args[1]
+        if with_units and _is_certainly_not_a_number(value_node):
+            # The directive is NAMED for this claim -- only numbers carry
+            # units -- so it enforces it rather than letting the units layer
+            # raise. Without this the message is a raw `InvalidOperation:
+            # ConversionSyntax` or a TypeError about Decimal coercion, neither
+            # of which names the directive or the offending value.
+            #
+            # Only the DECIDABLE cases are refused here. A `++` escape's value
+            # is not known until the module runs, so that one still reaches the
+            # units layer.
+            raise SyntaxError(
+                f"{spelling}: `{unparse(value_node)}` is not a number, and "
+                f"only numbers carry units. Use -constant_value for a value "
+                f"that is not a quantity.")
         rhs = transformer._transform_constant_rhs(value_node, ident)
         if with_units:
             unit_node = args[2]

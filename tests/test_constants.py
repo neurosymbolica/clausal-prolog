@@ -147,13 +147,13 @@ def test_the_directive_family_rejects_a_wrong_argument_count(tmp_path):
     with pytest.raises(SyntaxError, match="takes 2 arguments"):
         _load(tmp_path, "e4", "-constant_value(pi)\np(X) <- (X == 1)\n")
     with pytest.raises(SyntaxError, match="takes 3 arguments"):
-        _load(tmp_path, "e5", "-constant_value_units(f, 1)\np(X) <- (X == 1)\n")
+        _load(tmp_path, "e5", "-constant_number_units(f, 1)\np(X) <- (X == 1)\n")
 
 
 def test_the_units_form_refuses_something_that_is_not_a_unit(tmp_path):
     with pytest.raises(SyntaxError, match="not a unit expression"):
         _load(tmp_path, "e6",
-              "-constant_value_units(f, 1, \"euro\")\np(X) <- (X == 1)\n")
+              "-constant_number_units(f, 1, \"euro\")\np(X) <- (X == 1)\n")
 
 
 def test_unground_rhs_raises_at_load(tmp_path):
@@ -1062,11 +1062,11 @@ def test_an_ordinary_constant_name_does_not_warn(tmp_path):
                 and "_UNUSED" in str(w.message)]
 
 
-# ── The -constant_value_units/3 form ──────────────────────────────────────────
+# ── The -constant_number_units/3 form ──────────────────────────────────────────
 
 
 def test_units_form_binds_a_quantity(tmp_path):
-    """``-constant_value_units(max_fine, 5000, euro)`` binds
+    """``-constant_number_units(max_fine, 5000, euro)`` binds
     ``max_fine = Quantity(5000, euro)`` -- the unit kept out of the value,
     which is the whole reason the 3-arity form exists.
 
@@ -1076,7 +1076,7 @@ def test_units_form_binds_a_quantity(tmp_path):
     m = _load(tmp_path, "cvu", """
         -module(cvu, [cost/1])
         -import_from(european_union, [euro])
-        -constant_value_units(max_fine, 5000, euro)
+        -constant_number_units(max_fine, 5000, euro)
 
         cost(X) <- (X is ++max_fine)
     """)
@@ -1185,3 +1185,114 @@ def test_constant_value_2_reads_the_name_as_an_atom(tmp_path):
     """)
     assert len(list(call("by_string", module=chars.__dict__["$module"]))) == 0, (
         "a string names no constant")
+
+
+# ── constant_number_units/3 ───────────────────────────────────────────────────
+#
+# Named for what it can hold: only NUMBERS carry units (operator, 2026-09-11),
+# which is why it is not `constant_value_units/3`. The directive and the
+# predicate share the name, as `-constant_value` and `constant_value/2` do.
+
+
+def test_constant_number_units_3_gives_the_magnitude_and_the_unit(tmp_path):
+    m = _load(tmp_path, "cnu", """
+        -module(cnu, [look/2, cnu1_max_fine])
+        -import_from(european_union, [euro])
+        -constant_number_units(cnu1_max_fine, 5000, euro)
+
+        look(N, U) <- constant_number_units(cnu1_max_fine, N, U)
+    """)
+    n, u = Var(), Var()
+    [(number, units)] = [(deref(n), deref(u)) for _ in
+                         call("look", n, u, module=m.__dict__["$module"])]
+    assert number == 5000
+    assert units == ("euro",), units
+
+
+def test_a_compound_unit_comes_back_as_a_term(tmp_path):
+    """Division and powers survive as structure, so a caller can take the
+    units apart rather than parse a string."""
+    m = _load(tmp_path, "cnu2", """
+        -module(cnu2, [per/2, sq/2, cnu2_speed, cnu2_area])
+        -import_from(py.units, [metre, second])
+        -constant_number_units(cnu2_speed, 3, metre / second)
+        -constant_number_units(cnu2_area, 7, metre ** 2)
+
+        per(N, U) <- constant_number_units(cnu2_speed, N, U)
+        sq(N, U) <- constant_number_units(cnu2_area, N, U)
+    """)
+    mod = m.__dict__["$module"]
+
+    def one(goal):
+        n, u = Var(), Var()
+        [pair] = [(deref(n), deref(u)) for _ in call(goal, n, u, module=mod)]
+        return pair
+
+    assert one("per") == (3, ("/", ("metre",), ("second",)))
+    assert one("sq") == (7, ("**", ("metre",), 2))
+
+
+def test_a_unitless_constant_has_no_units_solution(tmp_path):
+    """It has a VALUE but no units, and `constant_value/2` is the predicate
+    that relates it. Failing is the ordinary reading of "no such relation" --
+    answering with a dimensionless marker would make every constant look
+    united."""
+    m = _load(tmp_path, "cnu3", """
+        -module(cnu3, [plain/1, both/1, cnu3_pi])
+        -constant_value(cnu3_pi, 3.14)
+
+        plain(N) <- constant_number_units(cnu3_pi, N, _)
+        both(V) <- constant_value(cnu3_pi, V)
+    """)
+    mod = m.__dict__["$module"]
+    v = Var()
+    assert [deref(v) for _ in call("plain", v, module=mod)] == []
+    v = Var()
+    assert [deref(v) for _ in call("both", v, module=mod)] == [3.14], (
+        "the negative control: the constant IS there, via constant_value/2")
+
+
+def test_constant_number_units_3_enumerates_only_united_constants(tmp_path):
+    m = _load(tmp_path, "cnu4", """
+        -module(cnu4, [enum/3, cnu4_fine, cnu4_plain])
+        -import_from(european_union, [euro])
+        -constant_number_units(cnu4_fine, 5000, euro)
+        -constant_value(cnu4_plain, 3)
+
+        enum(C, N, U) <- constant_number_units(C, N, U)
+    """)
+    a, b, c = Var(), Var(), Var()
+    rows = [(deref(a), deref(b), deref(c)) for _ in
+            call("enum", a, b, c, module=m.__dict__["$module"])]
+    names = {r[0] for r in rows}
+    # Membership, not equality: constant_number_units/3 is program-WIDE (a
+    # builtin never sees its calling module), so every united constant any
+    # loaded module declared answers here. Unique names keep this test from
+    # depending on what else the suite has loaded.
+    assert ("cnu4_fine",) in names
+    assert ("cnu4_plain",) not in names, "a unitless constant is not united"
+
+
+@pytest.mark.parametrize("value", ["[1, 2]", "'hello'", "{a: 1}", "True"])
+def test_only_a_number_may_carry_units(tmp_path, value):
+    """The directive is NAMED for this claim, so it enforces it. Without the
+    check the message is a raw InvalidOperation/ConversionSyntax from the
+    Decimal layer, naming neither the directive nor the value."""
+    with pytest.raises(SyntaxError, match="only numbers carry units"):
+        _load(tmp_path, "cnu5", f"""
+            -module(cnu5, [q/0, a])
+            -import_from(european_union, [euro])
+            -constant_number_units(x, {value}, euro)
+
+            q <- (1 == 1)
+        """)
+
+
+def test_a_number_still_carries_units(tmp_path):
+    """The negative control for the check above: it must not refuse the case
+    the directive exists for."""
+    m = _load(tmp_path, "cnu6", """
+        -import_from(european_union, [euro])
+        -constant_number_units(fee, 12.5, euro)
+    """)
+    assert m.fee.value == 12.5

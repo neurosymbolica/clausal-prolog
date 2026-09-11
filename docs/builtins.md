@@ -623,6 +623,45 @@ retry_limit(N) <- constant_value(max_retries, N)
     constant name both answer. Use [`module_constant/3`](#module_constant3) when the module
     matters.
 
+### `constant_number_units/3`
+
+```text
+constant_number_units(Name, Number, Units)
+```
+
+A constant declared with [`-constant_number_units`](directives.md#-constant_number_units).
+`Name` is an **atom**, `Number` the magnitude, `Units` the unit expression.
+
+Named for what it can hold: **only numbers carry units**, which is why this is not
+`constant_value_units/3`. The directive enforces it — a non-numeric value is a load-time
+error naming the directive.
+
+A constant declared *without* units has no solution here. It has a value but no units, and
+[`constant_value/2`](#constant_value2) is the predicate that relates it; answering with a
+dimensionless marker would make every constant look united.
+
+`Units` is built from the quantity's dimensions in a canonical order (sorted by unit name),
+so equal quantities always yield equal terms:
+
+| declared | `Units` |
+| --- | --- |
+| `-constant_number_units(max_fine, 5000, euro)` | `euro` |
+| `-constant_number_units(speed, 3, metre / second)` | `metre / second` |
+| `-constant_number_units(area, 7, metre ** 2)` | `metre ** 2` |
+
+```clausal
+-module(m, [limit/2, max_fine])
+-import_from(european_union, [euro])
+-constant_number_units(max_fine, 5000, euro)
+
+limit(N, U) <- constant_number_units(max_fine, N, U)
+```
+
+!!! warning "Scope: program-wide, like `constant_value/2`"
+    A builtin never sees its calling module, so this enumerates every loaded Clausal
+    module's own declarations. Two modules declaring the same constant name both answer.
+    Use [`module_constant/3`](#module_constant3) when the module matters.
+
 ### `module_constant/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:module_constant_3"

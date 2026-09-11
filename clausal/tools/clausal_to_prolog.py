@@ -1156,7 +1156,7 @@ class _ClausalToProlog:
             return None
         if name == "double_quotes":
             return self._convert_double_quotes_directive(call)
-        if name in ("constant_value", "constant_value_units"):
+        if name in ("constant_value", "constant_number_units"):
             self._collect_constant(name, call)
             return None          # folded at the use sites; nothing to emit
         if name in ("constants",):
@@ -1631,7 +1631,7 @@ class _ClausalToProlog:
         return PString(value)
 
     def _collect_constant(self, directive: str, call: python_ast.Call) -> None:
-        """Record a ``-constant_value`` / ``-constant_value_units`` declaration.
+        """Record a ``-constant_value`` / ``-constant_number_units`` declaration.
 
         The value is converted NOW, in file order, so a later declaration may
         refer to an earlier one and every use site gets a fully resolved term.
@@ -1644,7 +1644,7 @@ class _ClausalToProlog:
         policy, but it is recorded as LOSSY so it is never silent.
         """
         args = call.args if isinstance(call, python_ast.Call) else ()
-        expected = 3 if directive == "constant_value_units" else 2
+        expected = 3 if directive == "constant_number_units" else 2
         if len(args) != expected or not isinstance(args[0], python_ast.Name):
             # Malformed: the engine refuses this at load time, so a file that
             # reaches the translator should not contain one. Do not guess.
@@ -1657,11 +1657,11 @@ class _ClausalToProlog:
             value = self._fold_arithmetic(self._convert_expr(args[1]))
         finally:
             self._in_constant_rhs = previous
-        if directive == "constant_value_units":
+        if directive == "constant_number_units":
             unit = args[2]
             unit_text = (unit.id if isinstance(unit, python_ast.Name)
                          else python_ast.unparse(unit))
-            note = (f"unit discarded: -constant_value_units({name}, ..., "
+            note = (f"unit discarded: -constant_number_units({name}, ..., "
                     f"{unit_text}) -> {name} folds to its magnitude only")
             self._add_lossy(note)
             # ...and EMITTED, not merely recorded. `_add_lossy` is a
