@@ -75,3 +75,26 @@ class ClausalCurrencyLiteralWarning(ClausalLintWarning):
     Money only. A physical measurement makes no exact-decimal claim, and
     warning there would fire on every float in the corpus.
     """
+
+
+class ClausalScaleInNameWarning(ClausalLintWarning):
+    """A name that claims a SCALE carrying a bare number.
+
+    ``minimum_leverage_bps(300)`` says "basis points" in the identifier and
+    nothing anywhere the engine can read. The number is then a bare integer:
+    it adds to another currency's integer without complaint, and it compares
+    against a threshold in a different scale to give not a wrong number but a
+    **reversed answer** -- measured, ``155000 > 1550`` is True while the same
+    amounts as money are ``1550.00 > 1550``, which is False.
+
+    Declaring the amount (``-constant_number_currency`` /
+    ``-constant_number_units``) moves the scale to where the engine can check
+    it, and the declared pair stays recoverable through
+    ``constant_number_units/3``. So this lint is a migration worklist, not a
+    permanent complaint: a converted site carries a quantity rather than a
+    bare literal and goes quiet.
+
+    Emitted once per (file, identifier), as the TitleCase lint is -- 139
+    corpus sites warning once each is a worklist; warning per occurrence is
+    noise.
+    """

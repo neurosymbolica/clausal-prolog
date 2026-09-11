@@ -989,3 +989,94 @@ def test_the_currency_directive_is_listed_as_known():
     for spelling in ("-constant_value", "-constant_number_units",
                      "-constant_number_currency"):
         assert spelling in text, f"{spelling} missing from the list"
+
+
+# ── the scale-in-a-name lint ─────────────────────────────────────────────────
+#
+# Operator, 2026-09-11: "bare integers for currencies is begging for trouble."
+# Measured, and the second case is why — it is not a wrong number, it is a
+# REVERSED answer:
+#
+#     bare ints :  155000 > 1550   -> True    "exceeds the threshold"
+#     as money  :  1550.00 > 1550  -> False   it does not
+#
+# and two 'cents' integers of different currencies sum silently where the
+# money form raises `dollar (AUD) vs dollar (USD)`.
+#
+# Declaring the constant fixes the constant. It does nothing for a bare
+# literal in a FACT -- `minimum_leverage_bps(300)` -- which is exactly the
+# shape at leverage_ratio.clausal:111, where the deciding literal is bare and
+# the declared fact is the copy that cannot change an answer.
+
+
+def _lint_warnings(tmp_path, name, text):
+    import warnings as _w
+    from clausal.lint_warnings import ClausalScaleInNameWarning
+    with _w.catch_warnings(record=True) as caught:
+        _w.simplefilter("always")
+        _load(tmp_path, name, text)
+    return [str(c.message) for c in caught
+            if issubclass(c.category, ClausalScaleInNameWarning)]
+
+
+def test_a_fact_whose_name_claims_a_scale_and_carries_a_bare_number(tmp_path):
+    [w] = _lint_warnings(tmp_path, "sc_fact", """
+        minimum_leverage_bps(300),
+    """)
+    assert "minimum_leverage_bps" in w and "bps" in w
+
+
+def test_the_lint_names_the_way_out(tmp_path):
+    [w] = _lint_warnings(tmp_path, "sc_msg", "sum_eur_cents(155000),\n")
+    assert "-constant_number_currency" in w, w
+
+
+def test_a_name_without_a_scale_suffix_is_silent(tmp_path):
+    """The negative control that matters most: this lint reads every clause
+    in every file, so a false positive is noise everywhere."""
+    assert _lint_warnings(tmp_path, "sc_plain", "threshold(300),\n") == []
+
+
+def test_a_scale_name_carrying_a_UNITED_value_is_silent(tmp_path):
+    """The discriminator. A converted site is a quantity, not a bare literal,
+    so doing the right thing silences the lint — which is what makes it a
+    migration instrument rather than a permanent complaint."""
+    assert _lint_warnings(tmp_path, "sc_united", """
+        -import_from(united_states, [usd, usd_cent])
+        fee_cents(155000 (usd_cent)),
+    """) == []
+
+
+def test_a_scale_name_with_no_literal_is_silent(tmp_path):
+    """A variable carries no scale claim to check."""
+    assert _lint_warnings(tmp_path, "sc_var", """
+        fee_cents(X) <- (X == 1)
+    """) == []
+
+
+def test_a_unitless_constant_whose_name_claims_a_scale(tmp_path):
+    """The other half: the declaration form. `-constant_value` takes no unit,
+    so a scale in the NAME is the only record — which is the defect."""
+    [w] = _lint_warnings(tmp_path, "sc_const", """
+        -constant_value(sc_fee_cents, 155000)
+    """)
+    assert "sc_fee_cents" in w
+
+
+def test_a_declared_money_constant_is_silent(tmp_path):
+    """Declaring it is the fix, so declaring it must stop the warning."""
+    assert _lint_warnings(tmp_path, "sc_ok", """
+        -import_from(united_states, [usd, usd_cent])
+        -constant_number_currency(sc_ok_fee_cents, 155000, usd_cent)
+    """) == []
+
+
+def test_the_lint_fires_once_per_identifier(tmp_path):
+    """Per (file, identifier), like the TitleCase lint: 139 corpus sites
+    warning once each is a worklist, warning per occurrence is noise."""
+    w = _lint_warnings(tmp_path, "sc_once", """
+        minimum_leverage_bps(300),
+        minimum_leverage_bps(400),
+        other_ratio_bps(50),
+    """)
+    assert len(w) == 2, w

@@ -1332,6 +1332,49 @@ def _lower_dict_reads(head_ast, body_ast, excluded=frozenset()):
     return _lower_dict_reads_in_scope(body_ast, mint, excluded)
 
 
+_SCALE_SUFFIX_CACHE = None
+
+
+def _scale_suffixes() -> frozenset:
+    """Name endings that CLAIM a scale the engine cannot otherwise see.
+
+    Derived from the currency vocabulary where it can be -- every curated
+    minor-unit word plus its plural -- so that giving a currency a minor unit
+    extends this lint without a second edit. The ratio words are written out
+    because ratios are not units yet
+    (todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md);
+    when they become units this list should shrink to the derivation.
+    """
+    global _SCALE_SUFFIX_CACHE
+    if _SCALE_SUFFIX_CACHE is None:
+        from clausal.modules.countries import _data          # noqa: PLC0415
+        out = set()
+        for word in _data.MINOR_UNIT_WORDS.values():
+            out.add(word)
+            if not word.endswith("y"):          # penny -> pence, added below
+                out.add(word + "s")
+        out.update({"pence",                       # penny pluralises irregularly
+                    "bps", "basis_points", "percent", "pct"})
+        _SCALE_SUFFIX_CACHE = frozenset(out)
+    return _SCALE_SUFFIX_CACHE
+
+
+def _name_claims_a_scale(identifier: str) -> bool:
+    return any(identifier.endswith("_" + suffix) for suffix in _scale_suffixes())
+
+
+def _is_bare_number(node) -> bool:
+    """A numeric LITERAL, optionally negated -- not a quantity, not a call.
+
+    The discriminator the lint turns on: a converted site is
+    ``155000 (usd_cent)``, a ``Call``, and reads as silent.
+    """
+    if isinstance(node, UnaryOp) and isinstance(node.op, USub):
+        node = node.operand
+    return (isinstance(node, Constant) and isinstance(node.value, (int, float))
+            and not isinstance(node.value, bool))
+
+
 def _is_unit_expr(node) -> bool:
     """True for AST nodes that form a valid unit-type expression.
 
@@ -1551,6 +1594,7 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalSeamLiteralWarning,
     ClausalDeprecatedSpellingWarning,
     ClausalTitleCaseIdentifierWarning,
+    ClausalScaleInNameWarning,
 )
 
 
@@ -4995,6 +5039,7 @@ class EmbedTransformer(NodeTransformer):
         # assignments (their remedy is the ``++`` escape, like an injected
         # runtime class).
         transformer._titlecase_seen: set[str] = set()
+        transformer._scale_name_seen: set[str] = set()
         transformer._titlecase_imported: set[str] = set()
         transformer._titlecase_python_bound: set[str] = set()
         # Reflection models MORE than compiles — see TermTransformer._reify.
@@ -6114,6 +6159,53 @@ class EmbedTransformer(NodeTransformer):
         for arg in args:
             each(arg)
 
+    def _lint_scale_in_name(transformer, *nodes):
+        """Warn for a FUNCTOR that claims a scale and carries a bare number.
+
+        ``minimum_leverage_bps(300)`` puts "basis points" in the identifier
+        and nothing where the engine can read it, so the 300 is a bare
+        integer: it sums with another currency's integer in silence, and a
+        comparison against a threshold in another scale returns a REVERSED
+        answer rather than a wrong number. See ClausalScaleInNameWarning.
+
+        Piggybacks on ``_lint_titlecase``'s call sites rather than adding
+        nineteen of its own -- those are exactly the points at which the
+        transformer has recognised a CLAUSAL subtree, which is the set this
+        wants. **The coupling is deliberate and worth knowing about: removing
+        a ``_lint_titlecase`` call would silently narrow this lint too.**
+
+        The discriminator is a bare numeric LITERAL. A converted site is
+        ``155000 (usd_cent)`` -- a ``Call`` -- so doing the right thing
+        silences the warning, which is what makes this a migration worklist
+        rather than a permanent complaint.
+        """
+        def walk_(node):
+            if isinstance(node, Call):
+                func = node.func
+                if (isinstance(func, Name)
+                        and _name_claims_a_scale(func.id)
+                        and func.id not in transformer._scale_name_seen
+                        and any(_is_bare_number(a) for a in node.args)):
+                    transformer._scale_name_seen.add(func.id)
+                    import warnings                            # noqa: PLC0415
+                    lineno = getattr(node, "lineno", None)
+                    where = (transformer._site(lineno) if lineno
+                             else transformer._filename)
+                    warnings.warn(
+                        f"{where}: `{func.id}` names a "
+                        f"scale but carries a bare number — the scale exists "
+                        f"only in the identifier, where nothing can check it. "
+                        f"Declare the amount with -constant_number_currency "
+                        f"(or -constant_number_units) and use it here, so the "
+                        f"unit is a fact the engine holds.",
+                        ClausalScaleInNameWarning, stacklevel=2)
+            for child in iter_child_nodes(node):
+                walk_(child)
+
+        for node in nodes:
+            if node is not None:
+                walk_(node)
+
     def _lint_titlecase(transformer, *nodes, root_is_functor=False):
         """Lint every TitleCase ``Name`` in FUNCTOR position within the
         CLAUSAL subtrees *nodes* (see ClausalTitleCaseIdentifierWarning),
@@ -6176,6 +6268,9 @@ class EmbedTransformer(NodeTransformer):
         Severity is ``TITLECASE_IDENTIFIER_SEVERITY``: ``"warn"`` emits the
         warning at the identifier's first site, ``"error"`` raises there.
         """
+        # Same subtrees, different question — see _lint_scale_in_name,
+        # which piggybacks here rather than on nineteen call sites.
+        transformer._lint_scale_in_name(*nodes)
         import warnings  # noqa: PLC0415
 
         def _is_escape(node):
@@ -7642,6 +7737,23 @@ class EmbedTransformer(NodeTransformer):
                 f"unused-variable marker; consider another name",
                 ClausalLintWarning, stacklevel=2)
         value_node = args[1]
+        if (not with_units and _name_claims_a_scale(ident)
+                and _is_bare_number(value_node)
+                and ident not in transformer._scale_name_seen):
+            # The declaration half of the scale-in-a-name lint. A directive is
+            # not a clause, so `_lint_scale_in_name`'s walk never reaches it --
+            # and this is the form the corpus migration produces most, where
+            # `-constant_value` takes no unit and the scale in the NAME is the
+            # only record there is. See ClausalScaleInNameWarning.
+            transformer._scale_name_seen.add(ident)
+            import warnings  # noqa: PLC0415
+            warnings.warn(
+                f"{spelling}: `{ident}` names a scale but is declared without "
+                f"one — the scale exists only in the identifier, where nothing "
+                f"can check it. Use -constant_number_currency(name, number, "
+                f"<currency or minor unit>) so the unit is a fact the engine "
+                f"holds.",
+                ClausalScaleInNameWarning, stacklevel=2)
         if with_units and _is_certainly_not_a_number(value_node):
             # The directive is NAMED for this claim -- only numbers carry
             # units -- so it enforces it rather than letting the units layer

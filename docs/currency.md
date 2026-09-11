@@ -225,6 +225,47 @@ amount_value <- (eval_(7.89(euro), A), strip_units(A, V_UNUSED))   # V = Decimal
 
 ---
 
+## Bare integers are not money
+
+A number that carries its scale only in an identifier — `minimum_leverage_bps(300)`,
+`sga_monthly_amount_cents` — is a bare integer to the engine. Two failures follow, and
+neither announces itself:
+
+```text
+two 'cents' integers, different currencies
+  bare ints :  5000000 + 155000  ->  5155000      AUD and USD, silently summed
+  as money  :  UnitsMismatch: dollar (AUD) vs dollar (USD)
+
+a cents value against a dollars threshold
+  bare ints :  155000 > 1550     ->  True         "exceeds the threshold"
+  as money  :  1550.00 > 1550    ->  False        it does not
+```
+
+The second is the one to keep in mind: not a wrong number, a **reversed answer**.
+
+**So the engine warns.** A name ending in a scale word (`_cents`, `_bps`, `_satang`,
+`_pence`, `_percent`, …) that carries a bare numeric literal raises
+`ClausalScaleInNameWarning`, once per (file, identifier):
+
+```text
+leverage_ratio.clausal:111: `minimum_leverage_bps` names a scale but carries a bare
+number — the scale exists only in the identifier, where nothing can check it. Declare
+the amount with -constant_number_currency (or -constant_number_units) and use it here,
+so the unit is a fact the engine holds.
+```
+
+It fires on both shapes: a **fact** with a bare literal argument, and a `-constant_value`
+declaration whose name claims a scale but which takes no unit. A site that has been
+converted carries a quantity rather than a literal and goes quiet, so the lint is a
+**migration worklist, not a permanent complaint**.
+
+The money suffixes are derived from the currency vocabulary — every curated minor-unit word
+plus its plural — so giving a currency a minor unit extends the lint with no second edit.
+The ratio words (`bps`, `basis_points`, `percent`, `pct`) are written out because ratios are
+not units yet; that list shrinks to the derivation when they are.
+
+---
+
 ## Minor units
 
 **Ruled 2026-09-11.** This supersedes an earlier ruling of the same day, "there is no
