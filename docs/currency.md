@@ -210,7 +210,7 @@ Decimal amounts are exact here, which is what makes the base-currency form suffi
 -constant_number_units(rate, 0.10, euro)
 
 # 0.1 + 0.1 + 0.1 is exactly 0.30(euro) -- a float would give 0.30000000000000004
-sums(X) <- eval_(++rate + ++rate + ++rate, X)
+sums(X) <- eval_(constant(rate) + constant(rate) + constant(rate), X)
 ```
 
 Use [`eval_/2`](arithmetic.md) for arithmetic on amounts, not `==`: CLP constraints do not

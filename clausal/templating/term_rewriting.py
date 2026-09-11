@@ -2164,6 +2164,43 @@ class TermTransformer(NodeTransformer):
         ):
             return visit(call.args[0])
 
+        # constant(name) — retrieve a declared constant's VALUE.
+        #
+        # Replaces `++name` as the retrieval form (operator, 2026-09-11).
+        # `++` says "what follows is Python", which is the one thing a
+        # constant reference is not: the parentheses delimit the name, and
+        # restricting the inside to a single atom means there is no shape
+        # here that could be read as a Python expression.
+        #
+        # Lowered to the `++name` AST rather than reimplemented, so the two
+        # cannot drift in binding time: this is a late-bound lookup of the
+        # module global, exactly as the escape was.
+        if isinstance(call.func, Name) and call.func.id == "constant":
+            if call.keywords or len(call.args) != 1:
+                raise SyntaxError(
+                    f"constant() takes exactly one argument, the name of a "
+                    f"declared constant: constant(max_fine); got "
+                    f"{len(call.args)} arguments")
+            target = call.args[0]
+            if not isinstance(target, Name):
+                raise SyntaxError(
+                    f"constant() takes a bare name, not "
+                    f"`{unparse(target)}` — the whole point of the "
+                    f"parentheses is that what is inside cannot be a Python "
+                    f"expression. Write constant(max_fine).")
+            if target.id not in transformer.constants:
+                raise SyntaxError(
+                    f"constant({target.id}): nothing declares `{target.id}`. "
+                    f"Declare it with -constant_value({target.id}, <value>) "
+                    f"or -constant_number_units({target.id}, <number>, "
+                    f"<units>) above this clause, or import it.")
+            # The same builder the ``++`` escape path ends in, so the two
+            # cannot drift: a PyThunk over a bare module-global read, with no
+            # captured logic variables (a constant name is never one).
+            return _build_py_thunk_ast(
+                transformer, call,
+                replace(Name(id=target.id, ctx=load), target), [])
+
         # if_(cond, then, else) → IfExpr node.  (``If``, the old spelling,
         # is TitleCase and never reaches here: the lint raises first.)
         if isinstance(call.func, Name) and call.func.id in _ITE_NAMES:

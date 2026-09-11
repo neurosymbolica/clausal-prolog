@@ -1745,8 +1745,25 @@ class _ClausalToProlog:
     # Prolog meaning and must not be lowered to arithmetic look-alikes.
     _CLPFD_CANONICAL = frozenset({"#=", "#\\=", "#<", "#>", "#=<", "#>="})
 
+    def _fold_constant_call(self, node: python_ast.Call):
+        """``constant(name)`` -> the declared literal, or None if not that.
+
+        The retrieval form since 2026-09-11, replacing the ``++name`` escape.
+        Folded for the same reason: ISO has no evaluable ``constant/1`` any
+        more than it has ``++/1``, and the value is known here.
+        """
+        if not (isinstance(node.func, python_ast.Name)
+                and node.func.id == "constant"
+                and len(node.args) == 1
+                and isinstance(node.args[0], python_ast.Name)):
+            return None
+        return self._constants.get(node.args[0].id)
+
     def _convert_call(self, node: python_ast.Call) -> PTerm:
         """Convert a function call to a PCompound."""
+        folded = self._fold_constant_call(node)
+        if folded is not None:
+            return folded
         quantity = self._try_quantity(node)
         if quantity is not None:
             return quantity

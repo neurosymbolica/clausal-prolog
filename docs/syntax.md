@@ -245,11 +245,17 @@ as an atom, and the two ways of writing it differ in *when* the value is read:
 
 | written | means | bound |
 | --- | --- | --- |
-| `pi` | the value, embedded in the clause term | at clause construction |
-| `++pi` | the value, looked up in module globals | when the goal runs |
-| `'pi'` | the atom `("pi",)` | — |
+| `constant(pi)` | the value, looked up in module globals | when the goal runs |
+| `pi` | the atom `("pi",)` | — |
 
-`++pi` is the spelling to reach for. It is what makes a constant *late-bound*, so that changing
+`constant(pi)` is the retrieval form. The older `++pi` still works — a constant is a module
+global and `++` is the Python escape — but it says "what follows is Python", which is the one
+thing a constant reference is not. The parentheses delimit the name, and what goes inside must
+be a single atom, so there is no shape here that could be read as a Python expression. An
+undeclared name is a load-time error, where the escape deferred to a `NameError` when the goal
+eventually ran.
+
+`constant(pi)` is the spelling to reach for. It is what makes a constant *late-bound*, so that changing
 a declaration changes every use; and it is explicit, which matters when the same file also uses
 the atom. A name may be both a constant and an atom — but it may **not** be declared as a
 constant *and* listed as a bare atom in `-module`/`-private`/`-hide`, because that listing

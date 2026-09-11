@@ -167,3 +167,30 @@ def test_the_unfolded_form_is_why_this_exists(tmp_path):
     kind, detail = _run_scryer(tmp_path, unfolded, "applies(acme).")
     assert kind == "raises", (kind, detail)
     assert "type_error" in detail and "evaluable" in detail, detail
+
+
+# ── constant/1, the retrieval form the escape was replaced by ────────────────
+
+
+def test_constant_1_folds_to_its_literal():
+    """`constant(name)` is the blessed retrieval form since 2026-09-11, so the
+    exporter must fold it exactly as it folds the escape it replaced."""
+    out = clausal_source_to_prolog(
+        "-constant_value(max_fine, 5000)\n"
+        "\n"
+        "applies(X) <- (fine(X, F), F > constant(max_fine))\n")
+    assert "5000" in out, out
+    assert "???" not in out, out
+    assert "constant" not in out, ("the wrapper must not survive either", out)
+
+
+@needs_scryer
+def test_a_constant_1_program_runs(tmp_path):
+    pl = clausal_source_to_prolog(
+        "-constant_value(max_fine, 5000)\n"
+        "\n"
+        "applies(X) <- (fine(X, F), F > constant(max_fine))\n"
+        "fine(acme, 6000),\n"
+        "fine(tiny, 10),\n")
+    assert _run_scryer(tmp_path, pl, "applies(acme).") == ("succeeds", None)
+    assert _run_scryer(tmp_path, pl, "applies(tiny).") == ("fails", None)

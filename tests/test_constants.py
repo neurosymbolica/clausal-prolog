@@ -1358,3 +1358,72 @@ def test_a_non_rescaling_unit_agrees_between_the_two_predicates(tmp_path):
     [value] = [deref(v) for _ in call("value", v, module=mod)]
     assert (number, units) == (7, ("kilogram",))
     assert value.value == 7
+
+
+# ── constant/1 — the retrieval form ───────────────────────────────────────────
+#
+# Operator, 2026-09-11: `++name` says "this is Python", which is exactly what a
+# constant reference is not. `constant(name)` names the thing being done, the
+# parentheses delimit it, and restricting the inside to a single atom means it
+# can never be mistaken for a Python expression.
+
+
+def test_constant_1_retrieves_the_value(tmp_path):
+    m = _load(tmp_path, "c1", """
+        -module(c1, [big/1, small/1, thing, c1_max])
+        -constant_value(c1_max, 5000)
+
+        big(thing) <- (constant(c1_max) > 4000)
+        small(thing) <- (constant(c1_max) > 6000)
+    """)
+    mod = m.__dict__["$module"]
+    assert len(list(call("big", m.thing, module=mod))) == 1
+    assert len(list(call("small", m.thing, module=mod))) == 0
+
+
+def test_constant_1_is_late_bound_like_the_escape_it_replaces(tmp_path):
+    """Same binding time as ``++name``: a lookup when the goal runs, not a
+    fold at clause construction. Rebinding the global moves the answer."""
+    m = _load(tmp_path, "c1lb", """
+        -module(c1lb, [v/1, c1lb_max])
+        -constant_value(c1lb_max, 5000)
+
+        v(X) <- eval_(constant(c1lb_max), X)
+    """)
+    mod = m.__dict__["$module"]
+
+    def ask():
+        x = Var()
+        return [deref(x) for _ in call("v", x, module=mod)]
+
+    assert ask() == [5000]
+    m.c1lb_max = 9999
+    assert ask() == [9999], "late-bound, as ++name was"
+
+
+def test_constant_1_refuses_a_name_nothing_declares(tmp_path):
+    """The improvement over ``++name``: an undeclared constant is a LOAD
+    error naming the directive, where the escape deferred to a Python
+    NameError when the goal eventually ran."""
+    with pytest.raises(SyntaxError, match="constant"):
+        _load(tmp_path, "c1u", """
+            -module(c1u, [q/0])
+            q <- (constant(never_declared) > 1)
+        """)
+
+
+@pytest.mark.parametrize("bad,why", [
+    ("constant(a, b)", "two arguments"),
+    ("constant()", "no argument"),
+    ("constant(1 + 2)", "an expression, not an atom"),
+    ("constant('quoted')", "a quoted form, not a bare atom"),
+])
+def test_constant_1_takes_exactly_one_bare_atom(tmp_path, bad, why):
+    """`The thing inside the parentheses should be a single atom` -- so there
+    is no shape for which it could be read as a Python expression."""
+    with pytest.raises(SyntaxError, match="constant"):
+        _load(tmp_path, "c1bad", f"""
+            -module(c1bad, [q/0, a, b])
+            -constant_value(x, 1)
+            q <- ({bad} > 1)
+        """)

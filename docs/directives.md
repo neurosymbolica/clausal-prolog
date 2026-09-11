@@ -420,7 +420,7 @@ R**2`); Clausal gives constants their own lexical class instead.
 -constant_value(pi, 3.14159)
 -constant_value(max_retries, 3)
 
-area(R, AREA) <- (AREA == ++pi * R**2)
+area(R, AREA) <- (AREA == constant(pi) * R**2)
 
 test("area of radius 2") <- (
     area(2, AREA),
@@ -434,7 +434,7 @@ test("area of radius 2") <- (
 -import_from(european_union, [euro])
 -constant_number_units(max_fine, 5000, euro)
 
-applies(X) <- (fine(X, F), F > ++max_fine)
+applies(X) <- (fine(X, F), F > constant(max_fine))
 ```
 
 `-constant_number_units(name, number, units)` is the same declaration with the unit kept **out**
