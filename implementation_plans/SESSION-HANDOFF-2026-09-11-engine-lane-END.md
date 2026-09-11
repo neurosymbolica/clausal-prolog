@@ -86,6 +86,81 @@ So the ruling that unblocked the migration (`_cents` and `_bps` become decimals)
 it expensive, because those are exactly the two groups it redirects. Being re-decided with the
 real number. **Do not start corpus work here** — it is corpus-lane's, and it is not costed.
 
+## 4a. NEXT ENGINE TASK: minor-currency units — handed over, NOT started
+
+**Handed to the engine lane by corpus-lane on the operator's instruction, 2026-09-11, late.
+Nothing has been done. The operator explicitly said: record it, do not start it.**
+
+> "there must be units eur_cents and usd_cents in the currency module, with scale factor vs
+> base euro/usd. constant_number_units() should be clear about the unit. euro numbers must be
+> addable to eur_cents." — the operator
+
+    -constant_number_units(sga_monthly_amount, 155000, usd_cents)
+
+says the currency AND the scale in the declaration, where the ENGINE can see both, instead of
+encoding them in the identifier where only a human can.
+
+### THIS SUPERSEDES A RULING LANDED EARLIER THE SAME DAY — fix the docs WITH the work
+
+`docs/currency.md` currently carries a section headed **"There is no minor-unit currency, and
+there will not be"** (landed `960edd94`, on all three trees). That is now wrong and must be
+rewritten as part of this task. Do not leave it: it is a landed document that states the
+opposite of the current direction.
+
+**The ruling was not reversed arbitrarily — it was refined, and the refinement answers its own
+first objection.** The three reasons that section gives are:
+
+1. *`cent` is ambiguous* — euros have cents, dollars have cents. **`eur_cents`/`usd_cents`
+   answers this exactly**: the currency is IN the unit name, so the quantity says which.
+2. *a scaled minor unit would rescale* — still live, see the design question below.
+3. *it would put money in floats* — still live, and it is the hard constraint.
+
+So reasons 2 and 3 become the IMPLEMENTATION CONSTRAINTS rather than objections.
+
+### The hard constraint, measured on this tree
+
+The numeric type follows the FACTOR's own type:
+
+    gram      = Quantity(0.001, kilogram)   float factor   ->  7 gram  = 0.007  FLOAT
+    day       = Quantity(86400, second)     int factor     ->  int
+    kilometre = Quantity(1000, metre)       int factor     ->  int
+    euro amounts                                            ->  Decimal, always
+
+**Define the minor units with `Decimal` (or `Fraction`) factors, never float.**
+`Decimal('0.01')` against euro keeps `5000 eur_cents` exact and addable to `euro` with neither
+side going binary. Money in this corpus is stored in integer minor units precisely to stay out
+of binary floating point; a float factor would reintroduce the thing the design exists to
+prevent.
+
+### The design question to decide EXPLICITLY, and it is the operator's
+
+Does `5000 eur_cents` **normalise** to `Decimal('50') euro`, or stay `5000 eur_cents`?
+
+Every non-base unit in the library currently normalises to its base. `constant_number_units/3`
+reports the DECLARED pair either way (that ruling already landed), so this is about what
+`constant_value/2` and arithmetic return.
+
+corpus-lane's preference, and their reasoning is sound: **stay in the declared unit** — a
+statutory "155000 cents" that reads back as "1550 dollars" is the same recoverability problem
+`/3` was just fixed for. Not their call, and not mine; decide it before implementing, because
+it decides whether this is a new kind of unit or an ordinary scaled one.
+
+### Corpus state this lands on
+
+- `clausify-domains 73edb41d` renamed the two ambiguous identifiers that were cleanly
+  corpus-lane's: `sum_cents -> sum_eur_cents`,
+  `sga_monthly_amount_cents -> sga_monthly_amount_usd_cents`. Gates and oracles byte-identical.
+- **71 further ambiguous `_cents` names are NOT one lane's**: 13 are profile keys (oracle
+  interface), 56 reach `eval/` bodies (harness-batch-lane), 27 are anchored in mutation
+  catalogs.
+- **Worth putting to the operator when reporting**: once these units exist, those names can
+  carry the currency in the DECLARATION instead of the identifier, which may make most of the
+  71 renames unnecessary — turning a 71-name three-lane rename into an engine feature plus a
+  much smaller corpus pass. That is the strategic argument for doing this work first.
+
+corpus-lane handed off at 83% context; anything corpus-side now goes to the next corpus-lane
+session.
+
 ## 5. Open, and what they need
 
 - ~~The `-module` listing relaxation~~ **CLOSED** — moot. `constant(name)` needs no listing;
