@@ -179,6 +179,53 @@ amount_value <- (eval_(7.89(euro), A), strip_units(A, V_UNUSED))   # V = Decimal
 
 ---
 
+## There is no minor-unit currency, and there will not be
+
+**Never model an amount in cents, pence or centimes. Use the base currency with a decimal
+amount.** Ruled 2026-09-11.
+
+```text
+-constant_number_units(threshold, 50000.00, euro)      # yes
+-constant_number_units(threshold_cents, 5000000, ?)    # no: there is no `cent` unit
+```
+
+Three reasons, in order of how much trouble each saves:
+
+1. **`cent` is ambiguous.** Euros have cents, dollars have cents, and they are not the same
+   amount. A quantity tagged `cent` does not say which currency it belongs to, so the unit
+   carries less information than the base-currency form, not more.
+2. **A minor unit defined as a scaled major one would silently rescale.** Every non-base unit
+   in the library normalises to its base (`day` is `Quantity(86400, second)`), so a `cent`
+   defined as 1/100 euro would turn a declared `5000 cent` into `50` — a 100x error introduced
+   by the very mechanism meant to prevent one.
+3. **It would put money in floats.** The rescale is a division, and the numeric type follows
+   the unit's own factor: `gram` is `Quantity(0.001, kilogram)` with a *float* factor, so
+   `7 gram` becomes `0.007`. Storing money in integer minor units exists precisely to keep
+   money out of binary floating point; a `cent` unit would reintroduce it.
+
+Decimal amounts are exact here, which is what makes the base-currency form sufficient:
+
+```clausal
+-import_from(european_union, [euro])
+-constant_number_units(rate, 0.10, euro)
+
+# 0.1 + 0.1 + 0.1 is exactly 0.30(euro) -- a float would give 0.30000000000000004
+sums(X) <- eval_(++rate + ++rate + ++rate, X)
+```
+
+Use [`eval_/2`](arithmetic.md) for arithmetic on amounts, not `==`: CLP constraints do not
+operate on `Quantity` objects and will raise `type_error`. Comparisons (`>`, `=<`) work
+directly.
+
+**The same rule covers ratios.** There is no `percent` or `basis_point` unit either, and for
+the same first reason — write the ratio as a plain decimal (`0.0525`), not `525` of a scaled
+unit. A scale encoded in a name is documentation the engine cannot check; a decimal is a
+number the engine can.
+
+**And durations are not units at all** — see [`date_add/3` and `days_between/3`](builtins.md).
+A statutory "within 30 days" is a relation between two dates, not a quantity: months vary in
+length and business days need a holiday calendar, neither of which a scalar can express.
+
 ## Arithmetic rules
 
 Inherited unchanged from [units](units.md); currency just fixes the magnitude to `Decimal`.

@@ -188,3 +188,43 @@ float, measured, comes from the unit DEFINITION: `gram` is `Quantity(0.001, kilo
 the same defect. `day` is `Quantity(86400, second)` and `kilometre` `Quantity(1000, metre)`,
 both int — the type follows the factor's own type, which is a fixable property of the
 definition rather than of the mechanism.
+
+## RULED 2026-09-11: no minor-unit currency, no ratio units, ever
+
+**Operator: "cent is ambiguous. euros have cents, dollars have cents. Let's never use cents.
+Use the base currency, decimal numbers should be well supported in Clausal."**
+
+That resolves the `cent` design problem by removing it. Documented at
+`docs/currency.md#there-is-no-minor-unit-currency-and-there-will-not-be`, which is where
+someone would otherwise go to "fix" the missing unit.
+
+Three reasons, and the first is the operator's and the strongest: **a quantity tagged `cent`
+does not say which currency it belongs to**, so the unit carries LESS information than the
+base-currency form. The other two are the measured hazards — a scaled minor unit would rescale
+(5000 cent -> 50) and would put money in floats (the rescale is a division; the type follows
+the unit's factor, and `gram`'s factor is a Python float).
+
+**Extended by the same principle to ratios:** no `percent`, no `basis_point`. Write `0.0525`,
+not `525` of a scaled unit. A scale encoded in a name is documentation the engine cannot check;
+a decimal is a number it can. That closes the second of the three unit-design gates.
+
+**And durations were already ruled out** — date arithmetic, not units. That closes the third.
+
+So all three gates on the "represent the corpus's units" project are now closed, and none of
+them by adding a unit:
+
+    cent (35 params)     -> base currency with decimals
+    bps/percent (21)     -> plain decimal ratios
+    days/months (13)     -> date predicates, not units
+
+### Verified: decimal money is exact, via the documented idiom
+
+    eval_(++rate + ++rate + ++rate, X)   ->  Quantity(Decimal('0.3'), euro)
+
+Exact — a float gives 0.30000000000000004. Scaling and comparison work too.
+
+**One sharp edge worth knowing before the corpus relies on it:** `eval_/2` is the idiom for
+unit-carrying values, not `==`. `docs/arithmetic.md` says so ("CLP constraints don't operate on
+Quantity objects"), and `++a == ++b` on two amounts raises `type_error(integer, Quantity)` from
+clpfd. Comparisons (`>`, `=<`) work directly. Worth stating because `==` is the idiom for
+ordinary arithmetic, so it is the one a reader reaches for first — I did.
