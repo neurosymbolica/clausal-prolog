@@ -46,6 +46,21 @@ class UnitState:
         return f"UnitState({self.dims!r})"
 
 
+def to_solver_number(v):
+    """The bare number a solver receives for a Quantity value: a Decimal is
+    an exact rational spelled in decimal notation, so it becomes a Fraction
+    (exact at every scale); an integral rational presents as int, as
+    everywhere in the engine; int/float/Fraction pass through."""
+    from fractions import Fraction  # noqa: PLC0415
+    from decimal import Decimal  # noqa: PLC0415
+    from clausal.logic.variables import present_number  # noqa: PLC0415
+    if isinstance(v, Decimal):
+        return present_number(Fraction(v))
+    if type(v) is Fraction:
+        return present_number(v)
+    return v
+
+
 def constrain_var_dims(var, dims: dict, trail: Trail) -> bool:
     """Post a dimensional constraint on *var*.
 

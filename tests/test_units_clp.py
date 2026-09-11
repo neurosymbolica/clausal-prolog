@@ -78,3 +78,166 @@ class TestExactNumberCurrency:
         out = Var()
         assert list(_money_round_impl(q, "half_even", out, Trail())) == [None]
         assert deref(out) == Quantity(Decimal("333"), {yen: 1})
+
+
+import random
+
+from clausal.logic.variables import Trail, Var, deref, get_attr, put_attr, unify
+from clausal.logic.units_constraint import UNITS_KEY, UnitState
+from clausal.modules.py.units import metre, second, ampere, volt, ohm, watt, kilogram
+from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, UnitsMismatch
+
+M = {metre: 1}
+
+
+def _bin(cls, left, right):
+    """Nodes carry a leading ``position`` field: operands go by keyword."""
+    return cls(left=left, right=right)
+
+
+def _neg(operand):
+    return Negate(operand=operand)
+
+S = {second: 1}
+
+
+def _dims_of_value(v):
+    return dict(v.dims) if isinstance(v, Quantity) else {}
+
+
+def _eval_with_quantity_arithmetic(t):
+    """Fold a ground tree with Quantity's own operators — the oracle."""
+    if isinstance(t, Add):
+        return _eval_with_quantity_arithmetic(t.left) + _eval_with_quantity_arithmetic(t.right)
+    if isinstance(t, Sub):
+        return _eval_with_quantity_arithmetic(t.left) - _eval_with_quantity_arithmetic(t.right)
+    if isinstance(t, Mult):
+        return _eval_with_quantity_arithmetic(t.left) * _eval_with_quantity_arithmetic(t.right)
+    if isinstance(t, Div):
+        return _eval_with_quantity_arithmetic(t.left) / _eval_with_quantity_arithmetic(t.right)
+    if isinstance(t, Pow):
+        return _eval_with_quantity_arithmetic(t.left) ** _eval_with_quantity_arithmetic(t.right)
+    if isinstance(t, Negate):
+        return -_eval_with_quantity_arithmetic(t.operand)
+    return t
+
+
+_LEAVES = [2, 3, Quantity(3, M), Quantity(5, M), Quantity(4, S), Quantity(7, {}),
+           Quantity(2, {kilogram: 1})]
+
+
+def _random_tree(rng, depth):
+    if depth == 0 or rng.random() < 0.3:
+        return rng.choice(_LEAVES)
+    op = rng.choice(["add", "sub", "mult", "div", "pow", "neg"])
+    if op == "neg":
+        return _neg(_random_tree(rng, depth - 1))
+    if op == "pow":
+        return _bin(Pow, _random_tree(rng, depth - 1), rng.choice([2, 3]))
+    cls = {"add": Add, "sub": Sub, "mult": Mult, "div": Div}[op]
+    return _bin(cls, _random_tree(rng, depth - 1), _random_tree(rng, depth - 1))
+
+
+class TestRuleTablePositiveControl:
+    def test_ground_dims_agree_with_quantity_arithmetic(self):
+        from clausal.logic.units_clp import ground_dims
+        rng = random.Random(20260912)
+        seen_ok = seen_err = 0
+        for _ in range(3000):
+            tree = _random_tree(rng, 3)
+            try:
+                expected = _dims_of_value(_eval_with_quantity_arithmetic(tree))
+            except UnitsMismatch:
+                with pytest.raises(LogicException) as ei:
+                    ground_dims(tree)
+                _assert_system_error(ei, "units_mismatch")
+                seen_err += 1
+                continue
+            except (ZeroDivisionError, TypeError, OverflowError):
+                continue          # arithmetic accident, not a units question
+            assert ground_dims(tree) == expected, tree
+            seen_ok += 1
+        assert seen_ok > 500 and seen_err > 100   # the control actually exercised both arms
+
+    def test_floordiv_and_mod_follow_divmod_rules(self):
+        from clausal.logic.units_clp import ground_dims
+        assert ground_dims(_bin(FloorDiv, Quantity(7, M), Quantity(2, M))) == {}
+        assert ground_dims(_bin(Mod, Quantity(7, M), Quantity(2, M))) == M
+        with pytest.raises(LogicException) as ei:
+            ground_dims(_bin(FloorDiv, Quantity(7, M), 2))
+        _assert_system_error(ei, "units_mismatch")
+
+
+class TestInference:
+    def test_fresh_var_beside_metre_in_sub_is_metre(self):
+        from clausal.logic.units_clp import analyse
+        x, y = Var(), Var()
+        dl, dr, env = analyse(x, _bin(Sub, Quantity(3, M), y), "(==)/2")
+        assert dl == M and dr == M
+        assert env[x._id] == M and env[y._id] == M
+
+    def test_product_with_one_unknown_factor_defaults_the_factor(self):
+        from clausal.logic.units_clp import analyse
+        total, qty = Var(), Var()
+        dl, dr, env = analyse(total, _bin(Mult, Quantity(Decimal("2.00"), {euro: 1}), qty), "(==)/2")
+        assert env[total._id] == {euro: 1} and env[qty._id] == {}
+
+    def test_ohms_law_infers_volt(self):
+        from clausal.logic.units_clp import analyse
+        v = Var()
+        _, _, env = analyse(v, _bin(Mult, Quantity(2, {ampere: 1}), Quantity(3, ohm)), "(==)/2")
+        assert env[v._id] == dict(volt._dims)
+
+    def test_product_with_two_unknown_factors_is_undetermined(self):
+        from clausal.logic.units_clp import analyse
+        x, y, z = Var(), Var(), Var()
+        put_attr(x, UNITS_KEY, UnitState(M), Trail())
+        with pytest.raises(LogicException) as ei:
+            analyse(x, _bin(Mult, y, z), "(==)/2")
+        _assert_system_error(ei, "units_undetermined")
+
+    def test_plain_number_beside_dimensioned_in_add_mismatches(self):
+        from clausal.logic.units_clp import analyse
+        with pytest.raises(LogicException) as ei:
+            analyse(Var(), _bin(Add, Quantity(3, M), 1), "(==)/2")
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_mixed_currencies_mismatch_and_name_both(self):
+        from clausal.logic.units_clp import analyse
+        from clausal.modules.countries.united_states import usd
+        with pytest.raises(LogicException) as ei:
+            analyse(Var(), _bin(Add, Quantity(Decimal("1.00"), {euro: 1}), Quantity(Decimal("1.00"), {usd: 1})), "(==)/2")
+        _assert_system_error(ei, "units_mismatch")
+        assert "euro" in ei.value.term.args[1] and "dollar" in ei.value.term.args[1]
+
+    def test_declared_units_var_disagreeing_with_operand_mismatches(self):
+        from clausal.logic.units_clp import analyse
+        x = Var()
+        put_attr(x, UNITS_KEY, UnitState(S), Trail())
+        with pytest.raises(LogicException) as ei:
+            analyse(x, Quantity(3, M), "(==)/2")
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_solver_var_without_units_is_a_bare_number(self):
+        from clausal.logic.units_clp import analyse
+        from clausal.logic.clpfd import in_domain
+        y = Var()
+        assert in_domain(y, 1, 5, Trail())
+        with pytest.raises(LogicException) as ei:
+            analyse(Var(), _bin(Sub, Quantity(3, M), y), "(==)/2")
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_dimensionless_result_is_bare(self):
+        from clausal.logic.units_clp import analyse
+        r = Var()
+        _, _, env = analyse(r, _bin(Div, Quantity(6, M), Quantity(3, M)), "(==)/2")
+        assert env[r._id] == {}
+
+    def test_no_material_is_not_engaged(self):
+        from clausal.logic.units_clp import has_units_material
+        assert not has_units_material(_bin(Add, Var(), 3))
+        assert has_units_material(_bin(Add, Var(), Quantity(3, M)))
+
+    def test_non_numeric_leaf_is_not_engaged(self):
+        from clausal.logic.units_clp import has_units_material
+        assert not has_units_material(_bin(Add, Quantity(3, M), "banana"))
