@@ -932,9 +932,25 @@ def test_row_29_the_bytecode_tag_invalidates_a_pre_flip_pyc():
     Bumped 11 -> 12 by fix round 5, item 1: an ``in`` goal in KEY mode emits
     ``$in_iter($deref(coll), False)`` instead of a bare ``$deref(coll)``, so a
     tag-11 ``.pyc`` still iterates the collection raw and still gives the
-    pre-fix answers for a plain dict's nil key and for a ``str``."""
+    pre-fix answers for a plain dict's nil key and for a ``str``.
+
+    Bumped 12 -> 13 on 2026-09-11, and for a different KIND of reason worth
+    recording: not one fix, but a GAP. Fifty-five commits touched the
+    transformer between the 11 -> 12 bump and that date with no bump at all,
+    and at least one of them (``7a4d7407``) changes emitted code -- a seam no
+    longer collects a name through a ``++`` escape, so a tag-12 ``.pyc``
+    still emits the walrus and still raises the ``UnboundLocalError`` the fix
+    removes.
+
+    That this assertion exists is what makes a bump a decision rather than a
+    slip -- it is the reason the 12 -> 13 change could not be made quietly.
+    What it cannot do is notice the CONVERSE: fifty-five transformer commits
+    that should have bumped the tag and did not, because nothing here fails
+    when the tag stays still. See
+    todo/clausal-bytecode-tag-is-manual-and-goes-stale-2026-09-11.md for
+    deriving the tag from an engine fingerprint, which closes that side."""
     from clausal.import_hook import CLAUSAL_BYTECODE_TAG
-    assert CLAUSAL_BYTECODE_TAG == 12
+    assert CLAUSAL_BYTECODE_TAG == 13
 
 
 def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):

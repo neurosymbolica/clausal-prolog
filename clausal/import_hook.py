@@ -457,7 +457,21 @@ def _preseed_py_submodules(module_items) -> None:
 # it emits ``$in_iter($deref(coll), False)`` now, so both modes fold a plain
 # dict's nil keys and read a ``str`` as its char atoms.  A stale tag-11 .pyc
 # still carries the bare iteration and still gives the pre-fix answers.
-CLAUSAL_BYTECODE_TAG = 12
+# 12 -> 13 (2026-09-11): FIFTY-FIVE transformer commits landed between the
+# 11->12 bump (b4875ba9, 2026-09-07) and this one with no bump at all, and at
+# least one of them demonstrably changes emitted code: 7a4d7407, where a seam
+# no longer collects a name through a ``++`` escape or an f-string slot. A
+# stale tag-12 .pyc still emits the walrus that made such a name local to the
+# whole enclosing function, and still raises the UnboundLocalError that fix
+# removes -- from a traceback pointing at the wrong line.
+#
+# The gap was found from the other end: a lane's re-measurement read stale
+# bytecode, and the first diagnosis was "the cache ignores the engine". It
+# does not -- this tag IS the engine version, and the defect was that nothing
+# turns it. See todo/clausal-bytecode-tag-is-manual-and-goes-stale-2026-09-11.md
+# for making it automatic, which is the real fix; this bump only closes the
+# accumulated gap.
+CLAUSAL_BYTECODE_TAG = 13
 
 
 # ── One source file → one compilation ────────────────────────────────────────
