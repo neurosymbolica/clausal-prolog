@@ -130,3 +130,76 @@ rename unnecessary and gives the "name says `_cents`, declaration doesn't" gate 
   doc-block test asserts on a count of violations; it needed its own before/after, plus a
   positive control that the scanner actually reaches the file I edited. Three of the 38 would
   have been mine and the set diff would still have said "0 new".
+
+---
+
+# Continued: four more commits, all from review
+
+`12f5e42c` above was written after ONE commit. Four more landed the same session, every one
+of them from a peer finding a defect in the previous one. The final state:
+
+    6e18af69  cent, an ordinary scaled unit
+    12f5e42c  (this handoff, written too early)
+    c045d5d6  currency-literal warning + BOTH exporter refusals
+    301ad6a7  minor units for AUD, THB, GBP
+    6bc72731  same-named dimensions say which is which
+
+    clone main      6bc72731
+    canonical       96cc8df6   STILL UNTOUCHED — the operator's hold stands
+    engine suite    144 failed / 15903 passed / 1 error, name set identical to baseline
+    doc blocks      38, unchanged
+
+## What the reviews found, in order
+
+1. **`-constant_number_units` is not the only shape.** `pay(155000(cent))` reaches
+   `_try_quantity`, not `_collect_constant`, and still emitted `155000`. The refusal covered
+   half the surface and the missed half looked identical from outside.
+2. **The two refusals need OPPOSITE polarity.** Reusing the declaration rule (refuse unless
+   known base) on the inline path broke 15 tests — the TitleCase `Metre` alias and four
+   `iso_type_checking` roundtrips. Inline refuses only what is known SCALED. Documented in
+   both the todo and the docs because they look like copies.
+3. **A guard placed before identification refuses everything.** `_try_quantity` is reached by
+   every one-argument call and returns None for non-quantities; my check sat above that and
+   refused `implements(k1)`.
+4. **The docs example demonstrated the SAFE case.** Both values in it round-trip exactly; the
+   "off by two cents" came from float ARITHMETIC inside my own probe being reported as a loss
+   from a float LITERAL. And the prose said "essentially always" where my own measurement
+   said 83%.
+5. **EUR/USD did not cover the corpus.** 139 identifiers across 27 domains, 6 of which used a
+   currency with no minor unit — so the identifier most needing a checkable unit
+   (`target_au_turnover_cents`) was the one that could not have one.
+6. **`dollar vs dollar`.** The mismatch message was unusable on exactly the case the widening
+   exists to catch, for 25 shared currency names.
+7. **The fix for 6 over-applied one level down**, decorating a `second` that was identical on
+   both sides, with a memory address that changed every run.
+
+## The one lesson that covers all seven
+
+**An instrument must be able to produce the negative result, over a space large enough to
+contain the defect.**
+
+Three of today's failures were instruments that could only say yes: a verifier that caught
+its own `TypeError` in the handler for the refusal it was testing and printed REFUSED; a test
+that asserted a warning APPEARS, which a safe value in the hazard band also satisfies; a test
+that asserted `UnitsMismatch` is raised, which cannot tell a message that explains from one
+that does not. In the last two the assertion was already right and was being evaluated over
+too small a space — the fixes were to change what the test OBSERVES (render differently;
+subprocess into fresh interpreters) rather than what it asserts.
+
+Companion, from harness-batch-lane: **name the instrument, not the commit.** "Re-measure on
+the new sha" collects the cheapest thing resembling measurement, which is a load census, and
+a load census cannot see a compiler change.
+
+And, from corpus-lane: **when a probe computes the value it is meant to be testing, it can
+only confirm itself.**
+
+## Still open
+
+- **Option 2 for the exporter** — fold to the base magnitude. Both refusals are a holding
+  position and lift together. It is the prerequisite for migrating any domain that is also
+  on the ISO publish list.
+- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, corpus-lane's live
+  blocker. Verify the dimensionless path's exactness first; the guarantee measured here comes
+  from the CURRENCY coercion, and a dimensionless Quantity may not have it.
+- **Mike's calls, unchanged**: base-vs-minor for the migration, dropping the 71-name rename,
+  the `.seam` remainder, iso-export-lane's `remedies_ineffectiveness` roster gap.
