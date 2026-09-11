@@ -448,3 +448,64 @@ it checks the site that decides.
 10 `au/merger_clearance`, 5 each `au/corps_act_disclosure` and
 `eu/procurement/selection_criteria/tests`, 3 each for five more. A materially different load
 census means one of the two instruments is wrong, and the difference is the finding.
+
+---
+
+# PROMOTED: canonical is `3b0e3547`
+
+    canonical   96cc8df6 -> 3b0e3547    21 commits, clean ff, NO C changes
+    clone       3b0e3547                 identical
+    box         NOT landed — separate, needs the ssh alias
+
+Verified by **observation in the canonical tree**, engine path asserted by realpath first:
+`usd.iso_code == "USD"`, `bhd.iso_code == "BHD"`, `155000 * usd_cent == 1550.00`,
+`CURRENCY_BINDINGS["USD"] == "usd"`, and a bare `dollar` raising `ImportError`. A ref and an
+exit code say a merge happened; they do not say the tree behaves.
+
+**The operator's go was taken directly, not from the relay.** corpus-lane reported the ruling
+accurately, and I still asked him before touching canonical: promoting rewrites source under
+every lane reading the tree, and a ruling relayed through a third party is not the word of the
+operator to the lane that will execute it.
+
+**What crossed is the approved sha PLUS ONE commit.** He approved `c06d5426`; `3b0e3547` is
+that plus `fix(exporter): the scaled-unit refusal names the directive that was WRITTEN`. I
+held the promotion to include it rather than land it under corpus-lane afterwards, and said so
+to him and to both lanes. "Approved sha + 1" must never be silent, even when the commit is a
+string.
+
+## What landed, in one list
+
+    cent + minor units as ordinary scaled units       6e18af69 · 301ad6a7 · 4a362c88
+    ISO-code naming for shared currency words         9fd8e7f9
+    the currency-literal warning + exporter refusals  c045d5d6
+    same-named dimensions say which is which          6bc72731
+    -constant_number_currency + the money SHAPE gate  303c2934 · 52a24676
+    the scale-in-a-name lint (+ its blind spot)       d728d2a9 · de1e2e4b
+    compatible_units/2                                25f06542
+    currency_code/2 relational; accessors raise       7a851c7c
+    number/1 accepts a quantity; sum_list sums money  06290b23
+    reflected operands raise symmetrically            c06d5426
+    the refusal names the written directive           3b0e3547
+
+## Open after the promotion
+
+- **BUG #2, the module/profile-key shadow.** `-import_from(currency, …)` binds a Python
+  MODULE; a bare profile key is the interned atom `('currency',)`; they are different kinds of
+  thing competing for one namespace slot, which is why the shadow is SILENT rather than a
+  redefinition error. Reproduced at engine level by corpus-lane, and the first thing anyone
+  writing the peppol migration will hit. **The resolution-order ruling is open and is this
+  lane's.** Deliberately not smuggled into a currency landing.
+- **Option 2 for the exporter** — fold to the BASE magnitude. Now load-bearing, not optional:
+  the operator ruled "follow statutes, it's daft but that's law", so minor units go wherever
+  the statutory verbatim states the amount that way, and those are exactly the declarations the
+  exporter refuses. NOTE for whoever builds it: the export stays LOSSY by the 2026-09-08
+  ruling — ISO Prolog cannot carry a quantity — so option 2 fixes only the MAGNITUDE
+  (`pay(1550)` rather than `pay(155000)`), not the unit.
+- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, still corpus-lane's blocker.
+- **peppol** proceeds as a separate migration. Its BR-CO tolerance is a READ-THE-STANDARD
+  question, ruled: `within_one`'s "1" is one of WHAT? Comparing a base-unit `.value` against a
+  bare `1` makes it 1 euro rather than 1 cent — a 100x widening with a green suite, measured.
+- **`Undefined` -> `undefined`**: corpus-side uses the alias; the engine rename is NOT bundled
+  here. A separate surface change with its own blast radius does not belong in a landing
+  measured for something else.
+- Box is not landed.
