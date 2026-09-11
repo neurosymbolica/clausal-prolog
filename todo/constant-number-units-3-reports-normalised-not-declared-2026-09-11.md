@@ -63,3 +63,45 @@ parameter is still in seconds. A statutory "within 30 days" is 30 CALENDAR days,
 not 30 x 86400 across a DST boundary or a month end. Representing a legal deadline in
 seconds looks more precise and is less correct. That is a units-library design problem,
 not a missing table entry, and it gates the "represent the corpus's units" project.
+
+## The rescaling rule, measured (corpus-lane's formulation, confirmed here)
+
+It is NOT "SI-derived units rescale". It is: **a unit that is not the base of its own
+dimension rescales to that base.**
+
+    7 kilogram   (IS the base)     ->  7          kilogram     no rescale
+    7 metre      (IS the base)     ->  7          metre        no rescale
+    7 gram       (not the base)    ->  0.007      kilogram     RESCALES (down)
+    7 kilometre  (not the base)    ->  7000       metre        RESCALES (up)
+    30 day       (not the base)    ->  2592000    second       RESCALES (up)
+    5000 euro    (own dimension)   ->  5000       euro         no rescale
+
+Currency does not rescale because each currency is effectively its own dimension with no
+base to normalise toward.
+
+**`gram` rescaling DOWN to 0.007 is a second hazard**: an exact integer quantity becomes a
+fraction. For a legal or financial number that is worse than a factor change, because it
+also changes the arithmetic type.
+
+### What that means for a `cent` unit
+
+A `cent` defined as a scaled euro would rescale TO euro, turning a declared 5000 cents into
+50 — the same 100x error the migration exists to prevent, in the other direction. So the
+minor-currency unit is not a table entry either: it has to be its own unit, related to euro
+by a conversion the caller asks for explicitly. Same shape as the calendar-duration problem.
+
+Three unit-design calls now gate the "represent the corpus's units" project, and none is a
+missing table row:
+
+    cent          must not rescale to euro
+    day           must not rescale to second (and calendar days are not 86400s)
+    basis point / percent   dimensionless ratios, no unit at all today
+
+## corpus-lane's argument for DECLARED, which is stronger than mine
+
+If /3 reports the declared pair, a corpus gate can check that a parameter's declared unit
+matches the unit its NAME claims — `_cents` declaring `cent`, `_days` declaring `day`. That
+check is impossible against the normalised pair, because every duration comes back as
+`second` whatever was written. So "declared" is not only more faithful: it is what makes the
+documented-vs-represented problem mechanically checkable, which is the reason the corpus
+lane cares about the migration at all.
