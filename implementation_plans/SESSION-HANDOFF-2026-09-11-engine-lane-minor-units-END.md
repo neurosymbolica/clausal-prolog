@@ -243,3 +243,56 @@ and `satang` unique, so bare):
 **Method note worth keeping.** The operator's answer was better than both fixes I offered,
 and the reason generalises: my options were *guards* on a hazard, theirs *removed the
 condition that creates it*. A name that cannot collide needs no collision check.
+
+---
+
+# Continued: major currencies, `9fd8e7f9`
+
+The `bahrain.dinar` vs `kuwait.dinar` residue recorded above as "still open" is now closed —
+the operator applied the minor-unit rule to major currencies.
+
+    a word naming exactly ONE CURRENT currency is kept       134 currencies
+    otherwise the currency is bound by its lowercase code    120 currencies
+
+    euro, yen, baht, sterling, lira, mark, escudo, koruna, guilder, colon   kept
+    dollar -> usd/aud/cad/...   dinar -> bhd/kwd/jod/...   franc, pound,
+    peso, rupee, shilling, rial, ruble, won, krone, krona, ...              coded
+
+**No identifier is bound in two jurisdictions any more**, which is the property the whole
+thing exists for: the silent last-one-wins import collision cannot be written.
+
+Keeping the word for a sole current user is the generator's own within-jurisdiction
+convention extended across them, and it pays twice: a legal text says "lira", not "TRY", and
+**`try` is a Python keyword** that could never be an identifier. TRY is the only current lira,
+so the rule needs no carve-out. Verified none of the 254 bindings is a keyword, shadows a
+builtin, or collides with a currency word, a unit name or a minor-unit name.
+
+**The display word is unchanged.** `_name` is still "dollar", so `money_format` gives
+"500.00 dollar" and a mismatch reads `dollar (AUD) vs dollar (USD)`. The disambiguation
+landed earlier today is what keeps those messages legible now that identifiers and displayed
+words differ. This changes what a rulebase WRITES, not what the system PRINTS.
+
+## Two traps this turned up, both worth the next reader's attention
+
+**A set keyed on a name the checked thing no longer uses.** `_base_unit_names` in the
+exporter was built from `r["name"]`, the word. After the rename it contained "dollar", which
+nothing can write, and lacked "usd", which everything writes — so this morning's scaled-unit
+refusal would have fired on `500(usd)`, the most ordinary declaration there is. The check
+kept working and checked the wrong population. Same shape as the inline-quantity hole.
+
+**A grep over a currency word is almost all false positives.** The first blast-radius
+measurement said 1788 references across 318 files. `mark` accounted for 1601 of them —
+`trail.mark()`. `won` was prose. Constrained to real usage shapes (import lists, `N(unit)`
+annotations, `from …countries.X import`, `<jurisdiction>.<word>`) the true figure was ~74 in
+8 files. A word that is also an ordinary English word or a method name cannot be counted by
+grepping for it.
+
+## Still open after this
+
+- The qualified-unit `/3` gap is unchanged and still filed:
+  `todo/qualified-unit-declarations-have-no-slash-3-answer-2026-09-11.md`. Its "related but
+  not the same" section about import shadowing is now **closed for currencies**, since no
+  identifier is bound twice — the todo needs that paragraph updated when someone takes it.
+- The corpus writes `dollar`; those sites need `usd` or `aud`. corpus-lane and
+  iso-export-lane have both been told, with the display-word caveat flagged as something for
+  them to confirm rather than take on my word.
