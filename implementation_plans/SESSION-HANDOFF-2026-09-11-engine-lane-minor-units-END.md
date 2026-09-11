@@ -356,3 +356,55 @@ earlier comparison. Their caveat, their fix.
 
 Corpus exposure on promotion is six sites in two US files (`dollar` -> `usd`), failing loud
 with an `ImportError` naming both the name and the module. No AU site exists today.
+
+---
+
+# Continued: the scale-in-a-name lint, `d728d2a9`
+
+Operator, 2026-09-11: *"bare integers for currencies is begging for trouble."* Measured, and
+the second case is the argument — not a wrong number, a **reversed answer**:
+
+    two 'cents' integers, different currencies
+      bare ints :  5000000 + 155000  ->  5155000    AUD and USD, silently summed
+      as money  :  UnitsMismatch: dollar (AUD) vs dollar (USD)
+
+    a cents value against a dollars threshold
+      bare ints :  155000 > 1550     ->  True       "exceeds the threshold"
+      as money  :  1550.00 > 1550    ->  False      it does not
+
+`ClausalScaleInNameWarning` fires when a name ending in a scale word carries a bare numeric
+literal — once per (file, identifier), on two shapes: a FACT argument, and a
+`-constant_value` declared without a unit.
+
+**Reading facts is the point.** Declaring constants fixes constants; it does nothing for
+`minimum_leverage_bps(300)`, and `leverage_ratio.clausal:111` is exactly that — the deciding
+literal is bare while the declared fact is the copy that cannot change an answer. A
+constants-only instrument would report that domain migrated while the number that decides
+went untouched.
+
+**It empties itself.** The discriminator is a bare numeric LITERAL, so a converted site is
+`155000 (usd_cent)`, a Call, and goes quiet. The warning count falling is a better progress
+measure for the migration than counting edited files.
+
+Money suffixes are DERIVED from `MINOR_UNIT_WORDS` (so a new minor unit extends the lint with
+no second edit); only the ratio words are written out, and that list shrinks to the
+derivation when ratios become units.
+
+**Coupling worth knowing:** it piggybacks on `_lint_titlecase`'s nineteen call sites rather
+than adding its own — those are exactly the points where the transformer has recognised a
+CLAUSAL subtree. Removing a `_lint_titlecase` call would silently narrow this lint too.
+Documented at both ends.
+
+Noise floor: **two** warnings across the full engine suite, both true positives by the rule
+(`reaches_percent(X, 10000, 50, V)`, `threshold_bps`).
+
+## State at end of this stretch
+
+    clone main    d728d2a9
+    canonical     96cc8df6      untouched all session
+    engine suite  144 failed / 15936 passed / 1 error, name set identical to baseline
+    doc blocks    38
+
+Asked of corpus-lane, for when it reaches canonical and not before: a load census counting
+warnings per domain. That is the migration's real size in the shape now ruled for, and being
+a count of BINDINGS rather than names it will differ from the 139 in both directions.
