@@ -1239,3 +1239,120 @@ def test_compatible_units_raises_rather_than_fails_in_clausal(tmp_path):
     v = Var()
     [msg] = [deref(v) for _ in call("caught", v, module=mod)]
     assert "expected" in str(msg) and "euro" in str(msg), msg
+
+
+# ── currency_code/2 as a relation, and the accessors that failed open ────────
+#
+# Measured before building, all three by execution:
+#
+#     currency_code(euro, X)      -> 'EUR'           forward works
+#     currency_code(C, "EUR")     -> NO SOLUTIONS    silent
+#     currency_code(C, ++"EUR")   -> NO SOLUTIONS    silent
+#     currency_scale(C_UNUSED, S) -> NO SOLUTIONS    silent
+#
+# and no code->currency path existed anywhere. `eu/peppol_einvoicing` carries
+# its currency as RUNTIME DATA (`currency: eur`) and cannot attach units to
+# its twelve money fields without one. Its BR-CO total-consistency rules
+# therefore cannot detect a mixed-currency invoice; under units they would
+# (corpus-lane, who built the data shape and measured it).
+#
+# The third defect is the one that shaped this: `"EUR"` written in a rulebase
+# is an ATOM, `iso_code` is a Python STRING, and they do not unify — so even
+# the forward CHECK was a trap, and peppol writes a third spelling (`eur`)
+# again. Operator, 2026-09-11: one relation, accepting either spelling.
+
+
+def _codes(module, goal, arity=1):
+    vs = [Var() for _ in range(arity)]
+    return [tuple(deref(v) for v in vs) for _ in
+            call(goal, *vs, module=module.__dict__["$module"])]
+
+
+def test_a_code_binds_its_currency_in_every_spelling(tmp_path):
+    """`eur` is peppol's spelling, `"EUR"` the one a reader writes, `++"EUR"`
+    the Python string. All three must reach the same currency."""
+    m = _load(tmp_path, "code_rev", """
+        -module(code_rev, [lower/1, upper/1, pystr/1])
+        -implicit_atoms
+        -import_from(currency, [currency_code])
+
+        lower(C) <- currency_code(C, eur)
+        upper(C) <- currency_code(C, "EUR")
+        pystr(C) <- currency_code(C, ++"EUR")
+    """)
+    from clausal.modules.countries.european_union import euro
+    for goal in ("lower", "upper", "pystr"):
+        assert _codes(m, goal) == [(euro,)], goal
+
+
+def test_the_forward_direction_is_unchanged(tmp_path):
+    """Nothing that works today may break: it still answers the canonical
+    uppercase string."""
+    m = _load(tmp_path, "code_fwd", """
+        -module(code_fwd, [code/1])
+        -import_from(currency, [currency_code])
+        -import_from(european_union, [euro])
+
+        code(X) <- currency_code(euro, X)
+    """)
+    assert _codes(m, "code") == [("EUR",)]
+
+
+def test_an_unknown_code_fails_rather_than_raising(tmp_path):
+    """No such pair is an ordinary "no". Raising would make a lookup
+    unusable as a test."""
+    m = _load(tmp_path, "code_no", """
+        -module(code_no, [nope/1])
+        -implicit_atoms
+        -import_from(currency, [currency_code])
+
+        nope(C) <- currency_code(C, zzz)
+    """)
+    assert _codes(m, "nope") == []
+
+
+def test_both_unbound_enumerates_the_whole_vocabulary(tmp_path):
+    """Enumeration yields ALL 254, historical included, because the relation
+    must be complete: `currency_code(dem_currency, X)` answers forward, so
+    the reverse and the enumeration have to reach it too. "Is this a CURRENT
+    currency" is a different question — `currency_end/2` answers it — and
+    conflating them would make this relation asymmetric."""
+    from clausal.modules.countries import _data
+    m = _load(tmp_path, "code_enum", """
+        -module(code_enum, [pair/2])
+        -import_from(currency, [currency_code])
+
+        pair(C, Code) <- currency_code(C, Code)
+    """)
+    rows = _codes(m, "pair", 2)
+    assert len(rows) == len(_data.CURRENCIES) == 254
+    codes = {r[1] for r in rows}
+    assert "EUR" in codes and "DEM" in codes, "historical are reachable"
+
+
+def test_an_accessor_RAISES_on_an_unbound_currency(tmp_path):
+    """The fail-open shape: these are functions of a currency, and a silent
+    no-solution at a boundary is how a typo'd field becomes "no answer"."""
+    from clausal.logic.exceptions import LogicException
+    m = _load(tmp_path, "acc_unbound", """
+        -module(acc_unbound, [scale/1, symbol/1])
+        -import_from(currency, [currency_scale, currency_symbol])
+
+        scale(S)  <- currency_scale(C_UNUSED, S)
+        symbol(S) <- currency_symbol(C_UNUSED, S)
+    """)
+    for goal in ("scale", "symbol"):
+        with pytest.raises(LogicException):
+            _codes(m, goal)
+
+
+def test_the_accessors_still_work_when_bound(tmp_path):
+    """The negative control for the raise above."""
+    m = _load(tmp_path, "acc_ok", """
+        -module(acc_ok, [scale/1])
+        -import_from(currency, [currency_scale])
+        -import_from(european_union, [euro])
+
+        scale(S) <- currency_scale(euro, S)
+    """)
+    assert _codes(m, "scale") == [(2,)]

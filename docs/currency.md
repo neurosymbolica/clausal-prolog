@@ -590,9 +590,43 @@ Query a currency's metadata (the argument is the currency, e.g. `euro`):
 currency_scale(euro, N)     # N = 2
 currency_code(euro, C)      # C = "EUR"   (a string)
 currency_symbol(euro, S)    # S = "€"     (a string)
-currency_start(mark, S)     # S = "1948-06-20"   (ISO date string)
-currency_end(mark, E)       # E = "2002-05-15";  euro's end is None (still current)
+currency_start(dem, S)      # S = "1948-06-20"   (ISO date string)
+currency_end(dem, E)        # E = "2002-05-15";  euro's end is None (still current)
 ```
+
+**An unbound currency RAISES.** An accessor is a function of a currency, so asking with an
+unbound first argument asks nothing — and answering nothing is the fail-open shape, where a
+typo'd field or an unbound variable becomes "no answer" and the rule silently does not fire.
+`currency_scale`, `currency_symbol`, `currency_start` and `currency_end` all raise
+`instantiation_error` instead.
+
+### `currency_code/2` is a relation, not an accessor
+
+A code identifies a currency — 254 currencies, 254 distinct ISO codes — so it runs in every
+direction:
+
+```text
+currency_code(euro, X)      X = "EUR"       the canonical UPPERCASE string
+currency_code(C, eur)       C = euro        an atom, in either case
+currency_code(C, "EUR")     C = euro
+currency_code(C, ++"EUR")   C = euro        a Python string
+currency_code(C, Code)      enumerates all 254
+```
+
+**The code may be written as an atom or a string.** This matters more than it looks: `"EUR"`
+written in a rulebase is an *atom* while `iso_code` is a Python *string*, so before this
+`currency_code(euro, "EUR")` — the obvious way to check a code — failed silently, and only
+`++"EUR"` worked. Both spellings now reach the same currency.
+
+Case-insensitive, which covers the two spellings that **can** exist: `eur` and `"EUR"`. A
+mixed-case `Eur` is not a misspelled code — TitleCase is a logic *variable*, so it would
+become a fresh variable and match anything.
+
+**Enumeration yields all 254, historical included**, because the relation must be complete:
+the forward mode answers for a withdrawn currency, so the reverse and the enumeration have to
+reach it too. *Is this a current currency* is a different question, and `currency_end/2`
+answers it — a current currency's end is `None`. A rulebase validating user input against
+"real currencies today" wants that filter, not this relation.
 
 ---
 
