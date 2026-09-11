@@ -509,3 +509,37 @@ string.
   here. A separate surface change with its own blast radius does not belong in a landing
   measured for something else.
 - Box is not landed.
+
+## The three claims for this landing
+
+| axis | who | result |
+| --- | --- | --- |
+| engine suite | me, on the promoted tree | 144 failed / 15966 passed / 1 error — failure NAME SET identical to the `946d7296` baseline |
+| export bytes | iso-export-lane, canonical `3b0e3547` | 0 across 1560 files, RAW **and** normalised, both engine trees content-pinned, corpus `b6f2c367` |
+| domain answers | harness-batch-lane, `7449448b` | answer diff — **in flight at time of writing** |
+
+**A zero is not always the same result, and the difference is worth naming** (iso-export-lane).
+The `-constant_number_currency` zero was cheap: nothing in the corpus writes that directive,
+so nothing exercised the new code. The `sum_list/2` zero is expensive: seeding from the first
+element is behavioural and sits on the path of every aggregate in every domain, so the changed
+code RAN 1560 times and agreed. "The changed code ran and produced the same bytes" and
+"nothing reaches the changed code" are different claims and only the first is worth much.
+
+They also ran a NORMALISED arm beside the raw one, which excludes two changes cancelling
+within one file — cheap once it exists, and it closes the reading a sceptic raises next.
+
+### Why the domain axis stays in the set (harness-batch-lane, recorded at their request)
+
+It has now been measured across **101 engine commits** from `820dc66f` without a single moved
+answer — and **twice in that span the sweep was the thing that found a defect the other two
+axes could not see.** That is the argument for keeping it rather than treating it as
+confirmation: an instrument that has never fired is not thereby useless, provided you can say
+when it DID fire. Export bytes are not answers; a green engine suite says the engine behaves,
+not that the corpus still answers the same.
+
+Three candidate movers were named before the run rather than after, which is the half that
+makes a zero informative: `sum_list/2` (behavioural, every aggregate — the one to bet against
+a null prediction on), `number/1` accepting a `Quantity` (changes a branch only where a guard
+meets data that could carry one), and the currency renames (should fail LOUD; their instrument
+reports a load failure as a no-score row carrying the exception type, so that case is visible
+rather than folded into a score).
