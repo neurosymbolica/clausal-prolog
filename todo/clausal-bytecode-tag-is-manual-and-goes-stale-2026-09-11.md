@@ -1,4 +1,19 @@
-# `CLAUSAL_BYTECODE_TAG` is manual, and it went 55 transformer commits stale
+# RESOLVED: `CLAUSAL_BYTECODE_TAG` is manual, and it went 55 transformer commits stale
+
+**Fixed 2026-09-11 at `a9989b7a`** — the tag is now derived from a content fingerprint of
+`templating/`, `pythonic_ast/` and `logic/compiler*`, XORed with the hand tag (kept as the
+lever for runtime changes a source fingerprint cannot see). Lazy and memoised: 9.7 ms on the
+first `.clausal` compile in a process, 0.06 µs after, and nothing at all for a process that
+loads no Clausal source. Verified end to end in subprocesses and on both machines — the box
+(x86_64) computes the same fingerprint as the dev tree (aarch64), which is the path-relative
+content-hash design working across architectures.
+
+The tag was also bumped 12 -> 13 to close the accumulated gap.
+
+Kept below for the reasoning, and because the WRONG first diagnosis is the instructive part.
+
+---
+
 
 **2026-09-11.** This file previously claimed the `.clausal` bytecode cache "ignores the engine
 version". **That was wrong and the correction is the point of the file.** The cache has an
