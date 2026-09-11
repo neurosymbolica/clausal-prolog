@@ -265,6 +265,49 @@ Being an ordinary unit, a minor unit works in a declaration, in the `155000 (usd
 sugar and in arithmetic — there is no special case anywhere, and nothing to remember about
 where the spelling is legal.
 
+## Declaring money: `-constant_number_currency`
+
+`-constant_number_units` takes any unit. When the constant is **money**, say so:
+
+```clausal
+-import_from(united_states, [usd])
+-constant_number_currency(sga_monthly, 5000, usd)     # stored Decimal('5000') usd
+```
+
+The directive is named for its claim and enforces it, exactly as
+`-constant_number_units` is named for "only numbers carry units". The third argument must
+**be a currency**:
+
+```text
+-constant_number_currency(fee, 5000, metre)
+
+TypeError: -constant_number_currency: `fee` declares money, but its unit is not a
+currency — <unit metre> is not a currency. Every currency in the vocabulary carries
+an ISO 4217 code; use -constant_number_units for a quantity that is not an amount
+of money.
+```
+
+That is the gap it closes, and it is worth being precise about which one. A **mistyped or
+unbound** currency was already caught — a currency identifier has to be bound to be written,
+so `-constant_number_units(fee, 5000, dollar)` is a `NameError`. What was not caught is a
+unit that loads perfectly well and **is not money**: `-constant_number_units(fee, 5000,
+metre)` yields `Quantity(5000, metre)`, an int-valued length, in silence. Asking for money
+and getting a length is the error this refuses.
+
+Three further properties, each with a test:
+
+* **A compound unit is refused.** Money is an amount, not a rate; `usd / second` is a good
+  unit expression and belongs to the general directive.
+* **A minor unit is refused.** `usd_cent` is a `Quantity`, not a currency. The amount is
+  money, but the third argument is not a currency — and the minor-unit declaration keeps its
+  own recoverability through `-constant_number_units`.
+* **Everything else is inherited**, deliberately: the value must be a number, the
+  [precision check](#the-precision-check) still rejects sub-scale digits, and the constant is
+  still visible through [`constant_number_units/3`](#minor-units) with its declared pair. A
+  stricter declaration of the same fact does not hide it from the view that already exists.
+
+---
+
 ### Which currencies have one
 
 | Import | Minor unit | Factor |

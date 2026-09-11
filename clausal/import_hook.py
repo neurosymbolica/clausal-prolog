@@ -44,6 +44,7 @@ from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule
 from .logic.constants import (
     check_constant_ground,
+    check_currency_unit,
     constant_functor_term,
     register_module_constant,
     register_constant_units,
@@ -225,6 +226,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         lambda term: predicate_nodes.append(_fact_to_predicate_node(term))
     )
     module_dict["$check_constant_ground"] = check_constant_ground
+    module_dict["$check_currency_unit"] = check_currency_unit
     module_dict["$constant_functor_term"] = constant_functor_term
     module_dict["$register_module_constant"] = register_module_constant
     module_dict["$register_constant_units"] = register_constant_units
@@ -1071,6 +1073,7 @@ _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
 # a module-backed reference exec'd in an IPython namespace (e.g. copy-pasted
 # compiled output) does not raise a bare NameError.
 _simple_ast_builtins["$check_constant_ground"] = check_constant_ground
+_simple_ast_builtins["$check_currency_unit"] = check_currency_unit
 _simple_ast_builtins["$constant_functor_term"] = constant_functor_term
 _simple_ast_builtins["$register_module_constant"] = register_module_constant
 _simple_ast_builtins["$register_constant_units"] = register_constant_units

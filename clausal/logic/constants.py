@@ -305,6 +305,37 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     return (functor, *slots)
 
 
+def check_currency_unit(name: str, unit, spelling: str):
+    """Gate for ``-constant_number_currency``: *unit* must BE a currency.
+
+    The directive is named for its claim, as ``-constant_number_units`` is
+    named for "only numbers carry units", and enforces it here rather than
+    letting a non-money unit through. The gap it closes is not a typo -- a
+    mistyped currency is already a ``NameError``, because a currency
+    identifier has to be bound to be written -- but a unit that loads
+    perfectly well and is not money: ``-constant_number_units(fee, 5000,
+    metre)`` yields ``Quantity(5000, metre)``, an int-valued length, in
+    silence.
+
+    A minor unit (``usd_cent``) is a ``Quantity``, not a currency, so it is
+    refused too: the amount is money but the third argument is not a
+    currency, and the minor-unit declaration keeps its own recoverability
+    through ``-constant_number_units``.
+
+    Returns the unit so the caller can use this inline.
+    """
+    if getattr(unit, "is_currency", False):
+        return unit
+    from clausal.terms import Quantity                       # noqa: PLC0415
+    what = "a minor unit" if isinstance(unit, Quantity) else "not a currency"
+    raise TypeError(
+        f"{spelling}: `{name}` declares money, but its unit is {what} "
+        f"— {unit!r} is not a currency. Every currency in the vocabulary "
+        f"carries an ISO 4217 code; use -constant_number_units for a "
+        f"quantity that is not an amount of money."
+    )
+
+
 def register_constant_units(module, name: str, number, units,
                             value=None) -> None:
     """Record what a ``-constant_number_units`` declaration SAID.

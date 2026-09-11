@@ -824,3 +824,134 @@ def test_both_dinars_import_into_one_file(tmp_path):
     from clausal.modules.countries.kuwait import kwd
     (bh,), (kw,) = _one(m, "bh", 1), _one(m, "kw", 1)
     assert bh.dims == {bhd: 1} and kw.dims == {kwd: 1}
+
+
+# ── -constant_number_currency: the directive that declares MONEY ─────────────
+#
+# Named for its claim and enforcing it, like -constant_number_units before it.
+# The gap it closes, measured on this tree: a wrong or mistyped currency was
+# ALREADY caught, because a currency identifier has to be bound to be written
+# (`-constant_number_units(fee, 5000, dollar)` is a NameError). What was not
+# caught is a unit that loads fine and is not money —
+# `-constant_number_units(fee, 5000, metre)` yields Quantity(5000, metre),
+# an int-valued length, in silence. Operator, 2026-09-11.
+
+
+def test_a_currency_constant_declares_and_stores_money(tmp_path):
+    m = _load(tmp_path, "cc_ok", """
+        -module(cc_ok, [look/2, cc_sga])
+        -import_from(united_states, [usd])
+        -constant_number_currency(cc_sga, 5000, usd)
+
+        look(N, U) <- constant_number_units(cc_sga, N, U)
+    """)
+    from clausal.modules.countries.united_states import usd
+    assert m.cc_sga.value == Decimal("5000") and m.cc_sga.dims == {usd: 1}
+    assert isinstance(m.cc_sga.value, Decimal)
+    # A money constant IS a united constant: the stricter declaration does not
+    # hide it from the view that already exists.
+    assert _one(m, "look", 2) == (5000, ("usd",))
+
+
+def test_a_non_currency_unit_is_refused(tmp_path):
+    """The gap. `metre` loads perfectly well under -constant_number_units and
+    gives a length; asked for money, the engine should say so."""
+    with pytest.raises(TypeError, match="not a currency"):
+        _load(tmp_path, "cc_metre", """
+            -import_from(py.units, [metre])
+            -constant_number_currency(fee, 5000, metre)
+        """)
+
+
+def test_the_refusal_names_the_directive_and_the_alternative(tmp_path):
+    with pytest.raises(TypeError) as exc:
+        _load(tmp_path, "cc_msg", """
+            -import_from(py.units, [metre])
+            -constant_number_currency(fee, 5000, metre)
+        """)
+    text = str(exc.value)
+    assert "metre" in text and "-constant_number_units" in text, text
+
+
+def test_a_compound_unit_is_refused(tmp_path):
+    """Money is an AMOUNT, not a rate. `usd / second` is a perfectly good unit
+    expression and belongs to the general directive."""
+    with pytest.raises(SyntaxError, match="single currency"):
+        _load(tmp_path, "cc_rate", """
+            -import_from(united_states, [usd])
+            -import_from(py.units, [second])
+            -constant_number_currency(burn, 5000, usd / second)
+        """)
+
+
+def test_a_non_number_is_refused(tmp_path):
+    """Inherited from the units form, and it must stay inherited: the value
+    check is about what carries a unit, not about which unit."""
+    with pytest.raises(SyntaxError, match="only numbers carry units"):
+        _load(tmp_path, "cc_str", """
+            -import_from(united_states, [usd])
+            -constant_number_currency(fee, 'hello', usd)
+        """)
+
+
+def test_the_precision_check_still_applies(tmp_path):
+    """Sub-scale digits are refused by the currency constructor, and routing
+    through a money-specific directive must not skip it."""
+    from clausal.terms import CurrencyPrecisionError
+    with pytest.raises(CurrencyPrecisionError):
+        _load(tmp_path, "cc_prec", """
+            -import_from(united_states, [usd])
+            -constant_number_currency(fee, 0.001, usd)
+        """)
+
+
+def test_a_minor_unit_is_refused_by_the_currency_directive(tmp_path):
+    """A deliberate edge: `usd_cent` is a Quantity, not a currency, so it is
+    not accepted here. The amount is money, but the directive's claim is
+    specifically that the third argument names a CURRENCY -- and the minor-unit
+    declaration keeps its own recoverability through -constant_number_units."""
+    with pytest.raises(TypeError, match="not a currency"):
+        _load(tmp_path, "cc_minor", """
+            -import_from(united_states, [usd, usd_cent])
+            -constant_number_currency(fee, 155000, usd_cent)
+        """)
+
+
+def test_the_general_directive_is_unchanged(tmp_path):
+    """The negative control. -constant_number_units still takes any unit,
+    including a non-money one; the new directive adds a claim, it does not
+    restrict the old one."""
+    m = _load(tmp_path, "cc_neg", """
+        -import_from(py.units, [metre])
+        -constant_number_units(cc_len, 5000, metre)
+    """)
+    assert m.cc_len.value == 5000
+
+
+def test_the_exporter_knows_the_currency_directive():
+    """A new directive the exporter does not recognise becomes an
+    unknown-directive warning and the constant silently stops folding. It
+    takes the same path as the other two: refuse a scaled unit, fold a base
+    one, record the discard."""
+    out = _export("-import_from(united_states, [usd])\n"
+                  "-constant_number_currency(cap, 5000, usd)\n"
+                  "fine(constant(cap)),\n")
+    assert "fine(5000)" in out
+    assert "-constant_number_currency(cap" in out, "the LOSSY note names it"
+
+
+def test_the_currency_directive_is_listed_as_known():
+    """The unknown-directive error enumerates what IS known; a directive
+    missing from that list is unfindable by the reader who mistyped it."""
+    with pytest.raises(SyntaxError) as exc:
+        import textwrap, tempfile, os
+        from clausal.import_hook import _load_module
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "unknown_dir.clausal")
+        open(p, "w").write("-no_such_directive(x)\n")
+        _load_module("unknown_dir_probe", p)
+    text = str(exc.value)
+    assert "known directives" in text
+    for spelling in ("-constant_value", "-constant_number_units",
+                     "-constant_number_currency"):
+        assert spelling in text, f"{spelling} missing from the list"

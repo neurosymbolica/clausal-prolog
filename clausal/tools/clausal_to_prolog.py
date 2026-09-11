@@ -1246,7 +1246,8 @@ class _ClausalToProlog:
             return None
         if name == "double_quotes":
             return self._convert_double_quotes_directive(call)
-        if name in ("constant_value", "constant_number_units"):
+        if name in ("constant_value", "constant_number_units",
+                    "constant_number_currency"):
             self._collect_constant(name, call)
             return None          # folded at the use sites; nothing to emit
         if name in ("constants",):
@@ -1734,7 +1735,9 @@ class _ClausalToProlog:
         policy, but it is recorded as LOSSY so it is never silent.
         """
         args = call.args if isinstance(call, python_ast.Call) else ()
-        expected = 3 if directive == "constant_number_units" else 2
+        united = directive in ("constant_number_units",
+                               "constant_number_currency")
+        expected = 3 if united else 2
         if len(args) != expected or not isinstance(args[0], python_ast.Name):
             # Malformed: the engine refuses this at load time, so a file that
             # reaches the translator should not contain one. Do not guess.
@@ -1747,7 +1750,7 @@ class _ClausalToProlog:
             value = self._fold_arithmetic(self._convert_expr(args[1]))
         finally:
             self._in_constant_rhs = previous
-        if directive == "constant_number_units":
+        if united:
             unit = args[2]
             unit_text = (unit.id if isinstance(unit, python_ast.Name)
                          else python_ast.unparse(unit))
@@ -1774,7 +1777,7 @@ class _ClausalToProlog:
                     f"exporter to fold to the base magnitude; see "
                     f"todo/exporter-folds-scaled-units-to-the-wrong-"
                     f"magnitude-2026-09-11.md")
-            note = (f"unit discarded: -constant_number_units({name}, ..., "
+            note = (f"unit discarded: -{directive}({name}, ..., "
                     f"{unit_text}) -> {name} folds to its magnitude only")
             self._add_lossy(note)
             # ...and EMITTED, not merely recorded. `_add_lossy` is a

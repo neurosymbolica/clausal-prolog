@@ -7031,6 +7031,9 @@ class EmbedTransformer(NodeTransformer):
         if name == "constant_number_units":
             return transformer._handle_constant_value_directive(
                 args, expr_stmt, with_units=True)
+        if name == "constant_number_currency":
+            return transformer._handle_constant_value_directive(
+                args, expr_stmt, with_units=True, currency=True)
         if name == "constants":
             raise SyntaxError(
                 "-constants(name = value, ...) is retired. Declare one "
@@ -7048,7 +7051,8 @@ class EmbedTransformer(NodeTransformer):
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
             f"-strict_atoms, -implicit_atoms, -allow_singletons, "
-            f"-constant_value, -implicit_functors, -double_quotes)"
+            f"-constant_value, -constant_number_units, "
+            f"-constant_number_currency, -implicit_functors, -double_quotes)"
         )
 
     def _handle_double_quotes_directive(transformer, args, expr_stmt):
@@ -7562,7 +7566,7 @@ class EmbedTransformer(NodeTransformer):
         return replace(Pass(), expr_stmt)
 
     def _handle_constant_value_directive(transformer, args, expr_stmt,
-                                         with_units=False):
+                                         with_units=False, currency=False):
         """Process ``-constant_value(pi, 3.14159)`` and
         ``-constant_number_units(max_fine, 5000, euro)``.
 
@@ -7590,9 +7594,11 @@ class EmbedTransformer(NodeTransformer):
         the next) is worse than a clear refusal, so this is checked before
         any of the usual validation.
         """
-        spelling = "-constant_number_units" if with_units else "-constant_value"
+        spelling = ("-constant_number_currency" if currency else
+                    "-constant_number_units" if with_units else "-constant_value")
         arity = 3 if with_units else 2
-        example = ("-constant_number_units(max_fine, 5000, euro)" if with_units
+        example = ("-constant_number_currency(max_fine, 5000, euro)" if currency
+                   else "-constant_number_units(max_fine, 5000, euro)" if with_units
                    else "-constant_value(pi, 3.14159)")
         if transformer._interactive:
             raise SyntaxError(
@@ -7653,14 +7659,34 @@ class EmbedTransformer(NodeTransformer):
         rhs = transformer._transform_constant_rhs(value_node, ident)
         if with_units:
             unit_node = args[2]
+            if currency and not isinstance(unit_node, (Name, Attribute)):
+                # Money is an AMOUNT. `usd / second` is a perfectly good unit
+                # expression and belongs to the general directive; allowing it
+                # here would make the name a lie.
+                raise SyntaxError(
+                    f"{spelling}: `{unparse(unit_node)}` is not a single "
+                    f"currency. This directive declares an amount of money, "
+                    f"so its third argument names one currency; use "
+                    f"-constant_number_units for a compound unit such as a "
+                    f"rate.")
             if not _is_unit_expr(unit_node):
                 raise SyntaxError(
                     f"{spelling}: `{unparse(unit_node)}` is not a unit "
                     f"expression — a unit is a name, or names combined with "
                     f"`*`, `/` and `**`: {example}")
+            gated = unit_node
+            if currency:
+                gated = replace(
+                    Call(func=replace(Name(id="$check_currency_unit", ctx=load),
+                                      value_node),
+                         args=[replace(Constant(value=ident), value_node),
+                               unit_node,
+                               replace(Constant(value=spelling), value_node)],
+                         keywords=[]),
+                    value_node)
             rhs = replace(
                 Call(func=replace(Name(id="$Quantity", ctx=load), value_node),
-                     args=[rhs, unit_node], keywords=[]),
+                     args=[rhs, gated], keywords=[]),
                 value_node)
         transformer._constants.add(ident)
         statements = []
