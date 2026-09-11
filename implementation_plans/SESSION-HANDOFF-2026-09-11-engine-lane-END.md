@@ -45,8 +45,10 @@ START of the day — every landing below moved it by zero. The extraction is at
 Rulings behind it, all the operator's, all 2026-09-11:
 
 - **A bare name is the ATOM**, never the value. One name carries both readings.
-- **Declaring a constant does NOT declare the atom** — my conservative call, not his. A bare
-  `pi` still needs its `-module` listing. Available to relax; not available to tighten later.
+- **Declaring a constant does NOT declare the atom** — my conservative call, not his. A name
+  written BARE as an atom still needs its `-module` listing. This does NOT affect
+  `constant(name)`, which needs no listing (measured); I stated it too broadly on 2026-09-11
+  and inflated a costing by 88 edits.
 - **`constant_number_units/3` reports the DECLARED pair.** `30 day` answers `30, day` while
   `constant_value/2` answers `2592000 second`. They disagree on purpose, because only the
   declared unit lets a gate check that a parameter's unit matches what its NAME claims.
@@ -54,18 +56,40 @@ Rulings behind it, all the operator's, all 2026-09-11:
   cents. Base currency with decimals. Extended to ratios: no `percent`, no `basis_point`.
 - **Durations are date arithmetic, not units.** Months vary; business days need holidays.
 
-## 4. The corpus migration — APPROVED and dispatched to corpus-lane
+## 4. The corpus migration — APPROVED, then RE-OPENED on the first real domain
 
 88 parameters / 28 domains / 337 call sites + 5 in eval bodies. 24 keyed parameters stay facts.
-Three edits per parameter (atom listing, declaration, each call site). First domain
-`eu/banking/crr_leverage_ratio`. Full spec sent to corpus-lane; they own it.
+corpus-lane owns it and has touched nothing.
 
-**Do not start corpus work here.** It is theirs, they hold the census and the gates.
+**The costing this was approved on is wrong in BOTH directions. Do not inherit either number.**
+
+*Smaller per parameter:* two edits, not three. `constant(name)` consumes the name, so it never
+becomes a bare-atom reference and needs no `-module` listing — measured. My "every migrated
+parameter needs a module-list entry" came from a test that wrote the name BARE, which is a
+different thing, and it inflated the estimate by 88 edits.
+
+*Much larger per domain*, which is the finding that matters. corpus-lane staged
+`eu/banking/crr_leverage_ratio` and stopped before editing:
+
+- The domain **computes in bps throughout**. `leverage_ratio_bps/2` is EXPORTED, the kit
+  supplies `ratio_bps`, 15 `bps` references span the public interface, queries and tests.
+  Converting the parameter to `0.03` without rescaling its producers and consumers makes the
+  comparison wrong; rescaling means changing a public predicate, a kit helper, the tests and
+  the oracle. `au/merger_clearance` shows the same shape: 8 `_cents` parameters, 69 `_cents`
+  references.
+- **The value is already in two places** — `minimum_leverage_bps(300)` and a bare `300` at
+  `leverage_ratio.clausal:111`. Converting the fact leaves the literal, so the DRY problem the
+  migration exists to fix SURVIVES it. That is a hole in the premise, not a cost line. An
+  upper bound of 74 of 112 parameters show the shape, with real noise — treat it as a shape.
+
+So the ruling that unblocked the migration (`_cents` and `_bps` become decimals) is what makes
+it expensive, because those are exactly the two groups it redirects. Being re-decided with the
+real number. **Do not start corpus work here** — it is corpus-lane's, and it is not costed.
 
 ## 5. Open, and what they need
 
-- **The `-module` listing relaxation** (§3). If corpus-lane reports it as pure friction across
-  88 parameters, put it to the operator. Cheap either way at this point.
+- ~~The `-module` listing relaxation~~ **CLOSED** — moot. `constant(name)` needs no listing;
+  the question only ever applied to a name written BARE as an atom.
 - **`_add_lossy` is a write-only channel** — nothing reads `_all_lossy`, so every unit
   discarded on export is silent. `todo/exporter-lossy-channel-is-write-only-2026-09-11.md`
   has three options and the golden-output churn each costs.
