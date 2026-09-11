@@ -105,3 +105,37 @@ check is impossible against the normalised pair, because every duration comes ba
 `second` whatever was written. So "declared" is not only more faithful: it is what makes the
 documented-vs-represented problem mechanically checkable, which is the reason the corpus
 lane cares about the migration at all.
+
+## Numeric TYPE also changes, and the rule is narrower than "rescaling gives floats"
+
+Measured:
+
+    7 gram      (rescales DOWN)  ->  0.007              float
+    7 kilogram  (base)           ->  7                  int
+    30 day      (rescales UP)    ->  2592000            int
+    5000 euro   (currency)       ->  Decimal('5000')    Decimal
+    12.5 euro   (currency)       ->  Decimal('12.5')    Decimal
+
+So it is not "a rescaling unit lands in binary floating point" — `day` rescales and stays
+`int`. **The float comes from DIVISION.** Rescaling up by an integer factor keeps the
+integer; rescaling down introduces a float. The currency path is different again: it
+coerces to `Decimal`, including a float literal.
+
+### Why this decides the `cent` design rather than merely informing it
+
+A `cent` that rescales to `euro` is a division by 100, so it takes the float path: every
+monetary parameter would move from exact integer to binary floating point. That is the
+precise failure integer-cents storage exists to prevent, arriving through the mechanism
+meant to make units safer.
+
+So the minor-currency unit has TWO constraints, not one:
+
+1. it must not rescale to euro (else 5000 cents becomes 50), and
+2. whatever it does must keep money out of floats — i.e. behave like the currency path
+   (Decimal), not like the SI path.
+
+corpus-lane checked the current values: 30 `_cents` facts, 0 of them not divisible by 100,
+so today's magnitudes would all land on whole euro. That removes the magnitude hazard for
+the CURRENT data and not the type hazard (50.0 is a float whether or not it is whole) — and
+"every value happens to divide by 100" is not a property anyone maintains, so it would be
+luck to rely on.
