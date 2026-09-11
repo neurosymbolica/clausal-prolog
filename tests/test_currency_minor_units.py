@@ -1521,3 +1521,67 @@ def test_summing_mixed_currencies_raises(tmp_path):
     with pytest.raises(UnitsMismatch):
         v = Var()
         list(call("bad", v, module=m.__dict__["$module"]))
+
+
+# ── reflected operands: 5 + money must say what money + 5 says ───────────────
+#
+# Asked whether UnitsMismatch subclasses TypeError (it does not — it derives
+# from Exception), which exposed what the old sum_list was really catching:
+# `Quantity.__radd__` returns NotImplemented for a bare number, so PYTHON
+# raises `unsupported operand type(s)`, and that plain TypeError became
+# `type_error(number, <Quantity>)` — naming the quantity as the offender, and
+# now self-contradictory, since `number/1` says a Quantity IS a number.
+
+
+def test_reflected_add_and_subtract_raise_the_same_as_forward():
+    from clausal.terms import UnitsMismatch
+    from clausal.modules.countries.european_union import euro
+    q = Quantity(Decimal("5"), euro)
+    with pytest.raises(UnitsMismatch, match="Cannot add"):
+        5 + q
+    with pytest.raises(UnitsMismatch, match="Cannot subtract"):
+        5 - q
+
+
+def test_scaling_by_a_bare_number_still_works():
+    """The negative control: multiplying a quantity by a dimensionless number
+    is legal in both orders and must not be swept up."""
+    from clausal.modules.countries.european_union import euro
+    q = Quantity(Decimal("5"), euro)
+    assert (5 * q).value == Decimal("25")
+    assert (q * 5).value == Decimal("25")
+
+
+def test_a_dimensionless_quantity_still_adds_to_a_bare_number():
+    """The other negative control: the fast path that made __radd__ return a
+    value rather than NotImplemented."""
+    from clausal.modules.units import dimensionless
+    assert (5 + Quantity(2, dimensionless)).value == 7
+    assert (5 - Quantity(2, dimensionless)).value == 3
+
+
+def test_an_unrelated_type_still_gets_pythons_TypeError():
+    """NotImplemented must survive for types the protocol should handle: only
+    a NUMBER meeting a dimensioned quantity is a units error."""
+    from clausal.modules.countries.european_union import euro
+    with pytest.raises(TypeError):
+        "a" + Quantity(Decimal("5"), euro)
+
+
+def test_sum_list_reports_the_same_error_in_either_order(tmp_path):
+    """The defect this fixes, at the level it was found: `[1, Q]` used to give
+    `type_error(number, <Quantity>)` while `[Q, 1]` gave UnitsMismatch."""
+    from clausal.terms import UnitsMismatch
+    m = _load(tmp_path, "ordsum", """
+        -module(ordsum, [money_first/1, bare_first/1])
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+
+        money_first(S) <- (money(1, euro, Q), sum_list([Q, 1], S))
+        bare_first(S)  <- (money(1, euro, Q), sum_list([1, Q], S))
+    """)
+    mod = m.__dict__["$module"]
+    for goal in ("money_first", "bare_first"):
+        with pytest.raises(UnitsMismatch, match="Cannot add"):
+            v = Var()
+            list(call(goal, v, module=mod))

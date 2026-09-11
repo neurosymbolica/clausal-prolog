@@ -2331,6 +2331,15 @@ class Quantity:
         if isinstance(other, (int, float, Decimal)) and not self._dims:
             a, b = self._num_pair(other, self._value)
             return Quantity(a + b, {})
+        if isinstance(other, (int, float, Decimal)):
+            # A NUMBER meeting a dimensioned quantity is a units error, and it
+            # is the same error in either order. Returning NotImplemented here
+            # let PYTHON raise `unsupported operand type(s)` instead, which is
+            # not the engine's error type and says nothing about units -- and
+            # `sum_list` then reported it as `type_error(number, <Quantity>)`,
+            # naming the quantity as the offender. That was already confusing
+            # and became self-contradictory once `number/1` accepted one.
+            self._require_same_dims(other, "add")
         return NotImplemented
 
     def __sub__(self, other):
@@ -2345,6 +2354,8 @@ class Quantity:
         if isinstance(other, (int, float, Decimal)) and not self._dims:
             a, b = self._num_pair(other, self._value)
             return Quantity(a - b, {})
+        if isinstance(other, (int, float, Decimal)):
+            self._require_same_dims(other, "subtract")   # see __radd__
         return NotImplemented
 
     def __mul__(self, other):

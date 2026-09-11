@@ -378,12 +378,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    in the same six ``Seg*`` methods, plus ``DictTerm.mapping_of`` and
     #    the one-shot-iterable materialisation in ``DictTerm.__init__`` --
     #    again all ABOVE ``term_str``) -- a further +83 shift, still no new
-    #    site), then -> 2482-3010 by the minor-currency-units landing (the
+    #    site), then -> 2482-3021 by the minor-currency-units landing (the
     #    ``_warn_if_literal_may_be_lost`` helper and the measured-rate table
     #    on its band constant, added beside ``_to_decimal`` and so ABOVE
     #    ``term_str``, then the same-named-dimension disambiguation in
     #    ``_dims_str``/``_colliding_dim_names``) -- still no new site.
-    AllowEntry("clausal/terms.py", (2482, 3010),
+    AllowEntry("clausal/terms.py", (2482, 3021),
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),
