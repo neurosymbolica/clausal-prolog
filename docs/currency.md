@@ -256,10 +256,21 @@ where the spelling is legal.
 
 ### Which currencies have one
 
-`european_union.cent` and `united_states.cent` (operator, 2026-09-11). Minor-unit *names* are
-not in ISO 4217 — the standard carries only the number of decimal places — so they are
-curated data, added per currency as a rulebase needs one. See `MINOR_UNITS` in
-[`scripts/gen_currencies.py`](#extending-the-vocabulary).
+| Import | Minor unit | Factor |
+|--------|-----------|--------|
+| `european_union` | `cent` | 1/100 euro |
+| `united_states` | `cent` | 1/100 dollar |
+| `australia` | `cent` | 1/100 dollar |
+| `united_kingdom` | `penny` | 1/100 sterling |
+| `thailand` | `satang` | 1/100 baht |
+
+Minor-unit *names* are not in ISO 4217 — the standard carries only the number of decimal
+places — so they are curated data, added per currency as a rulebase needs one. See
+`MINOR_UNITS` in [`scripts/gen_currencies.py`](#extending-the-vocabulary). This set covers
+the currencies a corpus census found carrying a minor-unit scale in identifier names.
+
+Names are **singular**, as every unit name in the vocabulary is (`metre`, not `metres`): GBP's
+subunit is `penny`, even where a rulebase spells its own identifiers `_pence`.
 
 `cent` is **jurisdiction-scoped exactly as `dinar` is**: bare-import one, qualify the other.
 A cent of one currency still never adds to a cent of another.

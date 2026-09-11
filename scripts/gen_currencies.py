@@ -63,9 +63,18 @@ OVERRIDE_SYMBOL = {"BHD": "BD"}
 # standard gives only the NUMBER of decimal places (the `scale` field), not the
 # word for the subunit. Currencies whose minor unit a rulebase actually writes
 # get an entry; the rest simply have no minor unit name, which is honest --
-# EUR and USD only (operator, 2026-09-11). The FACTOR is never written here:
-# `_make_minor_unit` derives it from the currency's own scale.
-MINOR_UNITS = {"EUR": "cent", "USD": "cent"}
+# EUR and USD first (operator, 2026-09-11), widened the same day to AUD, THB
+# and GBP after a corpus census found 139 identifiers carrying a minor-unit
+# scale in their NAMES across 27 domains -- 6 of which used a currency with no
+# minor unit here, so their amounts could not be declared in the unit their
+# own names claimed. The FACTOR is never written here: `_make_minor_unit`
+# derives it from the currency's own scale.
+#
+# Names are SINGULAR, as every unit name in the vocabulary is (`metre`, not
+# `metres`): GBP's subunit is `penny`, though the corpus spells its
+# identifiers `_pence` (operator, 2026-09-11).
+MINOR_UNITS = {"AUD": "cent", "EUR": "cent", "GBP": "penny",
+               "THB": "satang", "USD": "cent"}
 
 
 def iso_scale(code):

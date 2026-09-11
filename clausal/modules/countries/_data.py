@@ -442,6 +442,9 @@ JURISDICTIONS = [
 ]
 
 MINOR_UNITS = {
+    "AUD": "cent",
     "EUR": "cent",
+    "GBP": "penny",
+    "THB": "satang",
     "USD": "cent",
 }

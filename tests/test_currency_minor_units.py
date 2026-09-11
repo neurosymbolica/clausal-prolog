@@ -422,3 +422,67 @@ def test_an_inline_base_unit_quantity_still_exports():
     out = _export("-import_from(european_union, [euro])\n"
                   "fine(5000(euro)),\n")
     assert "fine(5000)" in out
+
+
+# ── the three currencies added for the corpus census ─────────────────────────
+#
+# corpus-lane measured the population the migration has to express: 139
+# identifiers, 114 `_cents` / 18 `_satang` / 7 `_pence`, across 14 eu, 7 us,
+# 4 au, 1 uk and 1 th domains. Six of those domains used a currency with no
+# minor unit, so "attach the true unit" was not an option that existed for
+# them and the migration would have had to go base-units in some places and
+# minor-units in others. Operator widened the table, 2026-09-11.
+
+
+def test_the_australian_cent_is_its_own_unit():
+    """`target_au_turnover_cents` is AUD cents. The identifier that most
+    needs a compiler-checkable unit was the one that could not have one —
+    and declaring it in `united_states.cent` would have been the 100x-adjacent
+    confusion this feature exists to prevent, with the engine's blessing."""
+    from clausal.modules.countries.australia import cent, dollar
+    from clausal.modules.countries.united_states import cent as usd_cent
+    assert cent.value == Decimal("0.01") and cent.dims == {dollar: 1}
+    assert cent.dims != usd_cent.dims, "an AUD cent is not a USD cent"
+
+
+def test_the_thai_satang_is_a_scaled_unit_of_the_baht():
+    from clausal.modules.countries.thailand import satang, baht
+    assert satang.value == Decimal("0.01") and satang.dims == {baht: 1}
+    assert (150000 * satang).value == Decimal("1500.00")
+
+
+def test_sterlings_minor_unit_is_penny_singular():
+    """The corpus spells its identifiers `_pence`, but a unit name is
+    singular here as everywhere else in the vocabulary — `metre`, not
+    `metres`. Operator's ruling, 2026-09-11."""
+    from clausal.modules.countries import united_kingdom
+    from clausal.modules.countries.united_kingdom import penny, sterling
+    assert penny.value == Decimal("0.01") and penny.dims == {sterling: 1}
+    assert not hasattr(united_kingdom, "pence"), "one spelling, not two"
+
+
+def test_every_named_minor_unit_exists_and_matches_its_scale():
+    """The table and the modules cannot drift: every entry must resolve, and
+    its factor must be the one its currency's ISO scale implies."""
+    import importlib
+    from clausal.modules.countries import _data
+    assert _data.MINOR_UNITS, "positive control: the table is not empty"
+    for code, minor_name in _data.MINOR_UNITS.items():
+        row = next(r for r in _data.CURRENCIES if r["code"] == code)
+        module = importlib.import_module(
+            f"clausal.modules.countries.{row['jurisdiction']}")
+        unit = getattr(module, minor_name)
+        assert unit.value == Decimal(1).scaleb(-row["scale"]), code
+        assert unit.dims == {getattr(module, row["name"]): 1}, code
+
+
+def test_the_exporter_refuses_every_named_minor_unit():
+    """The refusal is keyed on the table, so widening the table must widen
+    the refusal — not leave the new units exporting 100x too large."""
+    from clausal.modules.countries import _data
+    for code, minor_name in _data.MINOR_UNITS.items():
+        row = next(r for r in _data.CURRENCIES if r["code"] == code)
+        with pytest.raises(NotImplementedError, match="scaled unit"):
+            _export(f"-import_from({row['jurisdiction']}, "
+                    f"[{row['name']}, {minor_name}])\n"
+                    f"pay(5000({minor_name})),\n")
