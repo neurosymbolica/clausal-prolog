@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re as _re
 from dataclasses import dataclass, field
+from fractions import Fraction
 from decimal import (
     Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_HALF_DOWN,
     ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR,
@@ -2013,9 +2014,15 @@ class CurrencyPrecisionError(Exception):
 
 def _check_currency_precision(value, currency) -> None:
     """Raise CurrencyPrecisionError if `value` carries digits below `currency`'s
-    scale. Trailing zeros are allowed (7.890 == 7.89). `value` is already Decimal."""
+    scale. Trailing zeros are allowed (7.890 == 7.89). `value` is a Decimal or
+    an exact Fraction (a Fraction is in scale iff value * 10**scale is
+    integral)."""
     scale = currency.scale
-    if value != value.quantize(Decimal(1).scaleb(-scale)):
+    if isinstance(value, Fraction):
+        in_scale = (value * 10 ** scale).denominator == 1
+    else:
+        in_scale = value == value.quantize(Decimal(1).scaleb(-scale))
+    if not in_scale:
         raise CurrencyPrecisionError(
             f"{value} has more decimal places than {currency._name} supports "
             f"(scale {scale}). Combine per-currency literals "
@@ -2032,13 +2039,54 @@ _MONEY_ROUNDING = {
 }
 
 
+def _round_fraction_to_int(fr: Fraction, rounding) -> int:
+    """Round an exact rational to an integer under a ``decimal`` ROUND_* mode.
+
+    Exact by construction — no intermediate Decimal division — so a CLP(Q)
+    result such as a third of a yen rounds once, at the caller's chosen
+    mode, and nowhere else. ``divmod`` floors, so ``q < fr < q + 1`` when the
+    remainder is non-zero, and the tie test compares ``2 * rem`` with ``d``.
+    """
+    n, d = fr.numerator, fr.denominator
+    q, rem = divmod(n, d)
+    if rem == 0:
+        return q
+    if rounding == ROUND_FLOOR:
+        return q
+    if rounding == ROUND_CEILING:
+        return q + 1
+    if rounding == ROUND_DOWN:                    # toward zero
+        return q if fr > 0 else q + 1
+    if rounding == ROUND_UP:                      # away from zero
+        return q + 1 if fr > 0 else q
+    twice = 2 * rem
+    if twice < d:
+        return q
+    if twice > d:
+        return q + 1
+    # exact tie
+    if rounding == ROUND_HALF_UP:                 # away from zero
+        return q + 1 if fr > 0 else q
+    if rounding == ROUND_HALF_DOWN:               # toward zero
+        return q if fr > 0 else q + 1
+    if rounding == ROUND_HALF_EVEN:
+        return q if q % 2 == 0 else q + 1
+    raise ValueError(f"unsupported rounding mode {rounding!r}")
+
+
 def _quantize_to_scale(value, scale, mode_str):
-    """Quantize a Decimal to `scale` decimal places using a mode string."""
+    """Quantize a Decimal — or an exact Fraction — to `scale` decimal places
+    using a mode string. A Fraction is rounded exactly, without passing
+    through a Decimal division first."""
     rounding = _MONEY_ROUNDING.get(mode_str)
     if rounding is None:
         raise ValueError(f"unknown rounding mode {mode_str!r}; expected one of "
                          f"{sorted(_MONEY_ROUNDING)}")
-    return value.quantize(Decimal(1).scaleb(-scale), rounding=rounding)
+    unit = Decimal(1).scaleb(-scale)
+    if isinstance(value, Fraction):
+        units = _round_fraction_to_int(value * 10 ** scale, rounding)
+        return Decimal(units).scaleb(-scale).quantize(unit)
+    return value.quantize(unit, rounding=rounding)
 
 
 def _format_money(value, currency, style, mode_str):
@@ -2187,6 +2235,9 @@ class Quantity:
         - ``**`` scales every exponent by an integer constant; raises
           ``UnitsMismatch`` if the exponent is non-integer or has dimensions.
         - Plain numeric scalars (int/float) can be multiplied/divided freely.
+        - A currency value is an exact number: int, Fraction or Decimal. A
+          Fraction is kept as-is (a CLP(Q) result such as a third of a yen);
+          float is coerced through ``Decimal(str(f))``.
 
     Clausal protocol:
         - ``__unify__`` — checks dims equality then unifies values.
@@ -2221,7 +2272,7 @@ class Quantity:
             )
         self._value = value
         self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
-        if not isinstance(self._value, Decimal):
+        if not isinstance(self._value, (Decimal, Fraction)):
             for _k in self._dims:
                 if getattr(_k, "is_currency", False):
                     self._value = _to_decimal(self._value)
