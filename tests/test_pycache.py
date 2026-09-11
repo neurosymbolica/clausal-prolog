@@ -345,3 +345,120 @@ def _query_greet(logic_module):
     for trail in call("greet", v, module=logic_module):
         results.append(deref(v))
     return results
+
+
+class TestEngineFingerprintInvalidation:
+    """An ENGINE change invalidates cached bytecode, not just a source change.
+
+    A ``.clausal`` file is compiled by the engine's transformer and the result
+    cached as ordinary bytecode, validated against the source's mtime and
+    size. Nothing about the source changes when the compiler does -- so before
+    the fingerprint, upgrading the engine left every unchanged file running
+    the compilation whatever engine last saw it produced. Silently: stale
+    bytecode loads perfectly well, which is why a load census cannot detect
+    this and why it went 55 transformer commits unnoticed.
+
+    ``CLAUSAL_BYTECODE_TAG`` was always the intended lever (it is XORed into
+    the mtime importlib validates against, so a bump invalidates everything
+    with no clearing step). It is hand-maintained, and nothing turned it. The
+    fingerprint turns it automatically.
+    """
+
+    def test_the_effective_tag_includes_the_fingerprint(self):
+        from clausal import import_hook as ih
+        assert ih._effective_bytecode_tag() != ih.CLAUSAL_BYTECODE_TAG, (
+            "the manual tag alone would mean nothing had been derived")
+        assert ih._effective_bytecode_tag() == (
+            ih.CLAUSAL_BYTECODE_TAG ^ ih._compilation_fingerprint())
+
+    def test_the_fingerprint_is_lazy_and_memoised(self):
+        """It costs ~10ms, so a process that never compiles Clausal source
+        must not pay it, and one that compiles a thousand files pays once."""
+        from clausal import import_hook as ih
+        first = ih._compilation_fingerprint()
+        assert ih._FINGERPRINT_CACHE == first
+        assert ih._compilation_fingerprint() is first
+
+    def test_it_tracks_content_of_compilation_sources(self, tmp_path, monkeypatch):
+        """Content, not mtimes: ``git checkout`` rewrites mtimes without
+        changing content, and discarding every user's cache on a branch
+        switch would be a cost blamed on something else."""
+        from clausal import import_hook as ih
+        pkg = tmp_path / "enginelike"
+        (pkg / "templating").mkdir(parents=True)
+        source = pkg / "templating" / "term_rewriting.py"
+        source.write_text("EMIT = 1\n")
+
+        monkeypatch.setattr(ih, "_COMPILATION_ROOTS", ("templating",))
+        monkeypatch.setattr(ih, "_COMPILATION_FILES", ())
+        monkeypatch.setattr(ih, "__file__", str(pkg / "import_hook.py"))
+
+        monkeypatch.setattr(ih, "_FINGERPRINT_CACHE", None)
+        before = ih._compilation_fingerprint()
+
+        # Same content, new mtime: the fingerprint must NOT move.
+        os.utime(source, (0, 0))
+        monkeypatch.setattr(ih, "_FINGERPRINT_CACHE", None)
+        assert ih._compilation_fingerprint() == before, "mtime must not count"
+
+        # Changed content: it must.
+        source.write_text("EMIT = 2\n")
+        monkeypatch.setattr(ih, "_FINGERPRINT_CACHE", None)
+        assert ih._compilation_fingerprint() != before
+
+    def test_it_ignores_engine_files_that_do_not_decide_emitted_code(
+            self, tmp_path, monkeypatch):
+        """The negative control. Every file in the roots invalidates every
+        user's cache when it changes, so the set is narrow on purpose -- a
+        runtime-only module must not be in it."""
+        from clausal import import_hook as ih
+        pkg = tmp_path / "enginelike"
+        (pkg / "templating").mkdir(parents=True)
+        (pkg / "templating" / "t.py").write_text("EMIT = 1\n")
+        runtime_only = pkg / "solve.py"
+        runtime_only.write_text("def solve(): pass\n")
+
+        monkeypatch.setattr(ih, "_COMPILATION_ROOTS", ("templating",))
+        monkeypatch.setattr(ih, "_COMPILATION_FILES", ())
+        monkeypatch.setattr(ih, "__file__", str(pkg / "import_hook.py"))
+        monkeypatch.setattr(ih, "_FINGERPRINT_CACHE", None)
+        before = ih._compilation_fingerprint()
+
+        runtime_only.write_text("def solve(): return 42\n")
+        monkeypatch.setattr(ih, "_FINGERPRINT_CACHE", None)
+        assert ih._compilation_fingerprint() == before, (
+            "a runtime-only change must not discard everyone's bytecode; "
+            "the manual tag is the lever for that case")
+
+    def test_it_degrades_to_the_manual_tag_when_sources_are_unreadable(
+            self, tmp_path, monkeypatch):
+        """Degrading to the hand tag is the safe direction -- it is exactly
+        the behaviour that existed before the fingerprint."""
+        from clausal import import_hook as ih
+        monkeypatch.setattr(ih, "_COMPILATION_ROOTS", ("does_not_exist",))
+        monkeypatch.setattr(ih, "_COMPILATION_FILES", ("also/missing.py",))
+        monkeypatch.setattr(ih, "__file__", str(tmp_path / "import_hook.py"))
+        monkeypatch.setattr(ih, "_FINGERPRINT_CACHE", None)
+        assert ih._compilation_fingerprint() == 0
+        assert ih._effective_bytecode_tag() == ih.CLAUSAL_BYTECODE_TAG
+
+    def test_a_changed_fingerprint_recompiles_a_warm_cache(self, tmp_clausal):
+        """End to end, and the assertion the whole mechanism exists for."""
+        from clausal import import_hook as ih
+        src, mod_name = tmp_clausal
+        _load_module(mod_name + "_warm", str(src))          # writes the .pyc
+
+        with patch.object(ih.PredicateLoader, "source_to_code",
+                          autospec=True,
+                          side_effect=ih.PredicateLoader.source_to_code) as spy:
+            _load_module(mod_name + "_hit", str(src))
+            assert spy.call_count == 0, "unchanged engine: cache hit expected"
+
+            original = ih._FINGERPRINT_CACHE
+            try:
+                ih._FINGERPRINT_CACHE = (original or 0) ^ 0xABCD1234
+                _load_module(mod_name + "_miss", str(src))
+                assert spy.call_count == 1, (
+                    "a changed compiler must recompile, not reuse")
+            finally:
+                ih._FINGERPRINT_CACHE = original

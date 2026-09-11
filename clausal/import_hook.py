@@ -31,6 +31,7 @@ from importlib.machinery import ModuleSpec
 import importlib.util
 import sys
 import ast
+import hashlib
 import os
 import warnings
 
@@ -473,6 +474,69 @@ def _preseed_py_submodules(module_items) -> None:
 # accumulated gap.
 CLAUSAL_BYTECODE_TAG = 13
 
+#: Engine sources whose CONTENT decides emitted code. Narrow on purpose: every
+#: file here invalidates every user's cached bytecode when it changes, so a
+#: module that only affects RUNTIME behaviour must not be listed -- a runtime
+#: change that makes old bytecode wrong is what the manual tag above is for.
+_COMPILATION_ROOTS = ("templating", "pythonic_ast", "logic/compiler")
+_COMPILATION_FILES = ("logic/compiler_v2.py",)
+
+_FINGERPRINT_CACHE: "int | None" = None
+
+
+def _compilation_fingerprint() -> int:
+    """A digest of the engine sources that decide emitted code.
+
+    Computed LAZILY and memoised: it is only needed when a ``.clausal`` or
+    ``.pl`` file is actually compiled, so a process that imports ``clausal``
+    without loading Clausal source pays nothing, and one that loads a thousand
+    pays once.
+
+    Hashes CONTENT, not mtimes. An mtime walk is ~15x cheaper, but ``git
+    checkout`` rewrites mtimes without changing content, so it would discard
+    every user's cache on any branch switch -- frequent, and invisible enough
+    that the cost would be blamed on something else.
+
+    Returns 0 if the sources cannot be read, which leaves ``CLAUSAL_BYTECODE_
+    TAG`` alone in charge. Degrading to the manual tag is the safe direction:
+    it is what the behaviour was before this existed.
+    """
+    global _FINGERPRINT_CACHE
+    if _FINGERPRINT_CACHE is not None:
+        return _FINGERPRINT_CACHE
+    package = os.path.dirname(os.path.abspath(__file__))
+    paths = []
+    try:
+        for rel in _COMPILATION_ROOTS:
+            root = os.path.join(package, *rel.split("/"))
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+                paths += [os.path.join(dirpath, f)
+                          for f in filenames if f.endswith(".py")]
+        paths += [os.path.join(package, *rel.split("/"))
+                  for rel in _COMPILATION_FILES]
+        digest = hashlib.blake2b(digest_size=4)
+        for path in sorted(paths):
+            # The path goes in RELATIVE to the package, so moving or
+            # reinstalling the engine does not by itself change the answer.
+            digest.update(os.path.relpath(path, package).encode("utf-8"))
+            with open(path, "rb") as handle:
+                digest.update(handle.read())
+        _FINGERPRINT_CACHE = int.from_bytes(digest.digest(), "big")
+    except OSError:
+        _FINGERPRINT_CACHE = 0
+    return _FINGERPRINT_CACHE
+
+
+def _effective_bytecode_tag() -> int:
+    """The tag cached bytecode is actually validated against.
+
+    The hand-maintained tag XOR the automatic fingerprint, so a manual bump
+    still forces invalidation on its own -- which a content fingerprint cannot
+    do for a RUNTIME change that leaves the compiler untouched.
+    """
+    return CLAUSAL_BYTECODE_TAG ^ _compilation_fingerprint()
+
 
 # ── One source file → one compilation ────────────────────────────────────────
 #
@@ -545,7 +609,7 @@ class _ClausalSourceLoader(SourceLoader):
         # importlib stores/compares this field masked with 0xFFFFFFFF, so any
         # deterministic int is valid; masking keeps the value in range and the
         # tag XOR still participates, so a tag bump still invalidates old caches.
-        return {"mtime": (st.st_mtime_ns ^ CLAUSAL_BYTECODE_TAG) & 0xFFFFFFFF,
+        return {"mtime": (st.st_mtime_ns ^ _effective_bytecode_tag()) & 0xFFFFFFFF,
                 "size": st.st_size}
 
     def set_data(self, path, data):

@@ -784,19 +784,31 @@ def test_F018_path_stats_folds_bytecode_tag(tmp_path):
     The reported mtime uses *nanosecond* precision
     (``(st_mtime_ns ^ TAG) & 0xFFFFFFFF``) so a same-size edit within the same
     integer second still invalidates (see tests/test_pycache.py); the tag XOR
-    still participates, so a tag bump still invalidates old caches."""
+    still participates, so a tag bump still invalidates old caches.
+
+    2026-09-11: the tag folded in is the EFFECTIVE one -- the hand-maintained
+    ``CLAUSAL_BYTECODE_TAG`` XOR an automatic fingerprint of the engine
+    sources that decide emitted code. The manual tag alone went 55 transformer
+    commits stale because nothing turned it; the fingerprint turns it. Both
+    halves are asserted below, because using either one alone would still pass
+    a test that only checked "some tag participates"."""
     import os
-    from clausal.import_hook import _ClausalSourceLoader, CLAUSAL_BYTECODE_TAG
+    from clausal.import_hook import (
+        _ClausalSourceLoader, CLAUSAL_BYTECODE_TAG, _effective_bytecode_tag,
+        _compilation_fingerprint)
     src = tmp_path / "a10f018.clausal"
     src.write_text("fact(1),\n")
     loader = _ClausalSourceLoader("a10f018", str(src))
     stats = loader.path_stats(str(src))
     raw_ns = os.stat(str(src)).st_mtime_ns
-    assert stats["mtime"] == (raw_ns ^ CLAUSAL_BYTECODE_TAG) & 0xFFFFFFFF
+    assert stats["mtime"] == (raw_ns ^ _effective_bytecode_tag()) & 0xFFFFFFFF
     # Idempotent within a version.
     assert loader.path_stats(str(src))["mtime"] == stats["mtime"]
-    # Tag still participates: a different tag yields a different reported mtime
-    # (so a tag bump invalidates cached bytecode), confirmed by recomputing
-    # with a hypothetical bumped tag.
-    bumped = (raw_ns ^ (CLAUSAL_BYTECODE_TAG + 1)) & 0xFFFFFFFF
+    # The MANUAL half still participates: a hand bump alone must be able to
+    # invalidate, which is the lever for a RUNTIME change the fingerprint
+    # cannot see.
+    bumped = (raw_ns ^ ((CLAUSAL_BYTECODE_TAG + 1)
+                        ^ _compilation_fingerprint())) & 0xFFFFFFFF
     assert bumped != stats["mtime"]
+    # And the AUTOMATIC half: the folded tag is not merely the manual one.
+    assert _effective_bytecode_tag() != CLAUSAL_BYTECODE_TAG
