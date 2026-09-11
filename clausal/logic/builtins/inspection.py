@@ -775,82 +775,58 @@ def _constant_value__2(name, value, trail, k):
 
 @_builtin("constant_number_units", 3)
 def _constant_number_units__3(name, number, units, trail, k):
-    """constant_number_units(Name, Number, Units) — a UNITED constant.
+    """constant_number_units(Name, Number, Units) — as DECLARED.
 
-    ``Name`` is an atom, ``Number`` the magnitude, ``Units`` the unit
-    expression. Named for what it can hold: only NUMBERS carry units
-    (operator, 2026-09-11), which is why this is not
+    ``Name`` is an atom, ``Number`` and ``Units`` are the pair the
+    ``-constant_number_units`` declaration wrote. Named for what it can hold:
+    only NUMBERS carry units (operator, 2026-09-11), which is why this is not
     ``constant_value_units/3``.
 
-    A constant declared WITHOUT units has no solution here — it has a value
-    but no units, and ``constant_value/2`` is the predicate that relates it.
-    So this fails rather than answering with a dimensionless marker, which is
-    the ordinary Prolog reading of "there is no such relation".
+    **It reports the DECLARATION, not the stored value** (operator's ruling,
+    2026-09-11). Those differ whenever the declared unit is not the base of
+    its own dimension, because the units library rescales to that base:
+    ``-constant_number_units(standstill, 30, day)`` stores
+    ``Quantity(2592000, second)``, and both the 30 and the ``day`` are
+    unrecoverable from it. Reporting the normalised pair would make this a
+    lossy view of ``constant_value/2`` rather than a second source of
+    information — and it would make it impossible to check that a parameter's
+    declared unit matches the unit its NAME claims, since every duration
+    comes back as ``second`` regardless of what was written.
 
-    ``Units`` is built from the quantity's dimensions in a canonical order
-    (sorted by unit name), so the same quantity always yields the same term:
-    a single unit at exponent 1 is the bare atom (``euro``), a negative
-    exponent divides (``metre / second``), any other exponent uses ``**``
-    (``metre ** 2``).
+    ``constant_value/2`` remains the VALUE view and yields the Quantity. The
+    two therefore disagree about the number on purpose: for ``30 day``, /2
+    gives 2592000 seconds and /3 gives 30 day. Both are true of the same
+    constant.
+
+    A constant declared without units has no solution here.
 
     Modes:
 
-      (+Name, ?Number, ?Units): the constant's magnitude and units.
+      (+Name, ?Number, ?Units): the declared magnitude and units.
       (-Name, ?Number, ?Units): enumerate every united constant.
     """
-    from clausal.terms import Quantity                     # noqa: PLC0415
-    m = Var()
-    value = Var()
-    for _ in _module_constant__3(m, name, value, trail, k):
-        q = deref(value)
-        if not isinstance(q, Quantity):
-            continue                       # unitless: no units to relate
-        dims = dict(q.dims)
-        if not dims:
-            continue                       # dimensionless is not "has units"
-        mark = trail.mark()
-        if (unify(number, q.value, trail)
-                and unify(units, _units_term(dims), trail)):
-            yield None
-        trail.undo(mark)
-
-
-def _units_term(dims: dict):
-    """The canonical Clausal term for a quantity's dimensions.
-
-    Deterministic by construction: units are taken in name order, so the term
-    does not depend on dict insertion order and two equal quantities always
-    produce equal terms.
-    """
-    from clausal.terms import _dim_name                    # noqa: PLC0415
-
-    def atom_for(key):
-        return mint(_dim_name(key))
-
-    positive, negative = [], []
-    for key in sorted(dims, key=_dim_name):
-        exponent = dims[key]
-        base = atom_for(key)
-        if exponent in (1, -1):
-            (positive if exponent == 1 else negative).append(base)
-        else:
-            power = abs(exponent)
-            term = ("**", base, power)
-            (positive if exponent > 0 else negative).append(term)
-
-    def product(parts):
-        head = parts[0]
-        for part in parts[1:]:
-            head = ("*", head, part)
-        return head
-
-    if not positive:
-        # No positive exponents: 1 / <units>, e.g. per-second.
-        return ("/", 1, product(negative))
-    result = product(positive)
-    if negative:
-        result = ("/", result, product(negative))
-    return result
+    import sys as _sys                                     # noqa: PLC0415
+    name_val = deref(name)
+    want = spelling(name_val) if _term_is_atom(name_val) else None
+    if want is None and not is_var(name_val):
+        return                       # a non-atom names no constant
+    for py_module in list(_sys.modules.values()):
+        logic_module = getattr(py_module, "__clausal_module__", None)
+        declared = getattr(logic_module, "constant_units", None)
+        if not declared:
+            continue
+        for cname, pair in list(declared.items()):
+            if want is not None and cname != want:
+                continue
+            cnumber, cunits = pair
+            if cnumber is None:
+                continue             # no literal magnitude was declared
+            mark = trail.mark()
+            if (unify(name, mint(cname), trail)
+                    and unify(number, cnumber, trail)
+                    and unify(units, cunits, trail)):
+                yield None
+            trail.undo(mark)
 
 
 @_builtin("module_constant", 3)

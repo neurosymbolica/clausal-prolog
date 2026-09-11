@@ -1296,3 +1296,65 @@ def test_a_number_still_carries_units(tmp_path):
         -constant_number_units(fee, 12.5, euro)
     """)
     assert m.fee.value == 12.5
+
+
+def test_constant_number_units_3_reports_the_DECLARED_pair(tmp_path):
+    """The operator's ruling, 2026-09-11, and the reason it was needed.
+
+    A unit that is not the base of its own dimension rescales to that base,
+    so ``30 day`` is STORED as ``Quantity(2592000, second)`` and neither the
+    30 nor the ``day`` survives in the value. Reporting the normalised pair
+    would make this predicate a lossy view of ``constant_value/2`` instead of
+    a second source of information -- and would make it impossible to check
+    that a parameter's declared unit matches the unit its NAME claims, since
+    every duration comes back as ``second`` whatever was written.
+
+    The two predicates therefore disagree about the number ON PURPOSE. Both
+    assertions are here together so neither can be changed without facing
+    the other.
+    """
+    m = _load(tmp_path, "decl", """
+        -module(decl, [declared/2, value/1, decl_standstill])
+        -import_from(units, [day])
+        -constant_number_units(decl_standstill, 30, day)
+
+        declared(N, U) <- constant_number_units(decl_standstill, N, U)
+        value(V) <- constant_value(decl_standstill, V)
+    """)
+    mod = m.__dict__["$module"]
+
+    n, u = Var(), Var()
+    [(number, units)] = [(deref(n), deref(u)) for _ in
+                         call("declared", n, u, module=mod)]
+    assert number == 30, "the DECLARED magnitude, not the rescaled one"
+    assert units == ("day",), "the DECLARED unit, not its base"
+
+    v = Var()
+    [value] = [deref(v) for _ in call("value", v, module=mod)]
+    assert value.value == 2592000, (
+        "constant_value/2 is the VALUE view and still normalises")
+    assert not hasattr(value, "day")
+
+
+def test_a_non_rescaling_unit_agrees_between_the_two_predicates(tmp_path):
+    """The negative control for the test above: where the unit IS the base of
+    its dimension there is nothing to disagree about, so a bug that always
+    reported the declared pair and a bug that always reported the normalised
+    one would both pass here. That is why the rescaling case is asserted
+    separately."""
+    m = _load(tmp_path, "agree", """
+        -module(agree, [declared/2, value/1, agree_mass])
+        -import_from(units, [kilogram])
+        -constant_number_units(agree_mass, 7, kilogram)
+
+        declared(N, U) <- constant_number_units(agree_mass, N, U)
+        value(V) <- constant_value(agree_mass, V)
+    """)
+    mod = m.__dict__["$module"]
+    n, u = Var(), Var()
+    [(number, units)] = [(deref(n), deref(u)) for _ in
+                         call("declared", n, u, module=mod)]
+    v = Var()
+    [value] = [deref(v) for _ in call("value", v, module=mod)]
+    assert (number, units) == (7, ("kilogram",))
+    assert value.value == 7

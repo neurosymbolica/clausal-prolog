@@ -640,8 +640,22 @@ A constant declared *without* units has no solution here. It has a value but no 
 [`constant_value/2`](#constant_value2) is the predicate that relates it; answering with a
 dimensionless marker would make every constant look united.
 
-`Units` is built from the quantity's dimensions in a canonical order (sorted by unit name),
-so equal quantities always yield equal terms:
+!!! important "It reports the DECLARATION, not the stored value"
+    These differ whenever the declared unit is not the base of its own dimension, because the
+    units library rescales to that base. `-constant_number_units(standstill, 30, day)` stores
+    `Quantity(2592000, second)` — both the `30` and the `day` are unrecoverable from the value.
+
+    | | |
+    | --- | --- |
+    | `constant_number_units(standstill, N, U)` | `N = 30`, `U = day` |
+    | `constant_value(standstill, V)` | `V = 2592000 second` |
+
+    The two disagree about the number **on purpose**: `constant_value/2` is the value view,
+    and this one exists to report what the declaration said. That is what lets a check assert
+    a parameter's declared unit matches the unit its *name* claims — impossible against the
+    normalised pair, where every duration is `second` whatever was written.
+
+`Units` is the unit expression as declared:
 
 | declared | `Units` |
 | --- | --- |

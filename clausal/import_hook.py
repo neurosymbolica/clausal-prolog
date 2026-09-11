@@ -45,6 +45,7 @@ from .logic.constants import (
     check_constant_ground,
     constant_functor_term,
     register_module_constant,
+    register_constant_units,
 )
 from .logic.variables import Var, Trail, unify, deref, walk
 from .logic.atoms import (
@@ -225,6 +226,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     module_dict["$check_constant_ground"] = check_constant_ground
     module_dict["$constant_functor_term"] = constant_functor_term
     module_dict["$register_module_constant"] = register_module_constant
+    module_dict["$register_constant_units"] = register_constant_units
     code = loader.get_code(module.__name__)
 
     # _last_transformer is set by source_to_code.  If the code came
@@ -254,6 +256,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     # freshly-built LogicModule. Carry the registrations across the swap
     # so module_constant/3 sees what the module actually declared.
     logic_module.constants.update(dummy_logic_module.constants)
+    logic_module.constant_units.update(dummy_logic_module.constant_units)
     module_dict["$module"] = logic_module
     module.__clausal_module__ = logic_module
 
@@ -992,6 +995,7 @@ _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
 _simple_ast_builtins["$check_constant_ground"] = check_constant_ground
 _simple_ast_builtins["$constant_functor_term"] = constant_functor_term
 _simple_ast_builtins["$register_module_constant"] = register_module_constant
+_simple_ast_builtins["$register_constant_units"] = register_constant_units
 
 from clausal.repl import Solutions as _Solutions, _run_ipython_goal as _run_ipython_goal
 _simple_ast_builtins["Solutions"] = _Solutions

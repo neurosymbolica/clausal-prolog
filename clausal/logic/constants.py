@@ -303,6 +303,19 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     return (functor, *slots)
 
 
+def register_constant_units(module, name: str, number, units) -> None:
+    """Record what a ``-constant_number_units`` declaration SAID.
+
+    *number* and *units* are the declared pair, lowered at compile time —
+    not read back from the Quantity, which cannot yield them: a unit that is
+    not the base of its own dimension rescales to that base, so ``30 day``
+    becomes ``Quantity(2592000, second)`` and both the 30 and the ``day`` are
+    unrecoverable. Backs ``constant_number_units/3`` (operator's ruling,
+    2026-09-11: the predicate reports the DECLARED pair).
+    """
+    module.constant_units[name] = (number, units)
+
+
 def register_module_constant(module, name: str, value) -> None:
     """Record a declared ``-constants`` ``(name, value)`` pair on *module*.
 

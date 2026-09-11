@@ -1034,6 +1034,14 @@ class Module:
         # module_constant/3 reflection builtin (docs/builtins.md). Keyed by
         # the full `_NAME_`-shaped declaration spelling.
         self.constants: dict[str, Any] = {}
+        #: name -> (declared_number, declared_units_term) for constants
+        #: declared with ``-constant_number_units``. Kept beside .constants
+        #: rather than inside it because it records what the DECLARATION
+        #: said, which is not recoverable from the value: a unit that is not
+        #: the base of its dimension rescales, so `30 day` is stored as
+        #: Quantity(2592000, second) and the 30 is gone. See
+        #: constant_number_units/3.
+        self.constant_units: dict[str, tuple] = {}
 
     def assert_fact(self, term: Any) -> None:
         """assertz a fact (clause with no body goals)."""

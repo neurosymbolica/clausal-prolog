@@ -500,6 +500,50 @@ def _is_retired_constant_spelling(identifier: str) -> bool:
     )
 
 
+def _literal_number(node):
+    """The declared magnitude, as a Python number, from the AST.
+
+    Only a literal (optionally negated) is read. Anything computed keeps its
+    computed value -- the declaration did not name a number in that case, so
+    there is nothing more faithful to record.
+    """
+    if isinstance(node, Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if (isinstance(node, UnaryOp) and isinstance(node.op, USub)
+            and isinstance(node.operand, Constant)
+            and isinstance(node.operand.value, (int, float))):
+        return -node.operand.value
+    return None
+
+
+def _units_ast_to_term(node):
+    """Lower a unit EXPRESSION's AST to the term ``constant_number_units/3``
+    answers with: nested tuples of atoms, ``('/', ('metre',), ('second',))``.
+
+    Built at compile time from what the declaration WROTE. The same term
+    cannot be recovered at runtime from the Quantity: a unit that is not the
+    base of its own dimension rescales to that base, so ``30 day`` is stored
+    as ``Quantity(2592000, second)`` and the ``day`` is gone.
+
+    Returns None for a shape this cannot lower, so the caller can fall back
+    rather than record a wrong answer.
+    """
+    if isinstance(node, Name):
+        return (node.id,)                      # an atom is a 1-tuple
+    if isinstance(node, Constant) and isinstance(node.value, int):
+        return node.value                      # an exponent
+    if isinstance(node, BinOp):
+        op = {Mult: "*", Div: "/", Pow: "**"}.get(type(node.op))
+        if op is None:
+            return None
+        left = _units_ast_to_term(node.left)
+        right = _units_ast_to_term(node.right)
+        if left is None or right is None:
+            return None
+        return (op, left, right)
+    return None
+
+
 def _is_certainly_not_a_number(node) -> bool:
     """True when *node* CANNOT be a number, decided from the AST alone.
 
@@ -7616,6 +7660,30 @@ class EmbedTransformer(NodeTransformer):
             ), expr_stmt)
         fix_missing_locations(register)
         statements.append(register)
+        # Record what the DECLARATION said, for constant_number_units/3.
+        # Lowered here, at compile time, because it is not recoverable from
+        # the value -- see _units_ast_to_term.
+        if with_units:
+            units_term = _units_ast_to_term(args[2])
+            if units_term is not None:
+                declared = replace(
+                    Expr(value=replace(
+                        Call(
+                            func=replace(
+                                Name(id="$register_constant_units", ctx=load),
+                                value_node),
+                            args=[
+                                replace(Name(id="$module", ctx=load), value_node),
+                                replace(Constant(value=ident), value_node),
+                                replace(Constant(value=_literal_number(args[1])),
+                                        value_node),
+                                replace(Constant(value=units_term), value_node),
+                            ],
+                            keywords=[],
+                        ), value_node),
+                    ), expr_stmt)
+                fix_missing_locations(declared)
+                statements.append(declared)
         return statements
 
 

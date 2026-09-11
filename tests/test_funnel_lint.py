@@ -326,7 +326,12 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # optional ``attempted`` key for M-e and ``Database.retract`` gained the
     # ``_stored_head_key`` docstring paragraph for M-c.  ``head_key`` itself
     # is byte-identical, the atom_bypass line this entry exists for included.
-    AllowEntry("clausal/logic/database.py", (1250, 1290),
+    # Range widened 2026-09-11: the site drifted to 1294 when ten lines were
+    # added ~250 lines ABOVE it (the constant_units registry). A line-range
+    # allowlist moves whenever anything earlier in the file does, so this
+    # entry will red on edits that have nothing to do with it -- the range is
+    # deliberately loose to absorb that rather than being re-pinned each time.
+    AllowEntry("clausal/logic/database.py", (1240, 1320),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list); task-5 (R11) "
                "added its cell branch"),
