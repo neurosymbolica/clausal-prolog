@@ -1115,3 +1115,127 @@ def test_body_position_is_reached_so_the_name_is_the_discriminator(tmp_path):
                          floor_bps(300) )
     """)
     assert len(warned) == 1 and "floor_bps" in warned[0], warned
+
+
+# ── compatible_units/2: the assertion that RAISES ────────────────────────────
+#
+# `has_units/2` answers the same relation by SUCCEEDING or FAILING, and a goal
+# failure is swallowed: a guard that fails just makes the rule not fire, so a
+# caller who passed the wrong thing gets "no" rather than "you passed the
+# wrong thing". Measured before building:
+#
+#     has_units(A, euro)   A is euro     succeeds
+#     has_units(A, metre)  A is euro     FAILS silently
+#     has_units(5, euro)   bare number   FAILS silently
+#
+# Operator, 2026-09-11: a bare number is never compatible — not even with
+# `dimensionless`. It is the only version that closes the hole for RATIOS,
+# where a bare `0.03` would otherwise pass as dimensionless and the check
+# would wave through exactly the case it exists to catch.
+
+
+def _compat(value, unit):
+    from clausal.modules.units import compatible_units_check
+    return compatible_units_check(value, unit)
+
+
+def test_a_matching_unit_is_compatible():
+    from clausal.modules.countries.european_union import euro
+    from clausal.modules.units import metre
+    assert _compat(Quantity(Decimal("5.00"), euro), euro) is True
+    assert _compat(Quantity(5, metre), metre) is True
+
+
+def test_scale_is_IGNORED_for_compatibility():
+    """A scaled unit normalises at construction, so by here the scale is
+    already applied and the only question left is the dimension. `5 kilometre`
+    is a metre-thing; `155000 usd_cent` is a dollar amount."""
+    from clausal.modules.countries.united_states import usd, usd_cent
+    from clausal.modules.units import metre, kilometre
+    assert _compat(155000 * usd_cent, usd) is True
+    assert _compat(155000 * usd_cent, usd_cent) is True
+    assert _compat(5 * kilometre, metre) is True
+
+
+def test_a_mismatched_unit_RAISES_where_has_units_would_fail():
+    from clausal.terms import UnitsMismatch
+    from clausal.modules.countries.european_union import euro
+    from clausal.modules.units import metre
+    with pytest.raises(UnitsMismatch, match="euro"):
+        _compat(Quantity(Decimal("5.00"), euro), metre)
+
+
+def test_a_bare_number_raises_even_against_dimensionless():
+    """The ruling, and the reason for it: once ratios are dimensionless, a
+    bare 0.03 passing as "dimensionless" would wave through the very case the
+    check exists to catch."""
+    from clausal.terms import UnitsMismatch
+    from clausal.modules.countries.european_union import euro
+    from clausal.modules.units import dimensionless
+    for unit in (euro, dimensionless):
+        with pytest.raises(UnitsMismatch, match="carries no unit"):
+            _compat(5, unit)
+    with pytest.raises(UnitsMismatch, match="carries no unit"):
+        _compat(0.03, dimensionless)
+
+
+def test_a_dimensionless_QUANTITY_is_compatible_with_dimensionless():
+    """The negative control for the rule above: the objection is to a bare
+    NUMBER, not to a dimensionless quantity. A ratio built by division is
+    exactly that, and it must pass."""
+    from clausal.modules.countries.european_union import euro
+    from clausal.modules.units import dimensionless
+    ratio = Quantity(Decimal("10"), euro) / Quantity(Decimal("4"), euro)
+    assert dict(ratio.dims) == {}
+    assert _compat(ratio, dimensionless) is True
+
+
+def test_two_currencies_are_not_compatible():
+    from clausal.terms import UnitsMismatch
+    from clausal.modules.countries.european_union import euro
+    from clausal.modules.countries.united_states import usd
+    with pytest.raises(UnitsMismatch):
+        _compat(Quantity(Decimal("5.00"), euro), usd)
+
+
+def test_compatible_units_same_named_currencies_are_distinguished():
+    """A second message path is a second chance to say "dollar vs dollar".
+
+    `_require_same_dims` learned this morning to qualify two sides that
+    render identically; this predicate builds its own message and reproduced
+    the defect immediately. The fix is to REUSE that logic, not to write a
+    second copy of it (corpus-lane found the original, 2026-09-11)."""
+    from clausal.terms import UnitsMismatch
+    from clausal.modules.countries.australia import aud
+    from clausal.modules.countries.united_states import usd
+    with pytest.raises(UnitsMismatch) as exc:
+        _compat(Quantity(Decimal("5"), aud), usd)
+    text = str(exc.value)
+    assert "(USD)" in text and "(AUD)" in text, text
+
+
+def test_compatible_units_raises_rather_than_fails_in_clausal(tmp_path):
+    """The whole reason it exists: in a goal position `has_units/2` FAILING
+    is swallowed, and the caller gets "no" instead of a diagnosis. This
+    aborts the query, and `catch/3` binds the message — the documented
+    contract for UnitsMismatch."""
+    from clausal.logic.exceptions import LogicException
+    m = _load(tmp_path, "compat", """
+        -module(compat, [ok/0, bad/0, caught/1])
+        -import_from(py.units, [compatible_units])
+        -import_from(european_union, [euro])
+        -import_from(united_states, [usd])
+        -import_from(clausal.terms, [UnitsMismatch])
+
+        ok  <- (eval_(5.00(euro), A), compatible_units(A, euro))
+        bad <- (eval_(5.00(euro), A), compatible_units(A, usd))
+        caught(M) <- catch((eval_(5.00(euro), A), compatible_units(A, usd)),
+                           ++UnitsMismatch(M), 1 == 1)
+    """)
+    mod = m.__dict__["$module"]
+    assert len(list(call("ok", module=mod))) == 1
+    with pytest.raises(LogicException):
+        list(call("bad", module=mod))
+    v = Var()
+    [msg] = [deref(v) for _ in call("caught", v, module=mod)]
+    assert "expected" in str(msg) and "euro" in str(msg), msg

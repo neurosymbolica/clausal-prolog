@@ -46,7 +46,8 @@ from __future__ import annotations
 
 from typing import Callable
 
-from clausal.terms import Quantity, UnitsMismatch  # noqa: F401
+from clausal.terms import (  # noqa: F401
+    Quantity, UnitsMismatch, _dims_str, _colliding_dim_names)
 from clausal.lint_warnings import ClausalDeprecatedSpellingWarning
 from clausal.logic.variables import deref, is_var, unify, get_attr
 from clausal.logic.trampoline import DONE
@@ -497,6 +498,81 @@ def _make_dimensioned_impl(value, dims_in, d_out, trail):
         yield None
 
 
+def _unit_dims(unit):
+    """The dims a UNIT expression denotes: a base or derived predicate, a
+    scaled unit (``kilometre``, ``usd_cent`` -- both ``Quantity``), or a
+    compound. Returns None when *unit* is not a unit at all."""
+    dims = getattr(unit, "_dims", None)
+    if dims is None:
+        dims = getattr(unit, "dims", None)
+    return None if dims is None else dict(dims)
+
+
+def compatible_units_check(value, unit) -> bool:
+    """Assert that *value* is a quantity whose dimension is *unit*'s.
+
+    Raises ``UnitsMismatch`` when it is not, and that is the whole point:
+    ``has_units/2`` answers the same relation by SUCCEEDING or FAILING, and a
+    goal failure is swallowed -- a guard that fails just makes the rule not
+    fire, so a caller who passed the wrong thing gets "no" rather than "you
+    passed the wrong thing".
+
+    **Scale is ignored**, because by here it has already been applied: a
+    scaled unit normalises at construction, so ``155000 usd_cent`` IS
+    ``Decimal('1550.00') usd`` and ``5 kilometre`` is 5000 metres. What is
+    left to check is the dimension, and `usd_cent` and `usd` name the same
+    one. That is also what makes ratios work: ``basis_points`` and
+    ``percent`` are both dimensionless with a scale factor, so both normalise
+    and ``300 basis_points`` compares equal to ``3 percent``.
+
+    **A bare number is never compatible -- not even with ``dimensionless``**
+    (operator, 2026-09-11). The engine lets a bare number add to a
+    dimensionless quantity, so this is deliberately stricter than the
+    arithmetic: the predicate asserts that a value IS a quantity carrying a
+    unit, and a bare number satisfies no unit claim. It is the only version
+    that closes the hole for RATIOS -- once bps and percent are
+    dimensionless, a bare ``0.03`` would otherwise pass as "dimensionless"
+    and the check would wave through exactly the case it exists to catch.
+    """
+    want = _unit_dims(unit)
+    if want is None:
+        raise TypeError(
+            f"compatible_units: {unit!r} is not a unit — the second argument "
+            f"names the unit the first is asserted to carry.")
+    if not isinstance(value, Quantity):
+        named = _dims_str(want) if want else "dimensionless"
+        raise UnitsMismatch(
+            f"compatible_units: {value!r} carries no unit, so it cannot be "
+            f"{named}. A bare number is never compatible, not even with "
+            f"dimensionless — write the quantity (`{value!r}({named})`), or "
+            f"declare it with -constant_number_currency.")
+    got = dict(value.dims)
+    if got != want:
+        # Reuse the collision logic rather than write a second copy: two
+        # same-NAMED dimensions would otherwise render "expected dollar, got
+        # dollar" here, which is the defect `_require_same_dims` was fixed for
+        # this morning and which this path reproduced immediately. A new
+        # message path is a new chance to make the same mistake.
+        collide = _colliding_dim_names(want, got)
+        expected = _dims_str(want, qualify=collide) if want else "1"
+        actual = _dims_str(got, qualify=collide) if got else "1"
+        raise UnitsMismatch(
+            f"compatible_units: expected {expected}, got {actual}")
+    return True
+
+
+def _compatible_units_impl(value, unit, trail):
+    """compatible_units(Quantity, Unit) — succeeds, or raises UnitsMismatch."""
+    v, u = deref(value), deref(unit)
+    if is_var(v) or is_var(u):
+        raise UnitsMismatch(
+            "compatible_units: both arguments must be bound — an unbound "
+            "argument asserts nothing, and a check that cannot fail is not "
+            "a check.")
+    compatible_units_check(v, u)
+    yield None
+
+
 dimension_of = _UnitsPredicate("dimension_of")
 dimension_of._register(2, _simple_to_trampoline(_dimension_of_impl))
 
@@ -518,6 +594,11 @@ import clausal.logic.units_constraint as _units_constraint  # noqa: F401
 # call through the imported name raising a missing-argument error.
 has_units = _UnitsPredicate("has_units")
 has_units._register(2, simple_to_trampoline(_units_constraint._has_units))
+
+# The RAISING sibling of has_units/2. Same relation, opposite failure mode:
+# has_units/2 fails silently, which a guard position swallows.
+compatible_units = _UnitsPredicate("compatible_units")
+compatible_units._register(2, _simple_to_trampoline(_compatible_units_impl))
 
 
 # ═════════════════════════════════════════════════════════════════════════════

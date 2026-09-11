@@ -227,7 +227,11 @@ class TestTitleCaseAliases:
             and n == n.lower() and len(n) > 3
             and not v is units.dimension_of
         }
-        expected = {"dimension_of", "strip_units", "make_quantity", "has_units"}
+        # Predicates exported from `units`, not units themselves — they have
+        # no TitleCase spelling to alias. `compatible_units` is the raising
+        # sibling of `has_units` (2026-09-11).
+        expected = {"dimension_of", "strip_units", "make_quantity",
+                    "has_units", "compatible_units"}
         assert lower_units - set(table.values()) - expected == set()
 
     def test_python_attribute_still_works_and_warns_once(

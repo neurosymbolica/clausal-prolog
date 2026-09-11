@@ -596,6 +596,55 @@ currency_end(mark, E)       # E = "2002-05-15";  euro's end is None (still curre
 
 ---
 
+## Asserting a unit: `compatible_units/2`
+
+[`has_units/2`](units.md) answers "does this carry that unit?" by **succeeding or failing**.
+In a goal position a failure is swallowed — the guard does not fire, the rule does not fire,
+and the caller gets "no" rather than "you passed the wrong thing". When the answer matters,
+assert it:
+
+```clausal
+-import_from(py.units, [compatible_units])
+-import_from(european_union, [euro])
+
+# raises UnitsMismatch unless AMOUNT is a euro quantity
+positive_fee(AMOUNT) <- (compatible_units(AMOUNT, euro), AMOUNT > 0.00(euro))
+```
+
+```text
+compatible_units: expected dollar (USD), got dollar (AUD)
+compatible_units: 5 carries no unit, so it cannot be euro. A bare number is never
+compatible, not even with dimensionless — write the quantity (`5(euro)`), or declare
+it with -constant_number_currency.
+```
+
+It raises [`UnitsMismatch`](#errors-and-catch3), so `catch/3` catches it and binds the
+message exactly as for a mismatch raised by arithmetic.
+
+**Scale is ignored, because by here it has already been applied.** A scaled unit normalises
+at construction, so `155000 usd_cent` *is* `Decimal('1550.00') usd` and `5 kilometre` is 5000
+metres. What is left to check is the dimension, and a minor unit names the same one as its
+currency:
+
+```text
+compatible_units(155000(usd_cent), usd)       succeeds
+compatible_units(155000(usd_cent), usd_cent)  succeeds
+compatible_units(5(kilometre), metre)         succeeds
+```
+
+That is also what makes ratios work. `basis_points` and `percent` are both dimensionless
+*with a scale factor*, so both normalise and `300 basis_points` compares equal to
+`3 percent` — the same right answer from either spelling.
+
+**A bare number is never compatible, not even with `dimensionless`.** This is deliberately
+stricter than the arithmetic, which does let a bare number add to a dimensionless quantity.
+The predicate asserts that a value IS a quantity carrying a unit, and a bare number satisfies
+no unit claim — and it is the only version that closes the hole for ratios, where a bare
+`0.03` would otherwise pass as "dimensionless" and wave through the case the check exists to
+catch. A dimensionless *quantity* — a ratio built by division, say — passes.
+
+---
+
 ## Errors and `catch/3`
 
 Two catchable exceptions, and one warning.  Both exceptions are Python classes, so a `.clausal` file names
