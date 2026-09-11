@@ -260,6 +260,20 @@ def instantiation_error(context: str = "") -> Compound:
     return Compound("error", (mint("instantiation_error"), context))
 
 
+def system_error(code: str, context: str = "") -> Compound:
+    """Build error(system_error(Code), Context).
+
+    ISO 13211-1 §7.12.2 lists ``system_error`` for errors outside the
+    standard's own catalogue; the engine puts its own error CODE inside it
+    so a ``catch/3`` pattern can select one kind (``units_mismatch``,
+    ``units_undetermined``, …) without matching every system error. *Code*
+    is minted as an atom like the names in :func:`type_error`; *Context* is
+    human text.
+    """
+    inner = Compound("system_error", (_name_atom(code),))
+    return Compound("error", (inner, context))
+
+
 def existence_error(obj_type: str, culprit: Any, context: str = "") -> Compound:
     """Build error(existence_error(ObjType, Culprit), Context)."""
     inner = Compound("existence_error", (_name_atom(obj_type), culprit))
