@@ -171,11 +171,11 @@ written — so the currency constructor warns
 or more significant digits. It cannot detect the loss; it detects the band in which loss is
 possible, which is the difference between a loud problem and a silent wrong amount.
 
-**The exact spelling for a large amount is a [minor unit](#minor-units--cent)**, because the
+**The exact spelling for a large amount is a [minor unit](#minor-units)**, because the
 magnitude is then an integer and an integer is exact at any size:
 
 ```text
-     12345678901234565 cent  ->  123456789012345.65   exact
+     12345678901234565 eur_cent ->  123456789012345.65   exact
     123456789012345.65 euro  ->  123456789012345.66   one cent high, and warns
 ```
 
@@ -214,7 +214,7 @@ amount_value <- (eval_(7.89(euro), A), strip_units(A, V_UNUSED))   # V = Decimal
 
 ---
 
-## Minor units — `cent`
+## Minor units
 
 **Ruled 2026-09-11.** This supersedes an earlier ruling of the same day, "there is no
 minor-unit currency, and there will not be"; [what changed](#what-changed-and-why) is
@@ -224,16 +224,16 @@ A minor unit is an **ordinary scaled unit** of its base currency, defined in the
 jurisdiction module as the currency itself — the same shape as `kilometre` against `metre`:
 
 ```clausal
--import_from(united_states, [dollar, cent])
+-import_from(united_states, [dollar, usd_cent])
 
 # what the filing SAID, in the unit it said it in
--constant_number_units(sga_monthly, 155000, cent)
+-constant_number_units(sga_monthly, 155000, usd_cent)
 ```
 
 ```text
 stored            Quantity(Decimal('1550.00'), dollar)   one representation, always
 constant_value/2  Quantity(Decimal('1550.00'), dollar)
-constant_number_units/3   155000, cent                   what the declaration said
+constant_number_units/3   155000, usd_cent                   what the declaration said
 ```
 
 The point is that the declaration names the **currency and the scale where the engine can
@@ -245,12 +245,12 @@ After declaration the constant simply **is** a dollar amount, which is what make
 major amounts add with no conversion logic and no mixed-dimension arithmetic:
 
 ```clausal
--import_from(european_union, [euro, cent])
+-import_from(european_union, [euro, eur_cent])
 
-total(T) <- (eval_(5000 (cent), A), eval_(10.00 (euro), B), eval_(A + B, T))   # 60.00(euro)
+total(T) <- (eval_(5000 (eur_cent), A), eval_(10.00 (euro), B), eval_(A + B, T))   # 60.00(euro)
 ```
 
-Being an ordinary unit, `cent` works in a declaration, in the `155000 (cent)` annotation
+Being an ordinary unit, a minor unit works in a declaration, in the `155000 (usd_cent)` annotation
 sugar and in arithmetic — there is no special case anywhere, and nothing to remember about
 where the spelling is legal.
 
@@ -258,11 +258,29 @@ where the spelling is legal.
 
 | Import | Minor unit | Factor |
 |--------|-----------|--------|
-| `european_union` | `cent` | 1/100 euro |
-| `united_states` | `cent` | 1/100 dollar |
-| `australia` | `cent` | 1/100 dollar |
+| `european_union` | `eur_cent` | 1/100 euro |
+| `united_states` | `usd_cent` | 1/100 dollar |
+| `australia` | `aud_cent` | 1/100 dollar |
 | `united_kingdom` | `penny` | 1/100 sterling |
 | `thailand` | `satang` | 1/100 baht |
+
+**A shared subunit word carries its currency in its name; a unique one does not.** `cent`
+belongs to the euro, the US dollar and the Australian dollar alike, so the bare word names
+none of them and is not bound — `eur_cent`, `usd_cent`, `aud_cent`. `penny` is sterling's
+alone and `satang` is the baht's alone, so they stay bare. The rule is derived from the
+curated word table, not written per currency.
+
+This is not decoration. It closes two holes by construction:
+
+* `-import_from(european_union, [euro, eur_cent])` followed by
+  `-import_from(united_states, [dollar, usd_cent])` used to bind `cent` **twice, silently,
+  last-one-wins** — and a rulebase computing throughout in what it believed were euro cents
+  would be holding dollars and never raise, because nothing would ever meet a euro amount to
+  mismatch against. Two minor units can now be imported into one file.
+* `constant_number_units/3` reports the declared **spelling**, so the spelling has to carry
+  the currency. Both sides previously answered `cent`, and the qualified `united_states.cent`
+  that would have disambiguated records nothing at all — `_units_ast_to_term` returns `None`
+  for an attribute, so that declaration has no `/3` answer.
 
 Minor-unit *names* are not in ISO 4217 — the standard carries only the number of decimal
 places — so they are curated data, added per currency as a rulebase needs one. See
@@ -272,15 +290,15 @@ the currencies a corpus census found carrying a minor-unit scale in identifier n
 Names are **singular**, as every unit name in the vocabulary is (`metre`, not `metres`): GBP's
 subunit is `penny`, even where a rulebase spells its own identifiers `_pence`.
 
-`cent` is **jurisdiction-scoped exactly as `dinar` is**: bare-import one, qualify the other.
+A minor unit is **jurisdiction-scoped exactly as `dinar` is**: bare-import one, qualify the other.
 A cent of one currency still never adds to a cent of another.
 
 ```clausal
--import_from(united_states, [dollar, cent])
+-import_from(united_states, [dollar, usd_cent])
 -import_module(european_union)
 
-us(A) <- eval_(5000 (cent), A)                       # 50.00(dollar)
-eu(A) <- eval_(5000 (european_union.cent), A)        # 50.00(euro)
+us(A) <- eval_(5000 (eur_cent), A)                       # 50.00(dollar)
+eu(A) <- eval_(5000 (eur_cent), A)        # 50.00(euro)
 ```
 
 ### The factor is derived, never written
@@ -310,20 +328,20 @@ the name entirely, because the declaration carries it.
 
 `clausal_to_prolog` folds a constant to its declared magnitude and discards the unit, which is
 faithful for a **base** unit (a currency, `metre`, `second`, or a factor-1 derived unit like
-`newton`) and wrong for a **scaled** one. `-constant_number_units(sga_monthly, 155000, cent)`
+`newton`) and wrong for a **scaled** one. `-constant_number_units(sga_monthly, 155000, usd_cent)`
 would export as `155000` where the engine holds `Decimal('1550.00') dollar` — a 100× money
 error. So it **refuses** rather than folding:
 
 ```text
-NotImplementedError: clausal_to_prolog: -constant_number_units(sga_monthly, ..., cent)
-declares a constant in a scaled unit (cent), and the exporter folds a constant to its
+NotImplementedError: clausal_to_prolog: -constant_number_units(sga_monthly, ..., usd_cent)
+declares a constant in a scaled unit (usd_cent), and the exporter folds a constant to its
 DECLARED magnitude -- which is not the magnitude the engine holds once a unit rescales.
 Declare the constant in a base unit ...
 ```
 
 The same refusal covers `30 day` and `5 kilometre`: the defect was never currency-specific —
 `day` is `Quantity(86400, second)`, so the exported `30` was never the 2592000 the engine
-holds. It also covers the **inline** form, `pay(155000(cent))`, which reaches a different
+holds. It also covers the **inline** form, `pay(155000(usd_cent))`, which reaches a different
 lowering and had the identical defect; refusing one shape and not the other would leave a
 hole in the middle of the guarantee. The two checks have opposite polarity on purpose — a
 declaration is refused unless its unit is known to be a base unit, while an inline quantity
@@ -343,10 +361,12 @@ The earlier ruling gave three reasons against a minor unit. The first is **answe
 naming the currency in the unit; the other two were **measured on this tree and do not
 hold**:
 
-1. *`cent` is ambiguous — euros have cents, dollars have cents.* Answered: `cent` lives in
-   its jurisdiction module, so `united_states.cent` and `european_union.cent` are distinct
-   units that never add, by the rule that already governs `dinar`.
-2. *A scaled minor unit would silently rescale `5000 cent` to `50`.* It rescales — to
+1. *`cent` is ambiguous — euros have cents, dollars have cents.* Answered twice over. Each
+   minor unit lives in its jurisdiction module, so they are distinct units that never add, by
+   the rule that already governs `dinar`; and because the word `cent` is shared, it is not
+   bound bare at all — the amount is written `eur_cent` or `usd_cent`, which says which at
+   the site rather than at the import.
+2. *A scaled minor unit would silently rescale `5000 eur_cent` to `50`.* It rescales — to
    `Decimal('50.00') euro`, which is the correct amount and the single representation the
    design wants. The 100× error described was a misreading: normalisation multiplies by the
    factor.
@@ -557,13 +577,19 @@ and one self-contained module per jurisdiction. Jurisdictions are registered
 
 To add or correct a currency, edit the generator (its scale-exception sets, `REGIONAL`,
 `OVERRIDE_NAME`/`OVERRIDE_SYMBOL`) and rerun it. To give a currency a
-[minor unit](#minor-units--cent), add its ISO code to the generator's `MINOR_UNITS` table
+[minor unit](#minor-units), add its ISO code to the generator's `MINOR_UNITS` table
 with the subunit's NAME — the factor is never written there, `_make_minor_unit` derives it
 from the currency's own scale:
 
 ```python
-MINOR_UNITS = {"EUR": "cent", "USD": "cent", "GBP": "penny"}   # ISO code -> subunit name
+MINOR_UNIT_WORDS = {"EUR": "cent", "USD": "cent", "GBP": "penny"}   # ISO code -> subunit WORD
 ```
+
+The bound NAME is derived from that table, not written: a word belonging to more than one
+currency takes its ISO code as a prefix (`eur_cent`), a word belonging to one stays bare
+(`penny`). So adding a currency whose subunit word is already in use renames nothing that
+exists — but adding a *second* user of a currently-unique word would, which is why the
+resolved `MINOR_UNITS` is emitted into `_data.py` where a test checks it against the rule.
 
 ```bash
 python scripts/gen_currencies.py   # rewrites _data.py + the jurisdiction modules

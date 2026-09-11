@@ -441,10 +441,21 @@ JURISDICTIONS = [
     "zimbabwe",
 ]
 
-MINOR_UNITS = {
+#: Curated subunit WORDS (ISO 4217 carries the scale, not the word).
+MINOR_UNIT_WORDS = {
     "AUD": "cent",
     "EUR": "cent",
     "GBP": "penny",
     "THB": "satang",
     "USD": "cent",
+}
+
+#: The names actually bound: a word shared by more than one currency
+#: takes its ISO code as a prefix, a unique word stays bare.
+MINOR_UNITS = {
+    "AUD": "aud_cent",
+    "EUR": "eur_cent",
+    "GBP": "penny",
+    "THB": "satang",
+    "USD": "usd_cent",
 }

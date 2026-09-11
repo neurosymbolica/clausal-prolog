@@ -1,10 +1,10 @@
-"""Minor currency units — `cent` as a scaled unit of its base currency.
+"""Minor currency units — a scaled unit of the base currency it belongs to.
 
 The operator's ruling, 2026-09-11: a declaration must name the currency AND
 the scale where the ENGINE can see both, instead of encoding them in the
 parameter's identifier where only a human can read them:
 
-    -constant_number_units(sga_monthly, 155000, cent)
+    -constant_number_units(sga_monthly, 155000, usd_cent)
 
 A minor unit is an ORDINARY scaled unit — `Quantity(Decimal('0.01'), dollar)`,
 the same shape as `kilometre = Quantity(1000, {metre: 1})` — so it works in a
@@ -13,10 +13,10 @@ anywhere. Two properties make it safe for money and are tested here:
 
   * the factor is DERIVED from the currency's ISO scale, so it cannot drift
     from it, and
-  * it is a `Decimal`, never a binary float, so `155000 cent` is exactly
+  * it is a `Decimal`, never a binary float, so `155000 usd_cent` is exactly
     `Decimal('1550.00')`.
 
-`constant_number_units/3` still reports the DECLARED pair (`155000, cent`),
+`constant_number_units/3` still reports the DECLARED pair (`155000, usd_cent`),
 which is what lets a gate check that a parameter's unit matches the unit its
 NAME claims. See docs/currency.md.
 """
@@ -49,18 +49,18 @@ def _one(module, goal, arity):
 # ── the units themselves ──────────────────────────────────────────────────────
 
 def test_cent_is_a_scaled_unit_of_the_dollar():
-    from clausal.modules.countries.united_states import cent, dollar
-    assert isinstance(cent, Quantity)
-    assert cent.dims == {dollar: 1}, "a cent is a dollar amount, not a dimension"
+    from clausal.modules.countries.united_states import usd_cent, dollar
+    assert isinstance(usd_cent, Quantity)
+    assert usd_cent.dims == {dollar: 1}, "a cent is a dollar amount, not a dimension"
 
 
 def test_the_minor_factor_is_decimal_never_float():
     """The constraint money exists to keep. A float factor is what puts money
     in binary floating point; `gram = Quantity(1e-3, {kilogram: 1})` is why
     `7 gram` is 0.007 and not exact."""
-    from clausal.modules.countries.united_states import cent
-    from clausal.modules.countries.european_union import cent as eur_cent
-    assert isinstance(cent.value, Decimal)
+    from clausal.modules.countries.united_states import usd_cent
+    from clausal.modules.countries.european_union import eur_cent
+    assert isinstance(usd_cent.value, Decimal)
     assert isinstance(eur_cent.value, Decimal)
 
 
@@ -85,9 +85,13 @@ def test_a_currency_with_no_minor_unit_is_refused():
 
 
 def test_each_currencys_cent_is_its_own():
-    """`cent` is jurisdiction-scoped exactly as `dinar` already is."""
-    from clausal.modules.countries.united_states import cent as usd_cent, dollar
-    from clausal.modules.countries.european_union import cent as eur_cent, euro
+    """A minor unit whose WORD is shared carries its currency in its NAME.
+
+    `cent` belongs to AUD, EUR and USD alike, so the bare word names none of
+    them and does not exist; `penny` and `satang` are unique and stay bare.
+    Operator's ruling, 2026-09-11."""
+    from clausal.modules.countries.united_states import usd_cent, dollar
+    from clausal.modules.countries.european_union import eur_cent, euro
     assert usd_cent.dims == {dollar: 1}
     assert eur_cent.dims == {euro: 1}
 
@@ -98,8 +102,8 @@ def test_a_minor_unit_declaration_stores_the_base_currency_amount(tmp_path):
     """One representation: after declaration it IS a dollar amount, which is
     what makes it addable to dollars with no conversion logic."""
     m = _load(tmp_path, "store", """
-        -import_from(united_states, [dollar, cent])
-        -constant_number_units(mu_sga_monthly, 155000, cent)
+        -import_from(united_states, [dollar, usd_cent])
+        -constant_number_units(mu_sga_monthly, 155000, usd_cent)
     """)
     from clausal.modules.countries.united_states import dollar
     assert m.mu_sga_monthly.value == Decimal("1550.00")
@@ -112,12 +116,12 @@ def test_the_declared_minor_pair_is_what_slash_3_reports(tmp_path):
     reads back as 155000 cents, not as 1550 dollars."""
     m = _load(tmp_path, "declared", """
         -module(declared, [look/2, mu_fee])
-        -import_from(european_union, [euro, cent])
-        -constant_number_units(mu_fee, 5000, cent)
+        -import_from(european_union, [euro, eur_cent])
+        -constant_number_units(mu_fee, 5000, eur_cent)
 
         look(N, U) <- constant_number_units(mu_fee, N, U)
     """)
-    assert _one(m, "look", 2) == (5000, ("cent",))
+    assert _one(m, "look", 2) == (5000, ("eur_cent",))
 
 
 def test_a_minor_amount_adds_to_a_major_amount(tmp_path):
@@ -125,9 +129,9 @@ def test_a_minor_amount_adds_to_a_major_amount(tmp_path):
     eur_cents"."""
     m = _load(tmp_path, "add", """
         -module(add, [total/1])
-        -import_from(european_union, [euro, cent])
+        -import_from(european_union, [euro, eur_cent])
 
-        total(T) <- (eval_(5000 (cent), A), eval_(10.00 (euro), B),
+        total(T) <- (eval_(5000 (eur_cent), A), eval_(10.00 (euro), B),
                      eval_(A + B, T))
     """)
     (total,) = _one(m, "total", 1)
@@ -139,9 +143,9 @@ def test_a_minor_unit_works_in_value_position(tmp_path):
     corpus has values duplicated as bare literals beside their parameter."""
     m = _load(tmp_path, "sugar", """
         -module(sugar, [fee/1])
-        -import_from(united_states, [dollar, cent])
+        -import_from(united_states, [dollar, usd_cent])
 
-        fee(F) <- eval_(155000 (cent), F)
+        fee(F) <- eval_(155000 (usd_cent), F)
     """)
     (fee,) = _one(m, "fee", 1)
     assert fee.value == Decimal("1550.00")
@@ -152,11 +156,11 @@ def test_the_qualified_form_names_the_currency(tmp_path):
     the rule that already governs `dinar`."""
     m = _load(tmp_path, "qual", """
         -module(qual, [eu/1, us/1])
-        -import_from(united_states, [dollar, cent])
+        -import_from(united_states, [dollar, usd_cent])
         -import_module(european_union)
 
-        eu(A) <- eval_(5000 (european_union.cent), A)
-        us(A) <- eval_(5000 (cent), A)
+        eu(A) <- eval_(5000 (european_union.eur_cent), A)
+        us(A) <- eval_(5000 (usd_cent), A)
     """)
     from clausal.modules.countries.european_union import euro
     from clausal.modules.countries.united_states import dollar
@@ -172,10 +176,10 @@ def test_minor_units_of_different_currencies_do_not_add(tmp_path):
     from clausal.terms import UnitsMismatch
     m = _load(tmp_path, "mismatch", """
         -module(mismatch, [bad/1])
-        -import_from(united_states, [dollar, cent])
+        -import_from(united_states, [dollar, usd_cent])
         -import_module(european_union)
 
-        bad(X) <- (eval_(100 (cent), A), eval_(100 (european_union.cent), B),
+        bad(X) <- (eval_(100 (usd_cent), A), eval_(100 (european_union.eur_cent), B),
                    eval_(A + B, X))
     """)
     with pytest.raises(UnitsMismatch):
@@ -316,8 +320,8 @@ def test_the_exporter_refuses_a_constant_declared_in_a_minor_unit():
     used to emit `pay(155000)` where the engine holds 1550.00 dollar -- a
     100x money error flagged only by a comment. A comment is not a guard."""
     with pytest.raises(NotImplementedError, match="scaled unit"):
-        _export("-import_from(united_states, [dollar, cent])\n"
-                "-constant_number_units(sga_monthly, 155000, cent)\n"
+        _export("-import_from(united_states, [dollar, usd_cent])\n"
+                "-constant_number_units(sga_monthly, 155000, usd_cent)\n"
                 "pay(constant(sga_monthly)),\n")
 
 
@@ -391,14 +395,14 @@ def test_the_band_is_a_hazard_not_a_certainty():
 def test_minor_units_keep_the_amount_the_float_literal_loses():
     """The pair that shows the recommendation works: the same amount the
     float literal cannot express is exact as an integer count of cents."""
-    from clausal.modules.countries.european_union import cent
-    assert (12345678901234565 * cent).value == Decimal("123456789012345.65")
+    from clausal.modules.countries.european_union import eur_cent
+    assert (12345678901234565 * eur_cent).value == Decimal("123456789012345.65")
 
 
 # ── the same refusal on the INLINE quantity path ─────────────────────────────
 #
 # The declaration is only ONE of the two ways a rulebase writes a minor-unit
-# amount. `pay(155000(cent))` reaches a different lowering (`_try_quantity`),
+# amount. `pay(155000(usd_cent))` reaches a different lowering (`_try_quantity`),
 # which kept the magnitude and dropped the unit for every unit, base or
 # scaled — so option 1 covered one shape and left the identical 100x defect
 # open on the other. Found by corpus-lane, 2026-09-11, on this tree.
@@ -406,8 +410,8 @@ def test_minor_units_keep_the_amount_the_float_literal_loses():
 
 def test_the_exporter_refuses_an_inline_quantity_in_a_scaled_unit():
     with pytest.raises(NotImplementedError, match="scaled unit"):
-        _export("-import_from(united_states, [dollar, cent])\n"
-                "pay(155000(cent)),\n")
+        _export("-import_from(united_states, [dollar, usd_cent])\n"
+                "pay(155000(usd_cent)),\n")
 
 
 def test_the_exporter_refuses_an_inline_scaled_physical_unit():
@@ -437,12 +441,12 @@ def test_an_inline_base_unit_quantity_still_exports():
 def test_the_australian_cent_is_its_own_unit():
     """`target_au_turnover_cents` is AUD cents. The identifier that most
     needs a compiler-checkable unit was the one that could not have one —
-    and declaring it in `united_states.cent` would have been the 100x-adjacent
+    and declaring it in `united_states.usd_cent` would have been the 100x-adjacent
     confusion this feature exists to prevent, with the engine's blessing."""
-    from clausal.modules.countries.australia import cent, dollar
-    from clausal.modules.countries.united_states import cent as usd_cent
-    assert cent.value == Decimal("0.01") and cent.dims == {dollar: 1}
-    assert cent.dims != usd_cent.dims, "an AUD cent is not a USD cent"
+    from clausal.modules.countries.australia import aud_cent, dollar
+    from clausal.modules.countries.united_states import usd_cent
+    assert aud_cent.value == Decimal("0.01") and aud_cent.dims == {dollar: 1}
+    assert aud_cent.dims != usd_cent.dims, "an AUD cent is not a USD cent"
 
 
 def test_the_thai_satang_is_a_scaled_unit_of_the_baht():
@@ -490,7 +494,7 @@ def test_the_exporter_refuses_every_named_minor_unit():
 
 # ── a mismatch must SAY which is which ───────────────────────────────────────
 #
-# `australia.cent + united_states.cent` correctly raised UnitsMismatch and
+# `australia.aud_cent + united_states.usd_cent` correctly raised UnitsMismatch and
 # said "dollar vs dollar" — a true error in a form indistinguishable from an
 # engine bug, on exactly the case the AUD widening exists to catch. 25 of the
 # 153 distinct currency names are shared by two or more ISO codes (dollar 22,
@@ -508,9 +512,9 @@ def _mismatch_sides(left, right):
 
 
 def test_same_named_currencies_are_distinguished_in_the_message():
-    from clausal.modules.countries.australia import cent as au_cent
-    from clausal.modules.countries.united_states import cent as us_cent
-    left, right = _mismatch_sides(1 * au_cent, 1 * us_cent)
+    from clausal.modules.countries.australia import aud_cent
+    from clausal.modules.countries.united_states import usd_cent
+    left, right = _mismatch_sides(1 * aud_cent, 1 * usd_cent)
     assert left != right, f"both sides rendered as {left!r}"
     assert "AUD" in left and "USD" in right, (left, right)
 
@@ -584,3 +588,121 @@ def test_the_mismatch_message_is_identical_across_runs():
                            capture_output=True, text=True).stdout
             for _ in range(3)}
     assert len(seen) == 1, f"message varies between runs: {seen}"
+
+
+# ── the name carries the currency exactly where the word does not ────────────
+#
+# Operator's ruling, 2026-09-11: `cent` belongs to AUD, EUR and USD alike, so
+# a bare `cent` names none of them; `penny` and `satang` are unique and stay
+# bare. This is not decoration — it closes two gaps by construction rather
+# than guarding them. Two jurisdictions can no longer shadow each other's
+# minor unit on import, and `/3` names the currency without needing the
+# qualified form (which records nothing, `_units_ast_to_term` returning None
+# for an Attribute).
+
+
+def test_a_shared_subunit_word_is_never_bound_bare():
+    """The gap this closes: `-import_from` of two jurisdictions used to bind
+    `cent` twice, silently, last-one-wins — a rulebase computing in silently
+    USD "cents" is wrong and never raises, because nothing ever meets a euro
+    amount to mismatch against."""
+    from clausal.modules.countries import european_union, united_states, australia
+    for module in (european_union, united_states, australia):
+        assert not hasattr(module, "cent"), (
+            f"{module.__name__} still binds a bare `cent`")
+
+
+def test_a_unique_subunit_word_stays_bare():
+    """`satang` is Thailand's alone and `penny` is sterling's alone, so
+    nothing is gained by prefixing them and the operator ruled they stay."""
+    from clausal.modules.countries import thailand, united_kingdom
+    assert hasattr(thailand, "satang") and not hasattr(thailand, "thb_satang")
+    assert hasattr(united_kingdom, "penny") and not hasattr(united_kingdom, "gbp_penny")
+
+
+def test_both_minor_units_import_into_one_file_without_shadowing(tmp_path):
+    """The whole point, end to end: two currencies' minor units in one file,
+    each resolving to its own currency. Before the rename this file bound
+    `cent` twice and the second silently won."""
+    m = _load(tmp_path, "both", """
+        -module(both, [eu/1, us/1])
+        -import_from(european_union, [euro, eur_cent])
+        -import_from(united_states, [dollar, usd_cent])
+
+        eu(A) <- eval_(5000 (eur_cent), A)
+        us(A) <- eval_(5000 (usd_cent), A)
+    """)
+    from clausal.modules.countries.european_union import euro
+    from clausal.modules.countries.united_states import dollar
+    (eu,), (us,) = _one(m, "eu", 1), _one(m, "us", 1)
+    assert eu.dims == {euro: 1} and us.dims == {dollar: 1}
+    assert eu.value == us.value == Decimal("50.00")
+
+
+def test_slash_3_names_the_currency_without_the_qualified_form(tmp_path):
+    """`/3` reports the declared SPELLING, so the spelling now carries the
+    currency. Previously both sides answered `cent` and a gate could not tell
+    EUR cents from USD cents from /3 at all."""
+    m = _load(tmp_path, "named", """
+        -module(named, [eu/2, us/2, n_eu, n_us])
+        -import_from(european_union, [euro, eur_cent])
+        -import_from(united_states, [dollar, usd_cent])
+        -constant_number_units(n_eu, 5000, eur_cent)
+        -constant_number_units(n_us, 5000, usd_cent)
+
+        eu(N, U) <- constant_number_units(n_eu, N, U)
+        us(N, U) <- constant_number_units(n_us, N, U)
+    """)
+    assert _one(m, "eu", 2) == (5000, ("eur_cent",))
+    assert _one(m, "us", 2) == (5000, ("usd_cent",))
+
+
+def test_the_naming_rule_is_derived_from_the_table_not_hand_written():
+    """A word used by more than one currency is prefixed with its ISO code;
+    a word used by one is not. Checked against the table so the rule cannot
+    drift from the names actually bound."""
+    import importlib
+    from collections import Counter
+    from clausal.modules.countries import _data
+    words = Counter(_data.MINOR_UNIT_WORDS.values())
+    assert words, "positive control: the word table is not empty"
+    assert any(c > 1 for c in words.values()), (
+        "positive control: some subunit WORD really is shared, or this test "
+        "proves nothing")
+    for code, word in _data.MINOR_UNIT_WORDS.items():
+        row = next(r for r in _data.CURRENCIES if r["code"] == code)
+        expected = f"{code.lower()}_{word}" if words[word] > 1 else word
+        assert _data.MINOR_UNITS[code] == expected, code
+        module = importlib.import_module(
+            f"clausal.modules.countries.{row['jurisdiction']}")
+        assert hasattr(module, expected), f"{code}: {expected} not bound"
+
+
+def test_the_committed_names_are_what_the_generator_would_emit():
+    """`_data.py` is GENERATED but was hand-edited, because babel (a
+    build-only dependency) is not installed in this venv and the generator
+    cannot be run here. So the one thing that could silently drift — the
+    curated words and the rule that resolves them — is checked directly
+    against the generator source, which needs no babel to read.
+    """
+    import ast
+    from clausal.modules.countries import _data
+
+    source = ast.parse(open("scripts/gen_currencies.py", encoding="utf-8").read())
+    ns = {}
+    for node in source.body:
+        wanted = (isinstance(node, ast.Assign)
+                  and getattr(node.targets[0], "id", "") == "MINOR_UNIT_WORDS")
+        wanted |= (isinstance(node, ast.FunctionDef)
+                   and node.name == "minor_unit_names")
+        if wanted:
+            exec(compile(ast.Module([node], []), "<gen>", "exec"), ns)
+    assert "minor_unit_names" in ns and ns.get("MINOR_UNIT_WORDS"), (
+        "positive control: the generator's rule and word table were found")
+
+    assert ns["MINOR_UNIT_WORDS"] == _data.MINOR_UNIT_WORDS
+    assert ns["minor_unit_names"](ns["MINOR_UNIT_WORDS"]) == _data.MINOR_UNITS
+    # The rule must do something, or agreement proves nothing.
+    assert ns["minor_unit_names"](
+        {"XXX": "cent", "YYY": "cent", "ZZZ": "krone"}) == {
+            "XXX": "xxx_cent", "YYY": "yyy_cent", "ZZZ": "krone"}

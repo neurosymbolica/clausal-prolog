@@ -2,4 +2,4 @@
 from clausal.modules.countries._currency import _make_currency, _make_minor_unit
 
 dollar = _make_currency("dollar", iso_code="USD", scale=2, symbol="$", start="1792-01-01", end=None)
-cent = _make_minor_unit(dollar)
+usd_cent = _make_minor_unit(dollar)

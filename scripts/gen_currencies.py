@@ -63,18 +63,46 @@ OVERRIDE_SYMBOL = {"BHD": "BD"}
 # standard gives only the NUMBER of decimal places (the `scale` field), not the
 # word for the subunit. Currencies whose minor unit a rulebase actually writes
 # get an entry; the rest simply have no minor unit name, which is honest --
+# Curated subunit WORDS, one per currency whose minor unit a rulebase writes.
 # EUR and USD first (operator, 2026-09-11), widened the same day to AUD, THB
 # and GBP after a corpus census found 139 identifiers carrying a minor-unit
 # scale in their NAMES across 27 domains -- 6 of which used a currency with no
-# minor unit here, so their amounts could not be declared in the unit their
-# own names claimed. The FACTOR is never written here: `_make_minor_unit`
-# derives it from the currency's own scale.
+# minor unit here. ISO 4217 carries the SCALE but not the WORD, so these are
+# curated; the FACTOR is never written, `_make_minor_unit` derives it from the
+# currency's own scale.
 #
-# Names are SINGULAR, as every unit name in the vocabulary is (`metre`, not
-# `metres`): GBP's subunit is `penny`, though the corpus spells its
-# identifiers `_pence` (operator, 2026-09-11).
-MINOR_UNITS = {"AUD": "cent", "EUR": "cent", "GBP": "penny",
-               "THB": "satang", "USD": "cent"}
+# Words are SINGULAR, as every unit name in the vocabulary is (`metre`, not
+# `metres`): GBP's subunit is `penny`, though the corpus spells its identifiers
+# `_pence` (operator, 2026-09-11).
+MINOR_UNIT_WORDS = {"AUD": "cent", "EUR": "cent", "GBP": "penny",
+                    "THB": "satang", "USD": "cent"}
+
+
+def minor_unit_names(words):
+    """Resolve curated subunit words to the names actually bound.
+
+    A word belonging to more than one currency names none of them, so it
+    takes its ISO code as a prefix: `cent` is AUD's, EUR's and USD's alike
+    and becomes `eur_cent`/`usd_cent`/`aud_cent`. A word belonging to one
+    currency stays bare -- `satang` is Thailand's alone (operator,
+    2026-09-11).
+
+    This closes two holes by construction rather than guarding them. Two
+    jurisdictions can no longer bind the same bare minor-unit name, which
+    `-import_from` resolves silently last-one-wins; and because
+    `constant_number_units/3` reports the declared SPELLING, the spelling
+    now carries the currency -- previously EUR and USD cents both answered
+    `cent`, and the qualified `united_states.cent` that would have
+    disambiguated records nothing at all (`_units_ast_to_term` returns None
+    for an Attribute).
+    """
+    shared = {w for w in words.values()
+              if sum(1 for x in words.values() if x == w) > 1}
+    return {code: (f"{code.lower()}_{word}" if word in shared else word)
+            for code, word in words.items()}
+
+
+MINOR_UNITS = minor_unit_names(MINOR_UNIT_WORDS)
 
 
 def iso_scale(code):
@@ -251,7 +279,16 @@ def main():
         # exporter needs the minor-unit NAMES to refuse a quantity it cannot
         # export faithfully, and importing 181 modules to learn two strings
         # would be absurd.
-        f.write("\nMINOR_UNITS = {\n")
+        f.write("\n#: Curated subunit WORDS (ISO 4217 carries the scale, "
+                "not the word).\n")
+        f.write("MINOR_UNIT_WORDS = {\n")
+        for code in sorted(MINOR_UNIT_WORDS):
+            f.write(f"    {py(code)}: {py(MINOR_UNIT_WORDS[code])},\n")
+        f.write("}\n")
+        f.write("\n#: The names actually bound: a word shared by more than "
+                "one currency\n#: takes its ISO code as a prefix, a unique "
+                "word stays bare.\n")
+        f.write("MINOR_UNITS = {\n")
         for code in sorted(MINOR_UNITS):
             f.write(f"    {py(code)}: {py(MINOR_UNITS[code])},\n")
         f.write("}\n")
