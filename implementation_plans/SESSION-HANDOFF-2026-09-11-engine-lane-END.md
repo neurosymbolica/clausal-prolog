@@ -161,6 +161,76 @@ it decides whether this is a new kind of unit or an ordinary scaled one.
 corpus-lane handed off at 83% context; anything corpus-side now goes to the next corpus-lane
 session.
 
+## 4b. THE DESIGN for 4a — ruled by the operator 2026-09-11, NOT implemented
+
+**Scale is a property of the WRITTEN FORM, not of the quantity.**
+
+One dimension per currency. Every amount is a `Decimal` in the base unit, always.
+`eur_cents`/`usd_cents` exist as a **declaration spelling**, not as units in the dimension
+system.
+
+    -constant_number_units(sga_monthly, 155000, usd_cents)
+
+      stored:    Quantity(Decimal('1550.00'), usd)   <- ONE representation, always
+      /3 says:   155000, usd_cents                   <- what the declaration said
+      /2 says:   Quantity(Decimal('1550.00'), usd)
+
+Conversion is `Decimal(n).scaleb(-currency_scale(c))`. **Verified exact and round-tripping**
+for 155000@2, 4999999@2, 300@4 (bps) and 1@0 (a scale-0 currency like JPY).
+
+### Why not a real scaled unit
+
+Each of these is measured on this tree, not argued:
+
+- **Rescaling surprise.** Every non-base unit normalises to its base, so a real `eur_cents`
+  would turn `5000 eur_cents` into `50 euro` and we would relitigate "does it normalise?"
+  forever. With one representation the question does not exist.
+- **The numeric type follows the FACTOR's type.** `gram` is `Quantity(0.001, kilogram)` with a
+  FLOAT factor, which is why `7 gram` is `0.007` binary float. A minor unit carrying a factor
+  is one careless `0.01` from putting money in floats. `scaleb` has no factor to get wrong.
+- **A dimension per currency-scale** doubles the dimension table for no expressive gain:
+  `eur_cents` and `euro` measure the same thing.
+
+It meets both stated requirements directly: the declaration names the currency AND the scale
+where the engine can see them, and euro amounts are addable to eur_cents amounts **trivially,
+because after declaration they ARE euro amounts** — no conversion logic, no mixed-dimension
+arithmetic.
+
+### What it unlocks
+
+`constant_number_units/3` reporting the DECLARED pair becomes the mechanism for the gate
+corpus-lane wanted: **a parameter whose name ends `_cents` but whose declaration does not say
+a minor unit is a defect**, mechanically checkable. That is the whole "documented not
+represented" problem, closed. Eventually the suffix disappears because the declaration carries
+it — which is the argument for doing this BEFORE the 71-name cross-lane rename, since it may
+make most of that rename unnecessary.
+
+Generalises unchanged to ratios: `basis_points`, `percent` as declaration spellings for
+dimensionless ratios, exact via the same `scaleb`.
+
+### Where it differs from the literal request
+
+The operator asked for "units in the currency module with scale factor vs base". This gives the
+observable behaviour asked for but **NOT a separate unit in the dimension system** — there is
+no `Quantity(Decimal('0.01'), euro)` factor object. The thing worth preserving (what the
+statute said) is already preserved by `/3`, without paying for it in the value representation.
+**The operator has seen this distinction stated and ruled for this design.**
+
+### What it does NOT solve
+
+Nothing here touches corpus-lane's two findings: a domain whose PUBLIC interface computes in
+bps (`leverage_ratio_bps/2` exported), and values DUPLICATED as bare literals (the `300` at
+`leverage_ratio.clausal:111`). The second means the migration's DRY premise is partly false
+until the literal sites also become `constant(...)`. This design makes both cheaper — no
+numeric representation changes at any interface — but not free.
+
+### Also required with the work
+
+`docs/currency.md`'s "There is no minor-unit currency, and there will not be" section
+(`960edd94`) is superseded and must be rewritten, not left. Its reason 1 (ambiguity) is
+ANSWERED by naming the currency in the unit; reasons 2 and 3 (rescaling, floats) become the
+constraints above.
+
 ## 5. Open, and what they need
 
 - ~~The `-module` listing relaxation~~ **CLOSED** — moot. `constant(name)` needs no listing;
