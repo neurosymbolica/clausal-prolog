@@ -296,3 +296,63 @@ grepping for it.
 - The corpus writes `dollar`; those sites need `usd` or `aud`. corpus-lane and
   iso-export-lane have both been told, with the display-word caveat flagged as something for
   them to confirm rather than take on my word.
+
+---
+
+# Continued: `-constant_number_currency`, `303c2934` + `52a24676`
+
+    -constant_number_currency(sga_monthly, 155000, usd_cent)
+
+A money-specific declaration, named for its claim and enforcing it as
+`-constant_number_units` is named for "only numbers carry units".
+
+**The gap it closes is narrower than it looks, and two of the three obvious failures were
+already covered.** Measured before building:
+
+    -constant_number_units(fee, 5000, dollar)   NameError            already caught
+    -constant_number_units(fee, 5000, usdd)     NameError            already caught
+    -constant_number_units(fee, 5000, metre)    Quantity(5000, metre)   SILENT
+
+A mistyped or unbound currency cannot be written, because a currency identifier has to be
+BOUND — a property the ISO-code rename strengthened. What was silent is a unit that loads
+fine and is not money: asking for money and getting an int-valued length.
+
+**Money is a SHAPE, not a type: one currency at exponent one.** The first version required
+the argument to BE a currency and so refused `usd_cent`. That was type-purity about the
+argument, where the property asserted is about the constant — and it split the two safety
+properties so that an author could have the currency gate or the minor-unit scale but never
+both, with all 139 migration identifiers falling on the ungated side.
+
+## Method notes from this stretch
+
+- **`kilometre` is the discriminating test row.** A Quantity over a single non-currency base
+  at exponent one — structurally identical to `usd_cent` except `is_currency`. Every other
+  refusal fails for a shape reason and would survive a checker that dropped the currency
+  test. Mutation-verified: dropping just that clause fails only this row.
+- **Mutation-test a new gate.** Two of these tests originally passed while the directive did
+  not exist, matching the unknown-directive `SyntaxError` through a loose
+  `pytest.raises(Exception)`. Neutering the check must fail exactly the refusal tests.
+- **The doc-block COUNT caught a regression the name-set diff could not.** The new section
+  showed a refusal in a ```clausal block, which cannot compile by design: 38 -> 39 while the
+  failure name set stayed at 144, because that test was already failing. Retyped as ```text.
+- **A census of NAMES is never evidence about BINDINGS** (corpus-lane). Three of my errors
+  today are this one shape: an AU corpus claim inferred from a `_cents` name census when no
+  AU domain imports a currency at all; a blast radius of 1788 that was 74 once `trail.mark()`
+  was excluded; and `_base_unit_names` keyed on a word nothing could write after the rename.
+
+## Verification of the whole series, by iso-export-lane
+
+Zero bytes across 1560 exported files, canonical `96cc8df6` against clone `303c2934`, with
+**both engine trees hashed before and after the run** rather than pinned by sha alone — a
+sha names what HEAD said, not what was read, and the clone had 42 modified files during an
+earlier comparison. Their caveat, their fix.
+
+## State
+
+    clone main    52a24676
+    canonical     96cc8df6      untouched all session; the operator's hold stands
+    engine suite  144 failed / 15928 passed / 1 error, name set identical to baseline
+    doc blocks    38
+
+Corpus exposure on promotion is six sites in two US files (`dollar` -> `usd`), failing loud
+with an `ImportError` naming both the name and the module. No AU site exists today.
