@@ -516,7 +516,20 @@ string.
 | --- | --- | --- |
 | engine suite | me, on the promoted tree | 144 failed / 15966 passed / 1 error — failure NAME SET identical to the `946d7296` baseline |
 | export bytes | iso-export-lane, canonical `3b0e3547` | 0 across 1560 files, RAW **and** normalised, both engine trees content-pinned, corpus `b6f2c367` |
-| domain answers | harness-batch-lane, `7449448b` | answer diff — **in flight at time of writing** |
+| domain answers | harness-batch-lane, `26c1fdc0` | 82 rows, 82 unchanged, 0 moved, 0 no-score, 0 torn, one fingerprint — **after it caught a regression at `7449448b`** |
+
+**This landing is the cleanest demonstration yet that none of the three implies another.** The
+engine suite was green and the export roster was zero bytes across 1560 files while a domain
+was raising `type_error(number, Fraction(...))` at solve time. Only the answer diff could see
+it. `sum_list/2`'s new pre-validation used `isinstance(v, (int, float))`, which excludes
+`Fraction` and `Decimal` — and `Decimal` is the magnitude of every currency amount, so the
+worse half was invisible to all three instruments and came out of DIAGNOSING the lesser one.
+Fixed at `26c1fdc0` with `numbers.Number`; the broken row was re-measured alone and then again
+inside the sweep, agreeing both times.
+
+The domain axis has now run across **103 commits from `820dc66f`** with no moved answer, and
+has fired three times where the other two axes could not. That is the argument for keeping it
+in the set rather than treating it as confirmation.
 
 **A zero is not always the same result, and the difference is worth naming** (iso-export-lane).
 The `-constant_number_currency` zero was cheap: nothing in the corpus writes that directive,
