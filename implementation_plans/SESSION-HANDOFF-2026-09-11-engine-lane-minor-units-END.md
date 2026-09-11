@@ -203,3 +203,43 @@ only confirm itself.**
   from the CURRENCY coercion, and a dimensionless Quantity may not have it.
 - **Mike's calls, unchanged**: base-vs-minor for the migration, dropping the 71-name rename,
   the `.seam` remainder, iso-export-lane's `remedies_ineffectiveness` roster gap.
+
+---
+
+# Continued again: the naming rule, `4a362c88`
+
+Asked "how do we reliably tell euro cents from dollar cents in a calculation?", the answer
+turned out to be **you cannot get it wrong in a calculation, and you could get it wrong in
+the source** — which produced one more commit.
+
+**In calculations there is nothing to get wrong.** A cent does not survive to the
+calculation: it converts where it is written, and what remains is a currency-dimensioned
+amount. `euro vs dollar` is the existing dimension guard, and same-named currencies now read
+`dollar (AUD) vs dollar (USD)`.
+
+**In the source, two measured holes**, both closed by the operator's rule that a shared
+subunit word carries its currency in its name (`eur_cent`, `usd_cent`, `aud_cent`; `penny`
+and `satang` unique, so bare):
+
+1. `-import_from` binds a duplicate name **silently, last-one-wins, no warning**. Two
+   jurisdictions' `cent` collided and the second won. A rulebase computing throughout in what
+   it believed were euro cents would hold dollars and never raise, because nothing would ever
+   meet a euro amount to mismatch against.
+2. `constant_number_units/3` reports the declared SPELLING, so both sides answered `cent` —
+   and the qualified `united_states.cent`, the spelling that would have disambiguated,
+   registers **nothing at all** (`_units_ast_to_term` returns None for an `Attribute`, so the
+   declaration is skipped).
+
+**Still open, and they are the residue of those two:**
+
+- Hole 1 remains for **currency** names: 25 are shared (dollar ×22, franc ×17, pound ×12,
+  dinar ×10), and `-import_from(bahrain,[dinar])` then `-import_from(kuwait,[dinar])` is
+  still silent last-one-wins. The naming rule fixed minor units by construction; currencies
+  were never in scope for it.
+- Hole 2 is filed: `todo/qualified-unit-declarations-have-no-slash-3-answer-2026-09-11.md`,
+  with the term-shape question (`('.', ('bahrain',), ('dinar',))` vs one flat atom) as the
+  only real decision.
+
+**Method note worth keeping.** The operator's answer was better than both fixes I offered,
+and the reason generalises: my options were *guards* on a hazard, theirs *removed the
+condition that creates it*. A name that cannot collide needs no collision check.
