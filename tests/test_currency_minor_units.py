@@ -856,7 +856,7 @@ def test_a_currency_constant_declares_and_stores_money(tmp_path):
 def test_a_non_currency_unit_is_refused(tmp_path):
     """The gap. `metre` loads perfectly well under -constant_number_units and
     gives a length; asked for money, the engine should say so."""
-    with pytest.raises(TypeError, match="not a currency"):
+    with pytest.raises(TypeError, match="not an amount of money"):
         _load(tmp_path, "cc_metre", """
             -import_from(py.units, [metre])
             -constant_number_currency(fee, 5000, metre)
@@ -905,16 +905,50 @@ def test_the_precision_check_still_applies(tmp_path):
         """)
 
 
-def test_a_minor_unit_is_refused_by_the_currency_directive(tmp_path):
-    """A deliberate edge: `usd_cent` is a Quantity, not a currency, so it is
-    not accepted here. The amount is money, but the directive's claim is
-    specifically that the third argument names a CURRENCY -- and the minor-unit
-    declaration keeps its own recoverability through -constant_number_units."""
-    with pytest.raises(TypeError, match="not a currency"):
-        _load(tmp_path, "cc_minor", """
-            -import_from(united_states, [usd, usd_cent])
-            -constant_number_currency(fee, 155000, usd_cent)
-        """)
+def test_a_minor_unit_is_accepted_by_the_currency_directive(tmp_path):
+    """A minor unit of a currency IS money, and the property the declaration
+    asserts is "this constant is money" — which it satisfies.
+
+    Refusing it split the two safety properties across two directives so that
+    an author could have the currency gate or the minor-unit scale but never
+    both — and every one of the 139 identifiers the corpus migration is about
+    is `_cents`/`_satang`/`_pence`, so the gate would have covered the case
+    the migration is least likely to produce (corpus-lane, 2026-09-11).
+    """
+    m = _load(tmp_path, "cc_minor", """
+        -import_from(united_states, [usd, usd_cent])
+        -constant_number_currency(cc_sga_minor, 155000, usd_cent)
+    """)
+    from clausal.modules.countries.united_states import usd
+    assert m.cc_sga_minor.value == Decimal("1550.00")
+    assert m.cc_sga_minor.dims == {usd: 1}
+
+
+def test_the_gate_is_money_SHAPE_not_currency_TYPE(tmp_path):
+    """What "money" means mechanically: dims is a single currency at exponent
+    one. That admits a currency and a minor unit of one, and nothing else --
+    `usd**2` is an area in dollars and `usd / second` is a rate, neither of
+    which is an amount of money.
+
+    **`kilometre` is the discriminating row** (corpus-lane, 2026-09-11): a
+    `Quantity` over a single non-currency base at exponent one, structurally
+    identical to `usd_cent` in every respect except `is_currency`. Every
+    other refusal here fails for a SHAPE reason and would still fail under a
+    checker that had dropped the currency test; only this one separates
+    "money shape" from "single-dimension scaled quantity", and it is the row
+    a future widening will trip over."""
+    from clausal.terms import Quantity
+    from clausal.modules.countries.united_states import usd, usd_cent
+    from clausal.modules.countries.european_union import eur_cent
+    from clausal.modules.units import metre, second, kilometre
+    from clausal.logic.constants import check_currency_unit
+
+    for ok in (usd, usd_cent, eur_cent):
+        assert check_currency_unit("x", ok, "-constant_number_currency") is ok
+    for bad in (metre, second, kilometre,
+                Quantity(1, {usd: 1, second: -1}), Quantity(1, {usd: 2})):
+        with pytest.raises(TypeError, match="not an amount of money"):
+            check_currency_unit("x", bad, "-constant_number_currency")
 
 
 def test_the_general_directive_is_unchanged(tmp_path):

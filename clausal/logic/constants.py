@@ -306,33 +306,45 @@ def constant_functor_term(name: str, args, kwargs, namespace):
 
 
 def check_currency_unit(name: str, unit, spelling: str):
-    """Gate for ``-constant_number_currency``: *unit* must BE a currency.
+    """Gate for ``-constant_number_currency``: *unit* must be MONEY.
 
-    The directive is named for its claim, as ``-constant_number_units`` is
-    named for "only numbers carry units", and enforces it here rather than
-    letting a non-money unit through. The gap it closes is not a typo -- a
-    mistyped currency is already a ``NameError``, because a currency
-    identifier has to be bound to be written -- but a unit that loads
-    perfectly well and is not money: ``-constant_number_units(fee, 5000,
-    metre)`` yields ``Quantity(5000, metre)``, an int-valued length, in
-    silence.
+    "Money" is a shape, not a type: **dims is a single currency at exponent
+    one.** That admits a currency (``usd``) and a minor unit of one
+    (``usd_cent``, which is ``Quantity(Decimal('0.01'), {usd: 1})``), and
+    nothing else -- ``usd ** 2`` is an area in dollars and ``usd / second`` a
+    rate, neither of which is an amount of money.
 
-    A minor unit (``usd_cent``) is a ``Quantity``, not a currency, so it is
-    refused too: the amount is money but the third argument is not a
-    currency, and the minor-unit declaration keeps its own recoverability
-    through ``-constant_number_units``.
+    Shape rather than type because the property the declaration ASSERTS is
+    "this constant is money", and a minor unit satisfies it. Requiring the
+    argument to *be* a currency split the two safety properties across two
+    directives so that an author could have the currency gate or the
+    minor-unit scale but never both -- and every one of the 139 identifiers
+    the corpus migration is about is spelled ``_cents``/``_satang``/
+    ``_pence``, so the gate would have covered the case the migration is
+    least likely to produce (corpus-lane, 2026-09-11).
+
+    The gap this closes is narrow and worth stating exactly, since two of the
+    three obvious failures were already covered: a mistyped or unbound
+    currency is a ``NameError``, because a currency identifier has to be
+    BOUND to be written. What was not covered is a unit that loads perfectly
+    well and is not money -- ``-constant_number_units(fee, 5000, metre)``
+    yields ``Quantity(5000, metre)``, an int-valued length, in silence.
 
     Returns the unit so the caller can use this inline.
     """
-    if getattr(unit, "is_currency", False):
-        return unit
-    from clausal.terms import Quantity                       # noqa: PLC0415
-    what = "a minor unit" if isinstance(unit, Quantity) else "not a currency"
+    dims = getattr(unit, "_dims", None)
+    if dims is None:
+        dims = getattr(unit, "dims", None)
+    if dims and len(dims) == 1:
+        (key, exponent), = dims.items()
+        if exponent == 1 and getattr(key, "is_currency", False):
+            return unit
     raise TypeError(
-        f"{spelling}: `{name}` declares money, but its unit is {what} "
-        f"— {unit!r} is not a currency. Every currency in the vocabulary "
-        f"carries an ISO 4217 code; use -constant_number_units for a "
-        f"quantity that is not an amount of money."
+        f"{spelling}: `{name}` declares money, but {unit!r} is not an amount "
+        f"of money. The unit must be a currency or a minor unit of one — one "
+        f"currency at exponent one — so a rate (`usd / second`) or a power "
+        f"(`usd ** 2`) is not accepted either. Use -constant_number_units "
+        f"for a quantity that is not money."
     )
 
 

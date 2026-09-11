@@ -275,16 +275,30 @@ where the spelling is legal.
 ```
 
 The directive is named for its claim and enforces it, exactly as
-`-constant_number_units` is named for "only numbers carry units". The third argument must
-**be a currency**:
+`-constant_number_units` is named for "only numbers carry units". The third argument must be
+**money**, which is a *shape* and not a type: **one currency at exponent one**. That admits a
+currency and a [minor unit](#minor-units) of one, and nothing else:
+
+```text
+usd          ok          usd / second   refused — a rate, not an amount
+usd_cent     ok          usd ** 2       refused — an area in dollars
+                         metre          refused — not money at all
+```
+
+Shape rather than type because the property the declaration asserts is *this constant is
+money*, and a minor unit satisfies it. Requiring a currency object split the two safety
+properties so that an author could have the currency gate or the minor-unit scale but never
+both — and every identifier the corpus migration concerns is spelled `_cents`, `_satang` or
+`_pence`, so the narrow gate would have covered exactly the case the migration is least
+likely to produce.
 
 ```text
 -constant_number_currency(fee, 5000, metre)
 
-TypeError: -constant_number_currency: `fee` declares money, but its unit is not a
-currency — <unit metre> is not a currency. Every currency in the vocabulary carries
-an ISO 4217 code; use -constant_number_units for a quantity that is not an amount
-of money.
+TypeError: -constant_number_currency: `fee` declares money, but <unit metre> is not
+an amount of money. The unit must be a currency or a minor unit of one — one
+currency at exponent one — so a rate (`usd / second`) or a power (`usd ** 2`) is
+not accepted either. Use -constant_number_units for a quantity that is not money.
 ```
 
 That is the gap it closes, and it is worth being precise about which one. A **mistyped or
@@ -298,9 +312,6 @@ Three further properties, each with a test:
 
 * **A compound unit is refused.** Money is an amount, not a rate; `usd / second` is a good
   unit expression and belongs to the general directive.
-* **A minor unit is refused.** `usd_cent` is a `Quantity`, not a currency. The amount is
-  money, but the third argument is not a currency — and the minor-unit declaration keeps its
-  own recoverability through `-constant_number_units`.
 * **Everything else is inherited**, deliberately: the value must be a number, the
   [precision check](#the-precision-check) still rejects sub-scale digits, and the constant is
   still visible through [`constant_number_units/3`](#minor-units) with its declared pair. A
