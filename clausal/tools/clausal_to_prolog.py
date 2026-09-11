@@ -1767,7 +1767,7 @@ class _ClausalToProlog:
             scaled = [n for n in _unit_leaf_names(unit) if n not in base]
             if scaled:
                 raise NotImplementedError(
-                    f"clausal_to_prolog: -constant_number_units({name}, ..., "
+                    f"clausal_to_prolog: -{directive}({name}, ..., "
                     f"{unit_text}) declares a constant in a scaled unit "
                     f"({', '.join(sorted(set(scaled)))}), and the exporter "
                     f"folds a constant to its DECLARED magnitude -- which is "

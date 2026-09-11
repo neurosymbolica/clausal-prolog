@@ -1585,3 +1585,24 @@ def test_sum_list_reports_the_same_error_in_either_order(tmp_path):
         with pytest.raises(UnitsMismatch, match="Cannot add"):
             v = Var()
             list(call(goal, v, module=mod))
+
+
+def test_the_refusal_names_the_directive_that_was_WRITTEN():
+    """A diagnostic must not name something the source does not contain.
+
+    The refusal hardcoded `-constant_number_units` even when the author wrote
+    `-constant_number_currency`, sending them to look for a directive that is
+    not in their file (iso-export-lane, 2026-09-11). Same shape as the
+    `dollar vs dollar` message and the `:111` motivation: a message about a
+    thing rather than about the thing.
+    """
+    for directive in ("constant_number_units", "constant_number_currency"):
+        with pytest.raises(NotImplementedError) as exc:
+            _export(f"-import_from(australia, [aud, aud_cent])\n"
+                    f"-{directive}(cap, 200000000, aud_cent)\n"
+                    f"pay(constant(cap)),\n")
+        text = str(exc.value)
+        assert f"-{directive}(cap" in text, text
+        other = ("constant_number_currency" if directive.endswith("units")
+                 else "constant_number_units")
+        assert f"-{other}(cap" not in text, f"names the other directive: {text}"
