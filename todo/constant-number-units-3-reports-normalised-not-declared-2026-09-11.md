@@ -139,3 +139,52 @@ so today's magnitudes would all land on whole euro. That removes the magnitude h
 the CURRENT data and not the type hazard (50.0 is a float whether or not it is whole) — and
 "every value happens to divide by 100" is not a property anyone maintains, so it would be
 luck to rely on.
+
+## RESOLVED 2026-09-11: the predicate reports the DECLARED pair
+
+Landed at `6e00bc75`. The declared number and unit expression are lowered at compile time and
+registered beside `.constants`; `constant_value/2` remains the value view. The two disagree
+about the number on purpose and both are documented.
+
+## Operator, 2026-09-11: "dates are weird — months change lengths, business days need
+## computation, awareness of holidays"
+
+This closes out the calendar-duration question, and the answer is that **a duration unit was
+the wrong model**, not a missing one.
+
+What the engine already has (`clausal/modules/py/datetime.py`): `date_add`, `date_sub`,
+`date_diff`, `days_between`, `date_between`, `weekday`, `ordinal`, `date_of`. Real date
+arithmetic on Python `date` objects.
+
+What it does NOT have: any month arithmetic, any business-day notion, any holiday calendar.
+Grepped, not assumed.
+
+### Why that settles it
+
+A statutory "within 30 days" is a RELATION between two dates, not a scalar quantity:
+
+- **Days** are already expressible — `date_add(Start, 30, Deadline)` / `days_between/3`. No
+  unit is needed, and a unit is worse: `Quantity(30, day)` normalises to 2592000 seconds and
+  invites arithmetic that is wrong across a DST boundary.
+- **Months** cannot be a duration at all. "Three months from 31 January" is a calendar rule,
+  not a multiplication; there is no number of seconds that means it. A `month` unit would be
+  incoherent, which is presumably why the units library has none.
+- **Business days** need a holiday calendar, which is jurisdiction-specific and dated — data,
+  not a unit. Two member states disagree about the same Tuesday.
+
+So of the 91 name-encoded units in the corpus, the ~11 duration ones (`_days`, `_months`,
+`_minutes`) should NOT migrate to units under any design. They want date-arithmetic
+predicates, and the two that do not exist (month arithmetic, business days) are a separate
+piece of engine work with a data dependency.
+
+That leaves the units project narrower than it looked: `cent` (35), `bps`/`percent` (21), and
+a handful of mass cases. The durations leave the units column entirely.
+
+### Unchanged, and still gating
+
+`cent` still needs a unit that neither rescales to euro nor puts money in a float — and the
+float, measured, comes from the unit DEFINITION: `gram` is `Quantity(0.001, kilogram)` with
+`0.001` stored as a Python float. So a minor-currency unit defined the same way would inherit
+the same defect. `day` is `Quantity(86400, second)` and `kilometre` `Quantity(1000, metre)`,
+both int — the type follows the factor's own type, which is a fixable property of the
+definition rather than of the mechanism.
