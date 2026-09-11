@@ -710,18 +710,35 @@ def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
-        try:
-            s = sum(deref(x) for x in items)
-        except TypeError as exc:
-            # Pick the first non-number element to point the type_error at.
-            offender = next(
-                (deref(x) for x in items
-                 if isinstance(deref(x), bool)
-                 or not isinstance(deref(x), (int, float))),
-                None,
-            )
+        from clausal.terms import Quantity                    # noqa: PLC0415
+
+        def _summable(v):
+            return (isinstance(v, Quantity)
+                    or (isinstance(v, (int, float))
+                        and not isinstance(v, bool)))
+
+        values = [deref(x) for x in items]
+        offender = next((v for v in values if not _summable(v)), None)
+        if offender is not None:
             raise LogicException(
-                type_error("number", offender, "sum_list/2")
+                type_error("number", offender, "sum_list/2"))
+        try:
+            # Seeded from the FIRST element, not from a bare 0: `sum()` starts
+            # at 0, and `0 + Quantity` is a plain number meeting a dimensioned
+            # one, so a list of money used to raise rather than total. The
+            # empty list still gives 0, every plain list is unchanged, and a
+            # list mixing currencies — or mixing money with a bare number —
+            # still raises UnitsMismatch, which is the property that makes
+            # uniting an invoice's totals worth doing.
+            s = 0
+            if values:
+                s = values[0]
+                for v in values[1:]:
+                    s = s + v
+        except TypeError as exc:
+            raise LogicException(
+                type_error("number", values[0] if values else None,
+                           "sum_list/2")
             ) from exc
         mark = trail.mark()
         if unify(total, s, trail):

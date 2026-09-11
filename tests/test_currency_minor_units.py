@@ -1356,3 +1356,168 @@ def test_the_accessors_still_work_when_bound(tmp_path):
         scale(S) <- currency_scale(euro, S)
     """)
     assert _codes(m, "scale") == [(2,)]
+
+
+# ── number/1 accepts a quantity; quantity/1 says it explicitly ───────────────
+#
+# The most dangerous thing found this session, and it was found by building
+# the migration rather than by reading it (corpus-lane, 2026-09-11). peppol
+# guards every money field with `number(V)` in `sum_field/3`, documented as
+# "a member whose KEY is absent or non-numeric contributes nothing... empty
+# list -> 0". Measured before the fix:
+#
+#     total, guard number/1, bare money    -> 10000
+#     total, guard number/1, united money  -> 0        SILENTLY
+#
+# So attaching units to peppol's twelve money fields would make every total
+# zero, every BR-CO consistency rule compare 0 against 0, and the domain's
+# entire conformance surface vacuously TRUE with a green suite.
+#
+# Operator's ruling: a Quantity IS a number carrying a unit. Guards pass it
+# through, and the failure mode inverts — code that guards and then does BARE
+# arithmetic raises UnitsMismatch instead of quietly summing zero.
+
+
+def test_number_accepts_a_quantity(tmp_path):
+    m = _load(tmp_path, "numq", """
+        -module(numq, [money_q/0, physical_q/0, plain/0])
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+        -import_from(py.units, [metre])
+
+        money_q    <- (money(10000, euro, Q), number(Q))
+        physical_q <- (eval_(5 (metre), Q), number(Q))
+        plain      <- number(10000)
+    """)
+    mod = m.__dict__["$module"]
+    for goal in ("money_q", "physical_q", "plain"):
+        assert len(list(call(goal, module=mod))) == 1, goal
+
+
+def test_a_guarded_total_no_longer_drops_money_to_zero(tmp_path):
+    """The failure this exists to prevent, end to end."""
+    m = _load(tmp_path, "guarded", """
+        -module(guarded, [total/1])
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+
+        amount(Q) <- money(10000, euro, Q)
+        total(S)  <- (findall(V, (amount(V), number(V)), L), sum_list(L, S))
+    """)
+    from clausal.modules.countries.european_union import euro
+    v = Var()
+    [total] = [deref(v) for _ in call("total", v, module=m.__dict__["$module"])]
+    assert total.value == Decimal("10000") and total.dims == {euro: 1}
+
+
+def test_integer_and_float_stay_STRICT(tmp_path):
+    """`number` means numeric-valued; `integer`/`float_` name a specific ISO
+    representation, and a Quantity is neither. Widening those too would make
+    `integer(V)` — which is how a rulebase asserts minor-unit scale — silently
+    true for an amount in any scale at all."""
+    m = _load(tmp_path, "strictint", """
+        -module(strictint, [as_int/0, as_float/0])
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+
+        as_int   <- (money(10000, euro, Q), integer(Q))
+        as_float <- (money(10000, euro, Q), float_(Q))
+    """)
+    mod = m.__dict__["$module"]
+    for goal in ("as_int", "as_float"):
+        assert list(call(goal, module=mod)) == [], goal
+
+
+def test_a_guard_followed_by_BARE_arithmetic_raises(tmp_path):
+    """Why accepting is safe rather than merely convenient: the case a guard
+    was protecting now fails LOUDLY instead of silently summing zero."""
+    from clausal.terms import UnitsMismatch
+    m = _load(tmp_path, "bare_arith", """
+        -module(bare_arith, [cmp/0])
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+
+        cmp <- (money(10000, euro, Q), number(Q), Q > 0)
+    """)
+    with pytest.raises(UnitsMismatch, match="Cannot compare"):
+        list(call("cmp", module=m.__dict__["$module"]))
+
+
+def test_quantity_1_is_the_affirmative_test(tmp_path):
+    m = _load(tmp_path, "quant1", """
+        -module(quant1, [yes/0, no_plain/0, no_atom/0])
+        -implicit_atoms
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+
+        yes      <- (money(10000, euro, Q), quantity(Q))
+        no_plain <- quantity(10000)
+        no_atom  <- quantity(foo)
+    """)
+    mod = m.__dict__["$module"]
+    assert len(list(call("yes", module=mod))) == 1
+    assert list(call("no_plain", module=mod)) == []
+    assert list(call("no_atom", module=mod)) == []
+
+
+def test_number_still_refuses_what_it_always_refused(tmp_path):
+    """The negative control: widening to quantities must not widen to
+    anything else."""
+    m = _load(tmp_path, "numneg", """
+        -module(numneg, [an_atom/0, a_bool/0, a_list/0])
+        -implicit_atoms
+
+        an_atom <- number(foo)
+        a_bool  <- number(true)
+        a_list  <- number([1, 2])
+    """)
+    mod = m.__dict__["$module"]
+    for goal in ("an_atom", "a_bool", "a_list"):
+        assert list(call(goal, module=mod)) == [], goal
+
+
+def test_sum_list_sums_quantities(tmp_path):
+    """`number/1` passing quantities through is only half the chain: the
+    aggregate has to add them. Python's `sum()` seeds with a bare 0, so
+    `0 + Quantity` raised — loud rather than silent, but it left peppol's
+    totals unbuildable. Seeding from the first element fixes it and keeps
+    every other case identical."""
+    from clausal.modules.countries.european_union import euro
+    m = _load(tmp_path, "sumq", """
+        -module(sumq, [money_total/1, plain_total/1, empty_total/1])
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+
+        money_total(S) <- (money(10000, euro, A), money(2500, euro, B),
+                           sum_list([A, B], S))
+        plain_total(S) <- sum_list([1, 2, 3], S)
+        empty_total(S) <- sum_list([], S)
+    """)
+    mod = m.__dict__["$module"]
+
+    def one(goal):
+        v = Var()
+        [r] = [deref(v) for _ in call(goal, v, module=mod)]
+        return r
+
+    total = one("money_total")
+    assert total.value == Decimal("12500") and total.dims == {euro: 1}
+    assert one("plain_total") == 6
+    assert one("empty_total") == 0
+
+
+def test_summing_mixed_currencies_raises(tmp_path):
+    """The property that makes peppol's BR-CO rules worth uniting: a
+    mixed-currency invoice cannot total silently."""
+    from clausal.terms import UnitsMismatch
+    m = _load(tmp_path, "summix", """
+        -module(summix, [bad/1])
+        -import_from(currency, [money])
+        -import_from(european_union, [euro])
+        -import_from(united_states, [usd])
+
+        bad(S) <- (money(1, euro, A), money(1, usd, B), sum_list([A, B], S))
+    """)
+    with pytest.raises(UnitsMismatch):
+        v = Var()
+        list(call("bad", v, module=m.__dict__["$module"]))

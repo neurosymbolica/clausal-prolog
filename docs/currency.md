@@ -630,6 +630,44 @@ answers it — a current currency's end is `None`. A rulebase validating user in
 
 ---
 
+## Type tests: a quantity IS a number
+
+`number/1` is true of a **`Quantity`** as well as an int or a float — a quantity is a number
+carrying a unit — and `quantity/1` says so explicitly:
+
+```text
+number(10000(euro))    succeeds        quantity(10000(euro))   succeeds
+number(10000)          succeeds        quantity(10000)         fails
+integer(10000(euro))   fails           float_(10000(euro))     fails
+```
+
+**This exists because the alternative was silent and catastrophic.** A rulebase that sums
+money behind a `number(V)` guard — the documented shape in real conformance rules, where *a
+member whose key is absent or non-numeric contributes nothing, and an empty list totals 0* —
+would, on attaching units, total **zero for every field**, compare 0 against 0 in every
+consistency rule, and report a whole conformance surface as satisfied with a green suite.
+
+Accepting inverts the failure mode rather than merely widening the test. Code that guards and
+then does **bare** arithmetic raises loudly at the site:
+
+```text
+number(V), V > 0        UnitsMismatch: Cannot compare dimensioned (euro) with plain value 0
+sum_list([1(euro), 1(usd)], S)   UnitsMismatch: euro vs dollar
+```
+
+`integer/1` and `float_/1` stay **strict**: they name a specific representation and a quantity
+is neither. Widening those would make `integer(V)` — which is how a rulebase asserts
+minor-unit scale — silently true for an amount in any scale at all.
+
+`sum_list/2` seeds from the **first element** rather than a bare `0`, so a list of money
+totals rather than raising on `0 + Quantity`. An empty list still gives `0`, plain lists are
+unchanged, and mixing currencies still raises.
+
+> **ISO note.** ISO says `number/1` is true of integers and floats only. A `Quantity` cannot
+> occur in an ISO `.pl` program, so no conforming program can observe the difference.
+
+---
+
 ## Asserting a unit: `compatible_units/2`
 
 [`has_units/2`](units.md) answers "does this carry that unit?" by **succeeding or failing**.

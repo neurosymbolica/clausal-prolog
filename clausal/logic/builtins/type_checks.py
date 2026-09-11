@@ -13,7 +13,8 @@ from clausal.logic.atoms import (
     is_atom as _term_is_atom, is_char_atom as _is_char_atom,
     spelling as _spelling,
 )
-from clausal.terms import Compound, KWTerm, SegList, SegString, SegBytes
+from clausal.terms import (
+    Compound, KWTerm, Quantity, SegList, SegString, SegBytes)
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.builtins._helpers import (
@@ -121,13 +122,38 @@ def _is_atom__1(x, trail, k):
 
 @_builtin("number", 1)
 def _number__1(x, trail, k):
-    """number(X) — succeeds if X is an int or float (not bool)."""
+    """number(X) — X is numeric-valued: an int, a float, or a QUANTITY.
+
+    A ``Quantity`` is a number carrying a unit, and a guard that silently
+    dropped one was the most dangerous defect this vocabulary produced. A
+    rulebase summing money behind ``number(V)`` — the documented shape in
+    ``eu/peppol_einvoicing``'s ``sum_field/3``, "a member whose KEY is absent
+    or non-numeric contributes nothing... empty list -> 0" — would, on
+    attaching units, total ZERO for every field, compare 0 against 0 in every
+    consistency rule, and turn a legal conformance surface vacuously true with
+    a green suite (corpus-lane, 2026-09-11, who found it by building the
+    migration rather than reading it).
+
+    Accepting inverts the failure mode rather than merely widening the test.
+    Code that guards and then does BARE arithmetic (``number(V), V > 0``) now
+    raises ``UnitsMismatch`` — loudly, at the site — where before it summed
+    zero in silence.
+
+    **Deviates from ISO**, which says number/1 is true of integers and floats
+    only. Mitigated by the fact that a ``Quantity`` cannot occur in an ISO
+    ``.pl`` program at all, so no conforming program can observe the
+    difference. ``integer/1`` and ``float_/1`` stay STRICT: they name a
+    specific representation, and a Quantity is neither — widening those would
+    make ``integer(V)``, which is how a rulebase asserts minor-unit scale,
+    silently true for an amount in any scale.
+    """
     x_val = deref(x)
-    if (
-        not is_var(x_val)
-        and isinstance(x_val, (int, float))
-        and not isinstance(x_val, bool)
-    ):
+    if is_var(x_val):
+        return
+    if isinstance(x_val, Quantity):
+        yield None
+        return
+    if isinstance(x_val, (int, float)) and not isinstance(x_val, bool):
         yield None
 
 
@@ -144,6 +170,20 @@ def _float__1(x, trail, k):
     """float_(X) — succeeds if X is a Python float."""
     x_val = deref(x)
     if not is_var(x_val) and isinstance(x_val, float):
+        yield None
+
+
+@_builtin("quantity", 1)
+def _quantity__1(x, trail, k):
+    """quantity(X) — X is a number carrying a UNIT.
+
+    The affirmative test, for saying explicitly what ``number/1`` now also
+    admits: a currency amount, a physical measurement, a dimensionless
+    quantity. A bare int or float is NOT a quantity — it carries no unit —
+    which is the distinction ``compatible_units/2`` asserts at a boundary.
+    """
+    x_val = deref(x)
+    if not is_var(x_val) and isinstance(x_val, Quantity):
         yield None
 
 
