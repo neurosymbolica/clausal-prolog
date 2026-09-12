@@ -1290,7 +1290,7 @@ def _units_strip_list(items, context, trail):
         _ensure_units_imports()
     stripped, dims = _strip_list_for_solver(items, context, trail)
     if dims is not None:
-        _whole_units_only(items, stripped, context)
+        stripped = _whole_units_only(items, stripped, context)
     return stripped
 
 
@@ -2040,7 +2040,7 @@ def fd_ne(l, r, trail: Trail) -> bool:
     return _post_constraint(constraint, trail)
 
 
-def fd_lt(l, r, trail: Trail) -> bool:
+def fd_lt(l, r, trail: Trail, _units_done: bool = False) -> bool:
     """Post X < Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
@@ -2048,7 +2048,7 @@ def fd_lt(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l < r
     # ── end fast path ──
-    stripped = _units_strip(l, r, "(<)/2", trail)
+    stripped = None if _units_done else _units_strip(l, r, "(<)/2", trail)
     if stripped is not None:
         l, r = stripped
     if not is_var(l):
@@ -2084,7 +2084,7 @@ def fd_lt(l, r, trail: Trail) -> bool:
     return _post_constraint(constraint, trail)
 
 
-def fd_le(l, r, trail: Trail) -> bool:
+def fd_le(l, r, trail: Trail, _units_done: bool = False) -> bool:
     """Post X <= Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
@@ -2092,7 +2092,7 @@ def fd_le(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l <= r
     # ── end fast path ──
-    stripped = _units_strip(l, r, "(=<)/2", trail)
+    stripped = None if _units_done else _units_strip(l, r, "(=<)/2", trail)
     if stripped is not None:
         l, r = stripped
     if not is_var(l):
@@ -2134,7 +2134,7 @@ def fd_gt(l, r, trail: Trail) -> bool:
     stripped = _units_strip(l, r, "(>)/2", trail)   # name the operator the user wrote
     if stripped is not None:
         l, r = stripped
-    return fd_lt(r, l, trail)
+    return fd_lt(r, l, trail, _units_done=stripped is not None)
 
 
 def fd_ge(l, r, trail: Trail) -> bool:
@@ -2146,7 +2146,7 @@ def fd_ge(l, r, trail: Trail) -> bool:
     stripped = _units_strip(l, r, "(>=)/2", trail)   # name the operator the user wrote
     if stripped is not None:
         l, r = stripped
-    return fd_le(r, l, trail)
+    return fd_le(r, l, trail, _units_done=stripped is not None)
 
 
 # ── FD attribute hook ────────────────────────────────────────────────────────
@@ -2606,7 +2606,7 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
         from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
         raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
     if coeff_dims is not None:
-        _whole_units_only(raw_coeffs, coeffs, "scalar_product/4")
+        coeffs = _whole_units_only(raw_coeffs, coeffs, "scalar_product/4")
     both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
     vars_list, value = both[:-1], both[-1]
 
@@ -2746,7 +2746,7 @@ def fd_circuit(vars_list, trail: Trail):
         from clausal.logic.units_clp import _unsupported  # noqa: PLC0415
         raise _unsupported("circuit/1", "node indices are positions and carry no units")
     if circuit_dims is not None:
-        _whole_units_only(vars_list, stripped, "circuit/1")
+        stripped = _whole_units_only(vars_list, stripped, "circuit/1")
     vars_list = stripped          # dimensionless quantities are plain positions
 
     n = len(vars_list)
@@ -3469,10 +3469,10 @@ if _USE_C_PROPAGATE:
             return not _eq
         return _c_impl(l, r, trail)
 
-    def fd_lt(l, r, trail, _c_impl=_c_fd_lt):
+    def fd_lt(l, r, trail, _c_impl=_c_fd_lt, _units_done=False):
         if type(l) is int and type(r) is int:
             return l < r          # same fast path as the Python twin, ahead of the side channel
-        stripped = _units_strip(l, r, "(<)/2", trail)
+        stripped = None if _units_done else _units_strip(l, r, "(<)/2", trail)
         if stripped is not None:
             l, r = stripped
         # The C fd_lt does no clean type-checking: an incomparable ground
@@ -3492,10 +3492,10 @@ if _USE_C_PROPAGATE:
                 raise
             raise _incomparable_order_error(dr, "(<)/2")
 
-    def fd_le(l, r, trail, _c_impl=_c_fd_le):
+    def fd_le(l, r, trail, _c_impl=_c_fd_le, _units_done=False):
         if type(l) is int and type(r) is int:
             return l <= r          # same fast path as the Python twin, ahead of the side channel
-        stripped = _units_strip(l, r, "(=<)/2", trail)
+        stripped = None if _units_done else _units_strip(l, r, "(=<)/2", trail)
         if stripped is not None:
             l, r = stripped
         _reject_nonnumeric_order(l, r, "(=<)/2")

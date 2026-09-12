@@ -565,6 +565,8 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
                 state = get_attr(v, UNITS_KEY)
                 if state is not None and state.dims:
                     raise _mismatch(ctx, state.dims, {}, f"plain bounds for {v!r}")
+            elif isinstance(v, _Quantity) and v.dims:
+                raise _mismatch(ctx, dict(v.dims), {}, f"quantity target {v!r} beside plain bounds")
         return None
     if not (lo_q and hi_q):
         q, plain = (lo, hi) if lo_q else (hi, lo)
@@ -573,8 +575,8 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     if dict(lo.dims) != dict(hi.dims):
         raise _mismatch(ctx, dict(lo.dims), dict(hi.dims))
     dims = dict(lo.dims)
-    lo_n, hi_n = to_solver_number(lo.value), to_solver_number(hi.value)
-    if type(lo_n) is not int or type(hi_n) is not int:
+    lo_n, hi_n = _as_whole(lo.value), _as_whole(hi.value)
+    if lo_n is None or hi_n is None:
         # The plain path raises TypeError for non-integer bounds; a domain
         # that only CLP(Q) could hold is not labellable, and posting it
         # anyway made label/1 succeed once with the variable unbound. This
@@ -698,18 +700,45 @@ def strip_list_for_solver(items, context: str, trail: Trail):
     return out, dims
 
 
-def whole_units_only(original, stripped, context: str) -> None:
-    """A finite-domain list builtin takes integers: after the strip, a
-    non-whole amount (10.50(euro) is Fraction(21, 2)) would be silently
-    skipped by the builtin's own integer guard. Throw instead, as
-    ``in_domain_units`` does for non-integral bounds. Only positions that
-    WERE quantities are checked; a plain 1.5 in the list is the builtin's
-    own business, as before."""
+def _as_whole(v):
+    """*v* as an int when it is a whole number (2.0, Decimal('2'),
+    Fraction(4, 2)), else None. Integrality, not type: ``2.0(metre)`` is a
+    whole number of metres however the magnitude was spelled."""
     from fractions import Fraction  # noqa: PLC0415
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        if v != v or v in (float("inf"), float("-inf")):
+            return None
+        fr = Fraction(Decimal(str(v)))
+    elif isinstance(v, (Decimal, Fraction)):
+        fr = Fraction(v)
+    else:
+        return None
+    return int(fr) if fr.denominator == 1 else None
+
+
+def whole_units_only(original, stripped, context: str) -> list:
+    """A finite-domain list builtin takes integers: a quantity operand must
+    be a whole number of units. Whole ones are returned as ints (``2.0``
+    metre is the integer 2 to the solver); a non-whole amount (10.50(euro)
+    is Fraction(21, 2)) throws, as ``in_domain_units`` does for bounds,
+    instead of being silently skipped by the builtin's own integer guard.
+    Only positions that WERE quantities are touched; a plain 1.5 in the
+    list is the builtin's own business, as before."""
     _ensure_imports()
+    out = []
     for o, v in zip(original, stripped):
-        if isinstance(deref(o), _Quantity) and isinstance(v, (Fraction, float, Decimal)):
-            raise _unsupported(
-                context,
-                f"operands must be whole units, got {deref(o)!r} — a finite "
-                f"domain is integers")
+        if isinstance(deref(o), _Quantity):
+            whole = _as_whole(v)
+            if whole is None:
+                raise _unsupported(
+                    context,
+                    f"operands must be whole units, got {deref(o)!r} — a "
+                    f"finite domain is integers")
+            out.append(whole)
+        else:
+            out.append(v)
+    return out

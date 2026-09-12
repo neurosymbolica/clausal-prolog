@@ -333,6 +333,11 @@ money result adds to a Decimal literal exactly.
   only positions that were quantities; an expression element beside units
   material in a list builtin throws `units_unsupported`; `label_targets`
   and the reify route are flag-gated.
+* Round 9: "whole units" is an integrality test, not a type test —
+  `2.0(metre)` is the integer 2 to a finite-domain builtin, `10.50(euro)`
+  still throws; a ground quantity target beside plain `in_domain` bounds is
+  a mismatch rather than a silent failure; `>` and `>=` strip once and tell
+  the delegate so.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

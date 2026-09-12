@@ -28,4 +28,12 @@ channel, and `_linearize` answers a Quantity leaf with a raw Python
 `(l, r, trail)` shape as `_z3_arith_binary`; the same one-line
 `strip_for_solver` call applies.
 
+**Design question parked 2026-09-12 (user thinking aloud: FD is not the ideal
+first target for units, since multiplication, division and conversion factors
+turn integers into rationals):** should `sum_/3` and `scalar_product/4` with
+rational (sub-unit money) operands post the equivalent LINEAR equation to
+CLP(Q) instead of throwing `units_unsupported`? Today `T == A + B` already
+takes CLP(Q) exactly, so the refusal only bites the list spellings. Products
+of two unknowns are nonlinear and belong to Z3 either way.
+
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.

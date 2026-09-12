@@ -945,3 +945,36 @@ class TestReviewRoundEight:
             assert label_targets(v) == v
         finally:
             _units_flag.active = saved
+
+
+class TestReviewRoundNine:
+    def test_float_spelled_whole_metres_are_whole_units(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.in_domain([x], Quantity(1.0, M), Quantity(3.0, M), t)
+        assert clpfd.all_different([Quantity(2.0, M), x], t)
+        assert sorted(deref(x).value for _ in clpfd.label([x], t)) == [1, 3]
+        with pytest.raises(LogicException) as ei:
+            clpfd.all_different([Quantity(2.5, M), Var()], Trail())
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_as_whole(self):
+        from clausal.logic.units_clp import _as_whole
+        assert _as_whole(2.0) == 2 and _as_whole(Decimal("2.00")) == 2 and _as_whole(Fraction(4, 2)) == 2
+        assert _as_whole(2.5) is None and _as_whole(Fraction(1, 3)) is None and _as_whole(True) is None
+
+    def test_quantity_target_beside_plain_bounds_is_loud(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([Quantity(3, M)], 1, 5, Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_gt_strips_once(self, monkeypatch):
+        import clausal.logic.clpfd as clpfd
+        import clausal.logic.units_clp as uc
+        calls = []
+        real = uc.strip_for_solver
+        monkeypatch.setattr(clpfd, "_strip_for_solver", lambda *a: (calls.append(a[2]), real(*a))[1])
+        t, x = Trail(), Var()
+        assert clpfd.fd_gt(x, Quantity(1, M), t)
+        assert calls == ["(>)/2"]
