@@ -97,7 +97,41 @@ TDD. The load-bearing cases:
 * mutation controls: neutering the module filter must fail exactly the leak test; neutering the
   raise must fail exactly the raise tests
 
-## Open input, requested before building
+## Open input — ANSWERED 2026-09-12 by corpus-lane, and it closes the risk
+
+**Zero `/3` call sites in the corpus**, measured by call site rather than by name across four
+surfaces:
+
+    rulebase bodies (.clausal/.seam)          0
+    Python / harness (.py, incl. eval)        0
+    the kit repo                              0
+    -constant_number_currency declarations   18 files -- all DIRECTIVES, none a body goal
+
+They verified that last line specifically, because a grep for the name matches the directive and
+the goal identically and 18 declarations must not be reported as 18 call sites.
+
+So (2) cross-module reads and (3) sites relying on `/3` FAILING are both **vacuously zero** —
+and (3) was searched for as its own shape (`\+ constant_number_units(...)`,
+`not constant_number_units(...)`) rather than left to fall out of the general count.
+
+**With a planted positive control**, because three zeros from one pattern is exactly when to
+distrust the pattern: a file containing both shapes was written and the census found both. The
+zeros are the absence of call sites, not the absence of a detector.
+
+**Why it is zero, which matters more than the number.** The corpus reaches constants exclusively
+through `constant(name)` — the compile-time substitution — and never through the `/3` reflection
+channel. 176 declared values across 17 domains, none read back by its declared pair. So `/3`'s
+current behaviour **has never been exercised by a rulebase in either direction**: the leak has
+never leaked to anyone, and the silence on an imported constant has never silenced anything.
+
+**Consequence for this design: a strict improvement with no migration.** Nothing goes from
+answering to raising, nothing from failing to raising, nothing loses an answer. And the channel
+is about to become useful — a name-vs-unit gate needs exactly the declared pair — so this is the
+cheap moment to make it right, before anything depends on it.
+
+### The original request, kept for the record
+
+
 
 corpus-lane is censusing **call sites**, not names:
 
