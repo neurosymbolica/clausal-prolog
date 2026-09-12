@@ -232,7 +232,15 @@ class TestTitleCaseAliases:
         # sibling of `has_units` (2026-09-11).
         expected = {"dimension_of", "strip_units", "make_quantity",
                     "has_units", "compatible_units"}
-        assert lower_units - set(table.values()) - expected == set()
+        # Units that POSTDATE the TitleCase retirement have no TitleCase
+        # ancestor to alias, and minting one would be adding to the very
+        # vocabulary the 2026-09-10 load-time error exists to remove. Derived
+        # from `RATIO_UNITS` rather than listed by name, so a ratio unit added
+        # later needs no second edit -- and so that the gate keeps its teeth
+        # for every unit that DOES have an ancestor.
+        no_titlecase_ancestor = set(units.RATIO_UNITS)
+        assert lower_units - set(table.values()) - expected \
+            - no_titlecase_ancestor == set()
 
     def test_python_attribute_still_works_and_warns_once(
             self, fresh_python_warnings):

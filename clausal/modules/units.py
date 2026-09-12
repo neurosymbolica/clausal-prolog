@@ -44,6 +44,7 @@ Usage in .clausal files::
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Callable
 
 from clausal.terms import (  # noqa: F401
@@ -300,6 +301,58 @@ mebibit      = Quantity(2**20,  {bit: 1})
 gibibit      = Quantity(2**30,  {bit: 1})
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Ratio units — dimensionless, scaled
+# ═════════════════════════════════════════════════════════════════════════════
+# A ratio is a pure number written at a scale: 300 basis points IS the ratio
+# 0.03, and 5.25 percent IS 0.0525. Declaring the scale where the ENGINE can
+# read it is what lets a rulebase stop carrying it in a parameter's NAME:
+#
+#     -constant_number_units(min_leverage, 300, basis_point)
+#
+# stores 0.03 while `constant_number_units/3` still answers `300,
+# basis_point`, so the statutory "300 basis points" stays recoverable. Same
+# shape as a minor currency unit, against the dimensionless base rather than
+# a currency, so it needs no special case in the directive, in the annotation
+# sugar or in arithmetic.
+#
+# Being dimensionless, `300 (basis_point)` and `3 (percent)` are the same
+# quantity and compare equal -- which is the point, and also why
+# `compatible_units/2` refuses a BARE number against a ratio unit: once a
+# ratio is dimensionless, a bare 0.03 would otherwise satisfy every ratio
+# claim there is.
+
+#: name -> decimal exponent. **The authority for the ratio vocabulary**: the
+#: scale-in-a-name lint and the Prolog exporter both enumerate from this
+#: rather than from a list written beside them, so adding a ratio unit
+#: extends them with no second edit. The bindings below are explicit, and
+#: `test_every_declared_ratio_unit_is_bound_in_the_module` is what notices
+#: when an entry here has no binding or the wrong factor.
+RATIO_UNITS = {
+    "percent":     2,
+    "basis_point": 4,
+}
+
+
+def _make_ratio_unit(name: str) -> Quantity:
+    """A dimensionless scaled unit of ``10**-RATIO_UNITS[name]``.
+
+    The factor is a ``Decimal`` built with ``scaleb``, never a float
+    literal, and that is the whole safety argument. A scaled unit returns
+    early from ``Quantity.__init__`` and never reaches the currency
+    coercion, so exactness here comes from ``_num_pair`` reading a float
+    magnitude beside a ``Decimal`` factor as ``Decimal(str(f))``. Give the
+    factor a float and that stops: ``gram = Quantity(1e-3, {kilogram: 1})``
+    is why ``7 gram`` is not exactly 0.007. A ratio multiplies against money
+    and against the thresholds that decide a case, so it is the last place
+    to reintroduce binary floating point.
+    """
+    return Quantity(Decimal(1).scaleb(-RATIO_UNITS[name]), {})
+
+
+percent     = _make_ratio_unit("percent")
+basis_point = _make_ratio_unit("basis_point")
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Named derived SI unit predicates
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -521,9 +574,11 @@ def compatible_units_check(value, unit) -> bool:
     scaled unit normalises at construction, so ``155000 usd_cent`` IS
     ``Decimal('1550.00') usd`` and ``5 kilometre`` is 5000 metres. What is
     left to check is the dimension, and `usd_cent` and `usd` name the same
-    one. That is also what makes ratios work: ``basis_points`` and
+    one. That is also what makes ratios work: ``basis_point`` and
     ``percent`` are both dimensionless with a scale factor, so both normalise
-    and ``300 basis_points`` compares equal to ``3 percent``.
+    and ``300 basis_point`` compares equal to ``3 percent``. (Written here on
+    2026-09-11 before either unit existed; they landed 2026-09-12 and this
+    paragraph is now describing behaviour rather than anticipating it.)
 
     **A bare number is never compatible -- not even with ``dimensionless``**
     (operator, 2026-09-11). The engine lets a bare number add to a

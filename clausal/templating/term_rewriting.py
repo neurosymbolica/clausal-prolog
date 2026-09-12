@@ -1339,16 +1339,20 @@ _HAND_MAINTAINED_SCALE_WORDS = frozenset({
     "pence", "pennies",                                  # penny is irregular
     "centime", "centimes", "fils", "sen", "satoshi",      # no table names
                                                          # these today
-    "bps", "basis_points", "percent", "pct",             # ratios are not
-    # units yet (todo/ratio-declaration-units-...); when they land these move
-    # into the derived half and the overlap control below will say so.
+    "bps", "pct",                                        # ABBREVIATIONS of
+    # ratio units, which no vocabulary holds and no derivation will ever
+    # produce. `percent` and `basis_points` were REMOVED from this half on
+    # 2026-09-12 when ratio units landed and the derivation took them over.
+    # The overlap control below is what named them -- a half designed to
+    # shrink needs something that notices when it should have.
 })
 
 
 def _derived_scale_words() -> set:
     from clausal.modules.countries import _data              # noqa: PLC0415
+    from clausal.modules import units as _units              # noqa: PLC0415
     out = set()
-    for word in _data.MINOR_UNIT_WORDS.values():
+    for word in list(_data.MINOR_UNIT_WORDS.values()) + list(_units.RATIO_UNITS):
         out.add(word)
         if not word.endswith("y"):
             out.add(word + "s")
@@ -1361,21 +1365,18 @@ _SCALE_SUFFIX_CACHE = None
 def _scale_suffixes() -> frozenset:
     """Name endings that CLAIM a scale the engine cannot otherwise see.
 
-    Derived from the currency vocabulary where it can be -- every curated
-    minor-unit word plus its plural -- so that giving a currency a minor unit
-    extends this lint without a second edit. The ratio words are written out
-    because ratios are not units yet
-    (todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md);
-    when they become units this list should shrink to the derivation.
+    Derived from the vocabulary where it can be -- every curated minor-unit
+    word and every ratio unit name, plus plurals -- so that giving a currency
+    a minor unit, or adding a ratio unit, extends this lint without a second
+    edit. What remains hand-maintained is what no vocabulary holds: retired
+    spellings, and the ABBREVIATIONS `bps` and `pct`.
     """
     global _SCALE_SUFFIX_CACHE
     if _SCALE_SUFFIX_CACHE is None:
-        from clausal.modules.countries import _data          # noqa: PLC0415
-        out = set()
-        for word in _data.MINOR_UNIT_WORDS.values():
-            out.add(word)
-            if not word.endswith("y"):          # penny -> pence, added below
-                out.add(word + "s")
+        # One derivation, called from both places that need it: this set and
+        # the overlap control below. Two copies of it would let the control
+        # go on checking a set the lint no longer uses.
+        out = _derived_scale_words()
         # DECLARED UNION, and the two halves have different maintenance
         # obligations (harness-batch-lane, 2026-09-12, who built the
         # derive-from-the-authority rule as code and bounded it).

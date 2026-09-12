@@ -540,8 +540,15 @@ def _is_known_scaled_unit(name: str) -> bool:
     from clausal.modules import units as _units                 # noqa: PLC0415
     from clausal.modules.countries import _data                 # noqa: PLC0415
     from clausal.terms import Quantity                          # noqa: PLC0415
-    scaled = {n for n, v in vars(_units).items()
-              if isinstance(v, Quantity) and v.dims}
+    # NOT `and v.dims`. That clause excluded a DIMENSIONLESS scaled unit,
+    # which is exactly a ratio unit's shape -- and it excluded nothing at all
+    # on the day it was written, because there were no dimensionless Quantity
+    # constants then, so nothing could notice it was wrong. Ratio units are
+    # the first values it is wrong about, and dropping `basis_point` from
+    # `300(basis_point)` emits 300 against a stored 0.03 (2026-09-12). The
+    # thing that makes a unit hazardous here is carrying a FACTOR, which has
+    # nothing to do with having a dimension.
+    scaled = {n for n, v in vars(_units).items() if isinstance(v, Quantity)}
     scaled |= set(_data.MINOR_UNITS.values())
     return name in scaled or name.lower() in scaled
 
