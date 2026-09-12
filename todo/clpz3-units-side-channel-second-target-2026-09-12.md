@@ -59,3 +59,11 @@ of two unknowns are nonlinear and belong to Z3 either way.
   comparators accept quantities they used to refuse. The sealed
   eu/procurement scorers (harness-batch-lane) must be re-run before this is
   promoted to canonical; that is a claim this repo cannot make.
+- Round 22 (lows, unfixed): `Quantity._all_finite` checks Decimals only, so a
+  non-finite FLOAT reaching `//`, `%` or the Fraction↔float bridge in
+  `_num_pair` raises a Python `ValueError`/`OverflowError` (widen the test with
+  `math.isfinite`); `reify_fd` skips the side channel when a side is not
+  ground, so a dimensional DISAGREEMENT in a reified comparison stays
+  undiagnosed (run `analyse` unconditionally, gate only `strip`); an UNBOUND
+  bound to `in_domain/3` with a declared target reports a units mismatch
+  instead of `instantiation_error`.
