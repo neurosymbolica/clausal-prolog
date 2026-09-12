@@ -303,10 +303,13 @@ Worth stating plainly, because the count is offered as a migration progress sign
 So a falling count is evidence of progress and not a measure of it, and **zero warnings is not
 "this domain is migrated"**. Read it as a worklist that empties, never as a certificate.
 
-The money suffixes are derived from the currency vocabulary — every curated minor-unit word
-plus its plural — so giving a currency a minor unit extends the lint with no second edit.
-The ratio words (`bps`, `basis_points`, `percent`, `pct`) are written out because ratios are
-not units yet; that list shrinks to the derivation when they are.
+The suffixes are derived from the vocabulary — every curated minor-unit word and every
+[ratio unit](#ratio-units-percent-and-basis_point) name, plus plurals — so giving a currency a
+minor unit, or adding a ratio unit, extends the lint with no second edit. What stays
+hand-maintained is what no vocabulary holds: retired spellings, and the abbreviations `bps`
+and `pct`. That half is *expected to shrink*, so the union asserts the two halves do not
+overlap; when ratio units landed on 2026-09-12 it was the assertion that named `percent` and
+`basis_points` as words to drop.
 
 ---
 
@@ -382,6 +385,69 @@ total(T) <- (eval_(5000 (eur_cent), A), eval_(10.00 (euro), B), eval_(A + B, T))
 Being an ordinary unit, a minor unit works in a declaration, in the `155000 (usd_cent)` annotation
 sugar and in arithmetic — there is no special case anywhere, and nothing to remember about
 where the spelling is legal.
+
+## Ratio units: `percent` and `basis_point`
+
+**Landed 2026-09-12**, unchanged from the mechanism minor units proved. A ratio is a pure
+number written at a scale — 300 basis points **is** the ratio 0.03 — so a ratio unit is an
+ordinary scaled unit against the *dimensionless* base rather than a currency:
+
+```clausal
+-import_from(py.units, [basis_point])
+
+# what the regulation SAID, in the unit it said it in
+-constant_number_units(min_leverage, 300, basis_point)
+```
+
+```text
+stored                     Quantity(Decimal('0.0300'), {})   one representation, always
+constant_value/2           Quantity(Decimal('0.0300'), {})
+constant_number_units/3    300, basis_point                  what the declaration said
+```
+
+Same bargain as the currency half: the declaration carries the scale where the **engine** can
+read it, so a domain can stop carrying it in a parameter's name. `minimum_leverage_bps` can
+go back to being `minimum_leverage`.
+
+Both units are dimensionless, so `300 (basis_point)` and `3 (percent)` are the **same
+quantity** and compare equal — a rulebase declares in whichever spelling the statute uses and
+the arithmetic does not care which was chosen. A ratio multiplies against money and keeps the
+money's dimension:
+
+```clausal
+-import_from(py.units, [basis_point])
+-import_from(united_states, [usd])
+
+charge(C) <- eval_(300 (basis_point) * 1550.00 (usd), C)   # 46.50(usd)
+```
+
+**The factor is a `Decimal`, built with `scaleb`, and that is the whole safety argument.** A
+scaled unit returns from `Quantity.__init__` before the currency coercion runs, so exactness
+here is not inherited from the money path — it comes from a float magnitude being read beside
+a `Decimal` factor as `Decimal(str(f))`. `5.25 (percent)` is therefore exactly `0.0525`. Give
+a unit a *float* factor instead and that stops: `gram = Quantity(1e-3, {kilogram: 1})` is why
+`7 gram` is not exactly 0.007. A ratio multiplies against the thresholds that decide a case,
+which makes it the last place to reintroduce binary floating point.
+
+Adding a ratio unit is one entry in `RATIO_UNITS` in `clausal/modules/units.py` plus its
+binding; that table is the **authority**, and the
+[scale lint](#bare-integers-are-not-money) and the exporter both enumerate from it rather
+than from a list written beside them.
+
+**Two limits, both deliberate.** A bare number is [never compatible with a ratio
+unit](#asserting-a-unit-compatible_units2) — once ratios are dimensionless, a bare `0.03`
+would otherwise satisfy every ratio claim there is. And the Prolog exporter **refuses** a
+ratio-unit amount, declaration or inline, for the reason it refuses every scaled unit: units
+are discarded on export, and discarding `basis_point` would emit `300` against a stored
+`0.03`. That is a 10000x error rather than the minor unit's 100x, and
+`eu/banking/crr_leverage_ratio` is on the export roster — so the refusal is load-bearing
+there, and lifts with the same fix
+(`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`).
+
+**What ratio units do not solve**, and it is the same shape the currency half left open: a
+domain whose *public interface* computes in basis points — `leverage_ratio_bps/2` is exported
+— still has to rescale its producers and consumers together. This makes that conversion
+cheaper, because no representation changes at any interface, not free.
 
 ## Declaring money: `-constant_number_currency`
 
@@ -573,11 +639,7 @@ Use [`eval_/2`](arithmetic.md) for arithmetic on amounts, not `==`: CLP constrai
 operate on `Quantity` objects and will raise `type_error`. Comparisons (`>`, `=<`) work
 directly.
 
-**Ratios are not covered by this.** There is still no `percent` or `basis_point` unit —
-write the ratio as a plain decimal (`0.0525`), not `525` of a scaled unit. The minor-unit
-mechanism generalises to them unchanged, and doing so is parked in
-`todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md`; until it lands, a
-scale encoded in a ratio's NAME is documentation the engine cannot check.
+**Ratios are covered too** — see [ratio units](#ratio-units-percent-and-basis_point).
 
 **And durations are not units at all** — see [`date_add/3` and `days_between/3`](builtins.md).
 A statutory "within 30 days" is a relation between two dates, not a quantity: months vary in
@@ -760,9 +822,10 @@ compatible_units(155000(usd_cent), usd_cent)  succeeds
 compatible_units(5(kilometre), metre)         succeeds
 ```
 
-That is also what makes ratios work. `basis_points` and `percent` are both dimensionless
-*with a scale factor*, so both normalise and `300 basis_points` compares equal to
-`3 percent` — the same right answer from either spelling.
+That is also what makes [ratio units](#ratio-units-percent-and-basis_point) work.
+`basis_point` and `percent` are both dimensionless *with a scale factor*, so both normalise
+and `300 basis_point` compares equal to `3 percent` — the same right answer from either
+spelling.
 
 **A bare number is never compatible, not even with `dimensionless`.** This is deliberately
 stricter than the arithmetic, which does let a bare number add to a dimensionless quantity.
