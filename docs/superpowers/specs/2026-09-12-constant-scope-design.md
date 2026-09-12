@@ -1,164 +1,128 @@
-# Constants resolve lexically: declared here, or imported here
+# Constants resolve lexically, by compile-time module insertion
 
-**Status**: design, awaiting review. Operator ruled the direction 2026-09-12 (import-only;
-module-prefixed access deferred).
+**Status**: design, awaiting review. Supersedes the first version of this file (same path,
+2026-09-12), whose mechanism was not feasible — see *What changed, and why*.
 
-## The problem, measured
+## The rule (unchanged)
 
-`constant_number_units/3` is keyed on the constant's ATOM. An atom is global by name, so two
-modules declaring `fee_x` register under one key. The result is not merely a leak — it is
-backwards:
+**A constant is in scope if this module declared it, imported it, or names its owner.** Nothing
+else. `/3` stops answering for other modules; an imported constant becomes reachable in the
+current spelling; a bound name that is no constant here raises.
 
-| you ask about | today |
-| --- | --- |
-| a constant another module declared, **not** imported | **you get their answer** |
-| a constant you **did** import | `[]` — silent |
-| an in-scope atom that is no constant | `[]` — silent |
-| a name not in scope at all | strict_atoms error ✔ |
-| `constant(name)` for an undefined name | **SyntaxError at LOAD** ✔ |
+## What changed, and why
 
-**The relation answers for modules you did not import, and stays silent for the one you did.**
-`-import_from(prov, [fee])` carries the VALUE — `++fee` works — but not the declared pair.
+The first version proposed "`/3` filters by the querying module". **That is not feasible**, and
+the codebase says so in `inspection.py`'s own docstring for `constant_value/2`:
 
-Reproduced with a clean two-module probe using plain float literals, so it is independent of
-any recent work. Filed as
-`todo/constant-number-units-3-answers-across-modules-2026-09-12.md`.
+> the module-implicit reading would need the CALLING module — which a builtin does not get: the
+> registry hands dispatch functions their arguments and a trail, and nothing else. … Two modules
+> that declare the same constant name both answer, in load order. Use `module_constant/3` when
+> the module matters.
 
-### Why it matters beyond a duplicate row
+So the cross-module answers are a **documented compromise, not a defect**, and its cause is
+architectural: builtins receive arguments and a trail. `_get_dispatch` is a frozen duck-typed
+protocol with ~22 out-of-tree implementors, so it cannot grow a calling-module parameter.
 
-The `/3` channel exists for **fidelity to what this declaration said** — so a gate can check that
-a parameter's unit matches the unit its NAME claims. An answer from another module is not extra
-data: `once/1` or any first-solution consumer takes whichever module loaded first, so **load
-order decides**. Same family as the `-import_from` module/profile-key shadow closed earlier
-today: silent, order-dependent, invisible until two things share a name.
+**The lever is that the COMPILER knows the calling module even though the builtin cannot** — and
+this codebase already uses it: `$register_constant_units` is handed `$module` by the transformer
+at declaration time rather than discovering it at runtime. Reading should work the way writing
+already does.
 
-## The rule
+## Design
 
-**A constant is in scope for `/3` if this module declared it, or imported it.** Nothing else.
+| written | compiles to | note |
+| --- | --- | --- |
+| `constant(fee)` | runtime module-global read | unchanged |
+| `constant(prov.fee)` | lookup in `prov`'s registry | dotted form is a QUALIFIED NAME, never evaluated |
+| `constant_number_units(fee, N, U)` | `module_constant_units(<this module>, fee, N, U)` | module inserted at compile time |
+| `constant_value(N, V)` | unchanged, stays unscoped | Triska's cross-implementation spelling, not ours to vary |
+| `module_constant(M, N, V)` | unchanged | already the module-scoped form |
 
-This is the rule the language already uses for atoms and predicates, and it needs **no new
-syntax**: strict_atoms already refuses a name that was neither declared nor imported, so the
-import this rule requires is the import the author is already writing.
+### 1. One new primitive
 
-Three parts:
+`module_constant_units/4` — a near-copy of the existing `module_constant/3`, reading
+`module.constant_units` instead of `module.constants`. The registries are already per-module and
+already correct; **nothing about registration changes.** The leak was only ever in the query
+path.
 
-1. **`/3` filters by the querying module.** `register_constant_units` already takes and records
-   a module; the relation does not consult it at query time. It will.
-2. **`-import_from` carries the declared pair**, not just the value. This fixes the half that is
-   silent today, and is what makes (1) usable rather than merely stricter.
-3. **A BOUND name in scope that is no constant here RAISES.** Operator: referencing a constant
-   that was never defined should be an error. `constant(name)` already sets this bar and clears
-   it at LOAD time; `/3` should match it, at load where the name is a literal.
+### 2. Imported constants
 
-### The constraint the measurement forces on (3)
+`constant(fee)` after `-import_from(prov, [fee])` raises today ("nothing declares `fee`") — the
+error tells you to do the thing you just did. The blocker is the compile-time `transformer._constants`
+set, which imports never touch, by a 2026-09-11 decision recorded at the import handler:
 
-`/3` with an **unbound** first argument legitimately enumerates — measured, 2 rows for a module
-with 2 constants. So the raise applies only to the bound case:
+> There is no imported-constant branch here. A constant name is atom-shaped now, so the importer
+> cannot tell a constant from an atom or a predicate in the owner module — that is the OWNER's
+> fact and the name no longer carries it.
 
-    constant_number_units(fee_x, N, U)   fee_x bound, no such constant here  -> RAISE
-    constant_number_units(C, N, U)       C unbound                           -> enumerate
+The reasoning holds: the importer genuinely cannot tell. But it **does know the owner**, from the
+directive, recorded in `_import_remap`. So the compile-time question changes from *"is this a
+constant?"* (unanswerable without executing the owner) to *"do I know who owns this?"*
+(answerable, statically). The "is it really a constant" check moves to the owner's registry,
+consulted where the owner is known.
 
-Enumeration must also be filtered by (1), or the leak returns through the back door: an unbound
-query would otherwise enumerate every module's constants.
+### 3. Module-prefixed access
 
-## What is NOT in this change
+`constant(prov.fee)`. Today refused deliberately:
 
-* **Module-prefixed access** (`prov.fee_x`). Deferred by the operator. Dotted constants do not
-  resolve at all today (`++prov.fee_p` is a `NameError`), and the design overlaps
-  `todo/qualified-unit-declarations-have-no-slash-3-answer-2026-09-11.md`, whose
-  `_units_ast_to_term` returns `None` for an `Attribute`. Both dotted questions should be
-  settled by one design, later.
-* **`-hide`.** It already mangles the atom, so a hidden constant's key is module-unique and
-  cannot collide. That makes it the answer for "this constant is mine alone" — the private half,
-  not the general rule. Unchanged here.
-* **The VALUE side.** `constant(name)` already raises for an undefined name, and does it at
-  LOAD: `constant(never_defined)` is a `SyntaxError` saying "nothing declares ...". Untouched,
-  and it is the bar `/3` should meet — a compile-time refusal beats a runtime one.
+> constant() takes a bare name … the whole point of the parentheses is that what is inside cannot
+> be a Python expression.
 
-  (Note on spelling, corrected by the operator 2026-09-12: the value of a constant is reached
-  with **`constant(name)`**, not `++name`. `++` remains correct for reaching PYTHON objects —
-  `++"EUR"`, `++UnitsMismatch(M)`, the `++()` escape — and still happens to resolve a constant,
-  but without the load-time check: `++never_defined` loads clean and fails at runtime only if
-  the clause executes. corpus-lane's census independently found the corpus uses `constant(name)`
-  exclusively.)
+**That invariant survives**, because a dotted name is read as a *qualified name*, not evaluated
+as an `Attribute` expression — the same way `-import_from(py.units, …)` takes a dotted module
+path without evaluating it. What the invariant buys (compile-time resolvability) is preserved:
+the owner is named at the site, so resolution is more static, not less.
 
-## Error shape
+This supersedes the operator's earlier "import-only for now" ruling, and the reason is that the
+investigation changed the facts: prefixing was deferred because it looked like a second
+namespace to build. It is not — it is the same owner-registry lookup as (2), reached from a
+different syntax. Recorded rather than silently reversed.
 
-The raise should name the constant, the querying module, and the way out — and, where the name
-IS declared elsewhere, say so, because "no such constant" is actively misleading when the
-constant exists one import away:
+### 4. Undefined names raise
 
-    constant_number_units: `fee_x` is not a constant in module `user`.
-      It is declared in `prov` — add -import_from(prov, [fee_x]).
+`constant(never_defined)` already raises at LOAD. `/3` fails silently on a bound in-scope
+non-constant; it should raise, and can do so at compile time where the name is a literal.
 
-Naming the other module is the difference between an error that stops you and an error that
-tells you what to type. The information is in the registry already.
+**Constraint from measurement**: `/3` with an **unbound** first argument legitimately enumerates
+(2 rows for a module with 2 constants). So the raise applies only to the bound case, and
+enumeration must be module-scoped too or the leak returns through the back door.
+
+## Not in this change
+
+* **`constant_value/2` stays unscoped.** Fixed by cross-implementation convention.
+* **`-hide`** already mangles the atom, so a hidden constant's key is module-unique. It is the
+  private half and needs nothing.
+* **Registration.** Both registries are per-module and correct.
+* **Prolog term expansion** for Scryer/Trealla — the operator's stated direction, and a separate
+  design. Noted because it may change what the exporter does with all of this; see
+  `todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`.
+
+## Blast radius: measured zero
+
+corpus-lane censused **call sites**, not names, across four surfaces: **zero** `/3` call sites in
+rulebase bodies, Python/harness, and the kit; the 18 files matching are all DIRECTIVES, verified
+specifically so declarations are not counted as goals. Sites relying on `/3` FAILING were
+searched as their own shape (`\+ constant_number_units(...)`) — zero. **With a planted positive
+control**, so the zeros are the absence of call sites, not of a detector.
+
+**Why zero**: the corpus reaches constants exclusively through `constant(name)`, never the `/3`
+reflection channel — 176 declared values across 17 domains. So `/3` has never been exercised by
+a rulebase in either direction. The leak never leaked; the silence never silenced.
+
+**Consequence: a strict improvement with no migration**, and the cheap moment to do it, because
+a name-vs-unit gate will need exactly the declared pair.
 
 ## Testing
 
-TDD. The load-bearing cases:
+TDD, with mutation controls on every gate:
 
-* two modules declaring one name — the querying module gets **its own, once**
-* an imported constant answers `/3` (fails today)
-* a bound in-scope non-constant raises, and the message names the declaring module when there
-  is one
-* an **unbound** query still enumerates, and enumerates only this module's
-* `-hide`-en constants keep working
-* mutation controls: neutering the module filter must fail exactly the leak test; neutering the
-  raise must fail exactly the raise tests
+* two modules declaring one name — the querying module gets its own, **once**
+* an imported constant answers `constant()` and `/3` (both fail today)
+* `constant(prov.fee)` resolves without an import; a non-constant there raises naming the owner
+* a bound in-scope non-constant raises; **an unbound query still enumerates, this module only**
+* `-hide`-en constants keep working; `constant_value/2` still enumerates across modules
+* neutering the module insertion must fail exactly the leak test; neutering the raise must fail
+  exactly the raise tests
 
-## Open input — ANSWERED 2026-09-12 by corpus-lane, and it closes the risk
-
-**Zero `/3` call sites in the corpus**, measured by call site rather than by name across four
-surfaces:
-
-    rulebase bodies (.clausal/.seam)          0
-    Python / harness (.py, incl. eval)        0
-    the kit repo                              0
-    -constant_number_currency declarations   18 files -- all DIRECTIVES, none a body goal
-
-They verified that last line specifically, because a grep for the name matches the directive and
-the goal identically and 18 declarations must not be reported as 18 call sites.
-
-So (2) cross-module reads and (3) sites relying on `/3` FAILING are both **vacuously zero** —
-and (3) was searched for as its own shape (`\+ constant_number_units(...)`,
-`not constant_number_units(...)`) rather than left to fall out of the general count.
-
-**With a planted positive control**, because three zeros from one pattern is exactly when to
-distrust the pattern: a file containing both shapes was written and the census found both. The
-zeros are the absence of call sites, not the absence of a detector.
-
-**Why it is zero, which matters more than the number.** The corpus reaches constants exclusively
-through `constant(name)` — the compile-time substitution — and never through the `/3` reflection
-channel. 176 declared values across 17 domains, none read back by its declared pair. So `/3`'s
-current behaviour **has never been exercised by a rulebase in either direction**: the leak has
-never leaked to anyone, and the silence on an imported constant has never silenced anything.
-
-**Consequence for this design: a strict improvement with no migration.** Nothing goes from
-answering to raising, nothing from failing to raising, nothing loses an answer. And the channel
-is about to become useful — a name-vs-unit gate needs exactly the declared pair — so this is the
-cheap moment to make it right, before anything depends on it.
-
-### The original request, kept for the record
-
-
-
-corpus-lane is censusing **call sites**, not names:
-
-1. how many `/3` call sites exist, in how many domains
-2. any that read a constant the querying module neither declared nor imported — these go from
-   answering to raising
-3. **any site that relies on `/3` FAILING** — a `\+` or guard expecting no answer. These go from
-   failing to raising, a behaviour change even where the leak is absent
-
-(3) is the likeliest to exist and the easiest to miss from the engine side, because "fails
-quietly" is something rulebases lean on without saying so. If (2) and (3) are zero the change is
-a strict improvement with no migration.
-
-## Blast radius
-
-`/3` is consumed by the corpus and is the mechanism the scale-lint migration is meant to make
-checkable, so this is a cross-lane interface change and not an engine-internal one. Three axes
-apply: engine suite (failure AND skip name sets), export bytes (iso-export-lane), domain answers
-(harness-batch-lane). The domain axis is the one that can see a rulebase that silently depended
-on the leak.
+Three axes before landing: engine suite (failure **and skip** name sets), export bytes
+(iso-export-lane), domain answers (harness-batch-lane).
