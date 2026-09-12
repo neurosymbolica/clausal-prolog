@@ -396,3 +396,98 @@ either. The existing answer in this lane's notes is "never trust a written-down 
 regenerate it", which is safe because regeneration is ~3 minutes. That answer stops scaling
 exactly where regeneration gets expensive, which is where iso-export-lane and
 harness-batch-lane live.
+
+---
+
+# A DEFECT IN THE PROMOTED LANDING, found and fixed: canonical is `dfe1d8f0`
+
+Found by **checking a peer's exoneration instead of accepting it.** harness-batch-lane read
+one row as 340/341 once in fourteen sweeps and attributed it to their own instrument. I knew
+something about my diff they could not, so I looked.
+
+## What was wrong
+
+`_derived_scale_words()` did `from clausal.modules import units as _units` to read
+`RATIO_UNITS`, and `_scale_suffixes()` calls it on **every transform**. Measured in both
+directions, engine path asserted in each tree:
+
+    c8f38336 (pre):  transform a unit-free .clausal  ->  clausal.modules.units NOT imported
+    cc008788 (post): transform a unit-free .clausal  ->  clausal.modules.units IMPORTED
+
+That is not merely an import. `clausal/logic/_units_flag.py` promises in its own docstring
+that **"a program that imports no unit module pays nothing"**. Importing units builds 84
+`Quantity` constants, and `Quantity.__init__` calls `_units_flag.touch()`. The flag is read at
+six sites in `clpfd.py` (2609, 2748, 3187, 3221, 3291, 3306) and four in `units_clp.py`. So
+the landing turned the CLP units side channel ON for every program in the corpus, including
+ones with no units anywhere.
+
+**Fix**: `RATIO_UNITS` moves to `clausal/modules/_ratio_data.py`, which constructs nothing;
+`units.py` re-exports it so `units.RATIO_UNITS` is unchanged for the exporter and the tests;
+the lint reads the data module. Mirrors `countries._data`, a data-only module the same lint
+already reads for exactly this reason.
+
+Pinned by `test_transforming_a_unit_free_file_does_not_import_the_units_module`, in a
+subprocess because the flag is process-global, **with a positive control** — a test asserting
+only "units not imported" would also pass if the lint had stopped reading the vocabulary
+entirely.
+
+**It was NOT the cause of the 340/341.** harness-batch-lane scanned all 82 domains for
+constraint operators, `all_different` and `label(` — zero hits, `selection_criteria` included.
+So the branch this enabled is one their axis never takes. A real candidate eliminated by
+measurement rather than an absence of one. Their anomaly stays open and theirs; they have
+since measured their own error rate at **1 unexplained deviation in 986 row-measurements**,
+with 3 of the 4 deviations being true positives.
+
+## The reasoning error, which is the reusable part
+
+I told both lanes the load-path change was "warning-only and cannot change emitted bytes".
+harness-batch-lane verified it by tracing `_name_claims_a_scale` to its two call sites and
+confirming both terminate in `warnings.warn`. **That was true, and it is still true.**
+
+What neither of us asked is what the function IMPORTS.
+
+* Call sites answer **what the code DOES**.
+* Imports answer **what the code BRINGS**.
+
+I made a category argument; they replaced it with an enumeration, which was a strict
+improvement and still missed, because an enumeration answers precisely the question its axis
+was chosen for. Their formulation: *the enumeration was as narrow as the category had been.*
+
+The candidate replacement, harder to answer and therefore the reason neither of us asked it:
+**what is different about the process after this has run that was not different before?** That
+covers emitted output, imports, global flags and caches in one question.
+
+## Two instrument failures of my own in the same hour, both fail-open
+
+1. **`-rf -rs` is not both.** pytest's `-r` is a STORE option, so `-rs` REPLACED `-rf`: the
+   short summary carried only SKIPPED lines, `grep '^FAILED '` returned nothing from a run
+   reporting `145 failed`, and the empty set made every baseline name look "fixed". Write
+   **`-rfs`**. The irony is load-bearing: **I added `-rs` to capture the skip set — the
+   hardening for the skip-blindness found earlier the same day — and it destroyed the failure
+   extraction it was meant to sit beside.** A new arm on an instrument can disable an existing
+   arm, and the instrument still reports.
+2. **An extractor that PRINTS its count does not ENFORCE it.** Mine printed `0` and I read on.
+   It now exits non-zero on an empty set, with both controls run: refuse the bad log, still
+   return 144 on a good one.
+
+And a mechanical one worth having: **never `tr -d '\033'` before the ANSI `sed`** — it deletes
+the ESC, leaves the literal `[33m`, and every `^ANCHOR` grep then fails silently.
+
+## State
+
+    canonical   dfe1d8f0     the fix, promoted and verified by observation
+    clone       dfe1d8f0     identical
+    box         NOT landed
+
+    engine suite   144 failed / 16284 passed / 1 error -- failure NAME SET identical to the
+                   pre-fix arm, 0 new / 0 fixed, both non-empty at 144
+    skip set       52 lines, extracted and recorded for the first time
+    domain axis    harness-batch-lane re-running selection_criteria against the fix
+
+**A shared box note, from harness-batch-lane's contention experiment:** four `while :; do :;
+done` spinners leaked for ten minutes because `LOADPIDS=$(jobs -p)` inside a non-interactive
+`zsh -c` captures nothing, so `kill $LOADPIDS` fired at nothing with its error hidden by
+`2>/dev/null`. **A deliberate-load experiment needs its teardown verified the same way its
+measurement is** — and a load experiment changes conditions for every other measurement on the
+box, including the ones it is being compared against. Had I read my suite's slowdown as a
+property of my own fix rather than checking `ps`, I would have had a confident wrong answer.
