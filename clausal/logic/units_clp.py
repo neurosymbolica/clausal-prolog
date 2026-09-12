@@ -88,14 +88,19 @@ def _render_pair(a: dict, b: dict) -> str:
     """``metre vs second``, qualifying same-named dimensions exactly as
     ``Quantity._require_same_dims`` does (``dollar (AUD) vs dollar (USD)``)."""
     from clausal.terms import _dims_str, _colliding_dim_names  # noqa: PLC0415
-    left, right = _dims_str(a), _dims_str(b)
+
+    def render(d, qualify=frozenset()):
+        # _dims_str spells the empty dims "1" (the algebraic identity); in
+        # an error message the word is clearer.
+        return _dims_str(d, qualify=qualify) if d else "dimensionless"
+
+    left, right = render(a), render(b)
     if left == right:
         collide = _colliding_dim_names(a, b)
-        left = _dims_str(a, qualify=collide)
-        right = _dims_str(b, qualify=collide)
+        left, right = render(a, collide), render(b, collide)
         if left == right:
             right += " — these are different dimensions that share a name"
-    return f"{left or 'dimensionless'} vs {right or 'dimensionless'}"
+    return f"{left} vs {right}"
 
 
 def _mismatch(context: str, a: dict, b: dict, what: str = "") -> Exception:

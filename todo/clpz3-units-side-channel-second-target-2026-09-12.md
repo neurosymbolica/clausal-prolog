@@ -1,0 +1,15 @@
+# CLP(Z3): second target for the units side channel
+
+**Filed 2026-09-12.** Operator's suggestion: the Z3 wrapper is an opaque solver
+and the test of whether the side channel is solver-independent.
+clausal/logic/clpz3.py routes z3_eq … z3_ge through `_z3_arith_binary(l, r,
+trail, op)`; one `strip_for_solver(l, r, ctx, trail)` call before
+`clausal_to_z3` is the whole change — `label_z3` binds vars by `unify`, so the
+`units_link` hook reattaches units without Z3 knowing. `in_z3` gets the
+`in_domain_units` treatment (its bounds are floats/ints; use a Z3 Real sort for
+money). `units_clp.py` deliberately imports nothing from clpfd at module level
+for this reason. Acceptance: the SI and money clauses of
+tests/fixtures/units_clp_side_channel.clausal re-spelled with z3 predicates,
+skipped when z3-solver is not installed.
+
+**Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.

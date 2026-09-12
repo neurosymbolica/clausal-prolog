@@ -1431,7 +1431,12 @@ def test_integer_and_float_stay_STRICT(tmp_path):
 def test_a_guard_followed_by_BARE_arithmetic_raises(tmp_path):
     """Why accepting is safe rather than merely convenient: the case a guard
     was protecting now fails LOUDLY instead of silently summing zero."""
-    from clausal.terms import UnitsMismatch
+    # 2026-09-12: a comparison goes through the units side channel, which
+    # throws the ISO 13211 term error(system_error(units_mismatch), Ctx)
+    # (spec docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md)
+    # — still LOUD, and now selectable by catch/3.
+    from clausal.logic.atoms import mint
+    from clausal.logic.exceptions import LogicException
     m = _load(tmp_path, "bare_arith", """
         -module(bare_arith, [cmp/0])
         -import_from(currency, [money])
@@ -1439,8 +1444,10 @@ def test_a_guard_followed_by_BARE_arithmetic_raises(tmp_path):
 
         cmp <- (money(10000, euro, Q), number(Q), Q > 0)
     """)
-    with pytest.raises(UnitsMismatch, match="Cannot compare"):
+    with pytest.raises(LogicException) as ei:
         list(call("cmp", module=m.__dict__["$module"]))
+    inner = ei.value.term.args[0]
+    assert inner.functor == "system_error" and inner.args[0] == mint("units_mismatch")
 
 
 def test_quantity_1_is_the_affirmative_test(tmp_path):
