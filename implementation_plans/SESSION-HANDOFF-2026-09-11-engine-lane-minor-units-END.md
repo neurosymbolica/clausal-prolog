@@ -790,3 +790,33 @@ owner knows the content. The less informative-sounding sentence is the more usef
   Quantity exists. Minor units preserve it exactly.
 - **Box is the only tree still on the old vocabulary.**
 - corpus-lane's side needs no reconstruction: `_tools/MIGRATION-money-constants.md`.
+
+## ADDENDUM: the scale lint over-reports on a table's CALL SITES
+
+Found by corpus-lane 2026-09-12, after `e7123f2e`. The row-level exemption works — a migrated
+DECLARATION is silent. What fires is the call site:
+
+    use(X) <- ( t_usd_cents(1, X) )          warns   <- `1` is the INDEX KEY, not money
+    use(X) <- ( t_usd_cents(K, X), K == 1 )  silent
+
+The functor claims a scale and carries a bare literal, and **`money_at(N)` lives on the
+DECLARATION — a call site does not carry it**, so the discriminator cannot tell a key column
+from a money column there.
+
+**It moves the count the WRONG WAY on migration.** `us/snap`'s tables are read with literal
+keys throughout (household size 1..8), so converting its 30 rows silences 30 declaration
+warnings and lights up every call site naming a size — each a false positive telling an author
+to declare a household size as money.
+
+**The fix is available in principle and was NOT built**, deliberately: exempt a bare literal
+in a NON-money column of a predicate declared by a table directive. The expansion knows the
+predicate name, its arity and `money_at(N)` at transform time, so recording that on the
+transformer and consulting it in `_lint_scale_in_name` is the shape. It was left because the
+lint is on the load path for all 82 harness bodies and this session had no margin left to
+verify a change there — the two regressions today were both in code that looked safe.
+
+So the count now has **three known distortions**, all documented in `docs/currency.md`:
+blind to a deciding literal under an unscaled functor; over-reporting on table call sites;
+and formerly over-reporting on migrated rows (fixed). The wording already in the docs covers
+it — a falling count is evidence of progress rather than a measure of it, and zero is not a
+certificate — which is a good sign for that wording rather than a reason to stop counting.

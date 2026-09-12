@@ -288,6 +288,12 @@ Worth stating plainly, because the count is offered as a migration progress sign
 * It **under-reports**. A bare literal under a functor that claims no scale is invisible, and
   that is where a deciding value can sit — so a domain can reach zero warnings with its
   deciding literal untouched.
+* It **over-reports on a table's CALL SITES.** `t_usd_cents(1, X)` warns because the functor
+  claims a scale and carries a bare literal — but that literal is the index key, not money.
+  `money_at(N)` lives on the declaration and a call site does not carry it, so the
+  discriminator cannot tell a key column from a money column there. A table read with literal
+  keys (household size 1..8, say) lights up one warning per call site on migration, each one
+  telling an author to declare an index as money.
 * It **over-reports** wherever the lint has not been taught that a site is already declared.
   It exempts a row carrying a unit, including one produced by
   [`-constants_number_currency`](#tables-a-declaration-that-defines-the-predicate) — but the
