@@ -793,3 +793,35 @@ class TestReviewRoundFour:
         assert clpfd.in_domain([a, b], 1, 2, t)
         sols = [(deref(a), deref(b)) for _ in clpfd.fd_circuit([a, Quantity(1, {})], t)]
         assert sols == [(2, 1)] or all(isinstance(x, int) for x, _ in sols)
+
+
+class TestReviewRoundFive:
+    def test_sub_unit_money_is_loud_in_every_list_builtin(self):
+        import clausal.logic.clpfd as clpfd
+        cents = Quantity(Decimal("10.50"), {euro: 1})
+        with pytest.raises(LogicException) as ei:
+            clpfd.all_different([cents, Var()], Trail())
+        _assert_system_error(ei, "units_unsupported")
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_element(Var(), [cents], Var(), Trail()))
+        _assert_system_error(ei, "units_unsupported")
+        with pytest.raises(LogicException) as ei:
+            clpfd.global_cardinality([Var()], [(cents, 1)], Trail())
+        _assert_system_error(ei, "units_unsupported")
+
+    @pytest.mark.parametrize("neg7", [-7, Decimal("-7"), Fraction(-7)])
+    def test_floordiv_and_mod_floor_regardless_of_storage(self, neg7):
+        assert (Quantity(neg7, {}) // 2).value == -4
+        assert (Quantity(neg7, {}) % 2).value == 1
+        assert (Quantity(neg7, M) // Quantity(2, M)).value == -4
+        assert (Quantity(neg7, M) % Quantity(2, M)).value == 1
+        assert (7 // Quantity(neg7 if not isinstance(neg7, Decimal) else Decimal(-2), {})).value in (-1, -4)
+
+    def test_money_mod_keeps_decimal_and_floors(self):
+        q = Quantity(Decimal("-7.50"), {euro: 1}) % Quantity(Decimal("2.00"), {euro: 1})
+        assert q.value == Decimal("0.50") and isinstance(q.value, Decimal)
+
+    def test_c_wrapper_integer_fast_path(self):
+        import clausal.logic.clpfd as clpfd
+        assert clpfd.fd_eq(3, 3, Trail()) and not clpfd.fd_ne(3, 3, Trail())
+        assert clpfd.fd_lt(2, 3, Trail()) and clpfd.fd_le(3, 3, Trail())

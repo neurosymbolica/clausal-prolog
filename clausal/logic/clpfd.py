@@ -1276,11 +1276,17 @@ def _units_strip(l, r, context, trail):
 
 
 def _units_strip_list(items, context, trail):
-    """List form of :func:`_units_strip` for the builtins whose operands
-    must share one dimension; returns the (possibly untouched) list."""
+    """List form of :func:`_units_strip` for the finite-domain builtins whose
+    operands must share one dimension; returns the (possibly untouched)
+    list. Every caller is a finite-domain builtin, so a quantity that is
+    not a whole number of units throws here (units_unsupported) rather than
+    being skipped, failed or miscounted by the builtin's own integer guard."""
     if _strip_list_for_solver is None:
         _ensure_units_imports()
-    return _strip_list_for_solver(items, context, trail)[0]
+    stripped, dims = _strip_list_for_solver(items, context, trail)
+    if dims is not None:
+        _whole_units_only(stripped, context)
+    return stripped
 
 
 def _ensure_exc_imports():
@@ -2519,11 +2525,7 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
     # Units (after the operator check, so a bad operator still wins): every
     # summand and the value share one dimension, and a quantity must be a
     # whole number of units (the integer guard below would skip it silently).
-    if _strip_list_for_solver is None:
-        _ensure_units_imports()
-    both, sum_dims = _strip_list_for_solver(list(vars_list) + [value], "sum_/3", trail)
-    if sum_dims is not None:
-        _whole_units_only(both, "sum_/3")
+    both = _units_strip_list(list(vars_list) + [value], "sum_/3", trail)
     vars_list, value = both[:-1], both[-1]
 
     vars_deref = [deref(v) for v in vars_list]
@@ -2596,9 +2598,7 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     if coeff_dims:
         from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
         raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
-    both, sp_dims = _strip_list_for_solver(list(vars_list) + [value], "scalar_product/4", trail)
-    if sp_dims is not None:
-        _whole_units_only(both, "scalar_product/4")
+    both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
     vars_list, value = both[:-1], both[-1]
 
     coeffs_deref = [deref(c) for c in coeffs]
@@ -3429,6 +3429,8 @@ if _USE_C_PROPAGATE:
     _post_constraint = _c_post_constraint
 
     def fd_eq(l, r, trail, _c_impl=_c_fd_eq):
+        if type(l) is int and type(r) is int:
+            return l == r          # same fast path as the Python twin, ahead of the side channel
         stripped = _units_strip(l, r, "(==)/2", trail)
         if stripped is not None:
             l, r = stripped
@@ -3444,6 +3446,8 @@ if _USE_C_PROPAGATE:
         return _c_impl(l, r, trail)
 
     def fd_ne(l, r, trail, _c_impl=_c_fd_ne):
+        if type(l) is int and type(r) is int:
+            return l != r          # same fast path as the Python twin, ahead of the side channel
         stripped = _units_strip(l, r, "(!=)/2", trail)
         if stripped is not None:
             l, r = stripped
@@ -3455,6 +3459,8 @@ if _USE_C_PROPAGATE:
         return _c_impl(l, r, trail)
 
     def fd_lt(l, r, trail, _c_impl=_c_fd_lt):
+        if type(l) is int and type(r) is int:
+            return l < r          # same fast path as the Python twin, ahead of the side channel
         stripped = _units_strip(l, r, "(<)/2", trail)
         if stripped is not None:
             l, r = stripped
@@ -3476,6 +3482,8 @@ if _USE_C_PROPAGATE:
             raise _incomparable_order_error(dr, "(<)/2")
 
     def fd_le(l, r, trail, _c_impl=_c_fd_le):
+        if type(l) is int and type(r) is int:
+            return l <= r          # same fast path as the Python twin, ahead of the side channel
         stripped = _units_strip(l, r, "(=<)/2", trail)
         if stripped is not None:
             l, r = stripped

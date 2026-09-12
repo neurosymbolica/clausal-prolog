@@ -2449,31 +2449,50 @@ class Quantity:
         a, b = self._num_pair(other, self._value)
         return Quantity(a / b, new_dims)
 
+    @staticmethod
+    def _floor_divmod(a, b):
+        """Floor quotient and divisor-signed remainder for ANY pair of exact
+        or real numbers. Python's ``Decimal // Decimal`` truncates toward
+        zero and ``Decimal %`` takes the dividend's sign, unlike int and
+        Fraction, so a currency amount (stored as Decimal) would round the
+        other way from the same amount stored as int. The quotient is
+        computed exactly as a Fraction (a float goes through its shortest
+        repr, as ``_num_pair`` does) and the remainder in the operands' own
+        types, so ``a == q * b + r`` holds with ``0 <= r < |b|``-style sign."""
+        import math  # noqa: PLC0415
+
+        def exact(x):
+            if isinstance(x, float):
+                return Fraction(Decimal(str(x)))
+            return Fraction(x)
+        q = math.floor(exact(a) / exact(b))
+        return q, a - q * b
+
     def __floordiv__(self, other):
         """The DIMENSION rule of ``divmod_/4``: operands share a dimension,
         the quotient is dimensionless (a dimensionless Quantity here, where
         ``divmod_/4`` binds a bare number — ``/`` has the same trait)."""
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
-            return Quantity(a // b, {})
+            return Quantity(self._floor_divmod(a, b)[0], {})
         self._require_same_dims(other, "floor-divide")
         a, b = self._num_pair(self._value, other._value)
-        return Quantity(a // b, {})
+        return Quantity(self._floor_divmod(a, b)[0], {})
 
     def __mod__(self, other):
         """The DIMENSION rule of ``divmod_/4``: operands share a dimension,
         the remainder keeps it."""
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
-            return Quantity(a % b, {})
+            return Quantity(self._floor_divmod(a, b)[1], {})
         self._require_same_dims(other, "take the remainder of")
         a, b = self._num_pair(self._value, other._value)
-        return Quantity(a % b, self._dims)
+        return Quantity(self._floor_divmod(a, b)[1], self._dims)
 
     def __rfloordiv__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(other, self._value)
-            return Quantity(a // b, {})
+            return Quantity(self._floor_divmod(a, b)[0], {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             self._require_same_dims(other, "floor-divide")   # see __radd__
         return NotImplemented
@@ -2481,7 +2500,7 @@ class Quantity:
     def __rmod__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(other, self._value)
-            return Quantity(a % b, {})
+            return Quantity(self._floor_divmod(a, b)[1], {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             self._require_same_dims(other, "take the remainder of")   # see __radd__
         return NotImplemented
