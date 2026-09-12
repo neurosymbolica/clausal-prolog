@@ -15,7 +15,7 @@ backwards:
 | a constant you **did** import | `[]` — silent |
 | an in-scope atom that is no constant | `[]` — silent |
 | a name not in scope at all | strict_atoms error ✔ |
-| `++name` for an undefined name | `NameError` ✔ |
+| `constant(name)` for an undefined name | **SyntaxError at LOAD** ✔ |
 
 **The relation answers for modules you did not import, and stays silent for the one you did.**
 `-import_from(prov, [fee])` carries the VALUE — `++fee` works — but not the declared pair.
@@ -47,7 +47,8 @@ Three parts:
 2. **`-import_from` carries the declared pair**, not just the value. This fixes the half that is
    silent today, and is what makes (1) usable rather than merely stricter.
 3. **A BOUND name in scope that is no constant here RAISES.** Operator: referencing a constant
-   that was never defined should be an error.
+   that was never defined should be an error. `constant(name)` already sets this bar and clears
+   it at LOAD time; `/3` should match it, at load where the name is a literal.
 
 ### The constraint the measurement forces on (3)
 
@@ -70,7 +71,16 @@ query would otherwise enumerate every module's constants.
 * **`-hide`.** It already mangles the atom, so a hidden constant's key is module-unique and
   cannot collide. That makes it the answer for "this constant is mine alone" — the private half,
   not the general rule. Unchanged here.
-* **The VALUE side.** `++name` already raises for an undefined name. Untouched.
+* **The VALUE side.** `constant(name)` already raises for an undefined name, and does it at
+  LOAD: `constant(never_defined)` is a `SyntaxError` saying "nothing declares ...". Untouched,
+  and it is the bar `/3` should meet — a compile-time refusal beats a runtime one.
+
+  (Note on spelling, corrected by the operator 2026-09-12: the value of a constant is reached
+  with **`constant(name)`**, not `++name`. `++` remains correct for reaching PYTHON objects —
+  `++"EUR"`, `++UnitsMismatch(M)`, the `++()` escape — and still happens to resolve a constant,
+  but without the load-time check: `++never_defined` loads clean and fails at runtime only if
+  the clause executes. corpus-lane's census independently found the corpus uses `constant(name)`
+  exclusively.)
 
 ## Error shape
 
