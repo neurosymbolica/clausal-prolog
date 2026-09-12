@@ -2130,6 +2130,30 @@ def _dim_name(k) -> str:
     return k._name if hasattr(k, "_name") else str(k)
 
 
+#: A value that renders as a plain numeric literal needs no parentheses.
+#: `Decimal('1E+18')` renders `1E+18`, which is one; `Fraction(10, 3)` renders
+#: `10/3`, which is not.
+_SIMPLE_NUMBER = _re.compile(r"-?\d+(\.\d*)?([eE][+-]?\d+)?$")
+
+
+def _value_text(value) -> str:
+    """The magnitude, parenthesised when it would not bind tightly enough.
+
+    A currency Quantity keeps an exact ``Fraction``, so `10.00(usd) / 3`
+    renders its value as ``10/3`` — and `10/3 (usd)` parses as
+    ``10 / 3(usd)``, because the call binds tighter than the division. That
+    round-trips to the same magnitude with an INVERTED dimension: dollars per
+    unit rather than dollars, which looks right and is not. `(10/3) (usd)` is
+    the annotation that was meant.
+
+    Parenthesising anything that is not a plain numeric literal is the
+    general form, so a future value type that renders an operator cannot
+    reintroduce this quietly.
+    """
+    text = str(value)
+    return text if _SIMPLE_NUMBER.match(text) else f"({text})"
+
+
 def _unit_identifier(key) -> str:
     """The name a dimension is BOUND to — what a rulebase can write.
 
@@ -2739,7 +2763,18 @@ class Quantity:
         # value. What this produced before resembled source and was not —
         # bare juxtaposition is a SyntaxError, and it named `dollar`, which
         # has not resolved since the ISO-code rename.
-        return f"{self._value} ({_unit_expr_str(self._dims)})"
+        unit = _unit_expr_str(self._dims)
+        value = self._value
+        if isinstance(value, Fraction) and value.denominator != 1:
+            # A rational magnitude cannot ride inside the annotation: the
+            # annotation evaluates its value as PYTHON, where `10/3` is float
+            # division, so `(10/3) (usd)` reconstructs 3.3333333333333335 and
+            # a currency refuses it outright. Dividing the QUANTITY is exact —
+            # `10 (usd) / 3` rebuilds Fraction(10, 3) — so the unit goes on
+            # the numerator. A currency Quantity keeps an exact Fraction, so
+            # this is the ordinary shape for money that has been divided.
+            return f"{value.numerator} ({unit}) / {value.denominator}"
+        return f"{_value_text(value)} ({unit})"
 
     def __format__(self, spec: str) -> str:
         cur = None

@@ -78,6 +78,13 @@ def _cases():
         ("compound", Quantity(3, {metre: 1, second: -1})),
         ("power", Quantity(3, {metre: 2})),
         ("dimensionless", Quantity(4, {})),
+        # A currency Quantity keeps an exact Fraction (the CLP lane, today),
+        # so `10.00(usd) / 3` renders with a `/` in the VALUE. Absent from
+        # the first eight shapes, and the shape that broke the property:
+        # `10/3 (usd)` parses as `10 / 3(usd)`, inverting the dimension.
+        ("fraction_money", Quantity(Decimal("10.00"), usd) / 3),
+        ("fraction_negative", Quantity(Decimal("-10.00"), usd) / 3),
+        ("negative_money", Quantity(Decimal("-5.00"), usd)),
     ]
 
 
@@ -87,7 +94,17 @@ def test_str_round_trips_to_an_equal_value(tmp_path, label, q):
     shape at once. A shape that cannot round-trip is the finding."""
     text = str(q)
     back = _reparse(tmp_path, f"rt_{label}", text, UNIT_IMPORTS)
+    # TYPE as well as equality. Equality alone could pass on a coincidence —
+    # a bare number comparing equal to a dimensionless Quantity, say — and
+    # "is my assertion the weaker one?" is the right question to ask of a
+    # passing round-trip test (corpus-lane, 2026-09-12, who could not
+    # reproduce this shape and asked it rather than assuming).
+    assert type(back) is type(q), (
+        f"{text!r} parsed back as {type(back).__name__}, not "
+        f"{type(q).__name__}: {back!r}")
     assert back == q, f"{text!r} parsed back as {back!r}, not {q!r}"
+    assert dict(back.dims) == dict(q.dims), (
+        f"{text!r} parsed back with dims {dict(back.dims)}, not {dict(q.dims)}")
 
 
 def test_the_money_form_is_the_ruled_spelling():
