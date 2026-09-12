@@ -281,6 +281,26 @@ gains `//` and `%` with `divmod_/4`'s rule so the positive control covers
 those nodes; and `_num_pair` bridges `Fraction`/`Decimal` so a CLP(Q)
 money result adds to a Decimal literal exactly.
 
+### 3.8b Rounds 2–4 of the review, in one place
+
+* `circuit/1` refuses united vars (node indices are positions, not
+  measurements) and accepts dimensionless quantities as positions.
+* `sum_/3` and `scalar_product/4` require whole-unit quantities and throw
+  `units_unsupported` otherwise — a finite domain is integers, and the
+  builtin's own integer guard would have skipped a `10.50(euro)` silently.
+* A declared units var cannot take plain `in_domain/3` bounds (a mismatch),
+  and `label/1` throws `units_unsupported` for a declared var that was given
+  solver state directly and never shadowed. Together with the `_link_hook`
+  net, no bypass fails silently.
+* The base of a power is a multiplicative position: a fresh var there
+  defaults to dimensionless, and `X ** 0` is dimensionless whatever `X` is.
+* `Quantity` accepts a bare `Fraction` in every scalar fast path and has
+  `//`, `%` and their reflected forms; `_num_pair` bridges
+  `Fraction`/`Decimal`/`float` exactly; the units hook accepts every
+  exact/real number for a dimensionless declaration.
+* Operator/relation arguments are validated before the side channel runs
+  (`sum_`, `scalar_product`, `chain`, `zcompare`), so a bad operator wins.
+
 ### 3.9 Where units and values meet inside a solver: nowhere
 
 The question is whether a solver ever needs the unit next to the value. It
