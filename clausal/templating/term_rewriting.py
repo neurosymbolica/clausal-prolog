@@ -1359,6 +1359,27 @@ def _scale_suffixes() -> frozenset:
     return _SCALE_SUFFIX_CACHE
 
 
+def _carries_a_unit(node) -> bool:
+    """True for the ``29200 (usd_cent)`` annotation shape — a number applied
+    to a unit expression.
+
+    A row carrying one has its scale represented where the ENGINE can read
+    it, which is the whole thing the scale lint asks for. Written as a
+    property of the ROW rather than as an exemption for the table directive,
+    because a hand-written fact with a united column deserves the same
+    silence and was warning too.
+    """
+    if not (isinstance(node, Call) and len(node.args) == 1 and not node.keywords):
+        return False
+    func = node.func
+    if isinstance(func, UnaryOp) and isinstance(func.op, USub):
+        func = func.operand
+    return (isinstance(func, Constant)
+            and isinstance(func.value, (int, float))
+            and not isinstance(func.value, bool)
+            and _is_unit_expr(node.args[0]))
+
+
 def _name_claims_a_scale(identifier: str) -> bool:
     return any(identifier.endswith("_" + suffix) for suffix in _scale_suffixes())
 
@@ -6354,7 +6375,13 @@ class EmbedTransformer(NodeTransformer):
                 if (isinstance(func, Name)
                         and _name_claims_a_scale(func.id)
                         and func.id not in transformer._scale_name_seen
-                        and any(_is_bare_number(a) for a in node.args)):
+                        and any(_is_bare_number(a) for a in node.args)
+                        # ...and NOTHING in the row carries a unit. A row with
+                        # a united column has its scale where the engine can
+                        # check it, so the lint has nothing left to ask for --
+                        # which is what makes the count fall as sites convert,
+                        # the property the whole lint was offered for.
+                        and not any(_carries_a_unit(a) for a in node.args)):
                     transformer._scale_name_seen.add(func.id)
                     import warnings                            # noqa: PLC0415
                     lineno = getattr(node, "lineno", None)

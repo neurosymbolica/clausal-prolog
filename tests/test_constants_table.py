@@ -232,3 +232,67 @@ def test_each_form_names_its_own_column_keyword(tmp_path):
             -import_from(py.units, [metre])
             -constants_number_units(t/2, [(1, 5)], metre, money_at(2))
         """)
+
+
+# ── the scale lint must see a migrated table as migrated ─────────────────────
+#
+# The lint was designed to EMPTY as sites convert, and a falling count was
+# offered as a better progress measure than counting edited files. A table
+# declaration it does not recognise breaks exactly that: converting `us/snap`'s
+# 30 rows would move the count by ZERO, so the progress signal reads "nothing
+# happened" on the largest migration in the corpus (corpus-lane, 2026-09-12).
+#
+# The discriminator was right and the exemption was missing: the generated
+# facts still carry bare numbers in their NON-money columns, so the rule fired
+# on a row whose money column is a quantity.
+
+
+def _scale_warnings(tmp_path, name, text):
+    import warnings as _w
+    from clausal.lint_warnings import ClausalScaleInNameWarning
+    with _w.catch_warnings(record=True) as caught:
+        _w.simplefilter("always")
+        _load(tmp_path, name, text)
+    return [str(c.message) for c in caught
+            if issubclass(c.category, ClausalScaleInNameWarning)]
+
+
+def test_a_migrated_table_does_not_warn(tmp_path):
+    assert _scale_warnings(tmp_path, "tbl_quiet", """
+        -module(tbl_quiet, [snap_usd_cents/2])
+        -import_from(united_states, [usd, usd_cent])
+        -constants_number_currency(snap_usd_cents/2,
+                                   [(1, 29200), (2, 53600)],
+                                   usd_cent, money_at(2))
+    """) == []
+
+
+def test_a_hand_written_fact_carrying_a_unit_does_not_warn(tmp_path):
+    """The general rule, not a special case for the directive: if a row
+    carries a unit ANYWHERE, the scale is represented where the engine can
+    check it, which is the whole thing the lint asks for."""
+    assert _scale_warnings(tmp_path, "hand_quiet", """
+        -module(hand_quiet, [fee_cents/2])
+        -import_from(united_states, [usd, usd_cent])
+
+        fee_cents(1, 29200 (usd_cent)),
+    """) == []
+
+
+def test_an_unmigrated_bare_fact_still_warns(tmp_path):
+    """The negative control. Exempting the migrated case must not exempt the
+    case the lint exists for."""
+    w = _scale_warnings(tmp_path, "bare_warns", """
+        -module(bare_warns, [snap_usd_cents/2])
+
+        snap_usd_cents(1, 29200),
+    """)
+    assert len(w) == 1 and "snap_usd_cents" in w[0]
+
+
+def test_a_units_table_does_not_warn_either(tmp_path):
+    assert _scale_warnings(tmp_path, "units_quiet", """
+        -module(units_quiet, [span_cents/2])
+        -import_from(united_states, [usd, usd_cent])
+        -constants_number_units(span_cents/2, [(1, 5)], usd_cent, number_at(2))
+    """) == []

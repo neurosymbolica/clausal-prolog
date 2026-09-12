@@ -280,10 +280,60 @@ Closing that gap needs a signal the source does not currently carry. The promisi
 take a ratio, the literal would be checkable at the call. A same-value or same-file heuristic
 is not — it learns the cases it was built from.
 
+### What the warning COUNT does not mean
+
+Worth stating plainly, because the count is offered as a migration progress signal and it is
+**wrong in both directions**:
+
+* It **under-reports**. A bare literal under a functor that claims no scale is invisible, and
+  that is where a deciding value can sit — so a domain can reach zero warnings with its
+  deciding literal untouched.
+* It **over-reports** wherever the lint has not been taught that a site is already declared.
+  It exempts a row carrying a unit, including one produced by
+  [`-constants_number_currency`](#tables-a-declaration-that-defines-the-predicate) — but the
+  exemption is a rule about the row's shape, and a future declaration form the rule does not
+  recognise would warn on correct code again.
+
+So a falling count is evidence of progress and not a measure of it, and **zero warnings is not
+"this domain is migrated"**. Read it as a worklist that empties, never as a certificate.
+
 The money suffixes are derived from the currency vocabulary — every curated minor-unit word
 plus its plural — so giving a currency a minor unit extends the lint with no second edit.
 The ratio words (`bps`, `basis_points`, `percent`, `pct`) are written out because ratios are
 not units yet; that list shrinks to the derivation when they are.
+
+---
+
+## Tables: a declaration that defines the predicate
+
+Most statutory money is in TABLES, not single facts. Declare the table and it **defines the
+predicate your rules already call** — so a domain migrates by replacing N fact lines with one
+declaration, and no call site changes:
+
+```clausal
+-import_from(united_states, [usd, usd_cent])
+-constants_number_currency(snap_max_allotment/2,
+                           [(1, 29200), (2, 53600), (3, 76800)],
+                           usd_cent, money_at(2))
+```
+
+```text
+snap_max_allotment(2, A)        A = 536.00 dollar
+snap_max_allotment(SIZE, A)     (1, 292.00) (2, 536.00) (3, 768.00)
+```
+
+**There is no `constant(...)` retrieval and no subscript.** `constant/1` substitutes a single
+value at *compile* time; a table is a lookup by key at *runtime*, which is a predicate call —
+so the rows are reached exactly as hand-written facts were.
+
+`-constants_number_units(name/arity, ROWS, unit, number_at(N))` is the general-unit sibling,
+matching [`-constant_number_units`](#declaring-money-constant_number_currency); the money form
+refuses a unit that is not money, and each names its own column keyword.
+
+**The money column is declared, never inferred** — real tables put it in arg 2 of 2, in arg 3
+of 4, and beside a two-date validity window, so any positional rule would guess wrong on one
+of them, silently. The money cell must be a written number: a table row is data, not an
+expression.
 
 ---
 
