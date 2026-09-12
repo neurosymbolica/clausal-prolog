@@ -500,6 +500,65 @@ def _is_retired_constant_spelling(identifier: str) -> bool:
     )
 
 
+def _decimal_string(node):
+    """The text of a declared decimal STRING, or None.
+
+    ``-constant_number_units(fee, "292.00", usd)`` (operator, 2026-09-12). A
+    written ``292.00`` is a Python float literal and loses its trailing zero
+    before any ``Quantity`` exists -- it stores ``Decimal('292.0')``. A string
+    carries the digits verbatim, so the scale a statute wrote survives.
+
+    **One rule, consulted by both paths.** The single-value directives gate on
+    `_is_certainly_not_a_number` and the table ones on `_literal_number`;
+    those are separate predicates, and two copies of one rule is the shape
+    that has bitten this file twice (the orphaned suffix list, and the
+    derivation the overlap control had stopped checking). So both call here.
+
+    Accepts exactly what ``Decimal`` accepts -- ``"1e5"`` yes, ``"1/3"`` no.
+    A rational needs a syntax of its own and does not get one by accident.
+    """
+    if not (isinstance(node, Constant) and isinstance(node.value, str)):
+        return None
+    from decimal import Decimal, InvalidOperation         # noqa: PLC0415
+    try:
+        d = Decimal(node.value)
+    except (InvalidOperation, ValueError):
+        return None
+    if not d.is_finite():
+        # "Infinity" and "NaN" parse as Decimals and are not amounts.
+        return None
+    return node.value
+
+
+def _declared_magnitude_node(value_node, at):
+    """AST for the magnitude ``constant_number_units/3`` should report.
+
+    A written number becomes a ``Constant``; a decimal STRING becomes a
+    ``$decimal_value(...)`` call, because a ``Decimal`` is not a legal AST
+    constant and the whole point of the string form is that the magnitude is
+    an exact Decimal. Reporting the string itself would make ``/3`` answer a
+    different KIND than the value holds, which is the defect the declared-
+    magnitude channel was fixed for on 2026-09-11.
+    """
+    text = _decimal_string(value_node)
+    if text is not None:
+        return _decimal_value_call(at, text)
+    return replace(Constant(value=_literal_number(value_node)), at)
+
+
+def _decimal_value_call(node, text):
+    """The AST for ``$decimal_value("292.00")``.
+
+    A ``Decimal`` cannot be an AST ``Constant`` -- the compiler admits only
+    the literal types -- so the conversion is a call the module makes at load,
+    through the same ``$``-helper channel as ``$check_currency_unit``.
+    """
+    return replace(
+        Call(func=replace(Name(id="$decimal_value", ctx=load), node),
+             args=[replace(Constant(value=text), node)], keywords=[]),
+        node)
+
+
 def _literal_number(node):
     """The declared magnitude, as a Python number, from the AST.
 
@@ -553,6 +612,8 @@ def _is_certainly_not_a_number(node) -> bool:
     answers False and is left to the units layer, which sees the real value.
     """
     if isinstance(node, Constant):
+        if _decimal_string(node) is not None:
+            return False            # a decimal STRING is a number, exactly
         return not isinstance(node.value, (int, float)) or isinstance(node.value, bool)
     return isinstance(node, (List, Dict, Set, Tuple, JoinedStr))
 
@@ -1558,7 +1619,7 @@ def _expand_currency_table(call):
         # would be wrapped as `name(unit)` -- an atom applied as a functor,
         # which is meaningless and would not announce itself. So the money
         # cell must be a numeric LITERAL.
-        if _literal_number(money) is None:
+        if _literal_number(money) is None and _decimal_string(money) is None:
             raise SyntaxError(
                 f"{spelling}: column {money_at} of `{unparse(row)}` is "
                 f"`{unparse(money)}`, which is not a number literal. A table "
@@ -1566,8 +1627,20 @@ def _expand_currency_table(call):
                 f"takes a written number.")
         # The same shape the `29200 (usd_cent)` annotation sugar builds, so the
         # ordinary visit lowers it and the currency gate runs on it.
-        cells[money_at - 1] = replace(
-            Call(func=money, args=[unit_node], keywords=[]), money)
+        _cell_decimal = _decimal_string(money)
+        if _cell_decimal is not None:
+            # A string cannot be the CALLEE of the `292.00(usd)` sugar, so
+            # emit what that sugar lowers to. The unit gate below still runs
+            # -- it gates the unit once for the whole table, not per row.
+            cells[money_at - 1] = replace(
+                Call(func=replace(Name(id="$Quantity", ctx=load), money),
+                     args=[_decimal_value_call(money, _cell_decimal),
+                           unit_node],
+                     keywords=[]),
+                money)
+        else:
+            cells[money_at - 1] = replace(
+                Call(func=money, args=[unit_node], keywords=[]), money)
         # A bodyless clause -- a FACT -- is a one-element Tuple statement.
         fact = Expr(value=replace(
             Tuple(elts=[replace(
@@ -8014,7 +8087,19 @@ class EmbedTransformer(NodeTransformer):
                 f"{spelling}: `{unparse(value_node)}` is not a number, and "
                 f"only numbers carry units. Use -constant_value for a value "
                 f"that is not a quantity.")
-        rhs = transformer._transform_constant_rhs(value_node, ident)
+        _declared_decimal = _decimal_string(value_node) if with_units else None
+        if _declared_decimal is not None:
+            # ONLY under `with_units`. `-constant_value(greeting, "hi")` is a
+            # string constant and stays one; it is the directives NAMED for
+            # carrying a unit that read a decimal string as the number.
+            #
+            # Built INSTEAD of running `_transform_constant_rhs`, not before
+            # it: that validator checks the functors a user wrote, and would
+            # refuse `$decimal_value` as undeclared. Engine-emitted helpers go
+            # in after it -- the same order `$check_currency_unit` uses below.
+            rhs = _decimal_value_call(value_node, _declared_decimal)
+        else:
+            rhs = transformer._transform_constant_rhs(value_node, ident)
         if with_units:
             unit_node = args[2]
             if currency and not isinstance(unit_node, (Name, Attribute)):
@@ -8096,8 +8181,7 @@ class EmbedTransformer(NodeTransformer):
                             args=[
                                 replace(Name(id="$module", ctx=load), value_node),
                                 replace(Constant(value=ident), value_node),
-                                replace(Constant(value=_literal_number(args[1])),
-                                        value_node),
+                                _declared_magnitude_node(args[1], value_node),
                                 replace(Constant(value=units_term), value_node),
                                 # The VALUE, so the declared magnitude can be
                                 # recorded in the same numeric kind the value

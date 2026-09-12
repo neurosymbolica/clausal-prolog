@@ -45,6 +45,7 @@ from .logic.database import Module as LogicModule
 from .logic.constants import (
     check_constant_ground,
     check_currency_unit,
+    decimal_value,
     constant_functor_term,
     register_module_constant,
     register_constant_units,
@@ -227,6 +228,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     )
     module_dict["$check_constant_ground"] = check_constant_ground
     module_dict["$check_currency_unit"] = check_currency_unit
+    module_dict["$decimal_value"] = decimal_value
     module_dict["$constant_functor_term"] = constant_functor_term
     module_dict["$register_module_constant"] = register_module_constant
     module_dict["$register_constant_units"] = register_constant_units
@@ -1074,6 +1076,7 @@ _simple_ast_builtins["$assert_fact"] = _ipython_facts.append
 # compiled output) does not raise a bare NameError.
 _simple_ast_builtins["$check_constant_ground"] = check_constant_ground
 _simple_ast_builtins["$check_currency_unit"] = check_currency_unit
+_simple_ast_builtins["$decimal_value"] = decimal_value
 _simple_ast_builtins["$constant_functor_term"] = constant_functor_term
 _simple_ast_builtins["$register_module_constant"] = register_module_constant
 _simple_ast_builtins["$register_constant_units"] = register_constant_units

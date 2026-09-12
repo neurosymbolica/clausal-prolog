@@ -305,6 +305,41 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     return (functor, *slots)
 
 
+def decimal_value(text: str):
+    """The exact ``Decimal`` a declared decimal STRING names.
+
+    ``-constant_number_units(fee, "292.00", usd)``. A written ``292.00`` is a
+    Python float literal and has already lost its trailing zero by the time
+    any ``Quantity`` exists -- it stores ``Decimal('292.0')`` -- so the scale
+    the statute wrote cannot be recovered downstream. A string carries the
+    digits verbatim.
+
+    The counterpart of minor units, reached from the other side: a minor unit
+    keeps "29200 cents" recoverable by declaring the SCALE, a decimal string
+    keeps "292.00 dollars" exact by declaring the DIGITS.
+
+    The transformer has already refused anything unparseable with a
+    ``SyntaxError`` naming the directive, so this raise is the belt to that
+    braces -- reached only if the two ever disagree, which is exactly when a
+    silent failure would be worst.
+    """
+    from decimal import Decimal, InvalidOperation      # noqa: PLC0415
+    if (isinstance(text, tuple) and len(text) == 1
+            and isinstance(text[0], str)):
+        # A table row is a FACT, and the fact layer interns a bare string
+        # argument as an ATOM -- the one-element tuple form. The single-value
+        # path emits into an expression and keeps a `str`, so this helper is
+        # reached with both spellings of the same written literal. Measured
+        # 2026-09-12; accepting one and not the other made the table half
+        # fail with `('292.00',) is not a decimal number`.
+        text = text[0]
+    try:
+        return Decimal(text)
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(
+            f"{text!r} is not a decimal number") from None
+
+
 def check_currency_unit(name: str, unit, spelling: str):
     """Gate for ``-constant_number_currency``: *unit* must be MONEY.
 

@@ -386,6 +386,51 @@ Being an ordinary unit, a minor unit works in a declaration, in the `155000 (usd
 sugar and in arithmetic — there is no special case anywhere, and nothing to remember about
 where the spelling is legal.
 
+## Decimal strings: declaring the digits
+
+**Ruled 2026-09-12.** A written `292.00` is a Python **float literal**, and it has already lost
+its trailing zero by the time any quantity exists:
+
+```text
+-constant_number_units(fee, 292.00, usd)     stores  Decimal('292.0')
+-constant_number_units(fee, "292.00", usd)   stores  Decimal('292.00')
+```
+
+Same number, different scale, and the scale is the part a statute wrote. Nothing downstream can
+recover it — by the time the value reaches a `Quantity` the digits are gone.
+
+So a **string in the number position is read as an exact `Decimal`**, in all four members of the
+family:
+
+```clausal
+-import_from(united_states, [usd])
+
+-constant_number_units(s_fee, "292.00", usd)
+-constant_number_currency(s_sga, "1550.00", usd)
+```
+
+This is the counterpart of [minor units](#minor-units), reached from the other side. A minor unit
+keeps a statutory "29200 cents" recoverable by declaring the **scale**; a decimal string keeps a
+statutory "292.00 dollars" exact by declaring the **digits**. Use whichever the source text uses.
+
+**Only the directives named for carrying a unit.** `-constant_value(greeting, "292.00")` is a
+string constant and stays one — reading strings as numbers there would silently retype every text
+constant in the corpus.
+
+**What is still refused**, because the directive is named for the claim that only numbers carry
+units: a string that is not a number (`"abc"`), and the non-finite Decimals (`"NaN"`,
+`"Infinity"`) which parse perfectly well and are not amounts. The currency precision check is
+unchanged and now runs against an exact value, so `-constant_number_currency(x, "19.999", usd)`
+is still refused for sub-scale digits.
+
+`constant_number_units/3` reports the **Decimal**, not the string: the string is how the
+magnitude was spelled, not what was declared.
+
+**One consequence worth knowing for the migration.** The [scale lint](#bare-integers-are-not-money)
+keys on a bare numeric literal, so a site converted to the string form goes silent — correctly,
+since it now carries its unit, but it means the warning count falls for string migrations as well
+as unit ones. As ever, a falling count is evidence of progress rather than a measure of it.
+
 ## Ratio units: `percent` and `basis_point`
 
 **Landed 2026-09-12**, unchanged from the mechanism minor units proved. A ratio is a pure
