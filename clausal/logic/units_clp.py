@@ -417,6 +417,8 @@ def ground_dims(tree: Any) -> dict:
     _ensure_imports()
     a = _Analysis("ground")
     d = a._known(tree)
+    if d is None:
+        raise _undetermined("ground", [a.vars[v] for v in a.unknown_order if v not in a.env])
     a._push(tree, d)
     return d
 

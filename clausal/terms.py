@@ -2513,16 +2513,28 @@ class Quantity:
         Fraction, so a currency amount (stored as Decimal) would round the
         other way from the same amount stored as int. The quotient is
         computed exactly as a Fraction (a float goes through its shortest
-        repr, as ``_num_pair`` does) and the remainder in the operands' own
-        types, so ``a == q * b + r`` holds with ``0 <= r < |b|``-style sign."""
+        repr, as ``_num_pair`` does) and so is the remainder — ``Decimal``
+        multiplication and subtraction are context operations and would
+        round past 28 digits — then presented in the operands' kind
+        (Decimal for a Decimal pair, int for ints), so ``a == q * b + r``
+        holds exactly with the divisor's sign on ``r``."""
         import math  # noqa: PLC0415
 
         def exact(x):
             if isinstance(x, float):
                 return Fraction(Decimal(str(x)))
             return Fraction(x)
-        q = math.floor(exact(a) / exact(b))
-        return q, a - q * b
+        ea, eb = exact(a), exact(b)
+        q = math.floor(ea / eb)
+        if isinstance(a, float) or isinstance(b, float):
+            return q, a - q * b                  # float semantics stay float
+        rem = ea - q * eb                        # exact; never a context operation
+        if isinstance(a, Decimal) or isinstance(b, Decimal):
+            d = _fraction_to_decimal_if_terminating(rem)
+            return q, d if d is not None else rem
+        if rem.denominator == 1:
+            return q, int(rem)
+        return q, rem
 
     def __floordiv__(self, other):
         """The DIMENSION rule of ``divmod_/4``: operands share a dimension,

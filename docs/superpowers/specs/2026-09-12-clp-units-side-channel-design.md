@@ -338,6 +338,10 @@ money result adds to a Decimal literal exactly.
   still throws; a ground quantity target beside plain `in_domain` bounds is
   a mismatch rather than a silent failure; `>` and `>=` strip once and tell
   the delegate so.
+* Round 10: the `%` remainder is computed exactly as well (a Decimal
+  product is a context operation and rounds past 28 digits), then
+  presented in the operands' kind; `ground_dims` on a non-ground tree
+  throws `units_undetermined` rather than a bare TypeError.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

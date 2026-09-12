@@ -978,3 +978,18 @@ class TestReviewRoundNine:
         t, x = Trail(), Var()
         assert clpfd.fd_gt(x, Quantity(1, M), t)
         assert calls == ["(>)/2"]
+
+
+class TestReviewRoundTen:
+    def test_remainder_is_exact_beyond_the_decimal_context(self):
+        big = Quantity(Decimal("1E+30"), M) % Quantity(Decimal("7"), M)
+        assert big.value == 1 and isinstance(big.value, Decimal)
+        q = Quantity(Decimal("1E+30"), M) // Quantity(Decimal("7"), M)
+        assert q.value == 10 ** 30 // 7
+        assert (Quantity(10 ** 30, M) % Quantity(7, M)).value == 1
+
+    def test_ground_dims_on_a_non_ground_tree_is_the_iso_term(self):
+        from clausal.logic.units_clp import ground_dims
+        with pytest.raises(LogicException) as ei:
+            ground_dims(_bin(Mult, Var(), Quantity(2, M)))
+        _assert_system_error(ei, "units_undetermined")

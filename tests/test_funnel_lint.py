@@ -383,7 +383,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    on its band constant, added beside ``_to_decimal`` and so ABOVE
     #    ``term_str``, then the same-named-dimension disambiguation in
     #    ``_dims_str``/``_colliding_dim_names``) -- still no new site.
-    AllowEntry("clausal/terms.py", (2660, 3199),   # re-anchored 2026-09-12 (exact-number currency helpers and // % above)
+    AllowEntry("clausal/terms.py", (2672, 3211),   # re-anchored 2026-09-12 (exact-number currency helpers and // % above)
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),
