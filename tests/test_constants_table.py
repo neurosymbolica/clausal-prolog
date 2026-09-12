@@ -296,3 +296,28 @@ def test_a_units_table_does_not_warn_either(tmp_path):
         -import_from(united_states, [usd, usd_cent])
         -constants_number_units(span_cents/2, [(1, 5)], usd_cent, number_at(2))
     """) == []
+
+
+def test_the_scale_suffixes_are_a_DECLARED_UNION(tmp_path):
+    """Derived plus retired, because this lint asks a RESIDUE question.
+
+    Deriving from `MINOR_UNIT_WORDS` answers "does this conform to the current
+    vocabulary". Asking whether an identifier claims a scale nothing
+    represents is about words the authority may already have FORGOTTEN — and
+    the forgetting is the event that makes the question necessary
+    (harness-batch-lane, 2026-09-12, who found that a census deriving only
+    from the authority would have reported a confident zero on the four
+    bodies carrying `dollar` after the rename).
+
+    So: derive for conformance, hand-maintain for residue, and say which is
+    which rather than letting a derived set pretend to be total.
+    """
+    from clausal.templating.term_rewriting import _scale_suffixes, _name_claims_a_scale
+    from clausal.modules.countries import _data
+    suffixes = _scale_suffixes()
+    derived = set(_data.MINOR_UNIT_WORDS.values())
+    assert derived and derived <= suffixes, "the derived half is present"
+    assert suffixes - derived, "the hand-maintained half is present"
+    # Spellings no table names today and a corpus may still carry.
+    for name in ("fee_pennies", "fee_centimes", "fee_fils", "rate_bps"):
+        assert _name_claims_a_scale(name), name

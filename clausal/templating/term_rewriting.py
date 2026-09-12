@@ -1353,8 +1353,28 @@ def _scale_suffixes() -> frozenset:
             out.add(word)
             if not word.endswith("y"):          # penny -> pence, added below
                 out.add(word + "s")
-        out.update({"pence",                       # penny pluralises irregularly
-                    "bps", "basis_points", "percent", "pct"})
+        # DECLARED UNION, and the two halves have different maintenance
+        # obligations (harness-batch-lane, 2026-09-12, who built the
+        # derive-from-the-authority rule as code and bounded it).
+        #
+        # Deriving from `MINOR_UNIT_WORDS` answers "does this conform to the
+        # CURRENT vocabulary". This lint asks a RESIDUE question — does an
+        # identifier claim a scale nothing represents — and residue is by
+        # definition about words the authority may already have forgotten.
+        # If `cent` were renamed, the derived half would stop matching
+        # `..._cents` at exactly the moment the rename made matching
+        # necessary. So the retired and never-derived spellings are listed by
+        # hand and SAY SO, rather than a derived set pretending to be total.
+        out.update({
+            "pence", "pennies",     # penny pluralises irregularly
+            "centime", "centimes", "fils", "sen", "satoshi",   # not in the
+            # table today; a corpus may still name them, and the lint should
+            # see a claim it cannot yet represent — that is the point of it.
+            "bps", "basis_points", "percent", "pct",           # ratios, not
+            # units yet: todo/ratio-declaration-units-basis-points-and-
+            # percent-2026-09-11.md. This half shrinks when they land.
+        })
+        assert out, "positive control: the suffix set is not empty"
         _SCALE_SUFFIX_CACHE = frozenset(out)
     return _SCALE_SUFFIX_CACHE
 
