@@ -1121,3 +1121,44 @@ class TestReviewRoundFourteen:
         with pytest.raises(LogicException) as ei:
             clpfd.in_domain([Quantity(Decimal("2.5"), {})], Quantity(1, {}), Quantity(3, {}), Trail())
         _assert_system_error(ei, "units_unsupported")
+
+
+class TestReviewRoundFifteen:
+    def test_declared_and_directly_posted_var_is_refused_even_when_shadowed(self):
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, M, t)
+        clpfd._ensure_fd(x, t)                 # a bypassing builtin
+        for goal in (lambda: clpfd.in_domain([x], Quantity(1, M), Quantity(3, M), t),
+                     lambda: clpfd.all_different([x, Var()], t),
+                     lambda: clpfd.fd_eq(x, _bin(Add, Quantity(1, M), Var()), t),
+                     lambda: list(clpfd.label([x], t))):
+            with pytest.raises(LogicException) as ei:
+                goal()
+            _assert_system_error(ei, "units_unsupported")
+
+    def test_dimensionless_quantity_target_with_plain_bounds(self):
+        import clausal.logic.clpfd as clpfd
+        assert clpfd.in_domain([Quantity(2, {})], 1, 3, Trail())
+        assert not clpfd.in_domain([Quantity(5, {})], 1, 3, Trail())
+
+    def test_cumulative_takes_dimensionless_quantities(self):
+        import clausal.logic.clpfd as clpfd
+        t, s1 = Trail(), Var()
+        assert clpfd.in_domain([s1], 0, 5, t)
+        assert clpfd.cumulative([(s1, Quantity(3, {}), Quantity(1, {}))], Quantity(2, {}), t) is True
+
+    def test_gt_and_zcompare_scan_once(self, monkeypatch):
+        import clausal.logic.clpfd as clpfd
+        import clausal.logic.units_clp as uc
+        calls = []
+        real = uc.strip_for_solver
+        monkeypatch.setattr(clpfd, "_strip_for_solver", lambda *a: (calls.append(a[2]), real(*a))[1])
+        t, x = Trail(), Var()
+        assert clpfd.fd_gt(x, _bin(Add, Var(), 1), t)          # not engaged, still scanned once
+        assert calls == ["(>)/2"]
+        calls.clear()
+        t2, y = Trail(), Var()
+        assert clpfd.zcompare(mint("<"), y, Quantity(3, M), t2)
+        assert calls == ["zcompare/3"]

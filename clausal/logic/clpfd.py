@@ -2126,28 +2126,30 @@ def fd_le(l, r, trail: Trail, _units_done: bool = False) -> bool:
     return _post_constraint(constraint, trail)
 
 
-def fd_gt(l, r, trail: Trail) -> bool:
+def fd_gt(l, r, trail: Trail, _units_done: bool = False) -> bool:
     """Post X > Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
     if type(l) is int and type(r) is int:
         return l > r
-    stripped = _units_strip(l, r, "(>)/2", trail)   # name the operator the user wrote
-    if stripped is not None:
-        l, r = stripped
-    return fd_lt(r, l, trail, _units_done=stripped is not None)
+    if not _units_done:
+        stripped = _units_strip(l, r, "(>)/2", trail)   # name the operator the user wrote
+        if stripped is not None:
+            l, r = stripped
+    return fd_lt(r, l, trail, _units_done=True)      # scanned here, once
 
 
-def fd_ge(l, r, trail: Trail) -> bool:
+def fd_ge(l, r, trail: Trail, _units_done: bool = False) -> bool:
     """Post X >= Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
     if type(l) is int and type(r) is int:
         return l >= r
-    stripped = _units_strip(l, r, "(>=)/2", trail)   # name the operator the user wrote
-    if stripped is not None:
-        l, r = stripped
-    return fd_le(r, l, trail, _units_done=stripped is not None)
+    if not _units_done:
+        stripped = _units_strip(l, r, "(>=)/2", trail)   # name the operator the user wrote
+        if stripped is not None:
+            l, r = stripped
+    return fd_le(r, l, trail, _units_done=True)      # scanned here, once
 
 
 # ── FD attribute hook ────────────────────────────────────────────────────────
@@ -3186,11 +3188,11 @@ def cumulative(tasks, limit, trail: Trail) -> bool:
     if _strip_list_for_solver is None:
         _ensure_units_imports()
     if _units_flag_active():
-        from clausal.logic.units_clp import _scan, _unsupported  # noqa: PLC0415
-        fields = [f for task in tasks for f in task] + [limit]
-        if any(_scan(f) is True for f in fields):
-            raise _unsupported("cumulative/2", "quantities and united variables are not "
-                               "supported here yet; strip their units first")
+        from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
+        flat = plain_fields_or_unsupported(
+            [f for task in tasks for f in task] + [limit], "cumulative/2")
+        tasks = [tuple(flat[i:i + 3]) for i in range(0, len(flat) - 1, 3)]
+        limit = flat[-1]
 
     task_tuples = []
     for start, dur, res in tasks:
@@ -3383,9 +3385,9 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     # If order is ground, use it to constrain x and y
     if order_name is not None:
         if order_name == '<':
-            return fd_lt(x, y, trail)
+            return fd_lt(x, y, trail, _units_done=stripped is not None)
         elif order_name == '>':
-            return fd_gt(x, y, trail)
+            return fd_gt(x, y, trail, _units_done=stripped is not None)
         elif order_name == '=':
             return fd_eq(x, y, trail)
         else:

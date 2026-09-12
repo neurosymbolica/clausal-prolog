@@ -363,6 +363,13 @@ money result adds to a Decimal literal exactly.
   None)`); integer powers of a Decimal or Fraction base are exact, so a
   Decimal power is never context-rounded; a dimensionless quantity target
   with dimensionless `in_domain` bounds is a plain number.
+* Round 15: a dimensioned user variable never carries solver state of its
+  own, so finding some means a builtin bypassed the channel — every entry
+  point (`analyse`, list strip, `in_domain`, `label`) refuses it up front,
+  shadowed or not; a dimensionless quantity target with plain bounds is a
+  plain number; `cumulative/2` takes dimensionless quantities as plain
+  numbers and refuses only dimensioned material; `>`/`>=` and `zcompare`
+  scan once.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

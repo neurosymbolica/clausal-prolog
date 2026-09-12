@@ -173,6 +173,20 @@ def _scan(x: Any):
     return _FOREIGN
 
 
+def _refuse_bypassed(v, context: str) -> None:
+    """A DIMENSIONED user variable never carries solver state of its own:
+    the side channel puts that on the shadow. If it does, some builtin
+    posted on it directly, and every later route (shadowing, labelling,
+    reattachment) would quietly work on the wrong variable — say so."""
+    state = get_attr(v, UNITS_KEY)
+    if state is not None and state.dims and _has_solver_state(v):
+        raise _unsupported(
+            context,
+            f"{v!r} carries solver state posted directly by a builtin outside "
+            f"the units side channel; that builtin does not support united "
+            f"variables yet")
+
+
 def _has_solver_state(v) -> bool:
     # FD_KEY / Q_KEY / REAL_KEY, spelled literally to keep this module free
     # of solver imports; tests/test_units_clp.py pins the spellings agree.
@@ -211,6 +225,7 @@ class _Analysis:
             self.vars[vid] = v
             state = get_attr(v, UNITS_KEY)
             if state is not None:
+                _refuse_bypassed(v, self.context)
                 self.env[vid] = dict(state.dims)
             elif _has_solver_state(v):
                 self.env[vid] = {}
@@ -559,15 +574,26 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
         # same mismatch as ``X == 1`` — and posting anyway put FD state on
         # the user's var, where label/1 then failed silently.
         targets = deref(var_or_list)
-        for v in (targets if isinstance(targets, list) else [targets]):
+        as_list = isinstance(targets, list)
+        plain, changed = [], False
+        for v in (targets if as_list else [targets]):
             v = deref(v)
             if is_var(v):
                 state = get_attr(v, UNITS_KEY)
                 if state is not None and state.dims:
                     raise _mismatch(ctx, state.dims, {}, f"plain bounds for {v!r}")
-            elif isinstance(v, _Quantity) and v.dims:
-                raise _mismatch(ctx, dict(v.dims), {}, f"quantity target {v!r} beside plain bounds")
-        return None
+            elif isinstance(v, _Quantity):
+                if v.dims:
+                    raise _mismatch(ctx, dict(v.dims), {}, f"quantity target {v!r} beside plain bounds")
+                n = _as_whole(v.value)           # a dimensionless quantity is a plain number
+                if n is None:
+                    raise _unsupported(ctx, f"target {v!r} is not a whole number")
+                v, changed = n, True
+            plain.append(v)
+        if not changed:
+            return None
+        from clausal.logic.clpfd import in_domain  # noqa: PLC0415
+        return in_domain(plain if as_list else plain[0], lo, hi, trail)
     if not (lo_q and hi_q):
         q, plain = (lo, hi) if lo_q else (hi, lo)
         raise _mismatch_text(
@@ -628,6 +654,7 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
         if state is None and _has_solver_state(v):
             raise _mismatch(ctx, {}, dims,
                             f"target {v!r} is already a bare solver variable")
+        _refuse_bypassed(v, ctx)                 # declared AND posted on directly
         shadows.append(shadow_for(v, dims, trail))
     from clausal.logic.clpfd import in_domain  # noqa: PLC0415
     return in_domain(shadows, lo_n, hi_n, trail)
@@ -644,20 +671,15 @@ def label_targets(vars_list) -> list:
     for v in vars_list:
         dv = deref(v)
         if is_var(dv):
+            # Declared with a dimension and given solver state DIRECTLY by
+            # a builtin outside the side channel — shadowed or not — every
+            # labelled value would land on the wrong variable or be refused
+            # by the units hook with no diagnostic. Say so, first.
+            _refuse_bypassed(dv, "label/1")
             state = get_attr(dv, UNITS_KEY)
             if state is not None and state.shadow is not None:
                 out.append(state.shadow)
                 continue
-            if state is not None and state.dims and _has_solver_state(dv):
-                # Declared with a dimension, given solver state DIRECTLY by
-                # a builtin outside the side channel, never shadowed: every
-                # labelled value would be refused by the units hook, with
-                # no diagnostic. Say so.
-                raise _unsupported(
-                    "label/1",
-                    f"{dv!r} carries solver state posted directly by a builtin "
-                    f"outside the units side channel; that builtin does not "
-                    f"support united variables yet")
         out.append(v)
     return out
 
@@ -689,6 +711,7 @@ def strip_list_for_solver(items, context: str, trail: Trail):
         elif is_var(v):
             state = get_attr(v, UNITS_KEY)
             if state is not None:
+                _refuse_bypassed(v, context)
                 known.append(dict(state.dims))
             elif _has_solver_state(v):
                 known.append({})
@@ -764,4 +787,32 @@ def whole_units_only(original, stripped, context: str) -> list:
             out.append(whole)
         else:
             out.append(v)
+    return out
+
+
+def plain_fields_or_unsupported(fields, context: str) -> list:
+    """For a builtin that is not routed (cumulative/2): a dimensioned
+    Quantity or united var throws units_unsupported; a dimensionless
+    quantity is a plain number (whole, or it throws too); everything else
+    passes through unchanged."""
+    _ensure_imports()
+    out = []
+    for f in fields:
+        v = deref(f)
+        if isinstance(v, _Quantity):
+            if v.dims:
+                raise _unsupported(context, f"{v!r}: quantities and united variables "
+                                            f"are not supported here yet; strip their units first")
+            n = _as_whole(v.value)
+            if n is None:
+                raise _unsupported(context, f"{v!r} is not a whole number")
+            out.append(n)
+        elif is_var(v):
+            state = get_attr(v, UNITS_KEY)
+            if state is not None and state.dims:
+                raise _unsupported(context, f"{v!r}: quantities and united variables "
+                                            f"are not supported here yet; strip their units first")
+            out.append(f)
+        else:
+            out.append(f)
     return out
