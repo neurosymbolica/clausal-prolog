@@ -2056,7 +2056,9 @@ def _fraction_to_decimal_if_terminating(fr: Fraction):
         return None
     k = max(k2, k5)
     scaled = fr.numerator * (10 ** k // fr.denominator)
-    return Decimal(scaled).scaleb(-k)
+    # Built from a string: exact whatever the decimal context's precision
+    # (scaleb is a context operation and would round past 28 digits).
+    return Decimal(f"{scaled}E-{k}")
 
 
 def _round_fraction_to_int(fr: Fraction, rounding) -> int:
@@ -2105,7 +2107,7 @@ def _quantize_to_scale(value, scale, mode_str):
     unit = Decimal(1).scaleb(-scale)
     if isinstance(value, Fraction):
         units = _round_fraction_to_int(value * 10 ** scale, rounding)
-        return Decimal(units).scaleb(-scale).quantize(unit)
+        return Decimal(f"{units}E-{scale}")     # exact, context-free
     return value.quantize(unit, rounding=rounding)
 
 
@@ -2272,11 +2274,20 @@ class Quantity:
     __slots__ = ("_value", "_dims")
 
     def __init__(self, value, dims) -> None:
+        if not _units_flag.active:
+            _units_flag.touch()          # the CLP side channel may now engage
+        if type(value) is Fraction and value.denominator == 1:
+            # The engine's one rule for integral rationals (present_number):
+            # Fraction(1000, 1) is the term 1000, on the ground path too.
+            value = int(value)
         if isinstance(dims, Quantity):
             # dims is a Quantity constant (e.g. kilometre) — multiply:
             # Quantity(5, kilometre) → Quantity(5 * 1000, {metre: 1})
             a, b = self._num_pair(value, dims._value)
-            self._value = a * b
+            product = a * b
+            if type(product) is Fraction and product.denominator == 1:
+                product = int(product)
+            self._value = product
             self._dims = dims._dims
             return
         if hasattr(dims, '_dims'):
@@ -2294,8 +2305,6 @@ class Quantity:
             )
         self._value = value
         self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
-        if not _units_flag.active:
-            _units_flag.touch()          # the CLP side channel may now engage
         if not isinstance(self._value, (Decimal, Fraction)):
             for _k in self._dims:
                 if getattr(_k, "is_currency", False):

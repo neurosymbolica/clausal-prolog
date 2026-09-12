@@ -680,7 +680,10 @@ class TestReviewRoundTwo:
 
     def test_fraction_money_times_float_stays_exact(self):
         q = Quantity(Fraction(1000, 3), {yen: 1}) * 1.5
-        assert type(q.value) is Fraction and q.value == Fraction(500)
+        assert not isinstance(q.value, float) and q.value == 500
+        assert isinstance(q.value, Decimal)     # integral → int → currency Decimal (round 7)
+        r = Quantity(Fraction(1000, 3), {yen: 1}) * 0.5
+        assert type(r.value) is Fraction and r.value == Fraction(500, 3)
 
     def test_strip_keeps_source_position(self):
         from clausal.logic.units_clp import analyse, strip
@@ -863,3 +866,46 @@ class TestReviewRoundSix:
     def test_units_flag_is_set_by_quantity_and_declaration(self):
         from clausal.logic import _units_flag
         assert _units_flag.active       # this test module built quantities at import
+
+
+class TestReviewRoundSeven:
+    def test_integral_fraction_presents_as_int_on_the_ground_path(self):
+        x = Quantity(Fraction(1000, 3), {yen: 1}) * 3
+        assert not isinstance(x.value, Fraction) and x.value == 1000
+        m = Quantity(Fraction(3, 2), M) * 2
+        assert type(m.value) is int and m.value == 3
+        assert type(Quantity(Fraction(4, 2), M).value) is int
+        assert type(Quantity(Fraction(4, 2), {yen: 1}).value) is Decimal   # currency coerces int
+
+    def test_units_flag_negative_control_in_a_fresh_process(self):
+        import subprocess, sys
+        code = ("import clausal.logic.clpfd, clausal.logic.units_clp\n"
+                "from clausal.logic import _units_flag\n"
+                "print(_units_flag.active)\n"
+                "from clausal.modules.units import kilometre\n"
+                "from clausal.terms import Quantity\n"
+                "Quantity(5, kilometre)\n"
+                "print(_units_flag.active)\n")
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                             cwd=os.path.dirname(os.path.dirname(__file__)))
+        assert out.returncode == 0, out.stderr
+        lines = out.stdout.split()
+        assert lines[0] == "False" and lines[-1] == "True", out.stdout
+
+    def test_exact_decimal_beyond_context_precision(self):
+        from clausal.terms import _fraction_to_decimal_if_terminating as f, _quantize_to_scale
+        big = 10 ** 30 + 1
+        assert f(Fraction(big)) == Decimal(big) and str(f(Fraction(big))) == str(big)
+        assert f(Fraction(big, 100)) == Decimal(f"{big}E-2")
+        assert _quantize_to_scale(Fraction(big, 3), 2, "half_even") == Decimal(f"{(big * 100 + 1) // 3}E-2")
+
+    def test_reified_comparison_with_units(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.reify_fd("lt", Quantity(1, M), Quantity(2, S), Trail())
+        _assert_system_error(ei, "units_mismatch")
+        assert ei.value.term.args[1].startswith("reify(lt)/3")
+        assert clpfd.reify_fd("lt", Quantity(1, M), Quantity(2, M), Trail()) is True
+        t, x = Trail(), Var()
+        assert clpfd.reify_fd("eq", x, Quantity(2, M), t) is None
+        assert get_attr(x, UNITS_KEY) is not None and get_attr(x, UNITS_KEY).shadow is not None

@@ -2404,7 +2404,7 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """
     x = deref(x)
     y = deref(y)
-    stripped = _units_strip(x, y, f"reify/{op}", trail)
+    stripped = _units_strip(x, y, f"reify({op})/3", trail)
     if stripped is not None:
         x, y = stripped
     x = _resolve(x)
