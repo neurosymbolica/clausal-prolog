@@ -491,3 +491,55 @@ done` spinners leaked for ten minutes because `LOADPIDS=$(jobs -p)` inside a non
 measurement is** — and a load experiment changes conditions for every other measurement on the
 box, including the ones it is being compared against. Had I read my suite's slowdown as a
 property of my own fix rather than checking `ps`, I would have had a confident wrong answer.
+
+## The three claims on `dfe1d8f0`, complete
+
+| axis | who | result |
+| --- | --- | --- |
+| engine suite | me | 144 failed / 16284 passed / 1 error — failure NAME SET identical to the pre-fix arm, 0 new / 0 fixed, both non-empty at 144; **skip set (52) extracted for the first time** |
+| export bytes | iso-export-lane | 0 across 1560 files, raw and normalised, engine content-pinned across the run |
+| domain answers | harness-batch-lane | **82 unchanged, 0 moved, 0 no-score, 0 unpinned, one fingerprint, zero torn**, quiet box, 158 commits from `820dc66f` |
+
+**My named candidate mover was censused before the run and came back empty**, which is what makes
+the null informative rather than decorative:
+
+    harness bodies mentioning units at all                      0 of 82
+    bodies using a unit construct WITHOUT importing the module  0
+    domains declaring units in their RULEBASE                   19
+
+The 19 that touch units declare them explicitly, which puts `clausal.modules.units` in
+`sys.modules` exactly as before — the case I bet was safe. Nothing in the population relied on
+the side effect that was removed.
+
+**What this does NOT establish, and the asymmetry cannot be closed now.** The removal of an
+unintended side effect moved no answer. It does not show the side effect never moved one *while
+present*: `cc008788` was swept exactly once, and that sweep is the one carrying the 340/341.
+Re-sweeping a tip nobody should return to is the only way to close it, so it stays open as a
+known gap rather than a resolved one.
+
+## An open lead for whoever next touches the units surface
+
+`eu/procurement/selection_criteria` — the anomalous domain — **is one of the 19 that declare
+units**, currency units in its queries file. So the one unexplained reading in 1068 sits on a
+units-using domain, on the axis of the engine that has moved most this week.
+
+**That is a coincidence worth recording, not an explanation**, and harness-batch-lane declined
+to dress it as more. It does not reproduce: 14 targeted runs green on the unfixed tip (6 of them
+under genuine four-way load) and 6 green on the fix. Recorded here because the next person to
+change the units surface should know which domain to run alone first, and because a lead with no
+mechanism is still worth more than an unexplained number with no lead.
+
+Their instrument figures, in the form worth copying:
+
+    1068 row-measurements across 13 sweeps
+       4 deviations — 3 real regressions this axis caught, 1 unexplained
+       mechanism unknown; TWO candidates eliminated (mine, by census AND by outcome)
+
+**A number with its denominator, its eliminated hypotheses and its open question stated
+together** is a far more useful thing to hand the next person than either "it's flaky" or
+"it's clean".
+
+And one more instance of the day's dominant shape, theirs: their first check for units in that
+domain globbed `*.seam` and found nothing, because the domain has not been renamed and its
+sources are still `.clausal`. **The glob answered precisely what it asked.** They checked which
+files exist before repeating the claim.
