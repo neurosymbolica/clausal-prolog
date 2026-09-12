@@ -1389,15 +1389,6 @@ def _scale_suffixes() -> frozenset:
         # necessary. So the retired and never-derived spellings are listed by
         # hand and SAY SO, rather than a derived set pretending to be total.
         out.update(_HAND_MAINTAINED_SCALE_WORDS)
-        _UNUSED_INLINE = {
-            "pence", "pennies",     # penny pluralises irregularly
-            "centime", "centimes", "fils", "sen", "satoshi",   # not in the
-            # table today; a corpus may still name them, and the lint should
-            # see a claim it cannot yet represent — that is the point of it.
-            "bps", "basis_points", "percent", "pct",           # ratios, not
-            # units yet: todo/ratio-declaration-units-basis-points-and-
-            # percent-2026-09-11.md. This half shrinks when they land.
-        }
         assert out, "positive control: the suffix set is not empty"
         # A half expected to SHRINK needs something that notices when it
         # should have (harness-batch-lane, 2026-09-12). The control above

@@ -714,3 +714,79 @@ has no way to notice it has stopped being.
   import-order mitigation — RE-POINTING its regression test at the new guarantee, not
   deleting it.
 - **Box is the only tree still on the old vocabulary.**
+
+---
+
+# Notes to survive this session's context (2026-09-12)
+
+## 1. The scale lint's warning count is wrong in BOTH directions
+
+It **under-reports**: a bare literal under a functor claiming no scale is invisible, and that
+is where a deciding value can sit — `leverage_ratio.clausal:111` is a bare `300` in
+`check_ratio_gte/6`, while the scale-named fact at `:93` no longer decides anything. So a
+domain can reach zero warnings with its deciding literal untouched.
+
+It **over-reported** on migrated tables until `e7123f2e`, which exempts any row carrying a
+unit — as a property of the ROW, not of the directive, so a hand-written fact with a united
+column is silent too.
+
+**A falling count is evidence of progress, not a measure of it, and zero is not a
+certificate.** Stated in `docs/currency.md`.
+
+## 2. `X == <quantity>` collapses a dimensionless Quantity to a bare int
+
+The CLP path, not the parse. `parse(str(q))` is faithful and returns a `Quantity`; binding
+through `==` returns `4`. Recorded so the next person who writes a round-trip check, gets `4`
+and suspects the renderer does not spend an afternoon establishing which path is right — the
+two differ and the parse is the correct one.
+
+## 3. A property test is only as complete as its SHAPE LIST, and the shape list ages
+
+The most reusable thing this session produced, and it generalises well past units.
+
+The `str(Quantity)` round-trip property was called total over eight shapes. It was total over
+the shapes CHOSEN, selected before another lane made a currency Quantity hold an exact
+`Fraction`. The missing shape was the worst kind: `'10/3 (usd)'` parses as `10 / 3(usd)` —
+same magnitude, **INVERTED dimension**, dollars-per-unit rather than dollars. It looked right
+and survived a passing suite.
+
+**The failure mode is not that the instrument was wrong; it is that it stayed the same while
+the world it measures moved** (harness-batch-lane). That is a maintenance obligation distinct
+from correctness, and nothing watches it by default.
+
+Two shapes for it, and the second bounds the first:
+
+- **Derive the instrument's enumeration from the AUTHORITY**, not a list beside it.
+  `test_the_shape_list_covers_every_magnitude_type_a_quantity_holds` reads the types out of
+  `_to_decimal` and fails if one has no case.
+- **But derive only for CONFORMANCE questions.** A RESIDUE question — "does this contain
+  traces of the old world" — needs a set the authority has already FORGOTTEN, and the
+  forgetting is the event that makes the question necessary. After the ISO rename, `dollar`
+  was in no table; a census deriving from the authority would have reported a confident zero
+  on the four corpus bodies carrying it. So: **declared union**, derived plus hand-maintained,
+  each marked, each with a control — empty-derived means blind on the vocabulary, empty-hand
+  means blind on residue, and OVERLAP means the authority has taken a word back and the hand
+  list should shrink.
+- And: a complete word set is a useless FILTER (486 words flagged 81 of 82 bodies).
+  **Enumerate from the authority; constrain by the SHAPE.**
+
+## 4. Telling another lane a change is safe
+
+**Name the FILE, not the nature of the change.** "Docs, one test and a suffix set" was true of
+the content and silent about the location — and that suffix set is in `term_rewriting.py`, on
+the load path for all 82 harness bodies. A reader's instrument reacts to location; only the
+owner knows the content. The less informative-sounding sentence is the more useful one.
+
+## Open for whoever picks this lane up
+
+- **Mike's Q6, unanswered**: should a `[date, value, cite]` row carry a currency-valued
+  magnitude? A units question, not a constants one.
+- Option 2 for the exporter (fold to the BASE magnitude) — load-bearing since "follow
+  statutes"; export stays lossy, it fixes the magnitude not the unit.
+- Ratio units (`basis_points`, `percent`) — designed, unbuilt; when they land, the scale
+  lint's hand-maintained half must shrink and its overlap control will say so.
+- peppol as a separate migration; its BR-CO tolerance is a READ-THE-STANDARD question.
+- The decimal-literal gap: source `292.00` is a float and loses its trailing zero before any
+  Quantity exists. Minor units preserve it exactly.
+- **Box is the only tree still on the old vocabulary.**
+- corpus-lane's side needs no reconstruction: `_tools/MIGRATION-money-constants.md`.
