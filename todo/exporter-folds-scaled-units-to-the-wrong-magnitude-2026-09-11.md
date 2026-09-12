@@ -131,3 +131,33 @@ only by quantities — it identifies a quantity and returns None for anything el
 placed before that identification refuses `implements(k1)`. `test_ordinary_predicate_call_is_untouched`
 in `tests/test_prolog_quantity_units.py` catches it; the guard belongs inside the branches
 that have already established the node IS a quantity.
+
+---
+
+## 2026-09-12 — the operator expects the constants family in Scryer/Trealla via TERM EXPANSION
+
+Operator, on landing the decimal-string form: *"I expect constants predicate family to be
+available for Scryer and Trealla anyway, using term expansion."*
+
+**That reframes this todo and may retire its premise.** Option 2 (fold to the base magnitude) is
+a way of making a LOSSY export less wrong: the 2026-09-08 ruling was that ISO Prolog cannot carry
+a quantity, so the exporter discards the unit and the only question was which number survives.
+If the constants family exists on the Prolog side as term-expanded declarations, the exporter
+stops needing to fold at all — it emits the declaration and the unit crosses with it.
+
+Three things that follow, none of them yet decided:
+
+* **Option 2 may be the wrong shape of work.** Folding to the base magnitude is a patch on a
+  channel that would no longer be the channel. Worth settling the term-expansion direction
+  BEFORE building it, because the two answers do not compose — one discards units more
+  carefully, the other stops discarding them.
+* **The scaled-unit refusals would lift for a different reason.** Today they exist because
+  dropping `usd_cent` or `basis_point` changes the magnitude. Under term expansion the unit is
+  not dropped, so there is nothing to refuse.
+* **It changes what "lossy" means for the roster.** iso-export-lane's export-bytes axis compares
+  emitted Prolog; a declaration-carrying export is a different file shape, not a different number
+  in the same shape. That is a coordinated change, not an engine-side one.
+
+**Not a decision to make from here.** Recorded so that whoever picks up option 2 checks the
+term-expansion direction with the operator first, rather than building the fold and discovering
+it was scaffolding.
