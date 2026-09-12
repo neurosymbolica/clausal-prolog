@@ -496,3 +496,16 @@ class TestDomainAndLabel:
         t, x = Trail(), Var()
         assert clpfd.in_domain([x], 1, 2, t)
         assert [deref(x) for _ in clpfd.label([x], t)] == [1, 2]
+
+
+import os
+
+
+class TestSurfaceFixture:
+    def test_fixture_passes_every_test_clause(self):
+        from clausal.testing import run_file
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "units_clp_side_channel.clausal")
+        results = run_file(path)
+        failed = [(r.name, r.error) for r in results.results if not r.passed]
+        assert not failed, failed
+        assert len(results.results) >= 20      # the runner actually collected the clauses

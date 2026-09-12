@@ -1,0 +1,141 @@
+-import_from(py.units, [metre, second, ampere, volt, ohm, watt, dimensionless, strip_units])
+-import_from(european_union, [euro])
+-import_from(united_states, [usd])
+-import_from(japan, [yen])
+-import_from(kuwait, [kwd])
+-import_from(currency, [money_round])
+
+# Units inside CLP comparisons: dimensional analysis runs first in a side
+# channel, the solvers see bare numbers, units are reattached on binding.
+# `#=` opens a comment on this surface, so the infix spellings are used;
+# they reach the same functions.
+# Spec: docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md
+
+# ── money ────────────────────────────────────────────────────────────────
+
+test("money comparison") <- (
+    X == 3.00(euro),
+    X < 1550.00(euro)
+)  # nv
+
+test("money subtraction binds the result with its unit") <- (
+    X == 1550.00(euro) - 50.00(euro),
+    X == 1500.00(euro)
+)  # nv
+
+test("money subtraction with an inferred operand") <- (
+    X == 1550.00(euro) - Y,
+    Y == 50.00(euro),
+    X == 1500.00(euro)
+)  # nv
+
+test("mixed currencies throw the ISO units_mismatch term") <- (
+    catch(
+        (_ == 1.00(euro) + 1.00(usd)),
+        error(system_error(CODE), _),
+        CODE is 'units_mismatch',
+    )
+)  # nv
+
+test("a third of 1000 yen is exact and the caller rounds") <- (
+    X == 1000(yen) / 3,
+    money_round(X, 'half_even', R),
+    R == 333(yen)
+)  # nv
+
+test("a third of one dinar keeps three places after explicit rounding") <- (
+    X == 1.000(kwd) / 3,
+    money_round(X, 'half_up', R),
+    R == 0.333(kwd)
+)  # nv
+
+test("money bounds with in_domain and label") <- (
+    in_domain([X], 1(yen), 3(yen)),
+    findall(X, label([X]), XS),
+    XS == [1(yen), 2(yen), 3(yen)]
+)  # nv
+
+# ── SI electrical ────────────────────────────────────────────────────────
+
+test("ohm's law: V = I * R infers volt") <- (
+    V == 2(ampere) * 3(ohm),
+    has_units(V, volt),
+    V == 6(volt)
+)  # nv
+
+test("ohm's law solved for the current") <- (
+    12(volt) == I * 4(ohm),
+    I == 3(ampere)
+)  # nv
+
+test("power P = V * I") <- (
+    P == 12(volt) * 2(ampere),
+    has_units(P, watt),
+    strip_units(P, 24)
+)  # nv
+
+test("power loss P = I^2 * R") <- (
+    I == 3(ampere),
+    P == I * I * 5(ohm),
+    P == 45(watt)
+)  # nv
+
+test("power P = V^2 / R") <- (
+    P == 12(volt) ** 2 / 4(ohm),
+    P == 36(watt)
+)  # nv
+
+test("resistance from integer domain") <- (
+    in_domain([R], 1(ohm), 10(ohm)),
+    12(volt) == 3(ampere) * R,
+    label([R]),
+    R == 4(ohm)
+)  # nv
+
+# ── dimensional rules ────────────────────────────────────────────────────
+
+test("metre minus second throws") <- (
+    catch(
+        (_ == 3(metre) - 2(second)),
+        error(system_error(CODE), _),
+        CODE is 'units_mismatch',
+    )
+)  # nv
+
+test("plain number beside a length in a sum throws") <- (
+    catch(
+        (_ == 3(metre) + 1),
+        error(system_error(CODE), _),
+        CODE is 'units_mismatch',
+    )
+)  # nv
+
+test("two unknown factors are undetermined") <- (
+    has_units(X, metre),
+    catch(
+        (X == Y * Z),
+        error(system_error(CODE), _),
+        CODE is 'units_undetermined',
+    )
+)  # nv
+
+test("dimensionless ratio is a plain number") <- (
+    R == 6(metre) / 3(metre),
+    R == 2
+)  # nv
+
+test("disequality on quantities") <- (
+    X != 3(metre),
+    X == 4(metre)
+)  # nv
+
+test("declared unit variable then constrained") <- (
+    has_units(X, metre),
+    X == 3(metre) + 1(metre),
+    X == 4(metre)
+)  # nv
+
+test("backtracking undoes a unit binding") <- (
+    findall(X, (in_(N, [1, 2]), X == N * 1(metre)), XS),
+    XS == [1(metre), 2(metre)]
+)  # nv
