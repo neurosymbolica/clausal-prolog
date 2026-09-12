@@ -1247,6 +1247,19 @@ _type_error = None
 
 # The units side channel (clausal.logic.units_clp), cached on first use.
 _strip_for_solver = None
+_strip_list_for_solver = None
+_in_domain_units = None
+_label_targets = None
+
+
+def _ensure_units_imports() -> None:
+    global _strip_for_solver, _strip_list_for_solver, _in_domain_units, _label_targets
+    if _strip_for_solver is None:
+        from clausal.logic import units_clp  # noqa: PLC0415
+        _strip_for_solver = units_clp.strip_for_solver
+        _strip_list_for_solver = units_clp.strip_list_for_solver
+        _in_domain_units = units_clp.in_domain_units
+        _label_targets = units_clp.label_targets
 
 
 def _units_strip(l, r, context, trail):
@@ -1254,11 +1267,17 @@ def _units_strip(l, r, context, trail):
     united Var is involved (the existing path is untouched), else the
     stripped ``(l, r)`` the solvers can take. Must run BEFORE ``_resolve``,
     which raises on a Quantity leaf, and before the non-numeric guards."""
-    global _strip_for_solver
     if _strip_for_solver is None:
-        from clausal.logic.units_clp import strip_for_solver  # noqa: PLC0415
-        _strip_for_solver = strip_for_solver
+        _ensure_units_imports()
     return _strip_for_solver(l, r, context, trail)
+
+
+def _units_strip_list(items, context, trail):
+    """List form of :func:`_units_strip` for the builtins whose operands
+    must share one dimension; returns the (possibly untouched) list."""
+    if _strip_list_for_solver is None:
+        _ensure_units_imports()
+    return _strip_list_for_solver(items, context, trail)[0]
 
 
 def _ensure_exc_imports():
@@ -2098,6 +2117,9 @@ def fd_gt(l, r, trail: Trail) -> bool:
     r = deref(r)
     if type(l) is int and type(r) is int:
         return l > r
+    stripped = _units_strip(l, r, "(>)/2", trail)   # name the operator the user wrote
+    if stripped is not None:
+        l, r = stripped
     return fd_lt(r, l, trail)
 
 
@@ -2107,6 +2129,9 @@ def fd_ge(l, r, trail: Trail) -> bool:
     r = deref(r)
     if type(l) is int and type(r) is int:
         return l >= r
+    stripped = _units_strip(l, r, "(>=)/2", trail)   # name the operator the user wrote
+    if stripped is not None:
+        l, r = stripped
     return fd_le(r, l, trail)
 
 
@@ -2211,8 +2236,9 @@ def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
 
     Quantity bounds go through the units side channel: the targets become
     united vars and the stripped bounds are posted on their shadows."""
-    from clausal.logic.units_clp import in_domain_units  # noqa: PLC0415
-    united = in_domain_units(var_or_list, lo, hi, trail)
+    if _in_domain_units is None:
+        _ensure_units_imports()
+    united = _in_domain_units(var_or_list, lo, hi, trail)
     if united is not None:
         return united
     lo = deref(lo)
@@ -2277,10 +2303,16 @@ def label(vars_list, trail: Trail):
     if not isinstance(vars_list, list):
         vars_list = [vars_list]
     # A united var is labelled through its shadow (units side channel);
-    # the units_link hook rebinds the user's var on every solution.
-    from clausal.logic.units_clp import label_targets  # noqa: PLC0415
-    vars_list = label_targets(vars_list)
+    # the units_link hook rebinds the user's var on every solution. The
+    # substitution happens ONCE here; the search recurses on _label_fd.
+    if _label_targets is None:
+        _ensure_units_imports()
+    yield from _label_fd(_label_targets(vars_list), trail)
 
+
+def _label_fd(vars_list: list, trail: Trail):
+    """The labelling search proper, over a list already stripped of united
+    vars (see :func:`label`)."""
     # Collect unbound vars with FD domains
     unbound: list = []
     for v in vars_list:
@@ -2328,7 +2360,7 @@ def label(vars_list, trail: Trail):
         mark = trail.mark()
         if unify(best, val, trail):
             # Recurse for remaining vars
-            yield from label(vars_list, trail)
+            yield from _label_fd(vars_list, trail)
         trail.undo(mark)
 
 
@@ -2337,6 +2369,7 @@ def all_different(vars_list, trail: Trail) -> bool:
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         return False
+    vars_list = _units_strip_list(vars_list, "all_different/1", trail)
     vars_tuple = tuple(deref(v) for v in vars_list)
     constraint = AllDiffConstraint(vars_tuple)
     return _post_constraint(constraint, trail)
@@ -2362,6 +2395,9 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """
     x = deref(x)
     y = deref(y)
+    stripped = _units_strip(x, y, f"reify/{op}", trail)
+    if stripped is not None:
+        x, y = stripped
     x = _resolve(x)
     y = _resolve(y)
     if _both_ground(x, y):
@@ -2471,6 +2507,9 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
 
     if not isinstance(vars_list, list):
         return
+    # Units: every summand and the value share one dimension.
+    both = _units_strip_list(list(vars_list) + [value], "sum_/3", trail)
+    vars_list, value = both[:-1], both[-1]
     op_str = _op_spelling(op_str, "sum_/3")
     if op_str is None:
         return
@@ -2534,6 +2573,16 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
         return
     if len(coeffs) != len(vars_list):
         return
+    # Units: coefficients are plain numbers; the vars and the value share
+    # one dimension.
+    if _strip_list_for_solver is None:
+        _ensure_units_imports()
+    _, coeff_dims = _strip_list_for_solver(coeffs, "scalar_product/4", trail)
+    if coeff_dims:
+        from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
+        raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
+    both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
+    vars_list, value = both[:-1], both[-1]
     op_str = _op_spelling(op_str, "scalar_product/4")
     if op_str is None:
         return
@@ -2595,6 +2644,10 @@ def fd_element(index, lst, value, trail: Trail):
 
     index = deref(index)
     value = deref(value)
+    # Units: the list elements and the value share one dimension; the
+    # index is a plain position.
+    both = _units_strip_list(list(lst) + [value], "element/3", trail)
+    lst, value = both[:-1], both[-1]
     n = len(lst)
 
     if isinstance(index, int):
@@ -2663,6 +2716,7 @@ def fd_circuit(vars_list, trail: Trail):
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         return
+    vars_list = _units_strip_list(vars_list, "circuit/1", trail)
 
     n = len(vars_list)
     if n == 0:
@@ -3118,6 +3172,7 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         return False
+    vars_list = _units_strip_list(vars_list, "global_cardinality/2", trail)
 
     vars_deref = []
     for v in vars_list:
@@ -3146,6 +3201,7 @@ def chain(vars_list, relation, trail: Trail) -> bool:
         return False
     if len(vars_list) <= 1:
         return True  # trivially satisfied
+    vars_list = _units_strip_list(vars_list, "chain/2", trail)
 
     _rel_to_fn = {
         "lt": fd_lt, "gt": fd_gt, "le": fd_le, "ge": fd_ge,
@@ -3181,6 +3237,7 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
     for tup in tuples_list:
         tup = deref(tup)
         if isinstance(tup, list):
+            tup = _units_strip_list(tup, "tuples_in/2", trail)
             vars_ = []
             for v in tup:
                 v = deref(v)
@@ -3236,6 +3293,9 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     order = deref(order)
     x = deref(x)
     y = deref(y)
+    stripped = _units_strip(x, y, "zcompare/3", trail)
+    if stripped is not None:
+        x, y = stripped
     # Read (and validate) the Order BEFORE anything else, including the
     # ground/ground fast path below.  Fix round 1: with the check further
     # down, ``zcompare("<", 1, 5)`` took the fast path and merely FAILED (the

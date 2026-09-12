@@ -117,24 +117,30 @@ def _eval_with_quantity_arithmetic(t):
         return _eval_with_quantity_arithmetic(t.left) / _eval_with_quantity_arithmetic(t.right)
     if isinstance(t, Pow):
         return _eval_with_quantity_arithmetic(t.left) ** _eval_with_quantity_arithmetic(t.right)
+    if isinstance(t, FloorDiv):
+        return _eval_with_quantity_arithmetic(t.left) // _eval_with_quantity_arithmetic(t.right)
+    if isinstance(t, Mod):
+        return _eval_with_quantity_arithmetic(t.left) % _eval_with_quantity_arithmetic(t.right)
     if isinstance(t, Negate):
         return -_eval_with_quantity_arithmetic(t.operand)
     return t
 
 
 _LEAVES = [2, 3, Quantity(3, M), Quantity(5, M), Quantity(4, S), Quantity(7, {}),
-           Quantity(2, {kilogram: 1})]
+           Quantity(2, {kilogram: 1}), Quantity(Decimal("1.50"), {euro: 1}),
+           Quantity(Fraction(1, 3), {euro: 1})]
 
 
 def _random_tree(rng, depth):
     if depth == 0 or rng.random() < 0.3:
         return rng.choice(_LEAVES)
-    op = rng.choice(["add", "sub", "mult", "div", "pow", "neg"])
+    op = rng.choice(["add", "sub", "mult", "div", "pow", "neg", "floordiv", "mod"])
     if op == "neg":
         return _neg(_random_tree(rng, depth - 1))
     if op == "pow":
         return _bin(Pow, _random_tree(rng, depth - 1), rng.choice([2, 3]))
-    cls = {"add": Add, "sub": Sub, "mult": Mult, "div": Div}[op]
+    cls = {"add": Add, "sub": Sub, "mult": Mult, "div": Div,
+           "floordiv": FloorDiv, "mod": Mod}[op]
     return _bin(cls, _random_tree(rng, depth - 1), _random_tree(rng, depth - 1))
 
 
@@ -509,3 +515,127 @@ class TestSurfaceFixture:
         failed = [(r.name, r.error) for r in results.results if not r.passed]
         assert not failed, failed
         assert len(results.results) >= 20      # the runner actually collected the clauses
+
+
+class TestReviewRoundOne:
+    """Findings of the 2026-09-12 branch review, each reproduced then fixed."""
+
+    # F1: FD builtins beyond the comparators must not post on the user's var
+    def test_all_different_on_united_vars_labels(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, y = Trail(), Var(), Var()
+        assert clpfd.in_domain([x, y], Quantity(1, M), Quantity(2, M), t)
+        assert clpfd.all_different([x, y], t)
+        sols = sorted((deref(x).value, deref(y).value) for _ in clpfd.label([x, y], t))
+        assert sols == [(1, 2), (2, 1)]
+        assert all(isinstance(deref(v), Quantity) or is_var_unbound(v) for v in (x, y))
+
+    def test_sum_of_money_vars_binds_total_with_unit(self):
+        import clausal.logic.clpfd as clpfd
+        t, a, b, total = Trail(), Var(), Var(), Var()
+        assert clpfd.in_domain([a, b], Quantity(1, {yen: 1}), Quantity(3, {yen: 1}), t)
+        assert list(clpfd.fd_sum([a, b], mint("#="), total, t)) == [None]
+        assert unify(a, Quantity(1, {yen: 1}), t) and unify(b, Quantity(3, {yen: 1}), t)
+        assert deref(total) == Quantity(4, {yen: 1})
+
+    def test_sum_mixing_dims_throws(self):
+        import clausal.logic.clpfd as clpfd
+        t, a, b = Trail(), Var(), Var()
+        assert clpfd.in_domain([a], Quantity(1, M), Quantity(3, M), t)
+        assert clpfd.in_domain([b], Quantity(1, S), Quantity(3, S), t)
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_sum([a, b], mint("#="), Var(), t))
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_scalar_product_with_plain_coefficients(self):
+        import clausal.logic.clpfd as clpfd
+        t, a, b, total = Trail(), Var(), Var(), Var()
+        assert clpfd.in_domain([a, b], Quantity(1, M), Quantity(3, M), t)
+        assert list(clpfd.fd_scalar_product([2, 3], [a, b], mint("#="), total, t)) == [None]
+        assert unify(a, Quantity(1, M), t) and unify(b, Quantity(2, M), t)
+        assert deref(total) == Quantity(8, M)
+
+    def test_chain_on_united_vars(self):
+        import clausal.logic.clpfd as clpfd
+        t, a, b = Trail(), Var(), Var()
+        assert clpfd.in_domain([a, b], Quantity(1, M), Quantity(2, M), t)
+        assert clpfd.chain([a, b], "lt", t)
+        sols = [(deref(a).value, deref(b).value) for _ in clpfd.label([a, b], t)]
+        assert sols == [(1, 2)]
+
+    def test_element_on_united_list(self):
+        import clausal.logic.clpfd as clpfd
+        t, i, v = Trail(), Var(), Var()
+        assert clpfd.in_domain([i], 1, 3, t)
+        sols = [(deref(i), deref(v)) for _ in
+                clpfd.fd_element(i, [Quantity(5, M), Quantity(7, M), Quantity(9, M)], v, t)]
+        assert (2, Quantity(7, M)) in sols or any(
+            is_var_unbound(iv) and is_var_unbound(vv) for iv, vv in sols)   # posted, not enumerated
+        if all(not is_var_unbound(iv) for iv, _ in sols):
+            assert sols == [(1, Quantity(5, M)), (2, Quantity(7, M)), (3, Quantity(9, M))]
+
+    def test_direct_solver_post_on_united_var_is_loud(self):
+        """The safety net: a builtin that bypasses the side channel leaves FD
+        state on the user's var; reattachment then throws instead of failing."""
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, M, t)
+        clpfd._ensure_fd(x, t)                      # what a bypassing builtin does
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_eq(x, Quantity(5, M), t)
+        _assert_system_error(ei, "units_unsupported")
+
+    # F2: Fraction-valued money must interoperate with Decimal-valued money
+    def test_fraction_and_decimal_money_arithmetic(self):
+        a = Quantity(Fraction(1000, 3), {yen: 1})
+        b = Quantity(Decimal("1"), {yen: 1})
+        assert (a + b).value == Fraction(1003, 3)
+        assert (b - a).value == Fraction(-997, 3)
+        assert (a * Decimal("3")).value == 1000
+        assert (b / a).value == Fraction(3, 1000)
+        assert type((a + b).value) is Fraction
+
+    # F3: exponent errors are type/instantiation errors, not units mismatches
+    def test_unbound_exponent_is_instantiation_error(self):
+        from clausal.logic.units_clp import analyse
+        with pytest.raises(LogicException) as ei:
+            analyse(Var(), _bin(Pow, Quantity(2, M), Var()), "(==)/2")
+        assert ei.value.term.args[0] == mint("instantiation_error")
+
+    def test_fractional_exponent_is_type_error(self):
+        from clausal.logic.units_clp import analyse
+        with pytest.raises(LogicException) as ei:
+            analyse(Var(), _bin(Pow, Quantity(2, M), 2.5), "(==)/2")
+        assert ei.value.term.args[0].functor == "type_error"
+
+    def test_not_a_power_reads_sensibly(self):
+        from clausal.logic.units_clp import analyse
+        with pytest.raises(LogicException) as ei:
+            analyse(_bin(Pow, Var(), 2), Quantity(3, M), "(==)/2")
+        _assert_system_error(ei, "units_mismatch")
+        assert "share a name" not in ei.value.term.args[1]
+
+    # F4: non-integral quantity bounds are rejected like non-integer plain ones
+    def test_in_domain_non_integral_money_bounds_rejected(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(TypeError, match="in_domain"):
+            clpfd.in_domain([Var()], Quantity(Decimal("0.01"), {euro: 1}), Quantity(Decimal("0.05"), {euro: 1}), Trail())
+
+    # F5: > and >= name themselves in the error
+    def test_gt_context_names_gt(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_gt(Quantity(5, M), Quantity(3, S), Trail())
+        assert ei.value.term.args[1].startswith("(>)/2")
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_ge(Quantity(5, M), Quantity(3, S), Trail())
+        assert ei.value.term.args[1].startswith("(>=)/2")
+
+    # F6: ground arithmetic has // and % on quantities, matching divmod_/4
+    def test_quantity_floordiv_and_mod(self):
+        assert Quantity(7, M) // Quantity(2, M) == Quantity(3, {})
+        assert Quantity(7, M) % Quantity(2, M) == Quantity(1, M)
+        with pytest.raises(UnitsMismatch):
+            Quantity(7, M) // 2
+        assert Quantity(7, {}) // 2 == Quantity(3, {})

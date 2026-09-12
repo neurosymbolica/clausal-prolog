@@ -12,4 +12,9 @@ for this reason. Acceptance: the SI and money clauses of
 tests/fixtures/units_clp_side_channel.clausal re-spelled with z3 predicates,
 skipped when z3-solver is not installed.
 
+Also on the safety net, not routed: `cumulative/2` (task tuples of
+start/duration/resource — two dimensions, time and resource, so it needs its
+own rule rather than `strip_list_for_solver`). Today a united var reaching it
+throws `system_error(units_unsupported)` at reattachment.
+
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.

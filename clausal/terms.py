@@ -2232,6 +2232,8 @@ class Quantity:
         - ``+`` / ``-`` require identical dimension dicts; raises ``UnitsMismatch``
           otherwise.
         - ``*`` / ``/`` merge dimension dicts by addition / subtraction.
+        - ``//`` / ``%`` require identical dimension dicts (as ``divmod_/4``);
+          the quotient is dimensionless, the remainder keeps the dimension.
         - ``**`` scales every exponent by an integer constant; raises
           ``UnitsMismatch`` if the exponent is non-integer or has dimensions.
         - Plain numeric scalars (int/float) can be multiplied/divided freely.
@@ -2366,6 +2368,13 @@ class Quantity:
             return a, Decimal(str(b))
         if isinstance(b, Decimal) and isinstance(a, float) and not isinstance(a, bool):
             return Decimal(str(a)), b
+        # Decimal and Fraction compare equal in Python but do not add: a
+        # Fraction-valued money quantity (a CLP(Q) result) meeting a
+        # Decimal literal goes exact-to-exact via Fraction(Decimal).
+        if isinstance(a, Decimal) and isinstance(b, Fraction):
+            return Fraction(a), b
+        if isinstance(b, Decimal) and isinstance(a, Fraction):
+            return a, Fraction(b)
         return a, b
 
     # ── Arithmetic ──────────────────────────────────────────────────────────
@@ -2433,6 +2442,26 @@ class Quantity:
         new_dims = {k: -v for k, v in self._dims.items()}
         a, b = self._num_pair(other, self._value)
         return Quantity(a / b, new_dims)
+
+    def __floordiv__(self, other):
+        """Same rule as ``divmod_/4``: operands share a dimension, the
+        quotient is dimensionless."""
+        if isinstance(other, (int, float, Decimal)) and not self._dims:
+            a, b = self._num_pair(self._value, other)
+            return Quantity(a // b, {})
+        self._require_same_dims(other, "floor-divide")
+        a, b = self._num_pair(self._value, other._value)
+        return Quantity(a // b, {})
+
+    def __mod__(self, other):
+        """Same rule as ``divmod_/4``: operands share a dimension, the
+        remainder keeps it."""
+        if isinstance(other, (int, float, Decimal)) and not self._dims:
+            a, b = self._num_pair(self._value, other)
+            return Quantity(a % b, {})
+        self._require_same_dims(other, "take the remainder of")
+        a, b = self._num_pair(self._value, other._value)
+        return Quantity(a % b, self._dims)
 
     def __pow__(self, exp):
         if isinstance(exp, Quantity):

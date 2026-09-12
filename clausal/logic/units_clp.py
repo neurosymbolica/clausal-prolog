@@ -110,6 +110,21 @@ def _mismatch(context: str, a: dict, b: dict, what: str = "") -> Exception:
         "units_mismatch", f"{context}: {detail}{_render_pair(a, b)}"))
 
 
+def _mismatch_text(context: str, text: str) -> Exception:
+    from clausal.logic.exceptions import LogicException, system_error  # noqa: PLC0415
+    return LogicException(system_error("units_mismatch", f"{context}: {text}"))
+
+
+def _unsupported(context: str, text: str) -> Exception:
+    from clausal.logic.exceptions import LogicException, system_error  # noqa: PLC0415
+    return LogicException(system_error("units_unsupported", f"{context}: {text}"))
+
+
+def _render(d: dict) -> str:
+    from clausal.terms import _dims_str  # noqa: PLC0415
+    return _dims_str(d) if d else "dimensionless"
+
+
 def _undetermined(context: str, vars_: list) -> Exception:
     from clausal.logic.exceptions import LogicException, system_error  # noqa: PLC0415
     names = ", ".join(repr(v) for v in vars_)
@@ -238,14 +253,21 @@ class _Analysis:
         raise _NotEngaged()
 
     def _exponent(self, x) -> int:
+        """The exponent of a Pow node: a ground int. A dimensioned exponent
+        is a units mismatch; an unbound one is an instantiation error and a
+        non-integer one a type error — not units complaints, so they carry
+        their own ISO codes and a units_mismatch catch does not swallow them."""
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, type_error, instantiation_error)
         e = deref(x.right)
         if isinstance(e, _Quantity):
             if e.dims:
                 raise _mismatch(self.context, dict(e.dims), {}, "exponent")
             e = e.value
+        if is_var(e):
+            raise LogicException(instantiation_error(f"{self.context}: exponent"))
         if isinstance(e, bool) or not isinstance(e, int):
-            raise _mismatch(self.context, {}, {},
-                            f"exponent must be a ground int, got {e!r}")
+            raise LogicException(type_error("integer", e, f"{self.context}: exponent"))
         return e
 
     # top-down -------------------------------------------------------------
@@ -297,7 +319,9 @@ class _Analysis:
             n = self._exponent(x)
             base = _unscale(want, n)
             if base is None:
-                raise _mismatch(self.context, want, {}, f"not a {n}th power")
+                raise _mismatch_text(
+                    self.context,
+                    f"{_render(want)} is not the power {n} of any dimension")
             self._push(x.left, base)
             return
         if isinstance(x, _Negate):
@@ -417,6 +441,17 @@ def _link_hook(link: Link, bound_to, trail: Trail) -> bool:
     value = present_number(bound_to)
     user = deref(link.user)
     if is_var(user):
+        if _has_solver_state(user):
+            # Some builtin posted on the user's variable DIRECTLY, bypassing
+            # the side channel, so it now carries FD/Q/R state of its own
+            # and the FD hook would refuse the Quantity below — silently.
+            # Say so instead: the fix is to route that builtin through
+            # strip_list_for_solver / strip_for_solver.
+            raise _unsupported(
+                "units",
+                f"{user!r} carries solver state posted directly by a builtin "
+                f"outside the units side channel; that builtin does not "
+                f"support united variables yet")
         return unify(user, _Quantity(value, link.dims), trail)
     return (isinstance(user, _Quantity) and dict(user.dims) == link.dims
             and user.value == value)
@@ -477,8 +512,8 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     Quantity (the caller's plain path). Both bounds must be quantities of
     one dimension; every target becomes a united var of that dimension
     (a target already declared with other dims throws) and the stripped
-    bounds are posted on its shadow — ``in_domain`` for integer bounds,
-    ``in_q`` otherwise, so money bounds take the exact rational route."""
+    bounds are posted on its shadow. Bounds must be whole units (``1(yen)``,
+    ``1.00(euro)``): a finite domain is integers, as on the plain path."""
     _ensure_imports()
     lo, hi = deref(lo), deref(hi)
     lo_q, hi_q = isinstance(lo, _Quantity), isinstance(hi, _Quantity)
@@ -512,11 +547,14 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
                             f"target {v!r} is already a bare solver variable")
         shadows.append(shadow_for(v, dims, trail))
     lo_n, hi_n = to_solver_number(lo.value), to_solver_number(hi.value)
-    if type(lo_n) is int and type(hi_n) is int:
-        from clausal.logic.clpfd import in_domain  # noqa: PLC0415
-        return in_domain(shadows, lo_n, hi_n, trail)
-    from clausal.logic.clpq import in_q  # noqa: PLC0415
-    return in_q(shadows, lo_n, hi_n, trail)
+    if type(lo_n) is not int or type(hi_n) is not int:
+        # The plain path raises TypeError for non-integer bounds; a domain
+        # that only CLP(Q) could hold is not labellable, and posting it
+        # anyway made label/1 succeed once with the variable unbound.
+        raise TypeError(
+            f"in_domain bounds must be whole units, got {lo!r}, {hi!r}")
+    from clausal.logic.clpfd import in_domain  # noqa: PLC0415
+    return in_domain(shadows, lo_n, hi_n, trail)
 
 
 def label_targets(vars_list) -> list:
@@ -533,3 +571,52 @@ def label_targets(vars_list) -> list:
                 continue
         out.append(v)
     return out
+
+
+def strip_list_for_solver(items, context: str, trail: Trail):
+    """The side channel for a builtin that takes a LIST of operands which
+    must all share one dimension (all_different, sum_, chain, element, …).
+
+    Returns ``(items, None)`` untouched when no element is a Quantity or a
+    united Var, or when some element is not numeric (the builtin's own
+    checks own that). Otherwise every known dimension must agree — a plain
+    number or bare solver var is dimensionless — a fresh Var takes the
+    shared dimension, and the result is ``(stripped, dims)`` with
+    quantities as solver numbers and united vars as shadows.
+    """
+    _ensure_imports()
+    items = [deref(v) for v in items]
+    try:
+        if not any(_scan(v) for v in items):
+            return items, None
+    except _NotEngaged:
+        return items, None
+    known = []
+    for v in items:
+        if isinstance(v, _Quantity):
+            known.append(dict(v.dims))
+        elif is_var(v):
+            state = get_attr(v, UNITS_KEY)
+            if state is not None:
+                known.append(dict(state.dims))
+            elif _has_solver_state(v):
+                known.append({})
+            else:
+                known.append(None)
+        elif _is_plain_number(v):
+            known.append({})
+        else:
+            return items, None
+    dims = next(d for d in known if d is not None)
+    for d in known:
+        if d is not None and d != dims:
+            raise _mismatch(context, dims, d)
+    out = []
+    for v in items:
+        if isinstance(v, _Quantity):
+            out.append(to_solver_number(v.value))
+        elif is_var(v) and dims:
+            out.append(shadow_for(v, dims, trail))
+        else:
+            out.append(v)
+    return out, dims
