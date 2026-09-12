@@ -375,6 +375,11 @@ money result adds to a Decimal literal exactly.
   the comparators, which choose their own solver — so `chain([X,
   10.50(euro)], lt)` and the plain rational spelling both work (todo
   closed); `_units_done` is keyword-only in every twin.
+* Round 17: `zcompare/3` with an unbound Order decides a ground pair of any
+  magnitude directly (the whole-units rule applies only when a variable
+  operand will be posted over an integer domain); `cumulative/2` converts
+  fields per task, so a malformed task fails the same way with or without
+  units in the process.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

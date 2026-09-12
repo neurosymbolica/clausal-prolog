@@ -1190,3 +1190,23 @@ class TestReviewRoundSixteen:
         assert clpfd.zcompare(order, p, q, t2)
         assert unify(p, 1, t2) and unify(q, 2, t2)
         assert deref(order) == mint("<")
+
+
+class TestReviewRoundSeventeen:
+    def test_zcompare_unbound_order_over_ground_sub_unit_money(self):
+        import clausal.logic.clpfd as clpfd
+        t, order = Trail(), Var()
+        assert clpfd.zcompare(order, Quantity(Decimal("1.50"), {euro: 1}), Quantity(Decimal("2.50"), {euro: 1}), t)
+        assert deref(order) == mint("<")
+        t2, order2 = Trail(), Var()
+        assert clpfd.zcompare(order2, Quantity(Decimal("2.50"), {euro: 1}), Quantity(Decimal("2.50"), {euro: 1}), t2)
+        assert deref(order2) == mint("=")
+
+    def test_cumulative_malformed_task_fails_the_same_way_with_units_on(self):
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic import _units_flag
+        assert _units_flag.active
+        t, s1 = Trail(), Var()
+        assert clpfd.in_domain([s1], 0, 5, t)
+        with pytest.raises(ValueError):
+            clpfd.cumulative([(s1, 2)], 1, t)

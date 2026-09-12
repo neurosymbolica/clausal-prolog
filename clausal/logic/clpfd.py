@@ -3185,14 +3185,12 @@ def cumulative(tasks, limit, trail: Trail) -> bool:
     # Units: not routed (two dimensions, time and resource, need their own
     # rule) and durations/resources never get solver state, so the
     # reattachment net would not fire either — refuse loudly here instead.
-    if _strip_list_for_solver is None:
-        _ensure_units_imports()
+    # Per task, so a malformed task still fails the unpack below as before.
     if _units_flag_active():
         from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
-        flat = plain_fields_or_unsupported(
-            [f for task in tasks for f in task] + [limit], "cumulative/2")
-        tasks = [tuple(flat[i:i + 3]) for i in range(0, len(flat) - 1, 3)]
-        limit = flat[-1]
+        tasks = [tuple(plain_fields_or_unsupported(list(task), "cumulative/2"))
+                 for task in tasks]
+        limit = plain_fields_or_unsupported([limit], "cumulative/2")[0]
 
     task_tuples = []
     for start, dur, res in tasks:
@@ -3360,17 +3358,21 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     # Units side channel after the Order check, so a bad Order still wins.
     stripped = _units_strip(x, y, "zcompare/3", trail)
     if stripped is not None:
-        if order_name is None:
-            # An unbound Order posts ZcompareConstraint over integer
-            # domains (no comparator to delegate to), so the operands must
-            # be whole units, as in every other integer-domain builtin.
-            stripped = _whole_units_only([x, y], list(stripped), "zcompare/3")
-        x, y = stripped
+        sx, sy = stripped
+        if order_name is None and (is_var(sx) or is_var(sy)):
+            # An unbound Order with a variable operand posts
+            # ZcompareConstraint over integer domains (no comparator to
+            # delegate to), so the operands must be whole units, as in every
+            # other integer-domain builtin. A ground pair is decided below
+            # whatever its magnitudes.
+            sx, sy = _whole_units_only([x, y], [sx, sy], "zcompare/3")
+        x, y = sx, sy
 
-    # If both x and y are ground, just determine the order directly.  The
-    # answer is unified against *order*, which is either an unbound Var (it
-    # gets bound) or the atom the caller already wrote (it is checked).
-    if isinstance(x, int) and isinstance(y, int):
+    # If both x and y are ground numbers, just determine the order directly.
+    # The answer is unified against *order*, which is either an unbound Var
+    # (it gets bound) or the atom the caller already wrote (it is checked).
+    if (isinstance(x, (int, Fraction, float)) and isinstance(y, (int, Fraction, float))
+            and not isinstance(x, bool) and not isinstance(y, bool)):
         if x < y:
             return unify(order, mint('<'), trail)
         elif x > y:
