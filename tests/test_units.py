@@ -1243,14 +1243,20 @@ class TestUnitMismatchErrors:
             list(call("test", module=mod))
 
     def test_compare_metre_with_second_raises(self, tmp_path):
-        """Comparing m > s directly in clause body raises UnitsMismatch."""
+        """Comparing m > s directly in clause body throws the ISO 13211 term
+        error(system_error(units_mismatch), Ctx) — a comparison goes through
+        the units side channel (2026-09-12), which speaks ISO, not Python."""
         # nv
         from clausal.logic.solve import call
+        from clausal.logic.atoms import mint
+        from clausal.logic.exceptions import LogicException
         mod = self._load(tmp_path, "mismatch_cmp",
             "-import_from(py.units, [metre, second])\n"
             "test <- (5(metre) > 3(second))\n")
-        with pytest.raises(UnitsMismatch):
+        with pytest.raises(LogicException) as ei:
             list(call("test", module=mod))
+        inner = ei.value.term.args[0]
+        assert inner.functor == "system_error" and inner.args[0] == mint("units_mismatch")
 
     def test_add_dimensioned_with_plain_raises(self, tmp_path):
         """Adding a plain number to a dimensional quantity via ++ raises UnitsMismatch."""

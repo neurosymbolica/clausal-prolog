@@ -1245,6 +1245,21 @@ def _ensure_term_imports():
 _LogicException = None
 _type_error = None
 
+# The units side channel (clausal.logic.units_clp), cached on first use.
+_strip_for_solver = None
+
+
+def _units_strip(l, r, context, trail):
+    """Run the units side channel on a comparison: None when no Quantity or
+    united Var is involved (the existing path is untouched), else the
+    stripped ``(l, r)`` the solvers can take. Must run BEFORE ``_resolve``,
+    which raises on a Quantity leaf, and before the non-numeric guards."""
+    global _strip_for_solver
+    if _strip_for_solver is None:
+        from clausal.logic.units_clp import strip_for_solver  # noqa: PLC0415
+        _strip_for_solver = strip_for_solver
+    return _strip_for_solver(l, r, context, trail)
+
 
 def _ensure_exc_imports():
     global _LogicException, _type_error
@@ -1900,6 +1915,9 @@ def fd_eq(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l == r
     # ── end fast path ──
+    stripped = _units_strip(l, r, "(==)/2", trail)
+    if stripped is not None:
+        l, r = stripped
     if not is_var(l):
         l = _resolve(l)
     if not is_var(r):
@@ -1959,6 +1977,9 @@ def fd_ne(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l != r
     # ── end fast path ──
+    stripped = _units_strip(l, r, "(!=)/2", trail)
+    if stripped is not None:
+        l, r = stripped
     if not is_var(l):
         l = _resolve(l)
     if not is_var(r):
@@ -1994,6 +2015,9 @@ def fd_lt(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l < r
     # ── end fast path ──
+    stripped = _units_strip(l, r, "(<)/2", trail)
+    if stripped is not None:
+        l, r = stripped
     if not is_var(l):
         l = _resolve(l)
     if not is_var(r):
@@ -2035,6 +2059,9 @@ def fd_le(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l <= r
     # ── end fast path ──
+    stripped = _units_strip(l, r, "(=<)/2", trail)
+    if stripped is not None:
+        l, r = stripped
     if not is_var(l):
         l = _resolve(l)
     if not is_var(r):
@@ -3302,6 +3329,9 @@ if _USE_C_PROPAGATE:
     _post_constraint = _c_post_constraint
 
     def fd_eq(l, r, trail, _c_impl=_c_fd_eq):
+        stripped = _units_strip(l, r, "(==)/2", trail)
+        if stripped is not None:
+            l, r = stripped
         # A12-F002: the C fd_eq does not type-check operands, so guard here
         # (cheap: only touches the two derefs) before delegating.
         _reject_nonnumeric_eq(l, r)
@@ -3314,6 +3344,9 @@ if _USE_C_PROPAGATE:
         return _c_impl(l, r, trail)
 
     def fd_ne(l, r, trail, _c_impl=_c_fd_ne):
+        stripped = _units_strip(l, r, "(!=)/2", trail)
+        if stripped is not None:
+            l, r = stripped
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
         _reject_nonnumeric_eq(l, r, "(!=)/2")
         _eq = _text_list_eq(deref(l), deref(r))
@@ -3322,6 +3355,9 @@ if _USE_C_PROPAGATE:
         return _c_impl(l, r, trail)
 
     def fd_lt(l, r, trail, _c_impl=_c_fd_lt):
+        stripped = _units_strip(l, r, "(<)/2", trail)
+        if stripped is not None:
+            l, r = stripped
         # The C fd_lt does no clean type-checking: an incomparable ground
         # comparison escapes as a raw Python TypeError. Convert those to a
         # catchable type_error, while preserving the legitimate mixed
@@ -3340,6 +3376,9 @@ if _USE_C_PROPAGATE:
             raise _incomparable_order_error(dr, "(<)/2")
 
     def fd_le(l, r, trail, _c_impl=_c_fd_le):
+        stripped = _units_strip(l, r, "(=<)/2", trail)
+        if stripped is not None:
+            l, r = stripped
         _reject_nonnumeric_order(l, r, "(=<)/2")
         try:
             return _c_impl(l, r, trail)

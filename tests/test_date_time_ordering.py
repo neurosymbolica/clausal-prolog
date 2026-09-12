@@ -195,11 +195,15 @@ class TestVarVsNonNumericOperand:
         _assert_orderable_error(ei, "(<)/2")
 
     def test_var_lt_quantity(self):
+        # 2026-09-12: quantities order through the units side channel now
+        # (spec docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
         from clausal.terms import Quantity
         from clausal.modules.units import metre
-        with pytest.raises(LogicException) as ei:
-            fd_lt(Var(), Quantity(5, {metre: 1}), Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        from clausal.logic.variables import unify, deref
+        v, t = Var(), Trail()
+        assert fd_lt(v, Quantity(5, {metre: 1}), t)
+        assert unify(v, Quantity(3, {metre: 1}), t)
+        assert deref(v) == Quantity(3, {metre: 1})
 
     def test_var_lt_decimal(self):
         from decimal import Decimal

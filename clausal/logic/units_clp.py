@@ -438,3 +438,28 @@ def strip(x: Any, env: dict[int, dict], trail: Trail) -> Any:
     if isinstance(x, _Negate):
         return type(x)(operand=strip(x.operand, env, trail))
     return x
+
+
+# ── entry point for solver front ends ───────────────────────────────────────
+
+def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
+    """The side channel, in one call, for a comparison ``l <op> r``.
+
+    Returns None when neither side holds a Quantity or a united Var (the
+    caller's existing path is untouched), or when a leaf is something the
+    side channel does not speak for (the caller's guards own that error).
+    Otherwise runs the dimension analysis — throwing the ISO term on
+    disagreement — and returns ``(l', r')`` holding only bare numbers, bare
+    Vars and shadows.
+    """
+    _ensure_imports()
+    l, r = deref(l), deref(r)
+    try:
+        material_l = _scan(l)
+        material_r = _scan(r)
+        if not (material_l or material_r):
+            return None
+        _, _, env = analyse(l, r, context)
+    except _NotEngaged:
+        return None
+    return strip(l, env, trail), strip(r, env, trail)

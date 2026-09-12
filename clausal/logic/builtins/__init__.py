@@ -70,6 +70,7 @@ from clausal.logic.builtins import iso_compare       # noqa: F401  (registers by
 
 # Import units_constraint to register has_units/2 before _build_all_builtin_classes runs.
 import clausal.logic.units_constraint               # noqa: F401
+import clausal.logic.units_clp                      # noqa: F401  (registers the units_link hook)
 
 # Re-export private names used by tests and other modules.
 from clausal.logic.builtins.database_ops import _normalize_fact_clause  # noqa: F401

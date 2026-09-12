@@ -268,13 +268,17 @@ class TestF002EqNonRealOperand:
         with pytest.raises(LogicException):
             fd_eq(Var(), dt.datetime(2026, 6, 1, 12, 0), Trail())
 
-    def test_eq_quantity_operand_raises_catchable_type_error(self):
-        from clausal.logic.exceptions import LogicException
+    def test_eq_quantity_operand_binds_via_units_side_channel(self):
+        # 2026-09-12: a Quantity is numeric to the comparators now (spec
+        # docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        # The broken-FD-var defect this pinned cannot recur: the solver never
+        # sees the Quantity, only its bare number and a shadow variable.
         from clausal.terms import Quantity
         from clausal.modules.units import metre
-        with pytest.raises(LogicException) as ei:
-            fd_eq(Var(), Quantity(5, {metre: 1}), Trail())
-        self._assert_evaluable_error(ei, Quantity(5, {metre: 1}))
+        from clausal.logic.variables import deref
+        v, t = Var(), Trail()
+        assert fd_eq(v, Quantity(5, {metre: 1}), t)
+        assert deref(v) == Quantity(5, {metre: 1})
 
     def test_eq_decimal_operand_raises_catchable_type_error(self):
         from decimal import Decimal
@@ -380,12 +384,18 @@ class TestF002NeNonRealOperand:
         with pytest.raises(LogicException):
             fd_ne(Var(), dt.date(2026, 6, 1), Trail())
 
-    def test_ne_quantity_operand_raises_catchable_type_error(self):
-        from clausal.logic.exceptions import LogicException
+    def test_ne_quantity_operand_posts_via_units_side_channel(self):
+        # 2026-09-12: a Quantity is numeric to the comparators now (spec
+        # docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        # The broken-FD-var defect this pinned cannot recur: the solver never
+        # sees the Quantity, only its bare number and a shadow variable.
         from clausal.terms import Quantity
         from clausal.modules.units import metre
-        with pytest.raises(LogicException):
-            fd_ne(Var(), Quantity(5, {metre: 1}), Trail())
+        from clausal.logic.variables import unify
+        v, t = Var(), Trail()
+        assert fd_ne(v, Quantity(5, {metre: 1}), t)
+        assert not unify(v, Quantity(5, {metre: 1}), t)
+        assert unify(v, Quantity(6, {metre: 1}), t)
 
     def test_ne_compiled_repro_raises_instead_of_losing_solution(self, load):
         # The silent-loss shape: X != "banana", X is "apple" had 0 solutions.
@@ -616,10 +626,15 @@ class TestNonNumericLeafInsideExprTree:
         from clausal.logic.exceptions import LogicException
         from clausal.terms import Quantity
         from clausal.modules.units import metre
+        # 2026-09-12: the units side channel now sees this first, and
+        # ``X + 2 metre == 5`` IS a units mismatch — thrown in the ISO
+        # 13211 shape (spec docs/superpowers/specs/2026-09-12-clp-units-side-channel-design.md).
+        from clausal.logic.atoms import mint
         q = Quantity(2, {metre: 1})
         with pytest.raises(LogicException) as ei:
             fd_eq(self._add(Var(), q), 5, Trail())
-        self._assert_integer_leaf_error(ei, q)
+        inner = ei.value.term.args[0]
+        assert inner.functor == "system_error" and inner.args[0] == mint("units_mismatch")
 
     def test_ground_quantity_tree_vs_var_raises(self):
         # X == Quantity(2, m) * 2: the tree is fully ground but not
@@ -630,9 +645,13 @@ class TestNonNumericLeafInsideExprTree:
         from clausal.logic.exceptions import LogicException
         from clausal.terms import Mult, Quantity
         from clausal.modules.units import metre
+        # 2026-09-12: units arithmetic in constraint position IS supported
+        # now, through the units side channel — X binds to 4 metre.
+        from clausal.logic.variables import deref
         q = Quantity(2, {metre: 1})
-        with pytest.raises(LogicException):
-            fd_eq(Var(), Mult(left=q, right=2), Trail())
+        v, t = Var(), Trail()
+        assert fd_eq(v, Mult(left=q, right=2), t)
+        assert deref(v) == Quantity(4, {metre: 1})
 
     def test_float_leaf_raises(self):
         # A bare float leaf inside a var-containing FD tree never dispatched

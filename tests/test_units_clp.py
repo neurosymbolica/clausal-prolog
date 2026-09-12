@@ -333,3 +333,166 @@ class TestShadowLink:
         assert unify(s, 5, t)
         t.undo(mark)
         assert is_var_unbound(x) and is_var_unbound(s)
+
+
+class TestComparatorsEngine:
+    """Through the module-level fd_* (the C wrappers when loaded)."""
+
+    def _fd(self):
+        import clausal.logic.clpfd as clpfd
+        return clpfd
+
+    def test_eq_var_against_quantity_binds(self):
+        clpfd = self._fd()
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(x, Quantity(5, M), t)
+        assert deref(x) == Quantity(5, M)
+
+    def test_money_subtraction_binds_exact_euro(self):
+        clpfd = self._fd()
+        t, x = Trail(), Var()
+        tree = _bin(Sub, Quantity(Decimal("1550.00"), {euro: 1}), Quantity(Decimal("50.00"), {euro: 1}))
+        assert clpfd.fd_eq(x, tree, t)
+        v = deref(x)
+        assert v == Quantity(Decimal("1500.00"), {euro: 1})
+        assert not isinstance(v.value, float)
+
+    def test_money_division_by_three_is_exact_fraction(self):
+        clpfd = self._fd()
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(x, _bin(Div, Quantity(Decimal("1000"), {yen: 1}), 3), t)
+        v = deref(x)
+        assert type(v.value) is Fraction and v.value == Fraction(1000, 3)
+
+    def test_lt_then_bind(self):
+        clpfd = self._fd()
+        t, x = Trail(), Var()
+        assert clpfd.fd_lt(x, Quantity(Decimal("1550.00"), {euro: 1}), t)
+        assert unify(x, Quantity(Decimal("3.00"), {euro: 1}), t)
+        t2, y = Trail(), Var()
+        assert clpfd.fd_lt(y, Quantity(Decimal("1550.00"), {euro: 1}), t2)
+        assert not unify(y, Quantity(Decimal("2000.00"), {euro: 1}), t2)
+
+    def test_ne_then_bind(self):
+        clpfd = self._fd()
+        t, x = Trail(), Var()
+        assert clpfd.fd_ne(x, Quantity(3, M), t)
+        assert not unify(x, Quantity(3, M), t)
+        assert unify(x, Quantity(4, M), t)
+
+    def test_mixed_currencies_throw_before_any_solver_runs(self):
+        clpfd = self._fd()
+        from clausal.modules.countries.united_states import usd
+        t, x = Trail(), Var()
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_eq(x, _bin(Add, Quantity(Decimal("1.00"), {euro: 1}), Quantity(Decimal("1.00"), {usd: 1})), t)
+        _assert_system_error(ei, "units_mismatch")
+        assert get_attr(x, UNITS_KEY) is None      # nothing was posted
+
+    def test_metre_minus_second_throws(self):
+        clpfd = self._fd()
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_eq(Var(), _bin(Sub, Quantity(3, M), Quantity(2, S)), Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_ground_both_sides(self):
+        clpfd = self._fd()
+        t = Trail()
+        assert clpfd.fd_eq(_bin(Sub, Quantity(Decimal("1550.00"), {euro: 1}), Quantity(Decimal("50.00"), {euro: 1})),
+                           Quantity(Decimal("1500.00"), {euro: 1}), t)
+        assert not clpfd.fd_lt(Quantity(5, M), Quantity(3, M), t)
+
+    def test_declared_var_then_constraint(self):
+        clpfd = self._fd()
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, M, t)
+        assert clpfd.fd_eq(x, _bin(Add, Quantity(3, M), Quantity(1, M)), t)
+        assert deref(x) == Quantity(4, M)
+
+    def test_inferred_var_in_sub_then_bind_other(self):
+        clpfd = self._fd()
+        t, x, y = Trail(), Var(), Var()
+        assert clpfd.fd_eq(x, _bin(Sub, Quantity(Decimal("1550.00"), {euro: 1}), y), t)
+        assert unify(y, Quantity(Decimal("50.00"), {euro: 1}), t)
+        assert deref(x) == Quantity(Decimal("1500.00"), {euro: 1})
+
+    def test_dimensionless_result_is_plain_number(self):
+        clpfd = self._fd()
+        t, r = Trail(), Var()
+        assert clpfd.fd_eq(r, _bin(Div, Quantity(6, M), Quantity(3, M)), t)
+        assert deref(r) == 2 and not isinstance(deref(r), Quantity)
+
+    def test_units_var_against_atom_keeps_existing_type_error(self):
+        clpfd = self._fd()
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, M, t)
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_eq(x, mint("banana"), t)
+        assert ei.value.term.args[0].functor == "type_error"
+
+    def test_plain_constraints_untouched(self):
+        clpfd = self._fd()
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(x, _bin(Add, 2, 3), t)
+        assert deref(x) == 5 and get_attr(x, UNITS_KEY) is None
+
+    def test_attr_key_spellings_agree(self):
+        from clausal.logic.clpfd import FD_KEY
+        from clausal.logic.clpq import Q_KEY
+        from clausal.logic.clpr import REAL_KEY
+        assert (FD_KEY, Q_KEY, REAL_KEY) == ("fd", "clpq", "real")
+
+
+class TestDomainAndLabel:
+    def test_in_domain_with_money_bounds_then_label(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.in_domain([x], Quantity(Decimal("1"), {yen: 1}), Quantity(Decimal("3"), {yen: 1}), t)
+        seen = []
+        for _ in clpfd.label([x], t):
+            seen.append(deref(x))
+        assert seen == [Quantity(1, {yen: 1}), Quantity(2, {yen: 1}), Quantity(3, {yen: 1})]
+        assert all(not isinstance(q.value, float) for q in seen)
+
+    def test_in_domain_with_metre_bounds_and_constraint(self):
+        import clausal.logic.clpfd as clpfd
+        t, w, h = Trail(), Var(), Var()
+        assert clpfd.in_domain([w, h], Quantity(1, M), Quantity(6, M), t)
+        area = Var()
+        assert clpfd.fd_eq(area, _bin(Mult, w, h), t)
+        assert clpfd.fd_eq(area, Quantity(12, {metre: 2}), t)
+        assert clpfd.fd_eq(w, Quantity(3, M), t)
+        for _ in clpfd.label([w, h], t):
+            assert deref(h) == Quantity(4, M)
+            break
+        else:
+            pytest.fail("no solution")
+
+    def test_in_domain_plain_bound_beside_quantity_bound_throws(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([Var()], 1, Quantity(3, M), Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_in_domain_bounds_disagreeing_throws(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([Var()], Quantity(1, M), Quantity(3, S), Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_in_domain_on_declared_var_with_other_dims_throws(self):
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, S, t)
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([x], Quantity(1, M), Quantity(3, M), t)
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_plain_in_domain_and_label_untouched(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.in_domain([x], 1, 2, t)
+        assert [deref(x) for _ in clpfd.label([x], t)] == [1, 2]
