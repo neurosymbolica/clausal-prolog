@@ -149,3 +149,35 @@ def test_a_minor_unit_prints_its_BASE_unit(tmp_path):
     assert str(29200 * usd_cent) == "292.00 (usd)"
     from clausal.modules.units import gram
     assert str(7 * gram) == "0.007 (kilogram)"
+
+
+def test_the_shape_list_covers_every_magnitude_type_a_quantity_holds():
+    """A guard against the shape list going STALE rather than being wrong.
+
+    The eight original shapes were total over the shapes CHOSEN, and they were
+    chosen before a currency Quantity began holding an exact `Fraction` — so
+    the list did not become incorrect, it stayed the same while the thing it
+    measures moved. That is a maintenance obligation distinct from
+    correctness, and nothing was watching it.
+
+    The shape here is: derive the instrument's coverage from the AUTHORITY
+    rather than from a hand list. `_to_decimal` enumerates the magnitude types
+    a currency accepts; if one is added, this fails until a round-trip shape
+    covers it. The scale lint uses the same trick, taking its suffixes from
+    `MINOR_UNIT_WORDS` so a new minor unit extends it with no second edit.
+    """
+    import inspect
+    from clausal import terms
+
+    source = inspect.getsource(terms._to_decimal)
+    accepted = {name for name in ("int", "float", "Decimal", "Fraction")
+                if f"isinstance(x, {name}" in source
+                or f", {name})" in source or f"({name}," in source}
+    assert accepted, "positive control: the authority names magnitude types"
+
+    covered = {type(q.value).__name__ for _, q in _cases()}
+    missing = accepted - covered - {"bool"}
+    assert not missing, (
+        f"magnitude types accepted by the engine but absent from the "
+        f"round-trip shapes: {sorted(missing)} — add a case, or the property "
+        f"is total only over the shapes someone chose earlier")

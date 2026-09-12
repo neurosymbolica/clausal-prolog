@@ -638,3 +638,79 @@ without either side being wrong.
 - **corpus-lane** retires the import-order mitigation and RE-POINTS its regression test at the
   new guarantee rather than deleting it.
 - **Box** is the only tree still on the old vocabulary.
+
+---
+
+# 2026-09-12: tables, the re-readable renderer, and BUG #2 — all on canonical `a25bc430`
+
+    -constants_number_currency(snap_max/2, [(1, 29200), (2, 53600)], usd_cent, money_at(2))
+    -constants_number_units(span/2, [(short, 5)], metre, number_at(2))
+
+The declaration **defines the predicate the rulebase already calls**, so 217 indexed money
+rows across ~8 domains migrate with ZERO call-site churn. Nothing is reached through
+`constant/1`: that substitutes a single value at COMPILE time, a table is a lookup by key at
+RUNTIME. Implemented as a source-level expansion in a `visit_Module` prepass so the generated
+facts are the same kind of predicate as the fact lines they replace.
+
+`str(Quantity)` now emits text that parses back to an equal value — `292.00 (usd)`,
+`3 (metre / second)`, `4 (dimensionless)`, `10 (usd) / 3`. What it produced before resembled
+source and was not: bare juxtaposition is a SyntaxError, `·` and `^` are not syntax at all,
+and `dollar` has not resolved since the ISO-code rename. ONE renderer, so mismatches read
+`aud vs usd` — unambiguous by construction, retiring the collision-qualifier for currencies.
+
+BUG #2: `-import_from` binds the names it lists, not the module.
+
+## Three claims
+
+| axis | result |
+| --- | --- |
+| engine suite | 144 failed / 16259 passed — name set identical to the `946d7296` baseline |
+| export bytes | 0 across 1560 files (measured at `303c2934`; no exporter change since) |
+| domain answers | 82 unchanged, 0 moved, zero torn — `a25bc430/so1789092742`, **147 commits from `820dc66f`** |
+
+The answer diff was ordered: a census named the four bodies carrying a renamed unit word in a
+string literal (`us/diversity_jurisdiction`, `us/irc_s121`, `us/sara_irc_tax`, `us/snap`),
+those four ran ALONE first and were at their recorded numbers, then the full 82.
+
+## Two rules this day produced, both about instruments rather than code
+
+**A targeted run and a broad run answer different questions, and the targeted one is only
+worth doing when its census limits are stated with it.** Otherwise "the four at-risk domains
+are clean" reads as "the at-risk domains are clean". Their blind spots are complementary: a
+census names candidates in advance and cannot see data a body READS; a sweep sees everything
+and names nothing in advance. Neither is a weaker version of the other.
+
+**A property test is only as complete as its SHAPE LIST, and the shape list ages.** The
+round-trip property was called total over eight shapes. It was total over the shapes CHOSEN,
+selected before another lane made a currency Quantity hold an exact `Fraction` — and the
+missing shape was the worst kind: `'10/3 (usd)'` parses as `10 / 3(usd)`, same magnitude,
+**inverted dimension**. Looks right, is not.
+
+**The failure mode is not that the instrument was wrong; it is that it stayed the same while
+the world it measures moved** (harness-batch-lane's formulation). That is a maintenance
+obligation distinct from correctness, and nothing was watching it.
+
+### The shape for it: derive the instrument's coverage from the AUTHORITY
+
+`test_the_shape_list_covers_every_magnitude_type_a_quantity_holds` reads the magnitude types
+out of `_to_decimal` and fails if one has no round-trip case. Adding a type to the engine now
+fails a test until a shape covers it. The scale lint already had this shape — its suffixes
+come from `MINOR_UNIT_WORDS`, so a new minor unit extends it with no second edit.
+
+Generalised: **wherever an instrument enumerates, enumerate FROM the thing that defines the
+set, not from a list written beside it.** A hand list is correct on the day it is written and
+has no way to notice it has stopped being.
+
+## Open
+
+- Option 2 for the exporter (fold to the BASE magnitude) — load-bearing since "follow
+  statutes"; export stays lossy, it fixes the magnitude not the unit.
+- Ratio units (`basis_points`, `percent`) — designed, unbuilt.
+- peppol as a separate migration; its BR-CO tolerance is a READ-THE-STANDARD question.
+- The decimal-literal gap: source `292.00` is a float and loses its trailing zero before any
+  Quantity exists. Minor units preserve it exactly, which is one more argument for declaring
+  in cents where the statute states cents.
+- corpus-lane migrates `us/snap` (30 rows) and `eu/procurement/common` (81), and retires the
+  import-order mitigation — RE-POINTING its regression test at the new guarantee, not
+  deleting it.
+- **Box is the only tree still on the old vocabulary.**
