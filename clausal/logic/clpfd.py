@@ -2507,15 +2507,16 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
 
     if not isinstance(vars_list, list):
         return
-    # Units: every summand and the value share one dimension.
-    both = _units_strip_list(list(vars_list) + [value], "sum_/3", trail)
-    vars_list, value = both[:-1], both[-1]
     op_str = _op_spelling(op_str, "sum_/3")
     if op_str is None:
         return
     op_fn = _FD_OPS.get(op_str)
     if op_fn is None:
         return
+    # Units (after the operator check, so a bad operator still wins): every
+    # summand and the value share one dimension.
+    both = _units_strip_list(list(vars_list) + [value], "sum_/3", trail)
+    vars_list, value = both[:-1], both[-1]
 
     vars_deref = [deref(v) for v in vars_list]
 
@@ -2573,7 +2574,13 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
         return
     if len(coeffs) != len(vars_list):
         return
-    # Units: coefficients are plain numbers; the vars and the value share
+    op_str = _op_spelling(op_str, "scalar_product/4")
+    if op_str is None:
+        return
+    op_fn = _FD_OPS.get(op_str)
+    if op_fn is None:
+        return
+    # Units (after the operator check): coefficients are plain numbers; the vars and the value share
     # one dimension.
     if _strip_list_for_solver is None:
         _ensure_units_imports()
@@ -2583,12 +2590,6 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
         raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
     both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
     vars_list, value = both[:-1], both[-1]
-    op_str = _op_spelling(op_str, "scalar_product/4")
-    if op_str is None:
-        return
-    op_fn = _FD_OPS.get(op_str)
-    if op_fn is None:
-        return
 
     coeffs_deref = [deref(c) for c in coeffs]
     if not all(isinstance(c, int) for c in coeffs_deref):
@@ -2716,7 +2717,15 @@ def fd_circuit(vars_list, trail: Trail):
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         return
-    vars_list = _units_strip_list(vars_list, "circuit/1", trail)
+    # circuit/1's arguments are 1-based node INDICES — positions, not
+    # measurements — so a united var or a quantity here is a category
+    # error, refused rather than stripped.
+    if _strip_list_for_solver is None:
+        _ensure_units_imports()
+    _, circuit_dims = _strip_list_for_solver(vars_list, "circuit/1", trail)
+    if circuit_dims is not None:
+        from clausal.logic.units_clp import _unsupported  # noqa: PLC0415
+        raise _unsupported("circuit/1", "node indices are positions and carry no units")
 
     n = len(vars_list)
     if n == 0:

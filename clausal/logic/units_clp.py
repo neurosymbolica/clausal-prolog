@@ -95,7 +95,7 @@ def _render_pair(a: dict, b: dict) -> str:
         return _dims_str(d, qualify=qualify) if d else "dimensionless"
 
     left, right = render(a), render(b)
-    if left == right:
+    if left == right and a != b:
         collide = _colliding_dim_names(a, b)
         left, right = render(a, collide), render(b, collide)
         if left == right:
@@ -519,13 +519,25 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     ``1.00(euro)``): a finite domain is integers, as on the plain path."""
     _ensure_imports()
     lo, hi = deref(lo), deref(hi)
+    ctx = "in_domain/3"
     lo_q, hi_q = isinstance(lo, _Quantity), isinstance(hi, _Quantity)
     if not (lo_q or hi_q):
+        # Plain bounds. A target already declared with a dimension cannot
+        # take them: ``has_units(X, metre), in_domain([X], 1, 3)`` is the
+        # same mismatch as ``X == 1`` — and posting anyway put FD state on
+        # the user's var, where label/1 then failed silently.
+        targets = deref(var_or_list)
+        for v in (targets if isinstance(targets, list) else [targets]):
+            v = deref(v)
+            if is_var(v):
+                state = get_attr(v, UNITS_KEY)
+                if state is not None and state.dims:
+                    raise _mismatch(ctx, state.dims, {}, f"plain bounds for {v!r}")
         return None
-    ctx = "in_domain/3"
     if not (lo_q and hi_q):
         q, plain = (lo, hi) if lo_q else (hi, lo)
-        raise _mismatch(ctx, dict(q.dims), {}, f"bound {plain!r}")
+        raise _mismatch_text(
+            ctx, f"bound {plain!r} is a plain number beside {q!r}")
     if dict(lo.dims) != dict(hi.dims):
         raise _mismatch(ctx, dict(lo.dims), dict(hi.dims))
     dims = dict(lo.dims)
@@ -570,8 +582,9 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
 
 def label_targets(vars_list) -> list:
     """``label/1``'s list with every united var replaced by its shadow. A
-    united var with no shadow yet has no domain and is left alone (label
-    skips it, as it skips any var without FD state)."""
+    united var with no shadow and no solver state has no domain and is left
+    alone (label skips it, as it skips any var without FD state); one with
+    solver state but no shadow was posted on directly and throws."""
     out = []
     for v in vars_list:
         dv = deref(v)
@@ -580,6 +593,16 @@ def label_targets(vars_list) -> list:
             if state is not None and state.shadow is not None:
                 out.append(state.shadow)
                 continue
+            if state is not None and state.dims and _has_solver_state(dv):
+                # Declared with a dimension, given solver state DIRECTLY by
+                # a builtin outside the side channel, never shadowed: every
+                # labelled value would be refused by the units hook, with
+                # no diagnostic. Say so.
+                raise _unsupported(
+                    "label/1",
+                    f"{dv!r} carries solver state posted directly by a builtin "
+                    f"outside the units side channel; that builtin does not "
+                    f"support united variables yet")
         out.append(v)
     return out
 

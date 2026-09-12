@@ -2386,7 +2386,7 @@ class Quantity:
     # ── Arithmetic ──────────────────────────────────────────────────────────
 
     def __add__(self, other):
-        if isinstance(other, (int, float, Decimal)) and not self._dims:
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
             return Quantity(a + b, {})
         self._require_same_dims(other, "add")
@@ -2394,10 +2394,10 @@ class Quantity:
         return Quantity(a + b, self._dims)
 
     def __radd__(self, other):
-        if isinstance(other, (int, float, Decimal)) and not self._dims:
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(other, self._value)
             return Quantity(a + b, {})
-        if isinstance(other, (int, float, Decimal)):
+        if isinstance(other, (int, float, Decimal, Fraction)):
             # A NUMBER meeting a dimensioned quantity is a units error, and it
             # is the same error in either order. Returning NotImplemented here
             # let PYTHON raise `unsupported operand type(s)` instead, which is
@@ -2409,7 +2409,7 @@ class Quantity:
         return NotImplemented
 
     def __sub__(self, other):
-        if isinstance(other, (int, float, Decimal)) and not self._dims:
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
             return Quantity(a - b, {})
         self._require_same_dims(other, "subtract")
@@ -2417,10 +2417,10 @@ class Quantity:
         return Quantity(a - b, self._dims)
 
     def __rsub__(self, other):
-        if isinstance(other, (int, float, Decimal)) and not self._dims:
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(other, self._value)
             return Quantity(a - b, {})
-        if isinstance(other, (int, float, Decimal)):
+        if isinstance(other, (int, float, Decimal, Fraction)):
             self._require_same_dims(other, "subtract")   # see __radd__
         return NotImplemented
 
@@ -2450,9 +2450,10 @@ class Quantity:
         return Quantity(a / b, new_dims)
 
     def __floordiv__(self, other):
-        """Same rule as ``divmod_/4``: operands share a dimension, the
-        quotient is dimensionless."""
-        if isinstance(other, (int, float, Decimal)) and not self._dims:
+        """The DIMENSION rule of ``divmod_/4``: operands share a dimension,
+        the quotient is dimensionless (a dimensionless Quantity here, where
+        ``divmod_/4`` binds a bare number — ``/`` has the same trait)."""
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
             return Quantity(a // b, {})
         self._require_same_dims(other, "floor-divide")
@@ -2460,9 +2461,9 @@ class Quantity:
         return Quantity(a // b, {})
 
     def __mod__(self, other):
-        """Same rule as ``divmod_/4``: operands share a dimension, the
-        remainder keeps it."""
-        if isinstance(other, (int, float, Decimal)) and not self._dims:
+        """The DIMENSION rule of ``divmod_/4``: operands share a dimension,
+        the remainder keeps it."""
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
             return Quantity(a % b, {})
         self._require_same_dims(other, "take the remainder of")

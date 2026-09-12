@@ -646,9 +646,9 @@ class TestReviewRoundTwo:
         t, x, y = Trail(), Var(), Var()
         assert clpfd.in_domain([x], Quantity(1, S), Quantity(2, S), t)
         assert clpfd.in_domain([y], Quantity(1, M), Quantity(2, M), t)
+        assert clpfd.tuples_in([[x, y]], [(1, 2), (2, 1)], t)   # posts normally
         with pytest.raises(LogicException) as ei:
-            clpfd.tuples_in([[x, y]], [(1, 2), (2, 1)], t)
-            list(clpfd.label([x, y], t))
+            list(clpfd.label([x, y], t))                          # loud at reattachment
         _assert_system_error(ei, "units_unsupported")
 
     def test_global_cardinality_keys_share_the_dimension(self):
@@ -697,3 +697,60 @@ class TestReviewRoundTwo:
         with pytest.raises(LogicException) as ei:
             clpfd.zcompare(mint("<"), Quantity(1, M), Quantity(1, S), Trail())
         _assert_system_error(ei, "units_mismatch")
+
+
+class TestReviewRoundThree:
+    def test_dimensionless_quantity_with_bare_fraction(self):
+        assert (Quantity(7, {}) + Fraction(1, 3)).value == Fraction(22, 3)
+        assert (Fraction(1, 3) + Quantity(7, {})).value == Fraction(22, 3)
+        assert (Quantity(7, {}) - Fraction(1, 3)).value == Fraction(20, 3)
+        assert (Fraction(1, 3) - Quantity(7, {})).value == Fraction(-20, 3)
+        assert (Quantity(7, {}) // Fraction(2)).value == 3
+        assert (Quantity(7, {}) % Fraction(2)).value == 1
+
+    def test_declared_var_with_plain_bounds_is_a_mismatch(self):
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, M, t)
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([x], 1, 3, t)
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_declared_var_given_solver_state_directly_is_loud_at_label(self):
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, M, t)
+        clpfd._ensure_fd(x, t)                       # a bypassing builtin
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.label([x], t))
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_dimensionless_declared_var_binds_exact_rational(self):
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, {}, t)
+        assert unify(x, Fraction(4, 3), t)
+        assert deref(x) == Fraction(4, 3)
+
+    def test_plain_bound_beside_quantity_bound_message(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([Var()], 1, Quantity(3, {}), Trail())
+        assert "share a name" not in ei.value.term.args[1]
+
+    def test_sum_bad_operator_wins_over_units(self):
+        import clausal.logic.clpfd as clpfd
+        t = Trail()
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_sum([Quantity(1, M), Quantity(1, S)], "#=", Var(), t))
+        assert ei.value.term.args[0].functor == "type_error"
+
+    def test_circuit_refuses_united_vars(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, y = Trail(), Var(), Var()
+        assert clpfd.in_domain([x, y], Quantity(1, M), Quantity(2, M), t)
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_circuit([x, y], t))
+        _assert_system_error(ei, "units_unsupported")

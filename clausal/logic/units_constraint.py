@@ -124,8 +124,12 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
             put_attr(bound_to, UNITS_KEY, attr_value, trail)   # inherit the shadow
         return True
 
-    if isinstance(bound_to, (int, float)) and not isinstance(bound_to, bool):
-        # Plain number allowed only for a dimensionless constraint.
+    import numbers  # noqa: PLC0415
+    from decimal import Decimal  # noqa: PLC0415
+    if (isinstance(bound_to, (numbers.Real, Decimal))
+            and not isinstance(bound_to, bool)):
+        # Plain number (int, float, Fraction, Decimal) allowed only for a
+        # dimensionless constraint.
         return not attr_value.dims
 
     return False
