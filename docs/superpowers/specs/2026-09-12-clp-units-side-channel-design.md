@@ -316,6 +316,12 @@ money result adds to a Decimal literal exactly.
   exception. `scalar_product` coefficients and `circuit` positions get the
   whole-units guard. The direct CLP(Q)/CLP(R) front ends (`clpq.rational/1`
   and friends) are recorded in the gap todo with the CLP(Z3) call site.
+* Round 7: `Quantity` applies `present_number` at construction, so an
+  integral rational from ground money arithmetic is the term `1000` (a
+  currency `Decimal`), never a rational that `=` accepts and `==` refuses;
+  the units flag is set before every early return, with a fresh-process
+  negative control; exact Decimals are built from strings rather than
+  context operations; reified comparisons are tested.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 
