@@ -1375,6 +1375,154 @@ def _is_bare_number(node) -> bool:
             and not isinstance(node.value, bool))
 
 
+#: The table family, mirroring the single-value one: a general-unit form and
+#: a money form named for the stricter claim it enforces. Each names its own
+#: COLUMN keyword, following the convention the family already uses for its
+#: third argument ("units" in one, "currency" in the other).
+TABLE_DIRECTIVES = {
+    "constants_number_units": ("number_at", False),
+    "constants_number_currency": ("money_at", True),
+}
+
+
+def _table_directive_call(stmt):
+    """The ``-constants_number_currency(...)`` Call in *stmt*, or None.
+
+    A directive is written ``-name(...)``, which parses as a unary minus over
+    a Call, so that is the shape matched here.
+    """
+    if not isinstance(stmt, Expr):
+        return None
+    node = stmt.value
+    if not (isinstance(node, UnaryOp) and isinstance(node.op, USub)):
+        return None
+    call = node.operand
+    if (isinstance(call, Call) and isinstance(call.func, Name)
+            and call.func.id in TABLE_DIRECTIVES):
+        return call
+    return None
+
+
+def _expand_currency_table(call):
+    """Expand one table directive into the fact statements it declares.
+
+    Source-to-source, run BEFORE the ordinary visit, so the generated facts go
+    through exactly the same machinery as hand-written ones -- same clause
+    compilation, same indexing, same everything. Generating the LOWERED form
+    instead would have made a table a second kind of predicate.
+
+    The declaration DEFINES the predicate the rulebase already calls
+    (operator, 2026-09-12), so a domain migrates by replacing N fact lines
+    with one declaration and no call site changes. The money COLUMN is
+    declared with ``money_at(N)``, 1-based, never inferred: the real corpus
+    shapes put money in arg 2 of 2, in arg 3 of 4 and beside a two-date
+    validity window, so any positional rule would guess wrong on one of them,
+    silently.
+    """
+    directive = call.func.id
+    column_kw, is_money = TABLE_DIRECTIVES[directive]
+    spelling = f"-{directive}"
+    example = (f"{spelling}(snap_max/2, [(1, 29200), (2, 53600)], "
+               f"{'usd_cent' if is_money else 'metre'}, {column_kw}(2))")
+    if call.keywords:
+        raise SyntaxError(
+            f"{spelling}: takes no keyword arguments; the money column is "
+            f"named positionally as {column_kw}(N): {example}")
+    if len(call.args) != 4:
+        raise SyntaxError(
+            f"{spelling} takes four arguments — a predicate indicator, the "
+            f"rows, the unit, and {column_kw}(N) naming the column. The "
+            f"column is never inferred, because a rule that guesses guesses "
+            f"silently: {example}")
+    indicator, rows_node, unit_node, at_node = call.args
+
+    if not (isinstance(indicator, BinOp) and isinstance(indicator.op, Div)
+            and isinstance(indicator.left, Name)
+            and isinstance(indicator.right, Constant)
+            and isinstance(indicator.right.value, int)):
+        raise SyntaxError(
+            f"{spelling}: the first argument is a predicate indicator "
+            f"`name/arity`, got `{unparse(indicator)}`: {example}")
+    pred_name, arity = indicator.left.id, indicator.right.value
+
+    if not (isinstance(at_node, Call) and isinstance(at_node.func, Name)
+            and at_node.func.id == column_kw and len(at_node.args) == 1
+            and isinstance(at_node.args[0], Constant)
+            and isinstance(at_node.args[0].value, int)):
+        raise SyntaxError(
+            f"{spelling}: the fourth argument names the column as "
+            f"{column_kw}(N), 1-based, got `{unparse(at_node)}`: {example}")
+    money_at = at_node.args[0].value
+    if not 1 <= money_at <= arity:
+        raise SyntaxError(
+            f"{spelling}: {column_kw}({money_at}) is out of range for "
+            f"{pred_name}/{arity} — the column is 1-based and must name one "
+            f"of the {arity} arguments.")
+
+    if not isinstance(rows_node, (List, Tuple)):
+        raise SyntaxError(
+            f"{spelling}: the second argument is the list of rows, got "
+            f"`{unparse(rows_node)}`: {example}")
+    if not _is_unit_expr(unit_node):
+        raise SyntaxError(
+            f"{spelling}: `{unparse(unit_node)}` is not a unit expression: "
+            f"{example}")
+
+    facts = []
+    for row in rows_node.elts:
+        if not isinstance(row, (Tuple, List)):
+            raise SyntaxError(
+                f"{spelling}: every row is a tuple of {arity} columns, got "
+                f"`{unparse(row)}`")
+        cells = list(row.elts)
+        if len(cells) != arity:
+            raise SyntaxError(
+                f"{spelling}: row `{unparse(row)}` has {len(cells)} columns "
+                f"but {pred_name}/{arity} takes {arity} — the arity in the "
+                f"indicator is the contract, and a row that does not match it "
+                f"would define a predicate of two different shapes.")
+        money = cells[money_at - 1]
+        # STRICTER than the single-value form on purpose. `-constant_value`
+        # accepts a computed RHS (a `++` escape, an earlier constant), so its
+        # check is deliberately one-sided and leaves a bare name to the units
+        # layer. A table ROW is data, not an expression, and a bare name here
+        # would be wrapped as `name(unit)` -- an atom applied as a functor,
+        # which is meaningless and would not announce itself. So the money
+        # cell must be a numeric LITERAL.
+        if _literal_number(money) is None:
+            raise SyntaxError(
+                f"{spelling}: column {money_at} of `{unparse(row)}` is "
+                f"`{unparse(money)}`, which is not a number literal. A table "
+                f"row is data: only numbers carry units, and the money column "
+                f"takes a written number.")
+        # The same shape the `29200 (usd_cent)` annotation sugar builds, so the
+        # ordinary visit lowers it and the currency gate runs on it.
+        cells[money_at - 1] = replace(
+            Call(func=money, args=[unit_node], keywords=[]), money)
+        # A bodyless clause -- a FACT -- is a one-element Tuple statement.
+        fact = Expr(value=replace(
+            Tuple(elts=[replace(
+                Call(func=replace(Name(id=pred_name, ctx=load), row),
+                     args=cells, keywords=[]), row)], ctx=load), row))
+        fix_missing_locations(replace(fact, row))
+        facts.append(fact)
+    if facts and is_money:
+        # Gate the UNIT once, at load, through the same check the
+        # single-value `-constant_number_currency` uses: the directive is
+        # named for the claim that this is MONEY, so a physical unit here is
+        # refused rather than quietly producing a table of lengths. One call
+        # for the table, not one per row.
+        guard = Expr(value=replace(
+            Call(func=replace(Name(id="$check_currency_unit", ctx=load), call),
+                 args=[replace(Constant(value=f"{pred_name}/{arity}"), call),
+                       unit_node,
+                       replace(Constant(value=spelling), call)],
+                 keywords=[]), call))
+        fix_missing_locations(replace(guard, call))
+        facts.insert(0, guard)
+    return facts
+
+
 def _is_unit_expr(node) -> bool:
     """True for AST nodes that form a valid unit-type expression.
 
@@ -6159,6 +6307,27 @@ class EmbedTransformer(NodeTransformer):
         for arg in args:
             each(arg)
 
+    def _expand_currency_tables(transformer, module):
+        """Rewrite every ``-constants_number_currency`` into its fact
+        statements, in place, BEFORE the ordinary visit sees the body.
+
+        Source-to-source on purpose: the generated facts are then transformed
+        by exactly the machinery that transforms hand-written ones, so a
+        declared table is the same kind of predicate as the fact lines it
+        replaces -- not a second kind wearing the same name.
+        """
+        body = []
+        changed = False
+        for stmt in module.body:
+            call = _table_directive_call(stmt)
+            if call is None:
+                body.append(stmt)
+                continue
+            body.extend(_expand_currency_table(call))
+            changed = True
+        if changed:
+            module.body = body
+
     def _lint_scale_in_name(transformer, *nodes):
         """Warn for a FUNCTOR that claims a scale and carries a bare number.
 
@@ -6412,6 +6581,7 @@ class EmbedTransformer(NodeTransformer):
         # like a hosted binding and the constant/atom pair this design is
         # built around would be refused. See _check_constant_name_is_free.
         transformer._hosted_names = set(_hosted_python_bindings(module))
+        transformer._expand_currency_tables(module)
         transformer._titlecase_prepass(module)
         result = transformer.generic_visit(module)
         transformer._check_var_shaped_predicate_names()
@@ -7147,7 +7317,8 @@ class EmbedTransformer(NodeTransformer):
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
             f"-strict_atoms, -implicit_atoms, -allow_singletons, "
             f"-constant_value, -constant_number_units, "
-            f"-constant_number_currency, -implicit_functors, -double_quotes)"
+            f"-constant_number_currency, -constants_number_units, "
+            f"-constants_number_currency, -implicit_functors, -double_quotes)"
         )
 
     def _handle_double_quotes_directive(transformer, args, expr_stmt):
