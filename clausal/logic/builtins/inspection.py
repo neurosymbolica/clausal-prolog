@@ -829,6 +829,76 @@ def _constant_number_units__3(name, number, units, trail, k):
             trail.undo(mark)
 
 
+def _module_constant_units_dict(module):
+    """A module's ``constant_units`` registry, or ``None``.
+
+    Accepts EITHER module object, because the two callers hold different
+    ones: a hand-written ``module_constant_units(m, ...)`` passes the PYTHON
+    module that ``-import_module`` binds (as ``module_constant/3`` does),
+    while the compile-time insertion for ``constant_number_units/3`` passes
+    the LOGIC module, which is what ``$module`` holds where the transformer
+    emits it. See docs/import.md's "two module objects" table -- requiring
+    one of them would make the same relation unwritable from one of its two
+    call paths.
+    """
+    own = getattr(module, "constant_units", None)
+    if own is not None:
+        return own                      # already the logic Module
+    logic_module = getattr(module, "__clausal_module__", None)
+    if logic_module is None:
+        return None
+    return getattr(logic_module, "constant_units", None)
+
+
+@_builtin("module_constant_units", 4)
+def _module_constant_units__4(m, name, number, units, trail, k):
+    """module_constant_units(Module, Name, Number, Units) — the DECLARED pair,
+    scoped to one module.
+
+    The module-scoped sibling of ``constant_number_units/3``, standing to it
+    exactly as ``module_constant/3`` stands to ``constant_value/2``.
+
+    It exists because a builtin never receives the CALLING module -- the
+    registry hands dispatch functions their arguments and a trail, and
+    nothing else -- so ``constant_number_units/3`` answers for every loaded
+    module that declares the name, in load order. Where the module matters,
+    it has to be an ARGUMENT, and the caller that always knows it is the
+    COMPILER: the transformer inserts ``$module`` here, the same way it
+    already hands ``$module`` to ``$register_constant_units`` when the
+    declaration is lowered. Reading works the way writing already does.
+
+    Reports the DECLARATION, not the stored value, for the reasons set out at
+    ``constant_number_units/3``: a rescaling unit makes the stored Quantity
+    unable to yield either half back.
+
+    A module that does not declare *Name* simply FAILS. This is a lookup, not
+    an assertion -- the raise for a name nothing declares belongs at the
+    ``constant_number_units/3`` call site, where the compiler can see the name
+    was written as a literal and can refuse it before anything runs.
+    """
+    registry = _module_constant_units_dict(deref(m))
+    if registry is None:
+        return
+    name_val = deref(name)
+    name_key = spelling(name_val) if _term_is_atom(name_val) else None
+    if not is_var(name_val):
+        if name_key is None or name_key not in registry:
+            return
+        number_val, units_val = registry[name_key]
+        mark = trail.mark()
+        if unify(number, number_val, trail) and unify(units, units_val, trail):
+            yield None
+        trail.undo(mark)
+        return
+    for n, (number_val, units_val) in list(registry.items()):
+        mark = trail.mark()
+        if (unify(name, mint(n), trail)
+                and unify(number, number_val, trail)
+                and unify(units, units_val, trail)):
+            yield None
+        trail.undo(mark)
+
+
 @_builtin("module_constant", 3)
 def _module_constant__3(m, name, value, trail, k):
     """module_constant(Module, Name, Value) — reflect on a module's own
