@@ -2207,7 +2207,14 @@ register_attr_hook(FD_KEY, _fd_hook)
 
 
 def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
-    """Post domain [lo, hi] on a variable or list of variables."""
+    """Post domain [lo, hi] on a variable or list of variables.
+
+    Quantity bounds go through the units side channel: the targets become
+    united vars and the stripped bounds are posted on their shadows."""
+    from clausal.logic.units_clp import in_domain_units  # noqa: PLC0415
+    united = in_domain_units(var_or_list, lo, hi, trail)
+    if united is not None:
+        return united
     lo = deref(lo)
     hi = deref(hi)
     if not isinstance(lo, int) or not isinstance(hi, int):
@@ -2269,6 +2276,10 @@ def label(vars_list, trail: Trail):
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         vars_list = [vars_list]
+    # A united var is labelled through its shadow (units side channel);
+    # the units_link hook rebinds the user's var on every solution.
+    from clausal.logic.units_clp import label_targets  # noqa: PLC0415
+    vars_list = label_targets(vars_list)
 
     # Collect unbound vars with FD domains
     unbound: list = []

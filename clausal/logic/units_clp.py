@@ -463,3 +463,68 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
     except _NotEngaged:
         return None
     return strip(l, env, trail), strip(r, env, trail)
+
+
+# ── in_domain / label ────────────────────────────────────────────────────────
+
+def in_domain_units(var_or_list, lo, hi, trail: Trail):
+    """``in_domain/3`` with quantity bounds. None when neither bound is a
+    Quantity (the caller's plain path). Both bounds must be quantities of
+    one dimension; every target becomes a united var of that dimension
+    (a target already declared with other dims throws) and the stripped
+    bounds are posted on its shadow — ``in_domain`` for integer bounds,
+    ``in_q`` otherwise, so money bounds take the exact rational route."""
+    _ensure_imports()
+    lo, hi = deref(lo), deref(hi)
+    lo_q, hi_q = isinstance(lo, _Quantity), isinstance(hi, _Quantity)
+    if not (lo_q or hi_q):
+        return None
+    ctx = "in_domain/3"
+    if not (lo_q and hi_q):
+        q, plain = (lo, hi) if lo_q else (hi, lo)
+        raise _mismatch(ctx, dict(q.dims), {}, f"bound {plain!r}")
+    if dict(lo.dims) != dict(hi.dims):
+        raise _mismatch(ctx, dict(lo.dims), dict(hi.dims))
+    dims = dict(lo.dims)
+    targets = deref(var_or_list)
+    if not isinstance(targets, list):
+        targets = [targets]
+    shadows = []
+    for v in targets:
+        v = deref(v)
+        if isinstance(v, _Quantity):
+            if dict(v.dims) != dims:
+                raise _mismatch(ctx, dict(v.dims), dims)
+            shadows.append(to_solver_number(v.value))
+            continue
+        if not is_var(v):
+            raise _mismatch(ctx, {}, dims, f"target {v!r}")
+        state = get_attr(v, UNITS_KEY)
+        if state is not None and state.dims != dims:
+            raise _mismatch(ctx, state.dims, dims)
+        if state is None and _has_solver_state(v):
+            raise _mismatch(ctx, {}, dims,
+                            f"target {v!r} is already a bare solver variable")
+        shadows.append(shadow_for(v, dims, trail))
+    lo_n, hi_n = to_solver_number(lo.value), to_solver_number(hi.value)
+    if type(lo_n) is int and type(hi_n) is int:
+        from clausal.logic.clpfd import in_domain  # noqa: PLC0415
+        return in_domain(shadows, lo_n, hi_n, trail)
+    from clausal.logic.clpq import in_q  # noqa: PLC0415
+    return in_q(shadows, lo_n, hi_n, trail)
+
+
+def label_targets(vars_list) -> list:
+    """``label/1``'s list with every united var replaced by its shadow. A
+    united var with no shadow yet has no domain and is left alone (label
+    skips it, as it skips any var without FD state)."""
+    out = []
+    for v in vars_list:
+        dv = deref(v)
+        if is_var(dv):
+            state = get_attr(dv, UNITS_KEY)
+            if state is not None and state.shadow is not None:
+                out.append(state.shadow)
+                continue
+        out.append(v)
+    return out
