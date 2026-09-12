@@ -306,6 +306,16 @@ money result adds to a Decimal literal exactly.
   whatever the storage type (Decimal's own operators truncate), computed
   exactly through `Fraction`; the C comparator wrappers keep the integer
   fast path ahead of the side channel.
+* Round 6: ground `Quantity` division with a Decimal or Fraction operand is
+  EXACT — a terminating quotient presents as Decimal, a non-terminating one
+  stays the rational — so `1000(yen) / 3` agrees between `is/2` and CLP(Q)
+  (int/int and anything with a float keep Python's semantics). The side
+  channel is gated on `clausal/logic/_units_flag.active`, set the first time
+  a Quantity is built or a units var declared, so a program without units
+  never walks a tree; a foreign leaf is a return value of the scan, not an
+  exception. `scalar_product` coefficients and `circuit` positions get the
+  whole-units guard. The direct CLP(Q)/CLP(R) front ends (`clpq.rational/1`
+  and friends) are recorded in the gap todo with the CLP(Z3) call site.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 
