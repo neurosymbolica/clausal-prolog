@@ -182,9 +182,10 @@ def _refuse_bypassed(v, context: str) -> None:
     if state is not None and state.dims and _has_solver_state(v):
         raise _unsupported(
             context,
-            f"{v!r} carries solver state posted directly by a builtin outside "
-            f"the units side channel; that builtin does not support united "
-            f"variables yet")
+            f"{v!r} carries solver state of its own: it was posted on directly "
+            f"by a builtin outside the units side channel, or unified with a "
+            f"bare solver variable; neither is supported for a dimensioned "
+            f"variable")
 
 
 def _has_solver_state(v) -> bool:
@@ -702,8 +703,15 @@ def strip_list_for_solver(items, context: str, trail: Trail):
     _ensure_imports()
     items = [deref(v) for v in items]
     scans = [_scan(v) for v in items]
-    if any(sc is _FOREIGN for sc in scans) or not any(scans):
-        return items, None
+    if not any(sc is True for sc in scans):
+        return items, None                       # no units material anywhere
+    for v, sc in zip(items, scans):
+        if sc is _FOREIGN:
+            # An atom/string/date beside units material: the builtin's own
+            # integer guard would skip the quantity silently. Say so, as
+            # for an expression element.
+            raise _unsupported(
+                context, f"element {v!r} beside units material is not numeric")
     known = []
     for v in items:
         if isinstance(v, _Quantity):

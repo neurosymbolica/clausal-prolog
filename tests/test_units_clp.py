@@ -912,7 +912,7 @@ class TestReviewRoundSeven:
         assert clpfd.reify_fd("lt", Quantity(1, M), Quantity(2, M), Trail()) is True
         t, x = Trail(), Var()
         assert clpfd.reify_fd("eq", x, Quantity(2, M), t) is None
-        assert get_attr(x, UNITS_KEY) is not None and get_attr(x, UNITS_KEY).shadow is not None
+        assert get_attr(x, UNITS_KEY) is None      # round 21: a None answer declares nothing
 
 
 class TestReviewRoundEight:
@@ -1283,3 +1283,66 @@ class TestReviewRoundTwenty:
         t, y = Trail(), Var()
         assert clpfd.zcompare(mint("="), y, Quantity(3, M), t)
         assert calls == ["zcompare/3"] and deref(y) == Quantity(3, M)
+
+
+class TestReviewRoundTwentyOne:
+    def test_circuit_refuses_before_any_strip_with_one_code(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, y = Trail(), Var(), Var()
+        assert clpfd.in_domain([x], Quantity(1, M), Quantity(2, M), t)
+        assert clpfd.in_domain([y], Quantity(1, S), Quantity(2, S), t)
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_circuit([x, y], t))          # disagreeing dims: still units_unsupported
+        _assert_system_error(ei, "units_unsupported")
+        z = Var()
+        with pytest.raises(LogicException):
+            list(clpfd.fd_circuit([z, Quantity(1, M)], t))
+        assert get_attr(z, UNITS_KEY) is None            # no shadow created on the refusal path
+
+    def test_reify_does_not_declare_a_dimension_on_none(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.reify_fd("lt", x, Quantity(5, M), t) is None
+        assert get_attr(x, UNITS_KEY) is None
+        assert unify(x, Quantity(3, S), t)               # still free to be anything
+        with pytest.raises(LogicException) as ei:
+            clpfd.reify_fd("lt", Quantity(1, M), Quantity(2, S), Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_united_var_unified_with_bare_solver_var_fails_at_unification(self):
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic.units_constraint import constrain_var_dims
+        for order in ("vw", "wv"):
+            t, v, w = Trail(), Var(), Var()
+            assert constrain_var_dims(v, M, t)
+            assert clpfd.in_domain([w], 1, 3, t)
+            ok = unify(v, w, t) if order == "vw" else unify(w, v, t)
+            if ok:
+                # the bare var's own hook fired instead of the units hook
+                # (which side binds is the unifier's choice): the conflict
+                # is still loud at the first units-channel use
+                with pytest.raises(LogicException) as ei:
+                    clpfd.fd_eq(v, Quantity(2, M), t)
+                _assert_system_error(ei, "units_unsupported")
+            else:
+                assert is_var_unbound(v) and is_var_unbound(w)
+        t, d, w = Trail(), Var(), Var()
+        assert clpfd.in_domain([w], 1, 3, t)
+        assert constrain_var_dims(d, {}, t)                # dimensionless may
+        assert unify(d, w, t)
+
+    def test_foreign_leaf_beside_units_material_in_a_list_is_loud(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_sum([Quantity(3, M), mint("foo")], mint("#="), Var(), Trail()))
+        _assert_system_error(ei, "units_unsupported")
+        assert list(clpfd.fd_sum([3, mint("foo")], mint("#="), Var(), Trail())) == []   # no material: as before
+
+    def test_result_type_through_strip_units_is_documented(self):
+        from clausal.modules.units import _strip_dimensions_impl
+        q = Quantity(10, M) / Quantity(4, M)
+        out = Var()
+        assert list(_strip_dimensions_impl(q, out, Trail())) == [None]
+        v = deref(out)
+        assert type(v) is Fraction and v == Fraction(5, 2)
+        assert v == 2.5                                  # unify-equal to the float; a rational term

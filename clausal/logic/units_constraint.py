@@ -85,6 +85,11 @@ def constrain_var_dims(var, dims: dict, trail: Trail) -> bool:
     return existing.dims == clean
 
 
+def _has_bare_solver_state(v) -> bool:
+    return (get_attr(v, "fd") is not None or get_attr(v, "clpq") is not None
+            or get_attr(v, "real") is not None)
+
+
 def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
     """Called when an AttVar with a ``"units"`` attribute is unified.
 
@@ -116,6 +121,12 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
         # Unified with another variable — transfer or check constraint.
         other = get_attr(bound_to, UNITS_KEY)
         if other is None:
+            if attr_value.dims and _has_bare_solver_state(bound_to):
+                # A bare solver variable is a plain number; a dimensioned
+                # variable cannot be it. Refuse HERE, at the unification,
+                # rather than later at reattachment with a misleading
+                # "posted directly by a builtin" diagnosis.
+                return False
             put_attr(bound_to, UNITS_KEY, attr_value, trail)
             return True
         # Both constrained — dims must be identical (no intersection for units).

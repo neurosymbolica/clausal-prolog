@@ -397,6 +397,15 @@ money result adds to a Decimal literal exactly.
   `ground_dims` rejects every variable, declared or not; `fd_eq`/`fd_ne`
   take `_units_done`, and the reattachment hook passes it, so a binding
   never re-scans.
+* Round 21: `circuit/1` and `scalar_product/4` coefficients refuse
+  dimensioned material BEFORE any strip (one error code, no shadow on the
+  refusal path); a reified test strips only when both sides are ground, so
+  a `None` answer declares nothing; unifying a dimensioned variable with a
+  bare solver variable fails at the unification when the units hook is the
+  one that fires, and is loud at the next channel use otherwise; a foreign
+  leaf beside units material in a list builtin throws `units_unsupported`;
+  the rational result type through `strip_units/2` is pinned by a test
+  because it is corpus-visible (the sealed scorers must be re-run).
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

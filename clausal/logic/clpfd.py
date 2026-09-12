@@ -2412,9 +2412,13 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """
     x = deref(x)
     y = deref(y)
-    stripped = _units_strip(x, y, "reify(" + op + ")/3", trail)
-    if stripped is not None:
-        x, y = stripped
+    # A reified test commits nothing, so the side channel runs only when
+    # both sides are ground: stripping a non-ground side would create a
+    # shadow (and declare the variable's dimension) for an answer of None.
+    if not (_expr_tree_has_var(x) or _expr_tree_has_var(y)):
+        stripped = _units_strip(x, y, "reify(" + op + ")/3", trail)
+        if stripped is not None:
+            x, y = stripped
     x = _resolve(x)
     y = _resolve(y)
     if _both_ground(x, y):
@@ -2602,13 +2606,12 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     # one dimension.
     if _strip_list_for_solver is None:
         _ensure_units_imports()
-    raw_coeffs = coeffs
-    coeffs, coeff_dims = _strip_list_for_solver(coeffs, "scalar_product/4", trail)
-    if coeff_dims:
-        from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
-        raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
-    if coeff_dims is not None:
-        coeffs = _whole_units_only(raw_coeffs, coeffs, "scalar_product/4")
+    if _units_flag_active():
+        # Coefficients are plain numbers: dimensioned material is refused
+        # before any strip (no shadow on the refusal path), a dimensionless
+        # quantity becomes a plain int.
+        from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
+        coeffs = plain_fields_or_unsupported(coeffs, "scalar_product/4")
     both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
     vars_list, value = both[:-1], both[-1]
 
@@ -2739,17 +2742,12 @@ def fd_circuit(vars_list, trail: Trail):
     if not isinstance(vars_list, list):
         return
     # circuit/1's arguments are 1-based node INDICES — positions, not
-    # measurements — so a united var or a quantity here is a category
-    # error, refused rather than stripped.
-    if _strip_list_for_solver is None:
-        _ensure_units_imports()
-    stripped, circuit_dims = _strip_list_for_solver(vars_list, "circuit/1", trail)
-    if circuit_dims:
-        from clausal.logic.units_clp import _unsupported  # noqa: PLC0415
-        raise _unsupported("circuit/1", "node indices are positions and carry no units")
-    if circuit_dims is not None:
-        stripped = _whole_units_only(vars_list, stripped, "circuit/1")
-    vars_list = stripped          # dimensionless quantities are plain positions
+    # measurements — so dimensioned material is refused BEFORE any strip
+    # (one error code, no shadow created on the refusal path); a
+    # dimensionless quantity is a plain position.
+    if _units_flag_active():
+        from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
+        vars_list = plain_fields_or_unsupported(vars_list, "circuit/1")
 
     n = len(vars_list)
     if n == 0:
