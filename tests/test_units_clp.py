@@ -214,7 +214,11 @@ class TestInference:
         with pytest.raises(LogicException) as ei:
             analyse(Var(), _bin(Add, Quantity(Decimal("1.00"), {euro: 1}), Quantity(Decimal("1.00"), {usd: 1})), "(==)/2")
         _assert_system_error(ei, "units_mismatch")
-        assert "euro" in ei.value.term.args[1] and "dollar" in ei.value.term.args[1]
+        # `usd`, not `dollar`: the renderer names the BOUND identifier since
+        # 2026-09-12, and `dollar` has not resolved since the ISO-code rename.
+        # The property this asserts — the message names BOTH currencies — is
+        # unchanged, and is now unambiguous by construction.
+        assert "euro" in ei.value.term.args[1] and "usd" in ei.value.term.args[1]
 
     def test_declared_units_var_disagreeing_with_operand_mismatches(self):
         from clausal.logic.units_clp import analyse

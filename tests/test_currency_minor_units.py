@@ -517,7 +517,10 @@ def test_same_named_currencies_are_distinguished_in_the_message():
     from clausal.modules.countries.united_states import usd_cent
     left, right = _mismatch_sides(1 * aud_cent, 1 * usd_cent)
     assert left != right, f"both sides rendered as {left!r}"
-    assert "AUD" in left and "USD" in right, (left, right)
+    # Since the renderer switched to the BOUND identifier (2026-09-12) the two
+    # sides differ by construction and need no `(AUD)` qualifier — the
+    # identifiers are what a rulebase writes, and those were never ambiguous.
+    assert (left, right) == ("aud", "usd"), (left, right)
 
 
 def test_every_ambiguous_currency_name_renders_distinguishably():
@@ -549,7 +552,9 @@ def test_an_unambiguous_mismatch_keeps_its_plain_message():
     from clausal.modules.countries.european_union import euro
     from clausal.modules.countries.united_states import usd
     left, right = _mismatch_sides(Quantity(1, euro), Quantity(1, usd))
-    assert (left, right) == ("euro", "dollar")
+    # `euro` keeps its word because the word is unique; `usd` is the code
+    # because `dollar` is shared by 22 currencies and does not resolve.
+    assert (left, right) == ("euro", "usd")
 
 
 def test_a_compound_mismatch_qualifies_only_the_colliding_component():
@@ -563,10 +568,12 @@ def test_a_compound_mismatch_qualifies_only_the_colliding_component():
     from clausal.modules.units import second
     left, right = _mismatch_sides(Quantity(1, {aud: 1, second: -1}),
                                   Quantity(1, {usd: 1, second: -1}))
-    assert "(AUD)" in left and "(USD)" in right
-    shared_left = [p for p in left.split("·") if p.startswith("second")]
-    shared_right = [p for p in right.split("·") if p.startswith("second")]
-    assert shared_left == shared_right == ["second^-1"], (left, right)
+    # The property is unchanged and now reads directly: the colliding
+    # component differs, the shared one is IDENTICAL on both sides. What
+    # changed is that the renderer emits a re-readable unit expression, so
+    # the shared part is `/ second` rather than `·second^-1`.
+    assert (left, right) == ("aud / second", "usd / second"), (left, right)
+    assert left.split(" / ")[1] == right.split(" / ")[1] == "second"
 
 
 def test_the_mismatch_message_is_identical_across_runs():
@@ -1211,7 +1218,7 @@ def test_compatible_units_same_named_currencies_are_distinguished():
     with pytest.raises(UnitsMismatch) as exc:
         _compat(Quantity(Decimal("5"), aud), usd)
     text = str(exc.value)
-    assert "(USD)" in text and "(AUD)" in text, text
+    assert "expected usd" in text and "got aud" in text, text
 
 
 def test_compatible_units_raises_rather_than_fails_in_clausal(tmp_path):

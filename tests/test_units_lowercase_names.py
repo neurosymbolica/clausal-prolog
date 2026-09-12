@@ -131,11 +131,11 @@ class TestLowercaseNames:
 class TestPrintedLabel:
     def test_str_base(self):
         """# nv"""
-        assert str(units.metre(5)) == "5 metre"
+        assert str(units.metre(5)) == "5 (metre)"
 
     def test_str_derived_lists_base_units(self):
         """# nv"""
-        assert str(units.newton(9.8)) == "9.8 kilogram·metre·second^-2"
+        assert str(units.newton(9.8)) == "9.8 (kilogram * metre / second ** 2)"
 
     def test_repr_uses_lowercase_key(self):
         """# nv"""
@@ -147,7 +147,7 @@ class TestPrintedLabel:
             "-import_from(py.units, [metre, second])\n"
             "q(S) <- (V is 10(metre/second), S is ++(str(V)))\n"), tmp_path)
         got = _one(mod, "q")
-        assert str(got) == "10 metre·second^-1"
+        assert str(got) == "10 (metre / second)"
 
     def test_mismatch_message_names_lowercase_units(self):
         """# nv"""
@@ -408,7 +408,7 @@ class TestBritishSpelling:
     def test_printed_label_is_the_base_unit(self):
         """A scaled length carries no label of its own: it prints in metre."""
         # nv
-        assert str(5 * units.kilometre) == "5000 metre"
+        assert str(5 * units.kilometre) == "5000 (metre)"
 
     def test_american_python_alias_warns_once(self, fresh_python_warnings):
         """# nv"""

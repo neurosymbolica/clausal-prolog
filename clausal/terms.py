@@ -2130,6 +2130,57 @@ def _dim_name(k) -> str:
     return k._name if hasattr(k, "_name") else str(k)
 
 
+def _unit_identifier(key) -> str:
+    """The name a dimension is BOUND to — what a rulebase can write.
+
+    For a currency this is `CURRENCY_BINDINGS[iso_code]`, never `_name`.
+    `_name` is the everyday display word, and since the ISO-code rename it is
+    not an identifier for a shared word: `dollar` does not resolve, and for
+    the 22 currencies sharing it, it could not say which one. The bindings
+    keep the plain word where it is unique (`euro`, `baht`, `sterling`), so
+    output stays readable rather than uniformly cryptic.
+    """
+    code = getattr(key, "iso_code", None)
+    if code:
+        from clausal.modules.countries import _data          # noqa: PLC0415
+        bound = _data.CURRENCY_BINDINGS.get(code)
+        if bound:
+            return bound
+    return _dim_name(key)
+
+
+def _unit_expr_str(dims: dict) -> str:
+    """A dims dict as a re-readable unit EXPRESSION.
+
+    The text `str(Quantity)` puts in parentheses, so that its whole output
+    parses back to an equal value. `metre·second^-1` used neither `·` nor `^`
+    validly; this emits `metre / second` and `metre ** 2`, which the parser
+    accepts and `_is_unit_expr` recognises.
+
+    Empty dims render as `dimensionless`, a real unit predicate, so that a
+    dimensionless quantity round-trips too rather than being the one shape
+    that cannot — `4` alone re-reads as a plain number and `4 ()` is not an
+    annotation.
+    """
+    if not dims:
+        return "dimensionless"
+
+    def term(name, exponent):
+        return name if exponent == 1 else f"{name} ** {exponent}"
+
+    items = sorted(((_unit_identifier(k), e) for k, e in dims.items()),
+                   key=lambda pair: pair[0])
+    numerator = [term(n, e) for n, e in items if e > 0]
+    denominator = [term(n, -e) for n, e in items if e < 0]
+    head = " * ".join(numerator) if numerator else "1"
+    if not denominator:
+        return head
+    tail = " * ".join(denominator)
+    if len(denominator) > 1:
+        tail = f"({tail})"
+    return f"{head} / {tail}"
+
+
 def _dims_str(dims: dict, *, qualify: frozenset = frozenset()) -> str:
     """Human-readable dimension string, e.g. 'm·s^-2'.
 
@@ -2149,15 +2200,26 @@ def _dims_str(dims: dict, *, qualify: frozenset = frozenset()) -> str:
     """
     if not dims:
         return "1"
+    if not qualify:
+        # ONE renderer (operator, 2026-09-12): a diagnostic names the unit the
+        # way a rulebase writes it. `usd vs aud` is unambiguous by
+        # construction, where `dollar vs dollar` was not — so for currencies
+        # the qualifier below is now unnecessary rather than merely correct.
+        return _unit_expr_str(dims)
     parts = []
-    for k in sorted(dims, key=_dim_name):
+    for k in sorted(dims, key=_unit_identifier):
         v = dims[k]
-        name = _dim_name(k)
+        name = _unit_identifier(k)
+        # Reached only for same-named dimensions the bindings cannot separate,
+        # which after the ISO-code rename means NON-currency ones: the 31 base
+        # dimension names are SI plus `bit` and do not intersect the currency
+        # names, so this branch has no live case today. `pound` is a currency
+        # word twelve times over and there is no `pound` mass unit yet.
         code = getattr(k, "iso_code", None) if name in qualify else None
         if code:
             name = f"{name} ({code})"
-        parts.append(name if v == 1 else f"{name}^{v}")
-    return "·".join(parts)
+        parts.append(name if v == 1 else f"{name} ** {v}")
+    return " * ".join(parts)
 
 
 def _colliding_dim_names(a: dict, b: dict) -> frozenset:
@@ -2673,7 +2735,11 @@ class Quantity:
         return f"Quantity({self._value!r}, {self._dims!r})"
 
     def __str__(self) -> str:
-        return f"{self._value} {_dims_str(self._dims)}"
+        # The output IS valid input: `292.00 (usd)` parses back to an equal
+        # value. What this produced before resembled source and was not —
+        # bare juxtaposition is a SyntaxError, and it named `dollar`, which
+        # has not resolved since the ISO-code rename.
+        return f"{self._value} ({_unit_expr_str(self._dims)})"
 
     def __format__(self, spec: str) -> str:
         cur = None
