@@ -60,6 +60,8 @@ def to_solver_number(v):
     from decimal import Decimal  # noqa: PLC0415
     from clausal.logic.variables import present_number  # noqa: PLC0415
     if isinstance(v, Decimal):
+        if not v.is_finite():
+            return v          # the comparators' own guards refuse it, catchably
         return present_number(Fraction(v))
     if type(v) is Fraction:
         return present_number(v)

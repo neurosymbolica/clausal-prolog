@@ -384,6 +384,13 @@ money result adds to a Decimal literal exactly.
   and in the relation (a ground quantity position was skipped by the
   constraint's int/var tests and the column silently dropped);
   dimensionless quantities are plain numbers there too.
+* Round 19: a non-finite Decimal is left to the comparators' own catchable
+  guards rather than overflowing in `to_solver_number`; the `system_error/1`
+  docstring records that ISO spells `system_error` as a bare atom and that
+  putting the code inside it is the operator's deliberate deviation. The
+  review's claim that the funnel-lint allowlist was mis-shifted was checked
+  against both trees and is wrong: the anchor lines are unique and moved
+  uniformly (+203).
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

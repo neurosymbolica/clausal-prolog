@@ -264,11 +264,14 @@ def system_error(code: str, context: str = "") -> Compound:
     """Build error(system_error(Code), Context).
 
     ISO 13211-1 §7.12.2 lists ``system_error`` for errors outside the
-    standard's own catalogue; the engine puts its own error CODE inside it
-    so a ``catch/3`` pattern can select one kind (``units_mismatch``,
-    ``units_undetermined``, …) without matching every system error. *Code*
-    is minted as an atom like the names in :func:`type_error`; *Context* is
-    human text.
+    standard's own catalogue — as a bare ATOM. This engine puts its own
+    error CODE inside it, ``system_error(units_mismatch)``, so a ``catch/3``
+    pattern can select one kind (``units_mismatch``, ``units_undetermined``,
+    ``units_unsupported``, …) without matching every system error. That is
+    a deliberate, recorded deviation (operator's ruling 2026-09-12 after
+    discussion with Markus Triska): a portable ``error(system_error, _)``
+    pattern does not match these terms. *Code* is minted as an atom like
+    the names in :func:`type_error`; *Context* is human text.
     """
     inner = Compound("system_error", (_name_atom(code),))
     return Compound("error", (inner, context))

@@ -1226,3 +1226,14 @@ class TestReviewRoundEighteen:
         # dimensionless quantities are plain numbers: the column constrains
         assert clpfd.tuples_in([[Quantity(1, {}), y]], [(1, 2), (2, 1)], t)
         assert deref(y) == 2
+
+
+class TestReviewRoundNineteen:
+    def test_non_finite_currency_value_is_refused_catchably(self):
+        import clausal.logic.clpfd as clpfd
+        from clausal.logic.units_constraint import to_solver_number
+        inf = Decimal("Infinity")
+        assert to_solver_number(inf) is inf
+        bad = Quantity(inf, {euro: 1})
+        with pytest.raises(LogicException):
+            clpfd.fd_eq(Var(), bad, Trail())
