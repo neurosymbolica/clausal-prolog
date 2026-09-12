@@ -3283,6 +3283,9 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
     if not relation:
         return False  # empty relation — no tuple can match
 
+    if _units_flag_active():
+        from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
+        relation = [plain_fields_or_unsupported(list(r), "tuples_in/2") for r in relation]
     relation_tuple = tuple(tuple(r) for r in relation)
 
     for tup in tuples_list:
@@ -3290,8 +3293,14 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
         if isinstance(tup, list):
             # Not routed through the units side channel: a row is one var
             # per COLUMN and columns carry different dimensions, so the
-            # shared-dimension list form does not fit. A united var here
-            # trips the units_unsupported safety net at reattachment.
+            # shared-dimension list form does not fit. Dimensioned material
+            # is refused up front (a ground Quantity position would
+            # otherwise be SKIPPED by the constraint's int/var tests and the
+            # column silently dropped); a united var also trips the
+            # reattachment net. Dimensionless quantities are plain numbers.
+            if _units_flag_active():
+                from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
+                tup = plain_fields_or_unsupported(list(tup), "tuples_in/2")
             vars_ = []
             for v in tup:
                 v = deref(v)

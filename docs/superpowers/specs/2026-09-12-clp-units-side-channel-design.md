@@ -380,6 +380,10 @@ money result adds to a Decimal literal exactly.
   operand will be posted over an integer domain); `cumulative/2` converts
   fields per task, so a malformed task fails the same way with or without
   units in the process.
+* Round 18: `tuples_in/2` refuses dimensioned material up front, per row
+  and in the relation (a ground quantity position was skipped by the
+  constraint's int/var tests and the column silently dropped);
+  dimensionless quantities are plain numbers there too.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

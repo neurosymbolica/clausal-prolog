@@ -646,9 +646,9 @@ class TestReviewRoundTwo:
         t, x, y = Trail(), Var(), Var()
         assert clpfd.in_domain([x], Quantity(1, S), Quantity(2, S), t)
         assert clpfd.in_domain([y], Quantity(1, M), Quantity(2, M), t)
-        assert clpfd.tuples_in([[x, y]], [(1, 2), (2, 1)], t)   # posts normally
+        # round 18: refused up front at posting (earlier than the reattachment net)
         with pytest.raises(LogicException) as ei:
-            list(clpfd.label([x, y], t))                          # loud at reattachment
+            clpfd.tuples_in([[x, y]], [(1, 2), (2, 1)], t)
         _assert_system_error(ei, "units_unsupported")
 
     def test_global_cardinality_keys_share_the_dimension(self):
@@ -1210,3 +1210,19 @@ class TestReviewRoundSeventeen:
         assert clpfd.in_domain([s1], 0, 5, t)
         with pytest.raises(ValueError):
             clpfd.cumulative([(s1, 2)], 1, t)
+
+
+class TestReviewRoundEighteen:
+    def test_tuples_in_ground_quantity_is_refused_not_dropped(self):
+        import clausal.logic.clpfd as clpfd
+        t, y = Trail(), Var()
+        assert clpfd.in_domain([y], 1, 2, t)
+        with pytest.raises(LogicException) as ei:
+            clpfd.tuples_in([[Quantity(1, M), y]], [(1, 2), (2, 1)], t)
+        _assert_system_error(ei, "units_unsupported")
+        with pytest.raises(LogicException) as ei:
+            clpfd.tuples_in([[1, y]], [(Quantity(1, M), 2)], t)
+        _assert_system_error(ei, "units_unsupported")
+        # dimensionless quantities are plain numbers: the column constrains
+        assert clpfd.tuples_in([[Quantity(1, {}), y]], [(1, 2), (2, 1)], t)
+        assert deref(y) == 2
