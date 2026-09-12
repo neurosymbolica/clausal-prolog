@@ -2553,11 +2553,17 @@ class TermTransformer(NodeTransformer):
                 mod_expr = replace(Name(id="$module", ctx=load), call)
             fix_missing_locations(replace(mod_expr, call))
             # The same builder `constant()` ends in: a late read, evaluated
-            # where the clause runs. Built directly rather than synthesised as
-            # `++expr` and re-visited -- the escape is recognised from the
-            # SOURCE shape, so a manufactured double-UAdd is read as a term
-            # and the module expression comes back as `__import__/2 is not in
-            # scope as a term class`.
+            # where the clause runs.
+            #
+            # NOT synthesised as `++expr` and re-visited. `++` is SURFACE
+            # SYNTAX, and this code is already INSIDE the transformer that
+            # consumes it -- emitting surface forms from here means handing
+            # the reader something to re-read, one level below where we are.
+            # It also does not work: the escape is recognised from the source
+            # shape, so a manufactured double-UAdd is read as a term and the
+            # module expression fails as `__import__/2 is not in scope as a
+            # term class`. The failure is the symptom; the level confusion is
+            # the reason. Build at the level you are at.
             module_term = _build_py_thunk_ast(transformer, call, mod_expr, [])
             if named:
                 # The SPELLING, as a Python string, not the name re-visited.
