@@ -24,6 +24,7 @@ So the one load-bearing requirement is that the FACTOR is a `Decimal` —
 exactly the property `_make_minor_unit` argues for, and the property
 `gram = Quantity(1e-3, ...)` does not have.
 """
+import os
 import textwrap
 from decimal import Decimal
 from fractions import Fraction
@@ -329,3 +330,51 @@ def test_an_unconverted_ratio_site_still_warns(tmp_path):
         """)
     assert [w for w in caught
             if issubclass(w.category, ClausalScaleInNameWarning)]
+
+
+# ── the lint must not drag the units module into every load ──────────────────
+
+
+def test_transforming_a_unit_free_file_does_not_import_the_units_module():
+    """`clausal/logic/_units_flag.py` promises: "A program that imports no unit
+    module pays nothing."
+
+    Importing `clausal.modules.units` builds 84 `Quantity` constants at import
+    time, and `Quantity.__init__` calls `_units_flag.touch()`. The flag is read
+    at six sites in `clpfd.py` and four in `units_clp.py`, so switching it on
+    makes every CLP program take the units side-channel branch — including
+    programs with no units anywhere.
+
+    The scale lint reads the ratio vocabulary on EVERY transform, so it must
+    read it from a data-only module. This test failed when `_derived_scale_words`
+    imported `clausal.modules.units` directly (2026-09-12); the ratio table moved
+    to `clausal.modules._ratio_data`, which constructs nothing.
+
+    Run in a subprocess because the flag is process-global and any earlier test
+    in this file has already tripped it.
+    """
+    import subprocess
+    import sys
+    import textwrap
+    probe = textwrap.dedent('''
+        import sys, os, tempfile, pathlib
+        sys.path.insert(0, os.getcwd())
+        import clausal
+        assert os.path.realpath(clausal.__file__).startswith(
+            os.path.join(os.getcwd(), "")), clausal.__file__
+        from clausal.import_hook import _load_module
+        p = pathlib.Path(tempfile.mkdtemp()) / "plain.clausal"
+        p.write_text("-private([a])\\nthing(a),\\nother(X) <- thing(X),\\n")
+        _load_module("plain_probe_units_flag", str(p))
+        from clausal.logic import _units_flag
+        print("UNITS", "clausal.modules.units" in sys.modules)
+        print("FLAG", _units_flag.active)
+    ''')
+    r = subprocess.run([sys.executable, "-c", probe], cwd=os.getcwd(),
+                       capture_output=True, text=True)
+    assert "UNITS" in r.stdout, f"probe did not run:\n{r.stdout}\n{r.stderr[-2000:]}"
+    assert "UNITS False" in r.stdout, (
+        "transforming a unit-free file imported clausal.modules.units, which "
+        f"turns the CLP units side channel on for the whole process:\n{r.stdout}")
+    assert "FLAG False" in r.stdout, (
+        f"the units flag is active after a unit-free load:\n{r.stdout}")

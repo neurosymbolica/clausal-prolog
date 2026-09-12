@@ -1350,9 +1350,9 @@ _HAND_MAINTAINED_SCALE_WORDS = frozenset({
 
 def _derived_scale_words() -> set:
     from clausal.modules.countries import _data              # noqa: PLC0415
-    from clausal.modules import units as _units              # noqa: PLC0415
+    from clausal.modules import _ratio_data                  # noqa: PLC0415
     out = set()
-    for word in list(_data.MINOR_UNIT_WORDS.values()) + list(_units.RATIO_UNITS):
+    for word in list(_data.MINOR_UNIT_WORDS.values()) + list(_ratio_data.RATIO_UNITS):
         out.add(word)
         if not word.endswith("y"):
             out.add(word + "s")

@@ -321,16 +321,12 @@ gibibit      = Quantity(2**30,  {bit: 1})
 # ratio is dimensionless, a bare 0.03 would otherwise satisfy every ratio
 # claim there is.
 
-#: name -> decimal exponent. **The authority for the ratio vocabulary**: the
-#: scale-in-a-name lint and the Prolog exporter both enumerate from this
-#: rather than from a list written beside them, so adding a ratio unit
-#: extends them with no second edit. The bindings below are explicit, and
-#: `test_every_declared_ratio_unit_is_bound_in_the_module` is what notices
-#: when an entry here has no binding or the wrong factor.
-RATIO_UNITS = {
-    "percent":     2,
-    "basis_point": 4,
-}
+# The table itself lives in `clausal.modules._ratio_data`, a data-only module,
+# because the scale-in-a-name lint reads it on every transform and must not
+# import THIS module to do so -- importing it builds 84 Quantity constants,
+# which turns the CLP units side channel on for the whole process. See that
+# module's docstring. Re-exported here so `units.RATIO_UNITS` keeps working.
+from clausal.modules._ratio_data import RATIO_UNITS       # noqa: E402
 
 
 def _make_ratio_unit(name: str) -> Quantity:
