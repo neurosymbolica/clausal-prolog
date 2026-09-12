@@ -16,8 +16,9 @@ Also on the safety net, not routed: `cumulative/2` (task tuples of
 start/duration/resource — two dimensions, time and resource) and
 `tuples_in/2` (one var per column; strip per COLUMN, and the relation's
 column with it). Both need their own rule rather than `strip_list_for_solver`.
-Today a united var reaching either throws `system_error(units_unsupported)`
-at reattachment. Expression trees as ELEMENTS of a list builtin
+`tuples_in/2` throws `system_error(units_unsupported)` at reattachment;
+`cumulative/2` refuses units material up front with the same term (its
+durations and resources never get solver state, so the net would not fire). Expression trees as ELEMENTS of a list builtin
 (`sum_([A, 3(metre) + B], ...)`) are not stripped either (old type_error).
 
 The direct CLP(Q)/CLP(R) front ends are not routed either: `clpq.rational/1`,

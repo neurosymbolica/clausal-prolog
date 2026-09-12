@@ -1038,3 +1038,46 @@ class TestReviewRoundTwelve:
     def test_as_whole_rejects_non_finite_decimal_quietly(self):
         from clausal.logic.units_clp import _as_whole
         assert _as_whole(Decimal("Infinity")) is None and _as_whole(Decimal("NaN")) is None
+
+
+class TestReviewRoundThirteen:
+    def test_cumulative_refuses_units_material_loudly(self):
+        import clausal.logic.clpfd as clpfd
+        t, s1 = Trail(), Var()
+        assert clpfd.in_domain([s1], 0, 5, t)
+        with pytest.raises(LogicException) as ei:
+            clpfd.cumulative([(s1, Quantity(2, S), 1)], 1, t)
+        _assert_system_error(ei, "units_unsupported")
+        u = Var()
+        assert clpfd.in_domain([u], Quantity(0, S), Quantity(5, S), t)
+        with pytest.raises(LogicException) as ei:
+            clpfd.cumulative([(u, 2, 1)], 1, t)
+        _assert_system_error(ei, "units_unsupported")
+        assert clpfd.cumulative([(s1, 2, 1)], 1, t) is True      # plain case untouched
+
+    def test_zcompare_unbound_order_needs_whole_units(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, order = Trail(), Var(), Var()
+        with pytest.raises(LogicException) as ei:
+            clpfd.zcompare(order, x, Quantity(Decimal("10.50"), {euro: 1}), t)
+        _assert_system_error(ei, "units_unsupported")
+        t2, y, order2 = Trail(), Var(), Var()
+        assert clpfd.zcompare(order2, y, Quantity(3, M), t2)
+        assert unify(y, Quantity(1, M), t2)
+        assert deref(order2) == mint("<")
+        # A ground Order delegates to the comparators, but zcompare pre-ensures
+        # FD state first, so a rational operand overflows in the promotion —
+        # the same pre-existing defect as chain/2 (filed todo).
+
+    def test_two_shadows_with_distinct_links_unify(self):
+        from clausal.logic.units_clp import shadow_for
+        t, x, y = Trail(), Var(), Var()
+        sx, sy = shadow_for(x, M, t), shadow_for(y, M, t)
+        assert unify(sx, sy, t)
+        assert unify(sy, 4, t)
+        assert deref(x) == Quantity(4, M) and deref(y) == Quantity(4, M)
+        t2, a, b, w = Trail(), Var(), Var(), Var()
+        sa, sb = shadow_for(a, M, t2), shadow_for(b, M, t2)
+        assert unify(sa, w, t2) and unify(w, sb, t2)
+        assert unify(sa, 9, t2)
+        assert deref(a) == Quantity(9, M) and deref(b) == Quantity(9, M)

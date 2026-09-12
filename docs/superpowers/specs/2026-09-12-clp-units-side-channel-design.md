@@ -353,6 +353,11 @@ money result adds to a Decimal literal exactly.
   `todo/chain-rational-operand-fd-promotion-overflow-2026-09-12.md`); a
   non-finite Decimal is refused quietly; the units flag's real granularity
   (import of a unit module turns it on) is stated in its docstring.
+* Round 13: `cumulative/2` refuses units material up front (its durations
+  and resources never get solver state, so the reattachment net could not
+  fire); `zcompare/3` with an unbound Order posts over integer domains and
+  so requires whole units; the two-shadow link merge is tested; the reify
+  route calls the strip directly.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

@@ -2410,10 +2410,9 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """
     x = deref(x)
     y = deref(y)
-    if _units_flag_active():
-        stripped = _units_strip(x, y, "reify(" + op + ")/3", trail)
-        if stripped is not None:
-            x, y = stripped
+    stripped = _units_strip(x, y, "reify(" + op + ")/3", trail)
+    if stripped is not None:
+        x, y = stripped
     x = _resolve(x)
     y = _resolve(y)
     if _both_ground(x, y):
@@ -3181,6 +3180,17 @@ def cumulative(tasks, limit, trail: Trail) -> bool:
     """
     if not tasks:
         return True  # trivially satisfied
+    # Units: not routed (two dimensions, time and resource, need their own
+    # rule) and durations/resources never get solver state, so the
+    # reattachment net would not fire either — refuse loudly here instead.
+    if _strip_list_for_solver is None:
+        _ensure_units_imports()
+    if _units_flag_active():
+        from clausal.logic.units_clp import _scan, _unsupported  # noqa: PLC0415
+        fields = [f for task in tasks for f in task] + [limit]
+        if any(_scan(f) is True for f in fields):
+            raise _unsupported("cumulative/2", "quantities and united variables are not "
+                               "supported here yet; strip their units first")
 
     task_tuples = []
     for start, dur, res in tasks:
@@ -3348,6 +3358,11 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     # Units side channel after the Order check, so a bad Order still wins.
     stripped = _units_strip(x, y, "zcompare/3", trail)
     if stripped is not None:
+        if order_name is None:
+            # An unbound Order posts ZcompareConstraint over integer
+            # domains (no comparator to delegate to), so the operands must
+            # be whole units, as in every other integer-domain builtin.
+            stripped = _whole_units_only([x, y], list(stripped), "zcompare/3")
         x, y = stripped
     if is_var(x):
         _ensure_fd(x, trail)
