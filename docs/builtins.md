@@ -625,6 +625,32 @@ retry_limit(N) <- constant_value(max_retries, N)
 
 ### `constant_number_units/3`
 
+!!! note "Scope: the OWNING module, resolved at compile time (2026-09-12)"
+    Unlike [`constant_value/2`](#constant_value2) above, this is **module-scoped**, and the
+    difference is worth understanding because the constraint they face is identical.
+
+    A builtin cannot receive the calling module. But the **compiler** knows it, so a written
+    `constant_number_units(Name, N, U)` is compiled to
+    [`module_constant_units/4`](#module_constant_units4) with the owning module inserted —
+    the same way `$module` is handed to the registration when a declaration is lowered.
+    Reading works the way writing already does.
+
+    The module inserted is the name's **owner**, which is not always the caller: an imported
+    constant is registered on the module that declared it, so the compiler uses the module the
+    import named.
+
+    Consequences, all of them intentional:
+
+    * a name this module neither declares nor imports **cannot be written** — it is a
+      compile-time error naming the way out, rather than silently answering with some other
+      module's declaration in load order;
+    * an **imported** constant answers here (it did not before);
+    * with the name **unbound** this enumerates, but only this module's own declarations.
+
+    `constant_value/2` keeps the program-wide reading: its name and arity are fixed by
+    cross-implementation convention, so its scope is not ours to vary.
+
+
 ```text
 constant_number_units(Name, Number, Units)
 ```
@@ -675,6 +701,27 @@ limit(N, U) <- constant_number_units(max_fine, N, U)
     A builtin never sees its calling module, so this enumerates every loaded Clausal
     module's own declarations. Two modules declaring the same constant name both answer.
     Use [`module_constant/3`](#module_constant3) when the module matters.
+
+### `module_constant_units/4`
+
+```text
+module_constant_units(Module, Name, Number, Units)
+```
+
+The **declared pair**, scoped to one module — standing to
+[`constant_number_units/3`](#constant_number_units3) exactly as
+[`module_constant/3`](#module_constant3) stands to [`constant_value/2`](#constant_value2).
+
+`Module` is a module object; `Name` is the constant's spelling. Reports the **declaration**,
+not the stored value, for the reasons given at `constant_number_units/3`.
+
+A module that does not declare `Name` simply **fails**. This is a lookup, not an assertion —
+the error for a name nothing declares belongs at the `constant_number_units/3` call site, where
+the compiler can see the name was written as a literal and refuse it before anything runs.
+
+This is also the relation `constant_number_units/3` compiles to, with the owning module
+inserted. Writing it by hand is for the case where the module you want is not the one you are
+in and not one you imported the name from.
 
 ### `module_constant/3`
 ```clausal

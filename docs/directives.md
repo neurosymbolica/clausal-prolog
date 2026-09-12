@@ -449,6 +449,27 @@ The two directives are a family, which is why they are positional rather than ke
 arguments: `-constants(a = 1, b = 2)` had no room for a third argument on one of its pairs.
 One line per constant also reads better in a diff.
 
+### Reaching a constant from another module
+
+**Ruled 2026-09-12.** A constant is in scope where it is **declared**, where it is
+**imported**, or where its owner is **named**:
+
+```text
+-import_from(other_module, [max_fine])      # then: constant(max_fine)
+-import_module(other_module)                # then: constant(other_module.max_fine)
+```
+
+Both forms work for the value and for
+[`constant_number_units/3`](builtins.md#constant_number_units3), whose scope is resolved at
+compile time.
+
+The module-qualified form takes a **qualified name**, never an expression — the parentheses of
+`constant(...)` still delimit a name, which is what lets the reference be checked before
+anything runs. `constant(compute_it())` is refused exactly as it always was.
+
+A name that is neither declared, imported, nor qualified is a **compile-time error** that names
+the way out, rather than a silent failure or another module's answer.
+
 ### -constant_value (details)
 
 `-constant_value(name, value)` declares one module-level constant — a name spelled like an
