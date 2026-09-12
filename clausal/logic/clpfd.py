@@ -1265,6 +1265,11 @@ def _ensure_units_imports() -> None:
         _whole_units_only = units_clp.whole_units_only
 
 
+def _units_flag_active() -> bool:
+    from clausal.logic import _units_flag  # noqa: PLC0415
+    return _units_flag.active
+
+
 def _units_strip(l, r, context, trail):
     """Run the units side channel on a comparison: None when no Quantity or
     united Var is involved (the existing path is untouched), else the
@@ -1285,7 +1290,7 @@ def _units_strip_list(items, context, trail):
         _ensure_units_imports()
     stripped, dims = _strip_list_for_solver(items, context, trail)
     if dims is not None:
-        _whole_units_only(stripped, context)
+        _whole_units_only(items, stripped, context)
     return stripped
 
 
@@ -2404,9 +2409,10 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """
     x = deref(x)
     y = deref(y)
-    stripped = _units_strip(x, y, f"reify({op})/3", trail)
-    if stripped is not None:
-        x, y = stripped
+    if _units_flag_active():
+        stripped = _units_strip(x, y, "reify(" + op + ")/3", trail)
+        if stripped is not None:
+            x, y = stripped
     x = _resolve(x)
     y = _resolve(y)
     if _both_ground(x, y):
@@ -2594,12 +2600,13 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     # one dimension.
     if _strip_list_for_solver is None:
         _ensure_units_imports()
+    raw_coeffs = coeffs
     coeffs, coeff_dims = _strip_list_for_solver(coeffs, "scalar_product/4", trail)
     if coeff_dims:
         from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
         raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
     if coeff_dims is not None:
-        _whole_units_only(coeffs, "scalar_product/4")
+        _whole_units_only(raw_coeffs, coeffs, "scalar_product/4")
     both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
     vars_list, value = both[:-1], both[-1]
 
@@ -2739,7 +2746,7 @@ def fd_circuit(vars_list, trail: Trail):
         from clausal.logic.units_clp import _unsupported  # noqa: PLC0415
         raise _unsupported("circuit/1", "node indices are positions and carry no units")
     if circuit_dims is not None:
-        _whole_units_only(stripped, "circuit/1")
+        _whole_units_only(vars_list, stripped, "circuit/1")
     vars_list = stripped          # dimensionless quantities are plain positions
 
     n = len(vars_list)

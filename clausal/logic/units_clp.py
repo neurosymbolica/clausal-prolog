@@ -617,6 +617,8 @@ def label_targets(vars_list) -> list:
     united var with no shadow and no solver state has no domain and is left
     alone (label skips it, as it skips any var without FD state); one with
     solver state but no shadow was posted on directly and throws."""
+    if not _units_flag.active:
+        return list(vars_list)
     out = []
     for v in vars_list:
         dv = deref(v)
@@ -674,7 +676,13 @@ def strip_list_for_solver(items, context: str, trail: Trail):
         elif _is_plain_number(v):
             known.append({})
         else:
-            return items, None
+            # An expression node beside units material: the list form only
+            # speaks for leaves, and leaving the Quantity in place would let
+            # the builtin's integer guard skip it silently. Say so.
+            raise _unsupported(
+                context,
+                f"expression element {v!r} beside units material is not "
+                f"supported; bind it first (X == ...) and pass the variable")
     dims = next(d for d in known if d is not None)
     for d in known:
         if d is not None and d != dims:
@@ -690,16 +698,18 @@ def strip_list_for_solver(items, context: str, trail: Trail):
     return out, dims
 
 
-def whole_units_only(items, context: str) -> None:
+def whole_units_only(original, stripped, context: str) -> None:
     """A finite-domain list builtin takes integers: after the strip, a
     non-whole amount (10.50(euro) is Fraction(21, 2)) would be silently
     skipped by the builtin's own integer guard. Throw instead, as
-    ``in_domain_units`` does for non-integral bounds."""
+    ``in_domain_units`` does for non-integral bounds. Only positions that
+    WERE quantities are checked; a plain 1.5 in the list is the builtin's
+    own business, as before."""
     from fractions import Fraction  # noqa: PLC0415
-    for v in items:
-        v = deref(v)
-        if isinstance(v, (Fraction, float, Decimal)):
+    _ensure_imports()
+    for o, v in zip(original, stripped):
+        if isinstance(deref(o), _Quantity) and isinstance(v, (Fraction, float, Decimal)):
             raise _unsupported(
                 context,
-                f"operands must be whole units, got {v!r} — a finite domain "
-                f"is integers")
+                f"operands must be whole units, got {deref(o)!r} — a finite "
+                f"domain is integers")

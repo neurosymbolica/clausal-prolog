@@ -322,6 +322,17 @@ money result adds to a Decimal literal exactly.
   the units flag is set before every early return, with a fresh-process
   negative control; exact Decimals are built from strings rather than
   context operations; reified comparisons are tested.
+* Round 8: ground `Quantity` division is exact for EVERY exact operand pair,
+  int/int included — the engine's own `is` folds `10/3` to the rational, so
+  a quantity must not answer with a float where a bare number answers
+  exactly; a float operand keeps float semantics. Consequence for the
+  corpus: a money or SI quotient that used to print as a float or a
+  28-digit Decimal now prints as the exact rational (`10/3 euro`), which
+  is the ruling, and the sealed eu/procurement scorers must be re-run
+  before this is promoted (see the report). The whole-units guard checks
+  only positions that were quantities; an expression element beside units
+  material in a list builtin throws `units_unsupported`; `label_targets`
+  and the reify route are flag-gated.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

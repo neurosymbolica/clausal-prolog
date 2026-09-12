@@ -850,7 +850,11 @@ class TestReviewRoundSix:
         assert deref(x) == ground
         half = Quantity(Decimal("1550.00"), {euro: 1}) / 2
         assert isinstance(half.value, Decimal) and half.value == Decimal("775")
-        assert (Quantity(3, M) / 2).value == 1.5          # int/int keeps Python's own semantics
+        third = Quantity(10, M) / Quantity(3, S)
+        assert type(third.value) is Fraction and third.value == Fraction(10, 3)   # exact, as `is` folds 10/3
+        assert type((Quantity(3, M) / 2).value) is Fraction
+        assert type((Quantity(4, M) / 2).value) is int and (Quantity(4, M) / 2).value == 2
+        assert (Quantity(3, M) / 2.0).value == 1.5         # a float operand keeps float semantics
 
     def test_fraction_to_decimal_if_terminating(self):
         from clausal.terms import _fraction_to_decimal_if_terminating as f
@@ -909,3 +913,35 @@ class TestReviewRoundSeven:
         t, x = Trail(), Var()
         assert clpfd.reify_fd("eq", x, Quantity(2, M), t) is None
         assert get_attr(x, UNITS_KEY) is not None and get_attr(x, UNITS_KEY).shadow is not None
+
+
+class TestReviewRoundEight:
+    def test_ground_int_division_agrees_with_clp(self):
+        import clausal.logic.clpfd as clpfd
+        ground = Quantity(10, M) / Quantity(3, S)
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(x, _bin(Div, Quantity(10, M), Quantity(3, S)), t)
+        assert deref(x) == ground and type(deref(x).value) is Fraction
+
+    def test_plain_non_integer_operand_is_the_builtins_business(self):
+        import clausal.logic.clpfd as clpfd
+        # a plain 1.5 beside a dimensionless quantity: the builtin's own integer
+        # guard decides (quiet failure, as before), not the whole-units guard
+        assert list(clpfd.fd_sum([1.5, Quantity(5, {})], mint("#="), Var(), Trail())) == []
+
+    def test_expression_element_beside_units_is_loud(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.all_different([Quantity(1, M), _bin(Add, Var(), 1)], Trail())
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_label_targets_is_flag_gated(self):
+        from clausal.logic.units_clp import label_targets
+        from clausal.logic import _units_flag
+        saved = _units_flag.active
+        try:
+            _units_flag.active = False
+            v = [Var()]
+            assert label_targets(v) == v
+        finally:
+            _units_flag.active = saved

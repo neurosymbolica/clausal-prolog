@@ -2475,12 +2475,15 @@ class Quantity:
         expression through CLP(Q), which is exact. The quotient is computed
         as a Fraction; a terminating one is presented as a Decimal (what a
         Decimal operand pair produced before), a non-terminating one stays
-        the exact Fraction, as the CLP path yields it. int/int and anything
-        with a float keep Python's own semantics."""
+        the exact Fraction, as the CLP path yields it (an integral one is
+        presented as int by ``__init__``). Anything with a float keeps
+        Python's float semantics."""
         exact = (int, Decimal, Fraction)
         if (isinstance(a, exact) and isinstance(b, exact)
-                and not isinstance(a, bool) and not isinstance(b, bool)
-                and (isinstance(a, (Decimal, Fraction)) or isinstance(b, (Decimal, Fraction)))):
+                and not isinstance(a, bool) and not isinstance(b, bool)):
+            # int/int included: the engine's own `is` folds 10/3 to the
+            # rational Fraction(10, 3), so a quantity must not answer with a
+            # float where a bare number answers exactly.
             q = Fraction(a) / Fraction(b)
             if isinstance(a, Decimal) or isinstance(b, Decimal):
                 d = _fraction_to_decimal_if_terminating(q)
