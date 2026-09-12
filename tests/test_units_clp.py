@@ -993,3 +993,19 @@ class TestReviewRoundTen:
         with pytest.raises(LogicException) as ei:
             ground_dims(_bin(Mult, Var(), Quantity(2, M)))
         _assert_system_error(ei, "units_undetermined")
+
+
+class TestReviewRoundEleven:
+    def test_ground_quantity_target_in_domain_whole_and_not(self):
+        import clausal.logic.clpfd as clpfd
+        assert clpfd.in_domain([Quantity(2.0, M)], Quantity(1, M), Quantity(3, M), Trail())
+        assert not clpfd.in_domain([Quantity(5, M)], Quantity(1, M), Quantity(3, M), Trail())
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([Quantity(Decimal("2.5"), M)], Quantity(1, M), Quantity(3, M), Trail())
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_ground_dims_rejects_a_free_var_in_additive_position(self):
+        from clausal.logic.units_clp import ground_dims
+        with pytest.raises(LogicException) as ei:
+            ground_dims(_bin(Add, Var(), Quantity(2, M)))
+        _assert_system_error(ei, "units_undetermined")

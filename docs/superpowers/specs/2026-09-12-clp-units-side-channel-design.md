@@ -342,6 +342,10 @@ money result adds to a Decimal literal exactly.
   product is a context operation and rounds past 28 digits), then
   presented in the operands' kind; `ground_dims` on a non-ground tree
   throws `units_undetermined` rather than a bare TypeError.
+* Round 11: a ground quantity target of `in_domain/3` goes through the
+  same whole-units conversion as the bounds (`2.0(metre)` posts as 2, a
+  sub-unit amount throws); `ground_dims` rejects any free variable, so the
+  positive-control oracle cannot affirm a tree it did not evaluate.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

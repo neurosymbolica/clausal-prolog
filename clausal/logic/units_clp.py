@@ -417,8 +417,10 @@ def ground_dims(tree: Any) -> dict:
     _ensure_imports()
     a = _Analysis("ground")
     d = a._known(tree)
-    if d is None:
-        raise _undetermined("ground", [a.vars[v] for v in a.unknown_order if v not in a.env])
+    if d is None or a.unknown_order:
+        # Not ground: a free variable was met (and, for additive shapes,
+        # would otherwise have been assigned silently in this throwaway env).
+        raise _undetermined("ground", [a.vars[v] for v in a.unknown_order])
     a._push(tree, d)
     return d
 
@@ -601,7 +603,11 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
         if isinstance(v, _Quantity):
             if dict(v.dims) != dims:
                 raise _mismatch(ctx, dict(v.dims), dims)
-            shadows.append(to_solver_number(v.value))
+            n = _as_whole(v.value)
+            if n is None:
+                raise _unsupported(
+                    ctx, f"target {v!r} is not a whole number of units")
+            shadows.append(n)
             continue
         if not is_var(v):
             raise _mismatch(ctx, {}, dims, f"target {v!r}")
