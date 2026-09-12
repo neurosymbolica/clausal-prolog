@@ -358,6 +358,11 @@ money result adds to a Decimal literal exactly.
   fire); `zcompare/3` with an unbound Order posts over integer domains and
   so requires whole units; the two-shadow link merge is tested; the reify
   route calls the strip directly.
+* Round 14: the scan primes the module's lazy imports itself (cumulative
+  reached it first in a fresh process and crashed on `isinstance(x,
+  None)`); integer powers of a Decimal or Fraction base are exact, so a
+  Decimal power is never context-rounded; a dimensionless quantity target
+  with dimensionless `in_domain` bounds is a plain number.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

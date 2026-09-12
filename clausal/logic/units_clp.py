@@ -148,7 +148,11 @@ _FOREIGN = None   # _scan's third answer: a leaf the side channel does not speak
 def _scan(x: Any):
     """True: units material found. False: none. None: a foreign leaf
     (atom, string, date, …) — not engaged, no exception raised for it,
-    since a comparison over atoms is ordinary corpus code."""
+    since a comparison over atoms is ordinary corpus code. Primes the lazy
+    term-class imports itself: it is an entry point for callers that go
+    nowhere else in this module (cumulative/2)."""
+    if _Quantity is None:
+        _ensure_imports()
     x = deref(x)
     if isinstance(x, _Quantity):
         return True
@@ -583,9 +587,24 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     if not dims:
         # Dimensionless quantity bounds are plain integers: the plain path
         # (a united var with empty dims is a bare number, and a shadow with
-        # empty dims would never be consulted by the units hook).
+        # empty dims would never be consulted by the units hook). A
+        # dimensionless quantity TARGET is a plain number too.
+        targets = deref(var_or_list)
+        as_list = isinstance(targets, list)
+        plain = []
+        for v in (targets if as_list else [targets]):
+            v = deref(v)
+            if isinstance(v, _Quantity):
+                if v.dims:
+                    raise _mismatch(ctx, dict(v.dims), {}, f"target {v!r}")
+                n = _as_whole(v.value)
+                if n is None:
+                    raise _unsupported(ctx, f"target {v!r} is not a whole number")
+                plain.append(n)
+            else:
+                plain.append(v)
         from clausal.logic.clpfd import in_domain  # noqa: PLC0415
-        return in_domain(var_or_list, lo_n, hi_n, trail)
+        return in_domain(plain if as_list else plain[0], lo_n, hi_n, trail)
     targets = deref(var_or_list)
     if not isinstance(targets, list):
         targets = [targets]

@@ -2587,11 +2587,18 @@ class Quantity:
             # dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
             return Quantity(self._value ** exp, {})
         new_dims = {k: v * exp for k, v in self._dims.items() if v * exp != 0}
-        if exp < 0 and isinstance(self._value, (int, Decimal, Fraction)) \
-                and not isinstance(self._value, bool):
-            # A negative power is a division: keep it exact, as `/` is, so
-            # ``Q ** -1`` and ``1 / Q`` agree (and money is never truncated
-            # at the decimal context).
+        if isinstance(self._value, (Decimal, Fraction)):
+            # Exact: Decimal ** n is a context operation and rounds past 28
+            # digits, and a negative power is a division, which `/` keeps
+            # exact — so ``Q ** -1`` and ``1 / Q`` agree. A terminating
+            # result of a Decimal base presents as Decimal, as `/` does.
+            power = Fraction(self._value) ** exp
+            if isinstance(self._value, Decimal):
+                d = _fraction_to_decimal_if_terminating(power)
+                if d is not None:
+                    return Quantity(d, new_dims)
+            return Quantity(power, new_dims)
+        if exp < 0 and isinstance(self._value, int) and not isinstance(self._value, bool):
             return Quantity(self._exact_div(1, self._value ** -exp), new_dims)
         return Quantity(self._value ** exp, new_dims)
 

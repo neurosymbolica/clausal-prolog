@@ -1081,3 +1081,43 @@ class TestReviewRoundThirteen:
         assert unify(sa, w, t2) and unify(w, sb, t2)
         assert unify(sa, 9, t2)
         assert deref(a) == Quantity(9, M) and deref(b) == Quantity(9, M)
+
+
+class TestReviewRoundFourteen:
+    def test_cumulative_first_in_a_fresh_process(self):
+        import subprocess, sys
+        code = ("from clausal.modules.units import metre   # sets the units flag at import\n"
+                "import clausal.logic.clpfd as clpfd\n"
+                "from clausal.logic.variables import Trail, Var\n"
+                "t, s1 = Trail(), Var()\n"
+                "assert clpfd.in_domain([s1], 0, 5, t)\n"
+                "print(clpfd.cumulative([(s1, 2, 1)], 1, t))\n")
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                             cwd=os.path.dirname(os.path.dirname(__file__)))
+        assert out.returncode == 0 and out.stdout.strip() == "True", out.stderr
+
+    def test_scan_primes_its_own_imports_in_a_fresh_process(self):
+        import subprocess, sys
+        code = ("from clausal.logic.units_clp import _scan\n"
+                "from clausal.terms import Quantity\n"
+                "from clausal.modules.units import metre\n"
+                "print(_scan(Quantity(1, metre)))\n")
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                             cwd=os.path.dirname(os.path.dirname(__file__)))
+        assert out.returncode == 0 and out.stdout.strip() == "True", out.stderr
+
+    def test_powers_of_a_decimal_are_exact_past_the_context(self):
+        base = Quantity(Decimal("1.1"), M)
+        assert (base ** 30).value == Fraction(11, 10) ** 30           # 31 significant digits, exact
+        assert isinstance((base ** 30).value, Decimal)
+        assert (base ** -30).value == Fraction(1, Fraction(11, 10) ** 30)
+        assert (base ** -30) == 1 / (base ** 30)
+        assert (Quantity(2, M) ** -2).value == Fraction(1, 4)
+
+    def test_dimensionless_quantity_target_with_dimensionless_bounds(self):
+        import clausal.logic.clpfd as clpfd
+        assert clpfd.in_domain([Quantity(2, {})], Quantity(1, {}), Quantity(3, {}), Trail())
+        assert not clpfd.in_domain([Quantity(5, {})], Quantity(1, {}), Quantity(3, {}), Trail())
+        with pytest.raises(LogicException) as ei:
+            clpfd.in_domain([Quantity(Decimal("2.5"), {})], Quantity(1, {}), Quantity(3, {}), Trail())
+        _assert_system_error(ei, "units_unsupported")
