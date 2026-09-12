@@ -321,3 +321,24 @@ def test_the_scale_suffixes_are_a_DECLARED_UNION(tmp_path):
     # Spellings no table names today and a corpus may still carry.
     for name in ("fee_pennies", "fee_centimes", "fee_fils", "rate_bps"):
         assert _name_claims_a_scale(name), name
+
+
+def test_the_hand_maintained_half_notices_when_it_should_SHRINK():
+    """A half expected to shrink needs something that notices when it should
+    have (harness-batch-lane, 2026-09-12). The non-empty control catches an
+    empty hand list; nothing caught a REDUNDANT one — a word the authority has
+    since taken over, left behind by hand, which is the same staleness in the
+    other direction.
+
+    `bps`/`percent` move into the derived half when ratio units land, and the
+    overlap control is what will say so instead of letting the list quietly
+    carry them forever.
+    """
+    from clausal.templating.term_rewriting import (
+        _HAND_MAINTAINED_SCALE_WORDS, _derived_scale_words, _scale_suffixes)
+    derived = _derived_scale_words()
+    assert derived, "positive control: the derived half is not empty"
+    assert _HAND_MAINTAINED_SCALE_WORDS, "and neither is the hand half"
+    assert not (_HAND_MAINTAINED_SCALE_WORDS & derived), (
+        "a hand-maintained word is now in the vocabulary — drop it")
+    assert _scale_suffixes() >= derived | _HAND_MAINTAINED_SCALE_WORDS

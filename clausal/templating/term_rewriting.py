@@ -1332,6 +1332,29 @@ def _lower_dict_reads(head_ast, body_ast, excluded=frozenset()):
     return _lower_dict_reads_in_scope(body_ast, mint, excluded)
 
 
+#: Hand-maintained: spellings the vocabulary does NOT hold. A residue question
+#: needs a set the authority has forgotten, and that set cannot be derived —
+#: see `_scale_suffixes`. Marked stale-able rather than pretending otherwise.
+_HAND_MAINTAINED_SCALE_WORDS = frozenset({
+    "pence", "pennies",                                  # penny is irregular
+    "centime", "centimes", "fils", "sen", "satoshi",      # no table names
+                                                         # these today
+    "bps", "basis_points", "percent", "pct",             # ratios are not
+    # units yet (todo/ratio-declaration-units-...); when they land these move
+    # into the derived half and the overlap control below will say so.
+})
+
+
+def _derived_scale_words() -> set:
+    from clausal.modules.countries import _data              # noqa: PLC0415
+    out = set()
+    for word in _data.MINOR_UNIT_WORDS.values():
+        out.add(word)
+        if not word.endswith("y"):
+            out.add(word + "s")
+    return out
+
+
 _SCALE_SUFFIX_CACHE = None
 
 
@@ -1365,7 +1388,8 @@ def _scale_suffixes() -> frozenset:
         # `..._cents` at exactly the moment the rename made matching
         # necessary. So the retired and never-derived spellings are listed by
         # hand and SAY SO, rather than a derived set pretending to be total.
-        out.update({
+        out.update(_HAND_MAINTAINED_SCALE_WORDS)
+        _UNUSED_INLINE = {
             "pence", "pennies",     # penny pluralises irregularly
             "centime", "centimes", "fils", "sen", "satoshi",   # not in the
             # table today; a corpus may still name them, and the lint should
@@ -1373,8 +1397,20 @@ def _scale_suffixes() -> frozenset:
             "bps", "basis_points", "percent", "pct",           # ratios, not
             # units yet: todo/ratio-declaration-units-basis-points-and-
             # percent-2026-09-11.md. This half shrinks when they land.
-        })
+        }
         assert out, "positive control: the suffix set is not empty"
+        # A half expected to SHRINK needs something that notices when it
+        # should have (harness-batch-lane, 2026-09-12). The control above
+        # catches an empty hand list; nothing caught a REDUNDANT one — a word
+        # the authority has since taken over, left behind here, which is the
+        # same staleness in the other direction. Overlap is exactly that
+        # condition, so it raises rather than silently duplicating.
+        overlap = _HAND_MAINTAINED_SCALE_WORDS & {
+            w for w in out if w in _derived_scale_words()}
+        assert not overlap, (
+            f"{sorted(overlap)} now come from the vocabulary — drop them from "
+            f"_HAND_MAINTAINED_SCALE_WORDS; the hand-maintained half exists "
+            f"only for what the authority does NOT hold")
         _SCALE_SUFFIX_CACHE = frozenset(out)
     return _SCALE_SUFFIX_CACHE
 
