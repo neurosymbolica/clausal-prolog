@@ -1250,16 +1250,19 @@ _strip_for_solver = None
 _strip_list_for_solver = None
 _in_domain_units = None
 _label_targets = None
+_whole_units_only = None
 
 
 def _ensure_units_imports() -> None:
     global _strip_for_solver, _strip_list_for_solver, _in_domain_units, _label_targets
+    global _whole_units_only
     if _strip_for_solver is None:
         from clausal.logic import units_clp  # noqa: PLC0415
         _strip_for_solver = units_clp.strip_for_solver
         _strip_list_for_solver = units_clp.strip_list_for_solver
         _in_domain_units = units_clp.in_domain_units
         _label_targets = units_clp.label_targets
+        _whole_units_only = units_clp.whole_units_only
 
 
 def _units_strip(l, r, context, trail):
@@ -2514,8 +2517,13 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
     if op_fn is None:
         return
     # Units (after the operator check, so a bad operator still wins): every
-    # summand and the value share one dimension.
-    both = _units_strip_list(list(vars_list) + [value], "sum_/3", trail)
+    # summand and the value share one dimension, and a quantity must be a
+    # whole number of units (the integer guard below would skip it silently).
+    if _strip_list_for_solver is None:
+        _ensure_units_imports()
+    both, sum_dims = _strip_list_for_solver(list(vars_list) + [value], "sum_/3", trail)
+    if sum_dims is not None:
+        _whole_units_only(both, "sum_/3")
     vars_list, value = both[:-1], both[-1]
 
     vars_deref = [deref(v) for v in vars_list]
@@ -2588,7 +2596,9 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     if coeff_dims:
         from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
         raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
-    both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
+    both, sp_dims = _strip_list_for_solver(list(vars_list) + [value], "scalar_product/4", trail)
+    if sp_dims is not None:
+        _whole_units_only(both, "scalar_product/4")
     vars_list, value = both[:-1], both[-1]
 
     coeffs_deref = [deref(c) for c in coeffs]
@@ -2722,10 +2732,11 @@ def fd_circuit(vars_list, trail: Trail):
     # error, refused rather than stripped.
     if _strip_list_for_solver is None:
         _ensure_units_imports()
-    _, circuit_dims = _strip_list_for_solver(vars_list, "circuit/1", trail)
-    if circuit_dims is not None:
+    stripped, circuit_dims = _strip_list_for_solver(vars_list, "circuit/1", trail)
+    if circuit_dims:
         from clausal.logic.units_clp import _unsupported  # noqa: PLC0415
         raise _unsupported("circuit/1", "node indices are positions and carry no units")
+    vars_list = stripped          # dimensionless quantities are plain positions
 
     n = len(vars_list)
     if n == 0:
@@ -3215,8 +3226,6 @@ def chain(vars_list, relation, trail: Trail) -> bool:
         return False
     if len(vars_list) <= 1:
         return True  # trivially satisfied
-    vars_list = _units_strip_list(vars_list, "chain/2", trail)
-
     _rel_to_fn = {
         "lt": fd_lt, "gt": fd_gt, "le": fd_le, "ge": fd_ge,
         "eq": fd_eq, "ne": fd_ne,
@@ -3224,6 +3233,8 @@ def chain(vars_list, relation, trail: Trail) -> bool:
     post_fn = _rel_to_fn.get(relation)
     if post_fn is None:
         return False
+    # Units after the relation check, so a bad relation still wins.
+    vars_list = _units_strip_list(vars_list, "chain/2", trail)
 
     for i in range(len(vars_list) - 1):
         a = deref(vars_list[i])

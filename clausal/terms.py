@@ -2470,6 +2470,22 @@ class Quantity:
         a, b = self._num_pair(self._value, other._value)
         return Quantity(a % b, self._dims)
 
+    def __rfloordiv__(self, other):
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
+            a, b = self._num_pair(other, self._value)
+            return Quantity(a // b, {})
+        if isinstance(other, (int, float, Decimal, Fraction)):
+            self._require_same_dims(other, "floor-divide")   # see __radd__
+        return NotImplemented
+
+    def __rmod__(self, other):
+        if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
+            a, b = self._num_pair(other, self._value)
+            return Quantity(a % b, {})
+        if isinstance(other, (int, float, Decimal, Fraction)):
+            self._require_same_dims(other, "take the remainder of")   # see __radd__
+        return NotImplemented
+
     def __pow__(self, exp):
         if isinstance(exp, Quantity):
             if exp._dims:

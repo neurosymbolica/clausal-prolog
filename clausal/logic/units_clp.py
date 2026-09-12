@@ -317,6 +317,14 @@ class _Analysis:
             return
         if isinstance(x, _Pow):
             n = self._exponent(x)
+            if n == 0:
+                # X ** 0 is dimensionless whatever X is: nothing to push
+                # into the base, and a dimensioned want cannot be met.
+                if want:
+                    raise _mismatch_text(
+                        self.context,
+                        f"{_render(want)} is not the power 0 of any dimension")
+                return
             base = _unscale(want, n)
             if base is None:
                 raise _mismatch_text(
@@ -345,7 +353,8 @@ class _Analysis:
 
     def _default_one_factor(self, x: Any) -> bool:
         """Default the single unknown bare-var factor of a Mult/Div whose
-        result is unknown to dimensionless. Returns True if one was found."""
+        result is unknown — or the unknown bare-var base of a Pow — to
+        dimensionless. Returns True if one was found."""
         x = deref(x)
         if isinstance(x, (_Mult, _Div)):
             l, r = deref(x.left), deref(x.right)
@@ -357,6 +366,15 @@ class _Analysis:
                 self._assign(r, {})
                 return True
             return self._default_one_factor(l) or self._default_one_factor(r)
+        if isinstance(x, _Pow):
+            # The base of a power is a multiplicative position too: a fresh
+            # var there (X ** 2 with nothing else known, or X ** 0, whose
+            # base is genuinely free) defaults to dimensionless.
+            base = deref(x.left)
+            if is_var(base) and self._known(base) is None:
+                self._assign(base, {})
+                return True
+            return self._default_one_factor(base)
         if isinstance(x, _BINARY):
             return self._default_one_factor(x.left) or self._default_one_factor(x.right)
         if isinstance(x, _Negate):
@@ -656,3 +674,18 @@ def strip_list_for_solver(items, context: str, trail: Trail):
         else:
             out.append(v)
     return out, dims
+
+
+def whole_units_only(items, context: str) -> None:
+    """A finite-domain list builtin takes integers: after the strip, a
+    non-whole amount (10.50(euro) is Fraction(21, 2)) would be silently
+    skipped by the builtin's own integer guard. Throw instead, as
+    ``in_domain_units`` does for non-integral bounds."""
+    from fractions import Fraction  # noqa: PLC0415
+    for v in items:
+        v = deref(v)
+        if isinstance(v, (Fraction, float, Decimal)):
+            raise _unsupported(
+                context,
+                f"operands must be whole units, got {v!r} — a finite domain "
+                f"is integers")

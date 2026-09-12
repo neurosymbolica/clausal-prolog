@@ -754,3 +754,42 @@ class TestReviewRoundThree:
         with pytest.raises(LogicException) as ei:
             list(clpfd.fd_circuit([x, y], t))
         _assert_system_error(ei, "units_unsupported")
+
+
+class TestReviewRoundFour:
+    def test_zero_exponent_in_push_position(self):
+        from clausal.logic.units_clp import analyse
+        dl, dr, env = analyse(Quantity(3, {}), _bin(Pow, Var(), 0), "(==)/2")
+        assert dl == {} and dr == {}
+        with pytest.raises(LogicException) as ei:
+            analyse(Quantity(3, M), _bin(Pow, Var(), 0), "(==)/2")
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_sum_with_sub_unit_money_is_loud(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, total = Trail(), Var(), Var()
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_sum([Quantity(Decimal("10.50"), {euro: 1}), x], mint("#="), total, t))
+        _assert_system_error(ei, "units_unsupported")
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_scalar_product([1], [Quantity(Decimal("10.50"), {euro: 1})], mint("#="), total, t))
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_reflected_floordiv_and_mod(self):
+        assert (7 // Quantity(2, {})).value == 3
+        assert (7 % Quantity(2, {})).value == 1
+        with pytest.raises(UnitsMismatch):
+            7 // Quantity(2, M)
+        with pytest.raises(UnitsMismatch):
+            7 % Quantity(2, M)
+
+    def test_chain_bad_relation_wins_over_units(self):
+        import clausal.logic.clpfd as clpfd
+        assert clpfd.chain([Quantity(1, M), Quantity(2, S)], "bogus", Trail()) is False
+
+    def test_circuit_accepts_dimensionless_quantities(self):
+        import clausal.logic.clpfd as clpfd
+        t, a, b = Trail(), Var(), Var()
+        assert clpfd.in_domain([a, b], 1, 2, t)
+        sols = [(deref(a), deref(b)) for _ in clpfd.fd_circuit([a, Quantity(1, {})], t)]
+        assert sols == [(2, 1)] or all(isinstance(x, int) for x, _ in sols)
