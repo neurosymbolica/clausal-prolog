@@ -38,3 +38,24 @@ takes CLP(Q) exactly, so the refusal only bites the list spellings. Products
 of two unknowns are nonlinear and belong to Z3 either way.
 
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.
+
+## Unfinished low-priority review findings (rounds 12–21), parked here 2026-09-12
+
+- The units flag (`clausal/logic/_units_flag.py`) is per PROCESS and one-way:
+  importing any unit module turns the side channel on for every later
+  comparison post. Measured indistinguishable from baseline, but a per-query
+  or per-module gate would make the "pays nothing" claim exact.
+- `_units_hook`'s var–var branch: when the BARE solver variable is the side
+  the unifier binds, its own (C) hook fires instead of the units hook, so the
+  refusal for "dimensioned var unified with a bare solver var" arrives at the
+  next channel use (`units_unsupported`) rather than at the unification.
+  Direction-independent refusal needs the FD hook (C) to consult UNITS_KEY.
+- Expression trees as ELEMENTS of a list builtin throw `units_unsupported`;
+  supporting them means `analyse`/`strip` per element against the shared
+  dimension.
+- `ground_dims` is the positive-control oracle only; it rejects every
+  variable by design.
+- Corpus side: exact quotients now print as rationals (`10/3 euro`) and the
+  comparators accept quantities they used to refuse. The sealed
+  eu/procurement scorers (harness-batch-lane) must be re-run before this is
+  promoted to canonical; that is a claim this repo cannot make.
