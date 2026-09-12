@@ -300,6 +300,12 @@ money result adds to a Decimal literal exactly.
   exact/real number for a dimensionless declaration.
 * Operator/relation arguments are validated before the side channel runs
   (`sum_`, `scalar_product`, `chain`, `zcompare`), so a bad operator wins.
+* Round 5: the whole-units guard lives in the shared list wrapper, so
+  `all_different`, `element` and `global_cardinality` are as loud as `sum_`
+  for a sub-unit amount; `//` and `%` floor and take the divisor's sign
+  whatever the storage type (Decimal's own operators truncate), computed
+  exactly through `Fraction`; the C comparator wrappers keep the integer
+  fast path ahead of the side channel.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 
