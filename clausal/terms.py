@@ -2403,9 +2403,13 @@ class Quantity:
         # Fraction-valued money quantity (a CLP(Q) result) meeting a
         # Decimal literal goes exact-to-exact via Fraction(Decimal).
         if isinstance(a, Decimal) and isinstance(b, Fraction):
-            return Fraction(a), b
+            if a.is_finite():
+                return Fraction(a), b
+            return a, Decimal(b.numerator) / Decimal(b.denominator)   # result is NaN/Inf anyway
         if isinstance(b, Decimal) and isinstance(a, Fraction):
-            return a, Fraction(b)
+            if b.is_finite():
+                return a, Fraction(b)
+            return Decimal(a.numerator) / Decimal(a.denominator), b
         # A float beside a Fraction would produce a float; read the float
         # the way the Decimal bridge does (its shortest repr), exactly.
         if isinstance(a, Fraction) and isinstance(b, float) and not isinstance(b, bool):
@@ -2468,6 +2472,13 @@ class Quantity:
         return Quantity(a * b, self._dims)
 
     @staticmethod
+    def _all_finite(*xs) -> bool:
+        """False when a Decimal operand is NaN or infinite: those cannot be
+        made exact (``Fraction(Decimal('Infinity'))`` raises), so the exact
+        paths fall back to Decimal's own arithmetic for them."""
+        return all(x.is_finite() for x in xs if isinstance(x, Decimal))
+
+    @staticmethod
     def _exact_div(a, b):
         """Divide exactly when an exact non-integer type (Decimal, Fraction)
         is involved: Decimal's own ``/`` rounds to the 28-digit context, so
@@ -2480,7 +2491,8 @@ class Quantity:
         Python's float semantics."""
         exact = (int, Decimal, Fraction)
         if (isinstance(a, exact) and isinstance(b, exact)
-                and not isinstance(a, bool) and not isinstance(b, bool)):
+                and not isinstance(a, bool) and not isinstance(b, bool)
+                and Quantity._all_finite(a, b)):
             # int/int included: the engine's own `is` folds 10/3 to the
             # rational Fraction(10, 3), so a quantity must not answer with a
             # float where a bare number answers exactly.
@@ -2524,6 +2536,8 @@ class Quantity:
             if isinstance(x, float):
                 return Fraction(Decimal(str(x)))
             return Fraction(x)
+        if not Quantity._all_finite(a, b):
+            return a // b, a % b                 # Decimal's own semantics for NaN/Infinity
         ea, eb = exact(a), exact(b)
         q = math.floor(ea / eb)
         if isinstance(a, float) or isinstance(b, float):
@@ -2587,7 +2601,7 @@ class Quantity:
             # dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
             return Quantity(self._value ** exp, {})
         new_dims = {k: v * exp for k, v in self._dims.items() if v * exp != 0}
-        if isinstance(self._value, (Decimal, Fraction)):
+        if isinstance(self._value, (Decimal, Fraction)) and self._all_finite(self._value):
             # Exact: Decimal ** n is a context operation and rounds past 28
             # digits, and a negative power is a division, which `/` keeps
             # exact — so ``Q ** -1`` and ``1 / Q`` agree. A terminating

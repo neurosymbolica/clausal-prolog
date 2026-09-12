@@ -1237,3 +1237,49 @@ class TestReviewRoundNineteen:
         bad = Quantity(inf, {euro: 1})
         with pytest.raises(LogicException):
             clpfd.fd_eq(Var(), bad, Trail())
+
+
+class TestReviewRoundTwenty:
+    def test_non_finite_decimal_ground_arithmetic_does_not_raise_python_errors(self):
+        inf = Quantity(Decimal("Infinity"), {euro: 1})
+        assert (inf / 2).value == Decimal("Infinity")
+        assert (inf * Quantity(Decimal("2"), {})).value == Decimal("Infinity")
+        assert (inf ** 2).value == Decimal("Infinity")
+        assert (Quantity(Decimal("7"), {}) // Quantity(Decimal("Infinity"), {})).value == 0
+        nan = Quantity(Decimal("NaN"), {euro: 1}) + Quantity(Fraction(1, 2), {euro: 1})
+        assert nan.value.is_nan()
+
+    def test_global_cardinality_counts_are_cardinalities(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, y = Trail(), Var(), Var()
+        assert clpfd.in_domain([x, y], 1, 2, t)
+        assert clpfd.global_cardinality([x, y], [(1, Quantity(1, {})), (2, Quantity(1, {}))], t)
+        sols = sorted((deref(x), deref(y)) for _ in clpfd.label([x, y], t))
+        assert sols == [(1, 2), (2, 1)]
+        with pytest.raises(LogicException) as ei:
+            clpfd.global_cardinality([Var()], [(1, Quantity(1, M))], Trail())
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_ground_dims_rejects_declared_and_solver_vars(self):
+        from clausal.logic.units_clp import ground_dims
+        from clausal.logic.units_constraint import constrain_var_dims
+        import clausal.logic.clpfd as clpfd
+        t, x, y = Trail(), Var(), Var()
+        assert constrain_var_dims(x, M, t)
+        assert clpfd.in_domain([y], 1, 3, t)
+        with pytest.raises(LogicException) as ei:
+            ground_dims(_bin(Add, x, Quantity(2, M)))
+        _assert_system_error(ei, "units_undetermined")
+        with pytest.raises(LogicException) as ei:            # a bare solver var is dimensionless:
+            ground_dims(_bin(Add, y, Quantity(2, M)))         # the mismatch is met first
+        assert ei.value.term.args[0].args[0] in (mint("units_undetermined"), mint("units_mismatch"))
+
+    def test_zcompare_equals_branch_scans_once(self, monkeypatch):
+        import clausal.logic.clpfd as clpfd
+        import clausal.logic.units_clp as uc
+        calls = []
+        real = uc.strip_for_solver
+        monkeypatch.setattr(clpfd, "_strip_for_solver", lambda *a: (calls.append(a[2]), real(*a))[1])
+        t, y = Trail(), Var()
+        assert clpfd.zcompare(mint("="), y, Quantity(3, M), t)
+        assert calls == ["zcompare/3"] and deref(y) == Quantity(3, M)

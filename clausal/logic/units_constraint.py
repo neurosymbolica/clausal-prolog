@@ -107,7 +107,9 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
             return False
         if attr_value.shadow is not None:
             from clausal.logic.clpfd import fd_eq  # noqa: PLC0415  (module-level: C wrapper when loaded)
-            return fd_eq(attr_value.shadow, to_solver_number(bound_to.value), trail)
+            # A shadow and a bare number carry no units: skip the side channel.
+            return fd_eq(attr_value.shadow, to_solver_number(bound_to.value), trail,
+                         _units_done=True)
         return True
 
     if is_var(bound_to):
@@ -123,7 +125,7 @@ def _units_hook(attr_value: UnitState, bound_to, trail: Trail) -> bool:
             if attr_value.shadow is other.shadow:
                 return True
             from clausal.logic.clpfd import fd_eq  # noqa: PLC0415
-            return fd_eq(attr_value.shadow, other.shadow, trail)
+            return fd_eq(attr_value.shadow, other.shadow, trail, _units_done=True)
         if attr_value.shadow is not None:
             put_attr(bound_to, UNITS_KEY, attr_value, trail)   # inherit the shadow
         return True

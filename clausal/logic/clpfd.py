@@ -1931,7 +1931,7 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     raise _incomparable_order_error(ground, context)
 
 
-def fd_eq(l, r, trail: Trail) -> bool:
+def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     """Post X == Y.
 
     Dispatches to CLP(R) if either argument is a float or real variable;
@@ -1949,7 +1949,7 @@ def fd_eq(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l == r
     # ── end fast path ──
-    stripped = _units_strip(l, r, "(==)/2", trail)
+    stripped = None if _units_done else _units_strip(l, r, "(==)/2", trail)
     if stripped is not None:
         l, r = stripped
     if not is_var(l):
@@ -2003,7 +2003,7 @@ def fd_eq(l, r, trail: Trail) -> bool:
     return _post_constraint(constraint, trail)
 
 
-def fd_ne(l, r, trail: Trail) -> bool:
+def fd_ne(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     """Post X != Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
@@ -2011,7 +2011,7 @@ def fd_ne(l, r, trail: Trail) -> bool:
     if type(l) is int and type(r) is int:
         return l != r
     # ── end fast path ──
-    stripped = _units_strip(l, r, "(!=)/2", trail)
+    stripped = None if _units_done else _units_strip(l, r, "(!=)/2", trail)
     if stripped is not None:
         l, r = stripped
     if not is_var(l):
@@ -3219,7 +3219,14 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
     keys = [val for val, _ in pairs]
     both = _units_strip_list(list(vars_list) + keys, "global_cardinality/2", trail)
     vars_list, keys = both[:len(vars_list)], both[len(vars_list):]
-    pairs = [(k, cnt) for k, (_, cnt) in zip(keys, pairs)]
+    counts = [cnt for _, cnt in pairs]
+    if _units_flag_active():
+        # Counts are cardinalities, not measurements: a dimensioned count is
+        # refused, a dimensionless quantity becomes a plain int (the
+        # constraint would otherwise skip a non-int count silently).
+        from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
+        counts = plain_fields_or_unsupported(counts, "global_cardinality/2")
+    pairs = list(zip(keys, counts))
 
     vars_deref = []
     for v in vars_list:
@@ -3396,7 +3403,7 @@ def zcompare(order, x, y, trail: Trail) -> bool:
         elif order_name == '>':
             return fd_gt(x, y, trail, _units_done=stripped is not None)
         elif order_name == '=':
-            return fd_eq(x, y, trail)
+            return fd_eq(x, y, trail, _units_done=stripped is not None)
         else:
             return False
 
@@ -3476,10 +3483,10 @@ if _USE_C_PROPAGATE:
     _add_constraint = _c_add_constraint
     _post_constraint = _c_post_constraint
 
-    def fd_eq(l, r, trail, _c_impl=_c_fd_eq):
+    def fd_eq(l, r, trail, _c_impl=_c_fd_eq, *, _units_done=False):
         if type(l) is int and type(r) is int:
             return l == r          # same fast path as the Python twin, ahead of the side channel
-        stripped = _units_strip(l, r, "(==)/2", trail)
+        stripped = None if _units_done else _units_strip(l, r, "(==)/2", trail)
         if stripped is not None:
             l, r = stripped
         # A12-F002: the C fd_eq does not type-check operands, so guard here
@@ -3493,10 +3500,10 @@ if _USE_C_PROPAGATE:
             return _eq
         return _c_impl(l, r, trail)
 
-    def fd_ne(l, r, trail, _c_impl=_c_fd_ne):
+    def fd_ne(l, r, trail, _c_impl=_c_fd_ne, *, _units_done=False):
         if type(l) is int and type(r) is int:
             return l != r          # same fast path as the Python twin, ahead of the side channel
-        stripped = _units_strip(l, r, "(!=)/2", trail)
+        stripped = None if _units_done else _units_strip(l, r, "(!=)/2", trail)
         if stripped is not None:
             l, r = stripped
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.

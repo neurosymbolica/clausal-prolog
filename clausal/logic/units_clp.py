@@ -428,10 +428,10 @@ def ground_dims(tree: Any) -> dict:
     _ensure_imports()
     a = _Analysis("ground")
     d = a._known(tree)
-    if d is None or a.unknown_order:
-        # Not ground: a free variable was met (and, for additive shapes,
-        # would otherwise have been assigned silently in this throwaway env).
-        raise _undetermined("ground", [a.vars[v] for v in a.unknown_order])
+    if d is None or a.vars:
+        # Not ground: a variable was met — free, declared with has_units, or
+        # carrying solver state — and this oracle speaks only for ground trees.
+        raise _undetermined("ground", list(a.vars.values()))
     a._push(tree, d)
     return d
 

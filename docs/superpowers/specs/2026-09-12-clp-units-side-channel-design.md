@@ -391,6 +391,12 @@ money result adds to a Decimal literal exactly.
   review's claim that the funnel-lint allowlist was mis-shifted was checked
   against both trees and is wrong: the anchor lines are unique and moved
   uniformly (+203).
+* Round 20: non-finite Decimals fall back to Decimal's own arithmetic on
+  every exact ground path (no Python exception escapes); `global_cardinality`
+  counts are cardinalities and go through the plain-field refusal;
+  `ground_dims` rejects every variable, declared or not; `fd_eq`/`fd_ne`
+  take `_units_done`, and the reattachment hook passes it, so a binding
+  never re-scans.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 
