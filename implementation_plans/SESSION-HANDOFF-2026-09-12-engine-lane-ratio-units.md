@@ -263,3 +263,45 @@ now ALSO gates the feature built to fix leverage ratios. **Two independent route
 blocker makes it a sequencing fact rather than a preference**, and iso-export-lane is taking
 it to Mike in those terms while he decides whether option 2 stands alongside the Prolog units
 library.
+
+## harness-batch-lane: canonical is clean, and the transform-time argument is VERIFIED not agreed
+
+    82 rows on c8f38336, fingerprint c8f38336/so1789092742, one value, zero torn
+    82 unchanged   0 moved   0 no-score   0 unpinned
+
+That closes a five-commit live gap on canonical — `term_rewriting.py` had been edited by two
+separate landings (the scale-lint declared union, and this one) with no sweep between them.
+Nothing moved, so the wide bisect range never mattered; it was still the right thing to name
+in advance, because a moved row would have had a 5-commit range and not a 1-commit one.
+
+**On whether the clone's missing compiled trampoline matters for these two commits.** I argued
+it does not, because both load-path changes are transform-time rather than runtime. That is
+the kind of argument that is convenient enough to deserve checking, and it was checked twice —
+by harness-batch-lane and then independently here:
+
+    _name_claims_a_scale  has exactly TWO call sites, term_rewriting.py:6424 and :7986,
+    and both terminate in `warnings.warn`. Neither mutates the AST or the emitted Python.
+
+So widening the suffix set cannot change the transformed output by a byte, and what the
+trampoline later solves is identical either way. The `units.py` half is additive module-level
+names nothing imports — import-time only, equally out of the trampoline's reach.
+
+**The bound harness-batch-lane put on that, which is the part worth keeping:** it holds
+because those two call sites were read, NOT because transform-time changes are a category
+that is exempt. A transform-time change that altered emitted output would be exactly as
+exposed as `sum_list/2` was. The argument is about these two commits, not about a kind of
+commit.
+
+**Why the clone's trampoline was not built.** The procedure in
+[[rename-swap-so-under-live-importers]] has a SIGBUS failure mode that lands on whichever lane
+has the clone mapped — a risk taken in someone else's session to measure two commits that are
+going to canonical anyway. Promote-then-sweep gets the compiled path for free and puts the
+risk nowhere. harness-batch-lane will run it on canonical once promotion is approved.
+
+## A design property for assertions, from this landing's one genuinely new idea
+
+The overlap control fired and **named the two words to drop**. A control that fires tells you
+something is wrong; a control that names what to do tells you what to do next, and I did not
+have to work out which words the derivation had taken over — the assertion said. Worth asking
+of every new assertion, and it is cheap: the information is almost always already in hand at
+the raise site, since the check just computed it.
