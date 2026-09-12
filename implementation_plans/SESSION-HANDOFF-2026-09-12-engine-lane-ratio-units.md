@@ -305,3 +305,94 @@ something is wrong; a control that names what to do tells you what to do next, a
 have to work out which words the derivation had taken over — the assertion said. Worth asking
 of every new assertion, and it is cheap: the information is almost always already in hand at
 the raise site, since the check just computed it.
+
+---
+
+# PROMOTED: canonical is `cc008788` (2026-09-12)
+
+    canonical   c8f38336 -> cc008788   4 commits (2 code, 2 handoff), clean ff, NO C changes
+    clone       cc008788               identical
+    box         NOT landed — still the only tree on the old vocabulary
+
+Pre-flight, all done rather than assumed: ff confirmed possible by `merge-base`; crossing range
+checked for other lanes' commits (none, all four mine); barrier scan of the added lines clean;
+canonical's working tree carried no tracked modifications to disturb.
+
+Verified by **observation in the canonical tree**, engine path realpath-asserted first:
+`RATIO_UNITS == {'percent': 2, 'basis_point': 4}`, `300 (basis_point)` is `Decimal('0.0300')`,
+`5.25 (percent)` is `Decimal('0.0525')`, `300 bps == 3 percent`, the exporter REFUSES inline
+`300(basis_point)`, `basis_point` is a live lint suffix, `percent` has left the hand half and
+`bps` has stayed.
+
+## The first fast-forward did nothing, and the exit code was not what caught it
+
+`git -C /workspace/clausal merge --ff-only <sha>` fails with "not something we can merge" —
+canonical has no remote for the clone. **This was already written in this lane's notes, dated
+2026-09-11, with the exact failure string and the exact working form. I did not read it before
+acting.** What caught it was hashing the three engine files before and after the merge and
+finding the hash unchanged (`09cd1344` both times; after the real ff, `be7144b6`).
+
+The working form is `git fetch /workspace/clausal-bug-fix main && git merge --ff-only FETCH_HEAD`.
+
+**The generalisable half is which check caught it.** The notes already said "verify by
+observation in the canonical tree" and that would also have worked — but you only run the
+observation check if you believe something landed. A merge that did not happen at all is
+precisely the case where verification gets skipped, because there is nothing you think needs
+verifying. The before/after content hash covers that gap and is cheaper. **A ref is a claim
+about the tree; a content hash is an observation of it.** Had the retry been skipped, every
+downstream measurement — including another lane's sweep — would have been of the OLD tree
+while everyone believed it was the new one.
+
+## Canonical engine suite: 147 failed / 16218 passed / 1 error — and the 3 extra are not mine
+
+My worktree pair said 144. Canonical says 147. Rather than attribute the difference to "a
+different tree", each was run down:
+
+| canonical-only failure | cause, measured |
+| --- | --- |
+| `test_transitive_py_module_import.py` ×2 | They **SKIP in the clone** ("no project venv interpreter with an installed clausal distribution found"), so neither worktree arm ever ran them. Both also fail on `c8f38336` source — the fixture writes `Test(...)`, the TitleCase spelling that became a load-time error on 2026-09-10. Pre-existing, and invisible to my arms rather than introduced by them. |
+| `test_atoms_as_cells_flip.py::…is_zero_field_class` | Canonical's WORKING TREE, not its source. The guard AST-parses every `*.py` under `clausal/` and `tests/`, and two untracked generated artifacts (`tests/**/__transformed__/*.py`) are not valid Python. **Passes on identical `cc008788` source in a clean worktree.** Filed: `todo/class-test-guard-scans-generated-transformed-artifacts-2026-09-12.md`. |
+
+**The lesson is about the skips, not the failures.** Two tests skipped silently in both of my
+arms, so a set diff between them was structurally incapable of saying anything about those
+tests — and the set diff reported 0 new / 0 fixed, which reads as coverage it did not have. A
+failure-set diff is blind to everything that skips on both sides, and skips do not announce
+themselves in a count of failures. The skip COUNT differing between trees (52 vs 50) was the
+only visible signal, and I nearly explained it away.
+
+## The three claims on the promoted tree
+
+| axis | who | result |
+| --- | --- | --- |
+| engine suite | me | 147 failed / 16218 passed / 1 error on canonical; all 3 above the worktree pair's 144 run down to skips and working-tree artifacts, none to these commits |
+| export bytes | iso-export-lane | **0** across 1560 files, raw and normalised, engine content-pinned across the run |
+| domain answers | harness-batch-lane | sweeping `cc008788`, extensions verified byte-identical to the `c8f38336` sweep so these two commits are the only variable |
+
+## iso-export-lane's finding, which outlives this landing
+
+Their export zero came with a discovery: their baseline was `3b0e3547`, **56 commits back**
+(counted with `rev-list --count` on both sides, after their own eyeball estimate of ~70 —
+an unmeasured number inside a report about unmeasured numbers, as they put it). That range
+included `6d609eb1`, `-import_from` binding names rather than the module, which sits directly
+on the exporter's path.
+
+**"A measured skip is about a change; it is not a claim about a tree."** Their skip of the
+ratio-units run was correct and remains correct; what was stale was the inherited "the export
+is clean on canonical", which had been carrying a date nobody was watching.
+
+They built a recorder for it (`record`/`age`/`describe`: stores engine and corpus shas with
+each verification and reports how far each has moved since, counted rather than estimated),
+with the load-bearing test being the STALENESS direction — a recorder that can only ever say
+"current" is the same defect as a gate that can only refuse.
+
+**Note for anyone adopting it here: their module lives OUTSIDE the clausal repo** (`859c701` is
+not an object in this repo), so importing it into clausal would cross the information barrier.
+The idea transfers; the code cannot.
+
+**And it applies one level up, to this lane's own baseline.** I have been careful to say the
+144 agrees with the recorded baseline rather than independently confirming it — but that
+recorded baseline is itself a measurement with a date and a tree, and nothing watches its age
+either. The existing answer in this lane's notes is "never trust a written-down baseline,
+regenerate it", which is safe because regeneration is ~3 minutes. That answer stops scaling
+exactly where regeneration gets expensive, which is where iso-export-lane and
+harness-batch-lane live.
