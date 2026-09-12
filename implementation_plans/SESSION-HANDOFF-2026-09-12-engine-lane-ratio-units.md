@@ -202,3 +202,64 @@ anyway. **The difference is worth keeping, because the fixes differ.** A stale i
 its enumeration derived from an authority. An instrument that can only say yes needs a
 negative control — and the cheapest one is to mutate the thing it checks and require it to
 fail. Every gate touched here now has one.
+
+---
+
+# Peer measurements, same day — two of my open questions answered by other lanes
+
+## corpus-lane: the new suffixes are dead, and here is what ratio units actually unlock
+
+My handoff flagged that `basis_point` (singular) and `percents` might shift their 76-pair
+prediction, and said I could not check it from here. Measured: **zero corpus identifiers end
+in either.** The lint's suffix set grew without moving the count, so the 76/23 prediction
+stands unchanged.
+
+The number neither of us had, which is the one worth keeping:
+
+    ratio-suffixed functors carrying a bare literal:  21 (file, identifier) pairs, 9 domains
+
+      5  au/corps_act_disclosure        5  us/snap
+      2  eu/banking/crr_large_exposures_limit
+      2  eu/banking/crr_lcr             2  eu/banking/crr_leverage_ratio
+      2  eu/procurement/in_house_exemption
+      1  eu/aml/amlr_bo_chain           1  eu/vat/pro_rata_deduction
+
+45 ratio-suffixed functors exist corpus-wide; 21 pairs carry a bare literal and are therefore
+migratable. Money was 171 values across 15 domains, so **ratios are about an eighth of the
+work across 9 domains rather than 15.**
+
+They also record that `us/snap`'s five `_percent` warnings were previously reported to Mike as
+"genuinely not migratable", and that sentence is now wrong — they are migratable the moment
+this reaches canonical. Their own framing: an accounting of a domain's remaining warnings had
+a shelf life measured in HOURS. That is the shape-list-ages rule from 2026-09-11 in different
+clothes, and it applies to counts reported upward, not only to instruments.
+
+## iso-export-lane: no export arm, on a measured basis — and they checked what I did not
+
+They skipped the export-bytes run, having measured reachability rather than taking my word:
+**no corpus or kit file writes a ratio unit as a unit literal** — `basis_point`,
+`basis_points`, `percent`, `percentage`, `bps`, `pct` all return zero `N (unit)` sites across
+the pinned corpus and kit. What `crr_leverage_ratio` carries is `leverage_ratio_bps`,
+`minimum_leverage_bps`, `gsii_buffer_rate_bps`, `gold_ratio_bps` — bare integers with the
+scale in the NAME, the identical pattern to the 139 `_cents`/`_satang` identifiers. So the
+changed selection is unreached and a zero would have been the cheap kind.
+
+**The part worth carrying: my set-difference argument was sound and incomplete, and they said
+so.** It was scoped to `_is_known_scaled_unit`'s refused population and silent about the other
+two changed files. They checked those separately (units.py adds definitions nothing writes;
+term_rewriting.py is a lint vocabulary producing warnings, not exported bytes). Their
+sentence for it is the keeper: **"the commit I reasoned about is fine" is not the same claim
+as "the landing is fine".** Flagging all three files is what let them check; reasoning about
+one of three would have looked like reasoning about the landing.
+
+They also noted the failure-set diff is stronger for both arms being non-empty at 144 than it
+would be for two green runs, because **a diff of nothing against nothing is satisfied by an
+instrument that ran nothing.**
+
+## The sequencing fact both lanes independently landed on
+
+Option 2 for the exporter was already a prerequisite after the "follow statutes" ruling. It
+now ALSO gates the feature built to fix leverage ratios. **Two independent routes to the same
+blocker makes it a sequencing fact rather than a preference**, and iso-export-lane is taking
+it to Mike in those terms while he decides whether option 2 stands alongside the Prolog units
+library.
