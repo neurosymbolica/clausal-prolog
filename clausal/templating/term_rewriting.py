@@ -2498,6 +2498,91 @@ class TermTransformer(NodeTransformer):
         ):
             return visit(call.args[0])
 
+        # constant_number_units(Name, N, U) — COMPILE-TIME MODULE INSERTION.
+        #
+        # A builtin never receives the calling module (the registry hands
+        # dispatch functions their arguments and a trail, and `_get_dispatch`
+        # is a frozen protocol with out-of-tree implementors), so the /3
+        # relation answered for every loaded module declaring the name, in
+        # load order. That is the documented compromise at
+        # `constant_value/2`, not a defect -- and the way out is that the
+        # COMPILER knows the module. It already hands `$module` to
+        # `$register_constant_units` when a declaration is lowered; reading
+        # now works the way writing does.
+        #
+        # The module inserted is the name's OWNER, which is not always the
+        # caller: an imported constant is registered on the module that
+        # DECLARED it (`register_module_constant` records only a module's own
+        # declarations, deliberately), so inserting the caller would make an
+        # imported constant answer nothing. The import directive recorded the
+        # owner in `_import_remap`, so the owner is known statically.
+        #
+        # Emitted through the ``++`` escape rather than a bespoke lowering,
+        # so the module reference uses the one embedding path that already
+        # exists and is tested.
+        if (isinstance(call.func, Name)
+                and call.func.id == "constant_number_units"
+                and len(call.args) == 3 and not call.keywords):
+            name_node = call.args[0]
+            named = (isinstance(name_node, Name)
+                     and not _is_logic_var_name(name_node.id))
+            if named:
+                ident = name_node.id
+                if ident in transformer.constants:
+                    mod_expr = replace(Name(id="$module", ctx=load), name_node)
+                elif ident in transformer._import_remap:
+                    owner = transformer._import_remap[ident].rsplit(".", 1)[0]
+                    mod_expr = replace(
+                        Call(func=replace(Name(id="__import__", ctx=load), name_node),
+                             args=[replace(Constant(value=owner), name_node)],
+                             keywords=[keyword(
+                                 arg="fromlist",
+                                 value=replace(List(elts=[replace(Constant(value="_"), name_node)],
+                                                    ctx=load), name_node))]),
+                        name_node)
+                else:
+                    raise SyntaxError(
+                        f"constant_number_units({ident}, ...): `{ident}` is "
+                        f"not a constant in this module. Declare it with "
+                        f"-constant_number_units({ident}, <number>, <units>), "
+                        f"or import it from the module that does with "
+                        f"-import_from(<module>, [{ident}]).")
+            else:
+                # Unbound name: enumerate, but THIS module only -- an
+                # unscoped enumeration is the same leak by another door.
+                mod_expr = replace(Name(id="$module", ctx=load), call)
+            fix_missing_locations(replace(mod_expr, call))
+            # The same builder `constant()` ends in: a late read, evaluated
+            # where the clause runs. Built directly rather than synthesised as
+            # `++expr` and re-visited -- the escape is recognised from the
+            # SOURCE shape, so a manufactured double-UAdd is read as a term
+            # and the module expression comes back as `__import__/2 is not in
+            # scope as a term class`.
+            module_term = _build_py_thunk_ast(transformer, call, mod_expr, [])
+            if named:
+                # The SPELLING, as a Python string, not the name re-visited.
+                # In the importing module the imported name resolves to the
+                # imported VALUE (a `LoadName` over the dotted remap), so
+                # re-visiting it hands the registry a Quantity where it wants
+                # a key. The spelling is what the registry is keyed by, and a
+                # thunk over a str literal cannot be re-read as an atom, a
+                # char list or a string by the -double_quotes ratchet.
+                name_term = _build_py_thunk_ast(
+                    transformer, call,
+                    replace(Constant(value=ident), name_node), [])
+                rest = [visit(a) for a in call.args[1:]]
+            else:
+                name_term = visit(call.args[0])
+                rest = [visit(a) for a in call.args[1:]]
+            positional = [module_term, name_term] + rest
+            return node_ast(
+                "Call", call,
+                func=node_ast(
+                    "LoadName", call,
+                    name=replace(Constant(value="module_constant_units"), call)),
+                args=list_ast(positional, call),
+                kwargs=list_ast([], call))
+
         # constant(name) — retrieve a declared constant's VALUE.
         #
         # Replaces `++name` as the retrieval form (operator, 2026-09-11).
@@ -2516,13 +2601,37 @@ class TermTransformer(NodeTransformer):
                     f"declared constant: constant(max_fine); got "
                     f"{len(call.args)} arguments")
             target = call.args[0]
+            if isinstance(target, Attribute):
+                # constant(owner.name) -- module-prefixed access. The dotted
+                # form is read as a QUALIFIED NAME, never evaluated as a
+                # Python expression, so the invariant the message below
+                # states is intact: what is inside still cannot be an
+                # arbitrary expression, only a name or a name in a module.
+                # Resolution is MORE static this way, not less -- the owner
+                # is written at the site rather than inferred from imports.
+                if dotted_attr_chain(target) is None:
+                    raise SyntaxError(
+                        f"constant() takes a bare name or a module-qualified "
+                        f"name, not `{unparse(target)}` — the whole point of "
+                        f"the parentheses is that what is inside cannot be a "
+                        f"Python expression. Write constant(max_fine) or "
+                        f"constant(other_module.max_fine).")
+                return _build_py_thunk_ast(transformer, call, target, [])
             if not isinstance(target, Name):
                 raise SyntaxError(
-                    f"constant() takes a bare name, not "
-                    f"`{unparse(target)}` — the whole point of the "
+                    f"constant() takes a bare name or a module-qualified "
+                    f"name, not `{unparse(target)}` — the whole point of the "
                     f"parentheses is that what is inside cannot be a Python "
                     f"expression. Write constant(max_fine).")
-            if target.id not in transformer.constants:
+            if (target.id not in transformer.constants
+                    and target.id not in transformer._import_remap):
+                # An IMPORTED name passes. The importer genuinely cannot tell
+                # a constant from an atom in the owner (2026-09-11) -- but it
+                # does know WHO OWNS IT, and the lowering below is a late
+                # module-global read that the import has already bound. So
+                # the compile-time question is "do I know who owns this",
+                # which is answerable statically, rather than "is this a
+                # constant", which is not without executing the owner.
                 raise SyntaxError(
                     f"constant({target.id}): nothing declares `{target.id}`. "
                     f"Declare it with -constant_value({target.id}, <value>) "

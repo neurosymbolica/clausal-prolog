@@ -880,7 +880,14 @@ def _module_constant_units__4(m, name, number, units, trail, k):
     if registry is None:
         return
     name_val = deref(name)
-    name_key = spelling(name_val) if _term_is_atom(name_val) else None
+    if isinstance(name_val, str):
+        # The compile-time insertion passes the SPELLING directly (see
+        # term_rewriting's constant_number_units branch): in the importing
+        # module the name re-resolves to the imported value, so the compiler
+        # sends the registry key rather than something that looks it up.
+        name_key = name_val
+    else:
+        name_key = spelling(name_val) if _term_is_atom(name_val) else None
     if not is_var(name_val):
         if name_key is None or name_key not in registry:
             return

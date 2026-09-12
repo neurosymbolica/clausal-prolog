@@ -35,7 +35,14 @@ def _rows(module, goal, arity):
 
 def test_it_answers_for_the_named_module_only(tmp_path):
     """THE test. Two modules declare one name; asking a module by name gets
-    that module's pair and no other. `constant_number_units/3` returns both."""
+    that module's pair and no other.
+
+    The original version of this test compared against `constant_number_units/3`
+    answering BOTH. That comparison is gone because the comparison target is
+    gone: /3 is now compiled to this relation with the owner inserted, so a
+    module that neither declares nor imports the name cannot write the call at
+    all. See tests/test_constant_scope.py.
+    """
     _load(tmp_path, "owner_a", """
         -module(owner_a, [fee_mc])
         -import_from(united_states, [usd])
@@ -47,17 +54,18 @@ def test_it_answers_for_the_named_module_only(tmp_path):
         -constant_number_units(fee_mc, 22.00, usd)
     """)
     m = _load(tmp_path, "asker", """
-        -module(asker, [from_a/2, unscoped/2])
+        -module(asker, [from_a/2, from_b/2])
         -import_module(tmcu_owner_a)
+        -import_module(tmcu_owner_b)
         -private([fee_mc])
 
         from_a(N, U) <- module_constant_units(tmcu_owner_a, fee_mc, N, U)
-        unscoped(N, U) <- constant_number_units(fee_mc, N, U)
+        from_b(N, U) <- module_constant_units(tmcu_owner_b, fee_mc, N, U)
     """)
-    scoped = _rows(m, "from_a", 2)
-    assert [n for n, _ in scoped] == [11.0], scoped
-    # the unscoped relation still answers for BOTH -- it is not being changed
-    assert len(_rows(m, "unscoped", 2)) == 2
+    # The discriminator: one name, two owners, two different answers, and
+    # each asked for by naming its module.
+    assert [n for n, _ in _rows(m, "from_a", 2)] == [11.0]
+    assert [n for n, _ in _rows(m, "from_b", 2)] == [22.0]
 
 
 def test_a_name_the_module_does_not_declare_simply_fails(tmp_path):
