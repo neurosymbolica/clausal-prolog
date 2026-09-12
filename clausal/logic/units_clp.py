@@ -474,9 +474,12 @@ def strip(x: Any, env: dict[int, dict], trail: Trail) -> Any:
         dims = env.get(x._id, {})
         return shadow_for(x, dims, trail) if dims else x
     if isinstance(x, _BINARY):
-        return type(x)(left=strip(x.left, env, trail), right=strip(x.right, env, trail))
+        # transform_fields keeps the node's source position (and returns
+        # the same node when nothing below it changed).
+        return x.transform_fields(left=strip(x.left, env, trail),
+                                  right=strip(x.right, env, trail))
     if isinstance(x, _Negate):
-        return type(x)(operand=strip(x.operand, env, trail))
+        return x.transform_fields(operand=strip(x.operand, env, trail))
     return x
 
 
@@ -526,6 +529,21 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     if dict(lo.dims) != dict(hi.dims):
         raise _mismatch(ctx, dict(lo.dims), dict(hi.dims))
     dims = dict(lo.dims)
+    lo_n, hi_n = to_solver_number(lo.value), to_solver_number(hi.value)
+    if type(lo_n) is not int or type(hi_n) is not int:
+        # The plain path raises TypeError for non-integer bounds; a domain
+        # that only CLP(Q) could hold is not labellable, and posting it
+        # anyway made label/1 succeed once with the variable unbound. This
+        # one is an ISO term so the surface can catch it; the plain path's
+        # TypeError is a separate, older choice.
+        raise _unsupported(
+            ctx, f"bounds must be whole units, got {lo!r} and {hi!r}")
+    if not dims:
+        # Dimensionless quantity bounds are plain integers: the plain path
+        # (a united var with empty dims is a bare number, and a shadow with
+        # empty dims would never be consulted by the units hook).
+        from clausal.logic.clpfd import in_domain  # noqa: PLC0415
+        return in_domain(var_or_list, lo_n, hi_n, trail)
     targets = deref(var_or_list)
     if not isinstance(targets, list):
         targets = [targets]
@@ -546,13 +564,6 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
             raise _mismatch(ctx, {}, dims,
                             f"target {v!r} is already a bare solver variable")
         shadows.append(shadow_for(v, dims, trail))
-    lo_n, hi_n = to_solver_number(lo.value), to_solver_number(hi.value)
-    if type(lo_n) is not int or type(hi_n) is not int:
-        # The plain path raises TypeError for non-integer bounds; a domain
-        # that only CLP(Q) could hold is not labellable, and posting it
-        # anyway made label/1 succeed once with the variable unbound.
-        raise TypeError(
-            f"in_domain bounds must be whole units, got {lo!r}, {hi!r}")
     from clausal.logic.clpfd import in_domain  # noqa: PLC0415
     return in_domain(shadows, lo_n, hi_n, trail)
 
@@ -578,11 +589,13 @@ def strip_list_for_solver(items, context: str, trail: Trail):
     must all share one dimension (all_different, sum_, chain, element, …).
 
     Returns ``(items, None)`` untouched when no element is a Quantity or a
-    united Var, or when some element is not numeric (the builtin's own
-    checks own that). Otherwise every known dimension must agree — a plain
-    number or bare solver var is dimensionless — a fresh Var takes the
-    shared dimension, and the result is ``(stripped, dims)`` with
-    quantities as solver numbers and united vars as shadows.
+    united Var, or when some element is not a LEAF the side channel speaks
+    for (an atom, a string, an expression tree — the builtin's own checks
+    own those; expression elements in list builtins are a recorded gap).
+    Otherwise every known dimension must agree — a plain number or bare
+    solver var is dimensionless — a fresh Var takes the shared dimension,
+    and the result is ``(stripped, dims)`` with quantities as solver
+    numbers and united vars as shadows.
     """
     _ensure_imports()
     items = [deref(v) for v in items]

@@ -567,12 +567,10 @@ class TestReviewRoundOne:
         import clausal.logic.clpfd as clpfd
         t, i, v = Trail(), Var(), Var()
         assert clpfd.in_domain([i], 1, 3, t)
+        # element/3 with a Var index enumerates the index itself.
         sols = [(deref(i), deref(v)) for _ in
                 clpfd.fd_element(i, [Quantity(5, M), Quantity(7, M), Quantity(9, M)], v, t)]
-        assert (2, Quantity(7, M)) in sols or any(
-            is_var_unbound(iv) and is_var_unbound(vv) for iv, vv in sols)   # posted, not enumerated
-        if all(not is_var_unbound(iv) for iv, _ in sols):
-            assert sols == [(1, Quantity(5, M)), (2, Quantity(7, M)), (3, Quantity(9, M))]
+        assert sols == [(1, Quantity(5, M)), (2, Quantity(7, M)), (3, Quantity(9, M))]
 
     def test_direct_solver_post_on_united_var_is_loud(self):
         """The safety net: a builtin that bypasses the side channel leaves FD
@@ -619,8 +617,9 @@ class TestReviewRoundOne:
     # F4: non-integral quantity bounds are rejected like non-integer plain ones
     def test_in_domain_non_integral_money_bounds_rejected(self):
         import clausal.logic.clpfd as clpfd
-        with pytest.raises(TypeError, match="in_domain"):
+        with pytest.raises(LogicException) as ei:
             clpfd.in_domain([Var()], Quantity(Decimal("0.01"), {euro: 1}), Quantity(Decimal("0.05"), {euro: 1}), Trail())
+        _assert_system_error(ei, "units_unsupported")
 
     # F5: > and >= name themselves in the error
     def test_gt_context_names_gt(self):
@@ -639,3 +638,62 @@ class TestReviewRoundOne:
         with pytest.raises(UnitsMismatch):
             Quantity(7, M) // 2
         assert Quantity(7, {}) // 2 == Quantity(3, {})
+
+
+class TestReviewRoundTwo:
+    def test_tuples_in_on_united_var_is_loud_not_silent(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, y = Trail(), Var(), Var()
+        assert clpfd.in_domain([x], Quantity(1, S), Quantity(2, S), t)
+        assert clpfd.in_domain([y], Quantity(1, M), Quantity(2, M), t)
+        with pytest.raises(LogicException) as ei:
+            clpfd.tuples_in([[x, y]], [(1, 2), (2, 1)], t)
+            list(clpfd.label([x, y], t))
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_global_cardinality_keys_share_the_dimension(self):
+        import clausal.logic.clpfd as clpfd
+        t, x, y = Trail(), Var(), Var()
+        assert clpfd.in_domain([x, y], Quantity(1, M), Quantity(2, M), t)
+        assert clpfd.global_cardinality([x, y], [(Quantity(1, M), 1), (Quantity(2, M), 1)], t)
+        sols = sorted((deref(x).value, deref(y).value) for _ in clpfd.label([x, y], t))
+        assert sols == [(1, 2), (2, 1)]
+        with pytest.raises(LogicException) as ei:
+            clpfd.global_cardinality([x, y], [(Quantity(1, S), 2)], Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_dimensionless_quantity_bounds_take_the_plain_path(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.in_domain([x], Quantity(1, {}), Quantity(3, {}), t)
+        assert get_attr(x, UNITS_KEY) is None
+        assert not unify(x, 99, t)
+        assert [deref(x) for _ in clpfd.label([x], t)] == [1, 2, 3]
+
+    def test_scalar_product_dimensionless_quantity_coefficient_is_stripped(self):
+        import clausal.logic.clpfd as clpfd
+        t, a, total = Trail(), Var(), Var()
+        assert clpfd.in_domain([a], Quantity(1, M), Quantity(3, M), t)
+        assert list(clpfd.fd_scalar_product([Quantity(2, {})], [a], mint("#="), total, t)) == [None]
+        assert unify(a, Quantity(3, M), t)
+        assert deref(total) == Quantity(6, M)
+
+    def test_fraction_money_times_float_stays_exact(self):
+        q = Quantity(Fraction(1000, 3), {yen: 1}) * 1.5
+        assert type(q.value) is Fraction and q.value == Fraction(500)
+
+    def test_strip_keeps_source_position(self):
+        from clausal.logic.units_clp import analyse, strip
+        t, x = Trail(), Var()
+        tree = Sub(left=Quantity(3, M), right=x, position=(1, 2, 3, 4))
+        _, _, env = analyse(Var(), tree, "(==)/2")
+        assert strip(tree, env, t).position == (1, 2, 3, 4)
+
+    def test_zcompare_bad_order_wins_over_units(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.zcompare("<", Quantity(1, M), Quantity(1, S), Trail())
+        assert ei.value.term.args[0].functor == "type_error"
+        with pytest.raises(LogicException) as ei:
+            clpfd.zcompare(mint("<"), Quantity(1, M), Quantity(1, S), Trail())
+        _assert_system_error(ei, "units_mismatch")

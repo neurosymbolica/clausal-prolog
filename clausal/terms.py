@@ -2375,6 +2375,12 @@ class Quantity:
             return Fraction(a), b
         if isinstance(b, Decimal) and isinstance(a, Fraction):
             return a, Fraction(b)
+        # A float beside a Fraction would produce a float; read the float
+        # the way the Decimal bridge does (its shortest repr), exactly.
+        if isinstance(a, Fraction) and isinstance(b, float) and not isinstance(b, bool):
+            return a, Fraction(Decimal(str(b)))
+        if isinstance(b, Fraction) and isinstance(a, float) and not isinstance(a, bool):
+            return Fraction(Decimal(str(a))), b
         return a, b
 
     # ── Arithmetic ──────────────────────────────────────────────────────────

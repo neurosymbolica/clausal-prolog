@@ -258,14 +258,19 @@ refused by the FD hook — zero answers, no error. Two things fix that:
   solver numbers and united vars their shadows. Applied in `all_different`,
   `sum_/3` (summands and value), `scalar_product/4` (coefficients must be
   plain; vars and value share), `element/3` (list and value; index is a
-  plain position), `chain/2`, `circuit/1`, `global_cardinality/2`,
-  `tuples_in/2`; `reify` and `zcompare/3` use the pair form.
+  plain position), `chain/2`, `circuit/1`, `global_cardinality/2` (vars
+  and pair keys share); `reify` and `zcompare/3` use the pair form, after
+  zcompare's Order validation. List elements must be leaves: an expression
+  tree inside a list builtin is a recorded gap (the old type_error, loud).
 * **The safety net** — `_link_hook` throws
   `error(system_error(units_unsupported), Ctx)` when the user's variable
   already carries solver state, i.e. some builtin bypassed the side channel.
-  `cumulative/2` (task tuples) is the one FD builtin left on the net; it is
-  loud, not silent, and is recorded in the CLP(Z3) follow-up todo as the
-  next call site to route.
+  `cumulative/2` (task tuples) and `tuples_in/2` (one var per COLUMN, so
+  columns carry different dimensions and the shared-dimension list form does
+  not fit) are the two FD builtins left on the net; both are loud, not
+  silent, and are recorded in the CLP(Z3) follow-up todo as the next call
+  sites to route. Dimensionless quantity bounds to `in_domain/3` take the
+  plain path; non-integral bounds throw `system_error(units_unsupported)`.
 
 Also from that review: `>`/`>=` strip before delegating so the error names
 the operator the user wrote; exponent errors carry their own ISO codes

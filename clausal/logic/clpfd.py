@@ -2577,7 +2577,7 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     # one dimension.
     if _strip_list_for_solver is None:
         _ensure_units_imports()
-    _, coeff_dims = _strip_list_for_solver(coeffs, "scalar_product/4", trail)
+    coeffs, coeff_dims = _strip_list_for_solver(coeffs, "scalar_product/4", trail)
     if coeff_dims:
         from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
         raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
@@ -3172,7 +3172,12 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         return False
-    vars_list = _units_strip_list(vars_list, "global_cardinality/2", trail)
+    # Units: the vars and the pair KEYS share one dimension (a key is a
+    # value the vars may take), so they are stripped together.
+    keys = [val for val, _ in pairs]
+    both = _units_strip_list(list(vars_list) + keys, "global_cardinality/2", trail)
+    vars_list, keys = both[:len(vars_list)], both[len(vars_list):]
+    pairs = [(k, cnt) for k, (_, cnt) in zip(keys, pairs)]
 
     vars_deref = []
     for v in vars_list:
@@ -3237,7 +3242,10 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
     for tup in tuples_list:
         tup = deref(tup)
         if isinstance(tup, list):
-            tup = _units_strip_list(tup, "tuples_in/2", trail)
+            # Not routed through the units side channel: a row is one var
+            # per COLUMN and columns carry different dimensions, so the
+            # shared-dimension list form does not fit. A united var here
+            # trips the units_unsupported safety net at reattachment.
             vars_ = []
             for v in tup:
                 v = deref(v)
@@ -3293,9 +3301,6 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     order = deref(order)
     x = deref(x)
     y = deref(y)
-    stripped = _units_strip(x, y, "zcompare/3", trail)
-    if stripped is not None:
-        x, y = stripped
     # Read (and validate) the Order BEFORE anything else, including the
     # ground/ground fast path below.  Fix round 1: with the check further
     # down, ``zcompare("<", 1, 5)`` took the fast path and merely FAILED (the
@@ -3304,6 +3309,10 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     # It also means the refusal lands before ``_ensure_fd`` has touched the
     # trail.
     order_name = _op_spelling(order, "zcompare/3")
+    # Units side channel after the Order check, so a bad Order still wins.
+    stripped = _units_strip(x, y, "zcompare/3", trail)
+    if stripped is not None:
+        x, y = stripped
     if is_var(x):
         _ensure_fd(x, trail)
     if is_var(y):

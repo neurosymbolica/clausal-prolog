@@ -13,8 +13,11 @@ tests/fixtures/units_clp_side_channel.clausal re-spelled with z3 predicates,
 skipped when z3-solver is not installed.
 
 Also on the safety net, not routed: `cumulative/2` (task tuples of
-start/duration/resource — two dimensions, time and resource, so it needs its
-own rule rather than `strip_list_for_solver`). Today a united var reaching it
-throws `system_error(units_unsupported)` at reattachment.
+start/duration/resource — two dimensions, time and resource) and
+`tuples_in/2` (one var per column; strip per COLUMN, and the relation's
+column with it). Both need their own rule rather than `strip_list_for_solver`.
+Today a united var reaching either throws `system_error(units_unsupported)`
+at reattachment. Expression trees as ELEMENTS of a list builtin
+(`sum_([A, 3(metre) + B], ...)`) are not stripped either (old type_error).
 
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.
