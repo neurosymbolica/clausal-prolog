@@ -142,14 +142,6 @@ def _is_plain_number(x: Any) -> bool:
             and not isinstance(x, bool))
 
 
-def has_units_material(x: Any) -> bool:
-    """True if *x* holds a Quantity or a units-attributed Var anywhere, and
-    every leaf is one the side channel speaks for. A foreign leaf (atom,
-    string, date, …) returns False so the existing guards own the error."""
-    _ensure_imports()
-    return _scan(x) is True
-
-
 _FOREIGN = None   # _scan's third answer: a leaf the side channel does not speak for
 
 
@@ -721,8 +713,12 @@ def _as_whole(v):
         if v != v or v in (float("inf"), float("-inf")):
             return None
         fr = Fraction(Decimal(str(v)))
-    elif isinstance(v, (Decimal, Fraction)):
+    elif isinstance(v, Decimal):
+        if not v.is_finite():
+            return None
         fr = Fraction(v)
+    elif isinstance(v, Fraction):
+        fr = v
     else:
         return None
     return int(fr) if fr.denominator == 1 else None

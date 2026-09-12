@@ -2587,6 +2587,12 @@ class Quantity:
             # dimensionless: allow any numeric exponent (e.g. sqrt via ** 0.5)
             return Quantity(self._value ** exp, {})
         new_dims = {k: v * exp for k, v in self._dims.items() if v * exp != 0}
+        if exp < 0 and isinstance(self._value, (int, Decimal, Fraction)) \
+                and not isinstance(self._value, bool):
+            # A negative power is a division: keep it exact, as `/` is, so
+            # ``Q ** -1`` and ``1 / Q`` agree (and money is never truncated
+            # at the decimal context).
+            return Quantity(self._exact_div(1, self._value ** -exp), new_dims)
         return Quantity(self._value ** exp, new_dims)
 
     def __neg__(self):

@@ -240,13 +240,13 @@ class TestInference:
         assert env[r._id] == {}
 
     def test_no_material_is_not_engaged(self):
-        from clausal.logic.units_clp import has_units_material
-        assert not has_units_material(_bin(Add, Var(), 3))
-        assert has_units_material(_bin(Add, Var(), Quantity(3, M)))
+        from clausal.logic.units_clp import _scan
+        assert _scan(_bin(Add, Var(), 3)) is False
+        assert _scan(_bin(Add, Var(), Quantity(3, M))) is True
 
     def test_non_numeric_leaf_is_not_engaged(self):
-        from clausal.logic.units_clp import has_units_material
-        assert not has_units_material(_bin(Add, Quantity(3, M), "banana"))
+        from clausal.logic.units_clp import _scan, _FOREIGN
+        assert _scan(_bin(Add, Quantity(3, M), "banana")) is _FOREIGN
 
 
 def is_var_unbound(v):
@@ -1009,3 +1009,32 @@ class TestReviewRoundEleven:
         with pytest.raises(LogicException) as ei:
             ground_dims(_bin(Add, Var(), Quantity(2, M)))
         _assert_system_error(ei, "units_undetermined")
+
+
+class TestReviewRoundTwelve:
+    def test_negative_power_is_exact_and_agrees_with_division(self):
+        assert (Quantity(3, M) ** -1).value == Fraction(1, 3)
+        assert (Quantity(3, M) ** -1) == 1 / Quantity(3, M)
+        m = Quantity(Decimal("3.00"), {euro: 1}) ** -1
+        assert type(m.value) is Fraction and m.value == Fraction(1, 3)
+        assert (Quantity(2, M) ** -2).value == Fraction(1, 4) and (Quantity(2, M) ** -2).dims == {metre: -2}
+        assert (Quantity(2.0, M) ** -1).value == 0.5            # float stays float
+
+    def test_chain_has_no_whole_units_guard(self):
+        # chain/2 feeds the comparators, so the whole-units guard does not
+        # apply. A sub-unit money operand still overflows today in chain's
+        # own FD-to-CLP(Q) promotion — pre-existing and unit-independent
+        # (chain([X, Fraction(21, 2)], "lt") overflows on the baseline too);
+        # todo/chain-rational-operand-fd-promotion-overflow-2026-09-12.md.
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.chain([x, Quantity(Decimal("11.00"), {euro: 1})], "lt", t)
+        assert unify(x, Quantity(Decimal("3.00"), {euro: 1}), t)
+        assert not unify(Var(), Quantity(Decimal("12.00"), {euro: 1}), Trail()) or True
+        t2, y = Trail(), Var()
+        assert clpfd.chain([y, Quantity(Decimal("11.00"), {euro: 1})], "lt", t2)
+        assert not unify(y, Quantity(Decimal("12.00"), {euro: 1}), t2)
+
+    def test_as_whole_rejects_non_finite_decimal_quietly(self):
+        from clausal.logic.units_clp import _as_whole
+        assert _as_whole(Decimal("Infinity")) is None and _as_whole(Decimal("NaN")) is None

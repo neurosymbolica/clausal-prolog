@@ -346,6 +346,13 @@ money result adds to a Decimal literal exactly.
   same whole-units conversion as the bounds (`2.0(metre)` posts as 2, a
   sub-unit amount throws); `ground_dims` rejects any free variable, so the
   positive-control oracle cannot affirm a tree it did not evaluate.
+* Round 12: a negative power is a division and is exact, so `Q ** -1`
+  agrees with `1 / Q`; `chain/2` feeds the comparators and carries no
+  whole-units guard (a rational operand there still overflows in chain's own
+  FD promotion — pre-existing, filed as
+  `todo/chain-rational-operand-fd-promotion-overflow-2026-09-12.md`); a
+  non-finite Decimal is refused quietly; the units flag's real granularity
+  (import of a unit module turns it on) is stated in its docstring.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

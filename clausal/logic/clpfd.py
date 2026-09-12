@@ -1283,9 +1283,10 @@ def _units_strip(l, r, context, trail):
 def _units_strip_list(items, context, trail):
     """List form of :func:`_units_strip` for the finite-domain builtins whose
     operands must share one dimension; returns the (possibly untouched)
-    list. Every caller is a finite-domain builtin, so a quantity that is
-    not a whole number of units throws here (units_unsupported) rather than
-    being skipped, failed or miscounted by the builtin's own integer guard."""
+    list. Every caller is a finite-domain builtin (chain/2, which feeds the
+    comparators, calls the strip directly), so a quantity that is not a
+    whole number of units throws here (units_unsupported) rather than being
+    skipped, failed or miscounted by the builtin's own integer guard."""
     if _strip_list_for_solver is None:
         _ensure_units_imports()
     stripped, dims = _strip_list_for_solver(items, context, trail)
@@ -3244,8 +3245,12 @@ def chain(vars_list, relation, trail: Trail) -> bool:
     post_fn = _rel_to_fn.get(relation)
     if post_fn is None:
         return False
-    # Units after the relation check, so a bad relation still wins.
-    vars_list = _units_strip_list(vars_list, "chain/2", trail)
+    # Units after the relation check, so a bad relation still wins. No
+    # whole-units guard: chain decomposes into the comparators, which take
+    # rationals and reals (X < 10.50(euro) works, so must chain).
+    if _strip_list_for_solver is None:
+        _ensure_units_imports()
+    vars_list, _ = _strip_list_for_solver(vars_list, "chain/2", trail)
 
     for i in range(len(vars_list) - 1):
         a = deref(vars_list[i])
