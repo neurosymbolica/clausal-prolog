@@ -17,6 +17,7 @@ from __future__ import annotations
 import re as _re
 from dataclasses import dataclass, field
 from fractions import Fraction
+from clausal.logic import _units_flag
 from decimal import (
     Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_HALF_DOWN,
     ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR,
@@ -2039,6 +2040,25 @@ _MONEY_ROUNDING = {
 }
 
 
+def _fraction_to_decimal_if_terminating(fr: Fraction):
+    """The exact Decimal equal to *fr* when its denominator divides a power
+    of ten, else None. No rounding anywhere: the denominator is reduced by
+    its factors of 2 and 5 and the numerator scaled to match."""
+    den = fr.denominator
+    k2 = k5 = 0
+    while den % 2 == 0:
+        den //= 2
+        k2 += 1
+    while den % 5 == 0:
+        den //= 5
+        k5 += 1
+    if den != 1:
+        return None
+    k = max(k2, k5)
+    scaled = fr.numerator * (10 ** k // fr.denominator)
+    return Decimal(scaled).scaleb(-k)
+
+
 def _round_fraction_to_int(fr: Fraction, rounding) -> int:
     """Round an exact rational to an integer under a ``decimal`` ROUND_* mode.
 
@@ -2274,6 +2294,8 @@ class Quantity:
             )
         self._value = value
         self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
+        if not _units_flag.active:
+            _units_flag.touch()          # the CLP side channel may now engage
         if not isinstance(self._value, (Decimal, Fraction)):
             for _k in self._dims:
                 if getattr(_k, "is_currency", False):
@@ -2436,18 +2458,40 @@ class Quantity:
         a, b = self._num_pair(other, self._value)
         return Quantity(a * b, self._dims)
 
+    @staticmethod
+    def _exact_div(a, b):
+        """Divide exactly when an exact non-integer type (Decimal, Fraction)
+        is involved: Decimal's own ``/`` rounds to the 28-digit context, so
+        ``1000(yen) / 3`` on the ground path disagreed with the same
+        expression through CLP(Q), which is exact. The quotient is computed
+        as a Fraction; a terminating one is presented as a Decimal (what a
+        Decimal operand pair produced before), a non-terminating one stays
+        the exact Fraction, as the CLP path yields it. int/int and anything
+        with a float keep Python's own semantics."""
+        exact = (int, Decimal, Fraction)
+        if (isinstance(a, exact) and isinstance(b, exact)
+                and not isinstance(a, bool) and not isinstance(b, bool)
+                and (isinstance(a, (Decimal, Fraction)) or isinstance(b, (Decimal, Fraction)))):
+            q = Fraction(a) / Fraction(b)
+            if isinstance(a, Decimal) or isinstance(b, Decimal):
+                d = _fraction_to_decimal_if_terminating(q)
+                if d is not None:
+                    return d
+            return q
+        return a / b
+
     def __truediv__(self, other):
         if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, -1)
             a, b = self._num_pair(self._value, other._value)
-            return Quantity(a / b, new_dims)
+            return Quantity(self._exact_div(a, b), new_dims)
         a, b = self._num_pair(self._value, other)
-        return Quantity(a / b, self._dims)
+        return Quantity(self._exact_div(a, b), self._dims)
 
     def __rtruediv__(self, other):
         new_dims = {k: -v for k, v in self._dims.items()}
         a, b = self._num_pair(other, self._value)
-        return Quantity(a / b, new_dims)
+        return Quantity(self._exact_div(a, b), new_dims)
 
     @staticmethod
     def _floor_divmod(a, b):

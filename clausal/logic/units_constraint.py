@@ -74,6 +74,8 @@ def constrain_var_dims(var, dims: dict, trail: Trail) -> bool:
     If it has none, attach one.  Returns True on success, False on conflict.
     """
     clean = {k: v for k, v in dims.items() if v != 0}
+    from clausal.logic import _units_flag  # noqa: PLC0415
+    _units_flag.touch()
     existing = get_attr(var, UNITS_KEY)
     if existing is None:
         put_attr(var, UNITS_KEY, UnitState(clean), trail)

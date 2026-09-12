@@ -20,4 +20,12 @@ Today a united var reaching either throws `system_error(units_unsupported)`
 at reattachment. Expression trees as ELEMENTS of a list builtin
 (`sum_([A, 3(metre) + B], ...)`) are not stripped either (old type_error).
 
+The direct CLP(Q)/CLP(R) front ends are not routed either: `clpq.rational/1`,
+`clpq.maximize/2`, `clpq.minimize/2`, `clpr.real/1`, `clpr.label/1` … in
+clausal/logic/builtins/constraints.py reach `q_eq`/`real_eq` without the side
+channel, and `_linearize` answers a Quantity leaf with a raw Python
+`TypeError("CLP(Q) requires linear constraints")`. They take the same
+`(l, r, trail)` shape as `_z3_arith_binary`; the same one-line
+`strip_for_solver` call applies.
+
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.

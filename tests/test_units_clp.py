@@ -789,10 +789,10 @@ class TestReviewRoundFour:
 
     def test_circuit_accepts_dimensionless_quantities(self):
         import clausal.logic.clpfd as clpfd
-        t, a, b = Trail(), Var(), Var()
-        assert clpfd.in_domain([a, b], 1, 2, t)
-        sols = [(deref(a), deref(b)) for _ in clpfd.fd_circuit([a, Quantity(1, {})], t)]
-        assert sols == [(2, 1)] or all(isinstance(x, int) for x, _ in sols)
+        t, a = Trail(), Var()
+        assert clpfd.in_domain([a], 1, 2, t)
+        sols = [deref(a) for _ in clpfd.fd_circuit([a, Quantity(1, {})], t)]
+        assert sols == [2]        # node 2's successor is node 1, so node 1's is node 2
 
 
 class TestReviewRoundFive:
@@ -815,7 +815,8 @@ class TestReviewRoundFive:
         assert (Quantity(neg7, {}) % 2).value == 1
         assert (Quantity(neg7, M) // Quantity(2, M)).value == -4
         assert (Quantity(neg7, M) % Quantity(2, M)).value == 1
-        assert (7 // Quantity(neg7 if not isinstance(neg7, Decimal) else Decimal(-2), {})).value in (-1, -4)
+        assert (7 // Quantity(neg7, {})).value == -1
+        assert (7 % Quantity(neg7, {})).value == -0 and (7 % Quantity(neg7, {})).value == 0
 
     def test_money_mod_keeps_decimal_and_floors(self):
         q = Quantity(Decimal("-7.50"), {euro: 1}) % Quantity(Decimal("2.00"), {euro: 1})
@@ -825,3 +826,40 @@ class TestReviewRoundFive:
         import clausal.logic.clpfd as clpfd
         assert clpfd.fd_eq(3, 3, Trail()) and not clpfd.fd_ne(3, 3, Trail())
         assert clpfd.fd_lt(2, 3, Trail()) and clpfd.fd_le(3, 3, Trail())
+
+
+class TestReviewRoundSix:
+    def test_sub_unit_dimensionless_in_scalar_product_and_circuit_is_loud(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_scalar_product([Quantity(Decimal("2.50"), {})], [Var()], mint("#="), Var(), Trail()))
+        _assert_system_error(ei, "units_unsupported")
+        with pytest.raises(LogicException) as ei:
+            list(clpfd.fd_circuit([Quantity(Decimal("1.5"), {})], Trail()))
+        _assert_system_error(ei, "units_unsupported")
+
+    def test_ground_money_division_is_exact_and_agrees_with_clp(self):
+        import clausal.logic.clpfd as clpfd
+        ground = Quantity(Decimal("1000"), {yen: 1}) / 3
+        assert type(ground.value) is Fraction and ground.value == Fraction(1000, 3)
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(x, _bin(Div, Quantity(Decimal("1000"), {yen: 1}), 3), t)
+        assert deref(x) == ground
+        half = Quantity(Decimal("1550.00"), {euro: 1}) / 2
+        assert isinstance(half.value, Decimal) and half.value == Decimal("775")
+        assert (Quantity(3, M) / 2).value == 1.5          # int/int keeps Python's own semantics
+
+    def test_fraction_to_decimal_if_terminating(self):
+        from clausal.terms import _fraction_to_decimal_if_terminating as f
+        assert f(Fraction(775)) == Decimal("775")
+        assert f(Fraction(1, 8)) == Decimal("0.125")
+        assert f(Fraction(3, 20)) == Decimal("0.15")
+        assert f(Fraction(1, 3)) is None
+
+    def test_scan_returns_foreign_without_raising(self):
+        from clausal.logic.units_clp import _scan, _FOREIGN
+        assert _scan(_bin(Add, Quantity(3, M), mint("banana"))) is _FOREIGN
+
+    def test_units_flag_is_set_by_quantity_and_declaration(self):
+        from clausal.logic import _units_flag
+        assert _units_flag.active       # this test module built quantities at import

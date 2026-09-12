@@ -2598,6 +2598,8 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     if coeff_dims:
         from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
         raise _mismatch_text("scalar_product/4", "coefficients must be plain numbers")
+    if coeff_dims is not None:
+        _whole_units_only(coeffs, "scalar_product/4")
     both = _units_strip_list(list(vars_list) + [value], "scalar_product/4", trail)
     vars_list, value = both[:-1], both[-1]
 
@@ -2736,6 +2738,8 @@ def fd_circuit(vars_list, trail: Trail):
     if circuit_dims:
         from clausal.logic.units_clp import _unsupported  # noqa: PLC0415
         raise _unsupported("circuit/1", "node indices are positions and carry no units")
+    if circuit_dims is not None:
+        _whole_units_only(stripped, "circuit/1")
     vars_list = stripped          # dimensionless quantities are plain positions
 
     n = len(vars_list)

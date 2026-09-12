@@ -33,6 +33,7 @@ from clausal.logic.variables import (
     present_number,
 )
 from clausal.logic.units_constraint import UNITS_KEY, UnitState, to_solver_number
+from clausal.logic import _units_flag
 
 LINK_KEY = "units_link"
 
@@ -146,13 +147,16 @@ def has_units_material(x: Any) -> bool:
     every leaf is one the side channel speaks for. A foreign leaf (atom,
     string, date, …) returns False so the existing guards own the error."""
     _ensure_imports()
-    try:
-        return _scan(x)
-    except _NotEngaged:
-        return False
+    return _scan(x) is True
 
 
-def _scan(x: Any) -> bool:
+_FOREIGN = None   # _scan's third answer: a leaf the side channel does not speak for
+
+
+def _scan(x: Any):
+    """True: units material found. False: none. None: a foreign leaf
+    (atom, string, date, …) — not engaged, no exception raised for it,
+    since a comparison over atoms is ordinary corpus code."""
     x = deref(x)
     if isinstance(x, _Quantity):
         return True
@@ -162,11 +166,15 @@ def _scan(x: Any) -> bool:
         return False
     if isinstance(x, _BINARY):
         left = _scan(x.left)
+        if left is _FOREIGN:
+            return _FOREIGN
         right = _scan(x.right)
+        if right is _FOREIGN:
+            return _FOREIGN
         return left or right
     if isinstance(x, _Negate):
         return _scan(x.operand)
-    raise _NotEngaged()
+    return _FOREIGN
 
 
 def _has_solver_state(v) -> bool:
@@ -513,13 +521,17 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
     disagreement — and returns ``(l', r')`` holding only bare numbers, bare
     Vars and shadows.
     """
+    if not _units_flag.active:
+        return None            # no Quantity or units var exists in this process
     _ensure_imports()
     l, r = deref(l), deref(r)
+    material_l = _scan(l)
+    if material_l is _FOREIGN:
+        return None
+    material_r = _scan(r)
+    if material_r is _FOREIGN or not (material_l or material_r):
+        return None
     try:
-        material_l = _scan(l)
-        material_r = _scan(r)
-        if not (material_l or material_r):
-            return None
         _, _, env = analyse(l, r, context)
     except _NotEngaged:
         return None
@@ -535,6 +547,8 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     (a target already declared with other dims throws) and the stripped
     bounds are posted on its shadow. Bounds must be whole units (``1(yen)``,
     ``1.00(euro)``): a finite domain is integers, as on the plain path."""
+    if not _units_flag.active:
+        return None
     _ensure_imports()
     lo, hi = deref(lo), deref(hi)
     ctx = "in_domain/3"
@@ -638,12 +652,12 @@ def strip_list_for_solver(items, context: str, trail: Trail):
     and the result is ``(stripped, dims)`` with quantities as solver
     numbers and united vars as shadows.
     """
+    if not _units_flag.active:
+        return list(items), None
     _ensure_imports()
     items = [deref(v) for v in items]
-    try:
-        if not any(_scan(v) for v in items):
-            return items, None
-    except _NotEngaged:
+    scans = [_scan(v) for v in items]
+    if any(sc is _FOREIGN for sc in scans) or not any(scans):
         return items, None
     known = []
     for v in items:
