@@ -2041,7 +2041,7 @@ def fd_ne(l, r, trail: Trail) -> bool:
     return _post_constraint(constraint, trail)
 
 
-def fd_lt(l, r, trail: Trail, _units_done: bool = False) -> bool:
+def fd_lt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     """Post X < Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
@@ -2085,7 +2085,7 @@ def fd_lt(l, r, trail: Trail, _units_done: bool = False) -> bool:
     return _post_constraint(constraint, trail)
 
 
-def fd_le(l, r, trail: Trail, _units_done: bool = False) -> bool:
+def fd_le(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     """Post X <= Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
@@ -2126,7 +2126,7 @@ def fd_le(l, r, trail: Trail, _units_done: bool = False) -> bool:
     return _post_constraint(constraint, trail)
 
 
-def fd_gt(l, r, trail: Trail, _units_done: bool = False) -> bool:
+def fd_gt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     """Post X > Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
@@ -2139,7 +2139,7 @@ def fd_gt(l, r, trail: Trail, _units_done: bool = False) -> bool:
     return fd_lt(r, l, trail, _units_done=True)      # scanned here, once
 
 
-def fd_ge(l, r, trail: Trail, _units_done: bool = False) -> bool:
+def fd_ge(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     """Post X >= Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
     r = deref(r)
@@ -3267,10 +3267,10 @@ def chain(vars_list, relation, trail: Trail) -> bool:
     for i in range(len(vars_list) - 1):
         a = deref(vars_list[i])
         b = deref(vars_list[i + 1])
-        if is_var(a):
-            _ensure_fd(a, trail)
-        if is_var(b):
-            _ensure_fd(b, trail)
+        # No _ensure_fd here: each comparator picks its own solver, as it
+        # does when called directly. Pre-posting an unbounded FD domain made
+        # a rational neighbour overflow in the FD -> CLP(Q) promotion
+        # (todo/done/chain-rational-operand-fd-promotion-overflow-2026-09-12.md).
         if not post_fn(a, b, trail):
             return False
     return True
@@ -3366,10 +3366,6 @@ def zcompare(order, x, y, trail: Trail) -> bool:
             # be whole units, as in every other integer-domain builtin.
             stripped = _whole_units_only([x, y], list(stripped), "zcompare/3")
         x, y = stripped
-    if is_var(x):
-        _ensure_fd(x, trail)
-    if is_var(y):
-        _ensure_fd(y, trail)
 
     # If both x and y are ground, just determine the order directly.  The
     # answer is unified against *order*, which is either an unbound Var (it
@@ -3393,7 +3389,15 @@ def zcompare(order, x, y, trail: Trail) -> bool:
         else:
             return False
 
-    # General case: post constraint (order is a Var, x/y may be vars)
+    # General case: post constraint (order is a Var, x/y may be vars).
+    # FD state goes on x/y HERE, not before the ground-Order delegation
+    # above: the comparators choose their own solver, and a pre-posted
+    # unbounded FD domain overflowed the FD -> CLP(Q) promotion for a
+    # rational operand (same defect as chain/2).
+    if is_var(x):
+        _ensure_fd(x, trail)
+    if is_var(y):
+        _ensure_fd(y, trail)
     # Don't put FD on order — it will be bound to an order ATOM
     constraint = ZcompareConstraint(order, x, y)
     # Attach constraint only to FD vars (x and y), not order
@@ -3491,7 +3495,7 @@ if _USE_C_PROPAGATE:
             return not _eq
         return _c_impl(l, r, trail)
 
-    def fd_lt(l, r, trail, _c_impl=_c_fd_lt, _units_done=False):
+    def fd_lt(l, r, trail, _c_impl=_c_fd_lt, *, _units_done=False):
         if type(l) is int and type(r) is int:
             return l < r          # same fast path as the Python twin, ahead of the side channel
         stripped = None if _units_done else _units_strip(l, r, "(<)/2", trail)
@@ -3514,7 +3518,7 @@ if _USE_C_PROPAGATE:
                 raise
             raise _incomparable_order_error(dr, "(<)/2")
 
-    def fd_le(l, r, trail, _c_impl=_c_fd_le, _units_done=False):
+    def fd_le(l, r, trail, _c_impl=_c_fd_le, *, _units_done=False):
         if type(l) is int and type(r) is int:
             return l <= r          # same fast path as the Python twin, ahead of the side channel
         stripped = None if _units_done else _units_strip(l, r, "(=<)/2", trail)

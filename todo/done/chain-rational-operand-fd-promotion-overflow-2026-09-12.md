@@ -21,3 +21,9 @@ its solver, as it does when called directly) or make `_promote_fd_to_q` map
 an unbounded FD bound to `None`. Pin both the plain and the money spelling.
 
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.
+
+**Done 2026-09-12** on `feat/clp-units-side-channel-2026-09-12`: the
+pre-`_ensure_fd` was dropped from `chain/2`, and moved in `zcompare/3` to the
+unbound-Order branch that actually posts `ZcompareConstraint`. Pinned for the
+plain rational and the money spelling in tests/test_units_clp.py
+(`TestReviewRoundSixteen`).

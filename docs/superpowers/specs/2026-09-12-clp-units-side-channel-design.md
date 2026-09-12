@@ -370,6 +370,11 @@ money result adds to a Decimal literal exactly.
   plain number; `cumulative/2` takes dimensionless quantities as plain
   numbers and refuses only dimensioned material; `>`/`>=` and `zcompare`
   scan once.
+* Round 16: the pre-existing `chain/2` / `zcompare/3` overflow is fixed at
+  its root — neither pre-posts an unbounded FD domain before delegating to
+  the comparators, which choose their own solver — so `chain([X,
+  10.50(euro)], lt)` and the plain rational spelling both work (todo
+  closed); `_units_done` is keyword-only in every twin.
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

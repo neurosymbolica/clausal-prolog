@@ -1030,7 +1030,6 @@ class TestReviewRoundTwelve:
         t, x = Trail(), Var()
         assert clpfd.chain([x, Quantity(Decimal("11.00"), {euro: 1})], "lt", t)
         assert unify(x, Quantity(Decimal("3.00"), {euro: 1}), t)
-        assert not unify(Var(), Quantity(Decimal("12.00"), {euro: 1}), Trail()) or True
         t2, y = Trail(), Var()
         assert clpfd.chain([y, Quantity(Decimal("11.00"), {euro: 1})], "lt", t2)
         assert not unify(y, Quantity(Decimal("12.00"), {euro: 1}), t2)
@@ -1162,3 +1161,32 @@ class TestReviewRoundFifteen:
         t2, y = Trail(), Var()
         assert clpfd.zcompare(mint("<"), y, Quantity(3, M), t2)
         assert calls == ["zcompare/3"]
+
+
+class TestReviewRoundSixteen:
+    def test_chain_and_zcompare_take_sub_unit_money_and_plain_rationals(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.chain([x, Quantity(Decimal("10.50"), {euro: 1})], "lt", t)
+        assert unify(x, Quantity(Decimal("3.25"), {euro: 1}), t)
+        t2, y = Trail(), Var()
+        assert clpfd.chain([y, Quantity(Decimal("10.50"), {euro: 1})], "lt", t2)
+        assert not unify(y, Quantity(Decimal("12.00"), {euro: 1}), t2)
+        t3, z = Trail(), Var()
+        assert clpfd.chain([z, Fraction(21, 2)], "lt", t3)        # the plain shape, once an OverflowError
+        assert unify(z, Fraction(1, 2), t3)
+        t4, w = Trail(), Var()
+        assert clpfd.zcompare(mint("<"), w, Quantity(Decimal("10.50"), {euro: 1}), t4)
+        assert unify(w, Quantity(Decimal("1.25"), {euro: 1}), t4)
+
+    def test_chain_and_zcompare_still_post_fd_for_integers(self):
+        import clausal.logic.clpfd as clpfd
+        t, a, b = Trail(), Var(), Var()
+        assert clpfd.in_domain([a, b], 1, 2, t)
+        assert clpfd.chain([a, b], "lt", t)
+        assert [(deref(a), deref(b)) for _ in clpfd.label([a, b], t)] == [(1, 2)]
+        t2, p, q, order = Trail(), Var(), Var(), Var()
+        assert clpfd.in_domain([p, q], 1, 2, t2)
+        assert clpfd.zcompare(order, p, q, t2)
+        assert unify(p, 1, t2) and unify(q, 2, t2)
+        assert deref(order) == mint("<")

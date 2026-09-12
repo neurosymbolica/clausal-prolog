@@ -2104,10 +2104,10 @@ def _quantize_to_scale(value, scale, mode_str):
     if rounding is None:
         raise ValueError(f"unknown rounding mode {mode_str!r}; expected one of "
                          f"{sorted(_MONEY_ROUNDING)}")
-    unit = Decimal(1).scaleb(-scale)
     if isinstance(value, Fraction):
         units = _round_fraction_to_int(value * 10 ** scale, rounding)
         return Decimal(f"{units}E-{scale}")     # exact, context-free
+    unit = Decimal(1).scaleb(-scale)
     return value.quantize(unit, rounding=rounding)
 
 
