@@ -110,3 +110,45 @@ found at all.
 * Scryer/Trealla are local, not on box
 * `constant(name)` not `++name`
 * "never trust a written-down baseline" is BOUNDED to where regenerating is cheap
+
+---
+
+# ADDENDUM: a defect in the promoted work, found by a peer
+
+**Clone `b7e6feeb` carries a fix that canonical (`750e6ae1`) does not.** Narrow — only minor-unit
+constants at use sites, and no corpus file declares one yet — but it IS on canonical.
+
+`155000 aud_cent` is `Decimal('1550.00')`, which equals 1550 EXACTLY, and the emitter wrote
+`1550.00` — a Prolog FLOAT. The unscaled path stayed integer, so only SCALING lost exactness:
+the fold converted exact cents into binary floating point, which is the hazard the operator ruled
+against when rejecting dimensionless constants, reached by another route. Reported by
+iso-export-lane; fixed at the use-site substitution.
+
+**Two things about it worth more than the fix.**
+
+**The test I wrote for that path asserted `pay(1550.00)` — it encoded the defect as the
+expectation**, and three others did the same. So no amount of running my own suite would have
+found it. A test written alongside the code it tests inherits the code's assumptions; only
+someone reading the OUTPUT found this.
+
+**The first fix was wrong in an instructive way.** Integralising inside the shared scaler broke
+the DECLARATION, because a declaration wants the SCALE (`1_550_00/100`) and a use site wants the
+exact INTEGER. They want opposite things and the shared helper had folded them together.
+
+## Residual, and it may bear on the `#=` ruling
+
+A genuinely fractional fold (`15505 aud_cent` -> `155.05`) is still a float. There is no exact
+form to convert to at a use site — and **CLP(Z) is integer-only**, so under the operator's `#=`
+ruling `V #= 155.05` is not a clpz goal at all. **Fractional money cannot be expressed as the
+constraint the ruling calls for.** iso-export-lane's design question, flagged before their `#=`
+conversion meets a fractional amount.
+
+## Also open from iso-export-lane's report (theirs, not this lane's)
+
+* `==` / `=:=` should be `#=`, with `clpz` not `clpfd` — operator's ruling, and their measurement
+  shows **Clausal's `==` IS a CLP(Z) constraint** (`10 == X + 4` binds X to 6, backward)
+* the fold does not reach through a divisor: `constant(cap) / aud_cent` leaves `aud_cent`, which
+  is not an evaluable functor in either engine. 65 single-goal corpus clauses are this shape.
+  Pre-existing, not from these landings.
+* `_CLPFD_CANONICAL` at `clausal_to_prolog.py:2123` is the policy the ruling overturns — update
+  the comment rather than delete it, so a later reader sees it was chosen, not forgotten.
