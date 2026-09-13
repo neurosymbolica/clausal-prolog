@@ -80,10 +80,28 @@ wants an explicit stack, so this is a correctness fix as well as a speed one.
 Linear rational systems are worse for CLP(Q) — 36x at 200 vars, **326x at 1000** — and it scales
 about quadratically (2.3 s -> 62.8 s for 5x the size) where Z3 is near-linear (63 -> 193 ms).
 
-**THE CAVEAT THAT MUST TRAVEL WITH THOSE NUMBERS: that is our PYTHON CLP against Z3's C++.** It is
-not evidence that constraint solvers are slow. Scryer's `clpz`, SICStus or Gecode would sit
-somewhere else entirely. The benchmarks also post-everything-then-check, which flatters SMT against
-the incremental, backtracking use a Prolog engine actually makes of a constraint store.
+**CORRECTION 2026-09-13, and it matters more than the original claim.** This section first said
+"that is our PYTHON CLP against Z3's C++". **That is TRUE of CLP(Q) and FALSE of CLP(Z).** Checked
+by observation after the fact:
+
+    CLP(FD)/CLP(Z)   C.  _clpfd_propagate.c (3484 lines) + _clpfd_core.c (676) +
+                     _clpfd_domain_ops.h (530). At runtime _USE_C_DOMAINS and
+                     _USE_C_PROPAGATE are both True, and the C module REPLACES
+                     FDVar, every constraint class, propagate, _narrow and
+                     _post_constraint. The Python fd_eq/fd_ne are thin wrappers
+                     that unit-strip, type-check, then delegate to _c_impl.
+    CLP(Q)           PURE PYTHON. There is no _clpq_core.c at all -- 1767 lines of
+                     Python with no C counterpart. (CLP(R) and CLP(B) DO have one:
+                     _clpr_core.c, _clpb_core.c. CLP(Q) is the one that does not.)
+
+So the **326x for CLP(Q) is Python against C++**, as claimed, and the obvious question is whether a
+C core closes it given CLP(R) and CLP(B) already have one. But the **132x for CLP(Z) at 20-queens
+is a C PROPAGATOR losing**, which cannot be waved away the way the original caveat waved it away.
+See section 7.
+
+What remains true: the benchmarks post-everything-then-check, which flatters SMT against the
+incremental, backtracking use a Prolog engine actually makes of a constraint store; and Scryer's
+`clpz`, SICStus or Gecode would still sit somewhere else again.
 
 **Capability cuts the OTHER way on the thing this project cares about.** Under-determined system,
 `X + Y >= 10`, nothing else:
