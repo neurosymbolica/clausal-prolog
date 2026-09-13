@@ -21,5 +21,15 @@ assert n == len(terms), (n, len(terms))
 print(f"C bridge: {len(terms)} constraints (~{nodes} nodes)")
 print(f"  marshal {best*1e3:8.2f} ms    {best/nodes*1e6:6.3f} us/node")
 print()
-print(f"  real clausal_to_z3 measured earlier:  12.590 us/node  (125.9 ms)")
-print(f"  SPEEDUP on marshalling            :  {12.590/(best/nodes*1e6):8.1f}x")
+# LIKE-FOR-LIKE. The bridge builds ASTs and does NOT assert them into a solver,
+# so it must be compared against clausal_to_z3's CONSTRUCTION phase alone
+# (8.347 us/node), not against construction + solver.add (12.590), which would
+# flatter the bridge by ~50%. See FINDINGS.md section 1.
+CONSTRUCTION_ONLY = 8.347   # us/node, clausal_to_z3, measured by bench_real2.py
+WITH_SOLVER_ADD   = 12.590  # us/node, the same run including solver.add
+us = best/nodes*1e6
+print(f"  clausal_to_z3 CONSTRUCTION only    : {CONSTRUCTION_ONLY:7.3f} us/node")
+print(f"  LIKE-FOR-LIKE speedup              : {CONSTRUCTION_ONLY/us:7.1f}x   <- the honest number")
+print()
+print(f"  (for reference, construction+add   : {WITH_SOLVER_ADD:7.3f} us/node -> {WITH_SOLVER_ADD/us:.1f}x,")
+print(f"   which is NOT a fair comparison -- the bridge does no solver.add)")
