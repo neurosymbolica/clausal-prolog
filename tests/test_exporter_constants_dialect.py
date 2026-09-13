@@ -175,3 +175,78 @@ def test_the_iso_FACTS_form_runs_and_answers_the_pair(binary, name):
     res = _run(binary, program, "")
     assert "got(" in res, res
     assert "5000" in res and "euro" in res, res
+
+
+# ── the decimal representation: float vs rational ────────────────────────────
+#
+# Operator, 2026-09-13: "could add an option for decimals to be represented as
+# e.g. 1_550_00/100". Measured first: `155000/100` as a TERM is preserved
+# exactly in Scryer and Trealla, while `is 155000/100` evaluates to 1550.0 and
+# `155000 rdiv 100` normalises to 1550 -- so only the UNEVALUATED term keeps the
+# scale. SICStus's infix `r/2` is a third option, unimplemented because `3r2`
+# is a syntax error in both systems available here.
+
+
+def _rational(dialect_name="iso"):
+    import dataclasses
+    return dataclasses.replace(getattr(Dialect, dialect_name)(),
+                               decimal_repr="rational")
+
+
+def test_float_is_the_default_so_existing_output_is_unchanged():
+    """Adopting `rational` for the roster is a deliberate change needing its own
+    export-bytes measurement; it must not arrive as a side effect."""
+    for factory in ("iso", "swi", "scryer", "trealla", "gprolog"):
+        assert getattr(Dialect, factory)().decimal_repr == "float", factory
+
+
+def test_the_rational_form_keeps_the_SCALE_a_float_loses():
+    """THE test. `1550.00` is read as a float by every Prolog and prints as
+    `1550.0`; `1_550_00/100` keeps both halves, so two decimal places are
+    recoverable from the denominator."""
+    out = _clauses_only(_export(MINOR, _rational()))
+    assert "1_550_00/100" in out, out
+    assert "1550.00," not in out, out
+
+
+def test_the_use_site_stays_a_NUMBER_under_rational():
+    """Applies to the DECLARATION only: at a use site `F > 155000/100` is
+    evaluated back to a float anyway, so the rational buys nothing there and
+    complicates the arithmetic."""
+    out = _clauses_only(_export(MINOR, _rational()))
+    assert "pay(1550.00)" in out or "pay(1550.0)" in out, out
+
+
+def test_an_integer_magnitude_is_not_made_rational():
+    """Nothing to preserve, so nothing is changed -- a base-unit integer
+    constant must not acquire a denominator."""
+    out = _clauses_only(_export(BASE, _rational()))
+    assert "5000" in out and "/1" not in out, out
+
+
+def test_the_grouping_separates_minor_units_and_thousands():
+    from clausal.tools.clausal_to_prolog import _group_digits
+    assert _group_digits(155000, 2) == "1_550_00"       # the operator's example
+    assert _group_digits(1234567890, 2) == "12_345_678_90"
+    assert _group_digits(5, 2) == "0_05"                # pads below one unit
+    assert _group_digits(-155000, 2) == "-1_550_00"
+
+
+@pytest.mark.parametrize("system", ["scryer", "trealla"])
+def test_the_rational_form_reads_back_exactly_in_the_real_system(system):
+    """Asserted by RUNNING it: the grouped rational must parse, and both halves
+    must come back, or the scale is not actually recoverable."""
+    import os, subprocess, tempfile
+    binary = {"scryer": "/workspace/scryer-prolog/target/release/scryer-prolog",
+              "trealla": "/workspace/trealla-prolog/tpl"}[system]
+    if not os.path.exists(binary):
+        pytest.skip(f"{system} not built")
+    d = tempfile.mkdtemp()
+    prog = os.path.join(d, "r.pl")
+    with open(prog, "w") as fh:
+        fh.write(":- initialization(main).\n"
+                 "main :- X = 1_550_00/100, X = N/Dn, "
+                 "write(halves(N,Dn)), nl, halt.\n")
+    res = subprocess.run([binary, prog], capture_output=True, text=True,
+                         timeout=30).stdout
+    assert "halves(155000,100)" in res.replace(" ", ""), res

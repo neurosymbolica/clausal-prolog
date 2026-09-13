@@ -553,6 +553,23 @@ def _is_known_scaled_unit(name: str) -> bool:
     return name in scaled or name.lower() in scaled
 
 
+def _group_digits(numerator: int, places: int) -> str:
+    """`155000`, 2 places -> `"1_550_00"`. The minor units separated from the
+    major, which is how the amount is written in the statute. Both reference
+    systems accept underscore grouping in integers; verified 2026-09-13."""
+    text = str(abs(numerator)).rjust(places + 1, "0")
+    major, minor = (text[:-places], text[-places:]) if places else (text, "")
+    # thousands in the major part too, so a large statutory amount stays
+    # legible: 1234567890 at 2 places -> 12_345_678_90
+    chunks = []
+    while len(major) > 3:
+        chunks.insert(0, major[-3:])
+        major = major[:-3]
+    chunks.insert(0, major)
+    grouped = "_".join(chunks + ([minor] if minor else []))
+    return ("-" + grouped) if numerator < 0 else grouped
+
+
 def _scale_constant_value(value, factor):
     """*value* times *factor*, as a Prolog term, exactly.
 
@@ -1846,10 +1863,38 @@ class _ClausalToProlog:
             return PAtom(value)
         return PString(value)
 
+    def _declared_magnitude_term(self, value):
+        """The magnitude as the dialect represents it in a DECLARATION.
+
+        `float` leaves the number alone. `rational` emits the unevaluated term
+        `1_550_00/100`, which is plain ISO syntax and keeps the scale -- a
+        float literal loses it, because Prolog has no decimal type (measured in
+        both reference systems: `1550.00` reads and prints as `1550.0`, while
+        `155000/100` as a TERM is preserved exactly).
+
+        Underscore digit grouping is used because both systems accept it and it
+        makes the minor units legible: `1_550_00` reads as 1550 and 00.
+        """
+        if getattr(self.dialect, "decimal_repr", "float") != "rational":
+            return value
+        if not isinstance(value, PNumber):
+            return value
+        from decimal import Decimal                              # noqa: PLC0415
+        v = value.value
+        if not isinstance(v, Decimal):
+            return value                  # ints and floats: nothing to preserve
+        exponent = v.as_tuple().exponent
+        if not isinstance(exponent, int) or exponent >= 0:
+            return value                  # no fractional digits to keep
+        denominator = 10 ** (-exponent)
+        numerator = int(v.scaleb(-exponent))
+        return PCompound("/", (PNumber(_group_digits(numerator, -exponent)),
+                               PNumber(denominator)))
+
     def _constant_declaration(self, directive, name, value, unit, cap):
         """The declaration item for this dialect: a directive or a fact."""
         unit_term = self._convert_expr(unit)
-        args = (PAtom(name), value, unit_term)
+        args = (PAtom(name), self._declared_magnitude_term(value), unit_term)
         if cap == "expansion":
             return PDirective(PCompound(directive, args))
         module = (self._module_name

@@ -39,6 +39,28 @@ class Dialect:
     #: `user:term_expansion` clause reports the module the HOOK is defined in,
     #: so a named prelude module attributes every file to the prelude.
     constants_prelude: tuple | None = None
+    #: How an exact decimal magnitude is represented in a constant
+    #: DECLARATION. "float" writes `1550.00`, which every system reads as a
+    #: float and prints as `1550.0` -- the magnitude survives, the SCALE does
+    #: not, because Prolog has no decimal type. "rational" writes the
+    #: unevaluated term `1_550_00/100`, which is plain ISO syntax (a compound,
+    #: not arithmetic) and keeps both halves, so the scale is recoverable.
+    #:
+    #: Measured 2026-09-13 in Scryer and Trealla: `155000/100` as a TERM is
+    #: preserved exactly in both; `is 155000/100` evaluates to 1550.0 and
+    #: `155000 rdiv 100` normalises to 1550, so neither evaluated form helps.
+    #: SICStus's infix `r/2` (`155000r100`) is a third option, NOT implemented
+    #: because there is no SICStus here to verify it against -- and `3r2` is a
+    #: syntax error in both systems that are here.
+    #:
+    #: Applies to the DECLARATION only. At a use site `F > 155000/100` is
+    #: evaluated back to a float, so the rational buys nothing there and
+    #: complicates the arithmetic; the declaration is the fidelity channel.
+    #:
+    #: Default "float" keeps existing output byte-identical -- adopting
+    #: "rational" for the roster is a deliberate change that needs its own
+    #: export-bytes measurement.
+    decimal_repr: str = "float"
 
     @classmethod
     def iso(cls) -> Dialect:
