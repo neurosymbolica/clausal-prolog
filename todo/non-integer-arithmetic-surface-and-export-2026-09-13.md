@@ -29,16 +29,29 @@ does not error and does not warn — it silently does not fire, so the rulebase 
 That is harder to notice than a wrong number, because "no answer" also looks like "the rule
 correctly did not apply".
 
-## The operator's ruling, RELAYED via iso-export-lane 2026-09-13
+## RULED DIRECTLY BY THE OPERATOR, 2026-09-13 — this supersedes the relay below
+
+**`{...}` as a constraint set is the surface.** Asked directly, with both candidate surfaces side
+by side, and ruled. The `arithmetic(...)`/`z3.` alternative is CLOSED — do not re-raise it.
+
+**The cost was priced before the ruling, not discovered after.** The option as put to him carried
+both known costs: that it re-purposes the set literal, and that **CLP(Q) is in NEITHER ladder
+engine**. He ruled with those in hand, so the CLP(Q) availability gate is an implementation problem
+to solve, not grounds to reopen the surface.
+
+Recorded DIRECT by engine-lane. iso-export-lane has been relayed the same, so neither lane is
+working from a second-hand account any longer.
+
+## The same ruling as first RELAYED via iso-export-lane 2026-09-13 (superseded by the above)
 
 CLP(Q) uses `{...}`. Clausal's `{}` is a **set literal**, so: **a set in goal position is a set of
 CONSTRAINTS, and calling the goal solves them.** Fractional money goes to CLP(Q) through `{...}`.
 A construct the language already has, reinterpreted rather than invented.
 
-**Recorded as RELAYED, not direct.** The operator separately raised an `arithmetic(...)` wrapper
-with engine-lane, following the `z3.` precedent, minutes before this relay arrived. The two are
-not the same surface. **Whoever implements should get the surface confirmed directly** rather than
-pick one from two second-hand accounts.
+~~**Recorded as RELAYED, not direct.**~~ **RESOLVED 2026-09-13** — the confirmation this paragraph
+asked for has been obtained; see the section above. Kept because the procedure was right: two
+second-hand accounts of the same operator, minutes apart, describing different surfaces, and the
+correct move was to ask rather than to pick.
 
 ## The precedent the operator pointed at: `z3.`
 
