@@ -570,6 +570,26 @@ def _group_digits(numerator: int, places: int) -> str:
     return ("-" + grouped) if numerator < 0 else grouped
 
 
+def _integral_if_whole(value):
+    """A Decimal that equals a whole number becomes an int, for USE SITES.
+
+    Reported by iso-export-lane on canonical 750e6ae1: the scaled fold emitted
+    `1550.00`, which Prolog reads as a FLOAT, where the exact integer 1550 was
+    available -- and the unscaled path stayed integer, so only scaling lost
+    exactness. The engine holds currency exactly, so this was discarding
+    exactness at emission.
+
+    A genuinely fractional result stays a float, which is a known limit: a use
+    site must be arithmetically usable, and under the `#=` ruling CLP(Z) is
+    integer-only, so there is no exact form for fractional money to convert to.
+    """
+    from decimal import Decimal                                  # noqa: PLC0415
+    if (isinstance(value, PNumber) and isinstance(value.value, Decimal)
+            and value.value == value.value.to_integral_value()):
+        return PNumber(int(value.value))
+    return value
+
+
 def _scale_constant_value(value, factor):
     """*value* times *factor*, as a Prolog term, exactly.
 
@@ -1978,6 +1998,13 @@ class _ClausalToProlog:
             self._items.append(
                 self._constant_declaration(directive, name, value, unit, cap))
             self._emitted_constant_declaration = True
+            # Use sites want the EXACT number; the declaration wants the SCALE.
+            # They differ, and folding them was the bug: `155000 aud_cent` is
+            # Decimal('1550.00'), so a declaration should be able to render
+            # `1_550_00/100` while a use site must read as exact `1550` rather
+            # than the float `1550.00`. Integralising in the shared scaler broke
+            # the declaration's scale; integralising here does not.
+            value = _integral_if_whole(value)
         self._constants[name] = value
 
     #: Arithmetic that folds over numeric literals. Deliberately NOT a general

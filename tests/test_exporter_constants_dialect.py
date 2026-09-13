@@ -81,7 +81,9 @@ def test_a_minor_unit_constant_folds_to_the_BASE_magnitude():
     is 1550.00 dollars, and emitting 155000 was a 100x money error announced
     only by a comment."""
     out = _export(MINOR, Dialect.iso())
-    assert "pay(1550.00)" in out or "pay(1550.0)" in out, out
+    # An integral scaled fold is an exact INT at a use site since 2026-09-13.
+    # The guard that matters is unchanged: never the declared 155000.
+    assert "pay(1550)" in out, out
     assert "pay(155000)" not in out
 
 
@@ -214,7 +216,10 @@ def test_the_use_site_stays_a_NUMBER_under_rational():
     evaluated back to a float anyway, so the rational buys nothing there and
     complicates the arithmetic."""
     out = _clauses_only(_export(MINOR, _rational()))
-    assert "pay(1550.00)" in out or "pay(1550.0)" in out, out
+    # `pay(1550)` -- a NUMBER, and exactly so: an integral scaled fold is an
+    # int at a use site (see the integral test below), while the DECLARATION
+    # keeps the scale as 1_550_00/100. The two differ on purpose.
+    assert "pay(1550)" in out, out
 
 
 def test_an_integer_magnitude_is_not_made_rational():
@@ -250,3 +255,41 @@ def test_the_rational_form_reads_back_exactly_in_the_real_system(system):
     res = subprocess.run([binary, prog], capture_output=True, text=True,
                          timeout=30).stdout
     assert "halves(155000,100)" in res.replace(" ", ""), res
+
+
+def test_a_scaled_fold_that_lands_on_a_whole_unit_stays_an_INTEGER():
+    """Reported by iso-export-lane on canonical 750e6ae1, and it was mine.
+
+    `155000 aud_cent` is `Decimal('1550.00')`, which IS integral -- so an exact
+    integer was available and the emitter wrote `1550.00`, a Prolog FLOAT. The
+    base-unit case stayed integer, so the scaled path silently converted exact
+    cents into binary floating point: the hazard the operator ruled against when
+    rejecting dimensionless constants, arriving by another route.
+
+    The engine holds currency exactly (an exact Fraction since d2411c72), so the
+    exactness existed and was being discarded at emission.
+    """
+    out = _export('-import_from(australia, [aud, aud_cent])\n'
+                  '-constant_number_units(cap, 155000, aud_cent)\n'
+                  'v(constant(cap)),\n')
+    use_site = [l for l in out.splitlines() if l.startswith("v(")]
+    assert use_site == ["v(1550)."], out
+    # scoped to the USE SITE: the declaration legitimately carries 1550.00,
+    # which is where the scale lives and what decimal_repr="rational" renders.
+    assert "1550.0" not in use_site[0], out
+
+
+def test_a_genuinely_fractional_fold_is_still_a_float_and_that_is_KNOWN():
+    """The residual, pinned so it is a tracked limit rather than a surprise.
+
+    A conversion that does not land on a whole unit has no exact Prolog
+    representation at a USE SITE: `decimal_repr="rational"` covers declarations,
+    but a use site must be arithmetically usable, and under the operator's
+    `#=` ruling CLP(Z) is integer-only -- so a fractional money amount cannot be
+    a clpz constraint at all. That is a design question for the export lane, not
+    something to settle by changing this emitter.
+    """
+    out = _export('-import_from(australia, [aud, aud_cent])\n'
+                  '-constant_number_units(odd, 15505, aud_cent)\n'
+                  'v(constant(odd)),\n')
+    assert "v(155.05)." in out, out

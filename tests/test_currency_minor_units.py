@@ -326,7 +326,10 @@ def test_a_minor_unit_declaration_exports_the_BASE_magnitude():
     out = _export("-import_from(united_states, [usd, usd_cent])\n"
                   "-constant_number_units(sga_monthly, 155000, usd_cent)\n"
                   "pay(constant(sga_monthly)),\n")
-    assert "pay(1550.00)" in out, out
+    # `pay(1550)`: an integral scaled fold is an exact INT at a use site since
+    # the 2026-09-13 float fix (iso-export-lane's finding). The guard that
+    # matters is unchanged -- it must never be the declared 155000.
+    assert "pay(1550)" in out, out
     assert "pay(155000)" not in out
 
 
