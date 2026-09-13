@@ -19,6 +19,15 @@ class Dialect:
     string_type: str = "string"
     has_dicts: bool = False
     module_system: str = "iso"
+    #: How a `-constant_*` declaration can cross. "none" = refuse (the system
+    #: cannot receive it); "facts" = emit a fact with the module filled in BY
+    #: THE EXPORTER, which knows it statically (for systems without
+    #: `prolog_load_context/2`, which is not ISO); "expansion" = emit the
+    #: directive for a term_expansion prelude to expand on load. Verified
+    #: 2026-09-13: Scryer and Trealla both have prolog_load_context/2, both
+    #: report the real module inside `:- module(m, ...)`, and a hook fires and
+    #: sees it. See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md
+    constants: str = "facts"
 
     @classmethod
     def iso(cls) -> Dialect:
@@ -42,6 +51,7 @@ class Dialect:
             string_type="string",
             has_dicts=True,
             module_system="swi",
+            constants="expansion",
         )
 
     @classmethod
@@ -59,6 +69,7 @@ class Dialect:
             string_type="chars",
             has_dicts=False,
             module_system="iso",
+            constants="expansion",
         )
 
     @classmethod
@@ -72,6 +83,7 @@ class Dialect:
             string_type="atom",
             has_dicts=False,
             module_system="none",
+            constants="none",
         )
 
     @classmethod
@@ -88,6 +100,7 @@ class Dialect:
             string_type="chars",
             has_dicts=False,
             module_system="iso",
+            constants="expansion",
         )
 
 

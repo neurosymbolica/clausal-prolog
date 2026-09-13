@@ -553,6 +553,90 @@ def _is_known_scaled_unit(name: str) -> bool:
     return name in scaled or name.lower() in scaled
 
 
+def _scale_constant_value(value, factor):
+    """*value* times *factor*, as a Prolog term, exactly.
+
+    Kept exact: a `Decimal` factor times an int stays a Decimal, so
+    `155000 * Decimal('0.01')` is `Decimal('1550.00')` and never 1550.0000001.
+    A factor of 1 is returned UNCHANGED rather than multiplied, so a base-unit
+    constant cannot acquire a decimal point it did not have -- that is the
+    regression guard, not an optimisation.
+    """
+    if factor == 1:
+        return value
+    if not isinstance(value, PNumber):
+        raise NotImplementedError(
+            "clausal_to_prolog: a constant in a scaled unit must have a "
+            f"numeric magnitude to convert; got {value!r}")
+    return PNumber(value.value * factor)
+
+
+def _unit_factor(names: list[str]):
+    """The factor a declared unit multiplies by to reach its base, or None.
+
+    Resolved from STATIC DATA only -- the `Quantity` literal in
+    ``clausal.modules.units``, a currency's ISO scale via ``_data``, or
+    ``RATIO_UNITS``. Reading the unit vocabulary is not executing the file
+    being translated, which is the objection that does not apply here (the
+    exporter already resolves the import directives it turns into
+    ``use_module``).
+
+    A base dimension, a currency, or a factor-1 derived unit answers 1.
+    Anything the vocabulary does not hold answers None, and the caller
+    REFUSES rather than guessing -- a wrong factor is a wrong number in an
+    exported legal program, which is the defect this whole path exists for.
+
+    Only a SINGLE leaf is resolved. A compound (`usd / second`) would need
+    the factors composed with the operator, and getting that subtly wrong is
+    worse than refusing it; compounds of base units already answer 1 because
+    every leaf does.
+    """
+    from decimal import Decimal                                 # noqa: PLC0415
+    from clausal.modules import units as _units                 # noqa: PLC0415
+    from clausal.terms import Quantity                          # noqa: PLC0415
+    factor = 1
+    for leaf in names:
+        obj = getattr(_units, leaf, None)
+        if obj is None:
+            cf = _currency_factor(leaf)
+            if cf is None:
+                return None
+            if cf != 1:
+                if factor != 1:
+                    return None        # a compound of two SCALED units
+                factor = cf
+            continue
+        if isinstance(obj, Quantity):
+            if factor != 1:
+                return None            # a compound of two SCALED units
+            factor = obj.value
+        elif not isinstance(obj, _units._UnitsPredicate):
+            return None
+    return factor
+
+
+def _currency_factor(leaf: str):
+    """The factor for a currency or minor-unit NAME, or None if neither.
+
+    Read from `_data`'s tables rather than by importing a jurisdiction module:
+    a currency is a base dimension of its own, so its factor is 1; a minor
+    unit's factor is its currency's ISO scale, the same `scaleb` the engine's
+    `_make_minor_unit` derives it from -- so the two cannot drift.
+    """
+    from decimal import Decimal                                 # noqa: PLC0415
+    from clausal.modules.countries import _data                 # noqa: PLC0415
+    if leaf in set(_data.CURRENCY_BINDINGS.values()):
+        return 1                                    # a base dimension
+    for code, word in _data.MINOR_UNITS.items():
+        if word != leaf:
+            continue
+        for row in _data.CURRENCIES:
+            if row["code"] == code:
+                return Decimal(1).scaleb(-row["scale"])
+        return None
+    return None
+
+
 def _unit_leaf_names(node) -> list[str]:
     """The NAMES a unit expression mentions, in order. Exponents are skipped;
     a qualified ``european_union.euro`` contributes ``euro``."""
@@ -654,6 +738,11 @@ class _ClausalToProlog:
         # file paths are emitted relative to this module's package directory
         # (Scryer resolves a consulted path against the consulting file).
         self.module_path = module_path
+        # The `-module(...)` name, for the `facts` dialects that need the
+        # module filled in at export time. Captured when that directive is
+        # converted; falls back to the module path's basename, because a file
+        # may declare a constant before (or without) `-module`.
+        self._module_name: str | None = None
         # Dotted target path → that target's FILTERED export set, as returned
         # by module_export_signature. When set, import lists are narrowed to
         # names the target really exports.
@@ -1315,6 +1404,7 @@ class _ClausalToProlog:
     def _convert_module_directive(self, call: python_ast.Call) -> PDirective:
         """Convert -module(name, [exports])."""
         mod_name = self._get_string_or_name(call.args[0])
+        self._module_name = mod_name
         exports = []
         if len(call.args) > 1 and isinstance(call.args[1], python_ast.List):
             for elt in call.args[1].elts:
@@ -1728,6 +1818,18 @@ class _ClausalToProlog:
             return PAtom(value)
         return PString(value)
 
+    def _constant_declaration(self, directive, name, value, unit, cap):
+        """The declaration item for this dialect: a directive or a fact."""
+        unit_term = self._convert_expr(unit)
+        args = (PAtom(name), value, unit_term)
+        if cap == "expansion":
+            return PDirective(PCompound(directive, args))
+        module = (self._module_name
+                  or (posixpath.basename(self.module_path or "").split(".")[0]
+                      if self.module_path else None)
+                  or "user")
+        return PClause(PCompound(directive, (PAtom(module),) + args))
+
     def _collect_constant(self, directive: str, call: python_ast.Call) -> None:
         """Record a ``-constant_value`` / ``-constant_number_units`` declaration.
 
@@ -1770,29 +1872,38 @@ class _ClausalToProlog:
             # censuses agreed nothing declares a constant in a scaled unit
             # today; see todo/exporter-folds-scaled-units-to-the-wrong-
             # magnitude-2026-09-11.md for the fix that lifts this.
-            base = _base_unit_names()
-            scaled = [n for n in _unit_leaf_names(unit) if n not in base]
-            if scaled:
+            cap = getattr(self.dialect, "constants", "facts")
+            if cap == "none":
                 raise NotImplementedError(
                     f"clausal_to_prolog: -{directive}({name}, ..., "
-                    f"{unit_text}) declares a constant in a scaled unit "
-                    f"({', '.join(sorted(set(scaled)))}), and the exporter "
-                    f"folds a constant to its DECLARED magnitude -- which is "
-                    f"not the magnitude the engine holds once a unit "
-                    f"rescales. Declare the constant in a base unit "
-                    f"(a currency, or metre/second/kilogram...), or fix the "
-                    f"exporter to fold to the base magnitude; see "
-                    f"todo/exporter-folds-scaled-units-to-the-wrong-"
-                    f"magnitude-2026-09-11.md")
-            note = (f"unit discarded: -{directive}({name}, ..., "
-                    f"{unit_text}) -> {name} folds to its magnitude only")
-            self._add_lossy(note)
-            # ...and EMITTED, not merely recorded. `_add_lossy` is a
-            # write-only channel today (nothing reads `_all_lossy`), and an
-            # inline `5000(euro)` at least sits next to its use in the source
-            # -- a constant's unit is declared far away and would otherwise
-            # vanish without trace from a file about money.
-            self._items.append(PComment(f"LOSSY: {note}"))
+                    f"{unit_text}) cannot be exported to the "
+                    f"{self.dialect.name} dialect, which has no way to receive "
+                    f"a constant declaration (constants capability 'none'). "
+                    f"Refusing rather than emitting something that parses and "
+                    f"does not run.")
+            factor = _unit_factor(_unit_leaf_names(unit))
+            if factor is None:
+                raise NotImplementedError(
+                    f"clausal_to_prolog: -{directive}({name}, ..., "
+                    f"{unit_text}) declares a constant in a unit the exporter "
+                    f"cannot resolve from static data, so it cannot convert "
+                    f"the magnitude to the one the engine holds. Refusing "
+                    f"rather than guessing: a wrong factor is a wrong number "
+                    f"in an exported legal program.")
+            # The BASE magnitude -- the one the engine actually holds. Emitting
+            # the DECLARED magnitude is the defect this path existed for:
+            # `155000 usd_cent` is 1550.00 dollars, and `155000` was a 100x
+            # money error announced only by a comment.
+            value = _scale_constant_value(value, factor)
+            # The declaration CROSSES now, carrying its unit, so nothing is
+            # discarded and there is no LOSSY note to write. How it crosses is
+            # the dialect's business: a system with `prolog_load_context/2`
+            # takes the directive and expands it; one without gets the module
+            # filled in here, by the exporter, which knows it statically --
+            # exactly as the engine's transformer does for
+            # `constant_number_units/3`.
+            self._items.append(
+                self._constant_declaration(directive, name, value, unit, cap))
         self._constants[name] = value
 
     #: Arithmetic that folds over numeric literals. Deliberately NOT a general

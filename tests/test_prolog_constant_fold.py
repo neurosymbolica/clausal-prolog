@@ -118,11 +118,16 @@ def test_an_undeclared_name_in_an_escape_is_not_folded():
 # ── Units: lossy, and visibly so ─────────────────────────────────────────────
 
 
-def test_a_united_constant_exports_its_magnitude_and_says_so():
-    """Prolog has no unit system, so the unit cannot cross. The exporter
-    already discards units from an inline ``5000(euro)`` literal and records
-    it as LOSSY; a united constant follows that precedent rather than
-    inventing a policy -- but it must not drop the unit SILENTLY."""
+def test_a_united_constant_exports_its_magnitude_AND_its_unit():
+    """Was `..._and_says_so`, asserting a LOSSY note, on the premise that
+    "Prolog has no unit system, so the unit cannot cross".
+
+    Option 3 (2026-09-13) overturns the premise rather than the intent. The
+    original requirement was that a dropped unit must not be dropped SILENTLY;
+    it is now not dropped at all — the declaration crosses, carrying the unit,
+    so there is nothing to report as lost. The magnitude assertion is
+    unchanged, because that is the half that could still go wrong.
+    """
     out = clausal_source_to_prolog(
         "-import_from(european_union, [euro])\n"
         "-constant_number_units(max_fine, 5000, euro)\n"
@@ -130,14 +135,9 @@ def test_a_united_constant_exports_its_magnitude_and_says_so():
         "applies(X) <- (fine(X, F), F > ++max_fine)\n")
     assert "5000" in out, out
     assert "???" not in out, out
-    assert re.search(r"unit discarded", out), (
-        "the dropped unit must be reported, not silent", out)
+    assert "unit discarded" not in out, "nothing is discarded any more"
+    assert "constant_number_units(" in out and "euro" in out, out
 
-
-# ── Acceptance: the emitted program RUNS ─────────────────────────────────────
-
-
-@needs_scryer
 def test_folded_program_runs(tmp_path):
     """The definition of done: not "it parses", but "it answers".
 

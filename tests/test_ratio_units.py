@@ -218,11 +218,15 @@ def test_the_exporter_refuses_an_inline_quantity_in_a_ratio_unit():
                 "floor(300(basis_point)),\n")
 
 
-def test_the_exporter_refuses_a_constant_declared_in_a_ratio_unit():
-    with pytest.raises(NotImplementedError, match="scaled unit"):
-        _export("-import_from(py.units, [basis_point])\n"
-                "-constant_number_units(ru_floor, 300, basis_point)\n"
-                "floor(constant(ru_floor)),\n")
+def test_a_ratio_unit_declaration_exports_the_BASE_magnitude():
+    """Was a refusal until 2026-09-13 (option 3). The hazard it guarded is
+    unchanged and is what this asserts: `300 basis_point` is the ratio 0.03,
+    and emitting 300 would be a 10000x error."""
+    out = _export("-import_from(py.units, [basis_point])\n"
+                  "-constant_number_units(ru_floor, 300, basis_point)\n"
+                  "floor(constant(ru_floor)),\n")
+    assert "floor(0.03" in out, out
+    assert "floor(300)" not in out
 
 
 def test_every_declared_ratio_unit_is_refused_inline():

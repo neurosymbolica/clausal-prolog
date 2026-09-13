@@ -315,32 +315,41 @@ def _export(src):
     return clausal_source_to_prolog(src)
 
 
-def test_the_exporter_refuses_a_constant_declared_in_a_minor_unit():
-    """The magnitude the exporter would fold is the DECLARED one, so this
-    used to emit `pay(155000)` where the engine holds 1550.00 dollar -- a
-    100x money error flagged only by a comment. A comment is not a guard."""
-    with pytest.raises(NotImplementedError, match="scaled unit"):
-        _export("-import_from(united_states, [usd, usd_cent])\n"
-                "-constant_number_units(sga_monthly, 155000, usd_cent)\n"
-                "pay(constant(sga_monthly)),\n")
+def test_a_minor_unit_declaration_exports_the_BASE_magnitude():
+    """Was a REFUSAL until 2026-09-13 (option 3): the exporter folded the
+    DECLARED magnitude, emitting `pay(155000)` where the engine holds 1550.00
+    dollar -- a 100x money error flagged only by a comment, and a comment is
+    not a guard. It now converts, so the refusal is no longer needed.
+
+    This test kept its coverage and changed its expectation: the thing it
+    guards against is still `pay(155000)`."""
+    out = _export("-import_from(united_states, [usd, usd_cent])\n"
+                  "-constant_number_units(sga_monthly, 155000, usd_cent)\n"
+                  "pay(constant(sga_monthly)),\n")
+    assert "pay(1550.00)" in out, out
+    assert "pay(155000)" not in out
 
 
-def test_the_exporter_refuses_a_scaled_physical_unit():
-    """Not a currency special case: `30 day` folded to 30 while the engine
-    stores 2592000 seconds. The defect was always general."""
-    with pytest.raises(NotImplementedError, match="scaled unit"):
-        _export("-import_from(py.units, [day])\n"
-                "-constant_number_units(standstill, 30, day)\n"
-                "wait(constant(standstill)),\n")
+def test_a_scaled_physical_unit_declaration_converts_too():
+    """Not a currency special case, and it never was: `30 day` folded to 30
+    while the engine stores 2592000 seconds. Now converted, same as money."""
+    out = _export("-import_from(py.units, [day])\n"
+                  "-constant_number_units(standstill, 30, day)\n"
+                  "wait(constant(standstill)),\n")
+    assert "wait(2592000)" in out, out
+    assert "wait(30)" not in out
 
 
-def test_the_refusal_names_the_unit_and_the_way_out():
-    with pytest.raises(NotImplementedError) as exc:
-        _export("-import_from(py.units, [day])\n"
-                "-constant_number_units(standstill, 30, day)\n"
-                "wait(constant(standstill)),\n")
-    text = str(exc.value)
-    assert "day" in text and "base unit" in text, text
+def test_the_declaration_crosses_carrying_its_unit():
+    """Replaces two tests that asserted the refusal's WORDING. There is no
+    refusal on this path now -- the declaration is emitted, so the unit is
+    present in the exported program rather than named in an error about why it
+    could not be."""
+    out = _export("-import_from(py.units, [day])\n"
+                  "-constant_number_units(standstill, 30, day)\n"
+                  "wait(constant(standstill)),\n")
+    assert "constant_number_units(" in out and "day" in out, out
+
 
 
 def test_a_base_unit_constant_still_exports():
@@ -978,7 +987,10 @@ def test_the_exporter_knows_the_currency_directive():
                   "-constant_number_currency(cap, 5000, usd)\n"
                   "fine(constant(cap)),\n")
     assert "fine(5000)" in out
-    assert "-constant_number_currency(cap" in out, "the LOSSY note names it"
+    # Was: the LOSSY note names the directive. There is no LOSSY note on this
+    # path since 2026-09-13 -- the declaration is EMITTED, so the directive
+    # name appears as a clause rather than in a comment about what was lost.
+    assert "constant_number_currency(" in out, out
 
 
 def test_the_currency_directive_is_listed_as_known():
@@ -1601,25 +1613,24 @@ def test_sum_list_reports_the_same_error_in_either_order(tmp_path):
             list(call(goal, v, module=mod))
 
 
-def test_the_refusal_names_the_directive_that_was_WRITTEN():
+def test_the_inline_refusal_names_the_directive_that_was_WRITTEN():
     """A diagnostic must not name something the source does not contain.
 
     The refusal hardcoded `-constant_number_units` even when the author wrote
     `-constant_number_currency`, sending them to look for a directive that is
-    not in their file (iso-export-lane, 2026-09-11). Same shape as the
-    `dollar vs dollar` message and the `:111` motivation: a message about a
-    thing rather than about the thing.
+    not in their file (iso-export-lane, 2026-09-11).
+
+    Retargeted 2026-09-13: the DECLARATION path no longer refuses at all (it
+    converts), so this now guards the INLINE path, which still refuses and
+    still has to name what was written. The claim is unchanged; only the
+    surface that can violate it has moved.
     """
-    for directive in ("constant_number_units", "constant_number_currency"):
+    for unit in ("aud_cent", "usd_cent"):
         with pytest.raises(NotImplementedError) as exc:
             _export(f"-import_from(australia, [aud, aud_cent])\n"
-                    f"-{directive}(cap, 200000000, aud_cent)\n"
-                    f"pay(constant(cap)),\n")
-        text = str(exc.value)
-        assert f"-{directive}(cap" in text, text
-        other = ("constant_number_currency" if directive.endswith("units")
-                 else "constant_number_units")
-        assert f"-{other}(cap" not in text, f"names the other directive: {text}"
+                    f"-import_from(united_states, [usd, usd_cent])\n"
+                    f"pay(200000000({unit})),\n")
+        assert unit in str(exc.value), str(exc.value)
 
 
 def test_sum_list_still_accepts_every_numeric_kind(tmp_path):
