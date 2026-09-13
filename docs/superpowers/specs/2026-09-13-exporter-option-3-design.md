@@ -99,6 +99,22 @@ Packaging for `expansion`, still open and deferred: inline per file, or one libr
 `:- use_module(library(clausal_constants))`. Both are reasonable; neither needs deciding to ship
 `facts`.
 
+## What still does NOT cross: the decimal SCALE
+
+Measured 2026-09-13 by running the exporter's own output. The exporter writes
+`constant_number_units(fees, sga, 1550.00, usd_cent)`; both systems read `1550.00` as a float and
+print `1550.0`. **The magnitude survives, the scale does not**, because Prolog has no decimal
+type.
+
+So the decimal-string work (`-constant_number_units(fee, "292.00", usd)`) keeps a statutory scale
+exact **inside the engine** and loses it at the Prolog boundary. That is a smaller loss than the
+100x magnitude error option 3 fixes, and it is not fixable by this design — carrying it would need
+an exported representation Prolog can hold exactly, which is a separate question from whether the
+declaration crosses.
+
+Worth stating because the obvious next assumption is that a declaration crossing intact means the
+value crosses intact. It does not, in one specific respect.
+
 ## Scope
 
 * one field on `Dialect`, set by five factories

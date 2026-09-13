@@ -426,6 +426,11 @@ is still refused for sub-scale digits.
 `constant_number_units/3` reports the **Decimal**, not the string: the string is how the
 magnitude was spelled, not what was declared.
 
+**The scale does not survive EXPORT**, though the magnitude does. Prolog has no decimal type, so
+an exported `1550.00` is read as a float and prints as `1550.0` (measured 2026-09-13 in both
+Scryer and Trealla). A decimal string keeps the statutory scale exact inside the engine; at the
+Prolog boundary only the number crosses.
+
 **One consequence worth knowing for the migration.** The [scale lint](#bare-integers-are-not-money)
 keys on a bare numeric literal, so a site converted to the string form goes silent — correctly,
 since it now carries its unit, but it means the warning count falls for string migrations as well

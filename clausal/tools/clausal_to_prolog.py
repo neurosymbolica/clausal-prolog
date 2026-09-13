@@ -743,6 +743,9 @@ class _ClausalToProlog:
         # converted; falls back to the module path's basename, because a file
         # may declare a constant before (or without) `-module`.
         self._module_name: str | None = None
+        #: Set when a constant declaration is emitted, so the prelude import is
+        #: added only to files that need it.
+        self._emitted_constant_declaration = False
         # Dotted target path → that target's FILTERED export set, as returned
         # by module_export_signature. When set, import lists are narrowed to
         # names the target really exports.
@@ -1121,18 +1124,43 @@ class _ClausalToProlog:
         # the caller-supplied map for positions no single module can see.
         meta_directives = self._meta_predicate_directives(seen_order, defined)
 
+        # (4) For an `expansion` dialect, the emitted file must pull in the
+        # term_expansion prelude, or its `:- constant_number_units(...)` lines
+        # are unknown directives and the declarations vanish. Emitted ONLY when
+        # this file actually declares a constant -- a prelude import in every
+        # file would be noise in 1560 of them.
+        #
+        # The `discontiguous` declarations go with it because the expansion
+        # emits facts under the public names directly, and a file's constant
+        # declarations are not guaranteed to be contiguous in the output.
+        prelude_directives: list = []
+        prelude = getattr(self.dialect, "constants_prelude", None)
+        if prelude is not None and self._emitted_constant_declaration:
+            load, prelude_module = prelude
+            prelude_directives.append(
+                PDirective(PCompound(load, (PAtom(prelude_module),))))
+            for functor, arity in (("constant_number_units", 3),
+                                   ("module_constant_units", 4),
+                                   ("constant_value", 2),
+                                   ("module_constant", 3)):
+                prelude_directives.append(PDirective(PCompound(
+                    "discontiguous",
+                    (PCompound("/", (PAtom(functor), PNumber(arity))),))))
+
         rewritten: list[PItem] = []
         module_seen = False
         for item in self._items:
             if _is_module_directive(item):
                 rewritten.append(_filter_module_exports(item, defined))
+                rewritten.extend(prelude_directives)
                 rewritten.extend(meta_directives)
                 rewritten.extend(discontiguous_directives)
                 module_seen = True
             else:
                 rewritten.append(item)
         if not module_seen:
-            rewritten = meta_directives + discontiguous_directives + rewritten
+            rewritten = (prelude_directives + meta_directives
+                         + discontiguous_directives + rewritten)
         self._items = rewritten
 
         if self.strict and self._all_warnings:
@@ -1904,6 +1932,7 @@ class _ClausalToProlog:
             # `constant_number_units/3`.
             self._items.append(
                 self._constant_declaration(directive, name, value, unit, cap))
+            self._emitted_constant_declaration = True
         self._constants[name] = value
 
     #: Arithmetic that folds over numeric literals. Deliberately NOT a general

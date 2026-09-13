@@ -28,6 +28,17 @@ class Dialect:
     #: report the real module inside `:- module(m, ...)`, and a hook fires and
     #: sees it. See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md
     constants: str = "facts"
+    #: For an `expansion` dialect: (load_directive, prelude_module) naming the
+    #: term_expansion prelude the emitted file must pull in. None where no
+    #: prelude is needed (`facts`) or possible (`none`).
+    #:
+    #: The DIRECTIVE differs per system and is not cosmetic (measured
+    #: 2026-09-13): Scryer takes `use_module` and rejects `ensure_loaded/1` as a
+    #: directive; Trealla's prelude must be module-LESS and loaded with
+    #: `ensure_loaded`, because its `prolog_load_context(module, M)` inside a
+    #: `user:term_expansion` clause reports the module the HOOK is defined in,
+    #: so a named prelude module attributes every file to the prelude.
+    constants_prelude: tuple | None = None
 
     @classmethod
     def iso(cls) -> Dialect:
@@ -52,6 +63,10 @@ class Dialect:
             has_dicts=True,
             module_system="swi",
             constants="expansion",
+            # UNTESTED: no swipl on this machine. SWI has
+            # prolog_load_context/2, so the Scryer-shaped prelude is the
+            # likely fit, but nobody has run it.
+            constants_prelude=("use_module", "clausal_constants_scryer"),
         )
 
     @classmethod
@@ -70,6 +85,7 @@ class Dialect:
             has_dicts=False,
             module_system="iso",
             constants="expansion",
+            constants_prelude=("use_module", "clausal_constants_scryer"),
         )
 
     @classmethod
@@ -101,6 +117,7 @@ class Dialect:
             has_dicts=False,
             module_system="iso",
             constants="expansion",
+            constants_prelude=("ensure_loaded", "clausal_constants_trealla"),
         )
 
 

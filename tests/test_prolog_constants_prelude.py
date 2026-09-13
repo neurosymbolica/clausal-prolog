@@ -119,3 +119,56 @@ def test_an_unexpanded_program_is_the_negative_control(system):
     # nothing recorded. Accepting both keeps the control honest about what each
     # system actually does instead of forcing one answer.
     assert "absent" in res or "domain_error(directive" in res, res
+
+
+# ── end to end: the exporter's OWN output, unmodified ────────────────────────
+
+
+@pytest.mark.parametrize("system", sorted(BINARIES))
+def test_the_exporters_own_output_runs_unmodified(system):
+    """The claim that matters, and the only one that cannot be faked by a
+    hand-written program: take what the exporter emits for this dialect, copy
+    the prelude beside it, run it, and ask for the declared pair back.
+
+    Every earlier test in this file wrote its own program. This one writes
+    none -- if the exporter emits the wrong load directive, names the wrong
+    prelude, or orders the prelude after the declarations, only this fails.
+    """
+    import shutil
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    from clausal.tools.prolog_dialect import Dialect
+
+    binary = BINARIES[system]
+    if not os.path.exists(binary):
+        pytest.skip(f"{system} not built at {binary}")
+
+    out = clausal_source_to_prolog(
+        "-module(fees, [pay/1])\n"
+        "-import_from(united_states, [usd, usd_cent])\n"
+        "-constant_number_units(sga, 155000, usd_cent)\n"
+        "pay(constant(sga)),\n",
+        dialect=getattr(Dialect, system)())
+
+    d = tempfile.mkdtemp()
+    shutil.copy(os.path.join(PRELUDE_DIR, f"clausal_constants_{system}.pl"), d)
+    # The import of the jurisdiction module is a Clausal concept with no Prolog
+    # counterpart here, so drop that one line; everything else is verbatim.
+    body = "\n".join(l for l in out.splitlines()
+                     if "use_module('united_states'" not in l)
+    prog = os.path.join(d, "fees.pl")
+    with open(prog, "w") as fh:
+        fh.write(body + "\n:- initialization(main).\n"
+                 "main :- ( module_constant_units(M, sga, N, U) -> "
+                 "write(got(M,N,U)) ; write(no_answer) ), nl, halt.\n")
+    proc = subprocess.run([binary, prog], capture_output=True, text=True,
+                          timeout=40, cwd=d)
+    res = proc.stdout + proc.stderr
+    assert "got(fees," in res.replace(" ", ""), res
+    assert "usd_cent" in res, res         # the unit crossed
+    # The BASE magnitude, not the declared 155000. Asserted as a VALUE, not a
+    # spelling: the exporter writes `1550.00` and Prolog reads it as a float and
+    # prints `1550.0`. The magnitude survives; the decimal SCALE does not,
+    # because Prolog has no decimal type. Measured 2026-09-13 -- an earlier
+    # version of this assertion looked for "1550.00" and failed on a correct
+    # result, which is the right way round for an assertion to be wrong.
+    assert "1550" in res and "155000" not in res, res
