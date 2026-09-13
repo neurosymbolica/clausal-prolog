@@ -610,6 +610,33 @@ def _scale_constant_value(value, factor):
     return PNumber(value.value * factor)
 
 
+def _unscale_constant_value(value, factor):
+    """*value* divided by *factor*, as a Prolog term, exactly.
+
+    The inverse of :func:`_scale_constant_value`, for a USE SITE that asks for
+    a constant's magnitude in a named unit: a declaration stores the BASE
+    magnitude, so `constant(cap) / usd_cent` has to convert back out.
+
+    Exact by construction. `Decimal('1550.00') / Decimal('0.01')` is
+    `Decimal('155000')`, never 154999.99999. A factor of 1 returns the value
+    UNCHANGED rather than dividing, for the same reason the forward helper
+    does: a base-unit constant must not acquire a decimal point it never had.
+    Integral results are handed back as `int`, because `1550.00 / 0.01` is the
+    integer 155000 and emitting `155000.0` would reintroduce the float defect
+    this path exists to remove.
+    """
+    if factor == 1:
+        return value
+    if not isinstance(value, PNumber):
+        raise NotImplementedError(
+            "clausal_to_prolog: a constant asked for in a scaled unit must "
+            f"have a numeric magnitude to convert; got {value!r}")
+    out = value.value / factor
+    if out == int(out):
+        out = int(out)
+    return PNumber(out)
+
+
 def _unit_factor(names: list[str]):
     """The factor a declared unit multiplies by to reach its base, or None.
 
@@ -2288,8 +2315,41 @@ class _ClausalToProlog:
             return PCompound("\\", (self._convert_expr(node.operand),))
         return self._convert_expr(node.operand)
 
+    def _fold_constant_over_unit(self, node: python_ast.BinOp):
+        """``constant(c) / <unit>`` -> c's magnitude IN that unit, or None.
+
+        A declaration stores the BASE magnitude, so a use site that asks for a
+        constant in a named unit has to convert back. Without this the constant
+        folded and the DIVISOR survived, emitting `CENTS =:= 1550.00/usd_cent`
+        -- and a unit atom is not an evaluable functor, so both reference
+        engines answer `type_error(evaluable, usd_cent/0)`. 65 single-goal
+        corpus clauses were this exact shape (measured 2026-09-13); the derived
+        predicate could never have answered.
+
+        Returns None -- leaving the ordinary binop path to run -- whenever the
+        shape is not a constant over a resolvable unit. A `/` between two
+        ordinary terms is real division and must stay real division.
+        """
+        if not isinstance(node.op, python_ast.Div):
+            return None
+        if not isinstance(node.left, python_ast.Call):
+            return None
+        base = self._fold_constant_call(node.left)
+        if base is None:
+            return None
+        factor = _unit_factor(_unit_leaf_names(node.right))
+        if factor is None:
+            # A divisor the unit vocabulary does not hold is not a unit at all
+            # -- `constant(c) / COUNT` is division. Refusing here would break
+            # arithmetic that has always been legal.
+            return None
+        return _unscale_constant_value(base, factor)
+
     def _convert_binop(self, node: python_ast.BinOp) -> PTerm:
         """Convert binary operators to Prolog operators."""
+        folded = self._fold_constant_over_unit(node)
+        if folded is not None:
+            return folded
         left = self._convert_expr(node.left)
         right = self._convert_expr(node.right)
 
