@@ -6,12 +6,13 @@ is merely plausible is worth nothing. Each is executed under its own real
 binary and asked to answer the declared pair back.
 
 **There are two preludes because a single portable one does not work**, measured
-2026-09-13. Scryer takes an unqualified imported `term_expansion/2` and
-unqualified expansion output, and REFUSES a `user:`-qualified clause head.
-Trealla does not fire an unqualified imported hook at all, needs
-`user:term_expansion` and `user:`-qualified reads, but rejects a `:`-qualified
-term inside the expansion list. The two requirements are opposite, which is
-exactly why this sits behind a per-dialect capability.
+2026-09-13. Scryer fires an unqualified imported `term_expansion/2`, refuses a
+`user:`-qualified clause head, and rejects `ensure_loaded/1` as a directive.
+Trealla will not fire an unqualified imported hook, and its
+`prolog_load_context(module, M)` reports the module the HOOK is defined in --
+so its prelude must be module-LESS and loaded with `ensure_loaded`, or every
+file is attributed to the prelude. Opposite requirements, which is exactly why
+this sits behind a per-dialect capability.
 """
 import os
 import subprocess
@@ -41,8 +42,17 @@ def _run_with_prelude(system, program_body, module_name=None):
     prog = os.path.join(d, "prog.pl")
     with open(prog, "w") as fh:
         head = f":- module({module_name}, []).\n" if module_name else ""
-        fh.write(head + f":- use_module(cc_{system}).\n"
-                 ":- initialization(main).\n" + program_body)
+        # Scryer takes `use_module` and refuses `ensure_loaded/1`; Trealla's
+        # prelude must be module-LESS and loaded with `ensure_loaded`, or
+        # `prolog_load_context(module, M)` reports the prelude's own module.
+        # Measured 2026-09-13; see each prelude's header.
+        load = (f":- ensure_loaded(cc_{system}).\n" if system == "trealla"
+                else f":- use_module(cc_{system}).\n")
+        fh.write(head + load + ":- initialization(main).\n"
+                 ":- discontiguous(constant_number_units/3).\n"
+                 ":- discontiguous(module_constant_units/4).\n"
+                 ":- discontiguous(constant_value/2).\n"
+                 ":- discontiguous(module_constant/3).\n" + program_body)
     proc = subprocess.run([binary, prog], capture_output=True, text=True,
                           timeout=40, cwd=d)
     return proc.stdout + proc.stderr
@@ -72,17 +82,6 @@ def test_the_expansion_records_the_DECLARING_MODULE(system):
     # hardcoded wrong module -- which is the one thing this test exists to
     # detect, since getting the REAL module is why term expansion was the
     # asked-for route.
-    if system == "trealla":
-        # KNOWN GAP, measured 2026-09-13 and recorded in the prelude's header:
-        # Trealla's expansion output must be unqualified, so inside a named
-        # module the fact lands in that module while the accessors read `user:`.
-        # Asserted as the CURRENT behaviour so it is a tracked limitation with a
-        # test that will start failing -- and so demand a fix -- the moment
-        # someone makes it work.
-        assert "no_module" in out, (
-            "trealla's named-module gap is FIXED -- update this test and the "
-            f"prelude header: {out}")
-        return
     assert "mod(a_named_module)" in out, out
 
 
@@ -92,9 +91,6 @@ def test_a_value_only_constant_expands_too(system):
         ":- constant_value(pi_approx, 3).\n"
         "main :- ( constant_value(pi_approx, V) -> write(val(V)) "
         "; write(no_value) ), nl, halt.\n"))
-    if system == "trealla":
-        assert "val(3)" in out or "no_value" in out, out   # same gap
-        return
     assert "val(3)" in out, out
 
 
