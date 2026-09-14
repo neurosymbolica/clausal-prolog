@@ -59,6 +59,59 @@ cost is not workload-dependent at all.)
 *memory* slightly favours the class. It is swamped by the per-class fixed cost and by the
 construct/unify gap.
 
+
+## 2a. How much goes away — measured 2026-09-14
+
+**Deleted outright, ~1,450-1,650 lines:**
+
+    predicate.py                          1772 lines total
+      class PredicateMeta (689-1398)       710   the layer itself
+      generated-method factories           ~250  _make_init/_fast_new/_eq/_unify/
+        (344-620)                                _occurs_check/_repr/_term_iter,
+                                                 _make_instance_state_property
+      construction-error machinery         ~178  ClausalTermConstructionError and
+        (166-343)                                friends -- they exist because a
+                                                 class ctor can be called with wrong
+                                                 NAMED fields; tuples cannot be
+      class-shaped helpers                 ~150  _dispatch_at, _is_term_instance_py,
+        (1399-1530, 1642-1659, 1723-1736)        _is_zero_field_class_py,
+                                                 _term_field_names_py,
+                                                 term_field_names_of_class,
+                                                 _class_origin, make_predicate
+      ----                                 ----
+      subtotal                            ~1288  ~73% of the file
+
+    database.py PredRow (81-366)           ~286   the MIDDLE facade; goes if routing
+                                                  is direct to Database
+
+**Rewritten, not deleted: 435 reference lines across 52 modules**, and they are concentrated —
+`predicate.py` 50, `_variables.c` **46**, `specialization.py` 32, `compiler_v2.py` 32,
+`solve.py` 23, `term_rewriting.py` 20, `database.py` 16, `terms_to_ast.py` 16. Those eight hold
+~235 of the 435; the remaining ~200 are spread over 44 modules.
+
+**`_variables.c`'s 46 references are the unmeasured part of this estimate.** The C core
+special-cases predicate instances in its unify/deref/compare paths. Since the native
+functor-first-tuple path already exists and is faster, much of that special-casing should be
+DELETABLE rather than rewritten — but I have not read those 46 sites, so they are not counted in
+the subtotal above. The true deletion figure is likely higher than 1,650, not lower.
+
+**Generated code shrinks too, and this is the invisible half.** Every predicate in every module
+currently emits a ~10-line `try/except NameError/class` guard into its transformed AST. The engine's
+own stdlib alone accounts for ~484 predicate classes at import, i.e. roughly 4,800 lines of
+generated guard before any user code, and every corpus module carries its own share. That is
+bytecode, not source, so it does not appear in a line count — but it is why the fixed cost is
+~3.4 MB.
+
+**What survives in predicate.py** (~480 lines): the source-site/clause-provenance helpers
+(`module_source_path`, `record_clause_source`, `_source_site`, `_format_site`), the term
+accessors that need REWRITING for tuples rather than deleting (`term_field_values`,
+`term_field_dict`), `is_atom_value`, `make_atom`, the identity-mismatch diagnostics, and the
+name predicates (`_is_logic_var_name`, `_camel_case`).
+
+**Caveat on the range.** The subtotal is a line census by region, not a dependency analysis. Some
+of the ~150 "class-shaped helpers" may have non-class callers that need a replacement rather than
+a deletion; §6 P0 is what would find that out.
+
 ## 3. What the layer actually provides, and what replaces each part
 
 | role today | replacement |
