@@ -396,3 +396,70 @@ runtime name lookup. The bytecode stays clean; the runtime value carries the typ
 Which leaves the dates-and-decimals ruling intact and better founded: `('date', 2026, 9, 14)` and
 `('decimal', "10.01")` are marshal-clean *and* fold, so they need no `$cells`-style indirection,
 while an opaque Python object has neither property and stays refused.
+
+---
+
+# The tuple-DATA tag: `(tuple, …)` vs `('', …)` vs `((), …)` vs a reserved str
+
+Proposed: replace the `tuple`-type tag with `('', 1, 2)`, then `((), 1, 2)` — both to make
+tuple-data marshal-clean so the `$cells.TUPLE_TAG` indirection can go.
+
+**The benefit is real and larger than marshalling.** A marshal-clean tag folds into `co_consts`,
+which deletes the mechanism that exists ONLY because the current tag cannot be marshalled: the
+`$cells` namespace injection, the dotted value pattern (`compiler/predicate.py:403`,
+`globals_env.py:379`, `list_dispatch.py:111`). With a `str` tag the slot-0 rule also collapses from
+`type(s0) is str or s0 is TUPLE_TAG` to "slot 0 is a `str`" — one check on the hot recognition path.
+
+    marshal.dumps((tuple, 1, 2))      ValueError
+    marshal.dumps(('', 1, 2))         clean
+    marshal.dumps(((), 1, 2))         clean
+    marshal.dumps(('$tuple', 1, 2))   clean
+
+## Why BOTH empty spellings fail, and it is the same reason
+
+**Measured: `unify((), '')` is True, though `() == ''` is False.** The engine already treats the
+empty tuple, the empty string and `[]` as ONE term — nil:
+
+    unify((), '')    True        unify((), [])   True        unify('', [])   True
+
+so the two proposals are the same proposal as far as the engine is concerned:
+
+    ((), 1, 2)  vs  ('', 1, 2)        unify -> True
+
+and the empty data tuple collides with the empty atom under either:
+
+    ((),)       vs  ('',)            unify -> True     <- must be False for a tag to work
+
+Controls confirm the equivalence is specific, not a unify that says True to everything:
+`('a',)` vs `('b',)` False, `((),)` vs `(1,)` False.
+
+**So the tuple-tag question is DOWNSTREAM of the nil/empty-atom ruling**, whichever empty spelling
+is chosen. That ruling is already pending in
+`todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md`, which notes ISO has `''` as
+an atom distinct from `[]` so both readings are defensible, and asks for the same kind of ruling
+`'[]'` got. `atoms.NIL_KEY` is `()`; `atoms.mint('[]')` is the empty list.
+
+## The option that works without a ruling
+
+A reserved `str` that is not a writable atom spelling. This tree already reserves `$`-prefixed
+names for engine-internal bindings (`$module`, `$cells`, `$Var`), and they are not valid source
+identifiers. Measured:
+
+    ('$tuple',)      vs ('',)     False        ('$tuple',) vs ((),)    False
+    ('$tuple',)      vs ('[]',)   False        marshal-clean, and a str in slot 0
+                                               so it is already a cell today
+
+* keeps the empty data tuple as `('$tuple',)`, unambiguous
+* gives the one-branch slot-0 rule, the same win `''` would give
+* costs one reserved spelling, and loses the elegance of "a tuple is a compound with no functor"
+* **does not touch ISO fidelity** — `''` stays available as the ISO empty atom
+
+## Recommendation
+
+If the nil ruling goes the way the open todo hints (no empty-spelling atom in Clausal), `''` is the
+better design and should be taken then. Until that is ruled, a reserved `$`-prefixed tag gets the
+marshalling win and the one-branch recognition rule with no ISO cost and no dependency on an open
+question. Either way, `(tuple, …)` should go: it is the only candidate that cannot be marshalled.
+
+**Not established:** how many tuple-DATA terms exist in the corpus, i.e. what a re-tagging would
+cost to migrate. The engine's own use is small (4 sites, all display tests).
