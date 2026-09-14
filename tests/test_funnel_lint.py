@@ -608,7 +608,8 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2322 (2319 before the ``.seam`` alias-extension
+    """clausal/testing.py:2323 (2322 before the tuple-DATA tag's TUPLE_TAG
+    import, 2319 before the ``.seam`` alias-extension
     lines) has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
@@ -628,7 +629,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2322
+        v.pattern == "functor_fallback" and v.line == 2323
         for v in testing_violations
     ), testing_violations
 
