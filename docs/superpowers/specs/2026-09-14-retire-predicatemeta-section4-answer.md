@@ -169,3 +169,126 @@ Revised order:
 * `predicate.py:1425` — the `_get_dispatch` funnel is a duck-typed protocol with out-of-tree
   implementors and a frozen signature. Deleting the layer breaks an external contract; it is not
   in the spec's "not established" list and should be.
+
+---
+
+# REVISION, after the operator's direction of 2026-09-14
+
+The operator settled the representation question directly: **functor-first tuples are the main
+representation** (S-expressions), **atom 1-tuples discriminate atoms from strings in argument
+position** and match real atoms in shape, `PredicateMeta` goes because "Prolog needs immutable
+compounds — the only things that change are vars", and tuples are immutable with CPython fast
+paths. Three consequences below are measured, and one of them **retracts a recommendation I made
+above**.
+
+## R1. q3's "generic callable handle" is RETRACTED — the seam already speaks tuples
+
+I recommended binding the atom *plus one generic callable handle*, reasoning that Python still
+needs to call and construct. **Measured wrong**: the goal-position seam already does both, in the
+target representation, with no module-level predicate object anywhere.
+
+From `tests/test_goal_position_seam.py`, running today:
+
+    goal = ("decide", ("large",), ("verdict", S, IDS))       # functor-first; atoms are 1-tuples
+    once_bind(goal, mod.__dict__) is True
+    export(S) == ("prohibited",)  and  export(IDS) == [("r1",)]
+    list(each(goal, (S, IDS), mod.__dict__)) ==
+        [(("prohibited",), [("r1",)]), (("prohibited",), [("r2",)])]
+
+and `once_bind` resolves through `module_globals["$module"]` — the LogicModule and its db — not
+through a module-level binding. `if --goal(X):` and `for a, b in --goal(A, B):` lower to exactly
+this, exporting the answers as ordinary Python locals.
+
+**So the calling convention is `--`, not `m.some_pred`.** The module-level name should be the atom
+`('some_pred',)` and nothing else, which is the spec's original position; my counter-proposal was
+reasoning from the 209 in-tree object-shaped accesses without checking what the seam had already
+replaced them with. Those 209 are a MIGRATION to an existing idiom, not evidence that a handle is
+needed.
+
+## R2. `Compound` is not needed, and the tuple STRICTLY DOMINATES it
+
+`clausal/terms.py:97` — a dataclass of `functor: str | Var`, `args: tuple`, `_position`. The
+operator's read ("a generic class that contains a compound term, but that's what our
+functor-first-tuples are now") is right. The one capability that could have justified keeping it —
+a VARIABLE in functor position — measured the other way:
+
+    (F, 1)            vs ('f', 1)             unify -> True,  F bound to 'f'
+    Compound(G, (1,)) vs Compound('f', (1,))  unify -> FALSE, G left unbound
+
+`Compound.__unify__` refuses to bind an unbound functor var on purpose (the "deref-only floor",
+A01-F003). The tuple path binds it. So the tuple is not merely equivalent, it is **more
+expressive** on the only axis where `Compound` looked richer.
+
+And the fourth-representation tax is real and measurable:
+
+    Compound('f', (1,2)) vs ('f', 1, 2)       unify -> False
+
+**One thing `Compound` carries that a tuple cannot: `_position`** (source span, `compare=False`,
+`repr=False`, for diagnostics). That is the only open item in removing it, and it is a diagnostics
+question, not a representation one — a side table keyed by id, or positions kept on the clause
+rather than the term.
+
+## R3. A NEW GAP: an opaque Python object cannot go directly into a goal
+
+The operator's requirement — "there should be a way to pass Python objects *through* it, if
+necessary (ideally not touched)". Measured, with a working control:
+
+    control: ("idpred", 42, W)            -> True, exports 42
+    ("idpred", <Payload object>, W)       -> NotImplementedError:
+                                             term_to_ast_expr: unsupported term type Payload
+    pre-bind to a Var, pass the Var       -> True, exports Payload(42), SAME OBJECT (identity)
+
+So passthrough works, but only by the Var route; the direct route dies in `term_to_ast_expr`.
+
+**The cause is exactly the representation question.** `once_bind` hands the goal to `solve()`,
+which LOWERS it to AST — it treats the goal as *source to compile*, and an arbitrary Python object
+has no literal AST form. Once the goal is a tuple of DATA resolved against the db rather than a
+tree to compile, an opaque object in an argument slot is no more special than an `int`, and route A
+works for free. **This is an argument for the tuple representation, and a concrete acceptance test
+for it.**
+
+(A first probe of this reported a failure on the Var route too. Its control also failed — the
+fixture had not declared the functor — so that reading was void. Recorded because the control is
+the only reason it was not filed as a finding.)
+
+---
+
+# The cut barrier and the three suffixes
+
+The operator's ruling, restated: **cut-free forever is a property of `.clausal`, not of the
+engine.** `.pl` MAY carry cut and the rest of ISO. Clausal code must not be able to call into code
+with cuts — *not even load it*. A cut-free `.pl` file must run unchanged when renamed `.clausal`.
+The seam has no cuts and keeps none. The purpose is to guarantee monotonicity, because `.clausal`
+is the target of formalisation into ontologies.
+
+Four things follow, and the last one is load-bearing.
+
+**1. `.clausal` and `.pl` must share ONE front end.** "Rename the suffix and it runs" is only true
+if both suffixes read through L3. The suffixes then differ by a GATE, not by a grammar — which is
+the cheapest possible version of this design and is what L3 already is.
+
+**2. Purity is statically decidable, so it is a gate rather than a judgement** — as plan rev 3
+says. The reader sees `!` in a body; no analysis is required.
+
+**3. But purity is a property of the IMPORT CLOSURE, not of a file.** If pure A imports pure B
+which imports impure C, A can reach a cut. So the check is transitive, and a module must carry a
+purity bit that is the AND of its own text and everything it imports. This is not stated in the
+plan and it is where the design gets teeth.
+
+**4. The enforcement point already exists in this document.** §1's answer to q1 plants the
+exporter's row into the importer's table at import. **That plant is the chokepoint** — the one
+place that sees "module X is taking a dependency on module Y" with both modules resolved. Purity
+barrier, export enforcement (§2), and row sharing are three jobs for one hook. Doing q1 first
+therefore buys the cut barrier its mechanism, which is a second reason it sequences before P1.
+
+## The ordering constraint, measured
+
+    engine tree, tracked:   .clausal  431      .seam  0      .pl  15
+
+**Zero files have moved to `.seam`.** `.clausal` cannot take on ISO syntax while 431 engine files
+(plus the corpus, which the plan puts at 787 and which is not measured here) still hold Python-seam
+syntax under that name. The write-side flip to `.seam` is the prerequisite for everything in this
+section, and it has not started.
+
+Nothing here blocks L3, which targets `.pl`. It blocks the `.clausal` RECLAMATION, and the cut gate
+lives on the far side of it.
