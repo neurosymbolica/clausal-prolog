@@ -23,6 +23,8 @@ from clausal import Var, solve
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Trail, deref
+from clausal.modules.py.datetime import _dt_to_term as _T
+from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
 
 _COUNTER = [0]
 
@@ -341,7 +343,7 @@ def test_F015_guard_time4_construct_and_decompose():
     from clausal.modules.py.datetime import _time_4
     T = Var()
     sols = list(_time_4(10, 5, 0, T, Trail(), None))
-    assert len(sols) == 1 and deref(T) == pydt.time(10, 5, 0)
+    assert len(sols) == 1 and deref(T) == _T(pydt.time(10, 5, 0))
 
 
 def test_F015_datetime7_rejects_float_components():
@@ -356,7 +358,7 @@ def test_F015_guard_datetime7_construct():
     from clausal.modules.py.datetime import _datetime_7
     DT = Var()
     sols = list(_datetime_7(2020, 1, 5, 10, 30, 0, DT, Trail(), None))
-    assert len(sols) == 1 and deref(DT) == pydt.datetime(2020, 1, 5, 10, 30, 0)
+    assert len(sols) == 1 and deref(DT) == _T(pydt.datetime(2020, 1, 5, 10, 30, 0))
 
 
 def test_F015_timedelta3_float_days_exact_not_truncated():
@@ -366,7 +368,7 @@ def test_F015_timedelta3_float_days_exact_not_truncated():
     from clausal.modules.py.datetime import _timedelta_3
     TD = Var()
     sols = list(_timedelta_3(1.5, 0, TD, Trail(), None))
-    assert len(sols) == 1 and deref(TD) == pydt.timedelta(days=1.5)
+    assert len(sols) == 1 and deref(TD) == _T(pydt.timedelta(days=1.5))
 
 
 def test_F015_guard_timedelta3_int_and_unbound_seconds():
@@ -374,7 +376,7 @@ def test_F015_guard_timedelta3_int_and_unbound_seconds():
     from clausal.modules.py.datetime import _timedelta_3
     TD = Var()
     sols = list(_timedelta_3(2, Var(), TD, Trail(), None))
-    assert len(sols) == 1 and deref(TD) == pydt.timedelta(days=2)
+    assert len(sols) == 1 and deref(TD) == _T(pydt.timedelta(days=2))
 
 
 def test_F016_date_between_mixed_types_fails_cleanly():
@@ -382,7 +384,7 @@ def test_F016_date_between_mixed_types_fails_cleanly():
     import datetime as pydt
     from clausal.modules.py.datetime import _date_between_3
     gen = _date_between_3(None, "P", "F", None,
-                          pydt.date(2020, 1, 1), pydt.datetime(2020, 1, 3),
+                          _T(pydt.date(2020, 1, 1)), _T(pydt.datetime(2020, 1, 3)),
                           Var(), Trail())
     sols = [1 for parent, _v in gen if parent == "P"]  # must not raise
     assert sols == []
@@ -394,8 +396,8 @@ def test_F016_date_between_naive_aware_mix_fails_cleanly():
     import datetime as pydt
     from clausal.modules.py.datetime import _date_between_3
     gen = _date_between_3(None, "P", "F", None,
-                          pydt.datetime(2020, 1, 1),
-                          pydt.datetime(2020, 1, 3, tzinfo=pydt.timezone.utc),
+                          _T(pydt.datetime(2020, 1, 1)),
+                          _T(pydt.datetime(2020, 1, 3, tzinfo=pydt.timezone.utc)),
                           Var(), Trail())
     sols = [1 for parent, _v in gen if parent == "P"]  # must not raise
     assert sols == []

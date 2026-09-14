@@ -17,24 +17,26 @@ import pytest
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import date
+from clausal.modules.py.datetime import _dt_to_term as _T
+from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
 
 
 class TestConstruct:
     def test_ground_args_build_a_real_datetime_date(self):
         d = date(2026, 1, 15)
-        assert isinstance(d, dt.date)
-        assert d == dt.date(2026, 1, 15)
+        assert isinstance(_P(d), dt.date)
+        assert d == _T(dt.date(2026, 1, 15))
 
     def test_it_equals_and_hashes_as_a_plain_date(self):
         # so it unifies with engine-produced dates and works as a dict key
         d = date(2026, 1, 15)
-        assert d == dt.date(2026, 1, 15)
-        assert hash(d) == hash(dt.date(2026, 1, 15))
+        assert d == _T(dt.date(2026, 1, 15))
+        assert hash(d) == hash(_T(dt.date(2026, 1, 15)))
 
     def test_python_date_api_is_available(self):
         d = date(2026, 1, 15)
-        assert d.isoformat() == "2026-01-15"
-        assert d.year == 2026 and d.month == 1 and d.day == 15
+        assert _P(d).isoformat() == "2026-01-15"
+        assert _P(d).year == 2026 and _P(d).month == 1 and _P(d).day == 15
 
     def test_an_impossible_date_raises_an_ISO_domain_error(self):
         """A term constructor cannot FAIL the way date/4's goal could, so it
@@ -73,7 +75,7 @@ class TestConstruct:
         acceptance case a constructor that rejected EVERY 29 February would
         pass — a gate needs a test that it says YES."""
         d = date(2024, 2, 29)
-        assert isinstance(d, dt.date) and d.isoformat() == "2024-02-29"
+        assert isinstance(_P(d), dt.date) and _P(d).isoformat() == "2024-02-29"
 
     def test_the_century_rule_both_ways(self):
         """2024 and 2025 prove the four-year rule and nothing else. The century
@@ -86,7 +88,7 @@ class TestConstruct:
             date(2100, 2, 29)          # century, not a leap year
         assert "domain_error" in repr(exc.value.args[0])
         d = date(2000, 2, 29)          # century divisible by 400: a leap year
-        assert isinstance(d, dt.date) and d.isoformat() == "2000-02-29"
+        assert isinstance(_P(d), dt.date) and _P(d).isoformat() == "2000-02-29"
 
     def test_a_float_is_rejected_in_every_component_not_just_the_year(self):
         """Audit finding F015: a float component must be REJECTED, never
@@ -105,32 +107,32 @@ class TestConstruct:
         explicitly (`isinstance(x, int) and not isinstance(x, bool)`), so the
         two disagree. Recorded here so that if date/3 is ever made stricter it
         is a decision someone took, not a silent divergence discovered later."""
-        assert date(2020, True, 5) == dt.date(2020, 1, 5)
+        assert date(2020, True, 5) == _T(dt.date(2020, 1, 5))
 
 
 class TestDecompose:
     def test_pattern_unifies_against_a_real_date_and_binds_components(self):
         Y, M, D = Var(), Var(), Var()
         trail = Trail()
-        assert unify(date(Y, M, D), dt.date(2026, 1, 15), trail)
+        assert unify(date(Y, M, D), _T(dt.date(2026, 1, 15)), trail)
         assert (deref(Y), deref(M), deref(D)) == (2026, 1, 15)
 
     def test_unification_is_symmetric(self):
         Y, M, D = Var(), Var(), Var()
         trail = Trail()
-        assert unify(dt.date(2026, 1, 15), date(Y, M, D), trail)
+        assert unify(_T(dt.date(2026, 1, 15)), date(Y, M, D), trail)
         assert (deref(Y), deref(M), deref(D)) == (2026, 1, 15)
 
     def test_a_partially_bound_pattern_filters(self):
         D = Var()
         trail = Trail()
-        assert unify(date(2026, 1, D), dt.date(2026, 1, 15), trail)
+        assert unify(date(2026, 1, D), _T(dt.date(2026, 1, 15)), trail)
         assert deref(D) == 15
-        assert not unify(date(2025, 1, Var()), dt.date(2026, 1, 15), Trail())
+        assert not unify(date(2025, 1, Var()), _T(dt.date(2026, 1, 15)), Trail())
 
     def test_a_datetime_is_not_a_date(self):
         assert not unify(date(Var(), Var(), Var()),
-                         dt.datetime(2026, 1, 15, 9, 30), Trail())
+                         _T(dt.datetime(2026, 1, 15, 9, 30)), Trail())
 
 
 class TestOrdering:
@@ -144,4 +146,4 @@ class TestOrdering:
 
     def test_sorted_is_chronological_not_lexicographic(self):
         got = sorted([date(2026, 1, 15), date(2026, 1, 2), date(2026, 1, 9)])
-        assert got == [dt.date(2026, 1, 2), dt.date(2026, 1, 9), dt.date(2026, 1, 15)]
+        assert got == [_T(dt.date(2026, 1, 2)), _T(dt.date(2026, 1, 9)), _T(dt.date(2026, 1, 15))]

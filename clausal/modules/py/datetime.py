@@ -97,8 +97,19 @@ from clausal.logic.trampoline import DONE
 _DT_TERM_EMIT = {
     _dt.date: lambda v: ("date", v.year, v.month, v.day),
     _dt.time: lambda v: ("time", v.hour, v.minute, v.second, v.microsecond),
-    _dt.datetime: lambda v: ("datetime", v.year, v.month, v.day,
-                             v.hour, v.minute, v.second, v.microsecond),
+    # A tz-AWARE datetime carries a ninth component: its UTC offset in
+    # MINUTES. Dropping it silently was measurably wrong -- audit F016 pins
+    # that a naive/aware MIX must fail cleanly, and with the offset gone every
+    # value became naive and the mix quietly succeeded.
+    #
+    # Known narrowing, deliberate and recorded: a named zone (ZoneInfo) reduces
+    # to its offset AT THAT INSTANT, so later arithmetic across a DST boundary
+    # would differ from Python's. Exact for fixed offsets, which includes
+    # `timezone.utc` and therefore `now_utc/1`.
+    _dt.datetime: lambda v: (("datetime", v.year, v.month, v.day, v.hour,
+                              v.minute, v.second, v.microsecond)
+                             + ((v.utcoffset() // _dt.timedelta(minutes=1),)
+                                if v.tzinfo is not None else ())),
     _dt.timedelta: lambda v: ("timedelta", v.days, v.seconds, v.microseconds),
 }
 #: functor -> (ctor, minimum component count). Trailing components default to 0.
@@ -139,6 +150,14 @@ def _term_to_dt(value):
         return value
     ctor, minimum = spec
     args = value[1:]
+    if ctor is _dt.datetime and len(args) == 8:
+        *fields, offset_min = args
+        if all(isinstance(a, int) and not isinstance(a, bool) for a in args):
+            try:
+                return _dt.datetime(*fields, tzinfo=_dt.timezone(
+                    _dt.timedelta(minutes=offset_min)))
+            except (TypeError, ValueError, OverflowError):
+                return value
     if len(args) < minimum or any(not isinstance(a, int) or isinstance(a, bool)
                                   for a in args):
         return value          # not a well-formed one; let the caller's

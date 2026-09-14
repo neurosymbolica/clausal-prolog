@@ -66,6 +66,8 @@ from clausal.logic.atoms import mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+from clausal.modules.py.datetime import _dt_to_term as _T
+from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
 
 SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 SPEC = "implementation_plans/prolog-eq-mode-lowering.md"
@@ -352,7 +354,7 @@ class TestDateOrderingWitness:
         # Python caller must pass the atom (`mint`), not a str.
         clausal = _run_clausal(
             lambda: mod.service_in_force(mint("virtual_asset"),
-                                         datetime.date(2026, 9, 2))
+                                         _T(_P(datetime).date(2026, 9, 2)))
         )
         scryer = _run_scryer(
             tmp_path,

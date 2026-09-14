@@ -23,6 +23,8 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Compound, term_canonical, term_str
+from clausal.modules.py.datetime import _dt_to_term as _T
+from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
 
 
 def _load_inline_clausal(name: str, source: str):
@@ -1705,11 +1707,11 @@ def test_datetime_string_predicates_take_atom_text():
     )
     DT, D, S = Var(), Var(), Var()
     assert _answers(("parsed", DT), mod, DT) == [
-        (_dt.datetime(2026, 9, 7, 8, 30),)]
-    assert _answers(("iso_date", D), mod, D) == [(_dt.date(2026, 9, 7),)]
+        (_T(_dt.datetime(2026, 9, 7, 8, 30)),)]
+    assert _answers(("iso_date", D), mod, D) == [(_T(_dt.date(2026, 9, 7)),)]
     DT = Var()
     assert _answers(("iso_dt", DT), mod, DT) == [
-        (_dt.datetime(2026, 9, 7, 8, 30),)]
+        (_T(_dt.datetime(2026, 9, 7, 8, 30)),)]
     assert _answers(("formatted", S), mod, S) == [("07/09/2026",)]
 
 
