@@ -12,6 +12,156 @@ Both branches have clean working trees. Everything below is on a branch, by the 
 
 ---
 
+# 0. ORIENTATION — read this first if you are new to the lane
+
+Everything in this section was MEASURED this session unless marked *(design intent)* — which
+means an operator ruling or a plan's stated direction — or explicitly attributed to another
+source. It exists so the next instance does not have to re-derive it.
+
+**§0.5's gotchas were each hit in practice this session**, not read off a document; every one cost
+a cycle.
+
+## 0.1 There are FOUR term representations, and they do NOT interoperate
+
+    atoms              ('foo',)                        a 1-TUPLE. `atoms.is_atom` is the TERM test.
+    reader output      ('len', [], 0)                  functor-first TUPLES; variables arrive as
+                                                       VarRef(i=N) at parse time
+    runtime predicate  mylen(arg_0=[1,2], arg_1=2)     a PredicateMeta class INSTANCE, NOT a tuple
+    Compound           Compound('f', (1,2))            dataclass fallback for runtime-constructed
+                                                       or unknown-functor terms
+
+**Measured: a class instance, a functor-first tuple and a `Compound` are pairwise unequal and do
+not unify.** Conflating them is the easy and expensive mistake. `('two_arity',1,2)` will not unify
+with `two_arity(arg_0=1, arg_1=2)`.
+
+**But the engine DOES unify functor-first tuples natively, in C, and faster**:
+`unify(('f',1,X), ('f',1,2))` binds `X=2`. Tuples beat class instances 23x on construction and
+4.7x on unification, because the C `do_unify` has a native tuple path while the class detours
+through a generated Python `__unify__`.
+
+**A zero-arity PredicateMeta class is a "declared atom"** — deliberate, not a leftover.
+`predicate.py:1617` documents the union explicitly: `atoms.is_atom` is the TERM test,
+`predicate.is_zero_field_class` is the CLASS test, and `is_atom_value` admits both. THE FLIP
+(atoms became arity-0 cells) did not remove declared atoms, and any plan saying "atoms are tuples,
+full stop" is wrong on those paths.
+
+## 0.2 The compiler is a pipeline, and the JOIN is the transformed AST
+
+    .seam source --> ast.parse --> EmbedTransformer --> transformed AST --+
+                                   (templating/term_rewriting.py)        |
+                                                                         +--> exec in module_dict
+    .pl source --> L0 toklex --> L1 Pratt --> L2 reader --> L3 ----------+
+                   (tools/toklex)  (prolog_    (prolog_     (tools/
+                                    parser.py)  reader.py)   iso_l3.py)
+
+* **L0** `clausal/tools/toklex/` — generated, spec-driven tokenizer. DONE.
+* **L1** `prolog_parser.py` — Pratt/precedence-climbing over a **runtime-mutable
+  `OperatorTable`**; `:- op/3` is applied MID-PARSE. DONE.
+* **L2** `prolog_reader.py` — `feed()` / `read_term() -> ReaderItem | NEED_MORE | EOF`, resumable.
+  ReaderItem kinds seen in practice: `Clause`, `Directive`, `SyntaxIssue`. `Clause.term` is the
+  WHOLE item term, so a rule is `(':-', Head, Body)`. DONE.
+* **L3** `clausal/tools/iso_l3.py` — NEW this session, **facts only (P1)**.
+
+**Why the transformed AST is the join:** `compile_module`'s `module_dict` is the name-resolution
+environment for the entire compile (~102 touchpoints in `compiler_v2`). Lowering "direct to the
+compiler" would mean a second implementation of name resolution; routing through seam SOURCE TEXT
+goes via the reverse translator, which is measured NOT an inverse. Producing the same AST inherits
+module semantics by construction.
+
+**The `$`-prefixed names are literal `ast.Name` ids**, not valid Python source — resolved at exec
+time from `runtime_builtins`. `$define_predicate`, `$Predicate`, `$PredicateMeta`, `$module`,
+`$LoadName`. `import_hook.py:700` does `module_dict.update(runtime_builtins)`; line 265 sets
+`module_dict["$module"] = logic_module`; `$define_predicate` is set per-module in `exec_module`.
+
+**Every predicate emits a ~10-line class guard** into the transformed AST
+(`try / if name not in globals(): raise NameError / ... / except NameError: class name(metaclass=
+$PredicateMeta)`). Its job is CLASS REUSE — one class object per predicate per module. It also
+checks `type(name) is tuple and name == ("name",)`, i.e. whether the name currently holds the ATOM.
+
+**`.pl` already has a loader slot.** `PROLOG_SUFFIX` is in `SOURCE_SUFFIXES`, routed to
+`import_hook.PrologLoader`, which TODAY reverse-translates `.pl` -> `.clausal` text. **L3 replaces
+that implementation** — no new suffix, finder entry or registry change.
+
+## 0.3 Predicate state lives in the Database, and there are two facades over it
+
+    Database (database.py:467)   THE store. Keyed (functor, arity):
+                                 _clauses / _signatures / _dispatch / _lazy_recompile
+                                 _dynamic / _discontiguous / _tabled / _shallow / _rows
+                                 and it HOLDS module_dict.
+      ^
+      | read-through facade
+    PredRow (database.py:81)     "a THIN READ-THROUGH FACADE over the Database's existing
+                                 storage, not a second parallel store" -- its own docstring
+      ^
+      | read-through properties (cls._row)
+    PredicateMeta (predicate.py:689)
+                                 _clauses, _dispatch_fn, _lazy_recompile, _signature, _locked,
+                                 _clauses_source, _dynamic_arities are ALL read-through onto the
+                                 row. What the CLASS adds is generated term protocols:
+                                 __init__, __eq__, __repr__, __unify__, __occurs_check__,
+                                 __match_args__, __slots__, a fast constructor.
+
+**A module's Database is at `module_dict["$module"].db`.** NOT via any predicate's `_row.db` —
+that yields a DIFFERENT Database which reports `is_defined=False` for a predicate that has clauses.
+
+**`db.row(functor, arity) is not None`** is the equivalent of `isinstance(x, PredicateMeta)`.
+`db.is_defined` is STRICTER ("any clause asserted") and is False for declared-but-empty
+predicates, which the compiler creates deliberately.
+
+## 0.4 The three suffixes are three LANGUAGES *(design intent, operator-ruled)*
+
+    .seam     Python-seam syntax (today's .clausal/.seam)  the Python<->Clausal BOUNDARY;
+                                                           where embedding belongs
+    .pl       ISO Prolog                                   portable: loads in Scryer/Trealla
+                                                           directly and in Clausal via L3
+    .clausal  THE PURE DIALECT -- ISO minus cut and        what the language is designed around
+              cut-in-disguise
+
+`.clausal` therefore stops being a legacy alias for `.seam` and starts carrying meaning. The
+property is statically decidable, so it can be a GATE rather than a judgement.
+
+**HARD ORDERING CONSTRAINT, easy to miss:** `.clausal` CANNOT be reclaimed until the `.seam`
+migration completes. Today they are **aliases for the same syntax**, with `.clausal` first in
+finder priority, and the write-side flip to `.seam` is still deliberately held, so the population
+is still GROWING. None of this blocks L3, which targets `.pl`.
+
+*The figures in the next two paragraphs are the PLAN's, dated 2026-09-14 — neither measured by
+this session nor re-derived. Treat them as a starting point and re-measure before acting.*
+
+~1228 tracked files sit on the suffix to be reclaimed (787 corpus, 431 engine, 10 kit).
+
+For the pure dialect: cut `!` is already at ZERO sites — "Clausal is cut-free" is literally true
+of the corpus today, and what remains are the disguises. `once` 229 domain sites, `findall` 169
+domain / 1050 test, `\+` 44/75. 86% of `findall` is test code asserting determinism, which is why
+the restriction needs a SCOPE BOUNDARY at domain modules rather than the whole tree.
+
+## 0.5 Seam syntax gotchas (they will cost you a cycle each)
+
+    facts need a TRAILING COMMA        `mylen([], 0),`   -- without it: "looks like a bodyless
+                                                            fact missing its trailing ','"
+    rules use an ARROW                 `head(X) <- (goal1, goal2)`
+    lists cons with a STAR             `[H, *T]`, NOT `[H|T]` -- `|` builds a bitwise-or term and
+                                                            the clause can never match a list
+    unification is `==`, not `=`       `X == foo` -- `=` is a syntax error with a hint
+    strict atoms are the DEFAULT       a bare atom needs `-private([foo])`, a `-module` export
+                                       list, an import, or qualification
+    TitleCase RAISES at load           identifiers are lowercase or ALL_CAPS; a Python class is
+                                       reached as `++Name`
+
+## 0.6 Directions the work is heading *(design intent)*
+
+* **The surface reframe:** ISO syntax becomes the PRIMARY syntax for logic programs; the
+  Python-style seam is repositioned as the adaptor syntax it structurally always was.
+* **Terms become functor-first tuples; predicates become Database rows; `PredicateMeta` retires.**
+* **`==/2`'s overloading is disambiguated AT THE CALL SITE** via quoted string functors
+  (`'#='(L,R)`) — because Python has no user-defined operators and Clausal will be written by
+  LLMs rather than Python programmers.
+* **CLP(Q):** replace the Python solver with a faithful C port of Holzbaur's, then optimise the
+  tableau.
+* **No cut, forever** — ruled. Cut-free and no committed choice, permanently.
+
+---
+
 # 1. CLP(Q) C port — PARKED
 
 Its own handoff is authoritative: `implementation_plans/SESSION-HANDOFF-2026-09-14-clpq-port.md`
