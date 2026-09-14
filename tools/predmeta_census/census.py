@@ -58,12 +58,12 @@ VERDICTS = {
   "clausal/predicate_diagnostics.py:194": "A", "clausal/testing.py:862": "A",
   "clausal/templating/term_rewriting.py:4236": "A",
   "clausal/templating/term_rewriting.py:4371": "A",
-  "clausal/logic/compiler/head_match.py:846": "A",
-  "clausal/logic/compiler/terms_to_ast.py:110": "A",
+  "clausal/logic/compiler/head_match.py:846": "C",
+  "clausal/logic/compiler/terms_to_ast.py:110": "C",
   "clausal/logic/compiler/terms_to_ast.py:1060": "A",
   "clausal/logic/compiler/terms_to_ast.py:1245": "A",
-  "clausal/logic/compiler/arg_index.py:180": "A",
-  "clausal/logic/compiler/arg_index.py:378": "A",
+  "clausal/logic/compiler/arg_index.py:180": "C",
+  "clausal/logic/compiler/arg_index.py:378": "C",
   "clausal/logic/compiler/_lower_goalop_shared.py:129": "A",
   "clausal/logic/builtins/inspection.py:317": "A",
   # G -- TERM TEST via isinstance(type(x), PredicateMeta) -> the tuple path answers it
@@ -136,6 +136,16 @@ def classify(line: str) -> str:
         return "D-declaration"
     if "_fields" in t and "PredicateMeta" in t:
         return "C-zerofield"
+    # THE RULE that separates the two questions mechanically, found by reading the
+    # enclosing functions after the first pass had already classified these as A:
+    #   isinstance(x, type) and isinstance(x, PredicateMeta)  -> x IS a class, i.e. a
+    #       bare predicate-class used AS AN ATOM. Category C.
+    #   isinstance(x, PredicateMeta) on a name lookup         -> membership. Category A.
+    # Four sites were mis-verdicted A before this rule existed (arg_index 180/378,
+    # terms_to_ast 110, head_match 846). Rerouting those to a Database membership
+    # query would have turned an ATOM test into a PREDICATE test.
+    if re.search(r"isinstance\([^,]+,\s*type\)\s*and\s*isinstance\([^,]+,\s*PredicateMeta", t):
+        return "C-class-as-atom"
     if re.search(r"isinstance\(\s*(pred_cls|pred_obj|cls|mi_cls|owner)\s*,\s*PredicateMeta", t):
         return "A-predicate-test"
     if re.search(r"isinstance\(\s*(binding|resolved|target)\s*,\s*PredicateMeta", t):

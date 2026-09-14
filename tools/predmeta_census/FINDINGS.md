@@ -193,3 +193,55 @@ isinstance test needed none. Those sites need either the arity threaded to them 
 functor-only membership query on Database (which does not exist yet: every accessor is keyed
 `(functor, arity)`). That is the real design work in P1, and it should be decided once rather than
 per site.
+
+## CORRECTION to the P0 verdicts — A=26, C=8 (was 30/4)
+
+Reading the ENCLOSING FUNCTIONS of the category-A sites reclassified four of them, and there is a
+mechanical rule behind it that the census now enforces:
+
+    isinstance(x, type) and isinstance(x, PredicateMeta)   ->  x IS a class, i.e. a bare
+                                                               predicate-class used AS AN ATOM.
+                                                               Category C.
+    isinstance(x, PredicateMeta) on a name lookup          ->  membership. Category A.
+
+Mis-verdicted A before the rule existed: `arg_index.py:180`, `arg_index.py:378`,
+`terms_to_ast.py:110`, `head_match.py:846`. `arg_index.py:378` returns `(a.__name__, 0)` under a
+comment reading "PredicateMeta atom" — it is indexing a class AS a zero-arity atom.
+
+**Rerouting those four to a Database membership query would have turned an ATOM test into a
+PREDICATE test.** They belong with the declared-atom decision, not with P1.
+
+**What this says about the census's value.** P0 classified from the LINE; reading the enclosing
+function changed the verdict for 4 of 83 (~5%). The enumeration and the exit criterion are the
+durable parts; a line-level verdict is a hypothesis until the function around it is read. The rule
+above is now mechanical, so this particular mistake cannot recur.
+
+## P1 design: how the 26 A sites reach a Database
+
+Measured across all 26:
+
+    17  reach a dict (module_dict / namespace / env)  -> db via module_dict["$module"].db
+     6  have db in scope already
+     8  NEITHER
+
+**So 23 of 26 need no signature change** — the Database is reachable through the module dict they
+already hold. That settles the question the prerequisite note left open: **do NOT thread `db`
+through signatures, and do NOT add a functor-only query.** Reach it where it already is.
+
+The 8 without either need individual treatment and are listed here so they are not discovered one
+at a time:
+
+    import_diagnostics.py:201   io.py:589   io.py:735   predicate.py:1425
+    terms_to_ast.py:1245        _lower_goalop_shared.py:129   inspection.py:317
+    term_rewriting.py:4236
+
+Two of those are suspect as category A at all: `term_rewriting.py:4236` is inside the EMITTED
+guard (arguably category D), and `predicate.py:1425` is in `_dispatch_at`, which is part of the
+layer being deleted rather than a caller of it. **Re-read those two before rerouting them.**
+
+## Arity, the question that turned out not to be the obstacle
+
+The prerequisite note flagged arity as P1's real design work. Measured, it is not: the obstacle was
+reaching a Database at all, and that is solved for 23 of 26. Arity remains a per-site detail —
+present at most sites, and where absent the site is usually resolving an import spec that carries
+`name/arity` anyway.
