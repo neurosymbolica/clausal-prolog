@@ -292,3 +292,55 @@ section, and it has not started.
 
 Nothing here blocks L3, which targets `.pl`. It blocks the `.clausal` RECLAMATION, and the cut gate
 lives on the far side of it.
+
+---
+
+# RULED 2026-09-14: dates and decimals are TERMS, and the refusal stays
+
+The operator's ruling on R3, and it removes the exception rather than accommodating it:
+
+    a date     ('date', 2026, 9, 14)
+    a decimal  ('decimal', "10.01")     digits as a STRING, so exactness survives
+
+**Keep the error that is raised today when a Python object is put through.** No Python objects
+cross into term position.
+
+## Why this is the clean answer and not a compromise
+
+R3 left an open decision because `datetime.date`, `Decimal` and `Quantity` looked like a value
+vocabulary that needed an exception to "no Python objects in terms" — they are Python objects, and
+closing the runtime route would have taken them with it. Encoding them as ordinary functor-first
+terms means **there is no second class of value at all**: no declared vocabulary to maintain, no
+per-type carve-out in the marshal rule, and one sentence covers everything —
+
+> a term is marshal-clean data, and a Python object is not a term.
+
+Both encodings are marshal-clean (`str` + `int` inside a `tuple`), verified by the same
+`marshal.dumps` probe that showed `Decimal`, `datetime.date` and an opaque object are not.
+
+## It settles the two measured inconsistencies by DELETION
+
+    datetime.date passes the compile route while FAILING marshal
+        -> moot: a date is no longer a Python object, so it never takes that route
+    Decimal is refused on the compile route while the engine treats it as first-class
+        -> no longer a gap; the refusal IS the rule
+
+## The consequence to schedule, not to assume
+
+With dates and decimals encoded as terms, **nothing legitimate is left on the runtime object route**
+(pre-bind a Python object to a Var, pass the Var — measured working today, identity preserved). The
+refusal can therefore be made UNIFORM across both routes.
+
+That is a separate change with its own blast radius and it is NOT part of this ruling: existing
+engine and corpus code may lean on the runtime route, and that population is unmeasured. Sequence
+it after the encodings land, and gate it on a corpus answer-set run — money and dates are live
+corpus vocabulary (`decimal-currency`, the minor-units work, the date/3 predicates), so this is
+the one step in the representation change that touches values the corpus computes with.
+
+## Open, and small
+
+* `Quantity` — a unit-carrying value — was not named in the ruling. It is the same shape of
+  question as `Decimal` and probably the same answer (`('quantity', <magnitude term>, <unit>)`),
+  but it is not ruled and should not be assumed.
+* Whether `('decimal', "10.01")` is the WRITTEN surface or only the internal encoding. The corpus
+  writes money literals; if the encoding is also the surface, that is a corpus migration.
