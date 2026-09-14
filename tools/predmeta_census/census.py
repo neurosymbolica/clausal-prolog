@@ -178,6 +178,18 @@ def main() -> int:
           f"({len(verified)} sites, all verdicts in FINDINGS.md)")
     for f, verdict in HUMAN_VERIFIED.items():
         print(f"      {f} -- {verdict}")
+    # CATEGORY A IS THE UNION OF TWO POPULATIONS, and reporting only one of
+    # them is how the P1 work queue came to be stated as 26 when it is 50.
+    # The mechanical A verdicts come from a regex over the SUBJECT'S NAME
+    # (`cls`, `pred_cls`, ...), which cannot see that `cls = type(x)` one line
+    # up makes the site a category-G TERM test. Five did. See P1_SITES.tsv.
+    auto_A = {f"{r[0]}:{r[1]}" for r in rows if r[2] == "A-predicate-test"}
+    human_A = {k for k, v in VERDICTS.items() if v == "A"}
+    print(f"\n  CATEGORY A, actual population: {len(auto_A | human_A)} "
+          f"= {len(human_A)} human-read + {len(auto_A)} auto (by variable name)"
+          f"{', overlap ' + str(len(auto_A & human_A)) if auto_A & human_A else ''}")
+    print("      per-site dispositions: P1_SITES.tsv, checked by check_p1.py")
+
     print(f"\n  STILL TO READ: {len(unresolved)}")
     print(f"  EXIT CRITERION: 0 still-to-read. Currently {len(unresolved)}.\n")
     by_file = collections.Counter(r[0] for r in unresolved)

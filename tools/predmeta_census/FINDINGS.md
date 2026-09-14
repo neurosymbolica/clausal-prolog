@@ -285,3 +285,159 @@ before editing anything: the sites look alike at line level and are not alike.
 declaration-list sites cannot be served without one. That reverses the design note's "do not add
 a functor-only query", which was concluded from the 23-of-26 reachability figure before any site
 was read in full.
+
+---
+
+# P1 PER-SITE PASS — all category-A sites read in their enclosing functions
+
+The step the previous handoff marked "do not skip". Done. The table is
+`P1_SITES.tsv`, machine-checked by `check_p1.py` (six controls, each watched
+going red). Every claim below is measured.
+
+## The headline: the A population is 50, not 26
+
+    census VERDICTS, A               26   human-read, site by site, at P0
+    census "A-predicate-test"        24   classified MECHANICALLY, from the
+                                          VARIABLE NAME, and never read
+    overlap                           0
+    -------------------------------------
+    category A, actual               50
+
+P0's own summary contains both numbers — `24 A-predicate-test (by variable
+name)` in the mechanical block, `A=30` (later 26) in the human block — and the
+final taxonomy carried only the second forward. Every downstream statement of
+the work queue ("the 30 category-A sites", "the 26", "23 of 26 are mechanical")
+was therefore counting half the population. **`check_p1.py` now computes the
+union from the census and fails if the table disagrees, so the two cannot drift
+again.**
+
+The mechanical rule was `isinstance\(\s*(pred_cls|pred_obj|cls|mi_cls|owner)\s*,
+\s*PredicateMeta` — a regex over the SUBJECT'S NAME. `cls` is in that list, and
+`cls = type(x)` is the category-G spelling.
+
+## 14 of the 50 are not category A at all
+
+Reading each site in its enclosing function reclassified 14:
+
+    G  term test          5   the subject is a TYPE, so the question is
+                              "is x a term INSTANCE", not "is this NAME a predicate"
+    C  class-as-atom      3   (+1 C/G union)
+    B  construction       2   the class is CALLED to build a term
+    D  emitted code       2   inside a docstring showing the generated guard
+    LAYER                 1   part of the machinery being deleted, not a caller
+
+    mis-verdicted, human-read at P0     9 of 26   (34%)
+    mis-verdicted, auto by var name     5 of 24   (20%)
+
+**The category-G misses are the ones that matter**, for exactly the reason P0
+recorded: treating them as A changes what the engine considers a callable goal.
+P0 found eight G sites by their literal spelling `isinstance(type(x),
+PredicateMeta)`. Five more hoist the `type()` into a local first:
+
+    database_ops.py:280    own = type(head)   -> isinstance(own, PredicateMeta)
+    io.py:735              val = type(val)    -> isinstance(val, PredicateMeta)
+    terms_to_ast.py:549    cls = type(term)
+    terms_to_ast.py:1133   cls = type(term)
+    predicate.py:1500      cls = type(obj)
+    predicate.py:1688      cls = type(obj)    (gates the category-H diagnostic)
+
+A sixth, `predicate.py:1524`, splits `isinstance(cls, type)` and the
+`PredicateMeta` test into two separate `if` statements, so P0's one-line C rule
+could not see it either.
+
+**The lesson generalises P0's own.** P0 concluded that a line-level verdict is a
+hypothesis until the enclosing function is read. It is narrower than that: these
+verdicts were defeated by a LOCAL VARIABLE one line up. The rule has to be
+applied to the DATAFLOW, not to the line — and where it was applied to a
+variable NAME instead, one in five verdicts was wrong.
+
+## The P1 mechanical rule has a documented counter-example
+
+    isinstance(module_dict.get(functor), PredicateMeta) -> db.row(functor, arity) is not None
+
+`globals_env.py:550` (`_maybe_cache_dispatch`) is exactly that shape — `obj`
+comes from `base_globals.get(target_name)` — and its docstring rules the
+rewrite out in advance:
+
+> *"The row is the CLASS's own (``obj._row``), not ``db.row(name, arity)``: the
+> call site this key serves resolves to THIS class, so it is this class's row
+> whose dispatch may be baked under the key. A same-named predicate in the
+> compiling module's own Database is a different predicate, and baking its
+> dispatch here would silently redirect the call to it."*
+
+So the rule is not universal, and the exception is not exotic: it is the
+ordinary case of two modules owning same-named predicates. One site in 50 is
+marked `NO`; the value of the pass is that it was found by reading rather than
+by a redirected call in a corpus run.
+
+## The class holds state that the spec says it does not
+
+The spec's argument for removal is that `PredicateMeta`'s state "is not its
+own" — read-through onto a `PredRow`. Measured on a real compiled predicate
+(`classonly.py` probe, controls included), that is true of nine attributes and
+false of six:
+
+    read-through onto the row   _clauses _clauses_source _dispatch_fn
+                                _dynamic_arities _lazy_recompile _locked
+                                _signature  (+ _arity _functor as properties)
+
+    CLASS-ONLY, no row home     _fields
+                                _index_plans
+                                _index_plans_joint
+                                _index_plans_hierarchical
+                                _registered_at
+                                _tabled_home_db
+                                _te_predicate_nodes   (set only when term
+                                                       expansion runs)
+
+`_registered_at` was found by the probe, not at any call site.
+
+**Two of these are cross-module CARRIERS, and that is the load-bearing part.**
+`_tabled_home_db` (`database.py:974`) and `_te_predicate_nodes`
+(`term_expansion.py:107,160`) are stamped on the class precisely so state
+travels across `-import_from`, because the class object is shared between the
+exporter and the importer while a row belongs to one Database. `io.py:589`'s
+docstring records the same dependency as a fixed bug — *"the class knows its own
+row; the name does not"* — and `database_ops.py:280` tests it directly with
+`any(v is own for v in module_dict.values())`.
+
+So spec §4 question 1 (`-import_from`: delegation, alias table, or shared row)
+is not one open question among four. **It is the question 10 of the 50 sites are
+waiting on**, and the index plans plus `_registered_at` need a home before P4
+can delete anything.
+
+## Dispositions
+
+    R       11   reroute to db.row(functor, arity) is not None
+    R!       4   same, but the site does NOT check arity today, so the reroute
+                 TIGHTENS an arity-blind test -- a behaviour change, not a
+                 refactor (goal_trampoline 150/265, call_site 85/206: all four
+                 compute `arity` and then look up by name alone)
+    R-enum   1   rewrite to enumerate the Database's rows
+    S        3   simplify: a redundant type test on an already-resolved value
+    Q        3   needs functor-only resolution; no arity exists at the site
+    X4      10   blocked on spec §4
+    X4+Q     3   both
+    NO       1   documented in-tree as wrong to reroute
+    ---------------------------------------------------------------
+    stays A 36     actionable now (R/R!/R-enum/S) 19
+    reclassified 14   blocked or needs new API (Q/X4/X4+Q/NO) 17
+
+Four of the R sites are one idiom copied four times
+(`compiler/predicate.py:900,1025,1734,1849`): *"resolve pred_cls by name if not
+passed"*. They should become one helper, not four edits.
+
+## What this changes about the plan
+
+1. **`Database.has_any_arity(functor)` is still needed** (the Q sites), but the
+   declaration-list sites that motivated it — `compiler_v2.py:1717,1756` — are
+   ALSO §4-blocked, and 1756 cannot be served by a functor-only query on this
+   db at all: an imported re-export's clauses live on the exporter's. Add the
+   query for the specialization sites (969, 1004, 1044); do not expect it to
+   unblock the declaration lists.
+2. **P1 is 19 sites, not 26 or 50**, and 4 of the 19 change behaviour.
+3. **Spec §4 should be answered before, not after, P1's remaining half.**
+4. **`predicate.py:1425` is the `_get_dispatch` funnel** — a duck-typed protocol
+   with out-of-tree implementors and a frozen signature. It is inside the layer
+   being deleted, so P4 breaks an external contract. Not in P1's scope, but it
+   belongs in the spec's "not established" list and is not there.
