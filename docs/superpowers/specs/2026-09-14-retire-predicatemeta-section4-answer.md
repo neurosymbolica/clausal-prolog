@@ -877,3 +877,43 @@ Three kinds, and only the third needs a decision:
 Whether any corpus rulebase compares dates at all, and with what. The oracle gate
 (harness-batch-lane, the sealed scorers) is the check that matters before promotion, and it has not
 been asked for on any of this session's changes.
+
+---
+
+# P1 correction: 5 of the 19 "actionable" sites are P4 work
+
+Attempted the reroute now that §4 q1 has landed. Five sites retag from `R`/`S` to **`P4`**, which
+drops P1's actionable count from **19 to 14**.
+
+`compiler/predicate.py` 900 / 1025 / 1734 / 1849 are one idiom copied four times — "resolve
+pred_cls by name if not passed" — and all four exist only to feed
+`_install(db, functor, arity, fn, pred_cls=pred_cls)`. That looked like `compiler_v2.py:234`'s
+"stop passing a redundant class", because `_install` already receives `db`, `functor` AND `arity`.
+
+**It is not redundant.** `_install` (site 2218) uses the class for:
+
+    through=pred_cls                      the mutation gate's blast radius
+    pred_cls._mutate(...)                 opening the transaction
+    pred_cls._bind_row(db, functor, arity)    <-- the load-bearing one
+    pred_cls._dispatch_fn = fn            writing THROUGH the class
+    pred_cls._lazy_recompile = ...
+
+`_bind_row` is the class-to-row binding — **the step that makes `pred_cls._clauses` BE
+`db._clauses[key]`**. The read-through property the whole retirement rests on is established here.
+So this is not a routing lookup that can move to the Database; it is the machinery that makes the
+facade exist, and it cannot go while the classes do. That is P4, by definition.
+
+**The lesson repeats the pass's own.** These five look exactly like `compiler_v2.py:234` at line
+level — a `pred_cls` resolved and handed to a function that already has `db, functor, arity` — and
+they are not alike. 234's gate uses the class for a DIAGNOSTIC; `_install`'s uses it to BIND.
+Reading the callee, not the call site, is what separates them.
+
+**One simplification IS now available and is deliberately NOT taken here.** With §4 q1's planted
+rows, `db.row(functor, arity)` finds an imported predicate's row, so `through=pred_cls` is
+redundant *for imported predicates*. It is NOT redundant for a module's own predicate, whose class
+may still sit on a detached row at this point — dropping it would narrow the gate's blast radius
+for exactly the writes the gate exists to police. Needs its own test before it is touched.
+
+    revised P1 tally      R 7    R! 4    S 2    R-enum 1     = 14 actionable
+                          P4 5   Q 3     X4 10  X4+Q 3  NO 1 = 22 deferred
+                          reclassified out of A                14

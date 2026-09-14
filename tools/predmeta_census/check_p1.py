@@ -23,7 +23,7 @@ import census  # noqa: E402
 
 TABLE = HERE / "P1_SITES.tsv"
 DISPOSITIONS = {"R", "R!", "R-enum", "S", "Q", "X4", "X4+Q", "NO",
-                "G", "C", "C/G", "B", "D", "LAYER"}
+                "G", "C", "C/G", "B", "D", "LAYER", "P4"}
 
 
 def census_A_sites() -> set[tuple[str, int]]:

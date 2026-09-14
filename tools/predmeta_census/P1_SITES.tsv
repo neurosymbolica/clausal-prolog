@@ -14,10 +14,10 @@ clausal/logic/builtins/database_ops.py	275	H	R	_find_pred_cls: name lookup + ari
 clausal/logic/compiler_v2.py	285	M	R	-dynamic seeding: isinstance + len(_fields)==arity. db in scope.
 clausal/logic/compiler_v2.py	851	M	R	directive-target check; db in scope and the next line already scans db._clauses by functor.
 clausal/logic/compiler_v2.py	882	M	R	_refuse_untablable_target; db is a parameter.
-clausal/logic/compiler/predicate.py	900	M	R	"resolve pred_cls by name if not passed" -- copy 1 of 4. functor, arity, db all in scope.
-clausal/logic/compiler/predicate.py	1025	M	R	same idiom, copy 2 of 4.
-clausal/logic/compiler/predicate.py	1734	M	R	same idiom, copy 3 of 4.
-clausal/logic/compiler/predicate.py	1849	M	R	same idiom, copy 4 of 4.
+clausal/logic/compiler/predicate.py	900	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.
+clausal/logic/compiler/predicate.py	1025	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.
+clausal/logic/compiler/predicate.py	1734	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.
+clausal/logic/compiler/predicate.py	1849	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.
 clausal/logic/compiler/globals_env.py	165	M	R	_DictDatabase.signature_for: a shim faking a Database out of a dict; takes arity and IGNORES it. May delete outright.
 clausal/logic/compiler/goal_trampoline.py	150	M	R!	index-plan optimiser; arity computed on the line above and NOT used in the lookup. Rerouting TIGHTENS an arity-blind test.
 clausal/logic/compiler/goal_trampoline.py	265	M	R!	same, via _ir.SubCall.
@@ -28,7 +28,7 @@ clausal/logic/compiler_v2.py	276	H	R	step 4a stamps _dynamic_arities; the stamp 
 clausal/logic/compiler_v2.py	1008	H	R-enum	error message lists module_dict's predicates -> enumerate db's rows. Independent of §4.
 clausal/logic/compiler_v2.py	234	M	S	pred_cls resolved only to be passed to _load_gate, which already receives db, functor AND arity.
 clausal/logic/compiler_v2.py	796	M	S	_redefinition_error: a None-check dressed as a type test on an already-resolved value.
-clausal/logic/compiler/predicate.py	2218	M	S	_install: `pred_cls is not None and isinstance(pred_cls, PredicateMeta)` -- redundant; the whole write-through block collapses to a row write.
+clausal/logic/compiler/predicate.py	2218	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.
 clausal/logic/compiler_v2.py	969	M	Q	_preregister_specialized: bare directive name, NO arity, then consumed by analyze_mi. Needs functor->row, not just membership.
 clausal/logic/compiler_v2.py	1004	M	Q	_run_specialization, error path; same.
 clausal/logic/compiler_v2.py	1044	H	Q	pre-registered specialization target reused; bare new_name, no arity.
