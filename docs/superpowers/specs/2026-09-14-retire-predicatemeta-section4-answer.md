@@ -758,3 +758,70 @@ Also unmeasured, and needed before the arithmetic half: today a non-integral rat
 observable term form at all — `Fraction` cannot be lowered (`NotImplementedError`, same as
 `Decimal`), so nothing in a compiled goal can hold one. What `X` binds to for a non-integral result
 is therefore a question about the CLP path specifically, not about the general evaluator.
+
+---
+
+# The date ruling widened, and the objection in the way is MEASURED FALSE
+
+Ruled 2026-09-15, superseding the narrow scoping above: *"We don't need to use Python date and
+datetime classes any more, that ruling comes from before the functor-first-tuple representation.
+Internally, we can call back to Python, but the seam shouldn't need dates."*
+
+So `clausal/modules/py/datetime.py` is in scope after all — not as an inference, as a ruling.
+
+## The obstacle the module documents, and why it does not hold
+
+`py/datetime.py:96-113` states the reason `date/3` produces a real `datetime.date` rather than a
+compound:
+
+> *"The value must be a real datetime.date and NOT a compound named `date`. A compound compares its
+> arguments in standard order, which for the integer-like components is string order — so "15" <
+> "2" < "9" and msort/2 returns a WRONG chronological order without raising. A real date orders
+> natively and sorts correctly through sort/msort/min_list/max_list."*
+
+**Measured through the engine's own `msort/2`** (`tools/predmeta_census/date_order_probe.py`):
+
+    msort([date(2026,1,15), date(2026,1,2), date(2026,1,9), date(2025,12,31), date(2026,2,1)])
+      -> ('date', 2025, 12, 31)
+         ('date', 2026,  1,  2)
+         ('date', 2026,  1,  9)
+         ('date', 2026,  1, 15)
+         ('date', 2026,  2,  1)        chronological: TRUE
+
+The objection is true of STRING components and false of the actual representation. Date components
+are INTEGERS, standard order compares them numerically, and Y/M/D is already
+most-significant-first — so element-wise comparison IS chronological comparison. Python's own tuple
+order agrees with `datetime.date` on the same data, which is the same algorithm.
+
+**This was the load-bearing argument for the Python object, and it is gone.** The ordering property
+the module wanted is a property the cell already has.
+
+## The shape of the remaining work, scoped
+
+`py/datetime.py`, 797 lines, and construction is confined to it (`_dt.date(` / `datetime.date(`
+appears in no other engine module). It splits cleanly:
+
+    CONSTRUCT / DECOMPOSE     date/4 time/4 datetime/7 timedelta/3 date_of/2
+                              -> near-trivial once the TERM is the structure;
+                                 the module's own comment already says date/4 is
+                                 "redundant ... once the term carries the value itself"
+    COMPUTE                   now today now_utc date_add date_sub date_diff
+                              days_between date_max date_min ordinal weekday
+                              date_between datetime_string timestamp *_iso
+                              -> stay, converting term<->Python INTERNALLY, which is
+                                 exactly "internally we can call back to Python"
+    PATTERN-UNIFY MACHINERY   _DatePattern + 6 hooks, and `_index_transparent`
+                              -> DELETED; cells unify and index natively, and the
+                                 class exists only because a real date is a foreign
+                                 type that a compound is not
+
+**Term shapes** (predicate arity minus one, which is what the existing signatures imply):
+
+    ('date', Y, M, D)                      ('time', H, Mi, S)
+    ('datetime', Y, Mo, D, H, Mi, S)       ('timedelta', Days, Seconds)
+
+**One fidelity decision, flagged not assumed:** those shapes carry no microseconds and no `fold`,
+but `now/1` produces a `datetime` with microseconds and the removed reconstruction branch carried
+`fold` deliberately (roborev job 18). Either widen the terms
+(`('datetime', Y, Mo, D, H, Mi, S, US)`) or accept that `now/1` truncates. Widening is more
+faithful and costs only the predicates' arities.
