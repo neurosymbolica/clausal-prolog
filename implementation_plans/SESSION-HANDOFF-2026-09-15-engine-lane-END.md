@@ -115,3 +115,72 @@ worked. Backticks inside `git commit -m "..."` are command substitution — a me
 Use an array, and `-F -` with a quoted heredoc.
 
 See [[instruments-that-fail-open]] — running count is now 12.
+
+---
+
+# ADDENDUM — the oracle gate ran, went red, and the fix is ruled
+
+Written after the handoff above; it supersedes that section's "oracle gate has NOT been run".
+
+## The canary caught what my corpus sweep could not
+
+    branch   eu/procurement/selection_criteria   score = (none), EXIT=1
+             NotImplementedError: term_to_ast_expr: unsupported term type date
+    canonical, same domain, same minute          341/341, EXIT=0
+
+**My claim "the corpus cost is zero" for dates was wrong, and precisely how matters.** I swept
+`/workspace/clausify-domains` (787 .clausal, 88 .seam, 263 .py), found nothing importing
+`py.datetime` from code, and reported it as a fact about "the corpus". The SEALED SCORER BODIES are
+not in that tree. They construct `datetime.date` and pass it into goals — exactly the path the
+change closed. The number was right; the CLAIM generalised across a boundary I had not measured.
+
+harness-batch-lane named it as a shape three lanes have now hit: **the population you measured,
+named as the population that matters.** Recorded in [[instruments-that-fail-open]].
+
+## Blast radius, measured and predictable
+
+harness-batch-lane's predictor — "the body imports or constructs a `datetime`" — validated exact on
+the observed data (10 predicted failures, 10 observed, 0 missed, 0 false alarms). Corpus-wide:
+**23 of 74 domains**. A fix has a number to hit.
+
+**Partial evidence on the other three changes, and it is real rather than absent.** The 8 domains
+that scored are all at their recorded numbers, including the large-case ones (`life_cycle_costing`
+17464, `espd` 2294, `shortlisting` 2217, `procedure_choice` 4716). So the tuple-tag, ordering and
+import changes moved nothing ON THOSE EIGHT. They are untested on the 10 that could not run. Do not
+report them as gated.
+
+## The ruling: (b) + the better error
+
+Both lanes initially argued for (a) — engine coerces a Python date at the boundary — on a cost
+asymmetry. **Both cost arguments were withdrawn after measuring.** Mine said "82 sealed bodies";
+theirs said the same; neither had measured the WORK. By AST across all 82:
+
+    date() constructions   85   across 22 domains    (54 three-scalar, 31 starred triple)
+    timedelta()            37   keyword-only
+    clock or parse calls    0   ZERO, anywhere in the 82
+
+**Not one date in any sealed body comes from a clock, a parse, or external arithmetic.** That zero
+is what decided it: the only thing that would have made coercion NECESSARY is a date arriving with
+no component form, and there is none. So (b) loses nothing, and it is the version where "the seam
+shouldn't need dates" is literally true rather than "the seam tolerates dates".
+
+## What is done, and what is left
+
+DONE, gated 0-new: `f729d1b9` — the refusal names the fix.
+
+    term_to_ast_expr: a Python date is not a term.
+      Write the term instead:  ('date', 2023, 6, 1)
+      in .clausal source:      date(2023, 6, 1)
+
+A value with a canonical term encoding gets a suggestion; one without gets the plain refusal, and
+that asymmetry is pinned by a test — it IS the distinction the ruling turns on. Shapes come from
+`modules.py.datetime`'s own emit table so there is one definition.
+
+LEFT, harness-batch-lane's, gated on the operator's DIRECT word for sealed files:
+85 sites to the term form. 31 starred triples are `("date", *v)`; 54 scalar sites are
+`("date", y, m, d)`. **The 37 `timedelta()` calls are keyword-only and the term is positional** —
+`timedelta(days=1.5)` is `('timedelta', 1, 43200, 0)`, not `('timedelta', 1.5)`. Those want reading,
+not a sed.
+
+Then: the 28, then the full 82, with harness-batch-lane saying which of the four changes each
+result does and does not cover.
