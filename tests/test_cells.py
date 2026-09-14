@@ -79,7 +79,7 @@ class TestCellPrimitives:
     def test_make_cell_tuple_tag_functor(self):
         # nv
         c = make_cell(TUPLE_TAG, 1, 2, 3)
-        assert c == (tuple, 1, 2, 3)
+        assert c == (TUPLE_TAG, 1, 2, 3)
         assert c == make_tuple_cell(1, 2, 3)
 
     def test_make_cell_rejects_unbound_var_functor(self):
@@ -144,7 +144,7 @@ class TestCellPrimitives:
     def test_make_tuple_cell(self):
         # nv
         c = make_tuple_cell(1, "a", None)
-        assert c == (tuple, 1, "a", None)
+        assert c == (TUPLE_TAG, 1, "a", None)
         assert is_cell(c)
 
     def test_is_cell_true_for_str_functor(self):
@@ -154,12 +154,12 @@ class TestCellPrimitives:
 
     def test_is_cell_true_for_tuple_tag(self):
         # nv
-        assert is_cell((tuple, 1, 2)) is True
+        assert is_cell((TUPLE_TAG, 1, 2)) is True
 
     def test_is_cell_true_for_zero_arity_tuple_tag(self):
         # nv — review finding #3: (tuple,) alone (len == 1, the "len >= 1"
         # boundary) is still a legal (if empty) tuple-DATA cell.
-        assert is_cell((tuple,)) is True
+        assert is_cell((TUPLE_TAG,)) is True
 
     def test_is_cell_false_for_var_functor(self):
         # INVERTED (P3-2 Task 5, §1b): a Var-functor tuple is no longer

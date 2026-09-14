@@ -3224,7 +3224,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         # decided HERE: both cell tests below are falsy on it, so it used to
         # fall all the way to ``repr(t)`` and print ``()``.
         return _c('[]', 'bracket', style, _bd)
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
         # every compound term is represented, so the reader must see
         # ``pt(1, 2)``, the term they wrote, not a Python tuple repr.
@@ -3264,7 +3264,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         cb = _c(')', 'bracket', style, _bd)
         return functor_s + ob + sep.join(
             term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for a in args) + cb
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         # A tuple-DATA cell -- ``(tuple, e1, e2)`` -- represents plain tuple
         # data, not a compound (P3-2 Task 5's ``TUPLE_TAG`` convention).  It
         # renders as the ordinary tuple display it stands for: ``(e1, e2)``,
@@ -3407,14 +3407,14 @@ def term_canonical(t: Any) -> str:
         return _seg_canonical(walked)
     if isinstance(t, Var):
         return _canonical_var(t)
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A CELL.  Slot 0 read RAW, no deref -- the recognition rule every
         # cell site uses.  An arity-0 cell is an atom and prints bare.
         head = _quoted_atom_spelling(t[0])
         if len(t) == 1:
             return head
         return head + "(" + ",".join(term_canonical(a) for a in t[1:]) + ")"
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         return "(" + ",".join(term_canonical(e) for e in t[1:]) + ")"
     if isinstance(t, Compound):
         f = deref(t.functor)
@@ -3576,7 +3576,7 @@ def term_pformat(
         items = [_r(a) for a in t.args]
         return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A str-functor CELL -- the Compound-equivalent multi-line treatment
         # (P3-2 Task 7): a wide cell used to fall through every isinstance
         # branch above straight to ``return flat``, so a long ``pt(1, 2)``
@@ -3591,7 +3591,7 @@ def term_pformat(
         items = [_r(a) for a in args]
         return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         # A tuple-DATA cell -- same multi-line treatment as the list branch
         # above, since this is what it displays as (``TUPLE_TAG`` itself
         # never appears in the rendering).
@@ -3736,7 +3736,7 @@ def term_html(t: Any, _bd: int = 0) -> str:
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(a, _bd + 1) for a in t.args)
         return functor_s + ob + args_str + cb
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A str-functor CELL -- the ``Compound`` branch above's exact
         # counterpart (P3-2 Task 7); without this a cell fell through to the
         # ``esc(repr(t))`` tail, leaking the Python tuple repr into Jupyter
@@ -3750,7 +3750,7 @@ def term_html(t: Any, _bd: int = 0) -> str:
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(a, _bd + 1) for a in t[1:])
         return functor_s + ob + args_str + cb
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         # A tuple-DATA cell -- plain tuple display, brackets only.
         ob = _html_c('(', 'bracket', _bd)
         cb = _html_c(')', 'bracket', _bd)

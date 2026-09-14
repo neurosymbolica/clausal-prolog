@@ -124,11 +124,11 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
     if isinstance(term, list):
         return [_clausal_to_python(deref(item), context) for item in term]
     if type(term) is tuple:
-        if term and type(term[0]) is str:
+        if term and type(term[0]) is str and term[0] != TUPLE_TAG:
             # A compound cell of arity >= 1 (an arity-0 cell is an atom and
             # was taken by the is_atom branch above).
             raise LogicException(type_error("json_term", term, context))
-        if term and term[0] is TUPLE_TAG:
+        if term and term[0] == TUPLE_TAG:
             return [_clausal_to_python(e, context) for e in term[1:]]
         return [_clausal_to_python(e, context) for e in term]
     # int, float, bool, None — pass through
@@ -192,7 +192,7 @@ def _option_shape(opt: Any) -> tuple:
     (what a hand-built term or an older caller passes).  Everything else,
     including a bare atom, falls through to the caller's domain_error.
     """
-    if type(opt) is tuple and opt and type(opt[0]) is str:
+    if type(opt) is tuple and opt and type(opt[0]) is str and opt[0] != TUPLE_TAG:
         return opt[0], opt[1:]
     if isinstance(opt, Compound):
         return opt.functor, tuple(opt.args)
