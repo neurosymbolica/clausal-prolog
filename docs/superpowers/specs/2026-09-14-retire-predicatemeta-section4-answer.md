@@ -825,3 +825,55 @@ but `now/1` produces a `datetime` with microseconds and the removed reconstructi
 `fold` deliberately (roborev job 18). Either widen the terms
 (`('datetime', Y, Mo, D, H, Mi, S, US)`) or accept that `now/1` truncates. Widening is more
 faithful and costs only the predicates' arities.
+
+---
+
+# py.datetime: implemented, 45 tests still to update
+
+Commit `51a4b1d1`. The module now produces and consumes terms; its 13 new contract tests pass,
+including `msort` ordering date terms chronologically.
+
+## How, because the shape generalises
+
+Two choke points, not 36 argument sites: the module shadows its own `deref` (term -> Python on the
+way in) and `unify` (Python -> term on the way out). Every predicate body is untouched — they still
+compute with `datetime`, which is where calendar arithmetic belongs. **That is the ruling's
+"internally we can call back to Python", expressed as two functions.**
+
+`_DatePattern` and its hand-rolled `__unify__` are obsolete. A cell with unbound components IS the
+pattern, so construct and decompose become one mechanism — and grounding-after-the-fact now works,
+which the class's own KNOWN BOUNDARY comment says it could not.
+
+## The remaining work, enumerated
+
+    29  tests/test_date_time.py
+    10  tests/test_date_term.py
+     4  tests/audit_2026_07_05/test_11_modules_interop.py
+     1  tests/test_prolog_execution.py
+     1  tests/test_atoms_as_cells_flip.py
+    --
+    45  all pinning the OLD contract
+
+Three kinds, and only the third needs a decision:
+
+1. **Mechanical** (majority): `assert x == datetime.date(2026, 3, 16)` -> `("date", 2026, 3, 16)`.
+   The implementation is already producing the right term; the expectation is what is stale.
+2. **Interop tests**: `++D_.isoformat()` and `++TD.days` now raise `AttributeError` on a tuple. The
+   module already ships the replacements — `date_string_iso/2`, `datetime_string/3`, and
+   `timedelta(N, _, TD)` decomposition — which its docstring already recommends *over* the escapes
+   ("Prefer these declarative predicates over `++` Python escapes"). So these tests should move to
+   the form the module already prefers.
+3. **ONE GENUINE BEHAVIOUR CHANGE**, `tests/test_prolog_execution.py::TestDateOrderingWitness::
+   test_service_in_force_diverges`. `D1 =< D2` worked on Python dates and raises on a cell, because
+   `=<` is ARITHMETIC comparison and a date term is a compound. **The replacement exists and is
+   landed**: `@<`, `@=<`, `@>`, `@>=` and `compare/3` are all present as builtins on this branch,
+   and `msort` already orders date terms correctly. So date comparison moves from `=<` to `@=<`.
+
+   This cannot affect the corpus: corpus dates were ALREADY cells, never Python objects, so no
+   corpus code can have been comparing them with `=<` and getting Python's date ordering.
+
+## Still not measured
+
+Whether any corpus rulebase compares dates at all, and with what. The oracle gate
+(harness-batch-lane, the sealed scorers) is the check that matters before promotion, and it has not
+been asked for on any of this session's changes.
