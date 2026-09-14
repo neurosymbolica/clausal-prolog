@@ -542,3 +542,63 @@ mistake — testing a precedent at the wrong arity — is easy to repeat.)*
 
 **Not verified**: Trealla. Only Scryer is installed in this environment
 (`/workspace/scryer-prolog/target/release/`).
+
+---
+
+# CORPUS SWEEP — both open numbers, measured
+
+`/workspace/clausify-domains` @ `main`: **787 `.clausal`, 88 `.seam`, 263 `.py`** (the `.clausal`
+count matches the plan's 787 exactly). Instruments in `tools/predmeta_census/`; every count printed
+the size of what it matched, and both controls behaved (a must-match-nothing pattern returned 0, a
+must-match-plenty pattern returned 1,692 / 290,641).
+
+## 1. Object-shaped predicate access: ESSENTIALLY ZERO
+
+How the corpus actually invokes a predicate:
+
+    test(...)          in-language, .clausal        5,259  in 295 files
+    --pred(...)        the term seam, .seam            57  in  42 files
+    ++escape           python back across the seam   165  in  41 files
+    call("name", ..., module=mod)   .py                7  in   4 files
+    load_clausal_module(...)        .py                4  in   3 files
+    ------------------------------------------------------------------
+    module attribute / getattr on a predicate           ~0
+
+**The object-shaped count is a measurement artefact, and chasing it down is the finding.** A first
+sweep reported 123 object-shaped sites. Read:
+
+* **120 of them are `getattr(_body, 'run')` and `getattr(_body, 'main')`** — 60 each, shim
+  boilerplate reaching PYTHON entry points, not predicates. The regex matched any `getattr` with a
+  lowercase string.
+* **3 were `sections["citation_records"]`** — the alternation `(module_dict|md|ns)\[` matched the
+  `ns[` inside `sectio``ns[`.
+* `from <domain>.<module> import <pred>`: **0**. `call(mod.pred, …)`: **0**. Attribute calls
+  resolve to `re.Match.group`, `pathlib.mkdir` and the `_body.main` shim.
+
+So **spec §4 q3 — a module-level predicate name becomes the atom — costs the corpus nothing.** The
+engine's own 209 object-shaped accesses are the whole migration, and the corpus is already on the
+idiom the design targets.
+
+Worth noting for the seam's own roadmap: `if --goal:` and `for x in --goal:` are at **0** corpus
+sites. The goal-position seam landed 2026-09-08; all 57 corpus seams are TERM position. The
+transparent-variable idiom is available and unused.
+
+## 2. Tuple-DATA in the corpus: ZERO
+
+    TUPLE_TAG by name                0 occurrences in 0 files
+    $cells namespace                 0 occurrences in 0 files
+    is_cell / compound_cell_shape    0 occurrences in 0 files
+    matching slot 0 on a type        0 occurrences in 0 files
+
+**Re-tagging tuple-data is compiler-internal and costs the corpus nothing.** Corpus source writes
+`(1, 2)` and the compiler applies the tag; nothing in the corpus spells or matches it. The engine's
+own use is 4 sites, all display tests.
+
+**That was the one number between the `('()', 1, 2)` recommendation and a decision. It is zero.**
+
+## The caveat, because "no migration sites" is not "no risk"
+
+Those 5,259 `test(...)` and 57 `--pred(...)` invocations all run THROUGH the engine. A
+representation change with zero corpus EDIT sites can still move corpus ANSWERS, and site analysis
+is a different claim from an answer-set re-run. Both changes still need the oracle gate — ask
+harness-batch-lane to re-run the sealed scorers — before promotion.
