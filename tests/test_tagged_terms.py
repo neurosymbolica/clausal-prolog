@@ -1816,13 +1816,18 @@ class TestCellHeadArgOpaqueSlots:
 
     def test_the_clausal_assertz_repro(self):
         """The reviewer's repro, from source rather than from the Python API:
-        ``assertz`` of a fact whose cell head arg carries a date."""
-        import datetime
+        ``assertz`` of a fact whose cell head arg carries a date.
 
+        The fixture's ``D is date(2020, 1, 1)`` binds the TERM since the
+        2026-09-15 ruling, so the query passes the same term. A date is no
+        longer the OPAQUE case this class is named for -- its siblings keep
+        that coverage with a plain ``"other"`` -- but the head-arg shape being
+        exercised, a value nested inside a cell, is unchanged.
+        """
         mod = _load_inline("_tt_opaque_assertz", _OPAQUE_ASSERTZ_SRC)
         lm = mod.__dict__["$module"]
         list(call("setup", module=lm))
-        d = datetime.date(2020, 1, 1)
+        d = ("date", 2020, 1, 1)
         K = Var()
         assert [deref(K) for _t in call("q", ("pt", 1, d), K, module=lm)] \
             == [mint("yes"), mint("catchall")]
