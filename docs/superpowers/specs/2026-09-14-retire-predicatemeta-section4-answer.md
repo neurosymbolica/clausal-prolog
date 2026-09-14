@@ -508,3 +508,37 @@ is the same trade `'[]'` already makes, and it is why the precedent matters.
 
 **Migration**: the engine's own tuple-DATA use is 4 sites, all display tests. The corpus is
 unmeasured — that figure is the only thing between this recommendation and a decision.
+
+### Confirmed against real Prolog (Scryer, plus the operator's SWI 10 session)
+
+    (1,2) == ','(1,2)                  true     <- (1,2) IS the comma-term
+    (1,2) == '()'(1,2)                 false
+    {1,2} == '{}'(','(1,2))            true     <- the curly precedent, at arity ONE
+    {1,2} == '{}'(1,2)      arity 2    false
+    {a}   == '{}'(a)                   true
+
+    functor((1,2))      = (,)/2
+    functor({1,2})      = {}/1
+    functor('()'(1,2))  = ()/2
+
+    writeq('()'(1,2))   ->  '()'(1,2)
+    writeq('{}'(a))     ->  {a}
+
+**`(1,2)` in Prolog is ALREADY TAKEN** — it is the comma-term, functor `(,)/2`, i.e. conjunction.
+Prolog therefore has no surface syntax available for tuple-data at all, which is exactly why it
+needs a reserved functor rather than a bracket form. `'()'(1,2)` failing to unify with `(1,2)` is
+the property we want, and SWI 10 and Scryer agree on it.
+
+**`'()'` round-trips**: `writeq` returns it in canonical quoted form in both engines, so a
+Clausal-emitted `.pl` carrying tuple-data is readable and re-readable there.
+
+**One asymmetry, in `'()'`'s favour.** `writeq('{}'(a))` prints `{a}` — Prolog has read-back SUGAR
+for the curly functor. `'()'` has none, so it always prints canonically: no writer support to add,
+and a tuple in a `.pl` file is visually unmistakable from a conjunction.
+
+*(A first reading of `'{}'(1,2) \= {1,2}` as a refutation of the curly precedent was an ARITY
+mismatch — `{1,2}` is `'{}'/1` over the comma-term, not `'{}'/2`. Recorded because the shape of the
+mistake — testing a precedent at the wrong arity — is easy to repeat.)*
+
+**Not verified**: Trealla. Only Scryer is installed in this environment
+(`/workspace/scryer-prolog/target/release/`).
