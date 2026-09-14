@@ -659,3 +659,56 @@ Reading 1 is a day. Reading 2 is the numeric surface. **Not guessed — put to t
 Named in neither. Same shape of question as `Decimal`, plausibly
 `('quantity', <magnitude>, <unit>)`, but units are live corpus vocabulary and it should not be
 assumed to follow.
+
+---
+
+# `('()', 1, 2)` LANDED on the branch — gate clean
+
+    baseline  7ad86154   144 failed, 16287 passed
+    candidate 28f29c55   144 failed, 16304 passed      NEW 0   GONE 0
+
+The +17 is the new tests (12 shared-row, 5 tuple-tag). Sites changed: `cells.py` (the tag, the
+one-branch `_valid_functor_slot`, `is not` -> `!=`), and the data/compound split written down
+explicitly in `terms.py` (4 pairs), `reflection.py`, `testing.py`, `builtins/_helpers.py` (2) and
+`modules/py/json.py` (3).
+
+## What the gate caught, both worth keeping
+
+**1. The identity sweep I did not do.** I fixed `compound_cell_shape`'s `is not TUPLE_TAG` because
+I happened to read it, and did not sweep. Thirteen more sites had the shape, and they are PAIRS in
+which the COMPOUND branch runs first:
+
+    if type(t) is tuple and t and type(t[0]) is str:    # compound   <- ran first
+    if type(t) is tuple and t and t[0] is TUPLE_TAG:    # tuple-data <- never reached
+
+While the tag was a type object the compound branch excluded it FOR FREE. With a `str` tag it
+swallows tuple-data, and every data tuple rendered, serialised and pattern-matched as the compound
+`'()'/N`. 19 failures, all one cause.
+
+**The general rule, now twice-learned this session: a property that was FREE under the old
+representation has to be written down under the new one.** `_helpers._cell_functor` needed the same
+treatment for the same reason, and its docstring now says so.
+
+**2. A missing import that failed OPEN.** `testing.py` used `TUPLE_TAG` without importing it. The
+`NameError` was swallowed by the diagnostic path, so near-miss output silently lost the goal name
+(`chain_subject(simple)` vanished, leaving only "argument 1 was actually: simple") instead of
+crashing. **And the check I wrote to prevent exactly this was worthless**: `spec['name'] in
+src.split('def ')[0] or 'import' in src` — the second disjunct is true of every Python file, so it
+reported OK for all five modules. Re-verified by asking each MODULE for the attribute
+(`getattr(mod, name) == TUPLE_TAG`), which found it immediately.
+
+**3. One flake, correctly identified as such.** `test_F026_multi_star_splits_bounded_for_moderate
+_input` is a perf bound; it failed once while two suites ran concurrently, passed 3/3 standalone,
+and did not recur on a clean solo gate.
+
+## The indirection this deletes
+
+Three tests existed only to pin `$cells.TUPLE_TAG`, and the reason it existed is sharp: **the tag
+was a NAME, and a bare name in a `match` pattern CAPTURES rather than compares.** Rooting it at
+`$cells` was the dodge. A string literal cannot capture:
+
+    case [$cells.TUPLE_TAG, _ncap0]:     ->     case ['()', _ncap0]:
+
+with no namespace injection — and the "degrades to a wildcard when `$cells` is absent" failure,
+which silently cost a non-ground tuple-data cell its indexing, can no longer happen. Those three
+tests are INVERTED to pin that rather than deleted.
