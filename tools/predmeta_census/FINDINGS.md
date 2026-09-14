@@ -21,11 +21,20 @@ Concentrated: `_variables.c` 41, `predicate.py` 32, `specialization.py` 32, `com
     D  DECLARATION           metaclass= / $PredicateMeta in AST    -> deleted with the guard
     E  IMPORT                follows its users
 
-**Category C is a finding.** `inspection.py:51,140` and `testing.py:1662` still convert a
-zero-field predicate class into an `Atom`. So THE FLIP did not fully eliminate zero-field classes
-as an atom representation — they still occur and are still treated as atoms on some paths. Any
-plan that assumes "atoms are tuples, full stop" is wrong on these paths and needs to say what
-happens to them.
+**Category C — CORRECTED.** I first recorded this as an undiscovered gap: that THE FLIP had not
+fully eliminated zero-field classes as an atom representation. **That overstated it.** The tree has
+already separated the two questions and documented the union, at `predicate.py:1617`:
+
+> *"Two different questions share the stem `is_atom` in this tree, and this is the union of them:
+> `clausal.logic.atoms.is_atom` is the TERM test — exactly the 1-tuple whose slot 0 is a `str`.
+> `predicate.is_zero_field_class` is the CLASS test."*
+
+So a zero-arity `PredicateMeta` class is a **declared atom** by design, and `is_atom_value` admits
+it deliberately. `inspection.py:51,140` and `testing.py:1662` are honouring that, not leaking.
+
+What survives of the finding: the plan must still say **what happens to declared atoms** when the
+class goes — they need a tuple spelling and a migration. But the tree is not confused about it, and
+I should not have implied it was.
 
 ## FILE COMPLETE: `specialization.py` — NO class-identity dependency
 
@@ -50,8 +59,41 @@ Remaining work in this file: 4 construction sites become tuple construction, and
 and by suspicion. Its dependencies turning out to be name + arity + row is the strongest evidence
 so far that the removal is mechanical rather than architectural.
 
-## Not yet read
+## FILE COMPLETE: `_variables.c` — does NOT block the removal
 
-`_variables.c` (41) is the one that could still change the verdict — it is the C core's
-unify/deref/compare special-casing, and it is the only place that could hold a representation
-assumption the Python side cannot express. **Read it before believing the removal is mechanical.**
+The 41 references, read. They do not hold a blocking assumption, for one decisive reason:
+
+**The C is ALREADY polymorphic over term representations.** `c_is_term_instance` (2190) tests for a
+`PredicateMeta` instance *and then falls back* to a `__dataclass_fields__` probe — so two term
+representations are already supported, with the fallback documented in the source. Adding or
+removing one is in-pattern, not architectural.
+
+Everything else is one of four routine shapes behind a single cached type pointer
+(`PredicateMeta_type`, set by `_register_predicate_meta`, 2115-2139):
+
+    "is this a term instance?"    2204        -> the term test, already polymorphic
+    "is this a predicate CLASS?"  2344, 2540, 2984, 3351
+                                              -> used for ground-ness and no-variables
+                                                 shortcuts: "PredicateMeta classes are always
+                                                 ground -- they're types, not terms" (2341)
+    field names                   2278-2301   -> `_fields`, with a py_term_field_names fallback
+    reconstruction                3133, 3151  -> copy fields, rebuild via the fast constructor
+
+The `PredicateMeta_type == NULL` guards are **defensive, not a degradation path** — the comment at
+2195 says registration happens at import from `predicate.py` before any caller can reach it, and
+returning 0 is "rather than silently misclassifying". So do not read them as evidence the C can
+already run without the metaclass.
+
+**One piece of genuinely stale C.** `py_is_atom` (2305) implements the LEGACY meaning — "a
+`PredicateMeta` class with zero fields" — and is exported from the extension (3755) but **not
+re-exported by `clausal/logic/variables/__init__.py`**, so it is unreachable through the package
+surface. `atoms.is_atom` is the live term test and is pure Python over tuples. Three modules do
+import from `._variables` directly (`predicate.py:1584`, `builtins/inspection.py:197`,
+`builtins/_helpers.py:291`), so confirm none of them pulls `is_atom` before deleting it.
+
+## Verdict after two files
+
+Both of the files most likely to block this — `specialization.py` by suspicion,
+`_variables.c` by being the C core — are **mechanical**. The removal looks like a large
+refactor rather than a redesign. 195 sites remain unread, so this is a strong indication and not
+a conclusion.

@@ -23,6 +23,15 @@ import pathlib, re, sys, collections
 ROOT = pathlib.Path("/workspace/clausal/clausal")
 PAT = re.compile(r"PredicateMeta")
 
+# Files a human has READ END TO END and recorded a verdict for in FINDINGS.md.
+# Their sites are excluded from the unread queue so the tool's number and the
+# findings document cannot drift apart -- they did once, and the prose was
+# ahead of the instrument.
+HUMAN_VERIFIED = {
+    "clausal/logic/specialization.py": "mechanical: name + arity + row only, 4 ctor sites",
+    "clausal/logic/variables/_variables.c": "mechanical: already polymorphic over term reprs",
+}
+
 
 def classify(line: str) -> str:
     t = line.strip()
@@ -55,9 +64,15 @@ def main() -> int:
     print(f"{len(rows)} references in {len({r[0] for r in rows})} files\n")
     for k, v in counts.most_common():
         print(f"  {v:4}  {k}")
-    unresolved = [r for r in rows if r[2].startswith("?")]
-    print(f"\n  UNCLASSIFIED (must be read): {len(unresolved)}")
-    print(f"  EXIT CRITERION: 0 unclassified. Currently {len(unresolved)}.\n")
+    verified = [r for r in rows if r[0] in HUMAN_VERIFIED]
+    unresolved = [r for r in rows
+                  if r[2].startswith("?") and r[0] not in HUMAN_VERIFIED]
+    print(f"\n  human-verified files : {len(HUMAN_VERIFIED)} "
+          f"({len(verified)} sites, all verdicts in FINDINGS.md)")
+    for f, verdict in HUMAN_VERIFIED.items():
+        print(f"      {f} -- {verdict}")
+    print(f"\n  STILL TO READ: {len(unresolved)}")
+    print(f"  EXIT CRITERION: 0 still-to-read. Currently {len(unresolved)}.\n")
     by_file = collections.Counter(r[0] for r in unresolved)
     for f, c in by_file.most_common(10):
         print(f"    {c:3}  {f}")
