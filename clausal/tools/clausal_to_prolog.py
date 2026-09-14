@@ -29,7 +29,7 @@ from clausal.tools.prolog_operators import OperatorTable
 # (Compare(Lt, UnaryOp(USub, ...))); only the SOURCE SPACING separates them.
 # We import the engine's own predicates rather than re-implementing them so
 # the translator's term-position rule cannot drift from the clause-level rule
-# the engine enforces (see _refuse_arrow_lambda_in_term_position).
+# the engine enforces (see _lower_arrow_lambda_in_term_position).
 from clausal.templating.term_rewriting import (
     _is_arrow_adjacent as _engine_is_arrow_adjacent,
     _leftmost_usub as _engine_leftmost_usub,
@@ -703,6 +703,75 @@ def _currency_factor(leaf: str):
     return None
 
 
+def _is_arrow_lambda_shape(node, source_lines) -> bool:
+    """True iff *node* is a `<-` lambda rather than a `< -` comparison.
+
+    One predicate, asked by both the call site and the lowering, so the two
+    can never disagree about what an arrow lambda is. `<-` and `< -` parse to
+    the same AST and only source spacing separates them; with no source
+    positions (a programmatically built AST) we cannot tell, and the answer is
+    False so the pre-existing comparison behavior stands.
+    """
+    if not isinstance(node, python_ast.Compare) or not node.ops:
+        return False
+    if not isinstance(node.ops[0], python_ast.Lt):
+        return False
+    usub_node, _depth = _engine_leftmost_usub(node.comparators[0])
+    if usub_node is None:
+        return False
+    try:
+        return _engine_is_arrow_adjacent(node.left, usub_node, source_lines)
+    except ValueError:
+        return False
+
+
+def _variable_names(node) -> frozenset[str]:
+    """Every LOGIC VARIABLE name mentioned anywhere under *node*."""
+    return frozenset(
+        n.id for n in python_ast.walk(node)
+        if isinstance(n, python_ast.Name) and _is_logic_var_name(n.id))
+
+
+def _names_bound_in(node) -> frozenset[str]:
+    """Variables *node* puts in an OUTPUT position: the left of `is`/`==`.
+
+    Deliberately NOT "every variable passed as an argument". A variable handed
+    to a predicate is usually an input, and treating argument position as an
+    output would refuse nearly every closure in a corpus. This set is the
+    shape that is unambiguous from the source alone.
+    """
+    out: set[str] = set()
+    for n in python_ast.walk(node):
+        if (isinstance(n, python_ast.Compare) and len(n.ops) == 1
+                and isinstance(n.ops[0], (python_ast.Eq, python_ast.Is))):
+            out |= _variable_names(n.left)
+        elif isinstance(n, python_ast.Assign):
+            for target in n.targets:
+                out |= _variable_names(target)
+    return frozenset(out)
+
+
+def _lambda_parameter_names(node) -> list[str] | None:
+    """The parameter list of a `<-` lambda, or None if it is not one.
+
+    `(U, V) <- Body` gives ``["U", "V"]``; a single `S <- Body` gives
+    ``["S"]``. Anything that is not a plain variable — a literal, a call, a
+    nested tuple — returns None, and the caller refuses rather than guessing
+    what the author meant.
+    """
+    if isinstance(node, python_ast.Tuple):
+        elements = list(node.elts)
+    else:
+        elements = [node]
+    names = []
+    for element in elements:
+        if not (isinstance(element, python_ast.Name)
+                and _is_logic_var_name(element.id)):
+            return None
+        names.append(element.id)
+    return names or None
+
+
 def _unit_leaf_names(node) -> list[str]:
     """The NAMES a unit expression mentions, in order. Exponents are skipped;
     a qualified ``european_union.euro`` contributes ``euro``."""
@@ -812,6 +881,16 @@ class _ClausalToProlog:
         #: Set when a constant declaration is emitted, so the prelude import is
         #: added only to files that need it.
         self._emitted_constant_declaration = False
+        #: True once a `<-` lambda has been lowered, so the module gets
+        #: `:- use_module(library(lambda))`. Set by
+        #: :meth:`_lower_arrow_lambda_in_term_position`.
+        self._emitted_arrow_lambda = False
+        #: Variable names bound by the head of the clause currently being
+        #: converted. A lambda's body variable that is NOT a parameter and
+        #: IS in this set is a CAPTURE, which is the only thing the lowering
+        #: has to reason about. Saved and restored around each clause, so a
+        #: nested conversion cannot see an outer clause's head.
+        self._enclosing_head_vars: frozenset[str] = frozenset()
         # Dotted target path → that target's FILTERED export set, as returned
         # by module_export_signature. When set, import lists are narrowed to
         # names the target really exports.
@@ -1210,6 +1289,27 @@ class _ClausalToProlog:
         # emits facts under the public names directly, and a file's constant
         # declarations are not guaranteed to be contiguous in the output.
         prelude_directives: list = []
+        if self._emitted_arrow_lambda:
+            # `\\`/`^` are library(lambda)'s operators; without the import the
+            # file is a syntax error rather than a wrong answer. Both reference
+            # engines ship it and export the SAME list (measured 2026-09-14).
+            #
+            # THE IMPORT LIST IS EXPLICIT ON PURPOSE, and a listless
+            # `use_module(library(lambda))` is a real defect rather than a
+            # tidier spelling: a consumer that decides whether a predicate is
+            # already supplied cannot see inside a library, so a listless
+            # import reads as "this might supply anything" and suppresses
+            # every other library import that file needed. Measured while
+            # building this: one listless line silently removed the
+            # `library(dif)` import from a module that calls `dif/2`, and the
+            # module then failed at CALL time with existence_error — never at
+            # consult time.
+            lambda_exports = (
+                [PCompound("/", (PAtom("\\"), PNumber(n))) for n in range(1, 9)]
+                + [PCompound("/", (PAtom("^"), PNumber(n))) for n in range(3, 11)])
+            prelude_directives.append(PDirective(PCompound(
+                "use_module", (PCompound("library", (PAtom("lambda"),)),
+                               PList(tuple(lambda_exports))))))
         prelude = getattr(self.dialect, "constants_prelude", None)
         if prelude is not None and self._emitted_constant_declaration:
             load, prelude_module = prelude
@@ -1382,7 +1482,12 @@ class _ClausalToProlog:
             if arrow is not None:
                 head_ast, body_ast = arrow
                 head = self._convert_head(head_ast)
-                body = self._convert_expr(body_ast, goal_position=True)
+                outer_head_vars = self._enclosing_head_vars
+                self._enclosing_head_vars = _variable_names(head_ast)
+                try:
+                    body = self._convert_expr(body_ast, goal_position=True)
+                finally:
+                    self._enclosing_head_vars = outer_head_vars
                 return PClause(head, body)
             return None
 
@@ -2565,47 +2670,87 @@ class _ClausalToProlog:
         )
         return True
 
-    def _refuse_arrow_lambda_in_term_position(
-            self, node: python_ast.Compare) -> bool:
-        """Refuse a ``<-`` lambda that reached TERM position.
+    def _lower_arrow_lambda_in_term_position(
+            self, node: python_ast.Compare) -> PTerm | None:
+        """Lower a `<-` lambda in TERM position to `library(lambda)`.
 
-        A ``<-`` lambda is only meaningful as a CLAUSE arrow. Reaching a term
-        position — ``include((D <- Goal), Xs, Ys)`` — it was previously
-        emitted as inert operator soup (``include(D < -(...), ...)``): data,
-        not a closure. It never runs, and nothing downstream says so.
+        `(U, V) <- Body` becomes `\\U^V^Body`, a real closure both reference
+        engines can meta-call. Until 2026-09-14 this site refused instead: the
+        emission before that was inert `</2` operator soup — `include(D < -(…))`
+        — data rather than a closure, which never ran and said nothing.
 
-        The lambda arrow ``<-`` and the comparison ``< -`` parse to the SAME
-        AST; only source spacing separates them. This mirrors the engine's
-        clause-level rule by calling the engine's own predicates
-        (:func:`_is_arrow_adjacent`), so `a < -b` — a genuine comparison
-        against a negated term — keeps its current behavior untouched.
+        The lambda arrow `<-` and the comparison `< -` parse to the SAME AST;
+        only source spacing separates them, so this mirrors the engine's own
+        clause-level rule via :func:`_engine_is_arrow_adjacent`. `a < -b`, a
+        genuine comparison against a negated term, is untouched.
 
-        Returns True when the site was refused.
+        CAPTURE SEMANTICS, WHICH IS THE WHOLE OF THE DESIGN HERE. A body
+        variable that is neither a parameter nor local — one the enclosing
+        clause's head also binds — is a CAPTURE. `library(lambda)`'s plain
+        `\\` copies the closure per call, so a capture flows its VALUE in;
+        `+\\` opts into true sharing instead. This emits `\\`, matching the
+        capture-by-value rule the lambda design note records, under which a
+        bound capture flows in and an unbound one contributes a fresh variable
+        per call.
+
+        Measured 2026-09-14 on both reference engines:
+
+            maplist(\\X^Y^(Y is X*2), [1,2,3], L)        L = [2,4,6]
+            P = 7, maplist(P+\\X^Y^(Y is X+P), [1], L)   L = [8]
+            unbound F, undeclared                        fresh var per call
+
+        WHY OUTPUT-THROUGH-A-CAPTURE IS REFUSED RATHER THAN LOWERED. The
+        interpreter today SHARES a capture, so a binding made inside a lambda
+        reaches the enclosing clause. Under `\\` it would not, and the
+        difference is SILENT — a different answer, never an error. That
+        capability is deliberately unsettled pending a design decision
+        (operator, 2026-09-14: "I'm trying to avoid them"), so a lambda that
+        binds one of its captures is refused here, by name, instead of being
+        lowered into a quiet behaviour change. Refusing makes "avoid output
+        captures" checkable rather than a convention.
+
+        A capture the lambda only READS is unaffected: copy-per-call and
+        sharing flow the same value, so the lowering is answer-preserving.
+
+        Returns the lowered term, or None when the site was refused (a warning
+        has been recorded in that case).
         """
-        if not node.ops or not isinstance(node.ops[0], python_ast.Lt):
-            return False
+        if not _is_arrow_lambda_shape(node, self._source_lines):
+            return None
         usub_node, _depth = _engine_leftmost_usub(node.comparators[0])
-        if usub_node is None:
-            return False
-        try:
-            adjacent = _engine_is_arrow_adjacent(
-                node.left, usub_node, self._source_lines)
-        except ValueError:
-            # Missing source positions (programmatically built AST): we
-            # cannot tell `<-` from `< -`, so do not guess — leave the
-            # pre-existing comparison behavior in place.
-            return False
-        if not adjacent:
-            return False
-        self._add_warning(
-            "`<-` lambda in term position: "
-            + python_ast.unparse(node)
-            + " — a `<-` lambda is a clause arrow, not a closure; in term "
-            "position it emits inert operator soup that never runs. Define a "
-            "named auxiliary predicate and pass its name instead (class-M "
-            "design note; see the 2026-09-03 decision)"
-        )
-        return True
+
+        source = python_ast.unparse(node)
+        params = _lambda_parameter_names(node.left)
+        if params is None:
+            self._add_warning(
+                "`<-` lambda in term position with a non-variable parameter: "
+                + source
+                + " — a lambda's parameters must be plain variables to lower "
+                "to library(lambda); write them as variables, or define a "
+                "named auxiliary predicate and pass its name instead")
+            return None
+
+        body_ast = usub_node.operand
+        captures = (_variable_names(body_ast) - set(params)) & self._enclosing_head_vars
+        written = captures & _names_bound_in(body_ast)
+        if written:
+            self._add_warning(
+                "`<-` lambda in term position binds a CAPTURED variable ("
+                + ", ".join(sorted(written)) + "): " + source
+                + " — the interpreter shares a capture, so that binding is "
+                "visible to the enclosing clause; library(lambda)'s `\\` "
+                "copies per call and it would not be, silently. Output "
+                "through a capture is an open design question, so this is "
+                "refused rather than lowered. Pass the value out through a "
+                "lambda PARAMETER, or define a named auxiliary predicate.")
+            return None
+
+        body = self._convert_expr(body_ast, goal_position=True)
+        term = body
+        for name in reversed(params):
+            term = PCompound("^", (PVar(clausal_var_to_prolog(name)), term))
+        self._emitted_arrow_lambda = True
+        return PCompound("\\", (term,))
 
     def _convert_compare(self, node: python_ast.Compare, goal_position: bool = False) -> PTerm:
         """Convert comparison operators.
@@ -2652,10 +2797,14 @@ class _ClausalToProlog:
         `_convert_is_subscript`'s docstring and
         .superpowers/sdd/2026-09-05-class-M/c-pre-report.md (trunk repo).
         """
-        # A `<-` lambda reaching term position is untranslatable (2026-09-03).
-        # Checked before any Lt lowering, and on the chained path too.
-        if self._refuse_arrow_lambda_in_term_position(node):
-            return PAtom("???")
+        # A `<-` lambda reaching term position is a CLOSURE, lowered to
+        # library(lambda) (2026-09-14; it was refused outright from
+        # 2026-09-03). Checked before any Lt lowering, and on the chained
+        # path too. A refusal returns None having warned, and in strict mode
+        # the warning is what raises, so the placeholder is never emitted.
+        if _is_arrow_lambda_shape(node, self._source_lines):
+            lowered = self._lower_arrow_lambda_in_term_position(node)
+            return lowered if lowered is not None else PAtom("???")
 
         # Handle single comparison
         if len(node.ops) == 1:

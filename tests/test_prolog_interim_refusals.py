@@ -178,24 +178,91 @@ class TestMembershipPolarityAsymmetry:
 
 # ── Refusal 2: `<-` lambda in term position ────────────────────────────
 
-class TestArrowLambdaInTermPositionRefusal:
+class TestArrowLambdaInTermPositionLowering:
+    """`<-` in term position LOWERS to library(lambda) (2026-09-14).
 
-    def test_refuses_lambda_passed_to_include(self):
-        src = "p(A, B) <- (include((D <- (D is delta(_, S, T))), A, B))\n"
-        msgs = _refusals(src)
+    It was refused outright from 2026-09-03 to 2026-09-14, and before that
+    emitted as inert `</2` operator soup. The tests that pinned the refusal
+    are rewritten here rather than deleted, so the file still says what
+    happens at this site — the operator ruled the lowering after the two
+    reference engines were measured to ship `library(lambda)`.
+    """
+
+    def test_lambda_passed_to_a_hof_lowers(self):
+        out = clausal_source_to_prolog(
+            "p(A, B) <- (maplist(((X, Y) <- (Y is x(X))), A, B))\n",
+            strict=True)
+        assert "\\ X ^ Y ^" in out, out
+        assert "use_module(library(lambda), [(\\)/1," in out, out
+
+    def test_single_parameter_lambda_lowers(self):
+        out = clausal_source_to_prolog(
+            "p(A) <- (maplist((X <- (X > 0)), A))\n", strict=True)
+        assert "\\ X ^" in out, out
+
+    def test_the_library_import_is_emitted_only_when_used(self):
+        """A gate needs a test that it says NO: without a lambda the import
+        must be absent, or its presence proves nothing."""
+        out = clausal_source_to_prolog("p(A) <- (q(A))\n", strict=True)
+        assert "library(lambda)" not in out, out
+
+    def test_the_library_import_carries_an_EXPLICIT_list(self):
+        """A listless `use_module(library(lambda))` is a real defect, not a
+        tidier spelling, and this is the test that says so.
+
+        A consumer deciding whether a predicate is already supplied cannot
+        see inside a library, so a listless import reads as "this might
+        supply anything". Measured 2026-09-14 while building the lowering: a
+        single listless line silently removed the `library(dif)` import from
+        a module calling `dif/2`, which then failed at CALL time with
+        existence_error and never at consult time. Pinning the explicit list
+        is what stops that coming back.
+        """
+        out = clausal_source_to_prolog(
+            "p(A, B) <- (maplist(((X, Y) <- (Y is x(X))), A, B))\n",
+            strict=True)
+        assert "use_module(library(lambda), [" in out, out
+        assert "use_module(library(lambda))." not in out, out
+        # every arity both reference engines export, so a closure called at
+        # any arity resolves
+        for n in range(1, 9):
+            assert f"(\\)/{n}" in out, out
+        for n in range(3, 11):
+            assert f"(^)/{n}" in out, out
+
+    def test_a_read_only_capture_lowers(self):
+        """A capture the lambda only READS behaves the same under
+        copy-per-call and under sharing, so it is safe to lower."""
+        out = clausal_source_to_prolog(
+            "p(F, A, B) <- (maplist(((X, Y) <- (Y is f(X, F))), A, B))\n",
+            strict=True)
+        assert "\\ X ^ Y ^" in out, out
+
+    def test_binding_a_capture_is_REFUSED_and_names_the_variable(self):
+        """Output through a capture is an open design question (operator,
+        2026-09-14), so it is refused rather than silently lowered: the
+        interpreter SHARES a capture, `library(lambda)`'s `\\` copies, and
+        the difference is a different answer with no error."""
+        msgs = _refusals(
+            "p(A, OUT) <- (maplist(((X, Y) <- (OUT is X, Y is X)), A, _Z))\n")
         assert len(msgs) == 1, msgs
-        assert "`<-` lambda in term position" in msgs[0]
+        assert "binds a CAPTURED variable" in msgs[0], msgs
+        assert "OUT" in msgs[0], msgs
 
-    def test_message_names_the_construct_and_the_design_note(self):
-        msg = _refusals(
-            "p(A, B) <- (include((D <- (D is x)), A, B))\n")[0]
-        assert "`<-` lambda in term position" in msg
-        assert "class-M" in msg
-        assert "2026-09-03" in msg
+    def test_a_lambda_LOCAL_variable_is_not_a_capture(self):
+        """The discrimination the whole refusal rests on. `T` is bound inside
+        the lambda but is NOT in the enclosing head, so it is lambda-local and
+        must lower. A rule that refused every binding inside a lambda body
+        would refuse nearly every closure in the corpus."""
+        out = clausal_source_to_prolog(
+            "p(A, B) <- (maplist(((X, Y) <- (T is X, Y is g(T))), A, B))\n",
+            strict=True)
+        assert "\\ X ^ Y ^" in out, out
 
-    def test_tuple_param_lambda_refuses(self):
-        assert _refusals(
-            "p(A, B) <- (maplist(((E, K) <- (E is [K, _])), A, B))\n")
+    def test_non_variable_parameter_is_refused(self):
+        msgs = _refusals("p(A, B) <- (maplist((f(Z) <- (Z is 1)), A, B))\n")
+        assert len(msgs) == 1, msgs
+        assert "non-variable parameter" in msgs[0], msgs
 
 
 class TestArrowSpacingDiscrimination:
@@ -208,10 +275,16 @@ class TestArrowSpacingDiscrimination:
     if the rule were AST-based, one of them would have to fail.
     """
 
-    def test_tight_arrow_is_a_lambda_and_refuses(self):
-        msgs = _refusals("p(A, B) <- (g(D <-1, A, B))\n")
-        assert len(msgs) == 1, msgs
-        assert "`<-` lambda in term position" in msgs[0]
+    def test_tight_arrow_is_a_lambda_and_lowers(self):
+        """A tight arrow is a lambda: it lowers, and `-1` does NOT survive as
+        a negated number. `D` is the parameter and `1` the body."""
+        out = clausal_source_to_prolog("p(A, B) <- (g(D <-1, A, B))\n",
+                                       strict=True)
+        # The real emission, not a guess at it: `D` occurs once so it carries
+        # the translator's singleton mangling, and `1` is the BODY rather than
+        # a negated number — which is the whole discrimination.
+        assert "g(\\ _D ^ 1, A, B)" in out, out
+        assert "use_module(library(lambda), [(\\)/1," in out, out
 
     def test_spaced_arrow_is_a_comparison_and_is_untouched(self):
         out = clausal_source_to_prolog("p(A, B) <- (g(D < -1, A, B))\n",
@@ -234,9 +307,14 @@ class TestArrowSpacingDiscrimination:
         tight = ast.parse("g(D <-1)")
         spaced = ast.parse("g(D < -1)")
         assert ast.dump(tight) == ast.dump(spaced)
-        # ...and yet the translator gives them opposite verdicts.
-        assert _refusals("p(A) <- (g(D <-1, A))\n")
-        assert _refusals("p(A) <- (g(D < -1, A))\n") == []
+        # ...and yet the translator gives them opposite verdicts: the tight
+        # spelling becomes a closure, the spaced one stays a comparison.
+        tight_out = clausal_source_to_prolog("p(A) <- (g(D <-1, A))\n",
+                                             strict=True)
+        spaced_out = clausal_source_to_prolog("p(A) <- (g(D < -1, A))\n",
+                                              strict=True)
+        assert "library(lambda)" in tight_out, tight_out
+        assert "library(lambda)" not in spaced_out, spaced_out
 
 
 # ── The kit witness: the RED fixture named by the decision ─────────────
@@ -273,11 +351,13 @@ class TestKitWitness:
       current state, not on anything this translator controls.
     """
 
-    def test_kit_witness_names_the_construct(self):
-        """Frozen fixture, not the live file (see class docstring) — pins
-        the `<-`-lambda-in-term-position refusal MESSAGE SHAPE against a
-        source snapshot that is guaranteed to still contain it."""
-        msgs = _refusals(KIT_QUERY_COMBINATORS_PRE_MIGRATION.read_text())
-        assert len(msgs) == 3, msgs
-        assert all("`<-` lambda in term position" in m for m in msgs), msgs
-        assert any("D < -" in m for m in msgs), msgs
+    def test_kit_witness_lowers_all_three_closures(self):
+        """Frozen fixture, not the live file (see class docstring). It held
+        the three shapes the refusal was written for; all three now LOWER,
+        which is what makes it a witness for the 2026-09-14 change rather
+        than a stale pin."""
+        source = KIT_QUERY_COMBINATORS_PRE_MIGRATION.read_text()
+        assert _refusals(source) == [], _refusals(source)
+        out = clausal_source_to_prolog(source, strict=True)
+        assert out.count("\\ ") >= 3, out
+        assert "use_module(library(lambda), [(\\)/1," in out, out
