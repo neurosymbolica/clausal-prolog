@@ -12,8 +12,10 @@ Two coordinated paths:
   object is bound at runtime by reference — no reconstruction, tz-aware values
   included, and distinct dates reuse ONE compiled query like ints do;
 - a NESTED occurrence (inside a list/compound arg, which templatization leaves
-  structural) lowers through `term_to_ast_expr`'s `$date`/`$datetime`/`$time`/
-  `$timedelta` constructor-call branches (7fd537b3).
+  structural) used to lower through `term_to_ast_expr`'s constructor-call
+  branches (7fd537b3). REMOVED 2026-09-15: a Python datetime is not a term, so
+  a nested one is refused and the caller passes `('date', Y, M, D)` instead --
+  which is also simpler than the `[Y, M, D]` + `Date/4` dance above.
 """
 
 from __future__ import annotations
@@ -96,31 +98,33 @@ def test_datetime_time_timedelta_args(tmp_path):
         assert _solutions(mod.echo(value, v), v) == [value], f"{value!r}"
 
 
-def test_date_nested_in_a_list_arg(tmp_path):
-    # A structural arg is NOT parameterized — the date inside it must lower
-    # through the term_to_ast_expr reconstruction branch.
+def test_a_NESTED_python_datetime_is_refused(tmp_path):
+    """RULED 2026-09-15: a Python datetime is not a term.
+
+    A direct ground query arg is PARAMETERIZED -- bound at runtime by
+    reference, no AST form needed -- which is why the tests above still pass.
+    A NESTED occurrence is left structural, so it has to lower through
+    `term_to_ast_expr`, and that is the compile route: the value must have an
+    AST form. Reconstruction calls used to give datetimes one; they no longer
+    do, so a nested Python datetime is refused exactly as `Decimal`,
+    `Fraction` and any opaque object always were.
+    """
+    import pytest
+    from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
+
+    for value in (date(2024, 5, 5),
+                  datetime(2024, 11, 3, 1, 30, fold=1),
+                  time(12, 0),
+                  timedelta(days=3)):
+        with pytest.raises(NotImplementedError):
+            term_to_ast_expr([value], {})
+
+
+def test_the_ruled_term_form_is_what_a_nested_caller_passes(tmp_path):
+    """And it is simpler than either the object or the `[Y, M, D]` + `Date/4`
+    dance this file's docstring records: ordinary data, no reconstruction."""
     mod = _load(tmp_path, "dq_f", "heads(L, H) <- (L is [H, *_REST])\n")
     h = Var()
-    assert _solutions(mod.heads([date(2024, 5, 5), date(2024, 5, 6)], h), h) == [
-        date(2024, 5, 5)
-    ]
-
-
-def test_nested_reconstruction_preserves_fold(tmp_path):
-    # fold is not part of datetime equality, so unification succeeds either
-    # way — but the BOUND object must be what the caller passed (roborev
-    # job 18): the reconstruction has to carry fold through.
-    mod = _load(tmp_path, "dq_fold", "heads(L, H) <- (L is [H, *_REST])\n")
-    value = datetime(2024, 11, 3, 1, 30, fold=1)
-    h = Var()
-    [got] = _solutions(mod.heads([value, "sentinel"], h), h)
-    assert got == value
-    assert got.fold == 1, "fold was dropped by the nested reconstruction"
-
-
-def test_naive_datetime_and_timedelta_nested_in_a_list_arg(tmp_path):
-    mod = _load(tmp_path, "dq_g", "heads(L, H) <- (L is [H, *_REST])\n")
-    for value in (datetime(2024, 1, 2, 3, 4, 5, 6), time(1, 2, 3),
-                  timedelta(hours=2)):
-        h = Var()
-        assert _solutions(mod.heads([value, "sentinel"], h), h) == [value], f"{value!r}"
+    assert _solutions(
+        mod.heads([("date", 2024, 5, 5), ("date", 2024, 5, 6)], h), h
+    ) == [("date", 2024, 5, 5)]
