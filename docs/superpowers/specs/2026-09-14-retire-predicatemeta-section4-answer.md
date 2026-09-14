@@ -712,3 +712,49 @@ was a NAME, and a bare name in a `match` pattern CAPTURES rather than compares.*
 with no namespace injection — and the "degrades to a wildcard when `$cells` is absent" failure,
 which silently cost a non-ground tuple-data cell its indexing, can no longer happen. Those three
 tests are INVERTED to pin that rather than deleted.
+
+---
+
+# rdiv/decimal: the TERM half is free; the arithmetic half collides with a parked branch
+
+Ruled 2026-09-15: rationals are `('rdiv', N, D)` (Scryer's spelling, not SICStus's `r/2`), and
+decimals are `('decimal', M, E)` — mantissa and power-of-ten scale.
+
+## Free, measured
+
+Both spellings already work, with NO engine change, because post-FLIP every compound is a cell:
+
+    rdiv(1, 3)        in source ->  ('rdiv', 1, 3)          marshal-clean, compiles
+    decimal(1001, 2)  in source ->  ('decimal', 1001, 2)    marshal-clean, compiles
+
+Names confirmed free: `rdiv` and `decimal` have 0 engine-builtin mentions and 0 corpus definitions.
+
+`('decimal', M, E)` is Python's own `Decimal` model — `Decimal.as_tuple()` is
+`(sign, digits, exponent)` — so conversion is lossless both ways, the sign rides in the mantissa,
+and SCALE survives where `rdiv` alone loses it:
+
+    10.01   -> ('decimal', 1001, 2)          distinct terms,
+    10.010  -> ('decimal', 10010, 3)         same rational value
+
+and it is a SUBTYPE of rdiv: `('decimal', M, E)` == `('rdiv', M, 10**E)`, so arithmetic normalises
+with one rule rather than gaining a fourth numeric type. **Open detail:** `1E+5` has a POSITIVE
+Decimal exponent, so it encodes as `('decimal', 1, -5)` — a negative scale field meaning x10^5.
+Allowing it preserves Decimal's model exactly; normalising to `('decimal', 100000, 0)` loses the
+`1E+5` / `100000` distinction. Recommended: allow it.
+
+## What is NOT free, and why it should wait
+
+Making the two spellings NUMBERS — recognised by the evaluator and by CLP — is the real work, and
+it lands squarely on rational arithmetic. **`feat/clpq-c-port-2026-09-13` has `arith_q` already
+ported to C over GMP** (its handoff: "ported to C over GMP and agrees with Holzbaur 20/20 on a live
+Scryer differential"). `arith_q` IS the rational arithmetic layer.
+
+So a rational-representation change written now would be written against a Python `arith_q` that a
+parked branch is midway through replacing. **Sequence it WITH the CLP(Q) port, not against it** —
+otherwise one of the two gets rewritten twice, and the differential oracle that makes the port
+trustworthy would be comparing against a moved target.
+
+Also unmeasured, and needed before the arithmetic half: today a non-integral rational has no
+observable term form at all — `Fraction` cannot be lowered (`NotImplementedError`, same as
+`Decimal`), so nothing in a compiled goal can hold one. What `X` binds to for a non-integral result
+is therefore a question about the CLP path specifically, not about the general evaluator.
