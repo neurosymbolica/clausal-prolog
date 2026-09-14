@@ -344,3 +344,55 @@ the one step in the representation change that touches values the corpus compute
   but it is not ruled and should not be assumed.
 * Whether `('decimal', "10.01")` is the WRITTEN surface or only the internal encoding. The corpus
   writes money literals; if the encoding is also the surface, that is a corpus migration.
+
+---
+
+# Python tuples as DATA, and a correction to the marshal rule
+
+Asked: what does an actual Python tuple passed in become? **The mechanism already exists** —
+`clausal/logic/cells.py`. Slot 0 of a cell is either a `str` (a compound functor) or the `tuple`
+TYPE OBJECT itself (`TUPLE_TAG`), which marks plain tuple DATA:
+
+    foo(1, 2)   compound     ('foo', 1, 2)             slot 0 is a str
+    foo         atom         ('foo',)                  slot 0 is a str
+    (1, 2)      tuple DATA   (<class 'tuple'>, 1, 2)   slot 0 is the tuple TYPE
+
+Tagging with the type object rather than a reserved string is the load-bearing choice, and
+`cells.py` gives the reason: a data tuple's own slot 0 could be anything — an int, a str, another
+tuple — so no string tag is collision-free. A type object cannot appear as a user value.
+
+Measured, not read off the docstring:
+
+    is_cell(('foo', 1))          True       is_cell((1, 2))        False   a raw pair is not a cell
+    is_cell((tuple, 1, 2))       True       is_cell((Var(), 1))    False   deprecated
+
+    ('foo',1,2) vs (tuple,1,2)   False      the two shapes do not unify -- correct
+    (tuple,1,X) vs (tuple,1,2)   True       X = 2
+    (1,2)       vs (tuple,1,2)   False      an untagged pair is opaque data, not tuple-data
+
+Slot 0 must be `str` or `TUPLE_TAG`; nothing else is a cell. A `Var` in functor position is
+explicitly deprecated — `(F, 1)` would flip from compound to tuple-data the moment `F` bound to the
+`tuple` type, which `cells.py` records as having caused the bridge's one Critical.
+
+## CORRECTION to the ruling's wording
+
+The dates-and-decimals ruling above is recorded as "**a term is marshal-clean data**". Measured,
+that is too strong:
+
+    marshal.dumps(('foo', 1, 2))    clean
+    marshal.dumps((tuple, 1, 2))    ValueError -- the type object cannot be marshalled
+
+So a tuple-DATA term is not marshal-clean, and the rule as written would outlaw a shape the design
+depends on. The design is nevertheless consistent, because the tag never becomes a bytecode
+constant: emitted code names it as the DOTTED VALUE PATTERN `$cells.TUPLE_TAG`
+(`cells.CELLS_NAMESPACE_KEY`, used by `compiler/predicate.py:403` and `list_dispatch.py:111`), a
+runtime name lookup. The bytecode stays clean; the runtime value carries the type object.
+
+**The accurate rule:**
+
+> A term that is a COMPILE-TIME CONSTANT must be marshal-clean. Tuple-data is constructed by name,
+> not folded into `co_consts`.
+
+Which leaves the dates-and-decimals ruling intact and better founded: `('date', 2026, 9, 14)` and
+`('decimal', "10.01")` are marshal-clean *and* fold, so they need no `$cells`-style indirection,
+while an opaque Python object has neither property and stays refused.
