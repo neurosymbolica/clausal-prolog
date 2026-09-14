@@ -602,3 +602,60 @@ Those 5,259 `test(...)` and 57 `--pred(...)` invocations all run THROUGH the eng
 representation change with zero corpus EDIT sites can still move corpus ANSWERS, and site analysis
 is a different claim from an answer-set re-run. Both changes still need the oracle gate — ask
 harness-batch-lane to re-run the sealed scorers — before promotion.
+
+---
+
+# Scoping the dates-and-decimals ruling — the two halves are NOT alike
+
+Measured before implementing, and they need different decisions.
+
+## Dates: the ruled shape is ALREADY the reality
+
+    date(2026, 9, 14) written in .clausal   exports as   ('date', 2026, 9, 14)   type tuple
+
+Exactly the ruled encoding, in the engine today. And the corpus standardises on it independently:
+`_tools/check_date_representation.py` is a RATCHET whose whole job is stopping `[Y, M, D]` integer
+lists spreading in place of "the standard `date(Y, M, D)` term", with a per-file baseline holding
+**one** remaining violation. So there is no date migration to do.
+
+**But the remaining `datetime.date` route is deliberate machinery, not a leak.**
+`terms_to_ast.py:60-72` defines `_VALUE_TERM_CTORS`: `datetime.date`, `datetime.datetime`,
+`datetime.time` and `datetime.timedelta` are lowered to CONSTRUCTOR CALLS in the emitted AST
+(`date(year, month, day)`), which is why a Python date passes the compile route where a `Decimal`
+or an opaque object is refused. Extending the refusal to dates therefore means DELETING a built
+feature, not closing a hole — and 9 engine test files reference `datetime.date`.
+
+That is a feature removal and wants an explicit call rather than an inference from "keep that
+error".
+
+## Decimals: NOT in the ruled shape, and the change is the bigger one
+
+    10.01 written in .clausal   exports as   10.01   type FLOAT
+    3/4                         exports as   Div(left=3, right=4)   a structural operator node
+
+A decimal literal is a Python float today — which is the known scale-loss problem recorded against
+the money work (`decimal_repr="float"`, the default, loses scale; `"rational"` keeps it as an
+unevaluated `1_550_00/100`).
+
+**Two readings of `('decimal', "10.01")`, and they are materially different work:**
+
+1. **A SEAM-BOUNDARY encoding.** Python hands `('decimal', "10.01")` across the seam instead of a
+   `Decimal` object, and the engine keeps refusing the object. Bounded, matches "keep that error
+   that was raised if there is an attempt to put these through", and changes nothing about how
+   `10.01` in source compiles. Open sub-question: what the engine then DOES with that term — it has
+   to be recognised as a number for arithmetic, or it is inert.
+
+2. **The LITERAL representation.** `10.01` in `.clausal` source stops compiling to a float and
+   becomes `('decimal', "10.01")`. This fixes the scale loss at its root, and it is the reading
+   that makes the encoding load-bearing rather than decorative. It also changes the numeric surface
+   and interacts with the 2026-09-13 ruling that **arithmetic IS RATIONAL** (`{...}` the default,
+   `#=` the narrow integer case) — a decimal term would have to participate in rational arithmetic,
+   and `Quantity` reaches 29 engine modules and 26 test files.
+
+Reading 1 is a day. Reading 2 is the numeric surface. **Not guessed — put to the operator.**
+
+## `Quantity` is still unruled
+
+Named in neither. Same shape of question as `Decimal`, plausibly
+`('quantity', <magnitude>, <unit>)`, but units are live corpus vocabulary and it should not be
+assumed to follow.
