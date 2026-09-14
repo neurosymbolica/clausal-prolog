@@ -3,15 +3,48 @@
 Instrument: `census.py`. Exit criterion: **zero unclassified**, because a site classified wrong is
 a silent behaviour change.
 
-## State
+## P0 IS COMPLETE — 0 still to read
 
-    431 references, 50 files
-      93  comments
-     163  auto-classified
-     268  MUST BE READ   <-- the work queue
+    431 references, 50 files.  STILL TO READ: 0.
 
-Concentrated: `_variables.c` 41, `predicate.py` 32, `specialization.py` 32, `compiler_v2.py` 16,
-`solve.py` 14, `term_rewriting.py` 14.
+Positive-controlled rather than asserted: removing a single verdict from the table makes the
+checker report 1, restoring it reports 0. A zero is the easiest number to produce by accident.
+
+    mechanically classified   240  PROSE 128 + COMMENT 112
+                               40  F-annotation
+                               24  A-predicate-test (by variable name)
+                                9  C-zerofield
+                                5  B-term-construction
+                                4  E-import
+                                3  D-declaration
+    human-read, 2 whole files  78  specialization.py 32 + _variables.c 41 (+5 auto)
+    human-read, site by site   83  A=30 C=4 D=5 G=8 H=2 P=34
+
+## THE TAXONOMY, final — SEVEN categories
+
+The spec assumed two. The first census pass found five. Reading every site found seven.
+
+    A  PREDICATE TEST     30  "is this NAME a predicate here?"  -> Database membership test
+    G  TERM TEST           8  `isinstance(type(x), PredicateMeta)` -- a DIFFERENT question,
+                              "is x a term INSTANCE". The functor-first-tuple path already
+                              answers it natively.
+    C  ATOM WIDENING       4  a zero-field class admitted as an atom VALUE
+    D  DECLARATION         5  the class statement, registration, __all__, emitted AST
+    H  FOREIGN IDENTITY    2  compares against ANOTHER copy of the engine's PredicateMeta
+    P  PROSE              34  read, non-behavioural
+    F/E/B                 49  annotations, imports, construction-by-name
+
+**G is the category that matters most and the one the spec missed entirely.** `isinstance(x,
+PredicateMeta)` asks "is x a predicate CLASS"; `isinstance(type(x), PredicateMeta)` asks "is x a
+term INSTANCE". They share a spelling and mean opposite things -- the same one-stem-two-questions
+trap that produced `is_atom` -> `is_zero_field_class`. Eight sites ask the second question, in
+`solve.py` (6), `head_match.py`, `term_expansion.py` and `predicate.py`. **Any rewrite that treats
+these as category A silently changes what the engine considers a callable goal.**
+
+**H is the only category needing a genuinely new design.** `predicate.py:1701-1703` compares
+against a FOREIGN `PredicateMeta` (`foreign.__name__ != PredicateMeta.__name__`) to detect a
+double-loaded engine -- it depends on class-object identity ACROSS module copies, which is exactly
+what a tuple cannot carry. It needs a replacement mechanism, not a deletion. Two sites.
 
 ## The taxonomy is FIVE categories, not the spec's two
 
@@ -91,9 +124,26 @@ surface. `atoms.is_atom` is the live term test and is pure Python over tuples. T
 import from `._variables` directly (`predicate.py:1584`, `builtins/inspection.py:197`,
 `builtins/_helpers.py:291`), so confirm none of them pulls `is_atom` before deleting it.
 
-## Verdict after two files
+## FINAL VERDICT: the removal is MECHANICAL, with two named exceptions
 
-Both of the files most likely to block this — `specialization.py` by suspicion,
-`_variables.c` by being the C core — are **mechanical**. The removal looks like a large
-refactor rather than a redesign. 195 sites remain unread, so this is a strong indication and not
-a conclusion.
+Every one of the 431 references is accounted for. **No site blocks the removal.** In particular
+the two candidates for blocking it do not:
+
+* `specialization.py` needs only name + arity + row, all of which `Database.row()` provides
+* `_variables.c` is **already polymorphic** over term representations (PredicateMeta instance,
+  then a `__dataclass_fields__` fallback), so removing one is in-pattern
+
+**The two exceptions, both small and both now identified rather than latent:**
+
+1. **Category G, 8 sites** — the term test. Must be rewritten as a tuple test, NOT folded into the
+   predicate test. Mistaking them changes what counts as a callable goal.
+2. **Category H, 2 sites** — the foreign-engine-identity diagnostic. Needs a new mechanism; class
+   identity across module copies has no tuple equivalent.
+
+**And one decision the plan must now make explicitly:** category C's 4 sites admit a zero-field
+class as an atom VALUE, which `predicate.py:1617` documents as deliberate (a zero-arity class is a
+"declared atom"). Declared atoms need a tuple spelling and a migration path before the class can
+go.
+
+P1 of the spec — routing straight to `Database.row()` — is now unblocked and its work queue is the
+30 category-A sites.
