@@ -463,3 +463,48 @@ question. Either way, `(tuple, …)` should go: it is the only candidate that ca
 
 **Not established:** how many tuple-DATA terms exist in the corpus, i.e. what a re-tagging would
 cost to migrate. The engine's own use is small (4 sites, all display tests).
+
+## RECOMMENDED: `('()', 1, 2)` — the two-character spelling `"()"`
+
+Proposed by the operator after `''` and `()` were measured to be the same nil-entangled tag. It
+beats both, and it beats `'$tuple'`. Measured:
+
+**1. Not entangled with nil** — the property `''` and `()` both fail:
+
+    ('()',) vs ((),)    False        ('()',) vs ([],)     False
+    ('()',) vs ('',)    False        ('()',) vs ('[]',)   False
+    ('()',1,2) vs ('()',1,2)  True
+
+So it needs no ruling and does not wait on
+`todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md`.
+
+**2. It follows an established convention exactly.** `atoms.NIL_SPELLING` is `'[]'`, and
+`atoms.mint('[]')` returns the empty list — the engine ALREADY reserves and intercepts a writable
+quoted-atom spelling for a structural term. `'()'` spelling a tuple is the same idea, and reads
+correctly: `('()', 1, 2)` is the tuple `(1, 2)`.
+
+**3. The "but it is writable as a quoted atom" objection is a FEATURE here.** `'()'(1, 2)` is valid
+ISO — a quoted atom may be a functor, and the reader already handles it
+(`prolog_parser.py:490`, "a quoted functor like `'foo'(1)`"). So tuple-data gets a portable
+spelling with NO new syntax, and a `.pl` file containing one loads in Scryer and Trealla. That
+matters for the `.pl` portability goal in a way `'$tuple'` does not: `$` is not an ISO atom
+convention.
+
+**4. It is faster, and the operator's reason is the right one** — a Python `str` caches its hash,
+so it wins both the recognition test and the dict lookup:
+
+    recognition  one-branch  `type(s0) is str`               0.0205 s / 2M
+                 two-branch  `str or s0 is TUPLE_TAG`        0.0428 s / 2M    2.08x
+    dict key     str-tagged cell                             0.0335 s / 2M
+                 type-tagged cell                            0.0584 s / 2M    1.74x
+
+The one-branch rule is only available to a `str` tag, so this is the same win `''` would have
+given, without the collision.
+
+**5. `'()'` is free.** 0 uses in engine Python, 0 `.clausal` files, 0 tests.
+
+**The one cost**, stated plainly: the atom `'()'` stops being available as an ordinary atom. That
+is the same trade `'[]'` already makes, and it is why the precedent matters.
+
+**Migration**: the engine's own tuple-DATA use is 4 sites, all display tests. The corpus is
+unmeasured — that figure is the only thing between this recommendation and a decision.
