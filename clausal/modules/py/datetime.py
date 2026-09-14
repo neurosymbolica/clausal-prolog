@@ -167,6 +167,22 @@ def _term_to_dt(value):
         return value
 
 
+def date_term_to_python(value):
+    """PUBLIC: a date-family TERM -> its Python value; anything else unchanged.
+
+    Exposed for callers outside the engine that have to tell a date term from a
+    look-alike container -- notably the eval harness's ``profile_terms``, which
+    recurses into tuples ELEMENTWISE and would otherwise try to resolve
+    ``date`` as an atom on a rulebase that never declared it.
+
+    ``cells.is_cell`` does NOT discriminate: ``('date', 2023, 6, 1)`` and a
+    profile tuple ``('alpha', 'beta')`` are both cells. This does, because it
+    requires the components to be well formed -- and it is the SAME function
+    the engine converts with, so a caller's rule cannot drift from the
+    engine's. ``date_term_to_python(x) is not x`` is the discrimination test.
+    """
+    return _term_to_dt(value)
+
 def deref(value):  # noqa: F811 -- deliberately shadows the import above
     """``variables.deref`` then term->Python, so every predicate below reads
     a Python value whatever the caller wrote."""
