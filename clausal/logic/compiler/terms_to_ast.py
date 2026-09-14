@@ -1235,9 +1235,47 @@ def term_to_ast_expr(
             raise SyntaxError(msg, (None, pos[0], None, None))
         raise SyntaxError(msg)
 
+    # A value with a CANONICAL TERM ENCODING gets told what to write; a value
+    # without one gets the plain refusal. That is the distinction the
+    # 2026-09-15 ruling turns on -- a date can be a term, an opaque object
+    # cannot -- and it is why this is a suggestion rather than a coercion.
+    #
+    # The shapes come from ``modules.py.datetime``'s own emit table so there is
+    # ONE definition of the encoding; a second spelling here would drift.
+    suggestion = _term_form_suggestion(term)
+    if suggestion is not None:
+        raise NotImplementedError(
+            f"term_to_ast_expr: a Python {type(term).__name__} is not a term.\n"
+            f"  Write the term instead:  {suggestion}\n"
+            f"  in .clausal source:      {_source_form(suggestion)}\n"
+            f"  (got {term!r})"
+        )
     raise NotImplementedError(
         f"term_to_ast_expr: unsupported term type {type(term).__name__}: {term!r}"
     )
+
+
+def _term_form_suggestion(term: Any) -> "str | None":
+    """The term a Python datetime value should have been written as, or None.
+
+    None for everything else, deliberately: only a value the language HAS an
+    encoding for can be suggested, and suggesting one for an opaque object
+    would promise a migration that does not exist.
+    """
+    try:
+        from clausal.modules.py.datetime import _dt_to_term  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 -- a diagnostic must not upstage the fault
+        return None
+    form = _dt_to_term(term)
+    return repr(form) if type(form) is tuple else None
+
+
+def _source_form(term_repr: str) -> str:
+    """``('date', 2023, 6, 1)`` -> ``date(2023, 6, 1)``, the .clausal spelling."""
+    inner = term_repr.strip("()").split(", ", 1)
+    if len(inner) != 2:
+        return term_repr
+    return f"{inner[0].strip(chr(39))}({inner[1]})"
 
 
 # ── Arithmetic term → AST expression ──────────────────────────────────────────
