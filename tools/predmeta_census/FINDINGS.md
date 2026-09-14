@@ -245,3 +245,43 @@ The prerequisite note flagged arity as P1's real design work. Measured, it is no
 reaching a Database at all, and that is solved for 23 of 26. Arity remains a per-site detail —
 present at most sites, and where absent the site is usually resolving an import spec that carries
 `name/arity` anyway.
+
+## CORRECTION: "23 of 26 are mechanical" is TOO OPTIMISTIC
+
+Reaching a Database is solved for 23 of 26. **That is necessary and not sufficient**, and two
+sites read in detail show the A category decomposes further:
+
+**1. Some are SIMPLIFICATIONS, not reroutes — better than expected.**
+`compiler_v2.py:233` passes `pred_cls` into `_load_gate(db, functor, arity, author, kind,
+pred_cls, origins, module_name, module_dict)` — which **already receives `db`, `functor` AND
+`arity`**. The class is redundant information the gate could derive itself. So this site's fix is
+to stop passing it, not to reroute a test. Check the gate's use of it for the
+import-redefinition DIAGNOSTIC first: that is what `pred_cls` is there for.
+
+**2. Some need the functor-only query the design note said we would not need.**
+`compiler_v2.py:1717`: `not isinstance(module_dict.get(entry), PredicateMeta) and entry not in
+_module_constants(module_dict)` -> then bind `entry` as an ATOM. `entry` comes from a declaration
+list and **has no arity** — the question is "is this name a predicate at ANY arity?"
+`db.row(functor, arity)` cannot answer that.
+
+**3. And that same site is really blocked on spec §4, not on P1.** It asks whether a
+module-level NAME is bound to a predicate. Under the new design a predicate may not bind a
+module-level name at all — that is exactly §4's open question ("what binds at module level?"). So
+its logic changes with §4's answer, not with a reroute.
+
+### Revised P1 shape
+
+    26 category-A sites
+      -> reroute to db.row(f, a) is not None        the straightforward ones
+      -> SIMPLIFY: stop passing a redundant class   where db+functor+arity already flow
+      -> needs a functor-only membership query      where no arity exists (declaration lists)
+      -> BLOCKED on spec §4                         where the question is about module binding
+
+**The per-site split is not yet done.** It needs one pass reading each of the 26 in its enclosing
+function — the same discipline that corrected 4 of 83 P0 verdicts, applied to the 26. Do that
+before editing anything: the sites look alike at line level and are not alike.
+
+**And add a functor-only membership query to Database** (`has_any_arity(functor)`), since the
+declaration-list sites cannot be served without one. That reverses the design note's "do not add
+a functor-only query", which was concluded from the 23-of-26 reachability figure before any site
+was read in full.
