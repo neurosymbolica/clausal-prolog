@@ -134,7 +134,7 @@ def compile_module(
 
     # ── Step 0: Process imports (before term expansion, so imported TE
     #    rules are available) ──────────────────────────────────────────────
-    _process_imports(module_items, module_dict)
+    _process_imports(module_items, module_dict, db)
 
     # ── Step 1: Term expansion (after imports, before directives) ────────
     from clausal.logic.term_expansion import run_term_expansion
@@ -515,8 +515,42 @@ def _imported_reference(mod, orig_name: str, value):
     return predicate_builtins.setdefault(orig_name, _mint_atom(orig_name))
 
 
-def _process_imports(module_items: list, module_dict: dict) -> None:
-    """Execute import directives, populating module_dict."""
+def _plant_imported_rows(db, mod, orig_name: str, local_name: str) -> None:
+    """Make *local_name* resolve, in *db*, to the row the exporter owns.
+
+    Spec §4 q1.  The binding above is the whole import relationship today --
+    one Python object reference -- and the importing Database has no record of
+    it at all.  This puts the relationship in the store, under the IMPORTER's
+    own spelling, so ``db.row(functor, arity)`` answers "what does this name
+    mean here" for imported names as well as local ones.
+
+    The arity comes from the exporter's database, because an ``-import_from``
+    names a predicate without one.  Purely additive: nothing resolves THROUGH
+    the importer's database yet, so planting cannot change how a goal is
+    reached -- it can only make a question answerable that returned ``None``
+    before.
+    """
+    if db is None:
+        return
+    exporter = getattr(mod, "__dict__", {}).get("$module")
+    exporter_db = getattr(exporter, "db", None)
+    if exporter_db is None or exporter_db is db:
+        return
+    for arity in exporter_db.arities_for(orig_name):
+        row = exporter_db.row(orig_name, arity)
+        if row is not None:
+            db.adopt_row(local_name, arity, row)
+
+
+def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
+    """Execute import directives, populating module_dict.
+
+    *db* is the importing module's Database -- the LOCAL in ``compile_module``,
+    not ``module_dict["$module"].db``: at this point the dict still holds the
+    placeholder module the body exec'd against, which ``compile_module``
+    replaces afterwards.  Reaching for the dict here plants into a database
+    that is then thrown away.
+    """
     for item in module_items:
         if isinstance(item, ImportFromItem):
             mod = _resolve_module(item.module)
@@ -525,6 +559,12 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                     orig_name, local_name = name_spec
                     value = getattr(mod, orig_name)
                     module_dict[local_name] = value
+                    # Keyed by LOCAL_NAME: the aliasing module says ``link``,
+                    # so ``link`` is what its database answers to.  A class
+                    # cannot do this -- it carries the exporter's ``__name__``
+                    # wherever it goes, which is why ``_import_from_origins``
+                    # has to index an aliased import under both spellings.
+                    _plant_imported_rows(db, mod, orig_name, local_name)
                     # Also store under the dotted key ("module.OrigName") so
                     # that _inject_resolved_targets can resolve it when the compiler
                     # emits LoadName(name="module.OrigName") for remapped imports.
@@ -533,6 +573,7 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                 else:
                     value = getattr(mod, name_spec)
                     module_dict[name_spec] = value
+                    _plant_imported_rows(db, mod, name_spec, name_spec)
                     # Dotted key for compiler resolution (e.g. "py.sympy.inf").
                     module_dict[f"{item.module}.{name_spec}"] = (
                         _imported_reference(mod, name_spec, value))

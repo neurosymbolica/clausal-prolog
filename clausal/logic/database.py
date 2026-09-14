@@ -480,6 +480,57 @@ class Database:
         self._rows: dict[tuple[str, int], PredRow] = {}
         self.module_dict: dict | None = module_dict
 
+    def arities_for(self, functor: str) -> "set[int]":
+        """Every arity this database knows *functor* at.
+
+        The functor-only question ``row(functor, arity)`` cannot answer, and
+        the one the import plant needs: an ``-import_from`` names a predicate
+        but carries no arity, so the arities have to come from the EXPORTER's
+        database.  Scans the same containers ``row()``'s own ``known`` test
+        consults, so the two agree about what "this database knows it" means.
+        """
+        found = {a for (f, a) in self._rows if f == functor}
+        for keyed in (self._clauses, self._dispatch, self._lazy_recompile,
+                      self._signatures, self._dynamic):
+            found |= {a for (f, a) in keyed if f == functor}
+        return found
+
+    def adopt_row(self, local_functor: str, arity: int, row: "PredRow") -> bool:
+        """Make ``(local_functor, arity)`` resolve to an existing *row* that
+        another database owns.  True if it was adopted, False if this database
+        already had something under that key.
+
+        Spec §4 q1.  ``-import_from`` is ``getattr`` today, so the importing
+        database holds no row and no dispatch for an imported predicate and
+        the whole relationship lives as one Python object reference in
+        ``module_dict``.  This is the relationship, in the store that is
+        supposed to hold it -- keyed by the IMPORTER's spelling, which is what
+        makes an aliased import an ordinary key rather than a class whose
+        ``__name__`` disagrees with the name the file uses.
+
+        Never displaces an existing entry: a module that imports a name AND
+        defines its own predicate under it keeps its own, and the clash is
+        left for the mutation gate to police rather than silently resolved
+        here in load order.
+        """
+        key = (local_functor, arity)
+        if key in self._rows:
+            return False
+        self._rows[key] = row
+        return True
+
+    def owns(self, functor: str, arity: int) -> bool:
+        """True if this database is the HOME of ``(functor, arity)`` — as
+        opposed to merely resolving it through a row it adopted at import.
+
+        The replacement for asking a predicate class whether it "belongs
+        elsewhere" (``compiler_v2._belongs_elsewhere``): a row knows its own
+        database, so ownership is a property of the row rather than of a class
+        object's identity across module copies.
+        """
+        row = self.row(functor, arity)
+        return row is not None and row.db is self
+
     def row(self, functor: str, arity: int, create: bool = False) -> "PredRow | None":
         """Return the ``PredRow`` for ``(functor, arity)``, or ``None``.
 
