@@ -331,7 +331,9 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # allowlist moves whenever anything earlier in the file does, so this
     # entry will red on edits that have nothing to do with it -- the range is
     # deliberately loose to absorb that rather than being re-pinned each time.
-    AllowEntry("clausal/logic/database.py", (1240, 1320),
+    #    Range shifted 1240-1320 -> 1240-1400 by the §4 q1 import-plant's
+    #    arities_for/adopt_row/owns/_adopted additions earlier in the file.
+    AllowEntry("clausal/logic/database.py", (1240, 1400),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list); task-5 (R11) "
                "added its cell branch"),

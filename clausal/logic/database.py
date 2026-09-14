@@ -478,6 +478,14 @@ class Database:
         self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
         self._rows: dict[tuple[str, int], PredRow] = {}
+        # Rows another database OWNS, resolvable here under this module's own
+        # spelling because an ``-import_from`` named them (spec §4 q1).  Held
+        # apart from ``_rows`` deliberately: adoption must never shadow a
+        # predicate this module goes on to DEFINE, and imports are processed
+        # before any local clause is compiled, so an entry in ``_rows`` would
+        # be found by the local definition's own ``row(..., create=True)``.
+        # See ``row()``: adopted rows answer READS only.
+        self._adopted: dict[tuple[str, int], PredRow] = {}
         self.module_dict: dict | None = module_dict
 
     def arities_for(self, functor: str) -> "set[int]":
@@ -514,9 +522,9 @@ class Database:
         here in load order.
         """
         key = (local_functor, arity)
-        if key in self._rows:
+        if key in self._rows or key in self._adopted:
             return False
-        self._rows[key] = row
+        self._adopted[key] = row
         return True
 
     def owns(self, functor: str, arity: int) -> bool:
@@ -553,8 +561,15 @@ class Database:
             or key in self._signatures
             or key in self._dynamic
         )
-        if not known and not create:
-            return None
+        if not known:
+            # A row this module ADOPTED at import answers a read -- that is
+            # what makes ``db.row(functor, arity)`` a correct answer to "what
+            # does this name mean here".  It must NOT answer a write: a
+            # ``create=True`` caller is defining a predicate, and handing it
+            # somebody else's row is how a local clause stops producing
+            # solutions (tests/fixtures/fnmismatch_use.clausal).
+            if not create:
+                return self._adopted.get(key)
         # NOTE: deliberately does NOT touch ``_clauses`` here (Finding 2) —
         # minting a row from a dispatch/signature/dynamic-only predicate must
         # not flip ``is_defined()`` False→True. Clause-list vivification is

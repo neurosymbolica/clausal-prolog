@@ -161,3 +161,29 @@ def test_imported_predicates_still_answer_end_to_end(mods):
     assert sorted((X.value, Z.value) for _ in mods["plain"].two_hop(X, Z)) == [(1, 3)]
     A, B = Var(), Var()
     assert sorted((A.value, B.value) for _ in mods["alias"].hop(A, B)) == [(1, 2), (2, 3)]
+
+
+def test_a_local_definition_takes_over_a_name_that_was_adopted_first():
+    """Adoption must never shadow a predicate this database goes on to define.
+
+    Imports are processed at step 0, BEFORE any local clause is compiled, so
+    "never displace an existing entry" cannot protect a module that imports a
+    name and then defines its own predicate under it -- at plant time there is
+    nothing to displace yet. `tests/fixtures/fnmismatch_use.clausal` is exactly
+    that module, and its local clause silently stopped producing solutions.
+
+    The rule that makes the ordering irrelevant: a WRITE (`create=True`) always
+    lands on a row this database owns.
+    """
+    from clausal.logic.database import Database
+    mine, theirs = Database(), Database()
+    mine.adopt_row("p", 1, theirs.row("p", 1, create=True))
+
+    assert mine.row("p", 1) is not None, "a read should still resolve to the adopted row"
+    assert mine.owns("p", 1) is False
+
+    local = mine.row("p", 1, create=True)
+
+    assert local.db is mine, "a write landed on another database's row"
+    assert mine.owns("p", 1) is True
+    assert mine.row("p", 1) is local, "the local row must now win reads too"
