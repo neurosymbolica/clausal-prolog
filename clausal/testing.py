@@ -1639,6 +1639,7 @@ def _reify_value(value, depth: int = 0, path=None):
         return value
     if isinstance(value, list):
         return [_reify_value(v, depth + 1, path) for v in value]
+    from clausal.logic.cells import TUPLE_TAG  # noqa: PLC0415
     if type(value) is tuple and len(value) == 1 and type(value[0]) is str and value[0] != TUPLE_TAG:
         # An ATOM — the arity-0 cell (spec §6.7).  It is a NAME, so it
         # reifies as ``Atom`` and prints bare; without this branch the cell
