@@ -147,3 +147,49 @@ go.
 
 P1 of the spec — routing straight to `Database.row()` — is now unblocked and its work queue is the
 30 category-A sites.
+
+---
+
+# Spec P1 prerequisite — WHICH Database call replaces the isinstance test
+
+Settled before touching any of the 30 category-A sites, because the obvious answer is wrong.
+
+    db.is_defined(functor, arity)        "any clause has been asserted"    STRICTER -- WRONG
+    db.row(functor, arity) is not None   "a row exists for it"             EQUIVALENT -- USE THIS
+
+Measured:
+
+    predicate                        isinstance  is_defined  row is not None  is_dynamic
+    has_clauses/1                    True        True        True             False
+    declared_empty/1 (dynamic, no    True        FALSE       True             True
+      clauses)
+
+`compiler_v2.py:958` deliberately *"Creates empty PredicateMeta classes (no clauses, no
+dispatch)"*, so `isinstance` is True for declared-but-empty predicates. **Rerouting to
+`is_defined` would have silently un-declared every dynamic-but-unasserted predicate** — across 30
+sites, found only by a behaviour change downstream.
+
+`row(create=False)` also correctly returns None for an unknown predicate, so the test does not
+answer True for everything the moment it is asked.
+
+Pinned by `tests/predmeta_p1/test_membership_equivalence.py`, including a negative control that
+fails if `is_defined` ever changes meaning.
+
+## And a wrong turn worth recording
+
+The module's Database is reached through **`module_dict["$module"].db`**. Reaching for it instead
+via any predicate's `_row.db` yields a DIFFERENT Database, which reports `is_defined=False` even
+for a predicate that demonstrably has clauses. The first measurement here did exactly that and
+produced a self-contradictory table — a predicate with a clause reporting undefined. **That the
+table contradicted itself is the only reason the wrong db was noticed**; had both rows read
+False-but-plausible it would have been recorded as a finding about the engine.
+
+## P1's mechanical rule, and the part that is not mechanical
+
+    isinstance(module_dict.get(functor), PredicateMeta)  ->  db.row(functor, arity) is not None
+
+**The obstacle is arity.** Several category-A sites have a functor in hand but no arity — the
+isinstance test needed none. Those sites need either the arity threaded to them or a
+functor-only membership query on Database (which does not exist yet: every accessor is keyed
+`(functor, arity)`). That is the real design work in P1, and it should be decided once rather than
+per site.
