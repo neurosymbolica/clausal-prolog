@@ -33,6 +33,18 @@ class UnitInfo:
     start: str | None = None
     end: str | None = None
 
+    @property
+    def _name(self) -> str:
+        """Alias for :attr:`name`, so a ``UnitInfo`` can stand in for a unit
+        predicate wherever one is read for display.
+
+        ``_format_money`` takes "a currency" and reads ``.scale``, ``.symbol``,
+        ``.iso_code`` and ``._name``. A test pins that it accepts the PREDICATE
+        directly -- a judgment prints "dollar", not "USD" -- so the contract
+        stays as it is and this completes the surface from the other side.
+        """
+        return self.name
+
 
 #: atom -> UnitInfo. Global; see ``register`` for the conflict rule.
 _TABLE: dict[str, UnitInfo] = {}
