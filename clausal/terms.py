@@ -2374,7 +2374,9 @@ class quantity:  # noqa: N801 -- see the naming note below
             if type(product) is Fraction and product.denominator == 1:
                 product = int(product)
             self._value = product
-            self._dims = dims._dims
+            # COPY: _dims is a plain dict now, so aliasing would let one
+            # quantity's mutation reach another's -- and __hash__ reads _dims.
+            self._dims = dict(dims._dims)
             return
         if hasattr(dims, '_dims'):
             # dims is a _UnitsPredicate — extract dims dict
@@ -2390,7 +2392,12 @@ class quantity:  # noqa: N801 -- see the naming note below
                 f"used as units"
             )
         self._value = value
-        self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
+        # A PLAIN DICT, not a mappingproxy. The proxy was the one thing
+        # blocking marshalling (a plain {'metre': 1} marshals in 14 bytes), and
+        # it was never needed for hashing: __hash__ goes through
+        # frozenset(self._dims.items()) and does not touch _dims. Immutability
+        # moves to the `dims` PROPERTY, which is where callers reach it.
+        self._dims = {k: v for k, v in actual_dims.items() if v != 0}
         if not isinstance(self._value, (Decimal, Fraction)):
             for _k in self._dims:
                 if getattr(_k, "is_currency", False):
@@ -2417,7 +2424,10 @@ class quantity:  # noqa: N801 -- see the naming note below
 
     @property
     def dims(self) -> MappingProxyType:
-        return self._dims
+        # A VIEW over the stored dict. __hash__ is computed from _dims, so a
+        # caller mutating it would silently corrupt an already-hashed value:
+        # the guarantee has to survive even though the storage is now mutable.
+        return MappingProxyType(self._dims)
 
     # ── Internal helpers ────────────────────────────────────────────────────
 

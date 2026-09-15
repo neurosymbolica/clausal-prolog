@@ -455,6 +455,27 @@ MSG
 `getattr(key, "is_currency", False)`. Against a `str` atom that returns `False` — **silently**.
 Flipping the keys first would turn every currency into a non-currency with no error anywhere.
 
+**CORRECTION, found while reading the sites (2026-09-15).** The task is bigger than flipping four
+predicates, because two sites do not merely TEST the key — they RETURN it as the currency object
+and callers then read metadata off it:
+
+* `clausal/modules/currency.py:_currency_of` returns `key`; `_quantize` reads `.scale` and
+  `_format_money` reads `.scale`, `.symbol`, `.iso_code`, `._name`. Verified its three callers
+  (`:203`, `:217`, `:226`) use `c` for metadata ONLY — never as a dims key or constructor — so
+  returning a `UnitInfo` instead is a clean substitution.
+* `clausal/terms.py.__format__` sets `cur = key` and passes it to `_format_money`.
+
+`UnitInfo` already carries `scale`, `symbol` and `iso_code`. The one gap is `_format_money`'s
+`currency._name`, which `UnitInfo` spells `name` — the same everyday word, since `UnitInfo.name`
+is built from `_make_currency`'s `name`. So `_format_money` changes to `.name`.
+
+**NOT a dims-key read; leave both alone:**
+
+* `clausal/modules/currency.py:137` — that `c` is `deref(currency)`, a GOAL ARGUMENT: the unit
+  predicate a rulebase passed in, which keeps its attributes.
+* `clausal/terms.py` `__init__`'s `getattr(dims, "is_currency", False)` — `dims` is the unit
+  predicate the caller passed, not a key.
+
 - [ ] **Step 1: Write the failing test**
 
 ```python
