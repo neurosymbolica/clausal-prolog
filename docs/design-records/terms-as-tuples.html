@@ -541,7 +541,7 @@ Fraction(1, 100)                             <span class="no">marshal FAIL</span
   <p>Two things fall out of that table. It is the <code>mappingproxy</code> that blocks <code>_dims</code>, <em>not</em> the dict &mdash; so &ldquo;a quantity is a true value, containing no other Python objects&rdquo; is one rekey away from literally true. And <code>Decimal</code> and <code>Fraction</code> do not marshal either, which is <em>why</em> <code>('decimal', M, E)</code> and <code>('rdiv', N, D)</code> exist &mdash; so <strong>the ratio must be a term too</strong>, recursing through the registry exactly as the magnitude does.</p>
 
   <div class="pull">
-    <p><span class="chip c-ruled">Ruled</span> A unit is <code>unit(Ratio, Dimensions)</code> &mdash; always <code>unit/2</code>. The <em>ratio</em> travels, not the name. Dimensions are <code>dimensions(metre(1), second(-2))</code>, canonically sorted, because two orderings of one vector would be two terms that unification and <code>msort</code> both lie about. Dimensionless is the atom <code>dimensionless</code>.</p>
+    <p><span class="chip c-ruled">Ruled</span> A unit is <code>unit(Ratio, Dimensions)</code> &mdash; always <code>unit/2</code>. The <em>ratio</em> travels, not the name. Dimensions are <code>dimensions(metre(1), second(-2))</code>, sorted <em>on emit</em> &mdash; see below, where the stored map becomes a dict and the sort stops being an invariant. Dimensionless is the atom <code>dimensionless</code>.</p>
   </div>
 
   <figure class="evidence">
@@ -589,6 +589,54 @@ scale without naming a unit. on the write side it is always 1.</pre>
   </figure>
 
   <p>Nothing is lost, because the object had already normalised before the term existed. But if a quantity should also round-trip the unit it was <em>written</em> in, that is a change to the object &mdash; a third slot &mdash; not to the transfer form, and it is not ruled. <strong>It is the only thing these rulings leave open.</strong></p>
+
+<div class="pull">
+    <p><span class="chip c-ruled">Ruled</span> The dimension map is a <strong>plain dict inside</strong> and a <strong>tuple on the wire</strong>. The hashability argument that first chose the tuple was about a <em>runtime term</em>, and a quantity is an object &mdash; so it never reached the stored map at all.</p>
+  </div>
+
+  <figure class="evidence">
+    <figcaption><span>The stored map never needed to be hashable</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>quantity.__hash__ = hash((self._value, frozenset(self._dims.items())))
+
+_dims today       mappingproxy      <span class="dim">ALREADY unhashable</span>
+hash(_dims)       <span class="no">TypeError</span>
+hash(the OBJECT)  <span class="ok">works</span>          <span class="dim"># it derives a key; it never touches _dims</span>
+
+the _dims mappingproxy    <span class="no">marshal FAIL</span>
+dict {'metre': 1}         <span class="ok">marshal OK</span>   14 bytes</pre>
+  </figure>
+
+  <p>So the dict is free, and the <code>mappingproxy</code> was the only thing blocking marshalling. Store the dict; have the <code>dims</code> <em>property</em> return a proxy <em>view</em>, so the immutability guarantee survives at the public boundary &mdash; <code>__hash__</code> is computed from <code>_dims</code>, and a caller mutating it would silently corrupt an already-hashed value.</p>
+
+  <div class="pull">
+    <p><span class="chip c-retracted">Withdrawn</span> That a dict has no ISO spelling. It does: Scryer and Trealla both read <code>{'metre':1,'second':-2}</code> as <code>{}(','(:(metre,1),:(second,-2)))</code> &mdash; an ordinary term over <code>{}/1</code>, <code>,/2</code> and <code>:/2</code>. Measured on both.</p>
+    <p><span class="chip c-retracted">Softened</span> That the canonical sort is <em>not optional</em>. For Clausal-internal equality the dict is order-insensitive and the sort is unnecessary. It returns only <em>on emit</em>, because a curly term is a term over there &mdash; <code>{metre:1,second:2} == {second:2,metre:1}</code> is <span class="no">false</span> in Scryer. That applies under either wire spelling, so it stopped being a point of difference.</p>
+  </div>
+
+  <figure class="evidence">
+    <figcaption><span>Why the wire form is still a tuple: a dict cannot be a bytecode constant</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>tuple  co_consts = (None, ('quantity', 5000, ('unit', 1, ('dimensions', ...))))
+       opcodes   = RESUME, RETURN_CONST                        <span class="ok">2 opcodes</span>
+
+dict   co_consts = (None, 'quantity', 5000, 'unit', 1, -2, ('metre','second'))
+       opcodes   = RESUME, LOAD_CONST x7, BUILD_CONST_KEY_MAP,
+                   BUILD_TUPLE, BUILD_TUPLE, RETURN_VALUE     <span class="no">12 opcodes</span></pre>
+  </figure>
+
+  <p>The tuple folds <em>whole</em> into <code>co_consts</code>. The dict does not fold at all &mdash; the cache stores fragments and a recipe, and the term is rebuilt at every evaluation. Both code objects still marshal (163 vs 178 bytes), so the <code>.pyc</code> works either way; what differs is whether the finished value or the instructions to build it are what gets cached. It bites here because a quantity literal is read into an object at load, so the thing sitting in <code>co_consts</code> <em>is</em> the transfer term.</p>
+
+  <figure class="evidence">
+    <figcaption><span>And the conversion is a coincidence, not code</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>the pair form IS what dict() accepts:
+
+dict(wire[1:])                      -&gt;  {'metre': 1, 'second': -2}
+('dimensions', *sorted(d.items()))  -&gt;  the wire form, round-trip <span class="ok">True</span>
+
+wire -&gt; dict   <span class="ok">133 ns</span>   a single dict() call
+dict -&gt; wire   <span class="ok">220 ns</span>   sorted + unpack</pre>
+  </figure>
+
+  <p><code>frozendict</code> was considered and rejected. It is hashable, but it is not in the stdlib and not installed, and it would lose <em>both</em> properties at issue &mdash; <code>marshal</code> takes only the basic types, and a custom class folds into <code>co_consts</code> no better than a dict. It also solves a problem that is not there, since the stored map never needed to be hashable.</p>
 
   <p>What the design preserves, each of it live corpus behaviour: <code>300 basis_point == 3 percent</code>, <code>155000 usd_cent</code> <em>being</em> <code>Decimal('1550.00') usd</code>, and inches addable to metres. All three survive because the object keeps its own equality and normalises at construction. A tuple quantity carrying a ratio would have broken all three at once.</p>
 </section>

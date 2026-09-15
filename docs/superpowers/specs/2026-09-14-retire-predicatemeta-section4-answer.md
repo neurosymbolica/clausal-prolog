@@ -1239,7 +1239,10 @@ become bare atoms.
 ## §2 — The transfer form
 
     a DIMENSION    metre(1)                              ('metre', 1)
-    DIMENSIONS     dimensions(metre(1), second(-2))      canonically sorted -- not optional
+    DIMENSIONS     dimensions(metre(1), second(-2))      sorted ON EMIT -- see the dims-map
+                                                         section: the stored dict is
+                                                         order-insensitive, so the sort is
+                                                         a boundary step, not an invariant
     a UNIT         unit(Ratio, Dimensions)               ALWAYS unit/2
     a QUANTITY     quantity(Magnitude, Unit)             ALWAYS quantity/2
 
@@ -1387,3 +1390,125 @@ quantity should also round-trip the unit it was WRITTEN in, that is a change to 
 third slot), not to the transfer form, and it is not ruled here.
 
 **OPEN, and the only thing left open by these rulings.**
+
+---
+
+# The dims map: a DICT inside, a TUPLE on the wire — 2026-09-15, and it corrects me twice
+
+Operator, on reading the above: *"if dicts can be marshalled, then it's better if dims are stored
+in dicts."* Right, and it retires an obligation this document had recorded as mandatory.
+
+## RULED: `_dims` is a plain dict
+
+`0444f6b0` chose the tuple over the dict on HASHABILITY — *"a term is hashed, so a dict cannot be
+one"*. That argument was about a RUNTIME TERM. A quantity is an object, so its dimension map is
+not a term at all, and the argument does not reach it.
+
+**Measured, and the map never needed to be hashable in the first place:**
+
+    quantity.__hash__ = hash((self._value, frozenset(self._dims.items())))
+
+    _dims today       mappingproxy      ALREADY unhashable
+    hash(_dims)       TypeError: unhashable type: 'dict'
+    hash(the OBJECT)  works fine
+
+The hash derives a key and never touches `_dims` directly, so a plain dict costs it nothing. And
+the `mappingproxy` was the one thing blocking marshalling:
+
+    the _dims mappingproxy    marshal FAIL
+    dict {'metre': 1}         marshal OK   14 bytes
+
+**Refinement to take with it:** store a plain dict, and have the `dims` PROPERTY return a
+`MappingProxyType` VIEW of it. The immutability guarantee survives at the public boundary — which
+matters, because `__hash__` is computed from `_dims` and a caller mutating it would silently
+corrupt an already-hashed value — while the stored thing is marshal-clean.
+
+## The canonical sort is NOT mandatory after all — but it is not gone either
+
+    different insertion order, dicts    equal TRUE
+    different order, tuples            equal FALSE     <- why the sort was mandatory
+
+So for CLAUSAL-INTERNAL equality the dict gives order-insensitivity free and the sort is
+unnecessary. `0444f6b0`'s *"Sort the pairs. It is not optional"* was true only of the tuple.
+
+**But it comes back on EMIT, measured in Scryer** (with a positive control, so the test can say
+yes):
+
+    {'metre':1,'second':2} == {'second':2,'metre':1}    order_significant
+    {'metre':1,'second':2} == {'metre':1,'second':2}    same_order_equal
+
+A curly term is a TERM over there, not a dict. So a canonical sort is wanted wherever two Prologs
+will compare dimension vectors — under either wire spelling, which is why it stopped being a point
+of difference between them.
+
+## I was WRONG that a dict has no ISO spelling. Measured on both references
+
+Operator: *"I thought that `{'metre':2}` is valid Scryer syntax, isn't it?"* It is. Scryer and
+Trealla, identical output:
+
+    {'metre':2}                 reads as   {}(:(metre,2))
+    {'metre':1, 'second': -2}   reads as   {}(','(:(metre,1),:(second,-2)))
+
+An ordinary ISO term over `{}/1`, `,/2` and `:/2`, destructurable with standard operators. The
+objection I raised against a dict on the wire does not hold and is withdrawn.
+
+## RULED: the WIRE form stays `dimensions/N` — and the reason is `co_consts`
+
+The operator asked where a bare dict could actually be a problem, reasoning that ISO Prologs
+discard dimensions they cannot use and that quantities are converted at the boundary anyway. Both
+true. The problem is in the THIRD boundary they named — Python's bytecode caches:
+
+    tuple form   co_consts = (None, ('quantity', 5000, ('unit', 1, ('dimensions', ...))))
+                 opcodes   = RESUME, RETURN_CONST                             2 opcodes
+
+    dict form    co_consts = (None, 'quantity', 5000, 'unit', 1, -2, ('metre','second'))
+                 opcodes   = RESUME, LOAD_CONST x7, BUILD_CONST_KEY_MAP,
+                             BUILD_TUPLE, BUILD_TUPLE, RETURN_VALUE          12 opcodes
+
+**A dict literal cannot be a bytecode constant.** The tuple folds WHOLE into `co_consts` — one
+constant, loaded. The dict does not fold at all: the cache stores fragments plus build
+instructions, and the term is RECONSTRUCTED at every evaluation. Both code objects still marshal
+(163 vs 178 bytes), so `.pyc` works either way; what differs is whether the finished value or a
+recipe is what gets cached.
+
+This bites here specifically because of the read-time rule: a quantity literal in `.clausal` source
+is read into an OBJECT at load, so the thing sitting in `co_consts` IS the transfer term.
+
+Two smaller notes, neither decisive. A tuple containing a dict is UNHASHABLE, which is harmless
+only while the transfer form is never a key. And "zero conversion" would hand out the live
+`_dims`, so mutating an emitted term would corrupt the quantity — it wants a copy, and the copy is
+the conversion being avoided.
+
+## And the conversion is free, by a coincidence worth recording
+
+Operator: *"the functor-first-tuple form `(('metre', 1), ('second', -2))` is precisely what
+python's `dict()` constructor accepts to build the same dict."* Exactly so:
+
+    dict(wire[1:])                           ->  {'metre': 1, 'second': -2}
+    ('dimensions', *sorted(d.items()))       ->  the wire form, round-trip TRUE
+
+    wire -> dict    133 ns     a single dict() call
+    dict -> wire    220 ns     sorted + unpack
+
+So the dict's remaining advantage on the wire — no conversion — is worth ~133 ns, against
+single-constant folding. The pair form IS the dict constructor's input format, which is why there
+is no marshalling code to write in either direction.
+
+## `frozendict` considered, rejected
+
+Operator: *"frozendict is hashable, btw."* True, but it is not in the stdlib (PEP 416 was
+rejected) and **is not installed here** — so it would be a new dependency. Two reasons not to:
+
+1. It would lose BOTH properties this section is about. `marshal` takes only the basic types —
+   measured refusals for `Decimal`, `Fraction`, `mappingproxy` and `DictTerm` — and a custom class
+   cannot fold into `co_consts` any more than a dict can. (Inference from those four, not a direct
+   measurement, since it is not installed.)
+2. It solves a problem that is not there. The internal `_dims` **never needed to be hashable**:
+   `__hash__` already goes through `frozenset(self._dims.items())`.
+
+## Net
+
+    STORED    _dims is a plain dict; the `dims` property returns a MappingProxyType VIEW
+    WIRE      ('dimensions', ('metre',1), ('second',-2)) -- folds as one constant, ISO-readable
+    BETWEEN   dict(t[1:])  /  ('dimensions', *sorted(d.items()))     133 ns / 220 ns
+    SORT      unnecessary for internal equality; wanted ON EMIT, under either spelling
