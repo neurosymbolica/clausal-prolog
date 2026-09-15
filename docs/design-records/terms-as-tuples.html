@@ -1,0 +1,561 @@
+<title>Terms as Tuples</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+:root{
+  --ground:#EEF1F4;
+  --surface:#F7F9FA;
+  --surface-2:#E4E9EE;
+  --ink:#16202B;
+  --ink-soft:#42525F;
+  --slate:#6B7C8C;
+  --rule:#CFD8E0;
+  --rule-soft:#DFE5EB;
+  --teal:#0E6B68;
+  --teal-bg:#DCEBEA;
+  --ochre:#9A5C16;
+  --ochre-bg:#F2E6D4;
+  --crimson:#8F2A38;
+  --crimson-bg:#F1DEE1;
+  --accent:var(--teal);
+
+  --f-display:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+
+  --measure:68ch;
+  --pad:clamp(1.15rem,4vw,2.75rem);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E151C;
+    --surface:#151F28;
+    --surface-2:#1D2933;
+    --ink:#DCE4EC;
+    --ink-soft:#A3B1BE;
+    --slate:#7F90A0;
+    --rule:#2A3742;
+    --rule-soft:#222E38;
+    --teal:#54B3AD;
+    --teal-bg:#15302F;
+    --ochre:#D39A55;
+    --ochre-bg:#322616;
+    --crimson:#D8707F;
+    --crimson-bg:#331A1F;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E151C;
+  --surface:#151F28;
+  --surface-2:#1D2933;
+  --ink:#DCE4EC;
+  --ink-soft:#A3B1BE;
+  --slate:#7F90A0;
+  --rule:#2A3742;
+  --rule-soft:#222E38;
+  --teal:#54B3AD;
+  --teal-bg:#15302F;
+  --ochre:#D39A55;
+  --ochre-bg:#322616;
+  --crimson:#D8707F;
+  --crimson-bg:#331A1F;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:calc(var(--measure) + 15rem);margin:0 auto;padding:0 var(--pad) 6rem}
+
+/* ---------- masthead ---------- */
+.mast{
+  border-bottom:2px solid var(--ink);
+  padding:clamp(2.5rem,7vw,4.5rem) 0 1.5rem;
+  display:flex;flex-direction:column;gap:1.4rem;
+}
+.eyebrow{
+  font-family:var(--f-mono);font-size:.7rem;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--slate);
+  display:flex;flex-wrap:wrap;gap:.45rem 1.4rem;
+}
+h1{
+  font-family:var(--f-display);font-weight:700;
+  font-size:clamp(2.4rem,7vw,4rem);line-height:1.02;
+  letter-spacing:-.035em;margin:0;text-wrap:balance;
+}
+.standfirst{
+  font-size:clamp(1.05rem,2.2vw,1.28rem);line-height:1.5;
+  color:var(--ink-soft);max-width:54ch;margin:0;font-style:italic;
+}
+.statusbar{
+  display:flex;flex-wrap:wrap;gap:0 2.2rem;
+  font-family:var(--f-mono);font-size:.76rem;color:var(--slate);
+  border-top:1px solid var(--rule-soft);padding-top:1rem;
+}
+.statusbar b{color:var(--ink);font-weight:500}
+
+/* ---------- provenance chips: the page's structural device ---------- */
+.chip{
+  display:inline-flex;align-items:center;gap:.4em;
+  font-family:var(--f-mono);font-size:.63rem;font-weight:600;
+  letter-spacing:.11em;text-transform:uppercase;
+  padding:.24em .6em;border-radius:2px;white-space:nowrap;
+  vertical-align:.12em;
+}
+.chip::before{content:"";width:.42em;height:.42em;border-radius:50%;background:currentColor}
+.c-measured{color:var(--teal);background:var(--teal-bg)}
+.c-ruled{color:var(--ink);background:var(--surface-2)}
+.c-open{color:var(--ochre);background:var(--ochre-bg)}
+.c-retracted{color:var(--crimson);background:var(--crimson-bg)}
+
+/* ---------- sections ---------- */
+section{padding-top:3.4rem}
+.shead{display:flex;align-items:baseline;gap:.9rem;flex-wrap:wrap;margin-bottom:.4rem}
+.snum{
+  font-family:var(--f-mono);font-size:.78rem;font-weight:600;color:var(--accent);
+  letter-spacing:.08em;
+}
+h2{
+  font-family:var(--f-display);font-weight:600;
+  font-size:clamp(1.5rem,3.4vw,2rem);line-height:1.14;
+  letter-spacing:-.022em;margin:0;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-display);font-weight:600;font-size:1.03rem;
+  letter-spacing:-.008em;margin:2.2rem 0 .5rem;
+}
+p{max-width:var(--measure);margin:0 0 1.05rem}
+.lede{color:var(--ink-soft)}
+strong{font-weight:600}
+em{font-style:italic}
+code{
+  font-family:var(--f-mono);font-size:.855em;
+  background:var(--surface-2);padding:.1em .34em;border-radius:2px;
+  overflow-wrap:break-word;
+}
+a{color:var(--accent);text-underline-offset:.18em}
+
+/* ---------- evidence block: mono, breaks the measure ---------- */
+.evidence{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-left:3px solid var(--accent);
+  margin:1.5rem 0;
+}
+.evidence > figcaption{
+  font-family:var(--f-mono);font-size:.68rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);
+  padding:.7rem 1rem .1rem;
+  display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+}
+.evidence pre{
+  font-family:var(--f-mono);font-size:.795rem;line-height:1.72;
+  margin:0;padding:.55rem 1rem 1.05rem;
+  overflow-x:auto;color:var(--ink);
+}
+.ok{color:var(--teal);font-weight:600}
+.no{color:var(--crimson);font-weight:600}
+.dim{color:var(--slate)}
+
+/* ---------- matrix table ---------- */
+.tablewrap{overflow-x:auto;margin:1.5rem 0;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-family:var(--f-mono);font-size:.775rem;min-width:36rem}
+caption{
+  font-family:var(--f-mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);text-align:left;padding:.75rem 1rem .5rem;
+}
+th,td{padding:.5rem .85rem;text-align:left;border-top:1px solid var(--rule-soft)}
+thead th{
+  font-weight:600;color:var(--slate);font-size:.68rem;
+  letter-spacing:.08em;text-transform:uppercase;border-top:none;
+  border-bottom:1px solid var(--rule);
+}
+tbody th{font-weight:500;color:var(--ink);white-space:nowrap}
+td{font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+
+/* ---------- decision blocks ---------- */
+.decisions{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule);margin:1.6rem 0}
+.decision{background:var(--surface);padding:1.15rem 1.25rem}
+.decision .dhead{display:flex;align-items:baseline;gap:.7rem;flex-wrap:wrap;margin-bottom:.35rem}
+.decision .dq{font-family:var(--f-mono);font-size:.76rem;font-weight:600;color:var(--accent)}
+.decision .dt{font-family:var(--f-display);font-weight:600;font-size:1rem;letter-spacing:-.01em}
+.decision p{margin:0;font-size:.93rem;color:var(--ink-soft);max-width:66ch}
+.decision p + p{margin-top:.55rem}
+
+/* ---------- next steps: a real sequence ---------- */
+ol.steps{list-style:none;counter-reset:s;padding:0;margin:1.5rem 0 0;display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+ol.steps li{counter-increment:s;background:var(--surface);padding:1.1rem 1.25rem 1.1rem 3.4rem;position:relative}
+ol.steps li::before{
+  content:counter(s);position:absolute;left:1.25rem;top:1.05rem;
+  font-family:var(--f-mono);font-size:.82rem;font-weight:600;color:var(--accent);
+}
+ol.steps .stitle{font-family:var(--f-display);font-weight:600;font-size:1rem;letter-spacing:-.01em;display:block;margin-bottom:.25rem}
+ol.steps p{margin:0;font-size:.93rem;color:var(--ink-soft);max-width:64ch}
+ol.steps .gate{
+  display:block;margin-top:.5rem;font-family:var(--f-mono);font-size:.72rem;
+  color:var(--slate);
+}
+ol.steps .gate b{color:var(--ink-soft);font-weight:500}
+
+ul.plain{max-width:var(--measure);padding-left:1.15rem;margin:0 0 1.05rem}
+ul.plain li{margin-bottom:.4rem}
+
+.pull{
+  border-left:3px solid var(--ochre);
+  background:var(--ochre-bg);
+  padding:1rem 1.2rem;margin:1.6rem 0;max-width:var(--measure);
+}
+.pull p{margin:0;font-size:.97rem}
+.pull p + p{margin-top:.6rem}
+
+footer{
+  margin-top:4.5rem;padding-top:1.3rem;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:.72rem;color:var(--slate);
+  display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:opacity .15s ease}
+}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">
+    <span>Clausal · engine lane</span>
+    <span>Design record</span>
+    <span>2026-09-14</span>
+  </div>
+  <h1>Terms as Tuples</h1>
+  <p class="standfirst">Retiring the per-predicate class, and what it revealed about how one module reaches another.</p>
+  <div class="statusbar">
+    <span>branch <b>feat/iso-l3-lowering-2026-09-14</b></span>
+    <span>head <b>d118c42b</b></span>
+    <span>landed <b>nothing</b></span>
+    <span>engine gate <b>0 new</b></span>
+    <span>oracle gate <b>went red</b></span>
+  </div>
+</header>
+
+<section>
+  <div class="shead"><span class="snum">01</span><h2>The spine</h2></div>
+  <p class="lede">One move, repeated at three levels: <strong>collapse incidental Python object identity into explicit keys and immutable data.</strong></p>
+  <p>Terms stop being generated class instances and become functor-first tuples — S-expressions, with atoms as 1-tuples so an atom is distinguishable from a string in argument position and shaped like the arity-0 compound it is. Predicates stop being classes and become <code>Database</code> rows keyed <code>(functor, arity)</code>. And imports stop being Python attribute references and become row sharing.</p>
+  <p>The reasoning is the same each time. Prolog needs immutable compounds; the only things that change are variables. Tuples are immutable and CPython gives them fast paths — the C <code>do_unify</code> already has a native functor-first path, which is why the class is a <em>cost</em>, not a feature.</p>
+
+  <figure class="evidence">
+    <figcaption><span>What the class costs</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>construct    class instance   809 ns/op      tuple   35 ns/op     23x
+unify        class instances  678 ns/op      tuple  145 ns/op    4.7x
+
+classes live after importing ONE 3-predicate module        487
+   of which the engine's own                              ~484
+fixed cost before any user code                          ~3.4 MB
+
+deleted outright                              ~1,450-1,650 lines
+rewritten                                              435 lines
+generated class-guard, invisible to any line count      ~4,800 lines</pre>
+  </figure>
+
+  <p>One honest counterpoint: a <code>__slots__</code> instance is 48 B against a tuple's 64 B, so per-<em>term</em> memory slightly favours the class. It is swamped by the per-class fixed cost and by the construct and unify gaps.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">02</span><h2>Four representations, going to one</h2></div>
+  <p>Today four term shapes coexist and do not interoperate. A class instance, a functor-first tuple and a <code>Compound</code> are pairwise unequal and do not unify. Conflating them has been the expensive mistake in this lane.</p>
+
+  <h3>Compound is not needed — and the tuple strictly dominates it</h3>
+  <p><code>Compound</code> is a dataclass of <code>functor: str | Var</code>, <code>args: tuple</code> and a source position. The one capability that could have justified keeping it — a variable in functor position — measures the other way round.</p>
+
+  <figure class="evidence">
+    <figcaption><span>A variable functor, both ways</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>(F, 1)             vs ('f', 1)              <span class="ok">True</span>   F bound to 'f'
+Compound(G, (1,))  vs Compound('f', (1,))   <span class="no">False</span>  G left unbound
+
+Compound('f',(1,2)) vs ('f', 1, 2)          <span class="no">False</span>  the four-representation tax</pre>
+  </figure>
+
+  <p><code>Compound.__unify__</code> refuses to bind an unbound functor variable on purpose — the “deref-only floor”. The tuple path binds it. So the tuple is not merely equivalent; it is <em>more expressive</em> on the only axis where <code>Compound</code> looked richer.</p>
+  <p>The single open item in removing it is <code>_position</code>, the source span it carries for diagnostics and a tuple cannot. That is a diagnostics question — a side table, or positions kept on the clause rather than the term — not a representation one.</p>
+
+  <h3>Which tag marks a tuple that is data, not a compound</h3>
+  <p>Slot 0 of a term is the functor. A Python tuple arriving as <em>data</em> needs a tag there, because its own first element could be anything. Today that tag is the <code>tuple</code> type object — which cannot be marshalled, and that single fact is the whole reason emitted code has to reach the tag by name through a <code>$cells</code> namespace instead of folding it into a constant.</p>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Four candidate tags <span class="chip c-measured">Measured</span></caption>
+      <thead>
+        <tr><th scope="col">Tag</th><th scope="col">marshal</th><th scope="col">distinct from nil</th><th scope="col">ISO-writable</th><th scope="col">slot-0 rule</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row"><code>(tuple, 1, 2)</code></th><td class="no">no</td><td class="ok">yes</td><td class="no">no</td><td>two branches</td></tr>
+        <tr><th scope="row"><code>('', 1, 2)</code></th><td class="ok">yes</td><td class="no">no</td><td class="ok">yes</td><td>one branch</td></tr>
+        <tr><th scope="row"><code>((), 1, 2)</code></th><td class="ok">yes</td><td class="no">no</td><td class="no">no</td><td>two branches</td></tr>
+        <tr><th scope="row"><code>('()', 1, 2)</code></th><td class="ok">yes</td><td class="ok">yes</td><td class="ok">yes</td><td>one branch</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>The two empty spellings are the same tag to the engine.</strong> Measured: <code>unify((), '')</code> is <em>true</em> though <code>() == ''</code> is false — <code>()</code>, <code>''</code> and <code>[]</code> are already one term, nil. So under either, the empty data tuple collides with the empty atom, and the choice waits on a nil ruling that is already open in the tree.</p>
+
+  <p><code>'()'</code> has neither problem — and it is not a new convention, it completes an existing one. ISO gives each bracket syntax a reserved quoted atom as its functor, and this tree already implements two of them:</p>
+
+  <figure class="evidence">
+    <figcaption><span>Bracket syntax → reserved functor, already in the reader</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>{a, b}     ISO   '{}'(','(a,b))     prolog_reader.py:24   ('{}', body_cell)
+[]         ISO   the atom '[]'      atoms.py:169          NIL_SPELLING = "[]"
+[a|b]      ISO   '.'(a, b)
+
+(1, 2)                               <span class="ok">proposed</span>               ('()', 1, 2)</pre>
+  </figure>
+
+  <p>So <code>'()'</code> is the third member of a family, in the shape the engine already stores the first two. That it <em>can</em> be written as a quoted atom is the same property <code>'{}'</code> and <code>'[]'</code> have — a feature rather than a collision. <code>'()'(1, 2)</code> is valid ISO, which gives tuple-data a portable spelling with no new syntax and lets a <code>.pl</code> file carrying one load in Scryer and Trealla.</p>
+
+  <figure class="evidence">
+    <figcaption><span>And a str caches its hash</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>recognition   one-branch  type(s0) is str            0.0205 s / 2M
+              two-branch  str or s0 is TUPLE_TAG     0.0428 s / 2M   <span class="ok">2.08x</span>
+
+dict key      str-tagged cell                        0.0335 s / 2M
+              type-tagged cell                       0.0584 s / 2M   <span class="ok">1.74x</span></pre>
+  </figure>
+
+  <p>The one cost, stated plainly: the atom <code>'()'</code> stops being available as an ordinary atom — the same trade <code>'[]'</code> already makes. It is free today: no uses in engine Python, no <code>.clausal</code> file, no test.</p>
+  <p><strong>And the corpus cost is zero.</strong> Swept: no corpus file names <code>TUPLE_TAG</code>, <code>$cells</code> or <code>is_cell</code>, or matches slot 0 on a type. Corpus source writes <code>(1, 2)</code> and the compiler applies the tag, so a re-tagging is compiler-internal. That was the one number between this recommendation and a decision.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">03</span><h2>The seam already speaks tuples</h2></div>
+  <p>The Python seam does not need predicate objects coming out of it, and it has not needed them for a while. Goal-position <code>--</code> already calls and constructs in the target representation, resolving through the module's <code>Database</code> rather than any module-level binding.</p>
+
+  <figure class="evidence">
+    <figcaption><span>tests/test_goal_position_seam.py, running today</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>goal = ("decide", ("large",), ("verdict", S, IDS))   <span class="dim"># functor-first; atoms are 1-tuples</span>
+
+once_bind(goal, mod.__dict__)          is True
+export(S)                              == ("prohibited",)
+export(IDS)                            == [("r1",)]
+
+list(each(goal, (S, IDS), mod.__dict__)) ==
+    [(("prohibited",), [("r1",)]),
+     (("prohibited",), [("r2",)])]</pre>
+  </figure>
+
+  <p><code>if --goal(X):</code> and <code>for a, b in --goal(A, B):</code> lower to exactly this and export answers as ordinary Python locals — transparent variable handling, with the goal's variables becoming names the host function can read. The calling convention is <code>--</code>, not <code>m.some_pred</code>.</p>
+
+  <div class="pull">
+    <p><span class="chip c-retracted">Retracted</span></p>
+    <p>An earlier draft of this record recommended keeping <em>one generic callable handle</em> at module level, so Python could still call and construct. That was argued from 209 object-shaped accesses in the engine's own tests without checking what the seam had already replaced them with. The module-level name should be the atom <code>('some_pred',)</code> and nothing else. The 209 are a migration to an idiom that already exists.</p>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">04</span><h2>What crosses the seam</h2></div>
+  <p>Arbitrary Python objects should not become terms: marshalling does not work on them, and keeping them out is safer, cleaner and faster. The refusal in the tree today sits on one specific line, though, and there turned out to be three lines, not one — which is what the ruling below had to settle.</p>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Three boundaries, measured separately <span class="chip c-measured">Measured</span></caption>
+      <thead>
+        <tr><th scope="col">Value</th><th scope="col">In the goal, compiled</th><th scope="col">Runtime, via a Var</th><th scope="col">marshal-clean</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">tuple term</th><td class="ok">allowed</td><td class="ok">allowed</td><td class="ok">yes</td></tr>
+        <tr><th scope="row">int, str</th><td class="ok">allowed</td><td class="ok">allowed</td><td class="ok">yes</td></tr>
+        <tr><th scope="row">datetime.date</th><td class="ok">allowed</td><td class="ok">allowed</td><td class="no">no</td></tr>
+        <tr><th scope="row">Decimal</th><td class="no">refused</td><td class="ok">allowed</td><td class="no">no</td></tr>
+        <tr><th scope="row">opaque object</th><td class="no">refused</td><td class="ok">allowed, by identity</td><td class="no">no</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The compile-route refusal comes from <code>term_to_ast_expr</code>: <code>once_bind</code> hands the goal to <code>solve()</code>, which <em>lowers it to AST</em> — it treats a goal as source to compile, and an arbitrary object has no literal AST form. The runtime route is a different mechanism entirely, and <code>terms_to_ast.py</code>'s own comment relies on it: a bound variable whose value “has no literal lowering (e.g. a <code>datetime.date</code> produced by an earlier goal)” is handled by referencing the variable.</p>
+
+  <div class="pull">
+    <p><span class="chip c-ruled">Ruled</span> The values that seemed to need an exception get an encoding instead. A date is the term <code>('date', 2026, 9, 14)</code>; a decimal is <code>('decimal', "10.01")</code>, its digits carried as a string so exactness survives the round trip. The refusal stays exactly where it is raised today.</p>
+    <p>This removes the exception rather than accommodating it. Both encodings are ordinary functor-first terms and both are marshal-clean, so there is no second class of value to declare, no vocabulary to maintain, and one rule covers everything: <strong>a term is marshal-clean data, and a Python object is not a term.</strong></p>
+    <p>It also settles the two inconsistencies by deletion. <code>datetime.date</code> no longer needs to pass the compile route, because a date is no longer a Python object; <code>Decimal</code>'s refusal there stops being a gap and becomes the rule. And with nothing legitimate left on the runtime object route, the refusal can eventually be made uniform across both — a separate change with its own blast radius, since existing code may lean on it.</p>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">05</span><h2>§4 answered: what binds at module level</h2></div>
+  <p>The question the removal was blocked on. It turns on one fact: <strong><code>-import_from</code> is <code>getattr</code></strong>, and the importing <code>Database</code> has no record of the import at all.</p>
+
+  <figure class="evidence">
+    <figcaption><span>The import chain, end to end</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>importer.edge IS exporter.edge                 <span class="ok">True</span>    the SAME class object
+importer's db  row('edge', 2)                  <span class="no">None</span>
+importer's db  dispatch for edge/2             <span class="no">None</span>
+importer.edge._row.db is exporter's db         <span class="ok">True</span>
+two_hop answers                                [(1, 3)]  <span class="dim">— and it works</span>
+
+aliased:  aliaser.link IS exporter.edge        <span class="ok">True</span>
+          aliaser.link.__name__                'edge'  <span class="dim">the class keeps ITS name</span>
+          'edge' bound in aliaser?             <span class="no">False</span>
+          aliaser's db row('edge'|'link', 2)   <span class="no">None, None</span></pre>
+  </figure>
+
+  <p>The entire import relationship is one Python object reference in <code>module_dict</code>. So there is nothing to reroute to — the relationship has to be <em>created</em>. That single absence explains every cross-module oddity found in the site pass: the <code>_tabled_home_db</code> stamp, <code>_te_predicate_nodes</code>, the double-indexed import origins, and <code>io.py</code>'s recorded bug note that “the class knows its own row; the name does not”.</p>
+
+  <div class="decisions">
+    <div class="decision">
+      <div class="dhead"><span class="dq">q1</span><span class="dt">-import_from → a shared row</span><span class="chip c-measured">Measured feasible</span></div>
+      <p>Plant the exporter's row in the importer's table under the <em>importer's own</em> spelling. <code>Database.row()</code> consults <code>_rows</code> first, so it is a key insert, not new machinery. Probed with controls: clauses and dispatch become reachable through the importer, an unplanted key stays <code>None</code>, and <code>is_defined</code> still reports on the importer's own storage.</p>
+      <p>The alias problem disappears — a key has no intrinsic name, which is exactly why <code>alias(edge, link)</code> is hard today. <code>row.db is not self</code> becomes the ownership test. Every class-only attribute gets a row home, and <code>_tabled_home_db</code> is deleted outright because a row already knows its database.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">q2</span><span class="dt">Export lists stay advisory</span><span class="chip c-measured">Measured</span></div>
+      <p>A <code>-private</code> name absent from the <code>-module</code> list is still importable today, and still answers. Nothing is being enforced, so converting exports to a <code>(functor, arity)</code> set translates nothing. Record the set; rule on enforcement separately, because turning a silent success into a load error across an unmeasured corpus is its own decision.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">q3</span><span class="dt">A module-level name is ABSENT</span><span class="chip c-measured">Revised</span></div>
+      <p>Ruled first as “the atom”. Measured later: the spec's other branch — <em>absent</em> — costs less and is the cleaner end state. A logic module is a plain Python module, so a PEP 562 <code>__getattr__</code> fires on a MISS and resolves the name from its Database row.</p>
+      <p><strong>A miss-only hook serves every REACH and cannot ENUMERATE</strong>, and that is the whole distinction. Attribute access, <code>getattr</code> by literal and by variable, <code>hasattr</code>, and <code>from domain import pred</code> all keep working untouched; only <code>vars(m)</code>, <code>dir(m)</code> and name-discovery loops break.</p>
+      <p>Enumeration sites: <strong>3 in the engine</strong> (each already headed for “enumerate the db's rows”), and <strong>zero</strong> in the 82 sealed harness bodies. So q3 costs one hook plus a <code>__dir__</code> — not the ~655 site edits an earlier count in this record claimed.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">q4</span><span class="dt">The type test</span><span class="chip c-measured">Measured</span></div>
+      <p>Answered by the census and the per-site pass: 431 references classified, category A is 50 sites, 14 of which are not category A at all. Five of those hoist <code>type(x)</code> into a local, so separating “is this a predicate” from “is this a term” has to be done on the dataflow, not on the line.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">06</span><h2>The class does hold state of its own</h2></div>
+  <p>The removal spec argues the class holds nothing — its state reads through to a <code>PredRow</code>, which is itself a facade over the <code>Database</code>. That is true of nine attributes and false of six.</p>
+
+  <figure class="evidence">
+    <figcaption><span>Probed on a real compiled predicate</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>read-through onto the row   _clauses  _clauses_source  _dispatch_fn
+                            _dynamic_arities  _lazy_recompile  _locked
+                            _signature   (+ _arity, _functor)
+
+<span class="no">CLASS-ONLY, no row home</span>     _fields
+                            _index_plans
+                            _index_plans_joint
+                            _index_plans_hierarchical
+                            _registered_at          <span class="dim">— found by the probe, not at any call site</span>
+                            _tabled_home_db         <span class="dim">— cross-module carrier</span>
+                            _te_predicate_nodes     <span class="dim">— cross-module carrier</span></pre>
+  </figure>
+
+  <p>Two of them are carriers: stamped on the class precisely because the class is shared across <code>-import_from</code> while a row belongs to one database. They are not leftovers, they are the workaround for the absence in §5 — which is why answering q1 dissolves them instead of migrating them.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">07</span><h2>The cut barrier</h2></div>
+  <p class="lede">Cut-free forever is a property of <code>.clausal</code>, not of the engine.</p>
+  <p><code>.pl</code> may carry cut and the rest of ISO. Clausal code must not be able to call into code with cuts — not even load it. A cut-free <code>.pl</code> file must run unchanged when renamed <code>.clausal</code>. The seam has no cuts and keeps none. The purpose is to guarantee monotonicity, because <code>.clausal</code> is the target of formalisation into ontologies.</p>
+  <ul class="plain">
+    <li><strong>One front end, two suffixes.</strong> “Rename it and it runs” is only true if both read through L3; the suffixes then differ by a gate, not a grammar.</li>
+    <li><strong>Purity is statically decidable</strong> — the reader sees <code>!</code> in a body — so it is a gate rather than a judgement.</li>
+    <li><strong>But purity is a property of the import closure, not of a file.</strong> Pure A imports pure B imports impure C, and A can reach a cut. A module carries a purity bit that is the AND of its own text and everything it imports. This is the part the plan does not say.</li>
+    <li><strong>The enforcement point already exists.</strong> q1's plant is the one hook that sees “X depends on Y” with both modules resolved. Row sharing, export enforcement and the purity barrier are three jobs for one chokepoint.</li>
+  </ul>
+
+  <figure class="evidence">
+    <figcaption><span>The ordering constraint, in the engine tree</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>tracked files    .clausal  <span class="ok">431</span>      .seam  <span class="no">0</span>      .pl  15</pre>
+  </figure>
+
+  <p><strong>Zero files have moved to <code>.seam</code>.</strong> <code>.clausal</code> cannot take on ISO syntax while 431 engine files — plus the corpus, which is not measured here — still hold Python-seam syntax under that name. The write-side flip is the prerequisite for the whole cut gate, and it has not started. It does not block L3, which targets <code>.pl</code>.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">08</span><h2>What the measurements got wrong</h2></div>
+  <p class="lede">A green engine suite said the date change was safe. The oracle gate said otherwise on its first domain, and the difference between those two claims is the most useful thing here.</p>
+
+  <figure class="evidence">
+    <figcaption><span>The canary, first row</span><span class="chip c-retracted">Caught</span></figcaption>
+<pre>branch      eu/procurement/selection_criteria   score = (none), <span class="no">EXIT=1</span>
+            NotImplementedError: unsupported term type date: datetime.date(2023, 6, 1)
+canonical,  same domain, same minute            <span class="ok">341/341, EXIT=0</span></pre>
+  </figure>
+
+  <p>The claim behind the change was that the corpus never imports the date module and so could not be affected. The sweep was accurate; the claim generalised past it. <strong>The sealed scorer bodies are not in the corpus tree</strong>, they construct <code>datetime.date</code> and pass it into goals, and that is exactly the path the change closed. Five of the first six procurement scorers went scoreless; the sweep was stopped there rather than watching the same traceback fifty more times.</p>
+
+  <p>Four claims failed the same way in one day, and the cause is structural rather than careless. <strong>The sealed bodies are excluded from every other lane's census by the seal</strong> — one lane cannot read them, the exporter skips their directory, engine sweeps cover the corpus tree. So <em>“the corpus costs nothing”</em> is silent about the harnesses <em>by construction</em>, and that population exercises the engine more directly than any other.</p>
+
+  <div class="pull">
+    <p><span class="chip c-ruled">Protocol</span> Any sweep whose conclusion would cover the harnesses goes to the lane that owns them as a question, before it becomes a number. Most are one AST pass.</p>
+    <p>And state the glob in the sentence. <em>“No <code>.py</code> file does X”</em> is a fact; <em>“the corpus does not do X”</em> is an inference across a boundary, and the two read identically in a report.</p>
+  </div>
+
+  <h3>One domain answered wrongly rather than failing</h3>
+  <p>Migrating the harnesses' date constructions — rather than their crossings — returned <code>framework_agreements</code> at <strong>1413/1423</strong>. Ten cases silently got a different answer instead of an error, because the harnesses do not merely pass dates to the engine: they <em>compute</em> with them in Python, and a term is a tuple with none of that API. That is the failure the whole oracle axis exists to catch, and it is why the remaining migration converts at crossings, where nothing downstream computes with the converted value.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">09</span><h2>The conversion registry</h2></div>
+  <p>Two global dicts, no overriding: <code>TO_TERM</code> maps a class to the function yielding its term, <code>FROM_TERM</code> maps a functor to the function rebuilding the Python value. Each function knows its own components and decides what recurses — the date family moves its ints across untouched, the data tuple recurses because only it can contain anything.</p>
+
+  <p><strong>There is no generic converter.</strong> An early cut walked <code>__match_args__</code> and mangled a module-qualified functor for anything unregistered. The reason to delete it is not that it fails on <code>date</code> and <code>Decimal</code>, which report no match args — it is that <em>a class's attributes may each need converting differently, and only that class knows how</em>. A generic walk applies one rule to all of them, so it is not a fallback; it is a different, wrong answer that happens to typecheck.</p>
+
+  <figure class="evidence">
+    <figcaption><span>Exact-type keys, and what they buy</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>an isinstance walk must test <span class="ok">datetime before date</span> -- it is a SUBCLASS,
+and the wrong order renders every datetime as a date and drops
+the time of day, silently.
+
+exact keys remove the trap instead of documenting it.
+the cost: a SUBCLASS needs its own entry -- the safe direction,
+since it may carry state the base's function would drop.</pre>
+  </figure>
+
+  <p>The reverse direction earns its place immediately: round-trip tests pin that a <code>Decimal</code> keeps its <em>scale</em> (<code>10.010</code> stays <code>10.010</code>) and that an aware datetime keeps its <em>offset</em> — the two properties an earlier pass got wrong.</p>
+
+  <p><span class="chip c-retracted">Reverted</span> Hooking the registry to <code>++</code>, so a Python value would convert automatically on the way in, failed at three insertion points. Wrapping the emitted call broke the seam's own passes, which pattern-match its shape. Wrapping the thunk left the shape alone but wrapped tuples <em>the seam itself built</em>. <strong>That is the real obstacle and it is a design question</strong>: <code>++</code> sits where both kinds of tuple are in flight and nothing in the value distinguishes them. The converters are callable today; only the automatic application is unresolved.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">10</span><h2>Sequence</h2></div>
+  <p>Ordered because each step makes the next one's premise true. Everything below sits on one branch; nothing is landed or promoted.</p>
+  <ol class="steps">
+    <li>
+      <span class="stitle">Plant shared rows at import <span class="chip c-measured">Done</span></span>
+      <p>The importer's local spelling maps to the exporter's row. Adoption answers <em>reads only</em> — a <code>create=True</code> caller is defining a predicate, so it never receives another database's row and the load ordering stops mattering.</p>
+      <span class="gate">engine gate — <b>0 new</b></span>
+    </li>
+    <li>
+      <span class="stitle">Tuple-data tag becomes <code>'()'</code> <span class="chip c-measured">Done</span></span>
+      <p>Marshal-clean, ISO-writable, 2.08× recognition, 1.74× as a dict key. Thirteen sites had to be told explicitly that tuple-data is not a compound — a property that was free while the tag was a type object.</p>
+      <span class="gate">engine gate — <b>0 new</b></span>
+    </li>
+    <li>
+      <span class="stitle">Dates are terms <span class="chip c-measured">Engine done</span></span>
+      <p>The compile route is closed and <code>py.datetime</code> produces and consumes terms through two choke points, computing in Python between them. The refusal names the fix.</p>
+      <span class="gate">engine gate 0 new — <b>oracle gate RED; harness side open</b></span>
+    </li>
+    <li>
+      <span class="stitle">Predicate names leave <code>module_dict</code></span>
+      <p>Now the cheapest large step, because q3 resolved: one PEP 562 <code>__getattr__</code> plus a <code>__dir__</code>, shipped together. The <code>__dir__</code> is a safety property — if a harness body ever declares a predicate, a re-export line becomes a real enumeration in 82 launchers at once.</p>
+      <span class="gate">gate — <b>answer-set run; it also unblocks the 5 sites that turned out to be P4, not P1</b></span>
+    </li>
+    <li>
+      <span class="stitle">The remaining 14 reroute sites</span>
+      <p>Anchored by snippet rather than line number, after 19 of 50 drifted while the checker validated a tree nobody was editing. Four of the 14 tighten an arity-blind test, so they change behaviour rather than preserving it.</p>
+      <span class="gate">gate — <b>failure-set diff, and an answer-set run for the four</b></span>
+    </li>
+    <li>
+      <span class="stitle">Rationals and decimals as numbers</span>
+      <p><code>('rdiv', N, D)</code> and <code>('decimal', M, E)</code> already work as <em>terms</em> with no engine change. Making them <em>numbers</em> belongs with the CLP(Q) C port, which has already replaced the rational arithmetic layer in C — writing against the Python one means rewriting twice.</p>
+      <span class="gate">sequencing — <b>with the port, not against it</b></span>
+    </li>
+  </ol>
+  </section>
+
+<footer>
+  <span>Clausal engine lane · design record · 2026-09-14</span>
+  <span>census, probes and per-site table in tools/predmeta_census/</span>
+</footer>
+
+</div>
