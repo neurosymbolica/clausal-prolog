@@ -242,12 +242,18 @@ in C over GMP — writing against the Python one means rewriting twice.
 **§4 q3 is not free.** I reported corpus object-shaped predicate access as ~0 and
 "the engine's own 209 sites are the whole migration". Measured: corpus `.seam`
 harnesses use `m.<predicate>(` ~200 times across 160 names, plus ~101
-`getattr(m, <var>)`. **~500 sites, ~290 of them in corpus files.**
+`getattr(m, <var>)`. **~446 sites in the 82 SEALED BODIES alone** (harness-batch-lane's own count: 296
+module-attribute reaches across 245 names, 98 `getattr(m, <var>)`, 52
+`getattr(m, 'literal')` -- a shape I did not count), plus the engine's 209.
 
-Four times in one day I generalised a sweep past the file type it covered. The rule
-is in [[instruments-that-fail-open]] (count now 15): **put the glob in the sentence.**
-"No `.py` file does X" is a fact; "the corpus does not do X" is an inference, and
-they read identically.
+Four times in one day I generalised a sweep past the file type it covered -- but the
+CAUSE is structural, not carelessness, and harness-batch-lane named it: the sealed
+bodies are excluded from every other lane's census BY THE SEAL, so "the corpus costs
+nothing" is silent about the harnesses BY CONSTRUCTION.
+
+**STANDING PROTOCOL FROM HERE: any sweep whose conclusion would cover the harnesses
+goes to harness-batch-lane as a question.** They answer most in one AST pass. See
+[[instruments-that-fail-open]] (count 15).
 
 ## NEXT, in order
 

@@ -982,3 +982,32 @@ the encoding, and `to_term`/`from_term` with round-trip tests pinning decimal SC
 passed while 323, then 34, then 30 did not. Each fixture covered the CONVERSION I was building
 rather than the VALUES that flow through the hook I had placed it in — a variable, an engine term,
 a tuple the seam made. Testing the thing built, not the place it was installed.
+
+## The §4 q3 figure again, verified at source and HIGHER
+
+harness-batch-lane re-measured on the sealed bodies rather than inheriting my number:
+
+    module-attribute reaches   296   across 245 distinct names   (I reported ~200 / 160)
+    getattr(m, <variable>)      98                               (I reported ~101)
+    getattr(m, 'literal')       52                               (I did not count this shape)
+    ------------------------------------------------------------
+                              ~446   across the 82 sealed bodies
+
+**Use 446, not 300.** My figure came from the visible corpus tree; theirs from the population that
+actually matters.
+
+### And the STRUCTURAL reason, which is better than the rule I wrote
+
+I filed four of these as repeated carelessness. harness-batch-lane named the cause instead:
+
+> *the sealed bodies are excluded from every other lane's census BY THE SEAL -- corpus-lane cannot
+> read them, the exporter skips `eval/`, your sweeps are over the corpus tree. So any claim of the
+> form "the corpus costs nothing" is silent about the harnesses BY CONSTRUCTION, not by oversight.*
+
+That is not four lapses. It is one population that is invisible to every lane except the one that
+owns it — and which consumes the engine more directly than anything else. "Put the glob in the
+sentence" catches the wording; this catches the reason, and it has a counter-move:
+
+**ASK HARNESS-BATCH-LANE.** Any sweep whose conclusion would cover the harnesses goes to that lane
+as a question. They answer most in one AST pass. That is cheaper than a fifth discovery arriving
+mid-landing, and it is the standing protocol from here.
