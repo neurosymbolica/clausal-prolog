@@ -65,7 +65,7 @@ def test_the_declaration_defines_the_predicate(tmp_path):
     rows = _rows(m, "snap_max", 2)
     assert [k for k, _ in rows] == [1, 2]
     assert [v.value for _, v in rows] == [Decimal("292.00"), Decimal("536.00")]
-    assert all(v.dims == {usd: 1} for _, v in rows)
+    assert all(v.dims == {"usd": 1} for _, v in rows)
 
 
 def test_a_call_site_written_the_old_way_still_works(tmp_path):
@@ -192,7 +192,7 @@ def test_the_units_form_takes_any_unit(tmp_path):
     from clausal.modules.units import metre
     assert [r[0] for r in rows] == [("short",), ("long",)]
     assert [r[1].value for r in rows] == [5, 900]
-    assert all(r[1].dims == {metre: 1} for r in rows)
+    assert all(r[1].dims == {"metre": 1} for r in rows)
 
 
 def test_the_units_form_accepts_a_currency_too(tmp_path):
