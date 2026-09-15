@@ -372,7 +372,8 @@ def check_currency_unit(name: str, unit, spelling: str):
         dims = getattr(unit, "dims", None)
     if dims and len(dims) == 1:
         (key, exponent), = dims.items()
-        if exponent == 1 and getattr(key, "is_currency", False):
+        from clausal.terms import _currency_info        # noqa: PLC0415
+        if exponent == 1 and _currency_info(key) is not None:
             return unit
     raise TypeError(
         f"{spelling}: `{name}` declares money, but {unit!r} is not an amount "
