@@ -324,7 +324,7 @@ def _to_term_runtime(value):
     already-a-term check, and this module is imported far earlier than that.
     """
     from clausal.logic.python_terms import to_term  # noqa: PLC0415
-    return to_term(value)
+    return to_term(value, strict=False)
 
 
 INJECTED_RUNTIME_BUILTINS: dict = {

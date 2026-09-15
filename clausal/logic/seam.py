@@ -100,7 +100,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             # ``terms_to_ast``, and it has to be BOTH or a value would mean
             # different things depending on which route reached it.
             from clausal.logic.python_terms import to_term  # noqa: PLC0415
-            return to_term(term.fn(*term.var_objects))
+            return to_term(term.fn(*term.var_objects), strict=False)
         if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
             fname = (term.func.name if isinstance(term.func, LoadName)
                      else dotted(term.func))

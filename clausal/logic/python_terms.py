@@ -176,6 +176,19 @@ register(tuple, TUPLE_TAG, _tuple_to_term, _tuple_from_term)
 _SCALARS = (bool, int, float, str, bytes, bytearray, complex, type(None))
 
 
+def _is_already_engine_term(value: Any) -> bool:
+    """True for a value the ENGINE already owns as a term.
+
+    A logic variable most of all: converting one is not lossy, it is
+    destructive. The rest are engine term types that have no Python value to
+    convert TO -- they are already the representation.
+    """
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    if isinstance(value, Var):
+        return True
+    return type(value).__module__.startswith(("clausal.", "_variables"))
+
+
 def generic_functor(cls: type) -> str:
     """``('{module}\\x1f{class}', ...)``'s head, for a type with no canonical
     shape.  The separator is ``atoms.HIDDEN_SEP``, so a generic functor cannot
@@ -225,7 +238,7 @@ def _already_a_term(value: tuple) -> bool:
     return False
 
 
-def to_term(value: Any) -> Any:
+def to_term(value: Any, *, strict: bool = True) -> Any:
     """*value* as a functor-first term, recursively.
 
     Scalars pass through.  A registered type takes its canonical shape.  A list
@@ -236,22 +249,36 @@ def to_term(value: Any) -> Any:
     """
     if isinstance(value, _SCALARS):
         return value
+    if _is_already_engine_term(value):
+        # A logic VARIABLE, or a term type the engine already owns. Converting
+        # one would be a category error -- an AttVar is not a Python value with
+        # a term form, it IS the term -- and for a Var it would be destructive.
+        return value
     convert = TO_TERM.get(type(value))
     if convert is not None:
         return convert(value)
     if isinstance(value, list):
-        return [to_term(v) for v in value]
+        return [to_term(v, strict=strict) for v in value]
     if isinstance(value, dict):
-        return {to_term(k): to_term(v) for k, v in value.items()}
+        return {to_term(k, strict=strict): to_term(v, strict=strict)
+                for k, v in value.items()}
     names = _match_arg_names(value)
     if names is None:
+        if not strict:
+            # The IMPLICIT path (``++``). A value the registry does not know and
+            # that does not describe itself passes through UNCHANGED, exactly as
+            # it did before ++ auto-converted. Raising here would make the hook
+            # refuse values that have always been legal -- measured, 323 new
+            # failures across Quantity, DictTerm, Module and AttVar, none of
+            # which the author asked to convert.
+            return value
         raise TypeError(
             f"to_term: {type(value).__name__} has no __match_args__, no "
             f"dataclass fields and no _fields, so its component order is "
             f"unknown. Give it __match_args__, or register a canonical shape."
         )
     return (generic_functor(type(value)),) + tuple(
-        to_term(getattr(value, n)) for n in names)
+        to_term(getattr(value, n), strict=strict) for n in names)
 
 
 def from_term(value: Any) -> Any:
