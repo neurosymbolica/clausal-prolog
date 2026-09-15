@@ -638,6 +638,30 @@ dict -&gt; wire   <span class="ok">220 ns</span>   sorted + unpack</pre>
 
   <p><code>frozendict</code> was considered and rejected. It is hashable, but it is not in the stdlib and not installed, and it would lose <em>both</em> properties at issue &mdash; <code>marshal</code> takes only the basic types, and a custom class folds into <code>co_consts</code> no better than a dict. It also solves a problem that is not there, since the stored map never needed to be hashable.</p>
 
+<figure class="evidence">
+    <figcaption><span>When the sort can be skipped &mdash; and why the guard is a false economy</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>insertion order buys ROUND-TRIP STABILITY, free:
+  dict(t[1:]) then tuple(d.items()) returns the SAME term.
+
+it does NOT buy cross-path equality:
+  metre*second keys  ['metre', 'second']
+  second*metre keys  ['second', 'metre']
+  dicts equal <span class="ok">TRUE</span>   key order equal <span class="no">FALSE</span>
+
+116 unit constants:  len 0-1 = <span class="ok">60.4%</span> (no sort by definition)
+                     len 2-4 = <span class="no">39.7%</span> (sort required)
+
+n=1  sorted 143 ns | raw  82 ns | len-guard  <span class="ok">95 ns</span>   guard wins  -48
+n=2  sorted 184 ns | raw 101 ns | len-guard <span class="no">200 ns</span>   guard LOSES +16
+n=3  sorted 216 ns | raw 135 ns | len-guard <span class="no">250 ns</span>   guard LOSES +34</pre>
+  </figure>
+
+  <p>So the sort is skippable for the 60% of units carrying one dimension or none &mdash; every currency, every base unit &mdash; but not wholesale, because <code>_merge_dims</code> is path-dependent and two <em>equal</em> quantities would emit different terms. And the obvious <code>len(d) &gt; 1</code> guard costs more at n&nbsp;&ge;&nbsp;2 than the sort it skips: about <strong>17 ns per emit</strong> once weighted, on an operation that happens only at a marshal boundary. Sort unconditionally &mdash; not because the saving is unreal, but because it sits behind a branch, and a branch is the thing that later gets copied to a site where its premise does not hold.</p>
+
+  <div class="pull">
+    <p><span class="chip c-measured">Measured</span> <strong>The sort is impossible today.</strong> <code>sorted(d.items())</code> raises <code>TypeError: '&lt;' not supported between instances of '_UnitsPredicate'</code> &mdash; dimension keys have no ordering while they are predicate objects. The canonical sort is <em>downstream of the atom rekey</em>, not independent of it, which is one more reason that rekey is the first step rather than a cleanup.</p>
+  </div>
+
   <p>What the design preserves, each of it live corpus behaviour: <code>300 basis_point == 3 percent</code>, <code>155000 usd_cent</code> <em>being</em> <code>Decimal('1550.00') usd</code>, and inches addable to metres. All three survive because the object keeps its own equality and normalises at construction. A tuple quantity carrying a ratio would have broken all three at once.</p>
 </section>
 

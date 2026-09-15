@@ -1512,3 +1512,55 @@ rejected) and **is not installed here** — so it would be a new dependency. Two
     WIRE      ('dimensions', ('metre',1), ('second',-2)) -- folds as one constant, ISO-readable
     BETWEEN   dict(t[1:])  /  ('dimensions', *sorted(d.items()))     133 ns / 220 ns
     SORT      unnecessary for internal equality; wanted ON EMIT, under either spelling
+
+## When the sort can be skipped — measured, and the obvious guard is a false economy
+
+Operator: *"sometimes we can avoid the sort. Python dicts guarantee preservation of insertion
+order."* True, and it buys a property worth recording on its own — but it does not remove the sort,
+and the naive way of skipping it costs more than it saves.
+
+**What insertion order DOES buy: round-trip stability.** Because a dict preserves order,
+`dict(t[1:])` followed by `tuple(d.items())` returns the SAME term. So a wire form that goes out,
+comes back and goes out again is stable with no canonicalisation anywhere. That is free and it is
+real.
+
+**What it does NOT buy: cross-path equality.** Measured:
+
+    metre*second keys   ['metre', 'second']
+    second*metre keys   ['second', 'metre']
+    dicts equal         TRUE
+    key ORDER equal     FALSE
+
+`_merge_dims` is path-dependent, so two EQUAL quantities emit DIFFERENT terms. The sort cannot be
+dropped wholesale.
+
+**Where it genuinely can be skipped**, measured across the 116 unit constants:
+
+    len(_dims) == 0     3   ( 2.6%)
+    len(_dims) == 1    67   (57.8%)      <- 60.4% need no sort BY DEFINITION
+    len(_dims) == 2    12   (10.3%)
+    len(_dims) == 3    19   (16.4%)
+    len(_dims) == 4    15   (12.9%)      <- 39.7% do
+
+Every currency and every base unit is in the first group.
+
+**But the `len(d) > 1` guard is a false economy.** Measured at real sizes:
+
+    n=1   sorted 143 ns | raw  82 ns | len-guard  95 ns     guard WINS  (-48)
+    n=2   sorted 184 ns | raw 101 ns | len-guard 200 ns     guard LOSES (+16)
+    n=3   sorted 216 ns | raw 135 ns | len-guard 250 ns     guard LOSES (+34)
+
+The conditional costs more at n>=2 than the sort it skips. Weighted on the distribution above it
+nets about **17 ns per emit** — on an operation that happens only at a marshal boundary.
+**Recommendation: sort unconditionally at emit.** Not because the saving is unreal, but because it
+is 17 ns behind a branch, and a branch is the thing that later gets copied to a site where the
+premise does not hold.
+
+**And a sequencing fact: the sort is IMPOSSIBLE today.**
+
+    sorted(d.items())   TypeError: '<' not supported between instances of '_UnitsPredicate'
+    sorted by name      ['metre', 'second']      works
+
+Dimension keys have no ordering while they are predicate objects. **The canonical sort is
+downstream of the atom rekey**, not independent of it — which is one more reason that rekey is the
+first step rather than a cleanup.
