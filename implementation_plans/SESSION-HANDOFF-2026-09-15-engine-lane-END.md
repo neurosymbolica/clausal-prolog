@@ -184,3 +184,77 @@ not a sed.
 
 Then: the 28, then the full 82, with harness-batch-lane saying which of the four changes each
 result does and does not cover.
+
+---
+
+# ADDENDUM 2 — the registry, the ++ attempt, and a correction that matters
+
+## Final branch state
+
+    feat/iso-l3-lowering-2026-09-14   head 4bf2fca1   clean
+    gate                              144 failed / 16316 passed, NEW 0, GONE 0
+    canonical / clone main            untouched. NOTHING LANDED.
+
+## LANDED on the branch, each gated 0-new
+
+    §4 q1 shared-row plant       arities_for / adopt_row / owns; adoption answers
+                                 READS only, so a create=True caller never gets
+                                 another database's row
+    ('()', 1, 2) tuple tag       marshal-clean, ISO-writable, 2.08x recognition,
+                                 1.74x as a dict key; completes the '[]' / '{}'
+                                 family
+    dates are terms              compile route closed; py.datetime produces and
+                                 consumes terms via two choke points (its own
+                                 deref/unify shadows), computing in Python between
+    the error names the fix      "a Python date is not a term. Write the term
+                                 instead: ('date', 2023, 6, 1)"
+    the conversion REGISTRY      TO_TERM / FROM_TERM, exact-type keys, global, no
+                                 overriding, NO generic converter; py.datetime
+                                 consumes it rather than holding a second copy
+
+## NOT landed, and why
+
+**`++` auto-conversion: three insertion points, all red, REVERTED.** The obstacle
+is a design question — `++` sits where both seam-built and user-returned tuples are
+in flight and nothing in the value distinguishes them. Needs a marker on seam
+constructions, or a conversion point where only user values appear. Full account in
+the spec.
+
+**`rdiv` / `decimal` as NUMBERS.** Term spellings are free and work today. The
+arithmetic half belongs WITH the parked CLP(Q) C port, which has `arith_q` already
+in C over GMP — writing against the Python one means rewriting twice.
+
+## OPEN for the operator
+
+1. `1E+5` -> `('decimal', 1, -5)`: allow the negative scale field (Decimal's own
+   model) or normalise? Recommended: allow.
+2. `Quantity` is unruled. Same shape as `Decimal`, but units are live corpus
+   vocabulary — do not assume it follows.
+3. The date migration on the HARNESS side: ruled (b) + the better error, then
+   harness-batch-lane measured the real shape — 85 constructions vs 70 crossings
+   in 62 wrappers, and a migration of the constructions produced a SILENT WRONG
+   answer (`framework_agreements` 1413/1423). Their kit changes (capability probe,
+   recogniser, pass-through) are correct and uncommitted. **The cost basis has
+   moved three times; nothing should proceed there without a fresh ruling.**
+
+## THE CORRECTION THAT MATTERS MOST
+
+**§4 q3 is not free.** I reported corpus object-shaped predicate access as ~0 and
+"the engine's own 209 sites are the whole migration". Measured: corpus `.seam`
+harnesses use `m.<predicate>(` ~200 times across 160 names, plus ~101
+`getattr(m, <var>)`. **~500 sites, ~290 of them in corpus files.**
+
+Four times in one day I generalised a sweep past the file type it covered. The rule
+is in [[instruments-that-fail-open]] (count now 15): **put the glob in the sentence.**
+"No `.py` file does X" is a fact; "the corpus does not do X" is an inference, and
+they read identically.
+
+## NEXT, in order
+
+1. **P1's 14 actionable sites** — `tools/predmeta_census/P1_SITES.tsv`, now anchored
+   by SNIPPET because line numbers drift (19 of 50 had, while the checker validated
+   the canonical tree nobody edits). 4 of the 14 TIGHTEN an arity-blind test.
+   `globals_env.py:550` is marked NO — re-read it now imports are planted.
+2. **The oracle gate is the instrument that matters**, not the engine suite. It
+   caught what a green suite and a corpus sweep both missed. Ask harness-batch-lane.
+3. `rdiv`/`decimal` arithmetic, sequenced with the CLP(Q) port.
