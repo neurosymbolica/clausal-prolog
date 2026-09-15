@@ -24,55 +24,45 @@ from decimal import Decimal
 
 import pytest
 
-from clausal.logic.atoms import HIDDEN_SEP
 from clausal.logic.python_terms import to_term
 
 
-class Point:
+# ── an unregistered class has NO generic fallback ────────────────────────────
+
+class Unregistered:
+    """Deliberately has __match_args__, to pin that it is IGNORED."""
     __match_args__ = ("x", "y")
 
     def __init__(self, x, y):
         self.x, self.y = x, y
 
 
-# ── scalars pass through untouched ───────────────────────────────────────────
-
-@pytest.mark.parametrize("v", [1, -3, 0, 1.5, "text", b"bytes", True, False, None])
-def test_scalars_are_left_alone(v):
-    assert to_term(v) is v or to_term(v) == v
-
-
-def test_a_bool_is_not_widened_to_an_int():
-    assert to_term(True) is True
-
-
-# ── the registry comes first ─────────────────────────────────────────────────
-
-def test_a_date_gets_its_CANONICAL_shape_not_a_mangled_one():
-    """The whole point of registry-first."""
-    assert to_term(datetime.date(2023, 6, 1)) == ("date", 2023, 6, 1)
+def test_an_unregistered_class_RAISES_and_names_the_registry():
+    """No generic converter, by design. A class's attributes may each need
+    converting differently and only that class knows how, so a generic walk is
+    not a fallback -- it is a different, wrong answer."""
+    with pytest.raises(TypeError) as exc:
+        to_term(Unregistered(1, 2))
+    assert "no registered conversion" in str(exc.value)
+    assert "register(" in str(exc.value)
 
 
-def test_a_timedelta_gets_its_canonical_shape():
-    assert to_term(datetime.timedelta(days=3)) == ("timedelta", 3, 0, 0)
+def test___match_args___is_NOT_consulted():
+    """It was, in the first cut. Pinned so the generic path cannot creep back."""
+    with pytest.raises(TypeError):
+        to_term(Unregistered(1, 2))
 
 
-def test_a_decimal_gets_its_canonical_shape():
-    """Ruled: mantissa and power-of-ten scale."""
-    assert to_term(Decimal("10.01")) == ("decimal", 1001, 2)
+def test_the_implicit_path_lets_an_unregistered_class_through():
+    """``++`` must leave alone what it does not understand -- raising there
+    refused values that had always been legal (323 failures)."""
+    u = Unregistered(1, 2)
+    assert to_term(u, strict=False) is u
 
 
-# ── the generic form, for anything the registry does not know ────────────────
-
-def test_an_arbitrary_object_becomes_module_sep_class_plus_match_args():
-    got = to_term(Point(1, 2))
-    assert got == (f"{Point.__module__}{HIDDEN_SEP}Point", 1, 2)
-
-
-def test_conversion_RECURSES_into_the_match_args():
-    got = to_term(Point(datetime.date(2023, 6, 1), [Decimal("0.5")]))
-    assert got[1] == ("date", 2023, 6, 1)
-    assert got[2] == [("decimal", 5, 1)]
+def test_conversion_RECURSES_through_a_registered_container():
+    got = to_term([datetime.date(2023, 6, 1), Decimal("0.5")])
+    assert got == [("date", 2023, 6, 1), ("decimal", 5, 1)]
 
 
 # ── containers ───────────────────────────────────────────────────────────────
@@ -111,7 +101,7 @@ def test_an_object_with_no_match_args_says_so_rather_than_guessing():
             self.a = 1
     with pytest.raises(TypeError) as exc:
         to_term(Opaque())
-    assert "__match_args__" in str(exc.value)
+    assert "no registered conversion" in str(exc.value)
 
 
 # ── the reverse direction ────────────────────────────────────────────────────

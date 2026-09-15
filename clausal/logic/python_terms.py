@@ -1,47 +1,55 @@
-"""Recursively convert a Python object into functor-first-tuple form.
+"""Convert a Python object into functor-first-tuple form, and back.
 
-Design ruled by the operator 2026-09-15: take the class name prefixed with its
-module, take the match args, convert them recursively, and emit
-``('{module}\\x1f{class}', arg0, ..., argN)``.  Scalars are left alone.  A tuple
-becomes the ``('()', ...)`` data form.
+Design ruled by the operator 2026-09-15, and REVISED the same day: there is NO
+generic converter. **Every class that crosses the seam must have a registered
+conversion function.**
 
-The intended consumer is ``++`` (the Python escape), so a value crossing from
-Python into a goal arrives as a TERM without the author converting it by hand.
-This module does not hook ``++``; that is a separate change with its own gate.
+The first cut walked ``__match_args__`` and emitted
+``('{module}\\x1f{class}', ...)`` for anything unregistered. That is wrong, and
+the reason is not that it fails on types lacking ``__match_args__`` (it does --
+``datetime.date`` and ``Decimal`` both report ``None``). It is that **a class's
+attributes may each need converting differently, and only that class knows
+how.** A generic walk applies one rule to all of them, so it is not a fallback
+for the registry -- it is a different, wrong answer that happens to typecheck.
 
-REGISTRY FIRST, generic second, and that ordering is load-bearing
-=================================================================
-``__match_args__`` is ABSENT on the types that matter most -- measured,
-``datetime.date`` and ``Decimal`` both report ``None`` -- so a purely generic
-converter fails on exactly the values that prompted this design.
+THE REGISTRY
+============
+``TO_TERM``   maps a class    to the function yielding its TERM.
+``FROM_TERM`` maps a functor  to the function rebuilding the PYTHON value.
 
-More importantly a generic mangle would give a date
-``('datetime\\x1fdate', 2023, 6, 1)`` while 94 corpus rulebases expect
-``('date', 2023, 6, 1)``.  **Two encodings for one value is precisely what this
-representation change exists to remove**, so a type with a canonical shape uses
-it and never the generic form.
+Each function knows its own components and decides what recurses: the date
+family moves its ints across untouched, while the data tuple recurses because
+only it can contain anything.
 
-The separator is ``atoms.HIDDEN_SEP``, which already exists and already spells
-``f"{module}{HIDDEN_SEP}{name}"`` in ``atoms.mangle``.  Reused rather than
-respelled: a second definition of an encoding is a drift this lane has paid for
-three times.
+Keyed by EXACT type. An ``isinstance`` walk has to put ``datetime`` before
+``date`` -- it is a subclass -- and the wrong order renders every datetime as a
+date and silently drops the time of day. Exact keys remove the trap instead of
+documenting it. A SUBCLASS therefore needs its own registration, which is the
+safe direction: it may carry state the base's function would drop in silence.
+
+GLOBAL, AND OVERRIDING IS REFUSED. A per-module registry would let two ``.seam``
+files disagree about what ``('date', ...)`` means, and a term that means
+different things in different modules is not a term.
+
+TWO MODES
+=========
+``strict=True``   an unregistered class RAISES, naming the fix. For a caller
+                  who asked for a conversion.
+``strict=False``  an unregistered class passes through UNCHANGED. For the
+                  implicit ``++`` hook, which must leave alone what it does not
+                  understand -- raising there refused values that had always
+                  been legal, measured at 323 failures.
 
 THE DOCUMENTED HAZARD: a tuple already in functor-first form
 ============================================================
-``("date", 2023, 6, 1)`` is already a term and must not be wrapped as data --
-but it is indistinguishable, by shape alone, from a genuine Python tuple of a
-string and three ints.  The operator's call is to document this rather than
-solve it.
+``("date", 2023, 6, 1)`` is already a term and must not be wrapped as data, but
+it is indistinguishable by shape from a Python tuple of a str and three ints.
+The operator's call is to document rather than solve it.
 
-What is implemented narrows it as far as shape allows: a tuple is DATA unless
-it is a well-formed term the engine already recognises.  So the common cases are
-right and the residue is nameable -- a Python tuple whose first element is a
-str, whose remaining elements happen to fit a known term's component types,
-converts as that term rather than as data.  In practice that is a tuple like
-``("date", 2023, 6, 1)`` meant as data, which has no way to say so.
-
-If that residue ever bites, the fix is not a cleverer guess: it is an explicit
-wrapper at the call site saying which was meant.
+Narrowed as far as shape allows: a tuple is DATA unless it is a well-formed
+term the engine already recognises, so ``("date", "x", "y")`` converts as data
+while ``("date", 2023, 6, 1)`` does not. If the residue ever bites, the fix is
+an explicit wrapper at the call site, not a cleverer guess.
 """
 
 from __future__ import annotations
@@ -51,11 +59,9 @@ import datetime as _dt
 from decimal import Decimal
 from typing import Any
 
-from clausal.logic.atoms import HIDDEN_SEP
 from clausal.logic.cells import TUPLE_TAG
 
-__all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM",
-           "generic_functor"]
+__all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM"]
 
 
 def _decimal_to_term(d: Decimal) -> tuple:
@@ -189,32 +195,6 @@ def _is_already_engine_term(value: Any) -> bool:
     return type(value).__module__.startswith(("clausal.", "_variables"))
 
 
-def generic_functor(cls: type) -> str:
-    """``('{module}\\x1f{class}', ...)``'s head, for a type with no canonical
-    shape.  The separator is ``atoms.HIDDEN_SEP``, so a generic functor cannot
-    collide with a name a program can write."""
-    return f"{cls.__module__}{HIDDEN_SEP}{cls.__qualname__}"
-
-
-def _match_arg_names(obj: Any) -> "tuple[str, ...] | None":
-    """The component names to convert, or None if the object does not say.
-
-    ``__match_args__`` first, because it is the object's own statement of its
-    positional structure.  A dataclass without one still declares its fields,
-    and a namedtuple declares ``_fields``.  Nothing else is guessed: reading
-    ``__dict__`` would invent an order the class never promised.
-    """
-    ma = getattr(type(obj), "__match_args__", None)
-    if ma:
-        return tuple(ma)
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return tuple(f.name for f in dataclasses.fields(obj))
-    fields = getattr(type(obj), "_fields", None)
-    if isinstance(fields, tuple) and all(isinstance(f, str) for f in fields):
-        return fields
-    return None
-
-
 def _already_a_term(value: tuple) -> bool:
     """True for a tuple the engine would already read as a well-formed term.
 
@@ -225,8 +205,6 @@ def _already_a_term(value: tuple) -> bool:
     if not value or type(value[0]) is not str:
         return False
     head = value[0]
-    if HIDDEN_SEP in head:
-        return True
     if head == TUPLE_TAG:
         return True
     from clausal.modules.py.datetime import date_term_to_python  # noqa: PLC0415
@@ -262,23 +240,16 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
     if isinstance(value, dict):
         return {to_term(k, strict=strict): to_term(v, strict=strict)
                 for k, v in value.items()}
-    names = _match_arg_names(value)
-    if names is None:
-        if not strict:
-            # The IMPLICIT path (``++``). A value the registry does not know and
-            # that does not describe itself passes through UNCHANGED, exactly as
-            # it did before ++ auto-converted. Raising here would make the hook
-            # refuse values that have always been legal -- measured, 323 new
-            # failures across Quantity, DictTerm, Module and AttVar, none of
-            # which the author asked to convert.
-            return value
-        raise TypeError(
-            f"to_term: {type(value).__name__} has no __match_args__, no "
-            f"dataclass fields and no _fields, so its component order is "
-            f"unknown. Give it __match_args__, or register a canonical shape."
-        )
-    return (generic_functor(type(value)),) + tuple(
-        to_term(getattr(value, n), strict=strict) for n in names)
+    if not strict:
+        # The IMPLICIT path (``++``). A class with no registered conversion
+        # passes through UNCHANGED, exactly as it did before ++ auto-converted.
+        return value
+    raise TypeError(
+        f"to_term: {type(value).__name__} has no registered conversion. "
+        f"Every class that crosses the seam needs one -- register(cls, "
+        f"functor, to_fn, from_fn) -- because only the class's own function "
+        f"knows how its attributes convert."
+    )
 
 
 def from_term(value: Any) -> Any:
@@ -286,8 +257,7 @@ def from_term(value: Any) -> Any:
 
     For a term coming back OUT -- a harness reading an answer, say. Consults
     ``FROM_TERM`` by functor, so each registered type rebuilds itself and
-    decides what recurses: the date family moves its ints across untouched,
-    while the data tuple recurses because only it can contain anything.
+    decides what recurses.
 
     A term with no registered functor is returned UNCHANGED rather than guessed
     at. Most terms are not Python values in disguise -- ``('cite', ('art52',))``
