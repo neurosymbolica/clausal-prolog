@@ -189,6 +189,38 @@ result does and does not cover.
 
 # ADDENDUM 2 — the registry, the ++ attempt, and a correction that matters
 
+## READ THESE FOUR; they agree with each other
+
+    implementation_plans/SESSION-HANDOFF-2026-09-15-engine-lane-END.md   <- you are here
+    docs/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answer.md
+                                        the reasoning, every measurement, every ruling
+    docs/design-records/terms-as-tuples.html
+                                        the readable record; its README says the FILE is
+                                        the source and the URL a rendering -- republish to
+                                        the SAME url or a bookmarked link goes stale in place
+    tools/predmeta_census/              the instruments, their controls, and P1_SITES.tsv
+                                        (anchored by SNIPPET; line numbers drift)
+
+## Rulings taken AFTER the body of this handoff was written
+
+    52ab6b30   a decimal with NO FRACTIONAL DIGITS is an int. ('decimal', M, E) means
+               M x 10^-E, so E is a count of decimal places and a negative count is a
+               significant-figures claim this language does not model. 1E+5 -> 100000.
+               Decimal("10.00") KEEPS its scale -- only the absence of fractional digits
+               makes an int. Same rule clpfd already applies to integral rationals.
+    98d426b7   the design record moved into the repo (it was in a scratch dir).
+    0444f6b0   the `quantity` encoding DESIGN, recorded not implemented:
+               dimensions as ('dimensions', ('metre', 1), ('second', -2)) with a
+               CANONICAL SORT (mandatory -- a term is hashed, a dict is not, and the
+               tuple loses the dict's order-insensitive equality); a UNIT is dimensions
+               PLUS A RATIO, so ('unit', ('watt',)) keys a table -- which is also why
+               _dims being keyed by unit PREDICATE OBJECTS is not a problem to solve but
+               a category error to drop: a unit was never a predicate.
+               OPEN there: whether the named unit survives into the term for display
+               (1550.00 euro wants to print as euro, and currency is not SI), and what
+               DIMENSIONLESS is spelled as -- ('dimensions',) is the ATOM `dimensions`,
+               since a zero-argument compound is an atom.
+
 ## Final branch state
 
     feat/iso-l3-lowering-2026-09-14   head 4bf2fca1   clean
