@@ -1076,3 +1076,78 @@ nicety.
 
 The hook is meaningless until predicate names actually leave `module_dict`, which is P4. Add both
 together, with the `__dir__`, rather than landing a hook that can never fire.
+
+---
+
+# `quantity`: the dimension map, and why a unit is not a dimension
+
+Operator's design, 2026-09-15. Not implemented — recorded so it is not re-derived.
+
+## What `Quantity` actually is
+
+`clausal/terms.py`: `(_value, _dims)`, where `_dims` maps **unit predicate OBJECTS** to integer
+exponents and zero exponents are dropped.
+
+    Quantity(5, mappingproxy({units.metre/[]: 1}))        5 metres
+
+The magnitude is already solved by the other rulings: int stays int, `Decimal` becomes
+`('decimal', M, E)` or an int, `Fraction` becomes `('rdiv', N, D)`. It recurses through the
+registry and needs no new decision. **The dimension map is the whole of the problem.**
+
+## The term form, and the obligation that comes with it
+
+    acceleration    ('dimensions', ('metre', 1), ('second', -2))
+
+reading in source as `dimensions(metre(1), second(-2))`, which is how an author would write it.
+
+**The reason is hashability, not marshalling** — measured, since the first statement of this was
+that dicts do not marshal:
+
+    dict {'metre': 1}                              marshal-clean
+    ('dimensions', ('metre',1), ('second',-2))     marshal-clean
+
+    two dims, different insertion order   equal TRUE,  hashable NO
+    the same as TERMS, different order    equal FALSE, hashable YES
+
+A term is hashed — tabling, the query cache, indexing — so a dict cannot be one. And the two
+forms trade exactly: the dict gives order-insensitive equality for free and cannot be hashed; the
+tuple hashes and **must have a canonical sort imposed**, or `m·s⁻²` and `s⁻²·m` are different
+terms that unification and `msort` will both lie about. **Sort the pairs. It is not optional.**
+
+**A wrinkle to decide, not to discover later:** a zero-argument compound IS an atom in this
+representation, so `('dimensions',)` is the atom `dimensions`, not an empty `dimensions()`. So
+DIMENSIONLESS needs a deliberate spelling — the atom `dimensions` reused, or a distinct
+`dimensionless`. The empty dict has no direct translation.
+
+## The insight that makes units work: a unit is dimensions PLUS a ratio
+
+**`inch` and `metre` have the SAME dimensions and differ only in their ratio to the standard unit
+for those dimensions.** That is what lets inches convert to metres, and lets inches be ADDED to
+metres. So:
+
+    a DIMENSION    what kind of quantity this is        ('metre', 1)
+    a UNIT         a named (dimensions, ratio) pair     ('unit', ('watt',))
+
+reading as `unit(watt)`. The atom keys a table of known units; the table holds the dimensions and
+the ratio.
+
+This also answers the question the retirement raises. `_dims` is currently keyed by unit PREDICATE
+OBJECTS, which stop existing under P4 — and the answer is not "use the atom instead" but "a unit
+was never a predicate; it is a named entry in a units table, and the atom is its name".
+
+## Normalisation
+
+Values are already stored in SI base units internally, with named-unit predicates scaling on the
+way in and out (`terms.py`'s own docstring). The operator's direction is to normalise at COMPILE
+time, which matches that: the term carries the base-unit magnitude and the canonical dimension
+order, and the named unit is a surface spelling resolved on the way in.
+
+**Open**: whether the named unit survives INTO the term for display and exactness — `1550.00 euro`
+wants to print as euro, and currency is not SI — or whether only the dimensions do.
+
+## Also ruled: the functor is `quantity`, lowercase
+
+Not a preference. TitleCase RAISES at load since the identifier lint, so a functor spelled
+`Quantity` cannot be written in Clausal source at all. The Python CLASS may keep its name; the
+functor must be lowercase, and it then sits in the same namespace as `date`, `decimal` and `rdiv` —
+all lowercase, all writable, all atoms.
