@@ -71,7 +71,25 @@ def _decimal_to_term(d: Decimal) -> tuple:
     if not isinstance(exponent, int):       # nan / inf carry a str exponent
         raise TypeError(f"to_term: {d!r} has no finite decimal shape")
     mantissa = int("".join(map(str, digits))) * (-1 if sign else 1)
-    return ("decimal", mantissa, -exponent)
+    scale = -exponent
+    if scale <= 0:
+        # NO FRACTIONAL DIGITS -> an int. ``scale`` is a COUNT OF DECIMAL
+        # PLACES, and a negative count is not a quantity of anything: a
+        # positive Decimal exponent (``1E+5``) is a SIGNIFICANT-FIGURES claim,
+        # an assertion about precision rather than about the value, which this
+        # language does not model.
+        #
+        # The same rule the engine already applies one level up -- clpfd.py:
+        # "an integral rational presents as int" -- normalised at a single
+        # choke point rather than at every binding. This is that choke point
+        # for decimals.
+        #
+        # Note what this does NOT do: ``Decimal("10.00")`` keeps its scale and
+        # stays ('decimal', 1000, 2). Scale is why this encoding was chosen
+        # over rdiv, so only the ABSENCE of fractional digits makes an int, not
+        # integrality of the value.
+        return mantissa * 10 ** -scale
+    return ("decimal", mantissa, scale)
 
 
 def _decimal_from_term(t: tuple) -> Decimal:

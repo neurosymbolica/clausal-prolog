@@ -160,3 +160,34 @@ def test_overriding_a_registered_FUNCTOR_is_refused_too():
     with pytest.raises(ValueError) as exc:
         register(Other, "date", lambda v: (), lambda t: None)
     assert "overriding is not allowed" in str(exc.value)
+
+
+# ── a decimal with no fractional digits is an INT ────────────────────────────
+
+def test_a_decimal_with_no_decimal_places_is_an_int():
+    """RULED 2026-09-15. ('decimal', M, E) means M x 10^-E, so E is a COUNT OF
+    DECIMAL PLACES. A negative count is not a quantity of anything -- it is a
+    significant-figures claim (``1E+5`` is "100000 to one significant figure"),
+    which is an assertion about precision rather than about the value, and the
+    language does not model it.
+
+    Same rule the engine already applies one level up: clpfd.py:1441 "an
+    integral rational presents as int", normalised at 1506's "single choke
+    point" rather than at every binding. This is that choke point for decimals.
+    """
+    assert to_term(Decimal("1E+5")) == 100000
+    assert to_term(Decimal("100000")) == 100000
+    assert isinstance(to_term(Decimal("1E+5")), int)
+
+
+def test_but_a_decimal_WITH_places_keeps_its_scale_even_when_integral_in_value():
+    """The distinction that matters: ``10.00`` has two decimal places and is
+    worth ten. Scale is the reason this encoding was chosen over rdiv, so it
+    survives -- only the absence of fractional digits makes an int."""
+    assert to_term(Decimal("10.00")) == ("decimal", 1000, 2)
+    assert to_term(Decimal("0.1")) == ("decimal", 1, 1)
+
+
+def test_the_reverse_direction_agrees():
+    from clausal.logic.python_terms import from_term
+    assert from_term(to_term(Decimal("1E+5"))) == 100000
