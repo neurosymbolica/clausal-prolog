@@ -380,7 +380,7 @@ list(each(goal, (S, IDS), mod.__dict__)) ==
   <p>The compile-route refusal comes from <code>term_to_ast_expr</code>: <code>once_bind</code> hands the goal to <code>solve()</code>, which <em>lowers it to AST</em> — it treats a goal as source to compile, and an arbitrary object has no literal AST form. The runtime route is a different mechanism entirely, and <code>terms_to_ast.py</code>'s own comment relies on it: a bound variable whose value “has no literal lowering (e.g. a <code>datetime.date</code> produced by an earlier goal)” is handled by referencing the variable.</p>
 
   <div class="pull">
-    <p><span class="chip c-ruled">Ruled</span> The values that seemed to need an exception get an encoding instead. A date is the term <code>('date', 2026, 9, 14)</code>; a decimal is <code>('decimal', "10.01")</code>, its digits carried as a string so exactness survives the round trip. The refusal stays exactly where it is raised today.</p>
+    <p><span class="chip c-ruled">Ruled</span> The values that seemed to need an exception get an encoding instead. A date is the term <code>('date', 2026, 9, 14)</code>; a decimal is <code>('decimal', M, E)</code> &mdash; mantissa and a count of decimal places, so exactness <em>and</em> scale survive the round trip. The refusal stays exactly where it is raised today.</p>
     <p>This removes the exception rather than accommodating it. Both encodings are ordinary functor-first terms and both are marshal-clean, so there is no second class of value to declare, no vocabulary to maintain, and one rule covers everything: <strong>a term is marshal-clean data, and a Python object is not a term.</strong></p>
     <p>It also settles the two inconsistencies by deletion. <code>datetime.date</code> no longer needs to pass the compile route, because a date is no longer a Python object; <code>Decimal</code>'s refusal there stops being a gap and becomes the rule. And with nothing legitimate left on the runtime object route, the refusal can eventually be made uniform across both — a separate change with its own blast radius, since existing code may lean on it.</p>
   </div>
@@ -517,6 +517,83 @@ since it may carry state the base's function would drop.</pre>
 </section>
 
 <section>
+  <div class="shead"><span class="snum">11</span><h2>The one value that stays an object</h2></div>
+  <p class="lede"><code>quantity</code> does not become a term. It gets a term <em>form</em>, and the two are converted explicitly.</p>
+
+  <p>Every other value in this record moved the same way: a date, a decimal, a rational stopped being a Python object and became a functor-first tuple. A quantity cannot, and the reason is not about representation at all. <strong>A quantity stands in for a number.</strong> It has to be an operand of <code>#=/2</code> and of the CLP arithmetic, and a compound term is not a number. That is the line: a date is never an operand, so it could migrate; a quantity is too low-level to.</p>
+
+  <div class="pull">
+    <p><span class="chip c-retracted">Demoted</span> The argument this record would have led with &mdash; that a tuple's hash is structural and cannot be hooked, so a tuple quantity carrying a ratio would be two dict keys for one value while unification called them equal &mdash; is true, and it would have broken tabling, the query cache and indexing. But it is a <em>corollary</em>. The <code>#=/2</code> argument holds even where hashing does not.</p>
+  </div>
+
+  <figure class="evidence">
+    <figcaption><span>Why a term form exists anyway</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>Quantity(5, kilometre)      the OBJECT       <span class="no">marshal FAIL</span>  unmarshallable
+('quantity',5,('unit',1000,('dimensions',('metre',1))))  <span class="ok">marshal OK</span>    58 bytes
+the _dims mappingproxy                       <span class="no">marshal FAIL</span>  unmarshallable
+dict {'metre': 1}                            <span class="ok">marshal OK</span>    14 bytes
+Decimal('1550.00')                           <span class="no">marshal FAIL</span>  unmarshallable
+Fraction(1, 100)                             <span class="no">marshal FAIL</span>  unmarshallable</pre>
+  </figure>
+
+  <p>The boundaries that motivate the encoding are <strong>subinterpreters</strong> for or-parallelism, <strong>process boundaries</strong>, and <strong>Python's bytecode caches</strong> at compile time. Not same-interpreter seam crossings &mdash; a seam in one interpreter passes the object and needs no encoding, and naming the seam as the motivation was wrong. The <code>.pyc</code> boundary is what makes this a hard requirement rather than a nicety: <code>marshal</code> takes only the basic types.</p>
+
+  <p>Two things fall out of that table. It is the <code>mappingproxy</code> that blocks <code>_dims</code>, <em>not</em> the dict &mdash; so &ldquo;a quantity is a true value, containing no other Python objects&rdquo; is one rekey away from literally true. And <code>Decimal</code> and <code>Fraction</code> do not marshal either, which is <em>why</em> <code>('decimal', M, E)</code> and <code>('rdiv', N, D)</code> exist &mdash; so <strong>the ratio must be a term too</strong>, recursing through the registry exactly as the magnitude does.</p>
+
+  <div class="pull">
+    <p><span class="chip c-ruled">Ruled</span> A unit is <code>unit(Ratio, Dimensions)</code> &mdash; always <code>unit/2</code>. The <em>ratio</em> travels, not the name. Dimensions are <code>dimensions(metre(1), second(-2))</code>, canonically sorted, because two orderings of one vector would be two terms that unification and <code>msort</code> both lie about. Dimensionless is the atom <code>dimensionless</code>.</p>
+  </div>
+
+  <figure class="evidence">
+    <figcaption><span>What P4 actually requires, and what it costs</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>the problem is NOT "quantity must be a term". it is that
+_dims is keyed by unit PREDICATE OBJECTS, which stop existing.
+
+rekey to ATOMS + an atom-&gt;unit-metadata table.
+
+cost: <span class="no">~10 sites across 4 files</span> read is_currency / iso_code /
+      scale / symbol OFF those keys. the metadata has to live
+      somewhere before the keys can become bare atoms.</pre>
+  </figure>
+
+  <p>The currency name was never at risk, and the reason is the one that looked like a problem. A currency is a <em>self-keyed base dimension</em> &mdash; <code>pred._dims = {pred: 1}</code> &mdash; so its name is already in the dimensions map. <code>1550.00 euro</code> prints as euro <em>because</em> currency is not SI. What actually loses its name is a <em>scaled</em> unit: <code>5 kilometre</code> is <code>5000 (metre)</code> today, in the object, before any of this.</p>
+
+  <div class="tablewrap">
+    <table>
+      <caption>The two questions this closes <span class="chip c-ruled">Ruled</span></caption>
+      <tbody>
+        <tr><th scope="row">Does the named unit survive?</th><td>No &mdash; the <b>ratio</b> does. Currency names survive anyway, as dimensions.</td></tr>
+        <tr><th scope="row">How is dimensionless spelled?</th><td>The atom <code>dimensionless</code> &mdash; already a real unit predicate, already what <code>str()</code> emits so the value round-trips.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The rejected spelling was the more uniform one and that was argued away wrongly at first: <code>('dimensions',)</code> and <code>('dimensions', ('metre',1))</code> share a functor, so one test recognises and one slice iterates, for zero and for N alike. Choosing <code>dimensionless</code> means <strong>the dimension slot carries two functors</strong>, and &ldquo;the dims slot has functor <code>dimensions</code>&rdquo; stops being free. One helper, used everywhere &mdash; not a branch copied per site. It is the same shape as the thirteen pair-before-compound sites in &sect;08: <em>a property that was free under one representation has to be written down under the next.</em></p>
+
+  <div class="pull">
+    <p><span class="chip c-ruled">Ruled</span> Conversion is explicit: <code>quantity_number(QuantityTerm, Number)</code>. One relation, dialect-specific right side &mdash; Clausal binds the Python quantity; a Prolog with no units binds the number scaled to the standard unit for those dimensions. Where it is called depends on which boundary is being crossed, and is deliberately not fixed. This replaces a proposal, now withdrawn, that <code>__unify__</code> should accept a written term and compare by value.</p>
+  </div>
+
+  <figure class="evidence">
+    <figcaption><span>The ratio slot is asymmetric &mdash; read-side only</span><span class="chip c-open">Open</span></figcaption>
+<pre>Quantity(5, kilometre) has exactly two slots, and neither is a ratio:
+  _value  5000        _dims  {metre: 1}        ratio/name: <span class="no">NOTHING</span>
+
+so 5 kilometre does not round-trip as it was written:
+
+  written by an AUTHOR     ('quantity', 5,    ('unit', 1000, ...))
+  emitted from the OBJECT  ('quantity', 5000, ('unit', 1,    ...))
+
+both denote 5000 metres. the slot lets an INCOMING term state its
+scale without naming a unit. on the write side it is always 1.</pre>
+  </figure>
+
+  <p>Nothing is lost, because the object had already normalised before the term existed. But if a quantity should also round-trip the unit it was <em>written</em> in, that is a change to the object &mdash; a third slot &mdash; not to the transfer form, and it is not ruled. <strong>It is the only thing these rulings leave open.</strong></p>
+
+  <p>What the design preserves, each of it live corpus behaviour: <code>300 basis_point == 3 percent</code>, <code>155000 usd_cent</code> <em>being</em> <code>Decimal('1550.00') usd</code>, and inches addable to metres. All three survive because the object keeps its own equality and normalises at construction. A tuple quantity carrying a ratio would have broken all three at once.</p>
+</section>
+
+<section>
   <div class="shead"><span class="snum">10</span><h2>Sequence</h2></div>
   <p>Ordered because each step makes the next one's premise true. Everything below sits on one branch; nothing is landed or promoted.</p>
   <ol class="steps">
@@ -546,6 +623,11 @@ since it may carry state the base's function would drop.</pre>
       <span class="gate">gate — <b>failure-set diff, and an answer-set run for the four</b></span>
     </li>
     <li>
+      <span class="stitle">Rekey <code>_dims</code> to atoms</span>
+      <p>What P4 actually needs from <code>quantity</code>, and all it needs: the dimension map stops being keyed by unit predicate objects. It also makes the value marshal-clean, since the <code>mappingproxy</code> is what blocks it. ~10 sites across 4 files read <code>is_currency</code>, <code>iso_code</code>, <code>scale</code> and <code>symbol</code> off those keys, so an atom-to-metadata table has to exist first.</p>
+      <span class="gate">gate — <b>oracle, not the engine suite: units are live corpus vocabulary</b></span>
+    </li>
+    <li>
       <span class="stitle">Rationals and decimals as numbers</span>
       <p><code>('rdiv', N, D)</code> and <code>('decimal', M, E)</code> already work as <em>terms</em> with no engine change. Making them <em>numbers</em> belongs with the CLP(Q) C port, which has already replaced the rational arithmetic layer in C — writing against the Python one means rewriting twice.</p>
       <span class="gate">sequencing — <b>with the port, not against it</b></span>
@@ -554,7 +636,7 @@ since it may carry state the base's function would drop.</pre>
   </section>
 
 <footer>
-  <span>Clausal engine lane · design record · 2026-09-14</span>
+  <span>Clausal engine lane · design record · 2026-09-15</span>
   <span>census, probes and per-site table in tools/predmeta_census/</span>
 </footer>
 

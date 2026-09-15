@@ -656,6 +656,9 @@ Reading 1 is a day. Reading 2 is the numeric surface. **Not guessed — put to t
 
 ## `Quantity` is still unruled
 
+> **SUPERSEDED 2026-09-15.** Ruled: a quantity stays a PYTHON OBJECT with a tuple
+> TRANSFER form. See `quantity` RULED — 2026-09-15 at the end of this document.
+
 Named in neither. Same shape of question as `Decimal`, plausibly
 `('quantity', <magnitude>, <unit>)`, but units are live corpus vocabulary and it should not be
 assumed to follow.
@@ -1081,6 +1084,11 @@ together, with the `__dir__`, rather than landing a hook that can never fire.
 
 # `quantity`: the dimension map, and why a unit is not a dimension
 
+> **PARTLY SUPERSEDED 2026-09-15.** The dimension analysis below stands. What changed:
+> the quantity itself is NOT a term (it must be an operand of `#=/2`), a unit is
+> `unit(Ratio, Dimensions)` rather than `('unit', ('watt',))` — the RATIO travels, not
+> the name — and dimensionless is the atom `dimensionless`. See the end of this document.
+
 Operator's design, 2026-09-15. Not implemented — recorded so it is not re-derived.
 
 ## What `Quantity` actually is
@@ -1142,7 +1150,9 @@ way in and out (`terms.py`'s own docstring). The operator's direction is to norm
 time, which matches that: the term carries the base-unit magnitude and the canonical dimension
 order, and the named unit is a surface spelling resolved on the way in.
 
-**Open**: whether the named unit survives INTO the term for display and exactness — `1550.00 euro`
+**Open** — **CLOSED 2026-09-15: the named unit does NOT survive; the RATIO does, and currency
+names survive anyway as self-keyed base dimensions. See the end of this document.** The question
+as it stood: whether the named unit survives INTO the term for display and exactness — `1550.00 euro`
 wants to print as euro, and currency is not SI — or whether only the dimensions do.
 
 ## Also ruled: the functor is `quantity`, lowercase
@@ -1151,3 +1161,229 @@ Not a preference. TitleCase RAISES at load since the identifier lint, so a funct
 `Quantity` cannot be written in Clausal source at all. The Python CLASS may keep its name; the
 functor must be lowercase, and it then sits in the same namespace as `date`, `decimal` and `rdiv` —
 all lowercase, all writable, all atoms.
+
+---
+
+# `quantity` RULED — 2026-09-15. The open question above is closed, and it closed the other way
+
+Operator's rulings, 2026-09-15, interactively. This section supersedes the `Normalisation`
+subsection's **Open** and the `Quantity` is still unruled entry. Recorded, **not implemented**:
+§2's rekey and §5's predicate both want the oracle gate in front of them.
+
+## The ruling in one line
+
+**A quantity is a Python object, not a term.** It has a functor-first tuple form for transfer,
+and the two are converted explicitly.
+
+## Why an object, and it is not the reason I first argued
+
+**A quantity stands in for a NUMBER.** It has to be an operand of `#=/2` and of the CLP
+arithmetic, and a compound term is not a number. That is the whole reason, and it is also the
+line between `quantity` and `date`: a date is never an arithmetic operand, so it could migrate to
+a term; a quantity is too low-level to.
+
+I led with a different argument — that a tuple's hash is structural and cannot be hooked, so a
+bare-tuple quantity carrying a ratio would be two distinct dict keys for one value while
+`__unify__` called them equal, breaking the contract tabling, the query cache and indexing rest
+on. That is TRUE and worth keeping:
+
+    hash((5, 1000)) == hash((5000, 1))     False
+    Quantity.__hash__ is defined            True   -- and __eq__, __unify__, __format__
+    Quantity(5, kilometre) == Quantity(5000, metre)   True, hashes equal
+
+but it is a COROLLARY, not the reason. The `#=/2` argument would hold even if tuples could be
+hooked.
+
+## Why a tuple form exists at all — and which boundaries actually motivate it
+
+**Subinterpreters (for or-parallelism), process boundaries, and Python's bytecode caches at
+compile time.** NOT same-interpreter seam crossings: a seam in one interpreter passes the object
+and needs no encoding. I had named the seam as the motivation; that was wrong.
+
+The bytecode-cache boundary is a HARD requirement rather than a nicety, because `marshal` takes
+only the basic types. Measured:
+
+    Quantity(5, kilometre)          the OBJECT      marshal FAIL  unmarshallable object
+    ('quantity',5,('unit',1000,('dimensions',('metre',1))))   marshal OK    58 bytes
+    the _dims mappingproxy                          marshal FAIL  unmarshallable object
+    dict {'metre': 1}                               marshal OK    14 bytes
+    Decimal('1550.00')                              marshal FAIL  unmarshallable object
+    Fraction(1, 100)                                marshal FAIL  unmarshallable object
+
+Two things fall out of that table that are easy to get wrong:
+
+* **It is the `mappingproxy` that blocks `_dims`, not the dict.** A plain `{'metre': 1}`
+  marshals. So "a quantity is a true value, containing no other Python objects" is ONE REKEY away
+  from being literally true — which is what §2 below does, and it is a better reason for the
+  rekey than P4 hygiene.
+* **`Decimal` and `Fraction` do not marshal either.** That is *why* `('decimal', M, E)` and
+  `('rdiv', N, D)` exist, and it means **the RATIO must be a term too**, not a raw `Fraction`. No
+  new rule — the ratio recurses through the TO_TERM/FROM_TERM registry exactly as the magnitude
+  does — but it is free until it is not, so it is written down here.
+
+## §1 — What P4 requires, and it is narrower than "become a term"
+
+Not "quantity becomes a tuple". The P4 problem is precisely that **`_dims` is keyed by unit
+PREDICATE OBJECTS**, which stop existing. Rekey it to ATOMS, backed by an atom -> unit-metadata
+table, and P4 is solved with the object intact.
+
+That table is not a new mechanism: it is this document's own "a unit is a named entry in a units
+table, and the atom is its name", built rather than described.
+
+**Cost, measured, so it is not mistaken for a rename:** ~10 sites across 4 files read
+`is_currency` / `iso_code` / `scale` / `symbol` OFF those keys — `clausal/terms.py`,
+`clausal/logic/constants.py`, `clausal/modules/currency.py`,
+`clausal/modules/countries/_currency.py`. The metadata has to live somewhere before the keys can
+become bare atoms.
+
+## §2 — The transfer form
+
+    a DIMENSION    metre(1)                              ('metre', 1)
+    DIMENSIONS     dimensions(metre(1), second(-2))      canonically sorted -- not optional
+    a UNIT         unit(Ratio, Dimensions)               ALWAYS unit/2
+    a QUANTITY     quantity(Magnitude, Unit)             ALWAYS quantity/2
+
+    5 kilometre    ('quantity', 5, ('unit', 1000, ('dimensions', ('metre',1))))
+    1550.00 euro   ('quantity', ('decimal',155000,2), ('unit', 1, ('dimensions', ('euro',1))))
+    3 percent      ('quantity', 3, ('unit', ('decimal',1,2), ('dimensionless',)))
+
+**Wrapped, not flat.** `unit(1, metre(1), second(-1))` was the alternative and it loses head
+matching: the arity of `unit` would vary with the dimension count, so no clause head matches
+every unit and every site needs `U =.. [unit, R | Dims]`. Every other member of this family is
+fixed-arity — `date/3`, `decimal/2`, `rdiv/2` — and that is exactly what makes them writable in a
+head. The variadic problem does not vanish; it is confined to `dimensions/N`, the one slot where
+`=..` is the honest tool anyway.
+
+**A list was considered and is DEAD, measured.** `dimensions([metre(1), second(-1)])` would have
+made the vector variadic at fixed arity and made dimensionless fall out as `[]`. But a Prolog
+list here is a NATIVE PYTHON LIST — `atoms.mint('[]')` returns `[]`, class `list` — and the
+key-form mechanism rescues only the empty one: `key_of` maps `'[]'` to `()`, and `as_dict_key`
+passes everything else through untouched. A non-empty dimension vector would be unhashable. It
+dies for the exact reason the dict died.
+
+## §3 — The named unit does NOT survive; the RATIO does
+
+The operator's words: *"don't have to have named units, but have to have scaling factor to
+standard unit of that dimension."*
+
+This needs no new information about units, because **a scaled unit already IS a (ratio,
+dimensions) pair** in the code:
+
+    kilometre    Quantity(1000, {metre: 1})
+    eur_cent     Quantity(Decimal('0.01'), {euro: 1})
+    percent      Quantity(Decimal('0.01'), {})
+
+The ratio is the unit constant's own value. What is new is that `quantity.__init__` currently
+MULTIPLIES IT AWAY — `terms.py`'s `isinstance(dims, Quantity)` branch computes `5 x 1000` and
+keeps only `dims` — so the transfer form retains something the object drops at construction.
+
+**Currency names survive anyway, for free, and the open question's own example was never at
+risk.** A currency is a SELF-KEYED BASE DIMENSION (`_currency.py`: `pred._dims = {pred: 1}`), so
+its name is already in the dimensions map. Measured:
+
+    1550.00 euro      value=Decimal('1550.0')    dims={'euro': 1}   str=1550.0 (euro)
+    155000 eur_cent   value=Decimal('1550.00')   dims={'euro': 1}   str=1550.00 (euro)
+    5 kilometre       value=5000                 dims={'metre': 1}  str=5000 (metre)
+
+"`1550.00 euro` wants to print as euro, and currency is not SI" is the REASON IT WORKS: because
+it is not SI, each currency is its own base dimension. What actually loses its name is a SCALED
+unit — `kilometre`, `eur_cent`, `inch`, `percent` — and it loses it today, in the object, before
+any of this.
+
+## §4 — Dimensionless is the atom `dimensionless`
+
+Not the degenerate `('dimensions',)`. The word already exists and is load-bearing:
+
+* `units.py:189` defines `dimensionless` as a real unit predicate, `_make_unit_pred(..., {})`
+* `terms.py:2189` emits it for empty dims SPECIFICALLY so a dimensionless quantity round-trips —
+  its own docstring: *"`4` alone re-reads as a plain number and `4 ()` is not an annotation"*
+* `compatible_units/2`'s mismatch text says it
+* the TitleCase alias table maps `"Dimensionless"` to it
+
+Spelling it `dimensions` would be a SECOND name for a concept that already has one — the drift
+the `Quantity` -> `quantity` rename exists to remove.
+
+**THE COST, WRITTEN DOWN, because it is this session's recurring failure shape.** The rejected
+option was genuinely more uniform and I first argued that away wrongly: `('dimensions',)` and
+`('dimensions', ('metre',1))` share a functor, so `t[0]` recognises and `t[1:]` iterates, for
+zero and for N alike. Choosing `dimensionless` means **the dimension slot carries two functors**,
+and "the dims slot has functor `dimensions`" stops being free. It must be said out loud at every
+recognition site — as ONE HELPER used everywhere, not a branch copied per site. This is the same
+shape as `_helpers._cell_functor` and the 13 pair-vs-compound sites: a property that was free
+under one representation has to be written down under the next.
+
+## §5 — Conversion is EXPLICIT: `quantity_number/2`
+
+    quantity_number(QuantityTerm, Number)
+
+One relation, dialect-specific right-hand side:
+
+    Clausal            Number = the Python quantity object
+    Scryer / Trealla   Number = the number scaled to the standard unit for those
+                       dimensions -- a system with no units carries no units
+
+This is the principled form of what the exporter already does per-dialect by hand (see the
+exporter's capability mechanism, option 3).
+
+**Where `quantity_number` is called depends on which boundary is being crossed, and is
+deliberately not fixed here** (operator).
+
+This REPLACES a proposal I made and now withdraw: that `Quantity.__unify__` should accept a
+written term on the other side and compare by value. Explicit conversion is better, and it also
+disposes of the edge that proposal created — two written terms compared to each other, with no
+object on either side, would have stayed structural while object-vs-term compared by value.
+
+## §6 — Both spellings are legal in source, but the annotation is the better one
+
+An author MAY write `quantity(5, unit(1000, dimensions(metre(1))))` in `.clausal`. They should
+write `5 (kilometre)`. The term form is READ INTO AN OBJECT at read time and **never survives to
+runtime as a term** — which is what preserves §1's whole point: a goal only ever holds an object,
+so `#=/2` cannot see a quantity it is unable to use.
+
+## What this design PRESERVES, and each is live corpus behaviour
+
+* `300 basis_point == 3 percent` — documented as behaviour at `units.py:575`
+* `155000 usd_cent` BEING `Decimal('1550.00') usd`
+* inches addable to metres
+
+All three survive because the object keeps its own `__eq__` / `__hash__` and normalises at
+construction, exactly as today. A bare-tuple quantity carrying a ratio would have broken all
+three at once.
+
+## Noted in passing, not part of these rulings
+
+`3 percent` and `300 basis_point` are equal quantities whose magnitudes carry DIFFERENT DECIMAL
+SCALES — `Decimal('0.03')` and `Decimal('0.0300')` — so they write as different transfer terms
+`('decimal',3,2)` and `('decimal',300,4)`. Harmless here, because the OBJECT is what is compared
+and hashed at runtime and the terms round-trip back to two equal objects. It would NOT have been
+harmless had quantities become terms. Recorded because the same scale distinction is a live
+consequence of `52ab6b30` wherever decimals ARE the term.
+
+## THE RATIO SLOT IS ASYMMETRIC — read-side only, and this must not be discovered later
+
+The examples in §2 are AUTHORED forms. An object-produced form is different, and the spec would
+be read two ways without saying so.
+
+**Clausal never EMITS a ratio other than 1**, because the object does not retain one. Measured —
+the object has exactly two slots and neither is a ratio:
+
+    Quantity(5, units.kilometre)
+      _value   5000
+      _dims    mappingproxy({units.metre/[]: 1})
+      ratio / unit-name retained:  NOTHING
+
+So `5 kilometre` does NOT round-trip as `('quantity', 5, ('unit', 1000, ...))`. It round-trips as:
+
+    written by an AUTHOR      ('quantity', 5,    ('unit', 1000, ('dimensions',('metre',1))))
+    emitted from the OBJECT   ('quantity', 5000, ('unit', 1,    ('dimensions',('metre',1))))
+
+Both denote 5000 metres. The ratio slot is therefore a READ-SIDE AFFORDANCE: it lets an incoming
+term state what scale its magnitude is in without naming a unit, and `quantity_number/2`
+multiplies through. On the write side it is always 1.
+
+That is consistent — nothing is lost, because the object had already normalised before the term
+existed — but it means the slot earns its place on the READ path only. If the intent is that a
+quantity should also round-trip the unit it was WRITTEN in, that is a change to the OBJECT (a
+third slot), not to the transfer form, and it is not ruled here.
+
+**OPEN, and the only thing left open by these rulings.**
