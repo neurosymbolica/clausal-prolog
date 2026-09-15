@@ -917,3 +917,68 @@ for exactly the writes the gate exists to police. Needs its own test before it i
     revised P1 tally      R 7    R! 4    S 2    R-enum 1     = 14 actionable
                           P4 5   Q 3     X4 10  X4+Q 3  NO 1 = 22 deferred
                           reclassified out of A                14
+
+---
+
+# CORRECTION to §4 q3's cost: it is NOT zero
+
+Earlier in this document I reported that the corpus has essentially no object-shaped predicate
+access, so binding a module-level name to the atom would cost the corpus nothing and "the engine's
+own 209 sites are the whole migration".
+
+**Measured wrong.** In the corpus `.seam` harnesses:
+
+    m.<predicate>(        200 occurrences, 160 distinct names   (~11 are re.Match false positives)
+    getattr(m, <var>)     101 occurrences
+
+`m` is a loaded logic module (`_RULE.get()`, `get_module()`, `fresh_module()`, `_MODULE`), and
+these are predicate calls — `solve(m.obligation_applies(P, getattr(m, ob), A))` hands the result
+straight to `solve`.
+
+**So §4 q3 costs roughly 500 sites, ~290 of them in corpus files**, not 209 engine-only.
+
+## How the error was made, because it is the fourth of its kind today
+
+The sweep covered the 263 corpus `.py` files and found ≈0. The harnesses are `.seam` files. I had
+swept those too — for `--`/`++` usage, answering a different question — and never went back for
+`m.pred(`. The `m.<lowercase>(` hits did appear in my results, and I dismissed the whole class as
+`re.Match` methods because `m.group(` was the top row.
+
+Three earlier instances the same day: the sealed bodies outside the corpus tree; "the corpus never
+imports py.datetime" (the import is spelled `date_time`); and harness-batch-lane's own
+population-vs-work estimate. **The rule, now stated four times: name the glob in the sentence.**
+"No `.py` file does X" is a fact. "The corpus does not do X" is an inference across a boundary,
+and it reads identically in a report.
+
+---
+
+# `++` auto-conversion: attempted, REVERTED, and why
+
+The registry landed and is gated clean. Hooking it to `++` did not.
+
+    around the emitted thunk call    26 red   the seam's later passes pattern-match that
+                                              call's SHAPE -- the query cache among them --
+                                              and an extra Call node broke recognition
+    inside PyThunk.__init__          30 red   shape untouched, but nested seams came back
+                                              wrong: the SEAM builds tuples internally and
+                                              to_term wrapped them as ('()', ...) data
+
+**The second is the obstacle and it is a DESIGN question.** `++` sits at a boundary where both
+kinds of tuple are in flight, and nothing in the value distinguishes "the seam constructed this"
+from "user Python returned this". The documented hazard is not an edge case there; it is the
+central case. A fix needs either a marker the seam puts on its own constructions, or a conversion
+point where only user values can appear.
+
+**And it would have helped the harnesses less than suggested:** `.seam` files are PYTHON-first,
+with `--goal(...)` marking Clausal inside them, so there is no `++` in a harness to hook. The
+direction was backwards in the first proposal.
+
+WHAT SURVIVES, all gated: the registry (two global dicts, exact-type keys, no overriding), the
+removal of the generic converter, `py.datetime` consuming the registry rather than a second copy of
+the encoding, and `to_term`/`from_term` with round-trip tests pinning decimal SCALE and tz offset.
+`to_term` is callable today; only its automatic application is unresolved.
+
+**One method note, distinct from the measurement errors.** Across the three attempts my own tests
+passed while 323, then 34, then 30 did not. Each fixture covered the CONVERSION I was building
+rather than the VALUES that flow through the hook I had placed it in — a variable, an engine term,
+a tuple the seam made. Testing the thing built, not the place it was installed.
