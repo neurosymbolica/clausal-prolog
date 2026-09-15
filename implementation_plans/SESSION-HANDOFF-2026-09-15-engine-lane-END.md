@@ -237,6 +237,28 @@ in C over GMP — writing against the Python one means rewriting twice.
    recogniser, pass-through) are correct and uncommitted. **The cost basis has
    moved three times; nothing should proceed there without a fresh ruling.**
 
+## §4 q3 RESOLVED (and it reverses the ruling, cheaply)
+
+Take **"absent"**, the spec's other branch, not the atom. A logic module is a plain
+Python module, so a PEP 562 `__getattr__` fires on a MISS and resolves the name from
+the Database row. Verified: attribute reach, `getattr` by literal AND by variable,
+`hasattr`, and `from domain import pred` all keep working. **A miss-only hook serves
+every REACH and cannot ENUMERATE** -- that is the entire distinction.
+
+Enumeration count: engine **3** (all already dispositioned "enumerate the db's rows");
+sealed bodies **ZERO** (harness-batch-lane, by AST, calibrated 6 positive / 5 negative
+before running). Their 164 hits are all one launcher line enumerating the harness's own
+PYTHON sibling -- 0 of 82 bodies declare a clause head, 82 of 82 export lists are empty.
+
+**So q3 is one hook plus a `__dir__`, not ~655 site edits.**
+
+CAVEAT, and it is why `__dir__` ships WITH the hook rather than after: the zero rests on
+harness bodies declaring no predicates, which is how this batch was built, not a rule
+anyone enforces. If one ever does, that re-export line becomes a real enumeration in all
+82 launchers at once.
+
+SEQUENCING: the hook cannot fire until names leave `module_dict` (P4). Add both together.
+
 ## THE CORRECTION THAT MATTERS MOST
 
 **§4 q3 is not free.** I reported corpus object-shaped predicate access as ~0 and
