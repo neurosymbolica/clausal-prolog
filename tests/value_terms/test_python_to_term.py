@@ -112,3 +112,61 @@ def test_an_object_with_no_match_args_says_so_rather_than_guessing():
     with pytest.raises(TypeError) as exc:
         to_term(Opaque())
     assert "__match_args__" in str(exc.value)
+
+
+# ── the reverse direction ────────────────────────────────────────────────────
+
+def test_from_term_rebuilds_the_python_value():
+    from clausal.logic.python_terms import from_term
+    assert from_term(("date", 2023, 6, 1)) == datetime.date(2023, 6, 1)
+    assert from_term(("timedelta", 3, 0, 0)) == datetime.timedelta(days=3)
+    assert from_term(("decimal", 1001, 2)) == Decimal("10.01")
+
+
+def test_a_decimal_round_trips_INCLUDING_its_scale():
+    from clausal.logic.python_terms import from_term
+    for lit in ("10.01", "10.010", "-10.01", "1550.00", "0.1"):
+        assert str(from_term(to_term(Decimal(lit)))) == lit
+
+
+def test_an_aware_datetime_round_trips_with_its_offset():
+    from clausal.logic.python_terms import from_term
+    v = datetime.datetime(2023, 6, 1, tzinfo=datetime.timezone.utc)
+    assert from_term(to_term(v)) == v
+
+
+def test_the_data_tuple_recurses_both_ways():
+    from clausal.logic.python_terms import from_term
+    v = (datetime.date(2023, 6, 1), 2, "x")
+    assert from_term(to_term(v)) == v
+
+
+def test_an_unregistered_functor_comes_back_UNCHANGED():
+    """Most terms are not Python values in disguise."""
+    from clausal.logic.python_terms import from_term
+    t = ("cite", ("art52",))
+    assert from_term(t) is t
+
+
+def test_a_look_alike_with_the_right_head_but_wrong_components_is_unchanged():
+    from clausal.logic.python_terms import from_term
+    t = ("date", "x", "y")
+    assert from_term(t) is t
+
+
+# ── the registry is global and immutable ─────────────────────────────────────
+
+def test_overriding_a_registered_type_is_REFUSED():
+    from clausal.logic.python_terms import register
+    with pytest.raises(ValueError) as exc:
+        register(datetime.date, "date2", lambda v: (), lambda t: None)
+    assert "overriding is not allowed" in str(exc.value)
+
+
+def test_overriding_a_registered_FUNCTOR_is_refused_too():
+    from clausal.logic.python_terms import register
+    class Other:
+        pass
+    with pytest.raises(ValueError) as exc:
+        register(Other, "date", lambda v: (), lambda t: None)
+    assert "overriding is not allowed" in str(exc.value)

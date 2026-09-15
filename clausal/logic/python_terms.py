@@ -54,17 +54,13 @@ from typing import Any
 from clausal.logic.atoms import HIDDEN_SEP
 from clausal.logic.cells import TUPLE_TAG
 
-__all__ = ["to_term", "CANONICAL_SHAPES", "generic_functor"]
+__all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM",
+           "generic_functor"]
 
 
-def _decimal_shape(d: Decimal) -> tuple:
-    """``Decimal`` -> ``('decimal', mantissa, scale)``.
-
-    Python's own model: ``as_tuple()`` is ``(sign, digits, exponent)``, so this
-    is lossless both ways and SCALE survives -- ``10.01`` and ``10.010`` are
-    distinct terms with the same rational value.  A positive Decimal exponent
-    (``1E+5``) yields a NEGATIVE scale, which is Decimal's model exactly.
-    """
+def _decimal_to_term(d: Decimal) -> tuple:
+    """``Decimal`` -> ``('decimal', mantissa, scale)``. Components are already
+    ints, so nothing recurses."""
     sign, digits, exponent = d.as_tuple()
     if not isinstance(exponent, int):       # nan / inf carry a str exponent
         raise TypeError(f"to_term: {d!r} has no finite decimal shape")
@@ -72,7 +68,12 @@ def _decimal_shape(d: Decimal) -> tuple:
     return ("decimal", mantissa, -exponent)
 
 
-def _datetime_shape(v: _dt.datetime) -> tuple:
+def _decimal_from_term(t: tuple) -> Decimal:
+    _, mantissa, scale = t
+    return Decimal(mantissa).scaleb(-scale)
+
+
+def _datetime_to_term(v: _dt.datetime) -> tuple:
     """Aware values carry a ninth component, the UTC offset in MINUTES.
 
     Dropping it was measurably wrong: an audit pins that a naive/aware MIX must
@@ -86,17 +87,88 @@ def _datetime_shape(v: _dt.datetime) -> tuple:
     return base + (v.utcoffset() // _dt.timedelta(minutes=1),)
 
 
-#: Types whose term shape the language DEFINES.  Consulted before the generic
-#: form, so these never appear mangled.  ``datetime`` precedes ``date`` because
-#: it is a SUBCLASS -- the other order renders every datetime as a date and
-#: silently drops the time of day.
-CANONICAL_SHAPES: "list[tuple[type, Any]]" = [
-    (_dt.datetime, _datetime_shape),
-    (_dt.date, lambda v: ("date", v.year, v.month, v.day)),
-    (_dt.time, lambda v: ("time", v.hour, v.minute, v.second, v.microsecond)),
-    (_dt.timedelta, lambda v: ("timedelta", v.days, v.seconds, v.microseconds)),
-    (Decimal, _decimal_shape),
-]
+def _datetime_from_term(t: tuple) -> _dt.datetime:
+    args = t[1:]
+    if len(args) == 8:
+        *fields, offset = args
+        return _dt.datetime(*fields, tzinfo=_dt.timezone(
+            _dt.timedelta(minutes=offset)))
+    return _dt.datetime(*args)
+
+
+def _tuple_to_term(v: tuple) -> tuple:
+    """The one entry that RECURSES -- a data tuple's elements are arbitrary.
+
+    It also owns THE DOCUMENTED HAZARD, because the entry is the only place that
+    knows what a tuple can be: a tuple already in functor-first form is left
+    alone rather than wrapped as data. Keeping that here rather than in
+    ``to_term`` is the same principle as the rest of the registry -- the
+    conversion function decides, and the dispatcher only dispatches.
+    """
+    if _already_a_term(v):
+        return v
+    return (TUPLE_TAG,) + tuple(to_term(e) for e in v)
+
+
+def _tuple_from_term(t: tuple) -> tuple:
+    return tuple(from_term(e) for e in t[1:])
+
+
+#: Python type -> the function that yields its TERM.
+#:
+#: Keyed by EXACT type, deliberately. An ``isinstance`` walk has to put
+#: ``datetime`` before ``date`` -- it is a subclass -- and the wrong order
+#: renders every datetime as a date and silently drops the time of day. Exact
+#: keys remove that trap rather than documenting it, and make lookup O(1).
+#:
+#: A SUBCLASS therefore does not match its base's entry. That is the safe
+#: direction: a subclass may carry state the base shape would drop without
+#: saying so, and falling through to the generic form (or to the TypeError that
+#: names the fix) is better than truncating in silence.
+TO_TERM: "dict[type, Any]" = {}
+
+#: Functor string -> the function that rebuilds the PYTHON value.
+#:
+#: The reverse direction, for a term coming back out. Each function knows its
+#: own components: the date family moves ints across untouched, while the data
+#: tuple recurses, because only it can contain anything.
+FROM_TERM: "dict[str, Any]" = {}
+
+
+def register(cls: type, functor: str, to_fn, from_fn) -> None:
+    """Add a bidirectional conversion. OVERRIDING IS REFUSED.
+
+    Global and immutable by the operator's ruling (2026-09-15): a per-module
+    registry would let two ``.seam`` files disagree about what ``('date', ...)``
+    means, and a term that means different things in different modules is not a
+    term. If a second registration is ever legitimate, it needs a design for
+    which one wins at a CROSSING, and that does not exist.
+    """
+    if cls in TO_TERM:
+        raise ValueError(
+            f"register: {cls.__name__} already converts to "
+            f"{TO_TERM[cls].__name__}; overriding is not allowed")
+    if functor in FROM_TERM:
+        raise ValueError(
+            f"register: functor {functor!r} is already registered; "
+            f"overriding is not allowed")
+    TO_TERM[cls] = to_fn
+    FROM_TERM[functor] = from_fn
+
+
+register(_dt.datetime, "datetime", _datetime_to_term, _datetime_from_term)
+register(_dt.date, "date",
+         lambda v: ("date", v.year, v.month, v.day),
+         lambda t: _dt.date(*t[1:]))
+register(_dt.time, "time",
+         lambda v: ("time", v.hour, v.minute, v.second, v.microsecond),
+         lambda t: _dt.time(*t[1:]))
+register(_dt.timedelta, "timedelta",
+         lambda v: ("timedelta", v.days, v.seconds, v.microseconds),
+         lambda t: _dt.timedelta(*t[1:]))
+register(Decimal, "decimal", _decimal_to_term, _decimal_from_term)
+register(tuple, TUPLE_TAG, _tuple_to_term, _tuple_from_term)
+
 
 #: Left alone.  ``bool`` is listed for the reader, not for the code: it is a
 #: subclass of ``int`` and would pass anyway, but a future edit that narrows the
@@ -164,13 +236,9 @@ def to_term(value: Any) -> Any:
     """
     if isinstance(value, _SCALARS):
         return value
-    for cls, shape in CANONICAL_SHAPES:
-        if isinstance(value, cls):
-            return shape(value)
-    if isinstance(value, tuple):
-        if _already_a_term(value):
-            return value
-        return (TUPLE_TAG,) + tuple(to_term(v) for v in value)
+    convert = TO_TERM.get(type(value))
+    if convert is not None:
+        return convert(value)
     if isinstance(value, list):
         return [to_term(v) for v in value]
     if isinstance(value, dict):
@@ -184,3 +252,35 @@ def to_term(value: Any) -> Any:
         )
     return (generic_functor(type(value)),) + tuple(
         to_term(getattr(value, n)) for n in names)
+
+
+def from_term(value: Any) -> Any:
+    """A TERM back to its Python value, recursively. The reverse of ``to_term``.
+
+    For a term coming back OUT -- a harness reading an answer, say. Consults
+    ``FROM_TERM`` by functor, so each registered type rebuilds itself and
+    decides what recurses: the date family moves its ints across untouched,
+    while the data tuple recurses because only it can contain anything.
+
+    A term with no registered functor is returned UNCHANGED rather than guessed
+    at. Most terms are not Python values in disguise -- ``('cite', ('art52',))``
+    is a term and should stay one -- so silence is the correct default and the
+    registry is the whole of the opt-in.
+    """
+    if isinstance(value, _SCALARS):
+        return value
+    if isinstance(value, list):
+        return [from_term(v) for v in value]
+    if isinstance(value, dict):
+        return {from_term(k): from_term(v) for k, v in value.items()}
+    if type(value) is not tuple or not value or type(value[0]) is not str:
+        return value
+    rebuild = FROM_TERM.get(value[0])
+    if rebuild is None:
+        return value
+    try:
+        return rebuild(value)
+    except (TypeError, ValueError, OverflowError):
+        # A look-alike, not a term: ("date", "x", "y") has the head but not the
+        # components. Unchanged, for the same reason an unregistered functor is.
+        return value

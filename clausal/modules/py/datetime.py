@@ -94,75 +94,40 @@ from clausal.logic.trampoline import DONE
 # them silently would be worse than a wider term. Short forms are ACCEPTED on
 # input (a missing trailing microsecond reads as 0), so `timedelta(3, 0)` and
 # `timedelta(3, 0, 0)` both work.
-_DT_TERM_EMIT = {
-    _dt.date: lambda v: ("date", v.year, v.month, v.day),
-    _dt.time: lambda v: ("time", v.hour, v.minute, v.second, v.microsecond),
-    # A tz-AWARE datetime carries a ninth component: its UTC offset in
-    # MINUTES. Dropping it silently was measurably wrong -- audit F016 pins
-    # that a naive/aware MIX must fail cleanly, and with the offset gone every
-    # value became naive and the mix quietly succeeded.
-    #
-    # Known narrowing, deliberate and recorded: a named zone (ZoneInfo) reduces
-    # to its offset AT THAT INSTANT, so later arithmetic across a DST boundary
-    # would differ from Python's. Exact for fixed offsets, which includes
-    # `timezone.utc` and therefore `now_utc/1`.
-    _dt.datetime: lambda v: (("datetime", v.year, v.month, v.day, v.hour,
-                              v.minute, v.second, v.microsecond)
-                             + ((v.utcoffset() // _dt.timedelta(minutes=1),)
-                                if v.tzinfo is not None else ())),
-    _dt.timedelta: lambda v: ("timedelta", v.days, v.seconds, v.microseconds),
-}
-#: functor -> (ctor, minimum component count). Trailing components default to 0.
-_DT_TERM_READ = {
-    "date": (_dt.date, 3),
-    "time": (_dt.time, 1),
-    "datetime": (_dt.datetime, 3),
-    "timedelta": (_dt.timedelta, 0),
-}
+# THE ENCODING LIVES IN ``logic.python_terms``, not here. This module used to
+# carry its own emit/read tables, which is a SECOND DEFINITION of the same
+# encoding -- the drift this lane has paid for three times in one session. The
+# registry is now the single source and this module consumes it.
+from clausal.logic import python_terms as _pt  # noqa: E402
+
+#: The date family only. NOT ``python_terms.to_term``/``from_term``: those are
+#: the GENERAL converters for ``++``, and the general one wraps any tuple as
+#: ``('()', ...)`` data -- which would destroy every term passing through this
+#: module's seam. The shapes still come from the registry, so there is one
+#: definition; what is narrowed here is the SCOPE, not the encoding.
+_DATE_TYPES = (_dt.datetime, _dt.date, _dt.time, _dt.timedelta)
+_DATE_FUNCTORS = frozenset(("datetime", "date", "time", "timedelta"))
 
 
 def _dt_to_term(value):
-    """A Python datetime value -> its term. Anything else passes through.
-
-    ``datetime`` before ``date``: ``datetime`` is a SUBCLASS of ``date``, so an
-    isinstance walk in the wrong order would render every datetime as a date
-    and drop the time of day.
-    """
-    for cls in (_dt.datetime, _dt.date, _dt.time, _dt.timedelta):
-        if type(value) is cls or (isinstance(value, cls) and cls is not _dt.date):
-            return _DT_TERM_EMIT[cls](value)
-    if isinstance(value, _dt.date):
-        return _DT_TERM_EMIT[_dt.date](value)
+    """A Python datetime value -> its term. Anything else passes through."""
+    convert = _pt.TO_TERM.get(type(value))
+    if convert is not None and isinstance(value, _DATE_TYPES):
+        return convert(value)
     return value
 
 
 def _term_to_dt(value):
-    """A date/time/datetime/timedelta TERM -> the Python object.
-
-    Anything else -- an int, an atom, a Var, a value that is already a Python
-    datetime -- passes through untouched, so this is safe to run over every
-    dereferenced argument.
-    """
+    """A date-family TERM -> the Python object. Anything else passes through."""
     if type(value) is not tuple or not value or type(value[0]) is not str:
         return value
-    spec = _DT_TERM_READ.get(value[0])
-    if spec is None:
+    if value[0] not in _DATE_FUNCTORS:
         return value
-    ctor, minimum = spec
-    args = value[1:]
-    if ctor is _dt.datetime and len(args) == 8:
-        *fields, offset_min = args
-        if all(isinstance(a, int) and not isinstance(a, bool) for a in args):
-            try:
-                return _dt.datetime(*fields, tzinfo=_dt.timezone(
-                    _dt.timedelta(minutes=offset_min)))
-            except (TypeError, ValueError, OverflowError):
-                return value
-    if len(args) < minimum or any(not isinstance(a, int) or isinstance(a, bool)
-                                  for a in args):
-        return value          # not a well-formed one; let the caller's
-    try:                      # expect_type produce the honest error
-        return ctor(*args)
+    rebuild = _pt.FROM_TERM.get(value[0])
+    if rebuild is None:
+        return value
+    try:
+        return rebuild(value)
     except (TypeError, ValueError, OverflowError):
         return value
 
@@ -172,16 +137,17 @@ def date_term_to_python(value):
 
     Exposed for callers outside the engine that have to tell a date term from a
     look-alike container -- notably the eval harness's ``profile_terms``, which
-    recurses into tuples ELEMENTWISE and would otherwise try to resolve
-    ``date`` as an atom on a rulebase that never declared it.
+    recurses into tuples ELEMENTWISE and would otherwise try to resolve ``date``
+    as an atom on a rulebase that never declared it.
 
     ``cells.is_cell`` does NOT discriminate: ``('date', 2023, 6, 1)`` and a
     profile tuple ``('alpha', 'beta')`` are both cells. This does, because it
-    requires the components to be well formed -- and it is the SAME function
-    the engine converts with, so a caller's rule cannot drift from the
-    engine's. ``date_term_to_python(x) is not x`` is the discrimination test.
+    requires the components to be well formed -- and it is the SAME function the
+    engine converts with, so a caller's rule cannot drift from the engine's.
+    ``date_term_to_python(x) is not x`` is the discrimination test.
     """
     return _term_to_dt(value)
+
 
 def deref(value):  # noqa: F811 -- deliberately shadows the import above
     """``variables.deref`` then term->Python, so every predicate below reads
