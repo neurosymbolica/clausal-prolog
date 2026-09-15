@@ -2327,7 +2327,7 @@ def _warn_if_literal_may_be_lost(f: float) -> None:
         ClausalCurrencyLiteralWarning, stacklevel=4)
 
 
-class Quantity:
+class quantity:  # noqa: N801 -- see the naming note below
     """A number with physical dimensions for dimensional analysis.
 
     ``dims`` maps dimension keys (unit predicate objects) to integer exponents.
@@ -2756,7 +2756,9 @@ class Quantity:
     # ── Representation ───────────────────────────────────────────────────────
 
     def __repr__(self) -> str:
-        return f"Quantity({self._value!r}, {self._dims!r})"
+        # the CLASS name, not a hardcoded spelling -- repr is what an author
+        # sees, so it must not outlive a rename
+        return f"{type(self).__name__}({self._value!r}, {self._dims!r})"
 
     def __str__(self) -> str:
         # The output IS valid input: `292.00 (usd)` parses back to an equal
@@ -2801,6 +2803,22 @@ class Quantity:
 
 
 # ── Cons / list helpers ────────────────────────────────────────────────────────
+
+
+#: THE NAME IS `quantity`, LOWERCASE, and this is not a style preference.
+#: TitleCase RAISES at load since the identifier lint, so a functor spelled
+#: `Quantity` cannot be written in Clausal source at all -- which makes the
+#: CLASS's name and the TERM's name disagree for the one type whose whole job
+#: is to be written by authors. Lowercase puts it in the same namespace as
+#: `date`, `decimal` and `rdiv`: all writable, all atoms.
+#:
+#: `Quantity` stays as an alias because it is exported from this module and
+#: reached from corpus files and sealed harness bodies that this lane may not
+#: edit. The ~945 in-tree call sites are a separate, mechanical migration --
+#: separate because lowercase `quantity` ALREADY exists as a local variable in
+#: 51 places, so a blanket rename would leave the class shadowed by a local in
+#: any function that uses both.
+Quantity = quantity
 
 def list_to_cons(lst: list) -> object:
     """Convert a Python list to explicit Prolog-style cons structure.
@@ -3834,7 +3852,8 @@ __all__ = [
     "PyThunk",
     "FStringThunk",
     # Units
-    "Quantity",
+    "quantity",
+    "Quantity",   # deprecated alias; see the naming note in terms.py
     "UnitsMismatch",
     # Kleene (K3) third truth value
     "Undefined",

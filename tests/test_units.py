@@ -90,7 +90,10 @@ class TestQuantityBasics:
     def test_repr(self):
         # nv
         x = d(3, m=1, s=-2)
-        assert "Quantity" in repr(x)
+        # The functor is `quantity`, lowercase -- TitleCase raises at load, so
+        # a term spelled `Quantity` cannot be written in Clausal source. repr
+        # derives from the class name rather than hardcoding a spelling.
+        assert "quantity" in repr(x)
         assert "3" in repr(x)
 
     def test_str(self):
