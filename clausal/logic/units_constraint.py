@@ -41,7 +41,11 @@ class UnitState:
     __slots__ = ("dims", "shadow")
 
     def __init__(self, dims: dict, shadow=None) -> None:
-        self.dims = {k: v for k, v in dims.items() if v != 0}
+        from clausal.terms import atom_keyed_dims       # noqa: PLC0415
+        # Normalised for the same reason Quantity does it: a constraint keyed
+        # by predicates would not match the atom-keyed quantity that satisfies
+        # it, and the mismatch is silent -- the goal just stops holding.
+        self.dims = atom_keyed_dims(dims)
         self.shadow = shadow
 
     def __eq__(self, other: object) -> bool:
@@ -75,7 +79,8 @@ def constrain_var_dims(var, dims: dict, trail: Trail) -> bool:
     identical (units constraints don't merge — they either match or conflict).
     If it has none, attach one.  Returns True on success, False on conflict.
     """
-    clean = {k: v for k, v in dims.items() if v != 0}
+    from clausal.terms import atom_keyed_dims           # noqa: PLC0415
+    clean = atom_keyed_dims(dims)      # compared against existing.dims below
     from clausal.logic import _units_flag  # noqa: PLC0415
     _units_flag.touch()
     existing = get_attr(var, UNITS_KEY)

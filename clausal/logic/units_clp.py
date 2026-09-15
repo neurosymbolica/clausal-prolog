@@ -444,8 +444,13 @@ class Link:
     __slots__ = ("user", "dims")
 
     def __init__(self, user, dims: dict) -> None:
+        from clausal.terms import atom_keyed_dims       # noqa: PLC0415
         self.user = user
-        self.dims = dict(dims)
+        # The third twin of Quantity._dims and UnitState.dims. _link_hook
+        # compares link.dims against a Quantity's, so a predicate-keyed link
+        # silently stops reattaching -- the shadow binds and the user's
+        # variable never gets its units back.
+        self.dims = atom_keyed_dims(dims)
 
     def __repr__(self) -> str:
         return f"Link({self.user!r}, {self.dims!r})"

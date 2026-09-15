@@ -68,7 +68,7 @@ class TestNoRegressionFloatQuantities:
         t = Quantity(2.0, {second: 1})
         v = d / t
         assert v.value == 10.0
-        assert v.dims == {metre: 1, second: -1}
+        assert v.dims == {"metre": 1, "second": -1}
 
     def test_dimension_mismatch_still_raises(self):
         from clausal.terms import UnitsMismatch
@@ -110,4 +110,4 @@ class TestDecimalScalarConsistency:
         from clausal.modules.py.units import centimetre, metre
         q = Quantity(Decimal("5"), centimetre)  # centimetre == Quantity(1e-2, {metre:1})
         assert q.value == Decimal("0.05")
-        assert q.dims == {metre: 1}
+        assert q.dims == {"metre": 1}
