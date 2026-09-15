@@ -1011,3 +1011,68 @@ sentence" catches the wording; this catches the reason, and it has a counter-mov
 **ASK HARNESS-BATCH-LANE.** Any sweep whose conclusion would cover the harnesses goes to that lane
 as a question. They answer most in one AST pass. That is cheaper than a fifth discovery arriving
 mid-landing, and it is the standing protocol from here.
+
+---
+
+# §4 q3 REVISED: "absent" beats "the atom", and the cliff is not there
+
+The spec offered *"either absent, or the atom `('some_pred',)`"* and the 2026-09-15 ruling took the
+atom. **Take "absent" instead.** Measured, it costs nothing and it is the cleaner end state.
+
+## The mechanism
+
+A Clausal logic module is a plain Python `module`, so PEP 562 applies: a module-level
+`__getattr__` fires on a MISS. With no predicate binding in `module_dict`, a name resolves on
+demand out of the Database row. Measured on a real loaded module:
+
+    row exists with NO name binding        True
+    del module_dict["edge"] ; m.edge       resolves from the row via __getattr__
+    from g4 import edge                    works -- PEP 562 covers it
+    dir(m) lists it                        False   <- the one real gap
+
+**A miss-only hook serves every REACH and cannot ENUMERATE.** That is the whole of the distinction:
+
+    keeps working, no edit          breaks
+    ----------------------------    -------------------------------------------
+    m.some_pred(...)                vars(m) / m.__dict__.items() / .keys()
+    getattr(m, name)  var OR lit    dir(m)          (a __dir__ fixes it)
+    hasattr(m, name)                loops discovering predicate names
+    from domain import pred         asserting a name is / is not in the namespace
+
+## The count, and it is ZERO where it matters
+
+    engine, enumeration sites                    3   all already dispositioned
+                                                     "enumerate the db's rows"
+    sealed bodies, enumeration of a RULEBASE      0   (harness-batch-lane, AST)
+
+The detector found 164 enumeration sites in the sealed bodies and every one is the same line in the
+82 launchers — `globals().update({k: v for k, v in vars(_body).items() ...})` — enumerating the
+harness's own PYTHON sibling, not a rulebase. Unaffected, because:
+
+    harness bodies declaring a clause head    0 of 82
+    their -module export lists                82 of 82 EMPTY
+    sites enumerating under_test / rulebase   0
+
+**So q3 costs one hook on the module type plus a `__dir__`, not ~655 site edits.** The 446 sealed
+access sites — including the 52 `getattr(m, 'literal')` I had not counted — need no migration.
+
+The zero is calibrated: eleven cases, six positive and five negative, with attribute reach,
+`getattr` by literal and by variable, `hasattr` and `vars()` on a non-module all correctly NOT
+detected before it was run over the corpus. A zero from an untested detector is the absence of a
+detector.
+
+## THE CAVEAT, and it is why `__dir__` is not optional
+
+The zero rests on the harness bodies declaring no predicates — true today at 0 of 82 with empty
+export lists, but **a property of how this batch was built, not a rule anyone enforces.** If a
+future body ever declares one, that re-export line becomes a genuine enumeration of a genuine
+namespace **in all 82 launchers at once**.
+
+So: the hook is safe against these harnesses as they are, and **the `__dir__` is what keeps it safe
+if that changes.** Ship them together; the `__dir__` is the safety property, not a cosmetic
+nicety.
+
+## Sequencing
+
+The hook is meaningless until predicate names actually leave `module_dict`, which is P4. Add both
+together, with the `__dir__`, rather than landing a hook that can never fire.
