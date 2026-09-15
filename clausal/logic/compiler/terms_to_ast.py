@@ -1193,14 +1193,9 @@ def term_to_ast_expr(
                         value=_call(_name("$Var")),
                     ),
                 ))
-        # ++ AUTO-CONVERTS (ruled 2026-09-15): the thunk's Python value crosses
-        # into the term as a TERM, so every future crossing is correct by
-        # construction instead of each one being remembered. A scalar and an
-        # f-string's str pass through untouched, so this is a no-op for the
-        # FStringThunk case that shares this node.
         return ast.Call(
-            func=_name("$to_term"),
-            args=[ast.Call(func=_name(thunk_name), args=arg_exprs, keywords=[])],
+            func=_name(thunk_name),
+            args=arg_exprs,
             keywords=[],
         )
 

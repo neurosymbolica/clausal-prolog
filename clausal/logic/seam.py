@@ -96,11 +96,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
         if isinstance(term, Var):
             return term
         if isinstance(term, PyThunk):
-            # ++ auto-converts -- same rule as the compiled path in
-            # ``terms_to_ast``, and it has to be BOTH or a value would mean
-            # different things depending on which route reached it.
-            from clausal.logic.python_terms import to_term  # noqa: PLC0415
-            return to_term(term.fn(*term.var_objects), strict=False)
+            return term.fn(*term.var_objects)
         if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
             fname = (term.func.name if isinstance(term.func, LoadName)
                      else dotted(term.func))

@@ -317,16 +317,6 @@ from clausal.logic.generated_names import (
 
 
 
-def _to_term_runtime(value):
-    """``$to_term`` -- the ++ escape's conversion, imported lazily.
-
-    Lazy because ``python_terms`` reaches ``modules.py.datetime`` for the
-    already-a-term check, and this module is imported far earlier than that.
-    """
-    from clausal.logic.python_terms import to_term  # noqa: PLC0415
-    return to_term(value, strict=False)
-
-
 INJECTED_RUNTIME_BUILTINS: dict = {
     # Term-constructor helpers and runtime types term_to_ast_expr emits --
     # referenced through their ``$`` twins (``$Var``, ``$Quantity``, ...; the
@@ -386,10 +376,6 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # module attribute to the atom CELL with an interned slot 0 (§9.3), and
     # ``$``-prefixed so a user predicate named ``mint`` cannot shadow it.
     "$mint": _mint,
-    # ++ auto-converts its Python value to a TERM (ruled 2026-09-15).
-    # Wrapped around the emitted thunk call in ``terms_to_ast``; a scalar
-    # and an f-string's str pass through, so it is a no-op for those.
-    "$to_term": _to_term_runtime,
     # THE SEAM: ``--term`` in Python-hosted code (clausal.logic.seam).
     "$seam": _seam_term,
     # Explicit text crossings in Python-hosted code: str(x), f"{x!s}" spell
