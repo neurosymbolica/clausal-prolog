@@ -2154,6 +2154,27 @@ def _value_text(value) -> str:
     return text if _SIMPLE_NUMBER.match(text) else f"({text})"
 
 
+def atom_keyed_dims(dims) -> dict:
+    """A dimension mapping with every key normalised to its ATOM.
+
+    THE one place that knows both spellings. Dims arrive from three
+    directions -- the unit factories, ``Quantity(value, dims)``, and the CLP
+    constraint (``UnitState`` / ``constrain_var_dims``) -- and rulebase code
+    reaches two of them, via ``make_quantity/3`` and ``has_units/2``.
+
+    Normalising in only some of them is not a partial fix but a WRONG one: a
+    quantity keyed by predicates does not compare equal to one keyed by atoms,
+    so `D == 10(newton)` simply stops holding, and a units constraint stops
+    matching the quantity that satisfies it. Both failures are silent.
+
+    Zero exponents are dropped here too, since every caller did that already.
+    """
+    return {
+        (k if type(k) is str else _unit_identifier(k)): v
+        for k, v in dims.items() if v != 0
+    }
+
+
 def _currency_info(key):
     """The currency metadata for a dimension *key*, or None if it is not one.
 
@@ -2415,7 +2436,7 @@ class quantity:  # noqa: N801 -- see the naming note below
         # it was never needed for hashing: __hash__ goes through
         # frozenset(self._dims.items()) and does not touch _dims. Immutability
         # moves to the `dims` PROPERTY, which is where callers reach it.
-        self._dims = {k: v for k, v in actual_dims.items() if v != 0}
+        self._dims = atom_keyed_dims(actual_dims)
         if not isinstance(self._value, (Decimal, Fraction)):
             for _k in self._dims:
                 if _currency_info(_k) is not None:

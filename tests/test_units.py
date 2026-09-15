@@ -79,7 +79,7 @@ class TestQuantityBasics:
     def test_zero_exponents_removed(self):
         # nv
         x = Quantity(1, {metre: 1, second: 0})
-        assert x.dims == {metre: 1}
+        assert x.dims == {"metre": 1}
 
     def test_empty_dims_is_dimensionless(self):
         # nv
@@ -197,7 +197,7 @@ class TestArithmetic:
         mass = d(2, kg=1)
         accel = d(9.8, m=1, s=-2)
         force = mass * accel
-        assert force.dims == {kilogram: 1, metre: 1, second: -2}
+        assert force.dims == {"kilogram": 1, "metre": 1, "second": -2}
         assert pytest.approx(force.value) == 19.6
 
     # ── division ────────────────────────────────────────────────────────────
@@ -243,7 +243,7 @@ class TestArithmetic:
     def test_pow_minus_one(self):
         # nv
         freq = d(50, s=1) ** -1
-        assert freq.dims == {second: -1}
+        assert freq.dims == {"second": -1}
         assert pytest.approx(freq.value) == 0.02
 
     def test_pow_zero_gives_dimensionless(self):
@@ -399,7 +399,7 @@ class TestUnificationProtocol:
         put_attr(y, UNITS_KEY, UnitState({metre: 1}), trail)
         assert unify(x, y, trail)
         # The surviving (older) var still carries the constraint.
-        assert get_attr(deref(x), UNITS_KEY).dims == {metre: 1}
+        assert get_attr(deref(x), UNITS_KEY).dims == {"metre": 1}
 
     def test_two_attvar_unit_constraints_fail_incompatible(self):
         """Unifying vars with incompatible unit constraints fails."""
@@ -419,7 +419,7 @@ class TestUnificationProtocol:
         y = Var()
         put_attr(x, UNITS_KEY, UnitState({kilogram: 1}), trail)
         assert unify(x, y, trail)
-        assert get_attr(deref(y), UNITS_KEY).dims == {kilogram: 1}
+        assert get_attr(deref(y), UNITS_KEY).dims == {"kilogram": 1}
 
     def test_attvar_unit_constraint_backtracks(self):
         """put_attr via trail correctly undoes on backtrack."""
@@ -490,21 +490,21 @@ class TestScaledUnits:
         # nv
         from clausal.modules.py.units import kilometre
         result = 1 * kilometre
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 1000.0
 
     def test_centimeter(self):
         # nv
         from clausal.modules.py.units import centimetre
         result = 100 * centimetre
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 1.0
 
     def test_gram(self):
         # nv
         from clausal.modules.py.units import gram
         result = 500 * gram
-        assert result.dims == {kilogram: 1}
+        assert result.dims == {"kilogram": 1}
         assert pytest.approx(result.value) == 0.5
 
     def test_tonne(self):
@@ -517,7 +517,7 @@ class TestScaledUnits:
         # nv
         from clausal.modules.py.units import minute
         result = 5 * minute
-        assert result.dims == {second: 1}
+        assert result.dims == {"second": 1}
         assert pytest.approx(result.value) == 300.0
 
     def test_hour(self):
@@ -530,14 +530,14 @@ class TestScaledUnits:
         # nv
         from clausal.modules.py.imperial import foot
         result = 1 * foot
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 0.3048
 
     def test_pound_unit_vector(self):
         # nv
         from clausal.modules.py.imperial import pound_mass
         result = 1 * pound_mass
-        assert result.dims == {kilogram: 1}
+        assert result.dims == {"kilogram": 1}
         assert pytest.approx(result.value) == 0.45359237
 
 
@@ -554,69 +554,69 @@ class TestDerivedUnits:
         # nv
         from clausal.modules.py.units import newton
         result = self._fwd(newton, 10)
-        assert result.dims == {kilogram: 1, metre: 1, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 1, "second": -2}
         assert result.value == 10
 
     def test_joule(self):
         # nv
         from clausal.modules.py.units import joule
         result = self._fwd(joule, 1)
-        assert result.dims == {kilogram: 1, metre: 2, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -2}
 
     def test_watt(self):
         # nv
         from clausal.modules.py.units import watt
         result = self._fwd(watt, 60)
-        assert result.dims == {kilogram: 1, metre: 2, second: -3}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -3}
 
     def test_pascal(self):
         # nv
         from clausal.modules.py.units import pascal
         result = self._fwd(pascal, 101325)
-        assert result.dims == {kilogram: 1, metre: -1, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": -1, "second": -2}
 
     def test_hertz(self):
         # nv
         from clausal.modules.py.units import hertz
         result = self._fwd(hertz, 440)
-        assert result.dims == {second: -1}
+        assert result.dims == {"second": -1}
 
     def test_volt(self):
         # nv
         from clausal.modules.py.units import volt
         result = self._fwd(volt, 230)
-        assert result.dims == {kilogram: 1, metre: 2, second: -3, ampere: -1}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -3, "ampere": -1}
 
     def test_coulomb(self):
         # nv
         from clausal.modules.py.units import coulomb
         result = self._fwd(coulomb, 1)
-        assert result.dims == {ampere: 1, second: 1}
+        assert result.dims == {"ampere": 1, "second": 1}
 
     def test_farad(self):
         # nv
         from clausal.modules.py.units import farad
         result = self._fwd(farad, 100e-6)
-        assert result.dims == {kilogram: -1, metre: -2, second: 4, ampere: 2}
+        assert result.dims == {"kilogram": -1, "metre": -2, "second": 4, "ampere": 2}
 
     def test_ohm(self):
         # nv
         from clausal.modules.py.units import ohm
         result = self._fwd(ohm, 100)
-        assert result.dims == {kilogram: 1, metre: 2, second: -3, ampere: -2}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -3, "ampere": -2}
 
     def test_bar(self):
         # nv
         from clausal.modules.py.units import bar
         result = 1 * bar
-        assert result.dims == {kilogram: 1, metre: -1, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": -1, "second": -2}
         assert pytest.approx(result.value) == 1e5
 
     def test_kilowatt_hour_unit_vector(self):
         # nv
         from clausal.modules.py.imperial import kilowatt_hour
         result = 1 * kilowatt_hour
-        assert result.dims == {kilogram: 1, metre: 2, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -2}
         assert pytest.approx(result.value) == 3_600_000.0
 
 
@@ -635,8 +635,8 @@ class TestUtilityPredicates:
         assert sols
         dims = sols[0]["DIMS"]
         assert isinstance(dims, DictTerm)
-        assert dims[metre] == 1
-        assert dims[second] == -1
+        assert dims["metre"] == 1
+        assert dims["second"] == -1
 
     def test_value_of(self):
         # nv
@@ -663,7 +663,7 @@ class TestUtilityPredicates:
         result = sols[0]["D"]
         assert isinstance(result, Quantity)
         assert result.value == 10
-        assert result.dims == {kilogram: 1, metre: 1, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 1, "second": -2}
 
     def test_dimension_of_plain_number_fails(self):
         # nv
@@ -692,7 +692,7 @@ class TestArithmeticViaIs:
         mass = d(2, kg=1)
         accel = d(9.8, m=1, s=-2)
         force = mass * accel
-        assert force.dims == {kilogram: 1, metre: 1, second: -2}
+        assert force.dims == {"kilogram": 1, "metre": 1, "second": -2}
         assert pytest.approx(force.value) == 19.6
 
     def test_kinetic_energy(self):
@@ -701,7 +701,7 @@ class TestArithmeticViaIs:
         mass = d(10, kg=1)
         velocity = d(3, m=1, s=-1)
         ke = 0.5 * mass * velocity ** 2
-        assert ke.dims == {kilogram: 1, metre: 2, second: -2}
+        assert ke.dims == {"kilogram": 1, "metre": 2, "second": -2}
         assert pytest.approx(ke.value) == 45.0
 
     def test_power_from_energy_over_time(self):
@@ -710,13 +710,13 @@ class TestArithmeticViaIs:
         energy = d(3600, kg=1, m=2, s=-2)
         time = d(60, s=1)
         power = energy / time
-        assert power.dims == {kilogram: 1, metre: 2, second: -3}
+        assert power.dims == {"kilogram": 1, "metre": 2, "second": -3}
         assert pytest.approx(power.value) == 60.0
 
     def test_speed_from_distance_over_time(self):
         # nv
         speed = d(100, m=1) / d(10, s=1)
-        assert speed.dims == {metre: 1, second: -1}
+        assert speed.dims == {"metre": 1, "second": -1}
         assert speed.value == 10.0
 
     def test_ohms_law_voltage(self):
@@ -725,7 +725,7 @@ class TestArithmeticViaIs:
         current = d(2, A=1)
         resistance = d(50, kg=1, m=2, s=-3, A=-2)
         voltage = current * resistance
-        assert voltage.dims == {kilogram: 1, metre: 2, second: -3, ampere: -1}
+        assert voltage.dims == {"kilogram": 1, "metre": 2, "second": -3, "ampere": -1}
         assert voltage.value == 100
 
     def test_area_from_side_squared(self):
@@ -744,7 +744,7 @@ class TestArithmeticViaIs:
         time = second(3)
         impulse = force * time
         # impulse dims: kg·m/s (momentum)
-        assert impulse.dims == {kilogram: 1, metre: 1, second: -1}
+        assert impulse.dims == {"kilogram": 1, "metre": 1, "second": -1}
         assert impulse.value == 15
 
 
@@ -760,7 +760,7 @@ class TestEdgeCases:
         scalar = d(2.0, **{})
         length = d(3, m=1)
         result = scalar * length
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert result.value == 6.0
 
     def test_add_two_dimensionless(self):
@@ -818,7 +818,7 @@ class TestEdgeCases:
         power = d(100, kg=1, m=2, s=-3)
         time = d(10, s=1)
         energy = power * time
-        assert energy.dims == {kilogram: 1, metre: 2, second: -2}
+        assert energy.dims == {"kilogram": 1, "metre": 2, "second": -2}
         assert energy.value == 1000
 
     def test_pow_half_dimensionless(self):
@@ -863,21 +863,21 @@ class TestUnitPredicateCall:
         # nv
         from clausal.modules.py.units import kilogram, speed_of_light
         e = kilogram(1) * speed_of_light ** 2
-        assert e.dims == {kilogram: 1, metre: 2, second: -2}
+        assert e.dims == {"kilogram": 1, "metre": 2, "second": -2}
         assert pytest.approx(e.value) == 8.987551787368176e16
 
     def test_expression_weight(self):
         # nv
         from clausal.modules.py.units import kilogram, standard_gravity
         w = kilogram(70) * standard_gravity
-        assert w.dims == {kilogram: 1, metre: 1, second: -2}
+        assert w.dims == {"kilogram": 1, "metre": 1, "second": -2}
         assert pytest.approx(w.value) == 686.4655
 
     def test_expression_ohms_law(self):
         # nv
         from clausal.modules.py.units import volt, ampere
         r = volt(12) / ampere(3)
-        assert r.dims == {kilogram: 1, metre: 2, second: -3, ampere: -2}
+        assert r.dims == {"kilogram": 1, "metre": 2, "second": -3, "ampere": -2}
         assert pytest.approx(r.value) == 4.0
 
 
@@ -893,19 +893,19 @@ class TestUnitPredicateArithmetic:
         # nv
         from clausal.modules.py.units import metre
         area = metre ** 2
-        assert area._dims == {metre: 2}
+        assert area._dims == {"metre": 2}
 
     def test_div_produces_correct_dims(self):
         # nv
         from clausal.modules.py.units import metre, second
         velocity = metre / second
-        assert velocity._dims == {metre: 1, second: -1}
+        assert velocity._dims == {"metre": 1, "second": -1}
 
     def test_mul_produces_correct_dims(self):
         # nv
         from clausal.modules.py.units import kilogram, metre
         kg_m = kilogram * metre
-        assert kg_m._dims == {kilogram: 1, metre: 1}
+        assert kg_m._dims == {"kilogram": 1, "metre": 1}
 
     def test_compound_force_dims(self):
         # nv
@@ -917,14 +917,14 @@ class TestUnitPredicateArithmetic:
         # nv
         from clausal.modules.py.units import metre, second
         acc = metre / second ** 2
-        assert acc._dims == {metre: 1, second: -2}
+        assert acc._dims == {"metre": 1, "second": -2}
 
     def test_pow_fractional_not_useful_but_legal(self):
         # nv
         from clausal.modules.py.units import metre
         # metre**-1 is a valid descriptor (e.g. wavenumber)
         inv = metre ** -1
-        assert inv._dims == {metre: -1}
+        assert inv._dims == {"metre": -1}
 
     def test_descriptor_matches_quantity_dims(self):
         # nv
@@ -952,32 +952,32 @@ class TestPhysicalConstants:
     def test_speed_of_light_dims(self):
         # nv
         from clausal.modules.py.units import speed_of_light
-        assert speed_of_light.dims == {metre: 1, second: -1}
+        assert speed_of_light.dims == {"metre": 1, "second": -1}
 
     def test_planck_constant_dims(self):
         # nv
         from clausal.modules.py.units import planck_constant
-        assert planck_constant.dims == {kilogram: 1, metre: 2, second: -1}
+        assert planck_constant.dims == {"kilogram": 1, "metre": 2, "second": -1}
 
     def test_boltzmann_constant_dims(self):
         # nv
         from clausal.modules.py.units import boltzmann_constant
-        assert boltzmann_constant.dims == {kilogram: 1, metre: 2, second: -2, kelvin: -1}
+        assert boltzmann_constant.dims == {"kilogram": 1, "metre": 2, "second": -2, "kelvin": -1}
 
     def test_standard_gravity_dims(self):
         # nv
         from clausal.modules.py.units import standard_gravity
-        assert standard_gravity.dims == {metre: 1, second: -2}
+        assert standard_gravity.dims == {"metre": 1, "second": -2}
 
     def test_elementary_charge_dims(self):
         # nv
         from clausal.modules.py.units import elementary_charge
-        assert elementary_charge.dims == {ampere: 1, second: 1}
+        assert elementary_charge.dims == {"ampere": 1, "second": 1}
 
     def test_gravitational_constant_dims(self):
         # nv
         from clausal.modules.py.units import gravitational_constant
-        assert gravitational_constant.dims == {metre: 3, kilogram: -1, second: -2}
+        assert gravitational_constant.dims == {"metre": 3, "kilogram": -1, "second": -2}
 
 
 # ── Sugar tests ───────────────────────────────────────────────────────────────
@@ -1443,21 +1443,21 @@ class TestSIPrefixes:
         # nv
         from clausal.modules.py.units import kilo, newton
         result = 5 * kilo * newton(1)
-        assert result.dims == {kilogram: 1, metre: 1, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 1, "second": -2}
         assert pytest.approx(result.value) == 5_000.0
 
     def test_nano_times_unit_vector(self):
         # nv
         from clausal.modules.py.units import nano
         result = 100 * nano * second(1)
-        assert result.dims == {second: 1}
+        assert result.dims == {"second": 1}
         assert pytest.approx(result.value) == 1e-7
 
     def test_mega_times_unit_vector(self):
         # nv
         from clausal.modules.py.units import mega, hertz
         result = 2.4 * mega * hertz(1)
-        assert result.dims == {second: -1}
+        assert result.dims == {"second": -1}
         assert pytest.approx(result.value) == 2.4e6
 
     def test_prefix_abbreviation_k(self):
@@ -1485,42 +1485,42 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import inch
         result = 12 * inch
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 0.3048
 
     def test_foot(self):
         # nv
         from clausal.modules.py.imperial import foot
         result = 1 * foot
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 0.3048
 
     def test_yard(self):
         # nv
         from clausal.modules.py.imperial import yard
         result = 1 * yard
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 0.9144
 
     def test_mile(self):
         # nv
         from clausal.modules.py.imperial import mile
         result = 1 * mile
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 1_609.344
 
     def test_nautical_mile(self):
         # nv
         from clausal.modules.py.imperial import nautical_mile
         result = 1 * nautical_mile
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value) == 1_852.0
 
     def test_light_year(self):
         # nv
         from clausal.modules.py.imperial import light_year
         result = 1 * light_year
-        assert result.dims == {metre: 1}
+        assert result.dims == {"metre": 1}
         assert pytest.approx(result.value, rel=1e-9) == 9.4607304725808e15
 
     # ── Mass ─────────────────────────────────────────────────────────────────
@@ -1529,14 +1529,14 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import pound_mass
         result = 1 * pound_mass
-        assert result.dims == {kilogram: 1}
+        assert result.dims == {"kilogram": 1}
         assert pytest.approx(result.value) == 0.45359237
 
     def test_ounce_mass(self):
         # nv
         from clausal.modules.py.imperial import ounce_mass
         result = 16 * ounce_mass
-        assert result.dims == {kilogram: 1}
+        assert result.dims == {"kilogram": 1}
         assert pytest.approx(result.value) == pytest.approx(1 * 0.45359237, rel=1e-6)
 
     # ── Force ─────────────────────────────────────────────────────────────────
@@ -1545,7 +1545,7 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import pound_force
         result = 1 * pound_force
-        assert result.dims == {kilogram: 1, metre: 1, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 1, "second": -2}
         assert pytest.approx(result.value) == 4.4482216152605
 
     # ── Volume ────────────────────────────────────────────────────────────────
@@ -1554,14 +1554,14 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import litre
         result = 1 * litre
-        assert result.dims == {metre: 3}
+        assert result.dims == {"metre": 3}
         assert pytest.approx(result.value) == 1e-3
 
     def test_gallon_us(self):
         # nv
         from clausal.modules.py.imperial import gallon_us
         result = 1 * gallon_us
-        assert result.dims == {metre: 3}
+        assert result.dims == {"metre": 3}
         assert pytest.approx(result.value) == 3.785411784e-3
 
     # ── Pressure ──────────────────────────────────────────────────────────────
@@ -1570,7 +1570,7 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import psi
         result = 1 * psi
-        assert result.dims == {kilogram: 1, metre: -1, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": -1, "second": -2}
         assert pytest.approx(result.value) == 6_894.757
 
     # ── Energy ────────────────────────────────────────────────────────────────
@@ -1579,21 +1579,21 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import calorie
         result = 1 * calorie
-        assert result.dims == {kilogram: 1, metre: 2, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -2}
         assert pytest.approx(result.value) == 4.184
 
     def test_btu(self):
         # nv
         from clausal.modules.py.imperial import btu
         result = 1 * btu
-        assert result.dims == {kilogram: 1, metre: 2, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -2}
         assert pytest.approx(result.value) == 1_055.05585262
 
     def test_kilowatt_hour(self):
         # nv
         from clausal.modules.py.imperial import kilowatt_hour
         result = 1 * kilowatt_hour
-        assert result.dims == {kilogram: 1, metre: 2, second: -2}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -2}
         assert pytest.approx(result.value) == 3_600_000.0
 
     # ── Power ─────────────────────────────────────────────────────────────────
@@ -1602,7 +1602,7 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import horsepower
         result = 1 * horsepower
-        assert result.dims == {kilogram: 1, metre: 2, second: -3}
+        assert result.dims == {"kilogram": 1, "metre": 2, "second": -3}
         assert pytest.approx(result.value) == 745.69987
 
     # ── Speed ─────────────────────────────────────────────────────────────────
@@ -1611,14 +1611,14 @@ class TestImperialUnits:
         # nv
         from clausal.modules.py.imperial import mph
         result = 60 * mph
-        assert result.dims == {metre: 1, second: -1}
+        assert result.dims == {"metre": 1, "second": -1}
         assert pytest.approx(result.value) == 26.8224
 
     def test_knot(self):
         # nv
         from clausal.modules.py.imperial import knot
         result = 1 * knot
-        assert result.dims == {metre: 1, second: -1}
+        assert result.dims == {"metre": 1, "second": -1}
         assert pytest.approx(result.value, rel=1e-6) == 1_852.0 / 3_600.0
 
     # ── Abbreviations ─────────────────────────────────────────────────────────
@@ -1671,14 +1671,17 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit
         result = bit(1)
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 1
 
-    def test_bit_dim_key_is_predicate(self):
+    def test_bit_dim_key_is_the_atom(self):
+        """RENAMED at the rekey. The key used to BE the predicate object; it
+        is now the unit's atom. A unit was never a predicate -- it is a named
+        entry in the registry, and the atom is its name."""
         # nv
-        from clausal.modules.py.units import bit
+        from clausal.modules.py.units import bit          # noqa: F401
         key = list(bit(1).dims.keys())[0]
-        assert key is bit
+        assert key == "bit"
 
     # ── byte = 8 bits ─────────────────────────────────────────────────────────
 
@@ -1686,7 +1689,7 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit, byte
         result = 1 * byte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8
 
     def test_byte_10_is_80_bits(self):
@@ -1700,28 +1703,28 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit, kilobyte
         result = 1 * kilobyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8_000
 
     def test_megabyte(self):
         # nv
         from clausal.modules.py.units import bit, megabyte
         result = 1 * megabyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8_000_000
 
     def test_gigabyte(self):
         # nv
         from clausal.modules.py.units import bit, gigabyte
         result = 1 * gigabyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8_000_000_000
 
     def test_terabyte(self):
         # nv
         from clausal.modules.py.units import bit, terabyte
         result = 1 * terabyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8_000_000_000_000
 
     # ── Decimal (SI-prefixed) bit multiples ───────────────────────────────────
@@ -1730,21 +1733,21 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit, kilobit
         result = 1 * kilobit
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 1_000
 
     def test_megabit(self):
         # nv
         from clausal.modules.py.units import bit, megabit
         result = 100 * megabit
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 100_000_000
 
     def test_gigabit(self):
         # nv
         from clausal.modules.py.units import bit, gigabit
         result = 1 * gigabit
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 1_000_000_000
 
     # ── Binary (IEC-prefixed) byte multiples ──────────────────────────────────
@@ -1753,28 +1756,28 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit, kibibyte
         result = 1 * kibibyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8 * 1024
 
     def test_mebibyte(self):
         # nv
         from clausal.modules.py.units import bit, mebibyte
         result = 1 * mebibyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8 * 2**20
 
     def test_gibibyte(self):
         # nv
         from clausal.modules.py.units import bit, gibibyte
         result = 1 * gibibyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8 * 2**30
 
     def test_tebibyte(self):
         # nv
         from clausal.modules.py.units import bit, tebibyte
         result = 1 * tebibyte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8 * 2**40
 
     # ── Binary (IEC-prefixed) bit multiples ───────────────────────────────────
@@ -1783,21 +1786,21 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit, kibibit
         result = 1 * kibibit
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 2**10
 
     def test_mebibit(self):
         # nv
         from clausal.modules.py.units import bit, mebibit
         result = 1 * mebibit
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 2**20
 
     def test_gibibit(self):
         # nv
         from clausal.modules.py.units import bit, gibibit
         result = 1 * gibibit
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 2**30
 
     # ── Binary prefix constants ───────────────────────────────────────────────
@@ -1838,14 +1841,14 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit, byte, gibi
         result = 4 * gibi * byte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 4 * 2**30 * 8
 
     def test_mebi_times_byte(self):
         # nv
         from clausal.modules.py.units import bit, byte, mebi
         result = 100 * mebi * byte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 100 * 2**20 * 8
 
     # ── Arithmetic between information quantities ─────────────────────────────
@@ -1855,14 +1858,14 @@ class TestInformationUnits:
         # nv
         from clausal.modules.py.units import bit, byte
         result = 1 * byte + bit(8)
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 16
 
     def test_kibibyte_minus_byte(self):
         # nv
         from clausal.modules.py.units import bit, kibibyte, byte
         result = 1 * kibibyte - 1 * byte
-        assert result.dims == {bit: 1}
+        assert result.dims == {"bit": 1}
         assert result.value == 8 * 1023
 
     def test_information_mismatch_with_length(self):

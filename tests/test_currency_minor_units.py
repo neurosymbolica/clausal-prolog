@@ -51,7 +51,7 @@ def _one(module, goal, arity):
 def test_cent_is_a_scaled_unit_of_the_dollar():
     from clausal.modules.countries.united_states import usd_cent, usd
     assert isinstance(usd_cent, Quantity)
-    assert usd_cent.dims == {usd: 1}, "a cent is a dollar amount, not a dimension"
+    assert usd_cent.dims == {"usd": 1}, "a cent is a dollar amount, not a dimension"
 
 
 def test_the_minor_factor_is_decimal_never_float():
@@ -92,8 +92,8 @@ def test_each_currencys_cent_is_its_own():
     Operator's ruling, 2026-09-11."""
     from clausal.modules.countries.united_states import usd_cent, usd
     from clausal.modules.countries.european_union import eur_cent, euro
-    assert usd_cent.dims == {usd: 1}
-    assert eur_cent.dims == {euro: 1}
+    assert usd_cent.dims == {"usd": 1}
+    assert eur_cent.dims == {"euro": 1}
 
 
 # ── declaring a constant in minor units ───────────────────────────────────────
@@ -108,7 +108,7 @@ def test_a_minor_unit_declaration_stores_the_base_currency_amount(tmp_path):
     from clausal.modules.countries.united_states import usd
     assert m.mu_sga_monthly.value == Decimal("1550.00")
     assert isinstance(m.mu_sga_monthly.value, Decimal)
-    assert m.mu_sga_monthly.dims == {usd: 1}
+    assert m.mu_sga_monthly.dims == {"usd": 1}
 
 
 def test_the_declared_minor_pair_is_what_slash_3_reports(tmp_path):
@@ -166,8 +166,8 @@ def test_the_qualified_form_names_the_currency(tmp_path):
     from clausal.modules.countries.united_states import usd
     (eu,) = _one(m, "eu", 1)
     (us,) = _one(m, "us", 1)
-    assert eu.value == Decimal("50.00") and eu.dims == {euro: 1}
-    assert us.value == Decimal("50.00") and us.dims == {usd: 1}
+    assert eu.value == Decimal("50.00") and eu.dims == {"euro": 1}
+    assert us.value == Decimal("50.00") and us.dims == {"usd": 1}
 
 
 def test_minor_units_of_different_currencies_do_not_add(tmp_path):
@@ -457,13 +457,13 @@ def test_the_australian_cent_is_its_own_unit():
     confusion this feature exists to prevent, with the engine's blessing."""
     from clausal.modules.countries.australia import aud_cent, aud
     from clausal.modules.countries.united_states import usd_cent
-    assert aud_cent.value == Decimal("0.01") and aud_cent.dims == {aud: 1}
+    assert aud_cent.value == Decimal("0.01") and aud_cent.dims == {"aud": 1}
     assert aud_cent.dims != usd_cent.dims, "an AUD cent is not a USD cent"
 
 
 def test_the_thai_satang_is_a_scaled_unit_of_the_baht():
     from clausal.modules.countries.thailand import satang, baht
-    assert satang.value == Decimal("0.01") and satang.dims == {baht: 1}
+    assert satang.value == Decimal("0.01") and satang.dims == {"baht": 1}
     assert (150000 * satang).value == Decimal("1500.00")
 
 
@@ -473,7 +473,7 @@ def test_sterlings_minor_unit_is_penny_singular():
     `metres`. Operator's ruling, 2026-09-11."""
     from clausal.modules.countries import united_kingdom
     from clausal.modules.countries.united_kingdom import penny, sterling
-    assert penny.value == Decimal("0.01") and penny.dims == {sterling: 1}
+    assert penny.value == Decimal("0.01") and penny.dims == {"sterling": 1}
     assert not hasattr(united_kingdom, "pence"), "one spelling, not two"
 
 
@@ -489,8 +489,9 @@ def test_every_named_minor_unit_exists_and_matches_its_scale():
             f"clausal.modules.countries.{row['jurisdiction']}")
         unit = getattr(module, minor_name)
         assert unit.value == Decimal(1).scaleb(-row["scale"]), code
-        base = getattr(module, _data.CURRENCY_BINDINGS[row["code"]])
-        assert unit.dims == {base: 1}, code
+        binding = _data.CURRENCY_BINDINGS[row["code"]]
+        assert getattr(module, binding) is not None, code
+        assert unit.dims == {binding: 1}, code
 
 
 def test_the_exporter_refuses_every_named_minor_unit():
@@ -655,7 +656,7 @@ def test_both_minor_units_import_into_one_file_without_shadowing(tmp_path):
     from clausal.modules.countries.european_union import euro
     from clausal.modules.countries.united_states import usd
     (eu,), (us,) = _one(m, "eu", 1), _one(m, "us", 1)
-    assert eu.dims == {euro: 1} and us.dims == {usd: 1}
+    assert eu.dims == {"euro": 1} and us.dims == {"usd": 1}
     assert eu.value == us.value == Decimal("50.00")
 
 
@@ -842,7 +843,7 @@ def test_both_dinars_import_into_one_file(tmp_path):
     from clausal.modules.countries.bahrain import bhd
     from clausal.modules.countries.kuwait import kwd
     (bh,), (kw,) = _one(m, "bh", 1), _one(m, "kw", 1)
-    assert bh.dims == {bhd: 1} and kw.dims == {kwd: 1}
+    assert bh.dims == {"bhd": 1} and kw.dims == {"kwd": 1}
 
 
 # ── -constant_number_currency: the directive that declares MONEY ─────────────
@@ -865,7 +866,7 @@ def test_a_currency_constant_declares_and_stores_money(tmp_path):
         look(N, U) <- constant_number_units(cc_sga, N, U)
     """)
     from clausal.modules.countries.united_states import usd
-    assert m.cc_sga.value == Decimal("5000") and m.cc_sga.dims == {usd: 1}
+    assert m.cc_sga.value == Decimal("5000") and m.cc_sga.dims == {"usd": 1}
     assert isinstance(m.cc_sga.value, Decimal)
     # A money constant IS a united constant: the stricter declaration does not
     # hide it from the view that already exists.
@@ -940,7 +941,7 @@ def test_a_minor_unit_is_accepted_by_the_currency_directive(tmp_path):
     """)
     from clausal.modules.countries.united_states import usd
     assert m.cc_sga_minor.value == Decimal("1550.00")
-    assert m.cc_sga_minor.dims == {usd: 1}
+    assert m.cc_sga_minor.dims == {"usd": 1}
 
 
 def test_the_gate_is_money_SHAPE_not_currency_TYPE(tmp_path):
@@ -1429,7 +1430,7 @@ def test_a_guarded_total_no_longer_drops_money_to_zero(tmp_path):
     from clausal.modules.countries.european_union import euro
     v = Var()
     [total] = [deref(v) for _ in call("total", v, module=m.__dict__["$module"])]
-    assert total.value == Decimal("10000") and total.dims == {euro: 1}
+    assert total.value == Decimal("10000") and total.dims == {"euro": 1}
 
 
 def test_integer_and_float_stay_STRICT(tmp_path):
@@ -1530,7 +1531,7 @@ def test_sum_list_sums_quantities(tmp_path):
         return r
 
     total = one("money_total")
-    assert total.value == Decimal("12500") and total.dims == {euro: 1}
+    assert total.value == Decimal("12500") and total.dims == {"euro": 1}
     assert one("plain_total") == 6
     assert one("empty_total") == 0
 

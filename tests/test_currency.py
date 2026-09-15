@@ -19,7 +19,7 @@ class TestCurrencyVocabulary:
 
     def test_currency_is_self_keyed_base_dimension(self):
         from clausal.modules.countries.european_union import euro
-        assert euro._dims == {euro: 1}
+        assert euro._dims == {"euro": 1}
 
     def test_scale_variety(self):
         from clausal.modules.countries.japan import yen
@@ -82,7 +82,7 @@ class TestCurrencyDecimalConstruction:
         assert isinstance(r.value, Decimal)
         assert r.value == Decimal("30.00")
         from clausal.modules.countries.european_union import euro
-        assert r.dims == {euro: 1}
+        assert r.dims == {"euro": 1}
 
     def test_ratio_of_same_currency_is_dimensionless(self):
         r = self._euro(10.00) / self._euro(4.00)

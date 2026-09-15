@@ -87,7 +87,7 @@ from clausal.logic.units_constraint import UNITS_KEY, UnitState
 from clausal.modules.py.units import metre, second, ampere, volt, ohm, watt, kilogram
 from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, UnitsMismatch
 
-M = {metre: 1}
+M = {"metre": 1}
 
 
 def _bin(cls, left, right):
@@ -98,7 +98,7 @@ def _bin(cls, left, right):
 def _neg(operand):
     return Negate(operand=operand)
 
-S = {second: 1}
+S = {"second": 1}
 
 
 def _dims_of_value(v):
@@ -186,7 +186,7 @@ class TestInference:
         from clausal.logic.units_clp import analyse
         total, qty = Var(), Var()
         dl, dr, env = analyse(total, _bin(Mult, Quantity(Decimal("2.00"), {euro: 1}), qty), "(==)/2")
-        assert env[total._id] == {euro: 1} and env[qty._id] == {}
+        assert env[total._id] == {"euro": 1} and env[qty._id] == {}
 
     def test_ohms_law_infers_volt(self):
         from clausal.logic.units_clp import analyse
@@ -286,7 +286,7 @@ class TestShadowLink:
         s = shadow_for(x, {euro: 1}, t)
         assert unify(s, Fraction(1, 3), t)
         v = deref(x)
-        assert v.dims == {euro: 1} and type(v.value) is Fraction and v.value == Fraction(1, 3)
+        assert v.dims == {"euro": 1} and type(v.value) is Fraction and v.value == Fraction(1, 3)
 
     def test_binding_user_to_quantity_binds_shadow(self):
         from clausal.logic.units_clp import shadow_for
@@ -1021,7 +1021,7 @@ class TestReviewRoundTwelve:
         assert (Quantity(3, M) ** -1) == 1 / Quantity(3, M)
         m = Quantity(Decimal("3.00"), {euro: 1}) ** -1
         assert type(m.value) is Fraction and m.value == Fraction(1, 3)
-        assert (Quantity(2, M) ** -2).value == Fraction(1, 4) and (Quantity(2, M) ** -2).dims == {metre: -2}
+        assert (Quantity(2, M) ** -2).value == Fraction(1, 4) and (Quantity(2, M) ** -2).dims == {"metre": -2}
         assert (Quantity(2.0, M) ** -1).value == 0.5            # float stays float
 
     def test_chain_has_no_whole_units_guard(self):

@@ -80,7 +80,7 @@ class TestConstructionPrecisionCheck:
         from fractions import Fraction
         r = Quantity(Decimal("10.00"), euro) / 3      # a third of ten euro, built via dict dims
         assert r.value == Fraction(10, 3)                       # sub-scale, exact
-        assert r.dims == {euro: 1}                              # and did not raise
+        assert r.dims == {"euro": 1}                              # and did not raise
 
 
 class TestMoneyConstructorsAndAccessors:
@@ -93,7 +93,7 @@ class TestMoneyConstructorsAndAccessors:
         from clausal.modules.currency import money_precise
         r = _run(money_precise, "0.0034", euro, "OUT")
         assert r[0]["OUT"].value == Decimal("0.0034")
-        assert r[0]["OUT"].dims == {euro: 1}
+        assert r[0]["OUT"].dims == {"euro": 1}
 
     def test_accessors(self):
         from clausal.modules.currency import currency_scale, currency_code, currency_symbol
@@ -151,7 +151,7 @@ class TestMoneyRoundingAndDisplay:
         amt = self._euro("2.675")                    # exact Decimal, sub-scale
         out = _run(money_round, amt, "half_up", "OUT")[0]["OUT"]
         assert out.value == Decimal("2.68")          # not 2.67
-        assert out.dims == {euro: 1}
+        assert out.dims == {"euro": 1}
 
     def test_money_round_half_even(self):
         from clausal.modules.currency import money_round
