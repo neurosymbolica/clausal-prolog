@@ -3,6 +3,13 @@
 Supersedes `SESSION-HANDOFF-2026-09-15-engine-lane-END.md`, which this session
 began by reading. That one's OPEN items 1 and 2 are now CLOSED.
 
+## LANDED 2026-09-16 (later session, on the operator's direct word)
+
+NEXT item 1 is DONE. `c69a59b9` (tree `fdfac1e9`) is now on canonical main and
+the box main by fast-forward, and on the clone main by merge commit `0b39a913`.
+Pure Python, no rebuild; observed on canonical and box with the 37 new/renamed
+tests + funnel lint (exit 0). GitLab not pushed. Items 2–4 below are unchanged.
+
 ## State: NOTHING LANDED — but the blocker is gone
 
     canonical main                        42160eb5   untouched
