@@ -4,8 +4,6 @@ term and the object (spec 2026-09-16-quantity-transfer-form-design.md §4).
 Driven through the engine, not through Python calls: every test loads a
 .clausal module and runs a goal with call().
 """
-from decimal import Decimal
-
 import pytest
 
 from clausal import Var
@@ -91,6 +89,7 @@ def test_a_malformed_term_RAISES_a_type_error_rather_than_failing_quietly(tmp_pa
         list(call("bad", Var(), module=mod))
     inner = ei.value.term.args[0]
     assert inner.functor == "type_error" and inner.args[0] == mint("quantity")
+    assert inner.args[1] == ("quantity", 5, ("units", 1, ("dimensionless",)))
 
 
 def test_a_term_slot_holding_a_bound_variable_still_reads(tmp_path):
@@ -121,6 +120,12 @@ def test_the_object_on_the_term_side_is_taken_as_itself(tmp_path):
 def test_a_non_quantity_on_the_object_side_just_fails(tmp_path):
     mod = _load(tmp_path, PRELUDE + "nope(T) <- quantity_number(T, 7)\n", "qn_fail")
     assert _solutions(mod, "nope", Var()) == []
+
+
+def test_a_bound_term_against_a_non_quantity_object_just_fails(tmp_path):
+    mod = _load(tmp_path, PRELUDE +
+        "nope <- quantity_number(quantity(5, unit(1000, dimensions(metre(1)))), 7)\n", "qn_fail2")
+    assert _solutions(mod, "nope") == []
 
 
 def test_the_relation_is_reachable_by_import_only(tmp_path):
