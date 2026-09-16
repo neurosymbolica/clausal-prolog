@@ -214,3 +214,69 @@ def test_the_seam_still_passes_a_quantity_through_as_ITSELF():
     assert to_term(q, strict=True) is q
     assert to_term(q, strict=False) is q
     assert Quantity not in TO_TERM
+
+
+# ── term -> Quantity (READ) ───────────────────────────────────────────────────
+
+def test_an_emitted_term_reads_back_to_an_EQUAL_object():
+    for q in (Quantity(5, units.kilometre), Quantity(Decimal("1550.00"), eu.euro),
+              Quantity(3, units.percent), Quantity(Fraction(10, 3), units.metre),
+              Quantity(1, units.metre) * Quantity(1, units.second)):
+        back = from_transfer(to_transfer(q))
+        assert isinstance(back, Quantity)
+        assert back == q, q
+        assert hash(back) == hash(q)
+
+
+def test_an_AUTHORED_ratio_is_multiplied_through_on_read():
+    # written by an author: 5 in a unit whose ratio to the standard unit is 1000
+    t = ("quantity", 5, ("unit", 1000, ("dimensions", ("metre", 1))))
+    assert from_transfer(t) == Quantity(5, units.kilometre)
+
+
+def test_a_decimal_ratio_stays_EXACT_on_read():
+    # 3 percent, written with the ratio rather than pre-scaled
+    t = ("quantity", 3, ("unit", ("decimal", 1, 2), ("dimensionless",)))
+    q = from_transfer(t)
+    assert q == Quantity(3, units.percent)
+    assert isinstance(q.value, Decimal) and q.value == Decimal("0.03")
+
+
+def test_an_rdiv_ratio_and_an_rdiv_magnitude_compose_exactly():
+    t = ("quantity", ("rdiv", 1, 3), ("unit", ("rdiv", 1, 2), ("dimensions", ("metre", 1))))
+    q = from_transfer(t)
+    assert q.value == Fraction(1, 6) and isinstance(q.value, Fraction)
+
+
+def test_read_is_ORDER_INSENSITIVE_in_the_dims_slot():
+    sorted_t = ("quantity", 1, ("unit", 1, ("dimensions", ("metre", 1), ("second", 1))))
+    unsorted = ("quantity", 1, ("unit", 1, ("dimensions", ("second", 1), ("metre", 1))))
+    assert from_transfer(unsorted) == from_transfer(sorted_t)
+
+
+def test_a_dimensionless_term_reads_to_an_empty_dims_map():
+    q = from_transfer(("quantity", 4, ("unit", 1, ("dimensionless",))))
+    assert isinstance(q, Quantity) and dict(q.dims) == {} and q.value == 4
+
+
+def test_a_MALFORMED_quantity_term_comes_back_unchanged():
+    bad = [
+        ("quantity", 5),                                              # arity
+        ("quantity", 5, ("unit", 1)),                                 # unit arity
+        ("quantity", 5, ("units", 1, ("dimensionless",))),            # wrong functor
+        ("quantity", 5, ("unit", 1, ("dimensions",))),                # empty dimensions/N
+        ("quantity", 5, ("unit", 1, ("dimensions", ("metre", 0)))),   # zero exponent
+        ("quantity", 5, ("unit", 1, ("dimensions", ("metre", 1), ("metre", 2)))),  # dup
+        ("quantity", "5", ("unit", 1, ("dimensionless",))),           # magnitude not a number
+        ("quantity", 5, ("unit", "1", ("dimensionless",))),           # ratio not a number
+        ("quantity", True, ("unit", 1, ("dimensionless",))),          # bool is not a number
+        ("quantity", 5, ("unit", 1, ("dimensions", ("metre", "1")))), # exponent not int
+    ]
+    for t in bad:
+        assert from_transfer(t) is t, t
+
+
+def test_the_seam_leaves_a_quantity_term_ALONE():
+    t = ("quantity", 5000, ("unit", 1, ("dimensions", ("metre", 1))))
+    assert from_term(t) is t
+    assert "quantity" not in FROM_TERM

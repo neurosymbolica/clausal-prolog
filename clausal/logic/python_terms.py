@@ -393,8 +393,37 @@ def _quantity_to_term(q: Quantity) -> tuple:
     return ("quantity", to_transfer(q.value), ("unit", 1, _dims_to_term(q.dims)))
 
 
+_NUMBER_TYPES = (int, float, Decimal, Fraction)
+
+
+def _transfer_number(x):
+    """A magnitude or ratio slot -> a Python number, or raise."""
+    n = from_transfer(x)
+    if isinstance(n, bool) or not isinstance(n, _NUMBER_TYPES):
+        raise TypeError(f"not a number term: {x!r}")
+    return n
+
+
 def _quantity_from_term(t: tuple) -> Quantity:
-    raise NotImplementedError("read side lands in the next commit")
+    """``('quantity', M, ('unit', R, Dims))`` -> the object, with ``R``
+    multiplied through EXACTLY: an int magnitude with a Decimal ratio stays
+    Decimal, a Fraction with a Fraction stays Fraction (``_num_pair`` is the
+    class's own coercion). The object then normalises as it always does --
+    an integral Fraction presents as an int, a currency magnitude becomes
+    Decimal -- so an emitted term reads back to an EQUAL object."""
+    _, magnitude, unit = t                   # ValueError if the arity is wrong
+    if type(unit) is not tuple or len(unit) != 3 or unit[0] != "unit":
+        raise TypeError("the unit slot must be unit/2")
+    _, ratio, dims_term = unit
+    m = _transfer_number(magnitude)
+    r = _transfer_number(ratio)
+    dims = _dims_from_term(dims_term)
+    if r == 1:
+        value = m
+    else:
+        a, b = Quantity._num_pair(m, r)
+        value = a * b
+    return Quantity(value, dims)
 
 
 register_transfer(Quantity, "quantity", _quantity_to_term, _quantity_from_term)
