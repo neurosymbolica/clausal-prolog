@@ -2154,6 +2154,45 @@ def _value_text(value) -> str:
     return text if _SIMPLE_NUMBER.match(text) else f"({text})"
 
 
+def atom_keyed_dims(dims) -> dict:
+    """A dimension mapping with every key normalised to its ATOM.
+
+    THE one place that knows both spellings. Dims arrive from three
+    directions -- the unit factories, ``Quantity(value, dims)``, and the CLP
+    constraint (``UnitState`` / ``constrain_var_dims``) -- and rulebase code
+    reaches two of them, via ``make_quantity/3`` and ``has_units/2``.
+
+    Normalising in only some of them is not a partial fix but a WRONG one: a
+    quantity keyed by predicates does not compare equal to one keyed by atoms,
+    so `D == 10(newton)` simply stops holding, and a units constraint stops
+    matching the quantity that satisfies it. Both failures are silent.
+
+    Zero exponents are dropped here too, since every caller did that already.
+    """
+    return {
+        (k if type(k) is str else _unit_identifier(k)): v
+        for k, v in dims.items() if v != 0
+    }
+
+
+def _currency_info(key):
+    """The currency metadata for a dimension *key*, or None if it is not one.
+
+    THE single place that turns a dimension key into its metadata. It takes a
+    KEY rather than an atom deliberately, so it works on both sides of the
+    rekey: today *key* is a unit predicate, afterwards it is the atom itself,
+    and ``_unit_identifier`` already answers for both.
+
+    Every caller used to read ``getattr(key, "is_currency", False)`` directly.
+    That spelling returns False for a ``str`` -- SILENTLY -- so it could not
+    survive the rekey, and one choke point is what makes the flip a
+    one-function change instead of a sweep.
+    """
+    from clausal.modules import _unit_registry          # noqa: PLC0415
+    entry = _unit_registry.info(_unit_identifier(key))
+    return entry if entry is not None and entry.is_currency else None
+
+
 def _unit_identifier(key) -> str:
     """The name a dimension is BOUND to — what a rulebase can write.
 
@@ -2374,7 +2413,9 @@ class Quantity:
             if type(product) is Fraction and product.denominator == 1:
                 product = int(product)
             self._value = product
-            self._dims = dims._dims
+            # COPY: _dims is a plain dict now, so aliasing would let one
+            # quantity's mutation reach another's -- and __hash__ reads _dims.
+            self._dims = dict(dims._dims)
             return
         if hasattr(dims, '_dims'):
             # dims is a _UnitsPredicate — extract dims dict
@@ -2390,10 +2431,15 @@ class Quantity:
                 f"used as units"
             )
         self._value = value
-        self._dims = MappingProxyType({k: v for k, v in actual_dims.items() if v != 0})
+        # A PLAIN DICT, not a mappingproxy. The proxy was the one thing
+        # blocking marshalling (a plain {'metre': 1} marshals in 14 bytes), and
+        # it was never needed for hashing: __hash__ goes through
+        # frozenset(self._dims.items()) and does not touch _dims. Immutability
+        # moves to the `dims` PROPERTY, which is where callers reach it.
+        self._dims = atom_keyed_dims(actual_dims)
         if not isinstance(self._value, (Decimal, Fraction)):
             for _k in self._dims:
-                if getattr(_k, "is_currency", False):
+                if _currency_info(_k) is not None:
                     self._value = _to_decimal(self._value)
                     break
         # Precision check only when TAGGING a raw number as a currency (dims is a
@@ -2417,7 +2463,10 @@ class Quantity:
 
     @property
     def dims(self) -> MappingProxyType:
-        return self._dims
+        # A VIEW over the stored dict. __hash__ is computed from _dims, so a
+        # caller mutating it would silently corrupt an already-hashed value:
+        # the guarantee has to survive even though the storage is now mutable.
+        return MappingProxyType(self._dims)
 
     # ── Internal helpers ────────────────────────────────────────────────────
 
@@ -2780,8 +2829,9 @@ class Quantity:
         cur = None
         if len(self._dims) == 1:
             (key, exp), = self._dims.items()
-            if exp == 1 and getattr(key, "is_currency", False):
-                cur = key
+            info = _currency_info(key) if exp == 1 else None
+            if info is not None:
+                cur = info
         if cur is None:
             return format(str(self), spec)
         # currency spec: "<style>" or "<style>,<mode>"; default style code, mode half_even

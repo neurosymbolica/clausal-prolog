@@ -173,7 +173,7 @@ def test_a_ratio_of_money_is_money(tmp_path):
     from clausal.modules.countries.united_states import usd
     (c,) = _one(m, "charge", 1)
     assert c.value == Decimal("46.50")
-    assert dict(c.dims) == {usd: 1}
+    assert dict(c.dims) == {"usd": 1}
 
 
 def test_a_ratio_does_not_add_to_a_dimensioned_amount(tmp_path):

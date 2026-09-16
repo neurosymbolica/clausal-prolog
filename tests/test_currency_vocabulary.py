@@ -32,7 +32,8 @@ class TestFullVocabulary:
             if obj is None:
                 problems.append(("missing", r)); continue
             if not (obj.is_currency and obj.iso_code == r["code"]
-                    and obj.scale == r["scale"] and obj._dims == {obj: 1}):
+                    and obj.scale == r["scale"]
+                    and obj._dims == {CURRENCY_BINDINGS[r["code"]]: 1}):
                 problems.append(("metadata", r))
         assert not problems, problems[:5]
 

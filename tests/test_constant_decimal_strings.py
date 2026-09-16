@@ -65,7 +65,7 @@ def test_the_string_form_stores_a_decimal_not_a_string(tmp_path):
     from clausal.modules.countries.united_states import usd
     assert isinstance(m.s_fee.value, Decimal)
     assert m.s_fee.value == Decimal("19.99")
-    assert m.s_fee.dims == {usd: 1}
+    assert m.s_fee.dims == {"usd": 1}
 
 
 def test_the_currency_directive_takes_it_too(tmp_path):

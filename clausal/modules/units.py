@@ -137,6 +137,17 @@ class _UnitsPredicate(ModulePredicate):
 # ── Unit constructor factories ───────────────────────────────────────────────
 
 
+def _register(name: str) -> None:
+    """Record a non-currency unit in the atom-keyed registry.
+
+    Imported locally so this module keeps its one-way dependency: the registry
+    is data-only and must never import back into `units`, which would build 84
+    Quantity constants and turn the CLP units side channel on for the process.
+    """
+    from clausal.modules import _unit_registry          # noqa: PLC0415
+    _unit_registry.register(name, _unit_registry.UnitInfo(name=name))
+
+
 def _make_unit_pred_base(name: str) -> _UnitsPredicate:
     """Create a base SI unit predicate that uses itself as the dimension key.
 
@@ -144,8 +155,11 @@ def _make_unit_pred_base(name: str) -> _UnitsPredicate:
     ``dims`` dict — e.g. ``{metre: 1}`` — without a circular-definition problem.
     """
     pred = _UnitsPredicate(name)
-    frozen_dims = {pred: 1}   # pred already exists; self-referential key is fine
-    pred._dims = frozen_dims
+    # Keyed by the ATOM, not by `pred`. A unit was never a predicate: it is a
+    # named entry in the registry and the atom is its name. This is also what
+    # makes _dims marshal and makes sorted() work on it.
+    pred._dims = {name: 1}
+    _register(name)
     return pred
 
 
@@ -158,9 +172,13 @@ def _make_unit_pred(name: str, dims: dict) -> _UnitsPredicate:
         D is ++(metre(5))          # explicit form
         eval_(5(metre), D)         # n(Unit) sugar, equivalent
     """
-    frozen_dims = {k: v for k, v in dims.items() if v != 0}
+    from clausal.terms import atom_keyed_dims           # noqa: PLC0415
+    # Callers still pass {kilogram: 1, metre: 1, second: -2} -- predicate
+    # objects, because that is how the definitions read.
+    frozen_dims = atom_keyed_dims(dims)
     pred = _UnitsPredicate(name)
     pred._dims = frozen_dims
+    _register(name)
     return pred
 
 

@@ -26,13 +26,18 @@ def _simple_to_trampoline(simple_fn: Callable) -> Callable:
 
 
 def _currency_of(amount):
-    """Return the currency predicate of a currency Quantity, or None."""
+    """Return the ``UnitInfo`` of a currency Quantity, or None.
+
+    Returns the METADATA, not the dimension key. The key is about to become a
+    bare atom carrying nothing, and every caller here (`_quantize`,
+    `_format_money`) wants `.scale` / `.symbol` / `.iso_code` / `.name` --
+    never the key itself as a key or a constructor.
+    """
+    from clausal.terms import _currency_info            # noqa: PLC0415
     if not isinstance(amount, Quantity) or len(amount.dims) != 1:
         return None
     (key, exp), = amount.dims.items()
-    if exp == 1 and getattr(key, "is_currency", False):
-        return key
-    return None
+    return _currency_info(key) if exp == 1 else None
 
 
 def _quantize(amount, currency, mode_str):

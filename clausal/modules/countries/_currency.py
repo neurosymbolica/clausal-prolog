@@ -50,13 +50,25 @@ def _make_currency(name: str, iso_code: str, scale: int, symbol: str,
     in use.
     """
     pred = _CurrencyPredicate(name)
-    pred._dims = {pred: 1}          # self-referential key — a base dimension
+    pred._dims = {}                 # set below, once the binding atom is known
     pred.iso_code = iso_code
     pred.scale = scale
     pred.symbol = symbol
     pred.start = start
     pred.end = end
     pred.historical = historical
+    # Keyed by the BINDING name -- what _unit_identifier answers and what a
+    # rulebase writes -- not `name`, which `dollar` shares twenty-two ways.
+    from clausal.modules import _unit_registry          # noqa: PLC0415
+    from clausal.terms import _unit_identifier          # noqa: PLC0415
+    _unit_registry.register(
+        _unit_identifier(pred),
+        _unit_registry.UnitInfo(name=name, is_currency=True, iso_code=iso_code,
+                                scale=scale, symbol=symbol, historical=historical,
+                                start=start, end=end))
+    # A currency is a base dimension whose NAME is what a rulebase writes --
+    # the BINDING, not `name`, which `dollar` shares twenty-two ways.
+    pred._dims = {_unit_identifier(pred): 1}
     return pred
 
 
