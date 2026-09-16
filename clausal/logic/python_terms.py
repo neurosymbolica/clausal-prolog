@@ -40,6 +40,18 @@ TWO MODES
                   understand -- raising there refused values that had always
                   been legal, measured at 323 failures.
 
+THE TRANSFER LAYER
+==================
+``TO_TRANSFER`` / ``FROM_TRANSFER`` and ``to_transfer`` / ``from_transfer``
+sit BESIDE the seam registry. A same-interpreter seam PASSES THE OBJECT
+(ruled 2026-09-15) -- a quantity stands in for a number and must reach
+``#=/2`` as itself -- so the entries a subinterpreter, a process boundary or
+a bytecode cache need (``Quantity`` as ``quantity/2``, ``Fraction`` as
+``rdiv/2``) live in their own tables where no seam consumer can reach them.
+The transfer functions consult their tables first and fall through to the
+seam converters, so a Decimal or a date inside a quantity needs no second
+entry. Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
+
 THE DOCUMENTED HAZARD: a tuple already in functor-first form
 ============================================================
 ``("date", 2023, 6, 1)`` is already a term and must not be wrapped as data, but
