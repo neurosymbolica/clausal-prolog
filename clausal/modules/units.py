@@ -34,12 +34,13 @@ Imperial and non-SI unit vectors live in ``imperial``::
 
 Usage in .clausal files::
 
-    -import_from(py.units, [metre, newton, watt, kilo, strip_units])
+    -import_from(py.units, [metre, newton, watt, kilo, strip_units, quantity_number])
 
     eval_(5(metre), D)                   # SI sugar
     eval_(9.8(newton), F)                # SI sugar
     BIG is ++(5 * kilo * newton(1))      # prefix via ++
     strip_units(D, V)                     # extract numeric value
+    quantity_number(T, Q)  # transfer term <-> object; writing T in source needs -private([quantity(A, B), unit(A, B), dimensions(A), metre(A), dimensionless, decimal(A, B)])
 """
 
 from __future__ import annotations
@@ -578,6 +579,10 @@ def _quantity_number_impl(term, number, trail):
     through; (+T, +Q) compares by value; (-, -) instantiation_error; a
     bound but malformed T is a type_error -- RAISED, because a malformed
     term that failed quietly would be the "goal just stops holding" shape.
+
+    A bound non-Quantity ``Number`` FAILS rather than raising, by ruling
+    (spec §4): the relation simply does not hold, and the emit direction
+    has nothing to convert.
     """
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, instantiation_error, type_error)
@@ -607,7 +612,10 @@ def _quantity_number_impl(term, number, trail):
 
 
 def _holds_var(term) -> bool:
-    """True if an UNBOUND variable sits anywhere inside a walked term."""
+    """True if an UNBOUND variable sits inside a walked term's tuple/list/dict
+    structure. Engine term instances (Compound, DictTerm, ...) are not
+    walked: inside a quantity term they are malformed anyway, and the
+    caller's type_error is the loud answer there."""
     if is_var(term):
         return True
     if isinstance(term, (tuple, list)):
