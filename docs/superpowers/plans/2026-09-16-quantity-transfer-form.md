@@ -913,7 +913,18 @@ def _load(tmp_path, src, name):
     return _load_module(name, str(p)).__dict__["$module"]
 
 
-PRELUDE = "-import_from(py.units, [metre, kilometre, percent, basis_point, quantity_number])\n"
+PRELUDE = (
+    "-import_from(py.units, [kilometre, percent, basis_point, quantity_number])\n"
+    "-private([quantity(A, B), unit(A, B), dimensions(A), metre(A), dimensionless, decimal(A, B)])\n"
+)
+# MEASURED 2026-09-16 (controller probe, this tree): with these declarations
+# `X is quantity(5, unit(1000, dimensions(metre(1))))` binds X to the tuple
+# ('quantity', 5, ('unit', 1000, ('dimensions', ('metre', 1)))), `dimensionless`
+# arrives as ('dimensionless',), and a bound R inlines. `is` is unification in
+# .clausal source (`=` is Python syntax, `==` is arithmetic equality). `metre` is
+# NOT imported here on purpose: an imported unit name in argument position builds
+# a Quantity, not the dimension pair metre(1). Each functor arity needs its own
+# declaration, so multi-dimension terms in source are out; Task 3 covers them.
 
 
 def _solutions(mod, functor, *args):
@@ -939,9 +950,9 @@ def test_term_to_object_multiplies_the_ratio_through(tmp_path):
 
 def test_both_bound_compares_by_VALUE(tmp_path):
     mod = _load(tmp_path, PRELUDE +
-        "same <- (eval_(5000(metre), Q), quantity_number(quantity(5, unit(1000, dimensions(metre(1)))), Q))\n"
+        "same <- (eval_(5(kilometre), Q), quantity_number(quantity(5, unit(1000, dimensions(metre(1)))), Q))\n"
         "pct <- (eval_(300(basis_point), Q), quantity_number(quantity(3, unit(decimal(1, 2), dimensionless)), Q))\n"
-        "diff <- (eval_(5001(metre), Q), quantity_number(quantity(5, unit(1000, dimensions(metre(1)))), Q))\n",
+        "diff <- (eval_(6(kilometre), Q), quantity_number(quantity(5, unit(1000, dimensions(metre(1)))), Q))\n",
         "qn_both")
     assert _solutions(mod, "same") == [()]
     assert _solutions(mod, "pct") == [()]
@@ -967,7 +978,7 @@ def test_a_malformed_term_RAISES_a_type_error_rather_than_failing_quietly(tmp_pa
 def test_a_term_slot_holding_a_bound_variable_still_reads(tmp_path):
     # the term is walked (deep deref) before it is read
     mod = _load(tmp_path, PRELUDE +
-        "read(Q) <- (R = 1000, quantity_number(quantity(5, unit(R, dimensions(metre(1)))), Q))\n",
+        "read(Q) <- (R is 1000, quantity_number(quantity(5, unit(R, dimensions(metre(1)))), Q))\n",
         "qn_deref")
     q = Var()
     sols = _solutions(mod, "read", q)
@@ -1089,7 +1100,7 @@ cd /workspace/clausal-bug-fix/.claude/worktrees/iso-l3
 
 Expected: `tests/test_quantity_number.py` all pass; `tests/test_units.py` unchanged against Task 0's red list.
 
-If `quantity(5, unit(1000, dimensions(metre(1))))` written in `.clausal` source does not arrive at the predicate as the tuple `('quantity', 5, ('unit', 1000, ('dimensions', ('metre', 1))))` — check by printing `repr(t)` inside the impl once — then the reader's shape for a compound differs from the wire form and this task must STOP and report: it is the spec's assumption ("post-FLIP every compound is a cell") and the fix is not in this plan.
+MEASURED already (see the PRELUDE note): the term arrives as the tuple. If it nevertheless does not arrive at the predicate as the tuple `('quantity', 5, ('unit', 1000, ('dimensions', ('metre', 1))))` — check by printing `repr(t)` inside the impl once — then the reader's shape for a compound differs from the wire form and this task must STOP and report: it is the spec's assumption ("post-FLIP every compound is a cell") and the fix is not in this plan.
 
 - [ ] **Step 5: Commit**
 
