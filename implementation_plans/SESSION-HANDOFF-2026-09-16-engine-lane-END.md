@@ -10,6 +10,13 @@ the box main by fast-forward, and on the clone main by merge commit `0b39a913`.
 Pure Python, no rebuild; observed on canonical and box with the 37 new/renamed
 tests + funnel lint (exit 0). GitLab not pushed. Items 2–4 below are unchanged.
 
+NEXT item 2 (the transfer form + quantity_number/2) is BUILT on this branch:
+c6819b7e..fdbab6e0, gated NEW 0 against qt-baseline (e43d2fa6),
+49 tests added. Spec docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md,
+plan docs/superpowers/plans/2026-09-16-quantity-transfer-form.md. Not promoted:
+it lands with the dates-are-terms work, behind harness-batch-lane's date
+migration. The exporter's Prolog-side quantity_number/2 is still theirs.
+
 ## State: NOTHING LANDED — but the blocker is gone
 
     canonical main                        42160eb5   untouched
