@@ -242,10 +242,17 @@ def register_transfer(cls: type, functor: str, to_fn, from_fn) -> None:
     FROM_TRANSFER[functor] = from_fn
 
 
-def _fraction_to_term(f: Fraction) -> tuple:
-    """``Fraction`` -> ``('rdiv', N, D)``. A Fraction is always in lowest terms
-    with the sign on the numerator, and an integral one never reaches here as
-    a Fraction (the engine presents it as an int), so nothing normalises."""
+def _fraction_to_term(f: Fraction):
+    """``Fraction`` -> ``('rdiv', N, D)``, always in lowest terms with the
+    sign on the numerator -- except an INTEGRAL Fraction, which emits as a
+    plain int. That is the engine's own rule, the same choke-point
+    ``_decimal_to_term`` already applies to a scale-less Decimal: an
+    integral rational presents as an int. It also keeps ``D > 1`` a true
+    invariant of the wire form, since a bare Fraction arithmetic result
+    (``Fraction(1, 3) + Fraction(2, 3)``) can land on a whole number without
+    ever being constructed as one."""
+    if f.denominator == 1:
+        return f.numerator
     return ("rdiv", f.numerator, f.denominator)
 
 

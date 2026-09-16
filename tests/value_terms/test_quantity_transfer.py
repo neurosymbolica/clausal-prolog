@@ -116,6 +116,15 @@ def test_an_rdiv_term_is_marshal_clean():
     assert marshal.loads(marshal.dumps(t)) == t
 
 
+def test_an_INTEGRAL_fraction_emits_as_an_int_so_D_gt_1_is_an_invariant():
+    # the engine's own rule: an integral rational presents as an int, and the
+    # read side's D > 1 guard would otherwise reject what the emit side wrote
+    f = Fraction(1, 3) + Fraction(2, 3)
+    assert f == 1 and type(f) is Fraction
+    assert to_transfer(f) == 1 and type(to_transfer(f)) is int
+    assert from_transfer(to_transfer(f)) == 1
+
+
 # ── the seam is UNCHANGED for a Fraction ─────────────────────────────────────
 
 def test_the_seam_still_passes_a_fraction_through_on_the_implicit_path():
