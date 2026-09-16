@@ -341,6 +341,65 @@ def from_transfer(value: Any) -> Any:
         return value
 
 
+# ── the dims slot: dimensions/N OR the atom dimensionless ──────────────────
+#
+# The dims slot carries TWO functors (spec §3, section-4 answer §4): the
+# word ``dimensionless`` already names the concept, so the empty case is that
+# atom rather than a degenerate ``('dimensions',)``. The cost is that "the
+# dims slot has functor dimensions" is not free -- so it is said HERE, once,
+# and every site goes through these two functions.
+
+def _dims_to_term(dims) -> tuple:
+    """An atom-keyed dims mapping -> its transfer term, SORTED by atom.
+
+    The stored dict is order-insensitive; the sort is a boundary step so an
+    emitted term is one term. ``dims.items()`` pairs are already
+    ``('metre', 1)`` -- functor-first ``metre(1)`` -- so nothing is rebuilt."""
+    if not dims:
+        return ("dimensionless",)
+    return ("dimensions", *sorted(dims.items()))
+
+
+def _dims_from_term(t) -> dict:
+    """The reverse: ``('dimensionless',)`` or ``('dimensions', *pairs)`` ->
+    an atom-keyed dict. Order-insensitive. Raises on anything else."""
+    if type(t) is not tuple or not t or type(t[0]) is not str:
+        raise TypeError("dims slot is not a term")
+    if t == ("dimensionless",):
+        return {}
+    if t[0] != "dimensions" or len(t) < 2:
+        raise TypeError("dims slot is neither dimensionless nor dimensions/N")
+    dims: dict = {}
+    for pair in t[1:]:
+        if (type(pair) is not tuple or len(pair) != 2
+                or type(pair[0]) is not str or type(pair[1]) is not int
+                or pair[1] == 0 or pair[0] in dims):
+            raise TypeError(f"not a dimension pair: {pair!r}")
+        dims[pair[0]] = pair[1]
+    return dims
+
+
+# ── Quantity <-> quantity/2 ──────────────────────────────────────────────────
+
+from clausal.terms import Quantity  # noqa: E402  (cycle-free: the package loads terms first)
+
+
+def _quantity_to_term(q: Quantity) -> tuple:
+    """``quantity(Magnitude, unit(1, Dims))``. The ratio is ALWAYS 1 on emit:
+    the object normalised at construction and keeps no ratio, so ``5
+    kilometre`` emits as 5000 metre. The magnitude goes through
+    ``to_transfer`` so a Decimal keeps its scale and a Fraction becomes
+    rdiv."""
+    return ("quantity", to_transfer(q.value), ("unit", 1, _dims_to_term(q.dims)))
+
+
+def _quantity_from_term(t: tuple) -> Quantity:
+    raise NotImplementedError("read side lands in the next commit")
+
+
+register_transfer(Quantity, "quantity", _quantity_to_term, _quantity_from_term)
+
+
 #: Left alone.  ``bool`` is listed for the reader, not for the code: it is a
 #: subclass of ``int`` and would pass anyway, but a future edit that narrows the
 #: int case must not silently widen ``True`` to ``1``.

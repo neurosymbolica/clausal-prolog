@@ -140,3 +140,77 @@ def test_the_seam_still_refuses_a_fraction_on_the_strict_path():
 def test_the_seam_leaves_an_rdiv_term_alone():
     t = ("rdiv", 1, 3)
     assert from_term(t) is t
+
+
+# ── Quantity -> term (EMIT) ───────────────────────────────────────────────────
+
+from clausal.logic.python_terms import _dims_from_term, _dims_to_term  # noqa: E402
+from clausal.modules import units  # noqa: E402
+from clausal.modules.countries import european_union as eu  # noqa: E402
+from clausal.terms import Quantity  # noqa: E402
+
+
+def test_the_dims_slot_helper_emits_dimensionless_for_an_empty_map():
+    assert _dims_to_term({}) == ("dimensionless",)
+
+
+def test_the_dims_slot_helper_SORTS_on_emit():
+    assert _dims_to_term({"second": -2, "metre": 1}) == \
+        ("dimensions", ("metre", 1), ("second", -2))
+
+
+def test_five_kilometre_emits_as_5000_metre_with_ratio_ONE():
+    # The object has no ratio slot: the ratio is always 1 on emit (spec §3).
+    q = Quantity(5, units.kilometre)
+    assert to_transfer(q) == \
+        ("quantity", 5000, ("unit", 1, ("dimensions", ("metre", 1))))
+
+
+def test_money_emits_its_decimal_magnitude_WITH_its_scale():
+    q = Quantity(Decimal("1550.00"), eu.euro)
+    assert to_transfer(q) == \
+        ("quantity", ("decimal", 155000, 2), ("unit", 1, ("dimensions", ("euro", 1))))
+
+
+def test_three_percent_emits_as_a_dimensionless_decimal():
+    q = Quantity(3, units.percent)
+    assert to_transfer(q) == \
+        ("quantity", ("decimal", 3, 2), ("unit", 1, ("dimensionless",)))
+
+
+def test_a_divided_value_emits_an_rdiv_magnitude():
+    q = Quantity(Fraction(10, 3), units.metre)
+    assert to_transfer(q) == \
+        ("quantity", ("rdiv", 10, 3), ("unit", 1, ("dimensions", ("metre", 1))))
+
+
+def test_a_two_dimension_quantity_emits_its_dims_sorted():
+    q = Quantity(1, units.metre) * Quantity(1, units.second)
+    assert to_transfer(q) == \
+        ("quantity", 1, ("unit", 1, ("dimensions", ("metre", 1), ("second", 1))))
+
+
+def test_a_quantity_inside_a_list_converts_too():
+    q = Quantity(5, units.kilometre)
+    assert to_transfer([q]) == \
+        [("quantity", 5000, ("unit", 1, ("dimensions", ("metre", 1))))]
+
+
+def test_every_emitted_transfer_term_is_marshal_clean_and_the_object_is_NOT():
+    qs = [Quantity(5, units.kilometre), Quantity(Decimal("1550.00"), eu.euro),
+          Quantity(3, units.percent), Quantity(Fraction(10, 3), units.metre),
+          Quantity(1, units.metre) * Quantity(1, units.second)]
+    for q in qs:
+        t = to_transfer(q)
+        assert marshal.loads(marshal.dumps(t)) == t, t
+    with pytest.raises(ValueError):          # positive control
+        marshal.dumps(qs[0])
+
+
+# ── the seam is UNCHANGED for a Quantity ─────────────────────────────────────
+
+def test_the_seam_still_passes_a_quantity_through_as_ITSELF():
+    q = Quantity(5, units.kilometre)
+    assert to_term(q, strict=True) is q
+    assert to_term(q, strict=False) is q
+    assert Quantity not in TO_TERM
