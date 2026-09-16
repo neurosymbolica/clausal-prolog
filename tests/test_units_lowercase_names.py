@@ -230,8 +230,10 @@ class TestTitleCaseAliases:
         # Predicates exported from `units`, not units themselves — they have
         # no TitleCase spelling to alias. `compatible_units` is the raising
         # sibling of `has_units` (2026-09-11).
+        # `quantity_number` is the transfer-term <-> object relation
+        # (2026-09-16), a predicate like the others here.
         expected = {"dimension_of", "strip_units", "make_quantity",
-                    "has_units", "compatible_units"}
+                    "has_units", "compatible_units", "quantity_number"}
         # Units that POSTDATE the TitleCase retirement have no TitleCase
         # ancestor to alias, and minting one would be adding to the very
         # vocabulary the 2026-09-10 load-time error exists to remove. Derived
