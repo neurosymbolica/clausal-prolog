@@ -94,6 +94,16 @@ def test_a_transfer_entry_may_not_shadow_a_seam_entry():
         register_transfer(Fresh2, "decimal", lambda v: v, lambda t: t)
 
 
+def test_a_seam_entry_may_not_shadow_a_transfer_entry_either():
+    from clausal.logic.python_terms import register
+    class Fresh3:
+        pass
+    with pytest.raises(ValueError, match="already"):
+        register(Fraction, "fraction2", lambda v: v, lambda t: t)
+    with pytest.raises(ValueError, match="already"):
+        register(Fresh3, "rdiv", lambda v: v, lambda t: t)
+
+
 # ── Fraction <-> rdiv/2 ───────────────────────────────────────────────────────
 
 def test_a_fraction_becomes_rdiv_with_the_sign_on_the_numerator():
@@ -240,6 +250,9 @@ def test_a_decimal_ratio_stays_EXACT_on_read():
     q = from_transfer(t)
     assert q == Quantity(3, units.percent)
     assert isinstance(q.value, Decimal) and q.value == Decimal("0.03")
+    t2 = ("quantity", 5, ("unit", ("decimal", 100, 2), ("dimensions", ("metre", 1))))
+    q2 = from_transfer(t2)
+    assert isinstance(q2.value, Decimal) and q2.value == Decimal("5.00")
 
 
 def test_an_rdiv_ratio_and_an_rdiv_magnitude_compose_exactly():
@@ -280,3 +293,58 @@ def test_the_seam_leaves_a_quantity_term_ALONE():
     t = ("quantity", 5000, ("unit", 1, ("dimensions", ("metre", 1))))
     assert from_term(t) is t
     assert "quantity" not in FROM_TERM
+
+
+# ── the tuple rule: a str-headed tuple is a compound ────────────────────────
+
+def test_to_transfer_is_IDEMPOTENT_on_a_well_formed_transfer_term():
+    t = to_transfer(Quantity(5, units.kilometre))
+    assert to_transfer(t) is t
+    r = to_transfer(Fraction(1, 3))
+    assert to_transfer(r) is r
+
+
+def test_a_LOOK_ALIKE_registered_head_is_a_compound_whose_arguments_still_convert():
+    # a live object inside a "transfer" term is the one thing this layer must never return
+    q = Quantity(5, units.kilometre)
+    out = to_transfer(("quantity", q, 3))
+    assert out == ("quantity", to_transfer(q), 3)
+    assert marshal.loads(marshal.dumps(out)) == out
+    out2 = to_transfer(("rdiv", Fraction(1, 2), "x"))
+    assert out2 == ("rdiv", ("rdiv", 1, 2), "x")
+    assert marshal.loads(marshal.dumps(out2)) == out2
+
+
+def test_to_transfer_of_an_empty_tuple_is_the_empty_data_tuple():
+    assert to_transfer(()) == ("()",)
+    assert to_transfer([()]) == [("()",)]
+    assert from_transfer(("()",)) == ()
+
+
+def test_a_str_headed_tuple_is_a_COMPOUND_and_round_trips_with_its_head():
+    t = to_transfer(("price", Fraction(1, 2)))
+    assert t == ("price", ("rdiv", 1, 2))
+    assert from_transfer(t) == ("price", Fraction(1, 2))
+
+
+def test_a_quantity_nested_under_an_unregistered_functor_reads_back():
+    q = Quantity(5, units.kilometre)
+    t = to_transfer(("price", q))
+    back = from_transfer(t)
+    assert back == ("price", q) and isinstance(back[1], Quantity)
+
+
+def test_a_tagged_data_tuple_still_converts_its_payload():
+    q = Quantity(5, units.kilometre)
+    out = to_transfer(("()", q))
+    assert out == ("()", to_transfer(q))
+    assert marshal.loads(marshal.dumps(out)) == out
+
+
+def test_the_dims_slot_helper_reads_both_functors_and_raises_on_anything_else():
+    assert _dims_from_term(("dimensionless",)) == {}
+    assert _dims_from_term(("dimensions", ("second", -2), ("metre", 1))) == {"metre": 1, "second": -2}
+    for bad in (("dimensions",), ("dims", ("metre", 1)), ("dimensions", ("metre", 0)),
+                ("dimensions", ("metre", 1), ("metre", 2)), ("dimensions", ("metre", "1")), "dimensionless"):
+        with pytest.raises((TypeError, ValueError)):
+            _dims_from_term(bad)

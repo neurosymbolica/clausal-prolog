@@ -50,7 +50,10 @@ a bytecode cache need (``Quantity`` as ``quantity/2``, ``Fraction`` as
 ``rdiv/2``) live in their own tables where no seam consumer can reach them.
 The transfer functions consult their tables first and fall through to the
 seam converters, so a Decimal or a date inside a quantity needs no second
-entry. Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
+entry. Unlike the seam, the transfer layer reads and writes compounds
+recursively -- it carries engine terms, where every compound is a str-headed
+tuple, so a registered head's arguments still convert instead of being left
+alone. Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
 
 THE DOCUMENTED HAZARD: a tuple already in functor-first form
 ============================================================
@@ -173,6 +176,19 @@ TO_TERM: "dict[type, Any]" = {}
 #: tuple recurses, because only it can contain anything.
 FROM_TERM: "dict[str, Any]" = {}
 
+#: Python type -> the function yielding its TRANSFER term. Exact type, as
+#: for ``TO_TERM``, and for the same reason.
+#:
+#: Defined HERE, above ``register``, rather than down in THE TRANSFER LAYER
+#: section below: ``register``'s guard checks both tables, and the
+#: module-level ``register(...)`` calls for the date family run before that
+#: section's code, so the table must already exist when they run.
+TO_TRANSFER: "dict[type, Any]" = {}
+
+#: Functor string -> the function rebuilding the Python value from a
+#: transfer term. Same reason as ``TO_TRANSFER`` above.
+FROM_TRANSFER: "dict[str, Any]" = {}
+
 
 def register(cls: type, functor: str, to_fn, from_fn) -> None:
     """Add a bidirectional conversion. OVERRIDING IS REFUSED.
@@ -182,12 +198,16 @@ def register(cls: type, functor: str, to_fn, from_fn) -> None:
     means, and a term that means different things in different modules is not a
     term. If a second registration is ever legitimate, it needs a design for
     which one wins at a CROSSING, and that does not exist.
+
+    Also refuses to shadow a TRANSFER entry (roborev F2): one class, one
+    shape, whichever layer owns it -- the same symmetric rule
+    ``register_transfer`` applies in the other direction.
     """
-    if cls in TO_TERM:
+    if cls in TO_TERM or cls in TO_TRANSFER:
         raise ValueError(
-            f"register: {cls.__name__} already converts to "
-            f"{TO_TERM[cls].__name__}; overriding is not allowed")
-    if functor in FROM_TERM:
+            f"register: {cls.__name__} already has a conversion; "
+            f"overriding is not allowed")
+    if functor in FROM_TERM or functor in FROM_TRANSFER:
         raise ValueError(
             f"register: functor {functor!r} is already registered; "
             f"overriding is not allowed")
@@ -229,14 +249,9 @@ register(tuple, TUPLE_TAG, _tuple_to_term, _tuple_from_term)
 # seam as a term would silently stop computing.
 #
 # Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
-
-#: Python type -> the function yielding its TRANSFER term. Exact type, as
-#: for ``TO_TERM``, and for the same reason.
-TO_TRANSFER: "dict[type, Any]" = {}
-
-#: Functor string -> the function rebuilding the Python value from a
-#: transfer term.
-FROM_TRANSFER: "dict[str, Any]" = {}
+#
+# ``TO_TRANSFER`` / ``FROM_TRANSFER`` themselves are defined above, just
+# before ``register`` -- see the comment there for why.
 
 
 def register_transfer(cls: type, functor: str, to_fn, from_fn) -> None:
@@ -287,12 +302,36 @@ def _fraction_from_term(t: tuple) -> Fraction:
 register_transfer(Fraction, "rdiv", _fraction_to_term, _fraction_from_term)
 
 
-def _already_a_transfer_term(value: tuple) -> bool:
-    """A tuple already in transfer form must not be wrapped as data -- the
-    same DOCUMENTED HAZARD as ``_already_a_term``, one layer up."""
-    if _already_a_term(value):
+def _well_formed_transfer_term(value: tuple) -> bool:
+    """True only for a tuple that is ALREADY a well-formed transfer term:
+    a registered transfer functor whose components rebuild, or a well-formed
+    seam term (date family, decimal). NARROW on purpose, like
+    ``_already_a_term``: a head that merely LOOKS registered is a compound
+    with a bad payload, and its arguments still need converting -- otherwise
+    a live object could ride inside the returned term, which is the one
+    thing this layer exists to prevent."""
+    if not value or type(value[0]) is not str:
+        return False
+    rebuild = FROM_TRANSFER.get(value[0])
+    if rebuild is not None:
+        try:
+            rebuild(value)
+        except (TypeError, ValueError, OverflowError):
+            return False
         return True
-    return type(value[0]) is str and value[0] in FROM_TRANSFER
+    if value[0] == TUPLE_TAG:
+        return False                   # a data tuple's payload still converts
+    return _already_a_term(value)      # a well-formed date / decimal term
+
+
+def _map_args(value: tuple, fn) -> tuple:
+    """Apply *fn* to a compound's arguments (or a tagged data tuple's
+    payload), keeping the head. Returns *value* ITSELF when nothing changed,
+    so a term that needed no conversion keeps its identity."""
+    args = tuple(fn(e) for e in value[1:])
+    if len(args) == len(value) - 1 and all(a is b for a, b in zip(args, value[1:])):
+        return value
+    return (value[0],) + args
 
 
 def to_transfer(value: Any) -> Any:
@@ -302,7 +341,11 @@ def to_transfer(value: Any) -> Any:
     first, and it does NOT wave an engine-owned object through -- a transfer
     is the one place a Quantity must not pass as itself. It is always strict:
     a caller asking for a transfer form has nowhere to put an object.
+
+    The tuple rule: a str-headed tuple is a compound; only an empty or
+    non-str-headed tuple is data.
     """
+    _ensure_quantity_registered()
     if isinstance(value, _SCALARS):
         return value
     from clausal.logic.variables import Var  # noqa: PLC0415
@@ -317,9 +360,16 @@ def to_transfer(value: Any) -> Any:
     if isinstance(value, dict):
         return {to_transfer(k): to_transfer(v) for k, v in value.items()}
     if isinstance(value, tuple):
-        if _already_a_transfer_term(value):
-            return value
-        return (TUPLE_TAG,) + tuple(to_transfer(e) for e in value)
+        if not value or type(value[0]) is not str:
+            # DATA: a Python tuple, not a term. Tagged so it reads back as one.
+            return (TUPLE_TAG,) + tuple(to_transfer(e) for e in value)
+        if _well_formed_transfer_term(value):
+            return value               # idempotent
+        # A COMPOUND (or an already-tagged data tuple): head kept, arguments
+        # convert. This is where the transfer layer diverges from the seam's
+        # narrow rule on purpose -- it carries ENGINE terms, where every
+        # compound is a str-headed tuple, so that is the common case here.
+        return _map_args(value, to_transfer)
     if _is_already_engine_term(value):
         # An engine term type with no transfer entry (an AttVar, say). It IS
         # the representation; nothing to convert.
@@ -333,7 +383,11 @@ def from_transfer(value: Any) -> Any:
     ``FROM_TRANSFER`` first, then the seam registry. A term with no registered
     functor, or a look-alike whose components do not fit, comes back
     UNCHANGED -- the same policy as ``from_term``, for the same reason.
+
+    The tuple rule: a str-headed tuple is a compound; only an empty or
+    non-str-headed tuple is data.
     """
+    _ensure_quantity_registered()
     if isinstance(value, _SCALARS):
         return value
     if isinstance(value, list):
@@ -345,12 +399,15 @@ def from_transfer(value: Any) -> Any:
     if value[0] == TUPLE_TAG:
         return tuple(from_transfer(e) for e in value[1:])
     rebuild = FROM_TRANSFER.get(value[0])
-    if rebuild is None:
-        return from_term(value)
-    try:
-        return rebuild(value)
-    except (TypeError, ValueError, OverflowError):
-        return value
+    if rebuild is not None:
+        try:
+            return rebuild(value)
+        except (TypeError, ValueError, OverflowError):
+            pass                       # a look-alike: read it as a compound
+    seam = from_term(value)
+    if seam is not value:
+        return seam                    # a registered SEAM shape (date, decimal)
+    return _map_args(value, from_transfer)   # any other compound: arguments read
 
 
 # ── the dims slot: dimensions/N OR the atom dimensionless ──────────────────
@@ -392,11 +449,14 @@ def _dims_from_term(t) -> dict:
 
 
 # ── Quantity <-> quantity/2 ──────────────────────────────────────────────────
+#
+# ``Quantity`` is registered lazily, on first use of ``to_transfer`` /
+# ``from_transfer`` -- see ``_ensure_quantity_registered`` below -- rather
+# than at module load, so that ``clausal.terms`` (imported by everything)
+# could itself import this module without a cycle (roborev F7 / review M4).
+# The registry stays a LEAF.
 
-from clausal.terms import Quantity  # noqa: E402  (cycle-free: the package loads terms first)
-
-
-def _quantity_to_term(q: Quantity) -> tuple:
+def _quantity_to_term(q: "Quantity") -> tuple:
     """``quantity(Magnitude, unit(1, Dims))``. The ratio is ALWAYS 1 on emit:
     the object normalised at construction and keeps no ratio, so ``5
     kilometre`` emits as 5000 metre. The magnitude goes through
@@ -416,13 +476,14 @@ def _transfer_number(x):
     return n
 
 
-def _quantity_from_term(t: tuple) -> Quantity:
+def _quantity_from_term(t: tuple) -> "Quantity":
     """``('quantity', M, ('unit', R, Dims))`` -> the object, with ``R``
     multiplied through EXACTLY: an int magnitude with a Decimal ratio stays
     Decimal, a Fraction with a Fraction stays Fraction (``_num_pair`` is the
     class's own coercion). The object then normalises as it always does --
     an integral Fraction presents as an int, a currency magnitude becomes
     Decimal -- so an emitted term reads back to an EQUAL object."""
+    from clausal.terms import Quantity  # noqa: PLC0415
     _, magnitude, unit = t                   # ValueError if the arity is wrong
     if type(unit) is not tuple or len(unit) != 3 or unit[0] != "unit":
         raise TypeError("the unit slot must be unit/2")
@@ -430,7 +491,7 @@ def _quantity_from_term(t: tuple) -> Quantity:
     m = _transfer_number(magnitude)
     r = _transfer_number(ratio)
     dims = _dims_from_term(dims_term)
-    if r == 1:
+    if type(r) is int and r == 1:
         value = m
     else:
         a, b = Quantity._num_pair(m, r)
@@ -438,7 +499,13 @@ def _quantity_from_term(t: tuple) -> Quantity:
     return Quantity(value, dims)
 
 
-register_transfer(Quantity, "quantity", _quantity_to_term, _quantity_from_term)
+def _ensure_quantity_registered() -> None:
+    """Register the Quantity converters on first use. ``clausal.terms`` is
+    imported HERE, not at module scope, so this registry stays a leaf that
+    ``clausal.terms`` could itself import without a cycle."""
+    from clausal.terms import Quantity  # noqa: PLC0415
+    if Quantity not in TO_TRANSFER:
+        register_transfer(Quantity, "quantity", _quantity_to_term, _quantity_from_term)
 
 
 #: Left alone.  ``bool`` is listed for the reader, not for the code: it is a
