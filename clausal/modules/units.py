@@ -565,6 +565,58 @@ def _make_dimensioned_impl(value, dims_in, d_out, trail):
         yield None
 
 
+def _quantity_number_impl(term, number, trail):
+    """quantity_number(QuantityTerm, Number): the EXPLICIT conversion between
+    a quantity's transfer term and the object (spec 2026-09-16, §4).
+
+    In Clausal ``Number`` is the OBJECT: a quantity stands in for a number
+    and must reach ``#=/2`` as itself. A Prolog with no units binds the
+    magnitude scaled to the standard unit instead; that half lives in the
+    exporter's per-dialect prelude, not here.
+
+    Modes: (-T, +Q) emits, ratio 1; (+T, -Q) reads, ratio multiplied
+    through; (+T, +Q) compares by value; (-, -) instantiation_error; a
+    bound but malformed T is a type_error -- RAISED, because a malformed
+    term that failed quietly would be the "goal just stops holding" shape.
+    """
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    from clausal.logic.python_terms import from_transfer, to_transfer  # noqa: PLC0415
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+
+    t, n = deref(term), deref(number)
+    if is_var(t):
+        if is_var(n):
+            raise LogicException(instantiation_error("quantity_number/2"))
+        if not isinstance(n, Quantity):
+            return                              # the relation does not hold
+        if unify(t, to_transfer(n), trail):
+            yield None
+        return
+    if isinstance(t, Quantity):
+        built = t                               # the object, taken as itself
+    else:
+        walked = _deref_walk(t)                 # bound vars inside the term
+        if _holds_var(walked):
+            raise LogicException(instantiation_error("quantity_number/2"))
+        built = from_transfer(walked)
+        if not isinstance(built, Quantity):
+            raise LogicException(type_error("quantity", walked, "quantity_number/2"))
+    if unify(n, built, trail):
+        yield None
+
+
+def _holds_var(term) -> bool:
+    """True if an UNBOUND variable sits anywhere inside a walked term."""
+    if is_var(term):
+        return True
+    if isinstance(term, (tuple, list)):
+        return any(_holds_var(e) for e in term)
+    if isinstance(term, dict):
+        return any(_holds_var(k) or _holds_var(v) for k, v in term.items())
+    return False
+
+
 def _unit_dims(unit):
     """The dims a UNIT expression denotes: a base or derived predicate, a
     scaled unit (``kilometre``, ``usd_cent`` -- both ``Quantity``), or a
@@ -650,6 +702,9 @@ strip_units._register(2, _simple_to_trampoline(_strip_dimensions_impl))
 
 make_quantity = _UnitsPredicate("make_quantity")
 make_quantity._register(3, _simple_to_trampoline(_make_dimensioned_impl))
+
+quantity_number = _UnitsPredicate("quantity_number")
+quantity_number._register(2, _simple_to_trampoline(_quantity_number_impl))
 
 # Register the "units" attribute hook for AttVar-based dimensional variables.
 import clausal.logic.units_constraint as _units_constraint  # noqa: F401
