@@ -57,11 +57,14 @@ from __future__ import annotations
 import dataclasses
 import datetime as _dt
 from decimal import Decimal
+from fractions import Fraction
 from typing import Any
 
 from clausal.logic.cells import TUPLE_TAG
 
-__all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM"]
+__all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM",
+           "to_transfer", "from_transfer", "register_transfer",
+           "TO_TRANSFER", "FROM_TRANSFER"]
 
 
 def _decimal_to_term(d: Decimal) -> tuple:
@@ -192,6 +195,143 @@ register(_dt.timedelta, "timedelta",
          lambda t: _dt.timedelta(*t[1:]))
 register(Decimal, "decimal", _decimal_to_term, _decimal_from_term)
 register(tuple, TUPLE_TAG, _tuple_to_term, _tuple_from_term)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# THE TRANSFER LAYER -- beside the seam registry, not inside it
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# A same-interpreter seam PASSES THE OBJECT (ruled 2026-09-15): a quantity
+# stands in for a number and must reach ``#=/2`` as itself. Only a boundary
+# that cannot carry an object -- a subinterpreter, a process, a bytecode
+# cache -- needs a term. Those entries live HERE, in their own tables, so
+# that nothing consulting the seam registry (``py.datetime``'s wrapper, a
+# ``++`` hook) can ever convert a quantity at a seam. ``to_transfer`` and
+# ``from_transfer`` consult these tables FIRST and fall through to the seam
+# converters, which is what makes a Decimal magnitude or a date inside a
+# quantity free: one dispatcher, every registered shape.
+#
+# The transfer tables are also where a ``Fraction`` lives. It cannot be a
+# seam entry: the engine has no arithmetic on an ``rdiv`` term yet (that is
+# sequenced with the CLP(Q) C port), so a divided money value crossing a
+# seam as a term would silently stop computing.
+#
+# Spec: docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md
+
+#: Python type -> the function yielding its TRANSFER term. Exact type, as
+#: for ``TO_TERM``, and for the same reason.
+TO_TRANSFER: "dict[type, Any]" = {}
+
+#: Functor string -> the function rebuilding the Python value from a
+#: transfer term.
+FROM_TRANSFER: "dict[str, Any]" = {}
+
+
+def register_transfer(cls: type, functor: str, to_fn, from_fn) -> None:
+    """Add a transfer-only conversion. OVERRIDING IS REFUSED, and so is
+    shadowing a SEAM entry: one class, one shape, whichever layer owns it."""
+    if cls in TO_TRANSFER or cls in TO_TERM:
+        raise ValueError(
+            f"register_transfer: {cls.__name__} already has a conversion; "
+            f"overriding is not allowed")
+    if functor in FROM_TRANSFER or functor in FROM_TERM:
+        raise ValueError(
+            f"register_transfer: functor {functor!r} is already registered; "
+            f"overriding is not allowed")
+    TO_TRANSFER[cls] = to_fn
+    FROM_TRANSFER[functor] = from_fn
+
+
+def _fraction_to_term(f: Fraction) -> tuple:
+    """``Fraction`` -> ``('rdiv', N, D)``. A Fraction is always in lowest terms
+    with the sign on the numerator, and an integral one never reaches here as
+    a Fraction (the engine presents it as an int), so nothing normalises."""
+    return ("rdiv", f.numerator, f.denominator)
+
+
+def _fraction_from_term(t: tuple) -> Fraction:
+    """The reverse. Anything that is not ``rdiv(int, int)`` in lowest terms
+    with ``D > 1`` is a look-alike and raises, which ``from_transfer`` turns
+    into "unchanged" -- the same policy as ``from_term``."""
+    _, n, d = t                              # ValueError if the arity is wrong
+    for x in (n, d):
+        if type(x) is not int:               # bool is a subclass; refuse it
+            raise TypeError("rdiv components must be ints")
+    if d <= 1:
+        raise ValueError("rdiv denominator must be > 1")
+    f = Fraction(n, d)
+    if (f.numerator, f.denominator) != (n, d):
+        raise ValueError("rdiv is not in lowest terms")
+    return f
+
+
+register_transfer(Fraction, "rdiv", _fraction_to_term, _fraction_from_term)
+
+
+def _already_a_transfer_term(value: tuple) -> bool:
+    """A tuple already in transfer form must not be wrapped as data -- the
+    same DOCUMENTED HAZARD as ``_already_a_term``, one layer up."""
+    if _already_a_term(value):
+        return True
+    return type(value[0]) is str and value[0] in FROM_TRANSFER
+
+
+def to_transfer(value: Any) -> Any:
+    """*value* as a TRANSFER term, recursively.
+
+    Differs from ``to_term`` in exactly two ways: it consults ``TO_TRANSFER``
+    first, and it does NOT wave an engine-owned object through -- a transfer
+    is the one place a Quantity must not pass as itself. It is always strict:
+    a caller asking for a transfer form has nowhere to put an object.
+    """
+    if isinstance(value, _SCALARS):
+        return value
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    if isinstance(value, Var):
+        raise TypeError("to_transfer: a logic variable has no transfer form; "
+                        "bind it or leave it out of the transferred term")
+    convert = TO_TRANSFER.get(type(value))
+    if convert is not None:
+        return convert(value)
+    if isinstance(value, list):
+        return [to_transfer(v) for v in value]
+    if isinstance(value, dict):
+        return {to_transfer(k): to_transfer(v) for k, v in value.items()}
+    if isinstance(value, tuple):
+        if _already_a_transfer_term(value):
+            return value
+        return (TUPLE_TAG,) + tuple(to_transfer(e) for e in value)
+    if _is_already_engine_term(value):
+        # An engine term type with no transfer entry (an AttVar, say). It IS
+        # the representation; nothing to convert.
+        return value
+    return to_term(value, strict=True)
+
+
+def from_transfer(value: Any) -> Any:
+    """A TRANSFER term back to its Python value, recursively.
+
+    ``FROM_TRANSFER`` first, then the seam registry. A term with no registered
+    functor, or a look-alike whose components do not fit, comes back
+    UNCHANGED -- the same policy as ``from_term``, for the same reason.
+    """
+    if isinstance(value, _SCALARS):
+        return value
+    if isinstance(value, list):
+        return [from_transfer(v) for v in value]
+    if isinstance(value, dict):
+        return {from_transfer(k): from_transfer(v) for k, v in value.items()}
+    if type(value) is not tuple or not value or type(value[0]) is not str:
+        return value
+    if value[0] == TUPLE_TAG:
+        return tuple(from_transfer(e) for e in value[1:])
+    rebuild = FROM_TRANSFER.get(value[0])
+    if rebuild is None:
+        return from_term(value)
+    try:
+        return rebuild(value)
+    except (TypeError, ValueError, OverflowError):
+        return value
 
 
 #: Left alone.  ``bool`` is listed for the reader, not for the code: it is a
