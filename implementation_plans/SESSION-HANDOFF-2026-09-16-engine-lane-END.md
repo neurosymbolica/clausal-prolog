@@ -20,6 +20,67 @@ OPEN for the consumer design: `from_transfer` converts any tuple headed
 `quantity`/`rdiv` at any depth, so the first real boundary needs a ruling on
 a rulebase's own `quantity/2` term crossing it.
 
+NEXT item 3 (PredicateMeta P1 reroutes) is BUILT on this branch:
+`eef9d8b2..9f80cf4c`, gated NEW 0 against p1-baseline (`eef9d8b2`), 37 tests
+added; spec `docs/superpowers/specs/2026-09-17-predmeta-p1-reroutes-design.md`,
+plan `docs/superpowers/plans/2026-09-17-predmeta-p1-reroutes.md`.
+
+Census (`tools/predmeta_census/P1_SITES.tsv`): 10 rows `-done` (4 `R-done`,
+4 `R!-done`, 1 `S-done`, 1 `R-enum-done`), 40 still expected — checked by
+`check_p1.py` against the working tree for done rows and the canonical anchor
+for the rest.
+
+Four sites LEFT, each with an in-tree measurement, at these WORKTREE lines
+(canonical-tree line numbers in the TSV, which drift from these):
+
+* `compiler_v2.py:239` (S) — the guard is not redundant: 34 of 14,615
+  arrivals over the suite find a non-class under a functor that has clause
+  nodes.
+* `compiler_v2.py:292` (R, THE WART) — the `-dynamic` set lives on the
+  class's own row, and for a clause-less declaration that row is still
+  DETACHED here, so `db` cannot name it; the set does not move.
+* `compiler_v2.py:930` and `compiler_v2.py:968` (R) — a predicate DECLARED
+  with no clauses has a class and no row at all; `db.row(...)` would refuse
+  a `-discontiguous`/`-table` load these two sites accept today (spec §4).
+
+Class reads left at CLOSED sites (deliberate, not leftover): `compiler_v2.py`
+313-332 keeps `pred_cls` for `_belongs_elsewhere`/`_bind_row` after the
+arity-checked row read; `database_ops.py`'s `_find_pred_cls` keeps the
+`type(head)` identity comparison and restores a class fallback for a class
+without a local row (review round 1, `13dcd93e`); `compiler_v2.py` ~868's
+`_redefinition_error` diagnostic still takes `pred_cls` as an argument (it
+arrives already resolved — the isinstance test there was a `None` check).
+
+The equivalence has a measured LIMIT: `db.row(f, a) is not None` is exact for
+clause-having and `-dynamic`-declared predicates, and WRONG for a predicate
+DECLARED with no clauses and not `-dynamic` — that shape is a `PredicateMeta`
+in the module dict with no row at all. `tests/predmeta_p1/test_membership_equivalence.py`
+now pins this as a NEGATIVE case
+(`test_row_existence_is_NOT_equivalent_for_a_declared_clause_less_predicate`):
+if it ever starts passing because `row()` changed meaning, the three sites
+left on the class for this reason (`compiler_v2.py` 930/968 and
+`_find_pred_cls`'s fallback) can be reconsidered.
+
+harness-batch-lane measured 82 of 82 sealed harnesses UNCHANGED at branch tip
+`6aab7b14` — a CUMULATIVE null across the range `c69a59b9..6aab7b14`
+containing the arity-exact change, NOT an attributable "P1 moved no row" (it
+is written exactly that way on purpose); a re-run at the final tip is
+agreed. Their constraint: `b26f41dc` (bare-date refusal) promotes TOGETHER
+with dates-as-terms.
+
+Landing day: `P1_SITES.tsv` column 2 (canonical line numbers) must be
+refreshed for every non-done row once these commits reach the canonical
+tree — the done rows' check already flips to a working-tree absence test for
+exactly this reason (`9f80cf4c`).
+
+Todos filed on this branch: `dynamic-at-another-arity-moves-the-class`
+(pre-existing, found by Task 3, `todo/dynamic-at-another-arity-moves-the-class-2026-09-17.md`);
+`bind-row-does-not-migrate-index-plans`
+(`todo/bind-row-does-not-migrate-index-plans-2026-09-17.md`, filed this
+session, not yet committed); `bucket-refs-ir-parallel-parity-is-vacuous`
+(`todo/bucket-refs-ir-parallel-parity-is-vacuous-2026-09-17.md`, filed this
+session, not yet committed).
+
 ## State: NOTHING LANDED — but the blocker is gone
 
     canonical main                        42160eb5   untouched
