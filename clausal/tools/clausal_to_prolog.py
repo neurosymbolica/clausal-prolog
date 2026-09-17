@@ -33,6 +33,8 @@ from clausal.tools.prolog_operators import OperatorTable
 from clausal.templating.term_rewriting import (
     _is_arrow_adjacent as _engine_is_arrow_adjacent,
     _leftmost_usub as _engine_leftmost_usub,
+    _table_directive_call as _engine_table_directive_call,
+    _expand_currency_table as _engine_expand_currency_table,
 )
 from clausal.tools.prolog_dialect import (
     Dialect,
@@ -949,6 +951,16 @@ class _ClausalToProlog:
         if node.keywords or len(node.args) != 1:
             return None
         unit = node.args[0]
+        if isinstance(unit, python_ast.Attribute):
+            # A QUALIFIED unit atom -- `united_states.usd`, the spelling the
+            # table-directive expansion produces because the declaration names
+            # its unit through the importing module. `_unit_leaf_names` has
+            # always resolved this shape ("a qualified european_union.euro
+            # contributes euro"); this lowering did not, so a qualified unit
+            # was refused as a "compound unit expression" and took its whole
+            # module down with it. The two now agree, which is the point: one
+            # notion of what a unit atom is, not two that differ by a dot.
+            unit = python_ast.Name(id=unit.attr, ctx=python_ast.Load())
         if not isinstance(unit, python_ast.Name) or _is_var_in_name_position(unit.id):
             # A unit is a NAME position -- the same argument as the callable
             # and the qualified-name cases.  Asking the LEXICAL rule here
@@ -3351,12 +3363,60 @@ def clausal_source_to_prolog_ast(source: str, *,
     if dialect is None:
         dialect = Dialect.iso()
     tree = python_ast.parse(source)
+    _expand_table_directives(tree)
     converter = _ClausalToProlog(dialect, strict=strict,
                                  module_path=module_path,
                                  module_signatures=module_signatures,
                                  meta_modes=meta_modes,
                                  source_lines=source.splitlines())
     return converter.convert_module(tree)
+
+
+def _expand_table_directives(tree) -> None:
+    """Rewrite every `-constants_number_*` table directive into its facts, in
+    place, BEFORE the converter walks the tree.
+
+    THE DEFECT THIS CLOSES. The SINGULAR declarations (`constant_value`,
+    `constant_number_units`, `constant_number_currency`) are routed to
+    `_collect_constant`, which honours the dialect's `constants` capability and
+    REFUSES for a dialect that cannot receive one. The PLURAL table family
+    (`constants_number_units`, `constants_number_currency`) had no handler here
+    at all, so it fell through to generic directive emission and landed in the
+    .pl verbatim. ISO has no such directive, so every one was
+    `domain_error(directive, constants_number_currency/4)` at LOAD -- the
+    exported program did not run at all. Measured 2026-09-17: 10 sites in 6
+    corpus files, and it is one of the two classes holding G3 at zero across the
+    whole roster.
+
+    A second data shape of the same declaration family, arriving after the first
+    was handled and never swept for. The names differ by one letter and an
+    arity, which is why a grep for the singular form finds nothing wrong.
+
+    WHY EXPANSION RATHER THAN A NEW EMITTER. The engine already answers this
+    question -- `term_rewriting._expand_currency_tables` rewrites the directive
+    into plain fact statements source-to-source, BEFORE the ordinary visit, so a
+    declared table becomes the same kind of predicate as the fact lines it
+    replaces rather than a second kind wearing the same name. Doing the same
+    here means the exporter translates facts it already knows how to translate,
+    and the two sides cannot drift: there is one expansion, called twice.
+
+    Deliberately NOT capability-gated. Expansion yields ordinary facts, which
+    every dialect can receive -- the `constants` capability governs whether a
+    *declaration* can cross, and after this runs there is no declaration left to
+    cross. That is also why this is the right fix for `Dialect.iso()`, whose
+    capability is "none": the facts are plain ISO.
+    """
+    body = []
+    changed = False
+    for stmt in tree.body:
+        call = _engine_table_directive_call(stmt)
+        if call is None:
+            body.append(stmt)
+            continue
+        body.extend(_engine_expand_currency_table(call))
+        changed = True
+    if changed:
+        tree.body = body
 
 
 def clausal_source_to_prolog(source: str, *,
