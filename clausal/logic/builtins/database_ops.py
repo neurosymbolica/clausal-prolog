@@ -267,6 +267,14 @@ def _find_pred_cls(functor: str, arity: int,
     Accepted only when that class is reachable from this module dict under
     some spelling, so a term that merely passed through this module cannot
     redirect the write to a predicate the module cannot see.
+
+    ROW-FIRST, CLASS-FALLBACK (P1, spec 2026-09-17 §2.2 + §3).  The name is
+    resolved through this module's Database row, and the redirect test is a
+    row comparison.  When there is NO row under that key the CLASS answers, as
+    it always did: a predicate reached by a plain Python import (never through
+    ``-import_from``, so no row was adopted) is visible in this module dict and
+    invisible to ``db.row`` — the same "declared here but rowless" shape that
+    keeps the two ``compiler_v2`` directive-target sites on the class.
     """
     from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
     if module_dict is None:
@@ -293,13 +301,24 @@ def _find_pred_cls(functor: str, arity: int,
         and any(v is own for v in module_dict.values())
     ):
         return own
-    if named_row is None:
-        return None
-    # THE class read that remains (spec §3): what this function RETURNS is a
+    # THE class reads that remain (spec §3): what this function RETURNS is a
     # class — the caller locks it, recompiles through it and builds terms with
     # it — so the module's binding is handed back when it is the class sitting
     # on that row, and the head's own class when it is the one there instead.
     candidate = module_dict.get(functor)
+    if named_row is None:
+        # THE CLASS FALLBACK (review round 1).  A class this module reached by
+        # a plain Python import is bound here under the right spelling at the
+        # right arity and has NO row in this Database — ``-import_from`` is
+        # what adopts a row, and this name never went through it.  The row
+        # lookup cannot see such a predicate, so the class answers, exactly as
+        # it did before the reroute: dropping it made ``listing(pp/1)`` and
+        # ``_namespace_dispatch`` raise for a predicate the module can see.
+        # Same class-without-a-row shape that left ``compiler_v2``'s
+        # ``_validate_directive_targets``/``_refuse_untablable_target`` on the
+        # class — a row cannot yet answer "declared/visible at module level".
+        return (candidate if isinstance(candidate, PredicateMeta)
+                and len(candidate._fields) == arity else None)
     if getattr(candidate, "_row", None) is named_row:
         return candidate
     return own if own_row is named_row else None

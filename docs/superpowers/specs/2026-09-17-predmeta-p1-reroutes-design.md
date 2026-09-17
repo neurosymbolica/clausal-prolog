@@ -16,6 +16,26 @@ Builds phase P1 of `2026-09-14-retire-predicatemeta-design.md` §6 over the cens
 * **`db.row(f, a) is not None` is the equivalent of the isinstance test** — pinned by
   `tests/predmeta_p1/test_membership_equivalence.py`; `is_defined` is stricter and WRONG.
 
+**CORRECTION (P1 Task 3, measured 2026-09-17, reproduced in review): that
+equivalence has a LIMIT, and two of the 14 sites fall outside it.** `Database.row`'s
+`known` test consults `_clauses`, `_dispatch`, `_lazy_recompile`, `_signatures` and
+`_dynamic`, plus `_adopted`. So a row exists for a predicate that has CLAUSES here, a
+dispatch, a registered signature, a `-dynamic(f/N)` declaration (step 2's `mark_dynamic`
+writes `_dynamic` before anything else runs), or an `-import_from`'d name (whose row this
+database ADOPTED). **Nothing else mints one.** `-module`/`-private` list membership is a
+module binding, and `-discontiguous`/`-table`/`-shallow` write their own sets, none of
+which `row()` reads. A name declared with fields and given no clauses is therefore a
+`PredicateMeta` in the module dict with **no row at all** —
+`isinstance(module_dict.get(f), PredicateMeta)` is True while `db.row(f, a)` is None, for
+the same name at the same arity. Pinned as a NEGATIVE test in
+`test_membership_equivalence.py`. Consequences: `compiler_v2`'s
+`_validate_directive_targets` (census 851) and `_refuse_untablable_target` (882) stay on
+the class — they ask "is this name a predicate DECLARED here", which is the §4 question —
+and `database_ops._find_pred_cls` (275) routes through the row but keeps a CLASS FALLBACK
+for the rowless case, which is how a predicate reached by a plain Python import (never
+through `-import_from`, so no row was adopted) stays visible to `listing/1` and
+`_namespace_dispatch`.
+
 ## 2. The design, four parts
 
 1. **Index plans get a row home.** `_index_plans`, `_index_plans_joint`,

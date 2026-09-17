@@ -164,6 +164,49 @@ def test_a_local_assert_lands_on_this_module_s_own_row(tmp_path):
     assert _answers(mod, "lp") == [7]
 
 
+def test_a_class_in_the_module_dict_without_a_local_row_still_resolves(
+        tmp_path, monkeypatch):
+    """The CLASS FALLBACK the row lookup keeps (review round 1).
+
+    A predicate class reached by a plain Python import — bound into the
+    importer's module dict, with no ``-import_from`` and therefore no adopted
+    row — is at the right arity under the right spelling and has NO row in
+    this Database.  ``db.row(functor, arity)`` cannot see it, so
+    ``_find_pred_cls`` falls back to the class, exactly as it did before the
+    reroute, and ``listing(pp/1)`` keeps working through
+    ``io._row_for_indicator``'s third leg.
+
+    Same class-without-a-row shape that left compiler_v2 851/882 on the class.
+    """
+    import io as _io
+    import sys as _sys
+
+    from clausal.logic.atoms import mint
+    from clausal.logic.builtins import get_builtin_dispatch
+    from clausal.logic.trampoline import StepGenerator, solutions
+    from clausal.logic.variables import Trail
+
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _write(tmp_path, "p1_pex", "-module(p1_pex, [pp(X)])\n\npp(1),\n")
+    exporter = _load_module("p1_pex", str(tmp_path / "p1_pex.clausal"))
+    mod = _load(tmp_path, "p1_pim", "other(1),\n")
+    # What ``from p1_pex import pp`` leaves behind: the class, no row.
+    mod.module_dict["pp"] = exporter.__dict__["pp"]
+    assert mod.db.row("pp", 1) is None
+
+    dispatch = get_builtin_dispatch("listing", 1, mod.db)
+    trail, buf, old = Trail(), _io.StringIO(), _sys.stdout
+    _sys.stdout = buf
+    try:
+        solutions(StepGenerator(dispatch, None, None, None,
+                                ("/", mint("pp"), 1), trail))
+    finally:
+        _sys.stdout = old
+    out = buf.getvalue()
+    assert "pp/1" in out
+    assert "1 clause(s)" in out
+
+
 def test_an_imported_predicate_is_reached_through_the_adopted_row(tmp_path,
                                                                   monkeypatch):
     """The other leg of the same lookup: an ``-import_from``'d name resolves
@@ -253,6 +296,12 @@ def test_a_clause_block_may_find_a_non_class_under_its_own_name(tmp_path,
     mod = _load(tmp_path, "p1_atomuse",
                 "-import_from(p1_atomexp, [shared_name])\n"
                 "shared_name(1),\n")
-    # The load survived: the clause block got its predicate whatever the
-    # import had already bound under the name.
+    # THE POINT: what the import left under the name is the interned atom
+    # TUPLE, not a predicate class, and step 4 looked the name up in this very
+    # dict.  Dropping the guard hands this tuple to ``_bind_row``.
+    binding = mod.module_dict["shared_name"]
+    assert isinstance(binding, tuple), type(binding)
+    from clausal.logic.predicate import PredicateMeta
+    assert not isinstance(binding, PredicateMeta)
+    # And the load survived: the clause block got its own predicate anyway.
     assert _answers(mod, "shared_name") == [1]

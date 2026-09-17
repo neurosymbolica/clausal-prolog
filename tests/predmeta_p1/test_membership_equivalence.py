@@ -92,3 +92,66 @@ def test_row_does_not_MINT_a_row_for_an_unknown_predicate(mod):
     answer True for everything the moment it is asked."""
     db = _db(mod)
     assert db.row("no_such_predicate_xyz", 3) is None
+
+
+# ── THE LIMIT of the equivalence (P1 Task 3, measured 2026-09-17) ───────────
+
+
+@pytest.fixture
+def declared_only(tmp_path, monkeypatch):
+    """A predicate DECLARED and given no clauses, and not ``-dynamic``.
+
+    WHICH DECLARATIONS MINT A ROW.  ``Database.row``'s ``known`` test consults
+    ``_clauses``, ``_dispatch``, ``_lazy_recompile``, ``_signatures`` and
+    ``_dynamic``, so a row exists for a predicate that has CLAUSES here, or a
+    dispatch, or a registered signature, or a ``-dynamic(f/N)`` declaration
+    (step 2's ``mark_dynamic`` writes ``_dynamic`` before anything else runs),
+    or an ``-import_from``'d name (whose row this database ADOPTED).
+
+    NOTHING ELSE DOES.  ``-module``/``-private`` list membership is a module
+    binding, and ``-discontiguous``/``-table``/``-shallow`` write their own
+    sets, none of which ``row()`` consults.  So a name declared with fields
+    and given no clauses is a ``PredicateMeta`` in the module dict with NO
+    ROW AT ALL -- and the ``-discontiguous`` directive naming it is what keeps
+    it bound to its class rather than to its interned spelling.
+    """
+    (tmp_path / "membnorow.seam").write_text(
+        "-private([p(X)])\n-discontiguous(p/1)\n\nhas_clauses(1),\n",
+        encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    m = importlib.import_module("membnorow")
+    yield m
+    for p in tmp_path.rglob("__pycache__"):
+        shutil.rmtree(p, ignore_errors=True)
+
+
+def test_row_existence_is_NOT_equivalent_for_a_declared_clause_less_predicate(
+        declared_only):
+    """The NEGATIVE pin: the reroute rule has a limit, and this is it.
+
+    ``isinstance(module_dict.get("p"), PredicateMeta)`` is True and
+    ``db.row("p", 1)`` is None for the same name, at the same arity, in the
+    same module.  Two P1 sites (``compiler_v2``'s
+    ``_validate_directive_targets`` and ``_refuse_untablable_target``) and
+    ``database_ops._find_pred_cls``'s class fallback turn on this: they ask
+    "is this name a predicate DECLARED/visible here", which is the spec §4
+    question, and a row cannot answer it yet.  If this test ever fails
+    because ``row()`` started answering, those three sites can be rerouted --
+    and ``test_row_existence_IS_equivalent_to_the_isinstance_test`` above is
+    then the whole rule rather than most of it.
+    """
+    from clausal.logic.predicate import PredicateMeta
+    db = _db(declared_only)
+    declared = vars(declared_only)["p"]
+    assert isinstance(declared, PredicateMeta), (
+        "the -discontiguous directive keeps this name bound to its class")
+    assert len(declared._fields) == 1
+    assert db.row("p", 1) is None, (
+        "row() now answers for a declared, clause-less, non-dynamic "
+        "predicate -- re-check compiler_v2 851/882 and _find_pred_cls's "
+        "class fallback, which are all left on the class because it did not")
+    assert db.is_defined("p", 1) is False
+    assert db.is_dynamic("p", 1) is False
+    # The positive control in the same module: a name WITH clauses does have
+    # a row, so the extraction above is not simply looking at nothing.
+    assert db.row("has_clauses", 1) is not None
