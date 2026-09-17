@@ -28,7 +28,7 @@ import census  # noqa: E402
 TABLE = HERE / "P1_SITES.tsv"
 # ``-done``: the site was rerouted (P1 Task 3, spec 2026-09-17 §2.2).  These
 # are the only dispositions for which check 2 runs backwards.
-DONE = {"R-done", "S-done", "R-enum-done"}
+DONE = {"R-done", "R!-done", "S-done", "R-enum-done"}
 DISPOSITIONS = {"R", "R!", "R-enum", "S", "Q", "X4", "X4+Q", "NO",
                 "G", "C", "C/G", "B", "D", "LAYER", "P4"} | DONE
 
@@ -101,15 +101,20 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
         wlines = (work / f).read_text(encoding="utf-8", errors="replace").splitlines()
         if disposition in DONE:
             # THE FLIPPED CHECK.  A rerouted site is proved by ABSENCE: the
-            # snippet the census recorded must no longer be anywhere in the
-            # WORKING tree's copy of the file.  The canonical anchor still has
-            # to hold -- that pair is what keeps the row's identity honest
-            # while its site is gone from the tree being edited.  (The
-            # canonical tree is not edited by this lane, so it keeps the
-            # snippet at its recorded line for the life of the table.)
+            # snippet the census recorded -- which must itself be a
+            # ``PredicateMeta`` membership line, or absence proves nothing --
+            # is no longer anywhere in the WORKING tree's copy of the file.
+            #
+            # WORKING TREE ONLY, deliberately (review round 1).  The canonical
+            # anchor is what a non-done row is held to, and it is right for a
+            # row whose site is still there.  Holding a DONE row to it as well
+            # would turn this checker red on landing day: the moment these
+            # commits reach the canonical tree, the snippet leaves that tree
+            # too, and a check that demanded both would call the row stale for
+            # having been landed.  The row's identity survives on the (file,
+            # line) pair and the census, which is where it has always lived.
             done_rows += 1
-            if (not snippet or "PredicateMeta" not in snippet
-                    or l > len(lines) or lines[l - 1].strip() != snippet):
+            if not snippet or "PredicateMeta" not in snippet:
                 stale.append((f, l))
                 continue
             hits = [i + 1 for i, c in enumerate(wlines) if c.strip() == snippet]
