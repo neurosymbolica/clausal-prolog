@@ -237,3 +237,21 @@ section-4 answer) — that is the literal surface and a corpus migration, **park
 | Q3 | **measure first**, then decide `writeq`; `write` keeps `10.01` | step added: measure Scryer and Trealla's `writeq` of a rational |
 | Q4 | **no**: `10.01` in source IS a float, that is ISO | the explicit spellings `decimal(M, S)` and `rdiv(N, D)` are the only way to write an exact non-integer; no literal flip, ever, on this ruling |
 | Q5 | **no implicit coercion — raise**. Decimal beside a float is an error; it risks loss of precision | §3's "Decimal ⊕ float → Decimal(str(f))" is REVERSED, and so is the same rule inside `Quantity._num_pair` (it is the same pair): a float beside a Decimal or a Fraction raises a type error. This changes money-path behaviour and goes to harness-batch-lane as a QUESTION before it lands |
+
+---
+
+# Step 1 BUILT and PROMOTED 2026-09-17 — the ordering guard (`e52a3171`)
+
+`exact_cell_number` beside `present_number`; canonical cells key in the number band (marked as the
+cell, after their object); `_number_key` carries (scale, cell) uniformly; Decimal left the
+native-sort fast path; `'=='` objects to two Decimals of different scale (Q2); an `rdiv` cell
+evaluates, a `decimal` cell stays LOUD until step 2. 20 tests, 5 mutation controls all firing (the
+first Q2 assertion was vacuous — list `==` ignores Decimal scale — and control 5 caught it).
+
+Gates: engine failure-set A/B on a clean base at `5d53aeea`: NEW 0 / GONE 0 (145 / 145 names,
++20 passed). Harness axis (harness-batch-lane, base AND guard run, .so premise verified by their
+own diff): **82/82 unchanged on both, ATTRIBUTABLE for the cell-ordering half; SILENT on
+mixed-scale decimal comparison** — their population has 0 bodies mentioning Decimal and 1 rulebase
+source of 849, so a clean result there is not coverage of the Q2 behaviour. Recorded as "ruled,
+engine-tested, corpus-unexercised", not as "no impact". Unification of decimals of different scale
+is still conflated (C unifier) and rides with the int/float todo.
