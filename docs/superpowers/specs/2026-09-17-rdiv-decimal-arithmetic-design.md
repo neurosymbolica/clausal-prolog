@@ -211,6 +211,8 @@ hook stays correct as is. Under A the hook may convert only after the whole nume
 | 2 | evaluator accepts a Decimal leaf; `/` → Fraction when an exact non-int operand is present, interpreted AND compiled (`$div`); parity fixture | 1–2 days | engine A/B + harness question |
 | 3 | Decimal: seam registry → transfer table; compile-route lowering of `decimal/2` and `rdiv/2` cells written in source; refuse malformed cells loudly | ~1 day | engine A/B; message iso-export-lane |
 | 4 | port spec §3.3: the Decimal entry conversion sentence | minutes | none |
+| 6 | RULED Q5: float beside Decimal/Fraction RAISES, in the evaluator and in `Quantity._num_pair` (remove the `Decimal(str(f))` bridge) | ~1 day | engine A/B + harness question (money paths) |
+| 7 | RULED Q3: measure Scryer/Trealla `writeq` of a rational, then decide | hours | none |
 | 5 | if parked question 2 rules "distinct": scale in the Decimal order key and tag | hours | engine A/B |
 
 Not in this list, deliberately: turning `10.01` in source into a Decimal (reading 2 of the
@@ -223,3 +225,15 @@ section-4 answer) — that is the literal surface and a corpus migration, **park
 * The population of `'is'(X, <decimal constant> ...)` sites in the corpus that raise today
   (§0's new fact) — corpus-lane's to count; if non-zero, step 2 is a live fix, not latent.
 * What Scryer and Trealla print for a rational (`writeq`) — needed for Q3, not measured here.
+
+---
+
+# RULED 2026-09-17 (operator, on the five parked questions)
+
+| Q | ruling | consequence for the design above |
+| --- | --- | --- |
+| Q1 | **re-align**: the decimal ruling takes the quantity ruling's shape — a Python number object in the engine, `('decimal', M, S)` a TRANSFER form and SOURCE spelling | option B is the design; option A is closed |
+| Q2 | **distinct terms, equal value**. They do NOT unify: `=`/2 is syntactic identity on numbers (ISO `1 = 1.0` fails), so `10.0 = 10.00` fails, `10.0 =:= 10.00` succeeds, `10.0 == 10.00` fails, `compare/3` orders by value then scale | the Decimal order key and `_numeric_tag` carry the scale; unification of two Decimals is exact-type-and-scale, and does NOT inherit the engine's int/float conflation (the deferred divergence stays what it is) |
+| Q3 | **measure first**, then decide `writeq`; `write` keeps `10.01` | step added: measure Scryer and Trealla's `writeq` of a rational |
+| Q4 | **no**: `10.01` in source IS a float, that is ISO | the explicit spellings `decimal(M, S)` and `rdiv(N, D)` are the only way to write an exact non-integer; no literal flip, ever, on this ruling |
+| Q5 | **no implicit coercion — raise**. Decimal beside a float is an error; it risks loss of precision | §3's "Decimal ⊕ float → Decimal(str(f))" is REVERSED, and so is the same rule inside `Quantity._num_pair` (it is the same pair): a float beside a Decimal or a Fraction raises a type error. This changes money-path behaviour and goes to harness-batch-lane as a QUESTION before it lands |
