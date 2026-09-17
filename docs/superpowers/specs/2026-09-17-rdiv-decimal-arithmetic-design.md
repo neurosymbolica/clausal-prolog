@@ -252,6 +252,10 @@ Gates: engine failure-set A/B on a clean base at `5d53aeea`: NEW 0 / GONE 0 (145
 +20 passed). Harness axis (harness-batch-lane, base AND guard run, .so premise verified by their
 own diff): **82/82 unchanged on both, ATTRIBUTABLE for the cell-ordering half; SILENT on
 mixed-scale decimal comparison** — their population has 0 bodies mentioning Decimal and 1 rulebase
-source of 849, so a clean result there is not coverage of the Q2 behaviour. Recorded as "ruled,
-engine-tested, corpus-unexercised", not as "no impact". Unification of decimals of different scale
+source of 849, so a clean result there is not coverage of the Q2 behaviour. Recorded as a CONDITION, not a
+status (harness-batch-lane's refinement, so it cannot rot into a standing property): **ruled (Q2)
+and engine-tested; the closed corpus does not CURRENTLY exercise mixed-scale decimal comparison —
+0 of 82 sealed scorers construct a Decimal — so the harness axis is silent on that half. RE-ASK
+harness-batch-lane when a domain compares or sorts money of differing scale** (their trigger: any
+sealed body constructing a `Decimal`; one grep, zero today; nobody monitors it). Unification of decimals of different scale
 is still conflated (C unifier) and rides with the int/float todo.
