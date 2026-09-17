@@ -36,7 +36,6 @@ predicate calls.
 
 from __future__ import annotations
 
-import datetime as _datetime
 import sys
 import types as _types
 from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
@@ -443,12 +442,6 @@ def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
         return None
 
 
-# The datetime scalar types _templatize_query_goal parameterizes (see
-# _ground_value): first-class value terms the input-lowering path otherwise
-# rejects. Exact types — subclasses are deliberately excluded.
-_DATETIME_QUERY_SCALARS = (
-    _datetime.date, _datetime.datetime, _datetime.time, _datetime.timedelta,
-)
 
 
 def _templatize_query_goal(goal: Any):
@@ -487,14 +480,14 @@ def _templatize_query_goal(goal: Any):
             return None
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
             return dv
-        # datetime values are first-class scalar terms at runtime (immutable,
-        # hashable, unify by value — `Date/4` produces them, `DaysBetween`
-        # consumes them), so parameterize them like ints: the OBJECT is bound
-        # at run time, which also spares tz-aware values any reconstruction.
-        # Exact types only — a subclass may carry state the base constructor
-        # cannot rebuild, so it keeps the structural fallback.
-        if type(dv) in _DATETIME_QUERY_SCALARS:
-            return dv
+        # A Python datetime is NOT parameterized. It was (ab0dabcd, 2026-09-02,
+        # before the ruling that a date is the TERM ('date', Y, M, D)): the
+        # object was bound by reference and never lowered, so once date/3
+        # yielded the term a bare Python date unified with nothing and the
+        # goal quietly answered NOTHING -- measured 2026-09-16 by
+        # harness-date-migration. Left structural, it lowers through
+        # term_to_ast_expr and meets the same refusal a nested one does, which
+        # names the term to write.
         if is_zero_field_class(dv):
             return dv
         return None
