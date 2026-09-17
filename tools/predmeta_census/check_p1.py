@@ -6,46 +6,39 @@ extraction that silently yields nothing is this lane's dominant failure mode:
 
   1. every category-A site the census knows about appears in P1_SITES.tsv
   2. every row in P1_SITES.tsv still points at a line containing PredicateMeta
-     -- EXCEPT a row marked ``-done``, where the check FLIPS: the snippet must
-     be GONE from the working tree, which is what "this site was rerouted"
-     looks like from outside.  A row is proved closed by absence, so marking
-     one done without touching its site fails here rather than passing quietly.
+     -- EXCEPT a CLOSED row (``-done`` or ``R-fallback``), where the check
+     FLIPS and is made over the site's REGION in the WORKING tree rather than
+     over a literal line.  See ``closed_row_verdict``.
   3. no row carries a disposition outside the documented set
 
 Category A is the UNION of two populations, which is the correction this pass
 made: the 26 sites human-read at P0 (census.VERDICTS) AND the 24 the census
-classified "A-predicate-test" from the VARIABLE NAME alone and never read.
+classified "A-predicate-test" from the VARIABLE NAME alone and never read --
+UNION the table's own closed rows, so check 1 survives landing day (see
+``census_A_sites``).
 
 Run with --controls to watch each check go red on purpose.
 """
 from __future__ import annotations
-import pathlib, sys
+import ast, pathlib, re, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import census  # noqa: E402
 
 TABLE = HERE / "P1_SITES.tsv"
-# ``-done``: the site was rerouted (P1 Task 3, spec 2026-09-17 §2.2).  These
-# are the only dispositions for which check 2 runs backwards.
+# ``-done``: the site was rerouted and keeps NO class read (P1 Task 3, spec
+# 2026-09-17 §2.2).  ``R-fallback``: rerouted row-FIRST, with a class fallback
+# deliberately kept and REPORTED (roborev L5 + final review I2, 2026-09-17) --
+# the shape ``_find_pred_cls``, ``_GlobalsDb.signature_for``,
+# ``_note_generic_compound_confusion`` and compiler_v2's ``-dynamic`` site all
+# have.  Both are CLOSED rows: check 2 runs backwards for them, but it asks a
+# different question of each.
 DONE = {"R-done", "R!-done", "S-done", "R-enum-done"}
+FALLBACK = {"R-fallback"}
+CLOSED = DONE | FALLBACK
 DISPOSITIONS = {"R", "R!", "R-enum", "S", "Q", "X4", "X4+Q", "NO",
-                "G", "C", "C/G", "B", "D", "LAYER", "P4"} | DONE
-
-
-def census_A_sites() -> set[tuple[str, int]]:
-    human = {(k.rsplit(":", 1)[0], int(k.rsplit(":", 1)[1]))
-             for k, v in census.VERDICTS.items() if v == "A"}
-    auto = set()
-    for p in sorted(census.ROOT.rglob("*")):
-        if p.suffix not in (".py", ".c", ".h") or not p.is_file():
-            continue
-        rel = str(p.relative_to(census.ROOT.parent))
-        for n, line in enumerate(
-                p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-            if census.PAT.search(line) and census.classify(line) == "A-predicate-test":
-                auto.add((rel, n))
-    return human | auto
+                "G", "C", "C/G", "B", "D", "LAYER", "P4"} | CLOSED
 
 
 def table_rows(path: pathlib.Path = TABLE):
@@ -57,6 +50,154 @@ def table_rows(path: pathlib.Path = TABLE):
         rows.append((parts[0], int(parts[1]), parts[2], parts[3],
                      parts[5] if len(parts) > 5 else None))
     return rows
+
+
+def census_A_sites(rows=None) -> set[tuple[str, int]]:
+    """The category-A population: census verdicts, the mechanical classifier,
+    and the table's own CLOSED rows.
+
+    That last union is what makes check 1 survive LANDING DAY (final review
+    I4).  ``census.ROOT`` is the canonical tree, which still holds the
+    pre-reroute spelling of every site; the moment these commits land there,
+    the six mechanically-sourced done rows stop classifying as
+    "A-predicate-test" in that tree and would drop out of the population --
+    turning them into "in table, absent from census" and the checker red for
+    having been LANDED.  A closed row's identity lives in this table and in
+    the census's own key space, so the table is part of the population.
+    """
+    human = {(k.rsplit(":", 1)[0], int(k.rsplit(":", 1)[1]))
+             for k, v in census.VERDICTS.items() if v == "A"}
+    auto = set()
+    for p in sorted(census.ROOT.rglob("*")):
+        if p.suffix not in (".py", ".c", ".h") or not p.is_file():
+            continue
+        rel = str(p.relative_to(census.ROOT.parent))
+        for n, line in enumerate(
+                p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if census.PAT.search(line) and census.classify(line) == "A-predicate-test":
+                auto.add((rel, n))
+    landed = {(f, l) for f, l, _s, d, _sn in (rows or []) if d in CLOSED}
+    return human | auto | landed
+
+
+# ── the site's REGION, and what may remain in it ────────────────────────────
+
+
+def qualname_at(path: pathlib.Path, line: int) -> "list[str] | None":
+    """The def/class path enclosing *line* in *path* (canonical tree)."""
+    tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    best: "list[str] | None" = None
+
+    def walk(node, prefix):
+        nonlocal best
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                  ast.ClassDef)):
+                qual = prefix + [child.name]
+                if child.lineno <= line <= (child.end_lineno or child.lineno):
+                    if best is None or len(qual) > len(best):
+                        best = qual
+                walk(child, qual)
+            else:
+                walk(child, prefix)
+
+    walk(tree, [])
+    return best
+
+
+def region_of(path: pathlib.Path, qual: "list[str]") -> "tuple[int, int] | None":
+    """``(first, last)`` lines of *qual* in *path* (working tree), or None."""
+    scope = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    node = None
+    for name in qual:
+        node = next(
+            (c for c in ast.iter_child_nodes(scope)
+             if isinstance(c, (ast.FunctionDef, ast.AsyncFunctionDef,
+                               ast.ClassDef)) and c.name == name),
+            None)
+        if node is None:
+            return None
+        scope = node
+    return (node.lineno, node.end_lineno)
+
+
+_SUBJECT = re.compile(r"isinstance\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*PredicateMeta")
+
+
+def subject_of(snippet: str) -> "str | None":
+    """The name the snippet's membership test is ABOUT."""
+    m = _SUBJECT.search(snippet)
+    return m.group(1) if m else None
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", " ", text)
+
+
+def closed_row_verdict(work_file: pathlib.Path, region, snippet, disposition,
+                       accounted: "set[int]") -> "str | None":
+    """Why this CLOSED row is not closed after all, or None if it is.
+
+    NOT a literal-line absence test (roborev L5): a reformat of the very same
+    membership test would make the recorded line vanish and the row would
+    report itself closed while the test sat there, one space different.  So
+    the question is asked of the site's REGION -- its enclosing def in the
+    WORKING tree, located by the qualified name the CANONICAL line sits in:
+
+    * ``-done``: no category-A membership test may remain in the region.  Two
+      detectors, because neither alone is enough.  ``census.classify`` is the
+      census's own rule and sees any of the subject names it knows; it is
+      blind to a site like the ``R-enum`` one, whose subject is a
+      comprehension variable -- so the row's OWN subject, parsed out of its
+      snippet, is searched for as well, over the region's text with
+      whitespace squashed, which is what makes a reformat visible.  Lines
+      that belong to ANOTHER row in the table (its snippet, located in this
+      working tree) are excluded: several rows share one enclosing def, and a
+      LIVE row's site is not evidence about a closed one.
+    * ``R-fallback``: the opposite question.  The class read is KEPT here on
+      purpose, so it must be PRESENT -- the row's subject still read as a
+      class (``x._attr``, ``getattr(x, ...)``, or an isinstance) -- and so
+      must the row read that makes the site row-FIRST.  A weaker instrument
+      than the ``-done`` one by nature: it proves the shape is still there,
+      not that nothing else changed.  Stated, not hidden.
+    """
+    lines = work_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    first, last = region
+    body = lines[first - 1:last]
+    text = _squash("\n".join(body))
+    # ... and the same region with every LIVE row's own line removed, which is
+    # what the two ``-done`` detectors are asked over: several rows share one
+    # enclosing def, and another row's site is not evidence about this one.
+    mine = _squash("\n".join(c for n, c in enumerate(body, first)
+                             if n not in accounted))
+    subject = subject_of(snippet or "")
+
+    if disposition in FALLBACK:
+        if subject is None:
+            return "snippet names no subject, so the fallback cannot be checked"
+        reads_class = re.search(
+            rf"getattr\(\s*{subject}\b|\b{subject}\s*\.\s*_|"
+            rf"isinstance\(\s*{subject}\s*,\s*PredicateMeta", text)
+        if not reads_class:
+            return f"no class read of {subject!r} left -- this is a plain -done row now"
+        if not re.search(r"\.row\(|_row\b", text):
+            return "no row read in the region -- the site is not row-first"
+        return None
+
+    offenders = [
+        n for n in range(first, last + 1)
+        if census.PAT.search(lines[n - 1])
+        and census.classify(lines[n - 1]) == "A-predicate-test"
+        and n not in accounted
+    ]
+    if offenders:
+        return (f"category-A membership test still in the region at working-tree "
+                f"line(s) {offenders}")
+    if subject and re.search(
+            rf"isinstance\(\s*{subject}\s*,\s*PredicateMeta", mine):
+        return (f"the row's own membership test on {subject!r} is still in the "
+                f"region (reformatted, but there)")
+    return None
 
 
 def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> int:
@@ -72,8 +213,8 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
     # validating the tree nobody was editing.
     root = root or census.ROOT.parent
     work = pathlib.Path(__file__).resolve().parents[2]
-    sites = census_A_sites()
     rows = table_rows(table_path)
+    sites = census_A_sites(rows)
     listed = {(f, l) for f, l, *_ in rows}
 
     print(f"census category-A sites : {len(sites)}")
@@ -91,35 +232,62 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
     for f, l in extra:
         print(f"      EXTRA   {f}:{l}")
 
+    # Lines in the working tree that belong to a LIVE row -- excluded from a
+    # closed row's region, because several rows share one enclosing def.
+    #
+    # KEYED BY REGION, not by file (control caught this): two rows in the same
+    # file can carry the SAME snippet text (compiler_v2 851 and 882 are both
+    # ``if isinstance(cls, PredicateMeta):``), so a file-wide text match let a
+    # live twin excuse the very line a closed row is judged on -- the checker
+    # then passed a table that marked a live site done.  A live row excuses a
+    # line only inside its OWN enclosing def.
+    accounted: "dict[tuple[str, tuple], set[int]]" = {}
+    for f, l, _s, disposition, snippet in rows:
+        if disposition in CLOSED or not snippet:
+            continue
+        wlines = (work / f).read_text(encoding="utf-8", errors="replace").splitlines()
+        qual = qualname_at(root / f, l)
+        region = region_of(work / f, qual) if qual else None
+        hits = {i + 1 for i, c in enumerate(wlines) if c.strip() == snippet}
+        if region is not None:
+            hits = {n for n in hits if region[0] <= n <= region[1]}
+        accounted.setdefault((f, tuple(qual or ())), set()).update(hits)
+
     stale, moved, undone = [], [], []
-    done_rows = 0
+    done_rows = fallback_rows = 0
     for row in rows:
         f, l = row[0], row[1]
         disposition = row[3]
         snippet = row[4] if len(row) > 4 else None
         lines = (root / f).read_text(encoding="utf-8", errors="replace").splitlines()
         wlines = (work / f).read_text(encoding="utf-8", errors="replace").splitlines()
-        if disposition in DONE:
-            # THE FLIPPED CHECK.  A rerouted site is proved by ABSENCE: the
-            # snippet the census recorded -- which must itself be a
-            # ``PredicateMeta`` membership line, or absence proves nothing --
-            # is no longer anywhere in the WORKING tree's copy of the file.
+        if disposition in CLOSED:
+            # THE FLIPPED CHECK, over the site's REGION in the WORKING tree.
             #
             # WORKING TREE ONLY, deliberately (review round 1).  The canonical
-            # anchor is what a non-done row is held to, and it is right for a
-            # row whose site is still there.  Holding a DONE row to it as well
+            # anchor is what a non-closed row is held to, and it is right for a
+            # row whose site is still there.  Holding a CLOSED row to it as well
             # would turn this checker red on landing day: the moment these
-            # commits reach the canonical tree, the snippet leaves that tree
-            # too, and a check that demanded both would call the row stale for
+            # commits reach the canonical tree, the site leaves that tree too,
+            # and a check that demanded both would call the row stale for
             # having been landed.  The row's identity survives on the (file,
             # line) pair and the census, which is where it has always lived.
-            done_rows += 1
+            if disposition in FALLBACK:
+                fallback_rows += 1
+            else:
+                done_rows += 1
             if not snippet or "PredicateMeta" not in snippet:
                 stale.append((f, l))
                 continue
-            hits = [i + 1 for i, c in enumerate(wlines) if c.strip() == snippet]
-            if hits:
-                undone.append((f, l, hits[0]))
+            qual = qualname_at(root / f, l)
+            region = region_of(work / f, qual) if qual else None
+            if region is None:
+                stale.append((f, l))
+                continue
+            why = closed_row_verdict(work / f, region, snippet, disposition,
+                                     accounted.get((f, tuple(qual)), set()))
+            if why:
+                undone.append((f, l, why))
             continue
         if snippet:
             # The SNIPPET is the anchor; the line number is a hint that drifts
@@ -133,11 +301,13 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
                 stale.append((f, l))
         elif l > len(lines) or "PredicateMeta" not in lines[l - 1]:
             stale.append((f, l))
-    print(f"  rows marked done (site rerouted) : {done_rows}")
-    print(f"  rows still expected to test PredicateMeta : {len(rows) - done_rows}")
-    print(f"  done rows whose site STILL tests PredicateMeta : {len(undone)}")
-    for f, l, n in undone:
-        print(f"      UNDONE  {f}:{l} -> still at working-tree line {n}")
+    print(f"  rows marked done (site rerouted, no class read)   : {done_rows}")
+    print(f"  rows marked R-fallback (row-first, class fallback) : {fallback_rows}")
+    print(f"  rows still expected to test PredicateMeta : "
+          f"{len(rows) - done_rows - fallback_rows}")
+    print(f"  closed rows whose region says otherwise : {len(undone)}")
+    for f, l, why in undone:
+        print(f"      UNDONE  {f}:{l} -- {why}")
     print(f"  rows whose snippet sits at a DIFFERENT line in the working tree : {len(moved)}")
     for f, l, n in moved:
         print(f"      MOVED   {f}:{l} -> {n}")
@@ -187,25 +357,44 @@ def controls() -> int:
     }
     # The control for the FLIPPED half of check 2: claim a live site is done.
     live = next(r for r in rows
-                if r.split("\t")[3] not in DONE and len(r.split("\t")) > 5)
+                if r.split("\t")[3] not in CLOSED and len(r.split("\t")) > 5
+                and subject_of(r.split("\t")[5]))
     cases["mark a live site done"] = "\n".join(
         ["\t".join(live.split("\t")[:3] + ["R-done"] + live.split("\t")[4:])]
         + [r for r in rows if r != live])
-    # ... and its mirror: a row marked done whose snippet is not a
-    # PredicateMeta test at all, which would make "absence" prove nothing.
-    dead = next(r for r in rows if r.split("\t")[3] in DONE)
+    # THE CONTROL FOR THE REGION CHECK ITSELF (roborev L5): the same live site,
+    # marked done, with its snippet REFORMATTED -- same test, different
+    # spelling, so the literal line the old checker looked for is nowhere in
+    # the tree.  Absence of the literal must NOT read as "rerouted".
+    parts = live.split("\t")
+    reformatted = _squash(parts[5]).replace(
+        "isinstance(", "isinstance( ").replace(", PredicateMeta", " , PredicateMeta")
+    assert reformatted != parts[5]
+    cases["mark a live site done with a REFORMATTED snippet"] = "\n".join(
+        ["\t".join(parts[:3] + ["R-done"] + [parts[4], reformatted])]
+        + [r for r in rows if r != live])
+    # ... and its mirror: a row marked closed whose snippet is not a
+    # PredicateMeta test at all, which would make the region check meaningless.
+    dead = next(r for r in rows if r.split("\t")[3] in CLOSED)
     cases["mark a row done on a snippet that never tested PredicateMeta"] = "\n".join(
         ["\t".join(dead.split("\t")[:5] + ["x = 1  # not a membership test"])]
         + [r for r in rows if r != dead])
+    # ... and an R-fallback row whose class read is gone is not an R-fallback.
+    fb = next(r for r in rows if r.split("\t")[3] in FALLBACK)
+    fbparts = fb.split("\t")
+    cases["claim R-fallback for a site with no class read"] = "\n".join(
+        ["\t".join(fbparts[:3] + ["R-fallback"]
+                   + [fbparts[4], "if isinstance(nosuchname, PredicateMeta):"])]
+        + [r for r in rows if r != fb])
     for name, body in cases.items():
         with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False) as fh:
             fh.write(body)
             tmp = pathlib.Path(fh.name)
         print(f"\n--- control: {name} (expect FAIL) ---")
         rc = run(tmp)
-        print(f"    -> {'PASS as expected' if rc != 0 else 'CONTROL DID NOT FIRE'}")
+        print(f"    -> {'FAILED as expected' if rc != 0 else 'CONTROL DID NOT FIRE'}")
         ok &= rc != 0
-    print(f"\n--- control: the real table (expect PASS) ---")
+    print("\n--- control: the real table (expect PASS) ---")
     rc = run(TABLE)
     ok &= rc == 0
     print(f"\nCONTROLS {'ALL BEHAVED' if ok else 'FAILED'}")
