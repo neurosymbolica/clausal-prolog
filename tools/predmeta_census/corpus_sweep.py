@@ -8,9 +8,16 @@ B. TUPLE-DATA -- does corpus code spell the tuple tag or match on it? If not, a
 Every count prints the size of what it matched. Controls at the bottom: a
 pattern that must match nothing, and a pattern that must match something.
 """
-import re, subprocess, collections, pathlib, sys
+import os, re, subprocess, collections, pathlib, sys
 
-ROOT = pathlib.Path("/workspace/clausify-domains")
+# The corpus tree is closed-side: its path is never written into this open
+# repo.  Name it with CORPUS_ROOT=<path> (or a first argument); the sweep
+# refuses to run against nothing rather than silently counting an empty tree.
+_root = os.environ.get("CORPUS_ROOT") or (sys.argv[1] if len(sys.argv) > 1 else "")
+if not _root or not pathlib.Path(_root, ".git").exists():
+    sys.exit("corpus root not given or not a git tree: set CORPUS_ROOT=<path> "
+             "or pass it as the first argument")
+ROOT = pathlib.Path(_root)
 files = subprocess.run(["git", "-C", str(ROOT), "ls-files", "*.py"],
                        capture_output=True, text=True).stdout.split()
 print(f"corpus .py files tracked: {len(files)}")

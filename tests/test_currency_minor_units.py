@@ -1109,7 +1109,7 @@ def test_the_lint_is_BLIND_to_a_literal_under_an_unscaled_functor(tmp_path):
     """The limit, pinned — and it is the case the lint was first MOTIVATED by,
     which is why it is a test and not a footnote.
 
-    `crr_leverage_ratio` has a scale-named fact at :93 that no longer decides
+    a leverage-ratio domain has a scale-named fact at :93 that no longer decides
     anything, and the 3% floor that DOES decide is a bare `300` in an argument
     of `check_ratio_gte/6` at :111. The functor claims no scale, so nothing in
     the source keys the literal to one and the lint cannot see it.
@@ -1273,7 +1273,7 @@ def test_compatible_units_raises_rather_than_fails_in_clausal(tmp_path):
 #     currency_code(C, ++"EUR")   -> NO SOLUTIONS    silent
 #     currency_scale(C_UNUSED, S) -> NO SOLUTIONS    silent
 #
-# and no code->currency path existed anywhere. `eu/peppol_einvoicing` carries
+# and no code->currency path existed anywhere. one e-invoicing domain carries
 # its currency as RUNTIME DATA (`currency: eur`) and cannot attach units to
 # its twelve money fields without one. Its BR-CO total-consistency rules
 # therefore cannot detect a mixed-currency invoice; under units they would

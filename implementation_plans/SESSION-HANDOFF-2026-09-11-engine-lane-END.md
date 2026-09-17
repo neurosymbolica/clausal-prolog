@@ -147,7 +147,7 @@ it decides whether this is a new kind of unit or an ordinary scaled one.
 
 ### Corpus state this lands on
 
-- `clausify-domains 73edb41d` renamed the two ambiguous identifiers that were cleanly
+- the corpus tree renamed the two ambiguous identifiers that were cleanly
   corpus-lane's: `sum_cents -> sum_eur_cents`,
   `sga_monthly_amount_cents -> sga_monthly_amount_usd_cents`. Gates and oracles byte-identical.
 - **71 further ambiguous `_cents` names are NOT one lane's**: 13 are profile keys (oracle

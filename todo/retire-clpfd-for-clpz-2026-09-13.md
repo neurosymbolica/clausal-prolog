@@ -35,7 +35,7 @@ built `.so` files. **Renaming these is a C-source change**, which means:
 * a rebuild everywhere, and the `.so` rename-swap hazard — never `build_ext --inplace` on a tree
   long-lived processes have imported (SIGBUS later); see the rename-swap procedure
 * box, which is x86_64 and clock-skewed, needs `--force` or the rebuild silently skips
-* the drift-gated forks (executor-train, clausify-tda) if any gate names these modules
+* the drift-gated forks (closed-side) if any gate names these modules
 
 **And no user sees any of it.** Measured: `clpfd` is NOT a user-facing spelling. A `.clausal` file
 does not write `py.clpfd`; the one fixture named `units_clpfd.clausal` is named after the

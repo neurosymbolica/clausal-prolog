@@ -2,8 +2,8 @@
 
 Operator's ruling, 2026-09-12. Most of the corpus's statutory money is in
 tables rather than single facts: 217 indexed money rows across ~8 domains
-against 29 single-value constants migrated (corpus-lane's census). `us/snap`
-alone holds 30 rows, `eu/procurement/common/thresholds.clausal` 81, and both
+against 29 single-value constants migrated (corpus-lane's census). One domain
+alone holds 30 rows, another's thresholds file 81, and both
 are stopped on this.
 
 **Half of it already worked.** `-constant_value` accepts a structured RHS, so
@@ -238,7 +238,7 @@ def test_each_form_names_its_own_column_keyword(tmp_path):
 #
 # The lint was designed to EMPTY as sites convert, and a falling count was
 # offered as a better progress measure than counting edited files. A table
-# declaration it does not recognise breaks exactly that: converting `us/snap`'s
+# declaration it does not recognise breaks exactly that: converting that domain's
 # 30 rows would move the count by ZERO, so the progress signal reads "nothing
 # happened" on the largest migration in the corpus (corpus-lane, 2026-09-12).
 #

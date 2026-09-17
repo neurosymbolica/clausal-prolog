@@ -1,6 +1,13 @@
 """How the corpus actually invokes predicates, counted on the real population."""
-import re, subprocess, pathlib
-ROOT = pathlib.Path("/workspace/clausify-domains")
+import os, re, subprocess, pathlib, sys
+# The corpus tree is closed-side: its path is never written into this open
+# repo.  Name it with CORPUS_ROOT=<path> (or a first argument); the sweep
+# refuses to run against nothing rather than silently counting an empty tree.
+_root = os.environ.get("CORPUS_ROOT") or (sys.argv[1] if len(sys.argv) > 1 else "")
+if not _root or not pathlib.Path(_root, ".git").exists():
+    sys.exit("corpus root not given or not a git tree: set CORPUS_ROOT=<path> "
+             "or pass it as the first argument")
+ROOT = pathlib.Path(_root)
 def ls(pat):
     return subprocess.run(["git","-C",str(ROOT),"ls-files",pat],
                           capture_output=True,text=True).stdout.split()

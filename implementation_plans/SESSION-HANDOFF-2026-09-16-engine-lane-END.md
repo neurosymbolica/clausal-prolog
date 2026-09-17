@@ -152,8 +152,8 @@ session, not yet committed).
     iso/dims-rekey-on-canonical-2026-09-15 clean, head c69a59b9   <- THE MEASURABLE TREE
 
     box  /workspace/clausal        main 42160eb5 + both branches above
-    box  /workspace/clausify-domains        90390bf9   (72 commits, ff'd)
-    box  /root/clausify-executor-train      d9ae9f4a   (126 commits, ff'd)
+    box  the corpus tree                    (72 commits, ff'd)
+    box  the kit tree                       (126 commits, ff'd)
 
 **The `_dims` rekey is FULLY GATED on both axes and is not promoted.** Promotion
 is now a decision, not a dependency. It needs the operator's direct word.

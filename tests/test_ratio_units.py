@@ -161,7 +161,7 @@ def test_three_hundred_basis_points_is_three_percent(tmp_path):
 
 
 def test_a_ratio_of_money_is_money(tmp_path):
-    """The shape `crr_leverage_ratio` needs: a ratio applied to an amount
+    """The shape a leverage-ratio domain needs: a ratio applied to an amount
     keeps the amount's dimension and its exact decimal magnitude."""
     m = _load(tmp_path, "ofmoney", """
         -module(ofmoney, [charge/1])
@@ -203,7 +203,7 @@ def test_a_ratio_does_not_add_to_a_dimensioned_amount(tmp_path):
 #
 # It matters here more than for `cent`: dropping `basis_point` from
 # `300(basis_point)` emits 300 against a stored 0.03, a 10000x error, and
-# `crr_leverage_ratio` — the domain that motivated ratio units — is on the
+# the leverage-ratio domain that motivated ratio units is on the
 # export roster.
 
 

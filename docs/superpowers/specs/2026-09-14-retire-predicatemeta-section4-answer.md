@@ -547,7 +547,7 @@ mistake — testing a precedent at the wrong arity — is easy to repeat.)*
 
 # CORPUS SWEEP — both open numbers, measured
 
-`/workspace/clausify-domains` @ `main`: **787 `.clausal`, 88 `.seam`, 263 `.py`** (the `.clausal`
+the corpus tree @ `main`: **787 `.clausal`, 88 `.seam`, 263 `.py`** (the `.clausal`
 count matches the plan's 787 exactly). Instruments in `tools/predmeta_census/`; every count printed
 the size of what it matched, and both controls behaved (a must-match-nothing pattern returned 0, a
 must-match-plenty pattern returned 1,692 / 290,641).

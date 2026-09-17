@@ -129,7 +129,7 @@ Written after the handoff above; it supersedes that section's "oracle gate has N
     canonical, same domain, same minute          341/341, EXIT=0
 
 **My claim "the corpus cost is zero" for dates was wrong, and precisely how matters.** I swept
-`/workspace/clausify-domains` (787 .clausal, 88 .seam, 263 .py), found nothing importing
+the corpus tree (787 .clausal, 88 .seam, 263 .py), found nothing importing
 `py.datetime` from code, and reported it as a fact about "the corpus". The SEALED SCORER BODIES are
 not in that tree. They construct `datetime.date` and pass it into goals — exactly the path the
 change closed. The number was right; the CLAIM generalised across a boundary I had not measured.
