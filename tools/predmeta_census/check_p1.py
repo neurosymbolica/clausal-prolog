@@ -6,6 +6,10 @@ extraction that silently yields nothing is this lane's dominant failure mode:
 
   1. every category-A site the census knows about appears in P1_SITES.tsv
   2. every row in P1_SITES.tsv still points at a line containing PredicateMeta
+     -- EXCEPT a row marked ``-done``, where the check FLIPS: the snippet must
+     be GONE from the working tree, which is what "this site was rerouted"
+     looks like from outside.  A row is proved closed by absence, so marking
+     one done without touching its site fails here rather than passing quietly.
   3. no row carries a disposition outside the documented set
 
 Category A is the UNION of two populations, which is the correction this pass
@@ -22,8 +26,11 @@ sys.path.insert(0, str(HERE))
 import census  # noqa: E402
 
 TABLE = HERE / "P1_SITES.tsv"
+# ``-done``: the site was rerouted (P1 Task 3, spec 2026-09-17 §2.2).  These
+# are the only dispositions for which check 2 runs backwards.
+DONE = {"R-done", "S-done", "R-enum-done"}
 DISPOSITIONS = {"R", "R!", "R-enum", "S", "Q", "X4", "X4+Q", "NO",
-                "G", "C", "C/G", "B", "D", "LAYER", "P4"}
+                "G", "C", "C/G", "B", "D", "LAYER", "P4"} | DONE
 
 
 def census_A_sites() -> set[tuple[str, int]]:
@@ -84,12 +91,31 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
     for f, l in extra:
         print(f"      EXTRA   {f}:{l}")
 
-    stale, moved = [], []
+    stale, moved, undone = [], [], []
+    done_rows = 0
     for row in rows:
         f, l = row[0], row[1]
+        disposition = row[3]
         snippet = row[4] if len(row) > 4 else None
         lines = (root / f).read_text(encoding="utf-8", errors="replace").splitlines()
         wlines = (work / f).read_text(encoding="utf-8", errors="replace").splitlines()
+        if disposition in DONE:
+            # THE FLIPPED CHECK.  A rerouted site is proved by ABSENCE: the
+            # snippet the census recorded must no longer be anywhere in the
+            # WORKING tree's copy of the file.  The canonical anchor still has
+            # to hold -- that pair is what keeps the row's identity honest
+            # while its site is gone from the tree being edited.  (The
+            # canonical tree is not edited by this lane, so it keeps the
+            # snippet at its recorded line for the life of the table.)
+            done_rows += 1
+            if (not snippet or "PredicateMeta" not in snippet
+                    or l > len(lines) or lines[l - 1].strip() != snippet):
+                stale.append((f, l))
+                continue
+            hits = [i + 1 for i, c in enumerate(wlines) if c.strip() == snippet]
+            if hits:
+                undone.append((f, l, hits[0]))
+            continue
         if snippet:
             # The SNIPPET is the anchor; the line number is a hint that drifts
             # whenever anything earlier in the file changes.
@@ -102,6 +128,11 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
                 stale.append((f, l))
         elif l > len(lines) or "PredicateMeta" not in lines[l - 1]:
             stale.append((f, l))
+    print(f"  rows marked done (site rerouted) : {done_rows}")
+    print(f"  rows still expected to test PredicateMeta : {len(rows) - done_rows}")
+    print(f"  done rows whose site STILL tests PredicateMeta : {len(undone)}")
+    for f, l, n in undone:
+        print(f"      UNDONE  {f}:{l} -> still at working-tree line {n}")
     print(f"  rows whose snippet sits at a DIFFERENT line in the working tree : {len(moved)}")
     for f, l, n in moved:
         print(f"      MOVED   {f}:{l} -> {n}")
@@ -125,7 +156,8 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
     dupes = len(rows) - len(listed)
     print(f"  duplicate rows : {dupes}")
 
-    bad = len(missing) + len(extra) + len(stale) + len(baddisp) + dupes + len(badsrc)
+    bad = (len(missing) + len(extra) + len(stale) + len(baddisp) + dupes
+           + len(badsrc) + len(undone))
     print(f"\n{'PASS' if bad == 0 else 'FAIL'}: {bad} problem(s)")
     return 0 if bad == 0 else 1
 
@@ -148,6 +180,18 @@ def controls() -> int:
                        + [("M" if rows[0].split("\t")[2] == "H" else "H")]
                        + rows[0].split("\t")[3:])] + rows[1:]),
     }
+    # The control for the FLIPPED half of check 2: claim a live site is done.
+    live = next(r for r in rows
+                if r.split("\t")[3] not in DONE and len(r.split("\t")) > 5)
+    cases["mark a live site done"] = "\n".join(
+        ["\t".join(live.split("\t")[:3] + ["R-done"] + live.split("\t")[4:])]
+        + [r for r in rows if r != live])
+    # ... and its mirror: a row marked done whose snippet is not a
+    # PredicateMeta test at all, which would make "absence" prove nothing.
+    dead = next(r for r in rows if r.split("\t")[3] in DONE)
+    cases["mark a row done on a snippet that never tested PredicateMeta"] = "\n".join(
+        ["\t".join(dead.split("\t")[:5] + ["x = 1  # not a membership test"])]
+        + [r for r in rows if r != dead])
     for name, body in cases.items():
         with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False) as fh:
             fh.write(body)

@@ -14,24 +14,24 @@
 #   X4     blocked on spec §4 (what binds at module level / cross-module carrier)
 #   NO     documented in-tree as WRONG to reroute
 #   G/C/B/D  reclassified OUT of category A
-clausal/logic/builtins/database_ops.py	275	H	R	_find_pred_cls: name lookup + arity check. db.row keys better than module_dict, which holds one class per NAME.	named = (candidate if isinstance(candidate, PredicateMeta)
-clausal/logic/compiler_v2.py	285	M	R	-dynamic seeding: isinstance + len(_fields)==arity. db in scope.	isinstance(pred_cls, PredicateMeta)
-clausal/logic/compiler_v2.py	851	M	R	directive-target check; db in scope and the next line already scans db._clauses by functor.	if isinstance(cls, PredicateMeta):
-clausal/logic/compiler_v2.py	882	M	R	_refuse_untablable_target; db is a parameter.	if isinstance(cls, PredicateMeta):
+clausal/logic/builtins/database_ops.py	275	H	R-done	DONE (P1 Task 3): membership + the redirect comparison are rows now (module_dict['$module'].db); the RETURN value is still a class, and type(head) stays (spec §3).	named = (candidate if isinstance(candidate, PredicateMeta)
+clausal/logic/compiler_v2.py	285	M	R-done	DONE (P1 Task 3): the CLASS's own row names the arity. NOT db.row(functor, arity) -- step 2's mark_dynamic makes that vacuously true here. pred_cls kept for _belongs_elsewhere/_bind_row (spec §3).	isinstance(pred_cls, PredicateMeta)
+clausal/logic/compiler_v2.py	851	M	R	LEFT (P1 Task 3, measured): a predicate DECLARED here with no clauses has a class and NO ROW, so db.row(...) would refuse a -discontiguous load the docstring promises to accept. Spec §4 question.	if isinstance(cls, PredicateMeta):
+clausal/logic/compiler_v2.py	882	M	R	LEFT (P1 Task 3, measured): is_pred chooses BETWEEN refusals; db.row disagrees with it on 3 of the 8 targets that reach here over the suite (ghost/2, solve_tiny/1, solve_count_tabled/2), replacing 'declared but has no clauses' with 'never defined'.	if isinstance(cls, PredicateMeta):
 clausal/logic/compiler/predicate.py	900	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.	if not isinstance(pred_cls, PredicateMeta):
 clausal/logic/compiler/predicate.py	1025	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.	if not isinstance(pred_cls, PredicateMeta):
 clausal/logic/compiler/predicate.py	1734	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.	if not isinstance(pred_cls, PredicateMeta):
 clausal/logic/compiler/predicate.py	1849	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.	if not isinstance(pred_cls, PredicateMeta):
-clausal/logic/compiler/globals_env.py	165	M	R	_DictDatabase.signature_for: a shim faking a Database out of a dict; takes arity and IGNORES it. May delete outright.	if isinstance(cls, PredicateMeta):
+clausal/logic/compiler/globals_env.py	165	M	R-done	DONE (P1 Task 3): reads $module's db row; ARITY-EXACT now, where the class read ignored the arity.	if isinstance(cls, PredicateMeta):
 clausal/logic/compiler/goal_trampoline.py	150	M	R!	index-plan optimiser; arity computed on the line above and NOT used in the lookup. Rerouting TIGHTENS an arity-blind test.	if not isinstance(pred_obj, PredicateMeta):
 clausal/logic/compiler/goal_trampoline.py	265	M	R!	same, via _ir.SubCall.	if not isinstance(pred_obj, PredicateMeta):
 clausal/logic/compiler/optimisations/call_site.py	85	M	R!	same idiom.	if not isinstance(pred_obj, PredicateMeta):
 clausal/logic/compiler/optimisations/call_site.py	206	M	R!	same idiom.	if not isinstance(pred_obj, PredicateMeta):
-clausal/testing.py	862	H	R	_note_generic_compound_confusion: "declared here at this arity?"; the else-branch already reads the signature registry.	if isinstance(declared, PredicateMeta):
-clausal/logic/compiler_v2.py	276	H	R	step 4a stamps _dynamic_arities; the stamp target moves to the row.	if isinstance(stamped, PredicateMeta):
-clausal/logic/compiler_v2.py	1008	H	R-enum	error message lists module_dict's predicates -> enumerate db's rows. Independent of §4.	f"{[k for k, v in module_dict.items() if isinstance(v, PredicateMeta)]})"
-clausal/logic/compiler_v2.py	234	M	S	pred_cls resolved only to be passed to _load_gate, which already receives db, functor AND arity.	if not isinstance(pred_cls, PredicateMeta):
-clausal/logic/compiler_v2.py	796	M	S	_redefinition_error: a None-check dressed as a type test on an already-resolved value.	if origin is None or not isinstance(pred_cls, PredicateMeta):
+clausal/testing.py	862	H	R-done	DONE (P1 Task 3): the declaredness test is a row through $module; the else-branch atom handling is unchanged.	if isinstance(declared, PredicateMeta):
+clausal/logic/compiler_v2.py	276	H	R	LEFT (P1 Task 3, THE WART): the set lives on the CLASS's own row, and for a clause-less -dynamic the class is still on its DETACHED row here (measured), so db cannot name it. Class kept for test and write; the set does not move.	if isinstance(stamped, PredicateMeta):
+clausal/logic/compiler_v2.py	1008	H	R-enum-done	DONE (P1 Task 3): enumerates sorted names of db._rows and db._adopted.	f"{[k for k, v in module_dict.items() if isinstance(v, PredicateMeta)]})"
+clausal/logic/compiler_v2.py	234	M	S	LEFT (P1 Task 3, measured): not redundant -- 34 of 14,615 arrivals over the suite find a non-class (an interned atom tuple, or nothing) under a functor that HAS clause nodes, and the guarded branch calls _bind_row.	if not isinstance(pred_cls, PredicateMeta):
+clausal/logic/compiler_v2.py	796	M	S-done	DONE (P1 Task 3): pred_cls arrives already resolved, so the type test was a None check; now 'pred_cls is None'.	if origin is None or not isinstance(pred_cls, PredicateMeta):
 clausal/logic/compiler/predicate.py	2218	M	P4	P4, not P1: _install uses pred_cls for _bind_row(db, functor, arity) and writes _dispatch_fn THROUGH the class -- that binding is what makes pred_cls._clauses BE db._clauses[key], so it cannot go while classes do.	if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
 clausal/logic/compiler_v2.py	969	M	Q	_preregister_specialized: bare directive name, NO arity, then consumed by analyze_mi. Needs functor->row, not just membership.	if not isinstance(mi_cls, PredicateMeta):
 clausal/logic/compiler_v2.py	1004	M	Q	_run_specialization, error path; same.	if not isinstance(mi_cls, PredicateMeta):
