@@ -16,16 +16,22 @@ from clausal.terms import Compound, Call, LoadName
 from tests.test_callsite_specialization import _make_locked_pred_cls
 
 
+# Each case returns its callee's Database too: since P1 (spec 2026-09-17
+# §2.3) ``analyse`` resolves the callee as ``db.row(fname, arity)`` -- arity
+# exact -- instead of by name in ``base_globals``, so the call site is written
+# at the callee's own arity and the db has to be handed to the pass.
+
+
 def _case_eligible_literal_arg():
     callee_cls, _ = _make_locked_pred_cls("color_e3", [
         (mint("red"),), (mint("green"),), (mint("blue"),),
         (mint("yellow"),), (mint("purple"),),
     ])
     x = Var()
-    body = [Call(func=LoadName(name="color_e3"), args=[mint("red"), x], kwargs=[])]
+    body = [Call(func=LoadName(name="color_e3"), args=[mint("red")], kwargs=[])]
     clause = Clause(head=Compound("caller", (x,)), body=body)
     base_globals = {"color_e3": callee_cls}
-    return clause, base_globals
+    return clause, base_globals, callee_cls._row.db
 
 
 def _case_ineligible_variable_arg():
@@ -34,18 +40,18 @@ def _case_ineligible_variable_arg():
         (mint("yellow"),), (mint("purple"),),
     ])
     x, y = Var(), Var()
-    body = [Call(func=LoadName(name="color_e3v"), args=[y, x], kwargs=[])]
+    body = [Call(func=LoadName(name="color_e3v"), args=[y], kwargs=[])]
     clause = Clause(head=Compound("caller", (x,)), body=body)
     base_globals = {"color_e3v": callee_cls}
-    return clause, base_globals
+    return clause, base_globals, callee_cls._row.db
 
 
 def test_call_site_pass_analyse_eligible():
     from clausal.logic.compiler.optimisations import call_site
     from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
-    clause, base_globals = _case_eligible_literal_arg()
+    clause, base_globals, db = _case_eligible_literal_arg()
     ir = terms_to_goalop(clause.body, db=None)
-    plan = call_site.analyse(ir, clause.head, base_globals)
+    plan = call_site.analyse(ir, clause.head, base_globals, db=db)
     assert isinstance(plan, call_site.CallSitePlan)
     assert len(plan.hints) == 1
     op_idx, gkey = plan.hints[0]
@@ -57,9 +63,9 @@ def test_call_site_pass_apply_sets_direct_bucket_ref():
     from clausal.logic.compiler.optimisations import call_site
     from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
     from clausal.logic.compiler.ir import SubCall
-    clause, base_globals = _case_eligible_literal_arg()
+    clause, base_globals, db = _case_eligible_literal_arg()
     ir = terms_to_goalop(clause.body, db=None)
-    plan = call_site.analyse(ir, clause.head, base_globals)
+    plan = call_site.analyse(ir, clause.head, base_globals, db=db)
     new_ir = call_site.apply(ir, plan)
     marked = [op for op in new_ir.ops
               if isinstance(op, SubCall) and op.direct_bucket_ref]
@@ -70,11 +76,11 @@ def test_call_site_pass_apply_sets_direct_bucket_ref():
 def test_call_site_pass_apply_is_idempotent():
     from clausal.logic.compiler.optimisations import call_site
     from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
-    clause, base_globals = _case_eligible_literal_arg()
+    clause, base_globals, db = _case_eligible_literal_arg()
     ir = terms_to_goalop(clause.body, db=None)
-    plan = call_site.analyse(ir, clause.head, base_globals)
+    plan = call_site.analyse(ir, clause.head, base_globals, db=db)
     once = call_site.apply(ir, plan)
-    twice_plan = call_site.analyse(once, clause.head, base_globals)
+    twice_plan = call_site.analyse(once, clause.head, base_globals, db=db)
     twice = call_site.apply(once, twice_plan)
     assert once == twice
 
@@ -82,9 +88,9 @@ def test_call_site_pass_apply_is_idempotent():
 def test_call_site_pass_ineligible_body_empty_plan():
     from clausal.logic.compiler.optimisations import call_site
     from clausal.logic.compiler.terms_to_goalop import terms_to_goalop
-    clause, base_globals = _case_ineligible_variable_arg()
+    clause, base_globals, db = _case_ineligible_variable_arg()
     ir = terms_to_goalop(clause.body, db=None)
-    plan = call_site.analyse(ir, clause.head, base_globals)
+    plan = call_site.analyse(ir, clause.head, base_globals, db=db)
     assert not plan.hints
     new_ir = call_site.apply(ir, plan)
     assert new_ir is ir
@@ -112,16 +118,16 @@ def test_call_site_pass_matches_legacy_gkey():
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     from clausal.logic.compiler.compile_ctx import CompilationContext
 
-    clause, base_globals = _case_eligible_literal_arg()
+    clause, base_globals, db = _case_eligible_literal_arg()
     legacy_globals = dict(base_globals)
     ctx = CompilationContext(
-        db=None, var_context={}, trail_name="trail",
+        db=db, var_context={}, trail_name="trail",
     )
-    _inject_bucket_refs_trampoline(ctx, [clause], legacy_globals)
+    _inject_bucket_refs_trampoline(ctx, [clause], legacy_globals, db=db)
     legacy_gkeys = set(ctx.bucket_ref_map.values())
 
     ir = terms_to_goalop(clause.body, db=None)
-    plan = call_site.analyse(ir, clause.head, base_globals)
+    plan = call_site.analyse(ir, clause.head, base_globals, db=db)
     ir_gkeys = {gkey for _, gkey in plan.hints}
 
     assert ir_gkeys == legacy_gkeys, (

@@ -846,11 +846,16 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
     of todo/done/a-generic-compound-renders-identically-to-a-declared-term.md:
     draw the distinction only here, in failure diagnostics, where the reader
     pays for it exactly when confused."""
-    from clausal.logic.predicate import PredicateMeta
     from clausal.logic.variables import deref
 
     if not named:
         return
+    # P1 (spec 2026-09-17 §2.2): "is a PREDICATE declared here at this arity"
+    # is a Database row, reached through the module's own ``$module`` handle —
+    # never a predicate's ``_row.db``, a different Database for an imported
+    # name.
+    db = getattr(namespace.get("$module"), "db", None)
+    from clausal.logic.predicate import PredicateMeta
     seen: set[str] = set()
     for name, var in named:
         for compound in _generic_compounds_in(deref(var)):
@@ -859,10 +864,24 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
                 continue
             arity = len(compound.args)
             declared = namespace.get(functor)
-            if isinstance(declared, PredicateMeta):
-                if len(declared._fields or ()) != arity:
-                    continue
-            else:
+            # A row is keyed ``(functor, arity)``, so the key IS the
+            # field-count check the class read had to make for itself.
+            #
+            # THE CLASS LEG, kept as a FALLBACK (roborev L4, 2026-09-17).  A
+            # predicate DECLARED here with fields and given no clauses has no
+            # row at all -- the measured limit of the row/isinstance
+            # equivalence, pinned by ``tests/predmeta_p1/
+            # test_membership_equivalence.py``.  Its declared term is exactly
+            # the thing a generic ``Compound`` of the same name/arity shadows,
+            # so dropping the class read silenced this note for the shape it
+            # was written for.  Arity-checked here, because the class read has
+            # no key to do it for it.
+            declared_here = (
+                (db is not None and db.row(functor, arity) is not None)
+                or (isinstance(declared, PredicateMeta)
+                    and len(declared._fields or ()) == arity)
+            )
+            if not declared_here:
                 # THE FLIP (spec §5.1): a declared DATA functor binds the
                 # arity-0 ATOM of its spelling, not a class, and the term
                 # this module constructs for it is the cell ``("cite", _)``.
@@ -1639,13 +1658,14 @@ def _reify_value(value, depth: int = 0, path=None):
         return value
     if isinstance(value, list):
         return [_reify_value(v, depth + 1, path) for v in value]
-    if type(value) is tuple and len(value) == 1 and type(value[0]) is str:
+    from clausal.logic.cells import TUPLE_TAG  # noqa: PLC0415
+    if type(value) is tuple and len(value) == 1 and type(value[0]) is str and value[0] != TUPLE_TAG:
         # An ATOM — the arity-0 cell (spec §6.7).  It is a NAME, so it
         # reifies as ``Atom`` and prints bare; without this branch the cell
         # branch below would reify it as a 0-argument ``Goal`` and print
         # ``foo()``, which is not a term form at all.
         return Atom(name=value[0])
-    if type(value) is tuple and value and type(value[0]) is str:
+    if type(value) is tuple and value and type(value[0]) is str and value[0] != TUPLE_TAG:
         # A CELL -- ``("cite", art52)``.  P3-2 Task 2 (THE FLIP): this is how
         # a compound term is represented, so it reifies as a ``Goal`` and
         # prints as ``cite(art52)``, exactly as the ``Compound`` branch below

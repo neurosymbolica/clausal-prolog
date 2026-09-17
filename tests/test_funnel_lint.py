@@ -331,7 +331,9 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # allowlist moves whenever anything earlier in the file does, so this
     # entry will red on edits that have nothing to do with it -- the range is
     # deliberately loose to absorb that rather than being re-pinned each time.
-    AllowEntry("clausal/logic/database.py", (1240, 1320),
+    #    Range shifted 1240-1320 -> 1240-1400 by the §4 q1 import-plant's
+    #    arities_for/adopt_row/owns/_adopted additions earlier in the file.
+    AllowEntry("clausal/logic/database.py", (1240, 1400),
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list); task-5 (R11) "
                "added its cell branch"),
@@ -383,7 +385,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    on its band constant, added beside ``_to_decimal`` and so ABOVE
     #    ``term_str``, then the same-named-dimension disambiguation in
     #    ``_dims_str``/``_colliding_dim_names``) -- still no new site.
-    AllowEntry("clausal/terms.py", (2699, 3389),   # re-anchored 2026-09-12 (exact-number currency helpers and // % above; then the re-readable unit renderer _unit_identifier/_unit_expr_str, then the rational rendering, still no new site); END re-anchored 2026-09-15 +50 by the _dims rekey (atom_keyed_dims and _currency_info added beside _unit_identifier, ABOVE term_str) -- the site sat EXACTLY on the old end, so any insertion above it tripped the lint; verified still the only violation in the tree
+    AllowEntry("clausal/terms.py", (2699, 3407),   # re-anchored 2026-09-12 (exact-number currency helpers and // % above; then the re-readable unit renderer _unit_identifier/_unit_expr_str, then the rational rendering, still no new site); END re-anchored 2026-09-15 to 3407 -- this branch's own commits had ALREADY pushed the site past the old end (the test was red in this branch's baseline, which is exactly why the branch gate could not see the drift), and the _dims rekey pushed it further; verified still the only violation in the tree
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),
@@ -606,13 +608,20 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2322 (2319 before the ``.seam`` alias-extension
+    """clausal/testing.py:2342 (2326 before the P1 fix wave's L4 class-leg
+    fallback in ``_note_generic_compound_confusion``, 2323 before P1 Task 3's
+    comment lines in the same function, 2322 before the tuple-DATA tag's
+    TUPLE_TAG import, 2319 before the ``.seam`` alias-extension
     lines) has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
-    testing.py (currently 2277-2389; the entry's own comment records how it
-    has moved as code above the site grew) is doing real exemption work,
-    not sitting on an already-invisible site."""
+    testing.py (currently 2277-2389, which still covers the site; the entry's
+    own comment records how it has moved as code above the site grew) is doing
+    real exemption work, not sitting on an already-invisible site.
+
+    This number is a MECHANICAL line count, not a behaviour: every edit above
+    the site moves it, and the trail above records each move.  The assertion
+    that matters is the pattern and the path."""
     entries_without_testing = tuple(
         e for e in ALLOWLIST if e.path != "clausal/testing.py"
     )
@@ -626,7 +635,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2322
+        v.pattern == "functor_fallback" and v.line == 2342
         for v in testing_violations
     ), testing_violations
 

@@ -258,7 +258,7 @@ class _ClauseReifier:
             # one atom reified to two different vocabulary terms and the
             # renderer had no atom to render.
             if (type(value) is tuple and len(value) == 1
-                    and type(value[0]) is str):
+                    and type(value[0]) is str and value[0] != _CELL_TUPLE_TAG):
                 return Atom(value[0])
             return value
         if isinstance(node, ast.List):
@@ -712,7 +712,7 @@ class _ClauseRenderer:
             return ast.List(
                 elts=[self.term(item) for item in value], ctx=ast.Load()
             )
-        if type(value) is tuple and value and type(value[0]) is str:
+        if type(value) is tuple and value and type(value[0]) is str and value[0] != _CELL_TUPLE_TAG:
             # A str-functor CELL (P3-2 Task 7) -- the tagged-tuple runtime
             # representation of a plain compound term, e.g. built by
             # ``op_node/3``'s NEW argument or ``replace_subterm/4``'s
@@ -736,7 +736,7 @@ class _ClauseRenderer:
                 args=[self.term(item) for item in value[1:]],
                 keywords=[],
             )
-        if type(value) is tuple and value and value[0] is _CELL_TUPLE_TAG:
+        if type(value) is tuple and value and value[0] == _CELL_TUPLE_TAG:
             # A tuple-DATA cell (``(tuple, e1, e2)``) -- plain tuple DATA,
             # not a compound (Task 5's ``TUPLE_TAG`` convention).  Renders
             # as the ordinary tuple literal it stands for; without this the

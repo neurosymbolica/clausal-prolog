@@ -2366,7 +2366,7 @@ def _warn_if_literal_may_be_lost(f: float) -> None:
         ClausalCurrencyLiteralWarning, stacklevel=4)
 
 
-class Quantity:
+class quantity:  # noqa: N801 -- see the naming note below
     """A number with physical dimensions for dimensional analysis.
 
     ``dims`` maps dimension keys (unit predicate objects) to integer exponents.
@@ -2805,7 +2805,9 @@ class Quantity:
     # ── Representation ───────────────────────────────────────────────────────
 
     def __repr__(self) -> str:
-        return f"Quantity({self._value!r}, {self._dims!r})"
+        # the CLASS name, not a hardcoded spelling -- repr is what an author
+        # sees, so it must not outlive a rename
+        return f"{type(self).__name__}({self._value!r}, {self._dims!r})"
 
     def __str__(self) -> str:
         # The output IS valid input: `292.00 (usd)` parses back to an equal
@@ -2851,6 +2853,22 @@ class Quantity:
 
 
 # ── Cons / list helpers ────────────────────────────────────────────────────────
+
+
+#: THE NAME IS `quantity`, LOWERCASE, and this is not a style preference.
+#: TitleCase RAISES at load since the identifier lint, so a functor spelled
+#: `Quantity` cannot be written in Clausal source at all -- which makes the
+#: CLASS's name and the TERM's name disagree for the one type whose whole job
+#: is to be written by authors. Lowercase puts it in the same namespace as
+#: `date`, `decimal` and `rdiv`: all writable, all atoms.
+#:
+#: `Quantity` stays as an alias because it is exported from this module and
+#: reached from corpus files and sealed harness bodies that this lane may not
+#: edit. The ~945 in-tree call sites are a separate, mechanical migration --
+#: separate because lowercase `quantity` ALREADY exists as a local variable in
+#: 51 places, so a blanket rename would leave the class shadowed by a local in
+#: any function that uses both.
+Quantity = quantity
 
 def list_to_cons(lst: list) -> object:
     """Convert a Python list to explicit Prolog-style cons structure.
@@ -3274,7 +3292,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         # decided HERE: both cell tests below are falsy on it, so it used to
         # fall all the way to ``repr(t)`` and print ``()``.
         return _c('[]', 'bracket', style, _bd)
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
         # every compound term is represented, so the reader must see
         # ``pt(1, 2)``, the term they wrote, not a Python tuple repr.
@@ -3314,7 +3332,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         cb = _c(')', 'bracket', style, _bd)
         return functor_s + ob + sep.join(
             term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for a in args) + cb
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         # A tuple-DATA cell -- ``(tuple, e1, e2)`` -- represents plain tuple
         # data, not a compound (P3-2 Task 5's ``TUPLE_TAG`` convention).  It
         # renders as the ordinary tuple display it stands for: ``(e1, e2)``,
@@ -3457,14 +3475,14 @@ def term_canonical(t: Any) -> str:
         return _seg_canonical(walked)
     if isinstance(t, Var):
         return _canonical_var(t)
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A CELL.  Slot 0 read RAW, no deref -- the recognition rule every
         # cell site uses.  An arity-0 cell is an atom and prints bare.
         head = _quoted_atom_spelling(t[0])
         if len(t) == 1:
             return head
         return head + "(" + ",".join(term_canonical(a) for a in t[1:]) + ")"
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         return "(" + ",".join(term_canonical(e) for e in t[1:]) + ")"
     if isinstance(t, Compound):
         f = deref(t.functor)
@@ -3626,7 +3644,7 @@ def term_pformat(
         items = [_r(a) for a in t.args]
         return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A str-functor CELL -- the Compound-equivalent multi-line treatment
         # (P3-2 Task 7): a wide cell used to fall through every isinstance
         # branch above straight to ``return flat``, so a long ``pt(1, 2)``
@@ -3641,7 +3659,7 @@ def term_pformat(
         items = [_r(a) for a in args]
         return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         # A tuple-DATA cell -- same multi-line treatment as the list branch
         # above, since this is what it displays as (``TUPLE_TAG`` itself
         # never appears in the rendering).
@@ -3786,7 +3804,7 @@ def term_html(t: Any, _bd: int = 0) -> str:
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(a, _bd + 1) for a in t.args)
         return functor_s + ob + args_str + cb
-    if type(t) is tuple and t and type(t[0]) is str:
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A str-functor CELL -- the ``Compound`` branch above's exact
         # counterpart (P3-2 Task 7); without this a cell fell through to the
         # ``esc(repr(t))`` tail, leaking the Python tuple repr into Jupyter
@@ -3800,7 +3818,7 @@ def term_html(t: Any, _bd: int = 0) -> str:
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(a, _bd + 1) for a in t[1:])
         return functor_s + ob + args_str + cb
-    if type(t) is tuple and t and t[0] is TUPLE_TAG:
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
         # A tuple-DATA cell -- plain tuple display, brackets only.
         ob = _html_c('(', 'bracket', _bd)
         cb = _html_c(')', 'bracket', _bd)
@@ -3884,7 +3902,8 @@ __all__ = [
     "PyThunk",
     "FStringThunk",
     # Units
-    "Quantity",
+    "quantity",
+    "Quantity",   # deprecated alias; see the naming note in terms.py
     "UnitsMismatch",
     # Kleene (K3) third truth value
     "Undefined",

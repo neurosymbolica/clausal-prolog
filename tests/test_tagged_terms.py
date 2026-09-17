@@ -884,30 +884,29 @@ class TestHeadPatterns:
                             globals_=other.__dict__)
         assert got.startswith("case ['point', ")
 
-    def test_the_tuple_data_tag_is_now_emitted_as_a_dotted_value_pattern(self):
-        """P3-2 Task 3.  Inverts ``test_no_tuple_data_tag_is_emitted_in_this
-        _stage``, which recorded the tuple-DATA arm's deliberate absence and
-        the constraint any future one would have to meet: a DOTTED value
-        pattern, because a bare ``tuple`` in a pattern is a capture.
+    def test_the_tuple_data_tag_emits_as_a_plain_literal_value_pattern(self):
+        """INVERTED when the tag became the reserved atom ``'()'``.
 
-        The arm exists now, and it is rooted at ``$cells`` rather than at
-        ``builtins`` -- see ``cells.CELLS_NAMESPACE_KEY``.  A str-functor cell
-        still tags slot 0 with the plain spelling.
+        The dotted ``$cells.TUPLE_TAG`` pattern existed for one reason: the tag
+        was the ``tuple`` TYPE OBJECT, so writing it into a pattern meant
+        writing a NAME, and a bare name in a ``match`` pattern CAPTURES rather
+        than compares.  Rooting it at ``$cells`` was how that was dodged.
+
+        A string literal cannot capture, so the dodge is no longer needed and
+        tuple-data now emits exactly as a str-functor cell does -- one
+        ``MatchValue``, no namespace, no injection.  This test pins the
+        collapse; ``tests/tuple_tag/`` pins the tag's value.
         """
         from clausal.logic.compiler import head_match
 
         pattern = head_match._cell_match_pattern("point", [])
         assert isinstance(pattern.patterns[0], ast.MatchValue)
         assert pattern.patterns[0].value.value == "point"
-        # The tuple-DATA tag never becomes a bare name (that would CAPTURE).
-        # ``$cells`` is what a compiled predicate's base_globals carries; the
-        # fixture module's own namespace does not, so it is supplied here.
-        from clausal.logic.cells import CELLS_NAMESPACE_KEY
-
-        g = dict(self._module_globals())
-        g[CELLS_NAMESPACE_KEY] = None
-        got = self._pattern((head_match.TUPLE_TAG, 1), globals_=g)
-        assert got == "case [$cells.TUPLE_TAG, _ncap0]:"
+        # The tag is a literal now, so no namespace is supplied and none is
+        # needed -- the same shape the "point" cell above produces.
+        got = self._pattern((head_match.TUPLE_TAG, 1),
+                            globals_=dict(self._module_globals()))
+        assert got == "case ['()', _ncap0]:"
 
     def test_the_cells_namespace_is_injected_from_one_place(self):
         """P3-3 Task 4: ``$cells`` was hand-copied into the trampoline and the
@@ -1647,38 +1646,37 @@ class TestLiveCellHeadArg:
         assert self._ask(m, (1, 2)) == ["catchall"]
         assert self._ask(m, ("pt", 1, 2)) == ["catchall"]
 
-    def test_the_tuple_data_tag_is_rooted_at_the_cells_namespace(self):
-        """Never a bare ``tuple`` (a capture), never ``builtins`` (a name a
-        user module can rebind), never ``__builtins__`` (a dict inside an
-        imported module)."""
-        from clausal.logic.cells import CELLS_NAMESPACE_KEY, make_tuple_cell
+    def test_the_tuple_data_tag_needs_no_namespace_at_all(self):
+        """The rooting question is gone with the type-object tag.
+
+        It used to matter which namespace the tag was reached through -- never
+        a bare ``tuple`` (a capture), never ``builtins`` (rebindable), never
+        ``__builtins__`` (a dict).  A reserved-atom tag is a literal, so there
+        is no name to root and an EMPTY globals dict produces the same pattern
+        an injected one did."""
+        from clausal.logic.cells import make_tuple_cell
         from clausal.logic.compiler.head_match import head_to_match_pattern
 
         got = _unparse_pattern(head_to_match_pattern(
-            make_tuple_cell(1, 2), {}, [], [], None,
-            globals_={CELLS_NAMESPACE_KEY: None}))
-        assert got == "case [$cells.TUPLE_TAG, _ncap0, _ncap1]:"
+            make_tuple_cell(1, 2), {}, [], [], None, globals_={}))
+        assert got == "case ['()', _ncap0, _ncap1]:"
 
-    def test_without_the_cells_namespace_the_tag_degrades_to_a_wildcard(self):
-        """A compilation path that does not inject ``$cells`` must not emit a
-        pattern that would ``NameError`` at MATCH time.  A ground tuple-data
-        cell still reaches the A02-F003 opaque-literal capture below it."""
+    def test_the_tag_no_longer_degrades_without_a_namespace(self):
+        """INVERTED: the failure this guarded cannot occur any more.
+
+        A compilation path that did not inject ``$cells`` had to throw the
+        pattern away, because emitting it would ``NameError`` at MATCH time --
+        so a non-ground tuple-data cell fell back to ``case _:`` and lost its
+        indexing. A literal tag resolves nothing at match time, so the same
+        call with an EMPTY globals dict now keeps its pattern."""
         from clausal.logic.cells import make_tuple_cell
         from clausal.logic.compiler.head_match import head_to_match_pattern
 
         sink = []
         got = _unparse_pattern(head_to_match_pattern(
             make_tuple_cell(1, Var()), {}, [], sink, None, globals_={}))
-        assert got == "case _:"
-        assert sink == [], f"guards leaked for a discarded pattern: {sink}"
-
-        # ... and the GROUND tuple-data cell that legitimately falls through
-        # to that capture leaves exactly the one guard it is supposed to.
-        ground_sink = []
-        got_ground = _unparse_pattern(head_to_match_pattern(
-            make_tuple_cell(1, 2), {}, [], ground_sink, None, globals_={}))
-        assert got_ground == "case _xcap0:"
-        assert [e[0] for e in ground_sink] == ["headlit"]
+        assert got != "case _:", "the tag still degrades without $cells"
+        assert got.startswith("case ['()', "), got
 
 
 class TestCellHeadGuardLeaks:
@@ -1818,13 +1816,18 @@ class TestCellHeadArgOpaqueSlots:
 
     def test_the_clausal_assertz_repro(self):
         """The reviewer's repro, from source rather than from the Python API:
-        ``assertz`` of a fact whose cell head arg carries a date."""
-        import datetime
+        ``assertz`` of a fact whose cell head arg carries a date.
 
+        The fixture's ``D is date(2020, 1, 1)`` binds the TERM since the
+        2026-09-15 ruling, so the query passes the same term. A date is no
+        longer the OPAQUE case this class is named for -- its siblings keep
+        that coverage with a plain ``"other"`` -- but the head-arg shape being
+        exercised, a value nested inside a cell, is unchanged.
+        """
         mod = _load_inline("_tt_opaque_assertz", _OPAQUE_ASSERTZ_SRC)
         lm = mod.__dict__["$module"]
         list(call("setup", module=lm))
-        d = datetime.date(2020, 1, 1)
+        d = ("date", 2020, 1, 1)
         K = Var()
         assert [deref(K) for _t in call("q", ("pt", 1, d), K, module=lm)] \
             == [mint("yes"), mint("catchall")]
@@ -2301,10 +2304,12 @@ class TestCallableAndTheTupleDataEdge:
         nothing constructs.  Under the plain-tuple analog every predicate
         agrees; under the tagged-Compound one, three disagree — INCLUDING
         ``ground/1``, whose cell branch was reviewed and accepted as correct.
-        That is the evidence the tagged Compound is the wrong analog rather
-        than a real defect: ``Compound`` treats ANY non-str functor as
-        non-ground (``_is_ground_py``'s Compound branch tests
-        ``isinstance(term.functor, str)``), which predates cells entirely.
+        The ORIGINAL evidence was a ground/1 divergence, which came from the
+        tag being a type object -- ``Compound`` treats any non-str functor as
+        non-ground (``_is_ground_py`` tests ``isinstance(term.functor, str)``),
+        predating cells entirely. Under the reserved-atom tag that divergence
+        is gone and the point is made more directly: ``Compound('()', (1, 2))``
+        is the compound ``'()'/2``, and tuple DATA is not a compound at all.
         """
         from clausal.logic.cells import TUPLE_TAG
         from clausal.terms import Compound
@@ -2322,8 +2327,15 @@ class TestCallableAndTheTupleDataEdge:
         # shows up here.
         assert self._nsol("callable_", tagged_compound) == 1
         assert self._nsol("compound", tagged_compound) == 1
-        assert self._nsol("ground", tagged_compound) == 0     # the quirk
-        assert self._nsol("ground", Compound(123, (1, 2))) == 0  # ... general
+        # MOVED when the tag became the reserved atom ``'()'``: the ground/1
+        # quirk used to fall on ``Compound(TUPLE_TAG, ...)`` too, because a
+        # type object is not a str and ``_is_ground_py``'s Compound branch
+        # tests ``isinstance(term.functor, str)``. With a str tag the tagged
+        # Compound is now ordinarily ground -- it is simply the compound
+        # ``'()'/2``, which is precisely what tuple DATA is not. The quirk
+        # itself is unchanged and still lives on any non-str functor.
+        assert self._nsol("ground", tagged_compound) == 1
+        assert self._nsol("ground", Compound(123, (1, 2))) == 0  # the quirk
 
     def test_compound_1_still_gates_on_arity_and_diverges_at_zero(self):
         """A pre-existing wart, pinned rather than copied.

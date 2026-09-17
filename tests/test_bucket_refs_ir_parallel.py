@@ -37,7 +37,7 @@ def _case_literal_arg():
         ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
     ])
     x = Var()
-    body = [Call(func=LoadName(name="color_lit"), args=["red", x], kwargs=[])]
+    body = [Call(func=LoadName(name="color_lit"), args=["red"], kwargs=[])]
     return ("literal_arg", callee_cls, "color_lit", Clause(
         head=Compound("caller", (x,)), body=body,
     ))
@@ -48,7 +48,7 @@ def _case_variable_arg():
         ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
     ])
     x, y = Var(), Var()
-    body = [Call(func=LoadName(name="color_var"), args=[y, x], kwargs=[])]
+    body = [Call(func=LoadName(name="color_var"), args=[y], kwargs=[])]
     return ("variable_arg", callee_cls, "color_var", Clause(
         head=Compound("caller", (x,)), body=body,
     ))
@@ -60,7 +60,7 @@ def _case_unlocked_predicate():
     ])
     callee_cls._locked = False
     x = Var()
-    body = [Call(func=LoadName(name="color_unl"), args=["red", x], kwargs=[])]
+    body = [Call(func=LoadName(name="color_unl"), args=["red"], kwargs=[])]
     return ("unlocked_predicate", callee_cls, "color_unl", Clause(
         head=Compound("caller", (x,)), body=body,
     ))
@@ -71,7 +71,7 @@ def _case_unknown_key():
         ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
     ])
     x = Var()
-    body = [Call(func=LoadName(name="color_unk"), args=["orange", x], kwargs=[])]
+    body = [Call(func=LoadName(name="color_unk"), args=["orange"], kwargs=[])]
     return ("unknown_key", callee_cls, "color_unk", Clause(
         head=Compound("caller", (x,)), body=body,
     ))
@@ -100,14 +100,19 @@ def test_bucket_refs_analyse_ir_agrees_with_legacy(
         analyse_ir_bucket_refs,
     )
 
+    # Both walkers resolve the callee in the SAME Database: since P1 the
+    # callee is ``db.row(fname, arity)``, not a name lookup in base_globals.
+    db = callee_cls._row.db
+
     base_globals_legacy = {callee_name: callee_cls}
-    ctx_legacy = _mkctx()
-    _inject_bucket_refs_trampoline(ctx_legacy, [clause], base_globals_legacy)
+    ctx_legacy = _mkctx(db=db)
+    _inject_bucket_refs_trampoline(
+        ctx_legacy, [clause], base_globals_legacy, db=db)
     legacy_br = dict(ctx_legacy.bucket_ref_map)
     legacy_jbr = dict(ctx_legacy.joint_bucket_ref_map)
 
     base_globals_ir = {callee_name: callee_cls}
-    ir_br, ir_jbr = analyse_ir_bucket_refs([clause], base_globals_ir)
+    ir_br, ir_jbr = analyse_ir_bucket_refs([clause], base_globals_ir, db=db)
 
     assert ir_br == legacy_br, (
         f"{name}: single-bucket disagreement — "

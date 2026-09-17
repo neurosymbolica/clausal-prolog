@@ -24,6 +24,8 @@ from clausal.modules.py.datetime import (
     _date_max_3, _date_min_3, _ordinal_2,
 )
 from clausal.logic.trampoline import DONE
+from clausal.modules.py.datetime import _dt_to_term as _T
+from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -59,7 +61,7 @@ class TestNow:
         results, trail = simple_solutions(_now_1, v)
         assert len(results) == 1
         val = deref(v)
-        assert isinstance(val, dt.datetime)
+        assert isinstance(_P(val), dt.datetime)
 
     def test_now_utc_binds_datetime(self):
         # nv
@@ -67,8 +69,8 @@ class TestNow:
         results, trail = simple_solutions(_now_utc_1, v)
         assert len(results) == 1
         val = deref(v)
-        assert isinstance(val, dt.datetime)
-        assert val.tzinfo is not None
+        assert isinstance(_P(val), dt.datetime)
+        assert _P(val).tzinfo is not None
 
     def test_today_binds_date(self):
         # nv
@@ -76,9 +78,9 @@ class TestNow:
         results, trail = simple_solutions(_today_1, v)
         assert len(results) == 1
         val = deref(v)
-        assert isinstance(val, dt.date)
-        assert not isinstance(val, dt.datetime)
-        assert val == dt.date.today()
+        assert isinstance(_P(val), dt.date)
+        assert not isinstance(_P(val), dt.datetime)
+        assert val == _T(dt.date.today())
 
 
 # ── date/4 ──────────────────────────────────────────────────────────────
@@ -90,12 +92,12 @@ class TestTime:
         t = Var()
         results, _ = simple_solutions(_time_4, 14, 30, 0, t)
         assert len(results) == 1
-        assert deref(t) == dt.time(14, 30, 0)
+        assert deref(t) == _T(dt.time(14, 30, 0))
 
     def test_decompose(self):
         # nv
         h, m, s = Var(), Var(), Var()
-        results, _ = simple_solutions(_time_4, h, m, s, dt.time(14, 30, 45))
+        results, _ = simple_solutions(_time_4, h, m, s, _T(dt.time(14, 30, 45)))
         assert len(results) == 1
         assert deref(h) == 14
         assert deref(m) == 30
@@ -112,7 +114,7 @@ class TestTime:
         t = Var()
         results, _ = simple_solutions(_time_4, 0, 0, 0, t)
         assert len(results) == 1
-        assert deref(t) == dt.time(0, 0, 0)
+        assert deref(t) == _T(dt.time(0, 0, 0))
 
 
 # ── datetime/7 ──────────────────────────────────────────────────────────
@@ -126,15 +128,15 @@ class TestDateTime:
             _datetime_7, 2026, 3, 16, 14, 30, 0, v
         )
         assert len(results) == 1
-        assert deref(v) == dt.datetime(2026, 3, 16, 14, 30, 0)
-        assert type(deref(v)) is dt.datetime
+        assert deref(v) == _T(dt.datetime(2026, 3, 16, 14, 30, 0))
+        assert type(_P(deref(v))) is dt.datetime
 
     def test_decompose(self):
         # nv
         y, mo, d, h, mi, s = Var(), Var(), Var(), Var(), Var(), Var()
         results, _ = simple_solutions(
             _datetime_7, y, mo, d, h, mi, s,
-            dt.datetime(2026, 3, 16, 14, 30, 45)
+            _T(dt.datetime(2026, 3, 16, 14, 30, 45))
         )
         assert len(results) == 1
         assert deref(y) == 2026
@@ -160,7 +162,7 @@ class TestTimeDelta:
         v = Var()
         results, _ = simple_solutions(_timedelta_3, 7, 3600, v)
         assert len(results) == 1
-        assert deref(v) == dt.timedelta(days=7, seconds=3600)
+        assert deref(v) == _T(dt.timedelta(days=7, seconds=3600))
 
     def test_construct_days_only(self):
         # nv
@@ -169,12 +171,12 @@ class TestTimeDelta:
         results, _ = simple_solutions(_timedelta_3, 7, s, v)
         assert len(results) == 1
         val = deref(v)
-        assert val.days == 7
+        assert _P(val).days == 7
 
     def test_decompose(self):
         # nv
         days, secs = Var(), Var()
-        td = dt.timedelta(days=5, seconds=1234)
+        td = _T(dt.timedelta(days=5, seconds=1234))
         results, _ = simple_solutions(_timedelta_3, days, secs, td)
         assert len(results) == 1
         assert deref(days) == 5
@@ -189,33 +191,33 @@ class TestDateAdd:
         # nv
         r = Var()
         results, _ = simple_solutions(
-            _date_add_3, dt.date(2026, 3, 16), dt.timedelta(days=7), r
+            _date_add_3, _T(dt.date(2026, 3, 16)), _T(dt.timedelta(days=7)), r
         )
         assert len(results) == 1
-        assert deref(r) == dt.date(2026, 3, 23)
+        assert deref(r) == _T(dt.date(2026, 3, 23))
 
     def test_add_to_datetime(self):
         # nv
         r = Var()
         results, _ = simple_solutions(
             _date_add_3,
-            dt.datetime(2026, 3, 16, 10, 0, 0),
-            dt.timedelta(hours=3),
+            _T(dt.datetime(2026, 3, 16, 10, 0, 0)),
+            _T(dt.timedelta(hours=3)),
             r,
         )
         assert len(results) == 1
-        assert deref(r) == dt.datetime(2026, 3, 16, 13, 0, 0)
+        assert deref(r) == _T(dt.datetime(2026, 3, 16, 13, 0, 0))
 
     def test_add_non_date_fails(self):
         # nv
         r = Var()
-        results, _ = simple_solutions(_date_add_3, "not-a-date", dt.timedelta(1), r)
+        results, _ = simple_solutions(_date_add_3, "not-a-date", _T(dt.timedelta(1)), r)
         assert len(results) == 0
 
     def test_add_non_timedelta_fails(self):
         # nv
         r = Var()
-        results, _ = simple_solutions(_date_add_3, dt.date(2026, 1, 1), 7, r)
+        results, _ = simple_solutions(_date_add_3, _T(dt.date(2026, 1, 1)), 7, r)
         assert len(results) == 0
 
 
@@ -227,22 +229,22 @@ class TestDateSub:
         # nv
         r = Var()
         results, _ = simple_solutions(
-            _date_sub_3, dt.date(2026, 3, 16), dt.timedelta(days=10), r
+            _date_sub_3, _T(dt.date(2026, 3, 16)), _T(dt.timedelta(days=10)), r
         )
         assert len(results) == 1
-        assert deref(r) == dt.date(2026, 3, 6)
+        assert deref(r) == _T(dt.date(2026, 3, 6))
 
     def test_sub_from_datetime(self):
         # nv
         r = Var()
         results, _ = simple_solutions(
             _date_sub_3,
-            dt.datetime(2026, 3, 16, 10, 0, 0),
-            dt.timedelta(hours=5),
+            _T(dt.datetime(2026, 3, 16, 10, 0, 0)),
+            _T(dt.timedelta(hours=5)),
             r,
         )
         assert len(results) == 1
-        assert deref(r) == dt.datetime(2026, 3, 16, 5, 0, 0)
+        assert deref(r) == _T(dt.datetime(2026, 3, 16, 5, 0, 0))
 
 
 # ── date_diff/3 ──────────────────────────────────────────────────────────
@@ -253,31 +255,31 @@ class TestDateDiff:
         # nv
         td = Var()
         results, _ = simple_solutions(
-            _date_diff_3, dt.date(2026, 3, 16), dt.date(2026, 3, 10), td
+            _date_diff_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 10)), td
         )
         assert len(results) == 1
-        assert deref(td) == dt.timedelta(days=6)
+        assert deref(td) == _T(dt.timedelta(days=6))
 
     def test_diff_datetimes(self):
         # nv
         td = Var()
         results, _ = simple_solutions(
             _date_diff_3,
-            dt.datetime(2026, 3, 16, 12, 0, 0),
-            dt.datetime(2026, 3, 16, 10, 0, 0),
+            _T(dt.datetime(2026, 3, 16, 12, 0, 0)),
+            _T(dt.datetime(2026, 3, 16, 10, 0, 0)),
             td,
         )
         assert len(results) == 1
-        assert deref(td) == dt.timedelta(hours=2)
+        assert deref(td) == _T(dt.timedelta(hours=2))
 
     def test_negative_diff(self):
         # nv
         td = Var()
         results, _ = simple_solutions(
-            _date_diff_3, dt.date(2026, 3, 10), dt.date(2026, 3, 16), td
+            _date_diff_3, _T(dt.date(2026, 3, 10)), _T(dt.date(2026, 3, 16)), td
         )
         assert len(results) == 1
-        assert deref(td) == dt.timedelta(days=-6)
+        assert deref(td) == _T(dt.timedelta(days=-6))
 
     def test_diff_non_dates_fails(self):
         # nv
@@ -294,7 +296,7 @@ class TestDatetimeString:
         # nv — format mode
         s = Var()
         results, _ = simple_solutions(
-            _datetime_string_3, dt.date(2026, 3, 16), s, "%Y-%m-%d"
+            _datetime_string_3, _T(dt.date(2026, 3, 16)), s, "%Y-%m-%d"
         )
         assert len(results) == 1
         assert deref(s) == "2026-03-16"
@@ -304,7 +306,7 @@ class TestDatetimeString:
         s = Var()
         results, _ = simple_solutions(
             _datetime_string_3,
-            dt.datetime(2026, 3, 16, 14, 30, 0), s, "%Y-%m-%d %H:%M",
+            _T(dt.datetime(2026, 3, 16, 14, 30, 0)), s, "%Y-%m-%d %H:%M",
         )
         assert len(results) == 1
         assert deref(s) == "2026-03-16 14:30"
@@ -313,7 +315,7 @@ class TestDatetimeString:
         # nv
         s = Var()
         results, _ = simple_solutions(
-            _datetime_string_3, dt.time(14, 30, 0), s, "%H:%M:%S"
+            _datetime_string_3, _T(dt.time(14, 30, 0)), s, "%H:%M:%S"
         )
         assert len(results) == 1
         assert deref(s) == "14:30:00"
@@ -325,19 +327,19 @@ class TestDatetimeString:
             _datetime_string_3, v, "2026-03-16 14:30", "%Y-%m-%d %H:%M"
         )
         assert len(results) == 1
-        assert deref(v) == dt.datetime(2026, 3, 16, 14, 30)
+        assert deref(v) == _T(dt.datetime(2026, 3, 16, 14, 30))
 
     def test_check_mode_matches(self):
         # nn — both ground, format matches
         results, _ = simple_solutions(
-            _datetime_string_3, dt.date(2026, 3, 16), "2026-03-16", "%Y-%m-%d"
+            _datetime_string_3, _T(dt.date(2026, 3, 16)), "2026-03-16", "%Y-%m-%d"
         )
         assert len(results) == 1
 
     def test_check_mode_mismatch_fails(self):
         # nn
         results, _ = simple_solutions(
-            _datetime_string_3, dt.date(2026, 3, 16), "2026-03-17", "%Y-%m-%d"
+            _datetime_string_3, _T(dt.date(2026, 3, 16)), "2026-03-17", "%Y-%m-%d"
         )
         assert len(results) == 0
 
@@ -357,7 +359,7 @@ class TestDatetimeString:
     def test_unbound_format_fails(self):
         # format arg must be ground
         results, _ = simple_solutions(
-            _datetime_string_3, dt.date(2026, 3, 16), Var(), Var()
+            _datetime_string_3, _T(dt.date(2026, 3, 16)), Var(), Var()
         )
         assert len(results) == 0
 
@@ -365,10 +367,10 @@ class TestDatetimeString:
         """A date → string → back yields a midnight datetime (documented asymmetry)."""
         # nv then vn
         s = Var()
-        simple_solutions(_datetime_string_3, dt.date(2026, 3, 16), s, "%Y-%m-%d")
+        simple_solutions(_datetime_string_3, _T(dt.date(2026, 3, 16)), s, "%Y-%m-%d")
         v = Var()
         simple_solutions(_datetime_string_3, v, deref(s), "%Y-%m-%d")
-        assert deref(v) == dt.datetime(2026, 3, 16, 0, 0, 0)
+        assert deref(v) == _T(dt.datetime(2026, 3, 16, 0, 0, 0))
 
 
 # ── weekday/2 ─────────────────────────────────────────────────────────
@@ -379,7 +381,7 @@ class TestWeekday:
         # nv
         dow = Var()
         results, _ = simple_solutions(
-            _weekday_2, dt.date(2026, 3, 16), dow  # Monday
+            _weekday_2, _T(dt.date(2026, 3, 16)), dow  # Monday
         )
         assert len(results) == 1
         assert deref(dow) == 0  # Monday = 0
@@ -388,7 +390,7 @@ class TestWeekday:
         # nv
         dow = Var()
         results, _ = simple_solutions(
-            _weekday_2, dt.date(2026, 3, 22), dow  # Sunday
+            _weekday_2, _T(dt.date(2026, 3, 22)), dow  # Sunday
         )
         assert len(results) == 1
         assert deref(dow) == 6
@@ -410,8 +412,8 @@ class TestDateBetween:
         d = Var()
         solutions, trail = trampoline_solutions(
             date_between,
-            dt.date(2026, 3, 14),
-            dt.date(2026, 3, 16),
+            _T(dt.date(2026, 3, 14)),
+            _T(dt.date(2026, 3, 16)),
             d,
         )
         assert len(solutions) == 3
@@ -421,8 +423,8 @@ class TestDateBetween:
         d = Var()
         solutions, _ = trampoline_solutions(
             date_between,
-            dt.date(2026, 3, 16),
-            dt.date(2026, 3, 16),
+            _T(dt.date(2026, 3, 16)),
+            _T(dt.date(2026, 3, 16)),
             d,
         )
         assert len(solutions) == 1
@@ -432,8 +434,8 @@ class TestDateBetween:
         d = Var()
         solutions, _ = trampoline_solutions(
             date_between,
-            dt.date(2026, 3, 17),
-            dt.date(2026, 3, 16),
+            _T(dt.date(2026, 3, 17)),
+            _T(dt.date(2026, 3, 16)),
             d,
         )
         assert len(solutions) == 0
@@ -443,8 +445,8 @@ class TestDateBetween:
         d = Var()
         solutions, _ = trampoline_solutions(
             date_between,
-            dt.date(2026, 3, 10),
-            dt.date(2026, 3, 16),
+            _T(dt.date(2026, 3, 10)),
+            _T(dt.date(2026, 3, 16)),
             d,
         )
         assert len(solutions) == 7
@@ -467,35 +469,35 @@ class TestDateOf:
         # nv
         d = Var()
         results, _ = simple_solutions(
-            _date_of_2, dt.datetime(2026, 3, 16, 14, 30, 0), d
+            _date_of_2, _T(dt.datetime(2026, 3, 16, 14, 30, 0)), d
         )
         assert len(results) == 1
         out = deref(d)
-        assert out == dt.date(2026, 3, 16)
-        assert isinstance(out, dt.date) and not isinstance(out, dt.datetime)
+        assert out == _T(dt.date(2026, 3, 16))
+        assert isinstance(_P(out), dt.date) and not isinstance(_P(out), dt.datetime)
 
     def test_inverse_midnight_datetime_from_date(self):
         """Inverse: date → midnight datetime."""
         # vn
         v = Var()
-        results, _ = simple_solutions(_date_of_2, v, dt.date(2026, 3, 16))
+        results, _ = simple_solutions(_date_of_2, v, _T(dt.date(2026, 3, 16)))
         assert len(results) == 1
         out = deref(v)
-        assert out == dt.datetime(2026, 3, 16, 0, 0, 0)
-        assert isinstance(out, dt.datetime)
+        assert out == _T(dt.datetime(2026, 3, 16, 0, 0, 0))
+        assert isinstance(_P(out), dt.datetime)
 
     def test_check_mode_matching(self):
         """Both ground, matching → one solution."""
         # nn
         results, _ = simple_solutions(
-            _date_of_2, dt.datetime(2026, 3, 16, 9, 0, 0), dt.date(2026, 3, 16)
+            _date_of_2, _T(dt.datetime(2026, 3, 16, 9, 0, 0)), _T(dt.date(2026, 3, 16))
         )
         assert len(results) == 1
 
     def test_check_mode_non_matching_fails(self):
         # nn
         results, _ = simple_solutions(
-            _date_of_2, dt.datetime(2026, 3, 16, 9, 0, 0), dt.date(2026, 3, 17)
+            _date_of_2, _T(dt.datetime(2026, 3, 16, 9, 0, 0)), _T(dt.date(2026, 3, 17))
         )
         assert len(results) == 0
 
@@ -519,7 +521,7 @@ class TestDaysBetween:
         # nnv
         n = Var()
         results, _ = simple_solutions(
-            _days_between_3, dt.date(2026, 3, 23), dt.date(2026, 3, 16), n
+            _days_between_3, _T(dt.date(2026, 3, 23)), _T(dt.date(2026, 3, 16)), n
         )
         assert len(results) == 1
         assert deref(n) == 7
@@ -528,7 +530,7 @@ class TestDaysBetween:
         # nnv
         n = Var()
         results, _ = simple_solutions(
-            _days_between_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23), n
+            _days_between_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 23)), n
         )
         assert len(results) == 1
         assert deref(n) == -7
@@ -537,36 +539,36 @@ class TestDaysBetween:
         # nnv
         n = Var()
         results, _ = simple_solutions(
-            _days_between_3, dt.date(2026, 3, 16), dt.date(2026, 3, 16), n
+            _days_between_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 16)), n
         )
         assert len(results) == 1
         assert deref(n) == 0
 
     def test_datetimes_whole_days(self):
-        """Whole-day count (timedelta.days), consistent with DateDiff."""
+        """Whole-day count (_P(timedelta).days), consistent with DateDiff."""
         # nnv
         n = Var()
         results, _ = simple_solutions(
             _days_between_3,
-            dt.datetime(2026, 3, 23, 10, 0, 0),
-            dt.datetime(2026, 3, 16, 12, 0, 0),
+            _T(dt.datetime(2026, 3, 23, 10, 0, 0)),
+            _T(dt.datetime(2026, 3, 16, 12, 0, 0)),
             n,
         )
         assert len(results) == 1
-        # 6 days, 22 hours → timedelta.days == 6
+        # 6 days, 22 hours → _P(timedelta).days == 6
         assert deref(n) == 6
 
     def test_check_mode(self):
         # nnn
         results, _ = simple_solutions(
-            _days_between_3, dt.date(2026, 3, 23), dt.date(2026, 3, 16), 7
+            _days_between_3, _T(dt.date(2026, 3, 23)), _T(dt.date(2026, 3, 16)), 7
         )
         assert len(results) == 1
 
     def test_check_mode_wrong_fails(self):
         # nnn
         results, _ = simple_solutions(
-            _days_between_3, dt.date(2026, 3, 23), dt.date(2026, 3, 16), 5
+            _days_between_3, _T(dt.date(2026, 3, 23)), _T(dt.date(2026, 3, 16)), 5
         )
         assert len(results) == 0
 
@@ -584,16 +586,16 @@ class TestTimestamp:
     def test_forward_datetime_to_float(self):
         # nv
         v = Var()
-        d = dt.datetime(2026, 3, 16, 12, 0, 0)
+        d = _T(dt.datetime(2026, 3, 16, 12, 0, 0))
         results, _ = simple_solutions(_timestamp_2, d, v)
         assert len(results) == 1
-        assert deref(v) == d.timestamp()
+        assert deref(v) == _P(d).timestamp()
 
     def test_inverse_float_to_datetime(self):
         # vn
-        d = dt.datetime(2026, 3, 16, 12, 0, 0)
+        d = _T(dt.datetime(2026, 3, 16, 12, 0, 0))
         v = Var()
-        results, _ = simple_solutions(_timestamp_2, v, d.timestamp())
+        results, _ = simple_solutions(_timestamp_2, v, _P(d).timestamp())
         assert len(results) == 1
         assert deref(v) == d
 
@@ -602,17 +604,17 @@ class TestTimestamp:
         v = Var()
         results, _ = simple_solutions(_timestamp_2, v, 0)
         assert len(results) == 1
-        assert isinstance(deref(v), dt.datetime)
+        assert isinstance(_P(deref(v)), dt.datetime)
 
     def test_check_mode_matches(self):
         # nn
-        d = dt.datetime(2026, 3, 16, 12, 0, 0)
-        results, _ = simple_solutions(_timestamp_2, d, d.timestamp())
+        d = _T(dt.datetime(2026, 3, 16, 12, 0, 0))
+        results, _ = simple_solutions(_timestamp_2, d, _P(d).timestamp())
         assert len(results) == 1
 
     def test_date_has_no_timestamp_fails(self):
         # a plain date is not a datetime → forward fails
-        results, _ = simple_solutions(_timestamp_2, dt.date(2026, 3, 16), Var())
+        results, _ = simple_solutions(_timestamp_2, _T(dt.date(2026, 3, 16)), Var())
         assert len(results) == 0
 
     def test_both_unbound_fails(self):
@@ -629,22 +631,22 @@ class TestUnification:
         # nv
         trail = Trail()
         v = Var()
-        assert unify(v, dt.date(2026, 3, 16), trail)
-        assert deref(v) == dt.date(2026, 3, 16)
+        assert unify(v, _T(dt.date(2026, 3, 16)), trail)
+        assert deref(v) == _T(dt.date(2026, 3, 16))
 
     def test_different_dates_fail(self):
         # nv
         trail = Trail()
         v = Var()
-        assert unify(v, dt.date(2026, 3, 16), trail)
+        assert unify(v, _T(dt.date(2026, 3, 16)), trail)
         # v is now bound — unifying with a different date should fail
-        assert not unify(v, dt.date(2026, 3, 17), trail)
+        assert not unify(v, _T(dt.date(2026, 3, 17)), trail)
 
     def test_datetime_unifies(self):
         # nv
         trail = Trail()
         v = Var()
-        d = dt.datetime(2026, 3, 16, 14, 30, 0)
+        d = _T(dt.datetime(2026, 3, 16, 14, 30, 0))
         assert unify(v, d, trail)
         assert deref(v) is d
 
@@ -652,7 +654,7 @@ class TestUnification:
         # nv
         trail = Trail()
         v = Var()
-        td = dt.timedelta(days=7)
+        td = _T(dt.timedelta(days=7))
         assert unify(v, td, trail)
         assert deref(v) == td
 
@@ -674,7 +676,7 @@ class TestAdapters:
         dispatch. Construct and decompose are unification, not a call."""
         # nv
         assert not hasattr(date, "_get_dispatch")
-        assert date(2026, 3, 16) == dt.date(2026, 3, 16)
+        assert date(2026, 3, 16) == _T(dt.date(2026, 3, 16))
 
     def test_time_has_dispatch(self):
         # nv
@@ -746,7 +748,7 @@ class TestDatetimeStringIso:
     def test_forward(self):
         # nv
         s = Var()
-        d = dt.datetime(2026, 3, 16, 14, 30, 0)
+        d = _T(dt.datetime(2026, 3, 16, 14, 30, 0))
         results, _ = simple_solutions(_datetime_string_iso_2, d, s)
         assert len(results) == 1
         assert deref(s) == "2026-03-16T14:30:00"
@@ -758,7 +760,7 @@ class TestDatetimeStringIso:
             _datetime_string_iso_2, v, "2026-03-16T14:30:00"
         )
         assert len(results) == 1
-        assert deref(v) == dt.datetime(2026, 3, 16, 14, 30, 0)
+        assert deref(v) == _T(dt.datetime(2026, 3, 16, 14, 30, 0))
 
     def test_inverse_invalid_fails(self):
         # vn
@@ -779,7 +781,7 @@ class TestDateStringIso:
     def test_forward(self):
         # nv
         s = Var()
-        results, _ = simple_solutions(_date_string_iso_2, dt.date(2026, 3, 16), s)
+        results, _ = simple_solutions(_date_string_iso_2, _T(dt.date(2026, 3, 16)), s)
         assert len(results) == 1
         assert deref(s) == "2026-03-16"
 
@@ -789,14 +791,14 @@ class TestDateStringIso:
         results, _ = simple_solutions(_date_string_iso_2, v, "2026-03-16")
         assert len(results) == 1
         out = deref(v)
-        assert out == dt.date(2026, 3, 16)
-        assert isinstance(out, dt.date) and not isinstance(out, dt.datetime)
+        assert out == _T(dt.date(2026, 3, 16))
+        assert isinstance(_P(out), dt.date) and not isinstance(_P(out), dt.datetime)
 
     def test_forward_rejects_datetime(self):
         """A datetime is not a plain date → forward fails (guarded like date/4)."""
         # nv
         results, _ = simple_solutions(
-            _date_string_iso_2, dt.datetime(2026, 3, 16, 1, 2, 3), Var()
+            _date_string_iso_2, _T(dt.datetime(2026, 3, 16, 1, 2, 3)), Var()
         )
         assert len(results) == 0
 
@@ -821,34 +823,34 @@ class TestDateMaxMin:
         # nnv
         m = Var()
         results, _ = simple_solutions(
-            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23), m
+            _date_max_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 23)), m
         )
         assert len(results) == 1
-        assert deref(m) == dt.date(2026, 3, 23)
+        assert deref(m) == _T(dt.date(2026, 3, 23))
 
     def test_date_min_binds_earlier(self):
         # nnv
         m = Var()
         results, _ = simple_solutions(
-            _date_min_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23), m
+            _date_min_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 23)), m
         )
         assert len(results) == 1
-        assert deref(m) == dt.date(2026, 3, 16)
+        assert deref(m) == _T(dt.date(2026, 3, 16))
 
     def test_equal_dates_bind_that_date(self):
         # nnv
         m = Var()
         results, _ = simple_solutions(
-            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 16), m
+            _date_max_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 16)), m
         )
         assert len(results) == 1
-        assert deref(m) == dt.date(2026, 3, 16)
+        assert deref(m) == _T(dt.date(2026, 3, 16))
 
     def test_datetimes_compare_too(self):
         # nnv
         m = Var()
-        a = dt.datetime(2026, 3, 16, 9, 0)
-        b = dt.datetime(2026, 3, 16, 17, 30)
+        a = _T(dt.datetime(2026, 3, 16, 9, 0))
+        b = _T(dt.datetime(2026, 3, 16, 17, 30))
         results, _ = simple_solutions(_date_max_3, a, b, m)
         assert len(results) == 1
         assert deref(m) == b
@@ -856,13 +858,13 @@ class TestDateMaxMin:
     def test_check_mode(self):
         # nnn
         results, _ = simple_solutions(
-            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23),
-            dt.date(2026, 3, 23)
+            _date_max_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 23)),
+            _T(dt.date(2026, 3, 23))
         )
         assert len(results) == 1
         results, _ = simple_solutions(
-            _date_max_3, dt.date(2026, 3, 16), dt.date(2026, 3, 23),
-            dt.date(2026, 3, 16)
+            _date_max_3, _T(dt.date(2026, 3, 16)), _T(dt.date(2026, 3, 23)),
+            _T(dt.date(2026, 3, 16))
         )
         assert len(results) == 0
 
@@ -871,15 +873,15 @@ class TestDateMaxMin:
         builtin fails the goal rather than leaking the exception."""
         # nnv
         results, _ = simple_solutions(
-            _date_max_3, dt.date(2026, 3, 16),
-            dt.datetime(2026, 3, 16, 9, 0), Var()
+            _date_max_3, _T(dt.date(2026, 3, 16)),
+            _T(dt.datetime(2026, 3, 16, 9, 0)), Var()
         )
         assert len(results) == 0
 
     def test_non_date_arg_fails(self):
         # nnv
         results, _ = simple_solutions(
-            _date_min_3, "2026-03-16", dt.date(2026, 3, 23), Var()
+            _date_min_3, "2026-03-16", _T(dt.date(2026, 3, 23)), Var()
         )
         assert len(results) == 0
 
@@ -892,36 +894,36 @@ class TestOrdinal:
         """ordinal(Date, N) → N = Date.toordinal() (covers ++D.toordinal())."""
         # nv
         n = Var()
-        d = dt.date(2026, 3, 16)
+        d = _T(dt.date(2026, 3, 16))
         results, _ = simple_solutions(_ordinal_2, d, n)
         assert len(results) == 1
-        assert deref(n) == d.toordinal()
+        assert deref(n) == _P(d).toordinal()
 
     def test_reverse_ordinal_to_date(self):
         """ordinal(D, N) with D unbound builds date.fromordinal(N) — the
         numlist-over-ordinals day-enumeration pattern maps back to dates."""
         # vn
         v = Var()
-        d = dt.date(2026, 3, 16)
-        results, _ = simple_solutions(_ordinal_2, v, d.toordinal())
+        d = _T(dt.date(2026, 3, 16))
+        results, _ = simple_solutions(_ordinal_2, v, _P(d).toordinal())
         assert len(results) == 1
         out = deref(v)
         assert out == d
-        assert isinstance(out, dt.date) and not isinstance(out, dt.datetime)
+        assert isinstance(_P(out), dt.date) and not isinstance(_P(out), dt.datetime)
 
     def test_check_mode(self):
         # nn
-        d = dt.date(2026, 3, 16)
-        results, _ = simple_solutions(_ordinal_2, d, d.toordinal())
+        d = _T(dt.date(2026, 3, 16))
+        results, _ = simple_solutions(_ordinal_2, d, _P(d).toordinal())
         assert len(results) == 1
-        results, _ = simple_solutions(_ordinal_2, d, d.toordinal() + 1)
+        results, _ = simple_solutions(_ordinal_2, d, _P(d).toordinal() + 1)
         assert len(results) == 0
 
     def test_datetime_forward_uses_its_calendar_day(self):
         # nv
         n = Var()
         results, _ = simple_solutions(
-            _ordinal_2, dt.datetime(2026, 3, 16, 14, 30), n
+            _ordinal_2, _T(dt.datetime(2026, 3, 16, 14, 30)), n
         )
         assert len(results) == 1
         assert deref(n) == dt.date(2026, 3, 16).toordinal()

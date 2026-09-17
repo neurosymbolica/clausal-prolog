@@ -1,29 +1,36 @@
-"""`datetime.date` (and datetime/time/timedelta) as first-class query-arg terms.
+"""Date-family values as query args: the TERM is the argument, the object is refused.
 
-The runtime always treated these as first-class terms — a ground `date/3`
-IS a real `datetime.date`, `days_between/3` consumes them, they unify by
-value and hash into tabling — but the input-lowering path rejected them:
-`term_to_ast_expr: unsupported term type date`, forcing the `[Y, M, D]` triple
-+ `Date/4` reconstruction dance on every Python-interop caller
-(todo/date-as-first-class-term-type.md).
+RULED 2026-09-14/15: a date is the term ``('date', Y, M, D)`` (datetime/time/
+timedelta likewise) and a Python datetime object is not a term. ``date/3``
+yields the term; the builtins consume it; a caller passes it.
 
-Two coordinated paths:
-- a DIRECT ground query arg is parameterized (`_templatize_query_goal`), so the
-  object is bound at runtime by reference — no reconstruction, tz-aware values
-  included, and distinct dates reuse ONE compiled query like ints do;
-- a NESTED occurrence (inside a list/compound arg, which templatization leaves
-  structural) lowers through `term_to_ast_expr`'s `$date`/`$datetime`/`$time`/
-  `$timedelta` constructor-call branches (7fd537b3).
+HISTORY, because the door this file used to hold open is the bug it now pins
+shut. ab0dabcd (2026-09-02, before the ruling) let a DIRECT ground query arg
+that was a Python datetime be PARAMETERIZED by ``_templatize_query_goal`` --
+the object bound to a Var on the trail by reference, never lowered -- while a
+NESTED one lowered through ``term_to_ast_expr``. When the nested route was made
+to refuse (2026-09-15) the direct route was left as it was, and harness-date-
+migration measured the consequence on 2026-09-16: a bare Python date bound by
+reference unifies with nothing a rulebase produces any more, so the goal
+silently yields NO solutions -- the quiet-wrong shape ruling (b) exists to
+exclude -- while the same value nested in a list is refused loudly. The
+parameterization of datetimes is retired here, so both routes refuse and the
+message names the term to write.
+
+``call(functor, *args)`` is a third door: it does no lowering at all, and is
+the "runtime object route" the section-4 answer sequences for a later uniform
+refusal. It is deliberately not touched by this file.
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
+
+import pytest
 
 import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal import Var, solve
-from clausal.logic import solve as _solve_mod
 from clausal.logic.variables import deref
 
 
@@ -44,20 +51,24 @@ def _solutions(goal, out=None):
     return vals
 
 
-def test_date_arg_unifies_by_value(tmp_path):
+D1 = ("date", 2024, 1, 1)
+D2 = ("date", 2024, 1, 2)
+
+
+def test_a_date_term_arg_unifies_by_value(tmp_path):
     mod = _load(tmp_path, "dq_a", "same_day(D, D),\n")
     x = Var()
-    assert _solutions(mod.same_day(date(2024, 1, 1), x), x) == [date(2024, 1, 1)]
-    assert len(_solutions(mod.same_day(date(2024, 1, 1), date(2024, 1, 1)))) == 1
-    assert _solutions(mod.same_day(date(2024, 1, 1), date(2024, 1, 2))) == []
+    assert _solutions(mod.same_day(D1, x), x) == [D1]
+    assert len(_solutions(mod.same_day(D1, ("date", 2024, 1, 1)))) == 1
+    assert _solutions(mod.same_day(D1, D2)) == []
 
 
-def test_date_does_not_unify_with_ymd_triple(tmp_path):
+def test_a_date_term_does_not_unify_with_a_ymd_list(tmp_path):
     mod = _load(tmp_path, "dq_b", "same_day(D, D),\n")
-    assert _solutions(mod.same_day(date(2024, 1, 1), [2024, 1, 1])) == []
+    assert _solutions(mod.same_day(D1, [2024, 1, 1])) == []
 
 
-def test_date_arg_flows_into_date_time_builtins(tmp_path):
+def test_a_date_term_arg_flows_into_the_date_time_builtins(tmp_path):
     mod = _load(
         tmp_path, "dq_c",
         "-import_from(date_time, [days_between, date])\n"
@@ -66,12 +77,15 @@ def test_date_arg_flows_into_date_time_builtins(tmp_path):
     )
     n = Var()
     expected = (date(2024, 6, 1) - date(2024, 1, 1)).days
-    assert _solutions(mod.window(date(2024, 6, 1), n), n) == [expected]
+    assert _solutions(mod.window(("date", 2024, 6, 1), n), n) == [expected]
 
 
-def test_distinct_date_args_reuse_one_compiled_query(tmp_path):
+def test_distinct_date_term_args_all_answer(tmp_path):
+    # The old test also pinned "ONE compiled query for 20 dates": that was the
+    # parameterization of the OBJECT, which is gone. A ground tuple takes the
+    # value-keyed cache today; whether ground cell tuples should be
+    # parameterized like scalars is a separate (performance) question.
     mod = _load(tmp_path, "dq_d", "echo(D, D),\n")
-    _solve_mod._query_cache.clear()
 
     def run(d):
         v = Var()
@@ -79,48 +93,55 @@ def test_distinct_date_args_reuse_one_compiled_query(tmp_path):
             return deref(v)
         return None
 
-    days = [date(2024, 1, 1) + timedelta(days=i) for i in range(20)]
+    days = [("date", 2024, 1, 1 + i) for i in range(20)]
     assert [run(d) for d in days] == days
-    assert len(_solve_mod._query_cache) == 1
 
 
-def test_datetime_time_timedelta_args(tmp_path):
+def test_datetime_time_timedelta_TERM_args_echo(tmp_path):
     mod = _load(tmp_path, "dq_e", "echo(D, D),\n")
     for value in (
-        datetime(2024, 1, 1, 12, 30, 15, 250),
-        datetime(2024, 1, 1, 12, 30, tzinfo=timezone.utc),  # tz-aware: by ref
-        time(23, 59, 59),
-        timedelta(days=3, seconds=71),
+        ("datetime", 2024, 1, 1, 12, 30, 15, 250),
+        ("datetime", 2024, 1, 1, 12, 30, 0, 0, 0),     # aware: ninth field, UTC offset in minutes
+        ("time", 23, 59, 59, 0),
+        ("timedelta", 3, 71, 0),
     ):
         v = Var()
         assert _solutions(mod.echo(value, v), v) == [value], f"{value!r}"
 
 
-def test_date_nested_in_a_list_arg(tmp_path):
-    # A structural arg is NOT parameterized — the date inside it must lower
-    # through the term_to_ast_expr reconstruction branch.
+def test_a_BARE_python_datetime_query_arg_is_refused_and_names_the_term(tmp_path):
+    """The door is shut: a bare Python datetime meets the same refusal a nested
+    one does, instead of binding by reference and quietly answering nothing."""
+    mod = _load(tmp_path, "dq_g", "same_day(D, D),\n")
+    for value, form in (
+        (date(2024, 5, 5), "('date', 2024, 5, 5)"),
+        (datetime(2024, 11, 3, 1, 30), "('datetime', 2024, 11, 3, 1, 30, 0, 0)"),
+        (time(12, 0), "('time', 12, 0, 0, 0)"),
+        (timedelta(days=3), "('timedelta', 3, 0, 0)"),
+    ):
+        with pytest.raises(NotImplementedError) as exc:
+            _solutions(mod.same_day(value, Var()))
+        assert form in str(exc.value), str(exc.value)
+
+
+def test_a_NESTED_python_datetime_is_refused(tmp_path):
+    """The nested route, refused since 2026-09-15; kept so both doors are pinned
+    side by side."""
+    from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
+
+    for value in (date(2024, 5, 5),
+                  datetime(2024, 11, 3, 1, 30, fold=1),
+                  time(12, 0),
+                  timedelta(days=3)):
+        with pytest.raises(NotImplementedError):
+            term_to_ast_expr([value], {})
+
+
+def test_the_ruled_term_form_is_what_a_nested_caller_passes(tmp_path):
+    """And it is simpler than either the object or the `[Y, M, D]` + `Date/4`
+    dance this file's docstring records: ordinary data, no reconstruction."""
     mod = _load(tmp_path, "dq_f", "heads(L, H) <- (L is [H, *_REST])\n")
     h = Var()
-    assert _solutions(mod.heads([date(2024, 5, 5), date(2024, 5, 6)], h), h) == [
-        date(2024, 5, 5)
-    ]
-
-
-def test_nested_reconstruction_preserves_fold(tmp_path):
-    # fold is not part of datetime equality, so unification succeeds either
-    # way — but the BOUND object must be what the caller passed (roborev
-    # job 18): the reconstruction has to carry fold through.
-    mod = _load(tmp_path, "dq_fold", "heads(L, H) <- (L is [H, *_REST])\n")
-    value = datetime(2024, 11, 3, 1, 30, fold=1)
-    h = Var()
-    [got] = _solutions(mod.heads([value, "sentinel"], h), h)
-    assert got == value
-    assert got.fold == 1, "fold was dropped by the nested reconstruction"
-
-
-def test_naive_datetime_and_timedelta_nested_in_a_list_arg(tmp_path):
-    mod = _load(tmp_path, "dq_g", "heads(L, H) <- (L is [H, *_REST])\n")
-    for value in (datetime(2024, 1, 2, 3, 4, 5, 6), time(1, 2, 3),
-                  timedelta(hours=2)):
-        h = Var()
-        assert _solutions(mod.heads([value, "sentinel"], h), h) == [value], f"{value!r}"
+    assert _solutions(
+        mod.heads([("date", 2024, 5, 5), ("date", 2024, 5, 6)], h), h
+    ) == [("date", 2024, 5, 5)]

@@ -134,7 +134,7 @@ def compile_module(
 
     # ── Step 0: Process imports (before term expansion, so imported TE
     #    rules are available) ──────────────────────────────────────────────
-    _process_imports(module_items, module_dict)
+    _process_imports(module_items, module_dict, db)
 
     # ── Step 1: Term expansion (after imports, before directives) ────────
     from clausal.logic.term_expansion import run_term_expansion
@@ -231,6 +231,11 @@ def compile_module(
         # is a snapshot and the write is what the row's contract names as the
         # deliberate clause-list minting site.
         pred_cls = module_dict.get(functor)
+        # P1 2026-09-17: this guard is NOT redundant and stays.  Measured over
+        # the whole suite (14,615 arrivals here), 34 of them find something
+        # other than a predicate class under a functor that HAS clause nodes —
+        # an interned atom ``tuple`` and an absent binding — so dropping the
+        # test would hand a tuple to ``_bind_row`` below.
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
@@ -273,6 +278,16 @@ def compile_module(
                 # the clause list is EMPTY, which includes the retract-back-
                 # to-empty return leg of a predicate that did have clauses.
                 stamped = module_dict.get(functor)
+                # THE WART (P1 spec 2026-09-17 §2): ``_dynamic_arities`` is a
+                # per-NAME set living on the CLASS's OWN row, which is the row
+                # of the class's own arity — not of ``arity``, the arity being
+                # declared.  That row cannot be named through ``db`` here: for
+                # a clause-less ``-dynamic`` declaration the class is still on
+                # its DETACHED row at this point (measured 2026-09-17), so
+                # ``db.row(...)`` reaches a different object, and a row-side
+                # membership test would skip the stamp altogether.  So the
+                # class stays for both the test and the write; the set does
+                # not move.  ``_bind_row`` carries the set onto the real row.
                 if isinstance(stamped, PredicateMeta):
                     if stamped._dynamic_arities is None:
                         stamped._dynamic_arities = set()
@@ -281,10 +296,21 @@ def compile_module(
                 if key in pending:
                     continue
                 pred_cls = module_dict.get(functor)
-                if (
-                    isinstance(pred_cls, PredicateMeta)
-                    and len(pred_cls._fields) == arity
-                ):
+                # P1 (spec 2026-09-17 §2.2): the class's OWN ROW names its
+                # arity, so this is the arity-checked membership test with no
+                # class test and no ``_fields`` read.  ``_row`` is set for
+                # every predicate class that reaches here — the stamp above
+                # reads ``_dynamic_arities``, a property over the class's row,
+                # which mints the detached row when there is none — and absent
+                # on a non-predicate binding.
+                #
+                # NOT ``db.row(functor, arity) is not None``: step 2's
+                # ``mark_dynamic`` already put ``(functor, arity)`` in this
+                # database, so that test is VACUOUSLY TRUE here (measured
+                # 2026-09-17), and ``-dynamic(d/2)`` beside ``d/1`` clauses
+                # would then bind d/1's class onto d/2's row.
+                cls_row = getattr(pred_cls, "_row", None)
+                if cls_row is not None and cls_row.key[1] == arity:
                     if _belongs_elsewhere(pred_cls, db):
                         # A ``-dynamic`` declaration for a predicate this
                         # module IMPORTED (P3-3 Task 3 fix round 1).  The
@@ -515,8 +541,42 @@ def _imported_reference(mod, orig_name: str, value):
     return predicate_builtins.setdefault(orig_name, _mint_atom(orig_name))
 
 
-def _process_imports(module_items: list, module_dict: dict) -> None:
-    """Execute import directives, populating module_dict."""
+def _plant_imported_rows(db, mod, orig_name: str, local_name: str) -> None:
+    """Make *local_name* resolve, in *db*, to the row the exporter owns.
+
+    Spec §4 q1.  The binding above is the whole import relationship today --
+    one Python object reference -- and the importing Database has no record of
+    it at all.  This puts the relationship in the store, under the IMPORTER's
+    own spelling, so ``db.row(functor, arity)`` answers "what does this name
+    mean here" for imported names as well as local ones.
+
+    The arity comes from the exporter's database, because an ``-import_from``
+    names a predicate without one.  Purely additive: nothing resolves THROUGH
+    the importer's database yet, so planting cannot change how a goal is
+    reached -- it can only make a question answerable that returned ``None``
+    before.
+    """
+    if db is None:
+        return
+    exporter = getattr(mod, "__dict__", {}).get("$module")
+    exporter_db = getattr(exporter, "db", None)
+    if exporter_db is None or exporter_db is db:
+        return
+    for arity in exporter_db.arities_for(orig_name):
+        row = exporter_db.row(orig_name, arity)
+        if row is not None:
+            db.adopt_row(local_name, arity, row)
+
+
+def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
+    """Execute import directives, populating module_dict.
+
+    *db* is the importing module's Database -- the LOCAL in ``compile_module``,
+    not ``module_dict["$module"].db``: at this point the dict still holds the
+    placeholder module the body exec'd against, which ``compile_module``
+    replaces afterwards.  Reaching for the dict here plants into a database
+    that is then thrown away.
+    """
     for item in module_items:
         if isinstance(item, ImportFromItem):
             mod = _resolve_module(item.module)
@@ -525,6 +585,12 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                     orig_name, local_name = name_spec
                     value = getattr(mod, orig_name)
                     module_dict[local_name] = value
+                    # Keyed by LOCAL_NAME: the aliasing module says ``link``,
+                    # so ``link`` is what its database answers to.  A class
+                    # cannot do this -- it carries the exporter's ``__name__``
+                    # wherever it goes, which is why ``_import_from_origins``
+                    # has to index an aliased import under both spellings.
+                    _plant_imported_rows(db, mod, orig_name, local_name)
                     # Also store under the dotted key ("module.OrigName") so
                     # that _inject_resolved_targets can resolve it when the compiler
                     # emits LoadName(name="module.OrigName") for remapped imports.
@@ -533,6 +599,7 @@ def _process_imports(module_items: list, module_dict: dict) -> None:
                 else:
                     value = getattr(mod, name_spec)
                     module_dict[name_spec] = value
+                    _plant_imported_rows(db, mod, name_spec, name_spec)
                     # Dotted key for compiler resolution (e.g. "py.sympy.inf").
                     module_dict[f"{item.module}.{name_spec}"] = (
                         _imported_reference(mod, name_spec, value))
@@ -793,7 +860,12 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
     """The load channel's surface exception for a gate refusal."""
     gate_line = str(exc.term.args[1])
     origin = origins.get(functor)
-    if origin is None or not isinstance(pred_cls, PredicateMeta):
+    # P1 (spec 2026-09-17 §2.2), simplification: *pred_cls* arrives already
+    # resolved.  Both ``_load_gate`` call sites pass either step 4's
+    # isinstance-guarded class or ``_imported_class``'s result, and
+    # ``_imported_class`` returns a predicate class or ``None`` — so the type
+    # test was a ``None`` check in a type test's clothing.
+    if origin is None or pred_cls is None:
         return SyntaxError(gate_line)
     exporter_name = origin[0]
     from clausal.import_diagnostics import (  # noqa: PLC0415
@@ -847,6 +919,13 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
                     functor, arity, db, module_dict, _specialize_aliases,
                 )
                 continue
+            # P1 2026-09-17: this one does NOT route to ``db.row``.  A
+            # predicate DECLARED here and given no clauses (``-private([p(X,
+            # Y)])`` plus a directive naming it) has a class in the module
+            # dict and NO ROW at all — measured — so the row test would refuse
+            # a load this accepts today, and the docstring above promises the
+            # opposite.  "Declared at module level" is the spec §4 question,
+            # not one a row can answer yet.
             cls = module_dict.get(functor)
             if isinstance(cls, PredicateMeta):
                 fields = term_field_names_of_class(cls)
@@ -878,6 +957,14 @@ def _refuse_untablable_target(
     if db.is_dynamic(functor, arity):
         return
 
+    # P1 2026-09-17: like its sibling in ``_validate_directive_targets``, this
+    # stays on the class.  ``is_pred`` chooses BETWEEN refusals, and the three
+    # shapes want three different remedies; measured over the suite,
+    # ``db.row(functor, arity) is not None`` disagrees with this test on 3 of
+    # the 8 targets that reach here (``ghost/2``, ``solve_tiny/1``,
+    # ``solve_count_tabled/2`` — all declared, none with a row), so rerouting
+    # would replace the accurate "declared but has no clauses" with "never
+    # defined".
     cls = module_dict.get(functor)
     if isinstance(cls, PredicateMeta):
         fields = term_field_names_of_class(cls)
@@ -1002,10 +1089,20 @@ def _run_specialization(
 
         mi_cls = module_dict.get(item.mi_name)
         if not isinstance(mi_cls, PredicateMeta):
+            # P1 (spec 2026-09-17 §2.4): the diagnostic enumerates the
+            # DATABASE's predicates — every container ``row()`` consults,
+            # plus the rows adopted at ``-import_from`` — rather than the
+            # classes that happen to sit in the module dict, so an imported
+            # predicate is listed under the spelling this module uses for it.
+            # The wording NAMES that population (final review minor 5 +
+            # roborev L6): it used to say "module dict" while listing rows,
+            # and it built the list from ``_rows``, which is lazily
+            # materialised and so not quite the population it refuses
+            # against.  ``Database.functors()`` is that population.
             raise RuntimeError(
-                f"-specialize: meta-interpreter '{item.mi_name}' not found "
-                f"in module dict (available: "
-                f"{[k for k, v in module_dict.items() if isinstance(v, PredicateMeta)]})"
+                f"-specialize: meta-interpreter '{item.mi_name}': no "
+                f"predicate of that name in this module's database "
+                f"(available: {db.functors()})"
             )
 
         # Analyze the MI (auto-detects program_arg from field names).

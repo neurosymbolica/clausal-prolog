@@ -65,7 +65,9 @@ _dt = _import_stdlib("datetime")
 
 from typing import Any
 
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import (  # noqa: F401
+    Var, deref as _deref, is_var, unify as _unify,
+)
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.exceptions import LogicException, domain_error, type_error
 from clausal.terms import Compound
@@ -73,6 +75,91 @@ from clausal.logic.trampoline import DONE
 
 
 # ── now / today ──────────────────────────────────────────────────────────
+
+
+# ── THE SEAM: terms in, terms out; Python only in between ──────────────────
+#
+# RULED 2026-09-15: "We don't need to use Python date and datetime classes any
+# more ... Internally, we can call back to Python, but the seam shouldn't need
+# dates."  The predicates below still COMPUTE with `datetime`, because that is
+# where calendar arithmetic belongs -- they just no longer hand one out.
+#
+# Done at two choke points rather than at ~36 argument sites: the module-local
+# `deref` converts an incoming date TERM to the Python object, and the
+# module-local `unify` converts an outgoing Python object back to a term. Every
+# predicate in this file then works unchanged, which is also why this diff does
+# not touch their bodies.
+#
+# Emitted shapes carry FULL precision -- `now/1` has microseconds and losing
+# them silently would be worse than a wider term. Short forms are ACCEPTED on
+# input (a missing trailing microsecond reads as 0), so `timedelta(3, 0)` and
+# `timedelta(3, 0, 0)` both work.
+# THE ENCODING LIVES IN ``logic.python_terms``, not here. This module used to
+# carry its own emit/read tables, which is a SECOND DEFINITION of the same
+# encoding -- the drift this lane has paid for three times in one session. The
+# registry is now the single source and this module consumes it.
+from clausal.logic import python_terms as _pt  # noqa: E402
+
+#: The date family only. NOT ``python_terms.to_term``/``from_term``: those are
+#: the GENERAL converters for ``++``, and the general one wraps any tuple as
+#: ``('()', ...)`` data -- which would destroy every term passing through this
+#: module's seam. The shapes still come from the registry, so there is one
+#: definition; what is narrowed here is the SCOPE, not the encoding.
+_DATE_TYPES = (_dt.datetime, _dt.date, _dt.time, _dt.timedelta)
+_DATE_FUNCTORS = frozenset(("datetime", "date", "time", "timedelta"))
+
+
+def _dt_to_term(value):
+    """A Python datetime value -> its term. Anything else passes through."""
+    convert = _pt.TO_TERM.get(type(value))
+    if convert is not None and isinstance(value, _DATE_TYPES):
+        return convert(value)
+    return value
+
+
+def _term_to_dt(value):
+    """A date-family TERM -> the Python object. Anything else passes through."""
+    if type(value) is not tuple or not value or type(value[0]) is not str:
+        return value
+    if value[0] not in _DATE_FUNCTORS:
+        return value
+    rebuild = _pt.FROM_TERM.get(value[0])
+    if rebuild is None:
+        return value
+    try:
+        return rebuild(value)
+    except (TypeError, ValueError, OverflowError):
+        return value
+
+
+def date_term_to_python(value):
+    """PUBLIC: a date-family TERM -> its Python value; anything else unchanged.
+
+    Exposed for callers outside the engine that have to tell a date term from a
+    look-alike container -- notably the eval harness's ``profile_terms``, which
+    recurses into tuples ELEMENTWISE and would otherwise try to resolve ``date``
+    as an atom on a rulebase that never declared it.
+
+    ``cells.is_cell`` does NOT discriminate: ``('date', 2023, 6, 1)`` and a
+    profile tuple ``('alpha', 'beta')`` are both cells. This does, because it
+    requires the components to be well formed -- and it is the SAME function the
+    engine converts with, so a caller's rule cannot drift from the engine's.
+    ``date_term_to_python(x) is not x`` is the discrimination test.
+    """
+    return _term_to_dt(value)
+
+
+def deref(value):  # noqa: F811 -- deliberately shadows the import above
+    """``variables.deref`` then term->Python, so every predicate below reads
+    a Python value whatever the caller wrote."""
+    return _term_to_dt(_deref(value))
+
+
+def unify(a, b, trail):  # noqa: F811 -- deliberately shadows the import above
+    """``variables.unify`` with Python->term on the way out, so no predicate
+    below can hand a Python datetime across the seam."""
+    return _unify(_dt_to_term(a), _dt_to_term(b), trail)
+
 
 
 def _now_1(dt, trail, k):
@@ -165,21 +252,24 @@ _DatePattern.__unify__ = _date_pattern_unify
 
 def date(year, month, day):
     """Construct a datetime.date, or a pattern when a component is unbound."""
-    y, m, d = deref(year), deref(month), deref(day)
+    y, m, d = _deref(year), _deref(month), _deref(day)
     if is_var(y) or is_var(m) or is_var(d):
-        # KNOWN BOUNDARY, shared with date/4's construct mode: a pattern
-        # whose components are bound *later* stays a pattern and never
-        # becomes a datetime.date. The two modes that matter -- a ground
-        # literal, and decomposing a bound date -- both resolve to a real
-        # date, and grounding-after-the-fact has no caller in the corpus.
-        return _DatePattern(y, m, d)
+        # No pattern class any more. A cell with unbound components IS the
+        # pattern: ``("date", Y, M, D)`` unifies against a ground
+        # ``("date", 2026, 1, 15)`` and binds Y/M/D natively, so construct and
+        # decompose are one mechanism. _DatePattern existed only because a real
+        # datetime.date is a FOREIGN type that a cell is not -- it had to
+        # hand-roll a __unify__ to bridge the two, and index-transparently at
+        # that. Grounding-after-the-fact now works too, which the old KNOWN
+        # BOUNDARY could not do.
+        return ("date", y, m, d)
     # Ground: hand the components to datetime.date UNCHANGED so it rejects a
     # float with a TypeError instead of int()-truncating 2020.9 to 2020, and
     # rejects (2025, 2, 29) as the non-date it is. Same reasoning as _date_4
     # (F015) -- a bogus date must never be constructible.
     try:
-        return _dt.date(y, m, d)
-    except (TypeError, ValueError) as exc:
+        _dt.date(y, m, d)          # VALIDATE through datetime, then discard:
+    except (TypeError, ValueError) as exc:   # rejects 2025-02-29 and floats
         # A term constructor cannot FAIL the way date/4's goal could, so it
         # raises -- but as a proper ISO error term, not a bare Python one.
         # An impossible date is a fact about the PROGRAM, not about Python,
@@ -199,6 +289,7 @@ def date(year, month, day):
         # reader needs: a typo in the shape, versus a date that is not a day.
         raise LogicException(
             domain_error("date", culprit, "date/3")) from None
+    return ("date", y, m, d)
 
 
 # ── time/4 — construct or decompose datetime.time ───────────────────────

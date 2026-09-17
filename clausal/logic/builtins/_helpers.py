@@ -375,12 +375,19 @@ except ImportError:
 def _cell_functor(term: Any) -> tuple[bool, Any]:
     """Return ``(is_compound_cell, functor)`` for *term*, read RAW.
 
-    ``is_compound_cell`` is True only for a str functor — a
-    ``(tuple, ...)`` tuple-DATA cell and a slot-0-Var tuple (deprecated,
-    §1b) are both explicitly NOT compound. No deref: compound iff
-    ``type(term) is tuple and term and type(term[0]) is str``.
+    ``is_compound_cell`` is True only for a str functor naming a PREDICATE —
+    a ``('()', ...)`` tuple-DATA cell and a slot-0-Var tuple (deprecated,
+    §1b) are both explicitly NOT compound. No deref.
+
+    The tuple-DATA exclusion used to be free here: the tag was the ``tuple``
+    TYPE object, so ``type(term[0]) is str`` already rejected it. Now that the
+    tag is the reserved atom ``'()'`` the check has to be written down, and
+    leaving it out would make every data tuple answer as the compound
+    ``'()'/N`` — a goal, a clause head, an ``assertz`` argument.
     """
-    if type(term) is tuple and term and type(term[0]) is str:
+    from clausal.logic.cells import TUPLE_TAG  # noqa: PLC0415
+    if (type(term) is tuple and term and type(term[0]) is str
+            and term[0] != TUPLE_TAG):
         return True, term[0]
     return False, None
 
@@ -788,7 +795,7 @@ def _standard_order_key(term: Any) -> tuple:
         if not term:
             return _ORD_EMPTY_LIST_KEY
         return _cons_key(tuple(_number_key(c) for c in term))
-    if type(term) is tuple and term and type(term[0]) is str:
+    if type(term) is tuple and term and type(term[0]) is str and term[0] != TUPLE_TAG:
         # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5) and keys in the
         # atom band by its spelling — the same key a 0-arity predicate class
         # of that name gets, so the two spellings of one atom are one atom in
@@ -798,7 +805,7 @@ def _standard_order_key(term: Any) -> tuple:
             return (_ORD_ATOM, term[0])
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
                 tuple(_standard_order_key(a) for a in term[1:]))
-    if type(term) is tuple and term and term[0] is TUPLE_TAG:
+    if type(term) is tuple and term and term[0] == TUPLE_TAG:
         return (_ORD_COMPOUND, len(term) - 1, (1, ""), _CF_POSITIONAL,
                 tuple(_standard_order_key(a) for a in term[1:]))
     if isinstance(term, (list, tuple)):

@@ -122,6 +122,19 @@ class PredRow:
     # _declared_arity``, which declines on ``None``, declines on
     # ``len(...) != 1``, and reports the single element otherwise.
     dynamic_arities: "set[int] | None" = None
+    # Index plans (arg_index): the call-site bucket functions the compiler
+    # exposes per argument position. Row-LOCAL (P1, 2026-09-17): they were
+    # class-only state, the one thing an index-hint pass could not find by
+    # (functor, arity). ``repr=False``: they hold closures.
+    # Nothing here clears a stale plan: the compiler REWRITES all three on
+    # every recompile of this key, which is what keeps them in step with the
+    # dispatch, and ``locked`` is what gates every reader (``hint_row``
+    # refuses an unlocked row, because its bucket functions may still be
+    # rebuilt), so a plan is never read across the window in which it could
+    # be stale.
+    index_plans: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
+    index_plans_joint: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
+    index_plans_hierarchical: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
     # The list handed out by ``clauses`` while this predicate has NO entry in
     # ``Database._clauses`` yet — an UNMINTED clause list.  ``None`` once the
     # entry exists (``ensure_clauses`` promotes this exact object into the
@@ -478,7 +491,89 @@ class Database:
         self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
         self._rows: dict[tuple[str, int], PredRow] = {}
+        # Rows another database OWNS, resolvable here under this module's own
+        # spelling because an ``-import_from`` named them (spec §4 q1).  Held
+        # apart from ``_rows`` deliberately: adoption must never shadow a
+        # predicate this module goes on to DEFINE, and imports are processed
+        # before any local clause is compiled, so an entry in ``_rows`` would
+        # be found by the local definition's own ``row(..., create=True)``.
+        # See ``row()``: adopted rows answer READS only.
+        self._adopted: dict[tuple[str, int], PredRow] = {}
         self.module_dict: dict | None = module_dict
+
+    def arities_for(self, functor: str) -> "set[int]":
+        """Every arity this database knows *functor* at.
+
+        The functor-only question ``row(functor, arity)`` cannot answer, and
+        the one the import plant needs: an ``-import_from`` names a predicate
+        but carries no arity, so the arities have to come from the EXPORTER's
+        database.  Scans the same containers ``row()``'s own ``known`` test
+        consults, so the two agree about what "this database knows it" means.
+        """
+        found = {a for (f, a) in self._rows if f == functor}
+        for keyed in (self._clauses, self._dispatch, self._lazy_recompile,
+                      self._signatures, self._dynamic):
+            found |= {a for (f, a) in keyed if f == functor}
+        return found
+
+    def functors(self) -> "list[str]":
+        """Every predicate NAME this database knows, sorted.
+
+        The functor-only twin of ``arities_for``, and the population a
+        diagnostic means by "the predicates available here": the same
+        containers ``row()``'s own ``known`` test consults, plus ``_adopted``
+        -- a row this module adopted at ``-import_from`` answers reads here
+        under this module's own spelling, so the name IS available.
+
+        Exists so a caller outside this module does not have to reach into
+        ``_rows`` to enumerate (final review minor 5, 2026-09-17): ``_rows``
+        is LAZILY materialised, so it is the one container that can be
+        missing a name the database plainly knows -- which made a
+        ``-specialize`` diagnostic list a population that was not quite the
+        one it was refusing against.
+        """
+        found = {f for (f, _a) in self._rows}
+        found |= {f for (f, _a) in self._adopted}
+        for keyed in (self._clauses, self._dispatch, self._lazy_recompile,
+                      self._signatures, self._dynamic):
+            found |= {f for (f, _a) in keyed}
+        return sorted(found)
+
+    def adopt_row(self, local_functor: str, arity: int, row: "PredRow") -> bool:
+        """Make ``(local_functor, arity)`` resolve to an existing *row* that
+        another database owns.  True if it was adopted, False if this database
+        already had something under that key.
+
+        Spec §4 q1.  ``-import_from`` is ``getattr`` today, so the importing
+        database holds no row and no dispatch for an imported predicate and
+        the whole relationship lives as one Python object reference in
+        ``module_dict``.  This is the relationship, in the store that is
+        supposed to hold it -- keyed by the IMPORTER's spelling, which is what
+        makes an aliased import an ordinary key rather than a class whose
+        ``__name__`` disagrees with the name the file uses.
+
+        Never displaces an existing entry: a module that imports a name AND
+        defines its own predicate under it keeps its own, and the clash is
+        left for the mutation gate to police rather than silently resolved
+        here in load order.
+        """
+        key = (local_functor, arity)
+        if key in self._rows or key in self._adopted:
+            return False
+        self._adopted[key] = row
+        return True
+
+    def owns(self, functor: str, arity: int) -> bool:
+        """True if this database is the HOME of ``(functor, arity)`` — as
+        opposed to merely resolving it through a row it adopted at import.
+
+        The replacement for asking a predicate class whether it "belongs
+        elsewhere" (``compiler_v2._belongs_elsewhere``): a row knows its own
+        database, so ownership is a property of the row rather than of a class
+        object's identity across module copies.
+        """
+        row = self.row(functor, arity)
+        return row is not None and row.db is self
 
     def row(self, functor: str, arity: int, create: bool = False) -> "PredRow | None":
         """Return the ``PredRow`` for ``(functor, arity)``, or ``None``.
@@ -502,8 +597,15 @@ class Database:
             or key in self._signatures
             or key in self._dynamic
         )
-        if not known and not create:
-            return None
+        if not known:
+            # A row this module ADOPTED at import answers a read -- that is
+            # what makes ``db.row(functor, arity)`` a correct answer to "what
+            # does this name mean here".  It must NOT answer a write: a
+            # ``create=True`` caller is defining a predicate, and handing it
+            # somebody else's row is how a local clause stops producing
+            # solutions (tests/fixtures/fnmismatch_use.clausal).
+            if not create:
+                return self._adopted.get(key)
         # NOTE: deliberately does NOT touch ``_clauses`` here (Finding 2) —
         # minting a row from a dispatch/signature/dynamic-only predicate must
         # not flip ``is_defined()`` False→True. Clause-list vivification is

@@ -40,11 +40,17 @@ def _make_fact_clauses(functor, facts):
     ]
 
 
-def _mkctx(locked_dispatch_keys=frozenset()):
-    """Build a fresh CompilationContext for per-test bucket-ref injection."""
+def _mkctx(locked_dispatch_keys=frozenset(), db=None):
+    """Build a fresh CompilationContext for per-test bucket-ref injection.
+
+    ``db`` is the Database the bucket-ref passes resolve the callee in —
+    they read ``db.row(fname, arity)`` now, so a ctx with no db means "no
+    hints" (P1 spec 2026-09-17 §2.3).  ``_make_locked_pred_cls`` puts its
+    callee in a Database reachable as ``callee_cls._row.db``.
+    """
     from clausal.logic.compiler.compile_ctx import CompilationContext
     return CompilationContext(
-        db=None, var_context={}, trail_name="trail",
+        db=db, var_context={}, trail_name="trail",
         locked_dispatch_keys=locked_dispatch_keys,
     )
 
@@ -440,10 +446,17 @@ class TestBucketKeyNaming:
 # ── Phase 10d: _inject_bucket_refs_trampoline ────────────────────────────────
 
 
-def _make_locked_pred_cls(name, facts):
-    """Build a locked PredicateMeta with _index_plans populated."""
+def _make_locked_pred_cls(name, facts, db=None):
+    """Build a locked PredicateMeta with _index_plans populated.
+
+    The class is bound to a row in a (fresh, by default) Database BEFORE
+    the compile, so the plans the compiler writes through the class land on
+    that row -- which is where the call-site passes read them from since
+    P1.  The Database is reachable afterwards as ``pred_cls._row.db``.
+    """
     pred_cls = _make_pred_cls(name, [f"arg{i}" for i in range(len(facts[0]))])
     arity = len(facts[0])
+    pred_cls._bind_row(db if db is not None else Database(), name, arity)
     clauses = _make_fact_clauses(name, facts)
     compile_predicate(name, arity, clauses, pred_cls=pred_cls)
     pred_cls._locked = True
@@ -460,10 +473,13 @@ class TestInjectBucketRefs:
         ])
         assert hasattr(callee_cls, "_index_plans") and callee_cls._index_plans
 
-        # Build a caller clause: caller(_x) <- color("red", _x)
+        # Build a caller clause: caller(_x) <- color(red)
         # We test inject directly, so we just need the Call term in the body.
+        # The call is at the callee's arity: hints are ARITY-EXACT now
+        # (P1 spec 2026-09-17 §2.3), so a colour/1 callee is only ever
+        # specialised for a 1-argument call site.
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[mint("red"), x])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -471,7 +487,7 @@ class TestInjectBucketRefs:
 
         base_globals = {"color": callee_cls}
         # Set locked_dispatch_keys so _disp_key-based check won't interfere
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("color", 0, ("red", 0))
         assert expected_gkey in base_globals, \
@@ -501,17 +517,18 @@ class TestInjectBucketRefs:
         assert hasattr(callee_cls, "_index_plans") and callee_cls._index_plans
         assert ("Dog", 2) in callee_cls._index_plans[0]
 
-        # Build a caller clause: caller(_x) <- shape(Dog(name=.., age=..), _x)
+        # Build a caller clause: caller(_x) <- shape(Dog(name=.., age=..))
+        # -- at shape/1's arity, since hints are arity-exact.
         x = Var()
         arg_term = dog(name="fixed", age=9)
-        call_goal = Call(func=LoadName(name="shape"), args=[arg_term, x])
+        call_goal = Call(func=LoadName(name="shape"), args=[arg_term])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
 
         base_globals = {"shape": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("shape", 0, ("Dog", 2))
         assert expected_gkey in base_globals, \
@@ -525,16 +542,16 @@ class TestInjectBucketRefs:
             (mint("yellow"),), (mint("purple"),),
         ])
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[mint("red"), x])
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        ctx = _mkctx()
+        ctx = _mkctx(db=callee_cls._row.db)
         _inject_bucket_refs_trampoline(ctx, [caller_clause], base_globals)
 
-        assert ("color", 2, 0, ("red", 0)) in ctx.bucket_ref_map
+        assert ("color", 1, 0, ("red", 0)) in ctx.bucket_ref_map
 
     def test_no_injection_for_variable_arg(self):
         """inject_bucket_refs does NOT inject for a variable (non-static) argument."""
@@ -545,13 +562,16 @@ class TestInjectBucketRefs:
         ])
         x = Var()
         y = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[y, x])
+        # At the callee's arity: hints are arity-exact, so a 2-argument call
+        # would be skipped on ARITY and this test would stop exercising the
+        # variable-argument guard it names.
+        call_goal = Call(func=LoadName(name="color"), args=[y])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         # No bucket refs should be injected for variable args
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -567,13 +587,14 @@ class TestInjectBucketRefs:
         callee_cls._locked = False  # explicitly unlock
 
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[mint("red"), x])
+        # At the callee's arity, so the LOCKED guard is what fires here.
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == []
@@ -586,13 +607,14 @@ class TestInjectBucketRefs:
             (mint("yellow"),), (mint("purple"),),
         ])
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[mint("orange"), x])
+        # At the callee's arity, so the UNKNOWN-KEY guard is what fires here.
+        call_goal = Call(func=LoadName(name="color"), args=[mint("orange")])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == []
@@ -671,7 +693,7 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("color", 0, ("red", 0))
         assert expected_gkey in base_globals
@@ -696,7 +718,7 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"dyn_color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == [], "Dynamic predicate should not be bucket-specialised"
@@ -718,7 +740,8 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": pred_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(
+            _mkctx(db=pred_cls._row.db), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
         assert bucket_keys == [], "Self-recursive unlocked predicate should not be specialised"
@@ -738,7 +761,7 @@ class TestCallsiteCorrectnessAndFallback:
             for a in ["red", "green", "blue"]
         ]
         base_globals = {"color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(),clauses, base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), clauses, base_globals)
 
         for atom in ["red", "green", "blue"]:
             gkey = _bucket_key("color", 0, (atom, 0))
@@ -757,7 +780,7 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         gkey = _bucket_key("color", 0, ("blue", 0))
         bucket_fn = base_globals[gkey]
@@ -780,12 +803,12 @@ class TestCallsiteCorrectnessAndFallback:
             body=[call_goal],
         )
         base_globals = {"color": callee_cls}
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
         gkey = _bucket_key("color", 0, ("red", 0))
         first_fn = base_globals[gkey]
 
         # Inject again — should NOT overwrite
-        _inject_bucket_refs_trampoline(_mkctx(), [caller_clause], base_globals)
+        _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
         assert base_globals[gkey] is first_fn
 
 
@@ -813,8 +836,11 @@ class TestDirectBucketCallSiteExecution:
             head=Compound("caller", (x,)),
             body=[Call(func=LoadName(name=callee_name), args=args)],
         )
+        # The callee's own Database: the bucket-ref pass resolves the callee
+        # as ``db.row(callee_name, 2)``, so the compile has to be handed one.
         fn = compile_predicate(
-            "caller", 1, [caller_clause], globals_={callee_name: callee_cls},
+            "caller", 1, [caller_clause], callee_cls._row.db,
+            globals_={callee_name: callee_cls},
         )
         return fn, callee_name
 

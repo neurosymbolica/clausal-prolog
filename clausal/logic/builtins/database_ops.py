@@ -267,23 +267,85 @@ def _find_pred_cls(functor: str, arity: int,
     Accepted only when that class is reachable from this module dict under
     some spelling, so a term that merely passed through this module cannot
     redirect the write to a predicate the module cannot see.
+
+    ROW-FIRST, CLASS-FALLBACK (P1, spec 2026-09-17 §2.2 + §3).  The name is
+    resolved through this module's Database row, and the redirect test is a
+    row comparison.  When there is NO row under that key the CLASS answers, as
+    it always did: a predicate reached by a plain Python import (never through
+    ``-import_from``, so no row was adopted) is visible in this module dict and
+    invisible to ``db.row`` — the same "declared here but rowless" shape that
+    keeps the two ``compiler_v2`` directive-target sites on the class.
+
+    ARITY-CHECKED ON EVERY LEG, and the last leg SYMMETRIC with that fallback
+    (final review I1 + roborev L3, 2026-09-17).  A row's key is arity-exact,
+    but the CLASS sitting on it need not be: a class can be bound to a row of
+    another arity (``todo/dynamic-at-another-arity-moves-the-class-2026-09-17.md``
+    is a live, pre-existing way to produce one), so handing back whatever sits
+    on the named row would re-open the very hazard the ARITY-CHECKED paragraph
+    above describes — the caller LOCKS what it gets, recompiles through it and
+    builds terms with it.  Every leg therefore re-checks ``len(_fields) ==
+    arity``, and when neither the module's binding nor the head's own class is
+    on the named row the answer is the same arity-checked class read the
+    no-row leg makes, not ``None``: a class the module can plainly see is the
+    better answer than a cross-module write path.
     """
     from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
     if module_dict is None:
         return None
-    candidate = module_dict.get(functor)
-    named = (candidate if isinstance(candidate, PredicateMeta)
-             and len(candidate._fields) == arity else None)
+    # ROW-RESOLVED (P1, spec 2026-09-17 §2.2).  The name is looked up in the
+    # module's own Database — ``module_dict["$module"].db``, never a
+    # predicate's ``_row.db``, which is a DIFFERENT Database for an imported
+    # name — and a row is keyed ``(functor, arity)``, which is what makes the
+    # lookup arity-checked without counting a class's fields.
+    db = getattr(module_dict.get("$module"), "db", None)
+    named_row = db.row(functor, arity) if db is not None else None
     own = type(head)
+    own_row = getattr(own, "_row", None)
+    # THE REDIRECT TEST, on rows: the row this module's spelling names is not
+    # the row the goal's OWN term reads.  ``named_row is None`` — the aliased
+    # import, where the canonical functor names no row here — is a mismatch
+    # like any other.  ``type(head)`` stays: the head's own class is the
+    # predicate, whatever it is spelled here (spec §3).
     if (
-        named is not own
+        named_row is not own_row
         and isinstance(own, PredicateMeta)
         and own.__name__ == functor
         and len(own._fields) == arity
         and any(v is own for v in module_dict.values())
     ):
         return own
-    return named
+    # THE class reads that remain (spec §3): what this function RETURNS is a
+    # class — the caller locks it, recompiles through it and builds terms with
+    # it — so the module's binding is handed back when it is the class sitting
+    # on that row, and the head's own class when it is the one there instead.
+    candidate = module_dict.get(functor)
+
+    def _arity_checked(cls_obj):
+        """*cls_obj* when it is a predicate class of THIS arity, else None."""
+        return (cls_obj if isinstance(cls_obj, PredicateMeta)
+                and len(cls_obj._fields or ()) == arity else None)
+
+    if named_row is None:
+        # THE CLASS FALLBACK (review round 1).  A class this module reached by
+        # a plain Python import is bound here under the right spelling at the
+        # right arity and has NO row in this Database — ``-import_from`` is
+        # what adopts a row, and this name never went through it.  The row
+        # lookup cannot see such a predicate, so the class answers, exactly as
+        # it did before the reroute: dropping it made ``listing(pp/1)`` and
+        # ``_namespace_dispatch`` raise for a predicate the module can see.
+        # Same class-without-a-row shape that left ``compiler_v2``'s
+        # ``_validate_directive_targets``/``_refuse_untablable_target`` on the
+        # class — a row cannot yet answer "declared/visible at module level".
+        return _arity_checked(candidate)
+    if (getattr(candidate, "_row", None) is named_row
+            and _arity_checked(candidate) is not None):
+        return candidate
+    if own_row is named_row and _arity_checked(own) is not None:
+        return own
+    # NEITHER is on the row (the class is bound to another Database's row, or
+    # to another arity's, and the head is generic).  Symmetric with the no-row
+    # leg above: the module's own arity-checked binding answers.
+    return _arity_checked(candidate)
 
 
 def _home_db(db, pred_cls) -> "Any":

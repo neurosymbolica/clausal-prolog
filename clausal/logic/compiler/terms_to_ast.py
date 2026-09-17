@@ -57,20 +57,6 @@ from ._vars import _var_python_name
 # ── Parsing helpers (used here and by .star_segments) ────────────────────────
 
 
-# Reconstruction spec for the datetime value-term branch of term_to_ast_expr:
-# exact type → (datetime-module constructor name, positional field order).
-# datetime/time entries are used only when tzinfo is None (checked at the
-# branch); timedelta is normalised by its constructor, so days/seconds/
-# microseconds is exhaustive.
-_DATETIME_CTOR_FIELDS = {
-    datetime.date: ("date", ("year", "month", "day")),
-    datetime.datetime: (
-        "datetime",
-        ("year", "month", "day", "hour", "minute", "second", "microsecond"),
-    ),
-    datetime.time: ("time", ("hour", "minute", "second", "microsecond")),
-    datetime.timedelta: ("timedelta", ("days", "seconds", "microseconds")),
-}
 
 
 def headlit_global_key(term: Any) -> str:
@@ -708,28 +694,6 @@ def term_to_ast_expr(
     # arbitrary tzinfo carries state the base constructor cannot rebuild, so
     # those keep the honest fallthrough below. NOT arithmetic: ``==`` on a
     # date stays unification, never a CLP constraint.
-    if type(term) in _DATETIME_CTOR_FIELDS and getattr(term, "tzinfo", None) is None:
-        ctor, fields = _DATETIME_CTOR_FIELDS[type(term)]
-        # ``fold`` is not part of datetime equality, so unification would
-        # succeed without it — but the bound object must be what the caller
-        # passed, matching the by-reference direct-arg path.
-        keywords = []
-        if getattr(term, "fold", 0):
-            keywords.append(ast.keyword(arg="fold", value=ast.Constant(value=1)))
-        return ast.Call(
-            func=ast.Attribute(
-                value=ast.Call(
-                    func=_name("__import__"),
-                    args=[ast.Constant(value="datetime")],
-                    keywords=[],
-                ),
-                attr=ctor,
-                ctx=ast.Load(),
-            ),
-            args=[ast.Constant(value=getattr(term, f)) for f in fields],
-            keywords=keywords,
-        )
-
     if isinstance(term, StarUnpack):
         return ast.Starred(
             value=term_to_ast_expr(term.value, var_context, eval_arith=eval_arith),
@@ -1271,9 +1235,47 @@ def term_to_ast_expr(
             raise SyntaxError(msg, (None, pos[0], None, None))
         raise SyntaxError(msg)
 
+    # A value with a CANONICAL TERM ENCODING gets told what to write; a value
+    # without one gets the plain refusal. That is the distinction the
+    # 2026-09-15 ruling turns on -- a date can be a term, an opaque object
+    # cannot -- and it is why this is a suggestion rather than a coercion.
+    #
+    # The shapes come from ``modules.py.datetime``'s own emit table so there is
+    # ONE definition of the encoding; a second spelling here would drift.
+    suggestion = _term_form_suggestion(term)
+    if suggestion is not None:
+        raise NotImplementedError(
+            f"term_to_ast_expr: a Python {type(term).__name__} is not a term.\n"
+            f"  Write the term instead:  {suggestion}\n"
+            f"  in .clausal source:      {_source_form(suggestion)}\n"
+            f"  (got {term!r})"
+        )
     raise NotImplementedError(
         f"term_to_ast_expr: unsupported term type {type(term).__name__}: {term!r}"
     )
+
+
+def _term_form_suggestion(term: Any) -> "str | None":
+    """The term a Python datetime value should have been written as, or None.
+
+    None for everything else, deliberately: only a value the language HAS an
+    encoding for can be suggested, and suggesting one for an opaque object
+    would promise a migration that does not exist.
+    """
+    try:
+        from clausal.modules.py.datetime import _dt_to_term  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 -- a diagnostic must not upstage the fault
+        return None
+    form = _dt_to_term(term)
+    return repr(form) if type(form) is tuple else None
+
+
+def _source_form(term_repr: str) -> str:
+    """``('date', 2023, 6, 1)`` -> ``date(2023, 6, 1)``, the .clausal spelling."""
+    inner = term_repr.strip("()").split(", ", 1)
+    if len(inner) != 2:
+        return term_repr
+    return f"{inner[0].strip(chr(39))}({inner[1]})"
 
 
 # ── Arithmetic term → AST expression ──────────────────────────────────────────
