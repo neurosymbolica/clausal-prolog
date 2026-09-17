@@ -477,6 +477,53 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
     return None
 
 
+def hint_row(
+    db: Any, fname: str, arity: int, base_globals: dict | None = None,
+) -> Any | None:
+    """Return the callee row a call-site hint may read plans from, or ``None``.
+
+    The four call-site hint passes (``_inject_bucket_refs_trampoline``,
+    ``analyse_ir_bucket_refs``, ``call_site.analyse`` and
+    ``call_site.populate_runtime_from_plan``) resolve their callee HERE
+    rather than by name in ``base_globals``.  A Database row is keyed by
+    ``(functor, arity)``, so a call at arity N can never be handed the plans
+    compiled for the same name at arity M — which a name lookup in a module
+    dict happily did, because a module dict holds one class per NAME (P1
+    spec 2026-09-17 §2.3).
+
+    ``None`` — meaning "emit no hints" — for every shape that cannot name a
+    row: no Database at all (a caller that compiles against a bare globals
+    dict), a name-only shim without ``row`` (``_GlobalsDb``), an unknown
+    ``(fname, arity)``, and a row that is not locked (its dispatch, and so
+    its bucket functions, may still be rebuilt).
+
+    THE DOTTED SPELLING.  ``-import_from`` rewrites every reference to an
+    imported predicate into the EXPORTER's dotted spelling
+    (``pkg.mod.p``), and that is a ``base_globals`` key, never a Database
+    key — the importer's Database adopted the row under the LOCAL name.
+    So a dotted callee is resolved through the object bound at that
+    spelling, which is the resolved target, and its own row is taken only
+    when the row's key agrees with the call's ARITY.  Same reasoning as
+    ``globals_env._maybe_cache_dispatch``, which records in-tree that for
+    a dotted key the object's own row is the right one and a
+    ``db.row(name, arity)`` lookup "would silently redirect the call".
+    This is the one place in the four passes where a class is still read;
+    it is arity-exact all the same, because the ARITY comes from the row.
+    """
+    row = None
+    if db is not None:
+        row_of = getattr(db, "row", None)
+        if row_of is not None:
+            row = row_of(fname, arity)
+    if row is None and "." in fname and base_globals is not None:
+        cand = getattr(base_globals.get(fname), "_row", None)
+        if cand is not None and cand.key[1] == arity:
+            row = cand
+    if row is None or not row.locked:
+        return None
+    return row
+
+
 def _bucket_key(fname: str, pos: int, key: Any) -> str:
     """Readable globals key for a single-position bucket function.
 

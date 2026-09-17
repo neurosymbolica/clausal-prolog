@@ -31,7 +31,6 @@ from clausal.pythonic_ast.nodes import (
     Keyword as KWNode,
 )
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta
 from clausal.terms import PyThunk
 
 from ._ast_helpers import (
@@ -54,7 +53,9 @@ from .goal_shallow import (
     _compile_predicate_call_impl,
 )
 from .compile_ctx import CompilationContext
-from .arg_index import _static_call_key, _bucket_key, _joint_bucket_key
+from .arg_index import (
+    _static_call_key, _bucket_key, _joint_bucket_key, hint_row,
+)
 
 from .tabled_naf import _is_tabled_naf, _compile_tabled_naf_simple
 from .control_constructs import (
@@ -104,6 +105,7 @@ def _inject_bucket_refs_trampoline(
     ctx: CompilationContext,
     clauses: list,
     base_globals: dict,
+    db: Any = None,
 ) -> None:
     """Phase 10d: pre-scan clause bodies for statically-known call-site args.
 
@@ -116,7 +118,15 @@ def _inject_bucket_refs_trampoline(
 
     Mutates ``ctx`` in place — the caller's ctx_template (captured by
     reference in the body_compiler closure) sees the new entries.
+
+    ``db`` is the Database the callee is resolved in — the compile
+    pipeline's own, threaded in explicitly.  It defaults to ``ctx.db``,
+    which is where ``_compile_predicate_trampoline_impl`` already put it;
+    a caller with no Database at all leaves both ``None`` and the pass
+    emits no hints.
     """
+    if db is None:
+        db = getattr(ctx, "db", None)
 
     brmap = ctx.bucket_ref_map
     jbrmap = ctx.joint_bucket_ref_map
@@ -146,12 +156,11 @@ def _inject_bucket_refs_trampoline(
             n_kwargs = len(goal.kwargs) if goal.kwargs else 0
             arity = len(goal.args) + n_kwargs
 
-            pred_obj = base_globals.get(fname)
-            if not isinstance(pred_obj, PredicateMeta):
-                continue
-            if not getattr(pred_obj, "_locked", False):
-                continue
-            if not hasattr(pred_obj, "_index_plans"):
+            # The callee is the Database row for (fname, arity) -- ARITY
+            # EXACT.  The name lookup this replaced read one class per NAME
+            # and so handed a call at arity N the plans compiled for arity M.
+            row = hint_row(db, fname, arity, base_globals)
+            if row is None:
                 continue
 
             # Convert term args to AST exprs (fresh var_context — we only care
@@ -159,7 +168,7 @@ def _inject_bucket_refs_trampoline(
             arg_exprs = [term_to_ast_expr(a, {}) for a in goal.args]
 
             # Single-position bucket specialisation
-            for pos, idx_dict in pred_obj._index_plans.items():
+            for pos, idx_dict in row.index_plans.items():
                 if pos >= len(arg_exprs):
                     continue
                 key = _static_call_key(arg_exprs[pos])
@@ -171,8 +180,8 @@ def _inject_bucket_refs_trampoline(
                 brmap[(fname, arity, pos, key)] = gkey
 
             # Joint bucket specialisation (Phase 9b)
-            if hasattr(pred_obj, "_index_plans_joint"):
-                for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+            if row.index_plans_joint:
+                for (pi, pj), jdict in row.index_plans_joint.items():
                     if pi >= len(arg_exprs) or pj >= len(arg_exprs):
                         continue
                     ki = _static_call_key(arg_exprs[pi])
@@ -190,7 +199,7 @@ def _inject_bucket_refs_trampoline(
     legacy_br_diff = {k: v for k, v in brmap.items() if k not in br_before}
     legacy_jbr_diff = {k: v for k, v in jbrmap.items() if k not in jbr_before}
     _maybe_cross_check_bucket_refs(
-        legacy_br_diff, legacy_jbr_diff, clauses, base_globals, ctx.db,
+        legacy_br_diff, legacy_jbr_diff, clauses, base_globals, db,
     )
 
 
@@ -237,7 +246,8 @@ def analyse_ir_bucket_refs(
 
     ``base_globals`` is read-only here — the IR walker does not inject
     new globals, only computes which entries *would* be added.  The
-    cross-check compares against legacy's actual mutations.
+    cross-check compares against legacy's actual mutations.  It is not
+    read for the CALLEE any more: ``db`` resolves that, arity-exactly.
 
     Bodies that ``terms_to_goalop`` cannot convert (``NotImplementedError``)
     are silently skipped, matching the D4/D6a/D6b fallback contract.
@@ -261,12 +271,9 @@ def analyse_ir_bucket_refs(
             fname = op.fname
             arity = op.arity
 
-            pred_obj = base_globals.get(fname)
-            if not isinstance(pred_obj, PredicateMeta):
-                continue
-            if not getattr(pred_obj, "_locked", False):
-                continue
-            if not hasattr(pred_obj, "_index_plans"):
+            # Same arity-exact callee resolution as the legacy walker.
+            row = hint_row(db, fname, arity, base_globals)
+            if row is None:
                 continue
 
             # ``SubCall.args`` carries the same positional terms legacy
@@ -274,7 +281,7 @@ def analyse_ir_bucket_refs(
             # ``terms_to_goalop`` only reorders, never alters values.
             arg_exprs = [term_to_ast_expr(a, {}) for a in op.args]
 
-            for pos, idx_dict in pred_obj._index_plans.items():
+            for pos, idx_dict in row.index_plans.items():
                 if pos >= len(arg_exprs):
                     continue
                 key = _static_call_key(arg_exprs[pos])
@@ -283,8 +290,8 @@ def analyse_ir_bucket_refs(
                 gkey = _bucket_key(fname, pos, key)
                 brmap[(fname, arity, pos, key)] = gkey
 
-            if hasattr(pred_obj, "_index_plans_joint"):
-                for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+            if row.index_plans_joint:
+                for (pi, pj), jdict in row.index_plans_joint.items():
                     if pi >= len(arg_exprs) or pj >= len(arg_exprs):
                         continue
                     ki = _static_call_key(arg_exprs[pi])

@@ -410,7 +410,9 @@ def _prepopulate_call_site_runtime(
     from .optimisations import call_site as _call_site
     ir = terms_to_goalop(ir_source, ctx.db)
     plan = _call_site.analyse(ir, None, ctx.base_globals, db=ctx.db)
-    _call_site.populate_runtime_from_plan(ir, plan, ctx, ctx.base_globals)
+    _call_site.populate_runtime_from_plan(
+        ir, plan, ctx, ctx.base_globals, db=ctx.db,
+    )
 
 
 def compile_body(

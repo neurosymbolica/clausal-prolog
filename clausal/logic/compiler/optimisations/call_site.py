@@ -16,6 +16,9 @@ Contract:
 
 - ``analyse(ir, head, base_globals, db=None) -> CallSitePlan`` is
   **pure** — no side effects, returns a plan with hashable state.
+  The callee is resolved as ``db.row(fname, arity)``: ARITY-EXACT,
+  so a call at arity N never sees the plans compiled for arity M.
+  With no ``db`` (or a Database-less shim) the plan is empty.
 - ``apply(ir, plan) -> ir`` is **idempotent**.  Empty plan
   short-circuits to *ir* unchanged (reference equality).
 - ``apply`` returns a new :class:`Sequence`; input *ir* is not
@@ -66,9 +69,10 @@ def analyse(
     from ``arg_index`` keeps the gkeys byte-identical.
     """
     from ..ir import Sequence, SubCall
-    from ..arg_index import _static_call_key, _bucket_key, _joint_bucket_key
+    from ..arg_index import (
+        _static_call_key, _bucket_key, _joint_bucket_key, hint_row,
+    )
     from ..terms_to_ast import term_to_ast_expr
-    from clausal.logic.predicate import PredicateMeta
 
     if not isinstance(ir, Sequence):
         return CallSitePlan(hints=(), joint_hints=())
@@ -81,12 +85,10 @@ def analyse(
             continue
         fname = op.fname
         arity = op.arity
-        pred_obj = base_globals.get(fname)
-        if not isinstance(pred_obj, PredicateMeta):
-            continue
-        if not getattr(pred_obj, "_locked", False):
-            continue
-        if not hasattr(pred_obj, "_index_plans"):
+        # ARITY-EXACT callee resolution: the Database row for
+        # (fname, arity), never a by-name lookup in ``base_globals``.
+        row = hint_row(db, fname, arity, base_globals)
+        if row is None:
             continue
 
         arg_exprs = [term_to_ast_expr(a, {}) for a in op.args]
@@ -98,7 +100,7 @@ def analyse(
         # single-position case.  For byte-parity with legacy we
         # record every match here — the plan stays faithful to the
         # legacy map shape.
-        for pos, idx_dict in pred_obj._index_plans.items():
+        for pos, idx_dict in row.index_plans.items():
             if pos >= len(arg_exprs):
                 continue
             key = _static_call_key(arg_exprs[pos])
@@ -108,8 +110,8 @@ def analyse(
             hint_list.append((op_idx, gkey))
             break  # only need one bucket-ref hint per SubCall
 
-        if hasattr(pred_obj, "_index_plans_joint"):
-            for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+        if row.index_plans_joint:
+            for (pi, pj), jdict in row.index_plans_joint.items():
                 if pi >= len(arg_exprs) or pj >= len(arg_exprs):
                     continue
                 ki = _static_call_key(arg_exprs[pi])
@@ -166,6 +168,7 @@ def apply(ir: Any, plan: CallSitePlan) -> Any:
 
 def populate_runtime_from_plan(
     ir: Any, plan: CallSitePlan, ctx: Any, base_globals: dict,
+    db: Any = None,
 ) -> None:
     """Populate :attr:`ctx.bucket_ref_map` / :attr:`joint_bucket_ref_map`
     **and** *base_globals* with entries derived from *plan*.
@@ -175,7 +178,9 @@ def populate_runtime_from_plan(
     For each :class:`SubCall` with a plan hint:
 
     - Looks up the matching ``pos`` / ``key`` / bucket callable on
-      the callee's ``_index_plans`` / ``_index_plans_joint``.
+      the callee's row (``index_plans`` / ``index_plans_joint``),
+      resolved ARITY-EXACTLY as ``db.row(fname, arity)``.  ``db``
+      defaults to ``ctx.db`` — the compile pipeline's own Database.
     - Writes the ``(fname, arity, pos, key)`` → gkey entry into the
       legacy map so the legacy fold's ``_dispatch_call_trampoline``
       emission sees it.
@@ -185,10 +190,11 @@ def populate_runtime_from_plan(
     Idempotent: re-running with the same plan is a no-op.
     """
     from ..ir import Sequence, SubCall
-    from ..arg_index import _static_call_key
+    from ..arg_index import _static_call_key, hint_row
     from ..terms_to_ast import term_to_ast_expr
-    from clausal.logic.predicate import PredicateMeta
 
+    if db is None:
+        db = getattr(ctx, "db", None)
     if not isinstance(ir, Sequence):
         return
     if not plan.hints and not plan.joint_hints:
@@ -202,14 +208,14 @@ def populate_runtime_from_plan(
             continue
         fname = op.fname
         arity = op.arity
-        pred_obj = base_globals.get(fname)
-        if not isinstance(pred_obj, PredicateMeta):
+        row = hint_row(db, fname, arity, base_globals)
+        if row is None:
             continue
         arg_exprs = [term_to_ast_expr(a, {}) for a in op.args]
 
         single_gkey = hint_idx.get(op_idx)
         if single_gkey is not None:
-            for pos, idx_dict in pred_obj._index_plans.items():
+            for pos, idx_dict in row.index_plans.items():
                 if pos >= len(arg_exprs):
                     continue
                 key = _static_call_key(arg_exprs[pos])
@@ -221,8 +227,8 @@ def populate_runtime_from_plan(
                 break
 
         joint_gkey = joint_idx.get(op_idx)
-        if joint_gkey is not None and hasattr(pred_obj, "_index_plans_joint"):
-            for (pi, pj), jdict in pred_obj._index_plans_joint.items():
+        if joint_gkey is not None and row.index_plans_joint:
+            for (pi, pj), jdict in row.index_plans_joint.items():
                 if pi >= len(arg_exprs) or pj >= len(arg_exprs):
                     continue
                 ki = _static_call_key(arg_exprs[pi])
