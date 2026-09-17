@@ -122,6 +122,13 @@ class PredRow:
     # _declared_arity``, which declines on ``None``, declines on
     # ``len(...) != 1``, and reports the single element otherwise.
     dynamic_arities: "set[int] | None" = None
+    # Index plans (arg_index): the call-site bucket functions the compiler
+    # exposes per argument position. Row-LOCAL (P1, 2026-09-17): they were
+    # class-only state, the one thing an index-hint pass could not find by
+    # (functor, arity). ``repr=False``: they hold closures.
+    index_plans: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
+    index_plans_joint: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
+    index_plans_hierarchical: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
     # The list handed out by ``clauses`` while this predicate has NO entry in
     # ``Database._clauses`` yet — an UNMINTED clause list.  ``None`` once the
     # entry exists (``ensure_clauses`` promotes this exact object into the

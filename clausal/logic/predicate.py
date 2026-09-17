@@ -1044,6 +1044,30 @@ class PredicateMeta(type):
     def _dynamic_arities(cls, value: "set[int] | None") -> None:
         (cls._row or cls._detached_row()).dynamic_arities = value
 
+    @property
+    def _index_plans(cls) -> dict:
+        return (cls._row or cls._detached_row()).index_plans
+
+    @_index_plans.setter
+    def _index_plans(cls, value: dict) -> None:
+        (cls._row or cls._detached_row()).index_plans = value
+
+    @property
+    def _index_plans_joint(cls) -> dict:
+        return (cls._row or cls._detached_row()).index_plans_joint
+
+    @_index_plans_joint.setter
+    def _index_plans_joint(cls, value: dict) -> None:
+        (cls._row or cls._detached_row()).index_plans_joint = value
+
+    @property
+    def _index_plans_hierarchical(cls) -> dict:
+        return (cls._row or cls._detached_row()).index_plans_hierarchical
+
+    @_index_plans_hierarchical.setter
+    def _index_plans_hierarchical(cls, value: dict) -> None:
+        (cls._row or cls._detached_row()).index_plans_hierarchical = value
+
     # ── Term construction ─────────────────────────────────────────────────
 
     def __call__(cls, *args: Any, **kwargs: Any) -> Any:
