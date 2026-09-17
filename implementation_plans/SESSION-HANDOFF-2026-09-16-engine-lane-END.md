@@ -21,14 +21,26 @@ OPEN for the consumer design: `from_transfer` converts any tuple headed
 a rulebase's own `quantity/2` term crossing it.
 
 NEXT item 3 (PredicateMeta P1 reroutes) is BUILT on this branch:
-`eef9d8b2..9f80cf4c`, gated NEW 0 against p1-baseline (`eef9d8b2`), 37 tests
-added; spec `docs/superpowers/specs/2026-09-17-predmeta-p1-reroutes-design.md`,
+`eef9d8b2..HEAD`, gated NEW 0 against p1-baseline (`eef9d8b2`), 37 tests added
+by the build and 18 more by the FIX WAVE (2026-09-17, `5555bfc7..f55b0a31`
+plus this handoff commit, closing roborev job 73 and the final opus review;
+`tests/predmeta_p1/` collects 59); spec
+`docs/superpowers/specs/2026-09-17-predmeta-p1-reroutes-design.md`,
 plan `docs/superpowers/plans/2026-09-17-predmeta-p1-reroutes.md`.
 
-Census (`tools/predmeta_census/P1_SITES.tsv`): 10 rows `-done` (4 `R-done`,
-4 `R!-done`, 1 `S-done`, 1 `R-enum-done`), 40 still expected — checked by
-`check_p1.py` against the working tree for done rows and the canonical anchor
-for the rest.
+Census (`tools/predmeta_census/P1_SITES.tsv`): 10 rows CLOSED — 6 `-done`
+(4 `R!-done`, 1 `S-done`, 1 `R-enum-done`) and 4 `R-fallback` (rerouted
+row-FIRST with a class read deliberately kept and reported) — 40 still
+expected. The fix wave expected 8 done + 2 fallback and MEASURED 6 + 4: its
+own M2 and L4 fixes put a reported class fallback back into
+`globals_env.signature_for` and `testing._note_generic_compound_confusion`,
+which is the same shape `database_ops._find_pred_cls` has, and the new
+region check FOUND both before they were re-booked. `check_p1.py` closes a
+row by REGION now (the enclosing def in the working tree, located by the
+qualified name the canonical line sits in) rather than by literal-snippet
+absence, holds `R-fallback` rows to the opposite requirement (the class read
+must be present, with a row read beside it), and UNIONs the table's closed
+rows into check 1's population so it survives landing.
 
 Four sites LEFT, each with an in-tree measurement, at these WORKTREE lines
 (canonical-tree line numbers in the TSV, which drift from these):
@@ -43,13 +55,40 @@ Four sites LEFT, each with an in-tree measurement, at these WORKTREE lines
   with no clauses has a class and no row at all; `db.row(...)` would refuse
   a `-discontiguous`/`-table` load these two sites accept today (spec §4).
 
-Class reads left at CLOSED sites (deliberate, not leftover): `compiler_v2.py`
-313-332 keeps `pred_cls` for `_belongs_elsewhere`/`_bind_row` after the
-arity-checked row read; `database_ops.py`'s `_find_pred_cls` keeps the
-`type(head)` identity comparison and restores a class fallback for a class
-without a local row (review round 1, `13dcd93e`); `compiler_v2.py` ~868's
-`_redefinition_error` diagnostic still takes `pred_cls` as an argument (it
-arrives already resolved — the isinstance test there was a `None` check).
+Class reads left at CLOSED sites (deliberate, not leftover — this is the list
+P4 has to remove, and it is the list the final review found incomplete):
+
+* `compiler/arg_index.py` `hint_row` — the own-row fallback the four R! sites
+  share. Row first; when `(fname, arity)` misses, the object bound under
+  `fname` in `base_globals` answers through ITS own row, and only when that
+  row's key agrees with the call's arity. No longer restricted to the dotted
+  spelling (final review I3, ruled), so a rowless callee keeps its hints.
+* `compiler_v2.py` ~312 `cls_row = getattr(pred_cls, "_row", None)` — the
+  `-dynamic` site's membership test IS a class read: the set lives on the
+  CLASS's own row and `db.row(functor, arity)` is vacuously true there. The
+  row cannot close without the class; booked `R-fallback`, not `R-done`.
+* `compiler_v2.py` 313-332 keeps `pred_cls` for `_belongs_elsewhere`/
+  `_bind_row` after that read.
+* `database_ops.py` `_find_pred_cls` keeps the `type(head)` identity
+  comparison, and the arity-checked class read answers on THREE legs now: no
+  row here, the named row holds a class of another arity, and neither the
+  module's binding nor the head's own class is on the named row (final review
+  I1 + roborev L3).
+* `compiler/globals_env.py` `_GlobalsDb.signature_for` — the class answers for
+  a hand-built globals dict with no `$module`, arity-checked (roborev M2).
+* `testing.py` `_note_generic_compound_confusion` — the class leg sits ahead
+  of the atom branch so a DECLARED clause-less predicate still gets its
+  generic-compound note (roborev L4).
+* `compiler_v2.py` ~868's `_redefinition_error` diagnostic still takes
+  `pred_cls` as an argument (it arrives already resolved — the isinstance
+  test there was a `None` check).
+
+FILES TOUCHED BEYOND THE PLAN'S FILE MAP, both justified (final review minor
+9): `compiler/arg_index.py` — the four R! sites' shared callee resolution was
+factored into `hint_row` there rather than copied four times, which is where
+the class read they keep now lives; and `compiler/goal_shallow.py` — the
+production caller of `call_site.analyse`/`populate_runtime_from_plan`, which
+had to thread `ctx.db` into them for the reroute to see a Database at all.
 
 The equivalence has a measured LIMIT: `db.row(f, a) is not None` is exact for
 clause-having and `-dynamic`-declared predicates, and WRONG for a predicate
@@ -64,14 +103,38 @@ left on the class for this reason (`compiler_v2.py` 930/968 and
 harness-batch-lane measured 82 of 82 sealed harnesses UNCHANGED at branch tip
 `6aab7b14` — a CUMULATIVE null across the range `c69a59b9..6aab7b14`
 containing the arity-exact change, NOT an attributable "P1 moved no row" (it
-is written exactly that way on purpose); a re-run at the final tip is
-agreed. Their constraint: `b26f41dc` (bare-date refusal) promotes TOGETHER
-with dates-as-terms.
+is written exactly that way on purpose). **That sweep PREDATES `13dcd93e`
+(the first review round's class fallback) and the whole fix wave, which adds
+two more behaviour changes — a rowless callee now gets hints, and
+`signature_for` is arity-exact. The agreed re-run at the FINAL tip is
+therefore REQUIRED before promotion, not optional**; iso-l3 must sit at that
+sha and not move while they copy the `.so` files. Their constraint:
+`b26f41dc` (bare-date refusal) promotes TOGETHER with dates-as-terms.
 
-Landing day: `P1_SITES.tsv` column 2 (canonical line numbers) must be
-refreshed for every non-done row once these commits reach the canonical
-tree — the done rows' check already flips to a working-tree absence test for
-exactly this reason (`9f80cf4c`).
+LANDING DAY, the full procedure:
+
+1. `P1_SITES.tsv` column 2 holds CANONICAL line numbers. Refresh it for every
+   NON-CLOSED row (the 40 still expected) once these commits reach the
+   canonical tree: their sites do not move, but everything above them does.
+   The 10 closed rows keep the line they have — it is their identity in the
+   census's key space, not a pointer to live code.
+2. Do NOT expect the closed rows to survive in the canonical scan. SEVEN of
+   the ten are mechanically sourced (`M` in column 3 — measured, where the
+   earlier note said six; the other three are `H`, recorded in
+   `census.VERDICTS`, which is a static dict and survives landing on its
+   own). The seven were in check 1's population only because
+   `census.classify` still finds their pre-reroute spelling in
+   `/workspace/clausal`; the moment these commits land there, that spelling
+   is gone and they would read as "in table, absent from census". Check 1
+   UNIONs the table's own closed rows into the population for exactly this
+   reason (`census_A_sites(rows)`), so nothing has to be done for them —
+   simulated: population without the union 40 vs 50 table rows = 10 EXTRA and
+   a RED checker for having been landed; with it, 50 and 0.
+3. Re-run `check_p1.py` and `check_p1.py --controls` in the canonical tree
+   after the refresh. Nine controls must fire and the real table must PASS.
+4. The closed rows are judged against the WORKING tree, so they answer the
+   same before and after landing; a canonical-tree run is a check of the
+   refreshed column 2, not of the reroutes.
 
 Todos filed on this branch: `dynamic-at-another-arity-moves-the-class`
 (pre-existing, found by Task 3, `todo/dynamic-at-another-arity-moves-the-class-2026-09-17.md`);

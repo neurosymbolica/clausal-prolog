@@ -59,10 +59,29 @@ through `-import_from`, so no row was adopted) stays visible to `listing/1` and
    `_locked` and `_index_plans*` off it, and never use the `arity` they computed. They read
    `db.row(fname, arity)` instead, with `db` threaded in EXPLICITLY from the compile pipeline
    (`compile_predicate_trampoline` has it) — not looked up through `$module`, so a test that
-   builds `base_globals` by hand keeps working by passing `db`. BEHAVIOUR CHANGE, stated: a call
-   at arity N no longer sees the plans compiled for a same-name predicate at arity M. A test pins
-   that each arity gets its own plans and never the other's, and a positive control pins that the
-   ordinary load path still produces hints.
+   builds `base_globals` by hand keeps working by passing `db`. `db` is keyword-REQUIRED on
+   `analyse` and `analyse_ir_bucket_refs`, so a caller that forgets to thread it is refused
+   rather than silently getting no hints.
+
+   **THE THREE BEHAVIOUR CHANGES, stated (2026-09-17; the third and the arity-exactness of
+   `signature_for` were added by the final review).** All three are performance or diagnostic
+   changes, none is an answer change, and the harness axis is the instrument that says so.
+
+   1. **Index hints are ARITY-EXACT.** A call at arity N no longer sees the plans compiled for
+      a same-name predicate at arity M. A test pins that each arity gets its own plans and never
+      the other's, and a positive control pins that the ordinary load path still produces hints.
+   2. **A ROWLESS callee resolves through the class fallback, arity-exactly.** `hint_row` reads
+      `db.row(fname, arity)` first and, when that misses, falls back to the object bound under
+      `fname` in `base_globals` — for ANY name, not only the dotted spelling an `-import_from`
+      remap emits. Its own row is taken only when that row's key agrees with the call's arity.
+      So a callee visible only as a class (a plain Python import; a compile handed a bare
+      globals dict, `db=None` included) keeps its hints instead of silently losing them. This is
+      THE class read the four R! sites keep, and it is reported as such (§3).
+   3. **`_GlobalsDb.signature_for` is arity-exact, on both legs.** The row is keyed
+      `(functor, arity)`; and where the globals dict carries no `$module` — the documented
+      hand-built shape — the class bound there answers, with a `len(_fields) == arity` check the
+      class read never made. A keyword-call body compiled against such a dict used to raise
+      `RuntimeError` for a predicate sitting in it.
 4. **The enumeration (R-enum).** `[k for k, v in module_dict.items() if isinstance(v,
    PredicateMeta)]` in a diagnostic becomes the names of `db._rows` ∪ `db._adopted`, sorted.
 
