@@ -516,6 +516,29 @@ class Database:
             found |= {a for (f, a) in keyed if f == functor}
         return found
 
+    def functors(self) -> "list[str]":
+        """Every predicate NAME this database knows, sorted.
+
+        The functor-only twin of ``arities_for``, and the population a
+        diagnostic means by "the predicates available here": the same
+        containers ``row()``'s own ``known`` test consults, plus ``_adopted``
+        -- a row this module adopted at ``-import_from`` answers reads here
+        under this module's own spelling, so the name IS available.
+
+        Exists so a caller outside this module does not have to reach into
+        ``_rows`` to enumerate (final review minor 5, 2026-09-17): ``_rows``
+        is LAZILY materialised, so it is the one container that can be
+        missing a name the database plainly knows -- which made a
+        ``-specialize`` diagnostic list a population that was not quite the
+        one it was refusing against.
+        """
+        found = {f for (f, _a) in self._rows}
+        found |= {f for (f, _a) in self._adopted}
+        for keyed in (self._clauses, self._dispatch, self._lazy_recompile,
+                      self._signatures, self._dynamic):
+            found |= {f for (f, _a) in keyed}
+        return sorted(found)
+
     def adopt_row(self, local_functor: str, arity: int, row: "PredRow") -> bool:
         """Make ``(local_functor, arity)`` resolve to an existing *row* that
         another database owns.  True if it was adopted, False if this database

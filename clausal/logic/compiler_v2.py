@@ -1090,14 +1090,19 @@ def _run_specialization(
         mi_cls = module_dict.get(item.mi_name)
         if not isinstance(mi_cls, PredicateMeta):
             # P1 (spec 2026-09-17 §2.4): the diagnostic enumerates the
-            # DATABASE's predicates — the rows it owns plus the rows it
-            # adopted at ``-import_from`` — rather than the classes that
-            # happen to sit in the module dict, so an imported predicate is
-            # listed under the spelling this module uses for it.
-            available = sorted({f for (f, _a) in (*db._rows, *db._adopted)})
+            # DATABASE's predicates — every container ``row()`` consults,
+            # plus the rows adopted at ``-import_from`` — rather than the
+            # classes that happen to sit in the module dict, so an imported
+            # predicate is listed under the spelling this module uses for it.
+            # The wording NAMES that population (final review minor 5 +
+            # roborev L6): it used to say "module dict" while listing rows,
+            # and it built the list from ``_rows``, which is lazily
+            # materialised and so not quite the population it refuses
+            # against.  ``Database.functors()`` is that population.
             raise RuntimeError(
-                f"-specialize: meta-interpreter '{item.mi_name}' not found "
-                f"in module dict (available: {available})"
+                f"-specialize: meta-interpreter '{item.mi_name}': no "
+                f"predicate of that name in this module's database "
+                f"(available: {db.functors()})"
             )
 
         # Analyze the MI (auto-detects program_arg from field names).

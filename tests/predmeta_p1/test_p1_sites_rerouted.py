@@ -327,3 +327,59 @@ def test_a_clause_block_may_find_a_non_class_under_its_own_name(tmp_path,
     assert not isinstance(binding, PredicateMeta)
     # And the load survived: the clause block got its own predicate anyway.
     assert _answers(mod, "shared_name") == [1]
+
+
+def test_the_specialize_diagnostic_names_the_population_it_lists(tmp_path):
+    """Final review minor 5 + roborev L6, 2026-09-17.
+
+    Two defects in one line.  The wording said "not found in module dict"
+    while listing the DATABASE's predicates, so a reader chasing a missing
+    name looked in the wrong place.  And the list was built from ``db._rows``
+    ∪ ``db._adopted``, where ``_rows`` is LAZILY materialised: the two
+    enumerations answer the same question and only one of them scans every
+    container ``row()``'s ``known`` test consults.  It now goes through
+    ``Database.functors()``, the same containers ``arities_for`` scans plus
+    ``_adopted``.
+
+    MEASURED: no ordinary LOAD distinguishes the two here -- a ``-dynamic``
+    declaration's row is materialised at step 4a, so ``'ghost'`` below is a
+    CONTROL that passed before this change too.  The difference is pinned
+    directly on the accessor in the next test, where a key is marked dynamic
+    without anyone asking for its row.  This is a robustness fix, and it is
+    recorded as one.
+    """
+    src = ("-dynamic(ghost/1)\n"
+           "prog(P) <- (P is [1]),\n"
+           "-specialize(nosuch_mi, prog, alias=zz)\n"
+           "realpred(1),\n")
+    with pytest.raises(RuntimeError) as exc:
+        _load(tmp_path, "p1_spec2", src)
+    msg = str(exc.value)
+    assert "no predicate of that name in this module's database" in msg, msg
+    assert "'ghost'" in msg, (
+        "a clause-less -dynamic name is known to this database and its row "
+        f"is merely unmaterialised — got {msg}")
+    assert "'realpred'" in msg and "'prog'" in msg
+
+
+def test_functors_scans_every_container_row_consults(tmp_path):
+    """``Database.functors()`` is the functor-only twin of ``arities_for``:
+    same containers, plus the rows this database ADOPTED at ``-import_from``
+    (which answer reads here under this module's own spelling)."""
+    mod = _load(tmp_path, "p1_fn", "-dynamic(ghost/1)\nreal(1),\n")
+    functors = mod.db.functors()
+    assert functors == sorted(functors), "sorted, so a diagnostic can print it"
+    assert "real" in functors and "ghost" in functors
+    # every name it lists is a name this database knows at some arity
+    for f in functors:
+        assert mod.db.arities_for(f) or f in {
+            k for (k, _a) in mod.db._adopted}, f
+
+    # THE DIFFERENCE, pinned where a load cannot show it: a key known only
+    # through a container whose row nobody has materialised.
+    from clausal.logic.database import Database
+    bare = Database()
+    bare.mark_dynamic("late", 1)
+    assert "late" not in {f for (f, _a) in (*bare._rows, *bare._adopted)}, (
+        "the old enumeration's population")
+    assert bare.functors() == ["late"]
