@@ -133,9 +133,15 @@ Errors use `clausal.logic.exceptions.type_error` / `instantiation_error` wrapped
 
 **The other dialects' half is not here.** For a Prolog with no units, `Number` is the magnitude
 scaled to the standard unit for those dimensions, i.e. `Magnitude × Ratio` with the unit
-discarded. That definition belongs in the exporter's per-dialect prelude, which is another
-lane's file and outside this repo's information barrier. This design gives them the reference
-semantics; the plan does not touch their tree.
+discarded. CORRECTED 2026-09-17 (iso-export-lane): the per-dialect preludes
+(`clausal/tools/prolog_preludes/clausal_constants_{scryer,trealla}.pl`) are in THIS tree, and
+the exporter stages COMPANIONS, so the definition's home is the `units` companion on the export
+side — an exported domain reaches it through the module it already imports. Built there
+2026-09-17 as ONE portable file (`Magnitude * Ratio`, never a division; `is/2` on purpose,
+since `#=` would pull integer-only clpz into every unit-bearing domain), ten tests on both
+engines. Known loud gap: a `decimal(M, S)` magnitude is not evaluable there and raises
+`type_error(evaluable, decimal/2)` — right while nothing emits one. This design gave the
+reference semantics; the plan did not touch the export side.
 
 ## 5. Where things live
 
