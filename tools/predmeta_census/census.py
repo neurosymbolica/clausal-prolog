@@ -39,6 +39,12 @@ HUMAN_VERIFIED = {
 # not classify was READ. Recorded here so the exit criterion is machine-checked
 # rather than asserted in prose -- the two drifted apart once already.
 #
+# KEY SPACE: lines in the CANONICAL tree at 38d3cb32 (re-keyed 2026-09-17, the
+# day P1 landed there: 42 of 83 keys moved, each relocated by its line's text
+# inside its enclosing def in c69a59b9 -> 38d3cb32, all 83 accounted for).
+# The three keys of CLOSED P1 rows (database_ops 275, testing 862, compiler_v2
+# 1008) are identities, not pointers: their pre-reroute sites are gone.
+#
 # G-term-test is the category the first taxonomy missed entirely:
 # `isinstance(type(x), PredicateMeta)` asks "is x a TERM INSTANCE", which is a
 # different question from `isinstance(x, PredicateMeta)` = "is x a predicate
@@ -47,42 +53,42 @@ HUMAN_VERIFIED = {
 VERDICTS = {
   # A -- PREDICATE TEST: "is this name a predicate here?" -> Database membership
   "clausal/import_diagnostics.py:201": "A", "clausal/logic/builtins/database_ops.py:275": "A",
-  "clausal/logic/builtins/database_ops.py:280": "A", "clausal/logic/builtins/io.py:589": "A",
-  "clausal/logic/builtins/io.py:735": "A", "clausal/logic/compiler/globals_env.py:550": "A",
-  "clausal/logic/compiler_v2.py:276": "A", "clausal/logic/compiler_v2.py:678": "A",
-  "clausal/logic/compiler_v2.py:745": "A", "clausal/logic/compiler_v2.py:1008": "A",
-  "clausal/logic/compiler_v2.py:1022": "A", "clausal/logic/compiler_v2.py:1044": "A",
-  "clausal/logic/compiler_v2.py:1717": "A", "clausal/logic/compiler_v2.py:1756": "A",
-  "clausal/logic/database.py:974": "A", "clausal/logic/predicate.py:1425": "A",
+  "clausal/logic/builtins/database_ops.py:311": "A", "clausal/logic/builtins/io.py:589": "A",
+  "clausal/logic/builtins/io.py:735": "A", "clausal/logic/compiler/globals_env.py:577": "A",
+  "clausal/logic/compiler_v2.py:291": "A", "clausal/logic/compiler_v2.py:745": "A",
+  "clausal/logic/compiler_v2.py:812": "A", "clausal/logic/compiler_v2.py:1008": "A",
+  "clausal/logic/compiler_v2.py:1119": "A", "clausal/logic/compiler_v2.py:1141": "A",
+  "clausal/logic/compiler_v2.py:1814": "A", "clausal/logic/compiler_v2.py:1853": "A",
+  "clausal/logic/database.py:1076": "A", "clausal/logic/predicate.py:1483": "A",
   "clausal/logic/term_expansion.py:107": "A", "clausal/logic/term_expansion.py:160": "A",
   "clausal/predicate_diagnostics.py:194": "A", "clausal/testing.py:862": "A",
   "clausal/templating/term_rewriting.py:4236": "A",
   "clausal/templating/term_rewriting.py:4371": "A",
   "clausal/logic/compiler/head_match.py:846": "C",
-  "clausal/logic/compiler/terms_to_ast.py:110": "C",
-  "clausal/logic/compiler/terms_to_ast.py:1060": "A",
-  "clausal/logic/compiler/terms_to_ast.py:1245": "A",
+  "clausal/logic/compiler/terms_to_ast.py:96": "C",
+  "clausal/logic/compiler/terms_to_ast.py:1024": "A",
+  "clausal/logic/compiler/terms_to_ast.py:1209": "A",
   "clausal/logic/compiler/arg_index.py:180": "C",
   "clausal/logic/compiler/arg_index.py:378": "C",
   "clausal/logic/compiler/_lower_goalop_shared.py:129": "A",
   "clausal/logic/builtins/inspection.py:317": "A",
   # G -- TERM TEST via isinstance(type(x), PredicateMeta) -> the tuple path answers it
-  "clausal/logic/compiler/head_match.py:126": "G", "clausal/logic/solve.py:230": "G",
-  "clausal/logic/solve.py:308": "G", "clausal/logic/solve.py:435": "G",
-  "clausal/logic/solve.py:502": "G", "clausal/logic/solve.py:938": "G",
-  "clausal/logic/term_expansion.py:44": "G", "clausal/logic/predicate.py:1481": "G",
+  "clausal/logic/compiler/head_match.py:126": "G", "clausal/logic/solve.py:229": "G",
+  "clausal/logic/solve.py:307": "G", "clausal/logic/solve.py:434": "G",
+  "clausal/logic/solve.py:495": "G", "clausal/logic/solve.py:931": "G",
+  "clausal/logic/term_expansion.py:44": "G", "clausal/logic/predicate.py:1539": "G",
   # C -- ATOM WIDENING: a zero-field class admitted as an atom VALUE
   "clausal/logic/builtins/inspection.py:384": "C",
   "clausal/logic/builtins/inspection.py:514": "C",
-  "clausal/logic/builtins/type_checks.py:342": "C", "clausal/testing.py:1662": "C",
+  "clausal/logic/builtins/type_checks.py:342": "C", "clausal/testing.py:1682": "C",
   # D -- DECLARATION / REGISTRATION: deleted with the class
-  "clausal/logic/predicate.py:689": "D", "clausal/logic/predicate.py:1597": "D",
-  "clausal/logic/predicate.py:1598": "D", "clausal/logic/predicate.py:1763": "D",
+  "clausal/logic/predicate.py:689": "D", "clausal/logic/predicate.py:1655": "D",
+  "clausal/logic/predicate.py:1656": "D", "clausal/logic/predicate.py:1821": "D",
   "clausal/templating/term_rewriting.py:4218": "D",
   # H -- FOREIGN-IDENTITY DIAGNOSTIC: compares against ANOTHER copy of the engine's
   # PredicateMeta to detect a double-loaded engine. Depends on class object identity
   # ACROSS module copies, so it needs a replacement, not a deletion.
-  "clausal/logic/predicate.py:1701": "H", "clausal/logic/predicate.py:1703": "H",
+  "clausal/logic/predicate.py:1759": "H", "clausal/logic/predicate.py:1761": "H",
   # P -- PROSE: a docstring or comment that MENTIONS the name. Read and confirmed
   # non-behavioural. These reach here rather than the PROSE heuristic because they
   # contain code punctuation (backticks, parens, arrows) inside the prose.
@@ -92,21 +98,21 @@ VERDICTS = {
   "clausal/logic/builtins/io.py:689": "P", "clausal/logic/builtins/type_checks.py:107": "P",
   "clausal/logic/compiler/arg_index.py:104": "P",
   "clausal/logic/compiler/globals_env.py:112": "P",
-  "clausal/logic/compiler/globals_env.py:524": "P",
+  "clausal/logic/compiler/globals_env.py:551": "P",
   "clausal/logic/compiler/list_dispatch.py:444": "P",
   "clausal/logic/compiler/predicate.py:1709": "P",
   "clausal/logic/compiler/predicate.py:2167": "P",
-  "clausal/logic/compiler/terms_to_ast.py:442": "P",
-  "clausal/logic/compiler/terms_to_ast.py:470": "P",
-  "clausal/logic/compiler_v2.py:818": "P", "clausal/logic/compiler_v2.py:958": "P",
-  "clausal/logic/database.py:167": "P", "clausal/logic/database.py:959": "P",
-  "clausal/logic/predicate.py:3": "P", "clausal/logic/predicate.py:1487": "P",
-  "clausal/logic/predicate.py:1619": "P", "clausal/logic/solve.py:20": "P",
-  "clausal/logic/solve.py:188": "P", "clausal/logic/solve.py:458": "P",
-  "clausal/logic/solve.py:981": "P", "clausal/logic/solve.py:989": "P",
-  "clausal/logic/solve.py:992": "P", "clausal/modules/py/datetime.py:124": "P",
+  "clausal/logic/compiler/terms_to_ast.py:428": "P",
+  "clausal/logic/compiler/terms_to_ast.py:456": "P",
+  "clausal/logic/compiler_v2.py:890": "P", "clausal/logic/compiler_v2.py:1045": "P",
+  "clausal/logic/database.py:180": "P", "clausal/logic/database.py:1061": "P",
+  "clausal/logic/predicate.py:3": "P", "clausal/logic/predicate.py:1545": "P",
+  "clausal/logic/predicate.py:1677": "P", "clausal/logic/solve.py:20": "P",
+  "clausal/logic/solve.py:187": "P", "clausal/logic/solve.py:451": "P",
+  "clausal/logic/solve.py:974": "P", "clausal/logic/solve.py:982": "P",
+  "clausal/logic/solve.py:985": "P", "clausal/modules/py/datetime.py:211": "P",
   "clausal/repl.py:188": "P", "clausal/repl.py:194": "P",
-  "clausal/testing.py:2153": "P", "clausal/templating/term_rewriting.py:4275": "P",
+  "clausal/testing.py:2173": "P", "clausal/templating/term_rewriting.py:4275": "P",
 }
 
 

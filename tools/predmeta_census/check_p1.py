@@ -10,6 +10,18 @@ extraction that silently yields nothing is this lane's dominant failure mode:
      FLIPS and is made over the site's REGION in the WORKING tree rather than
      over a literal line.  See ``closed_row_verdict``.
   3. no row carries a disposition outside the documented set
+  4. a row's canonical line sits inside the def its QUALNAME column names
+     (live rows only; a closed row's line is an identity, not a pointer)
+
+The REGION of a row is its enclosing def, and it is located by the row's
+QUALNAME column (column 7), not by the canonical line.  Landing day
+2026-09-17 showed why: the canonical tree became the branch, every line above
+a site shifted, and ``qualname_at(canonical, line)`` for three CLOSED rows
+resolved to a NEIGHBOURING def -- one false UNDONE (an R-enum-done row judged
+over a live Q row's def) and one false STALE (an S-done row whose old line now
+sat at module level).  A closed row cannot be re-anchored by its line, because
+its site is gone from the canonical tree; the def name survives.  Rows without
+the column fall back to the line, as before.
 
 Category A is the UNION of two populations, which is the correction this pass
 made: the 26 sites human-read at P0 (census.VERDICTS) AND the 24 the census
@@ -48,8 +60,15 @@ def table_rows(path: pathlib.Path = TABLE):
             continue
         parts = raw.split("\t")
         rows.append((parts[0], int(parts[1]), parts[2], parts[3],
-                     parts[5] if len(parts) > 5 else None))
+                     parts[5] if len(parts) > 5 else None,
+                     parts[6] if len(parts) > 6 and parts[6] else None))
     return rows
+
+
+def row_qual(root: pathlib.Path, f: str, l: int, qual_col: "str | None"):
+    """The def a row's site lives in: the QUALNAME column when recorded,
+    else the def enclosing the canonical line (the pre-column behaviour)."""
+    return qual_col.split(".") if qual_col else qualname_at(root / f, l)
 
 
 def census_A_sites(rows=None) -> set[tuple[str, int]]:
@@ -77,7 +96,7 @@ def census_A_sites(rows=None) -> set[tuple[str, int]]:
                 p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             if census.PAT.search(line) and census.classify(line) == "A-predicate-test":
                 auto.add((rel, n))
-    landed = {(f, l) for f, l, _s, d, _sn in (rows or []) if d in CLOSED}
+    landed = {(f, l) for f, l, _s, d, _sn, _q in (rows or []) if d in CLOSED}
     return human | auto | landed
 
 
@@ -243,23 +262,24 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
     # then passed a table that marked a live site done.  A live row excuses a
     # line only inside its OWN enclosing def.
     accounted: "dict[tuple[str, tuple], set[int]]" = {}
-    for f, l, _s, disposition, snippet in rows:
+    for f, l, _s, disposition, snippet, qual_col in rows:
         if disposition in CLOSED or not snippet:
             continue
         wlines = (work / f).read_text(encoding="utf-8", errors="replace").splitlines()
-        qual = qualname_at(root / f, l)
+        qual = row_qual(root, f, l, qual_col)
         region = region_of(work / f, qual) if qual else None
         hits = {i + 1 for i, c in enumerate(wlines) if c.strip() == snippet}
         if region is not None:
             hits = {n for n in hits if region[0] <= n <= region[1]}
         accounted.setdefault((f, tuple(qual or ())), set()).update(hits)
 
-    stale, moved, undone = [], [], []
+    stale, moved, undone, misplaced = [], [], [], []
     done_rows = fallback_rows = 0
     for row in rows:
         f, l = row[0], row[1]
         disposition = row[3]
-        snippet = row[4] if len(row) > 4 else None
+        snippet = row[4]
+        qual_col = row[5]
         lines = (root / f).read_text(encoding="utf-8", errors="replace").splitlines()
         wlines = (work / f).read_text(encoding="utf-8", errors="replace").splitlines()
         if disposition in CLOSED:
@@ -280,9 +300,11 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
             if not snippet or "PredicateMeta" not in snippet:
                 stale.append((f, l))
                 continue
-            qual = qualname_at(root / f, l)
+            qual = row_qual(root, f, l, qual_col)
             region = region_of(work / f, qual) if qual else None
             if region is None:
+                # no such def in the working tree (or, without the column,
+                # the canonical line sits at module level)
                 stale.append((f, l))
                 continue
             why = closed_row_verdict(work / f, region, snippet, disposition,
@@ -290,6 +312,10 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
             if why:
                 undone.append((f, l, why))
             continue
+        if qual_col and qualname_at(root / f, l) != qual_col.split("."):
+            # check 4: a LIVE row's canonical line must sit inside the def
+            # the row says it is in -- the column and the line disagree.
+            misplaced.append((f, l, qual_col))
         if snippet:
             # The SNIPPET is the anchor; the line number is a hint that drifts
             # whenever anything earlier in the file changes.
@@ -315,6 +341,10 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
     print(f"  rows whose snippet is GONE or ambiguous : {len(stale)}")
     for f, l in stale:
         print(f"      STALE   {f}:{l}")
+    print(f"  live rows whose canonical line is outside the recorded def : "
+          f"{len(misplaced)}")
+    for f, l, q in misplaced:
+        print(f"      DEF     {f}:{l} is not in {q}")
 
     human = {(k.rsplit(":", 1)[0], int(k.rsplit(":", 1)[1]))
              for k, v in census.VERDICTS.items() if v == "A"}
@@ -333,7 +363,7 @@ def run(table_path: pathlib.Path = TABLE, root: pathlib.Path | None = None) -> i
     print(f"  duplicate rows : {dupes}")
 
     bad = (len(missing) + len(extra) + len(stale) + len(baddisp) + dupes
-           + len(badsrc) + len(undone))
+           + len(badsrc) + len(undone) + len(misplaced))
     print(f"\n{'PASS' if bad == 0 else 'FAIL'}: {bad} problem(s)")
     return 0 if bad == 0 else 1
 
@@ -372,8 +402,19 @@ def controls() -> int:
         "isinstance(", "isinstance( ").replace(", PredicateMeta", " , PredicateMeta")
     assert reformatted != parts[5]
     cases["mark a live site done with a REFORMATTED snippet"] = "\n".join(
-        ["\t".join(parts[:3] + ["R-done"] + [parts[4], reformatted])]
+        ["\t".join(parts[:3] + ["R-done"] + [parts[4], reformatted] + parts[6:])]
         + [r for r in rows if r != live])
+    # THE CONTROLS FOR THE QUALNAME COLUMN (landing day 2026-09-17): a live
+    # row whose recorded def is not the one its canonical line sits in, and a
+    # closed row whose recorded def does not exist in the working tree.
+    assert len(parts) > 6 and parts[6], "the live control row has no qualname column"
+    cases["record the WRONG def on a live row"] = "\n".join(
+        ["\t".join(parts[:6] + ["no_such_def"])] + [r for r in rows if r != live])
+    dead0 = next(r for r in rows if r.split("\t")[3] in CLOSED)
+    dparts = dead0.split("\t")
+    assert len(dparts) > 6 and dparts[6], "the closed control row has no qualname column"
+    cases["close a row under a def that does not exist"] = "\n".join(
+        ["\t".join(dparts[:6] + ["no_such_def"])] + [r for r in rows if r != dead0])
     # ... and its mirror: a row marked closed whose snippet is not a
     # PredicateMeta test at all, which would make the region check meaningless.
     dead = next(r for r in rows if r.split("\t")[3] in CLOSED)
