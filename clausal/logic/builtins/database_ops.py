@@ -271,19 +271,38 @@ def _find_pred_cls(functor: str, arity: int,
     from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
     if module_dict is None:
         return None
-    candidate = module_dict.get(functor)
-    named = (candidate if isinstance(candidate, PredicateMeta)
-             and len(candidate._fields) == arity else None)
+    # ROW-RESOLVED (P1, spec 2026-09-17 §2.2).  The name is looked up in the
+    # module's own Database — ``module_dict["$module"].db``, never a
+    # predicate's ``_row.db``, which is a DIFFERENT Database for an imported
+    # name — and a row is keyed ``(functor, arity)``, which is what makes the
+    # lookup arity-checked without counting a class's fields.
+    db = getattr(module_dict.get("$module"), "db", None)
+    named_row = db.row(functor, arity) if db is not None else None
     own = type(head)
+    own_row = getattr(own, "_row", None)
+    # THE REDIRECT TEST, on rows: the row this module's spelling names is not
+    # the row the goal's OWN term reads.  ``named_row is None`` — the aliased
+    # import, where the canonical functor names no row here — is a mismatch
+    # like any other.  ``type(head)`` stays: the head's own class is the
+    # predicate, whatever it is spelled here (spec §3).
     if (
-        named is not own
+        named_row is not own_row
         and isinstance(own, PredicateMeta)
         and own.__name__ == functor
         and len(own._fields) == arity
         and any(v is own for v in module_dict.values())
     ):
         return own
-    return named
+    if named_row is None:
+        return None
+    # THE class read that remains (spec §3): what this function RETURNS is a
+    # class — the caller locks it, recompiles through it and builds terms with
+    # it — so the module's binding is handed back when it is the class sitting
+    # on that row, and the head's own class when it is the one there instead.
+    candidate = module_dict.get(functor)
+    if getattr(candidate, "_row", None) is named_row:
+        return candidate
+    return own if own_row is named_row else None
 
 
 def _home_db(db, pred_cls) -> "Any":

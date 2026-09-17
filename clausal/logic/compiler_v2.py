@@ -231,6 +231,11 @@ def compile_module(
         # is a snapshot and the write is what the row's contract names as the
         # deliberate clause-list minting site.
         pred_cls = module_dict.get(functor)
+        # P1 2026-09-17: this guard is NOT redundant and stays.  Measured over
+        # the whole suite (14,615 arrivals here), 34 of them find something
+        # other than a predicate class under a functor that HAS clause nodes —
+        # an interned atom ``tuple`` and an absent binding — so dropping the
+        # test would hand a tuple to ``_bind_row`` below.
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
@@ -273,6 +278,16 @@ def compile_module(
                 # the clause list is EMPTY, which includes the retract-back-
                 # to-empty return leg of a predicate that did have clauses.
                 stamped = module_dict.get(functor)
+                # THE WART (P1 spec 2026-09-17 §2): ``_dynamic_arities`` is a
+                # per-NAME set living on the CLASS's OWN row, which is the row
+                # of the class's own arity — not of ``arity``, the arity being
+                # declared.  That row cannot be named through ``db`` here: for
+                # a clause-less ``-dynamic`` declaration the class is still on
+                # its DETACHED row at this point (measured 2026-09-17), so
+                # ``db.row(...)`` reaches a different object, and a row-side
+                # membership test would skip the stamp altogether.  So the
+                # class stays for both the test and the write; the set does
+                # not move.  ``_bind_row`` carries the set onto the real row.
                 if isinstance(stamped, PredicateMeta):
                     if stamped._dynamic_arities is None:
                         stamped._dynamic_arities = set()
@@ -281,10 +296,21 @@ def compile_module(
                 if key in pending:
                     continue
                 pred_cls = module_dict.get(functor)
-                if (
-                    isinstance(pred_cls, PredicateMeta)
-                    and len(pred_cls._fields) == arity
-                ):
+                # P1 (spec 2026-09-17 §2.2): the class's OWN ROW names its
+                # arity, so this is the arity-checked membership test with no
+                # class test and no ``_fields`` read.  ``_row`` is set for
+                # every predicate class that reaches here — the stamp above
+                # reads ``_dynamic_arities``, a property over the class's row,
+                # which mints the detached row when there is none — and absent
+                # on a non-predicate binding.
+                #
+                # NOT ``db.row(functor, arity) is not None``: step 2's
+                # ``mark_dynamic`` already put ``(functor, arity)`` in this
+                # database, so that test is VACUOUSLY TRUE here (measured
+                # 2026-09-17), and ``-dynamic(d/2)`` beside ``d/1`` clauses
+                # would then bind d/1's class onto d/2's row.
+                cls_row = getattr(pred_cls, "_row", None)
+                if cls_row is not None and cls_row.key[1] == arity:
                     if _belongs_elsewhere(pred_cls, db):
                         # A ``-dynamic`` declaration for a predicate this
                         # module IMPORTED (P3-3 Task 3 fix round 1).  The
@@ -834,7 +860,12 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
     """The load channel's surface exception for a gate refusal."""
     gate_line = str(exc.term.args[1])
     origin = origins.get(functor)
-    if origin is None or not isinstance(pred_cls, PredicateMeta):
+    # P1 (spec 2026-09-17 §2.2), simplification: *pred_cls* arrives already
+    # resolved.  Both ``_load_gate`` call sites pass either step 4's
+    # isinstance-guarded class or ``_imported_class``'s result, and
+    # ``_imported_class`` returns a predicate class or ``None`` — so the type
+    # test was a ``None`` check in a type test's clothing.
+    if origin is None or pred_cls is None:
         return SyntaxError(gate_line)
     exporter_name = origin[0]
     from clausal.import_diagnostics import (  # noqa: PLC0415
@@ -888,6 +919,13 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
                     functor, arity, db, module_dict, _specialize_aliases,
                 )
                 continue
+            # P1 2026-09-17: this one does NOT route to ``db.row``.  A
+            # predicate DECLARED here and given no clauses (``-private([p(X,
+            # Y)])`` plus a directive naming it) has a class in the module
+            # dict and NO ROW at all — measured — so the row test would refuse
+            # a load this accepts today, and the docstring above promises the
+            # opposite.  "Declared at module level" is the spec §4 question,
+            # not one a row can answer yet.
             cls = module_dict.get(functor)
             if isinstance(cls, PredicateMeta):
                 fields = term_field_names_of_class(cls)
@@ -919,6 +957,14 @@ def _refuse_untablable_target(
     if db.is_dynamic(functor, arity):
         return
 
+    # P1 2026-09-17: like its sibling in ``_validate_directive_targets``, this
+    # stays on the class.  ``is_pred`` chooses BETWEEN refusals, and the three
+    # shapes want three different remedies; measured over the suite,
+    # ``db.row(functor, arity) is not None`` disagrees with this test on 3 of
+    # the 8 targets that reach here (``ghost/2``, ``solve_tiny/1``,
+    # ``solve_count_tabled/2`` — all declared, none with a row), so rerouting
+    # would replace the accurate "declared but has no clauses" with "never
+    # defined".
     cls = module_dict.get(functor)
     if isinstance(cls, PredicateMeta):
         fields = term_field_names_of_class(cls)
@@ -1043,10 +1089,15 @@ def _run_specialization(
 
         mi_cls = module_dict.get(item.mi_name)
         if not isinstance(mi_cls, PredicateMeta):
+            # P1 (spec 2026-09-17 §2.4): the diagnostic enumerates the
+            # DATABASE's predicates — the rows it owns plus the rows it
+            # adopted at ``-import_from`` — rather than the classes that
+            # happen to sit in the module dict, so an imported predicate is
+            # listed under the spelling this module uses for it.
+            available = sorted({f for (f, _a) in (*db._rows, *db._adopted)})
             raise RuntimeError(
                 f"-specialize: meta-interpreter '{item.mi_name}' not found "
-                f"in module dict (available: "
-                f"{[k for k, v in module_dict.items() if isinstance(v, PredicateMeta)]})"
+                f"in module dict (available: {available})"
             )
 
         # Analyze the MI (auto-detects program_arg from field names).

@@ -150,10 +150,23 @@ class _DbDispatchAdapter:
 class _GlobalsDb:
     """Minimal db-like proxy for signature lookup from module globals.
 
-    Used by compile_predicate when ``db=None`` — looks up ``_signature`` from
-    PredicateMeta classes found in the provided globals dict.  Only
-    ``signature_for`` is implemented; other Database methods are not needed
-    when compiling without a live database.
+    Used by compile_predicate when ``db=None``.  Only ``signature_for`` is
+    implemented; other Database methods are not needed when compiling without
+    a live database, and ``hint_row`` documents this shim as the "no ``row``"
+    shape it declines to read plans from.
+
+    P1 (spec 2026-09-17 §2.2): the signature comes from the module's own
+    Database ROW, reached through the ``$module`` handle the import hook binds
+    into every loaded module's dict — not from an ``isinstance(...,
+    PredicateMeta)`` test on whatever the name is bound to, and never through
+    a predicate's ``_row.db``, which is a DIFFERENT Database for an imported
+    name.  ``None`` when the globals dict carries no ``$module`` (a hand-built
+    dict), which is the same answer the class read gave for a name it did not
+    hold.
+
+    ARITY-EXACT, where the class read took ``arity`` and ignored it: a row is
+    keyed ``(functor, arity)``, so a call at arity N is no longer handed the
+    signature registered for the same name at arity M.
     """
     __slots__ = ("_globals",)
 
@@ -161,10 +174,11 @@ class _GlobalsDb:
         self._globals = globals_dict
 
     def signature_for(self, functor: str, arity: int):
-        cls = self._globals.get(functor)
-        if isinstance(cls, PredicateMeta):
-            return cls._signature
-        return None
+        db = getattr(self._globals.get("$module"), "db", None)
+        if db is None:
+            return None
+        row = db.row(functor, arity)
+        return row.signature if row is not None else None
 
 
 def _record_term_type(types: dict[str, type], term: Any) -> type:

@@ -846,11 +846,15 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
     of todo/done/a-generic-compound-renders-identically-to-a-declared-term.md:
     draw the distinction only here, in failure diagnostics, where the reader
     pays for it exactly when confused."""
-    from clausal.logic.predicate import PredicateMeta
     from clausal.logic.variables import deref
 
     if not named:
         return
+    # P1 (spec 2026-09-17 §2.2): "is a PREDICATE declared here at this arity"
+    # is a Database row, reached through the module's own ``$module`` handle —
+    # never a predicate's ``_row.db``, a different Database for an imported
+    # name.
+    db = getattr(namespace.get("$module"), "db", None)
     seen: set[str] = set()
     for name, var in named:
         for compound in _generic_compounds_in(deref(var)):
@@ -859,10 +863,9 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
                 continue
             arity = len(compound.args)
             declared = namespace.get(functor)
-            if isinstance(declared, PredicateMeta):
-                if len(declared._fields or ()) != arity:
-                    continue
-            else:
+            # A row is keyed ``(functor, arity)``, so the key IS the
+            # field-count check the class read had to make for itself.
+            if db is None or db.row(functor, arity) is None:
                 # THE FLIP (spec §5.1): a declared DATA functor binds the
                 # arity-0 ATOM of its spelling, not a class, and the term
                 # this module constructs for it is the cell ``("cite", _)``.

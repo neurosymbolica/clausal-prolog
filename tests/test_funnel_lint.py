@@ -608,14 +608,19 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2323 (2322 before the tuple-DATA tag's TUPLE_TAG
-    import, 2319 before the ``.seam`` alias-extension
+    """clausal/testing.py:2326 (2323 before P1 Task 3's comment lines in
+    ``_note_generic_compound_confusion``, 2322 before the tuple-DATA tag's
+    TUPLE_TAG import, 2319 before the ``.seam`` alias-extension
     lines) has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
-    testing.py (currently 2277-2389; the entry's own comment records how it
-    has moved as code above the site grew) is doing real exemption work,
-    not sitting on an already-invisible site."""
+    testing.py (currently 2277-2389, which still covers the site; the entry's
+    own comment records how it has moved as code above the site grew) is doing
+    real exemption work, not sitting on an already-invisible site.
+
+    This number is a MECHANICAL line count, not a behaviour: every edit above
+    the site moves it, and the trail above records each move.  The assertion
+    that matters is the pattern and the path."""
     entries_without_testing = tuple(
         e for e in ALLOWLIST if e.path != "clausal/testing.py"
     )
@@ -629,7 +634,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2323
+        v.pattern == "functor_fallback" and v.line == 2326
         for v in testing_violations
     ), testing_violations
 
