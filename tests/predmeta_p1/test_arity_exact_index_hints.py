@@ -359,3 +359,20 @@ def test_the_analysers_refuse_a_positional_or_missing_db():
         call_site.analyse(_ir_for(2, db), None, {"colour": cls})
     with pytest.raises(TypeError):
         call_site.analyse(_ir_for(2, db), None, {"colour": cls}, db)
+
+
+def test_populate_runtime_refuses_a_positional_or_missing_db():
+    """The third pass joins the other two (re-review): ``db`` is
+    keyword-required there too, so all three agree."""
+    import pytest
+
+    from clausal.logic.compiler.optimisations import call_site
+
+    db, cls = _callee_db()
+    base_globals = {"colour": cls}
+    ir = _ir_for(2, db)
+    plan = call_site.analyse(ir, None, base_globals, db=db)
+    with pytest.raises(TypeError):
+        call_site.populate_runtime_from_plan(ir, plan, _mkctx(db), base_globals)
+    with pytest.raises(TypeError):
+        call_site.populate_runtime_from_plan(ir, plan, _mkctx(db), base_globals, db)

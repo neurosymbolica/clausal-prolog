@@ -18,9 +18,11 @@ Contract:
   **pure** — no side effects, returns a plan with hashable state.
   The callee is resolved as ``db.row(fname, arity)``: ARITY-EXACT,
   so a call at arity N never sees the plans compiled for arity M.
-  ``db`` is keyword-REQUIRED (final review minor 6): every caller
-  threads it from the compile pipeline, and a defaulted ``None``
-  turned "this caller forgot" into "emit no hints", silently.
+  ``db`` is keyword-REQUIRED (final review minor 6; extended to
+  ``populate_runtime_from_plan`` by the re-review, so all three
+  passes agree): every caller threads it from the compile
+  pipeline, and a defaulted ``None`` turned "this caller forgot"
+  into "emit no hints", silently.
   Passing ``db=None`` is still allowed and still meaningful — the
   callee is then named through ``base_globals``, if anything there
   names it (see ``arg_index.hint_row``).
@@ -173,7 +175,7 @@ def apply(ir: Any, plan: CallSitePlan) -> Any:
 
 def populate_runtime_from_plan(
     ir: Any, plan: CallSitePlan, ctx: Any, base_globals: dict,
-    db: Any = None,
+    *, db: Any,
 ) -> None:
     """Populate :attr:`ctx.bucket_ref_map` / :attr:`joint_bucket_ref_map`
     **and** *base_globals* with entries derived from *plan*.

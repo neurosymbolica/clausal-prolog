@@ -128,3 +128,35 @@ def test_a_detached_rows_plans_do_not_overwrite_a_populated_target():
     target.index_plans = {"target": {}}
     cls._bind_row(db, "tint", 1)
     assert target.index_plans == {"target": {}}
+
+
+def test_plans_do_not_migrate_onto_a_row_with_a_DIFFERENT_key():
+    """Re-review residual on M1: the migration was guarded on "the old row is
+    DETACHED" and "the target is empty" but NOT on the two rows naming the
+    same predicate.
+
+    A detached compile names its own key (the class's name and field count).
+    Binding that class under ANOTHER name -- which ``_bind_row`` exists to do,
+    since an aliased ``-import_from`` binds a class under a name that is not
+    its own -- then handed the target row bucket functions built for a
+    DIFFERENT predicate, and ``locked`` travels in the same block, so
+    ``hint_row`` would go on to emit them at that target's call sites.
+    """
+    from clausal.logic.database import Database
+
+    db = Database()
+    # db=None: the compile writes plans onto the class's PRIVATE row and
+    # ``_install`` binds nothing, which is the documented out-of-tree shape.
+    cls = _detached_indexed_class("shade", 2, [(i, i * 10) for i in range(8)], None)
+    assert cls._row.detached and cls._row.key == ("shade", 2)
+    assert cls._index_plans, "the fixture must actually have plans"
+    cls._locked = True
+
+    cls._bind_row(db, "tint", 2)
+
+    target = db.row("tint", 2)
+    assert target is not None and cls._row is target
+    assert target.index_plans == {}, (
+        "shade/2's bucket functions were handed to tint/2: they are keyed on "
+        f"shade's own arguments -- got {target.index_plans}")
+    assert target.index_plans_joint == {} and target.index_plans_hierarchical == {}

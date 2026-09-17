@@ -59,8 +59,9 @@ def census_A_sites(rows=None) -> set[tuple[str, int]]:
     That last union is what makes check 1 survive LANDING DAY (final review
     I4).  ``census.ROOT`` is the canonical tree, which still holds the
     pre-reroute spelling of every site; the moment these commits land there,
-    the six mechanically-sourced done rows stop classifying as
-    "A-predicate-test" in that tree and would drop out of the population --
+    the SEVEN mechanically-sourced closed rows (measured; an earlier note said
+    six) stop classifying as "A-predicate-test" in that tree and would drop
+    out of the population --
     turning them into "in table, absent from census" and the checker red for
     having been LANDED.  A closed row's identity lives in this table and in
     the census's own key space, so the table is part of the population.

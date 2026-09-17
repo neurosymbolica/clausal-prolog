@@ -909,8 +909,10 @@ class PredicateMeta(type):
         the ONLY store, so there is no second copy to recover from.  See
         ``_migrate_detached_clauses``.
 
-        The three INDEX PLAN dicts travel on exactly that same condition, and
-        only onto EMPTY targets (roborev M1, ruled 2026-09-17).  They became
+        The three INDEX PLAN dicts travel on exactly that same condition, only
+        onto EMPTY targets, and only when the two rows name the SAME
+        ``(functor, arity)`` (roborev M1, ruled 2026-09-17; the same-key guard
+        added by the re-review).  They became
         row-local state in P1 Task 1, which put them in reach of this hazard:
         ``compile_predicate_trampoline`` writes the plans and its ``_install``
         binds afterwards, so a class compiled while DETACHED had its plans
@@ -919,7 +921,10 @@ class PredicateMeta(type):
         in-tree caller does.  Scoped deliberately: from a REAL old row nothing
         moves, because those plans are that Database's, not the class's; and a
         target that already holds plans keeps them, because the compiler
-        rewrites them on every recompile and the fresher set is the target's.
+        rewrites them on every recompile and the fresher set is the target's;
+        and a bind that RENAMES the predicate carries nothing, because a
+        bucket function is keyed on the arguments of the predicate it was
+        compiled for.
         """
         new_row = db.row(functor, arity, create=True)
         old_row = cls._row
@@ -953,9 +958,18 @@ class PredicateMeta(type):
         if old_row is not None:
             if old_row.detached and old_row.clauses:
                 _migrate_detached_clauses(old_row, new_row)
-            if old_row.detached:
+            if old_row.detached and old_row.key == new_row.key:
                 # The plans compiled onto the private row travel with the
                 # class; an already-populated target is left alone.
+                #
+                # SAME KEY ONLY (re-review of the fix wave).  A detached row
+                # names the CLASS's own key, and ``_bind_row`` takes *functor*
+                # precisely because a class can be bound under a name that is
+                # not its own (an aliased ``-import_from``).  Without this
+                # guard, compiling ``shade/2`` detached and then binding the
+                # class as ``tint/2`` handed tint's row bucket functions keyed
+                # on SHADE's arguments -- and ``locked`` travels three lines
+                # below, so ``hint_row`` would go on to emit them.
                 for _plans in ("index_plans", "index_plans_joint",
                                "index_plans_hierarchical"):
                     carried = getattr(old_row, _plans)
