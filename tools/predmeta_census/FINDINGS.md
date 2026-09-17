@@ -441,3 +441,39 @@ passed"*. They should become one helper, not four edits.
    with out-of-tree implementors and a frozen signature. It is inside the layer
    being deleted, so P4 breaks an external contract. Not in P1's scope, but it
    belongs in the spec's "not established" list and is not there.
+
+## X4 / X4+Q / Q refresh, 2026-09-17 (after adoption landed on canonical 38d3cb32)
+
+The 13 X4/X4+Q rows and 3 Q rows were re-read against what the Database answers TODAY, measured
+on a two-module probe (exporter `edge/2`, `-table(path/2)`; importer `-import_from(expmod,
+[edge, alias(path, route)])`):
+
+    importer.row('edge', 2)  is exporter.row('edge', 2)      True   (adoption, plain)
+    importer.row('route', 2) is exporter.row('path', 2)      True   (adoption, aliased)
+    importer.row('path', 2)                                  None   (original name NOT adopted)
+    importer.owns('edge', 2) / exporter.owns('edge', 2)      False / True
+    importer.arities_for('edge'), ('route')                  set(), set()   <-- GAP: ignores _adopted
+    'edge', 'route' in importer.functors()                   True, True
+    importer.row('route', 2).db is exporter db               True; its module_dict has $module + __file__
+    importer.row('route', 2).db.is_tabled('path', 2)         True   (the class stamp is redundant)
+    importer.signature_for('route', 2)                        None   <-- same GAP (row.signature answers)
+    alias class .__name__                                    'path'
+
+Dispositions after (column 4 of P1_SITES.tsv; each note starts "REFRESH 2026-09-17"):
+
+    X4 10, X4+Q 3, Q 3   ->   R 8 (+ 3 = 11 R total), P4 8 (+3 = 11), Q 2, X4 0, X4+Q 0
+
+* R (8): import_diagnostics 201 + predicate_diagnostics 194 (`owns` IS the `__module__` filter);
+  database.py 1076 (`_tabled_home_db` redundant, readers tabled_naf.py:45 / tabling.py:863 take
+  `db.row(f, a).db`); io.py 589 (adoption fixes the docstring's bug; class arm -> fallback);
+  term_expansion 107/160 (the shared row carries a `te_predicate_nodes` field -- the field is the
+  prerequisite); testing.py 2199 (defining module = `row.db.module_dict`); compiler_v2 1091
+  (error path, `functors()`).
+* P4 (8): compiler_v2 745/779/812 -- the gate's `through=` leg is the class carrier's residue,
+  needed ONLY for an aliased import whose clause head spells the original name (reachable only via
+  the class's `__name__`); 1056/1141 -- the specializer's PRODUCT is a class; terms_to_ast 1024 --
+  R6 is the binding-shape rule, i.e. the retirement design point itself.
+* Q (2): compiler_v2 1814 (imports precede declarations, so adopted names are visible; a LOCAL
+  predicate's row at that step is the unmeasured half) and 1853 (blocked on the `arities_for` gap).
+
+The gap is filed: `todo/arities-for-and-signature-for-ignore-adopted-rows-2026-09-17.md` (clone).
