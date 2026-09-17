@@ -198,25 +198,34 @@ class TestArithToAstExpr:
         assert isinstance(expr.func, ast.Name)
         assert expr.func.id == "$deref"  # A12-F004: engine helpers are $-prefixed
 
-    def test_add_gives_binop_add(self):
+    # Step 2 of the rdiv/decimal design (2026-09-17): ``+``, ``-``, ``*``
+    # and ``/`` lower to the exact helpers ``$add``/``$sub``/``$mul``/``$div``
+    # (one spelling shared with the interpreted evaluator) rather than to
+    # native ``ast.BinOp`` -- so a Decimal operand is exact and a runtime
+    # ``7 / 2`` is ``Fraction(7, 2)`` on both paths.  ``//``, ``%``, ``**``
+    # stay native (test_nested_add below covers the Add shape end to end).
+    def test_add_gives_exact_helper_call(self):
         # nv
         expr = arith_to_ast_expr(Add(left=1, right=2), {})
-        assert isinstance(expr, ast.BinOp)
-        assert isinstance(expr.op, ast.Add)
-        assert isinstance(expr.left, ast.Constant)
-        assert isinstance(expr.right, ast.Constant)
+        assert isinstance(expr, ast.Call)
+        assert expr.func.id == "$add"
+        assert all(isinstance(a, ast.Constant) for a in expr.args)
 
     def test_sub(self):
         # nv
         expr = arith_to_ast_expr(Sub(left=5, right=3), {})
-        assert isinstance(expr, ast.BinOp)
-        assert isinstance(expr.op, ast.Sub)
+        assert isinstance(expr, ast.Call) and expr.func.id == "$sub"
 
     def test_mult(self):
         # nv
         expr = arith_to_ast_expr(Mult(left=2, right=3), {})
-        assert isinstance(expr, ast.BinOp)
-        assert isinstance(expr.op, ast.Mult)
+        assert isinstance(expr, ast.Call) and expr.func.id == "$mul"
+
+    def test_floordiv_stays_a_native_binop(self):
+        # nv
+        from clausal.pythonic_ast.nodes import FloorDiv
+        expr = arith_to_ast_expr(FloorDiv(left=7, right=2), {})
+        assert isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.FloorDiv)
 
     def test_negate(self):
         # nv
@@ -227,8 +236,8 @@ class TestArithToAstExpr:
     def test_nested_add(self):
         # nv
         expr = arith_to_ast_expr(Add(left=Add(left=1, right=2), right=3), {})
-        assert isinstance(expr, ast.BinOp)
-        assert isinstance(expr.left, ast.BinOp)
+        assert isinstance(expr, ast.Call) and expr.func.id == "$add"
+        assert isinstance(expr.args[0], ast.Call) and expr.args[0].func.id == "$add"
 
 
 # ── compile_goal — structural tests ───────────────────────────────────────────

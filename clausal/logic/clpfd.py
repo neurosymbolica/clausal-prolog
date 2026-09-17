@@ -1747,6 +1747,23 @@ def _any_real(l, r) -> bool:
     return _is_real_arg(l) or _is_real_arg(r)
 
 
+def _ground_number_pair(l, r) -> bool:
+    """Both sides are ground NUMBERS (int, float, Fraction, Decimal; not
+    bool): the comparison is a VALUE question and needs no solver.
+
+    Sits ahead of ``_check_no_mixed_rational_real`` in the four comparison
+    entries: that check refuses a Fraction beside a float as "cannot mix
+    CLP(Q) and CLP(R)" -- right for a constraint over VARIABLES, wrong for
+    two ground values, where ``Fraction(1, 2) == 0.5`` is simply true.
+    Latent while the compiled tree divided to floats; exposed 2026-09-17 when
+    runtime ``1 / N`` became rational (step 2) and the suite's own
+    ``safe reciprocal of 2`` (``R == 0.5``) hit the refusal.  Python compares
+    all four kinds by exact value, which is what ``=:=`` means here.
+    """
+    return (isinstance(l, (int, float, Fraction, Decimal)) and not isinstance(l, bool)
+            and isinstance(r, (int, float, Fraction, Decimal)) and not isinstance(r, bool))
+
+
 def _check_no_mixed_rational_real(l, r) -> None:
     """Raise TypeError if one arg is rational and the other is float/real."""
     l_rat = _is_rational_arg(l)
@@ -1852,6 +1869,14 @@ def _expr_tree_has_var(x) -> bool:
     x = deref(x)
     if is_var(x):
         return True
+    # The node classes are imported LAZILY; before any arithmetic node has
+    # been evaluated in the process they are still ``None`` and the
+    # ``isinstance`` below raises a raw TypeError on any ground non-var leaf
+    # -- measured 2026-09-17 on a Fraction reaching a reified ``==`` from a
+    # compiled ``$div`` (step 2), latent before because the compiled tree
+    # produced floats that took the C fast path instead.
+    if _Add is None:
+        _ensure_term_imports()
     if isinstance(x, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow)):
         return _expr_tree_has_var(x.left) or _expr_tree_has_var(x.right)
     if isinstance(x, _Negate):
@@ -1976,6 +2001,8 @@ def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _ground_number_pair(l, r):
+        return l == r
     _check_no_mixed_rational_real(l, r)
     # A12-F002: a ground non-numeric operand against a Var made a broken FD
     # var (one that equals anything EXCEPT the operand). Reject it as a
@@ -2038,6 +2065,8 @@ def fd_ne(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _ground_number_pair(l, r):
+        return l != r
     _check_no_mixed_rational_real(l, r)
     # A ground non-numeric operand against a Var made the same broken var as
     # == (A12-F002 family): the NeConstraint's hook rejects every non-integer
@@ -2076,6 +2105,8 @@ def fd_lt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _ground_number_pair(l, r):
+        return l < r
     _check_no_mixed_rational_real(l, r)
     # BEFORE the CLP(Q)/CLP(R) dispatch, not after: a var carrying a
     # rational/real attribute triggers the dispatch on its own, and q_lt /
@@ -2120,6 +2151,8 @@ def fd_le(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         l = _resolve(l)
     if not is_var(r):
         r = _resolve(r)
+    if _ground_number_pair(l, r):
+        return l <= r
     _check_no_mixed_rational_real(l, r)
     # Guard before the dispatch, matching fd_lt and the C wrapper.
     _reject_nonnumeric_order(l, r, "(=<)/2")
@@ -3507,6 +3540,11 @@ if _USE_C_PROPAGATE:
         stripped = None if _units_done else _units_strip(l, r, "(==)/2", trail)
         if stripped is not None:
             l, r = stripped
+        # the ground-number VALUE comparison, ahead of the C impl's mixed
+        # rational/real refusal (see _ground_number_pair)
+        _dl, _dr = deref(l), deref(r)
+        if _ground_number_pair(_dl, _dr):
+            return _dl == _dr
         # A12-F002: the C fd_eq does not type-check operands, so guard here
         # (cheap: only touches the two derefs) before delegating.
         _reject_nonnumeric_eq(l, r)
@@ -3524,6 +3562,11 @@ if _USE_C_PROPAGATE:
         stripped = None if _units_done else _units_strip(l, r, "(!=)/2", trail)
         if stripped is not None:
             l, r = stripped
+        # the ground-number VALUE comparison, ahead of the C impl's mixed
+        # rational/real refusal (see _ground_number_pair)
+        _dl, _dr = deref(l), deref(r)
+        if _ground_number_pair(_dl, _dr):
+            return _dl != _dr
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
         _reject_nonnumeric_eq(l, r, "(!=)/2")
         _eq = _text_list_eq(deref(l), deref(r))
@@ -3537,6 +3580,11 @@ if _USE_C_PROPAGATE:
         stripped = None if _units_done else _units_strip(l, r, "(<)/2", trail)
         if stripped is not None:
             l, r = stripped
+        # the ground-number VALUE comparison, ahead of the C impl's mixed
+        # rational/real refusal (see _ground_number_pair)
+        _dl, _dr = deref(l), deref(r)
+        if _ground_number_pair(_dl, _dr):
+            return _dl < _dr
         # The C fd_lt does no clean type-checking: an incomparable ground
         # comparison escapes as a raw Python TypeError. Convert those to a
         # catchable type_error, while preserving the legitimate mixed
@@ -3560,6 +3608,11 @@ if _USE_C_PROPAGATE:
         stripped = None if _units_done else _units_strip(l, r, "(=<)/2", trail)
         if stripped is not None:
             l, r = stripped
+        # the ground-number VALUE comparison, ahead of the C impl's mixed
+        # rational/real refusal (see _ground_number_pair)
+        _dl, _dr = deref(l), deref(r)
+        if _ground_number_pair(_dl, _dr):
+            return _dl <= _dr
         _reject_nonnumeric_order(l, r, "(=<)/2")
         try:
             return _c_impl(l, r, trail)

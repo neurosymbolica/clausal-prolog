@@ -181,3 +181,44 @@ class TestEvaluatorUnit:
         assert present_number(Decimal("2")) == 2 and type(present_number(Decimal("2"))) is int
         assert present_number(Decimal("1E+2")) == 100 and type(present_number(Decimal("1E+2"))) is int
         assert type(present_number(Decimal("2.0"))) is Decimal
+
+
+class TestReifiedComparisonOnAnExactLeaf:
+    def test_expr_tree_has_var_before_any_node_was_imported(self, monkeypatch):
+        """Latent crash exposed by step 2: with the lazily-imported node
+        classes still None, a ground Fraction leaf raised a raw TypeError
+        from isinstance.  Pinned by resetting the lazy slot."""
+        from clausal.logic import clpfd
+        monkeypatch.setattr(clpfd, "_Add", None)
+        assert clpfd._expr_tree_has_var(Fraction(1, 2)) is False
+        assert clpfd._expr_tree_has_var(Decimal("1.5")) is False
+
+    def test_a_runtime_reciprocal_compares_equal_to_its_float(self, tmp_path):
+        """The suite's own ``safe reciprocal of 2``: ``eval_(1 / N, R)`` now
+        binds ``Fraction(1, 2)`` (rational division on the compiled path) and
+        the reified ``R == 0.5`` must still hold -- equal VALUE."""
+        mod = _module(tmp_path, "p(N, R) <- (eval_(1 / N, F), if_(F == 0.5, R is yes, R is no))\n")
+        r = Var()
+        for _ in call("p", 2, r, module=mod):
+            assert deref(r) == ("yes",)
+            break
+        else:
+            pytest.fail("no solution")
+
+    @pytest.mark.parametrize("goal, want", [
+        ("F == 0.5", "yes"), ("F != 0.5", "no"), ("F < 0.75", "yes"), ("F <= 0.5", "yes"),
+        ("F > 0.5", "no"), ("F >= 0.5", "yes"), ("F == 0.4", "no"),
+    ])
+    def test_ground_fraction_against_float_at_the_constraint_level(self, tmp_path, goal, want):
+        """Not reified: the constraint entries themselves (fd_eq & co.).  A
+        ground Fraction beside a ground float is a VALUE comparison, not a
+        CLP(Q)/CLP(R) mixing error."""
+        mod = _module(tmp_path, f"p(R) <- (eval_(1 / 2, F), if_({goal}, R is yes, R is no))\n"
+                                f"q() <- (eval_(1 / 2, F), {goal})\n")
+        r = Var()
+        for _ in call("p", r, module=mod):
+            assert deref(r) == (want,); break
+        else:
+            pytest.fail("no solution")
+        held = any(True for _ in call("q", module=mod))
+        assert held == (want == "yes")

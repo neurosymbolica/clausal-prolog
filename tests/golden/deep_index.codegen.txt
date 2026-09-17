@@ -126,7 +126,7 @@ def my_len__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
                         _m3 = trail.mark()
-                        if $unify(_v12, $present($deref(_v15) + 1), trail):
+                        if $unify(_v12, $present($add($deref(_v15), 1)), trail):
                             if _lr0 is not None or $head_list_unify_output(_lcap0, [_v13], _v14, [], trail):
                                 yield (_proceed, None)
                         trail.undo(_m3)
@@ -312,7 +312,7 @@ def my_nth_of__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, tr
                         _v37 = $Var()
                         if $fd_gt(_v33, 0, trail):
                             _m3 = trail.mark()
-                            if $unify(_v37, $present($deref(_v33) - 1), trail):
+                            if $unify(_v37, $present($sub($deref(_v33), 1)), trail):
                                 _gen4 = StepGenerator($dispatch_at(my_nth_of, 3), this_generator, this_generator, this_generator, _v37, _v36, _v34, trail)
                                 _st4 = (yield (_gen4, None))
                                 while _st4 is not $DONE:
@@ -416,7 +416,7 @@ def my_product__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
                         _m3 = trail.mark()
-                        if $unify(_v45, $present($deref(_v48) * $deref(_v46)), trail):
+                        if $unify(_v45, $present($mul($deref(_v48), $deref(_v46))), trail):
                             if _lr0 is not None or $head_list_unify_output(_lcap0, [_v46], _v47, [], trail):
                                 yield (_proceed, None)
                         trail.undo(_m3)
@@ -466,7 +466,7 @@ def my_sum_list__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
                         _m3 = trail.mark()
-                        if $unify(_v51, $present($deref(_v54) + $deref(_v52)), trail):
+                        if $unify(_v51, $present($add($deref(_v54), $deref(_v52))), trail):
                             if _lr0 is not None or $head_list_unify_output(_lcap0, [_v52], _v53, [], trail):
                                 yield (_proceed, None)
                         trail.undo(_m3)
