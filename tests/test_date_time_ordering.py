@@ -328,10 +328,18 @@ class TestVarVsNonNumericOperand:
 class TestLegitimateTypeErrorPreserved:
     def test_mixed_rational_real_not_swallowed(self):
         # This must stay a plain TypeError with its "cannot mix" message,
-        # NOT be converted to a type_error(orderable, ...).
+        # NOT be converted to a type_error(orderable, ...).  The refusal is
+        # about a CONSTRAINT over a variable: since 2026-09-17 (rdiv/decimal
+        # step 2) two GROUND numbers compare by exact value ahead of it, so
+        # the pin carries a variable on the rational side.
+        from clausal.terms import Add
         with pytest.raises(TypeError) as ei:
-            fd_lt(Fraction(1, 2), 0.9, Trail())
+            fd_lt(Add(left=Fraction(1, 2), right=Var()), 0.9, Trail())
         assert "mix" in str(ei.value).lower()
+
+    def test_ground_rational_against_ground_float_is_a_value_comparison(self):
+        assert fd_lt(Fraction(1, 2), 0.9, Trail())
+        assert not fd_lt(Fraction(1, 2), 0.1, Trail())
 
 
 class TestHelper:
