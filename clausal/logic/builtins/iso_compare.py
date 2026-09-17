@@ -237,7 +237,19 @@ def _numeric_tag(x):
         return int
     if isinstance(x, (bool, float, complex, _Decimal, _Fraction)):
         return type(x)
+    # An exact-number CELL (``('decimal', M, S)``, ``('rdiv', N, D)``) is NOT
+    # tagged here, deliberately: ``structural_eq`` already separates a cell
+    # from its object and two cells of different spelling, so a tag for cells
+    # would change no answer -- measured 2026-09-17 by mutation (disabling
+    # such a tag failed 0 of 11 guard tests).  The cell is handled where it
+    # IS observable: the order key (``_helpers._standard_order_key``) and the
+    # evaluator leaf (``clpfd._eval_ground``).
     return None
+
+
+def _decimal_scale(x: _Decimal) -> int:
+    """Decimal places of a Decimal object (``1.00`` -> 2)."""
+    return -x.as_tuple().exponent
 
 
 def _numeric_types_agree(a, b) -> bool:
@@ -281,7 +293,17 @@ def _numeric_types_agree(a, b) -> bool:
         # `_normalize_for_key` also leaves untagged, so `Decimal('1')` and `1`
         # already read as identical today — is not this check's business and
         # gets no objection.
-        return ta is None or tb is None or ta is tb
+        if ta is None or tb is None or ta is not tb:
+            return ta is None or tb is None
+        # RULED 2026-09-17 Q2: two decimals of equal VALUE and different SCALE
+        # are distinct terms (``1.0`` vs ``1.00``, the analogue of ISO's ``1``
+        # vs ``1.0``).  Python's ``Decimal.__eq__`` ignores scale, so the
+        # objection has to be raised here, where the order key raises it too
+        # (``_helpers._number_key``) -- that agreement is what keeps
+        # ``compare(=, X, Y) <=> X == Y`` true by construction.
+        if ta is _Decimal:
+            return _decimal_scale(a) == _decimal_scale(b)
+        return True
     if type(a) is not type(b):
         return True
     if isinstance(a, (list, tuple)):

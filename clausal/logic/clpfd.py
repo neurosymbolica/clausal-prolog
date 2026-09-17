@@ -35,6 +35,7 @@ from typing import Any
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import (
     present_number,
+    exact_cell_number,
     Var,
     Trail,
     deref,
@@ -1448,6 +1449,16 @@ def _eval_ground(expr):
     if not isinstance(expr, _Node):
         if isinstance(expr, bool):
             return None  # bools are deliberately not FD numbers; keep pending
+        # An exact-number CELL (the transfer form of a Fraction or a Decimal,
+        # RULED 2026-09-17) evaluates as the number it denotes: an ``rdiv``
+        # cell is its Fraction and is accepted above on re-entry; a
+        # ``decimal`` cell becomes its Decimal, which this evaluator still
+        # REFUSES -- loudly, through the same leaf error as the object --
+        # until the arithmetic half lands (design 2026-09-17 §3, step 2).
+        # A look-alike stays a compound and raises like any other leaf.
+        num = exact_cell_number(expr)
+        if num is not None:
+            return _eval_ground(num)
         raise _unknown_expr_leaf_error(expr)
     if isinstance(expr, _Add):
         l = _eval_ground(expr.left)

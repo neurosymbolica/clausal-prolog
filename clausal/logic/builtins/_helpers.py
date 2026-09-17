@@ -12,7 +12,7 @@ from fractions import Fraction as _Fraction
 from numbers import Real as _Real
 from typing import Any
 
-from clausal.logic.variables import deref, is_var
+from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
@@ -668,7 +668,7 @@ _ORD_EMPTY_LIST_KEY = (_ORD_ATOM, "[]")
 _ORD_CONS_NAME_KEY = (0, ".")
 
 
-def _number_key(x) -> tuple:
+def _number_key(x, cell: int = 0) -> tuple:
     """The number-band key of a plain (undimensioned) number.
 
     Shared deliberately: a code list is a list of number TERMS, so the bytes
@@ -679,7 +679,16 @@ def _number_key(x) -> tuple:
     2-tuple key and a 4-tuple key compare int against tuple. Caught by
     tests/test_standard_order.py; one constructor prevents the recurrence.
     """
-    return (_ORD_NUM, (), x, _NUMERIC_RANK.get(type(x), 90))
+    # RULED 2026-09-17 Q2: two decimals of equal value and different SCALE
+    # are distinct terms, ordered value first then scale (``1.0`` before
+    # ``1.00``); every other kind carries scale 0.  The last component says
+    # whether the term is the transfer CELL (1) or the object (0): the two
+    # are different terms (``structural_eq`` says so), and a key that could
+    # not tell them apart would let ``compare(=)`` hold where ``'=='`` says
+    # no.  Both components are here, in the ONE number-key constructor, so
+    # the shape stays uniform across the band (see the docstring above).
+    scale = -x.as_tuple().exponent if type(x) is _Decimal else 0
+    return (_ORD_NUM, (), x, _NUMERIC_RANK.get(type(x), 90), scale, cell)
 
 
 def _cons_key(element_keys: tuple) -> tuple:
@@ -796,6 +805,14 @@ def _standard_order_key(term: Any) -> tuple:
             return _ORD_EMPTY_LIST_KEY
         return _cons_key(tuple(_number_key(c) for c in term))
     if type(term) is tuple and term and type(term[0]) is str and term[0] != TUPLE_TAG:
+        # An exact-number cell -- the TRANSFER form of a Decimal or a Fraction
+        # (RULED 2026-09-17) -- keys as the NUMBER it denotes, in the number
+        # band, marked as the cell so it sorts right after its own object.
+        # Only the canonical spelling; a look-alike falls through to the
+        # compound band below.  See ``exact_cell_number``.
+        num = exact_cell_number(term)
+        if num is not None:
+            return _number_key(num, 1)
         # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5) and keys in the
         # atom band by its spelling — the same key a 0-arity predicate class
         # of that name gets, so the two spellings of one atom are one atom in
@@ -863,7 +880,12 @@ def _standard_order_key(term: Any) -> tuple:
 # ``[g/1, f/2]`` by key. ``list`` is excluded because it is NOT proven right —
 # a list whose elements are compounds inherits exactly that disagreement.
 # ``Quantity`` is excluded because its ``<`` raises across dimensions.
-_NATIVE_ORDER_SAFE = frozenset({int, float, bool, str, bytes, _Decimal, _Fraction})
+# ``Decimal`` LEFT this set 2026-09-17 (RULED Q2): two decimals of equal value
+# and different scale are distinct terms ordered by scale, and Python's own
+# ``<`` calls them equal -- so a homogeneous Decimal list sorted natively
+# would keep ``[1.00, 1.0]`` in input order where the key says ``[1.0, 1.00]``.
+# Membership is a positive claim, and the ruling removed the evidence.
+_NATIVE_ORDER_SAFE = frozenset({int, float, bool, str, bytes, _Fraction})
 
 
 def _standard_order_sorted(items: list) -> list:

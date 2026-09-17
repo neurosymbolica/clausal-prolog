@@ -23,6 +23,8 @@ Python (3.13t+).  The rules:
 """
 
 from fractions import Fraction as _Fraction
+from decimal import Decimal as _Decimal
+import math as _math
 
 from ._variables import (
     Var as PlainVar,
@@ -77,6 +79,40 @@ def present_number(x):
     if type(x) is _Fraction and x.denominator == 1:
         return x.numerator
     return x
+
+
+def exact_cell_number(term):
+    """The number a CANONICAL exact-number cell denotes, or ``None``.
+
+    ``('decimal', M, S)`` is ``M x 10**-S`` with ``S > 0`` decimal places;
+    ``('rdiv', N, D)`` is ``N/D`` in lowest terms with ``D > 1`` and the sign
+    on ``N``.  These are the TRANSFER forms of ``Decimal`` and ``Fraction``
+    (RULED 2026-09-17 Q1: numbers are Python number objects in the engine,
+    the cells are transfer forms and source spellings) and they should never
+    survive as compounds here -- but a leaked one must still ORDER and
+    EVALUATE as the number it denotes, because the failure mode is silent:
+    two decimal cells ``msort``ed by mantissa reverse a threshold test without
+    raising (todo/decimal-term-form-orders-as-a-term-in-compare-and-msort-2026-09-16.md).
+
+    ONLY the canonical spelling is a number.  A look-alike (``rdiv(2, 4)``,
+    ``rdiv(3, 1)``, ``decimal(100, 0)``, a str component, a bool) is a
+    compound and stays in the compound band: if two spellings of one value
+    both keyed as that value, ``compare(=, X, Y)`` would hold for terms
+    ``'=='`` calls different, and the identity ``compare(=) <=> ==`` that the
+    standard order holds BY CONSTRUCTION would break.  The transfer layer's
+    ``from_transfer`` draws the same line (``_fraction_from_term``).
+    ``bool`` is excluded by exact-type tests, as everywhere in this vocabulary.
+    """
+    if type(term) is not tuple or len(term) != 3:
+        return None
+    head, a, b = term
+    if type(a) is not int or type(b) is not int:
+        return None
+    if head == "decimal":
+        return _Decimal(a).scaleb(-b) if b > 0 else None
+    if head == "rdiv":
+        return _Fraction(a, b) if b > 1 and _math.gcd(a, b) == 1 else None
+    return None
 
 
 __all__ = [
