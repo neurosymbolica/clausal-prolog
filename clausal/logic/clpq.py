@@ -18,6 +18,7 @@ each modification.  On backtrack the snapshot is restored automatically.
 from __future__ import annotations
 
 import weakref
+from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
@@ -876,7 +877,7 @@ def _min_none(a: Fraction | None, b: Fraction | None) -> Fraction | None:
 
 
 def _is_ground_q(x: Any) -> bool:
-    return isinstance(x, (int, Fraction)) and not isinstance(x, bool)
+    return isinstance(x, (int, Fraction, Decimal)) and not isinstance(x, bool)
 
 
 
@@ -942,6 +943,10 @@ def _linearize(expr: Any, trail: Trail,
         return {}, Fraction(expr)
     if isinstance(expr, Fraction):
         return {}, expr
+    if isinstance(expr, Decimal):
+        if not expr.is_finite():
+            return None
+        return {}, Fraction(expr)         # exact; scale is not carried
     if isinstance(expr, float):
         return {}, Fraction(expr)
     if is_var(expr):
@@ -1014,7 +1019,7 @@ def _post_q_domain(target: Any, lo: Fraction | None,
     target = deref(target)
     if isinstance(target, bool):
         return False
-    if isinstance(target, (int, Fraction)):
+    if isinstance(target, (int, Fraction, Decimal)):
         val = Fraction(target)
         if lo is not None and val < lo:
             return False
@@ -1066,7 +1071,7 @@ def _q_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     if isinstance(bound_to, bool):
         return False
 
-    if isinstance(bound_to, (int, Fraction)):
+    if isinstance(bound_to, (int, Fraction, Decimal)):
         val = Fraction(bound_to)
         if state.lo is not None and val < state.lo:
             return False

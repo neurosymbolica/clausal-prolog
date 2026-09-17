@@ -29,10 +29,12 @@ import math
 import numbers
 import sys
 from collections import deque
+from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.exact_arith import exact_add, exact_sub, exact_mul, exact_div
 from clausal.logic.variables import (
     present_number,
     exact_cell_number,
@@ -1443,6 +1445,13 @@ def _eval_ground(expr):
         if type(expr) is Fraction:
             return present_number(expr)
         return expr
+    if type(expr) is Decimal:
+        # Step 2 of the rdiv/decimal design (2026-09-17): a Decimal LEAF is a
+        # number here -- exact, scale-carrying; NaN/Infinity have no finite
+        # shape and fall to the leaf error like any non-number.
+        if not expr.is_finite():
+            raise _unknown_expr_leaf_error(expr)
+        return present_number(expr)
     if is_var(expr):
         return None
     _ensure_term_imports()
@@ -1460,35 +1469,33 @@ def _eval_ground(expr):
         if num is not None:
             return _eval_ground(num)
         raise _unknown_expr_leaf_error(expr)
+    # The four exact operators are ONE spelling shared with the compiled
+    # tree (``exact_arith``): Decimal +,-,* exact and scale-keeping, ``/``
+    # rational over any exact operand, a float beside a Decimal refused.
     if isinstance(expr, _Add):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
         if l is None or r is None:
             return None
-        result = l + r
+        result = exact_add(l, r)
     elif isinstance(expr, _Sub):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
         if l is None or r is None:
             return None
-        result = l - r
+        result = exact_sub(l, r)
     elif isinstance(expr, _Mult):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
         if l is None or r is None:
             return None
-        result = l * r
+        result = exact_mul(l, r)
     elif isinstance(expr, _Div):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
         if l is None or r is None or r == 0:
             return None
-        # int/int → Fraction for exact rational arithmetic
-        if isinstance(l, int) and not isinstance(l, bool) \
-           and isinstance(r, int) and not isinstance(r, bool):
-            result = Fraction(l, r)
-        else:
-            result = l / r
+        result = exact_div(l, r)
     elif isinstance(expr, _FloorDiv):
         l = _eval_ground(expr.left)
         r = _eval_ground(expr.right)
@@ -1527,7 +1534,7 @@ def _eval_ground(expr):
     # presented here. The rule itself is ``present_number`` (one spelling,
     # in clausal.logic.variables); the ``type(...) is Fraction`` guard is a
     # hot-path choice: one pointer compare per node for the int case.
-    if type(result) is Fraction:
+    if type(result) is Fraction or type(result) is Decimal:
         return present_number(result)
     return result
 
@@ -1694,7 +1701,9 @@ def _is_rational_arg(x) -> bool:
     # Fast reject: int and float are the overwhelmingly common cases
     if type(x) is int or type(x) is float:
         return False
-    if isinstance(x, Fraction):
+    if isinstance(x, (Fraction, Decimal)):
+        # a Decimal enters CLP(Q) exactly (Fraction(d)); its scale is not
+        # reconstructed on the way out -- a CLP(Q) result is a rational
         return True
     if is_var(x):
         from clausal.logic.clpq import Q_KEY  # noqa: PLC0415

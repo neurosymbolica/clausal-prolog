@@ -78,6 +78,17 @@ def present_number(x):
     """
     if type(x) is _Fraction and x.denominator == 1:
         return x.numerator
+    if type(x) is _Decimal:
+        # A Decimal with NO decimal places presents as an int -- the same
+        # rule the transfer form applies (``_decimal_to_term``: scale <= 0 is
+        # an int), applied at the binder so the engine and the wire agree
+        # about which term ``Decimal('2')`` is.  ``Decimal('2.0')`` keeps its
+        # scale: scale is information (RULED 2026-09-17 Q2).  A non-finite
+        # Decimal has a str exponent and is left alone (the evaluator refuses
+        # it as a leaf).
+        exp = x.as_tuple().exponent
+        if type(exp) is int and exp >= 0:
+            return int(x)
     return x
 
 

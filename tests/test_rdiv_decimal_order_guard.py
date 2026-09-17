@@ -140,16 +140,14 @@ def test_rdiv_cell_evaluates_as_its_fraction():
     assert _eval_ground(R13) == Fraction(1, 3)
 
 
-def test_decimal_cell_is_refused_loudly_until_the_arithmetic_half_lands():
-    """Step 2 of the design accepts a Decimal leaf; until then the cell and
-    the object raise the SAME loud error.  Silent is the failure mode this
-    guard exists to prevent, so 'raises' is the pin, not 'evaluates'."""
+def test_decimal_cell_evaluates_as_its_decimal_since_step_2():
+    """The guard pinned this as LOUD (raises, not evaluates) until step 2 of
+    the design accepted a Decimal leaf; step 2 landed the same day, so the
+    cell and the object now evaluate to the SAME number.  The loud pin moved
+    to the non-finite case (tests/test_decimal_arithmetic.py)."""
     from clausal.logic.clpfd import _eval_ground
-    from clausal.logic.exceptions import LogicException
-    with pytest.raises(LogicException):
-        _eval_ground(D99)
-    with pytest.raises(LogicException):
-        _eval_ground(Decimal("9.9"))
+    assert _eval_ground(D99) == Decimal("9.9")
+    assert _eval_ground(Decimal("9.9")) == Decimal("9.9")
 
 
 def test_a_non_canonical_rdiv_cell_is_still_refused():

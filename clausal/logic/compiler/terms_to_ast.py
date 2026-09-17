@@ -21,6 +21,11 @@ import sys
 
 from contextlib import contextmanager
 from fractions import Fraction
+
+from clausal.logic.exact_arith import (
+    exact_add as _exact_add, exact_sub as _exact_sub,
+    exact_mul as _exact_mul, exact_div as _exact_div,
+)
 from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, present_number
@@ -1305,7 +1310,16 @@ def exact_div(l, r):
 ARITH_RUNTIME_NAMES: dict = {
     "$exact_div": exact_div,
     "$present": present_number,
+    # Step 2 of the rdiv/decimal design (2026-09-17): the four exact
+    # operators, ONE spelling shared with the interpreted evaluator, so the
+    # compiled and interpreted paths cannot disagree (they did: runtime
+    # ``7 / 2`` was a float here and ``Fraction(7, 2)`` there).
+    "$add": _exact_add,
+    "$sub": _exact_sub,
+    "$mul": _exact_mul,
+    "$div": _exact_div,
 }
+_EXACT_BINOP_NAMES = ((Add, "$add"), (Sub, "$sub"), (Mult, "$mul"), (Div, "$div"))
 
 
 def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
@@ -1345,6 +1359,16 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
             operand=arith_to_ast_expr(term.operand, var_context),
         )
 
+    # ``+``, ``-``, ``*``, ``/`` go through the exact helpers (a call, ~30 ns,
+    # measured); ``//``, ``%``, ``**`` stay native Python operators.
+    for cls, runtime_name in _EXACT_BINOP_NAMES:
+        if isinstance(term, cls):
+            return ast.Call(
+                func=_name(runtime_name),
+                args=[arith_to_ast_expr(term.left, var_context),
+                      arith_to_ast_expr(term.right, var_context)],
+                keywords=[],
+            )
     for cls, ast_op in _ARITH_BINOP_MAP:
         if isinstance(term, cls):
             return ast.BinOp(
