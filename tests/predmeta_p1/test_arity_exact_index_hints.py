@@ -111,13 +111,29 @@ def test_inject_skips_a_call_at_an_arity_with_no_row():
     assert not [k for k in base_globals if ".bucket(" in k]
 
 
-def test_inject_without_a_db_emits_no_hints():
+def test_inject_without_a_db_falls_back_to_the_class():
+    """RULED 2026-09-17 (final review I3).  With no Database the callee can
+    still be named — through the class bound in ``base_globals``, at ITS own
+    row's arity.  This test asserted the opposite while the fallback was
+    restricted to dotted spellings; the restriction is gone, so a db-less
+    compile keeps its hints instead of silently losing them."""
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, cls = _callee_db()
     base_globals = {"colour": cls}
     clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
     ctx = _mkctx(None)
     _inject_bucket_refs_trampoline(ctx, [clause], base_globals, db=None)
+    assert [k for k in ctx.bucket_ref_map if k[1] == 2], ctx.bucket_ref_map
+
+
+def test_inject_without_a_db_or_a_class_emits_no_hints():
+    """... and with neither a Database nor a binding, there is nothing to
+    name the callee with."""
+    from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
+    db, cls = _callee_db()
+    clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
+    ctx = _mkctx(None)
+    _inject_bucket_refs_trampoline(ctx, [clause], {}, db=None)
     assert not ctx.bucket_ref_map
 
 
@@ -162,11 +178,19 @@ def test_call_site_analyse_skips_an_arity_with_no_row():
     assert not plan.hints and not plan.joint_hints
 
 
-def test_call_site_analyse_without_a_db_emits_no_hints():
+def test_call_site_analyse_without_a_db_falls_back_to_the_class():
+    """The same ruling at site 3 (final review I3)."""
     from clausal.logic.compiler.optimisations import call_site
     db, cls = _callee_db()
     plan = call_site.analyse(_ir_for(2, db), None, {"colour": cls}, db=None)
-    assert not plan.hints
+    assert plan.hints
+
+
+def test_call_site_analyse_without_a_db_or_a_class_emits_no_hints():
+    from clausal.logic.compiler.optimisations import call_site
+    db, cls = _callee_db()
+    plan = call_site.analyse(_ir_for(2, db), None, {}, db=None)
+    assert not plan.hints and not plan.joint_hints
 
 
 # ── site 4: call_site.populate_runtime_from_plan ────────────────────────────
@@ -267,3 +291,71 @@ def test_a_dotted_callee_with_no_binding_is_no_row():
     db, _cls = _callee_db()
     assert hint_row(db, "pkg.mod.colour", 2, {}) is None
     assert hint_row(db, "pkg.mod.colour", 2, None) is None
+
+
+# ── the rowless callee: ANY spelling falls back to the class, arity-exactly ──
+
+
+def test_a_rowless_callee_keeps_its_hints_through_the_class_fallback():
+    """Final review I3, ruled 2026-09-17.  A callee that is visible only as a
+    CLASS — present in ``base_globals``, with no row in the Database this
+    compile targets — is the plain-Python-import shape
+    ``test_p1_sites_rerouted.test_a_class_in_the_module_dict_without_a_local_row_still_resolves``
+    builds, and the shape an out-of-tree ``db=None``-ish compile has.  It got
+    no hints at all once the pass went row-first, because the own-row fallback
+    was restricted to DOTTED names.  Dropping that restriction makes this THE
+    class read the four R! sites keep: row first, class fallback, reported —
+    and still arity-exact, because the arity comes from the row's own key.
+    """
+    from clausal.logic.compiler.arg_index import hint_row
+    db, cls = _callee_db()          # colour/2, locked, indexed, in `db`
+    compiling = Database()          # a Database that has never seen colour
+    base_globals = {"colour": cls}
+    assert compiling.row("colour", 2) is None
+    assert hint_row(compiling, "colour", 2, base_globals) is db.row("colour", 2)
+    # a same-name class at ANOTHER arity is not borrowed
+    assert hint_row(compiling, "colour", 1, base_globals) is None
+    # an unlocked callee is still refused
+    cls._locked = False
+    assert hint_row(compiling, "colour", 2, base_globals) is None
+
+
+def test_a_rowless_callee_still_needs_a_class_and_a_binding():
+    from clausal.logic.compiler.arg_index import hint_row
+    db, _cls = _callee_db()
+    compiling = Database()
+    assert hint_row(compiling, "colour", 2, {}) is None
+    assert hint_row(compiling, "colour", 2, None) is None
+    assert hint_row(compiling, "colour", 2, {"colour": 42}) is None
+
+
+def test_the_local_row_still_wins_over_the_class_binding():
+    """Row-FIRST: when this Database knows the name at this arity, that row
+    answers and the class in ``base_globals`` is never consulted."""
+    from clausal.logic.compiler.arg_index import hint_row
+    db, cls = _callee_db()
+    other, other_cls = _callee_db()
+    assert hint_row(db, "colour", 2, {"colour": other_cls}) is db.row("colour", 2)
+
+
+# ── db is keyword-REQUIRED on both analysers (final review minor 6) ─────────
+
+
+def test_the_analysers_refuse_a_positional_or_missing_db():
+    """A defaulted ``db=None`` turned "this caller forgot to thread the db"
+    into "emit no hints", silently.  Both analysers now say so."""
+    import pytest
+
+    from clausal.logic.compiler.goal_trampoline import analyse_ir_bucket_refs
+    from clausal.logic.compiler.optimisations import call_site
+
+    db, cls = _callee_db()
+    clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
+    with pytest.raises(TypeError):
+        analyse_ir_bucket_refs([clause], {"colour": cls})
+    with pytest.raises(TypeError):
+        analyse_ir_bucket_refs([clause], {"colour": cls}, db)
+    with pytest.raises(TypeError):
+        call_site.analyse(_ir_for(2, db), None, {"colour": cls})
+    with pytest.raises(TypeError):
+        call_site.analyse(_ir_for(2, db), None, {"colour": cls}, db)

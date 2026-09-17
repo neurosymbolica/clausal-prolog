@@ -236,7 +236,8 @@ _IR_EXTRA_BUCKET_REFS: list[tuple[dict, dict]] = []
 def analyse_ir_bucket_refs(
     clauses: list,
     base_globals: dict,
-    db: Any = None,
+    *,
+    db: Any,
 ) -> tuple[dict, dict]:
     """Return the bucket-ref entries the IR walker would inject.
 

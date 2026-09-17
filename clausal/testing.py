@@ -855,6 +855,7 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
     # never a predicate's ``_row.db``, a different Database for an imported
     # name.
     db = getattr(namespace.get("$module"), "db", None)
+    from clausal.logic.predicate import PredicateMeta
     seen: set[str] = set()
     for name, var in named:
         for compound in _generic_compounds_in(deref(var)):
@@ -865,7 +866,22 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
             declared = namespace.get(functor)
             # A row is keyed ``(functor, arity)``, so the key IS the
             # field-count check the class read had to make for itself.
-            if db is None or db.row(functor, arity) is None:
+            #
+            # THE CLASS LEG, kept as a FALLBACK (roborev L4, 2026-09-17).  A
+            # predicate DECLARED here with fields and given no clauses has no
+            # row at all -- the measured limit of the row/isinstance
+            # equivalence, pinned by ``tests/predmeta_p1/
+            # test_membership_equivalence.py``.  Its declared term is exactly
+            # the thing a generic ``Compound`` of the same name/arity shadows,
+            # so dropping the class read silenced this note for the shape it
+            # was written for.  Arity-checked here, because the class read has
+            # no key to do it for it.
+            declared_here = (
+                (db is not None and db.row(functor, arity) is not None)
+                or (isinstance(declared, PredicateMeta)
+                    and len(declared._fields or ()) == arity)
+            )
+            if not declared_here:
                 # THE FLIP (spec §5.1): a declared DATA functor binds the
                 # arity-0 ATOM of its spelling, not a class, and the term
                 # this module constructs for it is the cell ``("cite", _)``.

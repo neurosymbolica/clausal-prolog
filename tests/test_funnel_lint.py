@@ -608,8 +608,9 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2326 (2323 before P1 Task 3's comment lines in
-    ``_note_generic_compound_confusion``, 2322 before the tuple-DATA tag's
+    """clausal/testing.py:2342 (2326 before the P1 fix wave's L4 class-leg
+    fallback in ``_note_generic_compound_confusion``, 2323 before P1 Task 3's
+    comment lines in the same function, 2322 before the tuple-DATA tag's
     TUPLE_TAG import, 2319 before the ``.seam`` alias-extension
     lines) has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
@@ -634,7 +635,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2326
+        v.pattern == "functor_fallback" and v.line == 2342
         for v in testing_violations
     ), testing_violations
 

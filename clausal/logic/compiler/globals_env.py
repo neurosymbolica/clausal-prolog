@@ -160,12 +160,20 @@ class _GlobalsDb:
     into every loaded module's dict — not from an ``isinstance(...,
     PredicateMeta)`` test on whatever the name is bound to, and never through
     a predicate's ``_row.db``, which is a DIFFERENT Database for an imported
-    name.  ``None`` when the globals dict carries no ``$module`` (a hand-built
-    dict), which is the same answer the class read gave for a name it did not
-    hold.
+    name.
 
-    ARITY-EXACT, where the class read took ``arity`` and ignored it: a row is
-    keyed ``(functor, arity)``, so a call at arity N is no longer handed the
+    THE CLASS FALLBACK, for a HAND-BUILT globals dict with no ``$module``
+    (roborev M2, 2026-09-17).  That dict shape is documented and in use —
+    ``predicate.make_predicate``'s docstring builds one — and it names no
+    Database, so the row read cannot answer.  Answering ``None`` there is not
+    "the same answer the class read gave": the class read ANSWERED, and a
+    keyword-call body compiled against such a dict raises ``RuntimeError`` for
+    a predicate sitting right there in it.  So the class answers when there is
+    no ``$module``, and only then.
+
+    ARITY-EXACT on both legs, where the class read took ``arity`` and ignored
+    it: a row is keyed ``(functor, arity)``, and the fallback counts the
+    class's fields for itself, so a call at arity N is never handed the
     signature registered for the same name at arity M.
     """
     __slots__ = ("_globals",)
@@ -175,10 +183,15 @@ class _GlobalsDb:
 
     def signature_for(self, functor: str, arity: int):
         db = getattr(self._globals.get("$module"), "db", None)
-        if db is None:
-            return None
-        row = db.row(functor, arity)
-        return row.signature if row is not None else None
+        if db is not None:
+            row = db.row(functor, arity)
+            return row.signature if row is not None else None
+        # No ``$module``: a hand-built dict names no Database, so the class
+        # bound here answers — arity-checked, because a module dict holds one
+        # class per NAME and this shim is handed the arity.
+        cls = self._globals.get(functor)
+        return (cls._signature if isinstance(cls, PredicateMeta)
+                and len(cls._fields or ()) == arity else None)
 
 
 def _record_term_type(types: dict[str, type], term: Any) -> type:

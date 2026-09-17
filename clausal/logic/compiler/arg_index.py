@@ -492,30 +492,46 @@ def hint_row(
     spec 2026-09-17 §2.3).
 
     ``None`` — meaning "emit no hints" — for every shape that cannot name a
-    row: no Database at all (a caller that compiles against a bare globals
-    dict), a name-only shim without ``row`` (``_GlobalsDb``), an unknown
-    ``(fname, arity)``, and a row that is not locked (its dispatch, and so
-    its bucket functions, may still be rebuilt).
+    row: an unknown ``(fname, arity)`` with nothing bound under *fname* in
+    ``base_globals`` either, a binding that is not a predicate class, a class
+    whose own row is at ANOTHER arity, and a row that is not locked (its
+    dispatch, and so its bucket functions, may still be rebuilt).  A caller
+    with no Database at all (a bare globals dict, or a name-only shim without
+    ``row`` such as ``_GlobalsDb``) reaches the class fallback below rather
+    than stopping here.
 
-    THE DOTTED SPELLING.  ``-import_from`` rewrites every reference to an
-    imported predicate into the EXPORTER's dotted spelling
-    (``pkg.mod.p``), and that is a ``base_globals`` key, never a Database
-    key — the importer's Database adopted the row under the LOCAL name.
-    So a dotted callee is resolved through the object bound at that
-    spelling, which is the resolved target, and its own row is taken only
-    when the row's key agrees with the call's ARITY.  Same reasoning as
-    ``globals_env._maybe_cache_dispatch``, which records in-tree that for
-    a dotted key the object's own row is the right one and a
-    ``db.row(name, arity)`` lookup "would silently redirect the call".
-    This is the one place in the four passes where a class is still read;
-    it is arity-exact all the same, because the ARITY comes from the row.
+    ROW FIRST, THEN THE CLASS BOUND AT THAT SPELLING — for ANY name (final
+    review I3, ruled 2026-09-17).  Two callee shapes have no row under
+    ``(fname, arity)`` in the Database this compile targets and are still
+    perfectly ordinary predicates:
+
+    * the DOTTED spelling.  ``-import_from`` rewrites every reference to an
+      imported predicate into the EXPORTER's dotted spelling (``pkg.mod.p``),
+      and that is a ``base_globals`` key, never a Database key — the
+      importer's Database adopted the row under the LOCAL name.  Same
+      reasoning as ``globals_env._maybe_cache_dispatch``, which records
+      in-tree that for a dotted key the object's own row is the right one and
+      a ``db.row(name, arity)`` lookup "would silently redirect the call".
+    * the ROWLESS callee.  A predicate reached by a plain Python import is
+      bound in ``base_globals`` under its plain name with no row adopted here
+      (``test_p1_sites_rerouted.test_a_class_in_the_module_dict_without_a_
+      local_row_still_resolves`` builds exactly that shape), and so is any
+      callee an out-of-tree compile hands in through a globals dict.
+      Restricting the fallback to dotted names silently dropped every hint
+      for those — a performance loss, not a wrong answer, but a needless one.
+
+    So the fallback is taken for any name once the row read misses, and the
+    object's OWN row is used only when that row's key agrees with the call's
+    ARITY.  This is THE class read the four R! sites keep (spec §3, reported
+    in the handoff's class-reads-left list); it is arity-exact all the same,
+    because the arity comes from the row.
     """
     row = None
     if db is not None:
         row_of = getattr(db, "row", None)
         if row_of is not None:
             row = row_of(fname, arity)
-    if row is None and "." in fname and base_globals is not None:
+    if row is None and base_globals is not None:
         # THE class read this pass still makes -- spelled with an explicit
         # isinstance so P4 can find its removal site by grep, exactly as the
         # precedent ``globals_env._maybe_cache_dispatch`` spells it.

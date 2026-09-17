@@ -126,6 +126,12 @@ class PredRow:
     # exposes per argument position. Row-LOCAL (P1, 2026-09-17): they were
     # class-only state, the one thing an index-hint pass could not find by
     # (functor, arity). ``repr=False``: they hold closures.
+    # Nothing here clears a stale plan: the compiler REWRITES all three on
+    # every recompile of this key, which is what keeps them in step with the
+    # dispatch, and ``locked`` is what gates every reader (``hint_row``
+    # refuses an unlocked row, because its bucket functions may still be
+    # rebuilt), so a plan is never read across the window in which it could
+    # be stale.
     index_plans: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
     index_plans_joint: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)
     index_plans_hierarchical: dict = dataclasses.field(default_factory=dict, repr=False, compare=False)

@@ -57,3 +57,74 @@ def test_a_fresh_row_has_empty_plans(tmp_path):
     row = mod.db.row("empty", 1)
     assert row is not None and row.index_plans == {} and row.index_plans_joint == {} \
         and row.index_plans_hierarchical == {}
+
+
+# ── a DETACHED row's plans travel with the class (roborev M1) ───────────────
+
+
+def _detached_indexed_class(name, arity, facts, db):
+    """Compile *facts* through a class that is still on its PRIVATE row.
+
+    ``compile_predicate_trampoline`` writes the plans first and ``_install``
+    binds afterwards, so this is the one order in which plans are written onto
+    a detached row and then have to survive the bind.  (The fixture in
+    ``test_arity_exact_index_hints`` binds FIRST, which is the workaround this
+    test exists to remove.)
+    """
+    from clausal.logic.builtins import _normalize_fact_clause
+    from clausal.logic.compiler import compile_predicate_trampoline
+    from clausal.terms import Compound
+
+    cls = PredicateMeta(name, (), {"_fields": tuple(f"arg{i}" for i in range(arity))})
+    assert cls._row is None, "a fresh class has no row until something asks"
+    clauses = [_normalize_fact_clause(Compound(name, tuple(a))) for a in facts]
+    compile_predicate_trampoline(name, arity, clauses, db, pred_cls=cls)
+    return cls
+
+
+def test_plans_written_on_a_detached_row_survive_the_bind():
+    """_INDEX_THRESHOLD is 4; 8 distinct first args is indexed."""
+    from clausal.logic.database import Database
+
+    db = Database()
+    cls = _detached_indexed_class("shade", 2, [(i, i * 10) for i in range(8)], db)
+    row = db.row("shade", 2)
+    assert row is not None and not row.detached
+    assert cls._row is row, "the compile's _install binds the class to db's row"
+    assert row.index_plans, (
+        "the plans the compiler wrote through the class were left behind on "
+        "its detached row: _bind_row migrates clauses but not index_plans*"
+    )
+    assert cls._index_plans is row.index_plans
+
+
+def test_a_real_to_real_rebind_leaves_the_targets_plans_alone(tmp_path):
+    """The migration is scoped to a DETACHED old row (the ruling): a class
+    moving between two REAL rows must not overwrite the target's plans, which
+    belong to the target Database, not to the class."""
+    from clausal.logic.database import Database
+
+    a, b = Database(), Database()
+    cls = PredicateMeta("hue", (), {"_fields": ("arg0",)})
+    cls._bind_row(a, "hue", 1)
+    cls._index_plans = {"from-a": {}}
+    target = b.row("hue", 1, create=True)
+    target.index_plans = {"already-here": {}}
+    cls._bind_row(b, "hue", 1, authorized=True)
+    assert cls._row is target
+    assert target.index_plans == {"already-here": {}}
+    assert a.row("hue", 1).index_plans == {"from-a": {}}
+
+
+def test_a_detached_rows_plans_do_not_overwrite_a_populated_target():
+    """... and even from a detached row, only EMPTY target dicts are filled."""
+    from clausal.logic.database import Database
+
+    db = Database()
+    cls = PredicateMeta("tint", (), {"_fields": ("arg0",)})
+    cls._index_plans = {"detached": {}}   # mints the private detached row
+    assert cls._row.detached
+    target = db.row("tint", 1, create=True)
+    target.index_plans = {"target": {}}
+    cls._bind_row(db, "tint", 1)
+    assert target.index_plans == {"target": {}}

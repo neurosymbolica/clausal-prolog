@@ -14,11 +14,16 @@ clause's body; apply then rewrites the :class:`SubCall`s accordingly.
 
 Contract:
 
-- ``analyse(ir, head, base_globals, db=None) -> CallSitePlan`` is
+- ``analyse(ir, head, base_globals, *, db) -> CallSitePlan`` is
   **pure** — no side effects, returns a plan with hashable state.
   The callee is resolved as ``db.row(fname, arity)``: ARITY-EXACT,
   so a call at arity N never sees the plans compiled for arity M.
-  With no ``db`` (or a Database-less shim) the plan is empty.
+  ``db`` is keyword-REQUIRED (final review minor 6): every caller
+  threads it from the compile pipeline, and a defaulted ``None``
+  turned "this caller forgot" into "emit no hints", silently.
+  Passing ``db=None`` is still allowed and still meaningful — the
+  callee is then named through ``base_globals``, if anything there
+  names it (see ``arg_index.hint_row``).
 - ``apply(ir, plan) -> ir`` is **idempotent**.  Empty plan
   short-circuits to *ir* unchanged (reference equality).
 - ``apply`` returns a new :class:`Sequence`; input *ir* is not
@@ -58,7 +63,7 @@ class CallSitePlan:
 
 
 def analyse(
-    ir: Any, head: Any, base_globals: dict, db: Any = None,
+    ir: Any, head: Any, base_globals: dict, *, db: Any,
 ) -> CallSitePlan:
     """Compute the bucket-ref plan for *ir*.
 

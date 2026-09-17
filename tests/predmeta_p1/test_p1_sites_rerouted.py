@@ -58,6 +58,28 @@ def test_signature_for_is_arity_exact(tmp_path):
     assert env.signature_for("nope", 2) is None
 
 
+def test_signature_for_falls_back_to_the_class_for_a_hand_built_dict():
+    """A globals dict with NO ``$module`` (the documented hand-built shape at
+    ``predicate.make_predicate``) still answers for a class it holds — roborev
+    M2: the reroute made it ``None``, and a keyword-call body compiled against
+    such a dict then raises ``RuntimeError`` for a predicate that is right
+    there.  The fallback is the CLASS read, arity-checked, because a module
+    dict holds one class per NAME and the shim is handed the arity.
+    """
+    from clausal.logic.compiler.globals_env import _GlobalsDb
+    from clausal.logic.predicate import make_predicate
+
+    cls = make_predicate("foo", ["a", "b"])
+    cls._signature = cls._fields
+    env = _GlobalsDb({"foo": cls})
+    assert env.signature_for("foo", 2) == ("a", "b")
+    # the arity check M2 was conditioned on: same name, wrong arity, no answer
+    assert env.signature_for("foo", 3) is None
+    assert env.signature_for("foo", 1) is None
+    # and a non-class binding is not a predicate
+    assert _GlobalsDb({"foo": 42}).signature_for("foo", 2) is None
+
+
 def test_signature_for_answers_None_without_a_module_handle():
     """A hand-built globals dict carries no ``$module`` — and no signatures."""
     from clausal.logic.compiler.globals_env import _GlobalsDb
