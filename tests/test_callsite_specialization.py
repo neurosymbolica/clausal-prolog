@@ -562,7 +562,10 @@ class TestInjectBucketRefs:
         ])
         x = Var()
         y = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[y, x])
+        # At the callee's arity: hints are arity-exact, so a 2-argument call
+        # would be skipped on ARITY and this test would stop exercising the
+        # variable-argument guard it names.
+        call_goal = Call(func=LoadName(name="color"), args=[y])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -584,7 +587,8 @@ class TestInjectBucketRefs:
         callee_cls._locked = False  # explicitly unlock
 
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[mint("red"), x])
+        # At the callee's arity, so the LOCKED guard is what fires here.
+        call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],
@@ -603,7 +607,8 @@ class TestInjectBucketRefs:
             (mint("yellow"),), (mint("purple"),),
         ])
         x = Var()
-        call_goal = Call(func=LoadName(name="color"), args=[mint("orange"), x])
+        # At the callee's arity, so the UNKNOWN-KEY guard is what fires here.
+        call_goal = Call(func=LoadName(name="color"), args=[mint("orange")])
         caller_clause = Clause(
             head=Compound("caller", (x,)),
             body=[call_goal],

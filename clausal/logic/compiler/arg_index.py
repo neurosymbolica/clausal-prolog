@@ -516,9 +516,15 @@ def hint_row(
         if row_of is not None:
             row = row_of(fname, arity)
     if row is None and "." in fname and base_globals is not None:
-        cand = getattr(base_globals.get(fname), "_row", None)
-        if cand is not None and cand.key[1] == arity:
-            row = cand
+        # THE class read this pass still makes -- spelled with an explicit
+        # isinstance so P4 can find its removal site by grep, exactly as the
+        # precedent ``globals_env._maybe_cache_dispatch`` spells it.
+        from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+        obj = base_globals.get(fname)
+        if isinstance(obj, PredicateMeta):
+            cand = obj._row
+            if cand is not None and cand.key[1] == arity:
+                row = cand
     if row is None or not row.locked:
         return None
     return row
