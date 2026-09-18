@@ -191,7 +191,7 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
     row = home.row(functor, arity) if home is not None else None
     if row is not None and row.dynamic:
         if pred_cls is not None:
-            return pred_cls(*args)
+            return pred_cls._clausal_head(*args)   # P2: the store wants the HEAD instance, not the cell
         return Compound(functor, args)
     if row is None and not _declared_here_at_arity(module_dict, functor, arity):
         raise LogicException(existence_error(

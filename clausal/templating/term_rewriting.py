@@ -2825,7 +2825,7 @@ class TermTransformer(NodeTransformer):
             return node_ast(
                 "Predicate",
                 compare,
-                head=transformer.visit(head_ast),
+                head=_head_ctor_ast(transformer.visit(head_ast)),
                 body=transformer.visit(_lower_dict_reads(
                     head_ast, body_ast,
                     transformer._clause_scope_exclusions())),
@@ -4270,6 +4270,23 @@ def _swap_placeholder(block, placeholder=_PM_PLACEHOLDER,
         if isinstance(node, Name) and node.id == placeholder:
             node.id = twin
     return block
+
+
+def _head_ctor_ast(head_ast):
+    """Route a clause HEAD's construction through ``<cls>._clausal_head(...)``.
+
+    P2 Task 3 (2026-09-19): ``PredicateMeta.__call__`` builds the CELL now, but
+    the compiler's head channel stores and lowers an INSTANCE (``head_match``,
+    ``list_dispatch``, ``Database._stored_head_key``).  A head written
+    ``w(N=1)`` is therefore emitted as ``w._clausal_head(N=1)``; a bare Name
+    head (arity 0) is left alone.  The channel goes with the class in P4.
+    """
+    if isinstance(head_ast, Call) and isinstance(head_ast.func, Name):
+        return Call(
+            func=Attribute(value=head_ast.func, attr="_clausal_head", ctx=Load()),
+            args=head_ast.args, keywords=head_ast.keywords,
+        )
+    return head_ast
 
 
 def _make_functor_class_ast(functor_name, field_names, source):
@@ -6439,7 +6456,7 @@ class EmbedTransformer(NodeTransformer):
         )
         predicate_ast = node_ast(
             "Predicate", expr_stmt.value,
-            head=head_ast,
+            head=_head_ctor_ast(head_ast),
             body=replace(Constant(value=True), expr_stmt.value),
         )
         define_stmt = _make_define_stmt(predicate_ast, expr_stmt)
@@ -6475,7 +6492,7 @@ class EmbedTransformer(NodeTransformer):
         )
         predicate_ast = node_ast(
             "Predicate", expr_stmt.value,
-            head=head_ast,
+            head=_head_ctor_ast(head_ast),
             body=replace(Constant(value=True), expr_stmt.value),
         )
         define_stmt = _make_define_stmt(predicate_ast, expr_stmt)
@@ -7445,7 +7462,7 @@ class EmbedTransformer(NodeTransformer):
                 )
 
                 predicate_ast = node_ast(
-                    "Predicate", expr_stmt.value, head=head_ast, body=body_ast
+                    "Predicate", expr_stmt.value, head=_head_ctor_ast(head_ast), body=body_ast
                 )
                 define_stmt = replace(
                     Expr(
@@ -9433,7 +9450,7 @@ class EmbedTransformer(NodeTransformer):
         )
 
         predicate_ast = node_ast(
-            "Predicate", src, head=head_ast, body=body_ast
+            "Predicate", src, head=_head_ctor_ast(head_ast), body=body_ast
         )
         define_stmt = replace(
             Expr(

@@ -1134,27 +1134,43 @@ class PredicateMeta(type):
             for i, val in enumerate(args):
                 kwargs[fields[i]] = val
 
+        # P2 Task 3 (2026-09-19): a class applied to arguments builds the CELL
+        # -- the functor-first tuple the engine unifies in C -- never an
+        # instance.  Every Python-side producer (reflection's vocabulary,
+        # clpb, term expansion, the packages) goes through here, so this one
+        # site is the constructor flip; the class stays as the predicate
+        # handle until P4 deletes it.  Unknown keywords still raise.
+        unknown = [k for k in kwargs if k not in fields]
+        if unknown:
+            raise _term_construction_error(cls, kwargs, _source_site(1))
+        from clausal.logic.variables import Var  # noqa: PLC0415
+        return (cls.__name__, *(kwargs[f] if f in kwargs else Var() for f in fields))
+
+    def _clausal_head(cls, *args: Any, **kwargs: Any) -> Any:
+        """The clause-HEAD constructor: the instance the compiler's head
+        channel stores and lowers (``head_match``, ``list_dispatch``,
+        ``Database._stored_head_key`` read an instance or a Compound, never a
+        cell).  This is the pre-P2 ``__call__`` body, kept for that one
+        channel; the channel goes with the class in P4."""
+        if not cls._fields and not args and not kwargs:
+            return cls
+        fields = cls._fields
+        if args:
+            if len(args) > len(fields):
+                raise _term_arity_error(cls, len(args), kwargs, _source_site(1))
+            for i, val in enumerate(args):
+                kwargs[fields[i]] = val
         instance = cls.__new__(cls)
         try:
             cls.__init__(instance, **kwargs)
         except TypeError:
-            # A bare "unexpected keyword argument" here names neither the
-            # functor nor either field-name tuple nor any source location, so
-            # nothing in it identifies a target to repair.  Re-raise with all
-            # of that attached — but only when the kwargs really are unknown
-            # fields; any other TypeError from __init__ is passed through.
             if all(k in fields for k in kwargs):
                 raise
-            raise _term_construction_error(
-                cls, kwargs, _source_site(1)
-            ) from None
-
-        # Replace _MISSING with fresh Var()
+            raise _term_construction_error(cls, kwargs, _source_site(1)) from None
         from clausal.logic.variables import Var  # noqa: PLC0415
         for f in fields:
             if getattr(instance, f) is _MISSING:
                 object.__setattr__(instance, f, Var())
-
         return instance
 
     # ── Predicate properties ──────────────────────────────────────────────

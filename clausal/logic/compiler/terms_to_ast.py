@@ -380,7 +380,13 @@ def cell_signature_for_name(
         return None
     binding, leaf, leaf_namespace = resolved
     if isinstance(binding, PredicateMeta):
-        return None
+        # P2 Task 3: a PREDICATE functor in term position compiles to the cell
+        # too; its class only ever built instances, and __call__ builds cells
+        # now, so the class-call path would only cost a runtime construction.
+        cls_fields = term_field_names_of_class(binding)
+        if cls_fields is None:
+            return None
+        return _functor_spelling(binding, leaf), tuple(cls_fields)
     fields = functor_signature_for(leaf, leaf_namespace)
     if fields is None:
         return None

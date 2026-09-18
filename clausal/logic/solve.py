@@ -119,7 +119,7 @@ def _deref_walk_py(term: Any) -> Any:
                 _deref_walk_py(getattr(term, name))
                 for name in term_field_names(term)
             ))
-        return cls(**{
+        return cls._clausal_head(**{   # P2: an instance is a HEAD-channel term; rebuild it as one
             name: _deref_walk_py(getattr(term, name))
             for name in term_field_names(term)
         })
