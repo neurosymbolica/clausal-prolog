@@ -131,6 +131,9 @@ def _operand(x, op: str):
     answered the tuple REPEATED, Python's ``tuple * int``, silently, while
     ``is/2`` converted the leaf; an atom cell ``('yes',) * 2`` did the same.
     Python's tuple operators must never see an operand here."""
+    if type(x) is str:                 # STAGE 2: an atom -- Python's str operators must never see it
+        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+        raise LogicException(type_error("evaluable", x, f"{op}: not a number"))
     if type(x) is tuple:
         from clausal.logic.variables import exact_cell_number  # noqa: PLC0415
         num = exact_cell_number(x)

@@ -508,6 +508,13 @@ def _drive_seg_unify(cache, walked, other, trail, concrete_len, apply_fn):
 # unified with ``""`` and ``""`` unified with ``b""``, but ``SegString([""])``
 # and ``b""`` were False.
 #
+def _walked_nil(w) -> bool:
+    """Is a Seg*'s raw walk the empty sequence?  A text Seg walks to a bare
+    ``str`` (``SegString._walk_raw``), which after STAGE 2 is an ATOM to
+    ``is_nil`` -- here it is the text, so ``""`` is nil."""
+    return (w == "") if type(w) is str else _is_nil(w)
+
+
 # The six ``__unify__``/``__eq__`` methods therefore ask ``_is_nil`` of the
 # target and of their own WALKED value, ahead of everything else, and answer
 # True.  Two properties make that safe:
@@ -734,7 +741,7 @@ class SegList:
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL`` above this class for why this
         # sits ahead of the ``()`` rewrite and why it leaves VarSeg alone.
-        if _is_nil(other) and _is_nil(self._walk_raw()):
+        if _is_nil(other) and _walked_nil(self._walk_raw()):
             return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
@@ -746,8 +753,10 @@ class SegList:
         # ``A = ""``, not ``A = []``).
         if type(other) is tuple and not other:
             other = []
+        other_text = False
         if is_chars(other):
             other = chars_text(other)      # stage 1: the carrier is the str it holds here
+            other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
         if isinstance(other, bytes):
             # Codes-model symmetry (A01-F007): the C layer unifies plain
             # int-lists with bytes, and SegBytes accepts list targets — so a
@@ -756,7 +765,7 @@ class SegList:
             # the conversion is deterministic, so cached retry drives stay
             # consistent.
             return self.__unify__(list(other), trail)
-        if isinstance(other, (list, str)):
+        if isinstance(other, list) or other_text:
             walked = self._walk_raw()
             if isinstance(walked, list):
                 # No unbound *VarSeg* remains, but ConcreteSeg *element* Vars
@@ -768,7 +777,7 @@ class SegList:
                 # ``__walk__``) hands back the SegList's OWN elements, so the
                 # F018 promotion never has to be undone; only the ``other``
                 # side needs splitting, into CHARS.
-                if isinstance(other, str):
+                if other_text:
                     other = [char_atom(c) for c in other]
                 return unify(walked, other, trail)
             # Non-ground — drive the cached split enumerator one step.
@@ -927,12 +936,14 @@ class SegList:
     def __eq__(self, other):
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
-        if _is_nil(other) and _is_nil(self._walk_raw()):
+        if _is_nil(other) and _walked_nil(self._walk_raw()):
             return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
+        other_text = False
         if is_chars(other):
             other = chars_text(other)      # stage 1: the carrier is the str it holds here
+            other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
         if isinstance(other, SegList):
             return self._segments == other._segments
         if isinstance(other, list):
@@ -943,7 +954,7 @@ class SegList:
             if isinstance(w, list):
                 return w == other
             return False
-        if isinstance(other, str):
+        if other_text:
             # Symmetric with SegString — str unifies with char-list at runtime,
             # so equality should hold when the SegList walks to a char list.
             # Compared by SPELLING, so both char shapes answer alike.
@@ -1267,7 +1278,7 @@ class SegString:
         from .logic.variables import unify
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL``, above ``class SegList``.
-        if _is_nil(other) and _is_nil(self._walk_raw()):
+        if _is_nil(other) and _walked_nil(self._walk_raw()):
             return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
@@ -1279,9 +1290,11 @@ class SegString:
         # ``A = ""``, not ``A = []``).
         if type(other) is tuple and not other:
             other = []
+        other_text = False
         if is_chars(other):
             other = chars_text(other)      # stage 1: the carrier is the str it holds here
-        if isinstance(other, str):
+            other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
+        if other_text:
             walked = self._walk_raw()
             if isinstance(walked, str):
                 return walked == other
@@ -1301,7 +1314,7 @@ class SegString:
             # which is why this branch used to build the list itself.
             walked = self._walk_raw()
             if isinstance(walked, str):
-                return unify(walked, other, trail)
+                return unify(chars(walked), other, trail)   # STAGE 2: the text, not a bare str atom
             # F023 (audit 2026-05-25): non-ground SegString vs list — the
             # old branch returned ``NotImplemented`` which the C top-level
             # unify treats as "no protocol match → False", silently
@@ -1417,7 +1430,7 @@ class SegString:
         # a string, never expands).
         w = self._walk_raw()
         if isinstance(w, str):
-            return char_atom(w[index]) if isinstance(index, int) else w[index]
+            return char_atom(w[index]) if isinstance(index, int) else chars(w[index])
         char_buf: list[str] = []
         for seg in w._segments:
             if isinstance(seg, str):
@@ -1428,14 +1441,14 @@ class SegString:
                 # In-prefix forward slice is knowable (A01-F010); return a
                 # str to match ground SegString slicing.
                 if _slice_within_prefix(index, len(char_buf)):
-                    return "".join(char_buf)[index]
+                    return chars("".join(char_buf)[index])
                 raise PartialTermError(
                     f"SegString[{index!r}] requires resolving an unbound "
                     f"VarSeg; only the concrete prefix (indices "
                     f"0..{len(char_buf) - 1}) is knowable. SegString={self!r}"
                 )
         prefix = "".join(char_buf)
-        return char_atom(prefix[index]) if isinstance(index, int) else prefix[index]
+        return char_atom(prefix[index]) if isinstance(index, int) else chars(prefix[index])
 
     def __repr__(self):
         return f"SegString({self._segments!r})"
@@ -1443,15 +1456,17 @@ class SegString:
     def __eq__(self, other):
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
-        if _is_nil(other) and _is_nil(self._walk_raw()):
+        if _is_nil(other) and _walked_nil(self._walk_raw()):
             return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
+        other_text = False
         if is_chars(other):
             other = chars_text(other)      # stage 1: the carrier is the str it holds here
+            other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
         if isinstance(other, SegString):
             return self._segments == other._segments
-        if isinstance(other, str):
+        if other_text:
             w = self._walk_raw()
             return w == other if isinstance(w, str) else False
         if isinstance(other, list):
@@ -1664,8 +1679,10 @@ class SegBytes:
         # ``A = ""``, not ``A = []``).
         if type(other) is tuple and not other:
             other = []
+        other_text = False
         if is_chars(other):
             other = chars_text(other)      # stage 1: the carrier is the str it holds here
+            other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
         if isinstance(other, bytes):
             walked = self.__walk__()
             if isinstance(walked, bytes):
@@ -1759,8 +1776,10 @@ class SegBytes:
             return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
+        other_text = False
         if is_chars(other):
             other = chars_text(other)      # stage 1: the carrier is the str it holds here
+            other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
         if isinstance(other, SegBytes):
             return self._segments == other._segments
         if isinstance(other, bytes):
@@ -1880,7 +1899,7 @@ class DictTerm:
             items = data.items() if hasattr(data, "items") else data
             self._data = {_as_dict_key(k): v for k, v in items}
         else:
-            if "" in self._data or b"" in self._data:
+            if b"" in self._data or chars("") in self._data:   # STAGE 2: a bare "" is the atom '', not nil
                 self._data = {_as_dict_key(k): v
                               for k, v in self._data.items()}
         self._position = _position  # Slice G
@@ -1923,7 +1942,7 @@ class DictTerm:
         if isinstance(value, DictTerm):
             return value._data                 # already nil-normalised
         if isinstance(value, dict):
-            if "" in value or b"" in value:
+            if b"" in value or chars("") in value:   # STAGE 2: a bare "" is the atom '', not nil
                 return {_as_dict_key(k): v for k, v in value.items()}
             return value
         return None

@@ -162,13 +162,14 @@ class _Transform:
             # is the §1c contract's data heart and must not grow an import
             # edge into the engine — but it is the same term ``mint`` makes,
             # interned spelling included.
-            return (_sys.intern(node.name),)
+            return _sys.intern(node.name)   # STAGE 2: an atom IS the interned str
         if isinstance(node, PNumber):
             return node.value
         if isinstance(node, PString):
-            # THE FLIP (§9.7): a string IS a ``str``; it denotes the list of
-            # its char atoms, so nothing is expanded here (R-S2).
-            return node.value
+            # STAGE 2: a string is the chars CARRIER (``cells.chars``, spelled
+            # inline -- this module grows no import edge into the engine); it
+            # denotes the list of its char atoms and is equal to it everywhere.
+            return ("$chars", node.value)
         if isinstance(node, PVar):
             return VarRef(self.var_index(node.name))
         if isinstance(node, PCompound):

@@ -84,6 +84,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from clausal.logic.atoms import is_atom as _term_is_atom
+from clausal.logic.cells import is_chars
 from clausal.logic.predicate import PredicateMeta
 
 __all__ = [
@@ -174,14 +175,14 @@ def _const_set(elements):
         if _cset_atom(element):
             continue
         all_atoms = False
-        if element.__class__ not in _CONST_SET_TYPES:
-            return False
+        if element.__class__ not in _CONST_SET_TYPES and not is_chars(element):
+            return False              # the chars carrier is hashable and equal only to itself here; a char-list operand takes the scan
     if all_atoms:
         # Every element is an atom, so nothing in the set can collide with a
         # string of the same text — key on the spelling and let CPython's
         # cached str hash do the work.  Duplicate atoms are duplicate
         # spellings, so the count check below still catches them.
-        as_set = _AtomSpellings([e[0] for e in elements])
+        as_set = _AtomSpellings(elements)   # STAGE 2: an atom IS its spelling
     else:
         try:
             as_set = frozenset(elements)

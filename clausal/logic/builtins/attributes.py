@@ -21,7 +21,8 @@ from clausal.logic.atoms import (
 )
 from clausal.logic.builtins._helpers import _is_empty_list
 from clausal.logic.builtins._registry import _builtin
-from clausal.logic.runtime._seg_helpers import normalize_seg_input
+from clausal.logic.runtime._seg_helpers import walk_seg
+from clausal.logic.cells import is_chars
 
 
 # ── The Key funnel ─────────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ def _storage_key(key, context):
     close.
     """
     key_as_written = key
-    key = normalize_seg_input(key)
+    key = walk_seg(key)
     if _is_empty_list(key):
         # The nil atom (fix round 2, item 2).  ``atoms.is_atom`` below is the
         # arity-0-CELL shape test and answers False for ``[]``, so a nil key
@@ -77,7 +78,7 @@ def _storage_key(key, context):
         return spelling(key)
     if is_var(key):
         return None
-    if type(key) is str:
+    if is_chars(key):                  # STAGE 2: a str IS the atom; the carrier is the string
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error,
         )

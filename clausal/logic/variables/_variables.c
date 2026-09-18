@@ -1222,6 +1222,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
      * only through it (the flags): a bare str is an ATOM, equal to itself,
      * never to a list and never to the carrier of the same text. */
     int t1_text = 0, t2_text = 0;
+    PyObject *t1_term = t1, *t2_term = t2;   /* the carrier itself, for the __unify__ hooks below */
     if (is_chars_carrier(t1)) { t1 = unwrap_chars(t1); t1_text = 1; }
     if (is_chars_carrier(t2)) { t2 = unwrap_chars(t2); t2_text = 1; }
     if (t1_text && t2_text)
@@ -1434,7 +1435,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         if (probe_unify_hook(t1, &hook) < 0) return -1;
         if (hook) {
             PyObject *result = PyObject_CallFunctionObjArgs(
-                hook, t2, (PyObject *)trail, NULL);
+                hook, t2_term, (PyObject *)trail, NULL);   /* STAGE 2: a Seg* hook must see the CARRIER -- a bare str is an atom to it */
             Py_DECREF(hook);
             if (result == NULL) return -1;
             if (result != Py_NotImplemented) {
@@ -1452,7 +1453,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         if (probe_unify_hook(t2, &hook) < 0) return -1;
         if (hook) {
             PyObject *result = PyObject_CallFunctionObjArgs(
-                hook, t1, (PyObject *)trail, NULL);
+                hook, t1_term, (PyObject *)trail, NULL);
             Py_DECREF(hook);
             if (result == NULL) return -1;
             if (result != Py_NotImplemented) {
@@ -2543,10 +2544,14 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
      * together, so calling this accessor directly agrees with the funnel
      * wrapper in builtins/_helpers.py.  The empty string keeps the ISO
      * nil-atom spelling "[]", as the empty list does. */
-    if (PyUnicode_Check(term)) {
-        if (PyUnicode_GET_LENGTH(term) == 0)
+    if (is_chars_carrier(term)) {   /* STAGE 2: the carrier is the STRING -- cons-cell reading */
+        if (PyUnicode_GET_LENGTH(unwrap_chars(term)) == 0)
             return PyUnicode_FromString("[]");
         return PyUnicode_FromString(".");
+    }
+    if (PyUnicode_Check(term)) {    /* STAGE 2: a str IS the atom -- its own functor name */
+        Py_INCREF(term);
+        return term;
     }
     /* Bytes — codes-model cons-cell, untouched by the str~list retirement
      * (§1b: "the adjacent bytes<->list block is KEPT — codes model
@@ -2650,8 +2655,11 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
      * retired that reading here and in the Python twin _arity_py together,
      * so calling this accessor directly agrees with the funnel wrapper in
      * builtins/_helpers.py. */
-    if (PyUnicode_Check(term)) {
-        return PyLong_FromLong(PyUnicode_GET_LENGTH(term) == 0 ? 0 : 2);
+    if (is_chars_carrier(term)) {   /* STAGE 2: the carrier is the STRING -- cons-cell reading */
+        return PyLong_FromLong(PyUnicode_GET_LENGTH(unwrap_chars(term)) == 0 ? 0 : 2);
+    }
+    if (PyUnicode_Check(term)) {    /* STAGE 2: a str IS the atom, arity 0 */
+        return PyLong_FromLong(0);
     }
     /* Bytes — codes-model cons-cell. */
     if (PyBytes_Check(term)) {

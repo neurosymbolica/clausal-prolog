@@ -51,7 +51,7 @@ import dataclasses
 import warnings
 
 from clausal.logic.generated_names import bare_name_of
-from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG, is_chars as _is_chars, chars_text as _chars_text
+from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG, CHARS_TAG as _CHARS_TAG, is_chars as _is_chars, chars_text as _chars_text
 from clausal.logic.predicate import make_predicate
 from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast import nodes as simple_ast
@@ -257,13 +257,19 @@ class _ClauseReifier:
             # BARE name reifies to below.  Without this the two spellings of
             # one atom reified to two different vocabulary terms and the
             # renderer had no atom to render.
-            if (type(value) is tuple and len(value) == 1
-                    and type(value[0]) is str and value[0] != _CELL_TUPLE_TAG):
-                return Atom(value[0])
+            if type(value) is str:
+                return Atom(value)         # STAGE 2: a str constant is the ATOM
+            if _is_chars(value):
+                return _chars_text(value)  # the carrier is the STRING: a str in the vocabulary
             return value
         if isinstance(node, ast.List):
             return [self.term(elt) for elt in node.elts]
         if isinstance(node, ast.Tuple):
+            if (len(node.elts) == 2 and isinstance(node.elts[0], ast.Constant)
+                    and node.elts[0].value == _CHARS_TAG
+                    and isinstance(node.elts[1], ast.Constant)
+                    and type(node.elts[1].value) is str):
+                return node.elts[1].value  # the chars CARRIER literal: the STRING
             return tuple(self.term(elt) for elt in node.elts)
         if isinstance(node, ast.Dict):
             # A non-constant key reifies unhashable — a bare-atom key (`{foo: V}`,
@@ -333,6 +339,8 @@ class _ClauseReifier:
         reified = self.term(node)
         if isinstance(reified, Goal) and reified.name == "$intern_atom":
             args = reified.args
+            if len(args) == 1 and isinstance(args[0], Atom):
+                return args[0]             # STAGE 2: the str constant reified as the Atom already
             if len(args) == 1 and isinstance(args[0], str):
                 return Atom(args[0])
         return reified
@@ -528,6 +536,8 @@ def _deref_seq_field(value, what):
     ``["t"]`` can arrive here as ``"t"`` — the same term, read as its char
     list."""
     value = _deref_field(value)
+    if _is_chars(value):
+        return list(_chars_text(value))
     if isinstance(value, str):
         return list(value)
     if not isinstance(value, (list, tuple)):
@@ -1021,6 +1031,8 @@ class _ClauseRenderer:
         param_names = []
         for param in param_items:
             name = _deref_field(_deref_field(param).name)
+            if isinstance(name, Atom):
+                name = _deref_field(name.name)   # STAGE 2: a param NAME constant reifies as an Atom
             if not isinstance(name, str) or not name.isidentifier():
                 raise RenderError(f"cannot render non-identifier lambda param: {name!r}")
             param_names.append(name)
@@ -1059,8 +1071,11 @@ class _ClauseRenderer:
         key = _deref_field(key)
         if isinstance(key, Goal) and _deref_field(key.name) == "$intern_atom":
             args = _deref_seq_field(key.args, "$intern_atom key args")
-            if len(args) == 1 and isinstance(_deref_field(args[0]), str):
-                return self._name_ast(args[0])
+            arg0 = _deref_field(args[0]) if len(args) == 1 else None
+            if isinstance(arg0, Atom):
+                arg0 = _deref_field(arg0.name)   # STAGE 2: the name constant reified as an Atom
+            if len(args) == 1 and isinstance(arg0, str):
+                return self._name_ast(arg0)
         return self.term(key)
 
     def _goal_ast(self, goal):

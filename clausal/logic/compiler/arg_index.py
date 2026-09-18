@@ -116,6 +116,8 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
     _t = type(arg)
     if (_t is bytes or _t is str) and not arg:
         return _INDEX_VAR
+    if _t is str:
+        return (arg, 0)                # STAGE 2: a str is the ATOM -- name/0, the cell key's shape
     if isinstance(arg, _INDEXABLE_TYPES):
         return arg
     if type(arg) is tuple and arg:
@@ -356,6 +358,8 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
     # its two equal spellings keyed a full scan.
     if (t is bytes or t is str) and not a:
         return _INDEX_VAR
+    if t is str:
+        return (a, 0)                  # STAGE 2: a str is the ATOM
     if isinstance(a, _INDEXABLE_TYPES):
         return a
     if type(a) is tuple and a:
@@ -432,7 +436,7 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
         # (§6.9), so it has no static key either; answering the ``str``
         # would name a bucket no head ever built.
         if t is str:
-            return None
+            return (value, 0)          # STAGE 2: a str constant is the ATOM -- the bucket a head ("foo", 0) built
         return value
     if isinstance(arg_expr, ast.Tuple) and arg_expr.elts \
             and all(isinstance(e, ast.Constant) for e in arg_expr.elts) \
@@ -446,6 +450,8 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
         # required to be a Constant so the cell is fully ground and the
         # deep-groundness gate :func:`_runtime_arg_key` applies cannot
         # disagree with the key computed here.
+        if arg_expr.elts[0].value == CHARS_TAG and len(arg_expr.elts) == 2:
+            return _INDEX_VAR          # stage 1: a chars string is TEXT, never a $chars bucket
         return (arg_expr.elts[0].value, len(arg_expr.elts) - 1)
     if isinstance(arg_expr, (ast.List, ast.Tuple)):
         # literal list/tuple — if every element is an int constant in

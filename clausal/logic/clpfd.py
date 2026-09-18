@@ -2584,14 +2584,13 @@ def _op_spelling(op, context):
     ``None`` and failed silently instead of raising, exactly the reporting
     hole this funnel exists to close.
     """
-    from clausal.logic.runtime._seg_helpers import (  # noqa: PLC0415
-        normalize_seg_input,
-    )
+    from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
     op_as_written = op
-    op = normalize_seg_input(op)
+    op = walk_seg(op)
     if is_atom(op):
         return spelling(op)
-    if type(op) is str:
+    if is_chars(op):                   # STAGE 2: a str IS the atom; the carrier is the string
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error,
         )

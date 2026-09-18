@@ -55,8 +55,10 @@ def _functor_name_py(term: Any) -> Any:
         return type(term).__name__
     if isinstance(term, list):
         return "[]" if len(term) == 0 else "."
+    if is_chars(term):
+        return "[]" if len(chars_text(term)) == 0 else "."
     if isinstance(term, str):
-        return "[]" if len(term) == 0 else "."
+        return term                    # STAGE 2: an atom is its own functor name
     if isinstance(term, bytes):
         return "[]" if len(term) == 0 else "."
     if isinstance(term, (bool, int, float)) or term is None:
@@ -91,12 +93,16 @@ def _arity_py(term: Any) -> int | None:
         return len(term_field_names(term))
     if isinstance(term, list):
         return 0 if len(term) == 0 else 2
+    if is_chars(term):
+        return 0 if len(chars_text(term)) == 0 else 2
     if isinstance(term, str):
-        return 0 if len(term) == 0 else 2
+        return 0                       # STAGE 2: an atom
     if isinstance(term, bytes):
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:
         return 0
+    if is_zero_field_class(term):
+        return 0                       # twin parity: the C ``_arity`` answers 0 for a zero-field class
     return None
 
 
@@ -381,9 +387,9 @@ def _cell_functor(term: Any) -> tuple[bool, Any]:
     leaving it out would make every data tuple answer as the compound
     ``'()'/N`` — a goal, a clause head, an ``assertz`` argument.
     """
-    from clausal.logic.cells import TUPLE_TAG  # noqa: PLC0415
+    from clausal.logic.cells import TUPLE_TAG, CHARS_TAG  # noqa: PLC0415
     if (type(term) is tuple and term and type(term[0]) is str
-            and term[0] != TUPLE_TAG):
+            and term[0] != TUPLE_TAG and term[0] != CHARS_TAG):   # the chars carrier is a STRING, not a cell
         return True, term[0]
     return False, None
 
@@ -531,7 +537,9 @@ def _is_empty_list(term: Any) -> bool:
 
 def _is_non_empty_list(term: Any) -> bool:
     """True iff *term* is a NON-empty list, and so the ``'.'/2`` compound."""
-    return type(term) in (list, str, bytes) and len(term) > 0
+    if is_chars(term):
+        return len(chars_text(term)) > 0
+    return type(term) in (list, bytes) and len(term) > 0
 
 
 # ── Combined functor+arity probe ─────────────────────────────────────────────

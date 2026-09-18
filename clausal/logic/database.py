@@ -1408,6 +1408,8 @@ def head_key(head: Any) -> tuple[str, int]:
     # fires for a tuple.  A ``TUPLE_TAG`` cell and a slot-0-Var tuple are DATA,
     # not a predicate head, and keep the TypeError below -- which is exactly
     # what ``compound_cell_shape`` excludes.
+    if type(head) is str:
+        return head, 0                 # STAGE 2: an atom head is name/0
     is_cell_head, cell_functor_name = compound_cell_shape(head)
     if is_cell_head:
         return cell_functor_name, len(head) - 1

@@ -440,10 +440,10 @@ def _dims_to_term(dims) -> tuple:
 def _dims_from_term(t) -> dict:
     """The reverse: ``('dimensionless',)`` or ``('dimensions', *pairs)`` ->
     an atom-keyed dict. Order-insensitive. Raises on anything else."""
-    if type(t) is not tuple or not t or type(t[0]) is not str:
-        raise TypeError("dims slot is not a term")
     if t == "dimensionless":
         return {}
+    if type(t) is not tuple or not t or type(t[0]) is not str:
+        raise TypeError("dims slot is not a term")
     if t[0] != "dimensions" or len(t) < 2:
         raise TypeError("dims slot is neither dimensionless nor dimensions/N")
     dims: dict = {}

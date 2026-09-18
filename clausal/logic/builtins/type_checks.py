@@ -21,7 +21,8 @@ from clausal.logic.builtins._helpers import (
     NIL_SPELLING, _arity, _is_compound, _is_empty_list, _is_ground,
     _is_non_empty_list,
 )
-from clausal.logic.runtime._seg_helpers import normalize_seg_input
+from clausal.logic.runtime._seg_helpers import walk_seg
+from clausal.logic.cells import is_chars
 
 
 @_builtin("var", 1)
@@ -61,8 +62,8 @@ def _is_string_term(x) -> bool:
         return False                   # STAGE 2: a str is an ATOM, not a string
     if is_chars(x_val):
         return True
-    x_val = normalize_seg_input(x_val)
-    if isinstance(x_val, str):
+    x_val = walk_seg(x_val)
+    if is_chars(x_val):
         return True                    # a ground SegString walked to its text
     if type(x_val) is list:
         return all(_is_char_atom(deref(e)) for e in x_val)
@@ -127,7 +128,7 @@ def _is_atom__1(x, trail, k):
     if is_chars(x_val) or isinstance(x_val, (SegList, SegString, SegBytes)):
         # STAGE 2: a STRING (or a Seg*) is not an atom -- except that nil in
         # any spelling is the atom '[]'
-        if _is_empty_list(normalize_seg_input(x_val)):
+        if _is_empty_list(walk_seg(x_val)):
             yield None
         return
     if not is_var(x_val) and _is_atom_term(x_val):
@@ -211,7 +212,7 @@ def _compound__1(x, trail, k):
     ``functor("hello", '.', 2)`` (§6.4, already true) coherent.  The empty
     list is the atom ``'[]'`` and stays non-compound.
     """
-    x_val = normalize_seg_input(deref(x))
+    x_val = walk_seg(deref(x))
     if is_var(x_val):
         return
     if _is_non_empty_list(x_val):
@@ -267,6 +268,8 @@ def _is_atomic_term(x) -> bool:
     # is decided BEFORE the compound-shape rejection below catches ``[]``.
     if _is_empty_list(x):
         return True
+    if is_chars(x):
+        return False                   # a non-empty string is the '.'/2 compound
     # Reject compound shapes explicitly so we don't accidentally accept
     # them via the "anything else" fallthrough.
     if isinstance(x, (Compound, KWTerm, list, bytes,
@@ -299,7 +302,7 @@ def _atomic__1(x, trail, k):
     # F029 (A09): walk a ground Seg* to its concrete form first — a ground
     # SegString walks to a str (atomic) so is_str(X) no longer contradicts
     # atomic(X). A non-ground Seg* stays a Seg* and is rejected below.
-    if _is_atomic_term(normalize_seg_input(deref(x))):
+    if _is_atomic_term(walk_seg(deref(x))):
         yield None
 
 
@@ -314,7 +317,7 @@ def _callable__1_factory(db):
     """Factory for ``callable_/1`` — *db* is kept for the registry shape."""
 
     def callable___1(x, trail, k):
-        x_val = normalize_seg_input(deref(x))
+        x_val = walk_seg(deref(x))
         if is_var(x_val):
             return
         # Task 15 item 2 (spec §14.12, RULED 2026-09-07): callable = atom or
@@ -325,6 +328,9 @@ def _callable__1_factory(db):
         # existence_error for ``'.'/2`` and not a ``type_error(callable, …)``
         # (item 3): the term IS callable, the procedure does not exist.
         if _is_empty_list(x_val) or _is_non_empty_list(x_val):
+            yield None
+            return
+        if _is_atom_term(x_val):           # STAGE 2: an atom (a str) is callable -- ISO 3.24
             yield None
             return
         if isinstance(x_val, (Compound, KWTerm)):
@@ -383,7 +389,7 @@ def _is_list__1(x, trail, k):
     """
     x_val = deref(x)
     from clausal.logic.cells import is_chars  # noqa: PLC0415
-    if isinstance(x_val, (list, str, bytes)) or is_chars(x_val):   # stage 1: the carrier is a list
+    if isinstance(x_val, (list, bytes)) or is_chars(x_val):   # STAGE 2: a str is an ATOM; the carrier is the list
         yield None
     elif isinstance(x_val, (SegList, SegString, SegBytes)) and _is_ground(x_val):
         yield None
@@ -400,7 +406,8 @@ def _is_chars__1(x, trail, k):
     and succeeds (coherent with ``is_str`` / ``is_list``); a ground
     ``SegBytes`` walks to bytes and is rejected (codes model).
     """
-    if isinstance(normalize_seg_input(deref(x)), (list, str)):
+    x_val = walk_seg(deref(x))
+    if isinstance(x_val, list) or is_chars(x_val):
         yield None
 
 
@@ -455,13 +462,13 @@ def _check_type(type_name: str, term) -> bool:
         # and NOT a str; Task 15 item 2 adds the empty list, the atom
         # ``'[]'``.  The same call the atom/1 builtin makes, so
         # ``must_be(atom, "x")`` and ``atom("x")`` cannot drift apart.
-        return _is_atom_term(normalize_seg_input(term))
+        return _is_atom_term(walk_seg(term))
     elif type_name == "atomic":
         # Fix round 1, item 6: the row the table was missing, so
         # ``must_be(atomic, [])`` raised ``domain_error(type, atomic)`` while
         # ``atomic([])`` succeeded.  The same call the atomic/1 builtin
         # makes, so the two cannot drift apart.
-        return _is_atomic_term(normalize_seg_input(term))
+        return _is_atomic_term(walk_seg(term))
     elif type_name in ("string", "str"):
         # Task 14b: the same call the string/1 builtin makes, so
         # ``must_be(string, ['a','b'])`` and ``string(['a','b'])`` cannot
@@ -471,7 +478,7 @@ def _check_type(type_name: str, term) -> bool:
         # F016 (A09): align with is_list/1 — under strings-as-lists a str is
         # a char list and a bytes is a code list, and a ground Seg* walks to
         # one. Rejecting them here contradicted is_list("abc") succeeding.
-        if isinstance(term, (list, str, bytes)):
+        if isinstance(term, (list, bytes)) or is_chars(term):   # STAGE 2: a str is an ATOM; the carrier is the list
             return True
         return isinstance(term, (SegList, SegString, SegBytes)) and _is_ground(term)
     elif type_name in ("boolean", "bool"):
@@ -480,7 +487,7 @@ def _check_type(type_name: str, term) -> bool:
         # Task 15 item 2: callable = atom or compound (ISO 3.24), so a list
         # — ``[]``, ``[1, 2]``, ``"abc"``, ``b"ab"`` — is callable, matching
         # callable_/1.
-        walked = normalize_seg_input(term)
+        walked = walk_seg(term)
         return (
             _is_empty_list(walked)
             or _is_non_empty_list(walked)
@@ -498,7 +505,7 @@ def _check_type(type_name: str, term) -> bool:
     elif type_name == "compound":
         # Task 15 item 2: a non-empty list is the ``'.'/2`` compound,
         # matching the compound/1 builtin.
-        if _is_non_empty_list(normalize_seg_input(term)):
+        if _is_non_empty_list(walk_seg(term)):
             return True
         # Stage A: the funnel's shared definition — a cell counts as
         # compound only above arity 0, matching the compound/1 builtin's
