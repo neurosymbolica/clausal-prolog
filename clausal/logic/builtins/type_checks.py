@@ -56,11 +56,14 @@ def _is_string_term(x) -> bool:
     ``_check_type``'s ``string``/``str`` row, so the three cannot drift.
     """
     x_val = deref(x)
-    from clausal.logic.cells import is_chars, refuse_bare_str  # noqa: PLC0415
-    refuse_bare_str(x_val, "string/1")   # interim rule
-    x_val = normalize_seg_input(x_val)
-    if isinstance(x_val, str) or is_chars(x_val):
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    if type(x_val) is str:
+        return False                   # STAGE 2: a str is an ATOM, not a string
+    if is_chars(x_val):
         return True
+    x_val = normalize_seg_input(x_val)
+    if isinstance(x_val, str):
+        return True                    # a ground SegString walked to its text
     if type(x_val) is list:
         return all(_is_char_atom(deref(e)) for e in x_val)
     return False
@@ -118,7 +121,15 @@ def _is_atom__1(x, trail, k):
     reserved atom ``'[]'``, so ``atom([])``, ``atom("")`` and ``atom(b"")``
     hold — the ISO/Scryer answer.
     """
-    x_val = normalize_seg_input(deref(x))
+    x_val = deref(x)
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
+    if is_chars(x_val) or isinstance(x_val, (SegList, SegString, SegBytes)):
+        # STAGE 2: a STRING (or a Seg*) is not an atom -- except that nil in
+        # any spelling is the atom '[]'
+        if _is_empty_list(normalize_seg_input(x_val)):
+            yield None
+        return
     if not is_var(x_val) and _is_atom_term(x_val):
         yield None
 

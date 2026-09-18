@@ -101,3 +101,28 @@ def test_c_and_python_list_twins_agree_on_an_atom_target():
         assert fn("ab", [Var()], Var(), [], Trail()) is False          # an atom is not a sequence
         h, tl, t = Var(), Var(), Trail()
         assert fn(chars("ab"), [h], tl, [], t) is True and deref(h) == "a" and deref(tl) == chars("b")
+
+
+# ── Task 4: the entry points read a str as the atom ─────────────────────────
+
+def test_an_atom_is_not_text_at_the_funnels():
+    from clausal.logic.builtins.lists import _as_items
+    from clausal.logic.runtime._seg_helpers import normalize_seg_input
+    from clausal.modules.py import to_text
+    from clausal.logic.builtins._helpers import _functor_name, _arity, _args_list, _standard_order_key
+    assert _as_items("ab") is None and _as_items(chars("ab")) == ["a", "b"]
+    assert normalize_seg_input("ab") == "ab" and normalize_seg_input(chars("ab")) == "ab"
+    assert to_text("ab") == "ab" and to_text(chars("ab")) == "ab"
+    assert (_functor_name("ab"), _arity("ab"), _args_list("ab")) == ("ab", 0, [])
+    assert (_functor_name(chars("ab")), _arity(chars("ab"))) == (".", 2)
+    assert _standard_order_key("ab") == _standard_order_key(mint("ab")) != _standard_order_key(chars("ab"))
+
+
+def test_type_checks_and_goals(tmp_path):
+    from clausal.logic.variables import Var
+    mod = _mod(tmp_path, 'p(R) <- if_(atom(foo), R is yes, R is no)\nq(R) <- if_(string(foo), R is yes, R is no)\n'
+                         'r(R) <- if_(atom("foo"), R is yes, R is no)\nfoo,\ns <- call(foo)\nt(R) <- if_("ab" == [a, b], R is yes, R is no)\n'
+                         'u(R) <- if_(ab == [a, b], R is yes, R is no)\n', hdr="-double_quotes(chars)\n-private([yes, no, a, b, ab])\n")
+    assert _first(mod, "p", Var()) == ["yes"] and _first(mod, "q", Var()) == ["no"] and _first(mod, "r", Var()) == ["no"]
+    assert _first(mod, "s") is not None
+    assert _first(mod, "t", Var()) == ["yes"] and _first(mod, "u", Var()) == ["no"]

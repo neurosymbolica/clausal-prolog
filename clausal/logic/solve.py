@@ -219,14 +219,16 @@ def _term_to_goal(term: Any) -> Any:
         # so the answer is ``existence_error(procedure, '[]'/0)``.
         from clausal.logic.exceptions import LogicException, string_goal_error
         raise LogicException(string_goal_error("", 0, "solve/1"))
-    if type(term) is str or is_chars(term):   # stage 1: the chars carrier is a STRING too
+    if is_chars(term):                       # a STRING in goal position: no procedure '.'/2
         # THE FLIP (spec §6.4): a ``str`` is a STRING, not an atom.
         # ``solve("z0", m)`` used to be the same call as ``solve(("z0",), m)``;
         # it is now an error, and the cell spelling is the only one that names
         # a goal.  Task 15 item 3 (ISO alignment): the string is the compound
         # ``'.'/2``, so what is missing is the PROCEDURE, not callability.
         from clausal.logic.exceptions import LogicException, string_goal_error
-        raise LogicException(string_goal_error(chars_text(term) if is_chars(term) else term, 0, "solve/1"))
+        raise LogicException(string_goal_error(chars_text(term), 0, "solve/1"))
+    if type(term) is str:                     # STAGE 2: an atom IS the 0-arity goal of its name
+        return AstCall(func=LoadName(name=term), args=[], kwargs=[])
     if isinstance(type(term), PredicateMeta):
         cls = type(term)
         fields = term_field_names(term)

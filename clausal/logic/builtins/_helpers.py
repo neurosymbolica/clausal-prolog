@@ -425,37 +425,40 @@ _is_compound_precell = _is_compound
 # whatever these arms already answer for.
 
 def _functor_name(term: Any) -> Any:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, f = _cell_functor(term)
     if is_compound_cell:
         return f
     if type(term) is str:
-        return "[]" if not term else "."
+        return ("[]" if not term else ".") if text else term
     return _functor_name_precell(term)
 
 
 def _arity(term: Any) -> int | None:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return len(term) - 1
     if type(term) is str:
-        return 0 if not term else 2
+        return (0 if not term else 2) if text else 0
     return _arity_precell(term)
 
 
 def _nth_arg(term: Any, n: int) -> Any:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         if n < 1 or n > len(term) - 1:
             raise IndexError(f"arg index {n} out of range for {term!r}")
         return term[n]
     if type(term) is str:
-        if term:
+        if term and text:
             if n == 1:
                 return char_atom(term[0])
             if n == 2:
@@ -465,19 +468,21 @@ def _nth_arg(term: Any, n: int) -> Any:
 
 
 def _args_list(term: Any) -> list:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return list(term[1:])
     if type(term) is str:
-        return [] if not term else [char_atom(term[0]), chars(term[1:])]   # stage 1
+        return [char_atom(term[0]), chars(term[1:])] if (term and text) else []
     return _args_list_precell(term)
 
 
 def _is_compound(term: Any) -> bool:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return True
@@ -781,17 +786,9 @@ def _standard_order_key(term: Any) -> tuple:
         # `Quantity` sorts among them by magnitude instead of after them.
         return _number_key(term)
     if isinstance(term, str):
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(term, "the standard order of terms")   # interim rule
-        # THE FLIP (spec §6.5): a string keys as the LIST OF CHAR ATOMS it
-        # denotes — so ``"ab"`` and ``[("a",), ("b",)]`` have EQUAL keys and
-        # ``""`` keys like ``[]``.  That equality is what makes ``sort/2``
-        # collapse the two spellings of one term (dedup below is by key, not
-        # by ``==``).  Task 15 item 1: that list is the ``'.'/2`` compound,
-        # and the empty one is the ATOM ``'[]'``.
-        if not term:
-            return _ORD_EMPTY_LIST_KEY
-        return _cons_key(tuple((_ORD_ATOM, c) for c in term))
+        # STAGE 2 (spec 2026-09-18 §1): a str is an ATOM and keys in the atom
+        # band by its spelling; the carrier below keys as its char list
+        return (_ORD_ATOM, term)
     if is_zero_field_class(term):
         # P3-1 Task 4 (standard-order collapse), status corrected by the
         # Task 7 sweep: NOT a transient pre-pivot straggler after all. The

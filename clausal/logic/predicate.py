@@ -1483,7 +1483,7 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     """
     if isinstance(obj, PredicateMeta):
         return obj._get_dispatch(arity)
-    if type(obj) is str or is_chars(obj):   # stage 1: the carrier too
+    if is_chars(obj):
         # THE FLIP (spec §6.4): a ``str`` is a STRING.  The Stage A arm here
         # also accepted a bare ``str`` and built the indicator out of its
         # spelling, which silently read a string as a predicate NAME; it is
@@ -1495,8 +1495,8 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, string_goal_error,
         )
-        raise LogicException(string_goal_error(chars_text(obj) if is_chars(obj) else obj, arity, "call/N"))
-    if type(obj) is tuple and len(obj) == 1 and type(obj[0]) is str:
+        raise LogicException(string_goal_error(chars_text(obj), arity, "call/N"))
+    if type(obj) is str:   # STAGE 2: the atom (was the arity-0 cell)
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
         # through THE FLIP: a bare atom is the arity-0 CELL, reached here
         # whenever a goal resolves to a NAME that turned out to be data, not
@@ -1514,7 +1514,7 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             LogicException, existence_error,
         )
         from clausal.terms import Compound  # noqa: PLC0415
-        name = obj[0]
+        name = obj
         indicator = Compound("/", (name, arity))
         raise LogicException(
             existence_error(

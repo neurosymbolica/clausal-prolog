@@ -83,18 +83,8 @@ def _format_term_as_text(val):
         return "[]"
     if is_chars(val):
         val = chars_text(val)          # stage 1: the carrier is text
-    elif type(val) is str:
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(val, "write_text/1")   # interim rule
     if isinstance(val, str):
-        # The EMPTY string is the empty list and prints ``[]`` in the display
-        # family too (spec §6.7's ``""``/``[]`` row; Scryer) -- ``term_str``
-        # already answers so for both families, and ``write("")`` printing
-        # NOTHING while ``write([])`` printed ``[]`` was the last place the
-        # ``str`` representation of one term leaked into an answer.
-        if val == "":
-            return "[]"
-        return val
+        return val                     # STAGE 2: the text, or an atom's spelling ('' prints nothing)
     if isinstance(val, list):
         # A LIST -- routed through ``term_str`` for the same reason the cell
         # branch below is: ``str()`` on a list renders each ELEMENT with

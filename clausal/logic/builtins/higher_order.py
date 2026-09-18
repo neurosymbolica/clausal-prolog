@@ -130,7 +130,9 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # ``existence_error(procedure, '[]'/N)``, exactly what Scryer
         # answers for ``call([])``.
         raise LogicException(string_goal_error("", len(extra_args), "call/N"))
-    elif type(goal_val) is str or is_chars(goal_val):   # stage 1: the carrier too
+    elif type(goal_val) is str:
+        functor, goal_args = goal_val, []   # STAGE 2: an atom is the 0-arity goal of its name
+    elif is_chars(goal_val):
         # THE FLIP (spec §6.4): a ``str`` is a STRING, so ``call("foo")`` is
         # not a call to ``foo/0``.  Task 15 item 3 (ISO alignment): the
         # string IS the compound ``'.'/2`` and so IS callable — what is
@@ -140,7 +142,7 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # a string here is always a mistake about representation, and a
         # silent failure is exactly how that mistake stays invisible.
         raise LogicException(
-            string_goal_error(chars_text(goal_val) if is_chars(goal_val) else goal_val, len(extra_args), "call/N"))
+            string_goal_error(chars_text(goal_val), len(extra_args), "call/N"))
     else:
         return None
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]

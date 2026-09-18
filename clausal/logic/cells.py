@@ -158,26 +158,6 @@ TUPLE_TAG = "()"
 CHARS_TAG = "$chars"
 
 
-# The LOUD INTERIM RULE of stage 1 (RULED 2026-09-18): between the carrier
-# landing and the atom flip, a bare Python ``str`` handed to the engine as
-# TEXT is refused at every text entry point, so that no producer can go on
-# minting bare-str text unnoticed -- the positive control for stage 1.
-# ARMED by default since stage 1 slice 8 (2026-09-18): ``CLAUSAL_BARE_STR_TEXT=allow``
-# is the diagnostic override only.  Stage 2 retires the rule: a bare str
-# becomes the ATOM and is not text at all.
-BARE_STR_TEXT = os.environ.get("CLAUSAL_BARE_STR_TEXT", "refuse")
-
-
-def refuse_bare_str(x: Any, where: str) -> None:
-    """Raise if *x* is a bare Python str reaching *where* as text (interim rule)."""
-    if type(x) is str and BARE_STR_TEXT != "allow":
-        raise TypeError(
-            f"stage 1 of the atoms-as-str flip: a bare Python str {x!r} reached "
-            f"{where} as TEXT.  Text is the chars carrier ('$chars', s) -- build "
-            f"it with clausal.logic.cells.chars(s) (a ++ escape, to_term and "
-            f"every py-module do) or pass the list of char atoms.")
-
-
 def is_reserved_1tuple(x: Any) -> bool:
     """True for the arity-0 str-headed tuple ``('x',)`` -- the OLD atom cell,
     RESERVED after stage 2 of the atoms-as-str flip (RULED 2026-09-18: a

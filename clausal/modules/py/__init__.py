@@ -184,9 +184,7 @@ def to_text(val):
     if is_chars(_v):
         return chars_text(_v)
     if type(val) is str:
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(val, "a py-module text argument (to_text)")   # interim rule
-        return val
+        return val                     # STAGE 2: an ATOM -- its spelling is the text (spec §3)
     from clausal.logic.atoms import is_atom as _is_atom, spelling as _spelling
     from clausal.logic.variables import deref
     val = deref(val)

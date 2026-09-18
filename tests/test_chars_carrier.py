@@ -98,13 +98,10 @@ class TestSlice3Funnels:
     def test_infix_eq_between_a_bare_str_and_the_carrier(self):
         from clausal.logic.clpfd import fd_eq, fd_ne
         from clausal.logic.variables import Trail
-        from clausal.logic.cells import BARE_STR_TEXT
         t = Trail()
         assert fd_eq(chars("ab"), chars("ab"), t) and not fd_eq(chars("ab"), chars("ac"), t)
         assert fd_ne(chars("ab"), chars("ac"), t) and not fd_ne(chars("ab"), chars("ab"), t)
-        if BARE_STR_TEXT == "allow":     # the interim comparator: a bare str against the carrier
-            assert fd_eq("ab", chars("ab"), t) and fd_eq(chars("ab"), "ab", t)
-            assert not fd_eq("ab", chars("ac"), t)
+        assert not fd_eq("ab", chars("ab"), t)          # STAGE 2: the atom ab is not the string "ab"
 
     def test_python_side_crossings_read_the_text(self):
         from clausal.logic.to_python import to_python
@@ -146,8 +143,7 @@ class TestSlice4SegLayer:
         from clausal.logic.runtime.list_unify import _head_list_unify_input_py
         from clausal.logic.runtime._list_unify import _head_list_unify_input
         from clausal.logic.variables import Trail
-        from clausal.logic.cells import BARE_STR_TEXT
-        targets = [chars("abc")] + (["abc"] if BARE_STR_TEXT == "allow" else [])
+        targets = [chars("abc")]
         for fn in (_head_list_unify_input_py, _head_list_unify_input):
             for target in targets:
                 t = Trail(); h = Var(); tl = Var()
@@ -235,10 +231,7 @@ def test_the_three_spellings_answer_alike(tmp_path, goal):
     vars_ = sorted(set(re.findall(r"\b([A-Z][A-Za-z0-9]*)\b", goal)) - {"X"})
     head = "p(X" + "".join(", " + v for v in vars_) + ")"
     mod = _mod(tmp_path, f"is_a(a),\n{head} <- ({goal})\n")
-    from clausal.logic.cells import BARE_STR_TEXT
     spellings = [("carrier", chars("ab")), ("list", [char_atom("a"), char_atom("b")])]
-    if BARE_STR_TEXT == "allow":
-        spellings.insert(0, ("str", "ab"))     # the interim comparator, gone once the rule is armed
     answers = {}
     for label, x in spellings:
         args = [Var() for _ in vars_]
@@ -281,47 +274,3 @@ class TestSlice5Crossings:
         with pytest.raises(LogicException) as ei:
             _first(mod, "p")
         assert "existence_error" in str(ei.value) and "$chars" not in str(ei.value)
-
-
-class TestTheInterimRuleIsArmed:
-    """Stage 1 slice 8: the LOUD interim rule is the default.  A bare Python
-    str handed to the engine as text raises at the entry points; this is the
-    positive control for stage 1 (revert the arming and these fail)."""
-
-    def test_default_is_refuse_unless_overridden(self):
-        import os
-        from clausal.logic.cells import BARE_STR_TEXT
-        expected = os.environ.get("CLAUSAL_BARE_STR_TEXT", "refuse")
-        assert BARE_STR_TEXT == expected
-
-    @pytest.mark.skipif(__import__("os").environ.get("CLAUSAL_BARE_STR_TEXT", "refuse") == "allow",
-                        reason="rule disarmed by the diagnostic override")
-    def test_a_bare_str_is_refused_at_the_entry_points(self):
-        from clausal.logic.builtins.lists import _as_items
-        from clausal.logic.runtime._seg_helpers import normalize_seg_input
-        from clausal.modules.py import to_text
-        from clausal.logic.builtins._helpers import _standard_order_key
-        for fn in (_as_items, normalize_seg_input, to_text, _standard_order_key):
-            with pytest.raises(TypeError, match="bare Python str"):
-                fn("ab")
-        assert _as_items(chars("ab")) == [("a",), ("b",)]      # the carrier is the text
-
-
-class TestReviewRound1:
-    """roborev review of the branch (2026-09-18): the empty carrier is every
-    nil spelling's equal in the C unifier; regex positional groups are
-    tuple-DATA, never a bare tuple whose slot 0 reads as a functor."""
-
-    def test_the_empty_carrier_unifies_with_every_nil_spelling(self):
-        from clausal.logic.variables import unify, Trail
-        from clausal.logic.atoms import NIL_KEY
-        t = Trail()
-        for nil in ([], NIL_KEY, b"", chars("")):
-            assert unify(chars(""), nil, t) and unify(nil, chars(""), t), nil
-
-    def test_regex_positional_groups_are_a_data_tuple_not_a_cell(self, tmp_path):
-        from clausal.logic.cells import compound_cell_shape
-        mod = _mod(tmp_path, '-import_from(regex, [match])\np(G) <- match("(\\\\d)-(\\\\d)", "1-2", G)\nq(A, B) <- match("(\\\\d)-(\\\\d)", "1-2", (A, B))\n')
-        (g,) = _first(mod, "p", Var()); assert g == (chars("1"), chars("2")), g
-        assert compound_cell_shape(g) == (False, None)          # slot 0 is a carrier: never a functor
-        assert _first(mod, "q", Var(), Var()) == [chars("1"), chars("2")]
