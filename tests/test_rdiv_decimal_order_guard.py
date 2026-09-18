@@ -70,8 +70,8 @@ def test_cells_key_in_the_number_band():
 
 
 def test_cells_sort_among_numbers_not_after_atoms_and_compounds():
-    out = _msort([("a",), D99, ("f", 1), 20, R12, 5])
-    assert out == [R12, 5, D99, 20, ("a",), ("f", 1)]
+    out = _msort(["a", D99, ("f", 1), 20, R12, 5])
+    assert out == [R12, 5, D99, 20, "a", ("f", 1)]
 
 
 # ── identity: compare(=, X, Y) <=> X == Y, by construction ────────────────

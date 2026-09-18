@@ -14,6 +14,7 @@ import os
 import pytest
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call, solve, _deref_walk
 from clausal.import_hook import _load_module
 from clausal.terms import DictTerm, SetTerm
@@ -141,7 +142,7 @@ class TestDictSetFixture:
         # atom keys), so a description is the STRING it is written as.
         result = Var()
         sols = [deref(result)
-                for _ in call("test", test_name, module=logic_mod)]
+                for _ in call("test", chars(test_name), module=logic_mod)]
         return sols
 
     def test_origin(self, mod, logic_mod):
@@ -676,11 +677,13 @@ class TestDictSubscriptRead:
         """Task 15 fix round 4, item 1.  ``_subscript`` normalised the LOOKUP
         key to ``()`` but read a plain dict's mapping directly, so ``D[""]``
         on ``{"": 1}`` raised ``existence_error(dict_key, [])`` — the stored
-        key was never folded.  All four nil spellings are ONE key, and a plain
-        dict must answer exactly as the ``DictTerm`` does."""
+        key was never folded.  The nil spellings are ONE key, and a plain
+        dict must answer exactly as the ``DictTerm`` does.  Stage 2: a bare
+        Python ``""`` is the ATOM ``''``, not nil, so it is no longer one of
+        the spellings (``[]``, ``b""``, ``()`` remain)."""
         # nv
-        for d in ({"": 1}, DictTerm({(): 1})):
-            for key in ([], "", b"", ()):
+        for d in ({b"": 1}, {(): 1}, DictTerm({(): 1})):
+            for key in ([], b"", ()):
                 assert self._first_binding(logic_mod, d, key, Var()) == 1, (
                     d, key)
 

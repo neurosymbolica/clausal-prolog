@@ -26,11 +26,11 @@ def test_the_six_iso_ordering_rules():
     number-band change must not move any ISO term relative to another ISO
     term (spec §2), so these are the guard on that."""
     assert _lt(Var(), 1)                    # var before number
-    assert _lt(1, ("a",))                   # number before atom
-    assert _lt(("a",), ("f", 1))            # atom before compound
+    assert _lt(1, "a")                   # number before atom
+    assert _lt("a", ("f", 1))            # atom before compound
     assert _lt(("g", 1), ("f", 1, 2))       # arity before name
     assert _lt(("f", 1), ("f", 2))          # args left to right
-    assert _lt([], ("a",))                  # [] is an atom
+    assert _lt([], "a")                  # [] is an atom
 
 
 # --- the ISO float/int tiebreak --------------------------------------------
@@ -78,7 +78,7 @@ def test_cross_dimension_comparison_never_raises():
 
 
 def test_a_quantity_still_sorts_before_atoms_and_compounds():
-    assert _lt(Quantity(5, {"m": 1}), ("a",))
+    assert _lt(Quantity(5, {"m": 1}), "a")
     assert _lt(Quantity(5, {"m": 1}), ("f", 1))
 
 
@@ -147,7 +147,7 @@ def test_compare_equals_iff_iso_identical():
 
     terms = [1, 1.0, True, Decimal(1), Fraction(1),
              Quantity(1, {}), Quantity(1, {"m": 1}), Quantity(2, {"m": 1}),
-             2, 2.0, ("a",), ("b",), ("f", 1), ("f", 1, 2), ("g", 1),
+             2, 2.0, "a", "b", ("f", 1), ("f", 1, 2), ("g", 1),
              [], [1], [1, 2], chars("ab"), b"ab"]
     for a in terms:
         for b in terms:
@@ -161,7 +161,7 @@ def test_the_order_is_total_over_every_pair():
     from clausal.logic.builtins.iso_compare import _order_atom
 
     terms = [Var(), 1, 1.0, Decimal(1), Quantity(1, {"m": 1}), Quantity(1, {"s": 1}),
-             ("a",), ("f", 1), [], [1], chars("ab"), b"ab", {chars("a"): 1}, {1, 2}]
+             "a", ("f", 1), [], [1], chars("ab"), b"ab", {chars("a"): 1}, {1, 2}]
     for a in terms:
         for b in terms:
             ab, ba = _order_atom(a, b), _order_atom(b, a)

@@ -96,7 +96,7 @@ class TestHeadKeyCellBranch:
         assert head_key(("pair", 1, 2)) == ("pair", 2)
 
     def test_a_zero_arity_cell_reads_as_arity_zero(self):
-        assert head_key(("p",)) == ("p", 0)
+        assert head_key("p") == ("p", 0)
 
     def test_a_tuple_tag_cell_is_data_and_still_raises(self):
         """``(tuple, 1, 2)`` is tuple DATA -- it names no predicate."""
@@ -153,7 +153,7 @@ class TestCallNOverCells:
     def test_call_2_folds_its_extra_arg_onto_a_zero_arity_cell(self, mod):
         """ISO: ``call(f, B)`` is the goal ``f(B)``."""
         X = Var()
-        assert [deref(X) for _ in pcall("cg2", ("p",), X, module=_lm(mod))] == [1, 2]
+        assert [deref(X) for _ in pcall("cg2", "p", X, module=_lm(mod))] == [1, 2]
 
     def test_call_2_folds_its_extra_arg_onto_a_one_arity_cell(self, mod):
         """``call(pair(1), Y)`` is the goal ``pair(1, Y)``."""
@@ -166,28 +166,25 @@ class TestCallNOverCells:
     def test_call_3_folds_both_extra_args(self, mod):
         lm = _lm(mod)
         list(pcall("assertz", ("pair", 3, 4), module=lm))
-        assert len(list(pcall("cg3", ("pair",), 3, 4, module=lm))) == 1
-        assert list(pcall("cg3", ("pair",), 3, 5, module=lm)) == []
+        assert len(list(pcall("cg3", "pair", 3, 4, module=lm))) == 1
+        assert list(pcall("cg3", "pair", 3, 5, module=lm)) == []
 
     def test_a_bare_atom_goal_resolves_with_the_extra_args(self, mod):
-        """``call(p, X)`` is the goal ``p(X)``.  THE FLIP: the atom is the
-        arity-0 cell; a bare ``str`` is a STRING and is refused below."""
+        """``call(p, X)`` is the goal ``p(X)``.  STAGE 2 (atoms-as-str): the
+        atom IS the bare ``str``; the two spellings below agree."""
         X = Var()
         assert [deref(X)
                 for _ in pcall("cg2", mint("p"), X, module=_lm(mod))] == [1, 2]
 
     def test_a_bare_str_goal_has_no_procedure(self, mod):
-        """THE FLIP (spec §6.4): a ``str`` is a string — ``call("p", X)``
-        raises rather than running ``p/1``.  Task 15 item 3 (ISO alignment)
-        makes the refusal an ``existence_error`` for the ``'.'/N`` the string
-        actually names, not ``type_error(callable, …)``: the string IS a
-        compound and so IS callable (§6.3); the procedure is what is
-        missing."""
-        with pytest.raises(LogicException) as exc_info:
-            list(pcall("cg2", "p", Var(), module=_lm(mod)))
-        assert _error_term(exc_info.value)[0] == Compound(
-            "existence_error", (mint("procedure"),
-                                Compound("/", (mint("."), 3))))
+        """STAGE 2 (atoms-as-str, spec §3 Q1): a bare ``str`` IS the atom,
+        so ``call("p", X)`` is the goal ``p(X)`` and answers exactly what the
+        ``mint("p")`` spelling above answers -- not a refusal.  (Under THE
+        FLIP a ``str`` was a STRING and this raised ``existence_error`` for
+        ``'.'/3``; a string is the ``chars`` carrier now.)"""
+        X = Var()
+        assert [deref(X)
+                for _ in pcall("cg2", "p", X, module=_lm(mod))] == [1, 2]
 
     def test_a_non_cell_non_callable_goal_still_fails_silently(self, mod):
         """The translator session's pinned §4.2 contract, unchanged."""
@@ -252,7 +249,7 @@ class TestCallNOverCells:
         """``call((",",))`` used to fall past the arity-guarded refusal and
         fail silently while ``solve((",",), m)`` raised.  Fix round 1, F3."""
         with pytest.raises(LogicException) as exc_info:
-            list(pcall("cg1", (",",), module=_lm(mod)))
+            list(pcall("cg1", ",", module=_lm(mod)))
         assert _error_term(exc_info.value)[0].args[0] == mint(
             "callable_control_construct_unsupported")
 
@@ -441,15 +438,15 @@ class TestZeroArityControlConstructsByName:
     answered directly now: not refused (unlike ``,``/``;``/``->``, they need
     no goal-tree interpreter) and not looked up (no database defines them)."""
 
-    @pytest.mark.parametrize("goal", [("true",)])
+    @pytest.mark.parametrize("goal", ["true"])
     def test_true_succeeds_exactly_once(self, mod, goal):
         assert len(list(pcall("cg1", goal, module=_lm(mod)))) == 1
 
-    @pytest.mark.parametrize("goal", [("fail",), ("false",)])
+    @pytest.mark.parametrize("goal", ["fail", "false"])
     def test_fail_and_false_fail(self, mod, goal):
         assert list(pcall("cg1", goal, module=_lm(mod))) == []
 
-    @pytest.mark.parametrize("goal", [("!",)])
+    @pytest.mark.parametrize("goal", ["!"])
     def test_cut_succeeds_once_because_it_is_local_to_the_call(self, mod, goal):
         """ISO 7.8.3: a cut inside ``call/1`` is local to that call, so the
         barrier IS the call and there is nothing left inside it to cut.
@@ -467,44 +464,38 @@ class TestZeroArityControlConstructsByName:
         """Decided before the db lookups, like the control-construct refusal,
         so the behaviour never depends on how the builtin was reached."""
         from clausal.logic.builtins.higher_order import _resolve_named_goal
-        assert _resolve_named_goal(None, ("true",), (), "call/1") is not None
-        assert _resolve_named_goal(None, ("fail",), (), "call/1") is not None
+        assert _resolve_named_goal(None, "true", (), "call/1") is not None
+        assert _resolve_named_goal(None, "fail", (), "call/1") is not None
         assert _resolve_named_goal(
-            None, ("no_such_pred",), (), "call/1") is None
+            None, "no_such_pred", (), "call/1") is None
 
 
-# ── a bare str goal is the 1-tuple cell (final review M-b) ─────────────────
+# ── a bare str goal IS the atom (stage 2, atoms-as-str) ────────────────────
 
 
 class TestBareStrGoalInSolve:
-    """THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) settled the question
-    this class used to answer the other way.  A bare ``str`` goal was made to
-    mean the 1-tuple cell (final review M-b, so that three spellings of one
-    goal agreed); a ``str`` is a STRING now, the string ``"z0"`` is the
-    ``'.'/2`` compound, and ``solve("z0", m)`` is
-    ``existence_error(procedure, '.'/2)`` (Task 15 item 3).  The cell is the
-    only spelling of the goal."""
+    """STAGE 2 (atoms-as-str, spec §3 Q1): a bare ``str`` IS the atom, so
+    ``solve("z0", m)`` is the call of ``z0/0`` -- the same goal the
+    ``Compound("z0", ())`` spelling lowers to.  (THE FLIP had made a ``str``
+    a STRING, with ``solve("z0", m)`` an ``existence_error(procedure,
+    '.'/2)``; a string is the ``chars`` carrier now, and the old 1-tuple cell
+    spelling is refused by the engine.)"""
 
     def test_a_bare_str_goal_has_no_procedure(self, mod):
         lm = _lm(mod)
-        assert len(list(solve(("z0",), lm))) == 1
-        with pytest.raises(LogicException) as exc_info:
-            list(solve("z0", lm))
-        assert _error_term(exc_info.value)[0] == Compound(
-            "existence_error", (mint("procedure"),
-                                Compound("/", (mint("."), 2))))
+        assert len(list(solve("z0", lm))) == 1
+        assert len(list(solve(Compound("z0", ()), lm))) == 1
 
     def test_the_lowering_path_refuses_a_bare_str_goal(self):
         from clausal.logic.solve import _term_to_goal
-        with pytest.raises(LogicException):
-            _term_to_goal("z0")
+        assert _term_to_goal("z0") == _term_to_goal(Compound("z0", ()))
 
     def test_an_unknown_cell_goal_still_reports_the_missing_predicate(
             self, mod):
         from clausal.predicate_diagnostics import PredicateNotFoundError
         lm = _lm(mod)
         with pytest.raises(PredicateNotFoundError):
-            list(solve(("no_such_pred",), lm))
+            list(solve("no_such_pred", lm))
 
 
 # ── assertz / asserta / retract with a cell ────────────────────────────────

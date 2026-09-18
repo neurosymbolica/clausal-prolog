@@ -16,7 +16,6 @@ import warnings
 
 import pytest
 
-from clausal.logic.cells import chars_text
 
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
@@ -149,7 +148,7 @@ class TestPrintedLabel:
             "-import_from(py.units, [metre, second])\n"
             "q(S) <- (V is 10(metre/second), S is ++(str(V)))\n"), tmp_path)
         got = _one(mod, "q")
-        assert chars_text(got) == "10 (metre / second)"
+        assert got == "10 (metre / second)"   # a ++ escape's str result is the ATOM (stage 2)
 
     def test_mismatch_message_names_lowercase_units(self):
         """# nv"""

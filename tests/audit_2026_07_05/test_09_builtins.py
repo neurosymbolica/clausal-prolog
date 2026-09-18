@@ -574,8 +574,8 @@ def test_F015_regression_succ_rejects_bool(fix):
 
 def test_F016_must_be_list_string(fix):
     _, m = fix
-    assert _first(m, "is_list", "abc")  # locked-in F080 behaviour
-    assert _first(m, "must_be", mint("list"), "abc")  # raises today
+    assert _first(m, "is_list", chars("abc"))  # locked-in F080 behaviour (stage 2: the string is the carrier)
+    assert _first(m, "must_be", mint("list"), chars("abc"))  # raises today
 
 
 # ═══════════════════════════════════════════════════════════════════════════

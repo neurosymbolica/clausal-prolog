@@ -422,7 +422,7 @@ class TestParse3AtomsOption:
         # the same text.  At Stage B, ``atoms(["red"])`` written in source is
         # a list of STRINGS — demanding atoms there would make the option
         # unwritable in the notation it exists to serve.
-        for element in (chars("red"), "red", ("red",)):
+        for element in (chars("red"), "red"):
             t = Var()
             sols, _ = simple_solutions(
                 _parse_3, chars('{"k": "red"}'), t, [("atoms", [element])]
@@ -449,10 +449,10 @@ class TestGenerateRejectsCells:
         assert exc.value.term.args[0].args[0] == mint("json_term")
 
     def test_generate_of_an_atom_cell_is_its_spelling(self):
-        assert _clausal_to_python(("red",)) == "red"
+        assert _clausal_to_python(mint("red")) == "red"
 
     def test_generate_of_a_dict_with_atom_keys(self):
-        assert _clausal_to_python(DictTerm({("k",): ("v",)})) == {"k": "v"}
+        assert _clausal_to_python(DictTerm({mint("k"): mint("v")})) == {"k": "v"}
 
     def test_a_compound_cell_KEY_is_a_type_error_not_a_silent_failure(self):
         # The key arm must go through the same converter as the value arm:
@@ -468,7 +468,7 @@ class TestGenerateRejectsCells:
         # Only a str-functor cell of arity >= 1 is a json_term type_error.
         # Tuple DATA is content, not a compound, and keeps its array reading.
         from clausal.logic.cells import TUPLE_TAG, make_tuple_cell
-        cell = make_tuple_cell(1, ("red",))
+        cell = make_tuple_cell(1, mint("red"))
         assert cell[0] is TUPLE_TAG
         assert _clausal_to_python(cell) == [1, "red"]
 

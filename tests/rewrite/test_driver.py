@@ -237,12 +237,13 @@ def _rename_rule(tmp_path):
     rule = tmp_path / "rename.clausal"
     rule.write_text(textwrap.dedent("""\
         -double_quotes(chars)
+        -private([old, new])
         -import_from(reflection, [Clause, Goal])
 
         rewrite_clause(Clause(H, GOALS, P), Clause(H, GOALS2, P)) <- (
             rename_goal(GOALS, GOALS2)
         )
-        rename_goal([Goal("old", A, K), *GS], [Goal("new", A, K), *GS]),
+        rename_goal([Goal(old, A, K), *GS], [Goal(new, A, K), *GS]),
         rename_goal([G, *GS], [G, *GS2]) <- rename_goal(GS, GS2)
         """))
     return [rule]
@@ -312,9 +313,10 @@ def test_modification_with_count_change_is_refused(tmp_path):
     mixed = tmp_path / "mixed.clausal"
     mixed.write_text(textwrap.dedent("""\
         -double_quotes(chars)
+        -private([old, new])
         -import_from(reflection, [Clause, Goal])
 
-        rewrite_clause(Clause(H, [Goal("old", A, K), _], P), Clause(H, [Goal("new", A, K)], P)),
+        rewrite_clause(Clause(H, [Goal(old, A, K), _], P), Clause(H, [Goal(new, A, K)], P)),
         """))
     with pytest.raises(RewriteError, match="splice"):
         rewrite_source("p(X) <- (old(X), m(X))\n", [mixed])

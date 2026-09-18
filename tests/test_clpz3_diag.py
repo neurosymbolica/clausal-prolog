@@ -10,6 +10,7 @@ import pytest
 z3 = pytest.importorskip("z3")
 
 from clausal.logic.atoms import is_atom, mint
+from clausal.logic.cells import chars
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.clpz3 import (
@@ -145,11 +146,11 @@ class TestNamedConstraintNamesAreAtoms:
         x = Var()
         in_z3(x, 1, 10, trail)
         with pytest.raises(LogicException) as exc:
-            z3_named(Gt(left=x, right=5), "x_big", trail)
+            z3_named(Gt(left=x, right=5), chars("x_big"), trail)
         formal = exc.value.term.args[0]
         assert formal.functor == "type_error"
         assert formal.args[0] == mint("atom")
-        assert formal.args[1] == "x_big"
+        assert formal.args[1] == chars("x_big")
 
     def test_an_unbound_name_fails_rather_than_raising(self):
         """Fix round 1: a variable Name is a MODE signal, not a type fault —
@@ -456,28 +457,28 @@ class TestNamePositionsAreAtoms:
         # nv
         trail = Trail()
         with pytest.raises(LogicException) as exc:
-            z3_set_logic("QF_LIA", trail)
+            z3_set_logic(chars("QF_LIA"), trail)
         assert _formal_type(exc) == mint("atom")
 
     def test_string_option_key_is_a_type_error(self):
         # nv
         trail = Trail()
         with pytest.raises(LogicException) as exc:
-            z3_set_option("timeout", 5000, trail)
+            z3_set_option(chars("timeout"), 5000, trail)
         assert _formal_type(exc) == mint("atom")
 
     def test_string_datatype_name_is_a_type_error(self):
         # nv
         trail = Trail()
         with pytest.raises(LogicException) as exc:
-            z3_declare_datatype("Shade", [(mint("pale"), [])], trail)
+            z3_declare_datatype(chars("Shade"), [(mint("pale"), [])], trail)
         assert _formal_type(exc) == mint("atom")
 
     def test_string_constructor_name_is_a_type_error(self):
         # nv
         trail = Trail()
         with pytest.raises(LogicException) as exc:
-            z3_declare_datatype(mint("Shade2"), [("pale2", [])], trail)
+            z3_declare_datatype(mint("Shade2"), [(chars("pale2"), [])], trail)
         assert _formal_type(exc) == mint("atom")
 
     def test_unbound_logic_fails_rather_than_raising(self):

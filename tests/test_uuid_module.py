@@ -567,7 +567,7 @@ class TestFixtureIntegration:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("test", name, module=self.module), \
+        assert _succeeds("test", chars(name), module=self.module), \
             f"test({name!r}) failed"
 
 

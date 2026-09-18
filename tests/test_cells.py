@@ -150,7 +150,8 @@ class TestCellPrimitives:
     def test_is_cell_true_for_str_functor(self):
         # nv
         assert is_cell(("point", 1, 2)) is True
-        assert is_cell(("atom",)) is True
+        with pytest.raises(TypeError, match="reserved"):   # STAGE 2: the 1-tuple is RESERVED
+            is_cell(("atom",))
 
     def test_is_cell_true_for_tuple_tag(self):
         # nv

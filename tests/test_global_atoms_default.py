@@ -440,12 +440,14 @@ class TestStrAtomAcceptance:
         mod = _atoms_mod("tsaa_atom_empty")
         assert _succeeds("atom", mint(""), mod=mod)
 
-    def test_atom_still_true_for_zero_field_class(self):
-        # Transitional dual-accept: the class route keeps working until
-        # Task 2/3 retire atom-minting.
+    def test_atom_false_for_zero_field_class(self):
+        # STAGE 2 of the atoms-as-str flip (spec §4): no class is an atom.
+        # The class route the transitional dual-accept kept open is closed;
+        # the atom of that name is the str, and ``atom/1`` says so.
         atom_cls = make_predicate("tsaa_class_atom", [])
         mod = _atoms_mod("tsaa_atom_class")
-        assert _succeeds("atom", atom_cls, mod=mod)
+        assert not _succeeds("atom", atom_cls, mod=mod)
+        assert _succeeds("atom", mint("tsaa_class_atom"), mod=mod)
 
     def test_atom_false_for_int_var_compound_and_1field_class(self):
         mod = _atoms_mod("tsaa_atom_neg")
@@ -483,16 +485,20 @@ class TestIsAtomValueHelper:
         assert is_atom_value(mint("")) is True
 
     def test_false_for_plain_str(self):
-        # THE FLIP (spec §5.1) INVERTS the P3-1 acceptance: a ``str`` is a
-        # STRING, so it is not an atom value.
-        assert is_atom_value("red") is False
-        assert is_atom_value("") is False
+        # THE FLIP (spec §5.1) INVERTS the P3-1 acceptance: a STRING is not
+        # an atom value.  Since stage 2 the bare ``str`` IS the atom, so the
+        # string is spelled through its carrier.
+        assert is_atom_value(chars("red")) is False
+        assert is_atom_value(chars("")) is False
 
-    def test_true_for_zero_field_class(self):
+    def test_false_for_zero_field_class(self):
+        # STAGE 2 (spec §4): no class is an atom -- the value-level widening
+        # that admitted a zero-field class is retired with the cell.
         atom_cls = make_predicate("tiav_class_atom", [])
-        assert is_atom_value(atom_cls) is True
-        # and the pre-existing zero-field-CLASS test agrees on this shape
+        assert is_atom_value(atom_cls) is False
+        # it is still a zero-field CLASS, which is a different question
         assert is_zero_field_class(atom_cls) is True
+        assert is_atom_value(mint("tiav_class_atom")) is True
 
     def test_false_for_int_float_none_bytes(self):
         assert is_atom_value(42) is False
@@ -528,14 +534,16 @@ class TestFunctorArityAtomCell:
         assert functor_arity(mint("")) == ("", 0)
 
     def test_functor_arity_plain_str_is_out_of_domain(self):
-        assert functor_arity("red") is None
-        assert functor_arity("") is None
+        # Stage 2: the bare ``str`` is the atom; the STRING is the carrier.
+        assert functor_arity(chars("red")) is None
+        assert functor_arity(chars("")) is None
 
-    def test_functor_arity_matches_zero_field_class_shape(self):
+    def test_functor_arity_none_for_zero_field_class(self):
+        # STAGE 2 (spec §4): no class is an atom, so a zero-field class is
+        # outside ``functor_arity``'s domain; the atom of its name is name/0.
         atom_cls = make_predicate("tfasa_class_atom", [])
-        assert functor_arity(atom_cls) == (atom_cls, 0)
-        assert (functor_arity(mint("tfasa_class_atom"))[1]
-                == functor_arity(atom_cls)[1] == 0)
+        assert functor_arity(atom_cls) is None
+        assert functor_arity(mint("tfasa_class_atom")) == ("tfasa_class_atom", 0)
 
 
 class TestStrAtomUnification:
@@ -650,7 +658,7 @@ def test_bare_atom_arrives_as_the_arity_0_cell_at_python_seam():
     assert len(results) == 1
     val = results[0]
     assert val == mint("atompivot_seam_red")
-    assert type(val) is tuple and len(val) == 1 and type(val[0]) is str
+    assert type(val) is str   # stage 2: the atom is the Python str
 
 
 def test_strictness_preserved_across_the_lowering_flip():

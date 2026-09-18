@@ -123,7 +123,7 @@ def test_embed_double_minus_produces_term():
     console = ClausalConsole(filename="<test>")
     console.runsource("result = --foo", "<test>", "single")
     # THE SEAM: ``--foo`` is the atom cell, a runtime term, not a node.
-    assert console.locals.get("result") == ("foo",)
+    assert console.locals.get("result") == "foo"
 
 
 # ── ClausalConsole — *(goals) query syntax ───────────────────────────────────

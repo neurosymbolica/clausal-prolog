@@ -485,4 +485,4 @@ class TestLoggingFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("test", name, module=self.mod)
+        assert _succeeds("test", chars(name), module=self.mod)

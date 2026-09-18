@@ -77,7 +77,7 @@ class TestFacts:
         # A STRING (chars mode) reifies as the plain ``str`` it is.
         items = reify_source('-double_quotes(chars)\nitem("widget", 2.5),\n')
         (clause,) = clauses_of(items)
-        assert clause.head.args == [chars("widget"), 2.5]
+        assert clause.head.args == ["widget", 2.5]   # STAGE 2: the vocabulary spells a string as the str; an atom is Atom(name)
 
     def test_atom_argument_reifies_as_atom(self):
         items = reify_source("status(ok, 1),\n")

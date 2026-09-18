@@ -78,7 +78,7 @@ def test_complex():
 
 def test_single_quoted_is_an_atom():
     # nv — THE FLIP (spec §7): ``'hello'`` is an ATOM in every mode.
-    assert term_eval("'hello'", tuple) == mint("hello")
+    assert term_eval("'hello'", str) == mint("hello")
 
 
 def test_bytes():

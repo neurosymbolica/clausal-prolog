@@ -69,7 +69,7 @@ def _engine_compare(run_clausal, a, b):
 
 @pytest.mark.parametrize("a,b,expected", COMPARE_ROWS)
 def test_compare_three_engine(a, b, expected, run_clausal):
-    assert _engine_compare(run_clausal, a, b) == [repr((expected,))]
+    assert _engine_compare(run_clausal, a, b) == [repr(expected)]
 
 
 @pytest.mark.parametrize("a,b,expected", COMPARE_ROWS)
@@ -94,8 +94,8 @@ def test_order_predicates_register_term_classes_of_the_right_arity():
 
 UNIV_DECON = [
     # (engine term, engine repr, scryer goal, scryer output)
-    ("h(1, 2)", "[('h',), 1, 2]", "h(1, 2) =.. L", "[h,1,2]"),
-    ("a",       "[('a',)]",       "a =.. L",       "[a]"),
+    ("h(1, 2)", "['h', 1, 2]", "h(1, 2) =.. L", "[h,1,2]"),
+    ("a",       "['a']",       "a =.. L",       "[a]"),
 ]
 
 

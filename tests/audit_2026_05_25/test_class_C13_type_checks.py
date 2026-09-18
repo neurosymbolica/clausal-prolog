@@ -65,7 +65,7 @@ def test_F080_is_list_rejects_str_strings_as_lists_gap():
     mod = load_inline_clausal("c13_f080", "").__dict__["$module"]
 
     # The expected behaviour: is_list("abc") should succeed.
-    result = _check(mod, "is_list", "abc")
+    result = _check(mod, "is_list", chars("abc"))   # stage 2: a bare str is the ATOM; the string is the carrier
     assert result == "T", (
         f"is_list(\"abc\") should succeed under strings-as-lists contract, "
         f"got {result} (expected T)"
@@ -99,9 +99,9 @@ def test_F081_string_predicate_not_registered():
     )
 
     # And it should fail for a non-string.
-    result = _check(mod, "string", ["a", "b", "c"])
+    result = _check(mod, "string", [chars("a"), chars("b"), chars("c")])
     assert result == "F", (
-        f"string([\"a\",\"b\",\"c\"]) should fail (not a string), "
+        f"string([\"a\",\"b\",\"c\"]) (a list of one-char STRINGS) should fail (not a string), "
         f"got {result} (expected F)"
     )
 

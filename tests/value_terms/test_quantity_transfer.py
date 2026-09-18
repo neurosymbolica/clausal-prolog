@@ -170,7 +170,7 @@ from clausal.terms import Quantity  # noqa: E402
 
 
 def test_the_dims_slot_helper_emits_dimensionless_for_an_empty_map():
-    assert _dims_to_term({}) == ("dimensionless",)
+    assert _dims_to_term({}) == "dimensionless"
 
 
 def test_the_dims_slot_helper_SORTS_on_emit():
@@ -194,7 +194,7 @@ def test_money_emits_its_decimal_magnitude_WITH_its_scale():
 def test_three_percent_emits_as_a_dimensionless_decimal():
     q = Quantity(3, units.percent)
     assert to_transfer(q) == \
-        ("quantity", ("decimal", 3, 2), ("unit", 1, ("dimensionless",)))
+        ("quantity", ("decimal", 3, 2), ("unit", 1, "dimensionless"))
 
 
 def test_a_divided_value_emits_an_rdiv_magnitude():
@@ -255,7 +255,7 @@ def test_an_AUTHORED_ratio_is_multiplied_through_on_read():
 
 def test_a_decimal_ratio_stays_EXACT_on_read():
     # 3 percent, written with the ratio rather than pre-scaled
-    t = ("quantity", 3, ("unit", ("decimal", 1, 2), ("dimensionless",)))
+    t = ("quantity", 3, ("unit", ("decimal", 1, 2), "dimensionless"))
     q = from_transfer(t)
     assert q == Quantity(3, units.percent)
     assert isinstance(q.value, Decimal) and q.value == Decimal("0.03")
@@ -277,7 +277,7 @@ def test_read_is_ORDER_INSENSITIVE_in_the_dims_slot():
 
 
 def test_a_dimensionless_term_reads_to_an_empty_dims_map():
-    q = from_transfer(("quantity", 4, ("unit", 1, ("dimensionless",))))
+    q = from_transfer(("quantity", 4, ("unit", 1, "dimensionless")))
     assert isinstance(q, Quantity) and dict(q.dims) == {} and q.value == 4
 
 
@@ -285,13 +285,13 @@ def test_a_MALFORMED_quantity_term_comes_back_unchanged():
     bad = [
         ("quantity", 5),                                              # arity
         ("quantity", 5, ("unit", 1)),                                 # unit arity
-        ("quantity", 5, ("units", 1, ("dimensionless",))),            # wrong functor
-        ("quantity", 5, ("unit", 1, ("dimensions",))),                # empty dimensions/N
+        ("quantity", 5, ("units", 1, "dimensionless")),               # wrong functor
+        ("quantity", 5, ("unit", 1, "dimensions")),                   # empty dimensions/N
         ("quantity", 5, ("unit", 1, ("dimensions", ("metre", 0)))),   # zero exponent
         ("quantity", 5, ("unit", 1, ("dimensions", ("metre", 1), ("metre", 2)))),  # dup
-        ("quantity", "5", ("unit", 1, ("dimensionless",))),           # magnitude not a number
-        ("quantity", 5, ("unit", "1", ("dimensionless",))),           # ratio not a number
-        ("quantity", True, ("unit", 1, ("dimensionless",))),          # bool is not a number
+        ("quantity", "5", ("unit", 1, "dimensionless")),              # magnitude not a number
+        ("quantity", 5, ("unit", "1", "dimensionless")),              # ratio not a number
+        ("quantity", True, ("unit", 1, "dimensionless")),             # bool is not a number
         ("quantity", 5, ("unit", 1, ("dimensions", ("metre", "1")))), # exponent not int
     ]
     for t in bad:
@@ -351,9 +351,10 @@ def test_a_tagged_data_tuple_still_converts_its_payload():
 
 
 def test_the_dims_slot_helper_reads_both_functors_and_raises_on_anything_else():
-    assert _dims_from_term(("dimensionless",)) == {}
+    assert _dims_from_term("dimensionless") == {}
     assert _dims_from_term(("dimensions", ("second", -2), ("metre", 1))) == {"metre": 1, "second": -2}
-    for bad in (("dimensions",), ("dims", ("metre", 1)), ("dimensions", ("metre", 0)),
-                ("dimensions", ("metre", 1), ("metre", 2)), ("dimensions", ("metre", "1")), "dimensionless"):
+    for bad in ("dimensions", ("dims", ("metre", 1)), ("dimensions", ("metre", 0)),
+                ("dimensions", ("metre", 1), ("metre", 2)), ("dimensions", ("metre", "1")),
+                ("dimensionless",)):
         with pytest.raises((TypeError, ValueError)):
             _dims_from_term(bad)

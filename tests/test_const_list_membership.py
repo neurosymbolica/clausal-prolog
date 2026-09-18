@@ -29,6 +29,7 @@ import tempfile
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.compiler.compile_ctx import (
     _ALL_OPTIMISATIONS,
@@ -233,7 +234,7 @@ def test_a_string_query_does_not_match_the_atom_elements(build):
     """
     assert len(_solutions(build, "mixed", _atom(build, "a"))) == 2
     assert len(_solutions(build, "mixed", mint("a"))) == 2
-    assert len(_solutions(build, "mixed", "a")) == 0
+    assert len(_solutions(build, "mixed", chars("a"))) == 0
     assert len(_solutions(build, "mixed", mint("b"))) == 0
 
 
@@ -353,9 +354,9 @@ class TestConstSetBuilder:
         collide with a spelling.  A STRING is exactly that collision — after
         the flip ``"a"`` and ``a`` are different terms that must not unify —
         so a list holding both keeps the atom CELL in the set."""
-        built = _const_set([mint("a"), "a", 1, None])
+        built = _const_set([mint("a"), chars("a"), 1, None])
         assert built.__class__ is frozenset
-        assert built == frozenset({mint("a"), "a", 1, None})
+        assert built == frozenset({mint("a"), chars("a"), 1, None})
 
     def test_duplicate_atoms_are_caught_through_their_spellings(self):
         assert _const_set([mint("a"), mint("a"), mint("b")]) is False
@@ -371,7 +372,7 @@ class TestConstSetBuilder:
         assert _cset_atom(mint("a")) is True
         assert _cset_atom(char_atom("a")) is True
         assert _cset_atom(("f", 1)) is False
-        assert _cset_atom("a") is False       # a STRING, not an atom
+        assert _cset_atom(chars("a")) is False       # a STRING, not an atom
         assert _cset_atom(1) is False
 
     def test_refuses_duplicates(self):
@@ -443,7 +444,7 @@ def test_a_string_operand_cannot_match_a_spellings_set(build):
     is what keeps it out: in spellings mode a non-atom operand takes the
     scan.  Its char-list spelling is the same term as the string, and must
     answer the same."""
-    assert _solutions(build, "atoms4", "a") == []
+    assert _solutions(build, "atoms4", chars("a")) == []
     assert _solutions(build, "atoms4", [mint("a")]) == []
     assert _solutions(build, "atoms4", mint("a")) == [(mint("a"),)]
 
@@ -462,7 +463,7 @@ def test_a_mixed_callsite_fires_too_and_keeps_whole_terms():
     assert list(call("mixed_kinds", mint("a"), module=mod))
     built = fn.__globals__[cells[0]][0]
     assert built.__class__ is frozenset
-    assert mint("a") in built and "a" not in built
+    assert mint("a") in built and chars("a") not in built
 
 
 def test_const_set_is_a_registered_optimisation():

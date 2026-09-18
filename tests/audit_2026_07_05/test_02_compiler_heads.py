@@ -446,7 +446,7 @@ class TestF002ListDispatchFallthrough:
         # A STRING caller: "ab" is the list of its char atoms, so it takes
         # the ``[LH, *LT]`` cons clause exactly as ``[9]`` does.
         R = Var()
-        assert collect(mod, "ld2", "ab", R, outv=[R]) == [
+        assert collect(mod, "ld2", chars("ab"), R, outv=[R]) == [
             (mint("cons2"),), (mint("any2"),)]
 
     def test_control_var_enumerates_all(self, mod):

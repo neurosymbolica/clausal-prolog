@@ -681,7 +681,7 @@ def test_guard_escapes_and_literals(tmp_path):
     e = Var()
     assert _values(m.sub([0, 1, 2, 3], e), e) == [[1, 2]]
     s = Var()
-    assert _values(m.greet(chars("bob"), s), s) == [chars("hello bob!")]
+    assert _values(m.greet(chars("bob"), s), s) == ["hello bob!"]
 
 
 def test_guard_binop_structural_unify(tmp_path):

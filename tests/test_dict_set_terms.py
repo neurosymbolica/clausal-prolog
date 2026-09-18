@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.builtins import structural_unify
 from clausal.logic.variables import Var, Trail, deref, walk, is_var, unify
 from clausal.terms import DictTerm, SetTerm, term_str
@@ -97,8 +98,9 @@ class TestDictTermBasics:
         assert "'x': 1" in repr(d)
 
     def test_term_str(self):
-        # nv
-        d = DictTerm({"x": 1})
+        # nv -- a STRING key prints double-quoted (stage 2: the string is the
+        # chars carrier; a bare ``str`` is an ATOM)...
+        d = DictTerm({chars("x"): 1})
         s = term_str(d)
         assert '"x": 1' in s
         # ...and an ATOM key prints unquoted.

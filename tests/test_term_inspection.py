@@ -9,6 +9,7 @@ Tests for:
 import pytest
 
 from clausal.logic.atoms import is_atom, mint
+from clausal.logic.cells import chars
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -814,7 +815,7 @@ class TestGlobalAtom:
         suites down before anyone saw why (2026-09-08)."""
         import pytest
         from clausal.logic.exceptions import LogicException
-        for bad in ("date", ["d", "a", "t", "e"], 42):
+        for bad in (chars("date"), ["d", "a", "t", "e"], 42):
             with pytest.raises(LogicException) as info:
                 list(_global_atom_call(bad, Var()))
             shown = repr(info.value.term)

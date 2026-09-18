@@ -214,17 +214,23 @@ class TestAtomKeyCollapse:
     def test_class_atom_key_matches_same_spelled_atom_key(self):
         from clausal.logic.predicate import make_predicate
 
+        # STAGE 2 (spec 2026-09-18 §4): no class is an atom.  The atom `work`
+        # is the str and keys in the atom band; the CLASS keys in the opaque
+        # band, apart from it -- the "same-spelled class and atom are one
+        # atom" rule of P3-1 Task 4 is retired with the 1-tuple.
         atom_cls = make_predicate("work", [])
-        assert _standard_order_key(atom_cls) == _standard_order_key(mint("work"))
-        assert _standard_order_key(atom_cls) == (_ORD_ATOM, "work")
+        assert _standard_order_key(mint("work")) == (_ORD_ATOM, "work")
+        assert _standard_order_key(atom_cls) != _standard_order_key(mint("work"))
+        assert _standard_order_key(atom_cls)[0] > _ORD_ATOM
 
     def test_same_spelled_atom_and_class_atom_sort_adjacent_equal(self):
         from clausal.logic.predicate import make_predicate
 
         atom_cls = make_predicate("work", [])
         # Neither is ordered strictly before the other by the key.
-        ordered = _key_sorted([mint("work"), atom_cls])
-        assert {_standard_order_key(x) for x in ordered} == {(_ORD_ATOM, "work")}
+        # STAGE 2: the class sorts AFTER the atom of its name (opaque band), never equal
+        ordered = _key_sorted([atom_cls, mint("work")])
+        assert ordered[0] == "work" and ordered[1] is atom_cls
 
     def test_mixed_atoms_strings_numbers_compounds_key_shape(self):
         """A representative mixed list: each rank keeps its own key shape."""
@@ -314,8 +320,8 @@ class TestCellStandardOrder:
     """
 
     def test_cell_atom_keys_in_atom_band(self):
-        assert _standard_order_key(("bar",)) == (_ORD_ATOM, "bar")
-        assert _standard_order_key(("bar",)) == _standard_order_key(mint("bar"))
+        assert _standard_order_key("bar") == (_ORD_ATOM, "bar")
+        assert _standard_order_key("bar") == _standard_order_key(mint("bar"))
 
     def test_cell_keys_in_compound_band_arity_first(self):
         k = _standard_order_key(("f", 1, 2))
@@ -340,13 +346,13 @@ class TestCellStandardOrder:
         lm = mod.__dict__["$module"]
         out = Var()
         answers = [deref(out)
-                   for _ in solve(("msort", [("f", chars("x")), [1], ("b",), 1], out), lm)]
+                   for _ in solve(("msort", [("f", chars("x")), [1], "b", 1], out), lm)]
         assert len(answers) == 1
         # Task 15 item 1 (ISO 7.2.1, Scryer-verified): a list is the ``'.'/2``
         # compound, so it sorts among the ARITY-2 compounds -- AFTER the
         # arity-1 cell ``f("x")``, not before every compound as the retired
         # sequence band had it.
-        assert answers[0] == [1, ("b",), ("f", chars("x")), [1]]
+        assert answers[0] == [1, "b", ("f", chars("x")), [1]]
 
 
 # ── Task 15 item 1: lists, strings and code lists key as ``'.'/2`` ───────

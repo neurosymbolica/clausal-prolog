@@ -98,7 +98,7 @@ zorp(['a', 'b', 'c']) <- (helper(1))
     n_bar_list = sum(1 for _ in call("bar", [mint("a"), mint("b"), mint("c")], module=mod))
     n_quux_str = sum(1 for _ in call("quux", mint("abc"), module=mod))
     n_quux_list = sum(1 for _ in call("quux", [mint("a"), mint("b"), mint("c")], module=mod))
-    n_zorp_str = sum(1 for _ in call("zorp", "abc", module=mod))
+    n_zorp_str = sum(1 for _ in call("zorp", chars("abc"), module=mod))
     n_zorp_list = sum(1 for _ in call("zorp", [mint("a"), mint("b"), mint("c")], module=mod))
 
     # P3-1 \u00a71b: same-type combinations still return 1; cross-type

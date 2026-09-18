@@ -245,7 +245,7 @@ literal_file_name(NAME) <- (
     def test_goal_functor_answers_an_atom_not_a_string(self, matchers):
         names = _all_bindings("head_name", chars("edge(1, 2),\n"), module=matchers)
         assert names == [mint("edge")]
-        assert names[0] != "edge"  # a STRING would be a silent-mismatch bug
+        assert names[0] != chars("edge")  # a STRING would be a silent-mismatch bug
 
 
 class TestPythonSide:

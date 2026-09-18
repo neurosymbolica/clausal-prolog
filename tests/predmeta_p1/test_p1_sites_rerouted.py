@@ -15,6 +15,7 @@ import pytest
 
 from clausal import Var
 from clausal.import_hook import _load_module
+from clausal.logic.atoms import is_atom
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
 
@@ -322,7 +323,7 @@ def test_a_clause_block_may_find_a_non_class_under_its_own_name(tmp_path,
     # TUPLE, not a predicate class, and step 4 looked the name up in this very
     # dict.  Dropping the guard hands this tuple to ``_bind_row``.
     binding = mod.module_dict["shared_name"]
-    assert isinstance(binding, tuple), type(binding)
+    assert is_atom(binding), type(binding)
     from clausal.logic.predicate import PredicateMeta
     assert not isinstance(binding, PredicateMeta)
     # And the load survived: the clause block got its own predicate anyway.

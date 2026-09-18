@@ -64,7 +64,7 @@ chk_price(N) <- price(7.89(euro), N)
 # so f-strings and ++() escapes take the same path.
 tagd(f"v{0}", tagged_) <- (number(1))
 
-chk_tag(N) <- tagd("v0", N)
+chk_tag(N) <- tagd('v0', N)   # stage 2: an f-string thunk result is the ATOM, so the caller matches the atom
 
 esc(++(2 + 3), escd_) <- (number(1))
 

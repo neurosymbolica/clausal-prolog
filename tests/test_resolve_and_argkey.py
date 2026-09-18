@@ -12,6 +12,7 @@ Verifies that:
 from __future__ import annotations
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, is_var, get_attr, unify, unify_with_occurs_check
 from clausal.logic.clpfd import (
     FD_KEY, fd_eq, fd_ne, fd_lt, fd_le, fd_gt, fd_ge,
@@ -142,7 +143,8 @@ class TestRuntimeArgKey:
         # nv — spec §6.9: an ATOM keys ``(spelling, 0)``; a ``str`` is a
         # STRING, which is NOT indexable and keys ``_INDEX_VAR``.
         assert _runtime_arg_key(mint("hello")) == ("hello", 0)
-        assert _runtime_arg_key("hello") is _INDEX_VAR
+        assert _runtime_arg_key("hello") == ("hello", 0)   # STAGE 2: a str IS the atom
+        assert _runtime_arg_key(chars("hello")) is _INDEX_VAR   # the STRING is unindexable
 
     def test_bool_true_returns_self(self):
         """bool goes through isinstance fallback, not type(a) is int."""

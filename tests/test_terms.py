@@ -14,6 +14,7 @@ import dataclasses
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.terms import (
     Compound,
     KWTerm,
@@ -86,7 +87,7 @@ class TestCompound:
 
     def test_str_with_args(self):
         # nv
-        assert str(Compound("foo", (1, "x"))) == 'foo(1, "x")'
+        assert str(Compound("foo", (1, chars("x")))) == 'foo(1, "x")'
 
     def test_nested_str(self):
         # nv
@@ -121,7 +122,7 @@ class TestPythonLiteralsAreTerms:
 
     def test_str_is_term(self):
         # nv
-        t = "hello"
+        t = chars("hello")
         assert term_str(t) == '"hello"'
 
     def test_bool_true_is_term(self):
@@ -259,7 +260,7 @@ class TestTermStr:
 
     def test_str(self):
         # nv — a STRING is double-quoted; the ATOM is what quotes with ''.
-        assert term_str("abc") == '"abc"'
+        assert term_str(chars("abc")) == '"abc"'
         assert term_str(mint("abc")) == "abc"
 
     def test_bytes(self):
@@ -477,7 +478,7 @@ class TestCellTermPformat:
         # Spec §6.7: that flat form is the ATOM's bare name -- the 1-tuple
         # is an atom, not a zero-argument call (it printed ``atom_like()``
         # before atoms became cells).
-        assert term_pformat(("atom_like",), width=1) == "atom_like"
+        assert term_pformat("atom_like", width=1) == "atom_like"
 
     def test_wide_tuple_data_cell_gets_multiline_form(self):
         from clausal.logic.cells import TUPLE_TAG

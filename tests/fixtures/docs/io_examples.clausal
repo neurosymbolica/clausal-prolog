@@ -1,5 +1,5 @@
 -double_quotes(chars)
--private([bar])
+-private([bar, h, i])
 -implicit_functors
 # Doc snippet fixtures for docs/io.md.
 #
@@ -117,16 +117,19 @@ canonical_text(TERM, TEXT) <- (
 )
 
 test("write_canonical text: a string") <- (
-    canonical_text("hi", C1),
-    C1 == "'.'(h,'.'(i,[]))"
+    # stage 2: a string crossing ``++`` reaches Python as its text (a str,
+    # which the engine side reads back as an ATOM), so the equal char-list
+    # spelling of the same term is what canonical_text can be handed.
+    canonical_text([h, i], C1),
+    atom_chars(C1, "'.'(h,'.'(i,[]))")
 )  # nv
 
 test("write_canonical text: a list") <- (
     canonical_text([1, 2], C2),
-    C2 == "'.'(1,'.'(2,[]))"
+    atom_chars(C2, "'.'(1,'.'(2,[]))")
 )  # nv
 
 test("write_canonical text: the empty list") <- (
     canonical_text([], C3),
-    C3 == "[]"
+    atom_chars(C3, "[]")
 )  # nv

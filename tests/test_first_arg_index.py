@@ -8,6 +8,7 @@ indexed dispatch produces the same results as unindexed dispatch.
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import (
     compile_predicate_trampoline as compile_predicate,
@@ -59,7 +60,7 @@ class TestExtractFirstArgKey:
         c = Clause(head=Compound("f", (mint("hello"), 1)), body=[True])
         assert _extract_first_arg_key(c, 2) == ("hello", 0)
         # ...and the STRING of the same text is unindexable (spec §6.9).
-        c_str = Clause(head=Compound("f", ("hello", 1)), body=[True])
+        c_str = Clause(head=Compound("f", (chars("hello"), 1)), body=[True])
         assert _extract_first_arg_key(c_str, 2) is _INDEX_VAR
 
     def test_compound_var(self):
@@ -1493,7 +1494,7 @@ class TestCellAtomHeadReference:
         from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
 
         # The Stage B binding shape for a declared atom: the arity-0 cell.
-        clauses, globals_ = self._clauses_and_globals(lambda c: (c,))
+        clauses, globals_ = self._clauses_and_globals(lambda c: c)
         globals_[FUNCTOR_SIGNATURES_KEY] = {"wrap": ("x",)}
         fn = compile_predicate_trampoline(
             "level", 2, clauses, None, globals_=globals_)
@@ -1501,12 +1502,12 @@ class TestCellAtomHeadReference:
         # Position 0 unbound: dispatch is forced through position 1's cell
         # bucket, so the nested-reference pattern is what decides the match.
         v = Var()
-        results = _trampoline_solutions(fn, [v, ("wrap", ("blue",))])
-        assert results == [(3, ("wrap", ("blue",)))]
+        results = _trampoline_solutions(fn, [v, ("wrap", "blue")])
+        assert results == [(3, ("wrap", "blue"))]
 
         # A cell atom no clause carries still fails.
         v = Var()
-        assert _trampoline_solutions(fn, [v, ("wrap", ("teal",))]) == []
+        assert _trampoline_solutions(fn, [v, ("wrap", "teal")]) == []
 
     def test_nested_str_atom_reference_still_matches(self):
         """Stage A additivity: today's ``str`` atom binding keeps taking the

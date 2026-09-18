@@ -32,7 +32,7 @@ class TestSeamBuildsCells:
             "def build():\n"
             "    return --verdict(good, \"baz\")\n"
         ))
-        assert mod.build() == ("verdict", ("good",), ("$chars", "baz"))   # stage 1: the chars CARRIER
+        assert mod.build() == ("verdict", "good", ("$chars", "baz"))   # stage 1: the chars CARRIER
 
     def test_under_atom_mode_a_double_quoted_literal_is_the_atom(self):
         mod = _load_inline("_seam_atom_mode", (
@@ -42,7 +42,7 @@ class TestSeamBuildsCells:
             "def build():\n"
             "    return --verdict(good, \"baz\")\n"
         ))
-        assert mod.build() == ("verdict", ("good",), ("baz",))
+        assert mod.build() == ("verdict", "good", "baz")
 
     def test_a_single_quoted_literal_is_an_atom_in_chars_mode(self):
         mod = _load_inline("_seam_sq", (
@@ -52,7 +52,7 @@ class TestSeamBuildsCells:
             "def build():\n"
             "    return --verdict('sq', \"dq\")\n"
         ))
-        assert mod.build() == ("verdict", ("sq",), ("$chars", "dq"))
+        assert mod.build() == ("verdict", "sq", ("$chars", "dq"))
 
     def test_a_titlecase_name_is_an_atom_not_a_variable(self):
         mod = _load_inline("_seam_title", (
@@ -61,7 +61,7 @@ class TestSeamBuildsCells:
             "def build():\n"
             "    return --verdict(foo, 1)\n"
         ))
-        assert mod.build() == ("verdict", ("foo",), 1)
+        assert mod.build() == ("verdict", "foo", 1)
 
     def test_the_built_term_unifies_with_the_engine_s_own(self):
         from clausal.logic.solve import call
@@ -108,7 +108,7 @@ class TestVariablesAndEscapes:
             "def build(xs):\n"
             "    return --outer(++[--inner(++x) for x in xs], done)\n"
         ))
-        assert mod.build([1, 2]) == ("outer", [("inner", 1), ("inner", 2)], ("done",))
+        assert mod.build([1, 2]) == ("outer", [("inner", 1), ("inner", 2)], "done")
 
     def test_keyword_construction_places_named_slots(self):
         mod = _load_inline("_seam_kw", (
@@ -151,7 +151,7 @@ class TestHostModuleRulesApply:
                 "def build():\n"
                 "    return --verdict(good, \"baz\")\n"
             ))
-        assert mod.build() == ("verdict", ("good",), ("baz",))
+        assert mod.build() == ("verdict", "good", "baz")
 
 
 class TestNoClassInstances:
@@ -217,7 +217,7 @@ class TestTermForms:
             "-implicit_atoms\n"
             "GOLD = --verdict(good, \"x\")\n"
         ))
-        assert mod.GOLD == ("verdict", ("good",), ("$chars", "x"))
+        assert mod.GOLD == ("verdict", "good", ("$chars", "x"))
 
 
 class TestImportedVocabulary:
@@ -254,5 +254,5 @@ class TestImportedVocabulary:
                 "def inside():\n"
                 "    return --verdict(ok, \"text\")\n"),
         })
-        assert host.outside() == ("ok",)
-        assert host.inside() == ("verdict", ("ok",), ("$chars", "text"))
+        assert host.outside() == "ok"
+        assert host.inside() == ("verdict", "ok", ("$chars", "text"))

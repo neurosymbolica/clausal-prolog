@@ -81,7 +81,7 @@ class TestImportedAtomWithLocalArityNPredicate:
     def test_the_bare_form_in_a_head_stays_the_imported_atom(self):
         (value,), = _solutions(self.use.t5b_head_data, 1)
         assert value == mint("t5b_slot")
-        assert type(value) is tuple   # THE FLIP: the arity-0 cell
+        assert type(value) is str   # STAGE 2: an atom is the str
 
     def test_the_bare_form_in_a_body_stays_the_imported_atom(self):
         """The two positions get DIFFERENT globals keys — the applied form is
@@ -89,7 +89,7 @@ class TestImportedAtomWithLocalArityNPredicate:
         key — so one file can mean both with the same spelling."""
         (value,), = _solutions(self.use.t5b_body_data, 1)
         assert value == mint("t5b_slot")
-        assert type(value) is tuple   # THE FLIP: the arity-0 cell
+        assert type(value) is str   # STAGE 2: an atom is the str
 
     def test_a_genuinely_imported_predicate_still_reaches_its_owner(self):
         """``t5b_other/1`` carries a functor signature in the owner and has no
@@ -100,7 +100,7 @@ class TestImportedAtomWithLocalArityNPredicate:
         """The Python ``getattr`` surface is out of scope: the imported atom
         is what the attribute holds, exactly as before."""
         assert self.use.t5b_slot == mint("t5b_slot")
-        assert type(self.use.t5b_slot) is tuple   # THE FLIP: the cell
+        assert type(self.use.t5b_slot) is str   # STAGE 2: an atom is the str
 
 
 class TestImportedFunctorCollisionIsUnchanged:
@@ -186,7 +186,7 @@ class TestImportedDeclaredAtomWithZeroArityClauses:
     def test_the_key_is_the_plain_str_in_a_head_argument(self):
         (value,), = _solutions(self.use.t5b_ihead, 1)
         assert value == mint("t5b_kfact")
-        assert type(value) is tuple   # THE FLIP: the arity-0 cell
+        assert type(value) is str   # STAGE 2: an atom is the str
 
     def test_goal_position_still_runs_the_owners_zero_arity_predicate(self):
         """``call(t5b_kfact)`` from the importer resolves ``(t5b_kfact, 0)``

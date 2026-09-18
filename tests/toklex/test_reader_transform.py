@@ -32,8 +32,8 @@ class TestCells:
         # THE FLIP (spec §9.7): a ``PString`` reads as the ``str`` -- the
         # STRING, which IS the list of its char atoms (spec §6.2), so this
         # inverts the "emit the char list" reading, not its meaning.
-        assert tt('"ab"')[0] == "ab"
-        assert tt('""')[0] == ""
+        assert tt('"ab"')[0] == ("$chars", "ab")   # STAGE 2: the chars CARRIER; a bare str is the atom
+        assert tt('""')[0] == ("$chars", "")
 
     def test_atom_cell_is_parity_with_mint(self):
         """The reader INLINES ``mint``'s body and must stay in step with it.
@@ -51,8 +51,8 @@ class TestCells:
         assert cell == mint("hi")
         assert is_atom(cell)
         assert spelling(cell) == "hi"
-        # slot 0 is the interned spelling, exactly as ``mint`` leaves it
-        assert cell[0] is mint("hi")[0]
+        # the spelling is interned, exactly as ``mint`` leaves it
+        assert spelling(cell) is spelling(mint("hi"))
 
     def test_curly(self):
         assert tt("{a, b}")[0] == ("{}", (",", mint("a"), mint("b")))
@@ -83,7 +83,7 @@ class TestSpanTrees:
 
     def test_string_is_leaf_span(self):
         cell, spans, _ = tt('"ab"')
-        assert cell == "ab" and spans == (0, 4)
+        assert cell == ("$chars", "ab") and spans == (0, 4)
 
     def test_partial_list_span_outermost_covers_bracket(self):
         # [a, b | T]: the OUTERMOST cons node's span is the PList node's
@@ -111,7 +111,7 @@ class TestExtra:
         cell, spans, vn = tt('f(g(h([X, "ab" | T])))')
         assert cell == (
             "f",
-            ("g", ("h", (".", VarRef(0), (".", "ab", VarRef(1))))),
+            ("g", ("h", (".", VarRef(0), (".", ("$chars", "ab"), VarRef(1))))),
         )
         assert vn == {0: "X", 1: "T"}
         # span tree mirrors the cell shape

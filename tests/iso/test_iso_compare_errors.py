@@ -162,8 +162,8 @@ def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
     implementation, which knows only its Clausal spelling. Both follow from
     `#=` being a NAME for `==`'s existing behaviour; correcting either means
     changing infix `==`."""
-    yes = repr(("yes",))
-    no = repr(("no",))
+    yes = repr("yes")
+    no = repr("no")
 
     def yesno(goal, extra_atoms=("foo",)):
         atoms = ", ".join(("p(R)", "yes", "no") + tuple(extra_atoms))

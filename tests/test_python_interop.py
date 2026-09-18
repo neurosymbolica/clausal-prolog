@@ -55,7 +55,7 @@ class TestPyThunkValue:
         mod = _load_module("interop_upper", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("to_upper", chars("hello"), module=logic_mod)
-        assert results == [chars("HELLO")]
+        assert results == ["HELLO"]
 
     def test_arithmetic(self, tmp_path):
         """++(X_ + 1) does Python arithmetic on a dereferenced variable."""
@@ -116,7 +116,7 @@ class TestPyThunkValue:
         mod = _load_module("interop_join", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("join_words", [chars("a"), chars("b"), chars("c")], module=logic_mod)
-        assert results == [chars("a, b, c")]
+        assert results == ["a, b, c"]
 
 
 class TestPyThunkGoal:

@@ -59,6 +59,7 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.database import Module
 from clausal.logic.exceptions import LogicException
@@ -210,23 +211,24 @@ class TestQualifiedCellGoal:
                                         mods.importer)] == [11, 12]
 
     def test_a_zero_arity_inner_goal_runs(self, mods):
-        assert len(list(solve((":", EXPORTER, ("ready",)),
+        assert len(list(solve((":", EXPORTER, "ready"),
                               mods.importer))) == 1
 
     def test_a_bare_atom_inner_goal_is_the_zero_arity_cell(self, mods):
         """``M:k`` with an ATOM ``k`` is ``M:k()`` — the same cell path.
 
         THE FLIP (2026-09-06-atoms-as-cells-strings §6.4): the atom is the
-        arity-0 cell.  A bare ``str`` inner goal was accepted here while a
-        ``str`` was an atom; it is a STRING now, so it raises through the
-        same route an unqualified string goal does -- Task 15 item 3's
-        ``existence_error(procedure, '.'/2)``, the string being the
-        ``'.'/2`` compound whose procedure does not exist.
+        arity-0 cell -- and since stage 2 the atom IS the ``str``, so a bare
+        ``str`` inner goal is the call of ``ready/0``.  A STRING
+        (``chars("ready")``) raises through the same route an unqualified
+        string goal does -- Task 15 item 3's ``existence_error(procedure,
+        '.'/2)``, the string being the ``'.'/2`` compound whose procedure
+        does not exist.
         """
         assert len(list(solve((":", EXPORTER, mint("ready")),
                               mods.importer))) == 1
         with pytest.raises(LogicException) as exc_info:
-            list(solve((":", EXPORTER, "ready"), mods.importer))
+            list(solve((":", EXPORTER, chars("ready")), mods.importer))
         assert _error_term(exc_info.value)[0] == Compound(
             "existence_error", (mint("procedure"),
                                 Compound("/", (mint("."), 2))))

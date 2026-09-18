@@ -423,7 +423,7 @@ class TestPushback:
         results = []
         for _ in call("phrase", cls(v), ["x"], rest, module=mod):
             results.append((deref(v), deref(rest)))
-        assert results == [("x", ["x"])] or results == [("x", "x")]
+        assert results == [("x", ["x"])] or results == [("x", chars("x"))]
 
 
 # ── phrase/2 and phrase/3 ────────────────────────────────────────────────────
@@ -558,7 +558,7 @@ class TestFixtureIntegration:
         results = []
         for _ in call("phrase", cls(v), ["x"], rest, module=self.mod):
             results.append((deref(v), deref(rest)))
-        assert results == [("x", ["x"])] or results == [("x", "x")]
+        assert results == [("x", ["x"])] or results == [("x", chars("x"))]
 
     def test_not_a(self):
         # nv
@@ -1092,7 +1092,7 @@ class TestStringTerminals:
     def test_string_terminal_list_input(self, tmp_path):
         """A string terminal also matches a char-list caller (strings-as-lists).
 
-        THE FLIP (spec §6.2): the chars of "hi" are the ATOMS (("h",), ("i",)).
+        THE FLIP (spec §6.2): the chars of "hi" are the ATOMS ('h', 'i').
         The pre-flip list of 1-char STRINGS is a different term (a list of two
         one-character strings) and no longer matches.
         """
@@ -1100,7 +1100,7 @@ class TestStringTerminals:
         mod = _load("st2", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, [char_atom("h"), char_atom("i")], module=mod)
-        assert not _succeeds("phrase", cls, ["h", "i"], module=mod)
+        assert not _succeeds("phrase", cls, [chars("h"), chars("i")], module=mod)
 
     def test_string_terminal_in_sequence(self, tmp_path):
         """String terminal threaded between other terminals."""
