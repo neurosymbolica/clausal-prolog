@@ -170,7 +170,7 @@ def _collect_imported_te_clauses(module_dict: dict) -> list:
 
 def _make_module_state(init_list, final_list, user_state):
     """Create a module_expansion_state(Init, Final, State) term."""
-    module_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
+    module_cls = make_predicate("module_expansion_state", ["init", "final", "state"], instances=True)
     return module_cls(init_list, final_list, user_state)
 
 
@@ -225,11 +225,11 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     lm.module_dict["unify"] = structural_unify
 
     # Create the term_expansion PredicateMeta class.
-    te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"])
+    te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"], instances=True)
     lm.module_dict["term_expansion"] = te_cls
 
     # Also ensure module_expansion_state class exists for state threading.
-    mod_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
+    mod_cls = make_predicate("module_expansion_state", ["init", "final", "state"], instances=True)
     lm.module_dict["module_expansion_state"] = mod_cls
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
@@ -243,7 +243,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     for name, arity in functor_arities.items():
         if name not in lm.module_dict:
             lm.module_dict[name] = make_predicate(
-                name, [f"arg{i}" for i in range(arity)])
+                name, [f"arg{i}" for i in range(arity)], instances=True)
 
     # assertz each expansion clause.
     for pred_node in expansion_clauses:

@@ -49,8 +49,8 @@ BDD_FALSE = 0
 
 # ── Term constructors for equivalence / implication ──────────────────────────
 
-BoolEq = make_predicate("BoolEq", ["left", "right"])
-BoolImpl = make_predicate("BoolImpl", ["left", "right"])
+BoolEq = make_predicate("BoolEq", ["left", "right"], instances=True)
+BoolImpl = make_predicate("BoolImpl", ["left", "right"], instances=True)
 
 # Presence-check sentinel for _expr_to_bdd's BoolEq/BoolImpl getattr guard --
 # see the comment there.

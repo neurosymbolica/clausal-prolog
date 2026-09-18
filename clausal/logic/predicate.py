@@ -1140,6 +1140,12 @@ class PredicateMeta(type):
         # clpb, term expansion, the packages) goes through here, so this one
         # site is the constructor flip; the class stays as the predicate
         # handle until P4 deletes it.  Unknown keywords still raise.
+        if cls.__dict__.get("_clausal_instances"):
+            # P2 bridge: a class whose CONSUMERS still read attributes (the
+            # reflection vocabulary, clpb's BoolEq/BoolImpl, term expansion's
+            # state) keeps building instances until Task 4/6 convert them;
+            # ``make_predicate(..., instances=True)`` sets the flag.
+            return cls._clausal_head(*args, **kwargs)
         unknown = [k for k in kwargs if k not in fields]
         if unknown:
             raise _term_construction_error(cls, kwargs, _source_site(1))
@@ -1235,13 +1241,29 @@ class PredicateMeta(type):
         else:
             ctx.__exit__(None, None, None)
 
+    def _instance_head_clause(cls, clause: Any) -> Any:
+        """P2 Task 3: the clause store keeps HEADS as instances; a cell head of
+        this class (built by __call__, which builds cells now) becomes the
+        head instance at this door -- the twin of Database._with_instance_head."""
+        import dataclasses  # noqa: PLC0415
+        head = clause.head
+        if (type(head) is tuple and head and head[0] == cls.__name__
+                and len(head) - 1 == len(cls._fields or ())):
+            head = cls._clausal_head(*head[1:])
+            if dataclasses.is_dataclass(clause):
+                return dataclasses.replace(clause, head=head)
+            clause.head = head
+        return clause
+
     def _assertz(cls, clause: Any) -> None:
         """append clause at end; the gate invalidates the compiled dispatch."""
+        clause = cls._instance_head_clause(clause)
         with cls._gated("assert", "_assertz") as row:
             row.ensure_clauses().append(clause)
 
     def _asserta(cls, clause: Any) -> None:
         """Prepend clause at front; the gate invalidates the compiled dispatch."""
+        clause = cls._instance_head_clause(clause)
         with cls._gated("assert", "_asserta") as row:
             row.ensure_clauses().insert(0, clause)
 
@@ -1786,7 +1808,7 @@ def _describe_term_identity_mismatch(obj: Any) -> str:
     )
 
 
-def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
+def make_predicate(name: str, fields: list[str], *, instances: bool = False) -> "PredicateMeta":
     """Dynamically create a PredicateMeta class.
 
     Useful in tests and runtime code that needs a predicate without a
@@ -1797,7 +1819,10 @@ def make_predicate(name: str, fields: list[str]) -> "PredicateMeta":
         compile_predicate("foo", 2, foo._clauses, pred_cls=foo)
         fn = foo._get_dispatch()
     """
-    return PredicateMeta(name, (), {"_fields": tuple(fields)})
+    cls = PredicateMeta(name, (), {"_fields": tuple(fields)})
+    if instances:
+        cls._clausal_instances = True   # P2 bridge (see PredicateMeta.__call__)
+    return cls
 
 
 def make_atom(name: str) -> tuple[str]:

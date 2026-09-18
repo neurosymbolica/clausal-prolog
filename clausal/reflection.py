@@ -98,15 +98,15 @@ class RenderError(Exception):
 # fewer arguments auto-fills the missing trailing fields with fresh variables,
 # so ``Clause(HEAD, GOALS)`` written in a matcher head wildcards ``position``.
 
-Clause = make_predicate("Clause", ["head", "goals", "position"])
-Goal = make_predicate("Goal", ["name", "args", "kwargs"])
-Variable = make_predicate("Variable", ["name"])
-Atom = make_predicate("Atom", ["name"])
-Escape = make_predicate("Escape", ["code", "vars", "position"])
-FormatString = make_predicate("FormatString", ["code", "vars", "position"])
-IfThenElse = make_predicate("IfThenElse", ["condition", "then", "otherwise"])
-ModuleDirective = make_predicate("ModuleDirective", ["name", "args", "position"])
-PythonCode = make_predicate("PythonCode", ["kind", "name", "position"])
+Clause = make_predicate("Clause", ["head", "goals", "position"], instances=True)
+Goal = make_predicate("Goal", ["name", "args", "kwargs"], instances=True)
+Variable = make_predicate("Variable", ["name"], instances=True)
+Atom = make_predicate("Atom", ["name"], instances=True)
+Escape = make_predicate("Escape", ["code", "vars", "position"], instances=True)
+FormatString = make_predicate("FormatString", ["code", "vars", "position"], instances=True)
+IfThenElse = make_predicate("IfThenElse", ["condition", "then", "otherwise"], instances=True)
+ModuleDirective = make_predicate("ModuleDirective", ["name", "args", "position"], instances=True)
+PythonCode = make_predicate("PythonCode", ["kind", "name", "position"], instances=True)
 
 
 # ── Static evaluation of constructor code ────────────────────────────────────
@@ -380,6 +380,12 @@ class _ClauseReifier:
         return _const_value(pos) if pos is not None else None
 
     def _call(self, node):
+        # P2 Task 3: the transformer spells a clause HEAD ``cls._clausal_head(...)``
+        # (the head channel's instance constructor); the reified term is the
+        # same head ``cls(...)`` always reified to.
+        if (isinstance(node.func, ast.Attribute) and node.func.attr == "_clausal_head"
+                and isinstance(node.func.value, ast.Name)):
+            node = ast.Call(func=node.func.value, args=node.args, keywords=node.keywords)
         if not isinstance(node.func, ast.Name):
             raise ReifyError(f"cannot reify call: {ast.unparse(node)}")
         # Generated code spells a runtime class ``$``-prefixed (``$Var``,
