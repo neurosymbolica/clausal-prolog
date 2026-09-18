@@ -341,3 +341,16 @@ The twin population is exactly the four comparison entries (`propagate` hits are
 in-process and the pure-Python twins in a subprocess with the C propagate module blocked, and
 asserts identical outcomes; 0 divergences after step 2's fixes; positive control: the pre-9e30afa9
 wrapper (no ground fold) makes the tree case diverge and the matrix sees it.
+
+# Cell operands in compiled arithmetic — FIXED and PROMOTED (2026-09-18, `8f8ab9dd`)
+
+Found while scoping step 3: a spelling written in source (`decimal(1001, 2)`, `rdiv(1, 3)`, declared
+`-private`) reaches the COMPILED tree as a cell tuple, and the exact helpers fell to Python's tuple
+operators — `eval_(decimal(1001, 2) * 2, R)` answered the tuple REPEATED, `('yes',) * 2` the atom
+DOUBLED: a value of the right shape to keep flowing (harness-batch-lane's control, live on canonical
+before the fix). The four helpers now normalise a tuple operand: a canonical cell evaluates as its
+number (parity with `_eval_ground`'s leaf), any other tuple raises `type_error(evaluable)` on both
+paths; the `--` seam maps that to the Python `TypeError` it always raised. Gates: engine A/B on the
+canonical-engine baseline NEW 0 / GONE 0; harness 82/82 on base and fix with the control live on
+the swept trees — the stronger reading, theirs: no sealed harness performs compiled exact
+arithmetic on a tuple operand. This is what makes option (c) of Q7 the engine's current behaviour.
