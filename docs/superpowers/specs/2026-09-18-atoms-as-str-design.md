@@ -159,8 +159,13 @@ after. The barrier scan on every crossing commit.
 
 * **Q1.** A Python str crossing the seam is an ATOM. **Yes.** Text is a list of one-char strs or
   `chars(...)`.
-* **Q2.** The compact char-list carrier is the reserved-tag cell `('$chars', "…")`, equal to the
-  list-of-chars term. **Yes**; tag spelling open (`'$chars'` follows `'()'`).
+* **Q2. RULED 2026-09-18: `('$chars', "…")`**, arity 1, the Python str as the sole payload, equal to
+  the list-of-chars term; `writeq` never shows the tag. Sequencing ruled with it: the carrier lands
+  FIRST under a LOUD interim rule — between step 2 and step 3 a bare Python str handed to the engine
+  as text RAISES (the positive control for step 2, and what removes the ambiguity window) — then the
+  atom flip, after which the `('x',)` 1-tuple is refused wherever it is seen. Code lists stay on
+  `bytes`. Considered and set aside: `'"'` as the functor (ISO-legal, readable, but spellable by a
+  user and says nothing under `chars`).
 * **Q3.** `[]` stays the Python list as the canonical empty list/`'[]'` atom, and the str `'[]'`
   is the same atom. **Yes.**
 * **Q4.** `p()` in a `-module`/`-private` export list stays the spelling for "a 0-arity
