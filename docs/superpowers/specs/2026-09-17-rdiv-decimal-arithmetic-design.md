@@ -354,3 +354,50 @@ paths; the `--` seam maps that to the Python `TypeError` it always raised. Gates
 canonical-engine baseline NEW 0 / GONE 0; harness 82/82 on base and fix with the control live on
 the swept trees — the stronger reading, theirs: no sealed harness performs compiled exact
 arithmetic on a tuple operand. This is what makes option (c) of Q7 the engine's current behaviour.
+
+---
+
+# RULED 2026-09-18: Q6 = option C, Q7 = option c
+
+Q6 (the Q4/Q5 collision at the units bridge): **C** — a written float is exact at DECLARATION and
+CONSTRUCTION (its digits are the user's), a float beside an exact number at RUN TIME raises. The
+operator also floated a per-module `-float_literals(decimal | rational)` read-time directive,
+ISO-shaped like `double_quotes`, which would dissolve the collision for modules that opt in; noted,
+not ruled, not built. Q7 (lowering the written spellings): **c** — do not lower; `quantity_number/2`
+is meant for constants internally, most Prologs ignore units and compute on bare numbers, and the
+engine already orders and evaluates a written cell correctly.
+
+# Steps 6 and 3 BUILT and PROMOTED (`42153362`, `fe60e174`, gate fixes `4f0af19b`)
+
+Step 6: the shortest-repr bridge survives only in `Quantity.__init__` beside an exact factor
+(`2.5(centimetre)`, `5.25 percent`) and for money; `_num_pair` refuses a float beside a Decimal
+or a Fraction (`type_error(exact_number, Float)`); the exact helpers refuse a float beside a
+Fraction on both paths; the 13 float-literal SI-fraction factors of the units vocabulary are exact
+Decimals built from the literal text (measured physical constants stay floats). Consequence to
+schedule: an inline `MONEY * 1.2` in a clause body now raises and migrates to `decimal(12, 1)` or
+to a declared constant — corpus-lane's count decides how much.
+
+Step 3 (c): Decimal leaves the seam registry (no engine consumer, measured) and joins the transfer
+table beside `rdiv`; Decimal and Fraction are seam SCALARS, so the strict seam passes them as
+numbers (it used to refuse a Fraction as unregistered); `to_transfer` consults its table before the
+scalar pass-through. Nothing is lowered.
+
+Also taken (`4f0af19b`): `Quantity`'s own `+ - *` go through the exact helpers (one spelling; Decimal
+pairs exact beyond 28 digits); a non-finite Decimal keeps Decimal's NaN/Infinity semantics in
+quantity arithmetic while the evaluator still refuses it at the leaf. The first A/B's 7 NEW were all
+test pins following the rulings — the one that looked real was a test oracle dividing bare ints
+with Python's `/` (a float the TEST made, not the engine).
+
+Gates: 19 step-6 tests + 3 mutation controls; value-term tests follow the move; engine A/B on the
+canonical-engine baseline at `4f0af19b`: **NEW 0** (GONE 1 = the load-marginal perf test). Harness axis
+(harness-batch-lane, sequential, base 053fbdbe and branch 4f0af19b, .so premise re-verified): **82/82
+unchanged on both**, with a control behind each mechanism on the swept trees — `2.5(centimetre)`
+0.025 → Decimal('0.025'); `5(centimetre)` 0.05 → Decimal('0.05'); compiled `eval_(Q * 1.5, R)`
+`quantity(0.07500000000000001, …)` → `type_error(exact_number, 1.5)` (the float error the ruling exists
+to remove, sitting in a quantity on the base); `eval_(2.5 * 2, R)` 5.0 both (negative control).
+Their readings, kept verbatim: for the refusal, "no sealed harness performs compiled arithmetic
+mixing a float with a quantity or other exact number" — a property of the population; for the two
+spelling mechanisms, **a CONDITION, not a status**: the closed corpus does not CURRENTLY write a
+unit-bearing quantity literal (0 rulebases), so re-ask harness-batch-lane when any rulebase writes
+one. Limits, theirs: harness axis only; "reproduces canonical" is not "correct"; single replicate
+whose error mode is spurious movement.
