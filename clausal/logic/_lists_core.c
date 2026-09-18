@@ -107,7 +107,16 @@ seq_join_chars(PyObject *items)
     }
     PyObject *joined = PyUnicode_Join(empty_string, spellings);
     Py_DECREF(spellings);
-    return joined;
+    if (!joined) return NULL;
+    /* stage 1 of the atoms-as-str flip (spec 2026-09-18): a text RESULT is
+     * the chars CARRIER ('$chars', text), never a bare str -- every caller
+     * of this join (append/3 splits, select/3 remainders, permutation/2)
+     * is handing a term out. */
+    PyObject *tag = PyUnicode_FromString("$chars");
+    if (!tag) { Py_DECREF(joined); return NULL; }
+    PyObject *carrier = PyTuple_Pack(2, tag, joined);
+    Py_DECREF(tag); Py_DECREF(joined);
+    return carrier;
 }
 
 /*

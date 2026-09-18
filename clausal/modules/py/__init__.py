@@ -184,6 +184,8 @@ def to_text(val):
     if is_chars(_v):
         return chars_text(_v)
     if type(val) is str:
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(val, "a py-module text argument (to_text)")   # interim rule
         return val
     from clausal.logic.atoms import is_atom as _is_atom, spelling as _spelling
     from clausal.logic.variables import deref
@@ -258,7 +260,8 @@ def option(mapping, name, default=None):
     got = mapping.get(key_of(name), _OPTION_MISSING)
     if got is _OPTION_MISSING:
         got = mapping.get(name, _OPTION_MISSING)
-    return default if got is _OPTION_MISSING else got
+    # stage 1: a module's own str DEFAULT is text, so it crosses as the carrier
+    return text_result(default) if got is _OPTION_MISSING else got
 
 
 def has_option(mapping, name) -> bool:

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
+from clausal.logic.cells import chars, is_chars, chars_text, refuse_bare_str  # stage 1: the chars carrier
 from clausal.logic.atoms import char_atom, is_char_atom, spelling
 
 
@@ -82,6 +82,7 @@ def normalize_seg_input(x: Any) -> Any:
     # the interim rule is armed).
     if is_chars(x):
         return chars_text(x)
+    refuse_bare_str(x, "a sequence builtin (normalize_seg_input)")   # interim rule
     from clausal.terms import SegList, SegString, SegBytes
     if isinstance(x, (SegList, SegString, SegBytes)):
         w = x.__walk__()

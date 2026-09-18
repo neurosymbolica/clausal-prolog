@@ -98,10 +98,13 @@ class TestSlice3Funnels:
     def test_infix_eq_between_a_bare_str_and_the_carrier(self):
         from clausal.logic.clpfd import fd_eq, fd_ne
         from clausal.logic.variables import Trail
+        from clausal.logic.cells import BARE_STR_TEXT
         t = Trail()
-        assert fd_eq("ab", chars("ab"), t) and fd_eq(chars("ab"), "ab", t)
-        assert not fd_eq("ab", chars("ac"), t)
-        assert fd_ne("ab", chars("ac"), t) and not fd_ne("ab", chars("ab"), t)
+        assert fd_eq(chars("ab"), chars("ab"), t) and not fd_eq(chars("ab"), chars("ac"), t)
+        assert fd_ne(chars("ab"), chars("ac"), t) and not fd_ne(chars("ab"), chars("ab"), t)
+        if BARE_STR_TEXT == "allow":     # the interim comparator: a bare str against the carrier
+            assert fd_eq("ab", chars("ab"), t) and fd_eq(chars("ab"), "ab", t)
+            assert not fd_eq("ab", chars("ac"), t)
 
     def test_python_side_crossings_read_the_text(self):
         from clausal.logic.to_python import to_python
@@ -143,8 +146,10 @@ class TestSlice4SegLayer:
         from clausal.logic.runtime.list_unify import _head_list_unify_input_py
         from clausal.logic.runtime._list_unify import _head_list_unify_input
         from clausal.logic.variables import Trail
+        from clausal.logic.cells import BARE_STR_TEXT
+        targets = [chars("abc")] + (["abc"] if BARE_STR_TEXT == "allow" else [])
         for fn in (_head_list_unify_input_py, _head_list_unify_input):
-            for target in (chars("abc"), "abc"):
+            for target in targets:
                 t = Trail(); h = Var(); tl = Var()
                 assert fn(target, [h], tl, [], t) is True
                 assert deref(h) == ("a",) and deref(tl) == chars("bc"), (fn, target, deref(tl))
@@ -230,8 +235,12 @@ def test_the_three_spellings_answer_alike(tmp_path, goal):
     vars_ = sorted(set(re.findall(r"\b([A-Z][A-Za-z0-9]*)\b", goal)) - {"X"})
     head = "p(X" + "".join(", " + v for v in vars_) + ")"
     mod = _mod(tmp_path, f"is_a(a),\n{head} <- ({goal})\n")
+    from clausal.logic.cells import BARE_STR_TEXT
+    spellings = [("carrier", chars("ab")), ("list", [char_atom("a"), char_atom("b")])]
+    if BARE_STR_TEXT == "allow":
+        spellings.insert(0, ("str", "ab"))     # the interim comparator, gone once the rule is armed
     answers = {}
-    for label, x in (("str", "ab"), ("carrier", chars("ab")), ("list", [char_atom("a"), char_atom("b")])):
+    for label, x in spellings:
         args = [Var() for _ in vars_]
         try:
             got = sorted(repr(_as_text([deref(a) for a in args])) for _ in call("p", x, *args, module=mod))
@@ -242,7 +251,8 @@ def test_the_three_spellings_answer_alike(tmp_path, goal):
     # exactly; the char list is input-type-wins on OUTPUT shape (a str tail
     # stays text, a list tail stays a list), so it is held to the same
     # success/failure COUNT only
-    assert answers["carrier"] == answers["str"], answers
+    if "str" in answers:
+        assert answers["carrier"] == answers["str"], answers
     assert len(answers["list"]) == len(answers["carrier"]), answers
 
 

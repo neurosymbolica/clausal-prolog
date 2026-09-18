@@ -14,7 +14,7 @@ from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 from clausal.logic.builtins._helpers import _standard_order_key, _standard_order_sorted
-from clausal.logic.cells import chars, is_chars, chars_text
+from clausal.logic.cells import chars, is_chars, chars_text, refuse_bare_str
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -70,6 +70,8 @@ def _as_items(val):
         return val
     if is_chars(val):
         val = chars_text(val)          # the carrier walks to its text, below
+    elif type(val) is str:
+        refuse_bare_str(val, "a list builtin (_as_items)")   # interim rule
     if isinstance(val, str):
         return [char_atom(c) for c in val]
     if isinstance(val, bytes):

@@ -55,8 +55,10 @@ def _is_string_term(x) -> bool:
     The one implementation behind ``is_str/1``, ``string/1`` and
     ``_check_type``'s ``string``/``str`` row, so the three cannot drift.
     """
-    x_val = normalize_seg_input(deref(x))
-    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    x_val = deref(x)
+    from clausal.logic.cells import is_chars, refuse_bare_str  # noqa: PLC0415
+    refuse_bare_str(x_val, "string/1")   # interim rule
+    x_val = normalize_seg_input(x_val)
     if isinstance(x_val, str) or is_chars(x_val):
         return True
     if type(x_val) is list:

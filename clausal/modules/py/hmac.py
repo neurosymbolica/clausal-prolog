@@ -67,7 +67,7 @@ def _sign_4(algorithm, key, data, hex_out, trail, k):
 
 def _sign_3(key, data, hex_out, trail, k):
     """sign/3: HMAC-SHA256 (default algorithm)."""
-    yield from _sign_4("sha256", key, data, hex_out, trail, k)
+    yield from _sign_4(text_result("sha256"), key, data, hex_out, trail, k)   # stage 1: a module default is text
 
 
 def _verify_4(algorithm, key, data, hex_in, trail, k):
@@ -104,7 +104,7 @@ def _verify_4(algorithm, key, data, hex_in, trail, k):
 
 def _verify_3(key, data, hex_in, trail, k):
     """verify/3: verify HMAC-SHA256."""
-    yield from _verify_4("sha256", key, data, hex_in, trail, k)
+    yield from _verify_4(text_result("sha256"), key, data, hex_in, trail, k)
 
 
 # ── Build and export predicate objects ───────────────────────────────────

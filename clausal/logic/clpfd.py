@@ -1831,7 +1831,8 @@ def _text_list_eq(l, r):
     A char atom against a 1-char str stays UNEQUAL: ``"a"`` is the one-element
     list ``[a]``, not the cell ``a``, and a tuple is neither spelling here.
     """
-    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    from clausal.logic.cells import is_chars, chars_text, refuse_bare_str  # noqa: PLC0415
+    refuse_bare_str(l, "an arithmetic comparison"); refuse_bare_str(r, "an arithmetic comparison")   # interim rule
     unwrapped = False
     if is_chars(l):
         l = chars_text(l); unwrapped = True

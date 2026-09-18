@@ -96,6 +96,10 @@ def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, t
     # P3-1 Task 5 (§1b): the "must consume entirely" sentinel must match
     # list_val's own type — see _empty_remainder_like.
     empty = _empty_remainder_like(list_val)
+    # a bare str is TRANSIENT (the funnel's contract); the rule body receives
+    # its input state as the carrier again (stage 1), so sequence//1 and
+    # phrase/3 downstream see text and not a bare str
+    list_val = _text_out(list_val)
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
         # Class reference (0 extra args): phrase(greeting, [hello, world])
@@ -139,6 +143,7 @@ def _phrase__3(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, r
     # destructure str natively and bind Rest to a str slice when the
     # input is str.
     list_val = normalize_seg_input(list_val)
+    list_val = _text_out(list_val)   # stage 1: the rule body receives the carrier, not the transient bare str
     rest_val = deref(rest_arg)
 
     if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):

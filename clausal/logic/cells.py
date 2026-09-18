@@ -73,6 +73,7 @@ not add representation machinery the engine already has.").
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import Any
 
@@ -154,6 +155,26 @@ TUPLE_TAG = "()"
 # head no user functor can spell.  It exists so that a bare Python ``str``
 # can stop meaning "text" (stage 1) and start meaning "atom" (stage 2).
 CHARS_TAG = "$chars"
+
+
+# The LOUD INTERIM RULE of stage 1 (RULED 2026-09-18): between the carrier
+# landing and the atom flip, a bare Python ``str`` handed to the engine as
+# TEXT is refused at every text entry point, so that no producer can go on
+# minting bare-str text unnoticed -- the positive control for stage 1.
+# ``CLAUSAL_BARE_STR_TEXT=allow`` is the diagnostic override (and the setting
+# the pre-arming survey runs under).  Stage 2 retires the rule: a bare str
+# becomes the ATOM and is not text at all.
+BARE_STR_TEXT = os.environ.get("CLAUSAL_BARE_STR_TEXT", "allow")
+
+
+def refuse_bare_str(x: Any, where: str) -> None:
+    """Raise if *x* is a bare Python str reaching *where* as text (interim rule)."""
+    if type(x) is str and BARE_STR_TEXT != "allow":
+        raise TypeError(
+            f"stage 1 of the atoms-as-str flip: a bare Python str {x!r} reached "
+            f"{where} as TEXT.  Text is the chars carrier ('$chars', s) -- build "
+            f"it with clausal.logic.cells.chars(s) (a ++ escape, to_term and "
+            f"every py-module do) or pass the list of char atoms.")
 
 
 def chars(text: str) -> tuple:

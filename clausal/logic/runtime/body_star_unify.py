@@ -47,6 +47,9 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     construction (target is an unbound Var, pattern vars are bound).
     """
     d = deref(target)
+    if type(d) is str:
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(d, "a star-list pattern target")   # interim rule
 
     # Normalise ground SegList → plain list so the list branch fires.
     # Non-ground SegLists delegate to _head_list_unify_input which returns False.
@@ -664,7 +667,11 @@ def _body_multi_star_unify(target, segments, trail):
 
     Yields once per valid split (combinatorial backtracking).
     """
-    d = _unwrap(deref(target))
+    d = deref(target)
+    if type(d) is str:
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(d, "a multi-star pattern target")   # interim rule
+    d = _unwrap(d)
     # Strings and bytes are handled directly (no list conversion) so that star
     # vars bind to substrings/subbytes preserving type.
     if not isinstance(d, (list, str, bytes)):

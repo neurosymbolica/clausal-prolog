@@ -16,7 +16,7 @@ from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
-from clausal.logic.cells import TUPLE_TAG, is_chars, chars_text
+from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
@@ -453,7 +453,7 @@ def _nth_arg(term: Any, n: int) -> Any:
             if n == 1:
                 return char_atom(term[0])
             if n == 2:
-                return term[1:]
+                return chars(term[1:])     # stage 1: a text TAIL is the carrier
         raise IndexError(f"arg index {n} out of range for {term!r}")
     return _nth_arg_precell(term, n)
 
@@ -463,7 +463,7 @@ def _args_list(term: Any) -> list:
     if is_compound_cell:
         return list(term[1:])
     if type(term) is str:
-        return [] if not term else [char_atom(term[0]), term[1:]]
+        return [] if not term else [char_atom(term[0]), chars(term[1:])]   # stage 1
     return _args_list_precell(term)
 
 
@@ -771,6 +771,8 @@ def _standard_order_key(term: Any) -> tuple:
         # `Quantity` sorts among them by magnitude instead of after them.
         return _number_key(term)
     if isinstance(term, str):
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(term, "the standard order of terms")   # interim rule
         # THE FLIP (spec §6.5): a string keys as the LIST OF CHAR ATOMS it
         # denotes — so ``"ab"`` and ``[("a",), ("b",)]`` have EQUAL keys and
         # ``""`` keys like ``[]``.  That equality is what makes ``sort/2``

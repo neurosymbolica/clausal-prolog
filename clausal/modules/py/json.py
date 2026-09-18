@@ -34,6 +34,7 @@ cell, a plain non-cell tuple) still become JSON arrays.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -257,7 +258,7 @@ def _generate_2(term, string, trail, k):
         if value_is_ground(term):
             note_rejected_call("generate/2", exc)
         return
-    if unify(string, result, trail):
+    if unify(string, text_result(result), trail):   # stage 1
         yield None
 
 
@@ -273,7 +274,7 @@ def _pretty_generate_2(term, string, trail, k):
         if value_is_ground(term):
             note_rejected_call("pretty_generate/2", exc)
         return
-    if unify(string, result, trail):
+    if unify(string, text_result(result), trail):   # stage 1
         yield None
 
 

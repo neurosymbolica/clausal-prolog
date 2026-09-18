@@ -103,6 +103,9 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     d = deref(target)
     if is_chars(d):
         d = chars_text(d)              # stage 1: the carrier destructures as its text
+    elif type(d) is str:
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(d, "a head list pattern target")   # interim rule
 
     # ── fast path: [H, *T] on a plain list ──
     if type(d) is list and star_val is not None and not after_vals:
