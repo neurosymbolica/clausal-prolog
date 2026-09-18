@@ -483,6 +483,11 @@ class Database:
     def __init__(self, module_dict: dict | None = None) -> None:
         self._clauses: dict[tuple[str, int], list[Clause]] = {}
         self._signatures: dict[tuple[str, int], tuple | None] = {}
+        # P2 Task 2 (R-P2-1): the DECLARATION registry -- (functor, arity) ->
+        # declared field names, from fielded -private/-module entries and
+        # -import_from'd ones.  A declared functor is DATA until a row exists
+        # for it (clauses, -dynamic, a directive naming it); see declared_kind.
+        self._declared: dict[tuple[str, int], tuple[str, ...]] = {}
         self._dispatch: dict[tuple[str, int], Callable | None] = {}
         self._lazy_recompile: dict[tuple[str, int], Callable] = {}
         self._dynamic: set[tuple[str, int]] = set()
@@ -983,7 +988,40 @@ class Database:
 
     def signature_for(self, functor: str, arity: int) -> tuple[str, ...] | None:
         """Return the registered keyword param names, or None."""
-        return self._signatures.get((functor, arity))
+        sig = self._signatures.get((functor, arity))
+        if sig is None:
+            sig = self._declared.get((functor, arity))   # P2: a declared functor's fields
+        return sig
+
+    # -- the declaration registry (P2 Task 2, R-P2-1) ------------------------
+
+    def declare_functor(self, functor: str, fields: tuple[str, ...]) -> None:
+        """Record that this module declares ``functor/len(fields)`` with these
+        field names.  Declaring is not defining: ``row()`` stays None until a
+        row is minted (clauses, ``mark_dynamic``, a directive naming it)."""
+        self._declared[(functor, len(fields))] = tuple(fields)
+
+    def declared_fields(self, functor: str, arity: int) -> tuple[str, ...] | None:
+        return self._declared.get((functor, arity))
+
+    def declared_fields_by_name(self, functor: str) -> tuple[str, ...] | None:
+        """The by-NAME read the exec-time registry map offered (one entry per
+        name; the last declaration wins), for ``functor_signature_for``."""
+        found = None
+        for (f, _a), fields in self._declared.items():
+            if f == functor:
+                found = fields
+        return found
+
+    def declared_kind(self, functor: str, arity: int) -> str | None:
+        """``"predicate"`` when the Database knows a row for the key (clauses,
+        dispatch, ``-dynamic``, an adopted import, or a directive-minted row);
+        ``"data"`` when it is declared and rowless; ``None`` otherwise."""
+        if self.row(functor, arity) is not None:
+            return "predicate"
+        if (functor, arity) in self._declared:
+            return "data"
+        return None
 
     def set_dispatch(
         self,

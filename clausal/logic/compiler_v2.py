@@ -150,7 +150,7 @@ def compile_module(
     _preregister_specializations(module_items, module_dict)
 
     # ── Step 2: Process directives ───────────────────────────────────────
-    _process_directives(module_items, db)
+    _process_directives(module_items, db, module_dict)
 
     # ── Step 3: Process module/private declarations ──────────────────────
     #    Needs to know which declared functors are PREDICATES (P3-2 Task 2 /
@@ -1024,7 +1024,7 @@ def _refuse_untablable_target(
     )
 
 
-def _process_directives(module_items: list, db: Any) -> None:
+def _process_directives(module_items: list, db: Any, module_dict: dict | None = None) -> None:
     """Apply directive metadata to the database.
 
     PredicateMeta retirement, P4 prerequisite (2026-09-18): a declared
@@ -1056,6 +1056,14 @@ def _process_directives(module_items: list, db: Any) -> None:
             for entry in entries:
                 if isinstance(entry, tuple) and entry[1]:
                     declared.add((entry[0], len(entry[1])))
+                    db.declare_functor(entry[0], tuple(entry[1]))   # P2 Task 2: the registry
+    if module_dict is not None:
+        # -import_from'd fielded names arrive through the exec-time carrier map
+        # (``_make_import_signatures_update_ast``), keyed by LOCAL name.
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY  # noqa: PLC0415
+        for name, fields in (module_dict.get(FUNCTOR_SIGNATURES_KEY) or {}).items():
+            if fields and db.declared_fields(name, len(fields)) is None:
+                db.declare_functor(name, tuple(fields))
     for item in module_items:
         if isinstance(item, DirectiveItem):
             method_name = _directive_methods.get(item.name)

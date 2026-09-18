@@ -124,8 +124,8 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 # transiently bound to a class.  A PREDICATE functor builds
                 # the same cell: post-P3-3 a cell is a goal (``call/N``), and
                 # no class instance is ever minted from a seam.
-                registry = module_globals.get("__clausal_functor_signatures__") or {}
-                fields = registry.get(fname)
+                from clausal.logic.compiler.terms_to_ast import functor_signature_for  # noqa: PLC0415
+                fields = functor_signature_for(fname, module_globals)   # P2: the Database first, then the exec-time map
                 if fields is not None:
                     placed = _place_signature_slots(
                         fields, args, kwargs, functor=fname, missing=Var)

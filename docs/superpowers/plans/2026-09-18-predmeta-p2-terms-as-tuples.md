@@ -76,7 +76,12 @@ Exit: every site has a kind; the count per kind is in the commit message.
 - [ ] **Step 3: retire the module-level map** — `_make_functor_signatures_update_ast` emits nothing; the two readers go through the module's `db`. Run `tests/test_constants*.py`, `tests/test_testing*.py`, `tests/fixtures/docs`.
 - [ ] **Step 4: commit** with explicit paths.
 
-Exit: `grep -rn FUNCTOR_SIGNATURES_KEY clausal` is empty except `cells.py`'s definition (delete it too if nothing else reads it).
+Exit (revised while building, 2026-09-19): the Database is the registry and EVERY reader goes through
+`functor_signature_for`, which asks it first. The module-level map is NOT deleted: it is the EXEC-TIME carrier --
+generated code binds it before the module body runs, and the seam and the compiler's cell placer read it then,
+before `compile_module` has filled the Database. Retiring the carrier means moving declarations ahead of exec in
+the load pipeline; that is P4's load-order work, not P2's. Measured: the map and the registry hold field names AS
+WRITTEN (`('X', 'Y')`); a data functor's binding is already the atom str, not a class.
 
 ### Task 3: constructors emit cells
 

@@ -894,9 +894,8 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
                 # test reads the signature registry when the binding is that
                 # atom.
                 from clausal.logic.atoms import mint as _mint
-                from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
-                registry = namespace.get(FUNCTOR_SIGNATURES_KEY) or {}
-                fields = registry.get(functor)
+                from clausal.logic.compiler.terms_to_ast import functor_signature_for
+                fields = functor_signature_for(functor, namespace)   # P2: the Database first
                 if not (declared == _mint(functor) and fields is not None
                         and len(fields) == arity):
                     continue

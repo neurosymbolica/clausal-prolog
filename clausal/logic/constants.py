@@ -252,14 +252,14 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     raises for the same mistakes in a clause body -- the same mistake should
     not be a clean error in one position and a mangled term in the other.
     """
-    from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
     from clausal.logic.predicate import PredicateMeta
 
     binding = namespace.get(name)
     if isinstance(binding, PredicateMeta):
         return binding(*args, **kwargs)
 
-    fields = (namespace.get(FUNCTOR_SIGNATURES_KEY) or {}).get(name)
+    from clausal.logic.compiler.terms_to_ast import functor_signature_for  # noqa: PLC0415
+    fields = functor_signature_for(name, namespace)   # P2: the Database first, then the exec-time map
     if fields is None:
         # No class and no declared signature: nothing to place against.  Let
         # the original call happen so the failure names the real problem

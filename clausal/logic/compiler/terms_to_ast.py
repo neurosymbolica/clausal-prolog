@@ -309,6 +309,14 @@ def functor_signature_for(name: str, namespace: "dict | None") -> "tuple[str, ..
     """
     if namespace is None:
         return None
+    # P2 Task 2 (R-P2-1): the Database is the registry; the module-level map
+    # below is the EXEC-TIME carrier (bound before the module body runs) and
+    # answers while the Database has not been filled yet.
+    db = getattr(namespace.get("$module"), "db", None)
+    if db is not None:
+        declared = db.declared_fields_by_name(name)
+        if declared is not None:
+            return declared
     registry = namespace.get(FUNCTOR_SIGNATURES_KEY)
     if registry is not None and name in registry:
         return registry[name]
