@@ -529,13 +529,13 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
         if (!s) goto error;
 
         if (is_chars_carrier(s)) {
-    /* stage 1: the carrier splats as its text (owned reference swap) */
-    PyObject *inner = PyTuple_GET_ITEM(s, 1);
-    Py_INCREF(inner);
-    Py_DECREF(s);
-    s = inner;
-}
-if (PyList_Check(s)) {
+            /* stage 1: the carrier splats as its text (owned reference swap) */
+            PyObject *inner = PyTuple_GET_ITEM(s, 1);
+            Py_INCREF(inner);
+            Py_DECREF(s);
+            s = inner;
+        }
+        if (PyList_Check(s)) {
             /* Plain list: extend result */
             Py_ssize_t slen = PyList_GET_SIZE(s);
             for (Py_ssize_t i = 0; i < slen; i++) {

@@ -585,12 +585,12 @@ class SegList:
                     v = chars_text(v)          # stage 1: a hole bound to the carrier is a str-bound hole
                 if isinstance(v, str):
                     # VarSeg bound to a substring — expand to CHARS for SegList
-                    chars = [char_atom(c) for c in v]
+                    char_elems = [char_atom(c) for c in v]
                     if new_segs and isinstance(new_segs[-1], ConcreteSeg):
-                        new_segs[-1] = ConcreteSeg(new_segs[-1].elements + chars)
+                        new_segs[-1] = ConcreteSeg(new_segs[-1].elements + char_elems)
                     else:
-                        if chars:
-                            new_segs.append(ConcreteSeg(chars))
+                        if char_elems:
+                            new_segs.append(ConcreteSeg(char_elems))
                 elif isinstance(v, list):
                     # Inline the concrete list into previous ConcreteSeg or new one
                     if new_segs and isinstance(new_segs[-1], ConcreteSeg):
@@ -600,7 +600,7 @@ class SegList:
                             new_segs.append(ConcreteSeg(v))
                 elif isinstance(v, SegList):
                     # Inline nested SegList's segments. ``_walk_raw`` (not
-                    # ``__walk__``): a nested ground SegList of chars would
+                    # ``__walk__``): a nested ground SegList of char_elems would
                     # otherwise arrive PROMOTED to a str and fall into the
                     # ``._segments`` branch below, which a str does not have.
                     walked_inner = v._walk_raw()
@@ -1418,23 +1418,23 @@ class SegString:
         w = self._walk_raw()
         if isinstance(w, str):
             return char_atom(w[index]) if isinstance(index, int) else w[index]
-        chars: list[str] = []
+        char_buf: list[str] = []
         for seg in w._segments:
             if isinstance(seg, str):
-                chars.extend(seg)
+                char_buf.extend(seg)
             else:
-                if isinstance(index, int) and 0 <= index < len(chars):
-                    return char_atom(chars[index])
+                if isinstance(index, int) and 0 <= index < len(char_buf):
+                    return char_atom(char_buf[index])
                 # In-prefix forward slice is knowable (A01-F010); return a
                 # str to match ground SegString slicing.
-                if _slice_within_prefix(index, len(chars)):
-                    return "".join(chars)[index]
+                if _slice_within_prefix(index, len(char_buf)):
+                    return "".join(char_buf)[index]
                 raise PartialTermError(
                     f"SegString[{index!r}] requires resolving an unbound "
                     f"VarSeg; only the concrete prefix (indices "
-                    f"0..{len(chars) - 1}) is knowable. SegString={self!r}"
+                    f"0..{len(char_buf) - 1}) is knowable. SegString={self!r}"
                 )
-        prefix = "".join(chars)
+        prefix = "".join(char_buf)
         return char_atom(prefix[index]) if isinstance(index, int) else prefix[index]
 
     def __repr__(self):
