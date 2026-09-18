@@ -1027,18 +1027,20 @@ def _refuse_untablable_target(
 def _process_directives(module_items: list, db: Any) -> None:
     """Apply directive metadata to the database.
 
-    PredicateMeta retirement, P4 prerequisite (2026-09-18): every DECLARATION
-    creates its Database row here, so "is this name a predicate declared
-    here, at this arity?" (spec 2026-09-14 §4) is answerable by
-    ``db.row(functor, arity)`` and no longer only by the class the
-    declaration minted.  A fielded ``-private([p(X)])`` / ``-module(m,
-    [p(X)])`` entry and a ``predicate_export`` spec are declarations at
-    ``len(fields)``; a bare name in those lists is an ATOM and gets no row
-    (its predicate row appears with its first clause).  ``-dynamic`` already
-    created a row through ``mark_dynamic``; ``-discontiguous``/``-table``/
-    ``-shallow`` deliberately do NOT (``_validate_directive_targets`` checks
-    that their target is declared or defined, which a row minted by the
-    directive itself would make vacuous).
+    PredicateMeta retirement, P4 prerequisite (2026-09-18): a declared
+    functor that a ``-discontiguous``/``-table``/``-shallow`` directive names
+    as a PREDICATE at its declared arity gets its Database row here, so "is
+    this name a predicate declared here, at this arity?" (spec 2026-09-14
+    §4) is answerable by ``db.row(functor, arity)`` for that shape and no
+    longer only by the class the declaration minted -- the limit P1
+    measured.  Only that shape: a fielded ``-private([p(X)])`` entry ALONE
+    may be a DATA functor (a term constructor with no clauses), and the
+    Database must keep telling data from predicates (``test_predrow``, the
+    P3-3 tagging) -- a row on a data functor makes ``cite(KEY)`` in a body
+    read as a call.  The directive is what says "predicate".  ``-dynamic``
+    already creates its row through ``mark_dynamic``.  The row is minted
+    only for a DECLARED target, so ``_validate_directive_targets``'s typo
+    check (an undeclared, clause-less target) is not made vacuous.
     """
     _directive_methods = {
         "dynamic": "mark_dynamic",
@@ -1046,22 +1048,22 @@ def _process_directives(module_items: list, db: Any) -> None:
         "table": "mark_tabled",
         "shallow": "mark_shallow",
     }
+    declared: set[tuple[str, int]] = set()
     for item in module_items:
         if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
             entries = (item.exports if isinstance(item, ModuleDeclItem)
                        else item.items)
             for entry in entries:
                 if isinstance(entry, tuple) and entry[1]:
-                    db.row(entry[0], len(entry[1]), create=True)
-        elif isinstance(item, DirectiveItem):
-            if item.name == "predicate_export":
-                for functor, arity in item.specs:
-                    db.row(functor, arity, create=True)
-                continue
+                    declared.add((entry[0], len(entry[1])))
+    for item in module_items:
+        if isinstance(item, DirectiveItem):
             method_name = _directive_methods.get(item.name)
             if method_name is not None:
                 method = getattr(db, method_name)
                 for functor, arity in item.specs:
+                    if item.name != "dynamic" and (functor, arity) in declared:
+                        db.row(functor, arity, create=True)
                     method(functor, arity)
 
 

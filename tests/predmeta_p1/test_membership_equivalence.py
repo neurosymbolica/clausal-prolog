@@ -128,10 +128,12 @@ def declared_only(tmp_path, monkeypatch):
 def test_row_existence_IS_equivalent_even_for_a_declared_clause_less_predicate(
         declared_only):
     """The former NEGATIVE pin, flipped (PredicateMeta retirement, P4
-    prerequisite, 2026-09-18): a declaration now CREATES its row
+    prerequisite, 2026-09-18): a declared functor that a directive names as
+    a PREDICATE (here ``-discontiguous(p/1)``) now gets its row
     (``compiler_v2._process_directives``), so ``db.row("p", 1)`` answers for
-    a ``-private([p(X)])`` name with no clauses exactly as the ``isinstance``
-    test does.  The class still exists until P4 deletes it; the row is what
+    this ``-private([p(X)])`` name with no clauses exactly as the
+    ``isinstance`` test does.  A fielded declaration ALONE stays rowless:
+    it may be a data functor (``test_predrow`` pins that).  The class still exists until P4 deletes it; the row is what
     the compiler's "declared here at this arity" question reads now
     (``_validate_directive_targets`` asks the row first).  ``is_defined``
     is unchanged: a row is not a definition.
