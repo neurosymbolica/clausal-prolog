@@ -79,3 +79,35 @@ The operator chose to begin in this context ("spec-writing is lossy"). Branch
           harness-batch-lane's pre-landing sweep (informative diff, not a re-baseline)
     RULE  bare str is ACCEPTED as text at every patched site until the interim rule is armed — the
           suite must stay runnable between slices; commit each slice
+
+## ADDENDUM 2 (end of the 2026-09-18 session): stage 1 slice 2 committed; the fallout MAP for the successor
+
+Branch `feat/chars-carrier-stage1-2026-09-18` (canonical repo), slice 2 at `8853fc9c`: the carrier
+reads as its text at three FUNNELS — the py-modules' shared `to_text` (regex, sqlite, crypto, json,
+tcp, uuid, logging, z3 all pass through it), `normalize_seg_input` (every list consumer that walks a
+Seg*), and the test runner's test names (`test("…")` is a chars string, so every `.clausal` test file
+went red at once until the runner read the carrier — one funnel, many rows; the same runner serves the
+closed corpus, fixed once).
+
+Fallout snapshots vs the canonical-engine failure set (145 names): slice 1 = NEW 358 / GONE 0
+(16,247 passed); slice 2 = NEW=299 GONE=0 (slice 1 was NEW 358) (443 failed, 16306 passed, 52 skipped, 38 xfailed, 923 warnin). The map, by shape rather than by file:
+
+* **FUNNELS still to unwrap** (engine work, small): `unpack/2` (`=..`) has its own list check and
+  raises `type_error(list, carrier)` — it is what poisons `tests/fixtures/docs/builtins_sig_tests.clausal`
+  (125 rows), `z3_integer` (14), `io_to_string` (9) despite the runner fix; the text builtins in
+  `builtins/chars.py`/`inspection.py` (`atom_chars`, `atom_length`, `sub_atom`, `string_*`, `format`,
+  `write`/`writeq` — print the TEXT, never the tag); DCG terminal constants (`_dcg_terminal_text` still
+  emits a bare str); `SegString.__walk__` (returns str); the seam `to_term` (a Python str crossing IN
+  becomes the carrier in stage 1) and `text_of`; the 3 other `isinstance(x, str)` sites in lists.py;
+  the TEXT rows of `tools/atoms_flip/STR_SITES.tsv`; `_variables.c` PyUnicode sites 2517/2624
+  (check what they decide); the exporter's 37 branch lines.
+* **TEST PINS expecting a bare str** (mechanical, large): `[('$chars', '')] == ['']` shapes across
+  test_regex (86 at slice 1), test_string_list_builtins, test_string_higher_order, logging, currency
+  money, python_fallbacks, … — rewrite `'text'` expectations to `chars('text')` (or compare through
+  `chars_text`); a helper in `tests/` conftest would make this one edit per file.
+* **THEN** arm the loud interim rule (bare str at a text entry raises) as the positive control, run the
+  engine A/B on a clean base + exporter goldens, and FREEZE for harness-batch-lane's pre-landing sweep.
+
+Method that worked: fix a funnel, rerun the neighbour set (chars, double_quotes, dcg, bytes, standard
+order, iso, value_terms, seam, the carrier file — green at 728 after slice 1), commit, full snapshot in
+the background, read NEW by file. Never `pytest | tail && commit` — gate on pytest's own exit.
