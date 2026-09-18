@@ -9,9 +9,12 @@
     This report records decisions as of 2026-03-25. The *semantics* it settles
     still stand (strings are lists of characters; atoms are a distinct type),
     but the **representation** described under Issues 2 and 3 does not: an atom
-    is now the arity-0 cell `("red",)`, not a zero-field `PredicateMeta` class,
-    and the elements of a character list are one-character **atoms**, not
-    one-character strings. Atoms are compared by value equality, never by `is`.
+    is now the interned Python `str` itself — not a zero-field `PredicateMeta`
+    class, and not the arity-0 cell `("red",)` that briefly replaced it (that
+    1-tuple is now reserved and refused with a `TypeError`) — and the elements
+    of a character list are one-character **atoms**, not one-character
+    strings. Atoms are compared with `==` (`str` equality); interning makes
+    `is` agree too, but `==` is the test to write.
     See [Atoms vs strings](syntax.md#atoms-vs-strings) and
     [Strings as Lists](strings_as_lists.md) for the current model.
 
