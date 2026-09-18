@@ -52,3 +52,30 @@ loaded (defect in the GAP); a read-only census silent about sealed bodies BY RUL
 harness-batch-lane [803e60] (sequential sweeps; atom-literal census tool on the box; re-baseline
 protocol agreed); iso-export-lane [e8cdc5] (G3 first run on a frozen sha before stage 1 lands);
 corpus-lane [0dfae0] (AST instruments immune by construction; rulebase axis unaffected).
+
+## ADDENDUM (same session, later): stage 1 of the chars carrier is STARTED on a branch
+
+The operator chose to begin in this context ("spec-writing is lossy"). Branch
+`feat/chars-carrier-stage1-2026-09-18` in the CANONICAL repo (worktree
+`…/scratchpad/s1wt` of this session; recreate with `git worktree add <path> <branch>` and
+`setup.py build_ext --inplace` — it carries C changes), slice 1 at `1fb39385`:
+
+    DONE  cells.py CHARS_TAG/chars/is_chars/chars_text; tag excluded from "compound" beside TUPLE_TAG
+    DONE  term_rewriting: a "..." literal under -double_quotes(chars) compiles to Constant(('$chars', text))
+    DONE  lists.py entry points (_as_items/_was_string/_seq_result -> carrier out), append/3 kind tracking
+    DONE  clpfd._text_list_eq, type_checks string/1, _helpers standard-order key (carrier keys as its char list)
+    DONE  C: _variables.c unwraps a carrier right before the str<->list unify arms (after var handling);
+          _list_unify.c seq helpers, star splat, walked segment, promotion -> carrier
+    DONE  tests/test_chars_carrier.py (8) + 7 pins flipped; neighbour suites green (728)
+    OPEN  the full-suite fallout snapshot (running at handoff time; see the memory note for the result)
+    OPEN  every other producer/consumer of a bare str as TEXT: the seam (`to_term`: a Python str crossing in
+          becomes the carrier in stage 1; `text_of`), SegString.__walk__, the text builtins beyond lists
+          (atom_chars/atom_length/sub_atom/format/write/writeq print the TEXT, never the tag), DCG terminal
+          constants (`_dcg_terminal_text` stays str today), the 3 other `isinstance(x, str)` sites in
+          lists.py, the TEXT rows of tools/atoms_flip/STR_SITES.tsv (the human read), _variables.c's other
+          PyUnicode sites (2517/2624: standard order / type in C?), the exporter's 37 branch lines
+    OPEN  THEN arm the loud interim rule (a bare str reaching a text entry point RAISES) as the positive
+          control; THEN gate (engine A/B on a clean base + exporter goldens) and FREEZE for
+          harness-batch-lane's pre-landing sweep (informative diff, not a re-baseline)
+    RULE  bare str is ACCEPTED as text at every patched site until the interim rule is armed — the
+          suite must stay runnable between slices; commit each slice
