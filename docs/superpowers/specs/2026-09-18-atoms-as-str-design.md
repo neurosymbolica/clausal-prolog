@@ -195,7 +195,11 @@ after. The barrier scan on every crossing commit.
   the list-of-chars term; `writeq` never shows the tag. Sequencing ruled with it: the carrier lands
   FIRST under a LOUD interim rule — between step 2 and step 3 a bare Python str handed to the engine
   as text RAISES (the positive control for step 2, and what removes the ambiguity window) — then the
-  atom flip, after which the `('x',)` 1-tuple is refused wherever it is seen. Code lists stay on
+  atom flip, after which the `('x',)` 1-tuple is refused wherever it is seen — refused as RESERVED,
+  not as an old atom: the operator (2026-09-18) reserves the arity-0 str-headed tuple for a future
+  opaque Python object reference (caller-side object, engine passes but never inspects, swapped
+  in/out after marshalling). Not in scope; todo
+  `reserve-the-1-tuple-for-opaque-python-object-references-2026-09-18.md` (clone). Code lists stay on
   `bytes`. Considered and set aside: `'"'` as the functor (ISO-legal, readable, but spellable by a
   user and says nothing under `chars`).
 * **Q3.** `[]` stays the Python list as the canonical empty list/`'[]'` atom, and the str `'[]'`
