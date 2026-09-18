@@ -17,6 +17,8 @@ from __future__ import annotations
 import re as _re
 from dataclasses import dataclass, field
 from fractions import Fraction
+
+from clausal.logic.exact_arith import exact_add, exact_mul, exact_sub  # ONE spelling of + - * (2026-09-18)
 from clausal.logic import _units_flag
 from decimal import (
     Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_HALF_DOWN,
@@ -2584,15 +2586,15 @@ class quantity:  # noqa: N801 -- see the naming note below
     def __add__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
-            return Quantity(a + b, {})
+            return Quantity(exact_add(a, b), {})
         self._require_same_dims(other, "add")
         a, b = self._num_pair(self._value, other._value)
-        return Quantity(a + b, self._dims)
+        return Quantity(exact_add(a, b), self._dims)
 
     def __radd__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(other, self._value)
-            return Quantity(a + b, {})
+            return Quantity(exact_add(a, b), {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             # A NUMBER meeting a dimensioned quantity is a units error, and it
             # is the same error in either order. Returning NotImplemented here
@@ -2607,15 +2609,15 @@ class quantity:  # noqa: N801 -- see the naming note below
     def __sub__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(self._value, other)
-            return Quantity(a - b, {})
+            return Quantity(exact_sub(a, b), {})
         self._require_same_dims(other, "subtract")
         a, b = self._num_pair(self._value, other._value)
-        return Quantity(a - b, self._dims)
+        return Quantity(exact_sub(a, b), self._dims)
 
     def __rsub__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
             a, b = self._num_pair(other, self._value)
-            return Quantity(a - b, {})
+            return Quantity(exact_sub(a, b), {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             self._require_same_dims(other, "subtract")   # see __radd__
         return NotImplemented
@@ -2624,13 +2626,13 @@ class quantity:  # noqa: N801 -- see the naming note below
         if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, +1)
             a, b = self._num_pair(self._value, other._value)
-            return Quantity(a * b, new_dims)
+            return Quantity(exact_mul(a, b), new_dims)
         a, b = self._num_pair(self._value, other)
-        return Quantity(a * b, self._dims)
+        return Quantity(exact_mul(a, b), self._dims)
 
     def __rmul__(self, other):
         a, b = self._num_pair(other, self._value)
-        return Quantity(a * b, self._dims)
+        return Quantity(exact_mul(a, b), self._dims)
 
     @staticmethod
     def _all_finite(*xs) -> bool:

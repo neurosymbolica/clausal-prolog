@@ -70,7 +70,7 @@ def _dec_parts_of(x, context: str) -> "tuple[int, int] | None":
     """Parts of an int or a finite Decimal; None for any other kind."""
     if type(x) is Decimal:
         if not x.is_finite():
-            raise _not_finite(x, context)
+            return None
         return decimal_parts(x)
     if isinstance(x, int) and not isinstance(x, bool):
         return x, 0
@@ -93,6 +93,14 @@ def _dec_binop(l, r, op: str):
     raises (Q5)."""
     if type(l) is float or type(r) is float:
         raise _float_beside_decimal(l if type(l) is float else r, op)
+    for x in (l, r):
+        if type(x) is Decimal and not x.is_finite():
+            # NaN / Infinity have no (mantissa, scale); Decimal's own
+            # semantics apply (NaN propagates, Infinity absorbs) -- the
+            # evaluator refuses them at the LEAF, quantity arithmetic keeps
+            # them (tests/test_units_clp.py, round twenty).
+            return {"add": l.__add__, "sub": l.__sub__, "mul": l.__mul__}[op](r) if type(l) is Decimal \
+                else {"add": r.__radd__, "sub": r.__rsub__, "mul": r.__rmul__}[op](l)
     pl = _dec_parts_of(l, op)
     pr = _dec_parts_of(r, op)
     if pl is None or pr is None:
@@ -178,6 +186,6 @@ def exact_div(l, r):
             raise _float_beside_decimal(l if type(l) is float else r, "div")
         for x in (l, r):
             if type(x) is Decimal and not x.is_finite():
-                raise _not_finite(x, "div")
+                return l / r            # Decimal's own non-finite semantics
         return Fraction(l) / Fraction(r)
     return l / r

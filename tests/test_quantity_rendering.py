@@ -73,7 +73,8 @@ def _cases():
         ("money", 29200 * usd_cent),
         ("money_eur", 300000 * eur_cent),
         ("whole_currency", Quantity(Decimal("5"), euro)),
-        ("physical_scaled", 7 * gram),
+        ("physical_scaled", 7 * gram),          # an exact Decimal magnitude since 2026-09-18
+        ("physical_float", Quantity(2.5, metre)),  # a float magnitude: 2.5 beside an int factor stays float (Q4)
         ("physical_base", Quantity(3, metre)),
         ("compound", Quantity(3, {metre: 1, second: -1})),
         ("power", Quantity(3, {metre: 2})),
@@ -102,7 +103,16 @@ def test_str_round_trips_to_an_equal_value(tmp_path, label, q):
     assert type(back) is type(q), (
         f"{text!r} parsed back as {type(back).__name__}, not "
         f"{type(q).__name__}: {back!r}")
-    assert back == q, f"{text!r} parsed back as {back!r}, not {q!r}"
+    if type(q.value) is Decimal and type(back.value) is float:
+        # RULED Q4 (2026-09-17): a decimal literal in source IS a float, so an
+        # exact Decimal magnitude cannot come back as a Decimal through
+        # source text; what round-trips is its DIGITS (the shortest repr of
+        # the float is the written literal).  A read-time -float_literals
+        # directive would restore the kind; noted, not ruled.
+        assert Decimal(repr(back.value)) == q.value, (
+            f"{text!r} parsed back as {back!r}: digits differ from {q!r}")
+    else:
+        assert back == q, f"{text!r} parsed back as {back!r}, not {q!r}"
     assert dict(back.dims) == dict(q.dims), (
         f"{text!r} parsed back with dims {dict(back.dims)}, not {dict(q.dims)}")
 

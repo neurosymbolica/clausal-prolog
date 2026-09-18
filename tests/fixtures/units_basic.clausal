@@ -24,7 +24,7 @@ test("coulomb roundtrip") <- strip_units(3(coulomb), 3)  # nv
 test("centimetre roundtrip") <- (
     eval_(200(centimetre), D),
     strip_units(D, RAW),
-    ERR is ++(abs(RAW - 2.0)),
+    ERR is ++(abs(RAW - 2)),          # 2 not 2.0: RAW is an exact Decimal since 2026-09-18 (Q5/Q6)
     ERR < 1.0e-9
 )  # nv
 
@@ -142,7 +142,7 @@ test("kinetic energy") <- (
 
 test("bar stores as pascals") <- (
     eval_(1(bar), D),
-    ERR is ++(abs(D.value - 100000.0)),
+    ERR is ++(abs(D.value - 100000)),  # exact factor (Q6)
     ERR < 1.0e-6,
     has_units(D, pascal)
 )  # nv

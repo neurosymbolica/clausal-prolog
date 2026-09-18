@@ -114,7 +114,10 @@ def _eval_with_quantity_arithmetic(t):
     if isinstance(t, Mult):
         return _eval_with_quantity_arithmetic(t.left) * _eval_with_quantity_arithmetic(t.right)
     if isinstance(t, Div):
-        return _eval_with_quantity_arithmetic(t.left) / _eval_with_quantity_arithmetic(t.right)
+        l, r = _eval_with_quantity_arithmetic(t.left), _eval_with_quantity_arithmetic(t.right)
+        if type(l) is int and type(r) is int:
+            return Fraction(l, r)      # the engine's own rule: int / int is rational, never a float
+        return l / r
     if isinstance(t, Pow):
         return _eval_with_quantity_arithmetic(t.left) ** _eval_with_quantity_arithmetic(t.right)
     if isinstance(t, FloorDiv):
@@ -682,12 +685,18 @@ class TestReviewRoundTwo:
         assert unify(a, Quantity(3, M), t)
         assert deref(total) == Quantity(6, M)
 
-    def test_fraction_money_times_float_stays_exact(self):
-        q = Quantity(Fraction(1000, 3), {yen: 1}) * 1.5
+    def test_fraction_money_times_float_RAISES(self):
+        """Until 2026-09-18 this pinned the shortest-repr bridge (1.5 read as
+        Decimal('1.5'), exact).  RULED Q5/Q6 option C: at run time a float
+        beside a Fraction is refused; the written-literal case belongs at
+        construction/declaration.  Exact operands still multiply exactly."""
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            Quantity(Fraction(1000, 3), {yen: 1}) * 1.5
+        assert "exact_number" in str(ei.value)
+        q = Quantity(Fraction(1000, 3), {yen: 1}) * Fraction(3, 2)
         assert not isinstance(q.value, float) and q.value == 500
         assert isinstance(q.value, Decimal)     # integral → int → currency Decimal (round 7)
-        r = Quantity(Fraction(1000, 3), {yen: 1}) * 0.5
-        assert type(r.value) is Fraction and r.value == Fraction(500, 3)
 
     def test_strip_keeps_source_position(self):
         from clausal.logic.units_clp import analyse, strip

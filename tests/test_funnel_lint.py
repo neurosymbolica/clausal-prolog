@@ -385,7 +385,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    on its band constant, added beside ``_to_decimal`` and so ABOVE
     #    ``term_str``, then the same-named-dimension disambiguation in
     #    ``_dims_str``/``_colliding_dim_names``) -- still no new site.
-    AllowEntry("clausal/terms.py", (2699, 3407),   # re-anchored 2026-09-12 (exact-number currency helpers and // % above; then the re-readable unit renderer _unit_identifier/_unit_expr_str, then the rational rendering, still no new site); END re-anchored 2026-09-15 to 3407 -- this branch's own commits had ALREADY pushed the site past the old end (the test was red in this branch's baseline, which is exactly why the branch gate could not see the drift), and the _dims rekey pushed it further; verified still the only violation in the tree
+    AllowEntry("clausal/terms.py", (2699, 3440),   # END re-anchored 2026-09-18 to 3440: step 6 (Q6 option C) added the construction-time coercion, _float_beside_exact and the exact-helper routing above the site (was 3407); still the only violation in the tree. Earlier: re-anchored 2026-09-12 (exact-number currency helpers and // % above; then the re-readable unit renderer _unit_identifier/_unit_expr_str, then the rational rendering, still no new site); END re-anchored 2026-09-15 to 3407 -- this branch's own commits had ALREADY pushed the site past the old end (the test was red in this branch's baseline, which is exactly why the branch gate could not see the drift), and the _dims rekey pushed it further; verified still the only violation in the tree
                "pre-existing, out-of-inventory site: term_str's locale-"
                "translation atom-display branch; parked as a todo, not "
                "migrated this phase"),
