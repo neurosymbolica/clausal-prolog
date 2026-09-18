@@ -55,7 +55,7 @@ def test_the_note_fires_for_a_declared_clause_less_predicate(declared_only):
     db = vars(declared_only)["$module"].db
     # the shape this test is about, pinned so it cannot go vacuous
     assert isinstance(declared, PredicateMeta) and len(declared._fields) == 1
-    assert db.row("p", 1) is None
+    assert db.row("p", 1) is not None   # P4 prerequisite (2026-09-18): a declaration creates its row
     notes = _notes_for(declared_only, "p", [1])
     assert notes and "GENERIC compound p/1" in notes[0]
 

@@ -125,33 +125,24 @@ def declared_only(tmp_path, monkeypatch):
         shutil.rmtree(p, ignore_errors=True)
 
 
-def test_row_existence_is_NOT_equivalent_for_a_declared_clause_less_predicate(
+def test_row_existence_IS_equivalent_even_for_a_declared_clause_less_predicate(
         declared_only):
-    """The NEGATIVE pin: the reroute rule has a limit, and this is it.
-
-    ``isinstance(module_dict.get("p"), PredicateMeta)`` is True and
-    ``db.row("p", 1)`` is None for the same name, at the same arity, in the
-    same module.  Two P1 sites (``compiler_v2``'s
-    ``_validate_directive_targets`` and ``_refuse_untablable_target``) and
-    ``database_ops._find_pred_cls``'s class fallback turn on this: they ask
-    "is this name a predicate DECLARED/visible here", which is the spec §4
-    question, and a row cannot answer it yet.  If this test ever fails
-    because ``row()`` started answering, those three sites can be rerouted --
-    and ``test_row_existence_IS_equivalent_to_the_isinstance_test`` above is
-    then the whole rule rather than most of it.
+    """The former NEGATIVE pin, flipped (PredicateMeta retirement, P4
+    prerequisite, 2026-09-18): a declaration now CREATES its row
+    (``compiler_v2._process_directives``), so ``db.row("p", 1)`` answers for
+    a ``-private([p(X)])`` name with no clauses exactly as the ``isinstance``
+    test does.  The class still exists until P4 deletes it; the row is what
+    the compiler's "declared here at this arity" question reads now
+    (``_validate_directive_targets`` asks the row first).  ``is_defined``
+    is unchanged: a row is not a definition.
     """
     from clausal.logic.predicate import PredicateMeta
     db = _db(declared_only)
     declared = vars(declared_only)["p"]
-    assert isinstance(declared, PredicateMeta), (
-        "the -discontiguous directive keeps this name bound to its class")
+    assert isinstance(declared, PredicateMeta)
     assert len(declared._fields) == 1
-    assert db.row("p", 1) is None, (
-        "row() now answers for a declared, clause-less, non-dynamic "
-        "predicate -- re-check compiler_v2 851/882 and _find_pred_cls's "
-        "class fallback, which are all left on the class because it did not")
+    assert db.row("p", 1) is not None, (
+        "a fielded -private declaration must create its row")
+    assert db.row("p", 2) is None, "only at the declared arity"
     assert db.is_defined("p", 1) is False
-    assert db.is_dynamic("p", 1) is False
-    # The positive control in the same module: a name WITH clauses does have
-    # a row, so the extraction above is not simply looking at nothing.
-    assert db.row("has_clauses", 1) is not None
+    assert db.clauses_for("p", 1) == [] or not db.clauses_for("p", 1)

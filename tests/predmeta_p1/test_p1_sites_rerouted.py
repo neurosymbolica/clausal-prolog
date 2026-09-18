@@ -170,7 +170,9 @@ def test_the_specialize_diagnostic_lists_rows_not_classes(tmp_path):
     msg = str(exc.value)
     assert "nosuch_mi" in msg
     assert "'realpred'" in msg and "'prog'" in msg
-    assert "zonkish" not in msg, "a class with no row is not a row"
+    # P4 prerequisite (2026-09-18): a DECLARATION creates its row, so the
+    # declared, clause-less zonkish/2 is one of the rows and is listed.
+    assert "zonkish" in msg, "a declared predicate has a row and is listed"
 
 
 # ── clausal/logic/builtins/database_ops.py: _find_pred_cls ─────────────────
@@ -293,7 +295,10 @@ def test_a_directive_target_declared_without_clauses_still_loads(tmp_path):
     """
     mod = _load(tmp_path, "p1_disc",
                 "-private([zonkish(X, Y)])\n-discontiguous(zonkish/2)\nq(1),\n")
-    assert mod.db.row("zonkish", 2) is None
+    # P4 prerequisite (2026-09-18): the declaration created the row, and
+    # _validate_directive_targets accepts the target through it; the class
+    # fallback remains only for a class with no row (a plain Python import).
+    assert mod.db.row("zonkish", 2) is not None
     assert _answers(mod, "q") == [1]
 
 
