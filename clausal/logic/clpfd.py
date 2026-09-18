@@ -1832,12 +1832,19 @@ def _text_list_eq(l, r):
     list ``[a]``, not the cell ``a``, and a tuple is neither spelling here.
     """
     from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    unwrapped = False
     if is_chars(l):
-        l = chars_text(l)
+        l = chars_text(l); unwrapped = True
     if is_chars(r):
-        r = chars_text(r)
+        r = chars_text(r); unwrapped = True
     if not _TEXT_SPELLINGS:
         _ensure_text_list_imports()
+    if unwrapped and isinstance(l, _TEXT_SPELLINGS) and isinstance(r, _TEXT_SPELLINGS):
+        # STAGE 1: a carrier against the bare str it holds (or another
+        # carrier) is one text term in two spellings -- Python's ``==`` on
+        # the ORIGINALS (a tuple against a str) would say no.
+        from clausal.logic.constraints import structural_eq  # noqa: PLC0415
+        return structural_eq(l, r)
     if isinstance(l, _TEXT_SPELLINGS):
         if not isinstance(r, _LIST_SPELLINGS):
             return None

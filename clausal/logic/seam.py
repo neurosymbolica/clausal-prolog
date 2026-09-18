@@ -225,8 +225,11 @@ def text_of(value: Any) -> str:
     are untouched and still show the cell.
     """
     from clausal.logic.atoms import is_atom, spelling
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
     if is_atom(value):
         return spelling(value)
+    if is_chars(value):
+        return chars_text(value)       # stage 1: a chars string IS its text here
     return str(value)
 
 
@@ -242,8 +245,11 @@ def text_value(value: Any) -> Any:
     first, then the spec -- through :func:`text_of` instead.
     """
     from clausal.logic.atoms import is_atom, spelling
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
     if is_atom(value):
         return spelling(value)
+    if is_chars(value):
+        return chars_text(value)       # stage 1
     return value
 
 

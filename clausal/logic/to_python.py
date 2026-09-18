@@ -33,6 +33,7 @@ need an atom back mint one.
 from __future__ import annotations
 
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
+from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import deref, walk
 from clausal.terms import DictTerm, SegString
 
@@ -81,6 +82,8 @@ def to_python(val):
     if type(val) is str:
         return val
     val = deref(val)
+    if is_chars(val):
+        return chars_text(val)         # stage 1: a chars string crosses out as its text
     # Atom before the tuple arm, which would otherwise turn the arity-0 cell
     # ``("bar",)`` into a 1-tuple of its spelling.
     if _term_is_atom(val):

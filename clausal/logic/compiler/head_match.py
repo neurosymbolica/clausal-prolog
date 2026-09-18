@@ -36,7 +36,7 @@ from clausal.pythonic_ast.nodes import (
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
 )
-from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape
+from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.generated_names import dollar_ref
 
@@ -369,7 +369,12 @@ def head_to_match_pattern(
     # name, a ``'...'`` literal and (in the default ``atom`` mode) a ``"..."``
     # literal are ATOMS -- the arity-0 cell -- and take the cell branch at the
     # bottom of this cascade instead.
-    if isinstance(term, str):
+    if isinstance(term, str) or is_chars(term):
+        # STAGE 1 (spec 2026-09-18): the chars CARRIER ``('$chars', text)`` is
+        # a string literal too and takes the same capture + ``unify`` guard --
+        # NOT the compound-cell sequence pattern below, which would match
+        # only a caller holding the carrier and reject the char-list and
+        # bare-str spellings of the same term.  ``unify`` reads all three.
         cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
             list_guards.append(("str", cap_name, term))
@@ -828,7 +833,7 @@ def head_to_match_pattern(
         # the list of its char atoms, so ``p(SOME_STR)`` must match a
         # char-list caller as well as a ``str`` one.  A value pattern
         # compares with ``==`` and would reject the char-list caller.
-        if isinstance(resolved, str):
+        if isinstance(resolved, str) or is_chars(resolved):   # stage 1: carrier too
             cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
             if list_guards is not None:
                 list_guards.append(("str", cap_name, resolved))

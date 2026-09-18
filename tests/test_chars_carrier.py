@@ -71,3 +71,64 @@ class TestEqualToTheListSpelling:
         """Needs the C list-unify to read the carrier (slice 2)."""
         mod = _mod(tmp_path, "p(R) <- if_('='(\"ab\", [a, b]), R is yes, R is no)\n")
         (r,) = _first(mod, "p", Var()); assert r == ("yes",), r
+
+
+class TestSlice3Funnels:
+    """Slice 3: ``=..`` cons tail, rendering, the io producers, CLP ``==``,
+    and the Python-side crossings all read the carrier as its text."""
+
+    def test_univ_conses_a_char_onto_a_carrier(self, tmp_path):
+        mod = _mod(tmp_path, "p(T) <- unpack(T, ['.', a, \"bc\"])\nq(T) <- unpack(T, ['.', 1, \"bc\"])\n")
+        (t,) = _first(mod, "p", Var()); assert t == chars("abc"), t
+        (u,) = _first(mod, "q", Var()); assert u == [1, ("b",), ("c",)], u
+
+    def test_writeq_and_write_never_show_the_tag(self):
+        from clausal.terms import term_str, term_canonical
+        assert term_str(chars("ab")) == '"ab"'
+        assert term_str(chars("ab"), quoted=False, double_quotes=False) == "[a, b]"
+        assert term_canonical(chars("ab")) == "'.'(a,'.'(b,[]))"
+        assert "$chars" not in term_str(("f", chars("x")))
+
+    def test_to_string_producers_answer_the_carrier(self, tmp_path):
+        mod = _mod(tmp_path, 'p(S) <- write_to_string("hi", S)\nq(S) <- term_to_string([a, 1], S)\nr(S) <- write_text_to_string("hi", S)\n')
+        (s,) = _first(mod, "p", Var()); assert s == chars("[h,i]"), s
+        (t,) = _first(mod, "q", Var()); assert t == chars("[a, 1]"), t
+        (u,) = _first(mod, "r", Var()); assert u == chars("hi"), u
+
+    def test_infix_eq_between_a_bare_str_and_the_carrier(self):
+        from clausal.logic.clpfd import fd_eq, fd_ne
+        from clausal.logic.variables import Trail
+        t = Trail()
+        assert fd_eq("ab", chars("ab"), t) and fd_eq(chars("ab"), "ab", t)
+        assert not fd_eq("ab", chars("ac"), t)
+        assert fd_ne("ab", chars("ac"), t) and not fd_ne("ab", chars("ab"), t)
+
+    def test_python_side_crossings_read_the_text(self):
+        from clausal.logic.to_python import to_python
+        from clausal.logic.seam import text_of, text_value
+        assert to_python(chars("ab")) == "ab"
+        assert to_python([chars("ab"), 1]) == ["ab", 1]
+        assert text_of(chars("ab")) == "ab" and text_value(chars("ab")) == "ab"
+
+    def test_a_chars_literal_in_a_head_is_a_string_literal(self, tmp_path):
+        """A ``"..."`` head argument keeps the str literal's capture+unify
+        guard: every spelling of the text matches, and the stored head keeps
+        the literal (the test runner reads names off stored heads)."""
+        mod = _mod(tmp_path, 'p("ab", R) <- (R is yes)\np("cd", R) <- (R is no)\n')
+        from clausal.logic.atoms import char_atom
+        assert _first(mod, "p", chars("ab"), Var())[1] == ("yes",)
+        assert _first(mod, "p", "cd", Var())[1] == ("no",)
+        assert _first(mod, "p", [char_atom("a"), char_atom("b")], Var())[1] == ("yes",)
+        assert _first(mod, "p", chars("zz"), Var()) is None
+        x = Var(); assert _first(mod, "p", x, Var())[0] == chars("ab")     # output mode binds the carrier
+        heads = [c.head for c in mod.__dict__["$module"].db.clauses_for("p", 2)]
+        from clausal.logic.predicate import term_field_names
+        assert [getattr(h, term_field_names(h)[0]) for h in heads] == [chars("ab"), chars("cd")], heads
+
+    def test_runner_reads_chars_test_names_and_runs_the_right_body(self, tmp_path):
+        from clausal.testing import collect_tests, run_test
+        p = tmp_path / "t.clausal"
+        p.write_text(_HDR + 'test("first") <- (X is 1, X == 1)\ntest("second") <- (Y is 2, Y == 3)\n')
+        mod = load_clausal_module(p)
+        assert collect_tests(mod) == ["first", "second"]
+        assert run_test(mod, "first").passed and not run_test(mod, "second").passed

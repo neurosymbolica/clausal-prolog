@@ -14,6 +14,7 @@ from clausal.logic.predicate import (
 # speaks.  They are different questions; Task 12 gave the class test a name
 # that says which one it asks, so ``is_atom`` here is unambiguously the term
 # test.
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import (
     char_atom,
     is_atom as _term_is_atom,
@@ -278,6 +279,14 @@ def _cons(head, tail, who: str):
         if is_char_atom(h):
             return spelling(h) + tail
         return [head] + [char_atom(c) for c in tail]
+    if is_chars(tail):
+        # STAGE 1: consing a char atom onto the chars carrier keeps it a
+        # carrier; anything else expands it to the char list it denotes.
+        text = chars_text(tail)
+        h = deref(head)
+        if is_char_atom(h):
+            return chars(spelling(h) + text)
+        return [head] + [char_atom(c) for c in text]
     if is_var(tail):
         return SegList([ConcreteSeg([head]), VarSeg(tail)])
     if isinstance(tail, (SegList, SegString)):

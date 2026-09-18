@@ -31,7 +31,7 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG
+from .logic.cells import TUPLE_TAG, is_chars, chars_text
 from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -3262,6 +3262,10 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         return _c(str(t), 'number', style)
     if isinstance(t, (int, float, complex)):
         return _c(repr(t), 'number', style)
+    if is_chars(t):
+        # STAGE 1 (spec 2026-09-18): the chars carrier prints as the text it
+        # holds -- the tag is never shown, in any family.
+        t = chars_text(t)
     if isinstance(t, str):
         # A STRING (THE FLIP, spec §6.7).  The colour role ``'string'`` finally
         # means what it says.  ``writeq`` prints it as a double-quoted string
@@ -3476,6 +3480,8 @@ def term_canonical(t: Any) -> str:
         return str(t)
     if isinstance(t, (int, float, complex)):
         return repr(t)
+    if is_chars(t):
+        t = chars_text(t)              # stage 1: the carrier prints as its text
     if isinstance(t, str):
         # A STRING (THE FLIP) — the list of its char atoms, so it prints as
         # the cons structure that list denotes (spec §6.7, Scryer-verified):
