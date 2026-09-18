@@ -239,6 +239,12 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         _extend(inner_ops, goal.left, db)
         _extend(inner_ops, goal.right, db)
         return Sequence(ops=inner_ops)
+    if type(goal) is str:
+        # STAGE 2 of the atoms-as-str flip: an atom in GOAL position is the
+        # call of the 0-arity predicate of its name -- the rule solve/1 and
+        # call/N already apply, here for a bare ``p`` conjunct in a body
+        # (``p()`` and ``call(p)`` were the only accepted spellings before).
+        goal = nodes.Call(func=nodes.LoadName(name=goal), args=[], kwargs=[])
     match goal:
         # ``Or`` stays binary — nested ``Or(Or(a, b), c)`` must round-trip
         # to nested ``Alternate`` so the lowering emits the same nested

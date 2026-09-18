@@ -236,3 +236,24 @@ class TestReviewRound1:
         assert param.name == "X" and type(param.name) is str
         star = reifier._raw_node("MatchStar", {"name": ast.Constant("rest")})   # Optional[str]
         assert star.name == "rest" and type(star.name) is str
+
+
+class TestZeroArityValueBeforeFirstClause:
+    """The order caveat of the 0-arity-predicate-as-value rule, closed: under
+    -implicit_atoms a reference BEFORE the predicate's first clause used to
+    load the CLASS (prints like the atom, unequal to it, not a term)."""
+
+    def test_reference_before_and_after_the_clause_is_the_same_atom(self, tmp_path):
+        from clausal.logic.variables import Var
+        mod = _mod(tmp_path, "before(V) <- (V is p)\np <- true\nafter(V) <- (V is p)\n",
+                   hdr="-implicit_atoms\n")
+        (b,) = _first(mod, "before", Var())
+        (a,) = _first(mod, "after", Var())
+        assert b == mint("p") and a == mint("p") and type(b) is str
+        assert b == a
+
+    def test_a_call_in_function_position_is_still_a_call(self, tmp_path):
+        from clausal.logic.variables import Var
+        mod = _mod(tmp_path, "p <- true\nt(R) <- (p, R is yes)\n", hdr="-implicit_atoms\n")
+        (r,) = _first(mod, "t", Var())
+        assert r == mint("yes")

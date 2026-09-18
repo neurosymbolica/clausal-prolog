@@ -1731,6 +1731,33 @@ def _stacklevel_outside_rewriter() -> int:
     return level
 
 
+def _zero_arity_head_prepass(module) -> frozenset:
+    """The names every 0-arity clause HEAD in *module* uses -- ``p,`` and
+    ``p <- (...)`` -- read from the raw AST before any clause is walked.
+
+    STAGE 2 of the atoms-as-str flip: a 0-arity predicate referenced as a
+    VALUE is the atom of its name.  ``visit_Name`` learns a functor from
+    ``_seen_functors``, which is filled as heads are VISITED, so a reference
+    placed before the predicate's first clause (legal under -implicit_atoms,
+    where nothing else declares the name) fell through to the import-remap
+    path and loaded the CLASS at runtime -- a value that prints like the
+    atom, is not equal to it and is not a term.  This set closes the order
+    gap: it depends only on the file's text.
+    """
+    heads = set()
+    for stmt in getattr(module, "body", ()):
+        if not isinstance(stmt, Expr):
+            continue
+        # ``p,`` / ``p(1),`` parse as a Tuple statement; a clause written
+        # without the trailing comma (``p <- true``) is the bare expression.
+        elts = stmt.value.elts if isinstance(stmt.value, Tuple) else [stmt.value]
+        for elt in elts:
+            head = elt.left if isinstance(elt, Compare) else elt
+            if isinstance(head, Name):
+                heads.add(head.id)
+    return frozenset(heads)
+
+
 def _binds_name(module, name: str) -> bool:
     """True if *module* binds *name* anywhere: an assignment target, a
     def/class of that name, or an import (``import x as name``)."""
@@ -2259,6 +2286,7 @@ class TermTransformer(NodeTransformer):
                  logic_var_refs=None, constants=frozenset(), filename=None,
                  reify=False, hidden_atoms=frozenset(), module_name=None,
                  declared_functors=None, atom_functor_sites=None,
+                 zero_arity_heads=frozenset(),
                  quote_map=None, double_quotes_mode="atom",
                  seam=False, double_quotes_explicit=True,
                  python_visitor=None, titlecase_python_bound=None,
@@ -2330,6 +2358,12 @@ class TermTransformer(NodeTransformer):
         # mistake).
         transformer._declared_functors = (
             declared_functors if declared_functors is not None else {})
+        # The 0-arity clause heads of the WHOLE file, collected by
+        # ``EmbedTransformer._zero_arity_head_prepass`` before any body is
+        # walked -- ``_declared_functors`` only knows a head once its clause
+        # has been visited, so a value reference BEFORE the first clause
+        # (under -implicit_atoms) used to fall through to the class.
+        transformer._zero_arity_heads = zero_arity_heads
         # Fix round 2 (O1): the SHARED list ``EmbedTransformer.visit_Module``
         # drains once the walk is over.  ``_declared_functors`` is the
         # walk-time set, so "declared as an atom and NOT as a functor" cannot
@@ -3458,8 +3492,9 @@ class TermTransformer(NodeTransformer):
             )
         if identifier in transformer.atoms:
             return replace(Constant(value=sys.intern(identifier)), name)   # STAGE 2: the atom is the str
-        if (identifier in transformer._declared_functors
-                and len(transformer._declared_functors[identifier]) == 0
+        if (((identifier in transformer._declared_functors
+                  and len(transformer._declared_functors[identifier]) == 0)
+                 or identifier in transformer._zero_arity_heads)
                 and not transformer._in_callable_position):   # a Name in FUNCTION position is a call (_visit_call_func)
             # STAGE 2 (spec 2026-09-18 §1 table, §4): a 0-arity PREDICATE
             # referenced as a VALUE is the atom of its name -- the str, as in
@@ -6022,6 +6057,7 @@ class EmbedTransformer(NodeTransformer):
             hidden_atoms=transformer._hidden_atoms,
             module_name=transformer._module_name,
             declared_functors=transformer._seen_functors,
+            zero_arity_heads=transformer._zero_arity_heads,
             atom_functor_sites=transformer._atom_functor_sites,
             quote_map=transformer._quote_map,
             double_quotes_mode=transformer._double_quotes_mode,
@@ -6853,6 +6889,7 @@ class EmbedTransformer(NodeTransformer):
         # route through ``$text`` -- unless the file binds ``str`` itself, in
         # which case its own binding wins and nothing is rewritten.
         transformer._str_shadowed = _binds_name(module, "str")
+        transformer._zero_arity_heads = _zero_arity_head_prepass(module)
         # Snapshot the file's OWN Python bindings before the walk. Read
         # afterwards it would include generated code -- the -module rewrite
         # emits an assignment for every declared atom, so `pi` would look
