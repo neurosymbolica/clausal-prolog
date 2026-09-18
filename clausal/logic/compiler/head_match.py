@@ -1190,7 +1190,7 @@ def _compile_multi_star_guard(
                 _call(
                     _name("$unify"),
                     _var_or_const_expr(star_var),
-                    slice_expr,
+                    _call(_name("$seg_slice_out"), slice_expr),   # stage 1: a str slice is the carrier
                     _name(trail_name),
                 )
             )
@@ -1334,7 +1334,8 @@ def _compile_multi_star_guard(
     )
 
     # _d = deref(_lcap)
-    deref_assign = _assign(d_name, _call(_name("$deref"), _name(cap_name)))
+    deref_assign = _assign(d_name, _call(_name("$unwrap_chars"),          # stage 1
+                                         _call(_name("$deref"), _name(cap_name))))
 
     # If _d is a SegList, walk it: a fully-ground SegList becomes a plain list
     # so the existing isinstance(list) branch fires; a non-ground SegList stays
@@ -1345,13 +1346,13 @@ def _compile_multi_star_guard(
         body=[
             _assign(
                 d_name,
-                ast.Call(
+                _call(_name("$unwrap_chars"), ast.Call(      # stage 1: a char SegList walks to the carrier
                     func=ast.Attribute(
                         value=_name(d_name), attr="__walk__", ctx=ast.Load()
                     ),
                     args=[],
                     keywords=[],
-                ),
+                )),
             )
         ],
         orelse=[],
@@ -1365,13 +1366,13 @@ def _compile_multi_star_guard(
         body=[
             _assign(
                 d_name,
-                ast.Call(
+                _call(_name("$unwrap_chars"), ast.Call(      # stage 1: a char SegList walks to the carrier
                     func=ast.Attribute(
                         value=_name(d_name), attr="__walk__", ctx=ast.Load()
                     ),
                     args=[],
                     keywords=[],
-                ),
+                )),
             )
         ],
         orelse=[],
@@ -1385,13 +1386,13 @@ def _compile_multi_star_guard(
         body=[
             _assign(
                 d_name,
-                ast.Call(
+                _call(_name("$unwrap_chars"), ast.Call(      # stage 1: a char SegList walks to the carrier
                     func=ast.Attribute(
                         value=_name(d_name), attr="__walk__", ctx=ast.Load()
                     ),
                     args=[],
                     keywords=[],
-                ),
+                )),
             )
         ],
         orelse=[],

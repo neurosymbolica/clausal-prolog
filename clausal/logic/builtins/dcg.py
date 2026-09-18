@@ -10,6 +10,13 @@ from clausal.logic.trampoline import DONE, StepGenerator
 
 from clausal.logic.builtins._registry import _trampoline_builtin
 from clausal.logic.runtime._seg_helpers import normalize_seg_input, str_chars
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
+
+
+def _text_out(x):
+    """A DCG remainder/expected sequence as a term: a bare str is the chars
+    CARRIER (stage 1 of the atoms-as-str flip); anything else is itself."""
+    return chars(x) if type(x) is str else x
 
 
 # ── _DCG_ARITY_NOTE ──────────────────────────────────────────────────────────
@@ -38,6 +45,8 @@ def _elements(seq):
     splat.  ``bytes`` keeps the codes model (``list(b)`` yields ints) and a
     list is already elements.
     """
+    if is_chars(seq):
+        return str_chars(chars_text(seq))   # stage 1
     if type(seq) is str:
         return str_chars(seq)
     if isinstance(seq, bytes):
@@ -60,8 +69,8 @@ def _empty_remainder_like(list_val):
     sequence stays bytes — instead of swapping spelling halfway through a
     parse and handing the caller a different-looking empty.
     """
-    if isinstance(list_val, str):
-        return ""
+    if isinstance(list_val, str) or is_chars(list_val):
+        return chars("")               # stage 1: the empty TEXT remainder is the carrier
     if isinstance(list_val, bytes):
         return b""
     return []
@@ -203,7 +212,7 @@ def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
         # the int a bytes element normalises to).
         if len(s0_val) >= n:
             mark = trail.mark()
-            if unify(lst_pref_norm, s0_pref_norm, trail) and unify(s, s0_val[n:], trail):
+            if unify(lst_pref_norm, s0_pref_norm, trail) and unify(s, _text_out(s0_val[n:]), trail):
                 yield (_proceed, None)
             trail.undo(mark)
     elif isinstance(s_val, (list, str, bytes)):
@@ -213,7 +222,7 @@ def _sequence__3(this_generator, _proceed, _fail, _catcher, lst, s0, s, trail):
         if isinstance(lst_val, bytes) and isinstance(s_val, bytes):
             expected = lst_val + s_val
         elif isinstance(lst_val, str) and isinstance(s_val, str):
-            expected = lst_val + s_val
+            expected = _text_out(lst_val + s_val)
         else:
             expected = _elements(lst_val) + _elements(s_val)
         mark = trail.mark()

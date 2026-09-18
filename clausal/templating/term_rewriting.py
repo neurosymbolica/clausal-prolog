@@ -4681,7 +4681,10 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             # leave this ``str`` alone (a string IS that char list now, so
             # the pre-flip behaviour survives verbatim).  Making the quote
             # style matter here is Plan 2's question, parked.
-            terminal = Constant(value=value)
+            # STAGE 1 (spec 2026-09-18): a str terminal is the chars CARRIER
+            # -- ``sequence//1`` reads it as its text and hands out carrier
+            # remainders, so no bare str is born here.  ``bytes`` unchanged.
+            terminal = Constant(value=(CHARS_TAG, value) if isinstance(value, str) else value)
             terminal._dcg_terminal_text = True
             call = Call(
                 func=Name(id="sequence", ctx=load),

@@ -15,7 +15,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.testing import load_clausal_module
 
-_HDR = "-double_quotes(chars)\n-private([yes, no, a, b])\n"
+_HDR = "-double_quotes(chars)\n-private([yes, no, a, b, c, x, h, i, t, e, r])\n"
 
 
 def _mod(tmp_path, body):
@@ -132,3 +132,115 @@ class TestSlice3Funnels:
         mod = load_clausal_module(p)
         assert collect_tests(mod) == ["first", "second"]
         assert run_test(mod, "first").passed and not run_test(mod, "second").passed
+
+
+class TestSlice4SegLayer:
+    """Slice 4: the Seg* layer -- every text that ESCAPES into a term (a star
+    tail, a VarSeg binding, a star-list result, a ground Seg* walk, a DCG
+    remainder) is the carrier, in both the Python and the C twins."""
+
+    def test_head_star_tail_is_the_carrier_in_both_twins(self):
+        from clausal.logic.runtime.list_unify import _head_list_unify_input_py
+        from clausal.logic.runtime._list_unify import _head_list_unify_input
+        from clausal.logic.variables import Trail
+        for fn in (_head_list_unify_input_py, _head_list_unify_input):
+            for target in (chars("abc"), "abc"):
+                t = Trail(); h = Var(); tl = Var()
+                assert fn(target, [h], tl, [], t) is True
+                assert deref(h) == ("a",) and deref(tl) == chars("bc"), (fn, target, deref(tl))
+
+    def test_body_multi_star_binds_carriers(self, tmp_path):
+        mod = _mod(tmp_path, 'p(A, B) <- ("abc" is [*A, b, *B])\nq(T) <- ("abc" is [_, *T])\n')
+        a, b = _first(mod, "p", Var(), Var()); assert (a, b) == (chars("a"), chars("c")), (a, b)
+        (t,) = _first(mod, "q", Var()); assert t == chars("bc"), t
+
+    def test_star_list_built_from_carriers_is_a_carrier(self, tmp_path):
+        mod = _mod(tmp_path, 'p(R) <- (A is "ab", B is "cd", R is [*A, *B])\nq(R) <- (A is "ab", R is [yes, *A])\n')
+        (r,) = _first(mod, "p", Var()); assert r == chars("abcd"), r
+        (s,) = _first(mod, "q", Var()); assert s == [("yes",), ("a",), ("b",)], s
+
+    def test_ground_segstring_walks_to_the_carrier(self):
+        from clausal.terms import SegString, VarSeg
+        from clausal.logic.variables import Trail, walk, unify
+        t = Trail(); x = Var(); ss = SegString(["a", VarSeg(x)])
+        assert unify(x, chars("bc"), t) and walk(ss) == chars("abc")
+        y = Var(); ss2 = SegString(["a", VarSeg(y)])
+        assert unify(ss2, chars("abc"), t) and deref(y) == chars("bc")
+        assert ss2.is_ground() and ss2 == chars("abc")
+
+    def test_dcg_terminal_and_remainder(self, tmp_path):
+        mod = _mod(tmp_path, 'greet >> ("hi", " ", "there")\np(R) <- (phrase(greet, "hi there", R))\nq <- phrase(greet, "hi there")\nr <- phrase(greet, [h, i, \' \', t, h, e, r, e])\n')
+        (r,) = _first(mod, "p", Var()); assert r == chars(""), r
+        assert _first(mod, "q") is not None
+        assert _first(mod, "r") is not None
+
+    def test_is_list_flatten_and_fresh_shape(self, tmp_path):
+        mod = _mod(tmp_path, 'p(R) <- if_(is_list("ab"), R is yes, R is no)\nq(F) <- flatten([[a], "bc"], F)\n')
+        (r,) = _first(mod, "p", Var()); assert r == ("yes",)
+        (f,) = _first(mod, "q", Var()); assert f == [("a",), ("b",), ("c",)], f
+
+
+# ── spelling parity: the positive control for stage 1 ───────────────────────
+#
+# One text term, three spellings -- the bare str (interim), the carrier, and
+# the char list.  Every goal below must answer the SAME (answers compared with
+# the carrier and the bare str both read as their text).  A goal that answers
+# differently for the carrier is a funnel stage 1 has not reached.
+
+_PARITY_GOALS = [
+    "functor(X, N, A)", "unpack(X, L)", "length(X, N)", "msort([X, [a]], L)",
+    "sort([X, [a]], L)", "if_(compound(X), R is yes, R is no)",
+    "if_(atomic(X), R is yes, R is no)", "if_(is_list(X), R is yes, R is no)",
+    "if_(string(X), R is yes, R is no)", "if_(atom(X), R is yes, R is no)",
+"if_(ground(X), R is yes, R is no)",
+    "copy_term(X, Y)", "term_variables(X, V)", "append(X, [c], R)",
+    "append(X, \"c\", R)", "reverse(X, R)", "last(X, E)", 
+    "flatten([X, [c]], F)", "in_(E, X)", "compare(O, X, [a, b])",
+    "compare(O, X, [a, c])", "if_('=='(X, [a, b]), R is yes, R is no)",
+    "if_('@<'(X, [a, c]), R is yes, R is no)", "write_to_string(X, S)",
+    "term_to_string(X, S)", "write_text_to_string(X, S)", "arg(1, X, E)",
+    "sum_list([1], S), length(X, N)", "list_to_set(X, S)", "exclude(is_a, X, R)",
+    "include(is_a, X, R)", "if_(\"ab\" == X, R is yes, R is no)",
+    "if_(X == \"ac\", R is yes, R is no)", "(X is [H, *T])", "(X is [*P, b])",
+    "(X is [*P, *Q]), P == \"a\"", "atom_chars(A, X)", "atom_codes(A, X)",
+    "number_chars(N, X)",
+]
+
+
+def _as_text(v):
+    from clausal.terms import SegString
+    if is_chars(v):
+        return chars_text(v)
+    if isinstance(v, str):
+        return v
+    if isinstance(v, list):
+        return [_as_text(e) for e in v]
+    if isinstance(v, tuple):
+        return tuple(_as_text(e) for e in v)
+    if isinstance(v, SegString):
+        return ("SegString", v.__walk__() if v.is_ground() else repr(v))
+    return v
+
+
+@pytest.mark.parametrize("goal", _PARITY_GOALS)
+def test_the_three_spellings_answer_alike(tmp_path, goal):
+    from clausal.logic.atoms import char_atom
+    from clausal.logic.exceptions import LogicException
+    import re
+    vars_ = sorted(set(re.findall(r"\b([A-Z][A-Za-z0-9]*)\b", goal)) - {"X"})
+    head = "p(X" + "".join(", " + v for v in vars_) + ")"
+    mod = _mod(tmp_path, f"is_a(a),\n{head} <- ({goal})\n")
+    answers = {}
+    for label, x in (("str", "ab"), ("carrier", chars("ab")), ("list", [char_atom("a"), char_atom("b")])):
+        args = [Var() for _ in vars_]
+        try:
+            got = sorted(repr(_as_text([deref(a) for a in args])) for _ in call("p", x, *args, module=mod))
+        except LogicException as e:
+            got = ["raised " + type(e).__name__ + " " + repr(_as_text(e.args[0] if e.args else e))[:60]]
+        answers[label] = got
+    # the carrier and the bare str are ONE spelling family and must agree
+    # exactly; the char list is input-type-wins on OUTPUT shape (a str tail
+    # stays text, a list tail stays a list), so it is held to the same
+    # success/failure COUNT only
+    assert answers["carrier"] == answers["str"], answers
+    assert len(answers["list"]) == len(answers["carrier"]), answers

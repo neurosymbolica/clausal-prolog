@@ -369,7 +369,8 @@ def _is_list__1(x, trail, k):
     update in ``tests/test_string_list_builtins.py``.
     """
     x_val = deref(x)
-    if isinstance(x_val, (list, str, bytes)):
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    if isinstance(x_val, (list, str, bytes)) or is_chars(x_val):   # stage 1: the carrier is a list
         yield None
     elif isinstance(x_val, (SegList, SegString, SegBytes)) and _is_ground(x_val):
         yield None

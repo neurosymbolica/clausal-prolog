@@ -110,7 +110,8 @@ def _was_string(val):
         return True
     from clausal.terms import SegString
     if isinstance(val, SegString) and val.is_ground():
-        return isinstance(val.__walk__(), str)
+        w = val.__walk__()
+        return isinstance(w, str) or is_chars(w)   # stage 1: walks to the carrier
     return False
 
 
@@ -468,12 +469,12 @@ def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
                 for item in x:
                     outer = False
                     _do_flat(item)
-            elif not outer and isinstance(x, str):
+            elif not outer and (isinstance(x, str) or is_chars(x)):
                 # F056: nested str is recursed-into per the
                 # strings-as-lists equivalence; the top-level str case
                 # is handled by the early-return below the recursion.
                 # Its elements are CHARS, like every other str→list split.
-                for ch in x:
+                for ch in (chars_text(x) if is_chars(x) else x):
                     result.append(char_atom(ch))
             else:
                 # Ground Seg* walk to their concrete shape; reuse the
@@ -1002,6 +1003,8 @@ def _fresh_same_shape(seq_val):
     classic list of fresh ``Var`` objects.
     """
     from clausal.terms import SegString, SegBytes, VarSeg
+    if is_chars(seq_val):
+        seq_val = chars_text(seq_val)  # stage 1: str-shaped
     if isinstance(seq_val, str):
         return SegString([VarSeg(Var()) for _ in seq_val])
     if isinstance(seq_val, SegString) and seq_val.is_ground():

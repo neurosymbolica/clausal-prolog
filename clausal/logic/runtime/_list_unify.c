@@ -187,11 +187,32 @@ join_char_spellings(PyObject *chars)
     return joined;
 }
 
-/* Slice seq[start:end] — returns new ref. */
+/* ('$chars', text) for the str *text* -- a new reference (stage 1 of the
+ * atoms-as-str flip, spec 2026-09-18). */
+static PyObject *
+make_chars_carrier(PyObject *text)
+{
+    PyObject *tag = PyUnicode_FromString("$chars");
+    if (!tag) return NULL;
+    PyObject *carrier = PyTuple_Pack(2, tag, text);
+    Py_DECREF(tag);
+    return carrier;
+}
+
+/* Slice seq[start:end] — returns new ref.  The carrier slices as its text,
+ * and a str slice (a text target's star tail) is handed out as the CARRIER
+ * (stage 1): what a Var binds to is never a bare str. */
 static inline PyObject *
 seq_slice(PyObject *seq, Py_ssize_t start, Py_ssize_t end)
 {
-    return PySequence_GetSlice(seq, start, end);
+    seq = unwrap_chars(seq);
+    PyObject *s = PySequence_GetSlice(seq, start, end);
+    if (s && PyUnicode_Check(s)) {
+        PyObject *c = make_chars_carrier(s);
+        Py_DECREF(s);
+        return c;
+    }
+    return s;
 }
 
 /* Get length of a list or string. */

@@ -59,6 +59,8 @@ from clausal.logic.runtime.body_star_unify import (  # noqa: F401
     _build_star_list,
     _build_multi_star_list,
     _in_iter,
+    _unwrap as _unwrap_chars,      # stage 1: the chars carrier as its text
+    _text_out as _seg_slice_out,   # stage 1: a str slice as the carrier
 )
 from clausal.logic.runtime.tramp_call import (  # noqa: F401
     _tramp_call, _naf_has_solution,
@@ -358,6 +360,11 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # the target directly and so compared a head literal against a 1-char
     # ``str`` — a one-element STRING after THE FLIP, not a char.
     "$seq_getitem": _seq_getitem,
+    # STAGE 1 (spec 2026-09-18): the multi-star head guard reads a chars
+    # CARRIER target as its text and hands a str star slice out as the
+    # carrier, so what a caller's var binds to is never a bare str.
+    "$unwrap_chars": _unwrap_chars,
+    "$seg_slice_out": _seg_slice_out,
     # The two outbound term → Python conversions (spec
     # 2026-09-06-atoms-as-cells-strings §9.1).  The PyThunk lowering in
     # terms_to_ast emits ``$unwrap_atom`` — §9.1's fallback, applied on Task

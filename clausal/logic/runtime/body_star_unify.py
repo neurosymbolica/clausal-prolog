@@ -22,6 +22,18 @@ from clausal.terms import (
 )
 
 from clausal.logic.atoms import is_char_atom
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
+
+
+def _unwrap(d):
+    """A deref'd star / target value with the chars carrier read as its text
+    (stage 1): the builders below keep bare ``str`` as their INTERNAL form and
+    hand every text RESULT out as the carrier again (``_text_out``)."""
+    return chars_text(d) if is_chars(d) else d
+
+
+def _text_out(x):
+    return chars(x) if type(x) is str else x
 from ._seg_helpers import (
     maybe_promote_to_str, join_chars, seq_getitem, str_chars,
 )
@@ -52,8 +64,10 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     if isinstance(d, SegBytes):
         return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
-    if isinstance(d, (list, str, bytes)):
+    if isinstance(d, (list, str, bytes)) or is_chars(d):
         # Deconstruction: split list/str/bytes according to the pattern
+        # (the chars carrier destructures as its text -- stage 1; both twins
+        # of ``_head_list_unify_input`` read it)
         return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
     if is_var(d):
@@ -73,14 +87,14 @@ def _build_star_list(before, star, after):
     when star is bound to a ``str`` and all before/after elements are
     chars, returns a ``str`` (or ``SegString`` when partial).
     """
-    d = deref(star)
+    d = _unwrap(deref(star))
     if isinstance(d, str):
         # Check if all before/after elements are chars
         b = list(before)
         a = list(after)
         if (all(is_char_atom(e) for e in b) and
                 all(is_char_atom(e) for e in a)):
-            return join_chars(b) + d + join_chars(a)
+            return chars(join_chars(b) + d + join_chars(a))   # stage 1
         # Mixed types — fall through to list construction
         return b + str_chars(d) + a
     if isinstance(d, bytes):
@@ -99,6 +113,8 @@ def _build_star_list(before, star, after):
         return maybe_promote_to_str(list(before) + d + list(after))
     if isinstance(d, SegList):
         walked = d.__walk__()
+        if is_chars(walked):
+            walked = str_chars(chars_text(walked))   # stage 1: a char SegList walks to the carrier
         if isinstance(walked, list):
             # F043: promote a list of chars back to str.
             return maybe_promote_to_str(list(before) + walked + list(after))
@@ -111,13 +127,13 @@ def _build_star_list(before, star, after):
             segs.append(ConcreteSeg(list(after)))
         return SegList(segs)
     if isinstance(d, SegString):
-        walked = d.__walk__()
+        walked = _unwrap(d.__walk__())
         if isinstance(walked, str):
             b = list(before)
             a = list(after)
             if (all(is_char_atom(e) for e in b) and
                     all(is_char_atom(e) for e in a)):
-                return join_chars(b) + walked + join_chars(a)
+                return chars(join_chars(b) + walked + join_chars(a))   # stage 1
             return b + str_chars(walked) + a
         # non-ground SegString — wrap into a new SegString or SegList
         b = list(before)
@@ -210,7 +226,7 @@ def _build_multi_star_list(segments):
     string_mode = True
     for kind, val in segments:
         if kind == "star":
-            d = deref(val)
+            d = _unwrap(deref(val))
             if isinstance(d, str):
                 continue
             if isinstance(d, SegString):
@@ -222,6 +238,8 @@ def _build_multi_star_list(segments):
                 continue
             if isinstance(d, SegList):
                 walked = d.__walk__()
+                if is_chars(walked):
+                    continue           # stage 1: a char SegList walks to the carrier (all chars)
                 if isinstance(walked, list):
                     if not all(is_char_atom(e) for e in walked):
                         string_mode = False
@@ -248,7 +266,7 @@ def _build_multi_star_list(segments):
         str_segs: list = []
         for kind, val in segments:
             if kind == "star":
-                d = deref(val)
+                d = _unwrap(deref(val))
                 if isinstance(d, str):
                     if d:
                         if str_segs and isinstance(str_segs[-1], str):
@@ -256,7 +274,7 @@ def _build_multi_star_list(segments):
                         else:
                             str_segs.append(d)
                 elif isinstance(d, SegString):
-                    walked = d.__walk__()
+                    walked = _unwrap(d.__walk__())
                     if isinstance(walked, str):
                         if walked:
                             if str_segs and isinstance(str_segs[-1], str):
@@ -284,7 +302,7 @@ def _build_multi_star_list(segments):
                 elif isinstance(d, SegList):
                     walked = d.__walk__()
                     # walked is a list of chars (first-pass check)
-                    s = join_chars(walked)
+                    s = chars_text(walked) if is_chars(walked) else join_chars(walked)
                     if s:
                         if str_segs and isinstance(str_segs[-1], str):
                             str_segs[-1] = str_segs[-1] + s
@@ -300,14 +318,14 @@ def _build_multi_star_list(segments):
                         str_segs.append(s)
         # Ground? return str. Otherwise SegString.
         if all(isinstance(s, str) for s in str_segs):
-            return "".join(str_segs)
+            return chars("".join(str_segs))   # stage 1: a text result is the carrier
         return SegString(str_segs)
 
     bytes_mode = True
     bytes_source_present = False
     for kind, val in segments:
         if kind == "star":
-            d = deref(val)
+            d = _unwrap(deref(val))
             if isinstance(d, bytes):
                 bytes_source_present = True
                 continue
@@ -355,7 +373,7 @@ def _build_multi_star_list(segments):
 
         for kind, val in segments:
             if kind == "star":
-                d = deref(val)
+                d = _unwrap(deref(val))
                 if isinstance(d, bytes):
                     _push_bytes(d)
                 elif isinstance(d, SegBytes):
@@ -382,7 +400,7 @@ def _build_multi_star_list(segments):
     segs = []
     for kind, val in segments:
         if kind == "star":
-            d = deref(val)
+            d = _unwrap(deref(val))
             if isinstance(d, str):
                 if segs and isinstance(segs[-1], ConcreteSeg):
                     segs[-1] = ConcreteSeg(segs[-1].elements + str_chars(d))
@@ -397,6 +415,8 @@ def _build_multi_star_list(segments):
                         segs.append(ConcreteSeg(d))
             elif isinstance(d, SegList):
                 walked = d.__walk__()
+                if is_chars(walked):
+                    walked = str_chars(chars_text(walked))   # stage 1: a char SegList walks to the carrier
                 if isinstance(walked, list):
                     if segs and isinstance(segs[-1], ConcreteSeg):
                         segs[-1] = ConcreteSeg(segs[-1].elements + walked)
@@ -405,7 +425,7 @@ def _build_multi_star_list(segments):
                 else:
                     segs.extend(walked.segments)
             elif isinstance(d, SegString):
-                walked = d.__walk__()
+                walked = _unwrap(d.__walk__())
                 if isinstance(walked, str):
                     if segs and isinstance(segs[-1], ConcreteSeg):
                         segs[-1] = ConcreteSeg(segs[-1].elements + str_chars(walked))
@@ -461,6 +481,7 @@ def _in_iter(collection, pair_mode):
         # dict is handed back uncopied (two O(1) membership tests), so the
         # common case still iterates in place.
         return data.items() if pair_mode else iter(data)
+    collection = _unwrap(collection)    # stage 1: the carrier iterates as its chars
     if type(collection) is str:
         # THE FLIP (spec §6.2): a string is the LIST OF ITS CHAR ATOMS, so
         # ``X in "abc"`` enumerates ``("a",)``, ``("b",)``, ``("c",)`` — the
@@ -501,7 +522,7 @@ def _segstring_align(ss, segments, trail, target):
     mark = trail.mark()
     bind_ok = True
     for vs in var_segs:
-        if not unify(vs.var, "", trail):
+        if not unify(vs.var, chars(""), trail):   # stage 1: an empty TEXT hole
             bind_ok = False
             break
     if not bind_ok:
@@ -509,7 +530,7 @@ def _segstring_align(ss, segments, trail, target):
         return
 
     # Re-walk the SegString — should now be a plain str.
-    collapsed = ss.__walk__()
+    collapsed = _unwrap(ss.__walk__())
     if not isinstance(collapsed, str):
         # Some VarSeg was already bound to a non-str (e.g. another
         # SegString) — give up.
@@ -643,7 +664,7 @@ def _body_multi_star_unify(target, segments, trail):
 
     Yields once per valid split (combinatorial backtracking).
     """
-    d = deref(target)
+    d = _unwrap(deref(target))
     # Strings and bytes are handled directly (no list conversion) so that star
     # vars bind to substrings/subbytes preserving type.
     if not isinstance(d, (list, str, bytes)):
@@ -651,7 +672,7 @@ def _body_multi_star_unify(target, segments, trail):
         # here. Ground forms (walk → list / str / bytes) fall through to the
         # enumeration loop below.
         if isinstance(d, (SegList, SegString, SegBytes)):
-            d_walked = d.__walk__()
+            d_walked = _unwrap(d.__walk__())
             if isinstance(d_walked, (list, str, bytes)):
                 d = d_walked
             elif isinstance(d_walked, SegString):
@@ -733,7 +754,7 @@ def _body_multi_star_unify(target, segments, trail):
                     pos += 1
             else:  # star
                 length = split[si]
-                if not unify(val, d[pos:pos + length], trail):
+                if not unify(val, _text_out(d[pos:pos + length]), trail):   # stage 1
                     ok = False
                 pos += length
                 si += 1

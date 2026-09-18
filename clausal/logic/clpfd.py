@@ -2487,6 +2487,14 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     x = _resolve(x)
     y = _resolve(y)
     if _both_ground(x, y):
+        if op in ("eq", "ne"):
+            # the chars-model arm ``fd_eq``/``fd_ne`` already have: the two
+            # spellings of one text term (str / carrier / char list) are
+            # equal here too, where Python's ``==`` on the raw values says no
+            # (stage 1 -- a reified ``==`` inside ``if_/3`` took this path)
+            _eq = _text_list_eq(x, y)
+            if _eq is not None:
+                return _eq if op == "eq" else (not _eq)
         return _REIFY_OPS[op](x, y)
     return None
 

@@ -92,6 +92,8 @@ def to_python(val):
         # ``deref`` follows Var bindings only; a SegString normalises under
         # ``walk``, which yields a plain str exactly when every hole is bound.
         walked = walk(val)
+        if is_chars(walked):
+            return chars_text(walked)  # stage 1: a ground SegString walks to the carrier
         return walked if type(walked) is str else val
     if isinstance(val, list):
         return [to_python(x) for x in val]

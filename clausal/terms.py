@@ -31,7 +31,7 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, is_chars, chars_text
+from .logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -323,6 +323,8 @@ def _seg_unify_cache_key(other, trail):
     bounded by the trail's lifetime: once the trail is gone, any
     generator paused on it is unreachable too.
     """
+    if is_chars(other):
+        other = chars_text(other)      # stage 1: same key as the bare text
     if isinstance(other, str):
         return (other, id(trail))
     if isinstance(other, bytes):
@@ -377,6 +379,12 @@ def _seg_split_gen(segments, target_len, concrete_len):
     yield from _multi_star_splits(n_stars, target_len - concrete_len)
 
 
+def _seg_slice_out(sl):
+    """A slice of a split target as the term a hole binds to: a str target's
+    slice is the chars CARRIER (stage 1); a list's slice is itself."""
+    return chars(sl) if type(sl) is str else sl
+
+
 def _apply_seglist_split(seglist, target_list, split, trail):
     """Bind *seglist* against *target_list* for one *split*; return True on
     success (bindings left on *trail*), False otherwise. Mirrors the inner
@@ -390,7 +398,7 @@ def _apply_seglist_split(seglist, target_list, split, trail):
     for seg in seglist.segments:
         if isinstance(seg, VarSeg):
             sz = split[si]; si += 1
-            if not unify(seg.var, target_list[pos:pos + sz], trail):
+            if not unify(seg.var, _seg_slice_out(target_list[pos:pos + sz]), trail):
                 return False
             pos += sz
         else:
@@ -414,7 +422,7 @@ def _apply_segstring_split(segstring, target_str, split, trail):
     for seg in segstring.segments:
         if isinstance(seg, VarSeg):
             sz = split[si]; si += 1
-            if not unify(seg.var, target_str[pos:pos + sz], trail):
+            if not unify(seg.var, chars(target_str[pos:pos + sz]), trail):   # stage 1
                 return False
             pos += sz
         else:  # str
@@ -736,6 +744,8 @@ class SegList:
         # ``A = ""``, not ``A = []``).
         if type(other) is tuple and not other:
             other = []
+        if is_chars(other):
+            other = chars_text(other)      # stage 1: the carrier is the str it holds here
         if isinstance(other, bytes):
             # Codes-model symmetry (A01-F007): the C layer unifies plain
             # int-lists with bytes, and SegBytes accepts list targets — so a
@@ -919,6 +929,8 @@ class SegList:
             return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
+        if is_chars(other):
+            other = chars_text(other)      # stage 1: the carrier is the str it holds here
         if isinstance(other, SegList):
             return self._segments == other._segments
         if isinstance(other, list):
@@ -998,7 +1010,7 @@ def _seglist_unify_gen(seglist, target_list, trail):
         for seg in seglist.segments:
             if isinstance(seg, VarSeg):
                 sz = split[si]; si += 1
-                ok = ok and unify(seg.var, target_list[pos:pos + sz], trail)
+                ok = ok and unify(seg.var, _seg_slice_out(target_list[pos:pos + sz]), trail)
                 pos += sz
             else:
                 for elem in seg.elements:
@@ -1126,8 +1138,16 @@ class SegString:
     # ── Walk / normalisation ──────────────────────────────────────────────────
 
     def __walk__(self):
-        """Called by C do_walk. Normalise: collapse bound VarSegs, merge
-        adjacent strings. Returns a plain ``str`` when fully ground."""
+        """Called by C do_walk.  The OUTWARD form: a ground SegString walks to
+        the chars CARRIER (stage 1 of the atoms-as-str flip, spec
+        2026-09-18), a non-ground one to a normalised SegString.  Code inside
+        this class that needs the bare text uses :meth:`_walk_raw`."""
+        w = self._walk_raw()
+        return chars(w) if type(w) is str else w
+
+    def _walk_raw(self):
+        """Normalise: collapse bound VarSegs, merge adjacent strings.
+        Returns a plain ``str`` when fully ground (the INTERNAL form)."""
         from .logic.variables import walk
         new_segs: list = []
         for seg in self._segments:
@@ -1138,6 +1158,8 @@ class SegString:
                     new_segs.append(seg)
             else:  # VarSeg
                 v = walk(seg.var)
+                if is_chars(v):
+                    v = chars_text(v)          # stage 1: a hole bound to the carrier
                 if isinstance(v, str):
                     if new_segs and isinstance(new_segs[-1], str):
                         new_segs[-1] = new_segs[-1] + v
@@ -1170,7 +1192,7 @@ class SegString:
                     else:
                         new_segs.append(s)
                 elif isinstance(v, SegString):
-                    walked_inner = v.__walk__()
+                    walked_inner = v._walk_raw()
                     if isinstance(walked_inner, str):
                         if new_segs and isinstance(new_segs[-1], str):
                             new_segs[-1] = new_segs[-1] + walked_inner
@@ -1211,11 +1233,11 @@ class SegString:
 
     def is_ground(self) -> bool:
         """True if all VarSegs are bound — i.e. ``__walk__`` returns ``str``."""
-        return isinstance(self.__walk__(), str)
+        return isinstance(self._walk_raw(), str)
 
     def to_str(self) -> str:
         """Walk and join. Raises ``TypeError`` if not fully ground."""
-        w = self.__walk__()
+        w = self._walk_raw()
         if isinstance(w, str):
             return w
         raise TypeError(f"SegString is not ground: {w!r}")
@@ -1243,7 +1265,7 @@ class SegString:
         from .logic.variables import unify
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL``, above ``class SegList``.
-        if _is_nil(other) and _is_nil(self.__walk__()):
+        if _is_nil(other) and _is_nil(self._walk_raw()):
             return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
@@ -1255,8 +1277,10 @@ class SegString:
         # ``A = ""``, not ``A = []``).
         if type(other) is tuple and not other:
             other = []
+        if is_chars(other):
+            other = chars_text(other)      # stage 1: the carrier is the str it holds here
         if isinstance(other, str):
-            walked = self.__walk__()
+            walked = self._walk_raw()
             if isinstance(walked, str):
                 return walked == other
             # Non-ground — trail-free split-drive (A01-F005).
@@ -1273,7 +1297,7 @@ class SegString:
             # a char list here, which is what R-S2 (efficient
             # representations, always) asks for.  P3-1 had retired that arm,
             # which is why this branch used to build the list itself.
-            walked = self.__walk__()
+            walked = self._walk_raw()
             if isinstance(walked, str):
                 return unify(walked, other, trail)
             # F023 (audit 2026-05-25): non-ground SegString vs list — the
@@ -1295,6 +1319,18 @@ class SegString:
                     equivalent_segs.append(seg)
             return SegList(equivalent_segs).__unify__(other, trail)
         if isinstance(other, (SegString, SegList)):
+            # STAGE 1: a ground side resolves the pair itself.  Both used to
+            # walk to a bare str and meet in the C fallback's ``==``; now a
+            # ground text Seg* walks to the CARRIER, and that fallback refuses
+            # every tuple, so the pair has to be re-entered through ``unify``
+            # with the ground side in its walked form (the other Seg's own
+            # str/list arm then reads it).
+            w = self._walk_raw()
+            if isinstance(w, str):
+                return unify(chars(w), other, trail)
+            ow = other.__walk__()
+            if not isinstance(ow, (SegString, SegList)):
+                return self.__unify__(ow, trail)
             return NotImplemented
         return NotImplemented
 
@@ -1316,7 +1352,7 @@ class SegString:
         order; ``has_var_seg`` is True iff at least one VarSeg remains
         unbound after walking.
         """
-        w = self.__walk__()
+        w = self._walk_raw()
         if isinstance(w, str):
             return w, False
         parts: list = []
@@ -1356,7 +1392,7 @@ class SegString:
         if not is_char_atom(item):
             return False
         ch = spelling(item)
-        w = self.__walk__()
+        w = self._walk_raw()
         if isinstance(w, str):
             return ch in w
         # Non-ground: True if the char is in any concrete str segment.
@@ -1377,7 +1413,7 @@ class SegString:
         # a char atom (THE FLIP, §6.2).  A SLICE selects a sub-list, which
         # for a string is a ``str`` slice (R-S2: the tail of a string stays
         # a string, never expands).
-        w = self.__walk__()
+        w = self._walk_raw()
         if isinstance(w, str):
             return char_atom(w[index]) if isinstance(index, int) else w[index]
         chars: list[str] = []
@@ -1405,18 +1441,20 @@ class SegString:
     def __eq__(self, other):
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
-        if _is_nil(other) and _is_nil(self.__walk__()):
+        if _is_nil(other) and _is_nil(self._walk_raw()):
             return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
+        if is_chars(other):
+            other = chars_text(other)      # stage 1: the carrier is the str it holds here
         if isinstance(other, SegString):
             return self._segments == other._segments
         if isinstance(other, str):
-            w = self.__walk__()
+            w = self._walk_raw()
             return w == other if isinstance(w, str) else False
         if isinstance(other, list):
             # Symmetric with SegList — char-list unifies with str at runtime.
-            w = self.__walk__()
+            w = self._walk_raw()
             if isinstance(w, str):
                 return (
                     all(is_char_atom(c) for c in other)
@@ -1462,7 +1500,7 @@ def _segstring_unify_gen(segstring, target_str, trail):
         for seg in segstring.segments:
             if isinstance(seg, VarSeg):
                 sz = split[si]; si += 1
-                ok = ok and unify(seg.var, target_str[pos:pos + sz], trail)
+                ok = ok and unify(seg.var, chars(target_str[pos:pos + sz]), trail)   # stage 1
                 pos += sz
             else:  # str
                 end = pos + len(seg)
@@ -1624,6 +1662,8 @@ class SegBytes:
         # ``A = ""``, not ``A = []``).
         if type(other) is tuple and not other:
             other = []
+        if is_chars(other):
+            other = chars_text(other)      # stage 1: the carrier is the str it holds here
         if isinstance(other, bytes):
             walked = self.__walk__()
             if isinstance(walked, bytes):
@@ -1717,6 +1757,8 @@ class SegBytes:
             return True          # fix round 4, item 5 — see _EMPTY_SEG_IS_NIL
         if type(other) is tuple and not other:
             other = []
+        if is_chars(other):
+            other = chars_text(other)      # stage 1: the carrier is the str it holds here
         if isinstance(other, SegBytes):
             return self._segments == other._segments
         if isinstance(other, bytes):
