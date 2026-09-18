@@ -18,6 +18,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.cells import chars  # stage 2: a string is the carrier
 from clausal.logic.atoms import mint
 import clausal.logic.constraints as C
 from clausal.logic.constraints import (
@@ -131,8 +132,8 @@ class TestF001DifContainerBlindSpots:
         t = Trail()
         s = Var()
         ss = SegString(["a", VarSeg(s)])
-        assert dif(ss, "ab", t) is True
-        assert unify(s, "b", t) is False
+        assert dif(ss, chars("ab"), t) is True   # stage 2: the string is the carrier; a bare str is an atom
+        assert unify(s, chars("b"), t) is False
 
     def test_dif_quantity_enforced(self):
         t = Trail()

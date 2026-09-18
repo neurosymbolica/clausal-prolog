@@ -454,10 +454,17 @@ class _ClauseReifier:
         BinOp/UnaryOp subclasses carry structural ``__unify__``, so the raw
         node is directly matchable from Clausal."""
         cls = getattr(simple_ast, name)
+        # STAGE 2 (atoms-as-str): a str constant reifies as an ``Atom`` in
+        # TERM position, but a node field declared ``str`` (a param NAME,
+        # ``PosOrKwParam.name``) is a name, not a term -- read it raw.
+        str_fields = {f.name for f in dataclasses.fields(cls)
+                      if f.type is str or f.type == "str"} if dataclasses.is_dataclass(cls) else set()
         fields = {}
         for key, value in kwargs.items():
             if key in ("position", "_position"):
                 fields["position"] = _const_value(value)
+            elif key in str_fields and isinstance(value, ast.Constant) and type(value.value) is str:
+                fields[key] = value.value
             elif (name == "DictLiteral" and key == "keys"
                   and isinstance(value, (ast.List, ast.Tuple))):
                 # The SPLAT dict form arrives here as a ``DictLiteral(...)``

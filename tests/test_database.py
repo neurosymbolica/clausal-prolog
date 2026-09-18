@@ -71,7 +71,8 @@ class TestHeadKey:
     def test_bad_type_raises(self):
         # nv
         with pytest.raises(TypeError):
-            head_key("not_a_term")
+            head_key(3.5)                  # stage 2: a str head is the ATOM name/0, so the non-term here is a float
+        assert head_key("an_atom") == ("an_atom", 0)
 
     def test_compound_var_functor_raises(self):
         # nv

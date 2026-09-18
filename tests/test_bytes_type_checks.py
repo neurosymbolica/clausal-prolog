@@ -8,6 +8,7 @@ is_chars/1 → a bytes is a CODE sequence, not a CHAR sequence → fails
 import os
 import tempfile
 
+from clausal.logic.cells import chars  # stage 2: a string is the carrier
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 
@@ -35,7 +36,7 @@ class TestIsListBytes:
     def test_is_list_still_accepts_str_and_list(self):
         # nv  — regression
         mod = _mod("tc_il2")
-        assert _ok("is_list", "abc", mod)
+        assert _ok("is_list", chars("abc"), mod)   # stage 2: the string is the carrier
         assert _ok("is_list", [1, 2, 3], mod)
 
 
