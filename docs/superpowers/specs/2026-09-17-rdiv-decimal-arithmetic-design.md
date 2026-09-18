@@ -257,7 +257,17 @@ status (harness-batch-lane's refinement, so it cannot rot into a standing proper
 and engine-tested; the closed corpus does not CURRENTLY exercise mixed-scale decimal comparison —
 0 of 82 sealed scorers construct a Decimal — so the harness axis is silent on that half. RE-ASK
 harness-batch-lane when a domain compares or sorts money of differing scale** (their trigger: any
-sealed body constructing a `Decimal`; one grep, zero today; nobody monitors it). Unification of decimals of different scale
+sealed body constructing a `Decimal`; one grep, zero today; nobody monitors it).
+
+**Corrected 2026-09-18 (harness-batch-lane, their own correction):** the reason above was
+"unmeasured"; the true reason is stronger. The ONE Decimal money-arithmetic site in the closed
+corpus is a pure-Python GOLD model that imports nothing from the engine — no engine change can reach
+it. So the only Decimal arithmetic in the corpus is structurally unreachable from the engine, and
+the 82 sealed scorers ARE the engine-reaching population, re-derived structurally (their roster tool
+classifies every evaluation file outside the 82 by whether it reaches the engine: 92 outside, 5
+reach it — unmigrated scorers of unformalised domains with nothing yet to score — 0 genuine gaps,
+calibrated on a synthetic gap). The condition stands unchanged; "82 of 82" now means all of them.
+Their general lesson, kept: classify a file by what it can REACH, not by what it CONTAINS. Unification of decimals of different scale
 is still conflated (C unifier) and rides with the int/float todo.
 
 ---
