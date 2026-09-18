@@ -196,7 +196,7 @@ def _request_3(options, status_out, body_out, trail, k):
         return
     method = deref(option(opts.data, "method", "GET"))
     if is_var(method):
-        method = "GET"
+        method = text_result("GET")    # a module default is text (review 2026-09-18)
     hdrs_raw = option(opts.data, "headers")
     hdrs = _dict_term_to_headers(deref(hdrs_raw)) if hdrs_raw is not None else {}
     data_raw = option(opts.data, "data")

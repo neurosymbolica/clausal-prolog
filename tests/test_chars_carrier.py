@@ -305,3 +305,23 @@ class TestTheInterimRuleIsArmed:
             with pytest.raises(TypeError, match="bare Python str"):
                 fn("ab")
         assert _as_items(chars("ab")) == [("a",), ("b",)]      # the carrier is the text
+
+
+class TestReviewRound1:
+    """roborev review of the branch (2026-09-18): the empty carrier is every
+    nil spelling's equal in the C unifier; regex positional groups are
+    tuple-DATA, never a bare tuple whose slot 0 reads as a functor."""
+
+    def test_the_empty_carrier_unifies_with_every_nil_spelling(self):
+        from clausal.logic.variables import unify, Trail
+        from clausal.logic.atoms import NIL_KEY
+        t = Trail()
+        for nil in ([], NIL_KEY, b"", chars("")):
+            assert unify(chars(""), nil, t) and unify(nil, chars(""), t), nil
+
+    def test_regex_positional_groups_are_a_data_tuple_not_a_cell(self, tmp_path):
+        from clausal.logic.cells import compound_cell_shape
+        mod = _mod(tmp_path, '-import_from(regex, [match])\np(G) <- match("(\\\\d)-(\\\\d)", "1-2", G)\nq(A, B) <- match("(\\\\d)-(\\\\d)", "1-2", (A, B))\n')
+        (g,) = _first(mod, "p", Var()); assert g == (chars("1"), chars("2")), g
+        assert compound_cell_shape(g) == (False, None)          # slot 0 is a carrier: never a functor
+        assert _first(mod, "q", Var(), Var()) == [chars("1"), chars("2")]

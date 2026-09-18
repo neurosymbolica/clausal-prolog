@@ -1039,6 +1039,12 @@ static inline int is_nil_spelling(PyObject *t)
     if (PyList_Check(t))    return PyList_GET_SIZE(t) == 0;
     if (PyUnicode_Check(t)) return PyUnicode_GET_LENGTH(t) == 0;
     if (PyBytes_Check(t))   return PyBytes_GET_SIZE(t) == 0;
+    /* the EMPTY chars carrier ('$chars', "") is nil too (stage 1; review 2026-09-18) */
+    if (PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
+        && PyUnicode_Check(PyTuple_GET_ITEM(t, 0))
+        && PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(t, 0), "$chars") == 0
+        && PyUnicode_Check(PyTuple_GET_ITEM(t, 1)))
+        return PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(t, 1)) == 0;
     if (PyTuple_Check(t))   return PyTuple_GET_SIZE(t) == 0;
     return 0;
 }

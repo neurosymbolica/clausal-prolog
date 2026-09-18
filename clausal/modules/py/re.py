@@ -130,6 +130,10 @@ def _out(v):
     if type(v) is str:
         return chars(v)
     if type(v) is tuple:
+        # positional groups: a PLAIN tuple, the shape a .clausal ``(A, B)``
+        # literal compiles to and what ``++G[0]`` indexes.  Its slot 0 is a
+        # carrier (or None), never a str, so it cannot read as a cell -- the
+        # bare-str tuple it replaced COULD (review 2026-09-18, measured).
         return tuple(_out(e) for e in v)
     if type(v) is dict:
         return {k: _out(e) for k, e in v.items()}
