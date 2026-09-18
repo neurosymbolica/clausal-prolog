@@ -427,10 +427,11 @@ higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
 
 ### Atoms are global by spelling
 
-Unlike predicates, **atoms are not lexically scoped.** An atom is the arity-0
-cell `("approved",)`, and its identity IS its spelling, everywhere in the
-process — two atoms of the same spelling compare equal wherever they were
-made (equality, never `is`). Listing
+Unlike predicates, **atoms are not lexically scoped.** An atom **is** the
+interned Python `str` itself, and its spelling IS its value, everywhere in
+the process — two atoms of the same spelling are the same value wherever
+they were made (`==`; interning makes `is` agree too, but `==` is the
+test). Listing
 an atom in `-module(...)` / `-private([...])` declares that this file is
 allowed to reference the spelling (undeclared bare atoms are a compile-time
 error — see [`-strict_atoms`](directives.md#-strict_atoms)) — it does **not**
@@ -454,7 +455,7 @@ ask() <- check(approved)           # SUCCEEDS: `approved` is the same atom
 ```
 
 `Ask()` succeeds: `check`'s clause head and the goal `check(approved)` both
-carry the atom `approved` (the cell `("approved",)`, equal by value) — there is nothing to
+carry the atom `approved` (the interned `str` `'approved'`) — there is nothing to
 re-import for agreement's sake. (Importing it anyway, `-import_from(lib,
 [Check, approved])`, still works and is a reasonable style choice — it just
 is not REQUIRED the way it used to be.)
