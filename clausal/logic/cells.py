@@ -85,6 +85,7 @@ __all__ = [
     "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
     "CHARS_TAG", "chars", "is_chars", "chars_text",
+    "is_reserved_1tuple", "refuse_reserved_1tuple",
     "make_cell",
     "make_tuple_cell",
     "is_cell",
@@ -175,6 +176,24 @@ def refuse_bare_str(x: Any, where: str) -> None:
             f"{where} as TEXT.  Text is the chars carrier ('$chars', s) -- build "
             f"it with clausal.logic.cells.chars(s) (a ++ escape, to_term and "
             f"every py-module do) or pass the list of char atoms.")
+
+
+def is_reserved_1tuple(x: Any) -> bool:
+    """True for the arity-0 str-headed tuple ``('x',)`` -- the OLD atom cell,
+    RESERVED after stage 2 of the atoms-as-str flip (RULED 2026-09-18: a
+    future opaque Python object reference).  ``(TUPLE_TAG,)`` is the empty
+    tuple-DATA cell and is not it."""
+    return (type(x) is tuple and len(x) == 1 and type(x[0]) is str
+            and x[0] != TUPLE_TAG)
+
+
+def refuse_reserved_1tuple(x: Any) -> None:
+    """Raise on the reserved 1-tuple; the ONE spelling of the refusal."""
+    if is_reserved_1tuple(x):
+        raise TypeError(
+            f"the 1-tuple {x!r} is reserved (a future opaque Python object "
+            f"reference); an atom is the str {x[0]!r} -- write mint({x[0]!r}) "
+            f"or the bare name")
 
 
 def chars(text: str) -> tuple:
@@ -325,6 +344,8 @@ def _cell_shape(x: Any) -> tuple[bool, Any]:
     """
     if type(x) is not tuple or len(x) < 1:
         return False, None
+    if len(x) == 1:
+        refuse_reserved_1tuple(x)       # STAGE 2: the old atom cell is RESERVED
     slot0 = x[0]
     return _valid_functor_slot(slot0), slot0
 

@@ -199,11 +199,8 @@ def mint(spelling: str):
     if type(spelling) is not str:
         raise TypeError(f"mint: spelling must be a str, got {type(spelling).__name__}")
     if spelling == NIL_SPELLING:
-        # ISO 6.3.5 / the fix-round-1 ruling: ``'[]'`` IS the empty list, so
-        # there is no ``("[]",)`` cell to hand back.  A FRESH list every
-        # call -- a list is mutable, so no instance may be shared.
         return []
-    return (sys.intern(spelling),)
+    return sys.intern(spelling)          # STAGE 2 (spec 2026-09-18 §1): the atom IS the interned str
 
 
 #: The HASHABLE spelling of nil, and the canonical form of a nil DICT KEY
@@ -234,7 +231,7 @@ def key_of(spelling: str):
             f"key_of: spelling must be a str, got {type(spelling).__name__}")
     if spelling == NIL_SPELLING:
         return NIL_KEY
-    return (sys.intern(spelling),)
+    return sys.intern(spelling)          # STAGE 2: the atom is the str, hashable as it is
 
 
 def is_nil(term) -> bool:
@@ -253,7 +250,10 @@ def is_nil(term) -> bool:
     reaches the True arm; the empty one has no slot 0 and so is the list it
     holds — nothing.
     """
-    return isinstance(term, (list, str, bytes, tuple)) and len(term) == 0
+    # STAGE 2: a bare str is an ATOM (`''` is not nil); the empty STRING is the carrier chars("")
+    if type(term) is tuple and len(term) == 2 and term[0] == "$chars" and term[1] == "":
+        return True
+    return isinstance(term, (list, bytes, tuple)) and len(term) == 0
 
 
 def as_dict_key(key):
@@ -281,7 +281,7 @@ def is_atom(term) -> bool:
     An atom is the arity-0 cell: a 1-tuple whose slot 0 is a ``str`` (THE
     DISCIPLINE, ``cells.py:53-64``).  A plain ``str`` is a STRING and is not
     an atom (spec §6.3)."""
-    return type(term) is tuple and len(term) == 1 and type(term[0]) is str
+    return type(term) is str            # STAGE 2 (spec §1): an atom is a Python str; a string is the carrier
 
 
 def spelling(atom) -> str:
@@ -294,10 +294,10 @@ def spelling(atom) -> str:
     TERM-level question "is this an atom?" is ``atom/1`` /
     ``type_checks._is_atom_term``, which admits both.
     """
-    if type(atom) is tuple and len(atom) == 1 and type(atom[0]) is str:
-        return atom[0]
-    if type(atom) in (list, str, bytes, tuple) and len(atom) == 0:
-        return NIL_SPELLING
+    if type(atom) is str:
+        return atom                      # STAGE 2: an atom's spelling is itself
+    if is_nil(atom):
+        return NIL_SPELLING              # every nil spelling incl. the empty carrier
     raise TypeError(f"not an atom: {atom!r}")
 
 
@@ -324,17 +324,12 @@ def char_atom(ch: str):
     """
     if type(ch) is not str or len(ch) != 1:
         raise ValueError(f"char_atom: expected a 1-char str, got {ch!r}")
-    return (ch,)
+    return ch                            # STAGE 2: a char atom is the 1-char str
 
 
 def is_char_atom(term) -> bool:
     """True iff *term* is an atom whose spelling is one character."""
-    return (
-        type(term) is tuple
-        and len(term) == 1
-        and type(term[0]) is str
-        and len(term[0]) == 1
-    )
+    return type(term) is str and len(term) == 1   # STAGE 2
 
 
 __all__ = [
