@@ -246,7 +246,7 @@ as an atom, and the two ways of writing it differ in *when* the value is read:
 | written | means | bound |
 | --- | --- | --- |
 | `constant(pi)` | the value, looked up in module globals | when the goal runs |
-| `pi` | the atom `("pi",)` | — |
+| `pi` | the atom `'pi'` | — |
 
 `constant(pi)` is the retrieval form. The older `++pi` still works — a constant is a module
 global and `++` is the Python escape — but it says "what follows is Python", which is the one
@@ -435,15 +435,18 @@ Inside a logical term:
 
 An identifier that collides with a Python keyword or builtin (`not`, `is`, `max`) cannot be written as a bare atom. **Single-quote it** — `'not'` — and you get exactly the atom `not`, in every [`-double_quotes`](directives.md#-double_quotes) mode (see [Atoms vs strings](#atoms-vs-strings)). Single quotes are also how you spell an atom whose name has spaces or punctuation: `'hello world'`, `'order #42'`.
 
-An atom is the **arity-0 cell** `("red",)` — a 1-tuple whose slot 0 is the (interned) spelling, the same shape every compound term has at arity 0. Atoms are first-class values you can pass around, store in dicts, and use as goals. They are compared by **value equality**, never by identity: `("red",) == ("red",)` is the test, and no code — in the engine or outside it — may rely on `is`. From Python, build and read them with `clausal.logic.atoms`:
+An atom **is** the interned Python `str` — no wrapper, no class: `red` and `'red'` both produce the same `str` object every reference to `red` produces. Atoms are first-class values you can pass around, store in dicts, and use as goals. They are compared with **`==`** (`str` equality); because atoms are interned, `is` happens to agree too, but `==` is the test to write. From Python, build and read them with `clausal.logic.atoms`:
 
 ```python
 from clausal.logic.atoms import mint, is_atom, spelling
 
-mint("red")            # → ('red',)
-is_atom(("red",))      # → True
-spelling(("red",))     # → 'red'
+mint("red")            # → 'red'
+is_atom("red")         # → True
+spelling("red")        # → 'red'
 ```
+
+The 1-tuple `("red",)` — how atoms used to be represented — is now **reserved** for a future opaque
+Python object reference and is refused with a `TypeError` if constructed as a term.
 
 !!! info "Strict by default; global identity when resolved"
     An undeclared bare atom reference is a compile-time `NameError` by default —
@@ -457,8 +460,8 @@ spelling(("red",))     # → 'red'
     Once an atom **is** resolved — declared in `-module([...])` (public),
     `-private([...])` (private), imported, or reached via `global_atom/2` —
     it is **global by spelling**: every module that writes `red` has the same
-    atom `("red",)`, and the two compare equal, matching Prolog's convention.
-    Equality is the whole story; `is` is never the test.
+    atom, the interned `str` `'red'`, and the two compare equal, matching
+    Prolog's convention. `==` is the test to write.
 
     ```clausal
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_global_default"
@@ -725,8 +728,10 @@ See [Dicts & Sets](dicts_sets.md) for details.
 
 ## Strings
 
-A **string** is a Python `str`, and a `str` *is* the list of its one-character
-atoms — the classical Prolog *chars* model, as in ISO Prolog and Scryer. See
+A **string** is the list of its one-character atoms — the classical Prolog
+*chars* model, as in ISO Prolog and Scryer. (A bare Python `str` is an atom
+now, not a string — see [Atoms vs strings](#atoms-vs-strings) — so a string
+is its own value, not literally a `str`.) See
 [strings as lists](strings_as_lists.md):
 
 ```clausal
@@ -741,7 +746,7 @@ accepts it too. The analogous `b"…"` byte literal is a
 [list of integer codes](bytes_as_lists.md) (`0–255`); `str` and `bytes` are distinct
 domains and never cross-unify.
 
-Under the hood a string stays a compact `str` — it is never expanded into a
+Under the hood a string stays a compact value — it is never expanded into a
 chain of cons cells — but every relation treats it as the char list it
 denotes.
 
@@ -762,8 +767,8 @@ Clausal keeps two disjoint kinds, exactly as ISO Prolog does:
 | | **Atom (a symbol)** | **String (text / data)** |
 |---|---|---|
 | written as | bare identifier `red`, `café`, `δικαίωμα`; or `'any spelling'` | `"hello world"` under `-double_quotes(chars)` |
-| represented as | the arity-0 cell `("red",)` — a 1-tuple whose slot 0 is the spelling | Python `str` — the list of its char atoms |
-| compared by | value equality (`("red",) == ("red",)`); **never** `is` | value equality; also unifies with its char list |
+| represented as | the interned Python `str` itself | a list of char atoms (a `'.'/2` compound) — never a `str` |
+| compared by | `==` (`str` equality; interning makes `is` agree too, but write `==`) | value equality; also unifies with its char list |
 | typo-safe? | yes, under [`-strict_atoms`](directives.md#-strict_atoms) (the default) | no (it's data) |
 | `atom/1` | matches | does **not** match (use `string/1` / `is_str/1`) |
 | `atomic/1` | matches | does **not** match — a string is a list |
@@ -1067,7 +1072,7 @@ when using `-module(...)`, DCG predicates must be declared with their full signa
 # Correct: PredicateMeta classes created with proper field counts
 -module(my_grammar, [greeting(S0, S), digit(D, S0, S)])
 
-# Wrong: creates string atom assignments, not predicate classes
+# Wrong: greeting/digit are read as atoms here, not predicate references
 -module(my_grammar, [greeting, digit])
 ```
 
@@ -1393,7 +1398,7 @@ Three main reasons:
 
 1. **Ambiguity.** It is impossible at compile time to distinguish a Python global from an atom without tracking all imports. Old compiled code could silently become wrong when a new name is imported. With explicit `--` escaping, the boundary is always visible.
 
-2. **Term representation efficiency.** Compound terms are most efficiently represented as instances of generated classes (enabling `match`/`case` to work directly on them). Atoms need to be class objects for structural matching. Allowing arbitrary Python objects as functors requires a boxing wrapper, which is heavier.
+2. **Term representation efficiency.** Compound terms are most efficiently represented as instances of generated classes (enabling `match`/`case` to work directly on them); an atom needs no such wrapper — it *is* the interned `str`. Allowing arbitrary Python objects as functors requires a boxing wrapper, which is heavier.
 
 3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker — a capital initial (`X`, `FOO`, `Foo`) or a leading underscore (`_x`) — avoids confusion without requiring explicit `declare` statements.
 

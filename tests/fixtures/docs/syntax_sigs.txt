@@ -16,7 +16,7 @@ ast_node = ~~(x + y * z)
 
 --8<-- [start:atoms]
 # These are atoms (bare identifiers; unicode letters OK). Each is the
-# arity-0 cell ("red",) / ("active",) at runtime:
+# interned str 'red' / 'active' at runtime:
 color(red),
 status(active),
 # Single quotes spell an atom whose name is not a bare identifier:
