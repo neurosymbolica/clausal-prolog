@@ -578,7 +578,7 @@ Generate a unique atom by appending a monotonically increasing counter to `Prefi
 Reflect on the process-wide global atom dict — the registry that backs global atom identity (see [Atoms](syntax.md#atoms)). `Name` is an **atom**, read by its spelling; a bound `Name` that is not an atom (a string, a char list under `-double_quotes(chars)`, a number) raises `type_error(atom, Name)` rather than failing. Four modes:
 
 - **`(+Name, -Atom)` — mint on demand.** Look `Name`'s spelling up in the global dict; if absent, install `mint(spelling)`. Idempotent: a second call with the same spelling unifies `Atom` with the same atom. This is the sanctioned way to **reach** the global atom for a name from a module that has shadowed it via `-import_from` or a local declaration — though a quoted literal (`'date'`) already denotes the atom in any mode and needs no declaration.
-- **`(+Name, +Atom)` — guard.** Succeeds iff `Atom` **equals** the atom registered under `Name`'s spelling (equality, never identity: two atoms of one spelling are one atom).
+- **`(+Name, +Atom)` — guard.** Succeeds iff `Atom` **equals** the atom registered under `Name`'s spelling (`==`, the correct test: two atoms of one spelling are one atom, the same interned `str` — interning makes `is` agree too, but `==` is what to write).
 - **`(-Name, +Atom)` — reverse lookup.** Succeeds iff `Atom` is genuinely the registered global atom for its spelling (not a module-local namesake). Unifies `Name` with that atom.
 - **`(-Name, -Atom)` — enumerate.** Yields one solution per registered atom. The registry holds only atoms that reached it (through this builtin's mint mode, or a manual install), not every atom a program mentions; it can be empty. Ordering is **not guaranteed**.
 
@@ -1194,7 +1194,7 @@ Succeeds if `X` is bound (not an unbound `Var`).
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_1"
 ```
-Succeeds if `X` is an **atom**: the arity-0 cell `("red",)`. Written bare
+Succeeds if `X` is an **atom**: the interned Python `str` itself. Written bare
 (`red`, declared via `-private([red, blue])`, `-module(m, [red])`, an import,
 or `-implicit_atoms`) or single-quoted (`'hello world'`, no declaration
 needed). A **string** is not an atom — use `string/1` / `is_str/1` for that —
@@ -1207,7 +1207,7 @@ and neither is `[]`. From Python, build one with
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:is_str_1"
 ```
-Succeeds if `X` is a **string** — the term a `"…"` literal denotes, which is the list of its character atoms. Does not match atoms — use `atom/1` for those — and note that `atomic/1` rejects a string, because a string is a list. See [Type Checking](type_checking.md#string1-and-is_str1) for the full table, including the recorded `string([])` engine defect.
+Succeeds if `X` is a **string** — the term a `"…"` literal denotes, which is the list of its character atoms. Does not match atoms (a bare `str` is an atom, not a string) — use `atom/1` for those — and note that `atomic/1` rejects a string, because a string is a list. See [Type Checking](type_checking.md#string1-and-is_str1) for the full table.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/type_checks.py`
@@ -1301,7 +1301,7 @@ Succeeds if `X` is an **atom** or a compound term — something that could appea
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:is_list_1"
 ```
-Succeeds if `X` is list-shaped: a Python `list`, or a **string**, which *is* the list of its character atoms. Use `is_str/1` when you need to tell a `str` from a `list`.
+Succeeds if `X` is list-shaped: a Python `list`, or a **string**, which *is* the list of its character atoms. Use `is_str/1` when you need to tell a character sequence (string) apart from a plain list — a bare atom (`str`) satisfies neither.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:947`
