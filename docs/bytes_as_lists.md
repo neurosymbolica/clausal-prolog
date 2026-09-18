@@ -24,7 +24,7 @@ distinct:
 |---|---|---|
 | literal | `"abc"` | `b"abc"` |
 | decomposes to | `['a', 'b', 'c']` (1-char `str`s) | `[97, 98, 99]` (`int`s) |
-| element fixed point? | yes — `"a"[0] is "a"` | **no** — `b"a"[0] == 97` |
+| element fixed point? | yes — `"a"[0] is 'a'` | **no** — `b"a"[0] == 97` |
 | partial-term type | `SegString` | `SegBytes` |
 
 A `str` is a list of *characters*; a `bytes` is a list of *integer codes*. This
@@ -133,14 +133,14 @@ head_tail([H, *T], H, T),
 
 The same works as a body goal: `b"abc" is [First, *Rest]` binds `First = 97`
 and `Rest = b"bc"`. Star variables bind to **`bytes`** substrings, preserving
-the type — exactly as they bind to `str` substrings under
+the type — exactly as they bind to string substrings under
 [strings as lists](strings_as_lists.md). Multi-star patterns
 (`[*A, *B]`, `[*_, X, *_]`) match `bytes` too, and enumerate splits on
 backtracking just as they do for lists and strings.
 
-The flip side is that `[*XS]` is **not** a list test — a `bytes` (or `str`)
-matches it too, and a recursive list-walker destructures a `bytes` byte by
-byte instead of passing it through as a leaf. See the note under
+The flip side is that `[*XS]` is **not** a list test — a `bytes` (or a
+string) matches it too, and a recursive list-walker destructures a `bytes`
+byte by byte instead of passing it through as a leaf. See the note under
 [Pattern Matching in strings-as-lists](strings_as_lists.md#pattern-matching)
 for the explicit `++isinstance(X, list)` gate.
 
@@ -188,7 +188,7 @@ unifies with the matching `bytes`:
 ```
 
 This is intentional and symmetric with strings-as-lists (where any list of
-one-character **atoms** unifies with the matching `str`). The contract only fires when a
+one-character **atoms** unifies with the matching string). The contract only fires when a
 `bytes` object is actually present on one side of the unification — two plain
 int lists unify as int lists, and **nothing ever spuriously becomes `bytes`.**
 
@@ -200,7 +200,7 @@ int lists unify as int lists, and **nothing ever spuriously becomes `bytes`.**
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:out_of_scope"
 ```
 
-- **No `str` ↔ `bytes` cross-unification.** `"abc"` does not unify with
+- **No string ↔ `bytes` cross-unification.** `"abc"` does not unify with
   `b"abc"`, and `['a', 'b', 'c']` does not unify with `b"abc"`. They are
   distinct domains; cross between them explicitly with `.encode()` / `.decode()`.
 - **Out-of-range / non-int elements fail, they do not raise.** `b"a"` simply
@@ -238,7 +238,7 @@ The codes contract is wired through the same layers as strings-as-lists:
 - **Clause dispatch & first-argument indexing** — a `bytes`-literal clause head
   matches an int-list caller and buckets with it.
 
-Out-of-scope remains: no `str`/`bytes` cross-unification, and no `bytearray`
+Out-of-scope remains: no string/`bytes` cross-unification, and no `bytearray`
 support (only immutable `bytes`).
 
 ---
