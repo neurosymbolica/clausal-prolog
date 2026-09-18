@@ -85,6 +85,36 @@ WRITTEN (`('X', 'Y')`); a data functor's binding is already the atom str, not a 
 
 ### Task 3: constructors emit cells
 
+**BUILT 2026-09-19 as a CHECKPOINT (branch tip after f023e536), RED until Task 4 clears its worklist.** What
+was measured and decided while building (read before touching it):
+
+* Data-functor terms were ALREADY cells (stage 2 binds a declared data functor to its atom str). The live defect
+  was the PREDICATE functor: `w(3)` in a body built an instance, the seam built the cell `('w', 3)` for the same
+  term, and the two did not unify; `hd(r(X, _), X)` did not match the seam's cell. Measured.
+* The constructor flip is ONE site: `PredicateMeta.__call__` returns the cell. Every Python-side producer goes
+  through it. `cell_signature_for_name` answers for a class too, so bodies compile to cell literals and nested
+  head patterns to cell patterns.
+* The clause-HEAD channel stays on instances (`head_match`, `list_dispatch`, `Database._stored_head_key` lower an
+  instance, never a cell): `PredicateMeta._clausal_head` is the old `__call__`; the transformer emits heads as
+  `cls._clausal_head(...)` (`_head_ctor_ast`, 5 sites); the store's doors (`Database.assertz/asserta`,
+  `PredicateMeta._assertz/_asserta`) turn a cell head of a bound class back into the instance, because
+  `define_predicate`'s fact normalisers rebuild heads through the class. The reifier reads the new spelling.
+* THE BRIDGE: `make_predicate(..., instances=True)` marks a class whose consumers still read attributes; its
+  `__call__` keeps building instances and the compile-time literal respects the flag. Flagged: reflection's 9
+  vocabulary classes, clpb's BoolEq/BoolImpl, term expansion's 4 state classes. Task 4/6 remove a flag when that
+  class's consumers are converted. With the bridge, reflection (40) and rewrite (552) are green on the flip.
+* `q(...)` is QUASI-QUOTATION in this surface -- never name a probe predicate `q`.
+
+**Task 4 worklist at the checkpoint (22 rows, 7 files; the per-file first failures are in the handoff):**
+`test_term_expansion` 4 (state instances vs cells: `marker/1 not defined`, init-list injection), `test_predrow` 4
+and `predmeta_p1` 1 and `test_atoms_as_str_stage2` 1 (answers come back UNBOUND -- a cell head is still reaching
+a clause store through a door other than the four patched; find it with the `_stored_head_key` refusal as the
+probe), `test_python_fallbacks` 4 + `test_funnel_accessors` 2 (`is_term_instance`/`term_field_values` pins and
+readers: `dataclasses.fields` on a tuple, `Not a term instance: ('Pt', 1, 2)`), `test_cell_goals` 1 (a runtime
+class TERM goal now CALLS -- the P3-3 rule; flip the pin), `test_clpb` 1 (`'tuple' has no attribute
+'_signature'`, a CLP(B) reader).
+
+
 **Files:**
 - Modify: `clausal/logic/compiler/terms_to_ast.py::term_to_ast_expr` (~615; the `is_term_instance`/class-call arm at ~99-101)
 - Modify: `clausal/templating/term_rewriting.py::_make_functor_class_ast` (~4240): for a DATA functor emit nothing (no class); for a predicate keep the class (P4)
