@@ -380,6 +380,8 @@ def cell_signature_for_name(
         return None
     binding, leaf, leaf_namespace = resolved
     if isinstance(binding, PredicateMeta):
+        if binding.__dict__.get("_clausal_instances"):
+            return None            # P2 bridge: this class still builds instances (its consumers read attributes)
         # P2 Task 3: a PREDICATE functor in term position compiles to the cell
         # too; its class only ever built instances, and __call__ builds cells
         # now, so the class-call path would only cost a runtime construction.
