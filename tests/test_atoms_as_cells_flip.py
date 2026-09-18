@@ -93,7 +93,7 @@ def test_row_02_double_quoted_in_chars_mode_is_a_string():
         "r2_is_list(X) <- is_list(X),\n",
     )
     X = Var()
-    assert _answers(("r2", X), mod, X) == [("bar",)]
+    assert _answers(("r2", X), mod, X) == [(("$chars", "bar"),)]   # stage 1: the chars CARRIER
     assert list(solve(("r2_atom", "bar"), mod)) == []
     assert len(list(solve(("r2_string", "bar"), mod))) == 1
     assert len(list(solve(("r2_is_list", "bar"), mod))) == 1
@@ -895,7 +895,7 @@ def test_row_26_double_quotes_chars_is_accepted_after_the_flip():
         "r26(\"ab\"),\n",
     )
     X = Var()
-    assert _answers(("r26", X), chars_mod, X) == [("ab",)]
+    assert _answers(("r26", X), chars_mod, X) == [(("$chars", "ab"),)]   # stage 1
     assert _answers(("r26", X), atom_mod, X) == [(("ab",),)]
 
 
@@ -905,7 +905,7 @@ def test_row_27_a_pl_file_loads_its_strings_as_strings(tmp_path):
     assert "-double_quotes(chars)" in source
     mod = _load_inline_clausal("_flip_row27", source)
     X = Var()
-    assert _answers(("p", X), mod, X) == [("ab",)]
+    assert _answers(("p", X), mod, X) == [(("$chars", "ab"),)]   # stage 1
 
 
 # ── Rows 28-30: reader, bytecode cache, listing ─────────────────────────────

@@ -16,7 +16,7 @@ from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG, is_chars, chars_text
 from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
@@ -804,6 +804,14 @@ def _standard_order_key(term: Any) -> tuple:
         if not term:
             return _ORD_EMPTY_LIST_KEY
         return _cons_key(tuple(_number_key(c) for c in term))
+    if is_chars(term):
+        # STAGE 1 (spec 2026-09-18): the chars carrier keys exactly as the
+        # str it holds -- the cons compound of its char atoms, ``'[]'`` when
+        # empty -- so the two spellings of one text term have EQUAL keys.
+        text = chars_text(term)
+        if not text:
+            return _ORD_EMPTY_LIST_KEY
+        return _cons_key(tuple((_ORD_ATOM, c) for c in text))
     if type(term) is tuple and term and type(term[0]) is str and term[0] != TUPLE_TAG:
         # An exact-number cell -- the TRANSFER form of a Decimal or a Fraction
         # (RULED 2026-09-17) -- keys as the NUMBER it denotes, in the number

@@ -1831,6 +1831,11 @@ def _text_list_eq(l, r):
     A char atom against a 1-char str stays UNEQUAL: ``"a"`` is the one-element
     list ``[a]``, not the cell ``a``, and a tuple is neither spelling here.
     """
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(l):
+        l = chars_text(l)
+    if is_chars(r):
+        r = chars_text(r)
     if not _TEXT_SPELLINGS:
         _ensure_text_list_imports()
     if isinstance(l, _TEXT_SPELLINGS):

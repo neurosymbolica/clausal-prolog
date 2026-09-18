@@ -1052,6 +1052,26 @@ static int unify_census_on = 0;
 static unsigned long long unify_census_count = 0;
 static PyObject *unify_census_sites = NULL;   /* {"int/float": n, ...}, unordered pair */
 
+
+/* THE CHARS CARRIER (stage 1 of the atoms-as-str flip, spec 2026-09-18):
+ * ('$chars', "abc") is the compact form of the char list and EQUAL to it.
+ * Unwrapped to its str right before the str<->list arms, and only there --
+ * a Var must bind to the carrier itself, never to the bare str. */
+static inline int
+is_chars_carrier(PyObject *t)
+{
+    return PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
+        && PyUnicode_Check(PyTuple_GET_ITEM(t, 0))
+        && PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(t, 0), "$chars") == 0
+        && PyUnicode_Check(PyTuple_GET_ITEM(t, 1));
+}
+
+static inline PyObject *
+unwrap_chars(PyObject *t)
+{
+    return is_chars_carrier(t) ? PyTuple_GET_ITEM(t, 1) : t;
+}
+
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 {
@@ -1195,6 +1215,13 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                         trail, depth + 1, oc);
     }
 
+    /* the chars carrier walks to its text here (see is_chars_carrier) */
+    if (is_chars_carrier(t1) || is_chars_carrier(t2)) {
+        t1 = unwrap_chars(t1);
+        t2 = unwrap_chars(t2);
+        if (PyUnicode_Check(t1) && PyUnicode_Check(t2))
+            return PyUnicode_Compare(t1, t2) == 0;
+    }
     if (PyList_Check(t1) && PyList_Check(t2)) {
         Py_ssize_t n = PyList_GET_SIZE(t1);
         if (n != PyList_GET_SIZE(t2)) return 0;

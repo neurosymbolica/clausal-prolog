@@ -32,7 +32,7 @@ class TestSeamBuildsCells:
             "def build():\n"
             "    return --verdict(good, \"baz\")\n"
         ))
-        assert mod.build() == ("verdict", ("good",), "baz")
+        assert mod.build() == ("verdict", ("good",), ("$chars", "baz"))   # stage 1: the chars CARRIER
 
     def test_under_atom_mode_a_double_quoted_literal_is_the_atom(self):
         mod = _load_inline("_seam_atom_mode", (
@@ -52,7 +52,7 @@ class TestSeamBuildsCells:
             "def build():\n"
             "    return --verdict('sq', \"dq\")\n"
         ))
-        assert mod.build() == ("verdict", ("sq",), "dq")
+        assert mod.build() == ("verdict", ("sq",), ("$chars", "dq"))
 
     def test_a_titlecase_name_is_an_atom_not_a_variable(self):
         mod = _load_inline("_seam_title", (
@@ -217,7 +217,7 @@ class TestTermForms:
             "-implicit_atoms\n"
             "GOLD = --verdict(good, \"x\")\n"
         ))
-        assert mod.GOLD == ("verdict", ("good",), "x")
+        assert mod.GOLD == ("verdict", ("good",), ("$chars", "x"))
 
 
 class TestImportedVocabulary:
@@ -255,4 +255,4 @@ class TestImportedVocabulary:
                 "    return --verdict(ok, \"text\")\n"),
         })
         assert host.outside() == ("ok",)
-        assert host.inside() == ("verdict", ("ok",), "text")
+        assert host.inside() == ("verdict", ("ok",), ("$chars", "text"))

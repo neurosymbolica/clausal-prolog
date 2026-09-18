@@ -83,6 +83,7 @@ __all__ = [
     "IMPLICIT_FUNCTORS_FLAG",
     "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
+    "CHARS_TAG", "chars", "is_chars", "chars_text",
     "make_cell",
     "make_tuple_cell",
     "is_cell",
@@ -143,6 +144,34 @@ __all__ = [
 # with none of them, and ``'()'(1, 2)`` reads and writeq-round-trips in SWI and
 # Scryer, so a ``.pl`` file carrying tuple-data stays portable.
 TUPLE_TAG = "()"
+
+# THE CHARS CARRIER (spec docs/superpowers/specs/2026-09-18-atoms-as-str-design.md,
+# RULED Q2 2026-09-18).  Under ``-double_quotes(chars)`` a string IS the list
+# of its one-char atoms; ``('$chars', "abc")`` is that list's COMPACT form --
+# a reserved-tag cell, arity 1, the Python str as the sole payload, EQUAL to
+# the list term everywhere (unify, ==, standard order, the text builtins).
+# ``$``-prefixed like every reserved engine name and, like ``TUPLE_TAG``, a
+# head no user functor can spell.  It exists so that a bare Python ``str``
+# can stop meaning "text" (stage 1) and start meaning "atom" (stage 2).
+CHARS_TAG = "$chars"
+
+
+def chars(text: str) -> tuple:
+    """The chars carrier for *text* (a Python str)."""
+    if type(text) is not str:
+        raise TypeError(f"chars(): expected a str, got {type(text).__name__}")
+    return (CHARS_TAG, text)
+
+
+def is_chars(x) -> bool:
+    """True if *x* is a well-formed chars carrier ``('$chars', str)``."""
+    return (type(x) is tuple and len(x) == 2 and x[0] == CHARS_TAG
+            and type(x[1]) is str)
+
+
+def chars_text(x) -> str:
+    """The Python str a chars carrier holds (caller checked ``is_chars``)."""
+    return x[1]
 
 
 # The module-namespace key holding a module's functor-signature registry:
@@ -302,7 +331,7 @@ def compound_cell_shape(x: Any) -> tuple[bool, Any]:
     # ``!=``, not ``is not``: the tag is a str now, and a str that is equal
     # but not identical (not interned by the same route) must still be read
     # as tuple-data.
-    if ok and functor != TUPLE_TAG:
+    if ok and functor != TUPLE_TAG and functor != CHARS_TAG:
         return True, functor
     return False, None
 

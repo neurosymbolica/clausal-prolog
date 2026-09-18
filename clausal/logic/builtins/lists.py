@@ -14,6 +14,7 @@ from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 from clausal.logic.builtins._helpers import _standard_order_key, _standard_order_sorted
+from clausal.logic.cells import chars, is_chars, chars_text
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -67,6 +68,8 @@ def _as_items(val):
     """
     if isinstance(val, list):
         return val
+    if is_chars(val):
+        val = chars_text(val)          # the carrier walks to its text, below
     if isinstance(val, str):
         return [char_atom(c) for c in val]
     if isinstance(val, bytes):
@@ -103,7 +106,7 @@ def _was_string(val):
     including lists of chars — are *not* str-shaped under
     option A (input-type wins): list input keeps list output.
     """
-    if isinstance(val, str):
+    if isinstance(val, str) or is_chars(val):
         return True
     from clausal.terms import SegString
     if isinstance(val, SegString) and val.is_ground():
@@ -133,7 +136,8 @@ def _seq_result(items, was_string, was_bytes=False):
     ``bool``), promote to ``bytes`` (the codes model). Otherwise return the
     plain list (input-type-wins; a list input keeps a list output)."""
     if was_string and all(is_char_atom(c) for c in items):
-        return "".join(spelling(c) for c in items)
+        # STAGE 1: a text result is the CARRIER, never a bare str
+        return chars("".join(spelling(c) for c in items))
     if was_bytes and all(
         isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 255
         for c in items
@@ -243,7 +247,8 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     # Track the result container type. str output when a str is present and no
     # list/bytes; bytes output (codes model) when a bytes is present and no
     # list/str. A list anywhere keeps a list (input-type-wins).
-    _any_str = isinstance(l1_val, str) or isinstance(l2_val, str) or isinstance(l3_val, str)
+    _any_str = (isinstance(l1_val, str) or is_chars(l1_val) or isinstance(l2_val, str)
+                or is_chars(l2_val) or isinstance(l3_val, str) or is_chars(l3_val))   # stage 1: carrier is str-shaped
     _any_bytes = isinstance(l1_val, bytes) or isinstance(l2_val, bytes) or isinstance(l3_val, bytes)
     _any_list = isinstance(l1_val, list) or isinstance(l2_val, list) or isinstance(l3_val, list)
     _out_str = _any_str and not _any_list and not _any_bytes

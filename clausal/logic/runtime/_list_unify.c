@@ -108,9 +108,28 @@ char_spelling_obj(PyObject *e)
  * For strings: builds the CHAR at that index (char_atom_obj).
  * For bytes: the int code (codes model — never a char).
  */
+
+/* the chars carrier ('$chars', "abc") reads as its text in every sequence
+ * helper (stage 1 of the atoms-as-str flip, spec 2026-09-18) */
+static inline int
+is_chars_carrier(PyObject *t)
+{
+    return PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
+        && PyUnicode_Check(PyTuple_GET_ITEM(t, 0))
+        && PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(t, 0), "$chars") == 0
+        && PyUnicode_Check(PyTuple_GET_ITEM(t, 1));
+}
+
+static inline PyObject *
+unwrap_chars(PyObject *t)
+{
+    return is_chars_carrier(t) ? PyTuple_GET_ITEM(t, 1) : t;
+}
+
 static inline PyObject *
 seq_getitem(PyObject *seq, Py_ssize_t i)
 {
+    seq = unwrap_chars(seq);
     if (PyList_Check(seq)) {
         PyObject *item = PyList_GET_ITEM(seq, i);
         Py_INCREF(item);
@@ -179,6 +198,7 @@ seq_slice(PyObject *seq, Py_ssize_t start, Py_ssize_t end)
 static inline Py_ssize_t
 seq_length(PyObject *seq)
 {
+    seq = unwrap_chars(seq);
     if (PyList_Check(seq))
         return PyList_GET_SIZE(seq);
     if (PyUnicode_Check(seq))
@@ -222,7 +242,14 @@ maybe_promote_to_str(PyObject *result)
         }
     }
     /* All chars — build the promoted str from their spellings. */
-    return join_char_spellings(result);
+    PyObject *joined = join_char_spellings(result);
+    if (!joined) return NULL;
+    /* stage 1: a promoted text result is the CARRIER, never a bare str */
+    PyObject *tag = PyUnicode_FromString("$chars");
+    if (!tag) { Py_DECREF(joined); return NULL; }
+    PyObject *carrier = PyTuple_Pack(2, tag, joined);
+    Py_DECREF(tag); Py_DECREF(joined);
+    return carrier;
 }
 
 /* maybe_promote_to_bytes(result) — codes-model parallel of
@@ -327,7 +354,7 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         Py_DECREF(d);
         if (!walked) return NULL;
         d = walked;
-        if (!PyList_Check(d) && !PyUnicode_Check(d)) {
+        if (!PyList_Check(d) && !PyUnicode_Check(d) && !is_chars_carrier(d)) {
             Py_DECREF(d);
             Py_RETURN_NONE;
         }
@@ -347,14 +374,14 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         Py_DECREF(d);
         if (!walked) return NULL;
         d = walked;
-        if (!PyList_Check(d) && !PyUnicode_Check(d)) {
+        if (!PyList_Check(d) && !PyUnicode_Check(d) && !is_chars_carrier(d)) {
             Py_DECREF(d);
             Py_RETURN_FALSE;
         }
     }
 
     /* ── list, str, or bytes ── */
-    if (PyList_Check(d) || PyUnicode_Check(d) || PyBytes_Check(d)) {
+    if (PyList_Check(d) || PyUnicode_Check(d) || is_chars_carrier(d) || PyBytes_Check(d)) {
         Py_ssize_t dlen = seq_length(d);
         Py_ssize_t min_len = n_before + n_after;
 
@@ -480,7 +507,14 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
         PyObject *s = call_deref(star_val);
         if (!s) goto error;
 
-        if (PyList_Check(s)) {
+        if (is_chars_carrier(s)) {
+    /* stage 1: the carrier splats as its text (owned reference swap) */
+    PyObject *inner = PyTuple_GET_ITEM(s, 1);
+    Py_INCREF(inner);
+    Py_DECREF(s);
+    s = inner;
+}
+if (PyList_Check(s)) {
             /* Plain list: extend result */
             Py_ssize_t slen = PyList_GET_SIZE(s);
             for (Py_ssize_t i = 0; i < slen; i++) {
@@ -579,6 +613,16 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 if (ok < 0) return NULL;
                 if (ok) Py_RETURN_TRUE;
                 Py_RETURN_FALSE;
+            } else if (is_chars_carrier(walked)) {
+                PyObject *inner = PyTuple_GET_ITEM(walked, 1);
+                Py_INCREF(inner);
+                Py_DECREF(walked);
+                walked = inner;
+                if (extend_with_str_chars(result, walked) < 0) {
+                    Py_DECREF(walked);
+                    goto error;
+                }
+                Py_DECREF(walked);
             } else if (PyList_Check(walked) || PyUnicode_Check(walked)) {
                 /* Ground SegList (→ list) or ground SegString (→ str):
                  * extend result with the elements / CHARS. */

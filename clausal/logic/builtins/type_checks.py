@@ -56,7 +56,8 @@ def _is_string_term(x) -> bool:
     ``_check_type``'s ``string``/``str`` row, so the three cannot drift.
     """
     x_val = normalize_seg_input(deref(x))
-    if isinstance(x_val, str):
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    if isinstance(x_val, str) or is_chars(x_val):
         return True
     if type(x_val) is list:
         return all(_is_char_atom(deref(e)) for e in x_val)
