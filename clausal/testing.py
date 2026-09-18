@@ -1662,12 +1662,6 @@ def _reify_value(value, depth: int = 0, path=None):
     if isinstance(value, list):
         return [_reify_value(v, depth + 1, path) for v in value]
     from clausal.logic.cells import TUPLE_TAG  # noqa: PLC0415
-    if type(value) is tuple and len(value) == 1 and type(value[0]) is str and value[0] != TUPLE_TAG:
-        # An ATOM — the arity-0 cell (spec §6.7).  It is a NAME, so it
-        # reifies as ``Atom`` and prints bare; without this branch the cell
-        # branch below would reify it as a 0-argument ``Goal`` and print
-        # ``foo()``, which is not a term form at all.
-        return Atom(name=value[0])
     if type(value) is tuple and value and type(value[0]) is str and value[0] != TUPLE_TAG:
         # A CELL -- ``("cite", art52)``.  P3-2 Task 2 (THE FLIP): this is how
         # a compound term is represented, so it reifies as a ``Goal`` and

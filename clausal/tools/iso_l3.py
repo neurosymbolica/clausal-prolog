@@ -58,7 +58,7 @@ def _pos_tuple(span) -> ast.expr:
 
 
 def _is_atom(t: Any) -> bool:
-    return type(t) is tuple and len(t) == 1 and type(t[0]) is str
+    return type(t) is str              # STAGE 2: an atom is a str
 
 
 def lower_arg(t: Any, span=None) -> ast.expr:

@@ -433,7 +433,7 @@ def _dims_to_term(dims) -> tuple:
     emitted term is one term. ``dims.items()`` pairs are already
     ``('metre', 1)`` -- functor-first ``metre(1)`` -- so nothing is rebuilt."""
     if not dims:
-        return ("dimensionless",)
+        return "dimensionless"
     return ("dimensions", *sorted(dims.items()))
 
 
@@ -442,7 +442,7 @@ def _dims_from_term(t) -> dict:
     an atom-keyed dict. Order-insensitive. Raises on anything else."""
     if type(t) is not tuple or not t or type(t[0]) is not str:
         raise TypeError("dims slot is not a term")
-    if t == ("dimensionless",):
+    if t == "dimensionless":
         return {}
     if t[0] != "dimensions" or len(t) < 2:
         raise TypeError("dims slot is neither dimensionless nor dimensions/N")

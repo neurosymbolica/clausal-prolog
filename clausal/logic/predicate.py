@@ -1695,7 +1695,7 @@ def is_atom_value(obj: Any) -> bool:
     call THIS helper, never one of the two halves alone.
     """
     from clausal.logic.atoms import is_atom as _term_is_atom
-    return _term_is_atom(obj) or is_zero_field_class(obj)
+    return _term_is_atom(obj)          # STAGE 2 (spec §4): no class is an atom
 
 
 def _class_origin(cls: type) -> str:

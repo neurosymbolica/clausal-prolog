@@ -287,7 +287,7 @@ def _is_atomic_term(x) -> bool:
     if x is None or isinstance(x, (bool, int, float)):
         return True
     # Zero-arity PredicateMeta class — a declared atom.
-    return bool(is_zero_field_class(x))
+    return False                       # STAGE 2: no class is an atom
 
 
 @_builtin("atomic", 1)

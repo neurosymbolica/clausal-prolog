@@ -697,8 +697,6 @@ def _global_atom__2(name, atom, trail, k):
         # compatibility) a 0-arity PredicateMeta's __name__.
         if _term_is_atom(atom_val):
             cls_name = spelling(atom_val)
-        elif is_zero_field_class(atom_val):
-            cls_name = atom_val.__name__
         else:
             return
         # Equality, never identity (spec §2/§5.2).
@@ -723,7 +721,7 @@ def _global_atom__2(name, atom, trail, k):
         if _term_is_atom(val):
             if spelling(val) != key:
                 continue
-        elif not is_zero_field_class(val):
+        else:
             continue
         mark = trail.mark()
         if unify(name, mint(key), trail) and unify(atom, val, trail):

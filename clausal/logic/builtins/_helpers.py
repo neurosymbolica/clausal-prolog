@@ -16,7 +16,7 @@ from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
-from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
+from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
@@ -63,8 +63,6 @@ def _functor_name_py(term: Any) -> Any:
         # A09-F027: the atomic constant IS its own functor name (ISO:
         # functor(3, N, A) → N=3), so it roundtrips. repr(term) did not.
         return term
-    if is_zero_field_class(term):
-        return term
     return None
 
 
@@ -98,8 +96,6 @@ def _arity_py(term: Any) -> int | None:
     if isinstance(term, bytes):
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:
-        return 0
-    if is_zero_field_class(term):
         return 0
     return None
 
@@ -789,23 +785,6 @@ def _standard_order_key(term: Any) -> tuple:
         # STAGE 2 (spec 2026-09-18 §1): a str is an ATOM and keys in the atom
         # band by its spelling; the carrier below keys as its char list
         return (_ORD_ATOM, term)
-    if is_zero_field_class(term):
-        # P3-1 Task 4 (standard-order collapse), status corrected by the
-        # Task 7 sweep: NOT a transient pre-pivot straggler after all. The
-        # compiler stopped minting atom-shaped classes in Task 2, and the
-        # last live production atom-class-construction path
-        # (``global_atom/2``'s mint-on-demand mode) was fixed in Task 7 to
-        # install the interned str instead — but a bare 0-arity PREDICATE
-        # declared with explicit call syntax (``-module(m, [p()])``, as
-        # opposed to the bare-Name atom syntax ``-module(m, [p])``) still
-        # legitimately mints a real ``PredicateMeta`` class with no fields,
-        # and a reference to that predicate BY NAME (not called) reaches
-        # here as a live term value. Per §1b/R2 that class and a
-        # same-spelled str are still the SAME atom for ordering purposes,
-        # so this key must not be distinguishable from the str key above:
-        # no trailing discriminator, ``(_ORD_ATOM, "work")`` for both
-        # ``"work"`` and a 0-arity predicate class named ``work``.
-        return (_ORD_ATOM, term.__name__)
     if isinstance(term, bytes):
         # A code list (§5.4): the list of its code NUMBERS, so ``b"ab"`` and
         # ``[97, 98]`` are one term in the order exactly as ``"ab"`` and its
@@ -835,8 +814,7 @@ def _standard_order_key(term: Any) -> tuple:
         # of that name gets, so the two spellings of one atom are one atom in
         # the order.  Arity > 0 keys like ``Compound`` — arity first, then name
         # (ISO 7.2.1), positional flavour — never as a sequence.
-        if len(term) == 1:
-            return (_ORD_ATOM, term[0])
+        refuse_reserved_1tuple(term)   # STAGE 2: the arity-0 cell is RESERVED
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
                 tuple(_standard_order_key(a) for a in term[1:]))
     if type(term) is tuple and term and term[0] == TUPLE_TAG:

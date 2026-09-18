@@ -77,8 +77,6 @@ def _atom_to_str(val: Any) -> str | None:
     """
     if _term_is_atom(val):
         return spelling(val)
-    if is_zero_field_class(val):
-        return val.__name__
     if _is_empty_list(val):
         return NIL_SPELLING
     return None

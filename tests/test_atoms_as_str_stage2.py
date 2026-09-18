@@ -120,8 +120,12 @@ def test_an_atom_is_not_text_at_the_funnels():
 
 def test_type_checks_and_goals(tmp_path):
     from clausal.logic.variables import Var
-    mod = _mod(tmp_path, 'p(R) <- if_(atom(foo), R is yes, R is no)\nq(R) <- if_(string(foo), R is yes, R is no)\n'
-                         'r(R) <- if_(atom("foo"), R is yes, R is no)\nfoo,\ns <- call(foo)\nt(R) <- if_("ab" == [a, b], R is yes, R is no)\n'
+    # the fact comes FIRST: a 0-arity predicate referenced as a value before
+    # its first clause still loads the class (the value arm needs the
+    # registration), and a class is no longer an atom -- an order-dependence
+    # recorded in the handoff
+    mod = _mod(tmp_path, 'foo,\np(R) <- if_(atom(foo), R is yes, R is no)\nq(R) <- if_(string(foo), R is yes, R is no)\n'
+                         'r(R) <- if_(atom("foo"), R is yes, R is no)\ns <- call(foo)\nt(R) <- if_("ab" == [a, b], R is yes, R is no)\n'
                          'u(R) <- if_(ab == [a, b], R is yes, R is no)\n', hdr="-double_quotes(chars)\n-private([yes, no, a, b, ab])\n")
     assert _first(mod, "p", Var()) == ["yes"] and _first(mod, "q", Var()) == ["no"] and _first(mod, "r", Var()) == ["no"]
     assert _first(mod, "s") is not None
@@ -143,3 +147,24 @@ def test_a_thunk_result_str_is_the_atom(tmp_path):
     from clausal.logic.variables import Var
     mod = _mod(tmp_path, 'p(R) <- (R is ++"foo".upper())\nq(R) <- if_(atom(++"x"), R is yes, R is no)\nr(R) <- if_(string(++"x"), R is yes, R is no)\n')
     assert _first(mod, "p", Var()) == ["FOO"] and _first(mod, "q", Var()) == ["yes"] and _first(mod, "r", Var()) == ["no"]
+
+
+# ── Task 6: the writers, the order, the legacy ──────────────────────────────
+
+def test_write_and_order(tmp_path):
+    from clausal.logic.variables import Var
+    mod = _mod(tmp_path, "p(S) <- term_to_string('a b', S)\nq(S) <- write_to_string(\"ab\", S)\nw(S) <- term_to_string([a, \"b\"], S)\n"
+                         "r(L) <- msort([\"b\", b, [a], a, 1], L)\n")
+    assert _first(mod, "p", Var()) == [chars("'a b'")] and _first(mod, "q", Var()) == [chars("[a,b]")]
+    assert _first(mod, "w", Var()) == [chars('[a, "b"]')]
+    assert _first(mod, "r", Var()) == [[1, "a", "b", ["a"], chars("b")]]      # number < atoms < compounds; "b" == [b]
+
+
+def test_no_class_is_an_atom_and_the_reserved_tuple_never_prints():
+    from clausal.terms import term_str, term_canonical
+    from clausal.logic.predicate import is_atom_value
+    assert term_str("foo") == "foo" and term_str("a b") == "'a b'" and term_str("a b", quoted=False) == "a b"
+    assert term_canonical("a b") == "'a b'" and term_canonical(chars("ab")) == "'.'(a,'.'(b,[]))"
+    with pytest.raises(TypeError, match="reserved"):
+        term_str(("foo",))
+    assert not is_atom_value(type("Zero", (), {}))

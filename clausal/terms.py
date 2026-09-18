@@ -31,7 +31,7 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, chars, is_chars, chars_text
+from .logic.cells import TUPLE_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -3307,28 +3307,26 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
     if isinstance(t, (int, float, complex)):
         return _c(repr(t), 'number', style)
     if is_chars(t):
-        # STAGE 1 (spec 2026-09-18): the chars carrier prints as the text it
-        # holds -- the tag is never shown, in any family.
+        # A STRING -- the chars carrier (spec 2026-09-18 §1).  ``writeq``
+        # prints it as a double-quoted string token; ``write`` the bare text;
+        # the ISO family (``double_quotes(false)``) the list of its chars.
+        # The EMPTY string is the empty list and prints ``[]``.
         t = chars_text(t)
-    if isinstance(t, str):
-        # A STRING (THE FLIP, spec §6.7).  The colour role ``'string'`` finally
-        # means what it says.  ``writeq`` prints it as a double-quoted string
-        # token; ``write`` prints the bare text.  ``repr`` is gone: it picks
-        # its own quotes by content, so ``"it's"`` came out single-quoted --
-        # an ATOM to any reader.
-        #
-        # The EMPTY string is the empty list and prints ``[]`` in both
-        # families (spec §6.7's table row), which is also what the list
-        # branch below prints for ``[]``: the two spellings of one term
-        # render alike.
         if t == "":
             return _c('[]', 'bracket', style, _bd)
         if not double_quotes:
-            # ISO ``write_term(T, [])``: the string is the LIST of its char
-            # atoms, so print it as that list, each char quoted per *quoted*
-            # (Task 15 item 4; Scryer's own default).
             return _char_list_str(t, style, _bd, quoted, sep)
         return _c(quote_string(t) if quoted else t, 'string', style)
+    if isinstance(t, str):
+        # STAGE 2 (spec 2026-09-18 §1): a str is an ATOM.  It prints as a
+        # name: the writeq family (``quoted=True``) quotes it when ISO 6.4.2
+        # would (``'foo bar'``), the display family prints the bare
+        # spelling; a hidden atom shows its ``module.name`` form.
+        display = demangle_for_display(t) if is_mangled(t) else t
+        display = _locale_name(display, style, 0)
+        if quoted and not is_mangled(t) and atom_needs_quotes(display):
+            display = quote_atom(display)
+        return _c(display, 'atom', style)
     if isinstance(t, bytes):
         # A CODE LIST (spec §5.4).  Under ``double_quotes(false)`` — the ISO
         # family — it prints as the list of code NUMBERS it denotes, so
@@ -3387,21 +3385,7 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         # same mangled-atom display substitution as the str branch above --
         # WITHOUT the quoting, since a functor position is never quoted.
         display_functor = demangle_for_display(functor) if is_mangled(functor) else functor
-        if len(t) == 1:
-            # An ATOM -- an arity-0 cell (spec §6.7).  It is a name, not a
-            # zero-argument call, so it prints bare (``flag``), never
-            # ``flag()``.  Unlike the functor position above, an atom in an
-            # ARGUMENT position must re-read as itself, so the writeq family
-            # (``quoted=True``, the default) quotes it when ISO 6.4.2 says
-            # it would not (``'foo bar'``); the write/1 display family
-            # (``quoted=False``) always prints the bare spelling.
-            # Locale translation happens BEFORE quoting (the translated
-            # spelling is what has to re-read), and keeps the arity-0
-            # lookup this branch had when it still printed ``flag()``.
-            display = _locale_name(display_functor, style, 0)
-            if quoted and not is_mangled(functor) and atom_needs_quotes(display):
-                display = quote_atom(display)
-            return _c(display, 'atom', style)
+        refuse_reserved_1tuple(t)      # STAGE 2: the arity-0 cell is RESERVED
         args = t[1:]
         functor_s = _c(_locale_name(display_functor, style, len(args)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
@@ -3525,17 +3509,13 @@ def term_canonical(t: Any) -> str:
     if isinstance(t, (int, float, complex)):
         return repr(t)
     if is_chars(t):
-        t = chars_text(t)              # stage 1: the carrier prints as its text
-    if isinstance(t, str):
-        # A STRING (THE FLIP) — the list of its char atoms, so it prints as
-        # the cons structure that list denotes (spec §6.7, Scryer-verified):
-        # ``"abc"`` -> ``'.'(a,'.'(b,'.'(c,[])))``, ``""`` -> ``[]``.
-        # ``write_canonical/1`` ignores the ``double_quotes`` flag by design,
-        # which is why there is no mode to consult here.
+        # A STRING: the cons structure of its chars (Scryer-verified), ``[]`` when empty
         out = "[]"
-        for c in reversed(t):
+        for c in reversed(chars_text(t)):
             out = "'.'(" + _quoted_atom_spelling(c) + "," + out + ")"
         return out
+    if isinstance(t, str):
+        return _quoted_atom_spelling(t)   # STAGE 2: a str is an ATOM
     if isinstance(t, bytes):
         return repr(t)
     if isinstance(t, list):
@@ -3556,9 +3536,8 @@ def term_canonical(t: Any) -> str:
     if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
         # A CELL.  Slot 0 read RAW, no deref -- the recognition rule every
         # cell site uses.  An arity-0 cell is an atom and prints bare.
+        refuse_reserved_1tuple(t)      # STAGE 2: the arity-0 cell is RESERVED
         head = _quoted_atom_spelling(t[0])
-        if len(t) == 1:
-            return head
         return head + "(" + ",".join(term_canonical(a) for a in t[1:]) + ")"
     if type(t) is tuple and t and t[0] == TUPLE_TAG:
         return "(" + ",".join(term_canonical(e) for e in t[1:]) + ")"
