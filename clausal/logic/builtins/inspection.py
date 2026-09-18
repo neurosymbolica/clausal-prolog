@@ -889,7 +889,12 @@ def _module_constant_units__4(m, name, number, units, trail, k):
     if registry is None:
         return
     name_val = deref(name)
-    if isinstance(name_val, str):
+    if is_chars(name_val):
+        # STAGE 1: the compiler's name thunk hands its spelling back through
+        # the inbound text rule ($text_in), so the SPELLING arrives as the
+        # carrier -- read it as the registry key it is.
+        name_key = chars_text(name_val)
+    elif isinstance(name_val, str):
         # The compile-time insertion passes the SPELLING directly (see
         # term_rewriting's constant_number_units branch): in the importing
         # module the name re-resolves to the imported value, so the compiler

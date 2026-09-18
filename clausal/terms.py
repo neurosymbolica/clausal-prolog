@@ -581,6 +581,8 @@ class SegList:
                     new_segs.append(ConcreteSeg(walked_elems))
             else:  # VarSeg
                 v = walk(seg.var)
+                if is_chars(v):
+                    v = chars_text(v)          # stage 1: a hole bound to the carrier is a str-bound hole
                 if isinstance(v, str):
                     # VarSeg bound to a substring — expand to CHARS for SegList
                     chars = [char_atom(c) for c in v]
