@@ -225,7 +225,6 @@ register(_dt.time, "time",
 register(_dt.timedelta, "timedelta",
          lambda v: ("timedelta", v.days, v.seconds, v.microseconds),
          lambda t: _dt.timedelta(*t[1:]))
-register(Decimal, "decimal", _decimal_to_term, _decimal_from_term)
 register(tuple, TUPLE_TAG, _tuple_to_term, _tuple_from_term)
 
 
@@ -300,6 +299,13 @@ def _fraction_from_term(t: tuple) -> Fraction:
 
 
 register_transfer(Fraction, "rdiv", _fraction_to_term, _fraction_from_term)
+# RULED 2026-09-17 (Q1) and 2026-09-18 (Q7, option c): a Decimal is a NUMBER
+# in the engine, like a Fraction -- the seam passes the object (it is in
+# ``_SCALARS``) and ``('decimal', M, S)`` is its TRANSFER form only, beside
+# ``rdiv``.  It was in the seam registry until 2026-09-18; nothing in the
+# engine consulted that entry (measured: ``to_term``/``from_term`` have no
+# engine callers), so the move changes the wire, not a behaviour.
+register_transfer(Decimal, "decimal", _decimal_to_term, _decimal_from_term)
 
 
 def _well_formed_transfer_term(value: tuple) -> bool:
@@ -346,15 +352,17 @@ def to_transfer(value: Any) -> Any:
     non-str-headed tuple is data.
     """
     _ensure_quantity_registered()
+    # The transfer table FIRST: a Decimal and a Fraction are scalars at the
+    # seam (numbers pass as themselves, Q1) but have a wire form here.
+    convert = TO_TRANSFER.get(type(value))
+    if convert is not None:
+        return convert(value)
     if isinstance(value, _SCALARS):
         return value
     from clausal.logic.variables import Var  # noqa: PLC0415
     if isinstance(value, Var):
         raise TypeError("to_transfer: a logic variable has no transfer form; "
                         "bind it or leave it out of the transferred term")
-    convert = TO_TRANSFER.get(type(value))
-    if convert is not None:
-        return convert(value)
     if isinstance(value, list):
         return [to_transfer(v) for v in value]
     if isinstance(value, dict):
@@ -511,7 +519,9 @@ def _ensure_quantity_registered() -> None:
 #: Left alone.  ``bool`` is listed for the reader, not for the code: it is a
 #: subclass of ``int`` and would pass anyway, but a future edit that narrows the
 #: int case must not silently widen ``True`` to ``1``.
-_SCALARS = (bool, int, float, str, bytes, bytearray, complex, type(None))
+# Decimal and Fraction are NUMBERS (RULED 2026-09-17 Q1): the seam passes
+# them as it passes an int; their cells are transfer forms (see below).
+_SCALARS = (bool, int, float, str, bytes, bytearray, complex, type(None), Decimal, Fraction)
 
 
 def _is_already_engine_term(value: Any) -> bool:

@@ -62,7 +62,8 @@ def test_the_implicit_path_lets_an_unregistered_class_through():
 
 def test_conversion_RECURSES_through_a_registered_container():
     got = to_term([datetime.date(2023, 6, 1), Decimal("0.5")])
-    assert got == [("date", 2023, 6, 1), ("decimal", 5, 1)]
+    # a Decimal is a NUMBER at the seam (Q1/Q7, 2026-09-18): it passes as itself
+    assert got == [("date", 2023, 6, 1), Decimal("0.5")]
 
 
 # ── containers ───────────────────────────────────────────────────────────────
@@ -110,13 +111,17 @@ def test_from_term_rebuilds_the_python_value():
     from clausal.logic.python_terms import from_term
     assert from_term(("date", 2023, 6, 1)) == datetime.date(2023, 6, 1)
     assert from_term(("timedelta", 3, 0, 0)) == datetime.timedelta(days=3)
-    assert from_term(("decimal", 1001, 2)) == Decimal("10.01")
+    # the decimal cell is a TRANSFER form, not a seam form, since 2026-09-18
+    from clausal.logic.python_terms import from_transfer
+    assert from_transfer(("decimal", 1001, 2)) == Decimal("10.01")
+    assert from_term(("decimal", 1001, 2)) == ("decimal", 1001, 2)
 
 
 def test_a_decimal_round_trips_INCLUDING_its_scale():
-    from clausal.logic.python_terms import from_term
+    from clausal.logic.python_terms import from_transfer, to_transfer
     for lit in ("10.01", "10.010", "-10.01", "1550.00", "0.1"):
-        assert str(from_term(to_term(Decimal(lit)))) == lit
+        assert str(from_transfer(to_transfer(Decimal(lit)))) == lit
+        assert to_term(Decimal(lit)) == Decimal(lit)          # the seam passes the number
 
 
 def test_an_aware_datetime_round_trips_with_its_offset():
@@ -175,17 +180,19 @@ def test_a_decimal_with_no_decimal_places_is_an_int():
     integral rational presents as int", normalised at 1506's "single choke
     point" rather than at every binding. This is that choke point for decimals.
     """
-    assert to_term(Decimal("1E+5")) == 100000
-    assert to_term(Decimal("100000")) == 100000
-    assert isinstance(to_term(Decimal("1E+5")), int)
+    from clausal.logic.python_terms import to_transfer
+    assert to_transfer(Decimal("1E+5")) == 100000
+    assert to_transfer(Decimal("100000")) == 100000
+    assert isinstance(to_transfer(Decimal("1E+5")), int)
 
 
 def test_but_a_decimal_WITH_places_keeps_its_scale_even_when_integral_in_value():
     """The distinction that matters: ``10.00`` has two decimal places and is
     worth ten. Scale is the reason this encoding was chosen over rdiv, so it
     survives -- only the absence of fractional digits makes an int."""
-    assert to_term(Decimal("10.00")) == ("decimal", 1000, 2)
-    assert to_term(Decimal("0.1")) == ("decimal", 1, 1)
+    from clausal.logic.python_terms import to_transfer
+    assert to_transfer(Decimal("10.00")) == ("decimal", 1000, 2)
+    assert to_transfer(Decimal("0.1")) == ("decimal", 1, 1)
 
 
 def test_the_reverse_direction_agrees():

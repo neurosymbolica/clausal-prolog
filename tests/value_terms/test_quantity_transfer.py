@@ -29,8 +29,12 @@ def test_the_transfer_tables_are_separate_from_the_seam_tables():
     assert "rdiv" in FROM_TRANSFER and "rdiv" not in FROM_TERM
 
 
-def test_to_transfer_falls_through_to_the_seam_registry_for_a_decimal():
+def test_to_transfer_carries_a_decimal_as_its_own_entry():
+    """Since 2026-09-18 the decimal cell is a TRANSFER entry beside rdiv, not
+    a seam-registry fallthrough: the seam passes a Decimal as the number it is."""
+    from clausal.logic.python_terms import to_term
     assert to_transfer(Decimal("10.01")) == ("decimal", 1001, 2)
+    assert to_term(Decimal("10.01")) == Decimal("10.01")
 
 
 def test_to_transfer_falls_through_for_a_date_and_a_scalar():
@@ -142,9 +146,14 @@ def test_the_seam_still_passes_a_fraction_through_on_the_implicit_path():
     assert to_term(f, strict=False) is f
 
 
-def test_the_seam_still_refuses_a_fraction_on_the_strict_path():
-    with pytest.raises(TypeError, match="no registered conversion"):
-        to_term(Fraction(1, 3), strict=True)
+def test_the_seam_passes_a_fraction_as_the_number_it_is():
+    """Until 2026-09-18 the strict seam REFUSED a Fraction as an unregistered
+    class.  RULED Q1: numbers are Python number objects in the engine, so a
+    Fraction (and a Decimal) is a scalar at the seam, passed as itself; the
+    rdiv/decimal cells are TRANSFER forms only."""
+    f = Fraction(1, 3)
+    assert to_term(f, strict=True) is f
+    assert to_term(Decimal("10.01"), strict=True) == Decimal("10.01")
 
 
 def test_the_seam_leaves_an_rdiv_term_alone():
