@@ -161,7 +161,7 @@ class TestMapList3:
 
     def test_non_list_fails(self):
         # nv
-        results = run_trampoline_var(_map_list__3, _goal_double, "abc")
+        results = run_trampoline_var(_map_list__3, _goal_double, mint("abc"))
         assert results == []
 
 

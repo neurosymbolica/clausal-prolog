@@ -6,6 +6,7 @@ import os
 
 import pytest
 
+from clausal.logic.cells import chars
 from clausal.logic.builtins.lists import (
     _take__3, _drop__3, _split_at__4, _zip__3, _replicate__3, _split_with__3,
 )
@@ -201,11 +202,11 @@ class TestReplicate:
         # (2026-09-06-atoms-as-cells-strings): the element has to be the
         # char ATOM; a 1-char ``str`` is a one-element STRING and a list of
         # those is a list of strings, which does not promote.
-        assert run_trampoline_var(_replicate__3, 3, char_atom("x")) == ["xxx"]
+        assert run_trampoline_var(_replicate__3, 3, char_atom("x")) == [chars("xxx")]
 
     def test_zero(self):
         # nv — F053: zero copies is the empty list, which is the empty str.
-        assert run_trampoline_var(_replicate__3, 0, char_atom("x")) == [""]
+        assert run_trampoline_var(_replicate__3, 0, char_atom("x")) == [chars("")]
 
     def test_one(self):
         # nv

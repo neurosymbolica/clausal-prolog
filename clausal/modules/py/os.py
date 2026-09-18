@@ -14,6 +14,7 @@ Or via module import::
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     require_text,
@@ -41,7 +42,7 @@ def _environment_variable_2(name, value, trail, k):
         # Enumerate all env vars
         for env_name, env_value in _os.environ.items():
             mark = trail.mark()
-            if unify(name, env_name, trail) and unify(value, env_value, trail):
+            if unify(name, text_result(env_name), trail) and unify(value, text_result(env_value), trail):
                 yield None
             trail.undo(mark)
     else:
@@ -51,7 +52,7 @@ def _environment_variable_2(name, value, trail, k):
         env_value = _os.environ.get(name)
         if env_value is None:
             return
-        if unify(value, env_value, trail):
+        if unify(value, text_result(env_value), trail):
             yield None
 
 
@@ -82,7 +83,7 @@ def _unset_environment_variable_1(name, trail, k):
 def _working_directory_1(path, trail, k):
     """working_directory/1: unify Path with the current working directory."""
     cwd = _os.getcwd()
-    if unify(path, cwd, trail):
+    if unify(path, text_result(cwd), trail):
         yield None
 
 
@@ -106,13 +107,13 @@ def _pid_1(p, trail, k):
 
 def _argv_1(args, trail, k):
     """argv/1: unify Args with sys.argv as a Python list."""
-    if unify(args, list(_sys.argv), trail):
+    if unify(args, text_result(list(_sys.argv)), trail):
         yield None
 
 
 def _platform_1(p, trail, k):
     """platform/1: unify P with sys.platform."""
-    if unify(p, _sys.platform, trail):
+    if unify(p, text_result(_sys.platform), trail):
         yield None
 
 

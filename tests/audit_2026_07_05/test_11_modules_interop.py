@@ -19,6 +19,7 @@ import textwrap
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal import Var, solve
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
@@ -92,7 +93,7 @@ def test_F002_match_charlist_equals_string(tmp_path):
     assert len(list(solve(m.M2(char_list), module=m))) == 1
     R = Var()
     assert _values(m.R4([char_atom("a"), char_atom("b"), char_atom("c")], R),
-                   R, m) == ["aXc"]
+                   R, m) == [chars("aXc")]
 
 
 def test_F002_charlist_repr_false_positive(tmp_path):
@@ -161,8 +162,8 @@ def test_F006_mixed_groups_expose_positional_values(tmp_path):
         M(S, G) <- match(r"(?P<A>\\d+)-(\\d+)", S, G)
     ''', "f006")
     G = Var()
-    (g,) = _values(m.M("1-2", G), G, m)
-    assert g.get("A") == "1" and "2" in g.values()
+    (g,) = _values(m.M(chars("1-2"), G), G, m)
+    assert g.get("A") == chars("1") and chars("2") in g.values()
 
 
 def test_F007_dynamic_pattern_autobind_or_documented(tmp_path):
@@ -172,7 +173,7 @@ def test_F007_dynamic_pattern_autobind_or_documented(tmp_path):
         dyn(P, S, YEAR) <- match(P, S)
     ''', "f007")
     Y = Var()
-    assert _values(m.dyn(r"(?P<YEAR>\d+)", "2026", Y), Y, m) == ["2026"]
+    assert _values(m.dyn(chars(r"(?P<YEAR>\d+)"), chars("2026"), Y), Y, m) == [chars("2026")]
 
 
 def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
@@ -200,7 +201,7 @@ def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
     ''', "f007c")
     A, B = Var(), Var()
     got = [(deref(A), deref(B)) for _ in solve(m.two(A, B), module=m)]
-    assert got == [("2025", "2026")]
+    assert got == [(chars("2025"), chars("2026"))]
 
 
 def test_F007_dynamic_autobind_gated_on_logic_var_names(tmp_path):
@@ -213,9 +214,9 @@ def test_F007_dynamic_autobind_gated_on_logic_var_names(tmp_path):
     ''', "f007d")
     # lowercase group: no binding attempted, so the conflicting value "x"
     # still succeeds.
-    assert len(list(solve(m.dyn(r"(?P<year>\d+)", "2026", "x"), module=m))) == 1
+    assert len(list(solve(m.dyn(chars(r"(?P<year>\d+)"), chars("2026"), chars("x")), module=m))) == 1
     # ALLCAPS group binds — and therefore conflicts with "x" here.
-    assert list(solve(m.dyn(r"(?P<YEAR>\d+)", "2026", "x"), module=m)) == []
+    assert list(solve(m.dyn(chars(r"(?P<YEAR>\d+)"), chars("2026"), chars("x")), module=m)) == []
 
 
 def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
@@ -226,7 +227,7 @@ def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
         opt_g(S, TAG) <- match(r"(?P<TAG>\\d+)?x", S)
     ''', "f008")
     T = Var()
-    assert _values(m.opt_g("x", T), T, m) == [None]
+    assert _values(m.opt_g(chars("x"), T), T, m) == [None]
 
 
 def test_F009_guard_findall_single_group_is_string(tmp_path):
@@ -237,7 +238,7 @@ def test_F009_guard_findall_single_group_is_string(tmp_path):
         FA(S, M) <- findall(r"(\\d)x", S, M)
     ''', "f009")
     M = Var()
-    assert _values(m.FA("1x2x", M), M, m) == ["1", "2"]
+    assert _values(m.FA(chars("1x2x"), M), M, m) == [chars("1"), chars("2")]
 
 
 def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
@@ -247,12 +248,12 @@ def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
         G2(S, R) <- replace(r"b", "X", S, R)
         G3(S, PARTS) <- split(r",", S, PARTS)
     ''', "oracle")
-    assert len(list(solve(m.G1("123"), module=m))) == 1
-    assert list(solve(m.G1("abc"), module=m)) == []
+    assert len(list(solve(m.G1(chars("123")), module=m))) == 1
+    assert list(solve(m.G1(chars("abc")), module=m)) == []
     R = Var()
-    assert _values(m.G2("abc", R), R, m) == ["aXc"]
+    assert _values(m.G2(chars("abc"), R), R, m) == [chars("aXc")]
     P = Var()
-    assert _values(m.G3("a,b", P), P, m) == [["a", "b"]]
+    assert _values(m.G3(chars("a,b"), P), P, m) == [[chars("a"), chars("b")]]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -291,7 +292,7 @@ def test_F013_dict_literal_pattern_matches(tmp_path):
         -import_from(reflection, [reified_clause])
         dict_pattern(SRC) <- reified_clause(SRC, pt({"k": 5}) <- True)
     ''', "f013")
-    assert len(list(solve(m.dict_pattern('pt({"k": 5}),\n'), module=m))) == 1
+    assert len(list(solve(m.dict_pattern(chars('pt({"k": 5}),\n')), module=m))) == 1
 
 
 def test_F014_reified_item_unbound_source_instantiation_error(tmp_path):
@@ -311,7 +312,7 @@ def test_guard_reified_item_enumerates(tmp_path):
         AI(SRC, ITEM) <- reified_item(SRC, ITEM)
     ''', "reify")
     src = 'edge2(1, 2),\nconn(X, Y) <- edge2(X, Y)\n'
-    assert len(list(solve(m.AI(src, Var()), module=m))) == 2
+    assert len(list(solve(m.AI(chars(src), Var()), module=m))) == 2
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -406,7 +407,7 @@ def test_F016_date_between_naive_aware_mix_fails_cleanly():
 def test_F017_url_parse_bad_port_fails_cleanly():
     # A11-F017 (fixed): out-of-range port fails cleanly.
     from clausal.modules.py.url import _parse_2
-    sols = list(_parse_2("http://h:99999/", Var(), Trail(), None))
+    sols = list(_parse_2(chars("http://h:99999/"), Var(), Trail(), None))
     assert sols == []
 
 
@@ -415,21 +416,21 @@ def test_F017_url_parse_malformed_bracket_fails_cleanly():
     # (unclosed IPv6 bracket) — the wrapper must fail cleanly, uniformly with
     # the bad-port path.
     from clausal.modules.py.url import _parse_2
-    sols = list(_parse_2("http://[::1", Var(), Trail(), None))
+    sols = list(_parse_2(chars("http://[::1"), Var(), Trail(), None))
     assert sols == []
 
 
 def test_F018_http_get_malformed_url_fails_cleanly():
     # A11-F018 (fixed): malformed URL fails cleanly.
     from clausal.modules.py.http import _get_2
-    sols = list(_get_2("not-a-url", Var(), Trail(), None))
+    sols = list(_get_2(chars("not-a-url"), Var(), Trail(), None))
     assert sols == []
 
 
 def test_F019_hash_shake_fails_cleanly():
     # A11-F019 (fixed): shake_* variable-length digest fails cleanly.
     from clausal.modules.py.hash import _hash_3
-    sols = list(_hash_3("shake_128", "abc", Var(), Trail(), None))
+    sols = list(_hash_3(chars("shake_128"), chars("abc"), Var(), Trail(), None))
     assert sols == []
 
 
@@ -437,9 +438,9 @@ def test_F019_guard_hash_sha256_matches_hashlib():
     import hashlib
     from clausal.modules.py.hash import _hash_3
     H = Var()
-    sols = list(_hash_3("sha256", "abc", H, Trail(), None))
+    sols = list(_hash_3(chars("sha256"), chars("abc"), H, Trail(), None))
     assert len(sols) == 1
-    assert deref(H) == hashlib.sha256(b"abc").hexdigest()
+    assert deref(H) == chars(hashlib.sha256(b"abc").hexdigest())
 
 
 # ═════════════════════════════════════════════════════════════════════════════

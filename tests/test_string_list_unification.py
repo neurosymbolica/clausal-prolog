@@ -14,6 +14,7 @@ the deleted str↔list cons-rule block).
 
 import pytest
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, unify, deref, is_var
 
 
@@ -332,9 +333,9 @@ class TestSegListStringUnification:
         trail = Trail()
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
-        assert unify(sl, "hello", trail)
+        assert unify(sl, chars("hello"), trail)
         assert deref(X) == mint("h")
-        assert deref(T) == "ello"
+        assert deref(T) == chars("ello")
 
     def test_prefix_suffix(self):
         """[*P, ',', *S] matches 'a,b' — star vars bind to substrings."""
@@ -342,9 +343,9 @@ class TestSegListStringUnification:
         trail = Trail()
         P, S = Var(), Var()
         sl = SegList([VarSeg(P), ConcreteSeg([char_atom(",")]), VarSeg(S)])
-        assert unify(sl, "a,b", trail)
-        assert deref(P) == "a"
-        assert deref(S) == "b"
+        assert unify(sl, chars("a,b"), trail)
+        assert deref(P) == chars("a")
+        assert deref(S) == chars("b")
 
     def test_multi_star_multiple_solutions(self):
         """[*A, 'l', *B] matches 'hello' at two positions (l at idx 2 and 3)."""
@@ -359,8 +360,8 @@ class TestSegListStringUnification:
         for _ in _seglist_unify_gen(walked, "hello", trail):
             solutions.append((deref(A), deref(B)))
         assert len(solutions) == 2
-        assert ("he", "lo") in solutions
-        assert ("hel", "o") in solutions
+        assert (chars("he"), chars("lo")) in solutions
+        assert (chars("hel"), chars("o")) in solutions
 
     def test_empty_string(self):
         """[*A] matches '' → A='' (empty substring)."""
@@ -368,26 +369,26 @@ class TestSegListStringUnification:
         trail = Trail()
         A = Var()
         sl = SegList([VarSeg(A)])
-        assert unify(sl, "", trail)
-        assert deref(A) == ""
+        assert unify(sl, chars(""), trail)
+        assert deref(A) == chars("")
 
     def test_full_concrete_match(self):
         """['h', 'i'] matches 'hi'."""
         # nv
         sl = SegList([ConcreteSeg([char_atom("h"), char_atom("i")])])
-        assert unify(sl, "hi", Trail())
+        assert unify(sl, chars("hi"), Trail())
 
     def test_full_concrete_mismatch(self):
         """['h', 'i'] does NOT match 'ho'."""
         # nv
         sl = SegList([ConcreteSeg([char_atom("h"), char_atom("i")])])
-        assert not unify(sl, "ho", Trail())
+        assert not unify(sl, chars("ho"), Trail())
 
     def test_concrete_length_mismatch(self):
         """['a', 'b', 'c'] does NOT match 'ab'."""
         # nv
         sl = SegList([ConcreteSeg(["a", "b", "c"])])
-        assert not unify(sl, "ab", Trail())
+        assert not unify(sl, chars("ab"), Trail())
 
     def test_only_star(self):
         """[*X] matches 'abc' → X='abc' (substring preserved)."""
@@ -395,8 +396,8 @@ class TestSegListStringUnification:
         trail = Trail()
         X = Var()
         sl = SegList([VarSeg(X)])
-        assert unify(sl, "abc", trail)
-        assert deref(X) == "abc"
+        assert unify(sl, chars("abc"), trail)
+        assert deref(X) == chars("abc")
 
     def test_two_stars(self):
         """[*A, *B] matches 'abc' — enumerates 4 splits."""
@@ -433,9 +434,9 @@ class TestSegListStringUnification:
         trail = Trail()
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
-        assert unify(sl, "日本語", trail)
+        assert unify(sl, chars("日本語"), trail)
         assert deref(X) == mint("日")
-        assert deref(T) == "本語"
+        assert deref(T) == chars("本語")
 
     def test_symmetric_string_seglist(self):
         """unify('hello', SegList) works (SegList has __unify__ hook)."""
@@ -444,9 +445,9 @@ class TestSegListStringUnification:
         X, T = Var(), Var()
         sl = SegList([ConcreteSeg([X]), VarSeg(T)])
         # SegList is on the right, string on the left — C tries t2.__unify__(t1)
-        assert unify("hello", sl, trail)
+        assert unify(chars("hello"), sl, trail)
         assert deref(X) == mint("h")
-        assert deref(T) == "ello"
+        assert deref(T) == chars("ello")
 
 
 class TestBodyMultiStarUnifyString:
@@ -458,11 +459,11 @@ class TestBodyMultiStarUnifyString:
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
         results = []
-        for _ in _body_multi_star_unify("a,b", segments, trail):
+        for _ in _body_multi_star_unify(chars("a,b"), segments, trail):
             results.append((deref(A), deref(B)))
         assert len(results) == 1
         # The star slices stay ``str`` slices (R-S2).
-        assert results[0] == ("a", "b")
+        assert results[0] == (chars("a"), chars("b"))
 
     def test_multiple_commas(self):
         from clausal.logic.runtime.body_star_unify import _body_multi_star_unify
@@ -470,7 +471,7 @@ class TestBodyMultiStarUnifyString:
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
         results = []
-        for _ in _body_multi_star_unify("a,b,c", segments, trail):
+        for _ in _body_multi_star_unify(chars("a,b,c"), segments, trail):
             results.append((deref(A), deref(B)))
         assert len(results) == 2
 
@@ -479,7 +480,7 @@ class TestBodyMultiStarUnifyString:
         trail = Trail()
         A, B = Var(), Var()
         segments = [("star", A), ("fixed", [char_atom(",")]), ("star", B)]
-        results = list(_body_multi_star_unify("abc", segments, trail))
+        results = list(_body_multi_star_unify(chars("abc"), segments, trail))
         assert results == []  # No comma in string
 
     def test_empty_string(self):
@@ -487,5 +488,5 @@ class TestBodyMultiStarUnifyString:
         trail = Trail()
         A = Var()
         segments = [("star", A)]
-        results = list(_body_multi_star_unify("", segments, trail))
+        results = list(_body_multi_star_unify(chars(""), segments, trail))
         assert len(results) == 1

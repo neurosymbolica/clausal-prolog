@@ -22,6 +22,7 @@ from clausal.terms import (
     term_pformat,
     term_str,
 )
+from clausal.logic.cells import chars
 from clausal.logic.solve import solve
 
 
@@ -429,7 +430,7 @@ class TestTheThreeWriterFamilies:
         S = Var()
         got = [deref(S) for _ in call("write_text_to_string",
                                       SegString(["ab"]), S, module=mod)]
-        assert got == ["ab"]
+        assert got == [chars("ab")]
 
     def test_the_nil_tuple_prints_as_the_empty_list_in_every_family(self, mod):
         """Fix round 2, item 5: ``()`` is the hashable spelling of nil, and
@@ -461,42 +462,42 @@ class TestTheThreeWriterFamilies:
         assert _out(mod, ("write_text", b"ab")) == "b'ab'"
 
     def test_the_text_family_prints_a_string_as_its_text(self, mod):
-        assert _out(mod, ("write_text", "abc")) == "abc"
+        assert _out(mod, ("write_text", chars("abc"))) == "abc"
         assert _out(mod, ("write_text", [("a",), ("b",)])) == "ab"
         assert _out(mod, ("write_text", ("a b",))) == "a b"
-        assert _out(mod, ("write_text", "")) == "[]"
+        assert _out(mod, ("write_text", chars(""))) == "[]"
         assert _out(mod, ("write_text", [1, 2])) == "[1, 2]"
-        assert _out(mod, ("writeln_text", "abc")) == "abc\n"
+        assert _out(mod, ("writeln_text", chars("abc"))) == "abc\n"
 
     def test_write_text_to_string_answers_the_text(self, mod):
         from clausal.logic.variables import Var, deref
         S = Var()
         got = [deref(S)
-               for _ in solve(("write_text_to_string", "abc", S), mod)]
-        assert got == ["abc"]
+               for _ in solve(("write_text_to_string", chars("abc"), S), mod)]
+        assert got == [chars("abc")]
         S2 = Var()
         got2 = [deref(S2)
-                for _ in solve(("write_to_string", "abc", S2), mod)]
-        assert got2 == ["[a,b,c]"]
+                for _ in solve(("write_to_string", chars("abc"), S2), mod)]
+        assert got2 == [chars("[a,b,c]")]
 
     def test_print_term_and_term_to_string_are_the_display_form(self, mod):
         from clausal.logic.variables import Var, deref
 
-        assert _out(mod, ("print_term", "abc")) == '"abc"\n'
+        assert _out(mod, ("print_term", chars("abc"))) == '"abc"\n'
         expected = {
-            "abc": '"abc"',
-            "": "[]",
-            "a b": '"a b"',
+            chars("abc"): '"abc"',
+            chars(""): "[]",
+            chars("a b"): '"a b"',
         }
         for term, want in expected.items():
             S = Var()
             got = [deref(S) for _ in solve(("term_to_string", term, S), mod)]
-            assert got == [want], term
+            assert got == [chars(want)], term
         # The display family keeps the ``", "`` the ISO family drops.
         S2 = Var()
         got2 = [deref(S2)
-                for _ in solve(("term_to_string", ("f", ("a",), "bc"), S2), mod)]
-        assert got2 == ['f(a, "bc")']
-        assert _out(mod, ("write_term", ("f", ("a",), "bc"),
+                for _ in solve(("term_to_string", ("f", ("a",), chars("bc")), S2), mod)]
+        assert got2 == [chars('f(a, "bc")')]
+        assert _out(mod, ("write_term", ("f", ("a",), chars("bc")),
                           [("quoted", True), ("double_quotes", True)])) \
             == 'f(a,"bc")'

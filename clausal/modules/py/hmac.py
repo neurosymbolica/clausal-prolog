@@ -11,6 +11,7 @@ Wraps Python's ``hmac`` and ``hashlib`` modules. Default algorithm is SHA-256.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -60,13 +61,13 @@ def _sign_4(algorithm, key, data, hex_out, trail, k):
         # name, AttributeError for a digestmod without the hash protocol.
         note_rejected_call("sign/4", exc)
         return
-    if unify(hex_out, h.hexdigest(), trail):
+    if unify(hex_out, text_result(h.hexdigest()), trail):
         yield None
 
 
 def _sign_3(key, data, hex_out, trail, k):
     """sign/3: HMAC-SHA256 (default algorithm)."""
-    yield from _sign_4("sha256", key, data, hex_out, trail, k)
+    yield from _sign_4(text_result("sha256"), key, data, hex_out, trail, k)   # stage 1: a module default is text
 
 
 def _verify_4(algorithm, key, data, hex_in, trail, k):
@@ -103,7 +104,7 @@ def _verify_4(algorithm, key, data, hex_in, trail, k):
 
 def _verify_3(key, data, hex_in, trail, k):
     """verify/3: verify HMAC-SHA256."""
-    yield from _verify_4("sha256", key, data, hex_in, trail, k)
+    yield from _verify_4(text_result("sha256"), key, data, hex_in, trail, k)
 
 
 # ── Build and export predicate objects ───────────────────────────────────

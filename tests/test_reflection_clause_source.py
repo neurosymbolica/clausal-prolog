@@ -14,6 +14,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
+from clausal.logic.cells import chars, chars_text
 from clausal.logic.variables import Var, deref
 
 
@@ -82,14 +83,14 @@ def _solutions(functor, *args, module):
 
 def test_renders_a_rule_clause(matchers):
     text = Var()
-    sols = _solutions("source", "small(X) <- (X >= 1)\n", text, module=matchers)
-    assert [t for (t,) in sols] == ["small(X) <- (X >= 1)"]
+    sols = _solutions("source", chars("small(X) <- (X >= 1)\n"), text, module=matchers)
+    assert [t for (t,) in sols] == [chars("small(X) <- (X >= 1)")]
 
 
 def test_renders_a_fact(matchers):
     text = Var()
-    sols = _solutions("source", "edge(1, 2),\n", text, module=matchers)
-    assert [t for (t,) in sols] == ["edge(1, 2),"]
+    sols = _solutions("source", chars("edge(1, 2),\n"), text, module=matchers)
+    assert [t for (t,) in sols] == [chars("edge(1, 2),")]
 
 
 def test_quotes_a_rebuilt_clause(matchers):
@@ -97,8 +98,8 @@ def test_quotes_a_rebuilt_clause(matchers):
     the rebuilt clause — a term that never came from source text."""
     text = Var()
     sols = _solutions(
-        "swapped_source", "small(X) <- (X >= 1)\n", text, module=matchers)
-    assert [t for (t,) in sols] == ["small(X) <- (X > 1)"]
+        "swapped_source", chars("small(X) <- (X >= 1)\n"), text, module=matchers)
+    assert [t for (t,) in sols] == [chars("small(X) <- (X > 1)")]
 
 
 def test_unbound_term_raises_instantiation_error(matchers):
@@ -111,14 +112,14 @@ def test_bound_text_mismatch_fails_cleanly(matchers):
     # TEXT is a genuine STRING (what render_source answers), so the mismatching
     # value is a Python ``str`` — it must not unify with the rendered text.
     sols = _solutions(
-        "mismatch", "edge(1, 2),\n", "not the source", module=matchers)
+        "mismatch", chars("edge(1, 2),\n"), chars("not the source"), module=matchers)
     assert sols == []
 
 
 def test_bound_text_match_succeeds(matchers):
     # The other side of the same position: the rendered STRING unifies with an
     # equal ``str``.  Without this the mismatch row above passes vacuously.
-    sols = _solutions("mismatch", "edge(1, 2),\n", "edge(1, 2),", module=matchers)
+    sols = _solutions("mismatch", chars("edge(1, 2),\n"), chars("edge(1, 2),"), module=matchers)
     assert len(sols) == 1
 
 
@@ -129,7 +130,7 @@ def test_rendered_text_re_reifies(matchers):
 
     text = Var()
     [(rendered,)] = _solutions(
-        "source", "path(A, B) <- (edge(A, B),)\n", text, module=matchers)
-    (again,) = [i for i in reify_source(rendered + "\n")
+        "source", chars("path(A, B) <- (edge(A, B),)\n"), text, module=matchers)
+    (again,) = [i for i in reify_source(chars_text(rendered) + "\n")
                 if isinstance(i, Clause)]
     assert deref(again.head).name == "path"

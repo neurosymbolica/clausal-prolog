@@ -10,6 +10,7 @@ import uuid
 
 import pytest
 
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.uuid import (
     uuid_v4, uuid_v1, uuid_v3, uuid_v5,
@@ -120,45 +121,45 @@ class TestUuid3:
     def test_uuid3_deterministic(self):
         # nv
         u1, u2 = Var(), Var()
-        simple_solutions(_uuid3_3, "dns", "example.com", u1)
-        simple_solutions(_uuid3_3, "dns", "example.com", u2)
+        simple_solutions(_uuid3_3, chars("dns"), chars("example.com"), u1)
+        simple_solutions(_uuid3_3, chars("dns"), chars("example.com"), u2)
         assert deref(u1) == deref(u2)
 
     def test_uuid3_version(self):
         # nv
         v = Var()
-        simple_solutions(_uuid3_3, "dns", "test", v)
+        simple_solutions(_uuid3_3, chars("dns"), chars("test"), v)
         assert deref(v).version == 3
 
     def test_uuid3_all_namespaces(self):
         # nv
         for ns in ("dns", "url", "oid", "x500"):
             v = Var()
-            results, _ = simple_solutions(_uuid3_3, ns, "test", v)
+            results, _ = simple_solutions(_uuid3_3, chars(ns), chars("test"), v)
             assert len(results) == 1, f"namespace {ns} failed"
 
     def test_uuid3_raw_namespace(self):
         # nv
         v = Var()
-        results, _ = simple_solutions(_uuid3_3, uuid.NAMESPACE_DNS, "test", v)
+        results, _ = simple_solutions(_uuid3_3, uuid.NAMESPACE_DNS, chars("test"), v)
         assert len(results) == 1
 
     def test_uuid3_bad_namespace_fails(self):
         # nv
         v = Var()
-        results, _ = simple_solutions(_uuid3_3, "invalid", "test", v)
+        results, _ = simple_solutions(_uuid3_3, chars("invalid"), chars("test"), v)
         assert len(results) == 0
 
     def test_uuid3_unbound_name_fails(self):
         # nv
         v, name = Var(), Var()
-        results, _ = simple_solutions(_uuid3_3, "dns", name, v)
+        results, _ = simple_solutions(_uuid3_3, chars("dns"), name, v)
         assert len(results) == 0
 
     def test_uuid3_trampoline(self):
         # nv
         v = Var()
-        solutions, _ = trampoline_solutions(uuid_v3, "dns", "example.com", v)
+        solutions, _ = trampoline_solutions(uuid_v3, chars("dns"), chars("example.com"), v)
         assert len(solutions) == 1
 
 
@@ -169,20 +170,20 @@ class TestUuid5:
     def test_uuid5_deterministic(self):
         # nv
         u1, u2 = Var(), Var()
-        simple_solutions(_uuid5_3, "url", "https://example.com", u1)
-        simple_solutions(_uuid5_3, "url", "https://example.com", u2)
+        simple_solutions(_uuid5_3, chars("url"), chars("https://example.com"), u1)
+        simple_solutions(_uuid5_3, chars("url"), chars("https://example.com"), u2)
         assert deref(u1) == deref(u2)
 
     def test_uuid5_version(self):
         # nv
         v = Var()
-        simple_solutions(_uuid5_3, "dns", "test", v)
+        simple_solutions(_uuid5_3, chars("dns"), chars("test"), v)
         assert deref(v).version == 5
 
     def test_uuid5_trampoline(self):
         # nv
         v = Var()
-        solutions, _ = trampoline_solutions(uuid_v5, "url", "test", v)
+        solutions, _ = trampoline_solutions(uuid_v5, chars("url"), chars("test"), v)
         assert len(solutions) == 1
 
 
@@ -196,12 +197,12 @@ class TestUUIDStr:
         s = Var()
         results, _ = simple_solutions(_uuid_str_2, u, s)
         assert len(results) == 1
-        assert deref(s) == str(u)
+        assert deref(s) == chars(str(u))
 
     def test_construct(self):
         # nv
         original = uuid.uuid4()
-        s = str(original)
+        s = chars(str(original))
         u = Var()
         results, _ = simple_solutions(_uuid_str_2, u, s)
         assert len(results) == 1
@@ -218,19 +219,19 @@ class TestUUIDStr:
     def test_both_ground_match(self):
         # nv
         u = uuid.uuid4()
-        results, _ = simple_solutions(_uuid_str_2, u, str(u))
+        results, _ = simple_solutions(_uuid_str_2, u, chars(str(u)))
         assert len(results) == 1
 
     def test_both_ground_mismatch(self):
         # nv
         u = uuid.uuid4()
-        results, _ = simple_solutions(_uuid_str_2, u, "not-a-match")
+        results, _ = simple_solutions(_uuid_str_2, u, chars("not-a-match"))
         assert len(results) == 0
 
     def test_bad_string_fails(self):
         # nv
         u = Var()
-        results, _ = simple_solutions(_uuid_str_2, u, "not-a-uuid")
+        results, _ = simple_solutions(_uuid_str_2, u, chars("not-a-uuid"))
         assert len(results) == 0
 
 
@@ -244,13 +245,13 @@ class TestUUIDHex:
         h = Var()
         results, _ = simple_solutions(_uuid_hex_2, u, h)
         assert len(results) == 1
-        assert deref(h) == u.hex
+        assert deref(h) == chars(u.hex)
 
     def test_construct(self):
         # nv
         original = uuid.uuid4()
         u = Var()
-        results, _ = simple_solutions(_uuid_hex_2, u, original.hex)
+        results, _ = simple_solutions(_uuid_hex_2, u, chars(original.hex))
         assert len(results) == 1
         assert deref(u) == original
 
@@ -265,7 +266,7 @@ class TestUUIDHex:
     def test_bad_hex_fails(self):
         # nv
         u = Var()
-        results, _ = simple_solutions(_uuid_hex_2, u, "zzzz")
+        results, _ = simple_solutions(_uuid_hex_2, u, chars("zzzz"))
         assert len(results) == 0
 
 
@@ -279,13 +280,13 @@ class TestUUIDUrn:
         urn = Var()
         results, _ = simple_solutions(_uuid_urn_2, u, urn)
         assert len(results) == 1
-        assert deref(urn) == u.urn
+        assert deref(urn) == chars(u.urn)
 
     def test_construct(self):
         # nv
         original = uuid.uuid4()
         u = Var()
-        results, _ = simple_solutions(_uuid_urn_2, u, original.urn)
+        results, _ = simple_solutions(_uuid_urn_2, u, chars(original.urn))
         assert len(results) == 1
         assert deref(u) == original
 
@@ -472,7 +473,7 @@ class TestEdgeCases:
         s = Var()
         results, _ = simple_solutions(_uuid_str_2, nil, s)
         assert len(results) == 1
-        assert deref(s) == "00000000-0000-0000-0000-000000000000"
+        assert deref(s) == chars("00000000-0000-0000-0000-000000000000")
 
     def test_max_uuid(self):
         # nv
@@ -480,7 +481,7 @@ class TestEdgeCases:
         s = Var()
         results, _ = simple_solutions(_uuid_str_2, max_u, s)
         assert len(results) == 1
-        assert deref(s) == "ffffffff-ffff-ffff-ffff-ffffffffffff"
+        assert deref(s) == chars("ffffffff-ffff-ffff-ffff-ffffffffffff")
 
     def test_nil_uuid_version(self):
         # nv
@@ -589,7 +590,7 @@ class TestAtomArguments:
         atom_u, str_u = Var(), Var()
         assert len(simple_solutions(
             _uuid5_3, mint("dns"), mint("example.com"), atom_u)[0]) == 1
-        simple_solutions(_uuid5_3, "dns", "example.com", str_u)
+        simple_solutions(_uuid5_3, chars("dns"), chars("example.com"), str_u)
         # The atom crossed as its spelling: same UUID as the string form.
         assert deref(atom_u) == deref(str_u)
 

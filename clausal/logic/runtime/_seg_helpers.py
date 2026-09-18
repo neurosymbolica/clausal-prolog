@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from clausal.logic.cells import chars, is_chars, chars_text, refuse_bare_str  # stage 1: the chars carrier
 from clausal.logic.atoms import char_atom, is_char_atom, spelling
 
 
@@ -34,6 +35,8 @@ def seq_getitem(seq: Any, i: int) -> Any:
     (2026-09-06-atoms-as-cells-strings) is a change to ``char_atom``'s body
     alone.
     """
+    if is_chars(seq):
+        seq = chars_text(seq)          # stage 1: the carrier's element is a CHAR too
     if type(seq) is str:
         return char_atom(seq[i])
     return seq[i]
@@ -73,13 +76,19 @@ def normalize_seg_input(x: Any) -> Any:
     The walk is idempotent: calling on a plain ``list`` / ``str`` /
     ``Var`` is a cheap pass-through.
     """
+    # STAGE 1 of the atoms-as-str flip: a chars carrier normalises to the
+    # str it holds, so every consumer downstream of this funnel that accepts
+    # a str as text keeps working unchanged (both spellings accepted until
+    # the interim rule is armed).
+    if is_chars(x):
+        return chars_text(x)
+    refuse_bare_str(x, "a sequence builtin (normalize_seg_input)")   # interim rule
     from clausal.terms import SegList, SegString, SegBytes
-    if isinstance(x, SegList):
-        return x.__walk__()
-    if isinstance(x, SegString):
-        return x.__walk__()
-    if isinstance(x, SegBytes):
-        return x.__walk__()
+    if isinstance(x, (SegList, SegString, SegBytes)):
+        w = x.__walk__()
+        # a ground text Seg* walks to the CARRIER (stage 1); this funnel's
+        # contract is the bare str, so unwrap it here for its consumers
+        return chars_text(w) if is_chars(w) else w
     return x
 
 
@@ -123,5 +132,9 @@ def maybe_promote_to_str(result: Any) -> Any:
     if isinstance(result, list) and result and all(
         is_char_atom(e) for e in result
     ):
-        return join_chars(result)
+        # STAGE 1 (spec 2026-09-18): the compact form of a char list is the
+        # CARRIER, never a bare str -- this is the promotion funnel every
+        # star-list builder and Seg* walk hands its result through, and its
+        # C twin (``_list_unify.c``) promotes to the carrier already.
+        return chars(join_chars(result))
     return result

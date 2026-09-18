@@ -21,6 +21,8 @@ import pytest
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
+from clausal.logic.cells import chars as _chars_carrier
 from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import is_atom_value
 from clausal.logic.solve import solve
@@ -213,7 +215,7 @@ def test_maybe_promote_uses_is_char_atom():
     elements' SPELLINGS — not the elements themselves (Task 7)."""
     from clausal.logic.atoms import is_char_atom
     from clausal.logic.runtime import _seg_helpers
-    assert _seg_helpers.maybe_promote_to_str([char_atom("a"), char_atom("b")]) == "ab"
+    assert _seg_helpers.maybe_promote_to_str([char_atom("a"), char_atom("b")]) == chars("ab")
     assert _seg_helpers.maybe_promote_to_str(["ab", "c"]) == ["ab", "c"]
     assert _seg_helpers.maybe_promote_to_str([]) == []
     # Every element the promotion accepts is exactly a char atom.
@@ -224,12 +226,12 @@ def test_as_items_yields_char_atoms_for_a_str():
     """§6.2: ``_as_items`` on a str produces CHARS, not raw 1-char strs."""
     from clausal.logic.atoms import is_char_atom, spelling
     from clausal.logic.builtins.lists import _as_items, _seq_result
-    items = _as_items("abc")
+    items = _as_items(chars("abc"))
     assert len(items) == 3
     assert all(is_char_atom(c) for c in items)
     assert "".join(spelling(c) for c in items) == "abc"
     # ... and _seq_result reconstructs the str from those same chars.
-    assert _seq_result(items, was_string=True) == "abc"
+    assert _seq_result(items, was_string=True) == chars("abc")
     assert _seq_result(items, was_string=False) is items
 
 
@@ -242,7 +244,7 @@ def test_segstring_walk_unify_and_eq_speak_chars():
     X = Var()
     trail = Trail()
     assert unify(X, [char_atom("l"), char_atom("o")], trail)
-    assert SegString(["hel", VarSeg(X)]).__walk__() == "hello"
+    assert SegString(["hel", VarSeg(X)]).__walk__() == chars("hello")
     # __unify__ against a list: the walked str materialises as char atoms.
     A, B = Var(), Var()
     trail2 = Trail()
@@ -267,7 +269,7 @@ def test_ground_seglist_of_cell_chars_round_trips():
     sl = SegList([ConcreteSeg(list(chars))])
 
     # The promotion itself (the premise of the bug).
-    assert sl.__walk__() == "ab"
+    assert sl.__walk__() == _chars_carrier("ab")
 
     # __eq__ list arm, __contains__, to_list, iteration, indexing.
     assert sl == chars
@@ -288,9 +290,9 @@ def test_ground_seglist_of_cell_chars_round_trips():
     # is the one that unifies with the promoted str; a list of one-element
     # STRINGS does not (spec §6.2: ``("a",)`` vs ``"a"`` still FAILS).
     t3 = Trail()
-    assert not unify(SegList([ConcreteSeg(["a", "b"])]), "ab", t3)
+    assert not unify(SegList([ConcreteSeg(["a", "b"])]), _chars_carrier("ab"), t3)
     t4 = Trail()
-    assert unify(sl, "ab", t4)
+    assert unify(sl, _chars_carrier("ab"), t4)
 
     # ... and the vars in a matching pattern bind to the CELL chars.
     A, B = Var(), Var()
@@ -305,13 +307,13 @@ def test_ground_seglist_of_cell_chars_round_trips():
     X = Var()
     t5 = Trail()
     partial = SegList([ConcreteSeg([char_atom("h")]), VarSeg(X)])
-    assert unify(partial, "hi", t5)
-    assert deref(X) == "i"
+    assert unify(partial, _chars_carrier("hi"), t5)
+    assert deref(X) == _chars_carrier("i")
     # The CELL char is the canonical char now, so the same pattern written
     # with a literal 1-tuple matches too — it is the same term.
     Y = Var()
     t6 = Trail()
-    assert unify(SegList([ConcreteSeg([("h",)]), VarSeg(Y)]), "hi", t6)
+    assert unify(SegList([ConcreteSeg([("h",)]), VarSeg(Y)]), _chars_carrier("hi"), t6)
 
 
 def test_seglist_str_tail_and_head_are_char_lists():

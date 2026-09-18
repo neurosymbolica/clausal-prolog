@@ -78,6 +78,7 @@ fallbacks are used.
 
 from __future__ import annotations
 
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
     SegList, ConcreteSeg, VarSeg,
@@ -100,6 +101,11 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     handles ``[H, *T]`` against either ``["h", "e"]`` or ``"he"``.
     """
     d = deref(target)
+    if is_chars(d):
+        d = chars_text(d)              # stage 1: the carrier destructures as its text
+    elif type(d) is str:
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(d, "a head list pattern target")   # interim rule
 
     # ── fast path: [H, *T] on a plain list ──
     if type(d) is list and star_val is not None and not after_vals:
@@ -122,6 +128,8 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     # SegList unification is blocked by F030, Phase 6).
     if isinstance(d, SegString):
         d = d.__walk__()
+        if is_chars(d):
+            d = chars_text(d)          # stage 1: a ground SegString walks to the carrier
         if not isinstance(d, (list, str)):
             return None
     if isinstance(d, SegBytes):
@@ -130,6 +138,8 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
             return None
     if isinstance(d, SegList):
         d = d.__walk__()
+        if is_chars(d):
+            d = chars_text(d)          # stage 1: a ground char SegList walks to the carrier
         if not isinstance(d, (list, str)):
             return False
 
@@ -151,7 +161,10 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
                 return False
         if star_val is not None:
             star_end = len(d) - n_after if n_after else len(d)
-            if not unify(star_val, d[n_before:star_end], trail):
+            star_slice = d[n_before:star_end]
+            if type(star_slice) is str:
+                star_slice = chars(star_slice)   # stage 1: a str tail is the carrier
+            if not unify(star_val, star_slice, trail):
                 return False
         for i, v in enumerate(after_vals):
             if not unify(v, seq_getitem(d, len(d) - n_after + i), trail):
@@ -193,6 +206,8 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     # not a back door — it is R-S2's rule that a string stays a string.
     if star_val is not None:
         s = deref(star_val)
+        if is_chars(s):
+            s = chars_text(s)          # stage 1: a carrier-bound star splats as its chars
         if isinstance(s, list):
             result.extend(s)
         elif isinstance(s, str):
@@ -244,6 +259,8 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             # (the C twin's per-char ``PyUnicode_Substring`` splice, now
             # wrapped in ``char_atom_obj``).
             walked = s.__walk__()
+            if is_chars(walked):
+                walked = chars_text(walked)   # stage 1
             if isinstance(walked, (list, str)):
                 result.extend(
                     str_chars(walked) if isinstance(walked, str) else walked
@@ -269,6 +286,8 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             # a sequence of chars, matching the "strings as char
             # lists" contract). Non-ground → rebuild via the segments.
             walked = s.__walk__()
+            if is_chars(walked):
+                walked = chars_text(walked)   # stage 1
             if isinstance(walked, str):
                 result.extend(str_chars(walked))
                 result.extend(deref(v) for v in after_vals)

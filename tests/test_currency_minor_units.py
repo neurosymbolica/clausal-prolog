@@ -25,6 +25,7 @@ from decimal import Decimal
 
 import pytest
 
+from clausal.logic.cells import chars, chars_text
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -1318,7 +1319,7 @@ def test_the_forward_direction_is_unchanged(tmp_path):
 
         code(X) <- currency_code(euro, X)
     """)
-    assert _codes(m, "code") == [("EUR",)]
+    assert _codes(m, "code") == [(chars("EUR"),)]
 
 
 def test_an_unknown_code_fails_rather_than_raising(tmp_path):
@@ -1349,7 +1350,7 @@ def test_both_unbound_enumerates_the_whole_vocabulary(tmp_path):
     """)
     rows = _codes(m, "pair", 2)
     assert len(rows) == len(_data.CURRENCIES) == 254
-    codes = {r[1] for r in rows}
+    codes = {chars_text(r[1]) for r in rows}
     assert "EUR" in codes and "DEM" in codes, "historical are reachable"
 
 

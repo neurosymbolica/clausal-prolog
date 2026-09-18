@@ -64,6 +64,7 @@ def _storage_key(key, context):
     silently, which is the very reporting hole this funnel was built to
     close.
     """
+    key_as_written = key
     key = normalize_seg_input(key)
     if _is_empty_list(key):
         # The nil atom (fix round 2, item 2).  ``atoms.is_atom`` below is the
@@ -80,7 +81,7 @@ def _storage_key(key, context):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error,
         )
-        raise LogicException(type_error("atom", key, context))
+        raise LogicException(type_error("atom", key_as_written, context))
     return None
 
 

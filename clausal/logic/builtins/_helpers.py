@@ -16,7 +16,7 @@ from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
@@ -425,6 +425,8 @@ _is_compound_precell = _is_compound
 # whatever these arms already answer for.
 
 def _functor_name(term: Any) -> Any:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, f = _cell_functor(term)
     if is_compound_cell:
         return f
@@ -434,6 +436,8 @@ def _functor_name(term: Any) -> Any:
 
 
 def _arity(term: Any) -> int | None:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return len(term) - 1
@@ -443,6 +447,8 @@ def _arity(term: Any) -> int | None:
 
 
 def _nth_arg(term: Any, n: int) -> Any:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         if n < 1 or n > len(term) - 1:
@@ -453,21 +459,25 @@ def _nth_arg(term: Any, n: int) -> Any:
             if n == 1:
                 return char_atom(term[0])
             if n == 2:
-                return term[1:]
+                return chars(term[1:])     # stage 1: a text TAIL is the carrier
         raise IndexError(f"arg index {n} out of range for {term!r}")
     return _nth_arg_precell(term, n)
 
 
 def _args_list(term: Any) -> list:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return list(term[1:])
     if type(term) is str:
-        return [] if not term else [char_atom(term[0]), term[1:]]
+        return [] if not term else [char_atom(term[0]), chars(term[1:])]   # stage 1
     return _args_list_precell(term)
 
 
 def _is_compound(term: Any) -> bool:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return True
@@ -771,6 +781,8 @@ def _standard_order_key(term: Any) -> tuple:
         # `Quantity` sorts among them by magnitude instead of after them.
         return _number_key(term)
     if isinstance(term, str):
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(term, "the standard order of terms")   # interim rule
         # THE FLIP (spec §6.5): a string keys as the LIST OF CHAR ATOMS it
         # denotes — so ``"ab"`` and ``[("a",), ("b",)]`` have EQUAL keys and
         # ``""`` keys like ``[]``.  That equality is what makes ``sort/2``
@@ -804,6 +816,14 @@ def _standard_order_key(term: Any) -> tuple:
         if not term:
             return _ORD_EMPTY_LIST_KEY
         return _cons_key(tuple(_number_key(c) for c in term))
+    if is_chars(term):
+        # STAGE 1 (spec 2026-09-18): the chars carrier keys exactly as the
+        # str it holds -- the cons compound of its char atoms, ``'[]'`` when
+        # empty -- so the two spellings of one text term have EQUAL keys.
+        text = chars_text(term)
+        if not text:
+            return _ORD_EMPTY_LIST_KEY
+        return _cons_key(tuple((_ORD_ATOM, c) for c in text))
     if type(term) is tuple and term and type(term[0]) is str and term[0] != TUPLE_TAG:
         # An exact-number cell -- the TRANSFER form of a Decimal or a Fraction
         # (RULED 2026-09-17) -- keys as the NUMBER it denotes, in the number

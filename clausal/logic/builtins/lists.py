@@ -14,6 +14,7 @@ from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 from clausal.logic.builtins._helpers import _standard_order_key, _standard_order_sorted
+from clausal.logic.cells import chars, is_chars, chars_text, refuse_bare_str
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -67,6 +68,10 @@ def _as_items(val):
     """
     if isinstance(val, list):
         return val
+    if is_chars(val):
+        val = chars_text(val)          # the carrier walks to its text, below
+    elif type(val) is str:
+        refuse_bare_str(val, "a list builtin (_as_items)")   # interim rule
     if isinstance(val, str):
         return [char_atom(c) for c in val]
     if isinstance(val, bytes):
@@ -103,11 +108,12 @@ def _was_string(val):
     including lists of chars — are *not* str-shaped under
     option A (input-type wins): list input keeps list output.
     """
-    if isinstance(val, str):
+    if isinstance(val, str) or is_chars(val):
         return True
     from clausal.terms import SegString
     if isinstance(val, SegString) and val.is_ground():
-        return isinstance(val.__walk__(), str)
+        w = val.__walk__()
+        return isinstance(w, str) or is_chars(w)   # stage 1: walks to the carrier
     return False
 
 
@@ -133,7 +139,8 @@ def _seq_result(items, was_string, was_bytes=False):
     ``bool``), promote to ``bytes`` (the codes model). Otherwise return the
     plain list (input-type-wins; a list input keeps a list output)."""
     if was_string and all(is_char_atom(c) for c in items):
-        return "".join(spelling(c) for c in items)
+        # STAGE 1: a text result is the CARRIER, never a bare str
+        return chars("".join(spelling(c) for c in items))
     if was_bytes and all(
         isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 255
         for c in items
@@ -243,7 +250,8 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     # Track the result container type. str output when a str is present and no
     # list/bytes; bytes output (codes model) when a bytes is present and no
     # list/str. A list anywhere keeps a list (input-type-wins).
-    _any_str = isinstance(l1_val, str) or isinstance(l2_val, str) or isinstance(l3_val, str)
+    _any_str = (isinstance(l1_val, str) or is_chars(l1_val) or isinstance(l2_val, str)
+                or is_chars(l2_val) or isinstance(l3_val, str) or is_chars(l3_val))   # stage 1: carrier is str-shaped
     _any_bytes = isinstance(l1_val, bytes) or isinstance(l2_val, bytes) or isinstance(l3_val, bytes)
     _any_list = isinstance(l1_val, list) or isinstance(l2_val, list) or isinstance(l3_val, list)
     _out_str = _any_str and not _any_list and not _any_bytes
@@ -463,12 +471,12 @@ def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
                 for item in x:
                     outer = False
                     _do_flat(item)
-            elif not outer and isinstance(x, str):
+            elif not outer and (isinstance(x, str) or is_chars(x)):
                 # F056: nested str is recursed-into per the
                 # strings-as-lists equivalence; the top-level str case
                 # is handled by the early-return below the recursion.
                 # Its elements are CHARS, like every other str→list split.
-                for ch in x:
+                for ch in (chars_text(x) if is_chars(x) else x):
                     result.append(char_atom(ch))
             else:
                 # Ground Seg* walk to their concrete shape; reuse the
@@ -623,7 +631,7 @@ def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, tr
     s1_items = _as_items(s1)
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
-        _out_str = isinstance(s1, str) and isinstance(s2, str)
+        _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = _seq_result([x for x in s1_items if x not in s2_items], _out_str, _out_bytes)
         mark = trail.mark()
@@ -641,7 +649,7 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
     s1_items = _as_items(s1)
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
-        _out_str = isinstance(s1, str) and isinstance(s2, str)
+        _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = _seq_result([x for x in s1_items if x in s2_items], _out_str, _out_bytes)
         mark = trail.mark()
@@ -663,7 +671,7 @@ def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail)
     s1_items = _as_items(s1)
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
-        _out_str = isinstance(s1, str) and isinstance(s2, str)
+        _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = list(s1_items)
         for x in s2_items:
@@ -889,7 +897,7 @@ def _replicate__3(this_generator, _proceed, _fail, _catcher, n, elem, lst, trail
     elem_val = deref(elem)
     if isinstance(n_val, int) and n_val >= 0:
         if is_char_atom(elem_val):
-            result = spelling(elem_val) * n_val
+            result = chars(spelling(elem_val) * n_val)   # stage 1: a text result is the carrier
         else:
             result = [elem_val] * n_val
         mark = trail.mark()
@@ -997,6 +1005,8 @@ def _fresh_same_shape(seq_val):
     classic list of fresh ``Var`` objects.
     """
     from clausal.terms import SegString, SegBytes, VarSeg
+    if is_chars(seq_val):
+        seq_val = chars_text(seq_val)  # stage 1: str-shaped
     if isinstance(seq_val, str):
         return SegString([VarSeg(Var()) for _ in seq_val])
     if isinstance(seq_val, SegString) and seq_val.is_ground():

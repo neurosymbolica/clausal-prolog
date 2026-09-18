@@ -11,6 +11,7 @@ import io
 import sys
 import pytest
 
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
@@ -53,8 +54,8 @@ class TestPyThunkValue:
         src.write_text("to_upper(_s, _r) <- (_r is ++_s.upper())\n")
         mod = _load_module("interop_upper", str(src))
         logic_mod = mod.__dict__["$module"]
-        results = _call_and_capture("to_upper", "hello", module=logic_mod)
-        assert results == ["HELLO"]
+        results = _call_and_capture("to_upper", chars("hello"), module=logic_mod)
+        assert results == [chars("HELLO")]
 
     def test_arithmetic(self, tmp_path):
         """++(X_ + 1) does Python arithmetic on a dereferenced variable."""
@@ -114,8 +115,8 @@ class TestPyThunkValue:
         src.write_text('join_words(_w, _r) <- (_r is ++", ".join(_w))\n')
         mod = _load_module("interop_join", str(src))
         logic_mod = mod.__dict__["$module"]
-        results = _call_and_capture("join_words", ["a", "b", "c"], module=logic_mod)
-        assert results == ["a, b, c"]
+        results = _call_and_capture("join_words", [chars("a"), chars("b"), chars("c")], module=logic_mod)
+        assert results == [chars("a, b, c")]
 
 
 class TestPyThunkGoal:

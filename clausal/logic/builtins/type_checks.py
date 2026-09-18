@@ -55,8 +55,11 @@ def _is_string_term(x) -> bool:
     The one implementation behind ``is_str/1``, ``string/1`` and
     ``_check_type``'s ``string``/``str`` row, so the three cannot drift.
     """
-    x_val = normalize_seg_input(deref(x))
-    if isinstance(x_val, str):
+    x_val = deref(x)
+    from clausal.logic.cells import is_chars, refuse_bare_str  # noqa: PLC0415
+    refuse_bare_str(x_val, "string/1")   # interim rule
+    x_val = normalize_seg_input(x_val)
+    if isinstance(x_val, str) or is_chars(x_val):
         return True
     if type(x_val) is list:
         return all(_is_char_atom(deref(e)) for e in x_val)
@@ -368,7 +371,8 @@ def _is_list__1(x, trail, k):
     update in ``tests/test_string_list_builtins.py``.
     """
     x_val = deref(x)
-    if isinstance(x_val, (list, str, bytes)):
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    if isinstance(x_val, (list, str, bytes)) or is_chars(x_val):   # stage 1: the carrier is a list
         yield None
     elif isinstance(x_val, (SegList, SegString, SegBytes)) and _is_ground(x_val):
         yield None

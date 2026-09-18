@@ -38,6 +38,7 @@ from fractions import Fraction
 from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import (
     present_number,
     Var, Trail, deref, is_var, unify, put_attr, get_attr,
@@ -209,6 +210,8 @@ def clausal_to_z3(expr: Any, trail: Trail, default_sort: Any = None) -> Any:
         return _z3.RealVal(expr.numerator) / _z3.RealVal(expr.denominator)
     if isinstance(expr, str):
         return _z3.StringVal(expr)
+    if is_chars(expr):
+        return _z3.StringVal(chars_text(expr))   # stage 1: a chars string is a Z3 string
 
     # ── Logic variable ───────────────────────────────────────────────────────
     if is_var(expr):
@@ -1709,6 +1712,8 @@ def z3_str_regex(s: Any, pattern: Any, trail: Trail) -> bool:
     """
     state = get_z3_state(trail)
     z3_s = clausal_to_z3(s, trail, default_sort=_z3.StringSort())
+    if is_chars(pattern):
+        pattern = chars_text(pattern)          # stage 1
     if isinstance(pattern, str):
         z3_re = _z3.Re(pattern)
     else:
@@ -2226,6 +2231,8 @@ def z3_optimize_label(vars_list: Any, objective_expr: Any,
     state = get_z3_state(trail)
     vars_list = _as_list(deref(vars_list))
     mode = deref(mode)
+    if is_chars(mode):
+        mode = chars_text(mode)                # stage 1: "maximize"/"minimize" is a chars string
 
     z3_vars: list = []
     clausal_vars: list = []
@@ -2309,11 +2316,15 @@ def z3_multi_optimize(objectives: Any, results: Any, priority: Any,
     for expr, mode in objectives:
         z3_expr = clausal_to_z3(expr, trail, default_sort=_z3.RealSort())
         z3_objs.append(z3_expr)
+        if is_chars(mode):
+            mode = chars_text(mode)            # stage 1
         if mode == "maximize":
             handles.append(opt.maximize(z3_expr))
         else:
             handles.append(opt.minimize(z3_expr))
 
+    if is_chars(priority):
+        priority = chars_text(priority)        # stage 1
     if priority == "pareto":
         while opt.check() == _z3.sat:
             m = opt.model()

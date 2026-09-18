@@ -8,10 +8,11 @@ from __future__ import annotations
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.exceptions import LogicException, string_goal_error
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.logic.builtins.lists import _as_items, _seq_result
+from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 
 from clausal.logic.cells import (
+    is_chars, chars_text,   # stage 1: the chars carrier
     CELL_GOAL_CONTROL_FUNCTORS,
     QUALIFIED_GOAL_FUNCTOR,
     compound_cell_shape,
@@ -129,7 +130,7 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # ``existence_error(procedure, '[]'/N)``, exactly what Scryer
         # answers for ``call([])``.
         raise LogicException(string_goal_error("", len(extra_args), "call/N"))
-    elif type(goal_val) is str:
+    elif type(goal_val) is str or is_chars(goal_val):   # stage 1: the carrier too
         # THE FLIP (spec §6.4): a ``str`` is a STRING, so ``call("foo")`` is
         # not a call to ``foo/0``.  Task 15 item 3 (ISO alignment): the
         # string IS the compound ``'.'/2`` and so IS callable — what is
@@ -139,7 +140,7 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # a string here is always a mistake about representation, and a
         # silent failure is exactly how that mistake stays invisible.
         raise LogicException(
-            string_goal_error(goal_val, len(extra_args), "call/N"))
+            string_goal_error(chars_text(goal_val) if is_chars(goal_val) else goal_val, len(extra_args), "call/N"))
     else:
         return None
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
@@ -340,7 +341,7 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
     if xs_items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    was_str = isinstance(xs_val, str)
+    was_str = _was_string(xs_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     results = []
@@ -368,7 +369,7 @@ def _include__3(this_generator, _proceed, _fail, _catcher, goal, lst, included, 
     if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     kept = []
@@ -399,7 +400,7 @@ def _exclude__3(this_generator, _proceed, _fail, _catcher, goal, lst, excluded, 
     if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     kept = []
@@ -463,7 +464,7 @@ def _take_while__3(this_generator, _proceed, _fail, _catcher, goal, lst, prefix,
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     taken = []
@@ -491,7 +492,7 @@ def _drop_while__3(this_generator, _proceed, _fail, _catcher, goal, lst, suffix,
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     i = 0
@@ -519,7 +520,7 @@ def _span__4(this_generator, _proceed, _fail, _catcher, goal, lst, yes, no, trai
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     taken = []
@@ -555,7 +556,7 @@ def _group_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, groups, t
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     result: list[list] = []
@@ -602,7 +603,7 @@ def _sort_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, sorted_lst
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     keyed: list[tuple] = []
@@ -732,7 +733,7 @@ def _filter_map__3(this_generator, _proceed, _fail, _catcher, goal, lst, result,
     if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     kept = []
@@ -768,7 +769,7 @@ def _partition__4(this_generator, _proceed, _fail, _catcher, goal, lst, included
     if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
     yes = []
@@ -808,7 +809,7 @@ def _tfilter__3(this_generator, _proceed, _fail, _catcher, goal, lst, filtered, 
     if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     kept = []
@@ -846,7 +847,7 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
     if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
         yield (_fail, DONE)
         return
-    was_str = isinstance(lst_val, str)
+    was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
     yes = []

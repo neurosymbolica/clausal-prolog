@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
-from clausal.logic.cells import TUPLE_TAG, compound_cell_shape
+from clausal.logic.cells import TUPLE_TAG, compound_cell_shape, is_chars
 from clausal.logic.exceptions import (
     LogicException,
     existence_error,
@@ -1302,6 +1302,14 @@ def _is_structural_head_value(val: Any) -> bool:
     # inspection (``clauses_for``), ``listing/1``, the test harness's
     # description, first-argument indexing — would see a variable where the
     # program wrote an atom.
+    if is_chars(val):
+        # STAGE 1 (spec 2026-09-18): the chars CARRIER is a string literal --
+        # atomic here for the same reasons the arity-0 cell is: nothing to
+        # destructure, no inner Var, and ``head_to_match_pattern`` gives it
+        # the str literal's capture + ``unify`` guard.  Hoisting it left a
+        # Var in every stored ``test("...")`` head, and the test runner then
+        # dispatched every test to the first clause.
+        return False
     if type(val) is tuple and len(val) > 1 and (
             type(val[0]) is str or val[0] is TUPLE_TAG):
         return True

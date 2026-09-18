@@ -29,6 +29,7 @@ caller and is unaffected by this change.
 """
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from tests.audit_2026_05_25._helpers import load_inline_clausal
 
@@ -202,7 +203,7 @@ quux("abc") <- (helper(1))
     x = Var()
     partial = SegString(["a", VarSeg(x), "c"])
     bindings = [walk(x) for _ in call("quux", partial, module=mod)]
-    assert bindings == ["b"], (
+    assert bindings == [chars("b")], (
         f"partial SegString caller a<X>c vs head \"abc\": expected exactly "
         f"one solution binding X='b', got bindings={bindings!r}"
     )
@@ -254,10 +255,10 @@ quux("abc") <- (helper(1))
     assert "case ['abc']" not in rendered, (
         f"str head still compiled to a MatchValue pattern:\n{rendered}"
     )
-    assert "unify(_scap0, 'abc', trail)" in rendered, (
+    assert "unify(_scap0, ('$chars', 'abc'), trail)" in rendered, (
         f"str head did not emit the expected unify guard:\n{rendered}"
     )
-    assert "_scap0 == 'abc'" in rendered, (
+    assert "_scap0 == ('$chars', 'abc')" in rendered, (
         f"str head did not emit the same-type `==` short-circuit:\n{rendered}"
     )
 

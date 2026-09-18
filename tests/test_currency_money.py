@@ -15,6 +15,7 @@ from clausal.logic.variables import Trail, Var as LVar, deref
 from clausal.logic.solve import _drive_trampoline
 from clausal.logic.exceptions import LogicException
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars, chars_text
 
 
 def _run(pred, *args):
@@ -98,7 +99,7 @@ class TestMoneyConstructorsAndAccessors:
     def test_accessors(self):
         from clausal.modules.currency import currency_scale, currency_code, currency_symbol
         assert _run(currency_scale, euro, "N")[0]["N"] == 2
-        assert _run(currency_code, euro, "C")[0]["C"] == "EUR"
+        assert _run(currency_code, euro, "C")[0]["C"] == chars("EUR")
         assert _run(currency_symbol, euro, "S")[0]["S"] == "€"
 
     def test_money_end_to_end_clausal(self):
@@ -149,36 +150,36 @@ class TestMoneyRoundingAndDisplay:
     def test_money_round_half_up_classic_trap(self):
         from clausal.modules.currency import money_round
         amt = self._euro("2.675")                    # exact Decimal, sub-scale
-        out = _run(money_round, amt, "half_up", "OUT")[0]["OUT"]
+        out = _run(money_round, amt, chars("half_up"), "OUT")[0]["OUT"]
         assert out.value == Decimal("2.68")          # not 2.67
         assert out.dims == {"euro": 1}
 
     def test_money_round_half_even(self):
         from clausal.modules.currency import money_round
         amt = self._euro("2.665")
-        out = _run(money_round, amt, "half_even", "OUT")[0]["OUT"]
+        out = _run(money_round, amt, chars("half_even"), "OUT")[0]["OUT"]
         assert out.value == Decimal("2.66")
 
     def test_money_round_division_result(self):
         from clausal.modules.currency import money_round
         amt = Quantity(Decimal("10.00"), euro) / 3   # 3.333...
-        out = _run(money_round, amt, "half_up", "OUT")[0]["OUT"]
+        out = _run(money_round, amt, chars("half_up"), "OUT")[0]["OUT"]
         assert out.value == Decimal("3.33")
 
     def test_money_round_unknown_mode_raises(self):
         from clausal.modules.currency import money_round
         with pytest.raises(LogicException):
-            _run(money_round, self._euro("1.00"), "sideways", "OUT")
+            _run(money_round, self._euro("1.00"), chars("sideways"), "OUT")
 
     def test_money_str_default(self):
         from clausal.modules.currency import money_str
-        s = _run(money_str, self._euro("3.335"), "half_up", "OUT")[0]["OUT"]
-        assert s == "3.34 EUR"
+        s = _run(money_str, self._euro("3.335"), chars("half_up"), "OUT")[0]["OUT"]
+        assert s == chars("3.34 EUR")
 
     def test_money_format_styles(self):
         from clausal.modules.currency import money_format
         amt = self._euro("3.335")
-        f = lambda style: _run(money_format, amt, style, "half_up", "OUT")[0]["OUT"]
+        f = lambda style: _run(money_format, amt, chars(style), chars("half_up"), "OUT")[0]["OUT"]
         assert f("symbol") == "€3.34"
         assert f("code") == "3.34 EUR"
         assert f("name") == "3.34 euro"

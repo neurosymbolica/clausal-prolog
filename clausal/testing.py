@@ -318,6 +318,9 @@ def _test_description_name(desc) -> str:
     from clausal.logic.atoms import is_atom as _term_is_atom, spelling
     if _term_is_atom(desc):
         return spelling(desc)
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(desc):
+        desc = chars_text(desc)          # stage 1: a test NAME written "..." is the chars carrier
     if isinstance(desc, str):
         return desc
     return str(desc)

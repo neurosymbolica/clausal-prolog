@@ -26,6 +26,7 @@ Messages use Clausal's f-string support for interpolation::
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     _import_stdlib, ModulePredicate, simple_to_trampoline, text_or_str,
     to_text,
 )
@@ -119,7 +120,7 @@ def _get_level_2(logger, level_out, trail, k):
     """get_level/2: unify Level with the logger's effective level name."""
     lg = _resolve_logger(logger)
     name = _pylogging.getLevelName(lg.getEffectiveLevel())
-    if unify(level_out, name, trail):
+    if unify(level_out, text_result(name), trail):
         yield None
 
 

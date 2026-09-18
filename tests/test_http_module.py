@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars, chars_text
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import DictTerm
@@ -64,9 +65,9 @@ class TestHttpGet:
         # nv
         mock_urlopen.return_value = _mock_response(b"hello")
         body = Var()
-        sols, trail = simple_solutions(_get_2, "http://example.com", body)
+        sols, trail = simple_solutions(_get_2, chars("http://example.com"), body)
         assert len(sols) == 1
-        assert deref(body) == "hello"
+        assert deref(body) == chars("hello")
 
     @patch("clausal.modules.py.http._urlopen")
     def test_get_404_fails(self, mock_urlopen):
@@ -74,7 +75,7 @@ class TestHttpGet:
         from urllib.error import HTTPError
         mock_urlopen.side_effect = HTTPError(None, 404, "Not Found", {}, None)
         body = Var()
-        sols, _ = simple_solutions(_get_2, "http://example.com", body)
+        sols, _ = simple_solutions(_get_2, chars("http://example.com"), body)
         assert len(sols) == 0
 
     def test_unbound_url_fails(self):
@@ -87,11 +88,11 @@ class TestHttpGet:
     def test_get_with_headers(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b"ok")
-        headers = DictTerm({"Authorization": "Bearer token"})
+        headers = DictTerm({chars("Authorization"): chars("Bearer token")})
         body = Var()
-        sols, trail = simple_solutions(_get_3, "http://example.com", headers, body)
+        sols, trail = simple_solutions(_get_3, chars("http://example.com"), headers, body)
         assert len(sols) == 1
-        assert deref(body) == "ok"
+        assert deref(body) == chars("ok")
 
 
 # ── post/3,4 ─────────────────────────────────────────────────────────────
@@ -104,16 +105,16 @@ class TestHttpPost:
         # nv
         mock_urlopen.return_value = _mock_response(b"created")
         body = Var()
-        sols, trail = simple_solutions(_post_3, "http://example.com", "data", body)
+        sols, trail = simple_solutions(_post_3, chars("http://example.com"), chars("data"), body)
         assert len(sols) == 1
-        assert deref(body) == "created"
+        assert deref(body) == chars("created")
 
     @patch("clausal.modules.py.http._urlopen")
     def test_post_data_sent(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b"ok")
         body = Var()
-        simple_solutions(_post_3, "http://example.com", "payload", body)
+        simple_solutions(_post_3, chars("http://example.com"), chars("payload"), body)
         # Verify the request was created with correct data
         call_args = mock_urlopen.call_args
         req = call_args[0][0]
@@ -123,15 +124,15 @@ class TestHttpPost:
     def test_post_with_headers(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b"ok")
-        headers = DictTerm({"Content-Type": "text/plain"})
+        headers = DictTerm({chars("Content-Type"): chars("text/plain")})
         body = Var()
-        sols, _ = simple_solutions(_post_4, "http://example.com", "data", headers, body)
+        sols, _ = simple_solutions(_post_4, chars("http://example.com"), chars("data"), headers, body)
         assert len(sols) == 1
 
     def test_post_unbound_data_fails(self):
         # nv
         body = Var()
-        sols, _ = simple_solutions(_post_3, "http://example.com", Var(), body)
+        sols, _ = simple_solutions(_post_3, chars("http://example.com"), Var(), body)
         assert len(sols) == 0
 
 
@@ -144,7 +145,7 @@ class TestHttpRequest:
     def test_returns_status_code(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b"ok", status=200)
-        opts = DictTerm({"url": "http://example.com"})
+        opts = DictTerm({"url": chars("http://example.com")})
         status = Var()
         body = Var()
         sols, trail = simple_solutions(_request_3, opts, status, body)
@@ -159,7 +160,7 @@ class TestHttpRequest:
         import io
         err = HTTPError(None, 500, "Server Error", {}, io.BytesIO(b"error"))
         mock_urlopen.side_effect = err
-        opts = DictTerm({"url": "http://example.com"})
+        opts = DictTerm({"url": chars("http://example.com")})
         status = Var()
         body = Var()
         sols, trail = simple_solutions(_request_3, opts, status, body)
@@ -177,19 +178,19 @@ class TestHttpJson:
         # nv
         mock_urlopen.return_value = _mock_response(b'{"key": "value"}')
         term = Var()
-        sols, trail = simple_solutions(_json_get_2, "http://example.com/api", term)
+        sols, trail = simple_solutions(_json_get_2, chars("http://example.com/api"), term)
         assert len(sols) == 1
         result = deref(term)
         assert isinstance(result, DictTerm)
         # spec §9.2: JSON object keys parse as ATOMS; string values stay strings.
-        assert result.data[mint("key")] == "value"
+        assert result.data[mint("key")] == chars("value")
 
     @patch("clausal.modules.py.http._urlopen")
     def test_json_get_parses_list(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b'[1, 2, 3]')
         term = Var()
-        sols, trail = simple_solutions(_json_get_2, "http://example.com/api", term)
+        sols, trail = simple_solutions(_json_get_2, chars("http://example.com/api"), term)
         assert len(sols) == 1
         assert deref(term) == [1, 2, 3]
 
@@ -197,20 +198,20 @@ class TestHttpJson:
     def test_json_post_serializes_and_parses(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b'{"status": "ok"}')
-        payload = DictTerm({"name": "test"})
+        payload = DictTerm({"name": chars("test")})
         result = Var()
-        sols, trail = simple_solutions(_json_post_3, "http://example.com/api", payload, result)
+        sols, trail = simple_solutions(_json_post_3, chars("http://example.com/api"), payload, result)
         assert len(sols) == 1
         r = deref(result)
         assert isinstance(r, DictTerm)
-        assert r.data[mint("status")] == "ok"
+        assert r.data[mint("status")] == chars("ok")
 
     @patch("clausal.modules.py.http._urlopen")
     def test_invalid_json_fails(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b"not json")
         term = Var()
-        sols, _ = simple_solutions(_json_get_2, "http://example.com", term)
+        sols, _ = simple_solutions(_json_get_2, chars("http://example.com"), term)
         assert len(sols) == 0
 
 
@@ -223,31 +224,31 @@ class TestUrlEncode:
         """encode("hello world", E) → "hello%20world"."""
         # nv
         e = Var()
-        sols, trail = simple_solutions(_encode_2, "hello world", e)
+        sols, trail = simple_solutions(_encode_2, chars("hello world"), e)
         assert len(sols) == 1
-        assert deref(e) == "hello%20world"
+        assert deref(e) == chars("hello%20world")
 
     def test_encode_preserves_safe(self):
         """encode encodes everything (safe="")."""
         # nv
         e = Var()
-        simple_solutions(_encode_2, "a/b", e)
-        assert deref(e) == "a%2Fb"
+        simple_solutions(_encode_2, chars("a/b"), e)
+        assert deref(e) == chars("a%2Fb")
 
     def test_decode(self):
         # nv
         s = Var()
-        sols, trail = simple_solutions(_decode_2, "hello%20world", s)
+        sols, trail = simple_solutions(_decode_2, chars("hello%20world"), s)
         assert len(sols) == 1
-        assert deref(s) == "hello world"
+        assert deref(s) == chars("hello world")
 
     def test_round_trip(self):
         # nv
         e = Var()
         s = Var()
-        simple_solutions(_encode_2, "test value&more", e)
+        simple_solutions(_encode_2, chars("test value&more"), e)
         simple_solutions(_decode_2, deref(e), s)
-        assert deref(s) == "test value&more"
+        assert deref(s) == chars("test value&more")
 
     def test_unbound_fails(self):
         # nv
@@ -264,28 +265,28 @@ class TestUrlParse:
         """parse("https://example.com:8080/path?q=1#frag", P) → DictTerm."""
         # nv
         p = Var()
-        sols, trail = simple_solutions(_parse_2, "https://example.com:8080/path?q=1#frag", p)
+        sols, trail = simple_solutions(_parse_2, chars("https://example.com:8080/path?q=1#frag"), p)
         assert len(sols) == 1
         result = deref(p)
         assert isinstance(result, DictTerm)
         # Task 12c: the parts dict is built for SOURCE, so its keys are
         # ATOMS (§6.8) — ``P.scheme`` looks up ``("scheme",)``.  The values
         # stay text (§9.4).
-        assert result.data[mint("scheme")] == "https"
-        assert result.data[mint("host")] == "example.com"
+        assert result.data[mint("scheme")] == chars("https")
+        assert result.data[mint("host")] == chars("example.com")
         assert result.data[mint("port")] == 8080
-        assert result.data[mint("path")] == "/path"
-        assert result.data[mint("query")] == "q=1"
-        assert result.data[mint("fragment")] == "frag"
+        assert result.data[mint("path")] == chars("/path")
+        assert result.data[mint("query")] == chars("q=1")
+        assert result.data[mint("fragment")] == chars("frag")
 
     def test_parse_simple_url(self):
         # nv
         p = Var()
-        sols, _ = simple_solutions(_parse_2, "http://example.com", p)
+        sols, _ = simple_solutions(_parse_2, chars("http://example.com"), p)
         assert len(sols) == 1
         result = deref(p)
-        assert result.data[mint("scheme")] == "http"
-        assert result.data[mint("host")] == "example.com"
+        assert result.data[mint("scheme")] == chars("http")
+        assert result.data[mint("host")] == chars("example.com")
 
     def test_unbound_fails(self):
         # nv
@@ -298,32 +299,32 @@ class TestUrlJoin:
     def test_join_basic(self):
         # nv
         parts = DictTerm({
-            "scheme": "https",
-            "host": "example.com",
+            "scheme": chars("https"),
+            "host": chars("example.com"),
             "port": 8080,
-            "path": "/path",
-            "query": "q=1",
-            "fragment": "frag",
+            "path": chars("/path"),
+            "query": chars("q=1"),
+            "fragment": chars("frag"),
         })
         url = Var()
         sols, trail = simple_solutions(_join_2, parts, url)
         assert len(sols) == 1
-        assert deref(url) == "https://example.com:8080/path?q=1#frag"
+        assert deref(url) == chars("https://example.com:8080/path?q=1#frag")
 
     def test_join_no_port(self):
         # nv
         parts = DictTerm({
-            "scheme": "http",
-            "host": "example.com",
+            "scheme": chars("http"),
+            "host": chars("example.com"),
             "port": 0,
-            "path": "/",
-            "query": "",
-            "fragment": "",
+            "path": chars("/"),
+            "query": chars(""),
+            "fragment": chars(""),
         })
         url = Var()
         sols, trail = simple_solutions(_join_2, parts, url)
         assert len(sols) == 1
-        assert "example.com" in deref(url)
+        assert "example.com" in chars_text(deref(url))
 
     def test_unbound_fails(self):
         # nv
@@ -344,7 +345,7 @@ class TestUrlPartsKeysAreAtoms:
     def test_parse_emits_exactly_the_atom_key_set(self):
         # nv
         p = Var()
-        sols, _ = simple_solutions(_parse_2, "https://example.com/x", p)
+        sols, _ = simple_solutions(_parse_2, chars("https://example.com/x"), p)
         assert len(sols) == 1
         assert set(deref(p).data) == {
             mint("scheme"), mint("host"), mint("port"),
@@ -362,17 +363,17 @@ class TestUrlPartsKeysAreAtoms:
         sols, _ = simple_solutions(_join_2, parts, url)
         assert len(sols) == 1
         # ``str(("https",))`` would have spliced a tuple repr into the URL.
-        assert deref(url) == "https://example.com:8080/api"
+        assert deref(url) == chars("https://example.com:8080/api")
 
     def test_parse_join_round_trip(self):
         # nv
         p, url = Var(), Var()
         sols, _ = simple_solutions(
-            _parse_2, "https://example.com:8080/path?q=1#frag", p)
+            _parse_2, chars("https://example.com:8080/path?q=1#frag"), p)
         assert len(sols) == 1
         sols, _ = simple_solutions(_join_2, deref(p), url)
         assert len(sols) == 1
-        assert deref(url) == "https://example.com:8080/path?q=1#frag"
+        assert deref(url) == chars("https://example.com:8080/path?q=1#frag")
 
 
 # ── Task 12b: atoms in the text and option positions (spec §9.4) ─────────
@@ -396,7 +397,7 @@ class TestAtomArguments:
         body = Var()
         sols, _ = simple_solutions(_get_2, mint("http://example.com"), body)
         assert len(sols) == 1
-        assert deref(body) == "hello"
+        assert deref(body) == chars("hello")
         # The URL reached urllib as text, not as a tuple repr.
         req = mock_urlopen.call_args[0][0]
         assert req.full_url == "http://example.com"
@@ -415,7 +416,7 @@ class TestAtomArguments:
         })
         sols, _ = simple_solutions(_request_3, opts, status, body)
         assert len(sols) == 1
-        assert deref(body) == "ok"
+        assert deref(body) == chars("ok")
         req = mock_urlopen.call_args[0][0]
         assert req.full_url == "http://example.com/a"
         assert req.get_method() == "POST"

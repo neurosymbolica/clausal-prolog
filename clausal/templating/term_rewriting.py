@@ -39,7 +39,7 @@ from clausal.logic.atoms import NIL_SPELLING, mangle
 # The module-namespace key the ``-module``/``-private`` rewrite emits a
 # functor-signature registry under.  Single source of truth lives with the
 # cell primitives that registry feeds.
-from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
+from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG, CHARS_TAG
 from clausal.logic.generated_names import dollar_name, has_twin
 
 load = Load()
@@ -2869,7 +2869,11 @@ class TermTransformer(NodeTransformer):
                     f"-double_quotes(chars) (a string) or -double_quotes(atom) "
                     f"explicitly in this module"), stacklevel=2)
             if quote == '"' and transformer._double_quotes_mode == "chars":
-                return constant                     # a string
+                # STAGE 1 of the atoms-as-str flip (spec 2026-09-18): a chars
+                # string is the CARRIER ``('$chars', text)``, not a bare str.
+                # A tuple of constants is a legal ``Constant`` value and
+                # marshals into co_consts.
+                return replace(Constant(value=(CHARS_TAG, sys.intern(value))), constant)
             if value == NIL_SPELLING:
                 # Fix round 1, item 2 (operator-ruled 2026-09-07): a
                 # source-written ``'[]'`` IS the empty list, as it is in ISO
@@ -4677,7 +4681,10 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             # leave this ``str`` alone (a string IS that char list now, so
             # the pre-flip behaviour survives verbatim).  Making the quote
             # style matter here is Plan 2's question, parked.
-            terminal = Constant(value=value)
+            # STAGE 1 (spec 2026-09-18): a str terminal is the chars CARRIER
+            # -- ``sequence//1`` reads it as its text and hands out carrier
+            # remainders, so no bare str is born here.  ``bytes`` unchanged.
+            terminal = Constant(value=(CHARS_TAG, value) if isinstance(value, str) else value)
             terminal._dcg_terminal_text = True
             call = Call(
                 func=Name(id="sequence", ctx=load),

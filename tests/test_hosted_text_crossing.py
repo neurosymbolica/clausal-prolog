@@ -10,6 +10,7 @@ import os
 import tempfile
 
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars
 
 
 def _load_inline(name: str, source: str):
@@ -71,7 +72,7 @@ class TestBoundaries:
         ))
         s = Var()
         for _ in call("label", ("ok",), s, module=mod.__dict__["$module"]):
-            assert deref(s) == "v=ok"
+            assert deref(s) == chars("v=ok")
             break
         else:
             raise AssertionError("no solution")

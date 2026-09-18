@@ -30,6 +30,7 @@ import pathlib
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.solve import call
 
@@ -2181,7 +2182,7 @@ class TestCellsAtTheBuiltinSurface:
         # Task 15 item 2 (ISO alignment): the STRING ``"pt"`` is the list of
         # its characters, i.e. the ``'.'/2`` compound, so it IS compound --
         # a different question from whether the CELL of that name is.
-        assert self._nsol("compound", "pt") == 1
+        assert self._nsol("compound", chars("pt")) == 1
 
     def test_write_1_renders_the_term_not_the_tuple(self, capsys):
         """``write(pt(1, 2))`` printed ``('pt', 1, 2)``: ``io._format_term_iso``

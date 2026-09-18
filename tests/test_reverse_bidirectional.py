@@ -14,6 +14,7 @@ import pytest
 
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from clausal.logic.cells import chars
 
 
 @pytest.fixture(scope="module")
@@ -48,7 +49,7 @@ class TestReverseBackward:
     def test_string_backward_keeps_str(self, mod):
         """Backward reverse of a str result stays a str (input-type-wins)."""
         L = Var()
-        assert _collect(L, "reverse", L, "olleh", module=mod) == ["hello"]
+        assert _collect(L, "reverse", L, chars("olleh"), module=mod) == [chars("hello")]
 
     def test_bytes_backward_keeps_bytes(self, mod):
         """Backward reverse of a bytes result stays bytes (codes model)."""

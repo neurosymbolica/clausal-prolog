@@ -176,7 +176,16 @@ def to_text(val):
 
     What this never does is answer with a Python ``repr``.
     """
+    # STAGE 1 of the atoms-as-str flip: the chars carrier ('$chars', text)
+    # IS text -- every py-module text position reads it as its str.
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    from clausal.logic.variables import deref as _d  # noqa: PLC0415
+    _v = _d(val)
+    if is_chars(_v):
+        return chars_text(_v)
     if type(val) is str:
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(val, "a py-module text argument (to_text)")   # interim rule
         return val
     from clausal.logic.atoms import is_atom as _is_atom, spelling as _spelling
     from clausal.logic.variables import deref
@@ -200,12 +209,34 @@ def to_text(val):
             return ""
         from clausal.logic.runtime._seg_helpers import maybe_promote_to_str
         promoted = maybe_promote_to_str([deref(e) for e in val])
+        if is_chars(promoted):
+            return chars_text(promoted)    # stage 1: the promotion funnel answers the carrier
         if type(promoted) is str:
             return promoted
     return None
 
 
 _OPTION_MISSING = object()
+
+
+def text_result(v):
+    """A py-module RESULT as a term (stage 1 of the atoms-as-str flip, spec
+    2026-09-18): a Python str is TEXT, and text is the chars carrier
+    ``('$chars', s)``; a list, dict or DictTerm converts its VALUES (dict
+    keys stay what the module made them); everything else is itself.  A
+    tuple is left alone -- in term-land a tuple is a cell, whose functor is
+    a str that must not be touched."""
+    if type(v) is str:
+        from clausal.logic.cells import chars  # noqa: PLC0415
+        return chars(v)
+    if type(v) is list:
+        return [text_result(e) for e in v]
+    if type(v) is dict:
+        return {k: text_result(e) for k, e in v.items()}
+    from clausal.terms import DictTerm  # noqa: PLC0415
+    if isinstance(v, DictTerm):
+        return DictTerm({k: text_result(e) for k, e in v.data.items()})
+    return v
 
 
 def option(mapping, name, default=None):
@@ -229,7 +260,8 @@ def option(mapping, name, default=None):
     got = mapping.get(key_of(name), _OPTION_MISSING)
     if got is _OPTION_MISSING:
         got = mapping.get(name, _OPTION_MISSING)
-    return default if got is _OPTION_MISSING else got
+    # stage 1: a module's own str DEFAULT is text, so it crosses as the carrier
+    return text_result(default) if got is _OPTION_MISSING else got
 
 
 def has_option(mapping, name) -> bool:

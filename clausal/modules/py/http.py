@@ -11,6 +11,7 @@ Primary backend: ``urllib.request`` (stdlib, zero deps).
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -94,7 +95,7 @@ def _get_2(url, body, trail, k):
     status, body_str = result
     if status >= 400:
         return  # fail on HTTP errors
-    if unify(body, body_str, trail):
+    if unify(body, text_result(body_str), trail):
         yield None
 
 
@@ -114,7 +115,7 @@ def _get_3(url, headers, body, trail, k):
     status, body_str = result
     if status >= 400:
         return
-    if unify(body, body_str, trail):
+    if unify(body, text_result(body_str), trail):
         yield None
 
 
@@ -139,7 +140,7 @@ def _post_3(url, data, body, trail, k):
     status, body_str = result
     if status >= 400:
         return
-    if unify(body, body_str, trail):
+    if unify(body, text_result(body_str), trail):
         yield None
 
 
@@ -166,7 +167,7 @@ def _post_4(url, data, headers, body, trail, k):
     status, body_str = result
     if status >= 400:
         return
-    if unify(body, body_str, trail):
+    if unify(body, text_result(body_str), trail):
         yield None
 
 
@@ -195,7 +196,7 @@ def _request_3(options, status_out, body_out, trail, k):
         return
     method = deref(option(opts.data, "method", "GET"))
     if is_var(method):
-        method = "GET"
+        method = text_result("GET")    # a module default is text (review 2026-09-18)
     hdrs_raw = option(opts.data, "headers")
     hdrs = _dict_term_to_headers(deref(hdrs_raw)) if hdrs_raw is not None else {}
     data_raw = option(opts.data, "data")
@@ -212,7 +213,7 @@ def _request_3(options, status_out, body_out, trail, k):
     if result is None:
         return
     status, body_str = result
-    if unify(status_out, status, trail) and unify(body_out, body_str, trail):
+    if unify(status_out, text_result(status), trail) and unify(body_out, text_result(body_str), trail):
         yield None
 
 
@@ -253,7 +254,7 @@ def _json_post_3(url, term_in, term_out, trail, k):
             note_rejected_call("json_post/3", exc)
         return
     result = _do_request(
-        url_d, method="POST", data=json_str,
+        url_d, method="POST", data=text_result(json_str),   # stage 1: our own text is text
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
     if result is None:

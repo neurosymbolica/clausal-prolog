@@ -16,6 +16,7 @@ Findings tested here:
 """
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var
 from clausal.terms import SegList, SegString, VarSeg
@@ -91,7 +92,7 @@ def test_F081_string_predicate_not_registered():
     mod = load_inline_clausal("c13_f081", "").__dict__["$module"]
 
     # The expected behaviour: string("abc") should succeed (1 solution).
-    result = _check(mod, "string", "abc")
+    result = _check(mod, "string", chars("abc"))
     assert result == "T", (
         f"string(\"abc\") should succeed (builtin registered and matches), "
         f"got {result} (expected T)"
@@ -135,7 +136,7 @@ def test_F082_atomic_predicate_not_registered():
 
     # THE FLIP (spec §6.3) INVERTS the str row: a ``str`` is a STRING, the
     # list of its char atoms, and a list is not atomic.
-    result = _check(mod, "atomic", "abc")
+    result = _check(mod, "atomic", chars("abc"))
     assert result == "F", (
         f"atomic(\"abc\") should fail (a string is a list), "
         f"got {result} (expected F)"
@@ -216,9 +217,9 @@ def test_F084_callable_on_a_string_is_the_iso_answer():
     mod = load_inline_clausal("c13_f084", "").__dict__["$module"]
 
     # A non-empty string is the compound '.'/2 — callable.
-    assert _check(mod, "callable_", "abc") == "T"
-    assert _check(mod, "compound", "abc") == "T"
+    assert _check(mod, "callable_", chars("abc")) == "T"
+    assert _check(mod, "compound", chars("abc")) == "T"
     # "" is [] is the atom '[]' — callable, and NOT compound.
-    assert _check(mod, "callable_", "") == "T"
-    assert _check(mod, "compound", "") == "F"
-    assert _check(mod, "atom", "") == "T"
+    assert _check(mod, "callable_", chars("")) == "T"
+    assert _check(mod, "compound", chars("")) == "F"
+    assert _check(mod, "atom", chars("")) == "T"

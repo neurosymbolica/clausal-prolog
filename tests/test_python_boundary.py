@@ -9,6 +9,7 @@ pinned here, including that they are DIFFERENT.
 
 from clausal.modules.py._helpers import to_python
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.terms import DictTerm
 
 
@@ -128,4 +129,4 @@ def test_a_cell_atom_reaches_a_thunk_as_its_spelling(tmp_path):
     out = Var()
     results = [deref(out) for _ in call("to_upper", ("hello",), out,
                                         module=logic_mod)]
-    assert results == ["HELLO"]
+    assert results == [chars("HELLO")]

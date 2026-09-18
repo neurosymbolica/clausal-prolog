@@ -1831,8 +1831,22 @@ def _text_list_eq(l, r):
     A char atom against a 1-char str stays UNEQUAL: ``"a"`` is the one-element
     list ``[a]``, not the cell ``a``, and a tuple is neither spelling here.
     """
+    from clausal.logic.cells import is_chars, chars_text, refuse_bare_str  # noqa: PLC0415
+    # (no refuse here: the reflection layer compares reified variable NAMES,
+    # bare strs by design, with ==/!= -- a comparison is not a text entry point)
+    unwrapped = False
+    if is_chars(l):
+        l = chars_text(l); unwrapped = True
+    if is_chars(r):
+        r = chars_text(r); unwrapped = True
     if not _TEXT_SPELLINGS:
         _ensure_text_list_imports()
+    if unwrapped and isinstance(l, _TEXT_SPELLINGS) and isinstance(r, _TEXT_SPELLINGS):
+        # STAGE 1: a carrier against the bare str it holds (or another
+        # carrier) is one text term in two spellings -- Python's ``==`` on
+        # the ORIGINALS (a tuple against a str) would say no.
+        from clausal.logic.constraints import structural_eq  # noqa: PLC0415
+        return structural_eq(l, r)
     if isinstance(l, _TEXT_SPELLINGS):
         if not isinstance(r, _LIST_SPELLINGS):
             return None
@@ -2475,6 +2489,14 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     x = _resolve(x)
     y = _resolve(y)
     if _both_ground(x, y):
+        if op in ("eq", "ne"):
+            # the chars-model arm ``fd_eq``/``fd_ne`` already have: the two
+            # spellings of one text term (str / carrier / char list) are
+            # equal here too, where Python's ``==`` on the raw values says no
+            # (stage 1 -- a reified ``==`` inside ``if_/3`` took this path)
+            _eq = _text_list_eq(x, y)
+            if _eq is not None:
+                return _eq if op == "eq" else (not _eq)
         return _REIFY_OPS[op](x, y)
     return None
 
@@ -2540,6 +2562,7 @@ def _op_spelling(op, context):
     from clausal.logic.runtime._seg_helpers import (  # noqa: PLC0415
         normalize_seg_input,
     )
+    op_as_written = op
     op = normalize_seg_input(op)
     if is_atom(op):
         return spelling(op)
@@ -2547,7 +2570,7 @@ def _op_spelling(op, context):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error,
         )
-        raise LogicException(type_error("atom", op, context))
+        raise LogicException(type_error("atom", op_as_written, context))   # the culprit as the caller wrote it
     return None
 
 

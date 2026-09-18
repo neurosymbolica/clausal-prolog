@@ -37,6 +37,7 @@ from clausal.pythonic_ast.nodes import (
     TupleLiteral,
     Unify,
 )
+from clausal.logic.cells import is_chars as _is_chars, chars_text as _chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
 from clausal.logic.variables import Var, is_var, deref
 from clausal.logic.predicate import is_term_instance, term_field_names
@@ -236,11 +237,15 @@ def _extract_static_pattern(goal: Call) -> str | None:
     first = goal.args[0]
     if isinstance(first, str):
         return first
+    if _is_chars(first):
+        return _chars_text(first)      # stage 1: a chars-mode pattern literal is the carrier
     if _term_is_atom(first):
         return _atom_spelling(first)
     value = getattr(first, "value", None)
     if isinstance(value, str):
         return value
+    if _is_chars(value):
+        return _chars_text(value)
     if _term_is_atom(value):
         return _atom_spelling(value)
     return None

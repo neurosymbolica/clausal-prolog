@@ -17,6 +17,7 @@ Wraps Python's ``hashlib`` module. Supported algorithms include
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -59,7 +60,7 @@ def _hash_3(algorithm, data, hex_out, trail, k):
     except TypeError as exc:
         note_rejected_call("hash/3", exc)
         return
-    if unify(hex_out, digest, trail):
+    if unify(hex_out, text_result(digest), trail):
         yield None
 
 

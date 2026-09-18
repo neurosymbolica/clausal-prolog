@@ -35,6 +35,7 @@ _re = _import_stdlib("re")
 
 from typing import Any
 
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
@@ -77,12 +78,18 @@ def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
     walk = getattr(s, "__walk__", None)
     if callable(walk):
         s = walk()
+    if is_chars(s):
+        return chars_text(s)           # stage 1: a chars string is its text here
     if isinstance(s, str):
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(s, f"regex {pred} argument {arg}")   # interim rule
         return s
     if isinstance(s, (list, tuple)):
         if not s:
             return ""
         promoted = maybe_promote_to_str([deref(e) for e in s])
+        if is_chars(promoted):
+            return chars_text(promoted)    # stage 1: the promotion funnel answers the carrier
         if isinstance(promoted, str):
             return promoted
     note_mismatch(pred,
@@ -116,6 +123,23 @@ def _compile_pattern(pat: Any) -> "_re.Pattern":
     return _re.compile(text)
 
 
+def _out(v):
+    """A regex RESULT as a term: STAGE 1 (spec 2026-09-18) -- text is the
+    chars carrier, never a bare str; ``None`` (an unmatched optional group)
+    stays ``None``; tuples and dicts of groups convert element-wise."""
+    if type(v) is str:
+        return chars(v)
+    if type(v) is tuple:
+        # positional groups: a PLAIN tuple, the shape a .clausal ``(A, B)``
+        # literal compiles to and what ``++G[0]`` indexes.  Its slot 0 is a
+        # carrier (or None), never a str, so it cannot read as a cell -- the
+        # bare-str tuple it replaced COULD (review 2026-09-18, measured).
+        return tuple(_out(e) for e in v)
+    if type(v) is dict:
+        return {k: _out(e) for k, e in v.items()}
+    return v
+
+
 def _groups_dict(m: "_re.Match") -> dict | tuple:
     """Extract groups from a match object.
 
@@ -131,10 +155,10 @@ def _groups_dict(m: "_re.Match") -> dict | tuple:
         for i, val in enumerate(m.groups(), start=1):
             if i not in named_idx:
                 result[i] = val
-        return result
+        return _out(result)
     groups = m.groups()
     if groups:
-        return groups
+        return _out(groups)
     return {}
 
 
@@ -209,7 +233,7 @@ def _replace_4(pat, repl, string, result, trail, k):
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
-    out = compiled.sub(repl, string)
+    out = _out(compiled.sub(repl, string))
     if unify(result, out, trail):
         yield None
 
@@ -224,7 +248,7 @@ def _split_3(pat, string, parts, trail, k):
     if string is _NO_SUBJECT:
         return
     compiled = _compile_pattern(pat)
-    out = compiled.split(string)
+    out = [_out(p) for p in compiled.split(string)]
     if unify(parts, out, trail):
         yield None
 
@@ -254,7 +278,7 @@ def _findall_3(this_generator, _proceed, _fail, _catcher, pat, string, match_var
             value = groups if len(groups) > 1 else groups[0]
         else:
             value = m.group()
-        if unify(match_var, value, trail):
+        if unify(match_var, _out(value), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)

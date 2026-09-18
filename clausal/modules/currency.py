@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Callable
 
 from clausal.terms import Quantity, _quantize_to_scale, _format_money
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.logic.exceptions import LogicException, instantiation_error
@@ -51,7 +52,7 @@ def _money_impl(text, currency, out, trail):
     t, c = deref(text), deref(currency)
     if is_var(t) or is_var(c) or not getattr(c, "is_currency", False):
         return
-    q = Quantity(Decimal(str(t)), c)                 # CHECKED path (precision check)
+    q = Quantity(Decimal(chars_text(t) if is_chars(t) else str(t)), c)   # CHECKED path (precision check)
     if unify(deref(out), q, trail):
         yield None
 
@@ -60,7 +61,7 @@ def _money_precise_impl(text, currency, out, trail):
     t, c = deref(text), deref(currency)
     if is_var(t) or is_var(c) or not getattr(c, "is_currency", False):
         return
-    q = Quantity(Decimal(str(t)), dict(c._dims))     # UNCHECKED path (raw dict dims)
+    q = Quantity(Decimal(chars_text(t) if is_chars(t) else str(t)), dict(c._dims))   # UNCHECKED path (raw dict dims)
     if unify(deref(out), q, trail):
         yield None
 
@@ -141,7 +142,7 @@ def _currency_code_impl(currency, code, trail):
     if not is_var(c):
         if not getattr(c, "is_currency", False):
             return
-        if unify(deref(code), c.iso_code, trail):
+        if unify(deref(code), chars(c.iso_code), trail):   # stage 1: a code is text
             yield None
         return
     if not is_var(k):
@@ -158,7 +159,7 @@ def _currency_code_impl(currency, code, trail):
         obj = getattr(module, bindings[r["code"]])
         mark = trail.mark()
         if (unify(deref(currency), obj, trail)
-                and unify(deref(code), r["code"], trail)):
+                and unify(deref(code), chars(r["code"]), trail)):   # stage 1
             yield None
         trail.undo(mark)
 
@@ -222,7 +223,7 @@ def _money_str_impl(amount, mode, out, trail):
     c = _currency_of(a)
     if c is None or is_var(m):
         return
-    if unify(deref(out), _format_value(a, c, _mode_text(m), "code"), trail):
+    if unify(deref(out), chars(_format_value(a, c, _mode_text(m), "code")), trail):   # stage 1
         yield None
 
 

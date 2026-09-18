@@ -23,6 +23,7 @@ Use ``++int(X)`` or ``number_chars`` for conversion if needed.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -88,7 +89,7 @@ def _parse_row_2(string, row, trail, k):
         result = next(reader)
     except StopIteration:
         result = []
-    if unify(row, result, trail):
+    if unify(row, text_result(result), trail):
         yield None
 
 
@@ -99,7 +100,7 @@ def _parse_2(string, rows, trail, k):
         return
     reader = _csv.reader(io.StringIO(string))
     result = [row for row in reader]
-    if unify(rows, result, trail):
+    if unify(rows, text_result(result), trail):
         yield None
 
 
@@ -119,7 +120,7 @@ def _parse_records_3(string, headers, records, trail, k):
     if header_list is None:
         return
     record_list = [
-        DictTerm({_field_key(k): v for k, v in row.items()}) for row in reader
+        DictTerm({_field_key(k): text_result(v) for k, v in row.items()}) for row in reader   # stage 1
     ]
     mark = trail.mark()
     if (unify(headers, [_field_key(h) for h in header_list], trail)
@@ -151,7 +152,7 @@ def _generate_2(rows, string, trail, k):
     except (TypeError, ValueError) as exc:
         note_rejected_call("generate/2", exc)
         return
-    if unify(string, result, trail):
+    if unify(string, text_result(result), trail):
         yield None
 
 
@@ -188,7 +189,7 @@ def _generate_records_3(headers, records, string, trail, k):
     except (TypeError, ValueError) as exc:
         note_rejected_call("generate_records/3", exc)
         return
-    if unify(string, result, trail):
+    if unify(string, text_result(result), trail):
         yield None
 
 
@@ -203,7 +204,7 @@ def _read_file_2(path, rows, trail, k):
             result = [row for row in reader]
     except OSError:
         return
-    if unify(rows, result, trail):
+    if unify(rows, text_result(result), trail):
         yield None
 
 
@@ -224,7 +225,7 @@ def _read_records_2(path, records, trail, k):
             ]
     except OSError:
         return
-    if unify(records, result, trail):
+    if unify(records, text_result(result), trail):
         yield None
 
 

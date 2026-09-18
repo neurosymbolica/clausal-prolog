@@ -20,6 +20,7 @@ resulting values.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -136,7 +137,7 @@ def _uuid_str_2(u, s, trail, k):
     """
     u, s = deref(u), deref(s)
     if isinstance(u, _uuid.UUID):
-        if unify(s, str(u), trail):
+        if unify(s, text_result(str(u)), trail):
             yield None
     elif (s_text := to_text(s)) is not None:
         try:
@@ -161,7 +162,7 @@ def _uuid_hex_2(u, h, trail, k):
     """
     u, h = deref(u), deref(h)
     if isinstance(u, _uuid.UUID):
-        if unify(h, u.hex, trail):
+        if unify(h, text_result(u.hex), trail):
             yield None
     elif (h_text := to_text(h)) is not None:
         try:
@@ -186,7 +187,7 @@ def _uuid_urn_2(u, urn, trail, k):
     """
     u, urn = deref(u), deref(urn)
     if isinstance(u, _uuid.UUID):
-        if unify(urn, u.urn, trail):
+        if unify(urn, text_result(u.urn), trail):
             yield None
     elif (urn_text := to_text(urn)) is not None:
         try:

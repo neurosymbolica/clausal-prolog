@@ -12,6 +12,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.reflection import Clause
@@ -132,7 +133,7 @@ def _all_bindings(functor, *args, module):
 class TestEnumeration:
     def test_head_names_enumerate_all_clauses(self, matchers):
         # goal_functor/3 answers a NAME, so the bindings are ATOMS (§6.4).
-        names = _all_bindings("head_name", _TARGET, module=matchers)
+        names = _all_bindings("head_name", chars(_TARGET), module=matchers)
         assert names == [
             mint("edge"), mint("edge"),
             mint("connected"), mint("connected"), mint("size"),
@@ -141,11 +142,11 @@ class TestEnumeration:
     def test_direct_pattern_matching_without_accessors(self, matchers):
         # Destructuring the reified ``Goal`` FIELD, not the accessor: the field
         # holds the raw spelling ``str``, which is a string post-flip.
-        names = _all_bindings("direct_head_name", _TARGET, module=matchers)
+        names = _all_bindings("direct_head_name", chars(_TARGET), module=matchers)
         assert set(names) == {"edge", "connected", "size"}
 
     def test_fact_names_only_facts(self, matchers):
-        names = _all_bindings("fact_name", _TARGET, module=matchers)
+        names = _all_bindings("fact_name", chars(_TARGET), module=matchers)
         assert names == [mint("edge"), mint("edge")]
 
 
@@ -153,34 +154,34 @@ class TestCallGraph:
     def test_called_predicates_with_arity(self, matchers):
         name, arity = Var(), Var()
         found = set()
-        for _ in call("called_predicate", _TARGET, name, arity, module=matchers):
+        for _ in call("called_predicate", chars(_TARGET), name, arity, module=matchers):
             found.add((deref(name), deref(arity)))
         assert (mint("edge"), 2) in found
         assert (mint("connected"), 2) in found
         assert (mint("ghost"), 1) in found
 
     def test_undefined_call_lint_finds_ghost(self, matchers):
-        names = _all_bindings("undefined_call", _TARGET, module=matchers)
+        names = _all_bindings("undefined_call", chars(_TARGET), module=matchers)
         assert set(names) == {mint("ghost")}
 
 
 class TestEscapes:
     def test_escape_code_found_by_subterm_walk(self, matchers):
-        codes = _all_bindings("escape_code", _TARGET, module=matchers)
+        codes = _all_bindings("escape_code", chars(_TARGET), module=matchers)
         assert codes == ["len(L)"]
 
 
 class TestFiles:
     def test_file_head_names_from_real_example(self, matchers):
         path = os.path.join(EXAMPLES_DIR, "graph.clausal")
-        names = _all_bindings("file_head_name", path, module=matchers)
+        names = _all_bindings("file_head_name", chars(path), module=matchers)
         assert mint("path") in names
         assert names.count(mint("edge")) == 7
 
 
 class TestDcgMatching:
     def test_dcg_matches_bodies_starting_with_edge_call(self, matchers):
-        names = _all_bindings("starts_with_edge", _TARGET, module=matchers)
+        names = _all_bindings("starts_with_edge", chars(_TARGET), module=matchers)
         assert names == [mint("connected"), mint("connected")]
 
 
@@ -242,7 +243,7 @@ literal_file_name(NAME) <- (
         assert names.count(mint("edge")) == 7
 
     def test_goal_functor_answers_an_atom_not_a_string(self, matchers):
-        names = _all_bindings("head_name", "edge(1, 2),\n", module=matchers)
+        names = _all_bindings("head_name", chars("edge(1, 2),\n"), module=matchers)
         assert names == [mint("edge")]
         assert names[0] != "edge"  # a STRING would be a silent-mismatch bug
 

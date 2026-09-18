@@ -75,7 +75,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 
 __all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM",
            "to_transfer", "from_transfer", "register_transfer",
@@ -567,6 +567,12 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
     tuple becomes the ``('()', ...)`` data form unless it is already a term.
     Anything else uses ``('{module}\\x1f{class}', *match_args)``.
     """
+    if type(value) is str:
+        # STAGE 1 (spec 2026-09-18 §3): a Python str crossing the seam is
+        # TEXT today, and text is the chars carrier -- so a str becomes the
+        # carrier here (a dict KEY too: a string key is already a different
+        # key from the atom of the same spelling).  Stage 2 makes it the ATOM.
+        return chars(value)
     if isinstance(value, _SCALARS):
         return value
     if _is_already_engine_term(value):
@@ -608,6 +614,8 @@ def from_term(value: Any) -> Any:
     """
     if isinstance(value, _SCALARS):
         return value
+    if is_chars(value):
+        return chars_text(value)       # stage 1: the carrier comes back as the str
     if isinstance(value, list):
         return [from_term(v) for v in value]
     if isinstance(value, dict):

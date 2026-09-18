@@ -9,6 +9,7 @@ import sys
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars, chars_text
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
@@ -251,7 +252,7 @@ class TestWriteText:
     def test_write_text_string(self):
         # nv
         t = Trail()
-        assert _capture_stdout("write_text", 1, "hello", t) == "hello"
+        assert _capture_stdout("write_text", 1, chars("hello"), t) == "hello"
 
     def test_write_text_char_list(self):
         # nv
@@ -265,7 +266,7 @@ class TestWriteText:
         # nv
         v = Var()
         t = Trail()
-        unify(v, "world", t)
+        unify(v, chars("world"), t)
         assert _capture_stdout("write_text", 1, v, t) == "world"
 
     def test_write_text_fstring(self):
@@ -273,7 +274,7 @@ class TestWriteText:
         x = Var()
         t = Trail()
         unify(x, 42, t)
-        out = _capture_stdout("write_text", 1, f"The answer is {x}", t)
+        out = _capture_stdout("write_text", 1, chars(f"The answer is {x}"), t)
         assert out == "The answer is 42"
 
     def test_write_text_int_and_list_are_unchanged(self):
@@ -290,7 +291,7 @@ class TestWriteText:
     def test_writeln_text_appends_a_newline(self):
         # nv
         t = Trail()
-        assert _capture_stdout("writeln_text", 1, "hello", t) == "hello\n"
+        assert _capture_stdout("writeln_text", 1, chars("hello"), t) == "hello\n"
 
     def test_write_text_to_string(self):
         # nv
@@ -298,9 +299,9 @@ class TestWriteText:
         out = Var()
         dispatch = get_builtin_dispatch("write_text_to_string", 2, None)
         vals = solutions(
-            StepGenerator(dispatch, None, None, None, "hello", out, t),
+            StepGenerator(dispatch, None, None, None, chars("hello"), out, t),
             snapshot=lambda: deref(out))
-        assert vals == ["hello"]
+        assert vals == [chars("hello")]
 
 
 # ── writeln/1 ─────────────────────────────────────────────────────────────────
@@ -336,7 +337,7 @@ class TestWriteln:
         t = Trail()
         unify(x, "Alice", t)
         unify(y, 25, t)
-        out = _capture_stdout("writeln_text", 1, f"{x} is {y} years old", t)
+        out = _capture_stdout("writeln_text", 1, chars(f"{x} is {y} years old"), t)
         assert out == "Alice is 25 years old\n"
         out2 = _capture_stdout("writeln", 1, f"{y}!", t)
         assert out2 == "[2,5,!]\n"
@@ -465,9 +466,9 @@ class TestWriteToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, None, None, "hello", result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, chars("hello"), result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["[h,e,l,l,o]"]
+        assert vals == [chars("[h,e,l,l,o]")]
 
     def test_int_to_string(self):
         # nv
@@ -476,18 +477,18 @@ class TestWriteToString:
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, 42, result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["42"]
+        assert vals == [chars("42")]
 
     def test_var_bound(self):
         # nv
         v = Var()
         result = Var()
         t = Trail()
-        unify(v, "world", t)
+        unify(v, chars("world"), t)
         dispatch = get_builtin_dispatch("write_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["[w,o,r,l,d]"]
+        assert vals == [chars("[w,o,r,l,d]")]
 
     def test_tuple_data_cell(self):
         """P3-2 Task 7: routed through the same ``TUPLE_TAG``-aware
@@ -501,7 +502,7 @@ class TestWriteToString:
             StepGenerator(dispatch, None, None, None,
                           (TUPLE_TAG, mint("a"), mint("b")), result, t),
             snapshot=lambda: deref(result))
-        assert vals == ["(a,b)"]
+        assert vals == [chars("(a,b)")]
 
     def test_fstring(self):
         """An f-string is a STRING: ``write_to_string/2`` spells it out and
@@ -512,15 +513,15 @@ class TestWriteToString:
         t = Trail()
         unify(x, 42, t)
         dispatch = get_builtin_dispatch("write_text_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, None, None, f"answer={x}", result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, chars(f"answer={x}"), result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["answer=42"]
+        assert vals == [chars("answer=42")]
         result2 = Var()
         dispatch2 = get_builtin_dispatch("write_to_string", 2, None)
         vals2 = solutions(
-            StepGenerator(dispatch2, None, None, None, f"a{x}", result2, t),
+            StepGenerator(dispatch2, None, None, None, chars(f"a{x}"), result2, t),
             snapshot=lambda: deref(result2))
-        assert vals2 == ["[a,4,2]"]
+        assert vals2 == [chars("[a,4,2]")]
 
     def test_unbound_var(self):
         # nv
@@ -531,7 +532,7 @@ class TestWriteToString:
         vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
         assert len(vals) == 1
-        assert vals[0].startswith("_")
+        assert chars_text(vals[0]).startswith("_")
 
 
 # ── term_to_string/2 ────────────────────────────────────────────────────────────
@@ -545,16 +546,16 @@ class TestTermToString:
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, 42, result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["42"]
+        assert vals == [chars("42")]
 
     def test_string_quoted(self):
         # nv
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, None, None, "hello", result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, chars("hello"), result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ['"hello"']
+        assert vals == [chars('"hello"')]
 
     def test_list(self):
         # nv
@@ -563,7 +564,7 @@ class TestTermToString:
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, [1, 2], result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["[1, 2]"]
+        assert vals == [chars("[1, 2]")]
 
     def test_unbound_var(self):
         # nv
@@ -574,7 +575,7 @@ class TestTermToString:
         vals = solutions(StepGenerator(dispatch, None, None, None, v, result, t),
                          snapshot=lambda: deref(result))
         assert len(vals) == 1
-        assert "_" in vals[0]
+        assert "_" in chars_text(vals[0])
 
     def test_compound(self):
         # nv
@@ -583,7 +584,7 @@ class TestTermToString:
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
         vals = solutions(StepGenerator(dispatch, None, None, None, Compound("f", (1, 2)), result, t),
                          snapshot=lambda: deref(result))
-        assert vals == ["f(1, 2)"]
+        assert vals == [chars("f(1, 2)")]
 
 
 # ── Integration: .clausal file ────────────────────────────────────────────────

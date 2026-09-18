@@ -1,4 +1,5 @@
 from clausal.logic.atoms import char_atom
+from clausal.logic.cells import chars, is_chars
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.runtime.list_unify import (
     _head_list_unify_input_py, _head_list_unify_output_py,
@@ -136,8 +137,8 @@ class TestGroundSegListOfCharsOutputPy:
         unify(S, sl, trail)
         ok = _head_list_unify_output_py(target, [], S, [], trail)
         assert ok is True
-        assert deref(target) == "ab"
-        assert type(deref(target)) is str
+        assert deref(target) == chars("ab")
+        assert is_chars(deref(target))
 
     def test_ground_seglist_of_chars_matches_c_twin(self):
         # nv — same input through the C-accelerated function: the Python
@@ -157,8 +158,8 @@ class TestGroundSegListOfCharsOutputPy:
         ok_c = _head_list_unify_output(target_c, [], S_c, [], trail_c)
 
         assert ok_py == ok_c is True
-        assert deref(target_py) == deref(target_c) == "ab"
-        assert type(deref(target_py)) is type(deref(target_c)) is str
+        assert deref(target_py) == deref(target_c) == chars("ab")
+        assert type(deref(target_py)) is type(deref(target_c)) and is_chars(deref(target_py))
 
     def test_ground_seglist_of_non_chars_stays_list_via_python_fallback(self):
         # nv — control: a ground SegList with non-1-char elements does

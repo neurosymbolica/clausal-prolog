@@ -11,7 +11,7 @@ from clausal.logic.atoms import (
     is_atom as _term_is_atom,
     spelling,
 )
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import (
     term_str as _term_str,
@@ -81,6 +81,11 @@ def _format_term_as_text(val):
         # below and ``b""`` never reached ``term_str`` at all, so both used
         # to fall to ``str()`` and print ``()`` / ``b''``.
         return "[]"
+    if is_chars(val):
+        val = chars_text(val)          # stage 1: the carrier is text
+    elif type(val) is str:
+        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
+        refuse_bare_str(val, "write_text/1")   # interim rule
     if isinstance(val, str):
         # The EMPTY string is the empty list and prints ``[]`` in the display
         # family too (spec §6.7's ``""``/``[]`` row; Scryer) -- ``term_str``
@@ -236,7 +241,7 @@ def _write_text_to_string__2(term, result, trail, k):
     Term, as a string.  Prints nothing.
     """
     from clausal.logic.solve import _deref_walk
-    s = _format_term_as_text(_deref_walk(term))
+    s = chars(_format_term_as_text(_deref_walk(term)))   # stage 1: a text RESULT is the carrier
     mark = trail.mark()
     if unify(result, s, trail):
         yield None
@@ -445,7 +450,7 @@ def _write_to_string__2(term, result, trail, k):
     char list it is.  ``write_text_to_string/2`` is the text form.
     """
     from clausal.logic.solve import _deref_walk
-    s = _format_term_iso(_deref_walk(term), quoted=False)
+    s = chars(_format_term_iso(_deref_walk(term), quoted=False))   # stage 1: a text RESULT is the carrier
     mark = trail.mark()
     if unify(result, s, trail):
         yield None
@@ -462,7 +467,7 @@ def _term_to_string__2(term, result, trail, k):
     """
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
-    s = _term_str(val)
+    s = chars(_term_str(val))          # stage 1: a text RESULT is the carrier
     mark = trail.mark()
     if unify(result, s, trail):
         yield None
@@ -476,6 +481,8 @@ def _format_clause_term(val):
     val = deref(val)
     if isinstance(val, Var):
         return str(val)  # _N format for anonymous vars
+    if is_chars(val):
+        val = chars_text(val)          # stage 1: the carrier is text
     if isinstance(val, str):
         # A STRING (THE FLIP) -- ``listing/1`` is in the quoted family, so it
         # prints as a double-quoted string literal, which is how the module

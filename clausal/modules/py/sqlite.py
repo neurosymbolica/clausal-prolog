@@ -31,7 +31,7 @@ import threading as _threading
 from typing import Any
 
 from clausal.logic.to_python import to_python
-from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
+from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text, text_result
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
@@ -117,7 +117,7 @@ def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alia
         aliases = list(_CONNECTIONS.keys())
     for a in aliases:
         mark = trail.mark()
-        if unify(alias, a, trail):
+        if unify(alias, text_result(a), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -135,7 +135,7 @@ def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_v
         mark = trail.mark()
         # Single-column rows unwrap to the value itself
         value = row[0] if len(row) == 1 else row
-        if unify(row_var, value, trail):
+        if unify(row_var, text_result(value), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -156,7 +156,7 @@ def _sqlite_query_4(this_generator, _proceed, _fail, _catcher, alias, sql, param
     for row in cur:
         mark = trail.mark()
         value = row[0] if len(row) == 1 else row
-        if unify(row_var, value, trail):
+        if unify(row_var, text_result(value), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -222,7 +222,7 @@ def _sqlite_table_2(this_generator, _proceed, _fail, _catcher, alias, table_var,
     # Nondeterministic: iterate all tables
     for (name,) in cur:
         mark = trail.mark()
-        if unify(table_var, name, trail):
+        if unify(table_var, text_result(name), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -239,7 +239,7 @@ def _sqlite_column_4(this_generator, _proceed, _fail, _catcher, alias, table, co
         name = row[1]
         typ = row[2]
         mark = trail.mark()
-        if unify(col_name, name, trail) and unify(col_type, typ, trail):
+        if unify(col_name, text_result(name), trail) and unify(col_type, text_result(typ), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)

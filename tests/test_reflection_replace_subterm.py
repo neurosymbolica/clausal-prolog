@@ -11,6 +11,7 @@ See ``todo/done/replace-subterm-reflection-primitive.md``.
 """
 
 import pytest
+from clausal.logic.cells import chars
 
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
@@ -214,7 +215,7 @@ swap_gt_eto_gt(SRC, NEWCLAUSE) <- (
         src = "small(P) <- (get(P, k, V), V >= 1)\n"
         new_clause = Var()
         rendered = []
-        for _ in call("swap_gt_eto_gt", src, new_clause, module=matchers):
+        for _ in call("swap_gt_eto_gt", chars(src), new_clause, module=matchers):
             rendered.append(R.render_source(deref(new_clause)))
         # exactly one relop; `get(...)` stays first, `V >= 1` becomes `V > 1`
         assert rendered == ["small(P) <- ((get(P, k, V), V > 1))"]

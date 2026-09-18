@@ -53,6 +53,7 @@ catchable ``error(type_error(orderable, Culprit), (<)/2)``.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -501,7 +502,7 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
         except (TypeError, ValueError) as exc:
             note_rejected_call("datetime_string/3", exc)
             return
-        if unify(s, out, trail):
+        if unify(s, text_result(out), trail):   # stage 1
             yield None
     elif is_var(dt_obj) and (s_text := to_text(s)) is not None:
         s = s_text
@@ -777,7 +778,7 @@ def _datetime_string_iso_2(dt_obj, s, trail, k):
     """
     dt_obj, s = deref(dt_obj), deref(s)
     if isinstance(dt_obj, _dt.datetime):
-        if unify(s, dt_obj.isoformat(), trail):
+        if unify(s, text_result(dt_obj.isoformat()), trail):   # stage 1
             yield None
     elif is_var(dt_obj) and (s_text := to_text(s)) is not None:
         s = s_text
@@ -803,7 +804,7 @@ def _date_string_iso_2(d_obj, s, trail, k):
     """
     d_obj, s = deref(d_obj), deref(s)
     if isinstance(d_obj, _dt.date) and not isinstance(d_obj, _dt.datetime):
-        if unify(s, d_obj.isoformat(), trail):
+        if unify(s, text_result(d_obj.isoformat()), trail):   # stage 1
             yield None
     elif is_var(d_obj) and (s_text := to_text(s)) is not None:
         s = s_text

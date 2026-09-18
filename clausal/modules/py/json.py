@@ -34,6 +34,7 @@ cell, a plain non-cell tuple) still become JSON arrays.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -47,7 +48,7 @@ _json = _import_stdlib("json")
 from typing import Any
 
 from clausal.logic.atoms import is_atom, key_of, mint, spelling
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from clausal.logic.exceptions import LogicException, domain_error, type_error
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import Compound, DictTerm
@@ -78,7 +79,9 @@ def _python_to_clausal(obj: Any, atoms: frozenset = frozenset()) -> Any:
     if isinstance(obj, list):
         return [_python_to_clausal(item, atoms) for item in obj]
     if type(obj) is str:
-        return mint(obj) if obj in atoms else obj
+        # STAGE 1: a JSON string that is not a declared atom is a chars
+        # STRING, so it comes back as the carrier, never a bare str.
+        return mint(obj) if obj in atoms else chars(obj)
     # int, float, bool, None — pass through
     return obj
 
@@ -123,6 +126,8 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
         }
     if isinstance(term, list):
         return [_clausal_to_python(deref(item), context) for item in term]
+    if is_chars(term):
+        return chars_text(term)        # stage 1: a chars string serialises as its text
     if type(term) is tuple:
         if term and type(term[0]) is str and term[0] != TUPLE_TAG:
             # A compound cell of arity >= 1 (an arity-0 cell is an atom and
@@ -177,6 +182,8 @@ def _parse_options(options: Any) -> frozenset:
                 # Unreachable under Plan 0 (a str IS an atom to ``is_atom``);
                 # this is the arm that carries the option at Stage B.
                 atoms.add(s)
+            elif is_chars(s):
+                atoms.add(chars_text(s))   # stage 1: ``atoms(["red"])`` names by its text
             else:
                 raise LogicException(
                     domain_error("json_option", opt, "py.json.parse/3")
@@ -251,7 +258,7 @@ def _generate_2(term, string, trail, k):
         if value_is_ground(term):
             note_rejected_call("generate/2", exc)
         return
-    if unify(string, result, trail):
+    if unify(string, text_result(result), trail):   # stage 1
         yield None
 
 
@@ -267,7 +274,7 @@ def _pretty_generate_2(term, string, trail, k):
         if value_is_ground(term):
             note_rejected_call("pretty_generate/2", exc)
         return
-    if unify(string, result, trail):
+    if unify(string, text_result(result), trail):   # stage 1
         yield None
 
 

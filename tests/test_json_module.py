@@ -7,6 +7,7 @@ import os
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars, chars_text
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.json import (
@@ -70,7 +71,7 @@ class TestConverters:
 
     def test_python_to_clausal_scalars(self):
         # nv
-        assert _python_to_clausal("hello") == "hello"
+        assert _python_to_clausal("hello") == chars("hello")
         assert _python_to_clausal(42) == 42
         assert _python_to_clausal(3.14) == 3.14
         assert _python_to_clausal(True) is True
@@ -106,7 +107,7 @@ class TestParse:
     def test_simple_object(self):
         # nv
         t = Var()
-        sols, trail = simple_solutions(_parse_2, '{"a": 1, "b": 2}', t)
+        sols, trail = simple_solutions(_parse_2, chars('{"a": 1, "b": 2}'), t)
         assert len(sols) == 1
         result = deref(t)
         assert isinstance(result, DictTerm)
@@ -116,7 +117,7 @@ class TestParse:
     def test_nested_object(self):
         # nv
         t = Var()
-        sols, trail = simple_solutions(_parse_2, '{"a": {"b": 3}}', t)
+        sols, trail = simple_solutions(_parse_2, chars('{"a": {"b": 3}}'), t)
         assert len(sols) == 1
         result = deref(t)
         inner = result.data[mint("a")]
@@ -126,49 +127,49 @@ class TestParse:
     def test_array(self):
         # nv
         t = Var()
-        sols, trail = simple_solutions(_parse_2, '[1, 2, 3]', t)
+        sols, trail = simple_solutions(_parse_2, chars('[1, 2, 3]'), t)
         assert len(sols) == 1
         assert deref(t) == [1, 2, 3]
 
     def test_string_scalar(self):
         # nv
         t = Var()
-        sols, _ = simple_solutions(_parse_2, '"hello"', t)
+        sols, _ = simple_solutions(_parse_2, chars('"hello"'), t)
         assert len(sols) == 1
-        assert deref(t) == "hello"
+        assert deref(t) == chars("hello")
 
     def test_number_int(self):
         # nv
         t = Var()
-        sols, _ = simple_solutions(_parse_2, '42', t)
+        sols, _ = simple_solutions(_parse_2, chars('42'), t)
         assert len(sols) == 1
         assert deref(t) == 42
 
     def test_number_float(self):
         # nv
         t = Var()
-        sols, _ = simple_solutions(_parse_2, '3.14', t)
+        sols, _ = simple_solutions(_parse_2, chars('3.14'), t)
         assert len(sols) == 1
         assert deref(t) == 3.14
 
     def test_bool(self):
         # nv
         t = Var()
-        sols, _ = simple_solutions(_parse_2, 'true', t)
+        sols, _ = simple_solutions(_parse_2, chars('true'), t)
         assert len(sols) == 1
         assert deref(t) is True
 
     def test_null(self):
         # nv
         t = Var()
-        sols, _ = simple_solutions(_parse_2, 'null', t)
+        sols, _ = simple_solutions(_parse_2, chars('null'), t)
         assert len(sols) == 1
         assert deref(t) is None
 
     def test_empty_object(self):
         # nv
         t = Var()
-        sols, _ = simple_solutions(_parse_2, '{}', t)
+        sols, _ = simple_solutions(_parse_2, chars('{}'), t)
         assert len(sols) == 1
         result = deref(t)
         assert isinstance(result, DictTerm)
@@ -177,7 +178,7 @@ class TestParse:
     def test_empty_array(self):
         # nv
         t = Var()
-        sols, _ = simple_solutions(_parse_2, '[]', t)
+        sols, _ = simple_solutions(_parse_2, chars('[]'), t)
         assert len(sols) == 1
         assert deref(t) == []
 
@@ -188,13 +189,13 @@ class TestParse:
 
     def test_invalid_json_fails(self):
         # nv
-        sols, _ = simple_solutions(_parse_2, '{bad json}', Var())
+        sols, _ = simple_solutions(_parse_2, chars('{bad json}'), Var())
         assert len(sols) == 0
 
     def test_trampoline(self):
         # nv
         t = Var()
-        sols, trail = trampoline_solutions(parse, '{"x": 1}', t)
+        sols, trail = trampoline_solutions(parse, chars('{"x": 1}'), t)
         assert len(sols) == 1
         assert isinstance(deref(t), DictTerm)
 
@@ -210,7 +211,7 @@ class TestGenerate:
         sols, trail = simple_solutions(_generate_2, dt, s)
         assert len(sols) == 1
         import json
-        assert json.loads(deref(s)) == {"a": 1}
+        assert json.loads(chars_text(deref(s))) == {"a": 1}
 
     def test_nested(self):
         # nv
@@ -219,21 +220,21 @@ class TestGenerate:
         sols, trail = simple_solutions(_generate_2, dt, s)
         assert len(sols) == 1
         import json
-        assert json.loads(deref(s)) == {"a": {"b": 2}}
+        assert json.loads(chars_text(deref(s))) == {"a": {"b": 2}}
 
     def test_list(self):
         # nv
         s = Var()
         sols, trail = simple_solutions(_generate_2, [1, 2, 3], s)
         assert len(sols) == 1
-        assert deref(s) == "[1, 2, 3]"
+        assert deref(s) == chars("[1, 2, 3]")
 
     def test_scalars(self):
         # nv
         s = Var()
-        sols, _ = simple_solutions(_generate_2, "hello", s)
+        sols, _ = simple_solutions(_generate_2, chars("hello"), s)
         assert len(sols) == 1
-        assert deref(s) == '"hello"'
+        assert deref(s) == chars('"hello"')
 
     def test_unbound_var_fails(self):
         """Unbound term fails (can't serialize)."""
@@ -247,10 +248,10 @@ class TestGenerate:
         import json
         original = '{"name": "alice", "scores": [1, 2, 3]}'
         t = Var()
-        simple_solutions(_parse_2, original, t)
+        simple_solutions(_parse_2, chars(original), t)
         s = Var()
         simple_solutions(_generate_2, deref(t), s)
-        assert json.loads(deref(s)) == json.loads(original)
+        assert json.loads(chars_text(deref(s))) == json.loads(original)
 
 
 # ── pretty_generate/2 ───────────────────────────────────────────────────
@@ -263,7 +264,7 @@ class TestPrettyGenerate:
         dt = DictTerm({"a": 1})
         sols, trail = simple_solutions(_pretty_generate_2, dt, s)
         assert len(sols) == 1
-        result = deref(s)
+        result = chars_text(deref(s))
         assert "\n" in result
         assert "  " in result
 
@@ -331,25 +332,25 @@ class TestFileIO:
         # nv
         path = str(tmp_path / "test.json")
         dt = DictTerm({"hello": "world", "n": 42})
-        sols, _ = simple_solutions(_write_file_2, path, dt)
+        sols, _ = simple_solutions(_write_file_2, chars(path), dt)
         assert len(sols) == 1
 
         t = Var()
-        sols, trail = simple_solutions(_read_file_2, path, t)
+        sols, trail = simple_solutions(_read_file_2, chars(path), t)
         assert len(sols) == 1
         result = deref(t)
         assert isinstance(result, DictTerm)
-        assert result.data[mint("hello")] == "world"
+        assert result.data[mint("hello")] == chars("world")
         assert result.data[mint("n")] == 42
 
     def test_read_nonexistent_fails(self):
         # nv
-        sols, _ = simple_solutions(_read_file_2, "/nonexistent/file.json", Var())
+        sols, _ = simple_solutions(_read_file_2, chars("/nonexistent/file.json"), Var())
         assert len(sols) == 0
 
     def test_write_unbound_term_fails(self):
         # nv
-        sols, _ = simple_solutions(_write_file_2, "/tmp/test.json", Var())
+        sols, _ = simple_solutions(_write_file_2, chars("/tmp/test.json"), Var())
         assert len(sols) == 0
 
     def test_read_unbound_path_fails(self):
@@ -376,34 +377,34 @@ class TestParse3AtomsOption:
     def test_json_parse_3_atoms_option_mints_listed_strings(self):
         t = Var()
         sols, _ = simple_solutions(
-            _parse_3, '{"k": "red", "j": "text"}', t, [("atoms", ["red"])]
+            _parse_3, chars('{"k": "red", "j": "text"}'), t, [("atoms", ["red"])]
         )
         assert len(sols) == 1
         d = deref(t)
-        assert d[mint("k")] == mint("red") and d[mint("j")] == "text"
+        assert d[mint("k")] == mint("red") and d[mint("j")] == chars("text")
 
     def test_parse_3_empty_options_matches_parse_2(self):
         t2, t3 = Var(), Var()
-        simple_solutions(_parse_2, '{"k": "red"}', t2)
-        sols, _ = simple_solutions(_parse_3, '{"k": "red"}', t3, [])
+        simple_solutions(_parse_2, chars('{"k": "red"}'), t2)
+        sols, _ = simple_solutions(_parse_3, chars('{"k": "red"}'), t3, [])
         assert len(sols) == 1
         assert deref(t3).data == deref(t2).data
 
     def test_parse_3_atoms_option_reaches_nested_values(self):
         t = Var()
         sols, _ = simple_solutions(
-            _parse_3, '{"a": {"b": "red"}, "c": ["red", "blue"]}', t,
+            _parse_3, chars('{"a": {"b": "red"}, "c": ["red", "blue"]}'), t,
             [("atoms", ["red"])],
         )
         assert len(sols) == 1
         d = deref(t)
         assert d[mint("a")][mint("b")] == mint("red")
-        assert d[mint("c")] == [mint("red"), "blue"]
+        assert d[mint("c")] == [mint("red"), chars("blue")]
 
     def test_parse_3_rejects_an_unknown_option(self):
         with pytest.raises(LogicException) as exc:
             list(simple_solutions(
-                _parse_3, '{"k": 1}', Var(), [("colours", ["red"])],
+                _parse_3, chars('{"k": 1}'), Var(), [("colours", ["red"])],
             ))
         assert exc.value.term.args[0].functor == "domain_error"
         assert exc.value.term.args[0].args[0] == mint("json_option")
@@ -411,7 +412,7 @@ class TestParse3AtomsOption:
     def test_parse_3_is_reachable_through_the_module_predicate(self):
         t = Var()
         sols, _ = trampoline_solutions(
-            parse, '{"k": "red"}', t, [("atoms", ["red"])]
+            parse, chars('{"k": "red"}'), t, [("atoms", ["red"])]
         )
         assert len(sols) == 1
         assert deref(t)[mint("k")] == mint("red")
@@ -421,10 +422,10 @@ class TestParse3AtomsOption:
         # the same text.  At Stage B, ``atoms(["red"])`` written in source is
         # a list of STRINGS — demanding atoms there would make the option
         # unwritable in the notation it exists to serve.
-        for element in ("red", "red", ("red",)):
+        for element in (chars("red"), "red", ("red",)):
             t = Var()
             sols, _ = simple_solutions(
-                _parse_3, '{"k": "red"}', t, [("atoms", [element])]
+                _parse_3, chars('{"k": "red"}'), t, [("atoms", [element])]
             )
             assert len(sols) == 1
             assert deref(t)[mint("k")] == mint("red")
@@ -432,7 +433,7 @@ class TestParse3AtomsOption:
     def test_parse_3_rejects_a_non_text_spelling(self):
         with pytest.raises(LogicException) as exc:
             list(simple_solutions(
-                _parse_3, '{"k": 1}', Var(), [("atoms", [42])],
+                _parse_3, chars('{"k": 1}'), Var(), [("atoms", [42])],
             ))
         assert exc.value.term.args[0].args[0] == mint("json_option")
 
@@ -481,7 +482,7 @@ class TestGenerateRejectsCells:
         s = Var()
         sols, _ = simple_solutions(_generate_2, make_tuple_cell(1, 2), s)
         assert len(sols) == 1
-        assert deref(s) == "[1, 2]"
+        assert deref(s) == chars("[1, 2]")
 
     def test_the_type_error_context_names_the_calling_predicate(self):
         # One converter serves generate/2, pretty_generate/2, write_file/2
@@ -499,5 +500,5 @@ class TestGenerateRejectsCells:
 
         path = str(tmp_path / "out.json")
         with pytest.raises(LogicException) as exc:
-            list(_write_file_2(path, ("point", 1, 2), Trail(), None))
+            list(_write_file_2(chars(path), ("point", 1, 2), Trail(), None))
         assert exc.value.term.args[1] == "py.json.write_file/2"

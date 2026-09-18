@@ -21,6 +21,7 @@ from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_zero_field_class
+from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import (
     char_atom,
     is_atom as _term_is_atom,
@@ -189,6 +190,8 @@ def _char_type__2(char, type_, trail, k):
         from clausal.terms import SegString
         if isinstance(vc, SegString):
             walked = vc.__walk__()
+            if is_chars(walked):
+                walked = chars_text(walked)   # stage 1
             if isinstance(walked, str):
                 vc = walked
         if not is_char_atom(vc):
@@ -285,6 +288,8 @@ def _char_code__2(char, code, trail, k):
         from clausal.terms import SegString
         if isinstance(vc, SegString):
             walked = vc.__walk__()
+            if is_chars(walked):
+                walked = chars_text(walked)   # stage 1
             if isinstance(walked, str):
                 vc = walked
         if not is_char_atom(vc):

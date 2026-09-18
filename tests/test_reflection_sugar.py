@@ -14,6 +14,7 @@ currency).
 import pytest
 
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -91,13 +92,13 @@ def _succeeds(functor, *args, module):
 
 class TestShapeMatching:
     def test_matches_target_clause(self, matchers):
-        assert _succeeds("shape_xy", _TARGET, module=matchers)
+        assert _succeeds("shape_xy", chars(_TARGET), module=matchers)
 
     def test_matches_alpha_renamed_clause(self, matchers):
-        assert _succeeds("shape_xy", _RENAMED, module=matchers)
+        assert _succeeds("shape_xy", chars(_RENAMED), module=matchers)
 
     def test_rejects_crossed_variables(self, matchers):
-        assert not _succeeds("shape_xy", _CROSSED, module=matchers)
+        assert not _succeeds("shape_xy", chars(_CROSSED), module=matchers)
 
 
 class TestCapture:
@@ -105,7 +106,7 @@ class TestCapture:
         from clausal.reflection import Variable
 
         captured = Var()
-        for _ in call("capture_first_arg", _TARGET, captured, module=matchers):
+        for _ in call("capture_first_arg", chars(_TARGET), captured, module=matchers):
             break
         value = deref(captured)
         assert isinstance(value, Variable)
@@ -115,7 +116,7 @@ class TestCapture:
         from clausal.reflection import Goal
 
         goals = Var()
-        for _ in call("capture_body", _TARGET, goals, module=matchers):
+        for _ in call("capture_body", chars(_TARGET), goals, module=matchers):
             break
         value = deref(goals)
         assert isinstance(value, list)
@@ -125,25 +126,25 @@ class TestCapture:
 
 class TestPatternForms:
     def test_fact_pattern_with_atom_argument(self, matchers):
-        assert _succeeds("fact_with_atom", _TARGET, module=matchers)
+        assert _succeeds("fact_with_atom", chars(_TARGET), module=matchers)
 
     def test_atom_pattern_rejects_string_literal(self, matchers):
-        assert not _succeeds("fact_with_atom", _STRING_NOT_ATOM, module=matchers)
+        assert not _succeeds("fact_with_atom", chars(_STRING_NOT_ATOM), module=matchers)
 
     def test_operator_body_pattern(self, matchers):
-        assert _succeeds("operator_body", _TARGET, module=matchers)
+        assert _succeeds("operator_body", chars(_TARGET), module=matchers)
 
     def test_operator_body_rejects_different_operator(self, matchers):
-        assert not _succeeds("operator_body", _NEGATIVE, module=matchers)
+        assert not _succeeds("operator_body", chars(_NEGATIVE), module=matchers)
 
     def test_nested_compound_argument(self, matchers):
-        assert _succeeds("nested_compound", _TARGET, module=matchers)
+        assert _succeeds("nested_compound", chars(_TARGET), module=matchers)
 
     def test_negation_body_pattern(self, matchers):
-        assert _succeeds("negation_body", _TARGET, module=matchers)
+        assert _succeeds("negation_body", chars(_TARGET), module=matchers)
 
     def test_sugar_goal_inside_conjunction(self, matchers):
-        assert _succeeds("two_goal_body", _TARGET, module=matchers)
+        assert _succeeds("two_goal_body", chars(_TARGET), module=matchers)
 
 
 class TestBoundary:

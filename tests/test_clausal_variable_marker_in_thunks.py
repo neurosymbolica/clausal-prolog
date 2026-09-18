@@ -23,6 +23,7 @@ import textwrap
 import pytest
 
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars, chars_text
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -64,7 +65,7 @@ def test_marker_at_the_top_of_an_fstring_slot(tmp_path):
         tree(red),
         p(S) <- (tree(Node), S is f"{--Node}")
     """)
-    assert _answers(mod, "p") == [("red",)]
+    assert _answers(mod, "p") == [(chars("red"),)]
 
 
 def test_marker_and_bare_name_agree_in_an_fstring_slot(tmp_path):
@@ -81,7 +82,7 @@ def test_marker_and_bare_name_agree_in_an_fstring_slot(tmp_path):
         tree(red),
         p(S) <- (tree(Node), S is f"{Node}")
     """)
-    assert _answers(marked, "p") == _answers(bare, "p") == [("red",)]
+    assert _answers(marked, "p") == _answers(bare, "p") == [(chars("red"),)]
 
 
 def test_marker_below_the_top_of_a_slot_and_its_bare_twin(tmp_path):
@@ -109,7 +110,7 @@ def test_marker_below_the_top_of_a_slot_and_its_bare_twin(tmp_path):
         tree(red),
         p(S) <- (tree(Node), S is f"{str(Node).upper()}")
     """)
-    assert _answers(marked, "p") == _answers(bare, "p") == [("RED",)]
+    assert _answers(marked, "p") == _answers(bare, "p") == [(chars("RED"),)]
 
 
 def test_marker_in_a_slot_carrying_a_format_spec(tmp_path):
@@ -120,7 +121,7 @@ def test_marker_in_a_slot_carrying_a_format_spec(tmp_path):
         tree(red),
         p(S) <- (tree(Node), S is f"{--Node:>5}")
     """)
-    assert _answers(mod, "p") == [("  red",)]
+    assert _answers(mod, "p") == [(chars("  red"),)]
 
 
 # ── The marker in a ``++`` operand ─────────────────────────────────────────
@@ -141,7 +142,7 @@ def test_marker_in_a_plus_plus_operand_and_its_bare_twin(tmp_path):
         tree(red),
         p(S) <- (tree(Node), S is ++str(Node).upper())
     """)
-    assert _answers(marked, "p") == _answers(bare, "p") == [("RED",)]
+    assert _answers(marked, "p") == _answers(bare, "p") == [(chars("RED"),)]
 
 
 def test_marker_at_the_top_of_a_plus_plus_operand(tmp_path):
@@ -153,7 +154,7 @@ def test_marker_at_the_top_of_a_plus_plus_operand(tmp_path):
         tree(red),
         p(S) <- (tree(Node), S is ++(--Node))
     """)
-    assert _answers(mod, "p") == [("red",)]
+    assert _answers(mod, "p") == [(chars("red"),)]
 
 
 # ── The negative control: a marked name nothing in the clause binds ────────
@@ -187,7 +188,7 @@ def test_marker_on_a_name_no_goal_binds_is_a_load_error(tmp_path):
         p(S) <- (S is f"{Node}")
     """)
     [(rendered,)] = _answers(bare, "p")
-    assert rendered.startswith("<class "), rendered
+    assert chars_text(rendered).startswith("<class "), rendered
 
 
 def test_the_load_error_reaches_a_plus_plus_operand_too(tmp_path):
@@ -266,7 +267,7 @@ def test_two_markers_and_a_bare_name_in_one_thunk(tmp_path):
         sky(blue),
         p(S) <- (tree(Node), sky(Match), S is f"{--Node}/{--Match}/{Node}")
     """)
-    assert _answers(mod, "p") == [("red/blue/red",)]
+    assert _answers(mod, "p") == [(chars("red/blue/red"),)]
 
 
 def test_a_marker_in_the_head_sees_what_the_body_binds(tmp_path):
@@ -292,9 +293,9 @@ def test_a_marker_in_the_head_sees_what_the_body_binds(tmp_path):
     """)
     [(from_marked,)] = _answers(marked, "p")
     [(from_bare,)] = _answers(bare, "p")
-    assert from_marked.startswith("_") and from_bare.startswith("_"), (
+    assert chars_text(from_marked).startswith("_") and chars_text(from_bare).startswith("_"), (
         from_marked, from_bare)
-    assert "class" not in from_marked, from_marked
+    assert "class" not in chars_text(from_marked), from_marked
 
 
 # ── The promise holds everywhere the marker can be typed ───────────────────
@@ -353,7 +354,7 @@ def test_a_marker_in_the_value_slot_of_a_formatted_value_still_works(
         tree(red),
         p(S) <- (tree(Node), S is f"{--Node:>5}")
     """)
-    assert _answers(mod, "p") == [("  red",)]
+    assert _answers(mod, "p") == [(chars("  red"),)]
 
 
 # ── The block form bears markers; the inline seam does not ─────────────────

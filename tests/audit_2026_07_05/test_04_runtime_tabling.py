@@ -17,6 +17,7 @@ import gc
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, once, query, query_wfs, _query_cache
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -534,10 +535,10 @@ class TestF008DerefWalkTemplateFreeze:
         from clausal.logic.solve import _deref_walk
         t = Trail()
         A = Var()
-        unify(A, "!", t)
+        unify(A, chars("!"), t)
         snap = _deref_walk(SegString(["hi", VarSeg(A)]))
         t.reset()
-        assert snap == "hi!"  # F018 promotion preserved through _deref_walk
+        assert snap == chars("hi!")  # F018 promotion preserved through _deref_walk
 
     def test_compound_position_preserved(self):
         from clausal.terms import Compound
@@ -596,7 +597,7 @@ class TestCToolkitGuards:
             return {
                 "var": lambda: Var(),
                 "list": lambda: [1, 2, 3],
-                "str": lambda: "abc",
+                "str": lambda: chars("abc"),
                 "bytes": lambda: b"abc",
                 "shortlist": lambda: [1],
                 "empty": lambda: [],

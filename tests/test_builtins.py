@@ -14,6 +14,7 @@ import dataclasses
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref
@@ -150,7 +151,7 @@ class TestFunctor:
         # original cons-cell pin -- the cons-cell answer is back).
         mod = fresh_module()
         f, a = Var(), Var()
-        goal = Call(func=LoadName(name="functor"), args=["hello", f, a], kwargs=[])
+        goal = Call(func=LoadName(name="functor"), args=[chars("hello"), f, a], kwargs=[])
         assert sol_var(goal, f, mod=mod) == [mint(".")]
         assert sol_var(goal, a, mod=mod) == [2]
 
@@ -159,7 +160,7 @@ class TestFunctor:
         # F089 (audit 2026-06-13): empty str → nil atom ("[]", 0).
         mod = fresh_module()
         f, a = Var(), Var()
-        goal = Call(func=LoadName(name="functor"), args=["", f, a], kwargs=[])
+        goal = Call(func=LoadName(name="functor"), args=[chars(""), f, a], kwargs=[])
         assert sol_var(goal, f, mod=mod) == [mint("[]")]
         assert sol_var(goal, a, mod=mod) == [0]
 
@@ -321,8 +322,8 @@ class TestUniv:
         # expanded).  INVERTS the P3-1 atom reading ``['hello']``.
         mod = fresh_module()
         lst = Var()
-        goal = Call(func=LoadName(name="unpack"), args=["hello", lst], kwargs=[])
-        assert sol_var(goal, lst, mod=mod) == [[mint("."), mint("h"), "ello"]]
+        goal = Call(func=LoadName(name="unpack"), args=[chars("hello"), lst], kwargs=[])
+        assert sol_var(goal, lst, mod=mod) == [[mint("."), mint("h"), chars("ello")]]
 
     def test_decompose_list_cons_cell(self):
         # nv
@@ -347,7 +348,7 @@ class TestUniv:
         # F088/F089 (audit 2026-06-13): unpack on "" returns ["[]"].
         mod = fresh_module()
         lst = Var()
-        goal = Call(func=LoadName(name="unpack"), args=["", lst], kwargs=[])
+        goal = Call(func=LoadName(name="unpack"), args=[chars(""), lst], kwargs=[])
         assert sol_var(goal, lst, mod=mod) == [[mint("[]")]]
 
 

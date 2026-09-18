@@ -36,7 +36,7 @@ from clausal.pythonic_ast.nodes import (
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
 )
-from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape
+from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.generated_names import dollar_ref
 
@@ -369,7 +369,12 @@ def head_to_match_pattern(
     # name, a ``'...'`` literal and (in the default ``atom`` mode) a ``"..."``
     # literal are ATOMS -- the arity-0 cell -- and take the cell branch at the
     # bottom of this cascade instead.
-    if isinstance(term, str):
+    if isinstance(term, str) or is_chars(term):
+        # STAGE 1 (spec 2026-09-18): the chars CARRIER ``('$chars', text)`` is
+        # a string literal too and takes the same capture + ``unify`` guard --
+        # NOT the compound-cell sequence pattern below, which would match
+        # only a caller holding the carrier and reject the char-list and
+        # bare-str spellings of the same term.  ``unify`` reads all three.
         cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
             list_guards.append(("str", cap_name, term))
@@ -828,7 +833,7 @@ def head_to_match_pattern(
         # the list of its char atoms, so ``p(SOME_STR)`` must match a
         # char-list caller as well as a ``str`` one.  A value pattern
         # compares with ``==`` and would reject the char-list caller.
-        if isinstance(resolved, str):
+        if isinstance(resolved, str) or is_chars(resolved):   # stage 1: carrier too
             cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
             if list_guards is not None:
                 list_guards.append(("str", cap_name, resolved))
@@ -1185,7 +1190,7 @@ def _compile_multi_star_guard(
                 _call(
                     _name("$unify"),
                     _var_or_const_expr(star_var),
-                    slice_expr,
+                    _call(_name("$seg_slice_out"), slice_expr),   # stage 1: a str slice is the carrier
                     _name(trail_name),
                 )
             )
@@ -1329,7 +1334,8 @@ def _compile_multi_star_guard(
     )
 
     # _d = deref(_lcap)
-    deref_assign = _assign(d_name, _call(_name("$deref"), _name(cap_name)))
+    deref_assign = _assign(d_name, _call(_name("$unwrap_chars"),          # stage 1
+                                         _call(_name("$deref"), _name(cap_name))))
 
     # If _d is a SegList, walk it: a fully-ground SegList becomes a plain list
     # so the existing isinstance(list) branch fires; a non-ground SegList stays
@@ -1340,13 +1346,13 @@ def _compile_multi_star_guard(
         body=[
             _assign(
                 d_name,
-                ast.Call(
+                _call(_name("$unwrap_chars"), ast.Call(      # stage 1: a char SegList walks to the carrier
                     func=ast.Attribute(
                         value=_name(d_name), attr="__walk__", ctx=ast.Load()
                     ),
                     args=[],
                     keywords=[],
-                ),
+                )),
             )
         ],
         orelse=[],
@@ -1360,13 +1366,13 @@ def _compile_multi_star_guard(
         body=[
             _assign(
                 d_name,
-                ast.Call(
+                _call(_name("$unwrap_chars"), ast.Call(      # stage 1: a char SegList walks to the carrier
                     func=ast.Attribute(
                         value=_name(d_name), attr="__walk__", ctx=ast.Load()
                     ),
                     args=[],
                     keywords=[],
-                ),
+                )),
             )
         ],
         orelse=[],
@@ -1380,13 +1386,13 @@ def _compile_multi_star_guard(
         body=[
             _assign(
                 d_name,
-                ast.Call(
+                _call(_name("$unwrap_chars"), ast.Call(      # stage 1: a char SegList walks to the carrier
                     func=ast.Attribute(
                         value=_name(d_name), attr="__walk__", ctx=ast.Load()
                     ),
                     args=[],
                     keywords=[],
-                ),
+                )),
             )
         ],
         orelse=[],

@@ -20,6 +20,7 @@ What stays here:
 from __future__ import annotations
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.database import Module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, unify
@@ -88,9 +89,9 @@ class TestCompoundArgs:
         and so is a STRING, which is the list of its characters.  The empty
         list is the atom ``'[]'`` and is not compound."""
         assert _succeeds("compound", [1, 2])
-        assert _succeeds("compound", "a")
+        assert _succeeds("compound", chars("a"))
         assert _fails("compound", [])
-        assert _fails("compound", "")
+        assert _fails("compound", chars(""))
 
     def test_arity0_compound_still_compound(self):
         """DIFFERS from ISO: arity-0 Compound is still compound in clausal."""

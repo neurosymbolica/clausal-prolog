@@ -63,6 +63,7 @@ import clausal.import_hook  # noqa: F401  -- installs the .clausal finder/loader
 from clausal import solve
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
@@ -217,13 +218,13 @@ class TestEqStructuralShapeMatrix:
 
     def test_ground_ground_atom_equal(self, tmp_path):
         mod = _load_clausal(tmp_path, "eq2", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq("foo", "foo"))
+        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("foo")))
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, foo).")
         assert_agreement(clausal, scryer, case="eq(foo, foo)")
 
     def test_ground_ground_atom_unequal(self, tmp_path):
         mod = _load_clausal(tmp_path, "eq3", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq("foo", "bar"))
+        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("bar")))
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, bar).")
         assert_agreement(clausal, scryer, case="eq(foo, bar)")
 

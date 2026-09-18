@@ -19,6 +19,7 @@ Findings tested here:
 import pytest
 
 from clausal.logic.atoms import char_atom
+from clausal.logic.cells import chars, is_chars
 
 
 def test_F018_seglist_walk_promotes_all_char_str_to_str():
@@ -44,20 +45,20 @@ def test_F018_seglist_walk_promotes_all_char_str_to_str():
 
     # Case A: walk yields all-1-char-str list → promote to str.
     X = Var()
-    unify(X, "ello", Trail())
+    unify(X, chars("ello"), Trail())
     sl = SegList([ConcreteSeg([char_atom("h")]), VarSeg(X)])
     walked = sl.__walk__()
-    assert walked == "hello", (
+    assert walked == chars("hello"), (
         f"all-1-char-str walked list should promote to str 'hello', "
         f"got {walked!r} (type={type(walked).__name__})"
     )
-    assert isinstance(walked, str), (
+    assert is_chars(walked), (
         f"expected str, got {type(walked).__name__}: {walked!r}"
     )
 
     # Case B: walk yields mixed list (ints + strs) → stays as list.
     Y = Var()
-    unify(Y, "abc", Trail())
+    unify(Y, chars("abc"), Trail())
     sl2 = SegList([ConcreteSeg([1]), VarSeg(Y), ConcreteSeg([2])])
     walked2 = sl2.__walk__()
     assert isinstance(walked2, list), (
@@ -126,15 +127,15 @@ def test_F033_head_list_unify_output_preserves_str():
     target = Var()
     H, T = Var(), Var()
     unify(H, char_atom("h"), Trail())
-    unify(T, "ello", Trail())  # str-typed tail
+    unify(T, chars("ello"), Trail())  # str-typed tail
     _head_list_unify_output(target, [H], T, [], Trail())
 
     bound = deref(target)
-    assert bound == "hello", (
+    assert bound == chars("hello"), (
         f"expected target bound to str 'hello' (str-preserving output "
         f"mode), got {bound!r} (type={type(bound).__name__})"
     )
-    assert isinstance(bound, str), (
+    assert is_chars(bound), (
         f"expected target type str, got {type(bound).__name__}: {bound!r}"
     )
 
@@ -160,7 +161,7 @@ def test_F042_body_multi_star_unify_promotes_str_when_provable():
     H, S, R = Var(), Var(), Var()
     trail = Trail()
     unify(H, char_atom("h"), trail)
-    unify(S, "ell", trail)
+    unify(S, chars("ell"), trail)
     unify(R, char_atom("o"), trail)
     segments = [("fixed", [H]), ("star", S), ("fixed", [R])]
 
@@ -169,11 +170,11 @@ def test_F042_body_multi_star_unify_promotes_str_when_provable():
         bound = deref(target)
         break
     assert bound is not None, "expected at least one yield"
-    assert bound == "hello", (
+    assert bound == chars("hello"), (
         f"expected target bound to str 'hello' (all elements provably "
         f"1-char-strs / str), got {bound!r} (type={type(bound).__name__})"
     )
-    assert isinstance(bound, str), (
+    assert is_chars(bound), (
         f"expected type str (provable promote), got {type(bound).__name__}"
     )
 
@@ -217,11 +218,11 @@ def test_F043_build_star_list_preserves_str_for_list_of_chars():
     X = Var()
     unify(X, [char_atom(c) for c in "ello"], Trail())
     r1 = _build_star_list([char_atom("h")], X, [])
-    assert r1 == "hello", (
+    assert r1 == chars("hello"), (
         f"_build_star_list with list-of-chars star: expected str 'hello', "
         f"got {r1!r} (type={type(r1).__name__})"
     )
-    assert isinstance(r1, str), (
+    assert is_chars(r1), (
         f"_build_star_list with list-of-chars star: expected type str, "
         f"got {type(r1).__name__}: {r1!r}"
     )
@@ -230,11 +231,11 @@ def test_F043_build_star_list_preserves_str_for_list_of_chars():
     Z = Var()
     unify(Z, [char_atom(c) for c in "ello"], Trail())
     r2 = _build_multi_star_list([("fixed", [char_atom("h")]), ("star", Z)])
-    assert r2 == "hello", (
+    assert r2 == chars("hello"), (
         f"_build_multi_star_list with list-of-chars star: expected str "
         f"'hello', got {r2!r} (type={type(r2).__name__})"
     )
-    assert isinstance(r2, str), (
+    assert is_chars(r2), (
         f"_build_multi_star_list with list-of-chars star: expected type "
         f"str, got {type(r2).__name__}: {r2!r}"
     )

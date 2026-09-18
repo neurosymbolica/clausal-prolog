@@ -11,6 +11,7 @@ Wraps Python's ``hashlib.pbkdf2_hmac``.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -51,7 +52,7 @@ def _derive_5(password, salt, iterations, key_length, derived_key, trail, k):
         note_mismatch("derive/5", "was called with key length <= 0 (argument 4)")
         return
     dk = _hashlib.pbkdf2_hmac("sha256", pw_b, sa_b, it, dklen=kl)
-    if unify(derived_key, dk.hex(), trail):
+    if unify(derived_key, text_result(dk.hex()), trail):
         yield None
 
 

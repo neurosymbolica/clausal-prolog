@@ -3,6 +3,7 @@ unbound_keys/2, signature/3."""
 
 from __future__ import annotations
 
+from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, type_error,
@@ -44,6 +45,8 @@ def _field_keys(mapping, context: str):
             raise LogicException(instantiation_error(context))
         if is_atom(key):
             key = spelling(key)
+        elif is_chars(key):
+            key = chars_text(key)      # stage 1: a chars-string key is its text
         elif not isinstance(key, str):
             raise LogicException(type_error("atom", key, context))
         out[key] = value

@@ -44,6 +44,7 @@ from clausal.logic.atoms import (
     mint,
 )
 from clausal.logic.builtins import get_builtin_dispatch
+from clausal.logic.cells import chars, chars_text
 from clausal.logic.solve import call
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Trail, Var, deref, unify
@@ -299,8 +300,8 @@ def test_write_to_string_renders_human_form_for_hidden_atom():
     result = Var()
     texts = _dispatch_solutions(
         "write_to_string", 2, val, result, snap=lambda: deref(result))
-    assert texts == ["hide_owner.hide_secret"]
-    assert HIDDEN_SEP not in texts[0]
+    assert texts == [chars("hide_owner.hide_secret")]
+    assert HIDDEN_SEP not in chars_text(texts[0])
 
 
 def test_term_to_string_renders_human_form_for_hidden_atom():

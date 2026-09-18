@@ -7,6 +7,7 @@ import time
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars, chars_text
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.process import (
     shell, shell_output, process_create, sleep,
@@ -46,12 +47,12 @@ def trampoline_solutions(pred, *args):
 class TestShell1:
     def test_true_succeeds(self):
         # nv
-        sols, _ = simple_solutions(_shell_1, "true")
+        sols, _ = simple_solutions(_shell_1, chars("true"))
         assert len(sols) == 1
 
     def test_false_fails(self):
         # nv
-        sols, _ = simple_solutions(_shell_1, "false")
+        sols, _ = simple_solutions(_shell_1, chars("false"))
         assert len(sols) == 0
 
     def test_unbound_fails(self):
@@ -67,7 +68,7 @@ class TestShell1:
     def test_trampoline_multi_arity(self):
         # Arity 1 via multi-dispatch
         # nv
-        sols, _ = trampoline_solutions(shell, "true")
+        sols, _ = trampoline_solutions(shell, chars("true"))
         assert len(sols) == 1
 
 
@@ -78,21 +79,21 @@ class TestShell2:
     def test_true_exit_zero(self):
         # nv
         code = Var()
-        sols, trail = simple_solutions(_shell_2, "true", code)
+        sols, trail = simple_solutions(_shell_2, chars("true"), code)
         assert len(sols) == 1
         assert deref(code) == 0
 
     def test_false_exit_one(self):
         # nv
         code = Var()
-        sols, trail = simple_solutions(_shell_2, "false", code)
+        sols, trail = simple_solutions(_shell_2, chars("false"), code)
         assert len(sols) == 1
         assert deref(code) == 1
 
     def test_trampoline(self):
         # nv
         code = Var()
-        sols, trail = trampoline_solutions(shell, "true", code)
+        sols, trail = trampoline_solutions(shell, chars("true"), code)
         assert len(sols) == 1
         assert deref(code) == 0
 
@@ -104,13 +105,13 @@ class TestShellOutput2:
     def test_captures_stdout(self):
         # nv
         output = Var()
-        sols, trail = simple_solutions(_shell_output_2, "echo hello", output)
+        sols, trail = simple_solutions(_shell_output_2, chars("echo hello"), output)
         assert len(sols) == 1
-        assert deref(output).strip() == "hello"
+        assert chars_text(deref(output)).strip() == "hello"
 
     def test_nonzero_exit_fails(self):
         # nv
-        sols, _ = simple_solutions(_shell_output_2, "false", Var())
+        sols, _ = simple_solutions(_shell_output_2, chars("false"), Var())
         assert len(sols) == 0
 
     def test_unbound_fails(self):
@@ -121,9 +122,9 @@ class TestShellOutput2:
     def test_trampoline(self):
         # nv
         output = Var()
-        sols, trail = trampoline_solutions(shell_output, "echo world", output)
+        sols, trail = trampoline_solutions(shell_output, chars("echo world"), output)
         assert len(sols) == 1
-        assert deref(output).strip() == "world"
+        assert chars_text(deref(output)).strip() == "world"
 
 
 # ── shell_output/3 ─────────────────────────────────────────────────────
@@ -134,21 +135,21 @@ class TestShellOutput3:
         # nv
         out, err = Var(), Var()
         sols, trail = simple_solutions(
-            _shell_output_3, "echo out && echo err >&2", out, err
+            _shell_output_3, chars("echo out && echo err >&2"), out, err
         )
         assert len(sols) == 1
-        assert deref(out).strip() == "out"
-        assert deref(err).strip() == "err"
+        assert chars_text(deref(out)).strip() == "out"
+        assert chars_text(deref(err)).strip() == "err"
 
     def test_trampoline(self):
         # nv
         out, err = Var(), Var()
         sols, trail = trampoline_solutions(
-            shell_output, "echo hello && echo warn >&2", out, err
+            shell_output, chars("echo hello && echo warn >&2"), out, err
         )
         assert len(sols) == 1
-        assert deref(out).strip() == "hello"
-        assert deref(err).strip() == "warn"
+        assert chars_text(deref(out)).strip() == "hello"
+        assert chars_text(deref(err)).strip() == "warn"
 
 
 # ── process_create/3 ──────────────────────────────────────────────────
@@ -159,7 +160,7 @@ class TestProcessCreate3:
         # nv
         result = Var()
         sols, trail = simple_solutions(
-            _process_create_3, "echo", ["hello"], result
+            _process_create_3, chars("echo"), [chars("hello")], result
         )
         assert len(sols) == 1
         r = deref(result)
@@ -167,12 +168,12 @@ class TestProcessCreate3:
         # Task 12c: a result dict built for SOURCE has atom keys (§6.8) —
         # ``R.stdout`` looks up ``("stdout",)``.
         assert r.data[mint("exit_code")] == 0
-        assert "hello" in r.data[mint("stdout")]
+        assert "hello" in chars_text(r.data[mint("stdout")])
 
     def test_nonexistent_program_fails(self):
         # nv
         sols, _ = simple_solutions(
-            _process_create_3, "/nonexistent_program_xyz", [], Var()
+            _process_create_3, chars("/nonexistent_program_xyz"), [], Var()
         )
         assert len(sols) == 0
 
@@ -183,14 +184,14 @@ class TestProcessCreate3:
 
     def test_unbound_args_fails(self):
         # nv
-        sols, _ = simple_solutions(_process_create_3, "echo", Var(), Var())
+        sols, _ = simple_solutions(_process_create_3, chars("echo"), Var(), Var())
         assert len(sols) == 0
 
     def test_trampoline(self):
         # nv
         result = Var()
         sols, trail = trampoline_solutions(
-            process_create, "echo", ["test"], result
+            process_create, chars("echo"), [chars("test")], result
         )
         assert len(sols) == 1
         r = deref(result)
@@ -204,20 +205,20 @@ class TestProcessCreate4:
     def test_with_cwd(self, tmp_path):
         # nv
         result = Var()
-        opts = DictTerm({"cwd": str(tmp_path)})
+        opts = DictTerm({"cwd": chars(str(tmp_path))})
         sols, trail = simple_solutions(
-            _process_create_4, "pwd", [], opts, result
+            _process_create_4, chars("pwd"), [], opts, result
         )
         assert len(sols) == 1
         r = deref(result)
-        assert str(tmp_path) in r.data[mint("stdout")]
+        assert str(tmp_path) in chars_text(r.data[mint("stdout")])
 
     def test_with_timeout(self):
         # nv
         result = Var()
         opts = DictTerm({"timeout": 0.01})
         sols, _ = simple_solutions(
-            _process_create_4, "sleep", ["10"], opts, result
+            _process_create_4, chars("sleep"), [chars("10")], opts, result
         )
         # Should fail due to timeout
         assert len(sols) == 0
@@ -225,24 +226,24 @@ class TestProcessCreate4:
     def test_with_input(self):
         # nv
         result = Var()
-        opts = DictTerm({"input": "hello from stdin"})
+        opts = DictTerm({"input": chars("hello from stdin")})
         sols, trail = simple_solutions(
-            _process_create_4, "cat", [], opts, result
+            _process_create_4, chars("cat"), [], opts, result
         )
         assert len(sols) == 1
         r = deref(result)
-        assert r.data[mint("stdout")] == "hello from stdin"
+        assert r.data[mint("stdout")] == chars("hello from stdin")
 
     def test_trampoline(self):
         # nv
         result = Var()
         opts = DictTerm({})
         sols, trail = trampoline_solutions(
-            process_create, "echo", ["trampoline"], opts, result
+            process_create, chars("echo"), [chars("trampoline")], opts, result
         )
         assert len(sols) == 1
         r = deref(result)
-        assert "trampoline" in r.data[mint("stdout")]
+        assert "trampoline" in chars_text(r.data[mint("stdout")])
 
 
 # ── sleep/1 ──────────────────────────────────────────────────────────
@@ -297,7 +298,7 @@ class TestAtomArguments:
         out = Var()
         sols, _ = simple_solutions(_shell_output_2, mint("echo t12b"), out)
         assert len(sols) == 1
-        assert deref(out).strip() == "t12b"
+        assert chars_text(deref(out)).strip() == "t12b"
 
     def test_process_create_accepts_atom_program_and_args(self):
         # nv
@@ -310,7 +311,7 @@ class TestAtomArguments:
         # Task 12c closed the residual this line used to pin: the result dict
         # is emitted with ATOM keys, so ``R.stdout`` from source (which looks
         # up ``("stdout",)``, §6.8) now finds it.
-        assert deref(result).data[mint("stdout")].strip() == "t12b args"
+        assert chars_text(deref(result).data[mint("stdout")]).strip() == "t12b args"
 
     def test_process_create_reads_an_atom_keyed_options_dict(self, tmp_path):
         # nv
@@ -319,7 +320,7 @@ class TestAtomArguments:
         sols, _ = simple_solutions(
             _process_create_4, mint("pwd"), [], opts, result)
         assert len(sols) == 1
-        assert str(tmp_path) in deref(result).data[mint("stdout")]
+        assert str(tmp_path) in chars_text(deref(result).data[mint("stdout")])
 
     def test_process_create_accepts_an_atom_input(self):
         # nv
@@ -328,7 +329,7 @@ class TestAtomArguments:
         sols, _ = simple_solutions(
             _process_create_4, mint("cat"), [], opts, result)
         assert len(sols) == 1
-        assert deref(result).data[mint("stdout")] == "t12b stdin"
+        assert deref(result).data[mint("stdout")] == chars("t12b stdin")
 
 
 # ── Task 12c: the result dict is keyed by ATOMS (spec §6.8) ─────────────
@@ -346,7 +347,7 @@ class TestResultDictKeysAreAtoms:
     def test_process_create_3_keys(self):
         # nv
         result = Var()
-        sols, _ = simple_solutions(_process_create_3, "echo", ["k"], result)
+        sols, _ = simple_solutions(_process_create_3, chars("echo"), [chars("k")], result)
         assert len(sols) == 1
         # The whole key set, not just the one the reads above touch.
         assert set(deref(result).data) == {
@@ -356,7 +357,7 @@ class TestResultDictKeysAreAtoms:
         # nv
         result = Var()
         sols, _ = simple_solutions(
-            _process_create_4, "echo", ["k"], DictTerm({}), result)
+            _process_create_4, chars("echo"), [chars("k")], DictTerm({}), result)
         assert len(sols) == 1
         assert set(deref(result).data) == {
             mint("exit_code"), mint("stdout"), mint("stderr")}

@@ -20,6 +20,7 @@ import textwrap
 import pytest
 
 from clausal.logic.atoms import char_atom, mint, spelling
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic import solve as solve_mod
@@ -341,8 +342,8 @@ def test_F009_sequence_var_terminal(fix):
     # ATOMS, so a Var terminal binds ("a",), not the 1-char str it used to.
     _, m = fix
     X, S = Var(), Var()
-    assert _first(m, "sequence", [X], "a", S)
-    assert deref(X) == char_atom("a") and deref(S) == ""
+    assert _first(m, "sequence", [X], chars("a"), S)
+    assert deref(X) == char_atom("a") and deref(S) == chars("")
 
 
 def test_F009_regression_sequence_ground_modes(fix):
@@ -350,9 +351,9 @@ def test_F009_regression_sequence_ground_modes(fix):
     # one-character STRING, which is a different term.
     _, m = fix
     S = Var()
-    assert _first(m, "sequence", [char_atom("a")], "ab", S) and deref(S) == "b"
+    assert _first(m, "sequence", [char_atom("a")], chars("ab"), S) and deref(S) == chars("b")
     S0 = Var()
-    assert _first(m, "sequence", "a", S0, "b") and deref(S0) == "ab"
+    assert _first(m, "sequence", chars("a"), S0, chars("b")) and deref(S0) == chars("ab")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -585,7 +586,7 @@ def test_F016_must_be_list_string(fix):
 def test_F017_atom_chars_str_arg(fix):
     _, m = fix
     A = Var()
-    assert _first(m, "atom_chars", A, "abc")
+    assert _first(m, "atom_chars", A, chars("abc"))
     assert deref(A) == mint("abc")
 
 
@@ -629,7 +630,7 @@ def test_F019_same_length_ground_segstring(fix):
 def test_F019_regression_same_length_str(fix):
     _, m = fix
     L = Var()
-    assert _first(m, "same_length", "ab", L)
+    assert _first(m, "same_length", chars("ab"), L)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -795,7 +796,7 @@ def test_F025_regression_append_supported_modes(fix):
     L, R = Var(), Var()
     assert len(_collect(m, L, "append", L, R, [1, 2])) == 3
     S = Var()
-    assert _first(m, "append", "he", "llo", S) and deref(S) == "hello"
+    assert _first(m, "append", chars("he"), chars("llo"), S) and deref(S) == chars("hello")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -864,7 +865,7 @@ def test_F030_number_chars_python_lenient(fix):
     with surrounding whitespace parses (documented in docs/builtins.md)."""
     _, m = fix
     N = Var()
-    assert _first(m, "number_chars", N, " 1") and deref(N) == 1
+    assert _first(m, "number_chars", N, chars(" 1")) and deref(N) == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -875,14 +876,14 @@ def test_F032_msort_segstring_promotion(fix):
     _, m = fix
     S = Var()
     assert _first(m, "msort", SegString(["ba"]), S)
-    assert deref(S) == "ab"  # A09-F032 fixed: was ['a', 'b']
+    assert deref(S) == chars("ab")  # A09-F032 fixed: was ['a', 'b']
 
 
 def test_F032_regression_reverse_segstring_promotion(fix):
     _, m = fix
     R = Var()
     assert _first(m, "reverse", SegString(["ab"]), R)
-    assert deref(R) == "ba"
+    assert deref(R) == chars("ba")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -896,7 +897,7 @@ def test_regression_arg_bounds(fix):
     assert not _first(m, "arg", 0, t, Var())
     assert not _first(m, "arg", -1, t, Var())
     assert not _first(m, "arg", 0, [10, 20], Var())
-    assert not _first(m, "arg", -1, "ab", Var())
+    assert not _first(m, "arg", -1, chars("ab"), Var())
     X = Var()
     assert _first(m, "arg", 1, t, X) and deref(X) == 1
 
@@ -914,7 +915,7 @@ def test_regression_arg_cons_semantics(fix):
     X = Var()
     assert _first(m, "arg", 2, [10, 20, 30], X) and _dw(X) == [20, 30]
     Y = Var()
-    assert _first(m, "arg", 2, "abc", Y) and _dw(Y) == "bc"
+    assert _first(m, "arg", 2, chars("abc"), Y) and _dw(Y) == chars("bc")
 
 
 def test_regression_tfilter_user_reified(fix):
@@ -962,7 +963,7 @@ def test_regression_replicate_str_promotion(fix):
     R = Var()
     # A list of CHAR ATOMS is a string, so the result promotes back to one.
     assert (_first(m, "replicate", 3, char_atom("a"), R)
-            and deref(R) == "aaa")
+            and deref(R) == chars("aaa"))
 
 
 def test_regression_atom_concat_typed_error(fix):
@@ -1026,6 +1027,6 @@ def test_regression_python_list_builtins_leak_free(refcount_stable, fix):
         P = Var()
         _collect(m, P, "permutation", [1, 2, 3], P)
         L, R = Var(), Var()
-        _collect(m, L, "append", L, R, "abc")
+        _collect(m, L, "append", L, R, chars("abc"))
 
     refcount_stable(thunk, iterations=300, tol=256, alloc_tol=262144)

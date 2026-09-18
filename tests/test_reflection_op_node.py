@@ -13,6 +13,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal import reflection as R
@@ -117,17 +118,17 @@ def _solutions(functor, *args, module):
 class TestDecompose:
     def test_names_a_relational_node(self, matchers):
         name = Var()
-        sols = _solutions("op_name", "small(X) <- (X >= 1)\n", name, module=matchers)
+        sols = _solutions("op_name", chars("small(X) <- (X >= 1)\n"), name, module=matchers)
         assert [n for (n,) in sols] == [mint("GtE")]
 
     def test_names_arithmetic_and_relational_nodes(self, matchers):
         name = Var()
-        sols = _solutions("op_name", "big(X) <- (X + 1 >= 10)\n", name, module=matchers)
+        sols = _solutions("op_name", chars("big(X) <- (X + 1 >= 10)\n"), name, module=matchers)
         assert {n for (n,) in sols} == {mint("GtE"), mint("Add")}
 
     def test_captures_operands_in_field_order(self, matchers):
         name, args = Var(), Var()
-        sols = _solutions("op_parts", "small(X) <- (X >= 1)\n", name, args, module=matchers)
+        sols = _solutions("op_parts", chars("small(X) <- (X >= 1)\n"), name, args, module=matchers)
         assert len(sols) == 1
         nm, operands = sols[0]
         assert nm == mint("GtE")
@@ -136,22 +137,22 @@ class TestDecompose:
         assert deref(operands[1]) == 1
 
     def test_match_by_class_name_succeeds(self, matchers):
-        sols = _solutions("has_gt_e", "small(X) <- (X >= 1)\n", module=matchers)
+        sols = _solutions("has_gt_e", chars("small(X) <- (X >= 1)\n"), module=matchers)
         assert len(sols) == 1
 
     def test_match_by_class_name_rejects_other_operator(self, matchers):
         # a Lt-only body has no GtE node
-        sols = _solutions("has_gt_e", "tiny(X) <- (X < 1)\n", module=matchers)
+        sols = _solutions("has_gt_e", chars("tiny(X) <- (X < 1)\n"), module=matchers)
         assert sols == []
 
     def test_non_operator_node_fails_cleanly(self, matchers):
         name = Var()
-        sols = _solutions("clause_is_op", "small(X) <- (X >= 1)\n", name, module=matchers)
+        sols = _solutions("clause_is_op", chars("small(X) <- (X >= 1)\n"), name, module=matchers)
         assert sols == []
 
     def test_list_pattern_binds_both_operands(self, matchers):
         left, right = Var(), Var()
-        sols = _solutions("gt_e_parts", "small(X) <- (X >= 1)\n", left, right, module=matchers)
+        sols = _solutions("gt_e_parts", chars("small(X) <- (X >= 1)\n"), left, right, module=matchers)
         assert len(sols) == 1
         l, r = sols[0]
         assert deref(r) == 1  # right operand is the integer literal 1
@@ -159,7 +160,7 @@ class TestDecompose:
     def test_unary_and_comparison_named_together(self, matchers):
         # `X is -Y` reifies as Unify(left=X, right=Negate(operand=Y))
         name = Var()
-        sols = _solutions("op_name", "neg(X, Y) <- (X is -Y)\n", name, module=matchers)
+        sols = _solutions("op_name", chars("neg(X, Y) <- (X is -Y)\n"), name, module=matchers)
         assert [n for (n,) in sols] == [mint("Unify"), mint("Negate")]
 
     def test_compare_chain_excluded_but_its_inner_nodes_named(self, matchers):
@@ -168,7 +169,7 @@ class TestDecompose:
         # left/right pair, so it has no decompose/construct shape here. Its
         # inner Lt nodes ARE operator nodes.
         name = Var()
-        sols = _solutions("op_name", "mid(X) <- (1 < X < 10)\n", name, module=matchers)
+        sols = _solutions("op_name", chars("mid(X) <- (1 < X < 10)\n"), name, module=matchers)
         names = [n for (n,) in sols]
         assert mint("CompareChain") not in names
         assert names == [mint("Lt"), mint("Lt")]
@@ -284,7 +285,7 @@ class TestOperatorSwap:
         over the very same operands, entirely in Clausal."""
         new = Var()
         rendered = []
-        for _ in call("swap_gt_eto_gt", "small(X) <- (X >= 1)\n", new, module=matchers):
+        for _ in call("swap_gt_eto_gt", chars("small(X) <- (X >= 1)\n"), new, module=matchers):
             node = deref(new)
             assert isinstance(node, simple_ast.Gt)
             rendered.append(R.render_source(node))

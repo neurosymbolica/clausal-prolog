@@ -33,6 +33,7 @@ need an atom back mint one.
 from __future__ import annotations
 
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import deref, walk
 from clausal.terms import DictTerm, SegString
 
@@ -81,6 +82,8 @@ def to_python(val):
     if type(val) is str:
         return val
     val = deref(val)
+    if is_chars(val):
+        return chars_text(val)         # stage 1: a chars string crosses out as its text
     # Atom before the tuple arm, which would otherwise turn the arity-0 cell
     # ``("bar",)`` into a 1-tuple of its spelling.
     if _term_is_atom(val):
@@ -89,6 +92,8 @@ def to_python(val):
         # ``deref`` follows Var bindings only; a SegString normalises under
         # ``walk``, which yields a plain str exactly when every hole is bound.
         walked = walk(val)
+        if is_chars(walked):
+            return chars_text(walked)  # stage 1: a ground SegString walks to the carrier
         return walked if type(walked) is str else val
     if isinstance(val, list):
         return [to_python(x) for x in val]
@@ -105,6 +110,17 @@ def to_python(val):
         return {to_python(k): to_python(v) for k, v in val.items()}
     if isinstance(val, dict):
         return {to_python(k): to_python(v) for k, v in val.items()}
+    return val
+
+
+def wrap_text(val):
+    """The THUNK-path INBOUND conversion (stage 1 of the atoms-as-str flip,
+    spec 2026-09-18): a Python ``str`` a ``++`` escape or an f-string hands
+    back is TEXT, and text is the chars carrier.  Top level only, the mirror
+    of :func:`unwrap_atom`'s one-level outbound rule -- a container crosses
+    raw.  Stage 2 makes a bare str the ATOM and this becomes identity."""
+    if type(val) is str:
+        return chars(val)
     return val
 
 
@@ -135,4 +151,15 @@ def unwrap_atom(val):
     someone who can see exactly what they are passing.
     """
     val = deref(val)
+    if is_chars(val):
+        return chars_text(val)         # stage 1: a TOP-LEVEL chars string crosses out as its text
+    if type(val) is list:
+        # one level down too: a list of chars strings is what ", ".join(W)
+        # and every other str-consuming call over a list expects (stage 1;
+        # atoms inside stay cells).  The container crosses by IDENTITY when
+        # nothing inside is a carrier -- the documented "nothing deeper"
+        # contract -- and as a fresh list only when a carrier had to be read.
+        if any(is_chars(deref(x)) for x in val):
+            return [chars_text(e) if is_chars(e) else e for e in (deref(x) for x in val)]
+        return val
     return _atom_spelling(val) if _term_is_atom(val) else val

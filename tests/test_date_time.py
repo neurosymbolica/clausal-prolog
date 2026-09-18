@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import pytest
 
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import (
     now, now_utc, today, date, time, datetime, timedelta,
@@ -296,35 +297,35 @@ class TestDatetimeString:
         # nv — format mode
         s = Var()
         results, _ = simple_solutions(
-            _datetime_string_3, _T(dt.date(2026, 3, 16)), s, "%Y-%m-%d"
+            _datetime_string_3, _T(dt.date(2026, 3, 16)), s, chars("%Y-%m-%d")
         )
         assert len(results) == 1
-        assert deref(s) == "2026-03-16"
+        assert deref(s) == chars("2026-03-16")
 
     def test_format_datetime(self):
         # nv
         s = Var()
         results, _ = simple_solutions(
             _datetime_string_3,
-            _T(dt.datetime(2026, 3, 16, 14, 30, 0)), s, "%Y-%m-%d %H:%M",
+            _T(dt.datetime(2026, 3, 16, 14, 30, 0)), s, chars("%Y-%m-%d %H:%M"),
         )
         assert len(results) == 1
-        assert deref(s) == "2026-03-16 14:30"
+        assert deref(s) == chars("2026-03-16 14:30")
 
     def test_format_time(self):
         # nv
         s = Var()
         results, _ = simple_solutions(
-            _datetime_string_3, _T(dt.time(14, 30, 0)), s, "%H:%M:%S"
+            _datetime_string_3, _T(dt.time(14, 30, 0)), s, chars("%H:%M:%S")
         )
         assert len(results) == 1
-        assert deref(s) == "14:30:00"
+        assert deref(s) == chars("14:30:00")
 
     def test_parse_to_datetime(self):
         # vn — parse mode
         v = Var()
         results, _ = simple_solutions(
-            _datetime_string_3, v, "2026-03-16 14:30", "%Y-%m-%d %H:%M"
+            _datetime_string_3, v, chars("2026-03-16 14:30"), chars("%Y-%m-%d %H:%M")
         )
         assert len(results) == 1
         assert deref(v) == _T(dt.datetime(2026, 3, 16, 14, 30))
@@ -332,14 +333,14 @@ class TestDatetimeString:
     def test_check_mode_matches(self):
         # nn — both ground, format matches
         results, _ = simple_solutions(
-            _datetime_string_3, _T(dt.date(2026, 3, 16)), "2026-03-16", "%Y-%m-%d"
+            _datetime_string_3, _T(dt.date(2026, 3, 16)), chars("2026-03-16"), chars("%Y-%m-%d")
         )
         assert len(results) == 1
 
     def test_check_mode_mismatch_fails(self):
         # nn
         results, _ = simple_solutions(
-            _datetime_string_3, _T(dt.date(2026, 3, 16)), "2026-03-17", "%Y-%m-%d"
+            _datetime_string_3, _T(dt.date(2026, 3, 16)), chars("2026-03-17"), chars("%Y-%m-%d")
         )
         assert len(results) == 0
 
@@ -347,13 +348,13 @@ class TestDatetimeString:
         # vn
         v = Var()
         results, _ = simple_solutions(
-            _datetime_string_3, v, "not-a-date", "%Y-%m-%d"
+            _datetime_string_3, v, chars("not-a-date"), chars("%Y-%m-%d")
         )
         assert len(results) == 0
 
     def test_both_unbound_fails(self):
         # vv
-        results, _ = simple_solutions(_datetime_string_3, Var(), Var(), "%Y-%m-%d")
+        results, _ = simple_solutions(_datetime_string_3, Var(), Var(), chars("%Y-%m-%d"))
         assert len(results) == 0
 
     def test_unbound_format_fails(self):
@@ -367,9 +368,9 @@ class TestDatetimeString:
         """A date → string → back yields a midnight datetime (documented asymmetry)."""
         # nv then vn
         s = Var()
-        simple_solutions(_datetime_string_3, _T(dt.date(2026, 3, 16)), s, "%Y-%m-%d")
+        simple_solutions(_datetime_string_3, _T(dt.date(2026, 3, 16)), s, chars("%Y-%m-%d"))
         v = Var()
-        simple_solutions(_datetime_string_3, v, deref(s), "%Y-%m-%d")
+        simple_solutions(_datetime_string_3, v, deref(s), chars("%Y-%m-%d"))
         assert deref(v) == _T(dt.datetime(2026, 3, 16, 0, 0, 0))
 
 
@@ -751,13 +752,13 @@ class TestDatetimeStringIso:
         d = _T(dt.datetime(2026, 3, 16, 14, 30, 0))
         results, _ = simple_solutions(_datetime_string_iso_2, d, s)
         assert len(results) == 1
-        assert deref(s) == "2026-03-16T14:30:00"
+        assert deref(s) == chars("2026-03-16T14:30:00")
 
     def test_inverse(self):
         # vn
         v = Var()
         results, _ = simple_solutions(
-            _datetime_string_iso_2, v, "2026-03-16T14:30:00"
+            _datetime_string_iso_2, v, chars("2026-03-16T14:30:00")
         )
         assert len(results) == 1
         assert deref(v) == _T(dt.datetime(2026, 3, 16, 14, 30, 0))
@@ -765,7 +766,7 @@ class TestDatetimeStringIso:
     def test_inverse_invalid_fails(self):
         # vn
         v = Var()
-        results, _ = simple_solutions(_datetime_string_iso_2, v, "nope")
+        results, _ = simple_solutions(_datetime_string_iso_2, v, chars("nope"))
         assert len(results) == 0
 
     def test_both_unbound_fails(self):
@@ -783,12 +784,12 @@ class TestDateStringIso:
         s = Var()
         results, _ = simple_solutions(_date_string_iso_2, _T(dt.date(2026, 3, 16)), s)
         assert len(results) == 1
-        assert deref(s) == "2026-03-16"
+        assert deref(s) == chars("2026-03-16")
 
     def test_inverse(self):
         # vn
         v = Var()
-        results, _ = simple_solutions(_date_string_iso_2, v, "2026-03-16")
+        results, _ = simple_solutions(_date_string_iso_2, v, chars("2026-03-16"))
         assert len(results) == 1
         out = deref(v)
         assert out == _T(dt.date(2026, 3, 16))
@@ -805,7 +806,7 @@ class TestDateStringIso:
     def test_inverse_invalid_fails(self):
         # vn
         v = Var()
-        results, _ = simple_solutions(_date_string_iso_2, v, "2026-03-16T00:00:00")
+        results, _ = simple_solutions(_date_string_iso_2, v, chars("2026-03-16T00:00:00"))
         assert len(results) == 0
 
     def test_both_unbound_fails(self):
