@@ -155,6 +155,21 @@ after. The barrier scan on every crossing commit.
 * Closed side: harness-batch-lane's exact list of the 17 sites, and whether any harness body
   passes a Python str MEANING text through the seam (that is the one seam semantics change, §3).
 
+### 7a. Measured 2026-09-18 (canonical `bd31d3b2`)
+
+* **A. `str` type tests:** 147 sites in 42 files (the earlier 121 was two patterns; this is both,
+  by AST-free regex over `isinstance(x, str)` / `type(x) is str`). First cut by surrounding words:
+  TEXT 35, NAME 38, BOTH 37, unclassifiable 37 — so ~110 need the human read. Working table:
+  `tools/atoms_flip/STR_SITES.tsv` (disposition column blank until read). Top files: `_helpers.py`
+  14, `higher_order.py` 13, `body_star_unify.py` 13, `lists.py` 8, `term_rewriting.py` 8.
+* **B. Sites reaching around the atoms API** (1-tuple shape tests or literal cells outside
+  `atoms.py`): 178 in 57 files; top: `term_rewriting.py` 24, `clausal_to_prolog.py` 15,
+  `toklex/spec.py` 12, `prolog_to_clausal.py` 10, `compiler/ir.py` 9, `builtins/io.py` 7.
+* **C. Quoted literals in term patterns** in the engine's own `.clausal`/`.seam` modules: 5 sites in
+  3 of 19 files (listed in the commit that added this section) — small; the kit and corpus halves
+  are corpus-lane's and harness-batch-lane's to grep with the same pattern.
+* **D. Exporter atom/string/chars branch lines:** 37 of 3,708 in `clausal_to_prolog.py`.
+
 ## 8. Parked for the operator (recommendations in bold)
 
 * **Q1.** A Python str crossing the seam is an ATOM. **Yes.** Text is a list of one-char strs or

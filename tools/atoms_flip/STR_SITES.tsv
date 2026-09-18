@@ -1,0 +1,152 @@
+# Pre-build measurement A for the atoms-as-str flip (spec 2026-09-18 §7): every `str` type test in
+# clausal/ with a FIRST-CUT class from surrounding words (TEXT = means a string/char list, NAME = means an
+# atom/functor/key, BOTH/? = needs the human read). The flip INVERTS the TEXT class (those sites must
+# test for the $chars carrier) and keeps the NAME class. Column 5 (disposition) is filled by the read.
+# file	line	first_cut	snippet	disposition
+clausal/logic/atoms.py	110	BOTH	if type(value) is str:	
+clausal/logic/atoms.py	131	BOTH	text = value if type(value) is str else value[0]	
+clausal/logic/builtins/_helpers.py	51	NAME	return term.functor if isinstance(term.functor, str) else None	
+clausal/logic/builtins/_helpers.py	58	?	if isinstance(term, str):	
+clausal/logic/builtins/_helpers.py	96	?	if isinstance(term, str):	
+clausal/logic/builtins/_helpers.py	233	NAME	return isinstance(term.functor, str) and all(_is_ground_py(a) for a in term.args)	
+clausal/logic/builtins/_helpers.py	256	TEXT	if isinstance(seg, str):	
+clausal/logic/builtins/_helpers.py	420	TEXT	# The str arms are spelled ``type(term) is str`` rather than routed through	
+clausal/logic/builtins/_helpers.py	431	NAME	if type(term) is str:	
+clausal/logic/builtins/_helpers.py	440	?	if type(term) is str:	
+clausal/logic/builtins/_helpers.py	451	TEXT	if type(term) is str:	
+clausal/logic/builtins/_helpers.py	465	NAME	if type(term) is str:	
+clausal/logic/builtins/_helpers.py	474	TEXT	if type(term) is str:	
+clausal/logic/builtins/_helpers.py	579	NAME	if not isinstance(term.functor, str):	
+clausal/logic/builtins/_helpers.py	773	BOTH	if isinstance(term, str):	
+clausal/logic/builtins/_helpers.py	839	NAME	name_key = (0, functor) if isinstance(functor, str) else (1, "")	
+clausal/logic/builtins/attributes.py	36	BOTH	on ``isinstance(key, str)``, which post-flip matches a STRING and nothing	
+clausal/logic/builtins/attributes.py	79	NAME	if type(key) is str:	
+clausal/logic/builtins/chars.py	192	BOTH	if isinstance(walked, str):	
+clausal/logic/builtins/chars.py	288	BOTH	if isinstance(walked, str):	
+clausal/logic/builtins/dcg.py	41	TEXT	if type(seq) is str:	
+clausal/logic/builtins/dcg.py	63	?	if isinstance(list_val, str):	
+clausal/logic/builtins/dcg.py	215	?	elif isinstance(lst_val, str) and isinstance(s_val, str):	
+clausal/logic/builtins/dcg.py	234	TEXT	elif isinstance(lst_val, str):	
+clausal/logic/builtins/higher_order.py	132	TEXT	elif type(goal_val) is str:	
+clausal/logic/builtins/higher_order.py	343	?	was_str = isinstance(xs_val, str)	
+clausal/logic/builtins/higher_order.py	371	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	402	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	466	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	494	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	522	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	558	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	605	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	735	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	771	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	811	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/higher_order.py	849	?	was_str = isinstance(lst_val, str)	
+clausal/logic/builtins/inspection.py	105	?	if isinstance(seg, str):	
+clausal/logic/builtins/inspection.py	180	TEXT	if isinstance(seg, str):	
+clausal/logic/builtins/inspection.py	255	BOTH	ConcreteSeg([char_atom(c) for c in seg]) if isinstance(seg, str) else seg	
+clausal/logic/builtins/inspection.py	276	NAME	if isinstance(tail, str):	
+clausal/logic/builtins/inspection.py	412	BOTH	if type(f_val) is str:	
+clausal/logic/builtins/inspection.py	488	BOTH	if type(f_val) is str:	
+clausal/logic/builtins/inspection.py	883	BOTH	if isinstance(name_val, str):	
+clausal/logic/builtins/io.py	84	TEXT	if isinstance(val, str):	
+clausal/logic/builtins/io.py	479	BOTH	if isinstance(val, str):	
+clausal/logic/builtins/iso_compare.py	100	NAME	if isinstance(name, str):	
+clausal/logic/builtins/keyword_ops.py	47	BOTH	elif not isinstance(key, str):	
+clausal/logic/builtins/lists.py	70	NAME	if isinstance(val, str):	
+clausal/logic/builtins/lists.py	106	TEXT	if isinstance(val, str):	
+clausal/logic/builtins/lists.py	246	?	_any_str = isinstance(l1_val, str) or isinstance(l2_val, str) or isinstance(l3_val, str)	
+clausal/logic/builtins/lists.py	466	TEXT	elif not outer and isinstance(x, str):	
+clausal/logic/builtins/lists.py	626	?	_out_str = isinstance(s1, str) and isinstance(s2, str)	
+clausal/logic/builtins/lists.py	644	?	_out_str = isinstance(s1, str) and isinstance(s2, str)	
+clausal/logic/builtins/lists.py	666	?	_out_str = isinstance(s1, str) and isinstance(s2, str)	
+clausal/logic/builtins/lists.py	1000	TEXT	if isinstance(seq_val, str):	
+clausal/logic/builtins/translations_builtin.py	40	BOTH	elif isinstance(lang_val, str):	
+clausal/logic/builtins/type_checks.py	59	?	if isinstance(x_val, str):	
+clausal/logic/cells.py	259	?	return type(slot0) is str	
+clausal/logic/cells.py	497	NAME	if isinstance(functor, str):	
+clausal/logic/clpfd.py	2524	BOTH	``isinstance(op, str)``, which after the flip matches a STRING and nothing	
+clausal/logic/clpfd.py	2546	BOTH	if type(op) is str:	
+clausal/logic/clpz3.py	210	TEXT	if isinstance(expr, str):	
+clausal/logic/clpz3.py	1028	TEXT	if isinstance(val, str):	
+clausal/logic/clpz3.py	1712	TEXT	if isinstance(pattern, str):	
+clausal/logic/clpz3.py	1882	BOTH	if is_atom(fsort) or type(fsort) is str:	
+clausal/logic/clpz3.py	2265	TEXT	if isinstance(obj_val, str):	
+clausal/logic/compiler/arg_index.py	123	?	if type(slot0) is str:	
+clausal/logic/compiler/arg_index.py	291	BOTH	start = 1 if (type(slot0) is str or slot0 is TUPLE_TAG) else 0	
+clausal/logic/compiler/arg_index.py	361	?	if type(slot0) is str:	
+clausal/logic/compiler/globals_env.py	518	BOTH	``type(binding) is str`` this replaces, and which at Stage B admits the	
+clausal/logic/compiler/head_match.py	372	BOTH	if isinstance(term, str):	
+clausal/logic/compiler/head_match.py	831	BOTH	if isinstance(resolved, str):	
+clausal/logic/compiler/head_match.py	931	NAME	if isinstance(_tag, str) and len(term) == 1:	
+clausal/logic/compiler/head_match.py	948	BOTH	if isinstance(_tag, str):	
+clausal/logic/compiler/list_dispatch.py	20	NAME	_valid_functor_slot`` is EXACT-type (``type(slot0) is str``, review fix	
+clausal/logic/compiler_v2.py	693	BOTH	if isinstance(name, str):	
+clausal/logic/compiler_v2.py	1212	NAME	if isinstance(entry, str):	
+clausal/logic/compiler_v2.py	1788	NAME	declared_atoms = {e for e in exports if isinstance(e, str)}	
+clausal/logic/compiler_v2.py	1793	NAME	if isinstance(entry, str):	
+clausal/logic/constants.py	269	NAME	functor = binding if isinstance(binding, str) else name	
+clausal/logic/database.py	739	NAME	if isinstance(md, str):	
+clausal/logic/database.py	799	NAME	channel=detail if isinstance(detail, str) else None,	
+clausal/logic/database.py	847	NAME	channel=detail if isinstance(detail, str) else None,	
+clausal/logic/database.py	1382	BOTH	if not isinstance(f, str):	
+clausal/logic/exceptions.py	91	BOTH	if not isinstance(expected, str) or expected not in _NUMERIC_EXPECTATIONS:	
+clausal/logic/exceptions.py	242	NAME	return mint(name) if type(name) is str else name	
+clausal/logic/goal_expansion.py	237	NAME	if isinstance(first, str):	
+clausal/logic/goal_expansion.py	242	BOTH	if isinstance(value, str):	
+clausal/logic/goal_expansion.py	408	BOTH	if isinstance(key, str) and _is_logic_var_name(key) \	
+clausal/logic/predicate.py	1485	TEXT	if type(obj) is str:	
+clausal/logic/runtime/_seg_helpers.py	37	NAME	if type(seq) is str:	
+clausal/logic/runtime/body_star_unify.py	77	TEXT	if isinstance(d, str):	
+clausal/logic/runtime/body_star_unify.py	115	TEXT	if isinstance(walked, str):	
+clausal/logic/runtime/body_star_unify.py	141	TEXT	if isinstance(seg, str):	
+clausal/logic/runtime/body_star_unify.py	214	TEXT	if isinstance(d, str):	
+clausal/logic/runtime/body_star_unify.py	252	?	if isinstance(d, str):	
+clausal/logic/runtime/body_star_unify.py	260	TEXT	if isinstance(walked, str):	
+clausal/logic/runtime/body_star_unify.py	268	?	if isinstance(inner_seg, str):	
+clausal/logic/runtime/body_star_unify.py	302	TEXT	if all(isinstance(s, str) for s in str_segs):	
+clausal/logic/runtime/body_star_unify.py	386	TEXT	if isinstance(d, str):	
+clausal/logic/runtime/body_star_unify.py	409	TEXT	if isinstance(walked, str):	
+clausal/logic/runtime/body_star_unify.py	416	?	if isinstance(inner_seg, str):	
+clausal/logic/runtime/body_star_unify.py	464	BOTH	if type(collection) is str:	
+clausal/logic/runtime/body_star_unify.py	513	TEXT	if not isinstance(collapsed, str):	
+clausal/logic/runtime/list_unify.py	198	TEXT	elif isinstance(s, str):	
+clausal/logic/runtime/list_unify.py	249	TEXT	str_chars(walked) if isinstance(walked, str) else walked	
+clausal/logic/runtime/list_unify.py	272	TEXT	if isinstance(walked, str):	
+clausal/logic/runtime/list_unify.py	287	TEXT	if isinstance(inner, str):	
+clausal/logic/solve.py	221	BOTH	if type(term) is str:	
+clausal/logic/solve.py	785	BOTH	if isinstance(target, str):	
+clausal/logic/solve.py	1273	NAME	if not isinstance(functor, str):	
+clausal/logic/to_python.py	81	TEXT	if type(val) is str:	
+clausal/logic/to_python.py	92	?	return walked if type(walked) is str else val	
+clausal/modules/py/__init__.py	179	BOTH	if type(val) is str:	
+clausal/modules/py/__init__.py	184	NAME	if type(val) is str:	
+clausal/modules/py/__init__.py	191	?	if type(walked) is str:	
+clausal/modules/py/__init__.py	203	TEXT	if type(promoted) is str:	
+clausal/modules/py/csv.py	62	NAME	return mint(name) if type(name) is str else name	
+clausal/modules/py/json.py	80	NAME	if type(obj) is str:	
+clausal/modules/py/json.py	176	BOTH	elif type(s) is str:	
+clausal/modules/py/re.py	80	?	if isinstance(s, str):	
+clausal/modules/py/re.py	86	TEXT	if isinstance(promoted, str):	
+clausal/modules/reflection.py	109	BOTH	gate was ``isinstance(name, str)``, which after the flip matches a STRING	
+clausal/modules/reflection.py	123	BOTH	if type(name) is str:	
+clausal/modules/reflection.py	133	BOTH	``isinstance(source, str)`` gate.  Under the default	
+clausal/modules/reflection.py	265	NAME	if type(goal_name) is str:	
+clausal/pythonic_ast/node_class.py	24	TEXT	s = f.type if isinstance(f.type, str) else repr(f.type)	
+clausal/templating/compiler.py	113	NAME	if isinstance(node.func, ast.Constant) and isinstance(node.func.value, str):	
+clausal/templating/compiler.py	314	NAME	if isinstance(value, str):	
+clausal/templating/compiler.py	322	NAME	return _list([_name(v) if isinstance(v, str) and v in self.sub_names	
+clausal/templating/compiler.py	414	BOTH	if isinstance(node.func, ast.Constant) and isinstance(node.func.value, str):	
+clausal/templating/term_rewriting.py	520	?	if not (isinstance(node, Constant) and isinstance(node.value, str)):	
+clausal/templating/term_rewriting.py	2670	BOTH	if isinstance(call.func, Constant) and isinstance(call.func.value, str):	
+clausal/templating/term_rewriting.py	2854	?	if type(value) is str:	
+clausal/templating/term_rewriting.py	3993	NAME	if isinstance(node, Attribute) and isinstance(node.attr, str):	
+clausal/templating/term_rewriting.py	4148	?	if not isinstance(node.left.value, str):	
+clausal/templating/term_rewriting.py	7141	NAME	and isinstance(single_element.func.value, str)))	
+clausal/templating/term_rewriting.py	7205	?	and isinstance(lhs.func.value, str)):	
+clausal/templating/term_rewriting.py	7295	NAME	and isinstance(left.func.value, str)):	
+clausal/tools/clausal_to_prolog.py	1995	?	if isinstance(value, str):	
+clausal/tools/clausal_to_prolog.py	2274	NAME	and isinstance(node.func.value, str)	
+clausal/tools/clausal_to_prolog.py	2948	BOTH	if isinstance(node, python_ast.Constant) and isinstance(node.value, str):	
+clausal/tools/clausal_to_prolog.py	2974	TEXT	if isinstance(value, python_ast.Constant) and isinstance(value.value, str):	
+clausal/tools/iso_l3.py	70	NAME	if isinstance(t, str):	
+clausal/tools/prolog_parser.py	312	NAME	assert isinstance(name, str)	
+clausal/tools/prolog_parser.py	475	NAME	return tok.value if isinstance(tok.value, str) else None	
