@@ -314,3 +314,30 @@ Not in step 2 (still open): Fraction ⊕ float (a float today; step 6 with the h
 `**` with a Decimal base (native), `writeq` of a rational (step 7, measure first), the registry
 move of Decimal to the transfer table (step 3), unification of decimals of different scale (with
 the int/float todo).
+
+---
+
+# Step 7 MEASURED (2026-09-18): `writeq` of a rational in the two ladder engines
+
+    goal                     Scryer          Trealla
+    X is 1 rdiv 3, write     1 rdiv 3        1 rdiv 3
+    writeq                   1 rdiv 3        1 rdiv 3
+    write_canonical          rdiv(1,3)       1 rdiv 3
+    7 rdiv 2 / -1 rdiv 3     7 rdiv 2 / -1 rdiv 3   (both)
+    4 rdiv 2                 2               2        (integral presents as int — the engine's rule too)
+    rational(X), number(X)   true, true      true, true
+
+Neither engine has a decimal type, so there is no reference for `writeq(Decimal)`.
+**Recommendation for Q3 (parked, the operator's):** `write` and `writeq` of a Fraction print
+`N rdiv D`, matching both engines; `write` of a Decimal prints its digits (`10.01`, ruled);
+`writeq` of a Decimal prints the source spelling `decimal(M, S)`, because `writeq`'s contract is
+"reads back as the same term" and the digits read back as a FLOAT (Q4) — the cell spelling reads
+back exactly once step 3 lowers it. Nothing built.
+
+# Twin/wrapper audit CLOSED (2026-09-18)
+
+The twin population is exactly the four comparison entries (`propagate` hits are class methods).
+`tests/test_comparison_twin_parity.py` runs one 84-case matrix through the C-backed wrappers
+in-process and the pure-Python twins in a subprocess with the C propagate module blocked, and
+asserts identical outcomes; 0 divergences after step 2's fixes; positive control: the pre-9e30afa9
+wrapper (no ground fold) makes the tree case diverge and the matrix sees it.
