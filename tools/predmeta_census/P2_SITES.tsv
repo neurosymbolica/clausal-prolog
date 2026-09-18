@@ -32,7 +32,7 @@ clausal/logic/builtins/_registry.py	479	_build_all_builtin_classes	make_predicat
 clausal/logic/builtins/_registry.py	495	_build_all_builtin_classes	make_predicate(	constructor		same as 479, the multi-arity wrapper branch
 clausal/logic/builtins/attributes.py	234	_collect_attvars	is_term_instance(	typetest-compound		
 clausal/logic/builtins/attributes.py	235	_collect_attvars	term_field_names(	decomposer		
-clausal/logic/builtins/control.py	53	_goal_dispatch_and_args	is_term_instance(	typetest-compound		
+clausal/logic/builtins/control.py	53	_goal_dispatch_and_args	is_term_instance(	typetest-predicate		
 clausal/logic/builtins/control.py	59	_goal_dispatch_and_args	term_field_names(	decomposer		
 clausal/logic/builtins/database_ops.py	117	_freeze_asserted_head_args	is_term_instance(	typetest-compound		
 clausal/logic/builtins/database_ops.py	119	_freeze_asserted_head_args	term_field_names(	decomposer		field names read off the existing instance to rebuild a fresh one via type(head)(...)

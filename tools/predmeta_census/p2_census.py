@@ -307,6 +307,16 @@ def main():
         "# (the plan stops the sweep there); otherwise blank at this stage.\n"
         "# file\tline\tqualname\tpattern\tkind\tdisposition\tnote\n"
     )
+    # A labelled census is hand work: refuse to overwrite one whose kind/
+    # disposition columns are filled unless --force is given (a plain re-run
+    # clobbered the labels once, 2026-09-18; git restored them).
+    if OUT_TSV.exists() and "--force" not in sys.argv:
+        labelled = [ln for ln in OUT_TSV.read_text(encoding="utf-8").splitlines()
+                    if ln and not ln.startswith("#") and len(ln.split("\t")) > 4
+                    and ln.split("\t")[4] not in ("", "kind")]
+        if labelled:
+            print(f"REFUSING to overwrite {OUT_TSV.name}: {len(labelled)} labelled rows; pass --force")
+            return
     with OUT_TSV.open("w", encoding="utf-8") as fh:
         fh.write(header_comment)
         for r in rows:
