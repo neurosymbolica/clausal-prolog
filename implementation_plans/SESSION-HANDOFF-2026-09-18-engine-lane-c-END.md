@@ -60,12 +60,13 @@ annotations only — one signature change, no class-identity dependence.
 
 ## NEXT
 
-1. **Task 1 (the census with kinds) is IN FLIGHT on a sonnet agent** under
-   `$scratchpad/P2-TASK1-BRIEF.md`, worktree `$scratchpad/p2wt`. It commits `tools/predmeta_census/p2_census.py` +
-   `P2_SITES.tsv` on the P2 branch. VERIFY before building on it: re-run the walker (it prints the population size;
-   controls: 81 + 82 reader sites, 27 `make_predicate` callers, 17 C arms in 8 functions, 7 package files),
-   spot-check kind labels against the enclosing functions, confirm the commit touched only those two files. If the
-   agent did not finish, the branch has the plan and the brief has the spec; re-dispatch.
+1. **Task 1 (the census with kinds) is DONE and VERIFIED**: P2 branch tip `421a9fa0` = the agent's
+   `2e75cf62` (walker + 405 labelled rows over 52 files; population 524 files; all four controls reproduced, two
+   deltas explained) + my verification commit (the walker now REFUSES to overwrite a labelled TSV without
+   `--force` -- a plain re-run clobbered the labels once; `control.py:53` relabelled goal-position). Kinds:
+   decomposer 152, typetest-compound 75, typetest-predicate 61, package 41, constructor 33, c-arm 17,
+   definition 13, annotation 12; 45 rows `needs-db` (17 in specialization.py); 22 `._fields` rows are KWTerm/ast
+   false positives kept with notes. Task 2 (the registry) is next.
 2. Task 2 (the registry) is the first engine change; it subsumes the fb0106f3 row minting.
 3. Lanes: harness-batch-lane's RE-BASELINE sweep on `fb0106f3` (told); corpus-lane's attribution of the two
    newly-exportable wrong-answer domains (GDPR breach notification, Peppol) — theirs, not an engine block;
