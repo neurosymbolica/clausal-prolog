@@ -42,8 +42,13 @@ The three legitimate edits, and nothing else:
    `length("ab", 2)` written from Python); a test that asserted a str result of a `++` escape/`to_term`
    as the CARRIER now expects the bare str (the atom); `isinstance(x, tuple)`/`type(x) is tuple` for an
    atom becomes `type(x) is str`/`is_atom(x)`; `x[0]` to read an atom's spelling becomes `spelling(x)`.
-3. A `.clausal` fixture whose Python-side harness compares against the old shapes: same edits, Python side
-   only; the `.clausal` source needs NO change (bare names and `'...'` are atoms as before).
+3. A `.clausal` fixture whose Python-side harness compares against the old shapes: same edits on the Python
+   side. The `.clausal` SOURCE needs a change in exactly one case: a `++(...)` escape that yields Python strs
+   (`++sorted(["a", "b"])`, `++"x".upper()`, `++str(N)`) now yields ATOMS (spec §3 Q1), so a fixture that
+   compared such a result against `"..."` STRINGS under `-double_quotes(chars)` must compare against atoms
+   (`['a', 'b']` / `'X'`) or take the string side through `atom_chars`/`chars` -- keep the assertion's
+   strength. A harness that calls a fixture test BY NAME with a bare Python str (`_succeeds("test", name)`)
+   must pass `chars(name)`: under chars mode the `test("...")` head is a STRING literal.
 
 Forbidden: editing anything under `clausal/`; deleting or skipping/xfailing a test; loosening an
 assertion (`==` to `in`, dropping a check, catching the TypeError); changing what a test tests.
