@@ -17,3 +17,7 @@ whether dict keys should carry a tag; this todo is only the doc being wrong TODA
 atom and string keys coincide) and re-check the head-position passage it points at, or
 fold into Phase 4's audit if the semantics are about to change. docs/ is snippet-tested —
 run the doc-snippet suites after editing.
+
+## CLOSED 2026-09-18
+
+Done in the docs pass after the atoms-as-str flip (stages 1+2 landed on main at 3fcfd29e): docs branch `docs/atoms-as-str-doc-pass-2026-09-18`, fast-forwarded onto main. Every claim was measured against the landed engine; the doc-snippet suite (tests/fixtures/docs) is green. The current model: an atom IS the interned Python str, a string is the list of its char atoms (the `$chars` carrier internally), an atom key and a same-spelled STRING key are different keys, an atom key and its quoted spelling are one.
