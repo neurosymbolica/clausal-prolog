@@ -176,6 +176,13 @@ def to_text(val):
 
     What this never does is answer with a Python ``repr``.
     """
+    # STAGE 1 of the atoms-as-str flip: the chars carrier ('$chars', text)
+    # IS text -- every py-module text position reads it as its str.
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    from clausal.logic.variables import deref as _d  # noqa: PLC0415
+    _v = _d(val)
+    if is_chars(_v):
+        return chars_text(_v)
     if type(val) is str:
         return val
     from clausal.logic.atoms import is_atom as _is_atom, spelling as _spelling

@@ -73,6 +73,13 @@ def normalize_seg_input(x: Any) -> Any:
     The walk is idempotent: calling on a plain ``list`` / ``str`` /
     ``Var`` is a cheap pass-through.
     """
+    # STAGE 1 of the atoms-as-str flip: a chars carrier normalises to the
+    # str it holds, so every consumer downstream of this funnel that accepts
+    # a str as text keeps working unchanged (both spellings accepted until
+    # the interim rule is armed).
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(x):
+        return chars_text(x)
     from clausal.terms import SegList, SegString, SegBytes
     if isinstance(x, SegList):
         return x.__walk__()
