@@ -994,11 +994,7 @@ char_atom_from_ucs4(Py_UCS4 c)
 {
     if (c < 128 && g_ascii_char_atoms[c] != NULL)
         return Py_NewRef(g_ascii_char_atoms[c]);
-    PyObject *spelling = PyUnicode_FromOrdinal((int)c);
-    if (!spelling) return NULL;
-    PyObject *cell = PyTuple_Pack(1, spelling);
-    Py_DECREF(spelling);
-    return cell;
+    return PyUnicode_FromOrdinal((int)c);   /* STAGE 2: the char atom is the 1-char str */
 }
 
 /* Interned "__unify__", set in PyInit__variables before any unify runs. */
@@ -1037,7 +1033,7 @@ probe_unify_hook(PyObject *obj, PyObject **hook_out)
 static inline int is_nil_spelling(PyObject *t)
 {
     if (PyList_Check(t))    return PyList_GET_SIZE(t) == 0;
-    if (PyUnicode_Check(t)) return PyUnicode_GET_LENGTH(t) == 0;
+    /* STAGE 2: a bare str is an ATOM -- '' is not nil; the empty CARRIER below is */
     if (PyBytes_Check(t))   return PyBytes_GET_SIZE(t) == 0;
     /* the EMPTY chars carrier ('$chars', "") is nil too (stage 1; review 2026-09-18) */
     if (PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
@@ -1221,13 +1217,17 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                         trail, depth + 1, oc);
     }
 
-    /* the chars carrier walks to its text here (see is_chars_carrier) */
-    if (is_chars_carrier(t1) || is_chars_carrier(t2)) {
-        t1 = unwrap_chars(t1);
-        t2 = unwrap_chars(t2);
-        if (PyUnicode_Check(t1) && PyUnicode_Check(t2))
-            return PyUnicode_Compare(t1, t2) == 0;
-    }
+    /* STAGE 2 (spec 2026-09-18): the chars carrier is the ONLY text.  It
+     * walks to its str here, and the str<->list arms below are reachable
+     * only through it (the flags): a bare str is an ATOM, equal to itself,
+     * never to a list and never to the carrier of the same text. */
+    int t1_text = 0, t2_text = 0;
+    if (is_chars_carrier(t1)) { t1 = unwrap_chars(t1); t1_text = 1; }
+    if (is_chars_carrier(t2)) { t2 = unwrap_chars(t2); t2_text = 1; }
+    if (t1_text && t2_text)
+        return PyUnicode_Compare(t1, t2) == 0;
+    if ((t1_text && PyUnicode_Check(t2)) || (t2_text && PyUnicode_Check(t1)))
+        return 0;   /* a string is not the atom of its text */
     if (PyList_Check(t1) && PyList_Check(t2)) {
         Py_ssize_t n = PyList_GET_SIZE(t1);
         if (n != PyList_GET_SIZE(t2)) return 0;
@@ -1279,7 +1279,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
      * = "a"`` stays FALSE via the mixed list/tuple guard further down,
      * because "a" is the one-element LIST [("a",)], not the char.
      */
-    if (PyUnicode_Check(t1) && PyList_Check(t2)) {
+    if (t1_text && PyList_Check(t2)) {   /* carrier vs list */
         Py_ssize_t n = PyUnicode_GET_LENGTH(t1);
         if (n != PyList_GET_SIZE(t2)) return 0;
         if (n == 0) return 1;
@@ -1290,11 +1290,9 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             PyObject *elem_raw = PyList_GetItemRef(t2, i);
             if (elem_raw == NULL) return -1;
             PyObject *elem = var_deref(elem_raw);
-            if (!Var_Check(elem) && PyTuple_CheckExact(elem)
-                    && PyTuple_GET_SIZE(elem) == 1
-                    && PyUnicode_Check(PyTuple_GET_ITEM(elem, 0))
-                    && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(elem, 0)) == 1) {
-                Py_UCS4 c2 = PyUnicode_READ_CHAR(PyTuple_GET_ITEM(elem, 0), 0);
+            if (!Var_Check(elem) && PyUnicode_Check(elem)
+                    && PyUnicode_GET_LENGTH(elem) == 1) {
+                Py_UCS4 c2 = PyUnicode_READ_CHAR(elem, 0);
                 Py_DECREF(elem_raw);
                 if (c1 != c2) return 0;
             } else {
@@ -1308,7 +1306,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         }
         return 1;
     }
-    if (PyList_Check(t1) && PyUnicode_Check(t2)) {
+    if (PyList_Check(t1) && t2_text) {   /* list vs carrier */
         /* Symmetric: list on left, str on right. */
         Py_ssize_t n = PyUnicode_GET_LENGTH(t2);
         if (PyList_GET_SIZE(t1) != n) return 0;
@@ -1320,11 +1318,9 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             PyObject *elem_raw = PyList_GetItemRef(t1, i);
             if (elem_raw == NULL) return -1;
             PyObject *elem = var_deref(elem_raw);
-            if (!Var_Check(elem) && PyTuple_CheckExact(elem)
-                    && PyTuple_GET_SIZE(elem) == 1
-                    && PyUnicode_Check(PyTuple_GET_ITEM(elem, 0))
-                    && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(elem, 0)) == 1) {
-                Py_UCS4 c1 = PyUnicode_READ_CHAR(PyTuple_GET_ITEM(elem, 0), 0);
+            if (!Var_Check(elem) && PyUnicode_Check(elem)
+                    && PyUnicode_GET_LENGTH(elem) == 1) {
+                Py_UCS4 c1 = PyUnicode_READ_CHAR(elem, 0);
                 Py_DECREF(elem_raw);
                 if (c1 != c2) return 0;
             } else {
@@ -3857,9 +3853,7 @@ PyInit__variables(void)
         PyObject *spelling = PyUnicode_FromOrdinal(i);
         if (!spelling) return NULL;
         PyUnicode_InternInPlace(&spelling);
-        g_ascii_char_atoms[i] = PyTuple_Pack(1, spelling);
-        Py_DECREF(spelling);
-        if (!g_ascii_char_atoms[i]) return NULL;
+        g_ascii_char_atoms[i] = spelling;   /* STAGE 2: a char atom IS the interned 1-char str */
     }
 
     /* Interned before any walk can run — do_walk's fast-path gate uses it. */

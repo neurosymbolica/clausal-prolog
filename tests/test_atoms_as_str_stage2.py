@@ -81,3 +81,23 @@ def test_first_arg_indexing_keys_an_atom_by_the_str(tmp_path):
     body = "".join(f"c({a}, {i}),\n" for i, a in enumerate(["a", "b", "foo", "yes", "no"]))
     mod = _mod(tmp_path, body)
     assert _first(mod, "c", "foo", Var())[1] == 2 and _first(mod, "c", chars("foo"), Var()) is None
+
+
+# ── Task 3: the C twins ─────────────────────────────────────────────────────
+
+def test_c_unify_does_not_read_an_atom_as_a_list():
+    from clausal.logic.variables import unify, Trail
+    t = Trail()
+    assert not unify("ab", ["a", "b"], t) and unify(chars("ab"), ["a", "b"], t)
+    assert unify("ab", "ab", t) and not unify("ab", chars("ab"), t) and unify(chars("ab"), chars("ab"), t)
+    assert unify(chars(""), [], t) and not unify("", [], t)      # '' is the atom '', not nil
+
+
+def test_c_and_python_list_twins_agree_on_an_atom_target():
+    from clausal.logic.runtime.list_unify import _head_list_unify_input_py
+    from clausal.logic.runtime._list_unify import _head_list_unify_input
+    from clausal.logic.variables import Var, Trail, deref
+    for fn in (_head_list_unify_input_py, _head_list_unify_input):
+        assert fn("ab", [Var()], Var(), [], Trail()) is False          # an atom is not a sequence
+        h, tl, t = Var(), Var(), Trail()
+        assert fn(chars("ab"), [h], tl, [], t) is True and deref(h) == "a" and deref(tl) == chars("b")

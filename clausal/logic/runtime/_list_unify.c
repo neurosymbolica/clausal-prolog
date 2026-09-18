@@ -79,16 +79,14 @@ call_unify(PyObject *t1, PyObject *t2, PyObject *trail)
 static inline PyObject *
 char_atom_obj(PyObject *ch1)
 {
-    return PyTuple_Pack(1, ch1);
+    return Py_NewRef(ch1);   /* STAGE 2: the char atom is the 1-char str itself */
 }
 
 /* True iff *e* is a char — the arity-0 cell of a 1-char str. */
 static inline int
 is_char_atom_obj(PyObject *e)
 {
-    return PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1
-        && PyUnicode_Check(PyTuple_GET_ITEM(e, 0))
-        && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(e, 0)) == 1;
+    return PyUnicode_Check(e) && PyUnicode_GET_LENGTH(e) == 1;   /* STAGE 2: a char is the 1-char str */
 }
 
 /* The spelling of the char *e* — BORROWED reference, valid while *e* is.
@@ -98,9 +96,7 @@ is_char_atom_obj(PyObject *e)
 static inline PyObject *
 char_spelling_obj(PyObject *e)
 {
-    if (PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1)
-        return PyTuple_GET_ITEM(e, 0);
-    return e;
+    return e;   /* STAGE 2: a char atom is its own spelling */
 }
 
 /* Get item from list or string at index i.
@@ -375,7 +371,7 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         Py_DECREF(d);
         if (!walked) return NULL;
         d = walked;
-        if (!PyList_Check(d) && !PyUnicode_Check(d) && !is_chars_carrier(d)) {
+        if (!PyList_Check(d) && !is_chars_carrier(d)) {   /* STAGE 2: a bare str is an atom */
             Py_DECREF(d);
             Py_RETURN_NONE;
         }
@@ -395,14 +391,14 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         Py_DECREF(d);
         if (!walked) return NULL;
         d = walked;
-        if (!PyList_Check(d) && !PyUnicode_Check(d) && !is_chars_carrier(d)) {
+        if (!PyList_Check(d) && !is_chars_carrier(d)) {   /* STAGE 2: a bare str is an atom */
             Py_DECREF(d);
             Py_RETURN_FALSE;
         }
     }
 
     /* ── list, str, or bytes ── */
-    if (PyList_Check(d) || PyUnicode_Check(d) || is_chars_carrier(d) || PyBytes_Check(d)) {
+    if (PyList_Check(d) || is_chars_carrier(d) || PyBytes_Check(d)) {   /* STAGE 2 */
         Py_ssize_t dlen = seq_length(d);
         Py_ssize_t min_len = n_before + n_after;
 
@@ -528,12 +524,16 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
         PyObject *s = call_deref(star_val);
         if (!s) goto error;
 
+        int s_text = 0;
         if (is_chars_carrier(s)) {
-            /* stage 1: the carrier splats as its text (owned reference swap) */
+            /* the carrier splats as its text (owned reference swap); the flag
+             * is what makes the text arm below reachable -- a bare str star
+             * is an ATOM element and takes the else arm (STAGE 2) */
             PyObject *inner = PyTuple_GET_ITEM(s, 1);
             Py_INCREF(inner);
             Py_DECREF(s);
             s = inner;
+            s_text = 1;
         }
         if (PyList_Check(s)) {
             /* Plain list: extend result */
@@ -546,11 +546,9 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 }
             }
             Py_DECREF(s);
-        } else if (PyUnicode_Check(s)) {
-            /* Liskov "strings-as-lists" rule: a str-bound star is
-             * treated as a list of CHARS. Splat its chars into
-             * the result; the final ``maybe_promote_to_str`` re-promotes
-             * when every element is a char. */
+        } else if (s_text) {
+            /* a carrier-bound star splats as its CHARS; maybe_promote_to_str
+             * re-promotes the whole result when every element is a char */
             if (extend_with_str_chars(result, s) < 0) {
                 Py_DECREF(s);
                 goto error;

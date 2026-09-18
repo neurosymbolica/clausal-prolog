@@ -101,11 +101,11 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     handles ``[H, *T]`` against either ``["h", "e"]`` or ``"he"``.
     """
     d = deref(target)
+    d_text = False
     if is_chars(d):
-        d = chars_text(d)              # stage 1: the carrier destructures as its text
+        d = chars_text(d); d_text = True   # the carrier destructures as its text
     elif type(d) is str:
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(d, "a head list pattern target")   # interim rule
+        return False                   # STAGE 2: a bare str is an ATOM, not a sequence
 
     # ── fast path: [H, *T] on a plain list ──
     if type(d) is list and star_val is not None and not after_vals:
@@ -129,8 +129,8 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     if isinstance(d, SegString):
         d = d.__walk__()
         if is_chars(d):
-            d = chars_text(d)          # stage 1: a ground SegString walks to the carrier
-        if not isinstance(d, (list, str)):
+            d = chars_text(d); d_text = True   # a ground SegString walks to the carrier
+        if not (isinstance(d, list) or d_text):
             return None
     if isinstance(d, SegBytes):
         d = d.__walk__()
@@ -139,11 +139,11 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     if isinstance(d, SegList):
         d = d.__walk__()
         if is_chars(d):
-            d = chars_text(d)          # stage 1: a ground char SegList walks to the carrier
-        if not isinstance(d, (list, str)):
+            d = chars_text(d); d_text = True   # a ground char SegList walks to the carrier
+        if not (isinstance(d, list) or d_text):
             return False
 
-    if isinstance(d, (list, str, bytes)):
+    if isinstance(d, (list, bytes)) or d_text:   # STAGE 2: text only through the carrier
         n_before = len(var_vals)
         n_after = len(after_vals)
         min_len = n_before + n_after
@@ -206,11 +206,12 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     # not a back door — it is R-S2's rule that a string stays a string.
     if star_val is not None:
         s = deref(star_val)
-        if is_chars(s):
-            s = chars_text(s)          # stage 1: a carrier-bound star splats as its chars
+        s_text = is_chars(s)
+        if s_text:
+            s = chars_text(s)          # a carrier-bound star splats as its chars
         if isinstance(s, list):
             result.extend(s)
-        elif isinstance(s, str):
+        elif s_text:                   # STAGE 2: a bare str star is an ATOM element (the else arm)
             # Liskov "strings-as-lists" rule: a str-bound star is treated
             # as a list of CHARS. Splat its chars into the result;
             # the final ``maybe_promote_to_str`` re-promotes the whole
