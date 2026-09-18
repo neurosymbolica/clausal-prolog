@@ -73,7 +73,6 @@ not add representation machinery the engine already has.").
 
 from __future__ import annotations
 
-import os
 import sys
 from typing import Any
 
@@ -421,7 +420,7 @@ def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None
     remedy = _CONTROL_CONSTRUCT_REMEDY[functor]
     raise LogicException(type_error(
         "callable_control_construct_unsupported", cell,
-        f"{context}: {functor}/{len(cell) - 1} is a control construct, and a "
+        f"{context}: {functor}/{0 if type(cell) is str else len(cell) - 1} is a control construct, and a "
         f"control construct built as a TERM is not callable yet — {remedy} "
         f"(deferred to the ISO-surface phase; see clausal/logic/cells.py "
         f"refuse_control_construct_cell)",

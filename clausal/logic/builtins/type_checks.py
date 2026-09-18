@@ -247,12 +247,12 @@ def _is_atomic_term(x) -> bool:
     ``atomic(X)`` cannot drift apart — the pattern the ``atom`` and
     ``string`` rows already follow.
 
-    True for the arity-0 cell atom, the empty list, ``int``, ``float``,
-    ``bool``, ``None``, and zero-arity ``PredicateMeta`` classes. False for
-    ``Var``, ``Compound``, ``KWTerm``, term-instances, ``list``,
-    ``SegList``, ``SegString`` — and, since THE FLIP, a plain ``str``: a
-    string is the LIST of its char atoms (spec §6.3), so it is no more
-    atomic than the list it denotes.
+    True for an atom (STAGE 2: a ``str``), the empty list in any spelling,
+    ``int``, ``float``, ``bool`` and ``None``.  False for ``Var``,
+    ``Compound``, ``KWTerm``, term-instances, ``list``, ``SegList``,
+    ``SegString``, a non-empty STRING (the chars carrier: it is the LIST of
+    its char atoms, spec §6.3, so no more atomic than that list) — and any
+    class (STAGE 2, spec §4: no class is an atom).
 
     Task 15 item 2 (spec §14.1/§14.12, RULED 2026-09-07): ``""``/``[]``/
     ``b""`` ARE atomic — they are the atom ``'[]'`` — and a non-empty
@@ -300,8 +300,9 @@ def _atomic__1(x, trail, k):
     See :func:`_is_atomic_term`, which ``must_be(atomic, X)`` shares.
     """
     # F029 (A09): walk a ground Seg* to its concrete form first — a ground
-    # SegString walks to a str (atomic) so is_str(X) no longer contradicts
-    # atomic(X). A non-ground Seg* stays a Seg* and is rejected below.
+    # SegString walks to the chars carrier (a STRING, the '.'/2 compound), so
+    # string(X) and atomic(X) stay coherent: both see the same term.  A
+    # non-ground Seg* stays a Seg* and is rejected below.
     if _is_atomic_term(walk_seg(deref(x))):
         yield None
 
@@ -491,6 +492,7 @@ def _check_type(type_name: str, term) -> bool:
         return (
             _is_empty_list(walked)
             or _is_non_empty_list(walked)
+            or _is_atom_term(walked)       # STAGE 2: the same atom arm callable_/1 has (review round 1)
             or isinstance(term, (Compound, KWTerm))
             or is_term_instance(term)
             or (isinstance(term, type) and hasattr(term, '_get_dispatch'))

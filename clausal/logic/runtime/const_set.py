@@ -98,13 +98,16 @@ _cset_atom = _term_is_atom
 
 
 class _AtomSpellings(frozenset):
-    """A const-set holding SPELLINGS (``str``) rather than atom cells.
+    """A const-set holding ATOMS only — which, since STAGE 2 of the
+    atoms-as-str flip, are their spellings (an atom IS the ``str``).
 
     ``_const_set`` returns one of these when EVERY element of the constant
     list is an atom, which is the overwhelmingly common shape (``ACTION in
     [acquire, dispose, amend, cancel]``).  The subclass is the signal: the
-    generated code asks ``set.__class__ is $ATOM_SET`` and, when it is, looks
-    up ``elem[0]`` — the spelling — instead of the atom cell.
+    generated code asks ``set.__class__ is $ATOM_SET`` and, when it is,
+    narrows its GUARD to ``elem.__class__ is $str`` (the lookup is ``elem in
+    set`` in both modes; the slot-0 read of the cell era is gone).
+    The measurements below are from the cell era and are kept for the record.
 
     How much this is worth, measured rather than assumed: the cached-str-hash
     argument that motivates it is **almost entirely wrong on CPython 3.13**.

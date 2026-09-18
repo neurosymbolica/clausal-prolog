@@ -2571,24 +2571,7 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         return term;
     }
     /* Zero-arity PredicateMeta class (atom) */
-    if (PredicateMeta_type) {
-        r = PyObject_IsInstance(term, PredicateMeta_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *fields = PyObject_GetAttr(term, str_fields);
-            if (fields) {
-                if (!PyTuple_Check(fields)) { Py_DECREF(fields); Py_RETURN_NONE; }
-                int empty = (PyTuple_GET_SIZE(fields) == 0);
-                Py_DECREF(fields);
-                if (empty) {
-                    Py_INCREF(term);
-                    return term;  /* the class IS the functor name */
-                }
-            } else {
-                PyErr_Clear();
-            }
-        }
-    }
+    /* STAGE 2 (spec §4): no class is a term -- the zero-field-class arm is retired with the cell. */
     Py_RETURN_NONE;
 }
 
@@ -2671,21 +2654,7 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
         return PyLong_FromLong(0);
     }
     /* Zero-arity atom */
-    if (PredicateMeta_type) {
-        r = PyObject_IsInstance(term, PredicateMeta_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *fields = PyObject_GetAttr(term, str_fields);
-            if (fields) {
-                if (!PyTuple_Check(fields)) { Py_DECREF(fields); Py_RETURN_NONE; }
-                int empty = (PyTuple_GET_SIZE(fields) == 0);
-                Py_DECREF(fields);
-                if (empty) return PyLong_FromLong(0);
-            } else {
-                PyErr_Clear();
-            }
-        }
-    }
+    /* STAGE 2 (spec §4): no class is a term -- the zero-field-class arm is retired with the cell. */
     Py_RETURN_NONE;
 }
 

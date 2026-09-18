@@ -2264,7 +2264,6 @@ class TermTransformer(NodeTransformer):
                  python_visitor=None, titlecase_python_bound=None,
                  clause_var_names=None):
         transformer.seen_vars = set()
-        transformer._call_func_names: set[int] = set()   # STAGE 2: Names in call-func position
         # THE SEAM (``--term`` in Python-hosted code): ``seam`` marks a
         # transformer serving one seam expression; ``python_visitor`` is the
         # enclosing EmbedTransformer's ``visit``, run over every ``++``
@@ -2486,10 +2485,6 @@ class TermTransformer(NodeTransformer):
             transformer._in_callable_position = prev_callable
 
     def visit_Call(transformer, call):
-        if isinstance(call.func, Name):
-            # STAGE 2: a Name in FUNCTION position is a call, never the
-            # 0-arity-predicate-as-value atom (see visit_Name)
-            transformer._call_func_names.add(id(call.func))
         visit = transformer.visit
 
         # q(expr) — quasi-quotation: produces the simple_ast node for expr.
@@ -3465,7 +3460,7 @@ class TermTransformer(NodeTransformer):
             return replace(Constant(value=sys.intern(identifier)), name)   # STAGE 2: the atom is the str
         if (identifier in transformer._declared_functors
                 and len(transformer._declared_functors[identifier]) == 0
-                and id(name) not in transformer._call_func_names):
+                and not transformer._in_callable_position):   # a Name in FUNCTION position is a call (_visit_call_func)
             # STAGE 2 (spec 2026-09-18 §1 table, §4): a 0-arity PREDICATE
             # referenced as a VALUE is the atom of its name -- the str, as in
             # ISO -- and not its class: the zero-field-class-as-atom legacy

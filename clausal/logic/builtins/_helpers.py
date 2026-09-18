@@ -101,8 +101,6 @@ def _arity_py(term: Any) -> int | None:
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:
         return 0
-    if is_zero_field_class(term):
-        return 0                       # twin parity: the C ``_arity`` answers 0 for a zero-field class
     return None
 
 
@@ -516,7 +514,8 @@ NIL_SPELLING = _NIL_SPELLING
 
 
 def _is_empty_list(term: Any) -> bool:
-    """True iff *term* is the EMPTY LIST — ``[]``, ``""``, ``b""`` or ``()``.
+    """True iff *term* is the EMPTY LIST — ``[]``, ``chars("")``, ``b""`` or ``()``
+    (STAGE 2: a bare ``""`` is the atom ``''``, not nil).
 
     The empty ``tuple`` is here and NOT in :func:`_is_non_empty_list`
     deliberately: a non-empty tuple is a CELL (or tuple-data), which has its
@@ -817,10 +816,9 @@ def _standard_order_key(term: Any) -> tuple:
         num = exact_cell_number(term)
         if num is not None:
             return _number_key(num, 1)
-        # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5) and keys in the
-        # atom band by its spelling — the same key a 0-arity predicate class
-        # of that name gets, so the two spellings of one atom are one atom in
-        # the order.  Arity > 0 keys like ``Compound`` — arity first, then name
+        # A cell (spec §5.1).  STAGE 2: an atom is a str and keyed in the
+        # atom band above; the 1-tuple is RESERVED and refuses just below.
+        # Arity > 0 keys like ``Compound`` — arity first, then name
         # (ISO 7.2.1), positional flavour — never as a sequence.
         refuse_reserved_1tuple(term)   # STAGE 2: the arity-0 cell is RESERVED
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,

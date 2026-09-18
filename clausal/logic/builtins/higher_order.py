@@ -148,7 +148,7 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
     # The goal as the fold leaves it — the term both special routes below are
     # decided on (F4), and the culprit the control-construct refusal names.
-    folded = (functor,) + tuple(call_args)
+    folded = (functor,) + tuple(call_args) if call_args else functor   # STAGE 2: never build the reserved 1-tuple
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
         # Slots 1 and 2 are the qualification; everything past them is an
         # extra the fold has not placed yet, and it belongs to the INNER goal.

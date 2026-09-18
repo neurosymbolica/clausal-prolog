@@ -253,14 +253,18 @@ class TestIsZeroFieldClassAdoptionRegression:
     sites and their answers are the same ones.
     """
 
-    def test_functor_name_of_atom_class_is_itself(self):
-        # nv — _functor_name_py line ~54
-        assert _functor_name(foo_atom) is foo_atom
+    def test_functor_name_of_atom_class_is_none(self):
+        # STAGE 2 of the atoms-as-str flip (spec §4): no class is a term, so
+        # neither twin answers for a zero-field class -- the atom of that name
+        # is the str.  It is still a zero-field CLASS, a different question.
+        assert _functor_name(foo_atom) is None
+        assert _functor_name(mint("foo")) == "foo"
         assert is_zero_field_class(foo_atom)
 
-    def test_arity_of_atom_class_is_zero(self):
-        # nv — _arity_py line ~79
-        assert _arity(foo_atom) == 0
+    def test_arity_of_atom_class_is_none(self):
+        # STAGE 2 (spec §4): as above, for the arity twin
+        assert _arity(foo_atom) is None
+        assert _arity(mint("foo")) == 0
 
     def test_is_ground_of_atom_class_is_true(self):
         # nv — _is_ground_py line ~172 (checked isinstance(term, type) AND

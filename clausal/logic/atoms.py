@@ -63,6 +63,7 @@ toklex spec's own comment for the cross-reference back to this module).
 from __future__ import annotations
 
 import sys
+from clausal.logic.cells import CHARS_TAG   # cells imports nothing from this module: the edge is acyclic
 
 #: The reserved codepoint separating a mangled atom's owning module name
 #: from its bare spelling (design doc §1b, ruling R1-revised, 2026-09-05:
@@ -251,7 +252,7 @@ def is_nil(term) -> bool:
     holds — nothing.
     """
     # STAGE 2: a bare str is an ATOM (`''` is not nil); the empty STRING is the carrier chars("")
-    if type(term) is tuple and len(term) == 2 and term[0] == "$chars" and term[1] == "":
+    if type(term) is tuple and len(term) == 2 and term[0] == CHARS_TAG and term[1] == "":
         return True
     return isinstance(term, (list, bytes, tuple)) and len(term) == 0
 

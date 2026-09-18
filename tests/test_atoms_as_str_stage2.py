@@ -168,3 +168,40 @@ def test_no_class_is_an_atom_and_the_reserved_tuple_never_prints():
     with pytest.raises(TypeError, match="reserved"):
         term_str(("foo",))
     assert not is_atom_value(type("Zero", (), {}))
+
+
+class TestReviewRound1:
+    """Rows from the roborev review of the stage-2 branch (2026-09-18)."""
+
+    def test_must_be_callable_admits_an_atom_like_callable_1(self):
+        from clausal.logic.builtins.type_checks import _check_type
+        assert _check_type("callable", mint("foo")) is True
+        assert _check_type("callable", chars("foo")) is True     # a non-empty string is the '.'/2 compound
+        assert _check_type("callable", 3) is False
+
+    def test_the_reader_spells_the_chars_tag_as_cells_does(self):
+        from clausal.logic.cells import CHARS_TAG
+        from clausal.logic.atoms import is_nil
+        from clausal.tools.prolog_ast import PString
+        from clausal.tools.prolog_reader import transform_term
+        cell, _span, _names = transform_term(PString(""))
+        assert cell == chars("") and cell[0] == CHARS_TAG and is_nil(cell)
+        cell, _span, _names = transform_term(PString("ab"))
+        assert cell == chars("ab") and not is_nil(cell)
+
+    def test_call_of_a_control_construct_atom_reports_the_atom_not_a_1tuple(self, tmp_path):
+        from clausal.logic.exceptions import LogicException
+        mod = _mod(tmp_path, "")
+        with pytest.raises(LogicException) as exc:
+            _first(mod, "call", mint(","))
+        # the diagnostic renders its culprit: with a reserved 1-tuple as the
+        # culprit, str() of the error raised TypeError instead
+        assert "control construct" in str(exc.value) and ",/0" in str(exc.value)
+
+    def test_no_class_is_a_term_to_either_functor_twin(self):
+        from clausal.logic.builtins._helpers import _functor_name_py, _arity_py
+        from clausal.logic.variables._variables import _functor_name, _arity
+        from clausal.logic.predicate import make_predicate
+        cls = make_predicate("trr_zero_field", [])
+        assert _functor_name_py(cls) is None and _arity_py(cls) is None
+        assert _functor_name(cls) is None and _arity(cls) is None

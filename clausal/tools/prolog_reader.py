@@ -169,7 +169,7 @@ class _Transform:
             # STAGE 2: a string is the chars CARRIER (``cells.chars``, spelled
             # inline -- this module grows no import edge into the engine); it
             # denotes the list of its char atoms and is equal to it everywhere.
-            return ("$chars", node.value)
+            return ("$chars", node.value)   # == clausal.logic.cells.CHARS_TAG; pinned by tests/test_atoms_as_str_stage2.py
         if isinstance(node, PVar):
             return VarRef(self.var_index(node.name))
         if isinstance(node, PCompound):

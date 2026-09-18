@@ -173,7 +173,8 @@ class TestArityFallback:
 
     def test_atom(self):
         # nv
-        assert _arity_py(Atom) == _arity(Atom) == 0
+        # STAGE 2 (spec §4): no class is a term -- both twins answer None
+        assert _arity_py(Atom) is None and _arity(Atom) is None
 
     def test_string_nonempty_is_arity_two(self):
         # nv
