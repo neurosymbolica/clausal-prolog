@@ -32,7 +32,7 @@ out of the box, but some Prolog conventions must change.
 
 | Prolog | Clausal | Notes |
 |---|---|---|
-| `parent(alice, bob).` | `parent(alice, bob),` | Trailing comma, not period. Atoms are written bare (declare them in `-module`/`-private`, or carry `-implicit_atoms`) or single-quoted (`'alice'`, no declaration needed); each is the arity-0 cell `("alice",)`. A double-quoted `"alice"` follows the file's [`-double_quotes`](directives.md#-double_quotes) mode — an atom today, a string once the default flips. |
+| `parent(alice, bob).` | `parent(alice, bob),` | Trailing comma, not period. Atoms are written bare (declare them in `-module`/`-private`, or carry `-implicit_atoms`) or single-quoted (`'alice'`, no declaration needed); each is the interned Python `str` itself. A double-quoted `"alice"` follows the file's [`-double_quotes`](directives.md#-double_quotes) mode — an atom today, a string once the default flips. |
 | `X`, `Parent` | `X`, `PARENT` | Variables are ALLCAPS (or leading underscore: `_x`) |
 | `_` | `_` | Anonymous variable — same |
 | `_Foo` singleton silently allowed | [`_UNUSED` suffix](syntax.md#singleton-variables-and-_unused) (`_foo_UNUSED`, `FOO_UNUSED`) | Clausal warns by default on *any* named variable used once, in both styles — matching SWI's `singleton variable` warning, but the suppression is a **suffix**, not a leading-underscore reading. Leading underscore is already a first-class variable *style* here (`_x`), so it can't double as "don't warn" too — and a case-based exemption would be blind for caseless-script variables, which are forced into leading-underscore spelling. `-allow_singletons` opts a whole file out. |
@@ -150,9 +150,9 @@ Where you would use green cuts in Prolog, Clausal offers:
 
 ### Atoms
 
-An atom is the arity-0 cell `("red",)` — a 1-tuple whose slot 0 is the
-spelling — and is compared by **value equality**, never by identity. Write one
-bare (`red`, declared in `-private`/`-module`, imported, or under
+An atom **is** the interned Python `str` — no wrapper — and is compared with
+**`==`** (interning makes `is` agree too, but `==` is the test to write).
+Write one bare (`red`, declared in `-private`/`-module`, imported, or under
 `-implicit_atoms`) or single-quoted (`'hello world'`, no declaration needed).
 
 A double-quoted `"red"` is an atom or a **string** depending on the file's
