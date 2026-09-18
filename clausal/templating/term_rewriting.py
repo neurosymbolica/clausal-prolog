@@ -2886,7 +2886,7 @@ class TermTransformer(NodeTransformer):
                 # emits a list DISPLAY, which also gives a fresh list per
                 # evaluation -- what a mutable value requires.
                 return replace(List(elts=[], ctx=load), constant)
-            return replace(Constant(value=(sys.intern(value),)), constant)
+            return replace(Constant(value=sys.intern(value)), constant)   # STAGE 2: the atom is the str
         return constant
 
     def _visit_dict_key(transformer, key):
@@ -3453,11 +3453,18 @@ class TermTransformer(NodeTransformer):
         # atom by identity.
         if identifier in transformer._hidden_atoms:
             return replace(
-                Constant(value=(mangle(transformer._module_name, identifier),)),
+                Constant(value=mangle(transformer._module_name, identifier)),   # STAGE 2
                 name,
             )
         if identifier in transformer.atoms:
-            return replace(Constant(value=(sys.intern(identifier),)), name)
+            return replace(Constant(value=sys.intern(identifier)), name)   # STAGE 2: the atom is the str
+        if (identifier in transformer._seen_functors
+                and len(transformer._seen_functors[identifier]) == 0):
+            # STAGE 2 (spec 2026-09-18 §1 table, §4): a 0-arity PREDICATE
+            # referenced as a VALUE is the atom of its name -- the str, as in
+            # ISO -- and not its class: the zero-field-class-as-atom legacy
+            # is gone.  In GOAL position the same name is a call (visit_Call).
+            return replace(Constant(value=sys.intern(identifier)), name)
         # Imported predicate: remap to full dotted path so Python code in the
         # .clausal file cannot accidentally clobber the predicate reference.
         dotted = transformer._import_remap.get(identifier)
@@ -4319,8 +4326,8 @@ def _make_functor_class_ast(functor_name, field_names, source):
         # with a broadcasting ``__eq__`` (a numpy array, a pandas frame)
         # would raise at LOAD time on the bare ``==`` — the isinstance
         # short-circuit the pre-flip ``isinstance(.., str)`` guard had.
-        f"    if type({functor_name}) is tuple and "
-        f"{functor_name} == {(functor_name,)!r}:",
+        f"    if type({functor_name}) is str and "
+        f"{functor_name} == {functor_name!r}:",   # STAGE 2: the atom placeholder is the str
         "        raise NameError",
         "except NameError:",
         f"    class {functor_name}(metaclass={_PM_PLACEHOLDER}):",

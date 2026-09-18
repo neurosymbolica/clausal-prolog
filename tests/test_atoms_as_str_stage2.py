@@ -37,3 +37,47 @@ def test_the_1_tuple_is_reserved():
         _cell_shape(("x",))
     assert compound_cell_shape("x") == (False, None)
     assert compound_cell_shape(("f", 1)) == (True, "f")
+
+
+# ── Task 2: the reader and the head compiler ────────────────────────────────
+
+def _mod(tmp_path, body, hdr="-double_quotes(chars)\n-private([yes, no, a, b, foo])\n"):
+    from clausal.testing import load_clausal_module
+    p = tmp_path / "s2.clausal"; p.write_text(hdr + body)
+    return load_clausal_module(p)
+
+
+def _first(mod, name, *args):
+    from clausal.logic.solve import call
+    from clausal.logic.variables import deref
+    for _ in call(name, *args, module=mod):
+        return [deref(x) for x in args]
+    return None
+
+
+def test_an_atom_literal_compiles_to_the_str(tmp_path):
+    from clausal.logic.variables import Var
+    mod = _mod(tmp_path, "p(X) <- (X is foo)\nq(X) <- (X is 'foo')\nr(X) <- (X is \"foo\")\n")
+    assert _first(mod, "p", Var()) == ["foo"] and _first(mod, "q", Var()) == ["foo"]
+    assert _first(mod, "r", Var()) == [chars("foo")]
+
+
+def test_an_atom_head_literal_matches_the_str_and_binds_output_mode(tmp_path):
+    from clausal.logic.variables import Var
+    mod = _mod(tmp_path, "p(foo, R) <- (R is yes)\np(bar, R) <- (R is no)\n", hdr="-private([yes, no, foo, bar])\n")
+    assert _first(mod, "p", "foo", Var())[1] == "yes" and _first(mod, "p", mint("bar"), Var())[1] == "no"
+    x = Var(); assert _first(mod, "p", x, Var())[0] == "foo"
+    assert _first(mod, "p", chars("foo"), Var()) is None     # a STRING is not the atom
+
+
+def test_an_atom_and_a_predicate_of_the_same_name_coexist(tmp_path):
+    from clausal.logic.variables import Var
+    mod = _mod(tmp_path, "foo,\np(X) <- (X is foo)\nq <- foo()\n", hdr="")
+    assert _first(mod, "p", Var()) == ["foo"] and _first(mod, "q") is not None
+
+
+def test_first_arg_indexing_keys_an_atom_by_the_str(tmp_path):
+    from clausal.logic.variables import Var
+    body = "".join(f"c({a}, {i}),\n" for i, a in enumerate(["a", "b", "foo", "yes", "no"]))
+    mod = _mod(tmp_path, body)
+    assert _first(mod, "c", "foo", Var())[1] == 2 and _first(mod, "c", chars("foo"), Var()) is None
