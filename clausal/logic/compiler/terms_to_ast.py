@@ -1198,11 +1198,14 @@ def term_to_ast_expr(
                         value=_call(_name("$Var")),
                     ),
                 ))
-        return ast.Call(
+        # STAGE 1 (spec 2026-09-18): the thunk's RESULT crosses in through
+        # ``$text_in`` -- a str it hands back is text, and text is the chars
+        # carrier; one level, the mirror of ``$unwrap_atom`` on the way out.
+        return _call(_name("$text_in"), ast.Call(
             func=_name(thunk_name),
             args=arg_exprs,
             keywords=[],
-        )
+        ))
 
     if isinstance(term, Lambda):
         raise NotImplementedError(

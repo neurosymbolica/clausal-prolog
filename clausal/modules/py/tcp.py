@@ -11,6 +11,7 @@ Wraps Python's ``socket`` module. Socket handles are opaque Python objects.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -123,7 +124,7 @@ def _receive_3(sock, bufsize, data_out, trail, k):
         if unify(data_out, raw, trail):
             yield None
         return
-    if unify(data_out, text, trail):
+    if unify(data_out, text_result(text), trail):
         yield None
 
 

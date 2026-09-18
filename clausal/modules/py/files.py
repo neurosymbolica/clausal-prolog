@@ -16,6 +16,7 @@ Or via module import::
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     require_text,
@@ -78,7 +79,7 @@ def _directory_files_2(dir_path, files, trail, k):
         entries = sorted(e.name for e in p.iterdir())
     except OSError:
         return
-    if unify(files, entries, trail):
+    if unify(files, text_result(entries), trail):
         yield None
 
 
@@ -96,7 +97,7 @@ def _directory_entries_2(dir_path, entry, trail, k):
         return
     for name in entries:
         mark = trail.mark()
-        if unify(entry, name, trail):
+        if unify(entry, text_result(name), trail):
             yield None
         trail.undo(mark)
 
@@ -222,7 +223,7 @@ def _read_file_to_string_2(path, contents, trail, k):
         text = pathlib.Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return
-    if unify(contents, text, trail):
+    if unify(contents, text_result(text), trail):
         yield None
 
 
@@ -266,7 +267,7 @@ def _absolute_path_2(relative, absolute, trail, k):
     if relative is None:
         return
     resolved = str(pathlib.Path(relative).resolve())
-    if unify(absolute, resolved, trail):
+    if unify(absolute, text_result(resolved), trail):
         yield None
 
 
@@ -277,7 +278,7 @@ def _join_path_3(base, relative, joined, trail, k):
     if base is None or relative is None:
         return
     result = str(pathlib.Path(base) / relative)
-    if unify(joined, result, trail):
+    if unify(joined, text_result(result), trail):
         yield None
 
 
@@ -289,7 +290,7 @@ def _split_path_3(path, directory, filename, trail, k):
     p = pathlib.Path(path)
     dir_part = str(p.parent)
     name_part = p.name
-    if unify(directory, dir_part, trail) and unify(filename, name_part, trail):
+    if unify(directory, text_result(dir_part), trail) and unify(filename, text_result(name_part), trail):
         yield None
 
 
@@ -299,7 +300,7 @@ def _file_extension_2(path, extension, trail, k):
     if path is None:
         return
     ext = pathlib.Path(path).suffix
-    if unify(extension, ext, trail):
+    if unify(extension, text_result(ext), trail):
         yield None
 
 
@@ -313,7 +314,7 @@ def _temp_file_1(path, trail, k):
         _os.close(fd)
     except OSError:
         return
-    if unify(path, tmp_path, trail):
+    if unify(path, text_result(tmp_path), trail):
         yield None
 
 
@@ -323,7 +324,7 @@ def _temp_directory_1(path, trail, k):
         tmp_path = _tempfile.mkdtemp()
     except OSError:
         return
-    if unify(path, tmp_path, trail):
+    if unify(path, text_result(tmp_path), trail):
         yield None
 
 

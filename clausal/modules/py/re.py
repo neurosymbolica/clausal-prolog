@@ -86,6 +86,8 @@ def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
         if not s:
             return ""
         promoted = maybe_promote_to_str([deref(e) for e in s])
+        if is_chars(promoted):
+            return chars_text(promoted)    # stage 1: the promotion funnel answers the carrier
         if isinstance(promoted, str):
             return promoted
     note_mismatch(pred,

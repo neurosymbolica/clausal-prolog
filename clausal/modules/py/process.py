@@ -14,6 +14,7 @@ Or via module import::
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -89,7 +90,7 @@ def _shell_output_2(command, output, trail, k):
         return
     if result.returncode != 0:
         return
-    if unify(output, result.stdout, trail):
+    if unify(output, text_result(result.stdout), trail):
         yield None
 
 
@@ -106,7 +107,7 @@ def _shell_output_3(command, output, error, trail, k):
         return
     if result.returncode != 0:
         return
-    if unify(output, result.stdout, trail) and unify(error, result.stderr, trail):
+    if unify(output, text_result(result.stdout), trail) and unify(error, text_result(result.stderr), trail):
         yield None
 
 
@@ -132,7 +133,7 @@ def _process_create_3(program, args, result_var, trail, k):
         _STDOUT: result.stdout,
         _STDERR: result.stderr,
     })
-    if unify(result_var, result_dict, trail):
+    if unify(result_var, text_result(result_dict), trail):
         yield None
 
 
@@ -210,7 +211,7 @@ def _process_create_4(program, args, options, result_var, trail, k):
         _STDOUT: result.stdout or "",
         _STDERR: result.stderr or "",
     })
-    if unify(result_var, result_dict, trail):
+    if unify(result_var, text_result(result_dict), trail):
         yield None
 
 

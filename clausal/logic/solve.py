@@ -49,6 +49,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.logic.cells import (
+    is_chars, chars_text,   # stage 1: the chars carrier
     CELL_GOAL_CONTROL_FUNCTORS,
     QUALIFIED_GOAL_FUNCTOR,
     compound_cell_shape,
@@ -218,14 +219,14 @@ def _term_to_goal(term: Any) -> Any:
         # so the answer is ``existence_error(procedure, '[]'/0)``.
         from clausal.logic.exceptions import LogicException, string_goal_error
         raise LogicException(string_goal_error("", 0, "solve/1"))
-    if type(term) is str:
+    if type(term) is str or is_chars(term):   # stage 1: the chars carrier is a STRING too
         # THE FLIP (spec §6.4): a ``str`` is a STRING, not an atom.
         # ``solve("z0", m)`` used to be the same call as ``solve(("z0",), m)``;
         # it is now an error, and the cell spelling is the only one that names
         # a goal.  Task 15 item 3 (ISO alignment): the string is the compound
         # ``'.'/2``, so what is missing is the PROCEDURE, not callability.
         from clausal.logic.exceptions import LogicException, string_goal_error
-        raise LogicException(string_goal_error(term, 0, "solve/1"))
+        raise LogicException(string_goal_error(chars_text(term) if is_chars(term) else term, 0, "solve/1"))
     if isinstance(type(term), PredicateMeta):
         cls = type(term)
         fields = term_field_names(term)

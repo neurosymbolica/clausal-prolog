@@ -33,7 +33,7 @@ need an atom back mint one.
 from __future__ import annotations
 
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
-from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
+from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import deref, walk
 from clausal.terms import DictTerm, SegString
 
@@ -113,6 +113,17 @@ def to_python(val):
     return val
 
 
+def wrap_text(val):
+    """The THUNK-path INBOUND conversion (stage 1 of the atoms-as-str flip,
+    spec 2026-09-18): a Python ``str`` a ``++`` escape or an f-string hands
+    back is TEXT, and text is the chars carrier.  Top level only, the mirror
+    of :func:`unwrap_atom`'s one-level outbound rule -- a container crosses
+    raw.  Stage 2 makes a bare str the ATOM and this becomes identity."""
+    if type(val) is str:
+        return chars(val)
+    return val
+
+
 def unwrap_atom(val):
     """The THUNK-path outbound conversion: a TOP-LEVEL atom only.
 
@@ -140,4 +151,6 @@ def unwrap_atom(val):
     someone who can see exactly what they are passing.
     """
     val = deref(val)
+    if is_chars(val):
+        return chars_text(val)         # stage 1: a TOP-LEVEL chars string crosses out as its text
     return _atom_spelling(val) if _term_is_atom(val) else val

@@ -17,7 +17,7 @@ from typing import Callable
 from clausal.logic.to_python import to_python
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate
+from clausal.modules.py import ModulePredicate, text_result
 
 
 # ── Core helpers ────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ def _pure(fn: Callable) -> Callable:
         except Exception:
             yield (_fail, DONE)
             return
-        if unify(result_var, out, trail):
+        if unify(result_var, text_result(out), trail):
             yield (_proceed, None)
         yield (_fail, DONE)
     return dispatch
@@ -87,7 +87,7 @@ def _property_2(getter):
             yield (_fail, DONE)
             return
         if is_var(v):
-            if unify(value_var, actual, trail):
+            if unify(value_var, text_result(actual), trail):
                 yield (_proceed, None)
         else:
             if actual == v:
@@ -150,7 +150,7 @@ def _bidir_2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(y_raw, out, trail):
+            if unify(y_raw, text_result(out), trail):
                 yield (_proceed, None)
 
         elif _any_unbound(x) and not _any_unbound(y):
@@ -159,7 +159,7 @@ def _bidir_2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(x_raw, out, trail):
+            if unify(x_raw, text_result(out), trail):
                 yield (_proceed, None)
 
         elif not _any_unbound(x) and not _any_unbound(y):
@@ -171,7 +171,7 @@ def _bidir_2(forward, backward):
             mark = trail.mark()
             unified = False
             try:
-                unified = unify(y_raw, out, trail)
+                unified = unify(y_raw, text_result(out), trail)
             except Exception:
                 trail.undo(mark)
                 unified = _values_equal(out, y)
@@ -199,7 +199,7 @@ def _bidir_3_mid(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(y_raw, out, trail):
+            if unify(y_raw, text_result(out), trail):
                 yield (_proceed, None)
 
         elif _any_unbound(x) and not _any_unbound(y):
@@ -208,7 +208,7 @@ def _bidir_3_mid(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(x_raw, out, trail):
+            if unify(x_raw, text_result(out), trail):
                 yield (_proceed, None)
 
         elif not _any_unbound(x) and not _any_unbound(y):
@@ -220,7 +220,7 @@ def _bidir_3_mid(forward, backward):
             mark = trail.mark()
             unified = False
             try:
-                unified = unify(y_raw, out, trail)
+                unified = unify(y_raw, text_result(out), trail)
             except Exception:
                 trail.undo(mark)
                 unified = _values_equal(out, y)
@@ -256,7 +256,7 @@ def _bidir_3_split(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(a_raw, out_a, trail) and unify(b_raw, out_b, trail):
+            if unify(a_raw, text_result(out_a), trail) and unify(b_raw, text_result(out_b), trail):
                 yield (_proceed, None)
 
         elif x_unbound and not a_unbound and not b_unbound:
@@ -265,7 +265,7 @@ def _bidir_3_split(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(x_raw, out_x, trail):
+            if unify(x_raw, text_result(out_x), trail):
                 yield (_proceed, None)
 
         elif not x_unbound and not a_unbound and not b_unbound:
@@ -277,8 +277,8 @@ def _bidir_3_split(forward, backward):
             mark = trail.mark()
             unified = False
             try:
-                unified = (unify(a_raw, out_a, trail)
-                           and unify(b_raw, out_b, trail))
+                unified = (unify(a_raw, text_result(out_a), trail)
+                           and unify(b_raw, text_result(out_b), trail))
             except Exception:
                 trail.undo(mark)
                 unified = (_values_equal(out_a, a)
@@ -308,7 +308,7 @@ def _bidir_4_mid2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(y_raw, out, trail):
+            if unify(y_raw, text_result(out), trail):
                 yield (_proceed, None)
 
         elif _any_unbound(x) and not _any_unbound(y):
@@ -317,7 +317,7 @@ def _bidir_4_mid2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(x_raw, out, trail):
+            if unify(x_raw, text_result(out), trail):
                 yield (_proceed, None)
 
         elif not _any_unbound(x) and not _any_unbound(y):
@@ -329,7 +329,7 @@ def _bidir_4_mid2(forward, backward):
             mark = trail.mark()
             unified = False
             try:
-                unified = unify(y_raw, out, trail)
+                unified = unify(y_raw, text_result(out), trail)
             except Exception:
                 trail.undo(mark)
                 unified = _values_equal(out, y)

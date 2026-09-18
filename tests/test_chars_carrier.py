@@ -244,3 +244,30 @@ def test_the_three_spellings_answer_alike(tmp_path, goal):
     # success/failure COUNT only
     assert answers["carrier"] == answers["str"], answers
     assert len(answers["list"]) == len(answers["carrier"]), answers
+
+
+class TestSlice5Crossings:
+    """Slice 5: the seam and the py-modules -- text crosses OUT to Python as
+    a str and comes back IN as the carrier; module results are carriers."""
+
+    def test_thunk_sees_the_text_and_hands_back_the_carrier(self, tmp_path):
+        mod = _mod(tmp_path, 'p(N) <- (S is "abc", N is ++len(S))\nq(R) <- (S is "abc", R is ++S.upper())\n')
+        (n,) = _first(mod, "p", Var()); assert n == 3, n
+        (r,) = _first(mod, "q", Var()); assert r == chars("ABC"), r
+
+    def test_to_term_and_from_term_round_trip(self):
+        from clausal.logic.python_terms import to_term, from_term
+        assert to_term("ab") == chars("ab") and to_term(["ab", 1]) == [chars("ab"), 1]
+        assert to_term({"k": "v"}) == {chars("k"): chars("v")}
+        assert from_term(chars("ab")) == "ab" and from_term([chars("ab"), 1]) == ["ab", 1]
+
+    def test_module_results_are_carriers(self, tmp_path):
+        mod = _mod(tmp_path, '-import_from(py.hash, [hash])\np(H) <- hash("sha256", "abc", H)\n')
+        (h,) = _first(mod, "p", Var()); assert h == chars("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"), h
+
+    def test_a_chars_string_in_goal_position_is_refused_like_a_str(self, tmp_path):
+        from clausal.logic.exceptions import LogicException
+        mod = _mod(tmp_path, 'p <- call("foo")\n')
+        with pytest.raises(LogicException) as ei:
+            _first(mod, "p")
+        assert "existence_error" in str(ei.value) and "$chars" not in str(ei.value)

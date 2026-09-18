@@ -11,6 +11,7 @@ Wraps Python's ``urllib.parse`` module.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -57,7 +58,7 @@ def _encode_2(string, encoded, trail, k):
     if s is None:
         return
     result = _urllib_parse.quote(s, safe="")
-    if unify(encoded, result, trail):
+    if unify(encoded, text_result(result), trail):
         yield None
 
 
@@ -67,7 +68,7 @@ def _decode_2(encoded, string, trail, k):
     if e is None:
         return
     result = _urllib_parse.unquote(e)
-    if unify(string, result, trail):
+    if unify(string, text_result(result), trail):
         yield None
 
 
@@ -100,7 +101,7 @@ def _parse_2(url, parts, trail, k):
         mint("query"): parsed.query,
         mint("fragment"): parsed.fragment,
     })
-    if unify(parts, result, trail):
+    if unify(parts, text_result(result), trail):
         yield None
 
 
@@ -135,7 +136,7 @@ def _join_2(parts, url, trail, k):
         netloc = host
 
     result = _urllib_parse.urlunparse((scheme, netloc, path, "", query, fragment))
-    if unify(url, result, trail):
+    if unify(url, text_result(result), trail):
         yield None
 
 

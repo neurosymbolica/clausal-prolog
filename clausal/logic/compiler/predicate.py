@@ -81,6 +81,7 @@ from clausal.logic.runtime.const_set import (  # noqa: F401
 from clausal.logic.to_python import (  # noqa: F401
     to_python as _to_python_fn,
     unwrap_atom as _unwrap_atom_fn,
+    wrap_text as _wrap_text_fn,
 )
 from clausal.logic.atoms import mint as _mint  # noqa: F401
 from clausal.logic.runtime._seg_helpers import (  # noqa: F401
@@ -377,6 +378,7 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # first, so both are widenings of ``$deref``.
     "$to_python": _to_python_fn,
     "$unwrap_atom": _unwrap_atom_fn,
+    "$text_in": _wrap_text_fn,        # stage 1: a str a thunk hands back is the chars carrier
     # The canonical atom constructor (spec §6.1).  Referenced by the
     # declaration-site statement ``term_rewriting._make_atom_str_assign_ast``
     # generates for ``-module``/``-private``: ``foo = $mint('foo')`` binds the

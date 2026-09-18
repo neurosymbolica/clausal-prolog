@@ -25,6 +25,7 @@ import sys
 import textwrap
 from typing import Any, Callable
 
+from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal._suffixes import CLAUSAL_SUFFIXES
 
 
@@ -1482,7 +1483,7 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     """
     if isinstance(obj, PredicateMeta):
         return obj._get_dispatch(arity)
-    if type(obj) is str:
+    if type(obj) is str or is_chars(obj):   # stage 1: the carrier too
         # THE FLIP (spec §6.4): a ``str`` is a STRING.  The Stage A arm here
         # also accepted a bare ``str`` and built the indicator out of its
         # spelling, which silently read a string as a predicate NAME; it is
@@ -1494,7 +1495,7 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, string_goal_error,
         )
-        raise LogicException(string_goal_error(obj, arity, "call/N"))
+        raise LogicException(string_goal_error(chars_text(obj) if is_chars(obj) else obj, arity, "call/N"))
     if type(obj) is tuple and len(obj) == 1 and type(obj[0]) is str:
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
         # through THE FLIP: a bare atom is the arity-0 CELL, reached here

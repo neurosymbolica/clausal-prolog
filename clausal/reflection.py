@@ -51,7 +51,7 @@ import dataclasses
 import warnings
 
 from clausal.logic.generated_names import bare_name_of
-from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG, is_chars as _is_chars, chars_text as _chars_text
 from clausal.logic.predicate import make_predicate
 from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast import nodes as simple_ast
@@ -616,6 +616,11 @@ class _ClauseRenderer:
         ``"has space"`` or the reserved lambda sentinel would otherwise emit
         malformed text that re-reifies wrongly.  Refuse instead."""
         dotted = _deref_field(dotted)
+        if _is_chars(dotted):
+            # STAGE 1 (spec 2026-09-18): a name a rewrite rule wrote as
+            # ``"new"`` under -double_quotes(chars) is the chars carrier;
+            # the reified layer spells names as str, so read its text.
+            dotted = _chars_text(dotted)
         if not isinstance(dotted, str):
             raise RenderError(f"cannot render non-string name: {dotted!r}")
         parts = dotted.split(".")

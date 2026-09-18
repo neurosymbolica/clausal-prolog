@@ -11,6 +11,7 @@ Wraps Python's ``hmac`` and ``hashlib`` modules. Default algorithm is SHA-256.
 from __future__ import annotations
 
 from clausal.modules.py import (
+    text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
     expect_type,
@@ -60,7 +61,7 @@ def _sign_4(algorithm, key, data, hex_out, trail, k):
         # name, AttributeError for a digestmod without the hash protocol.
         note_rejected_call("sign/4", exc)
         return
-    if unify(hex_out, h.hexdigest(), trail):
+    if unify(hex_out, text_result(h.hexdigest()), trail):
         yield None
 
 
