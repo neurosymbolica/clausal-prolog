@@ -11,7 +11,7 @@ note stands: two census sweep tools hardcode the private corpus path).
 | canonical main `/workspace/clausal` | `fb0106f3` | atoms-as-str flip stages 1+2 (merges `1f864b39`, `be5cbc3a`), docs pass, P4 prerequisites |
 | clone main `/workspace/clausal-bug-fix` | `5bf7a8db` | the same, by merge (its main carries other sessions' work) |
 | box `/workspace/clausal` | `fb0106f3` | pushed; extensions force-rebuilt at `3fcfd29e` (x86_64), no C change since |
-| branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `421a9fa0` | the P2 PLAN (`ec06556f`) and the verified P2 census (Task 1 DONE, see NEXT) |
+| branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `b9c127e4` | the P2 PLAN (`ec06556f`), the verified census (Task 1), the declaration registry (Task 2, gated) |
 
 Extensions in the canonical checkout were rebuilt at `3fcfd29e` in a same-sha worktree and swapped by
 copy-then-move (two law-portal runservers had the old ones mapped). No C changed after that.
@@ -67,7 +67,14 @@ annotations only — one signature change, no class-identity dependence.
    decomposer 152, typetest-compound 75, typetest-predicate 61, package 41, constructor 33, c-arm 17,
    definition 13, annotation 12; 45 rows `needs-db` (17 in specialization.py); 22 `._fields` rows are KWTerm/ast
    false positives kept with notes. Task 2 (the registry) is next.
-2. Task 2 (the registry) is the first engine change; it subsumes the fb0106f3 row minting.
+2. **Task 2 (the declaration registry) is DONE and GATED** on the P2 branch, tip `b9c127e4` (NEW 0 / GONE 0, skips
+   identical, 2026-09-19): `Database.declare_functor/declared_fields/declared_fields_by_name/declared_kind`,
+   `signature_for` falls back to declared fields, `declared_kind` is DERIVED (predicate iff a row is known, data iff
+   declared and rowless); `functor_signature_for` asks the Database first and the three direct map readers go
+   through it. FOUND WHILE BUILDING: the module-level map is the EXEC-TIME carrier (generated code binds it before
+   the module body runs; the seam and the compiler's cell placer read it then) -- it is NOT retired in P2; that is
+   load-order work for P4 (plan's Task 2 exit revised). The seam keeps its own class resolution
+   (`classes=False`). Field names are stored AS WRITTEN (`('X', 'Y')`). Next: Task 3 (constructors emit cells).
 3. Lanes: harness-batch-lane's RE-BASELINE sweep on `fb0106f3` (told); corpus-lane's attribution of the two
    newly-exportable wrong-answer domains (GDPR breach notification, Peppol) — theirs, not an engine block;
    iso-export-lane: done for this window.
