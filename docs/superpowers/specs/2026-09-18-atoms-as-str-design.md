@@ -96,6 +96,19 @@ be true of both kinds, the ambiguity this design exists to remove.
 * **Transfer:** a bare str inside a transfer term is an atom (today: a string scalar); the carrier
   transfers as itself. `_SCALARS` keeps str; nothing else moves. The decimal/rdiv/quantity/date
   transfer forms are unaffected (str heads, int arguments).
+* **The kit's raw-string escape hatch is a named dependency (harness-batch-lane, 2026-09-18) — design
+  against it, do not discover it.** The closed kit lets a harness pass a profile value as a RAW
+  STRING (`string_values=`), and the mechanism is that the string is NOT the atom: an undeclared
+  name fails closed because `category("x")` cannot match `category(x)`. It is CONDITIONAL — a name
+  the module DOES declare still resolves to the atom — and a mutation control depends on that
+  conditionality (a mutant that ADDS a declared sector must be killable). Three sealed bodies use
+  it by design (a fail-closed spot case, two undeclared goods, one explicit allow-list). Under this
+  design "str = atom" would make the raw string EQUAL the atom and the spot case would silently
+  stop failing closed. So the hatch's undeclared branch must emit the `('$chars', …)` carrier (a
+  char list is still not an atom), and its declared branch the atom — same conditional, new
+  carrier. A kit change, harness-batch-lane's, in the landing window; an exercised test per body.
+  Their lexical census: 15 str literals inside goals in 3 of 82 bodies, a FLOOR (a str reaching a
+  goal through a variable is invisible to it) — the loud interim rule is what finds the rest.
 * **The exporter** consumes engine terms and has atom-vs-string branches; it flips WITH the engine,
   in the same landing, and its emitted Prolog does not change (an atom prints as an atom, a char
   list as a char list) — which is what makes its golden files the exporter's own gate.
@@ -125,6 +138,10 @@ be true of both kinds, the ambiguity this design exists to remove.
    then the tests that asserted str-means-string by hand.
 5. **Closed side, same window**: the 17 direct-representation sites (harness-batch-lane's files);
    the seam rule of §3 announced to every lane BEFORE step 2 lands so the 17 does not grow.
+5b. **Stage 1 (the carrier) is SWEPT BEFORE it lands** (harness-batch-lane's suggestion, taken):
+   unlike the atom flip it is not a re-baseline — most rows should be unchanged and the ones that
+   raise are the escape-hatch bodies plus whatever the lexical census missed, an informative diff.
+   The two stages keep SEPARATE shas even if they land in one window, so a moved row attributes.
 6. **Landing window** (the operator's, 2026-09-18): after iso-export-lane's first G3 result on a
    frozen sha is recorded; harness-batch-lane re-baselines the 82 the same day (every row moves by
    construction — a re-baseline, not a null); corpus-lane's rulebase axis is unaffected (sources
