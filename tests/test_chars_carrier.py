@@ -281,3 +281,27 @@ class TestSlice5Crossings:
         with pytest.raises(LogicException) as ei:
             _first(mod, "p")
         assert "existence_error" in str(ei.value) and "$chars" not in str(ei.value)
+
+
+class TestTheInterimRuleIsArmed:
+    """Stage 1 slice 8: the LOUD interim rule is the default.  A bare Python
+    str handed to the engine as text raises at the entry points; this is the
+    positive control for stage 1 (revert the arming and these fail)."""
+
+    def test_default_is_refuse_unless_overridden(self):
+        import os
+        from clausal.logic.cells import BARE_STR_TEXT
+        expected = os.environ.get("CLAUSAL_BARE_STR_TEXT", "refuse")
+        assert BARE_STR_TEXT == expected
+
+    @pytest.mark.skipif(__import__("os").environ.get("CLAUSAL_BARE_STR_TEXT", "refuse") == "allow",
+                        reason="rule disarmed by the diagnostic override")
+    def test_a_bare_str_is_refused_at_the_entry_points(self):
+        from clausal.logic.builtins.lists import _as_items
+        from clausal.logic.runtime._seg_helpers import normalize_seg_input
+        from clausal.modules.py import to_text
+        from clausal.logic.builtins._helpers import _standard_order_key
+        for fn in (_as_items, normalize_seg_input, to_text, _standard_order_key):
+            with pytest.raises(TypeError, match="bare Python str"):
+                fn("ab")
+        assert _as_items(chars("ab")) == [("a",), ("b",)]      # the carrier is the text
