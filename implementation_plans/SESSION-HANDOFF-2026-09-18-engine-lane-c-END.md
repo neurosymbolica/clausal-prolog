@@ -11,7 +11,7 @@ note stands: two census sweep tools hardcode the private corpus path).
 | canonical main `/workspace/clausal` | `fb0106f3` | atoms-as-str flip stages 1+2 (merges `1f864b39`, `be5cbc3a`), docs pass, P4 prerequisites |
 | clone main `/workspace/clausal-bug-fix` | `5bf7a8db` | the same, by merge (its main carries other sessions' work) |
 | box `/workspace/clausal` | `fb0106f3` | pushed; extensions force-rebuilt at `3fcfd29e` (x86_64), no C change since |
-| branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `b9c127e4` | the P2 PLAN (`ec06556f`), the verified census (Task 1), the declaration registry (Task 2, gated) |
+| branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `20b32550` | plan, census, registry (Task 2 gated at `b9c127e4`), Task 3 CHECKPOINT (red, see NEXT 3) |
 
 Extensions in the canonical checkout were rebuilt at `3fcfd29e` in a same-sha worktree and swapped by
 copy-then-move (two law-portal runservers had the old ones mapped). No C changed after that.
@@ -74,7 +74,23 @@ annotations only — one signature change, no class-identity dependence.
    through it. FOUND WHILE BUILDING: the module-level map is the EXEC-TIME carrier (generated code binds it before
    the module body runs; the seam and the compiler's cell placer read it then) -- it is NOT retired in P2; that is
    load-order work for P4 (plan's Task 2 exit revised). The seam keeps its own class resolution
-   (`classes=False`). Field names are stored AS WRITTEN (`('X', 'Y')`). Next: Task 3 (constructors emit cells).
+   (`classes=False`). Field names are stored AS WRITTEN (`('X', 'Y')`).
+3. **Task 3 (constructors emit cells) is BUILT AS A CHECKPOINT, RED**: P2 branch tip `20b32550` (2026-09-19).
+   `PredicateMeta.__call__` builds the cell (one site, every Python producer); `cell_signature_for_name` answers
+   for a class; the clause-HEAD channel stays on instances via `_clausal_head` (transformer `_head_ctor_ast`,
+   the four store doors, the reifier); THE BRIDGE `make_predicate(..., instances=True)` keeps a class on
+   instances until its consumers convert (reflection 9, clpb 2, term expansion 4 flagged) -- reflection and
+   rewrite are green on the flip. The plan's Task 3 section has the findings; `tools/predmeta_census/
+   P2_TASK4_WORKLIST.txt` has the 22 remaining rows in 7 files. Chase first: three files answer UNBOUND
+   (`test_predrow`, `predmeta_p1/test_arity_exact_index_hints`, `test_atoms_as_str_stage2`) -- a cell head
+   still reaches a clause store through a door other than the four patched; use the `_stored_head_key`
+   refusal as the probe. Do NOT gate this tip against the base (red by design); gate after Task 4 clears the
+   worklist. `q(...)` is quasi-quotation -- never name a probe predicate `q`.
+4. **iso-export-lane's `==` -> `#=` flip**: the KIT half `79fc9e4` is landed on export-trunk main (theirs); the
+   ENGINE half `272e2a3f` sits on `flip/eq-to-clpz-2026-09-19` in the CLONE off `5bf7a8db`, NOT on canonical
+   (`733de97a`; needs a cherry-pick + the exporter goldens). Measured G3 10 -> 14, +509 clauses, 0 regressions,
+   three inputs moved (attribution strong, not single-variable). Landing is the operator's word in the engine
+   session; both halves must be present together (the kit half already is).
 3. Lanes: harness-batch-lane's RE-BASELINE sweep on `fb0106f3` (told); corpus-lane's attribution of the two
    newly-exportable wrong-answer domains (GDPR breach notification, Peppol) — theirs, not an engine block;
    iso-export-lane: done for this window.
