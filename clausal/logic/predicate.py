@@ -1674,25 +1674,16 @@ is_atom = is_zero_field_class
 
 
 def is_atom_value(obj: Any) -> bool:
-    """True if obj is an atom-shaped VALUE: the arity-0 cell ``("bar",)``, or
-    a zero-arity PredicateMeta class (a declared atom).
+    """True iff *obj* is an atom VALUE — STAGE 2 of the atoms-as-str flip: an
+    atom IS the Python ``str`` (``clausal.logic.atoms.is_atom``), the chars
+    carrier is a STRING and no class is an atom (spec §4).
 
-    Two different questions share the stem ``is_atom`` in this tree, and this
-    is the union of them:
-
-    * ``clausal.logic.atoms.is_atom`` is the TERM test — after the flip
-      (2026-09-06-atoms-as-cells-strings §6.1) exactly the 1-tuple whose
-      slot 0 is a ``str``.  A plain ``str`` is a STRING and fails it.
-    * ``predicate.is_zero_field_class`` above is the CLASS test — "a
-      zero-field ``PredicateMeta`` class", the declared-atom form.  Several
-      COMPILER call sites (``terms_to_ast.py``, ``_lower_goalop_shared.py``)
-      key off that one to decide identity-lowering / bare-Name-reference
-      behaviour, so it must stay the narrow class question.  Task 12 renamed
-      it out of the shared stem; ``is_atom`` now means the term test
-      everywhere except the deprecated alias below it.
-
-    Runtime readers (``atom/1``, ``functor_arity``) want either shape and
-    call THIS helper, never one of the two halves alone.
+    This helper used to WIDEN the term test with the zero-field
+    ``PredicateMeta`` class (the declared-atom form of the cell era); that
+    widening is retired, and the two are one question now.  It stays as the
+    name the runtime readers (``atom/1``, ``functor_arity``) call, so a future
+    widening has one place to land.  ``predicate.is_zero_field_class`` above
+    remains the separate CLASS question the compiler keys on.
     """
     from clausal.logic.atoms import is_atom as _term_is_atom
     return _term_is_atom(obj)          # STAGE 2 (spec §4): no class is an atom

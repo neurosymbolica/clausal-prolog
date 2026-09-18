@@ -224,3 +224,15 @@ class TestReviewRound1:
         assert "name" in _str_typed_fields(simple_ast.MatchStar)
         assert "rest" in _str_typed_fields(simple_ast.MatchMapping)
         assert _str_typed_fields(int) == frozenset()
+        # a list[str] field is a LIST of names, not a name: it stays out
+        assert "names" not in _str_typed_fields(simple_ast.Global)
+        assert "kwd_attrs" not in _str_typed_fields(simple_ast.MatchClass)
+
+    def test_raw_node_reads_a_name_field_raw_end_to_end(self):
+        import ast
+        from clausal.reflection import _ClauseReifier
+        reifier = _ClauseReifier()
+        param = reifier._raw_node("PosOrKwParam", {"name": ast.Constant("X")})
+        assert param.name == "X" and type(param.name) is str
+        star = reifier._raw_node("MatchStar", {"name": ast.Constant("rest")})   # Optional[str]
+        assert star.name == "rest" and type(star.name) is str

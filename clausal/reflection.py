@@ -48,8 +48,9 @@ from __future__ import annotations
 import ast
 import copy
 import dataclasses
-import typing
 import functools
+import types
+import typing
 import warnings
 
 from clausal.logic.generated_names import bare_name_of
@@ -117,6 +118,13 @@ PythonCode = make_predicate("PythonCode", ["kind", "name", "position"])
 # vocabulary of expressions without executing anything.
 
 # simple_ast names whose constructor calls map onto raw (unifiable) nodes.
+_NODE_NAMES = {
+    name for name in simple_ast.__all__
+    if isinstance(getattr(simple_ast, name, None), type)
+    and issubclass(getattr(simple_ast, name), simple_ast.Node)
+}
+
+
 @functools.lru_cache(maxsize=None)
 def _str_typed_fields(cls) -> frozenset:
     """The names of *cls*'s dataclass fields declared ``str`` or ``Optional[str]``
@@ -135,18 +143,11 @@ def _str_typed_fields(cls) -> frozenset:
         elif isinstance(t, str):
             if t.replace(" ", "").replace("typing.", "") in ("str", "Optional[str]", "str|None", "None|str"):
                 out.add(f.name)
-        else:
-            args = typing.get_args(t)
-            if args and str in args and set(args) <= {str, type(None)}:
+        elif typing.get_origin(t) in (typing.Union, types.UnionType):   # Optional[str] / str | None only --
+            args = typing.get_args(t)                                     # never list[str], whose get_args is (str,)
+            if str in args and set(args) <= {str, type(None)}:
                 out.add(f.name)
     return frozenset(out)
-
-
-_NODE_NAMES = {
-    name for name in simple_ast.__all__
-    if isinstance(getattr(simple_ast, name, None), type)
-    and issubclass(getattr(simple_ast, name), simple_ast.Node)
-}
 
 
 def _const_value(node):
