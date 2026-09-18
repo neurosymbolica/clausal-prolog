@@ -153,4 +153,9 @@ def unwrap_atom(val):
     val = deref(val)
     if is_chars(val):
         return chars_text(val)         # stage 1: a TOP-LEVEL chars string crosses out as its text
+    if type(val) is list:
+        # one level down too: a list of chars strings is what ", ".join(W)
+        # and every other str-consuming call over a list expects (stage 1;
+        # the container itself still crosses raw, atoms inside stay cells)
+        return [chars_text(e) if is_chars(e) else e for e in (deref(x) for x in val)]
     return _atom_spelling(val) if _term_is_atom(val) else val

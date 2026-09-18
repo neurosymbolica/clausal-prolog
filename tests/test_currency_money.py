@@ -99,7 +99,7 @@ class TestMoneyConstructorsAndAccessors:
     def test_accessors(self):
         from clausal.modules.currency import currency_scale, currency_code, currency_symbol
         assert _run(currency_scale, euro, "N")[0]["N"] == 2
-        assert _run(currency_code, euro, "C")[0]["C"] == "EUR"
+        assert _run(currency_code, euro, "C")[0]["C"] == chars("EUR")
         assert _run(currency_symbol, euro, "S")[0]["S"] == "€"
 
     def test_money_end_to_end_clausal(self):
@@ -174,7 +174,7 @@ class TestMoneyRoundingAndDisplay:
     def test_money_str_default(self):
         from clausal.modules.currency import money_str
         s = _run(money_str, self._euro("3.335"), chars("half_up"), "OUT")[0]["OUT"]
-        assert s == "3.34 EUR"
+        assert s == chars("3.34 EUR")
 
     def test_money_format_styles(self):
         from clausal.modules.currency import money_format

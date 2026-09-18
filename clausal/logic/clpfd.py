@@ -1832,7 +1832,8 @@ def _text_list_eq(l, r):
     list ``[a]``, not the cell ``a``, and a tuple is neither spelling here.
     """
     from clausal.logic.cells import is_chars, chars_text, refuse_bare_str  # noqa: PLC0415
-    refuse_bare_str(l, "an arithmetic comparison"); refuse_bare_str(r, "an arithmetic comparison")   # interim rule
+    # (no refuse here: the reflection layer compares reified variable NAMES,
+    # bare strs by design, with ==/!= -- a comparison is not a text entry point)
     unwrapped = False
     if is_chars(l):
         l = chars_text(l); unwrapped = True
@@ -2561,6 +2562,7 @@ def _op_spelling(op, context):
     from clausal.logic.runtime._seg_helpers import (  # noqa: PLC0415
         normalize_seg_input,
     )
+    op_as_written = op
     op = normalize_seg_input(op)
     if is_atom(op):
         return spelling(op)
@@ -2568,7 +2570,7 @@ def _op_spelling(op, context):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error,
         )
-        raise LogicException(type_error("atom", op, context))
+        raise LogicException(type_error("atom", op_as_written, context))   # the culprit as the caller wrote it
     return None
 
 

@@ -25,6 +25,7 @@ from clausal.logic.translations import (
 )
 from clausal.logic.predicate import make_predicate, PredicateMeta
 from clausal.logic.variables import Var, Trail, deref
+from clausal.logic.cells import is_chars, chars_text
 from clausal.terms import Compound, KWTerm, term_str, TermStyle
 from clausal.import_hook import _load_module
 
@@ -203,8 +204,8 @@ class TestTranslateBuiltin:
         sol = next(gen, "NO_SOLUTION")
         assert sol is None
         result = deref(result_var)
-        assert isinstance(result, str)
-        assert "ต่อท้าย" in result
+        assert is_chars(result)
+        assert "ต่อท้าย" in chars_text(result)
 
     def test_result_is_string_not_term(self):
         # nv
@@ -216,7 +217,7 @@ class TestTranslateBuiltin:
         next(gen, None)
         result = deref(result_var)
         # Must be a string, not a Compound or PredicateMeta
-        assert isinstance(result, str)
+        assert is_chars(result)
         assert not isinstance(result, Compound)
 
     def test_unbound_lang_fails(self):
@@ -239,8 +240,8 @@ class TestTranslateBuiltin:
         sol = next(gen, "NO_SOLUTION")
         assert sol is None
         result = deref(result_var)
-        assert isinstance(result, str)
-        assert "ต่อท้าย" in result
+        assert is_chars(result)
+        assert "ต่อท้าย" in chars_text(result)
 
     def test_nested_translation(self):
         # nv
@@ -252,8 +253,8 @@ class TestTranslateBuiltin:
         gen = _translate__3(mint("th"), t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
-        assert "ต่อท้าย" in result
-        assert "สมาชิกของ" in result
+        assert "ต่อท้าย" in chars_text(result)
+        assert "สมาชิกของ" in chars_text(result)
         assert "append" not in result
         assert "member" not in result
 

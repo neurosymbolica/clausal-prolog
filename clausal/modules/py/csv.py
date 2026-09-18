@@ -120,7 +120,7 @@ def _parse_records_3(string, headers, records, trail, k):
     if header_list is None:
         return
     record_list = [
-        DictTerm({_field_key(k): v for k, v in row.items()}) for row in reader
+        DictTerm({_field_key(k): text_result(v) for k, v in row.items()}) for row in reader   # stage 1
     ]
     mark = trail.mark()
     if (unify(headers, [_field_key(h) for h in header_list], trail)

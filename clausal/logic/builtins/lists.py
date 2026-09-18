@@ -631,7 +631,7 @@ def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, tr
     s1_items = _as_items(s1)
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
-        _out_str = isinstance(s1, str) and isinstance(s2, str)
+        _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = _seq_result([x for x in s1_items if x not in s2_items], _out_str, _out_bytes)
         mark = trail.mark()
@@ -649,7 +649,7 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
     s1_items = _as_items(s1)
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
-        _out_str = isinstance(s1, str) and isinstance(s2, str)
+        _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = _seq_result([x for x in s1_items if x in s2_items], _out_str, _out_bytes)
         mark = trail.mark()
@@ -671,7 +671,7 @@ def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail)
     s1_items = _as_items(s1)
     s2_items = _as_items(s2)
     if s1_items is not None and s2_items is not None:
-        _out_str = isinstance(s1, str) and isinstance(s2, str)
+        _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = list(s1_items)
         for x in s2_items:
@@ -897,7 +897,7 @@ def _replicate__3(this_generator, _proceed, _fail, _catcher, n, elem, lst, trail
     elem_val = deref(elem)
     if isinstance(n_val, int) and n_val >= 0:
         if is_char_atom(elem_val):
-            result = spelling(elem_val) * n_val
+            result = chars(spelling(elem_val) * n_val)   # stage 1: a text result is the carrier
         else:
             result = [elem_val] * n_val
         mark = trail.mark()

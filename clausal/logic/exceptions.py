@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
 
@@ -219,7 +220,8 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
         if not isinstance(exc, type(catcher)):
             return False
         catcher_args = list(catcher.args)
-        exc_args = list(exc.args)
+        # stage 1: a Python exception's message (a str) crosses as TEXT
+        exc_args = [_chars(a) if type(a) is str else a for a in exc.args]
         return len(catcher_args) == len(exc_args) and unify(
             catcher_args, exc_args, trail
         )

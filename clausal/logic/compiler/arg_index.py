@@ -31,7 +31,7 @@ from clausal.logic.database import Clause
 
 from ._ast_helpers import _name, _call, _assign  # noqa: F401
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
-from clausal.logic.cells import TUPLE_TAG
+from clausal.logic.cells import TUPLE_TAG, CHARS_TAG
 
 
 # ── First-argument indexing (V2-1) ────────────────────────────────────────────
@@ -120,6 +120,8 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
         return arg
     if type(arg) is tuple and arg:
         slot0 = arg[0]
+        if slot0 == CHARS_TAG and len(arg) == 2:
+            return _INDEX_VAR          # stage 1: a chars string is TEXT, equal to its char list -- unindexable
         if type(slot0) is str:
             return (slot0, len(arg) - 1)
         if slot0 is TUPLE_TAG:
@@ -358,6 +360,8 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
         return a
     if type(a) is tuple and a:
         slot0 = a[0]
+        if slot0 == CHARS_TAG and len(a) == 2:
+            return _INDEX_VAR          # stage 1: text, never a $chars bucket
         if type(slot0) is str:
             if deep_gate and not _is_deeply_ground(a):
                 return _INDEX_VAR

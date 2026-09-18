@@ -254,7 +254,7 @@ def _json_post_3(url, term_in, term_out, trail, k):
             note_rejected_call("json_post/3", exc)
         return
     result = _do_request(
-        url_d, method="POST", data=json_str,
+        url_d, method="POST", data=text_result(json_str),   # stage 1: our own text is text
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
     if result is None:

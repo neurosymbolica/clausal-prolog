@@ -425,6 +425,8 @@ _is_compound_precell = _is_compound
 # whatever these arms already answer for.
 
 def _functor_name(term: Any) -> Any:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, f = _cell_functor(term)
     if is_compound_cell:
         return f
@@ -434,6 +436,8 @@ def _functor_name(term: Any) -> Any:
 
 
 def _arity(term: Any) -> int | None:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return len(term) - 1
@@ -443,6 +447,8 @@ def _arity(term: Any) -> int | None:
 
 
 def _nth_arg(term: Any, n: int) -> Any:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         if n < 1 or n > len(term) - 1:
@@ -459,6 +465,8 @@ def _nth_arg(term: Any, n: int) -> Any:
 
 
 def _args_list(term: Any) -> list:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return list(term[1:])
@@ -468,6 +476,8 @@ def _args_list(term: Any) -> list:
 
 
 def _is_compound(term: Any) -> bool:
+    if is_chars(term):
+        term = chars_text(term)       # stage 1: the carrier decomposes as its text
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return True

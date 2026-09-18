@@ -49,6 +49,7 @@ import functools
 import os
 
 from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
 from clausal.logic.builtins._helpers import _functor_name
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
@@ -244,7 +245,7 @@ def _clause_source_2(term, text, trail, k):
     term = deref(term)
     if is_var(term):
         raise LogicException(instantiation_error("clause_source/2"))
-    if unify(text, render_source(term), trail):
+    if unify(text, _chars(render_source(term)), trail):   # stage 1: a text result is the carrier
         yield None
 
 

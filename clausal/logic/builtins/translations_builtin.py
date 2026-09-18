@@ -7,6 +7,7 @@ and atom names replaced per the translation table.
 
 from __future__ import annotations
 
+from clausal.logic.cells import chars  # stage 1: the chars carrier
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.builtins._registry import _builtin
 from clausal.terms import term_str, TermStyle
@@ -49,6 +50,6 @@ def _translate__3(lang, term, translated_string, trail, k):
     result = term_str(term_val, style)
 
     mark = trail.mark()
-    if unify(translated_string, result, trail):
+    if unify(translated_string, chars(result), trail):   # stage 1
         yield None
     trail.undo(mark)
