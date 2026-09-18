@@ -126,3 +126,20 @@ def test_type_checks_and_goals(tmp_path):
     assert _first(mod, "p", Var()) == ["yes"] and _first(mod, "q", Var()) == ["no"] and _first(mod, "r", Var()) == ["no"]
     assert _first(mod, "s") is not None
     assert _first(mod, "t", Var()) == ["yes"] and _first(mod, "u", Var()) == ["no"]
+
+
+# ── Task 5: the seam ────────────────────────────────────────────────────────
+
+def test_a_python_str_crosses_in_as_the_atom_and_the_carrier_crosses_out_as_text():
+    from clausal.logic.python_terms import to_term, from_term
+    from clausal.logic.to_python import to_python, unwrap_atom, wrap_text
+    assert to_term("ab") == "ab" and to_term({"k": "v"}) == {"k": "v"} and to_term(["ab"]) == ["ab"]
+    assert from_term(chars("ab")) == "ab" and from_term("ab") == "ab"
+    assert to_python("ab") == "ab" and to_python(chars("ab")) == "ab"
+    assert unwrap_atom("ab") == "ab" and wrap_text("ab") == "ab"
+
+
+def test_a_thunk_result_str_is_the_atom(tmp_path):
+    from clausal.logic.variables import Var
+    mod = _mod(tmp_path, 'p(R) <- (R is ++"foo".upper())\nq(R) <- if_(atom(++"x"), R is yes, R is no)\nr(R) <- if_(string(++"x"), R is yes, R is no)\n')
+    assert _first(mod, "p", Var()) == ["FOO"] and _first(mod, "q", Var()) == ["yes"] and _first(mod, "r", Var()) == ["no"]

@@ -567,12 +567,8 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
     tuple becomes the ``('()', ...)`` data form unless it is already a term.
     Anything else uses ``('{module}\\x1f{class}', *match_args)``.
     """
-    if type(value) is str:
-        # STAGE 1 (spec 2026-09-18 §3): a Python str crossing the seam is
-        # TEXT today, and text is the chars carrier -- so a str becomes the
-        # carrier here (a dict KEY too: a string key is already a different
-        # key from the atom of the same spelling).  Stage 2 makes it the ATOM.
-        return chars(value)
+    # STAGE 2 (spec 2026-09-18 §3, Q1): a Python str crossing the seam IS the
+    # atom -- it passes through as a scalar; text is written chars(...)
     if isinstance(value, _SCALARS):
         return value
     if _is_already_engine_term(value):
