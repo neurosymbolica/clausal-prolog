@@ -138,6 +138,12 @@ after. The barrier scan on every crossing commit.
   the flip inverts the first class and keeps the second; the count of the first is the real size
   of step 3.
 * The exporter's atom/string branches (`clausal_to_prolog.py`), counted.
+* **String literals matched in TERM PATTERNS** — an error catcher like `catch(_, error(type_error("x",
+  _)), _)`, a head or a `==` against a quoted literal — anywhere in engine, kit or corpus code
+  (corpus-lane, 2026-09-18, from the atom pivot: quoted literals inside catchers stopped matching
+  under `chars` SILENTLY, and a suite cannot see an unexercised clamp). Under this design the same
+  literal becomes the `('$chars', …)` carrier and would fail the same quiet way; grep for the shape
+  before step 2 lands and give each site a test that is exercised.
 * Closed side: harness-batch-lane's exact list of the 17 sites, and whether any harness body
   passes a Python str MEANING text through the seam (that is the one seam semantics change, §3).
 
