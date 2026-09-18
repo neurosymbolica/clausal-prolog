@@ -115,7 +115,7 @@ fixtures, or code that deliberately relies on ceremony-free tag atoms.
 > comparing one against the other silently had no solution. That failure mode
 > is gone. Atoms are now global by spelling: `-module`, `-private`, and an
 > `-import_from` of the same spelling all resolve to the same atom — the
-> arity-0 cell `("red",)`, equal by value — so there is nothing left to
+> interned Python `str` itself — so there is nothing left to
 > disagree about (see [Import System §
 > Atoms are global by spelling](import.md#atoms-are-global-by-spelling)).
 
