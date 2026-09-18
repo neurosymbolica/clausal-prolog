@@ -29,6 +29,7 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Compound, DictTerm, KWTerm, SetTerm
 from clausal.logic.atoms import char_atom, is_atom, mint, spelling
+from clausal.logic.cells import chars
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ class TestStandardOrderShape:
     def test_a_string_is_an_arity_two_compound(self):
         """Task 15 item 1: ``"abc"`` is ``'.'(a, …)``, so it sorts after
         every arity-1 compound and among the arity-2 ones."""
-        n, s, cmp1, cmp2 = 3, "abc", _c("f", 1), _c("f", 1, 1)
+        n, s, cmp1, cmp2 = 3, chars("abc"), _c("f", 1), _c("f", 1, 1)
         assert _key_sorted([s, cmp2, cmp1, n]) == [n, cmp1, s, cmp2]
 
     def test_unbound_vars_sort_first(self):
@@ -164,8 +165,8 @@ class TestStandardOrderShape:
     def test_key_is_total_over_mixed_junk(self):
         """Every pair of keys must be comparable — no TypeError may escape."""
         items = [
-            Var(), 1, 2.5, Fraction(1, 3), "atom", b"bytes", [1, 2], (1, 2),
-            _c("f", 1), KWTerm("f", a=1), {"k": 1}, DictTerm({"k": 1}),
+            Var(), 1, 2.5, Fraction(1, 3), chars("atom"), b"bytes", [1, 2], (1, 2),
+            _c("f", 1), KWTerm("f", a=1), {chars("k"): 1}, DictTerm({chars("k"): 1}),
             SetTerm([1, 2]), dt.date(2020, 1, 1), None, object(),
         ]
         keys = [_standard_order_key(x) for x in items]
@@ -176,8 +177,8 @@ class TestStandardOrderShape:
 
     def test_structural_containers_order_numerically(self):
         assert _key_sorted([[15], [2], [9]]) == [[2], [9], [15]]
-        assert (_key_sorted([DictTerm({"k": 15}), DictTerm({"k": 2})])
-                == [DictTerm({"k": 2}), DictTerm({"k": 15})])
+        assert (_key_sorted([DictTerm({chars("k"): 15}), DictTerm({chars("k"): 2})])
+                == [DictTerm({chars("k"): 2}), DictTerm({chars("k"): 15})])
 
     def test_repeated_calls_are_stable(self):
         items = [_c("f", 15), _c("f", 2), _c("f", 9)]
@@ -205,10 +206,10 @@ class TestAtomKeyCollapse:
         assert _standard_order_key(mint("work")) == (_ORD_ATOM, "work")
 
     def test_string_keys_as_the_cons_compound_of_its_char_list(self):
-        assert _standard_order_key("work") == _standard_order_key(
+        assert _standard_order_key(chars("work")) == _standard_order_key(
             [char_atom(c) for c in "work"]
         )
-        assert _standard_order_key("work")[0] == _ORD_COMPOUND
+        assert _standard_order_key(chars("work"))[0] == _ORD_COMPOUND
 
     def test_class_atom_key_matches_same_spelled_atom_key(self):
         from clausal.logic.predicate import make_predicate
@@ -227,14 +228,14 @@ class TestAtomKeyCollapse:
 
     def test_mixed_atoms_strings_numbers_compounds_key_shape(self):
         """A representative mixed list: each rank keeps its own key shape."""
-        items = [_c("f", 1), "zeta", mint("alpha"), 3, Var(), 1.5]
+        items = [_c("f", 1), chars("zeta"), mint("alpha"), 3, Var(), 1.5]
         ordered = _key_sorted(items)
         ranks = [_standard_order_key(x)[0] for x in ordered]
         # Var < Number < Atom < Compound, and stable within a rank.
         assert ranks == sorted(ranks)
         # Task 15 item 1: the STRING is an arity-2 ``'.'/2`` compound, so it
         # is last -- after the arity-1 ``f(1)``.
-        assert ordered[-1] == "zeta"
+        assert ordered[-1] == chars("zeta")
 
 
 # ── Paths that were already correct must stay correct ────────────────────
@@ -323,7 +324,7 @@ class TestCellStandardOrder:
         # Task 15 item 1: ``[1, 2, 3]`` is the ``'.'/2`` compound ``'.'(1, …)``
         # now, so arity 2 vs arity 2 is decided on the NAME -- ``.`` < ``f``.
         assert _standard_order_key(("f", 1, 2)) > _standard_order_key([1, 2, 3])
-        assert _standard_order_key(("f", 1)) != _standard_order_key(["f", 1])
+        assert _standard_order_key(("f", 1)) != _standard_order_key([chars("f"), 1])
 
     def test_msort_orders_number_atom_cell_list(self):   # §13 row 16 (Stage A form)
         # A cell goal requires a module (``_module_for_moduleless_solve``
@@ -339,13 +340,13 @@ class TestCellStandardOrder:
         lm = mod.__dict__["$module"]
         out = Var()
         answers = [deref(out)
-                   for _ in solve(("msort", [("f", "x"), [1], ("b",), 1], out), lm)]
+                   for _ in solve(("msort", [("f", chars("x")), [1], ("b",), 1], out), lm)]
         assert len(answers) == 1
         # Task 15 item 1 (ISO 7.2.1, Scryer-verified): a list is the ``'.'/2``
         # compound, so it sorts among the ARITY-2 compounds -- AFTER the
         # arity-1 cell ``f("x")``, not before every compound as the retired
         # sequence band had it.
-        assert answers[0] == [1, ("b",), ("f", "x"), [1]]
+        assert answers[0] == [1, ("b",), ("f", chars("x")), [1]]
 
 
 # ── Task 15 item 1: lists, strings and code lists key as ``'.'/2`` ───────
@@ -366,7 +367,7 @@ class TestConsCompoundOrder:
 
     def test_empty_sequences_key_as_the_atom_empty_list(self):
         assert _standard_order_key([]) == (_ORD_ATOM, "[]")
-        assert _standard_order_key("") == (_ORD_ATOM, "[]")
+        assert _standard_order_key(chars("")) == (_ORD_ATOM, "[]")
         assert _standard_order_key(b"") == (_ORD_ATOM, "[]")
         assert _standard_order_key(()) == (_ORD_ATOM, "[]")
         assert _standard_order_key([]) == _standard_order_key(mint("[]"))
@@ -376,9 +377,9 @@ class TestConsCompoundOrder:
         assert k[0] == _ORD_COMPOUND and k[1] == 2 and k[2] == (0, ".")
 
     def test_a_string_keys_as_the_cons_of_its_char_atoms(self):
-        assert _standard_order_key("ab") == _standard_order_key(
+        assert _standard_order_key(chars("ab")) == _standard_order_key(
             [char_atom("a"), char_atom("b")])
-        k = _standard_order_key("ab")
+        k = _standard_order_key(chars("ab"))
         assert k[0] == _ORD_COMPOUND and k[1] == 2 and k[2] == (0, ".")
 
     def test_a_code_list_keys_as_the_cons_of_its_numbers(self):
@@ -408,7 +409,7 @@ class TestConsCompoundOrder:
         7.2.1 says ``<`` and that is what the key gives."""
         assert (_standard_order_key([char_atom("a")])
                 < _standard_order_key([char_atom("a"), char_atom("b")]))
-        assert _standard_order_key("a") < _standard_order_key("ab")
+        assert _standard_order_key(chars("a")) < _standard_order_key(chars("ab"))
 
     def test_msort_sorts_a_list_among_the_arity_two_compounds(self):
         got = _run_list_builtin(
@@ -433,7 +434,7 @@ class TestSortDedupCost:
         # nv
         import time
 
-        items = [f"s{i:06d}" for i in range(20000)]
+        items = [chars(f"s{i:06d}") for i in range(20000)]
         start = time.perf_counter()
         got = _run_list_builtin(_sort__2, list(items))
         elapsed = time.perf_counter() - start
@@ -455,13 +456,13 @@ class TestSortDedupCost:
         import datetime
 
         d = datetime.date(2026, 1, 2)
-        got = _run_list_builtin(_sort__2, [3, d, 3, "ab", d, "ab"])
+        got = _run_list_builtin(_sort__2, [3, d, 3, chars("ab"), d, chars("ab")])
         assert len(got) == 3
-        assert 3 in got and d in got and "ab" in got
+        assert 3 in got and d in got and chars("ab") in got
 
     def test_a_string_and_its_char_list_are_one_term(self):
         """The property the dedup exists for (spec §6.5) survives the set."""
         # nv
         got = _run_list_builtin(
-            _sort__2, ["ab", [char_atom("a"), char_atom("b")], "ab"])
+            _sort__2, [chars("ab"), [char_atom("a"), char_atom("b")], chars("ab")])
         assert len(got) == 1

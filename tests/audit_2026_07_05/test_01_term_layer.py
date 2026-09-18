@@ -18,6 +18,7 @@ import weakref
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal.logic.variables import (
     Trail,
     UnboundVarCoercionError,
@@ -367,13 +368,13 @@ class TestF008WalkFunctorTerms:
         assert unify(X, 1, trail)
         wl, wt = walk([X]), walk((X,))
         A = Var()
-        assert unify(A, "i!", trail)
+        assert unify(A, chars("i!"), trail)
         # THE FLIP: a char list holds CHAR ATOMS; ``["h"]`` is a list of one
         # one-character STRING and would not promote.
         ws = walk(SegList([ConcreteSeg([char_atom("h")]), VarSeg(A)]))
         trail.reset()
         assert wl == [1] and wt == (1,)
-        assert ws == "hi!"  # F018 Liskov promotion (prior art regression guard)
+        assert ws == chars("hi!")  # F018 Liskov promotion (prior art regression guard)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -620,8 +621,8 @@ class TestUnifyModes:
         trail.reset()
         X = Var()
         ss = SegString(["abc", VarSeg(X)])
-        assert not unify(ss, "ab", trail)       # shorter than min_len
-        assert unify(ss, "abc", trail) and deref(X) == ""
+        assert not unify(ss, chars("ab"), trail)       # shorter than min_len
+        assert unify(ss, chars("abc"), trail) and deref(X) == chars("")
 
     def test_dictterm_both_orders_and_mismatch(self, trail):
         V1, V2 = Var(), Var()

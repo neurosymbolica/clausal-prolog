@@ -23,6 +23,7 @@ Findings tested here:
 
 import pytest
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars, chars_text, is_chars
 
 
 def test_F050_split_with_join_preserves_str_parts():
@@ -55,9 +56,9 @@ def test_F050_split_with_join_preserves_str_parts():
     # First confirm the split direction yields ['a','b','c'] (precondition).
     parts = Var()
     split_results = []
-    for _ in call("split_with", char_atom(","), "a,b,c", parts, module=mod):
+    for _ in call("split_with", char_atom(","), chars("a,b,c"), parts, module=mod):
         split_results.append(deref(parts))
-    assert split_results == [["a", "b", "c"]], (
+    assert split_results == [[chars("a"), chars("b"), chars("c")]], (
         f"precondition: split_with(',', 'a,b,c', P) should yield "
         f"P = ['a','b','c'] (str parts); got {split_results!r}"
     )
@@ -65,7 +66,7 @@ def test_F050_split_with_join_preserves_str_parts():
     # Now run the inverse direction (join mode) with the same parts.
     J = Var()
     join_results = []
-    for _ in call("split_with", char_atom(","), J, ["a", "b", "c"], module=mod):
+    for _ in call("split_with", char_atom(","), J, [chars("a"), chars("b"), chars("c")], module=mod):
         join_results.append(deref(J))
 
     assert len(join_results) > 0, (
@@ -83,7 +84,7 @@ def test_F050_split_with_join_preserves_str_parts():
         f"``['a',',','b',',','c']``)."
     )
     # Stronger: every str part should appear somewhere in J.
-    flat = [char_atom(c) for c in j] if isinstance(j, str) else list(j)
+    flat = [char_atom(c) for c in chars_text(j)] if is_chars(j) else list(j)
     for p in (char_atom("a"), char_atom("b"), char_atom("c")):
         assert p in flat, (
             f"split_with(',', J, ['a','b','c']) returned J = {j!r}; "
@@ -123,12 +124,12 @@ def test_F051_as_items_accepts_ground_seg_inputs():
     # (default output is list; promote to str when all elements are
     # 1-char strs), a SegList whose elements are all 1-char strs walks
     # to the equivalent str (``"abc"``) rather than the char list.
-    assert sl.is_ground() and sl.__walk__() == "abc", (
+    assert sl.is_ground() and sl.__walk__() == chars("abc"), (
         f"precondition: SegList([ConcreteSeg(['a','b','c'])]) should be "
         f"ground and walk to 'abc' (Liskov promote-to-str); got "
         f"is_ground={sl.is_ground()}, walk={sl.__walk__()!r}"
     )
-    assert ss.is_ground() and ss.__walk__() == "abc", (
+    assert ss.is_ground() and ss.__walk__() == chars("abc"), (
         f"precondition: SegString(['abc']) should be ground and walk to "
         f"'abc'; got is_ground={ss.is_ground()}, walk={ss.__walk__()!r}"
     )
@@ -136,10 +137,10 @@ def test_F051_as_items_accepts_ground_seg_inputs():
     # Controls: list/str inputs succeed.
     R = Var()
     n_list_append = sum(
-        1 for _ in call("append", [char_atom("a"), char_atom("b"), char_atom("c")], "d", R, module=mod)
+        1 for _ in call("append", [char_atom("a"), char_atom("b"), char_atom("c")], chars("d"), R, module=mod)
     )
     R = Var()
-    n_str_append = sum(1 for _ in call("append", "abc", "d", R, module=mod))
+    n_str_append = sum(1 for _ in call("append", chars("abc"), chars("d"), R, module=mod))
     assert n_list_append > 0 and n_str_append > 0, (
         f"controls: append(list/str, ...) should both succeed; got "
         f"list={n_list_append}, str={n_str_append}. If this fails the "
@@ -148,9 +149,9 @@ def test_F051_as_items_accepts_ground_seg_inputs():
 
     # The bug: Seg* inputs silently fail across every gated builtin.
     R = Var()
-    n_sl_append = sum(1 for _ in call("append", sl, "d", R, module=mod))
+    n_sl_append = sum(1 for _ in call("append", sl, chars("d"), R, module=mod))
     R = Var()
-    n_ss_append = sum(1 for _ in call("append", ss, "d", R, module=mod))
+    n_ss_append = sum(1 for _ in call("append", ss, chars("d"), R, module=mod))
     assert n_sl_append > 0, (
         f"append(SegList(ground), 'd', R) yielded {n_sl_append} solutions; "
         f"expected >0 (matches the list/str control of {n_list_append}). "
@@ -237,7 +238,7 @@ def test_F052_reduction_predicates_dont_swallow_typeerror():
     # The bug: sum_list("abc", S) silently fails (TypeError swallowed).
     S = Var()
     try:
-        n_str = sum(1 for _ in call("sum_list", "abc", S, module=mod))
+        n_str = sum(1 for _ in call("sum_list", chars("abc"), S, module=mod))
     except LogicException:
         # Acceptable post-fix behaviour: a typed clausal exception is fine.
         return
@@ -288,7 +289,7 @@ def test_F053_output_mode_builders_respect_str_type_hint():
         f"got {len(rep_results)}."
     )
     rep = rep_results[0]
-    assert isinstance(rep, str), (
+    assert is_chars(rep), (
         f"replicate(5, 'a', R) returned R = {rep!r} of type "
         f"{type(rep).__name__}; expected a str (every element is a "
         f"1-char str, so 'aaaaa' is the natural / lossless str shape). "
@@ -304,7 +305,7 @@ def test_F053_output_mode_builders_respect_str_type_hint():
     from clausal.terms import SegString
     X = Var()
     same_results = []
-    for _ in call("same_length", "abc", X, module=mod):
+    for _ in call("same_length", chars("abc"), X, module=mod):
         same_results.append(deref(X))
         break
     assert len(same_results) == 1, (
@@ -312,7 +313,7 @@ def test_F053_output_mode_builders_respect_str_type_hint():
         f"solution; got {len(same_results)}."
     )
     same = same_results[0]
-    assert isinstance(same, (str, SegString)), (
+    assert is_chars(same) or isinstance(same, SegString), (
         f"same_length('abc', X) returned X = {same!r} of type "
         f"{type(same).__name__}; expected a str-shaped value (a str "
         f"or a SegString of fresh VarSeg holes) since the sibling "
@@ -340,57 +341,57 @@ def test_F053_output_mode_builders_respect_str_type_hint():
         (
             "reverse",
             ("reverse", [char_atom("a"), char_atom("b"), char_atom("c")]),
-            ("reverse", "abc"),
-            "cba",
+            ("reverse", chars("abc")),
+            chars("cba"),
             [char_atom("c"), char_atom("b"), char_atom("a")],
         ),
         (
             "msort",
             ("msort", [char_atom("c"), char_atom("b"), char_atom("a")]),
-            ("msort", "cba"),
-            "abc",
+            ("msort", chars("cba")),
+            chars("abc"),
             [char_atom("a"), char_atom("b"), char_atom("c")],
         ),
         (
             "sort",
             ("sort", [char_atom("a"), char_atom("b"), char_atom("c")]),
-            ("sort", "abc"),
-            "abc",
+            ("sort", chars("abc")),
+            chars("abc"),
             [char_atom("a"), char_atom("b"), char_atom("c")],
         ),
         (
             "take",
             ("take", 2, [char_atom("a"), char_atom("b"), char_atom("c")]),
-            ("take", 2, "abc"),
-            "ab",
+            ("take", 2, chars("abc")),
+            chars("ab"),
             [char_atom("a"), char_atom("b")],
         ),
         (
             "drop",
             ("drop", 1, [char_atom("a"), char_atom("b"), char_atom("c")]),
-            ("drop", 1, "abc"),
-            "bc",
+            ("drop", 1, chars("abc")),
+            chars("bc"),
             [char_atom("b"), char_atom("c")],
         ),
         (
             "list_to_set",
             ("list_to_set", [char_atom("a"), char_atom("b"), char_atom("c")]),
-            ("list_to_set", "abc"),
-            "abc",
+            ("list_to_set", chars("abc")),
+            chars("abc"),
             [char_atom("a"), char_atom("b"), char_atom("c")],
         ),
         (
             "subtract",
             ("subtract", [char_atom("a"), char_atom("b"), char_atom("c")], [char_atom("b")]),
-            ("subtract", "abc", "b"),
-            "ac",
+            ("subtract", chars("abc"), chars("b")),
+            chars("ac"),
             [char_atom("a"), char_atom("c")],
         ),
         (
             "union",
             ("union", [char_atom("a"), char_atom("b"), char_atom("c")], [char_atom("d")]),
-            ("union", "abc", "d"),
-            "abcd",
+            ("union", chars("abc"), chars("d")),
+            chars("abcd"),
             [char_atom("a"), char_atom("b"), char_atom("c"), char_atom("d")],
         ),
     ],
@@ -441,7 +442,7 @@ def test_F054_seq_result_input_type_wins(
         f"{label}(str-input) should return {expected_str_result!r}; "
         f"got {str_result!r}."
     )
-    assert isinstance(str_result, str), (
+    assert is_chars(str_result), (
         f"{label}(str-input) returned {str_result!r} of type "
         f"{type(str_result).__name__}; expected str (str input → str "
         f"output under option A)."
@@ -490,7 +491,7 @@ def test_F055_transpose_accepts_str_outer_matrix():
         f"{n_list}. If this fails the fixture is broken."
     )
     T = Var()
-    n_los = sum(1 for _ in call("transpose", ["ab", "cd"], T, module=mod))
+    n_los = sum(1 for _ in call("transpose", [chars("ab"), chars("cd")], T, module=mod))
     assert n_los > 0, (
         f"control: transpose(['ab','cd'], T) should succeed via "
         f"per-row _as_items; got {n_los}."
@@ -499,7 +500,7 @@ def test_F055_transpose_accepts_str_outer_matrix():
     # The gap: str outer matrix silently yields zero solutions.
     T = Var()
     try:
-        n_str = sum(1 for _ in call("transpose", "ab", T, module=mod))
+        n_str = sum(1 for _ in call("transpose", chars("ab"), T, module=mod))
     except LogicException:
         # Acceptable post-fix: a typed clausal exception is fine.
         return
@@ -588,11 +589,11 @@ key_of(_c, _k) <- if_(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
     sl = SegList([ConcreteSeg([char_atom("a"), char_atom("e"), char_atom("i")])])
     ss = SegString(["aei"])
     # Phase 2 Task 13 Liskov rule: all-1-char-str SegList walks to str.
-    assert sl.is_ground() and sl.__walk__() == "aei", (
+    assert sl.is_ground() and sl.__walk__() == chars("aei"), (
         f"precondition: SegList ground/walks (Liskov promote-to-str); "
         f"got is_ground={sl.is_ground()}, walk={sl.__walk__()!r}"
     )
-    assert ss.is_ground() and ss.__walk__() == "aei", (
+    assert ss.is_ground() and ss.__walk__() == chars("aei"), (
         f"precondition: SegString ground/walks; got is_ground={ss.is_ground()}, "
         f"walk={ss.__walk__()!r}"
     )
@@ -605,7 +606,7 @@ key_of(_c, _k) <- if_(in_(_c, ['a', 'e', 'i', 'o', 'u']), _k == 1, _k == 0)
     ok_list = any(
         True for _ in call("maplist", is_vowel, [char_atom("a"), char_atom("e"), char_atom("i")], module=mod)
     )
-    ok_str = any(True for _ in call("maplist", is_vowel, "aei", module=mod))
+    ok_str = any(True for _ in call("maplist", is_vowel, chars("aei"), module=mod))
     assert ok_list and ok_str, (
         f"control: maplist(is_vowel, list/str) should succeed; got "
         f"list={ok_list}, str={ok_str}."
@@ -687,7 +688,7 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
     is_vowel = mod.module_dict["is_vowel"]
 
     list_input = [char_atom("h"), char_atom("e"), char_atom("l"), char_atom("l"), char_atom("o")]
-    str_input = "hello"
+    str_input = chars("hello")
 
     # include — list keeps list, str preserves str (input-type wins).
     R = Var()
@@ -705,11 +706,11 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
         f"precondition: include should succeed on both inputs; got "
         f"list_inc={list_inc!r}, str_inc={str_inc!r}."
     )
-    assert str_inc == "eo", (
+    assert str_inc == chars("eo"), (
         f"include(is_vowel, 'hello', R) should return 'eo' (str); "
         f"got {str_inc!r}."
     )
-    assert isinstance(str_inc, str), (
+    assert is_chars(str_inc), (
         f"include(is_vowel, 'hello', R) returned {str_inc!r} of type "
         f"{type(str_inc).__name__}; expected str (str input → str "
         f"output under option A)."
@@ -741,11 +742,11 @@ is_vowel(_c) <- in_(_c, ['a', 'e', 'i', 'o', 'u'])
         f"precondition: partition should succeed on both inputs; got "
         f"list_par={list_par!r}, str_par={str_par!r}."
     )
-    assert str_par == ("eo", "hll"), (
+    assert str_par == (chars("eo"), chars("hll")), (
         f"partition(is_vowel, 'hello', Y, N) should bind Y='eo', "
         f"N='hll'; got {str_par!r}."
     )
-    assert isinstance(str_par[0], str) and isinstance(str_par[1], str), (
+    assert is_chars(str_par[0]) and is_chars(str_par[1]), (
         f"partition(is_vowel, 'hello', Y, N) bound ({str_par[0]!r}, "
         f"{str_par[1]!r}); expected both str under option A."
     )
@@ -789,14 +790,14 @@ code_key(_c, _k) <- char_code(_c, _k)
     # maplist/3 on str — every result element is a 1-char str.
     R = Var()
     mp = None
-    for _ in call("maplist", upcase, "abc", R, module=mod):
+    for _ in call("maplist", upcase, chars("abc"), R, module=mod):
         mp = deref(R)
         break
     assert mp is not None, (
         f"precondition: maplist(upcase, 'abc', R) should succeed; got None."
     )
     # All elements are 1-char strs; "ABC" is the lossless str shape.
-    assert isinstance(mp, str), (
+    assert is_chars(mp), (
         f"maplist(upcase, 'abc', R) returned {mp!r} of type "
         f"{type(mp).__name__}; expected a str (e.g. 'ABC') under the "
         f"string-preserving contract — every element of the result is "
@@ -807,13 +808,13 @@ code_key(_c, _k) <- char_code(_c, _k)
     # sort_by on str — same: result elements are 1-char strs.
     R = Var()
     sb = None
-    for _ in call("sort_by", code_key, "cba", R, module=mod):
+    for _ in call("sort_by", code_key, chars("cba"), R, module=mod):
         sb = deref(R)
         break
     assert sb is not None, (
         f"precondition: sort_by(code_key, 'cba', R) should succeed; got None."
     )
-    assert isinstance(sb, str), (
+    assert is_chars(sb), (
         f"sort_by(code_key, 'cba', R) returned {sb!r} of type "
         f"{type(sb).__name__}; expected a str (e.g. 'abc'). Hard-coded "
         f"list output: no _seq_result/was_str path."

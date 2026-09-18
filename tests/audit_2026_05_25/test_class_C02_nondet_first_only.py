@@ -83,6 +83,7 @@ def test_F016_segstring_unify_enumerates_all_splits():
     """
     from clausal.logic.variables import Var, unify, Trail, deref
     from clausal.terms import SegString, VarSeg, _segstring_unify_gen
+    from clausal.logic.cells import chars
 
     # Control: the generator itself enumerates all 4 splits.
     A_ctl, B_ctl = Var(), Var()
@@ -106,15 +107,15 @@ def test_F016_segstring_unify_enumerates_all_splits():
     splits_seen = set()
     for _ in range(4):
         mark = t.mark()
-        if unify(ss, "abc", t):
+        if unify(ss, chars("abc"), t):
             splits_seen.add((deref(A), deref(B)))
         t.undo(mark)
 
     expected = {
-        ("", "abc"),
-        ("a", "bc"),
-        ("ab", "c"),
-        ("abc", ""),
+        (chars(""), chars("abc")),
+        (chars("a"), chars("bc")),
+        (chars("ab"), chars("c")),
+        (chars("abc"), chars("")),
     }
     assert splits_seen == expected, (
         f"SegString.__unify__ should expose all 4 splits of "

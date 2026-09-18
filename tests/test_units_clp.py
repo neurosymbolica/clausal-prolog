@@ -9,6 +9,7 @@ from fractions import Fraction
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.exceptions import LogicException
 from clausal.terms import Compound, Quantity
 from clausal.modules.countries.european_union import euro
@@ -76,7 +77,7 @@ class TestExactNumberCurrency:
         from clausal.modules.currency import _money_round_impl
         q = Quantity(Fraction(1000, 3), {yen: 1})
         out = Var()
-        assert list(_money_round_impl(q, "half_even", out, Trail())) == [None]
+        assert list(_money_round_impl(q, chars("half_even"), out, Trail())) == [None]
         assert deref(out) == Quantity(Decimal("333"), {yen: 1})
 
 
@@ -708,7 +709,7 @@ class TestReviewRoundTwo:
     def test_zcompare_bad_order_wins_over_units(self):
         import clausal.logic.clpfd as clpfd
         with pytest.raises(LogicException) as ei:
-            clpfd.zcompare("<", Quantity(1, M), Quantity(1, S), Trail())
+            clpfd.zcompare(chars("<"), Quantity(1, M), Quantity(1, S), Trail())
         assert ei.value.term.args[0].functor == "type_error"
         with pytest.raises(LogicException) as ei:
             clpfd.zcompare(mint("<"), Quantity(1, M), Quantity(1, S), Trail())
@@ -760,7 +761,7 @@ class TestReviewRoundThree:
         import clausal.logic.clpfd as clpfd
         t = Trail()
         with pytest.raises(LogicException) as ei:
-            list(clpfd.fd_sum([Quantity(1, M), Quantity(1, S)], "#=", Var(), t))
+            list(clpfd.fd_sum([Quantity(1, M), Quantity(1, S)], chars("#="), Var(), t))
         assert ei.value.term.args[0].functor == "type_error"
 
     def test_circuit_refuses_united_vars(self):

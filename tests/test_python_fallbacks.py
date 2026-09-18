@@ -8,6 +8,7 @@ result as the C-accelerated version.
 from __future__ import annotations
 
 import pytest
+from clausal.logic.cells import chars
 
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.predicate import PredicateMeta
@@ -215,10 +216,10 @@ class TestNthArgFallback:
         # char atoms — so it decomposes as that list does.  The funnel
         # WRAPPER answers; the pre-cell ``_py`` twin still carries the
         # retired atom reading and is no longer reached for a str.
-        assert _nth_arg("hello", 1) == char_atom("h")
-        assert _nth_arg("hello", 2) == "ello"
+        assert _nth_arg(chars("hello"), 1) == char_atom("h")
+        assert _nth_arg(chars("hello"), 2) == chars("ello")
         with pytest.raises(IndexError):
-            _nth_arg("hello", 3)
+            _nth_arg(chars("hello"), 3)
         with pytest.raises(IndexError):
             _nth_arg_py("hello", 1)
 
@@ -246,7 +247,7 @@ class TestArgsListFallback:
         # char atoms — so it decomposes as that list does.  The funnel
         # WRAPPER answers; the pre-cell ``_py`` twin still carries the
         # retired atom reading and is no longer reached for a str.
-        assert _args_list("hello") == [char_atom("h"), "ello"]
+        assert _args_list(chars("hello")) == [char_atom("h"), chars("ello")]
         assert _args_list_py("hello") == []
 
 
@@ -1168,10 +1169,10 @@ class TestListUnifyCharTwinParity:
         for impl in _INPUT_TWINS:
             h, t = Var(), Var()
             trail = Trail()
-            assert impl("abc", [h], t, [], trail) is True
+            assert impl(chars("abc"), [h], t, [], trail) is True
             assert is_char_atom(deref(h))
             outs.append((_spelling(deref(h)), deref(t)))
-        assert outs[0] == ("a", "bc")
+        assert outs[0] == ("a", chars("bc"))
         assert len(set(outs)) == 1, f"twins disagree: {outs}"
 
     def test_a_str_star_promotes_the_output_back_to_a_str(self):
@@ -1181,10 +1182,10 @@ class TestListUnifyCharTwinParity:
         for impl in _OUTPUT_TWINS:
             target, star = Var(), Var()
             trail = Trail()
-            unify(star, "ab", trail)
+            unify(star, chars("ab"), trail)
             assert impl(target, [], star, [], trail) is True
             outs.append(deref(target))
-        assert outs[0] == "ab"
+        assert outs[0] == chars("ab")
         assert len(set(outs)) == 1, f"twins disagree: {outs}"
 
     def test_a_list_of_chars_star_is_promoted(self):
@@ -1198,9 +1199,9 @@ class TestListUnifyCharTwinParity:
             unify(star, [char_atom("a"), char_atom("b")], trail)
             assert impl(target, [], star, [], trail) is True
             got = deref(target)
-            assert got == "ab"
+            assert got == chars("ab")
             outs.append(got)
-        assert outs == ["ab"] * len(_OUTPUT_TWINS)
+        assert outs == [chars("ab")] * len(_OUTPUT_TWINS)
 
     def test_two_char_strs_beside_a_str_star_are_not_promoted(self):
         """A non-char element blocks the promotion in both twins."""
@@ -1234,10 +1235,10 @@ class TestListUnifyCharTwinParity:
             target, before, star = Var(), Var(), Var()
             trail = Trail()
             unify(before, ("a",), trail)        # a CELL-shaped char
-            unify(star, "b", trail)
+            unify(star, chars("b"), trail)
             assert impl(target, [before], star, [], trail) is True
             outs.append(deref(target))
-        assert outs[0] == "ab", outs
+        assert outs[0] == chars("ab"), outs
         assert len(set(outs)) == 1, f"twins disagree: {outs}"
 
     def test_a_cell_shaped_non_char_blocks_promotion_in_both_twins(self):
@@ -1265,5 +1266,5 @@ class TestListUnifyCharTwinParity:
             unify(star, SegString(["a", "b"]), trail)
             assert impl(target, [], star, [], trail) is True
             outs.append(deref(target))
-        assert outs[0] == "ab"
+        assert outs[0] == chars("ab")
         assert len(set(outs)) == 1, f"twins disagree: {outs}"

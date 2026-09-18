@@ -24,6 +24,7 @@ name (atoms/functors and table state are module-scoped).
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, _query_cache
 from clausal.logic.variables import (
@@ -444,14 +445,14 @@ badne(X) <- ( X != "banana", X is "apple" )
         # Python != between mismatched types falls back to identity and
         # never raises — no TypeError conversion needed on the ground path.
         tr = Trail()
-        assert fd_ne("a", 5, tr) is True
+        assert fd_ne(chars("a"), 5, tr) is True
         import datetime as dt
-        assert fd_ne(dt.date(2026, 1, 1), "x", tr) is True
+        assert fd_ne(dt.date(2026, 1, 1), chars("x"), tr) is True
 
     def test_ne_both_ground_strings_still_python_ne(self):
         tr = Trail()
-        assert fd_ne("a", "b", tr) is True
-        assert fd_ne("a", "a", tr) is False
+        assert fd_ne(chars("a"), chars("b"), tr) is True
+        assert fd_ne(chars("a"), chars("a"), tr) is False
 
 
 class TestF002ExprTreeVsNonNumericOperand:
@@ -528,11 +529,11 @@ badexpr(X) <- ( X + 1 == "banana", X is 4 )
         # scalar, and ground == ground falls back to Python == → False. The
         # guard must NOT reclassify a ground tree as the var side.
         tr = Trail()
-        assert fd_eq(self._add(2, 3), "banana", tr) is False
+        assert fd_eq(self._add(2, 3), chars("banana"), tr) is False
 
     def test_ne_ground_tree_vs_str_still_python_ne(self):
         tr = Trail()
-        assert fd_ne(self._add(2, 3), "banana", tr) is True
+        assert fd_ne(self._add(2, 3), chars("banana"), tr) is True
 
     def test_eq_var_tree_vs_ground_tree_still_legal(self):
         tr = Trail()
@@ -1222,10 +1223,10 @@ h([_, _, _, *_], R) <- (R is "many")
     # its char-list twin does.  ``""`` and ``[]`` are one term.
     @pytest.mark.parametrize("probe,expected", [
         ([mint("a"), mint("b")], [mint("two")]),
-        ("ab", [mint("two")]),
+        (chars("ab"), [mint("two")]),
         ([], [mint("empty")]),
-        ("", [mint("empty")]),
-        ("abc", [mint("many")]),
+        (chars(""), [mint("empty")]),
+        (chars("abc"), [mint("many")]),
     ])
     def test_guard_form_parity(self, load, probe, expected):
         m = load("liskov_guard", self.GUARD_SRC)
@@ -1235,10 +1236,10 @@ h([_, _, _, *_], R) <- (R is "many")
 
     @pytest.mark.parametrize("probe,expected", [
         ([mint("a"), mint("b")], [mint("two")]),
-        ("ab", [mint("two")]),
+        (chars("ab"), [mint("two")]),
         ([], [mint("empty")]),
-        ("", [mint("empty")]),
-        ("abcd", [mint("many")]),
+        (chars(""), [mint("empty")]),
+        (chars("abcd"), [mint("many")]),
     ])
     def test_head_pattern_parity(self, load, probe, expected):
         m = load("liskov_head", self.HEAD_SRC)
@@ -1255,7 +1256,7 @@ sl(["a", "b"], R) <- (R is "matched")
         r = Var()
         # The head list ["a", "b"] is a list of char ATOMS — that IS the
         # string "ab" (THE FLIP §6.2) — so a str probe matches it.
-        assert [deref(r) for _ in solve(m.sl("ab", r))] == [mint("matched")]
+        assert [deref(r) for _ in solve(m.sl(chars("ab"), r))] == [mint("matched")]
 
 
 class TestAssertzReindexSeam:

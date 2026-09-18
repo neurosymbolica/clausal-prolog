@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
@@ -902,7 +903,7 @@ class TestDCGStringInput:
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds1", src, tmp_path)
         cls = mod.module_dict["hi"]
-        assert _succeeds("phrase", cls, "hi", module=mod)
+        assert _succeeds("phrase", cls, chars("hi"), module=mod)
 
     def test_phrase2_string_no_match(self, tmp_path):
         """phrase(rule, "ho") fails when grammar expects "hi"."""
@@ -910,7 +911,7 @@ class TestDCGStringInput:
         src = 'hi >> (["h", "i"])\n'
         mod = _load("ds2", src, tmp_path)
         cls = mod.module_dict["hi"]
-        assert not _succeeds("phrase", cls, "ho", module=mod)
+        assert not _succeeds("phrase", cls, chars("ho"), module=mod)
 
     def test_phrase2_string_empty(self, tmp_path):
         """phrase(eps, "") succeeds for empty grammar."""
@@ -918,7 +919,7 @@ class TestDCGStringInput:
         src = 'eps >> ([])\n'
         mod = _load("ds3", src, tmp_path)
         cls = mod.module_dict["eps"]
-        assert _succeeds("phrase", cls, "", module=mod)
+        assert _succeeds("phrase", cls, chars(""), module=mod)
 
     def test_phrase2_string_multi_terminal(self, tmp_path):
         """phrase(rule, "hello") matches multi-char terminal sequence."""
@@ -926,8 +927,8 @@ class TestDCGStringInput:
         src = 'hello >> (["h", "e", "l", "l", "o"])\n'
         mod = _load("ds4", src, tmp_path)
         cls = mod.module_dict["hello"]
-        assert _succeeds("phrase", cls, "hello", module=mod)
-        assert not _succeeds("phrase", cls, "hell", module=mod)
+        assert _succeeds("phrase", cls, chars("hello"), module=mod)
+        assert not _succeeds("phrase", cls, chars("hell"), module=mod)
 
     def test_phrase3_string_remainder(self, tmp_path):
         """phrase(rule, "hiXY", Rest) — Rest preserves str type.
@@ -944,9 +945,9 @@ class TestDCGStringInput:
         cls = mod.module_dict["hi"]
         rest = Var()
         results = []
-        for _ in call("phrase", cls, "hiXY", rest, module=mod):
+        for _ in call("phrase", cls, chars("hiXY"), rest, module=mod):
             results.append(deref(rest))
-        assert results == ["XY"]
+        assert results == [chars("XY")]
 
     def test_phrase2_chained_nonterminals_string(self, tmp_path):
         """Chained non-terminals consume a string."""
@@ -958,8 +959,8 @@ class TestDCGStringInput:
         )
         mod = _load("ds6", src, tmp_path)
         cls = mod.module_dict["ab"]
-        assert _succeeds("phrase", cls, "ab", module=mod)
-        assert not _succeeds("phrase", cls, "ac", module=mod)
+        assert _succeeds("phrase", cls, chars("ab"), module=mod)
+        assert not _succeeds("phrase", cls, chars("ac"), module=mod)
 
     def test_phrase2_recursive_string(self, tmp_path):
         """Recursive DCG parses a string character by character."""
@@ -970,9 +971,9 @@ class TestDCGStringInput:
         )
         mod = _load("ds7", src, tmp_path)
         cls = mod.module_dict["chars"]
-        assert _succeeds("phrase", cls, "aaa", module=mod)
-        assert _succeeds("phrase", cls, "", module=mod)
-        assert not _succeeds("phrase", cls, "aab", module=mod)
+        assert _succeeds("phrase", cls, chars("aaa"), module=mod)
+        assert _succeeds("phrase", cls, chars(""), module=mod)
+        assert not _succeeds("phrase", cls, chars("aab"), module=mod)
 
     def test_phrase2_dcg_with_args_string(self, tmp_path):
         """DCG with args extracts characters from string input."""
@@ -982,7 +983,7 @@ class TestDCGStringInput:
         cls = mod.module_dict["tok"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), "x", module=mod):
+        for _ in call("phrase", cls(v), chars("x"), module=mod):
             results.append(deref(v))
         assert results == [mint("x")]
 
@@ -994,12 +995,12 @@ class TestDCGStringInput:
         cls = mod.module_dict["vowel"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), "e", module=mod):
+        for _ in call("phrase", cls(v), chars("e"), module=mod):
             results.append(deref(v))
         assert results == [mint("e")]
         # Consonant should fail
         results2 = []
-        for _ in call("phrase", cls(v), "b", module=mod):
+        for _ in call("phrase", cls(v), chars("b"), module=mod):
             results2.append(deref(v))
         assert results2 == []
 
@@ -1085,8 +1086,8 @@ class TestStringTerminals:
         src = 'hi >> ("hi")\n'
         mod = _load("st1", src, tmp_path)
         cls = mod.module_dict["hi"]
-        assert _succeeds("phrase", cls, "hi", module=mod)
-        assert not _succeeds("phrase", cls, "ho", module=mod)
+        assert _succeeds("phrase", cls, chars("hi"), module=mod)
+        assert not _succeeds("phrase", cls, chars("ho"), module=mod)
 
     def test_string_terminal_list_input(self, tmp_path):
         """A string terminal also matches a char-list caller (strings-as-lists).
@@ -1106,7 +1107,7 @@ class TestStringTerminals:
         src = 'greet >> ("he", ["l"], "lo")\n'
         mod = _load("st3", src, tmp_path)
         cls = mod.module_dict["greet"]
-        assert _succeeds("phrase", cls, "hello", module=mod)
+        assert _succeeds("phrase", cls, chars("hello"), module=mod)
 
     def test_bytes_terminal(self, tmp_path):
         src = "hi >> (b\"hi\")\n"

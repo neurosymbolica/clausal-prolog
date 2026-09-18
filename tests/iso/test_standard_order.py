@@ -10,6 +10,7 @@ from decimal import Decimal
 from fractions import Fraction
 
 from clausal.logic.builtins._helpers import _standard_order_key as K
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var
 from clausal.terms import Quantity
 
@@ -147,7 +148,7 @@ def test_compare_equals_iff_iso_identical():
     terms = [1, 1.0, True, Decimal(1), Fraction(1),
              Quantity(1, {}), Quantity(1, {"m": 1}), Quantity(2, {"m": 1}),
              2, 2.0, ("a",), ("b",), ("f", 1), ("f", 1, 2), ("g", 1),
-             [], [1], [1, 2], "ab", b"ab"]
+             [], [1], [1, 2], chars("ab"), b"ab"]
     for a in terms:
         for b in terms:
             assert (_order_atom(a, b) == "=") == bool(_iso_identical(a, b)), (
@@ -160,7 +161,7 @@ def test_the_order_is_total_over_every_pair():
     from clausal.logic.builtins.iso_compare import _order_atom
 
     terms = [Var(), 1, 1.0, Decimal(1), Quantity(1, {"m": 1}), Quantity(1, {"s": 1}),
-             ("a",), ("f", 1), [], [1], "ab", b"ab", {"a": 1}, {1, 2}]
+             ("a",), ("f", 1), [], [1], chars("ab"), b"ab", {chars("a"): 1}, {1, 2}]
     for a in terms:
         for b in terms:
             ab, ba = _order_atom(a, b), _order_atom(b, a)

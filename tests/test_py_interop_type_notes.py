@@ -152,13 +152,14 @@ def test_http_post_wrong_typed_data_notes_but_behaves_as_before(monkeypatch):
     # The body-less POST for non-str/bytes data is pre-existing behaviour;
     # the guard is note-only.
     import clausal.modules.py.http as http_mod
+    from clausal.logic.cells import chars
     from clausal.logic.variables import Trail, Var
     calls = []
     monkeypatch.setattr(http_mod, "_do_request",
                         lambda *a, **kw: calls.append((a, kw)) or (200, "ok"))
     body = Var()
     with collect_type_mismatch_notes() as notes:
-        results = list(http_mod._post_3("http://x.test/", 42, body, Trail(), None))
+        results = list(http_mod._post_3(chars("http://x.test/"), 42, body, Trail(), None))
     assert notes == [
         "post/3 was called with int where str or bytes is required (argument 2)"
     ]

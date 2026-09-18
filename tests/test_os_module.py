@@ -7,6 +7,7 @@ import sys
 
 import pytest
 
+from clausal.logic.cells import chars, is_chars
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.os import (
     environment_variable, set_environment_variable, unset_environment_variable,
@@ -48,22 +49,22 @@ class TestEnvironmentVariable:
     def test_get_home(self):
         # nv
         v = Var()
-        sols, trail = simple_solutions(_environment_variable_2, "HOME", v)
+        sols, trail = simple_solutions(_environment_variable_2, chars("HOME"), v)
         assert len(sols) == 1
-        assert deref(v) == os.environ.get("HOME")
+        assert deref(v) == chars(os.environ.get("HOME"))
 
     def test_get_path(self):
         # nv
         v = Var()
-        sols, trail = simple_solutions(_environment_variable_2, "PATH", v)
+        sols, trail = simple_solutions(_environment_variable_2, chars("PATH"), v)
         assert len(sols) == 1
-        assert deref(v) == os.environ["PATH"]
+        assert deref(v) == chars(os.environ["PATH"])
 
     def test_missing_var_fails(self):
         # nv
         v = Var()
         sols, _ = simple_solutions(
-            _environment_variable_2, "_CLAUSAL_NONEXISTENT_VAR_", v
+            _environment_variable_2, chars("_CLAUSAL_NONEXISTENT_VAR_"), v
         )
         assert len(sols) == 0
 
@@ -83,23 +84,23 @@ class TestEnvironmentVariable:
         home = os.environ.get("HOME", "")
         if not home:
             pytest.skip("HOME not set")
-        sols, _ = simple_solutions(_environment_variable_2, "HOME", home)
+        sols, _ = simple_solutions(_environment_variable_2, chars("HOME"), chars(home))
         assert len(sols) == 1
 
     def test_unify_value_wrong_fails(self):
         """when value is pre-bound to wrong value, fails."""
         # nv
         sols, _ = simple_solutions(
-            _environment_variable_2, "HOME", "definitely_not_home"
+            _environment_variable_2, chars("HOME"), chars("definitely_not_home")
         )
         assert len(sols) == 0
 
     def test_trampoline(self):
         # nv
         v = Var()
-        sols, trail = trampoline_solutions(environment_variable, "PATH", v)
+        sols, trail = trampoline_solutions(environment_variable, chars("PATH"), v)
         assert len(sols) == 1
-        assert deref(v) == os.environ["PATH"]
+        assert deref(v) == chars(os.environ["PATH"])
 
 
 # ── set_environment_variable/2 ───────────────────────────────────────────
@@ -110,7 +111,7 @@ class TestSetEnvironmentVariable:
         # nv
         key = "_CLAUSAL_TEST_SET_VAR_"
         try:
-            sols, _ = simple_solutions(_set_environment_variable_2, key, "hello")
+            sols, _ = simple_solutions(_set_environment_variable_2, chars(key), chars("hello"))
             assert len(sols) == 1
             assert os.environ[key] == "hello"
         finally:
@@ -118,17 +119,17 @@ class TestSetEnvironmentVariable:
 
     def test_unbound_name_fails(self):
         # nv
-        sols, _ = simple_solutions(_set_environment_variable_2, Var(), "val")
+        sols, _ = simple_solutions(_set_environment_variable_2, Var(), chars("val"))
         assert len(sols) == 0
 
     def test_unbound_value_fails(self):
         # nv
-        sols, _ = simple_solutions(_set_environment_variable_2, "KEY", Var())
+        sols, _ = simple_solutions(_set_environment_variable_2, chars("KEY"), Var())
         assert len(sols) == 0
 
     def test_non_string_name_fails(self):
         # nv
-        sols, _ = simple_solutions(_set_environment_variable_2, 42, "val")
+        sols, _ = simple_solutions(_set_environment_variable_2, 42, chars("val"))
         assert len(sols) == 0
 
 
@@ -140,14 +141,14 @@ class TestUnsetEnvironmentVariable:
         # nv
         key = "_CLAUSAL_TEST_UNSET_VAR_"
         os.environ[key] = "temp"
-        sols, _ = simple_solutions(_unset_environment_variable_1, key)
+        sols, _ = simple_solutions(_unset_environment_variable_1, chars(key))
         assert len(sols) == 1
         assert key not in os.environ
 
     def test_nonexistent_fails(self):
         # nv
         sols, _ = simple_solutions(
-            _unset_environment_variable_1, "_CLAUSAL_NONEXISTENT_UNSET_"
+            _unset_environment_variable_1, chars("_CLAUSAL_NONEXISTENT_UNSET_")
         )
         assert len(sols) == 0
 
@@ -167,21 +168,21 @@ class TestWorkingDirectory:
         sols, trail = simple_solutions(_working_directory_1, v)
         assert len(sols) == 1
         result = deref(v)
-        assert isinstance(result, str)
+        assert is_chars(result)
         assert len(result) > 0
 
     def test_matches_os_getcwd(self):
         # nv
         v = Var()
         sols, trail = simple_solutions(_working_directory_1, v)
-        assert deref(v) == os.getcwd()
+        assert deref(v) == chars(os.getcwd())
 
     def test_trampoline(self):
         # nv
         v = Var()
         sols, trail = trampoline_solutions(working_directory, v)
         assert len(sols) == 1
-        assert deref(v) == os.getcwd()
+        assert deref(v) == chars(os.getcwd())
 
 
 # ── change_directory/1 ──────────────────────────────────────────────────
@@ -192,7 +193,7 @@ class TestChangeDirectory:
         # nv
         original = os.getcwd()
         try:
-            sols, _ = simple_solutions(_change_directory_1, str(tmp_path))
+            sols, _ = simple_solutions(_change_directory_1, chars(str(tmp_path)))
             assert len(sols) == 1
             assert os.getcwd() == str(tmp_path)
         finally:
@@ -200,7 +201,7 @@ class TestChangeDirectory:
 
     def test_nonexistent_fails(self):
         # nv
-        sols, _ = simple_solutions(_change_directory_1, "/nonexistent_dir_xyz")
+        sols, _ = simple_solutions(_change_directory_1, chars("/nonexistent_dir_xyz"))
         assert len(sols) == 0
 
     def test_unbound_fails(self):
@@ -266,14 +267,14 @@ class TestPlatform:
         sols, trail = simple_solutions(_platform_1, v)
         assert len(sols) == 1
         result = deref(v)
-        assert result == sys.platform
+        assert result == chars(sys.platform)
 
     def test_trampoline(self):
         # nv
         v = Var()
         sols, trail = trampoline_solutions(platform, v)
         assert len(sols) == 1
-        assert deref(v) == sys.platform
+        assert deref(v) == chars(sys.platform)
 
 
 # ── cpu_count/1 ─────────────────────────────────────────────────────────

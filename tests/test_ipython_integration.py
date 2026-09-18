@@ -8,6 +8,7 @@ should produce simple_ast nodes as values.
 import ast
 import pytest
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars, is_chars
 from clausal.import_hook import (
     _FreshEmbedTransformer, _simple_ast_builtins,
     _star_query_input_transformer, _STAR_QUERY_SENTINEL,
@@ -264,8 +265,8 @@ def test_sentinel_multi_goal_compiles():
 def test_chars_mode_in_a_cell_makes_a_double_quoted_literal_a_string():
     # nv
     ns = run_cell('-double_quotes(chars)\nresult = --"foo"\n')
-    assert ns["result"] == "foo"
-    assert type(ns["result"]) is str
+    assert ns["result"] == chars("foo")
+    assert is_chars(ns["result"])
 
 
 def test_chars_mode_leaves_single_quoted_literals_atoms():
@@ -291,8 +292,8 @@ def test_ipython_path_reads_the_lines_the_input_transformer_recorded():
     ast.fix_missing_locations(transformed)
     ns = dict(_simple_ast_builtins)
     exec(compile(transformed, "<cell>", "exec"), ns)
-    assert ns["result"] == "foo"
-    assert type(ns["result"]) is str
+    assert ns["result"] == chars("foo")
+    assert is_chars(ns["result"])
 
 
 def test_recorded_lines_are_consumed_not_left_for_the_next_tree():

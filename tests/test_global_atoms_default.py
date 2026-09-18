@@ -29,6 +29,7 @@ import warnings
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
@@ -466,8 +467,8 @@ class TestStrAtomAcceptance:
         mod = _atoms_mod("tsaa_string_str")
         assert _succeeds("atom", mint("red"), mod=mod)
         assert not _succeeds("string", mint("red"), mod=mod)
-        assert _succeeds("string", "red", mod=mod)
-        assert not _succeeds("atom", "red", mod=mod)
+        assert _succeeds("string", chars("red"), mod=mod)
+        assert not _succeeds("atom", chars("red"), mod=mod)
 
 
 class TestIsAtomValueHelper:

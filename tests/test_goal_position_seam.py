@@ -7,6 +7,7 @@ import tempfile
 import pytest
 
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars
 
 
 def _load_inline(name: str, source: str):
@@ -152,7 +153,7 @@ class TestIf:
             "        return S, S2\n"
             "    return None\n"
         ))
-        assert mod.label(("small",)) == (("permitted",), "v=permitted")
+        assert mod.label(("small",)) == (("permitted",), chars("v=permitted"))
 
     def test_an_unbound_export_handed_to_an_inner_seam_binds_the_live_object(self):
         # spec §7: "an unbound export handed to an inner seam through ``++``

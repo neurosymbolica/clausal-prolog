@@ -8,6 +8,7 @@ import threading
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 
@@ -120,7 +121,7 @@ class TestConnect:
         # nv
         host, port = echo_server
         sock = Var()
-        sols, trail = simple_solutions(_connect_3, host, port, sock)
+        sols, trail = simple_solutions(_connect_3, chars(host), port, sock)
         assert len(sols) == 1
         s = deref(sock)
         assert isinstance(s, socket.socket)
@@ -130,7 +131,7 @@ class TestConnect:
         """connect to a port that's definitely not listening."""
         # nv
         sock = Var()
-        sols, _ = simple_solutions(_connect_3, "127.0.0.1", 1, sock)
+        sols, _ = simple_solutions(_connect_3, chars("127.0.0.1"), 1, sock)
         assert len(sols) == 0
 
     def test_unbound_host_fails(self):
@@ -142,7 +143,7 @@ class TestConnect:
     def test_unbound_port_fails(self):
         # nv
         sock = Var()
-        sols, _ = simple_solutions(_connect_3, "localhost", Var(), sock)
+        sols, _ = simple_solutions(_connect_3, chars("localhost"), Var(), sock)
         assert len(sols) == 0
 
 
@@ -155,7 +156,7 @@ class TestListenAccept:
         """listen on ephemeral port, connect from client, accept."""
         # nv
         server_sock = Var()
-        sols, trail = simple_solutions(_listen_3, "127.0.0.1", 0, server_sock)
+        sols, trail = simple_solutions(_listen_3, chars("127.0.0.1"), 0, server_sock)
         assert len(sols) == 1
         server = deref(server_sock)
         port = server.getsockname()[1]
@@ -178,7 +179,7 @@ class TestListenAccept:
         """listen with port 0 picks an available port."""
         # nv
         server_sock = Var()
-        sols, trail = simple_solutions(_listen_3, "127.0.0.1", 0, server_sock)
+        sols, trail = simple_solutions(_listen_3, chars("127.0.0.1"), 0, server_sock)
         assert len(sols) == 1
         server = deref(server_sock)
         assert server.getsockname()[1] > 0
@@ -195,18 +196,18 @@ class TestSendReceive:
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
 
         # send
-        sols, _ = simple_solutions(_send_2, s, "hello")
+        sols, _ = simple_solutions(_send_2, s, chars("hello"))
         assert len(sols) == 1
 
         # receive
         data = Var()
         sols, trail = simple_solutions(_receive_2, s, data)
         assert len(sols) == 1
-        assert deref(data) == "hello"
+        assert deref(data) == chars("hello")
 
         s.close()
 
@@ -214,21 +215,21 @@ class TestSendReceive:
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
 
-        simple_solutions(_send_2, s, "world")
+        simple_solutions(_send_2, s, chars("world"))
         data = Var()
         sols, trail = simple_solutions(_receive_3, s, 1024, data)
         assert len(sols) == 1
-        assert deref(data) == "world"
+        assert deref(data) == chars("world")
         s.close()
 
     def test_send_unbound_data_fails(self, echo_server):
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
         sols, _ = simple_solutions(_send_2, s, Var())
         assert len(sols) == 0
@@ -238,13 +239,13 @@ class TestSendReceive:
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
         sols, _ = simple_solutions(_send_2, s, b"bytes data")
         assert len(sols) == 1
         data = Var()
         simple_solutions(_receive_2, s, data)
-        assert deref(data) == "bytes data"
+        assert deref(data) == chars("bytes data")
         s.close()
 
 
@@ -257,7 +258,7 @@ class TestClose:
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
         sols, _ = simple_solutions(_close_1, s)
         assert len(sols) == 1
@@ -266,7 +267,7 @@ class TestClose:
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
         simple_solutions(_close_1, s)
         # Second close should still succeed (close() on closed socket is OK)
@@ -288,7 +289,7 @@ class TestSetTimeout:
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
         sols, _ = simple_solutions(_set_timeout_2, s, 1.0)
         assert len(sols) == 1
@@ -299,7 +300,7 @@ class TestSetTimeout:
         # nv
         host, port = echo_server
         sock = Var()
-        simple_solutions(_connect_3, host, port, sock)
+        simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
         sols, _ = simple_solutions(_set_timeout_2, s, Var())
         assert len(sols) == 0
@@ -316,17 +317,17 @@ class TestTcpTrampoline:
         # nv
         host, port = echo_server
         sock = Var()
-        sols, trail = trampoline_solutions(connect, host, port, sock)
+        sols, trail = trampoline_solutions(connect, chars(host), port, sock)
         assert len(sols) == 1
         s = deref(sock)
 
-        sols, _ = trampoline_solutions(send, s, "trampoline test")
+        sols, _ = trampoline_solutions(send, s, chars("trampoline test"))
         assert len(sols) == 1
 
         data = Var()
         sols, trail = trampoline_solutions(receive, s, data)
         assert len(sols) == 1
-        assert deref(data) == "trampoline test"
+        assert deref(data) == chars("trampoline test")
 
         trampoline_solutions(close, s)
 
@@ -358,7 +359,7 @@ class TestAtomArguments:
         sols, _ = simple_solutions(_receive_2, s, data)
         assert len(sols) == 1
         # The atom crossed as its spelling, never as a tuple repr.
-        assert deref(data) == "t12b atom payload"
+        assert deref(data) == chars("t12b atom payload")
         simple_solutions(_close_1, s)
 
     def test_listen_accepts_an_atom_host(self):

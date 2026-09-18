@@ -17,6 +17,7 @@ import os
 import tempfile
 
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -118,10 +119,10 @@ class TestPartialListUnification:
     """
 
     def test_a_partial_list_on_the_left_destructures_a_string(self):
-        assert _first("partial_left", 2) == [("a",), "b"]
+        assert _first("partial_left", 2) == [("a",), chars("b")]
 
     def test_a_partial_list_on_the_right_destructures_a_string(self):
-        assert _first("partial_right", 2) == [("a",), "b"]
+        assert _first("partial_right", 2) == [("a",), chars("b")]
 
     def test_the_head_and_tail_pin_as_the_char_list_spelling(self):
         assert _holds("partial_left_pinned")
@@ -177,39 +178,39 @@ class TestPartialListUnificationAtTheTermLevel:
         from clausal.terms import ConcreteSeg, SegList, VarSeg
         h, t = Var(), Var()
         trail = Trail()
-        assert unify(SegList([ConcreteSeg([h]), VarSeg(t)]), "ab", trail)
+        assert unify(SegList([ConcreteSeg([h]), VarSeg(t)]), chars("ab"), trail)
         assert deref(h) == ("a",)
-        assert deref(t) == "b"
+        assert deref(t) == chars("b")
 
     def test_a_string_destructures_a_var_tailed_seglist(self):
         from clausal.logic.variables import Trail, unify
         from clausal.terms import ConcreteSeg, SegList, VarSeg
         h, t = Var(), Var()
         trail = Trail()
-        assert unify("ab", SegList([ConcreteSeg([h]), VarSeg(t)]), trail)
+        assert unify(chars("ab"), SegList([ConcreteSeg([h]), VarSeg(t)]), trail)
         assert deref(h) == ("a",)
-        assert deref(t) == "b"
+        assert deref(t) == chars("b")
 
     def test_the_tail_of_a_one_char_string_is_the_empty_remainder(self):
         from clausal.logic.variables import Trail, unify
         from clausal.terms import ConcreteSeg, SegList, VarSeg
         h, t = Var(), Var()
         trail = Trail()
-        assert unify("a", SegList([ConcreteSeg([h]), VarSeg(t)]), trail)
+        assert unify(chars("a"), SegList([ConcreteSeg([h]), VarSeg(t)]), trail)
         assert deref(h) == ("a",)
         # The empty remainder is the empty string, which IS ``[]``.
-        assert deref(t) == ""
+        assert deref(t) == chars("")
         assert _holds("empty_eq_nil")
 
     def test_repeated_destructuring_walks_the_whole_string(self):
         from clausal.logic.variables import Trail, unify
         from clausal.terms import ConcreteSeg, SegList, VarSeg
         trail = Trail()
-        rest, chars = "abc", []
+        rest, seen = chars("abc"), []
         for _ in range(3):
             h, t = Var(), Var()
             assert unify(SegList([ConcreteSeg([h]), VarSeg(t)]), rest, trail)
-            chars.append(deref(h))
+            seen.append(deref(h))
             rest = deref(t)
-        assert chars == [("a",), ("b",), ("c",)]
-        assert rest == ""
+        assert seen == [("a",), ("b",), ("c",)]
+        assert rest == chars("")

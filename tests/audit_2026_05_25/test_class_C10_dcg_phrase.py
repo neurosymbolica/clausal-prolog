@@ -14,6 +14,7 @@ Findings tested here:
 
 import pytest
 
+from clausal.logic.cells import chars, is_chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, Trail, unify
 from clausal.terms import SegString, VarSeg, SegList, ConcreteSeg
@@ -38,11 +39,11 @@ def test_F067_phrase3_rest_type_preserves_str():
     # principle) or at least not silently downgrade to list.
     v, rest = Var(), Var()
     found = False
-    for _ in call("phrase", cls(v), "abcd", rest, module=mod):
+    for _ in call("phrase", cls(v), chars("abcd"), rest, module=mod):
         rv = deref(rest)
         # F067 fix: Rest is a str slice ("bcd") of the str input, not a
         # list of 1-char strs.
-        assert type(rv) is str and rv == "bcd", (
+        assert is_chars(rv) and rv == chars("bcd"), (
             f"phrase(tok(V), 'abcd', Rest) should preserve str type: "
             f"expected Rest='bcd', got Rest={rv!r} "
             f"(type={type(rv).__name__})"
@@ -127,7 +128,7 @@ def test_F069_phrase2_rejects_segstring():
     hi = load_inline_clausal("c10_f069_phrase2", source).__dict__["hi"]
 
     # Baseline: phrase/2 with plain str succeeds.
-    found_str = sum(1 for _ in call("phrase", hi, "hi", module=mod))
+    found_str = sum(1 for _ in call("phrase", hi, chars("hi"), module=mod))
     assert found_str == 1, (
         f"phrase/2 with str should succeed; got {found_str} solutions"
     )
@@ -138,7 +139,7 @@ def test_F069_phrase2_rejects_segstring():
     unify(X, "i", t)
     seg = SegString(["h", VarSeg(X)])
     # Verify the SegString walks to "hi".
-    assert seg.__walk__() == "hi", (
+    assert seg.__walk__() == chars("hi"), (
         f"SegString should walk to 'hi', got {seg.__walk__()!r}"
     )
 
@@ -165,7 +166,7 @@ def test_F069_phrase3_rejects_segstring_input():
     t = Trail()
     unify(X, "b", t)
     seg = SegString(["a", VarSeg(X), "c"])
-    assert seg.__walk__() == "abc", (
+    assert seg.__walk__() == chars("abc"), (
         f"SegString should walk to 'abc', got {seg.__walk__()!r}"
     )
 
@@ -206,7 +207,7 @@ def test_F069_phrase3_rejects_segstring_rest():
     v = Var()
 
     found = sum(
-        1 for _ in call("phrase", tok(v), "abcd", seg_rest, module=mod)
+        1 for _ in call("phrase", tok(v), chars("abcd"), seg_rest, module=mod)
     )
     assert found == 1, (
         f"phrase/3 with SegString-shaped Rest should unify; "
@@ -223,15 +224,15 @@ def test_F070_sequence_mode_a_preserves_str():
     """
     mod = load_inline_clausal("c10_f070_seq_mode_a", "").__dict__["$module"]
 
-    s0, s = "abXY", Var()
+    s0, s = chars("abXY"), Var()
     found = False
-    for _ in call("sequence", "ab", s0, s, module=mod):
+    for _ in call("sequence", chars("ab"), s0, s, module=mod):
         sv = deref(s)
         # F070 fix: ``S`` is a str slice of ``S0`` ("XY"), preserving the
         # str shape of the input under the Liskov "strings-as-lists"
         # rule. The default-list / promote-to-str contract still holds:
         # the slice is naturally str because str slicing returns str.
-        assert type(sv) is str and sv == "XY", (
+        assert is_chars(sv) and sv == chars("XY"), (
             f"sequence('ab', 'abXY', S): expected S='XY' (str) "
             f"under input-type-wins, got S={sv!r} "
             f"(type={type(sv).__name__})"
@@ -250,14 +251,14 @@ def test_F070_sequence_mode_b_preserves_str():
     """
     mod = load_inline_clausal("c10_f070_seq_mode_b", "").__dict__["$module"]
 
-    s0, s = Var(), "XY"
+    s0, s = Var(), chars("XY")
     found = False
-    for _ in call("sequence", "ab", s0, s, module=mod):
+    for _ in call("sequence", chars("ab"), s0, s, module=mod):
         s0v = deref(s0)
         # F070 fix: ``S0`` is the str concatenation of ``lst`` and ``S``
         # ("ab" + "XY" = "abXY"). The input-type-wins rule promotes when
         # both operands are str.
-        assert type(s0v) is str and s0v == "abXY", (
+        assert is_chars(s0v) and s0v == chars("abXY"), (
             f"sequence('ab', S0, 'XY'): expected S0='abXY' (str) "
             f"under input-type-wins, got S0={s0v!r} "
             f"(type={type(s0v).__name__})"
@@ -278,7 +279,7 @@ def test_F070_sequence_mode_c_builds_segstring():
 
     s0, s = Var(), Var()
     found = False
-    for _ in call("sequence", "ab", s0, s, module=mod):
+    for _ in call("sequence", chars("ab"), s0, s, module=mod):
         s0v = deref(s0)
         # F070 fix: ``S0`` is a SegString preserving the str type of
         # ``lst='ab'``. The trailing VarSeg holds the unbound ``S``.
@@ -305,7 +306,7 @@ def test_F070_sequence_mode_d_accepts_segstring():
     t = Trail()
     unify(X, "b", t)
     seg = SegString(["a", VarSeg(X)])
-    assert seg.__walk__() == "ab", (
+    assert seg.__walk__() == chars("ab"), (
         f"SegString should walk to 'ab', got {seg.__walk__()!r}"
     )
 

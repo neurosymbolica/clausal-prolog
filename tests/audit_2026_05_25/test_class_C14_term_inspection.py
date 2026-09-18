@@ -19,6 +19,7 @@ Findings tested here (all closed as of 2026-06-13 follow-up):
 """
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Trail, Var, deref
@@ -68,9 +69,9 @@ def test_F088_unpack_on_list_uses_cons_cell():
     )
     L2b = Var()
     sols2b = _collect(
-        "unpack", 2, "abc", L2b, snap=lambda L=L2b: deref(L)
+        "unpack", 2, chars("abc"), L2b, snap=lambda L=L2b: deref(L)
     )
-    assert sols2b == [[mint("."), mint("a"), "bc"]], (
+    assert sols2b == [[mint("."), mint("a"), chars("bc")]], (
         f'unpack("abc", L) bound L={sols2b!r}; expected '
         f'[".", ("a",), "bc"] -- a STRING is a list (spec §6.4).'
     )
@@ -82,7 +83,7 @@ def test_F088_unpack_on_list_uses_cons_cell():
         f'unpack([], L) bound L={sols3!r}; expected ["[]"].'
     )
     L4 = Var()
-    sols4 = _collect("unpack", 2, "", L4, snap=lambda L=L4: deref(L))
+    sols4 = _collect("unpack", 2, chars(""), L4, snap=lambda L=L4: deref(L))
     assert sols4 == [[mint("[]")]], (
         f'unpack("", L) bound L={sols4!r}; expected ["[]"].'
     )
@@ -101,7 +102,7 @@ def test_F089_functor_agrees_on_string_vs_char_list_and_diverges_on_the_atom():
     )
     F1b, A1b = Var(), Var()
     sols_str = _collect(
-        "functor", 3, "abc", F1b, A1b,
+        "functor", 3, chars("abc"), F1b, A1b,
         snap=lambda F=F1b, A=A1b: (deref(F), deref(A)),
     )
     F2, A2 = Var(), Var()
@@ -131,7 +132,7 @@ def test_F089_functor_agrees_on_string_vs_char_list_and_diverges_on_the_atom():
     # nil atom).
     F3, A3 = Var(), Var()
     sols_empty_str = _collect(
-        "functor", 3, "", F3, A3,
+        "functor", 3, chars(""), F3, A3,
         snap=lambda F=F3, A=A3: (deref(F), deref(A)),
     )
     F4, A4 = Var(), Var()

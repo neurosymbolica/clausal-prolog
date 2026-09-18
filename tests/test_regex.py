@@ -42,6 +42,7 @@ import pytest
 
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 
 
@@ -116,14 +117,14 @@ class TestMatchBoolean:
         mod = _load("rm1", r"""
 is_digits(S) <- match(r"\d+", S)
 """, tmp_path)
-        assert _succeeds("is_digits", "123", module=mod)
+        assert _succeeds("is_digits", chars("123"), module=mod)
 
     def test_digits_no_match(self, tmp_path):
         # nv
         mod = _load("rm2", r"""
 is_digits(S) <- match(r"\d+", S)
 """, tmp_path)
-        assert not _succeeds("is_digits", "abc", module=mod)
+        assert not _succeeds("is_digits", chars("abc"), module=mod)
 
     def test_anchored_at_start(self, tmp_path):
         """match is anchored at start (like Python re.match)."""
@@ -131,24 +132,24 @@ is_digits(S) <- match(r"\d+", S)
         mod = _load("rm3", r"""
 starts_digit(S) <- match(r"\d+", S)
 """, tmp_path)
-        assert not _succeeds("starts_digit", "abc123", module=mod)
-        assert _succeeds("starts_digit", "123abc", module=mod)
+        assert not _succeeds("starts_digit", chars("abc123"), module=mod)
+        assert _succeeds("starts_digit", chars("123abc"), module=mod)
 
     def test_fullmatch_via_dollar(self, tmp_path):
         # nv
         mod = _load("rm4", r"""
 all_digits(S) <- match(r"\d+$", S)
 """, tmp_path)
-        assert _succeeds("all_digits", "123", module=mod)
-        assert not _succeeds("all_digits", "123abc", module=mod)
+        assert _succeeds("all_digits", chars("123"), module=mod)
+        assert not _succeeds("all_digits", chars("123abc"), module=mod)
 
     def test_email_validation(self, tmp_path):
         # nv
         mod = _load("rm5", r"""
 is_email(S) <- match(r"[^@]+@[^@]+\.[^@]+", S)
 """, tmp_path)
-        assert _succeeds("is_email", "user@example.com", module=mod)
-        assert not _succeeds("is_email", "not-an-email", module=mod)
+        assert _succeeds("is_email", chars("user@example.com"), module=mod)
+        assert not _succeeds("is_email", chars("not-an-email"), module=mod)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -171,9 +172,9 @@ parse_date(S, YEAR, MONTH, DAY) <- (
     DAY is ++G["day"]
 )
 """, tmp_path)
-        results = _call_multi("parse_date", "2026-03-16", module=mod,
+        results = _call_multi("parse_date", chars("2026-03-16"), module=mod,
                               out_names=["y", "m", "d"])
-        assert results == [{"y": "2026", "m": "03", "d": "16"}]
+        assert results == [{"y": chars("2026"), "m": chars("03"), "d": chars("16")}]
 
     def test_positional_groups(self, tmp_path):
         """No named groups → GroupsDict is a tuple of positional captures."""
@@ -185,16 +186,16 @@ parse_pair(S, A, B) <- (
     B is ++G[1]
 )
 """, tmp_path)
-        results = _call_multi("parse_pair", "42-99", module=mod,
+        results = _call_multi("parse_pair", chars("42-99"), module=mod,
                               out_names=["a", "b"])
-        assert results == [{"a": "42", "b": "99"}]
+        assert results == [{"a": chars("42"), "b": chars("99")}]
 
     def test_no_match_fails(self, tmp_path):
         # nv
         mod = _load("rg3", r"""
 try_parse(S, G) <- match(r"(?P<x>\d+)", S, G)
 """, tmp_path)
-        assert _first("try_parse", "abc", module=mod) is None
+        assert _first("try_parse", chars("abc"), module=mod) is None
 
     def test_mixed_named_positional(self, tmp_path):
         """Named groups produce a dict; positional groups not in the dict."""
@@ -205,7 +206,7 @@ parse_ver(S, MAJOR) <- (
     MAJOR is ++G["major"]
 )
 """, tmp_path)
-        assert _first("parse_ver", "v3.14", module=mod) == "3"
+        assert _first("parse_ver", chars("v3.14"), module=mod) == chars("3")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -233,9 +234,9 @@ class TestMatchAutoBinding:
         mod = _load("ab1", r"""
 parse_date(S, YEAR, MONTH, DAY) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
 """, tmp_path)
-        results = _call_multi("parse_date", "2026-03-16", module=mod,
+        results = _call_multi("parse_date", chars("2026-03-16"), module=mod,
                               out_names=["y", "m", "d"])
-        assert results == [{"y": "2026", "m": "03", "d": "16"}]
+        assert results == [{"y": chars("2026"), "m": chars("03"), "d": chars("16")}]
 
     def test_auto_bind_no_match_fails(self, tmp_path):
         """If the regex doesn't match, the whole goal fails."""
@@ -243,7 +244,7 @@ parse_date(S, YEAR, MONTH, DAY) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<
         mod = _load("ab2", r"""
 parse_date(S, YEAR, MONTH, DAY) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<DAY>\d{2})", S)
 """, tmp_path)
-        assert not _succeeds("parse_date", "not-a-date",
+        assert not _succeeds("parse_date", chars("not-a-date"),
                              Var(), Var(), Var(), module=mod)
 
     def test_auto_bind_constrains_input(self, tmp_path):
@@ -253,11 +254,11 @@ parse_date(S, YEAR, MONTH, DAY) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})-(?P<
 is_year(S, YEAR) <- match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
 """, tmp_path)
         # YEAR is output — gets bound
-        assert _first("is_year", "2026-03-16", module=mod) == "2026"
+        assert _first("is_year", chars("2026-03-16"), module=mod) == chars("2026")
         # YEAR is input — constrains (should succeed when correct)
-        assert _succeeds("is_year", "2026-03-16", "2026", module=mod)
+        assert _succeeds("is_year", chars("2026-03-16"), chars("2026"), module=mod)
         # YEAR is input — constrains (should fail when wrong)
-        assert not _succeeds("is_year", "2026-03-16", "1999", module=mod)
+        assert not _succeeds("is_year", chars("2026-03-16"), chars("1999"), module=mod)
 
     def test_auto_bind_search(self, tmp_path):
         """Auto-binding also works with search (unanchored)."""
@@ -265,14 +266,14 @@ is_year(S, YEAR) <- match(r"(?P<YEAR>\d{4})-\d{2}-\d{2}", S)
         mod = _load("ab4", r"""
 find_tag(TEXT, TAG) <- search(r"<(?P<TAG>\w+)>", TEXT)
 """, tmp_path)
-        assert _first("find_tag", "text <bold> more", module=mod) == "bold"
+        assert _first("find_tag", chars("text <bold> more"), module=mod) == chars("bold")
 
     def test_auto_bind_single_group(self, tmp_path):
         # nv
         mod = _load("ab5", r"""
 first_word(S, WORD) <- match(r"(?P<WORD>\w+)", S)
 """, tmp_path)
-        assert _first("first_word", "hello world", module=mod) == "hello"
+        assert _first("first_word", chars("hello world"), module=mod) == chars("hello")
 
     def test_auto_bind_many_groups(self, tmp_path):
         # nv
@@ -280,10 +281,10 @@ first_word(S, WORD) <- match(r"(?P<WORD>\w+)", S)
 parse_url(S, SCHEME, HOST, PORT, PATH) <- match(r"(?P<SCHEME>https?)://(?P<HOST>[^:/]+):(?P<PORT>\d+)(?P<PATH>/\S*)", S)
 """, tmp_path)
         results = _call_multi(
-            "parse_url", "https://example.com:8080/api/v1", module=mod,
+            "parse_url", chars("https://example.com:8080/api/v1"), module=mod,
             out_names=["s", "h", "p", "path"])
-        assert results == [{"s": "https", "h": "example.com",
-                            "p": "8080", "path": "/api/v1"}]
+        assert results == [{"s": chars("https"), "h": chars("example.com"),
+                            "p": chars("8080"), "path": chars("/api/v1")}]
 
     def test_leading_underscore_group(self, tmp_path):
         """_leading_underscore group names also auto-bind."""
@@ -291,7 +292,7 @@ parse_url(S, SCHEME, HOST, PORT, PATH) <- match(r"(?P<SCHEME>https?)://(?P<HOST>
         mod = _load("ab7", r"""
 first_word(S, _word) <- match(r"(?P<_word>\w+)", S)
 """, tmp_path)
-        assert _first("first_word", "hello world", module=mod) == "hello"
+        assert _first("first_word", chars("hello world"), module=mod) == chars("hello")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -308,8 +309,8 @@ class TestMixedGroupNames:
 parse_log(LINE, LEVEL) <- match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR):\s+(?P<msg>.*)", LINE)
 """, tmp_path)
         # LEVEL is auto-bound; timestamp and msg are not (lowercase)
-        assert _first("parse_log", "2026-03-16 ERROR: disk full",
-                       module=mod) == "ERROR"
+        assert _first("parse_log", chars("2026-03-16 ERROR: disk full"),
+                       module=mod) == chars("ERROR")
 
     def test_lowercase_groups_still_work_in_regex(self, tmp_path):
         """Lowercase groups still function as regex groups (backreferences etc.)
@@ -318,8 +319,8 @@ parse_log(LINE, LEVEL) <- match(r"(?P<timestamp>\S+)\s+(?P<LEVEL>INFO|WARN|ERROR
         mod = _load("mx2", r"""
 has_repeated_word(S) <- search(r"(?P<word>\w+)\s+(?P=word)", S)
 """, tmp_path)
-        assert _succeeds("has_repeated_word", "the the cat", module=mod)
-        assert not _succeeds("has_repeated_word", "the cat sat", module=mod)
+        assert _succeeds("has_repeated_word", chars("the the cat"), module=mod)
+        assert not _succeeds("has_repeated_word", chars("the cat sat"), module=mod)
 
     def test_explicit_extraction_of_lowercase_group(self, tmp_path):
         """Lowercase groups accessible via match/3 + ++ even though not auto-bound."""
@@ -331,9 +332,9 @@ parse_log(LINE, LEVEL, MSG) <- (
     MSG is ++G["msg"]
 )
 """, tmp_path)
-        results = _call_multi("parse_log", "2026-03-16 ERROR: disk full",
+        results = _call_multi("parse_log", chars("2026-03-16 ERROR: disk full"),
                               module=mod, out_names=["level", "msg"])
-        assert results == [{"level": "ERROR", "msg": "disk full"}]
+        assert results == [{"level": chars("ERROR"), "msg": chars("disk full")}]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -348,7 +349,7 @@ class TestSearch:
         mod = _load("rs1", r"""
 find_digits(S, D) <- search(r"(?P<D>\d+)", S)
 """, tmp_path)
-        assert _first("find_digits", "abc123def", module=mod) == "123"
+        assert _first("find_digits", chars("abc123def"), module=mod) == chars("123")
 
     def test_search_with_explicit_groups(self, tmp_path):
         # nv
@@ -359,9 +360,9 @@ find_kv(S, KEY, VAL) <- (
     VAL is ++G["val"]
 )
 """, tmp_path)
-        results = _call_multi("find_kv", "foo bar=baz qux", module=mod,
+        results = _call_multi("find_kv", chars("foo bar=baz qux"), module=mod,
                               out_names=["k", "v"])
-        assert results == [{"k": "bar", "v": "baz"}]
+        assert results == [{"k": chars("bar"), "v": chars("baz")}]
 
 
 class TestFindAll:
@@ -375,14 +376,14 @@ class TestFindAll:
         mod = _load("rf1", r"""
 digit_run(S, D) <- findall(r"\d+", S, D)
 """, tmp_path)
-        assert _all("digit_run", "a1b23c456", module=mod) == ["1", "23", "456"]
+        assert _all("digit_run", chars("a1b23c456"), module=mod) == [chars("1"), chars("23"), chars("456")]
 
     def test_findall_no_matches(self, tmp_path):
         # nv
         mod = _load("rf2", r"""
 digit_run(S, D) <- findall(r"\d+", S, D)
 """, tmp_path)
-        assert _all("digit_run", "abc", module=mod) == []
+        assert _all("digit_run", chars("abc"), module=mod) == []
 
     def test_findall_with_groups(self, tmp_path):
         """Groups → each match is a tuple of group strings."""
@@ -390,8 +391,8 @@ digit_run(S, D) <- findall(r"\d+", S, D)
         mod = _load("rf3", r"""
 pairs(S, PAIR) <- findall(r"(\w+)=(\w+)", S, PAIR)
 """, tmp_path)
-        results = _all("pairs", "a=1 b=2 c=3", module=mod)
-        assert results == [("a", "1"), ("b", "2"), ("c", "3")]
+        results = _all("pairs", chars("a=1 b=2 c=3"), module=mod)
+        assert results == [(chars("a"), chars("1")), (chars("b"), chars("2")), (chars("c"), chars("3"))]
 
     def test_findall_backtracking(self, tmp_path):
         """findall solutions participate in Clausal backtracking."""
@@ -407,7 +408,7 @@ nonzero_error_count(COUNT) <- (
 )
 """, tmp_path)
         results = _all("nonzero_error_count", module=mod)
-        assert results == ["3"]
+        assert results == [chars("3")]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -422,14 +423,14 @@ class TestReplace:
         mod = _load("rep1", r"""
 clean_spaces(S, R) <- replace(r"\s+", " ", S, R)
 """, tmp_path)
-        assert _first("clean_spaces", "hello   world  foo", module=mod) == "hello world foo"
+        assert _first("clean_spaces", chars("hello   world  foo"), module=mod) == chars("hello world foo")
 
     def test_replace_remove(self, tmp_path):
         # nv
         mod = _load("rep2", r"""
 strip_digits(S, R) <- replace(r"\d+", "", S, R)
 """, tmp_path)
-        assert _first("strip_digits", "a1b2c3", module=mod) == "abc"
+        assert _first("strip_digits", chars("a1b2c3"), module=mod) == chars("abc")
 
     def test_replace_backreference(self, tmp_path):
         r"""Replacement can use \1 backreferences."""
@@ -437,7 +438,7 @@ strip_digits(S, R) <- replace(r"\d+", "", S, R)
         mod = _load("rep3", r"""
 wrap_words(S, R) <- replace(r"(\w+)", r"[\1]", S, R)
 """, tmp_path)
-        assert _first("wrap_words", "hello world", module=mod) == "[hello] [world]"
+        assert _first("wrap_words", chars("hello world"), module=mod) == chars("[hello] [world]")
 
     def test_replace_chain(self, tmp_path):
         # nv
@@ -447,7 +448,7 @@ normalize(S, R) <- (
     replace(r"^ | $", "", T, R)
 )
 """, tmp_path)
-        assert _first("normalize", "  hello   world  ", module=mod) == "hello world"
+        assert _first("normalize", chars("  hello   world  "), module=mod) == chars("hello world")
 
 
 class TestSplit:
@@ -458,14 +459,14 @@ class TestSplit:
         mod = _load("sp1", r"""
 csv_fields(S, F) <- split(r",\s*", S, F)
 """, tmp_path)
-        assert _first("csv_fields", "a, b, c", module=mod) == ["a", "b", "c"]
+        assert _first("csv_fields", chars("a, b, c"), module=mod) == [chars("a"), chars("b"), chars("c")]
 
     def test_split_whitespace(self, tmp_path):
         # nv
         mod = _load("sp2", r"""
 words(S, W) <- split(r"\s+", S, W)
 """, tmp_path)
-        assert _first("words", "hello world foo", module=mod) == ["hello", "world", "foo"]
+        assert _first("words", chars("hello world foo"), module=mod) == [chars("hello"), chars("world"), chars("foo")]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -481,8 +482,8 @@ class TestDynamicPattern:
         mod = _load("rd1", """
 starts_with(PREFIX, S) <- match(f"^{PREFIX}", S)
 """, tmp_path)
-        assert _succeeds("starts_with", "hello", "hello world", module=mod)
-        assert not _succeeds("starts_with", "goodbye", "hello world", module=mod)
+        assert _succeeds("starts_with", chars("hello"), chars("hello world"), module=mod)
+        assert not _succeeds("starts_with", chars("goodbye"), chars("hello world"), module=mod)
 
     def test_dynamic_with_explicit_groups(self, tmp_path):
         # nv
@@ -492,7 +493,7 @@ after_prefix(PREFIX, S, REST) <- (
     REST is ++G["rest"]
 )
 """, tmp_path)
-        assert _first("after_prefix", "key=", "key=value", module=mod) == "value"
+        assert _first("after_prefix", chars("key="), chars("key=value"), module=mod) == chars("value")
 
     def test_dynamic_pattern_variable(self, tmp_path):
         """Pattern passed as a plain variable."""
@@ -500,8 +501,8 @@ after_prefix(PREFIX, S, REST) <- (
         mod = _load("rd3", r"""
 try_match(PAT, S) <- match(PAT, S)
 """, tmp_path)
-        assert _succeeds("try_match", r"\d+", "123", module=mod)
-        assert not _succeeds("try_match", r"\d+", "abc", module=mod)
+        assert _succeeds("try_match", chars(r"\d+"), chars("123"), module=mod)
+        assert not _succeeds("try_match", chars(r"\d+"), chars("abc"), module=mod)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -517,8 +518,8 @@ class TestGoalExpansion:
         mod = _load("ge1", r"""
 is_hex(S) <- match(r"^[0-9a-fA-F]+$", S)
 """, tmp_path)
-        assert _succeeds("is_hex", "deadBEEF", module=mod)
-        assert not _succeeds("is_hex", "xyz", module=mod)
+        assert _succeeds("is_hex", chars("deadBEEF"), module=mod)
+        assert not _succeeds("is_hex", chars("xyz"), module=mod)
 
     def test_multiple_patterns_in_module(self, tmp_path):
         """Each static pattern gets its own compiled regex."""
@@ -527,9 +528,9 @@ is_hex(S) <- match(r"^[0-9a-fA-F]+$", S)
 is_date(S) <- match(r"\d{4}-\d{2}-\d{2}", S)
 is_time(S) <- match(r"\d{2}:\d{2}:\d{2}", S)
 """, tmp_path)
-        assert _succeeds("is_date", "2026-03-16", module=mod)
-        assert _succeeds("is_time", "14:30:00", module=mod)
-        assert not _succeeds("is_date", "14:30:00", module=mod)
+        assert _succeeds("is_date", chars("2026-03-16"), module=mod)
+        assert _succeeds("is_time", chars("14:30:00"), module=mod)
+        assert not _succeeds("is_date", chars("14:30:00"), module=mod)
 
     def test_same_pattern_deduplicated(self, tmp_path):
         """Same literal used twice → could share one compiled object."""
@@ -538,8 +539,8 @@ is_time(S) <- match(r"\d{2}:\d{2}:\d{2}", S)
 valid_id(S) <- match(r"[a-z]\w*", S)
 extract_id(S, ID) <- match(r"(?P<ID>[a-z]\w*)", S)
 """, tmp_path)
-        assert _succeeds("valid_id", "foo_bar", module=mod)
-        assert _first("extract_id", "foo_bar", module=mod) == "foo_bar"
+        assert _succeeds("valid_id", chars("foo_bar"), module=mod)
+        assert _first("extract_id", chars("foo_bar"), module=mod) == chars("foo_bar")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -554,17 +555,17 @@ class TestPracticalExamples:
         mod = _load("ex1", r"""
 parse_log(LINE, LEVEL, MSG) <- match(r"(?P<LEVEL>INFO|WARN|ERROR):\s*(?P<MSG>.*)", LINE)
 """, tmp_path)
-        results = _call_multi("parse_log", "ERROR: disk full", module=mod,
+        results = _call_multi("parse_log", chars("ERROR: disk full"), module=mod,
                               out_names=["level", "msg"])
-        assert results == [{"level": "ERROR", "msg": "disk full"}]
+        assert results == [{"level": chars("ERROR"), "msg": chars("disk full")}]
 
     def test_tokenizer(self, tmp_path):
         # nv
         mod = _load("ex2", r"""
 token(S, T) <- findall(r"[a-zA-Z_]\w*|\d+|[+\-*/=]", S, T)
 """, tmp_path)
-        assert _all("token", "x = 42 + y", module=mod) == \
-            ["x", "=", "42", "+", "y"]
+        assert _all("token", chars("x = 42 + y"), module=mod) == \
+            [chars("x"), chars("="), chars("42"), chars("+"), chars("y")]
 
     def test_backtracking_regex(self, tmp_path):
         """Regex extraction + Clausal backtracking."""
@@ -579,7 +580,7 @@ error_message(MSG) <- (
     match(r"\S+ ERROR\s+(?P<MSG>.*)", L)
 )
 """, tmp_path)
-        assert _all("error_message", module=mod) == ["disk full"]
+        assert _all("error_message", module=mod) == [chars("disk full")]
 
     def test_url_parser(self, tmp_path):
         # nv
@@ -587,10 +588,10 @@ error_message(MSG) <- (
 parse_url(S, SCHEME, HOST, PATH) <- match(r"(?P<SCHEME>https?)://(?P<HOST>[^/]+)(?P<PATH>/.*)?", S)
 """, tmp_path)
         results = _call_multi(
-            "parse_url", "https://example.com/api/v1", module=mod,
+            "parse_url", chars("https://example.com/api/v1"), module=mod,
             out_names=["s", "h", "p"])
-        assert results == [{"s": "https", "h": "example.com",
-                            "p": "/api/v1"}]
+        assert results == [{"s": chars("https"), "h": chars("example.com"),
+                            "p": chars("/api/v1")}]
 
     def test_csv_parse_and_validate(self, tmp_path):
         """split CSV, then validate each field."""
@@ -603,8 +604,8 @@ valid_email_in_csv(CSV, EMAIL) <- (
 )
 """, tmp_path)
         results = _all("valid_email_in_csv",
-                       "alice@ex.com, not-email, bob@ex.com", module=mod)
-        assert results == ["alice@ex.com", "bob@ex.com"]
+                       chars("alice@ex.com, not-email, bob@ex.com"), module=mod)
+        assert results == [chars("alice@ex.com"), chars("bob@ex.com")]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -621,7 +622,7 @@ class TestAutoBindingPitfalls:
 parse(S, YEAR) <- match(r"(?P<YAER>\d{4})", S)
 """, tmp_path)
         # YAER doesn't match YEAR → YEAR is unbound
-        result = _first("parse", "2026", module=mod)
+        result = _first("parse", chars("2026"), module=mod)
         from clausal.logic.variables import is_var
         assert is_var(result), "YEAR should be unbound due to group name typo"
 
@@ -632,13 +633,13 @@ parse(S, YEAR) <- match(r"(?P<YAER>\d{4})", S)
 parse(S, A, B) <- match(r"(?P<A>\d+)(?:-(?P<B>\d+))?", S)
 """, tmp_path)
         # With both groups
-        results = _call_multi("parse", "42-99", module=mod,
+        results = _call_multi("parse", chars("42-99"), module=mod,
                               out_names=["a", "b"])
-        assert results == [{"a": "42", "b": "99"}]
+        assert results == [{"a": chars("42"), "b": chars("99")}]
         # With only first group — B gets None
-        results = _call_multi("parse", "42", module=mod,
+        results = _call_multi("parse", chars("42"), module=mod,
                               out_names=["a", "b"])
-        assert results == [{"a": "42", "b": None}]
+        assert results == [{"a": chars("42"), "b": None}]
 
     def test_lowercase_groups_not_auto_bound(self, tmp_path):
         """Lowercase group names are NOT auto-bound — this is the control mechanism."""
@@ -649,7 +650,7 @@ check(S, RESULT) <- (
 )
 """, tmp_path)
         # RESULT is auto-bound (ALLCAPS); internal is not
-        assert _first("check", "42-hello", module=mod) == "hello"
+        assert _first("check", chars("42-hello"), module=mod) == chars("hello")
 
     def test_no_named_groups_boolean_only(self, tmp_path):
         """Unnamed groups → no auto-binding, match/2 is purely boolean."""
@@ -657,8 +658,8 @@ check(S, RESULT) <- (
         mod = _load("pit4", r"""
 check(S) <- match(r"(\d+)-(\d+)", S)
 """, tmp_path)
-        assert _succeeds("check", "42-99", module=mod)
-        assert not _succeeds("check", "abc", module=mod)
+        assert _succeeds("check", chars("42-99"), module=mod)
+        assert not _succeeds("check", chars("abc"), module=mod)
 
 
 class TestEdgeCases:
@@ -668,30 +669,30 @@ class TestEdgeCases:
         mod = _load("ec1", r"""
 match_empty(S) <- match(r"^$", S)
 """, tmp_path)
-        assert _succeeds("match_empty", "", module=mod)
-        assert not _succeeds("match_empty", " ", module=mod)
+        assert _succeeds("match_empty", chars(""), module=mod)
+        assert not _succeeds("match_empty", chars(" "), module=mod)
 
     def test_unicode(self, tmp_path):
         # nv
         mod = _load("ec2", r"""
 is_word(S) <- match(r"^\w+$", S)
 """, tmp_path)
-        assert _succeeds("is_word", "café", module=mod)
+        assert _succeeds("is_word", chars("café"), module=mod)
 
     def test_special_chars(self, tmp_path):
         # nv
         mod = _load("ec3", r"""
 has_parens(S) <- search(r"\(.*?\)", S)
 """, tmp_path)
-        assert _succeeds("has_parens", "foo(bar)", module=mod)
-        assert not _succeeds("has_parens", "foobar", module=mod)
+        assert _succeeds("has_parens", chars("foo(bar)"), module=mod)
+        assert not _succeeds("has_parens", chars("foobar"), module=mod)
 
     def test_findall_nonoverlapping(self, tmp_path):
         # nv
         mod = _load("ec4", r"""
 find_aa(S, M) <- findall(r"aa", S, M)
 """, tmp_path)
-        assert _all("find_aa", "aaaa", module=mod) == ["aa", "aa"]
+        assert _all("find_aa", chars("aaaa"), module=mod) == [chars("aa"), chars("aa")]
 
     def test_search_vs_match(self, tmp_path):
         """search finds anywhere; match only at start."""
@@ -700,8 +701,8 @@ find_aa(S, M) <- findall(r"aa", S, M)
 try_match(S) <- match(r"\d+", S)
 try_search(S) <- search(r"\d+", S)
 """, tmp_path)
-        assert not _succeeds("try_match", "abc123", module=mod)
-        assert _succeeds("try_search", "abc123", module=mod)
+        assert not _succeeds("try_match", chars("abc123"), module=mod)
+        assert _succeeds("try_search", chars("abc123"), module=mod)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -807,15 +808,15 @@ class TestCapitalInitialAutoBinding:
         mod = _load("tcab1", r"""
 parse_year(S, Year) <- match(r"(?P<Year>\d{4})", S)
 """, tmp_path)
-        assert _first("parse_year", "2026", module=mod) == "2026"
+        assert _first("parse_year", chars("2026"), module=mod) == chars("2026")
 
     def test_titlecase_group_constrains_a_bound_input(self, tmp_path):
         """Same two-way behaviour the ALLCAPS groups have."""
         mod = _load("tcab2", r"""
 is_year(S, Year) <- match(r"(?P<Year>\d{4})-\d{2}", S)
 """, tmp_path)
-        assert _succeeds("is_year", "2026-03", "2026", module=mod)
-        assert not _succeeds("is_year", "2026-03", "1999", module=mod)
+        assert _succeeds("is_year", chars("2026-03"), chars("2026"), module=mod)
+        assert not _succeeds("is_year", chars("2026-03"), chars("1999"), module=mod)
 
     def test_lowercase_group_still_does_not_bind(self, tmp_path):
         """The gate still EXCLUDES lowercase: it is the variable rule, not
@@ -824,4 +825,4 @@ is_year(S, Year) <- match(r"(?P<Year>\d{4})-\d{2}", S)
         mod = _load("tcab3", r"""
 parse_year(S, Out) <- (match(r"(?P<year>\d{4})", S), Out is 0)
 """, tmp_path)
-        assert _first("parse_year", "2026", module=mod) == 0
+        assert _first("parse_year", chars("2026"), module=mod) == 0

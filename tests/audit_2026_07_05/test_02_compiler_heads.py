@@ -14,6 +14,7 @@ from decimal import Decimal
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic import solve as solve_mod
 from clausal.logic.solve import call
@@ -545,7 +546,7 @@ class TestF004MultiStarTrailingFixed:
         # A STRING caller destructures into char atoms; the head's trailing
         # ``"d"`` is the ATOM d, which is what the last char atom is.  The
         # star binds the remaining char list, promoted back to a string.
-        assert collect(mod, "ssok", "xd", A, outv=[A]) == [("x",)]
+        assert collect(mod, "ssok", chars("xd"), A, outv=[A]) == [(chars("x"),)]
 
     def test_minimal_input(self, mod):
         A, B = Var(), Var()
@@ -561,7 +562,7 @@ class TestF004MultiStarTrailingFixed:
 
     def test_str_caller_trailing_fixed(self, mod):
         A, B = Var(), Var()
-        assert collect(mod, "mchr", "xayb", A, B, outv=[A, B]) == [("x", "y")]
+        assert collect(mod, "mchr", chars("xayb"), A, B, outv=[A, B]) == [(chars("x"), chars("y"))]
 
 
 # ── Regression guards: confirmed-correct behaviour ────────────────────────────
@@ -808,13 +809,13 @@ class TestHeadPatternGuards:
         assert collect(mod, "nst", [[], mint("t")], Var(), Var(), Var()) == []
         # inner pattern against a str element
         A, B, C = Var(), Var(), Var()
-        assert collect(mod, "nst", ["ab", mint("t")], A, B, C,
+        assert collect(mod, "nst", [chars("ab"), mint("t")], A, B, C,
                        outv=[A, B, C]) == [
-            (char_atom("a"), "b", [mint("t")])]
+            (char_atom("a"), chars("b"), [mint("t")])]
 
     def test_multi_star_str_caller_and_output_construction(self, mod):
         A, B = Var(), Var()
-        assert collect(mod, "ms", "axb", A, B, outv=[A, B]) == [("a", "b")]
+        assert collect(mod, "ms", chars("axb"), A, B, outv=[A, B]) == [(chars("a"), chars("b"))]
         L = Var()
         assert collect(mod, "ms", L, [1], [2], outv=[L]) == [([1, mint("x"), 2],)]
 

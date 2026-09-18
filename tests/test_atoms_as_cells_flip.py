@@ -19,6 +19,7 @@ import pytest
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars, chars_text, is_chars
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Trail, Var, deref, unify
@@ -94,9 +95,9 @@ def test_row_02_double_quoted_in_chars_mode_is_a_string():
     )
     X = Var()
     assert _answers(("r2", X), mod, X) == [(("$chars", "bar"),)]   # stage 1: the chars CARRIER
-    assert list(solve(("r2_atom", "bar"), mod)) == []
-    assert len(list(solve(("r2_string", "bar"), mod))) == 1
-    assert len(list(solve(("r2_is_list", "bar"), mod))) == 1
+    assert list(solve(("r2_atom", chars("bar")), mod)) == []
+    assert len(list(solve(("r2_string", chars("bar")), mod))) == 1
+    assert len(list(solve(("r2_is_list", chars("bar")), mod))) == 1
 
 
 def test_row_03_atom_equals_quoted_atom_but_not_a_string():
@@ -124,8 +125,8 @@ def test_row_04_a_string_unifies_with_its_char_list():
     )
     assert len(list(solve(("r4",), mod))) == 1
     # …and directly, both orientations.
-    assert unify("abc", [mint("a"), mint("b"), mint("c")], Trail())
-    assert unify([mint("a"), mint("b"), mint("c")], "abc", Trail())
+    assert unify(chars("abc"), [mint("a"), mint("b"), mint("c")], Trail())
+    assert unify([mint("a"), mint("b"), mint("c")], chars("abc"), Trail())
 
 
 def test_row_05_a_string_destructures_head_and_tail():
@@ -136,15 +137,15 @@ def test_row_05_a_string_destructures_head_and_tail():
         "r5_string(X) <- string(X),\n",
     )
     H, T = Var(), Var()
-    assert _answers(("r5", "abc", H, T), mod, H, T) == [((("a",), "bc"))]
-    assert len(list(solve(("r5_string", "bc"), mod))) == 1
+    assert _answers(("r5", chars("abc"), H, T), mod, H, T) == [((("a",), chars("bc")))]
+    assert len(list(solve(("r5_string", chars("bc")), mod))) == 1
 
 
 def test_row_06_the_empty_string_is_the_empty_list():
     from clausal.logic.builtins._helpers import _standard_order_key
 
-    assert unify("", [], Trail())
-    assert _standard_order_key("") == _standard_order_key([])
+    assert unify(chars(""), [], Trail())
+    assert _standard_order_key(chars("")) == _standard_order_key([])
 
 
 # ── Rows 7-12: the name position ────────────────────────────────────────────
@@ -249,17 +250,17 @@ def test_row_13c_the_empty_string_goal_names_the_nil_atom(builtins_mod):
 
 def test_row_14_atom_chars_reads_and_builds_atoms(builtins_mod):
     A = Var()
-    assert _answers(("atom_chars", A, "hi"), builtins_mod, A) == [(("hi",),)]
-    assert len(list(solve(("atom_chars", mint("hi"), "hi"), builtins_mod))) == 1
+    assert _answers(("atom_chars", A, chars("hi")), builtins_mod, A) == [(("hi",),)]
+    assert len(list(solve(("atom_chars", mint("hi"), chars("hi")), builtins_mod))) == 1
     with pytest.raises(LogicException) as exc:
-        list(solve(("atom_chars", "hi", Var()), builtins_mod))
+        list(solve(("atom_chars", chars("hi"), Var()), builtins_mod))
     assert "atom" in str(exc.value)
 
 
 def test_row_15_atom_length_refuses_a_string(builtins_mod):
     assert len(list(solve(("atom_length", mint("hi"), 2), builtins_mod))) == 1
     with pytest.raises(LogicException) as exc:
-        list(solve(("atom_length", "hi", Var()), builtins_mod))
+        list(solve(("atom_length", chars("hi"), Var()), builtins_mod))
     assert "atom" in str(exc.value)
 
 
@@ -272,16 +273,16 @@ def test_row_16_msort_orders_lists_and_strings_as_cons_compounds(builtins_mod):
     after the arity-1 ``foo(x)``, and among themselves by name ``.`` then by
     elements."""
     L = Var()
-    items = [mint("b"), "a", 1, ("foo", ("x",)), [mint("z")]]
+    items = [mint("b"), chars("a"), 1, ("foo", ("x",)), [mint("z")]]
     (ordered,), = _answers(("msort", items, L), builtins_mod, L)
-    assert ordered == [1, mint("b"), ("foo", ("x",)), "a", [mint("z")]]
+    assert ordered == [1, mint("b"), ("foo", ("x",)), chars("a"), [mint("z")]]
 
 
 def test_row_17_sort_dedups_a_string_against_its_char_list(builtins_mod):
     L = Var()
     (ordered,), = _answers(
-        ("sort", ["ab", [mint("a"), mint("b")]], L), builtins_mod, L)
-    assert ordered == ["ab"]
+        ("sort", [chars("ab"), [mint("a"), mint("b")]], L), builtins_mod, L)
+    assert ordered == [chars("ab")]
 
 
 # ── Rows 18-18c: the writers ────────────────────────────────────────────────
@@ -296,14 +297,14 @@ def test_row_18_write_and_writeq():
 
 
 def test_row_18b_write_canonical_prints_the_cons_structure(builtins_mod):
-    assert term_canonical("hello") == "'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))"
+    assert term_canonical(chars("hello")) == "'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))"
     assert term_canonical([1, 2]) == "'.'(1,'.'(2,[]))"
-    assert term_canonical(("foo", ("a",), "b")) == "foo(a,'.'(b,[]))"
+    assert term_canonical(("foo", ("a",), chars("b"))) == "foo(a,'.'(b,[]))"
     N, A, T = Var(), Var(), Var()
-    assert _answers(("functor", "hello", N, A), builtins_mod, N, A) == [
+    assert _answers(("functor", chars("hello"), N, A), builtins_mod, N, A) == [
         ((".",), 2)
     ]
-    assert _answers(("arg", 2, "hello", T), builtins_mod, T) == [("ello",)]
+    assert _answers(("arg", 2, chars("hello"), T), builtins_mod, T) == [(chars("ello"),)]
 
 
 def test_row_18c_construction_through_the_name_position_keeps_shapes(
@@ -367,7 +368,7 @@ def test_string_holds_for_every_spelling_of_a_string(builtins_mod):
     """
     from clausal.terms import SegString
 
-    for value in ("bar", "", [], [mint("a"), mint("b")], [mint("a")]):
+    for value in (chars("bar"), chars(""), [], [mint("a"), mint("b")], [mint("a")]):
         assert _string_answers(builtins_mod, value) == (True, True), value
 
     for value in ([1, 2], [mint("a"), 1], [mint("ab")], mint("bar"),
@@ -409,16 +410,16 @@ class TestEmptyListIsTheAtomNil:
     and ``b""`` are the same term, so all three answer alike."""
 
     def test_atom_and_atomic_hold_for_every_spelling_of_nil(self, builtins_mod):
-        for value in ([], "", b""):
+        for value in ([], chars(""), b""):
             assert _holds(builtins_mod, "atom", value), value
             assert _holds(builtins_mod, "atomic", value), value
 
     def test_nil_is_not_compound(self, builtins_mod):
-        for value in ([], "", b""):
+        for value in ([], chars(""), b""):
             assert not _holds(builtins_mod, "compound", value), value
 
     def test_nil_is_callable(self, builtins_mod):
-        for value in ([], "", b""):
+        for value in ([], chars(""), b""):
             assert _holds(builtins_mod, "callable_", value), value
 
     def test_must_be_agrees_with_the_builtins(self, builtins_mod):
@@ -431,7 +432,7 @@ class TestEmptyListIsTheAtomNil:
         assert list(solve(("must_be", mint("atomic"), mint("bar")),
                           builtins_mod))
         assert list(solve(("must_be", mint("atomic"), 42), builtins_mod))
-        for culprit in ("abc", [1, 2], b"ab", ("f", 1)):
+        for culprit in (chars("abc"), [1, 2], b"ab", ("f", 1)):
             with pytest.raises(LogicException) as exc:
                 list(solve(("must_be", mint("atomic"), culprit), builtins_mod))
             assert _formal(exc).args[0] == mint("atomic"), culprit
@@ -529,7 +530,7 @@ class TestTheNilAtomInAKeyPosition:
             "j(S, D) <- parse(S, D),\n",
         )
         D = Var()
-        (parsed,), = _answers(("j", '{"[]": 1, "a": 2}', D), mod, D)
+        (parsed,), = _answers(("j", chars('{"[]": 1, "a": 2}'), D), mod, D)
         assert list(parsed.keys()) == [(), mint("a")]
         assert parsed[()] == 1 and parsed[[]] == 1
 
@@ -595,7 +596,7 @@ class TestTheNilAtomInAKeyPosition:
             "g(D, K, V) <- get(D, K, V),\n",
         )
         D = Var()
-        (parsed,), = _answers(("j", '{"[]": 1}', D), mod, D)
+        (parsed,), = _answers(("j", chars('{"[]": 1}'), D), mod, D)
         for nil in ([], "", b"", ()):
             V = Var()
             assert _answers(("g", parsed, nil, V), mod, V) == [(1,)], nil
@@ -778,20 +779,20 @@ class TestANonEmptyListIsACompound:
     string and a code list, which ARE lists."""
 
     def test_compound_holds_for_lists_strings_and_code_lists(self, builtins_mod):
-        for value in ([1, 2], "abc", b"ab", [mint("a")]):
+        for value in ([1, 2], chars("abc"), b"ab", [mint("a")]):
             assert _holds(builtins_mod, "compound", value), value
 
     def test_callable_holds_for_lists_strings_and_code_lists(self, builtins_mod):
-        for value in ([1, 2], "abc", b"ab", [mint("a")]):
+        for value in ([1, 2], chars("abc"), b"ab", [mint("a")]):
             assert _holds(builtins_mod, "callable_", value), value
 
     def test_a_non_empty_list_is_not_atomic_and_not_an_atom(self, builtins_mod):
-        for value in ([1, 2], "abc", b"ab"):
+        for value in ([1, 2], chars("abc"), b"ab"):
             assert not _holds(builtins_mod, "atomic", value), value
             assert not _holds(builtins_mod, "atom", value), value
 
     def test_must_be_agrees_with_the_builtins(self, builtins_mod):
-        assert list(solve(("must_be", mint("compound"), "abc"), builtins_mod))
+        assert list(solve(("must_be", mint("compound"), chars("abc")), builtins_mod))
         assert list(solve(("must_be", mint("callable"), [1, 2]), builtins_mod))
 
 
@@ -822,11 +823,11 @@ def test_row_20_json_parse_makes_atom_keys_and_string_values():
         "r20_string(X) <- string(X),\n",
     )
     D = Var()
-    (parsed,), = _answers(("r20", '{"k": "v"}', D), mod, D)
+    (parsed,), = _answers(("r20", chars('{"k": "v"}'), D), mod, D)
     assert list(parsed.keys()) == [mint("k")]
-    assert parsed[mint("k")] == "v"
+    assert parsed[mint("k")] == chars("v")
     assert len(list(solve(("r20_atom", mint("k")), mod))) == 1
-    assert len(list(solve(("r20_string", "v"), mod))) == 1
+    assert len(list(solve(("r20_string", chars("v")), mod))) == 1
 
 
 def test_row_21_a_module_attribute_is_the_minted_atom():
@@ -844,8 +845,8 @@ def test_row_22_a_text_returning_wrapper_answers_a_string():
     os.environ["_FLIP_ROW22"] = "home-value"
     try:
         X = Var()
-        assert _answers(("r22", "_FLIP_ROW22", X), mod, X) == [("home-value",)]
-        assert len(list(solve(("r22_string", "home-value"), mod))) == 1
+        assert _answers(("r22", chars("_FLIP_ROW22"), X), mod, X) == [(chars("home-value"),)]
+        assert len(list(solve(("r22_string", chars("home-value")), mod))) == 1
     finally:
         del os.environ["_FLIP_ROW22"]
 
@@ -859,7 +860,7 @@ def test_row_23_an_atom_crossing_to_python_comes_back_a_string():
     X, Y = Var(), Var()
     (x, y), = _answers(("r23", X, Y), mod, X, Y)
     assert x == mint("bar")
-    assert y == "bar" and type(y) is str
+    assert y == chars("bar") and is_chars(y)
     assert x != y
 
 
@@ -1008,15 +1009,15 @@ def test_membership_over_a_plain_str_yields_char_atoms(builtins_mod):
     ``str``s, which are one-element STRINGS, not chars (Task 15 fix round 5,
     item 1: both modes go through ``_in_iter`` now)."""
     from clausal.logic.runtime.body_star_unify import _in_iter
-    chars = [char_atom("a"), char_atom("b"), char_atom("c")]
-    assert list(_in_iter("abc", False)) == chars
+    char_atoms = [char_atom("a"), char_atom("b"), char_atom("c")]
+    assert list(_in_iter(chars("abc"), False)) == char_atoms
     X = Var()
-    assert _answers(("in_", X, "abc"), builtins_mod, X) == [(c,) for c in chars]
+    assert _answers(("in_", X, chars("abc")), builtins_mod, X) == [(c,) for c in char_atoms]
     op_mod = _load_inline_clausal(
         "_flip_in_operator_str", "enum_elems(X, C) <- (X in C)\n")
     Y = Var()
-    assert _answers(("enum_elems", Y, "abc"), op_mod, Y) == [
-        (c,) for c in chars]
+    assert _answers(("enum_elems", Y, chars("abc")), op_mod, Y) == [
+        (c,) for c in char_atoms]
     # …and the operator still enumerates an ordinary list unchanged.
     Z = Var()
     assert _answers(("enum_elems", Z, [1, 2]), op_mod, Z) == [(1,), (2,)]
@@ -1035,7 +1036,7 @@ def test_a_promoted_seglist_decodes_back_to_char_atoms():
     outer = SegList([VarSeg(inner)])
     out = Var()
     assert unify(out, outer, trail)
-    assert _deref_walk(out) == "ab"
+    assert _deref_walk(out) == chars("ab")
     assert unify(outer, [char_atom("a"), char_atom("b")], Trail())
 
 
@@ -1379,14 +1380,14 @@ def test_sum_and_scalar_product_read_the_operator_as_an_atom():
 def test_sum_and_scalar_product_refuse_a_string_operator(builtins_mod):
     """A STRING in the operator position is not a name (§6.4) — and silence
     is what hid this whole family, so it is a refusal, not a failure."""
-    for goal in (("sum_", [1, 2, 3], "#=", 6),
-                 ("scalar_product", [2, 3], [4, 5], "#=", 23)):
+    for goal in (("sum_", [1, 2, 3], chars("#="), 6),
+                 ("scalar_product", [2, 3], [4, 5], chars("#="), 23)):
         with pytest.raises(LogicException) as exc:
             list(solve(goal, builtins_mod))
         formal = _formal(exc)
         assert formal.functor == "type_error"
         assert formal.args[0] == mint("atom")
-        assert formal.args[1] == "#="
+        assert formal.args[1] == chars("#=")
 
 
 def test_zcompare_binds_an_atom_and_reads_one():
@@ -1423,11 +1424,11 @@ def test_zcompare_binds_an_atom_and_reads_one():
     # operands.
     for shape in ((Var(), Var()), (1, 5)):
         with pytest.raises(LogicException) as exc:
-            zcompare("<", shape[0], shape[1], Trail())
+            zcompare(chars("<"), shape[0], shape[1], Trail())
         formal = _formal(exc)
         assert formal.functor == "type_error"
         assert formal.args[0] == mint("atom")
-        assert formal.args[1] == "<"
+        assert formal.args[1] == chars("<")
 
 
 def test_attribute_keys_are_atoms():
@@ -1451,16 +1452,16 @@ def test_attribute_keys_are_atoms():
 
 def test_a_string_attribute_key_is_refused(builtins_mod):
     """A string is not a name, here as everywhere else (§6.4)."""
-    for goal in (("put_attr", Var(), "t12b_str_key", 1),
-                 ("get_attr", Var(), "t12b_str_key", Var()),
-                 ("del_attr", Var(), "t12b_str_key"),
-                 ("put_attrs", Var(), {"t12b_str_key": 1})):
+    for goal in (("put_attr", Var(), chars("t12b_str_key"), 1),
+                 ("get_attr", Var(), chars("t12b_str_key"), Var()),
+                 ("del_attr", Var(), chars("t12b_str_key")),
+                 ("put_attrs", Var(), {chars("t12b_str_key"): 1})):
         with pytest.raises(LogicException) as exc:
             list(solve(goal, builtins_mod))
         formal = _formal(exc)
         assert formal.functor == "type_error"
         assert formal.args[0] == mint("atom")
-        assert formal.args[1] == "t12b_str_key"
+        assert formal.args[1] == chars("t12b_str_key")
 
 
 def _ground_segstring(text):
@@ -1473,8 +1474,8 @@ def _ground_segstring(text):
 
     hole = Var()
     seg = SegString([text[:1], VarSeg(hole)])
-    unify(hole, text[1:], Trail())
-    assert seg.__walk__() == text
+    unify(hole, chars(text[1:]), Trail())
+    assert seg.__walk__() == chars(text)
     return seg
 
 
@@ -1489,13 +1490,13 @@ def test_both_string_shapes_are_refused_the_same_way_in_a_name_position():
 
     for funnel, text, context in ((_storage_key, "segkey", "put_attr/3"),
                                   (_op_spelling, "#=", "sum_/3")):
-        for value in (text, _ground_segstring(text)):
+        for value in (chars(text), _ground_segstring(text)):
             with pytest.raises(LogicException) as exc:
                 funnel(value, context)
             formal = exc.value.term.args[0]
             assert formal.functor == "type_error"
             assert formal.args[0] == mint("atom")
-            assert formal.args[1] == text
+            assert formal.args[1] == chars(text)
 
 
 def test_bulk_attributes_round_trip_through_atom_keys():
@@ -1546,12 +1547,12 @@ def test_process_create_answers_an_atom_keyed_result_dict():
     )
     OUT, CODE = Var(), Var()
     (out, code), = _answers(("run3", OUT, CODE), mod, OUT, CODE)
-    assert out.strip() == "t12c" and code == 0
+    assert chars_text(out).strip() == "t12c" and code == 0
     OUT = Var()
-    assert _answers(("run4", OUT), mod, OUT) == [("t12c stdin",)]
+    assert _answers(("run4", OUT), mod, OUT) == [(chars("t12c stdin"),)]
     ERR = Var()
     (err,), = _answers(("err3", ERR), mod, ERR)
-    assert "t12c" in err
+    assert "t12c" in chars_text(err)
 
 
 def test_url_parse_answers_an_atom_keyed_dict_that_join_reads_back():
@@ -1575,10 +1576,10 @@ def test_url_parse_answers_an_atom_keyed_dict_that_join_reads_back():
     )
     S, N, U = Var(), Var(), Var()
     # The VALUE stays text (§9.4); only the KEY is an atom.
-    assert _answers(("scheme_of", S), mod, S) == [("https",)]
+    assert _answers(("scheme_of", S), mod, S) == [(chars("https"),)]
     assert _answers(("port_of", N), mod, N) == [(8080,)]
     assert _answers(("round_trip", U), mod, U) == [
-        ("https://example.com:8080/p?q=1",)]
+        (chars("https://example.com:8080/p?q=1"),)]
 
 
 def test_csv_records_answer_atom_keyed_dicts_and_atom_headers():
@@ -1602,12 +1603,12 @@ def test_csv_records_answer_atom_keyed_dicts_and_atom_headers():
         "generate_records(H, RS, S)),\n"
     )
     N, H, V, S = Var(), Var(), Var(), Var()
-    assert _answers(("first_name", N), mod, N) == [("alice",)]
+    assert _answers(("first_name", N), mod, N) == [(chars("alice"),)]
     assert _answers(("headers", H), mod, H) == [([mint("name"), mint("age")],)]
-    assert _answers(("by_header", V), mod, V) == [("alice",)]
+    assert _answers(("by_header", V), mod, V) == [(chars("alice"),)]
     # The round trip closes: what parse_records answered, generate_records
     # writes back out — atom headers and atom record keys included.
-    assert _answers(("regenerated", S), mod, S) == [("name,age\r\nalice,30\r\n",)]
+    assert _answers(("regenerated", S), mod, S) == [(chars("name,age\r\nalice,30\r\n"),)]
 
 
 def test_z3_satisfiability_answers_an_atom():
@@ -1674,11 +1675,11 @@ def test_os_env_and_working_directory_take_atom_text():
             V = Var()
             # The wrapper ANSWERS text as a string (§9.4); only the argument
             # positions accept an atom.
-            assert _answers(("read_it", V), mod, V) == [("t12d_value",)]
+            assert _answers(("read_it", V), mod, V) == [(chars("t12d_value"),)]
             assert len(list(solve(("unset_it",), mod))) == 1
             assert "t12d_name" not in _pyos.environ
             D = Var()
-            assert _answers(("cd_and_read", D), mod, D) == [(real_tmpdir,)]
+            assert _answers(("cd_and_read", D), mod, D) == [(chars(real_tmpdir),)]
         finally:
             _pyos.chdir(prev_cwd)
             if prev_env is None:
@@ -1712,7 +1713,7 @@ def test_datetime_string_predicates_take_atom_text():
     DT = Var()
     assert _answers(("iso_dt", DT), mod, DT) == [
         (_T(_dt.datetime(2026, 9, 7, 8, 30)),)]
-    assert _answers(("formatted", S), mod, S) == [("07/09/2026",)]
+    assert _answers(("formatted", S), mod, S) == [(chars("07/09/2026"),)]
 
 
 def test_hash_takes_an_atom_algorithm_name():
@@ -1728,7 +1729,7 @@ def test_hash_takes_an_atom_algorithm_name():
     )
     H, B = Var(), Var()
     assert _answers(("hex_of", H), mod, H) == [
-        ("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",)]
+        (chars("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),)]
     assert _answers(("raw_of", B), mod, B) == [
         (bytes.fromhex(
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
@@ -1749,7 +1750,7 @@ def test_hmac_takes_an_atom_algorithm_and_an_atom_digest():
         "bad() <- verify(sha256, \"k3y\", \"msg\", \"" + "0" * 64 + "\"),\n",
     )
     H = Var()
-    assert _answers(("signed", H), mod, H) == [(expected,)]
+    assert _answers(("signed", H), mod, H) == [(chars(expected),)]
     assert len(list(solve(("ok",), mod))) == 1
     assert list(solve(("bad",), mod)) == []
 
@@ -1773,15 +1774,15 @@ def test_csv_reading_predicates_take_atom_text():
             "read_back(RS) <- read_file(\"" + path + "\", RS),\n",
         )
         R, RS, N = Var(), Var(), Var()
-        assert _answers(("row", R), mod, R) == [(["a", "b", "c"],)]
-        assert _answers(("rows", RS), mod, RS) == [([["a", "b"], ["c", "d"]],)]
-        assert _answers(("first_name", N), mod, N) == [("alice",)]
+        assert _answers(("row", R), mod, R) == [([chars("a"), chars("b"), chars("c")],)]
+        assert _answers(("rows", RS), mod, RS) == [([[chars("a"), chars("b")], [chars("c"), chars("d")]],)]
+        assert _answers(("first_name", N), mod, N) == [(chars("alice"),)]
         assert len(list(solve(("wrote",), mod))) == 1
         # The file is where the ATOM said, not where its repr would have been.
         assert os.path.isfile(path)
         assert os.listdir(tmpdir) == ["t12d.csv"]
         RS = Var()
-        assert _answers(("read_back", RS), mod, RS) == [([["x", "y"]],)]
+        assert _answers(("read_back", RS), mod, RS) == [([[chars("x"), chars("y")]],)]
 
 
 def test_json_parse_and_file_predicates_take_atom_text():
@@ -1828,14 +1829,14 @@ def test_url_predicates_take_atom_text_including_the_port():
         "port: 8080, path: \"/p\"}, U),\n",
     )
     E, S, U = Var(), Var(), Var()
-    assert _answers(("enc", E), mod, E) == [("hello%20world",)]
-    assert _answers(("dec", S), mod, S) == [("hello world",)]
+    assert _answers(("enc", E), mod, E) == [(chars("hello%20world"),)]
+    assert _answers(("dec", S), mod, S) == [(chars("hello world"),)]
     S = Var()
-    assert _answers(("sch", S), mod, S) == [("https",)]
-    assert _answers(("joined", U), mod, U) == [("https://example.com:8080/p",)]
+    assert _answers(("sch", S), mod, S) == [(chars("https"),)]
+    assert _answers(("joined", U), mod, U) == [(chars("https://example.com:8080/p"),)]
     U = Var()
     assert _answers(("joined_int", U), mod, U) == [
-        ("https://example.com:8080/p",)]
+        (chars("https://example.com:8080/p"),)]
 
 
 def test_files_write_and_append_take_atom_contents():
@@ -1853,7 +1854,7 @@ def test_files_write_and_append_take_atom_contents():
         )
         assert len(list(solve(("wrote",), mod))) == 1
         S = Var()
-        assert _answers(("read_back", S), mod, S) == [("hello world",)]
+        assert _answers(("read_back", S), mod, S) == [(chars("hello world"),)]
         # The bytes on disk, not just what the wrapper says it wrote.
         with open(path, encoding="utf-8") as f:
             assert f.read() == "hello world"

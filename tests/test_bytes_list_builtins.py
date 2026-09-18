@@ -7,6 +7,7 @@ import os
 import tempfile
 
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -132,7 +133,7 @@ class TestBytesListNoStrCross:
         # nv  — bytes and str do not cross; append(b"a", "b", X) has no clean
         # codes/chars result, must not silently produce a wrong-typed answer.
         # (We assert it does not unify a bytes result against a str caller.)
-        assert sum(1 for _ in call("append", b"ab", b"c", "abc", module=_M)) == 0
+        assert sum(1 for _ in call("append", b"ab", b"c", chars("abc"), module=_M)) == 0
 
 
 class TestSecondarySequencePredicatesBytes:

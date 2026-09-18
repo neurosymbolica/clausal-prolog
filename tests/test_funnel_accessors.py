@@ -285,14 +285,16 @@ class TestIsZeroFieldClassAdoptionRegression:
 
     def test_standard_order_key_atom_sorts_adjacent_to_same_named_str(self):
         # nv — atoms and same-named strings interleave in standard order
-        items = [foo_atom, "foo"]
+        from clausal.logic.cells import chars
+        foo_str = chars("foo")
+        items = [foo_atom, foo_str]
         from clausal.logic.builtins._helpers import _standard_order_sorted
 
         result = _standard_order_sorted(items)
-        assert result == ["foo", foo_atom] or result == [foo_atom, "foo"]
+        assert result == [foo_str, foo_atom] or result == [foo_atom, foo_str]
         # both orderings are stable/valid — assert it did not raise and
         # both elements are present
-        assert set(id(x) for x in result) == {id(foo_atom), id("foo")}
+        assert set(id(x) for x in result) == {id(foo_atom), id(foo_str)}
 
 
 # ── Task 2 migration regression (sites with no existing direct coverage) ─────

@@ -2,6 +2,7 @@
 
 import pytest
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.import_hook import _load_module
@@ -48,26 +49,26 @@ class TestFilterString:
     def test_filter_vowels(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "include", mod.module_dict["is_vowel"], "hello", R, module=mod)
-        assert r == ["eo"]
+        r = _collect(R, "include", mod.module_dict["is_vowel"], chars("hello"), R, module=mod)
+        assert r == [chars("eo")]
 
     def test_filter_empty(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "include", mod.module_dict["is_vowel"], "", R, module=mod)
-        assert r == [""]
+        r = _collect(R, "include", mod.module_dict["is_vowel"], chars(""), R, module=mod)
+        assert r == [chars("")]
 
     def test_filter_none_match(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "include", mod.module_dict["is_vowel"], "xyz", R, module=mod)
-        assert r == [""]
+        r = _collect(R, "include", mod.module_dict["is_vowel"], chars("xyz"), R, module=mod)
+        assert r == [chars("")]
 
     def test_filter_all_match(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "include", mod.module_dict["is_vowel"], "aeiou", R, module=mod)
-        assert r == ["aeiou"]
+        r = _collect(R, "include", mod.module_dict["is_vowel"], chars("aeiou"), R, module=mod)
+        assert r == [chars("aeiou")]
 
     def test_filter_list_still_works(self, mod):
         """include on a regular list is unchanged."""
@@ -85,8 +86,8 @@ class TestExcludeString:
     def test_exclude_vowels(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "exclude", mod.module_dict["is_vowel"], "hello", R, module=mod)
-        assert r == ["hll"]
+        r = _collect(R, "exclude", mod.module_dict["is_vowel"], chars("hello"), R, module=mod)
+        assert r == [chars("hll")]
 
 
 # ── maplist/2 ───────────────────────────────────────────────────────────────
@@ -95,15 +96,15 @@ class TestExcludeString:
 class TestMapListString:
     def test_maplist2_all_succeed(self, mod):
         # nv
-        assert _first("maplist", mod.module_dict["is_vowel"], "aeiou", module=mod)
+        assert _first("maplist", mod.module_dict["is_vowel"], chars("aeiou"), module=mod)
 
     def test_maplist2_some_fail(self, mod):
         # nv
-        assert not _first("maplist", mod.module_dict["is_vowel"], "hello", module=mod)
+        assert not _first("maplist", mod.module_dict["is_vowel"], chars("hello"), module=mod)
 
     def test_maplist2_empty(self, mod):
         # nv
-        assert _first("maplist", mod.module_dict["is_vowel"], "", module=mod)
+        assert _first("maplist", mod.module_dict["is_vowel"], chars(""), module=mod)
 
 
 # ── maplist/3 ───────────────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ class TestMapList3String:
     def test_maplist3_char_to_code(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "maplist", mod.module_dict["char_to_code"], "abc", R, module=mod)
+        r = _collect(R, "maplist", mod.module_dict["char_to_code"], chars("abc"), R, module=mod)
         assert r == [[97, 98, 99]]
 
 
@@ -128,7 +129,7 @@ class TestFoldLeftString:
         # ``atom_concat/3`` takes ATOMS (spec §6.6), so the seed is the
         # empty ATOM and the answer is the atom ("abc",).
         r = _collect(R, "foldl", mod.module_dict["concat_chars"],
-                     "abc", mint(""), R, module=mod)
+                     chars("abc"), mint(""), R, module=mod)
         assert r == [mint("abc")]
 
 
@@ -141,9 +142,9 @@ class TestPartitionString:
         # (a list of char atoms IS the string it denotes, spec §6.2).
         Y, N = Var(), Var()
         results = []
-        for _ in call("partition", mod.module_dict["is_vowel"], "hello", Y, N, module=mod):
+        for _ in call("partition", mod.module_dict["is_vowel"], chars("hello"), Y, N, module=mod):
             results.append((deref(Y), deref(N)))
-        assert results == [("eo", "hll")]
+        assert results == [(chars("eo"), chars("hll"))]
 
 
 # ── take_while/3 ─────────────────────────────────────────────────────────────
@@ -153,14 +154,14 @@ class TestTakeWhileString:
     def test_take_while_vowels(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "take_while", mod.module_dict["is_vowel"], "aeibc", R, module=mod)
-        assert r == ["aei"]
+        r = _collect(R, "take_while", mod.module_dict["is_vowel"], chars("aeibc"), R, module=mod)
+        assert r == [chars("aei")]
 
     def test_take_while_none(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "take_while", mod.module_dict["is_vowel"], "xyz", R, module=mod)
-        assert r == [""]
+        r = _collect(R, "take_while", mod.module_dict["is_vowel"], chars("xyz"), R, module=mod)
+        assert r == [chars("")]
 
 
 # ── drop_while/3 ─────────────────────────────────────────────────────────────
@@ -170,8 +171,8 @@ class TestDropWhileString:
     def test_drop_while_vowels(self, mod):
         # nv
         R = Var()
-        r = _collect(R, "drop_while", mod.module_dict["is_vowel"], "aeibc", R, module=mod)
-        assert r == ["bc"]
+        r = _collect(R, "drop_while", mod.module_dict["is_vowel"], chars("aeibc"), R, module=mod)
+        assert r == [chars("bc")]
 
 
 # ── span/4 ──────────────────────────────────────────────────────────────────
@@ -183,6 +184,6 @@ class TestSpanString:
         # (a list of char atoms IS the string it denotes, spec §6.2).
         Y, N = Var(), Var()
         results = []
-        for _ in call("span", mod.module_dict["is_vowel"], "aeibc", Y, N, module=mod):
+        for _ in call("span", mod.module_dict["is_vowel"], chars("aeibc"), Y, N, module=mod):
             results.append((deref(Y), deref(N)))
-        assert results == [("aei", "bc")]
+        assert results == [(chars("aei"), chars("bc"))]

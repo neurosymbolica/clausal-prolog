@@ -13,6 +13,7 @@ import inspect
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic import solve as solve_mod
 from clausal.logic.solve import call
@@ -325,7 +326,7 @@ class TestF001TroNondetPrefix:
         """
         O = Var()
         assert sorted(sols(mod, mod.tac(1, [], O), O), key=repr) == sorted(
-            [([mint("")],), ("a",), ([mint("ab")],)], key=repr
+            [([mint("")],), (chars("a"),), ([mint("ab")],)], key=repr
         )
 
     # controls / oracle

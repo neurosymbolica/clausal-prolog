@@ -19,6 +19,7 @@ Findings tested here:
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 
 
 def test_F012_bare_str_vs_list_is_retired_segstring_var_binding_still_works():
@@ -95,7 +96,7 @@ def test_F032_head_list_unify_input_ground_segstring():
 
     ss = SegString(["abc"])
     # Sanity-check the precondition the bug claim depends on.
-    assert ss.is_ground() and ss.__walk__() == "abc", (
+    assert ss.is_ground() and ss.__walk__() == chars("abc"), (
         f"precondition: SegString(['abc']) should be ground and walk "
         f"to 'abc'; got is_ground={ss.is_ground()}, "
         f"walk={ss.__walk__()!r}"
@@ -113,7 +114,7 @@ def test_F032_head_list_unify_input_ground_segstring():
     )
     # THE FLIP (spec §6.2): the head of a string is its CHAR ATOM; the tail
     # stays a ``str`` slice (R-S2).
-    assert deref(H) == char_atom("a") and deref(T) == "bc", (
+    assert deref(H) == char_atom("a") and deref(T) == chars("bc"), (
         f"expected H=('a',), T='bc' from destructuring SegString(['abc']); "
         f"got H={deref(H)!r}, T={deref(T)!r}"
     )
@@ -146,7 +147,7 @@ def test_F034_head_list_unify_output_walks_segstring_star_val():
     # The actual current behaviour is ['h', SegString(['ello'])] — a list
     # with an opaque SegString tail element. The expected behaviour
     # (symmetric with the SegList branch) walks the SegString.
-    assert bound == [char_atom(c) for c in "hello"] or bound == "hello", (
+    assert bound == [char_atom(c) for c in "hello"] or bound == chars("hello"), (
         f"_head_list_unify_output with T bound to SegString(['ello']) "
         f"should walk the SegString into chars (or, under 'input type "
         f"wins', into the str 'hello'); got {bound!r} "
@@ -173,7 +174,7 @@ def test_F040_body_multi_star_unify_ground_segstring():
 
     ss = SegString(["abc"])
     # Precondition: ground SegString walks to plain str.
-    assert ss.is_ground() and ss.__walk__() == "abc", (
+    assert ss.is_ground() and ss.__walk__() == chars("abc"), (
         f"precondition: SegString(['abc']) ground+walks-to-'abc'; "
         f"got is_ground={ss.is_ground()}, walk={ss.__walk__()!r}"
     )
@@ -269,7 +270,7 @@ def test_F047_multi_star_head_guard_segstring():
 
     # Probe 1: ground SegString — walks to "abc"; should equal str control.
     ss_ground = SegString(["abc"])
-    assert ss_ground.is_ground() and ss_ground.__walk__() == "abc"
+    assert ss_ground.is_ground() and ss_ground.__walk__() == chars("abc")
     X3, Y3, A3, B3 = Var(), Var(), Var(), Var()
     n_ss_ground = sum(
         1 for _ in call("bracket", ss_ground, X3, Y3, A3, B3, module=mod)
@@ -317,7 +318,7 @@ def test_F075_chars_builtins_refuse_a_segstring_as_an_atom():
 
     seg = SegString(["hi"])
     # Precondition: this SegString walks to the plain str "hi".
-    assert seg.is_ground() and seg.__walk__() == "hi", (
+    assert seg.is_ground() and seg.__walk__() == chars("hi"), (
         f"precondition: SegString(['hi']) should be ground and walk "
         f"to 'hi'; got is_ground={seg.is_ground()}, "
         f"walk={seg.__walk__()!r}"
@@ -341,7 +342,7 @@ def test_F075_chars_builtins_refuse_a_segstring_as_an_atom():
     N2 = Var()
     with pytest.raises(LogicException):
         solutions(
-            StepGenerator(disp, None, None, None, "hi", N2, Trail()),
+            StepGenerator(disp, None, None, None, chars("hi"), N2, Trail()),
             snapshot=lambda: deref(N2),
         )
     # The ATOM of that spelling is what has a length.
@@ -357,12 +358,12 @@ def test_F075_chars_builtins_refuse_a_segstring_as_an_atom():
     # one-element STRING and not a char, so it yields nothing -- the same
     # answer the plain ``str`` gets.  The char atom is what succeeds.
     seg1 = SegString(["a"])
-    assert seg1.is_ground() and seg1.__walk__() == "a"
+    assert seg1.is_ground() and seg1.__walk__() == chars("a")
     disp_ct = get_builtin_dispatch("char_type", 2, None)
     assert len(solutions(StepGenerator(
         disp_ct, None, None, None, seg1, mint("alpha"), Trail()))) == 0
     assert len(solutions(StepGenerator(
-        disp_ct, None, None, None, "a", mint("alpha"), Trail()))) == 0
+        disp_ct, None, None, None, chars("a"), mint("alpha"), Trail()))) == 0
     assert len(solutions(StepGenerator(
         disp_ct, None, None, None, char_atom("a"), mint("alpha"),
         Trail()))) >= 1

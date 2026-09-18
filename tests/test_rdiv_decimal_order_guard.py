@@ -24,6 +24,7 @@ from clausal.logic.builtins._helpers import (
     _ORD_ATOM, _ORD_COMPOUND, _ORD_NUM, _standard_order_key as key,
 )
 from clausal.logic.builtins.iso_compare import _iso_identical
+from clausal.logic.cells import chars
 from clausal.logic.builtins.lists import _msort__2, _sort__2
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import Var, Trail, deref, exact_cell_number
@@ -115,7 +116,7 @@ def test_equal_value_and_scale_ARE_identical():
     ("rdiv", 1, -2),         # sign belongs on the numerator
     ("decimal", 100, 0),     # S must be > 0 (a scale-less decimal is an int)
     ("decimal", 1, -5),      # negative scale
-    ("decimal", "9", 1),     # not ints
+    ("decimal", chars("9"), 1),     # not ints
     ("decimal", True, 1),    # bool is not an int here
     ("rdiv", 1, 2, 3),       # wrong arity
 ])

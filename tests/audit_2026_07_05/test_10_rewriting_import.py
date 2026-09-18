@@ -21,6 +21,7 @@ import textwrap
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars
 from clausal import Var, solve
 from clausal.import_hook import _load_module, _load_prolog_module
 from clausal.logic.solve import call
@@ -217,8 +218,8 @@ def test_F005_regex_body_only_group_binds(tmp_path):
         )
     """)
     r = Var()
-    vals = _values(m.grab("42x", r), r)
-    assert vals == ["42"]
+    vals = _values(m.grab(chars("42x"), r), r)
+    assert vals == [chars("42")]
 
 
 def test_F005_guard_regex_head_var_group_binds(tmp_path):
@@ -229,7 +230,7 @@ def test_F005_guard_regex_head_var_group_binds(tmp_path):
         )
     """)
     y = Var()
-    assert _values(m.year_of("2026-03", y), y) == ["2026"]
+    assert _values(m.year_of(chars("2026-03"), y), y) == [chars("2026")]
 
 
 def test_F005_guard_regex_pattern_precompiled(tmp_path):
@@ -616,7 +617,7 @@ def test_guard_dcg_parse_generate_if_not_str(tmp_path):
     assert len(list(call("nox", [mint("x")], [], module=lm))) == 0
     # ``hi >> ("hi")`` is a STRING terminal routed through ``sequence//1``,
     # so it consumes the string and, equivalently, its char-ATOM list.
-    assert len(list(call("hi", "hi", "", module=lm))) == 1
+    assert len(list(call("hi", chars("hi"), chars(""), module=lm))) == 1
     assert len(list(call("hi", [char_atom("h"), char_atom("i")], [],
                          module=lm))) == 1
 
@@ -636,7 +637,7 @@ def test_guard_dcg_pushback_and_meta_nonterminal(tmp_path):
         got = rest.value
         # strings-as-lists: [("p",), ("y",)] may surface as "py" -- the
         # same term either way (spec §6.2)
-        assert got in ([mint("p"), mint("y")], "py")
+        assert got in ([mint("p"), mint("y")], chars("py"))
     assert n == 1
     assert len(list(call("run", m.word, [mint("w")], [], module=lm))) == 1
 
@@ -680,7 +681,7 @@ def test_guard_escapes_and_literals(tmp_path):
     e = Var()
     assert _values(m.sub([0, 1, 2, 3], e), e) == [[1, 2]]
     s = Var()
-    assert _values(m.greet("bob", s), s) == ["hello bob!"]
+    assert _values(m.greet(chars("bob"), s), s) == [chars("hello bob!")]
 
 
 def test_guard_binop_structural_unify(tmp_path):

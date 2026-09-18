@@ -17,6 +17,7 @@ Findings tested here:
 import pytest
 
 from clausal.logic.atoms import char_atom
+from clausal.logic.cells import chars
 
 
 def test_F021_seglist_sequence_protocol_no_bare_typeerror():
@@ -251,7 +252,7 @@ def test_F038_in_iter_ground_segstring_no_bare_typeerror():
 
     ss = SegString(["abc"])
     # Precondition: ground SegString walks to plain str "abc".
-    assert ss.is_ground() and ss.__walk__() == "abc", (
+    assert ss.is_ground() and ss.__walk__() == chars("abc"), (
         f"precondition: SegString(['abc']) ground+walks-to-'abc'; "
         f"got is_ground={ss.is_ground()}, walk={ss.__walk__()!r}"
     )

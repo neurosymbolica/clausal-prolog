@@ -23,6 +23,7 @@ import tempfile
 import pytest
 
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars, is_chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import SegBytes
@@ -152,9 +153,9 @@ class TestSequenceBytesMode:
         mod = _mod("seq_str_reg")
         s = Var()
         found = False
-        for _ in call("sequence", "ab", "abXY", s, module=mod):
+        for _ in call("sequence", chars("ab"), chars("abXY"), s, module=mod):
             sv = deref(s)
-            assert type(sv) is str and sv == "XY", (
+            assert is_chars(sv) and sv == chars("XY"), (
                 f"sequence('ab', 'abXY', S): regression — expected S='XY' (str), got {sv!r}"
             )
             found = True

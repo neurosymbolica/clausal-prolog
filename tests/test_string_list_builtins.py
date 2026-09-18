@@ -7,6 +7,7 @@ the result is returned as a string.
 
 import pytest
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.cells import chars, is_chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.import_hook import _load_module
@@ -47,15 +48,15 @@ class TestInString:
     def test_enumerate_chars(self, mod):
         # nv
         V = Var()
-        assert _collect(V, "in_", V, "abc", module=mod) == [mint("a"), mint("b"), mint("c")]
+        assert _collect(V, "in_", V, chars("abc"), module=mod) == [mint("a"), mint("b"), mint("c")]
 
     def test_member_check(self, mod):
         # nv
-        assert _first("in_", mint("b"), "abc", module=mod)
+        assert _first("in_", mint("b"), chars("abc"), module=mod)
 
     def test_member_miss(self, mod):
         # nv — a char atom that is genuinely absent from "abc".
-        assert not _first("in_", char_atom("z"), "abc", module=mod)
+        assert not _first("in_", char_atom("z"), chars("abc"), module=mod)
 
     def test_a_one_element_string_is_not_an_element(self, mod):
         """``"z"`` is the LIST ``[('z',)]``, not the char ``('z',)``.
@@ -65,13 +66,13 @@ class TestInString:
         spelling passed for this reason, not because ``z`` was absent.
         """
         # nv
-        assert not _first("in_", "a", "abc", module=mod)   # "a" IS in "abc"…
-        assert _first("in_", char_atom("a"), "abc", module=mod)  # …as an atom
+        assert not _first("in_", chars("a"), chars("abc"), module=mod)   # "a" IS in "abc"…
+        assert _first("in_", char_atom("a"), chars("abc"), module=mod)  # …as an atom
 
     def test_empty_string(self, mod):
         # nv
         V = Var()
-        assert _collect(V, "in_", V, "", module=mod) == []
+        assert _collect(V, "in_", V, chars(""), module=mod) == []
 
     def test_list_still_works(self, mod):
         # nv
@@ -82,11 +83,11 @@ class TestInString:
 class TestInCheckString:
     def test_memberchk_hit(self, mod):
         # nv
-        assert _first("in_check", char_atom("l"), "hello", module=mod)
+        assert _first("in_check", char_atom("l"), chars("hello"), module=mod)
 
     def test_memberchk_miss(self, mod):
         # nv
-        assert not _first("in_check", char_atom("z"), "hello", module=mod)
+        assert not _first("in_check", char_atom("z"), chars("hello"), module=mod)
 
 
 # ── append/3 ────────────────────────────────────────────────────────────────
@@ -96,46 +97,46 @@ class TestAppendString:
     def test_concat_two_strings(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "append", "hel", "lo", X, module=mod)
-        assert r == ["hello"]
+        r = _collect(X, "append", chars("hel"), chars("lo"), X, module=mod)
+        assert r == [chars("hello")]
 
     def test_prefix_match(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "append", "hel", X, "hello", module=mod)
-        assert r == ["lo"]
+        r = _collect(X, "append", chars("hel"), X, chars("hello"), module=mod)
+        assert r == [chars("lo")]
 
     def test_suffix_match(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "append", X, "lo", "hello", module=mod)
-        assert r == ["hel"]
+        r = _collect(X, "append", X, chars("lo"), chars("hello"), module=mod)
+        assert r == [chars("hel")]
 
     def test_enumerate_splits(self, mod):
         # nv
         X, Y = Var(), Var()
         pairs = []
-        for _ in call("append", X, Y, "abc", module=mod):
+        for _ in call("append", X, Y, chars("abc"), module=mod):
             pairs.append((deref(X), deref(Y)))
         assert pairs == [
-            ("", "abc"),
-            ("a", "bc"),
-            ("ab", "c"),
-            ("abc", ""),
+            (chars(""), chars("abc")),
+            (chars("a"), chars("bc")),
+            (chars("ab"), chars("c")),
+            (chars("abc"), chars("")),
         ]
 
     def test_concat_string_with_list(self, mod):
         """Mixed types: string + list → list result."""
         # nv
         X = Var()
-        r = _collect(X, "append", "ab", [1, 2], X, module=mod)
+        r = _collect(X, "append", chars("ab"), [1, 2], X, module=mod)
         assert r == [[mint("a"), mint("b"), 1, 2]]
 
     def test_empty_strings(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "append", "", "", X, module=mod)
-        assert r == [""]
+        r = _collect(X, "append", chars(""), chars(""), X, module=mod)
+        assert r == [chars("")]
 
     def test_list_still_works(self, mod):
         # nv
@@ -151,12 +152,12 @@ class TestLengthString:
     def test_length(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "length", "hello", X, module=mod) == [5]
+        assert _collect(X, "length", chars("hello"), X, module=mod) == [5]
 
     def test_empty(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "length", "", X, module=mod) == [0]
+        assert _collect(X, "length", chars(""), X, module=mod) == [0]
 
 
 # ── reverse/2 ──────────────────────────────────────────────────────────────
@@ -166,17 +167,17 @@ class TestReverseString:
     def test_reverse(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "reverse", "hello", X, module=mod) == ["olleh"]
+        assert _collect(X, "reverse", chars("hello"), X, module=mod) == [chars("olleh")]
 
     def test_reverse_empty(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "reverse", "", X, module=mod) == [""]
+        assert _collect(X, "reverse", chars(""), X, module=mod) == [chars("")]
 
     def test_reverse_single(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "reverse", "a", X, module=mod) == ["a"]
+        assert _collect(X, "reverse", chars("a"), X, module=mod) == [chars("a")]
 
 
 # ── last/2 ──────────────────────────────────────────────────────────────────
@@ -186,12 +187,12 @@ class TestLastString:
     def test_last_char(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "last", "hello", X, module=mod) == [mint("o")]
+        assert _collect(X, "last", chars("hello"), X, module=mod) == [mint("o")]
 
     def test_empty_fails(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "last", "", X, module=mod) == []
+        assert _collect(X, "last", chars(""), X, module=mod) == []
 
 
 # ── list_item/3 ─────────────────────────────────────────────────────────────
@@ -201,13 +202,13 @@ class TestListItemString:
     def test_index(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "list_item", 1, "hello", X, module=mod) == [mint("e")]
+        assert _collect(X, "list_item", 1, chars("hello"), X, module=mod) == [mint("e")]
 
     def test_enumerate(self, mod):
         # nv
         N, E = Var(), Var()
         pairs = []
-        for _ in call("list_item", N, "ab", E, module=mod):
+        for _ in call("list_item", N, chars("ab"), E, module=mod):
             pairs.append((deref(N), deref(E)))
         assert pairs == [(0, mint("a")), (1, mint("b"))]
 
@@ -219,29 +220,29 @@ class TestTakeDropSplitAt:
     def test_take(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "take", 3, "hello", X, module=mod) == ["hel"]
+        assert _collect(X, "take", 3, chars("hello"), X, module=mod) == [chars("hel")]
 
     def test_drop(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "drop", 3, "hello", X, module=mod) == ["lo"]
+        assert _collect(X, "drop", 3, chars("hello"), X, module=mod) == [chars("lo")]
 
     def test_split_at(self, mod):
         # nv
         L, R = Var(), Var()
-        for _ in call("split_at", 3, "hello", L, R, module=mod):
-            assert deref(L) == "hel"
-            assert deref(R) == "lo"
+        for _ in call("split_at", 3, chars("hello"), L, R, module=mod):
+            assert deref(L) == chars("hel")
+            assert deref(R) == chars("lo")
 
     def test_take_zero(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "take", 0, "hello", X, module=mod) == [""]
+        assert _collect(X, "take", 0, chars("hello"), X, module=mod) == [chars("")]
 
     def test_drop_all(self, mod):
         # nv
         X = Var()
-        assert _collect(X, "drop", 5, "hello", X, module=mod) == [""]
+        assert _collect(X, "drop", 5, chars("hello"), X, module=mod) == [chars("")]
 
 
 # ── msort/2, sort/2 ───────────────────────────────────────────────────
@@ -251,20 +252,20 @@ class TestSortString:
     def test_msort(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "msort", "cba", X, module=mod)
-        assert r == ["abc"]
+        r = _collect(X, "msort", chars("cba"), X, module=mod)
+        assert r == [chars("abc")]
 
     def test_msort_duplicates(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "msort", "abba", X, module=mod)
-        assert r == ["aabb"]
+        r = _collect(X, "msort", chars("abba"), X, module=mod)
+        assert r == [chars("aabb")]
 
     def test_sort_dedup(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "sort", "abba", X, module=mod)
-        assert r == ["ab"]
+        r = _collect(X, "sort", chars("abba"), X, module=mod)
+        assert r == [chars("ab")]
 
 
 # ── list_to_set/2 ────────────────────────────────────────────────────────────────
@@ -274,8 +275,8 @@ class TestToSetString:
     def test_to_set(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "list_to_set", "abba", X, module=mod)
-        assert r == ["ab"]
+        r = _collect(X, "list_to_set", chars("abba"), X, module=mod)
+        assert r == [chars("ab")]
 
 
 # ── select/3 ──────────────────────────────────────────────────────────────
@@ -286,12 +287,12 @@ class TestSelectString:
         # nv
         E, R = Var(), Var()
         pairs = []
-        for _ in call("select", E, "abc", R, module=mod):
+        for _ in call("select", E, chars("abc"), R, module=mod):
             pairs.append((deref(E), deref(R)))
         assert pairs == [
-            (char_atom("a"), "bc"),
-            (char_atom("b"), "ac"),
-            (char_atom("c"), "ab"),
+            (char_atom("a"), chars("bc")),
+            (char_atom("b"), chars("ac")),
+            (char_atom("c"), chars("ab")),
         ]
 
 
@@ -302,20 +303,20 @@ class TestSetOpsString:
     def test_subtract(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "subtract", "abcd", "bd", X, module=mod)
-        assert r == ["ac"]
+        r = _collect(X, "subtract", chars("abcd"), chars("bd"), X, module=mod)
+        assert r == [chars("ac")]
 
     def test_intersection(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "intersection", "abcd", "bce", X, module=mod)
-        assert r == ["bc"]
+        r = _collect(X, "intersection", chars("abcd"), chars("bce"), X, module=mod)
+        assert r == [chars("bc")]
 
     def test_union(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "union", "abc", "cde", X, module=mod)
-        assert r == ["abcde"]
+        r = _collect(X, "union", chars("abc"), chars("cde"), X, module=mod)
+        assert r == [chars("abcde")]
 
 
 # ── max_list/2, min_list/2 ──────────────────────────────────────────────────
@@ -325,13 +326,13 @@ class TestMaxMinString:
     def test_max(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "max_list", "hello", X, module=mod)
+        r = _collect(X, "max_list", chars("hello"), X, module=mod)
         assert r == [mint("o")]
 
     def test_min(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "min_list", "hello", X, module=mod)
+        r = _collect(X, "min_list", chars("hello"), X, module=mod)
         assert r == [mint("e")]
 
 
@@ -342,9 +343,9 @@ class TestPermutationString:
     def test_permutations(self, mod):
         # nv
         P = Var()
-        results = _collect(P, "permutation", "ab", P, module=mod)
-        assert set(results) == {"ab", "ba"}
-        assert all(isinstance(r, str) for r in results)
+        results = _collect(P, "permutation", chars("ab"), P, module=mod)
+        assert set(results) == {chars("ab"), chars("ba")}
+        assert all(is_chars(r) for r in results)
 
 
 # ── zip_/3 ──────────────────────────────────────────────────────────────────
@@ -354,14 +355,14 @@ class TestZipString:
     def test_zip_strings(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "zip_", "ab", "12", X, module=mod)
+        r = _collect(X, "zip_", chars("ab"), chars("12"), X, module=mod)
         assert r == [[[char_atom("a"), char_atom("1")],
                       [char_atom("b"), char_atom("2")]]]
 
     def test_zip_string_list(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "zip_", "ab", [1, 2], X, module=mod)
+        r = _collect(X, "zip_", chars("ab"), [1, 2], X, module=mod)
         assert r == [[[char_atom("a"), 1], [char_atom("b"), 2]]]
 
 
@@ -374,14 +375,14 @@ class TestSplitWithString:
         X = Var()
         # THE FLIP: the separator is an ELEMENT of the string, i.e. a CHAR
         # ATOM; the ``str`` "," is a one-element STRING and matches nothing.
-        r = _collect(X, "split_with", char_atom(","), "a,b,c", X, module=mod)
-        assert r == [["a", "b", "c"]]
+        r = _collect(X, "split_with", char_atom(","), chars("a,b,c"), X, module=mod)
+        assert r == [[chars("a"), chars("b"), chars("c")]]
 
     def test_split_no_sep(self, mod):
         # nv
         X = Var()
-        r = _collect(X, "split_with", char_atom(","), "abc", X, module=mod)
-        assert r == [["abc"]]
+        r = _collect(X, "split_with", char_atom(","), chars("abc"), X, module=mod)
+        assert r == [[chars("abc")]]
 
 
 # ── same_length/2 ──────────────────────────────────────────────────────────
@@ -390,15 +391,15 @@ class TestSplitWithString:
 class TestSameLengthString:
     def test_same_length(self, mod):
         # nv
-        assert _first("same_length", "abc", "xyz", module=mod)
+        assert _first("same_length", chars("abc"), chars("xyz"), module=mod)
 
     def test_different_length(self, mod):
         # nv
-        assert not _first("same_length", "ab", "xyz", module=mod)
+        assert not _first("same_length", chars("ab"), chars("xyz"), module=mod)
 
     def test_string_list_same_length(self, mod):
         # nv
-        assert _first("same_length", "abc", [1, 2, 3], module=mod)
+        assert _first("same_length", chars("abc"), [1, 2, 3], module=mod)
 
 
 # ── is_chars/1 ─────────────────────────────────────────────────────────────
@@ -407,7 +408,7 @@ class TestSameLengthString:
 class TestIsChars:
     def test_string(self, mod):
         # nv
-        assert _first("is_chars", "hello", module=mod)
+        assert _first("is_chars", chars("hello"), module=mod)
 
     def test_list(self, mod):
         # nv
@@ -429,4 +430,4 @@ class TestIsChars:
         ledger entry F080 for the full rationale.
         """
         # nv
-        assert _first("is_list", "hello", module=mod)
+        assert _first("is_list", chars("hello"), module=mod)

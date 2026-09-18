@@ -19,6 +19,7 @@ import tempfile
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve
@@ -60,9 +61,9 @@ def test_double_quotes_chars_is_accepted_after_the_flip():
         'dq_is_string(X) <- string(X),\n'
         'dq_is_atom(X) <- atom(X),\n',
     )
-    assert len(list(solve(("dq_ratchet_probe2", "hello"), chars_mod))) == 1
-    assert len(list(solve(("dq_is_string", "hello"), chars_mod))) == 1
-    assert list(solve(("dq_is_atom", "hello"), chars_mod)) == []
+    assert len(list(solve(("dq_ratchet_probe2", chars("hello")), chars_mod))) == 1
+    assert len(list(solve(("dq_is_string", chars("hello")), chars_mod))) == 1
+    assert list(solve(("dq_is_atom", chars("hello")), chars_mod)) == []
 
     atom_mod = _load_inline_clausal(
         "_dq_ratchet_atom2",

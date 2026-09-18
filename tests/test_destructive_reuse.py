@@ -47,6 +47,7 @@ def _find_destructive_reuse_goals(clause, db=None):
 from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
+from clausal.logic.cells import chars
 from clausal.terms import (
     And, Call, LoadName, Compound, Unify, Evaluate, Add,
     DictTerm, SetTerm,
@@ -433,9 +434,9 @@ class TestAppendDR:
         # nv
         trail = Trail()
         result_var = Var()
-        solutions = self._run("abc", "def", result_var, trail)
+        solutions = self._run(chars("abc"), chars("def"), result_var, trail)
         assert len(solutions) == 1
-        assert solutions[0] == "abcdef"
+        assert solutions[0] == chars("abcdef")
 
     def test_nondeterministic_mode_falls_back(self):
         """append(-, -, +) mode (all splits) uses standard fallback."""
@@ -762,7 +763,7 @@ class TestReverseDR:
         # nv — strings are immutable; the copying path preserves the str type
         trail = Trail()
         result_var = Var()
-        assert self._run("abc", result_var, trail) == ["cba"]
+        assert self._run(chars("abc"), result_var, trail) == [chars("cba")]
 
     def test_backward_mode_falls_back(self):
         # nv — reverse(-, +): nothing to mutate; standard bidirectional path

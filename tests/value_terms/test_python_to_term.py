@@ -25,6 +25,7 @@ from decimal import Decimal
 import pytest
 
 from clausal.logic.python_terms import to_term
+from clausal.logic.cells import chars
 
 
 # ── an unregistered class has NO generic fallback ────────────────────────────
@@ -77,7 +78,7 @@ def test_a_list_stays_a_list_and_its_elements_convert():
 
 
 def test_a_dict_converts_keys_and_values():
-    assert to_term({"k": datetime.date(2023, 6, 1)}) == {"k": ("date", 2023, 6, 1)}
+    assert to_term({"k": datetime.date(2023, 6, 1)}) == {chars("k"): ("date", 2023, 6, 1)}
 
 
 # ── the hazard the operator named: a tuple ALREADY in functor-first form ─────
@@ -93,7 +94,7 @@ def test_an_already_functor_first_tuple_is_the_DOCUMENTED_hazard():
     """
     assert to_term(("date", 2023, 6, 1)) == ("date", 2023, 6, 1)
     # ... and a look-alike that is NOT a well-formed term is treated as data
-    assert to_term(("date", "x", "y")) == ("()", "date", "x", "y")
+    assert to_term(("date", "x", "y")) == ("()", chars("date"), chars("x"), chars("y"))
 
 
 def test_an_object_with_no_match_args_says_so_rather_than_guessing():

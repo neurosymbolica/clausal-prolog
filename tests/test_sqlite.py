@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
@@ -133,27 +134,27 @@ class TestSQLiteConnect:
 
     def test_connect_memory(self):
         # nv
-        results = _run_simple(_sqlite_connect_2, ":memory:", "testdb")
+        results = _run_simple(_sqlite_connect_2, chars(":memory:"), chars("testdb"))
         assert len(results) == 1
         assert "testdb" in _CONNECTIONS
 
     def test_connect_file(self, tmp_path):
         # nv
         db_path = str(tmp_path / "test.db")
-        results = _run_simple(_sqlite_connect_2, db_path, "filedb")
+        results = _run_simple(_sqlite_connect_2, chars(db_path), chars("filedb"))
         assert len(results) == 1
         assert "filedb" in _CONNECTIONS
 
     def test_connect_duplicate_alias_idempotent(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "dup")
-        results = _run_simple(_sqlite_connect_2, ":memory:", "dup")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("dup"))
+        results = _run_simple(_sqlite_connect_2, chars(":memory:"), chars("dup"))
         assert len(results) == 1  # succeeds idempotently
 
     def test_connect_multiple_aliases(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "db1")
-        _run_simple(_sqlite_connect_2, ":memory:", "db2")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("db1"))
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("db2"))
         assert "db1" in _CONNECTIONS
         assert "db2" in _CONNECTIONS
 
@@ -163,14 +164,14 @@ class TestSQLiteDisconnect:
 
     def test_disconnect(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "dc1")
-        results = _run_simple(_sqlite_disconnect_1, "dc1")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("dc1"))
+        results = _run_simple(_sqlite_disconnect_1, chars("dc1"))
         assert len(results) == 1
         assert "dc1" not in _CONNECTIONS
 
     def test_disconnect_nonexistent_fails(self):
         # nv
-        results = _run_simple(_sqlite_disconnect_1, "nope")
+        results = _run_simple(_sqlite_disconnect_1, chars("nope"))
         assert len(results) == 0  # fails — no solution
 
 
@@ -179,8 +180,8 @@ class TestSQLiteCurrentConnection:
 
     def test_enumerate_all(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "cc1")
-        _run_simple(_sqlite_connect_2, ":memory:", "cc2")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("cc1"))
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("cc2"))
         trail = Trail()
         parent = object()
         v = Var()
@@ -190,15 +191,15 @@ class TestSQLiteCurrentConnection:
                 results.append(deref(v))
             elif gen is parent:
                 break
-        assert set(results) >= {"cc1", "cc2"}
+        assert set(results) >= {chars("cc1"), chars("cc2")}
 
     def test_check_specific(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "cc3")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("cc3"))
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_current_connection_1(None, parent, parent, parent, "cc3", trail):
+        for gen, val in _sqlite_current_connection_1(None, parent, parent, parent, chars("cc3"), trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -210,7 +211,7 @@ class TestSQLiteCurrentConnection:
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_current_connection_1(None, parent, parent, parent, "nope", trail):
+        for gen, val in _sqlite_current_connection_1(None, parent, parent, parent, chars("nope"), trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -224,7 +225,7 @@ class TestSQLiteCurrentConnection:
 
 def _setup_people_db(alias="qdb"):
     """Create an in-memory DB with a people table for testing."""
-    _run_simple(_sqlite_connect_2, ":memory:", alias)
+    _run_simple(_sqlite_connect_2, chars(":memory:"), chars(alias))
     conn = _CONNECTIONS[alias]
     conn.execute("CREATE TABLE people (name TEXT, age INTEGER)")
     conn.execute("INSERT INTO people VALUES ('alice', 30)")
@@ -243,7 +244,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q1", "SELECT * FROM people", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, chars("q1"), chars("SELECT * FROM people"), v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -257,13 +258,13 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q2", "SELECT name FROM people", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, chars("q2"), chars("SELECT name FROM people"), v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
                 break
         # Single-column rows unwrap
-        assert rows == ["alice", "bob", "carol"]
+        assert rows == [chars("alice"), chars("bob"), chars("carol")]
 
     def test_query_no_results(self):
         # nv
@@ -272,7 +273,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q3", "SELECT * FROM people WHERE age > 100", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, chars("q3"), chars("SELECT * FROM people WHERE age > 100"), v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -286,14 +287,14 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_4(None, parent, parent, parent, "q4",
-            "SELECT name FROM people WHERE age > ?", [26], v, trail
+        for gen, val in _sqlite_query_4(None, parent, parent, parent, chars("q4"),
+            chars("SELECT name FROM people WHERE age > ?"), [26], v, trail
         ):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
                 break
-        assert rows == ["alice", "carol"]
+        assert rows == [chars("alice"), chars("carol")]
 
     def test_query_multiple_params(self):
         # nv
@@ -302,19 +303,19 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_4(None, parent, parent, parent, "q5",
-            "SELECT name FROM people WHERE age >= ? AND age <= ?", [25, 30], v, trail
+        for gen, val in _sqlite_query_4(None, parent, parent, parent, chars("q5"),
+            chars("SELECT name FROM people WHERE age >= ? AND age <= ?"), [25, 30], v, trail
         ):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
                 break
-        assert set(rows) == {"alice", "bob"}
+        assert set(rows) == {chars("alice"), chars("bob")}
 
     def test_query_types_preserved(self):
         """INT, TEXT, REAL, NULL types come through correctly."""
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "q6")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("q6"))
         conn = _CONNECTIONS["q6"]
         conn.execute("CREATE TABLE types (i INTEGER, t TEXT, r REAL, n TEXT)")
         conn.execute("INSERT INTO types VALUES (42, 'hello', 3.14, NULL)")
@@ -323,7 +324,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q6", "SELECT * FROM types", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, chars("q6"), chars("SELECT * FROM types"), v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -332,7 +333,7 @@ class TestSQLiteQuery:
 
     def test_query_join(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "q7")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("q7"))
         conn = _CONNECTIONS["q7"]
         conn.execute("CREATE TABLE dept (id INTEGER, name TEXT)")
         conn.execute("CREATE TABLE emp (name TEXT, dept_id INTEGER)")
@@ -346,7 +347,7 @@ class TestSQLiteQuery:
         v = Var()
         rows = []
         sql = "SELECT emp.name, dept.name FROM emp JOIN dept ON emp.dept_id = dept.id"
-        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q7", sql, v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, chars("q7"), chars(sql), v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -360,7 +361,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         rows = []
-        for gen, val in _sqlite_query_3(None, parent, parent, parent, "q8", "SELECT COUNT(*) FROM people", v, trail):
+        for gen, val in _sqlite_query_3(None, parent, parent, parent, chars("q8"), chars("SELECT COUNT(*) FROM people"), v, trail):
             if gen is parent and val is None:
                 rows.append(deref(v))
             elif gen is parent:
@@ -373,7 +374,7 @@ class TestSQLiteQuery:
         parent = object()
         v = Var()
         with pytest.raises(ValueError, match="No SQLite connection"):
-            list(_sqlite_query_3(None, parent, parent, parent, "nonexistent", "SELECT 1", v, trail))
+            list(_sqlite_query_3(None, parent, parent, parent, chars("nonexistent"), chars("SELECT 1"), v, trail))
 
 
 class TestSQLiteExec:
@@ -381,17 +382,17 @@ class TestSQLiteExec:
 
     def test_exec_create_table(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "e1")
-        results = _run_simple(_sqlite_exec_2, "e1", "CREATE TABLE t (x INTEGER)")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("e1"))
+        results = _run_simple(_sqlite_exec_2, chars("e1"), chars("CREATE TABLE t (x INTEGER)"))
         assert len(results) == 1
 
     def test_exec_insert(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "e2")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("e2"))
         conn = _CONNECTIONS["e2"]
         conn.execute("CREATE TABLE t (x INTEGER)")
         conn.commit()
-        results = _run_simple(_sqlite_exec_2, "e2", "INSERT INTO t VALUES (42)")
+        results = _run_simple(_sqlite_exec_2, chars("e2"), chars("INSERT INTO t VALUES (42)"))
         assert len(results) == 1
         # Verify the row was inserted
         rows = list(conn.execute("SELECT x FROM t"))
@@ -399,12 +400,12 @@ class TestSQLiteExec:
 
     def test_exec_parameterized_insert(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "e3")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("e3"))
         conn = _CONNECTIONS["e3"]
         conn.execute("CREATE TABLE t (name TEXT, val INTEGER)")
         conn.commit()
-        results = _run_simple(_sqlite_exec_3, "e3",
-                              "INSERT INTO t VALUES (?, ?)", ["hello", 99])
+        results = _run_simple(_sqlite_exec_3, chars("e3"),
+                              chars("INSERT INTO t VALUES (?, ?)"), [chars("hello"), 99])
         assert len(results) == 1
         rows = list(conn.execute("SELECT * FROM t"))
         assert rows == [("hello", 99)]
@@ -412,8 +413,8 @@ class TestSQLiteExec:
     def test_exec_update(self):
         # nv
         _setup_people_db("e4")
-        _run_simple(_sqlite_exec_3, "e4",
-                    "UPDATE people SET age = ? WHERE name = ?", [31, "alice"])
+        _run_simple(_sqlite_exec_3, chars("e4"),
+                    chars("UPDATE people SET age = ? WHERE name = ?"), [31, chars("alice")])
         conn = _CONNECTIONS["e4"]
         rows = list(conn.execute("SELECT age FROM people WHERE name = 'alice'"))
         assert rows == [(31,)]
@@ -421,8 +422,8 @@ class TestSQLiteExec:
     def test_exec_delete(self):
         # nv
         _setup_people_db("e5")
-        _run_simple(_sqlite_exec_3, "e5",
-                    "DELETE FROM people WHERE name = ?", ["bob"])
+        _run_simple(_sqlite_exec_3, chars("e5"),
+                    chars("DELETE FROM people WHERE name = ?"), [chars("bob")])
         conn = _CONNECTIONS["e5"]
         rows = list(conn.execute("SELECT name FROM people"))
         names = [r[0] for r in rows]
@@ -434,14 +435,14 @@ class TestSQLiteRowCount:
 
     def test_row_count_insert(self):
         # nv
-        _run_simple(_sqlite_connect_2, ":memory:", "rc1")
+        _run_simple(_sqlite_connect_2, chars(":memory:"), chars("rc1"))
         conn = _CONNECTIONS["rc1"]
         conn.execute("CREATE TABLE t (x INTEGER)")
         conn.commit()
         trail = Trail()
         v = Var()
         results = list(_sqlite_row_count_3(
-            "rc1", "INSERT INTO t VALUES (1)", v, trail, None
+            chars("rc1"), chars("INSERT INTO t VALUES (1)"), v, trail, None
         ))
         assert len(results) == 1
         assert deref(v) == 1
@@ -452,7 +453,7 @@ class TestSQLiteRowCount:
         trail = Trail()
         v = Var()
         results = list(_sqlite_row_count_3(
-            "rc2", "UPDATE people SET age = age + 1", v, trail, None
+            chars("rc2"), chars("UPDATE people SET age = age + 1"), v, trail, None
         ))
         assert len(results) == 1
         assert deref(v) == 3  # 3 rows updated
@@ -463,7 +464,7 @@ class TestSQLiteRowCount:
         trail = Trail()
         v = Var()
         results = list(_sqlite_row_count_3(
-            "rc3", "DELETE FROM people WHERE age < 30", v, trail, None
+            chars("rc3"), chars("DELETE FROM people WHERE age < 30"), v, trail, None
         ))
         assert len(results) == 1
         assert deref(v) == 1  # only bob (age 25)
@@ -487,12 +488,12 @@ class TestSQLiteTable:
         parent = object()
         v = Var()
         tables = []
-        for gen, val in _sqlite_table_2(None, parent, parent, parent, "t1", v, trail):
+        for gen, val in _sqlite_table_2(None, parent, parent, parent, chars("t1"), v, trail):
             if gen is parent and val is None:
                 tables.append(deref(v))
             elif gen is parent:
                 break
-        assert set(tables) >= {"people", "cities"}
+        assert set(tables) >= {chars("people"), chars("cities")}
 
     def test_table_specific_exists(self):
         # nv
@@ -500,7 +501,7 @@ class TestSQLiteTable:
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_table_2(None, parent, parent, parent, "t2", "people", trail):
+        for gen, val in _sqlite_table_2(None, parent, parent, parent, chars("t2"), chars("people"), trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -513,7 +514,7 @@ class TestSQLiteTable:
         trail = Trail()
         parent = object()
         solutions = []
-        for gen, val in _sqlite_table_2(None, parent, parent, parent, "t3", "nope", trail):
+        for gen, val in _sqlite_table_2(None, parent, parent, parent, chars("t3"), chars("nope"), trail):
             if gen is parent and val is None:
                 solutions.append(True)
             elif gen is parent:
@@ -532,13 +533,13 @@ class TestSQLiteColumn:
         name_v = Var()
         type_v = Var()
         cols = []
-        for gen, val in _sqlite_column_4(None, parent, parent, parent, "c1", "people", name_v, type_v, trail
+        for gen, val in _sqlite_column_4(None, parent, parent, parent, chars("c1"), chars("people"), name_v, type_v, trail
         ):
             if gen is parent and val is None:
                 cols.append((deref(name_v), deref(type_v)))
             elif gen is parent:
                 break
-        assert cols == [("name", "TEXT"), ("age", "INTEGER")]
+        assert cols == [(chars("name"), chars("TEXT")), (chars("age"), chars("INTEGER"))]
 
     def test_column_specific_name(self):
         """when col_name is ground, only matching column succeeds."""
@@ -548,13 +549,13 @@ class TestSQLiteColumn:
         parent = object()
         type_v = Var()
         results = []
-        for gen, val in _sqlite_column_4(None, parent, parent, parent, "c2", "people", "name", type_v, trail
+        for gen, val in _sqlite_column_4(None, parent, parent, parent, chars("c2"), chars("people"), chars("name"), type_v, trail
         ):
             if gen is parent and val is None:
                 results.append(deref(type_v))
             elif gen is parent:
                 break
-        assert results == ["TEXT"]
+        assert results == [chars("TEXT")]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -573,7 +574,7 @@ setup(_db) <- (connect(":memory:", _db) and exec(_db, "CREATE TABLE items (name 
 item_name(_n) <- (setup("testdb") and query("testdb", "SELECT name FROM items", _n))
 """, tmp_path)
         names = _all("item_name", module=mod)
-        assert names == ["apple", "banana"]
+        assert names == [chars("apple"), chars("banana")]
 
     def test_parameterized_query(self, tmp_path):
         # nv
@@ -593,7 +594,7 @@ setup <- (connect(":memory:", "db3") and exec("db3", "CREATE TABLE alpha (x TEXT
 table_name(_t) <- (setup() and table("db3", _t))
 """, tmp_path)
         tables = _all("table_name", module=mod)
-        assert set(tables) >= {"alpha", "beta"}
+        assert set(tables) >= {chars("alpha"), chars("beta")}
 
     def test_column_introspection(self, tmp_path):
         # nv
@@ -607,9 +608,9 @@ col(_name, _type) <- (setup() and column("db4", "things", _name, _type))
         cols = []
         for _ in call("col", v1, v2, module=mod):
             cols.append((deref(v1), deref(v2)))
-        assert ("id", "INTEGER") in cols
-        assert ("label", "TEXT") in cols
-        assert ("weight", "REAL") in cols
+        assert (chars("id"), chars("INTEGER")) in cols
+        assert (chars("label"), chars("TEXT")) in cols
+        assert (chars("weight"), chars("REAL")) in cols
 
     def test_disconnect(self, tmp_path):
         # nv
@@ -627,7 +628,7 @@ setup <- (connect(":memory:", "db6") and exec("db6", "CREATE TABLE kv (k TEXT, v
 kv_key(_k) <- (setup() and query("db6", "SELECT k FROM kv", _k))
 """, tmp_path)
         keys = _all("kv_key", module=mod)
-        assert set(keys) == {"x", "y"}
+        assert set(keys) == {chars("x"), chars("y")}
 
     def test_a_path_written_as_a_quoted_atom_opens_that_database(self, tmp_path):
         """THE FLIP (spec §9.4): every text argument here is an ATOM under
