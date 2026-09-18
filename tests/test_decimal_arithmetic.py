@@ -53,11 +53,12 @@ def _module(tmp_path, body):
     return load_clausal_module(path)
 
 
-def _both(tmp_path, binders, expr):
+def _both(tmp_path, binders, expr, header=""):
     """Evaluate *expr* (over the names *binders* introduce) through is/2 and
     eval_/2; return ``(interpreted, compiled)`` where each is the bound value
     or the LogicException raised."""
-    src = (f"p_is(R) <- ({binders}, 'is'(R, {expr}))\n"
+    src = (header +
+           f"p_is(R) <- ({binders}, 'is'(R, {expr}))\n"
            f"p_ev(R) <- ({binders}, eval_({expr}, R))\n")
     mod = _module(tmp_path, src)
     out = []
@@ -246,3 +247,38 @@ class TestReifiedComparisonOnAnExactLeaf:
         mod = _module(tmp_path, "q() <- (dec(D), D / 3 == 0.5)\nq2() <- (dec(D), D * 2 == 3.0)\n")
         assert any(True for _ in call("q", module=mod))
         assert any(True for _ in call("q2", module=mod))
+
+
+class TestWrittenSpellingsInCompiledArithmetic:
+    """A cell written in source (``decimal(1001, 2)``, ``rdiv(1, 3)``, declared
+    with -private until step 3 makes the spellings known) reaches the
+    COMPILED tree as a tuple.  Found 2026-09-18: ``eval_(decimal(1001, 2) * 2,
+    R)`` answered ``('decimal', 1001, 2, 'decimal', 1001, 2)`` -- Python's
+    tuple repetition, silent -- while ``is/2`` converted the leaf.  The
+    helpers now convert a CANONICAL cell and refuse any other tuple loudly,
+    on both paths, so a cell can never reach a native tuple operator."""
+
+    _HDR = "-private([decimal(A, B), rdiv(A, B)])\n"
+
+    @pytest.mark.parametrize("expr, want", [
+        ("decimal(1001, 2) * 2", Decimal("20.02")),
+        ("decimal(1001, 2) + 1", Decimal("11.01")),
+        ("rdiv(1, 3) + 1", Fraction(4, 3)),
+        ("decimal(1001, 2) + rdiv(1, 3)", Fraction(3103, 300)),
+        ("2 * rdiv(1, 4)", Fraction(1, 2)),
+        ("decimal(150, 2) / 3", Fraction(1, 2)),
+        ("decimal(100, 2) - 1", Decimal("0.00")),   # scale is information: 1.00 - 1 is 0.00
+    ])
+    def test_written_cells_evaluate_on_both_paths(self, tmp_path, expr, want):
+        got_is, got_ev = _both(tmp_path, "true", expr, header=self._HDR)
+        _same(got_is, got_ev)
+        assert type(got_is) is type(want) and got_is == want and str(got_is) == str(want), (expr, got_is)
+
+    @pytest.mark.parametrize("expr", ["rdiv(2, 4) + 1", "decimal(1, 0) * 2", "rdiv(1, 3, 5) * 2"])
+    def test_a_look_alike_cell_is_refused_loudly_on_both_paths(self, tmp_path, expr):
+        got_is, got_ev = _both(tmp_path, "true", expr, header=self._HDR + "-private([rdiv(A, B, C)])\n")
+        assert isinstance(got_is, LogicException) and isinstance(got_ev, LogicException), (got_is, got_ev)
+
+    def test_an_atom_times_two_is_refused_not_repeated(self, tmp_path):
+        got_is, got_ev = _both(tmp_path, "true", "yes * 2")
+        assert isinstance(got_is, LogicException) and isinstance(got_ev, LogicException), (got_is, got_ev)

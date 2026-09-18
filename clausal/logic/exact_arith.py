@@ -105,9 +105,29 @@ def _dec_binop(l, r, op: str):
     return _from_parts(ml + mr if op == "add" else ml - mr, s)
 
 
+def _operand(x, op: str):
+    """A tuple operand is either a CANONICAL exact-number cell -- the
+    transfer form of a Decimal or a Fraction, which a spelling written in
+    source (``decimal(1001, 2)``, ``rdiv(1, 3)``) reaches the compiled tree
+    as -- and evaluates as that number, or it is not a number at all and is
+    refused LOUDLY.  Found 2026-09-18: ``eval_(decimal(1001, 2) * 2, R)``
+    answered the tuple REPEATED, Python's ``tuple * int``, silently, while
+    ``is/2`` converted the leaf; an atom cell ``('yes',) * 2`` did the same.
+    Python's tuple operators must never see an operand here."""
+    if type(x) is tuple:
+        from clausal.logic.variables import exact_cell_number  # noqa: PLC0415
+        num = exact_cell_number(x)
+        if num is None:
+            from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+            raise LogicException(type_error("evaluable", x, f"{op}: not a number"))
+        return num
+    return x
+
+
 def exact_add(l, r):
     if type(l) is int and type(r) is int:
         return l + r
+    l, r = _operand(l, "add"), _operand(r, "add")
     if type(l) is Decimal or type(r) is Decimal:
         return _dec_binop(l, r, "add")
     return l + r
@@ -116,6 +136,7 @@ def exact_add(l, r):
 def exact_sub(l, r):
     if type(l) is int and type(r) is int:
         return l - r
+    l, r = _operand(l, "sub"), _operand(r, "sub")
     if type(l) is Decimal or type(r) is Decimal:
         return _dec_binop(l, r, "sub")
     return l - r
@@ -124,6 +145,7 @@ def exact_sub(l, r):
 def exact_mul(l, r):
     if type(l) is int and type(r) is int:
         return l * r
+    l, r = _operand(l, "mul"), _operand(r, "mul")
     if type(l) is Decimal or type(r) is Decimal:
         return _dec_binop(l, r, "mul")
     return l * r
@@ -133,6 +155,9 @@ def exact_div(l, r):
     """True division: rational over exact operands.  ``ZeroDivisionError``
     propagates as it always has on the compiled path (the interpreted
     evaluator screens ``r == 0`` before calling)."""
+    if type(l) is int and type(r) is int:
+        return Fraction(l, r)
+    l, r = _operand(l, "div"), _operand(r, "div")
     if type(l) is int and type(r) is int:
         return Fraction(l, r)
     if type(l) is Decimal or type(r) is Decimal:
