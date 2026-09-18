@@ -236,11 +236,11 @@ def _compound__1(x, trail, k):
 
 
 # F082 (audit 2026-05-25): register ``atomic/1``, the ISO Prolog
-# type-check for "any non-variable, non-compound term". Accepts
-# Python ``str`` / ``int`` / ``float`` / ``bool`` / ``None`` and
-# zero-arity ``PredicateMeta`` classes; rejects Var, Compound,
-# KWTerm, term-instance, list, dict, and SegList / SegString — every
-# Seg* shape is structurally compound. See [[F082]].
+# type-check for "any non-variable, non-compound term".  STAGE 2: accepts
+# an atom (a ``str``), ``int`` / ``float`` / ``bool`` / ``None`` and the
+# empty list; rejects Var, Compound, KWTerm, term-instance, list, dict, a
+# non-empty STRING (the carrier), every class, and SegList / SegString —
+# every Seg* shape is structurally compound. See [[F082]].
 def _is_atomic_term(x) -> bool:
     """The one ``atomic/1`` definition, shared with ``_check_type``'s
     ``atomic`` row (fix round 1, item 6) so ``must_be(atomic, X)`` and
@@ -486,7 +486,7 @@ def _check_type(type_name: str, term) -> bool:
         return isinstance(term, bool)
     elif type_name == "callable":
         # Task 15 item 2: callable = atom or compound (ISO 3.24), so a list
-        # — ``[]``, ``[1, 2]``, ``"abc"``, ``b"ab"`` — is callable, matching
+        # — ``[]``, ``[1, 2]``, ``chars("abc")``, ``b"ab"`` — is callable, matching
         # callable_/1.
         walked = walk_seg(term)
         return (

@@ -418,9 +418,10 @@ def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None
         LogicException, type_error,
     )
     remedy = _CONTROL_CONSTRUCT_REMEDY[functor]
+    arity = 0 if type(cell) is str else len(cell) - 1   # STAGE 2: *cell* is the ATOM itself for the 0-arity case
     raise LogicException(type_error(
         "callable_control_construct_unsupported", cell,
-        f"{context}: {functor}/{0 if type(cell) is str else len(cell) - 1} is a control construct, and a "
+        f"{context}: {functor}/{arity} is a control construct, and a "
         f"control construct built as a TERM is not callable yet — {remedy} "
         f"(deferred to the ISO-surface phase; see clausal/logic/cells.py "
         f"refuse_control_construct_cell)",

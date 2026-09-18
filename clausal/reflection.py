@@ -48,6 +48,8 @@ from __future__ import annotations
 import ast
 import copy
 import dataclasses
+import typing
+import functools
 import warnings
 
 from clausal.logic.generated_names import bare_name_of
@@ -115,6 +117,31 @@ PythonCode = make_predicate("PythonCode", ["kind", "name", "position"])
 # vocabulary of expressions without executing anything.
 
 # simple_ast names whose constructor calls map onto raw (unifiable) nodes.
+@functools.lru_cache(maxsize=None)
+def _str_typed_fields(cls) -> frozenset:
+    """The names of *cls*'s dataclass fields declared ``str`` or ``Optional[str]``
+    (``str | None``).  STAGE 2 (atoms-as-str): a str constant reifies as an
+    ``Atom`` in TERM position, but such a field is a NAME (``PosOrKwParam.name``,
+    ``MatchAs.name``, ``MatchStar.name``, ``MatchMapping.rest``, the import
+    nodes' ``module``/``alias``), not a term, so ``_raw_node`` reads it raw.
+    Memoised: the answer depends only on the class."""
+    if not dataclasses.is_dataclass(cls):
+        return frozenset()
+    out = set()
+    for f in dataclasses.fields(cls):
+        t = f.type
+        if t is str:
+            out.add(f.name)
+        elif isinstance(t, str):
+            if t.replace(" ", "").replace("typing.", "") in ("str", "Optional[str]", "str|None", "None|str"):
+                out.add(f.name)
+        else:
+            args = typing.get_args(t)
+            if args and str in args and set(args) <= {str, type(None)}:
+                out.add(f.name)
+    return frozenset(out)
+
+
 _NODE_NAMES = {
     name for name in simple_ast.__all__
     if isinstance(getattr(simple_ast, name, None), type)
@@ -454,11 +481,7 @@ class _ClauseReifier:
         BinOp/UnaryOp subclasses carry structural ``__unify__``, so the raw
         node is directly matchable from Clausal."""
         cls = getattr(simple_ast, name)
-        # STAGE 2 (atoms-as-str): a str constant reifies as an ``Atom`` in
-        # TERM position, but a node field declared ``str`` (a param NAME,
-        # ``PosOrKwParam.name``) is a name, not a term -- read it raw.
-        str_fields = {f.name for f in dataclasses.fields(cls)
-                      if f.type is str or f.type == "str"} if dataclasses.is_dataclass(cls) else set()
+        str_fields = _str_typed_fields(cls)
         fields = {}
         for key, value in kwargs.items():
             if key in ("position", "_position"):

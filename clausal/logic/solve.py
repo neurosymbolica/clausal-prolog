@@ -228,6 +228,8 @@ def _term_to_goal(term: Any) -> Any:
         from clausal.logic.exceptions import LogicException, string_goal_error
         raise LogicException(string_goal_error(chars_text(term), 0, "solve/1"))
     if type(term) is str:                     # STAGE 2: an atom IS the 0-arity goal of its name
+        if term in CELL_GOAL_CONTROL_FUNCTORS:    # parity with call/N (F5): ','/0 is refused, not looked up
+            refuse_control_construct_cell(term, term, "solve/1")
         return AstCall(func=LoadName(name=term), args=[], kwargs=[])
     if isinstance(type(term), PredicateMeta):
         cls = type(term)

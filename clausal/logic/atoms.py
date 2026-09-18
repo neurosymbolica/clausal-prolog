@@ -275,13 +275,10 @@ def as_dict_key(key):
 
 
 def is_atom(term) -> bool:
-    """True iff *term* is an atom (the TERM test; a zero-field predicate class
-    is not an atom — see ``predicate.is_atom_value`` for the value-level
-    widening that still admits one).
-
-    An atom is the arity-0 cell: a 1-tuple whose slot 0 is a ``str`` (THE
-    DISCIPLINE, ``cells.py:53-64``).  A plain ``str`` is a STRING and is not
-    an atom (spec §6.3)."""
+    """True iff *term* is an atom: STAGE 2 of the atoms-as-str flip (spec §1),
+    an atom IS the Python ``str``.  A STRING is the chars carrier
+    ``('$chars', text)`` and is not an atom; no class is an atom (spec §4);
+    the 1-tuple ``('x',)`` is RESERVED (``cells.refuse_reserved_1tuple``)."""
     return type(term) is str            # STAGE 2 (spec §1): an atom is a Python str; a string is the carrier
 
 

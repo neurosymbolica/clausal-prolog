@@ -205,3 +205,22 @@ class TestReviewRound1:
         cls = make_predicate("trr_zero_field", [])
         assert _functor_name_py(cls) is None and _arity_py(cls) is None
         assert _functor_name(cls) is None and _arity(cls) is None
+
+    def test_solve_refuses_a_control_construct_atom_like_call_does(self):
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.solve import _term_to_goal
+        with pytest.raises(LogicException) as exc:
+            _term_to_goal(mint(","))
+        assert "control construct" in str(exc.value) and ",/0" in str(exc.value)
+        # an ordinary atom still lowers to the 0-arity call of its name
+        node = _term_to_goal(mint("foo"))
+        assert node.func.name == "foo" and node.args == []
+
+    def test_str_typed_node_fields_include_optional_str_names(self):
+        from clausal.reflection import _str_typed_fields
+        from clausal.pythonic_ast import nodes as simple_ast
+        assert "name" in _str_typed_fields(simple_ast.PosOrKwParam)
+        assert "name" in _str_typed_fields(simple_ast.MatchAs)       # declared Optional[str]
+        assert "name" in _str_typed_fields(simple_ast.MatchStar)
+        assert "rest" in _str_typed_fields(simple_ast.MatchMapping)
+        assert _str_typed_fields(int) == frozenset()
