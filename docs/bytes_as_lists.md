@@ -23,8 +23,8 @@ distinct:
 | | `str` (chars model) | `bytes` (codes model) |
 |---|---|---|
 | literal | `"abc"` | `b"abc"` |
-| decomposes to | `['a', 'b', 'c']` (1-char `str`s) | `[97, 98, 99]` (`int`s) |
-| element fixed point? | yes — `"a"[0] is 'a'` | **no** — `b"a"[0] == 97` |
+| decomposes to | `['a', 'b', 'c']` (char atoms — 1-char `str`s) | `[97, 98, 99]` (`int`s) |
+| element fixed point? | **no** — the element of `"a"` is the char atom `'a'`, and `"a"` itself is the list `['a']` | **no** — `b"a"[0] == 97` |
 | partial-term type | `SegString` | `SegBytes` |
 
 A `str` is a list of *characters*; a `bytes` is a list of *integer codes*. This

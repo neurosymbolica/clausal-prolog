@@ -158,7 +158,7 @@ spelling(red)        # 'red'
 ```
 
 **Every Python `str` is an atom** — there is no wrapper to opt in to.
-`is_atom("ok")` is `True` for any string, declared or not; a Python `str`
+`is_atom("ok")` is `True` for any Python `str`, declared or not; a Python `str`
 crossing into Clausal (a `to_term` argument, a `++` result, a dict key) is
 always read as the atom of that spelling. `mint` interns and hands back that
 same value:
