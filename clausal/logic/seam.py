@@ -168,6 +168,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             # arithmetic has no value to give.
             from clausal.logic.compiler.terms_to_ast import (
                 ARITH_RUNTIME_NAMES, arith_to_ast_expr)
+            from clausal.logic.exceptions import LogicException  # noqa: PLC0415
             for name in _load_names(term):
                 lookup(name)        # the seam's own NameError for an unbound atom
             if _contains_var(term):
@@ -185,7 +186,16 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             # emitter), without copying the module. Only those: a non-scalar
             # operand can still make the term emitter reach for other
             # ``$``-names, which stay unresolved.
-            result = eval(code, module_globals, ARITH_RUNTIME_NAMES)  # noqa: S307 — the module's own arithmetic
+            try:
+                result = eval(code, module_globals, ARITH_RUNTIME_NAMES)  # noqa: S307 — the module's own arithmetic
+            except LogicException as exc:
+                # The exact helpers ($add & co.) refuse a non-number operand
+                # LOUDLY in-engine (a catchable type_error(evaluable, ...));
+                # this is the PYTHON-facing surface, so the same refusal
+                # arrives as the TypeError it always was here.
+                raise TypeError(
+                    f"--: arithmetic over non-numbers; an atom is not "
+                    f"evaluable (type_error(evaluable, ...)): {exc}") from None
             import numbers
             if not (isinstance(result, numbers.Number)
                     or type(result).__name__ in ("Decimal", "Quantity")):
