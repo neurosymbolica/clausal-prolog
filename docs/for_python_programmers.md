@@ -33,10 +33,12 @@ completions from partial information. No separate functions needed.
 new parser, no foreign notation. Your editor's syntax highlighting, linting,
 and autocompletion work out of the box.
 
-**Data types are Python.** Numbers are Python numbers. [Lists](lists.md) are Python
-lists. [Dicts](dicts_sets.md) are Python dicts. Strings remain strings. Declared atoms
-(symbolic constants) are lightweight classes with identity semantics.
-There is no marshalling, no conversion, no foreign data model.
+**Data types are mostly Python.** Numbers are Python numbers. [Lists](lists.md) are Python
+lists. [Dicts](dicts_sets.md) are Python dicts. Declared atoms (symbolic constants) are
+just interned Python `str`s — no wrapper class. A Python `str` crossing into
+Clausal is always read as an atom; a logic *string* (the `"…"` chars-model
+kind) is a related but distinct, list-shaped value — see
+[Atoms are symbolic constants](#atoms-are-symbolic-constants) below.
 
 **The runtime is Python.** Clausal runs on the Python VM. You can call any
 Python library from within a logic predicate using `++()`, and call logic
@@ -127,9 +129,9 @@ This bidirectionality is what makes relations work in all directions.
 
 ### Atoms are symbolic constants
 
-In logic programming, an **atom** is a symbolic constant — like an enum value
-with identity. when you declare atoms in `-private` or `-module`, Clausal
-creates zero-arity classes:
+In logic programming, an **atom** is a symbolic constant — like an enum
+value. An atom **is** the interned Python `str`: declaring one in `-private`
+or `-module` doesn't wrap it in a class, it just interns the spelling:
 
 ```clausal
 -private([red, green, blue, color(C)])
@@ -139,60 +141,68 @@ color(green),
 color(blue),
 ```
 
-From the Python side, `red`, `green`, and `blue` are **arity-0 cells**: the
-1-tuple `('red',)`, whose single slot holds the spelling. Compare them with
-`==`, never with `is` — two equal atoms need not be the same object.
+From the Python side, `red`, `green`, and `blue` are plain `str` objects.
+Compare them with `==` — because atoms are interned, `is` happens to agree
+too, but `==` is the test to write:
 
 ```python
 # From Python:
 from my_module import red, blue
 from clausal.logic.atoms import mint, is_atom, spelling
 
-red                  # ('red',)
-red == mint("red")   # True — value equality is the test
+red                  # 'red'
+red == mint("red")   # True
 red == blue          # False
 is_atom(red)         # True
 spelling(red)        # 'red'
 ```
 
-A plain `str` is **not** an atom — it is a *string*, the list of its character
-atoms — so `red == "red"` is False. Create atoms dynamically with `mint`:
+**Every Python `str` is an atom** — there is no wrapper to opt in to.
+`is_atom("ok")` is `True` for any string, declared or not; a Python `str`
+crossing into Clausal (a `to_term` argument, a `++` result, a dict key) is
+always read as the atom of that spelling. `mint` interns and hands back that
+same value:
 
 ```python
 from clausal.logic.atoms import mint, is_atom
 
-ok = mint("ok")          # ('ok',)
-is_atom(ok)              # True
-is_atom("ok")            # False — that is the string "ok"
-ok == "ok"               # False — an atom is not its spelling
+ok = mint("ok")     # 'ok'
+is_atom(ok)          # True
+is_atom("ok")         # True — a raw str IS an atom
+ok == "ok"             # True — the same value
 ```
 
 If you specifically want a zero-arity `PredicateMeta` **class** — a 0-arity
-predicate, which is a procedure and not an atom — that is
-`make_predicate("ok", [])`. Two differently-spelled helpers answer the two
-different questions, and it is worth keeping them straight:
+predicate *value*, a different and rarer thing from an atom — that is
+`make_predicate("ok", [])`. The class and the atom are disjoint kinds now
+(no class is an atom), so a helper that used to answer either question no
+longer does:
 
 | Helper | Question |
 |---|---|
-| `clausal.logic.atoms.is_atom(x)` | Is this the **atom term** `("ok",)`? |
+| `clausal.logic.atoms.is_atom(x)` | Is this the **atom term** — an interned `str`? |
 | `clausal.logic.predicate.is_zero_field_class(x)` | Is this a zero-field `PredicateMeta` **class**? |
-| `clausal.logic.predicate.is_atom_value(x)` | Either of the above |
+| `clausal.logic.predicate.is_atom_value(x)` | The same question as `atoms.is_atom` — no class is an atom value |
 
-`predicate.is_atom` is a **deprecated alias** for `is_zero_field_class`, kept
-for one release; import `is_zero_field_class` if you mean the class test and
-`clausal.logic.atoms.is_atom` if you mean the term test.
+`predicate.is_atom` is a **deprecated alias** for `is_zero_field_class` (the
+class test, not the atom test) — import `is_zero_field_class` if you mean
+the class and `clausal.logic.atoms.is_atom` if you mean the atom.
 
-**Strings are a separate kind, not a looser atom.** A `"hello"` literal is a
-string only under [`-double_quotes(chars)`](directives.md#-double_quotes) —
-today's default still reads it as the atom `hello` — and a string is the list
-of its character atoms. Atoms and strings never unify, and **both** are
-compared by value equality; `is` is not the test for either. Use atoms for
-symbolic constants (colours, states, tags); use strings for text data.
+**Strings are the other kind — a list, not a bare `str`.** A `"hello"`
+literal is a string only under [`-double_quotes(chars)`](directives.md#-double_quotes)
+— today's default still reads it as the atom `hello` — and a string is the
+list of its character atoms: internally a compact carrier around the text,
+not literally a bare `str`. Atoms and strings never unify: under
+`-double_quotes(chars)`, `atom(hello)` holds for the bare atom but
+`atom("hello")` fails for the string. Compare atoms with `==` (interning
+makes `is` agree, but `==` is the test); a string also compares — and
+unifies — by value. Use atoms for symbolic constants (colours, states,
+tags); use strings for text data.
 
 | Type check | What it tests |
 |---|---|
-| `atom(X)` | An atom — the arity-0 cell `("red",)` |
-| `string(X)` / `is_str(X)` | A string (a character sequence) |
+| `atom(X)` | An atom — the interned Python `str` |
+| `string(X)` / `is_str(X)` | A string (a character sequence, not a bare `str`) |
 | `atomic(X)` | An atom or a number — **not** a string, which is a list |
 | `callable_(X)` | An atom or a compound term — **not** a string |
 
