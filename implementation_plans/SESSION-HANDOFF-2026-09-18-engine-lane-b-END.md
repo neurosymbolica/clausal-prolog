@@ -64,6 +64,6 @@ Supersedes `SESSION-HANDOFF-2026-09-18-engine-lane-END.md`'s ADDENDUM 2. Branch
 * The kit's raw-string escape hatch: its undeclared branch must emit the carrier (spec §3).
 
 ## Peers / landing
-harness-batch-lane: FREEZE sha = this commit's parent 1c24bd65 (engine tip; this commit is docs only) for the pre-landing sweep (informative diff, NOT a re-baseline); the
+harness-batch-lane: FREEZE sha = 73c86686 (slice 10 = roborev round-1 fixes, re-gated NEW 0 / GONE 0; the earlier 1c24bd65 is superseded) for the pre-landing sweep (informative diff, NOT a re-baseline); the
 kit's raw-string escape hatch must emit the carrier on its undeclared branch. iso-export-lane: G3 first run
 on a frozen sha gates the landing window. corpus-lane: silent-unmatch grep (quoted literals in term patterns).
