@@ -43,8 +43,16 @@ directly are ~10% cheaper (80 → 71 ns first-arg, 54 → 50 ns two-arg).
 `mint` 81, `spelling` 71, char-atom helpers 51, `is_zero_field_class` 13); 70 literal `("x",)`
 cells in engine code; 121 `str` type tests whose MEANING (atom vs text) has to be classified one
 by one; the C core special-cases tuple size 1 in 2 places and touches PyUnicode in ~78; 94 test
-files hold 499 literal atom tuples. Closed side: 126 files use the seam correctly, 7 files (17
-sites) write `("yes",)` literals directly — the rule violations, small enough to fix in one pass.
+files hold 499 literal atom tuples. Closed side — CORRECTED 2026-09-18 by harness-batch-lane's AST census (`tools/census/
+atom_literal_census.py`, calibrated on decoys before use): my read-only count of 7 files / 17 sites
+saw only the kit and tooling bucket, because the sealed harness bodies under `eval/` are unreadable
+to other lanes BY RULE. The real population, 925 files scanned, 214 sites in 72 files, read as a
+CEILING: 94 sites / 26 files are TEST expectations (break too, not seam violations); 84 / 28 are
+SEALED BODIES (the seam-rule population, invisible to this lane); 30 / 14 kit + tooling; 6 / 4 other.
+At least 15 of the 84 are tuples of NAMES, not atom cells (`answer_names=("STATUS",)`); the rest need
+a human read. The work is harness-batch-lane's; the landing is a RE-BASELINE (a new reference, the old
+one historical the moment it lands). An atom-literal arm on their census guard is the obvious way to
+stop it growing, armed AFTER the fix, by the operator's call.
 
 ## 1. The representation, before and after
 
