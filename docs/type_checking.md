@@ -41,8 +41,9 @@ test("unbound") <- (not nonvar(_))
 ## The atom / string / list table
 
 Atoms and strings are disjoint kinds ([Syntax § Atoms vs strings](syntax.md#atoms-vs-strings)).
-An atom is the arity-0 cell `("bar",)`; a string is a Python `str`, which *is*
-the list of its one-character atoms. Everything below follows from that:
+An atom **is** the interned Python `str`; a string is a distinct value — the
+list of its one-character atoms, not a bare `str`. Everything below follows
+from that:
 
 | | atom `bar` | string `"bar"` | `""` | `[]` | `['a','b']` | compound `f(1)` | number |
 |---|---|---|---|---|---|---|---|
@@ -60,8 +61,9 @@ constant. `compound/1` is false for an atom because an atom has arity 0.
 
 `string/1` follows the **term**, not the representation: `""` and `[]` are one
 and the same term, and so are `"ab"` and `['a', 'b']`, so `string/1` holds for
-all four. A string is stored compactly as a `str`, but that is a
-representation choice and no test keys on it.
+all four. A string is stored compactly (wrapping its text), but that is a
+representation choice and no test keys on it — and it is not a bare `str`,
+since a bare `str` is now an atom.
 
 ```clausal
 --8<-- "tests/fixtures/docs/type_checking_sigs.txt:atom_vs_string"
@@ -92,9 +94,10 @@ test("int is not atom") <- (not atom(42))
 
 `string(X)` and `is_str(X)` are the same test: succeeds if `X` is a **string**
 — the term a `"…"` literal denotes, which is the list of its character atoms.
-That covers a Python `str`, a partial string that has become ground, `[]`, and
-a proper list of char atoms, since those are the same terms. It does **not**
-match atoms, and it does not match a list with a non-character element.
+That covers a ground string, a partial string that has become ground, `[]`,
+and a proper list of char atoms, since those are the same terms. It does
+**not** match atoms — a bare `str` is an atom now, not a string — and it does
+not match a list with a non-character element.
 
 ```clausal
 -private([red])
@@ -163,7 +166,8 @@ test("not str") <- (not number("42"))
 
 `compound(X)` — succeeds if `X` is a compound term with arity > 0. This
 includes predicate instances, `Compound` terms, and `KWTerm` values. An **atom
-is not compound**: it is the arity-0 cell, and arity 0 is not `> 0`.
+is not compound**: it has arity 0 (it is a name, not a functor application),
+and arity 0 is not `> 0`.
 
 ```clausal
 -private([red])
@@ -198,7 +202,7 @@ test("not int") <- (not callable_(42))
 character atoms), so `is_list/1` accepts one, agreeing with every list-flavoured
 builtin: `append`, `length`, `reverse`, `member`, `maplist`, `take`, `drop`.
 `is_str/1` narrows that to the lists that are *character* sequences — it is not
-a test for the Python `str` representation (see below).
+a test for a particular representation (see below).
 
 ```clausal
 -double_quotes(chars)
@@ -232,7 +236,7 @@ test("not int") <- (not is_chars(42))
 All three follow the **term**, never the representation. `"hi"` and
 `['h','i']` are one and the same term, and so are `""` and `[]`, so no test
 can separate them — and there is deliberately no term-level predicate that
-asks "is this stored as a Python `str` rather than a `list`?". That is a
+asks "is this stored compactly rather than as a proper `list`?". That is a
 representation question, and a program that thinks it needs the answer almost
 always wants `is_str/1` (a character sequence) or `is_list/1` (list-shaped)
 instead.
@@ -313,10 +317,10 @@ safe_add(X, Y, Z) <- (
   clause, `var(X)` will fail even though `X` started as a variable.
 - **`is_list` accepts strings** — a string *is* the list of its char atoms, so
   `is_list("hello")` succeeds. `is_str/1` narrows it to *character* lists, not
-  to the `str` representation: `is_str([])` and `is_str(['h','i'])` succeed
+  to a particular representation: `is_str([])` and `is_str(['h','i'])` succeed
   too. (Neither recognises `'.'/2` cons-cell chains: Clausal stores lists as
-  native Python lists and strings as `str`, and only ever *shows* the cons
-  form, through `write_canonical/1`, `functor/3` and `=..`.)
+  native Python lists and strings as a compact carrier, and only ever *shows*
+  the cons form, through `write_canonical/1`, `functor/3` and `=..`.)
 - **A string is not atomic, an atom is not compound** — `atomic("bar")` fails
   because a string is a list; `compound(bar)` fails because an atom has arity 0.
 - **Order matters** — put `var` checks first in multi-clause predicates,
