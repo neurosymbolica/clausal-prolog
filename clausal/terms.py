@@ -2302,6 +2302,17 @@ def _colliding_dim_names(a: dict, b: dict) -> frozenset:
                      if left[n] != right[n])
 
 
+def _float_beside_exact(f):
+    """The refusal a float earns beside a Decimal or a Fraction at run time
+    (RULED 2026-09-17 Q5): no implicit coercion, it risks loss of precision.
+    One spelling with ``clausal.logic.exact_arith``."""
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    return LogicException(type_error(
+        "exact_number", f,
+        "quantity arithmetic: a float beside an exact number is refused "
+        "(RULED 2026-09-17 Q5); write the digits with the unit or as decimal(M, S)"))
+
+
 def _to_decimal(x):
     """Coerce a numeric magnitude to Decimal for a currency amount.
 
@@ -2408,6 +2419,15 @@ class quantity:  # noqa: N801 -- see the naming note below
         if isinstance(dims, Quantity):
             # dims is a Quantity constant (e.g. kilometre) — multiply:
             # Quantity(5, kilometre) → Quantity(5 * 1000, {metre: 1})
+            #
+            # RULED 2026-09-18 (Q6, option C): a float the user WROTE beside
+            # an EXACT factor is read through its shortest repr HERE, at
+            # construction -- ``2.5(centimetre)``, ``5.25 percent`` -- because
+            # these are the user's own digits.  At run time the same pair
+            # RAISES (``_num_pair``); this is the one place a written literal
+            # meets the vocabulary, and the only place the bridge survives.
+            if type(value) is float and isinstance(dims._value, (Decimal, Fraction)):
+                value = _to_decimal(value)
             a, b = self._num_pair(value, dims._value)
             product = a * b
             if type(product) is Fraction and product.denominator == 1:
@@ -2526,14 +2546,20 @@ class quantity:  # noqa: N801 -- see the naming note below
 
     @staticmethod
     def _num_pair(a, b):
-        """Return (a, b) with a plain float coerced to Decimal when the other
-        operand is a Decimal, so Decimal arithmetic never raises TypeError and
-        stays exact. Uses Decimal(str(f)) — never Decimal(f) — and leaves ints
-        alone (Decimal op int is already exact)."""
+        """Return (a, b) ready for exact arithmetic.
+
+        RULED 2026-09-18 (Q5 + Q6 option C): a float beside a Decimal or a
+        Fraction at RUN TIME is refused -- ``type_error(exact_number, Float)``
+        -- rather than coerced.  The shortest-repr bridge this used to apply
+        (``Decimal(str(f))``) is exact only for a float the user WROTE, and at
+        run time nothing can tell a written float from a computed one; the
+        written case is handled at CONSTRUCTION (``__init__`` beside an exact
+        factor, ``_to_decimal`` for money) and at DECLARATION.  Decimal beside
+        Fraction still goes exact-to-exact as a Fraction."""
         if isinstance(a, Decimal) and isinstance(b, float) and not isinstance(b, bool):
-            return a, Decimal(str(b))
+            raise _float_beside_exact(b)
         if isinstance(b, Decimal) and isinstance(a, float) and not isinstance(a, bool):
-            return Decimal(str(a)), b
+            raise _float_beside_exact(a)
         # Decimal and Fraction compare equal in Python but do not add: a
         # Fraction-valued money quantity (a CLP(Q) result) meeting a
         # Decimal literal goes exact-to-exact via Fraction(Decimal).
@@ -2545,12 +2571,12 @@ class quantity:  # noqa: N801 -- see the naming note below
             if b.is_finite():
                 return a, Fraction(b)
             return Decimal(a.numerator) / Decimal(a.denominator), b
-        # A float beside a Fraction would produce a float; read the float
-        # the way the Decimal bridge does (its shortest repr), exactly.
+        # A float beside a Fraction would silently produce a float: refused
+        # the same way (Q5).
         if isinstance(a, Fraction) and isinstance(b, float) and not isinstance(b, bool):
-            return a, Fraction(Decimal(str(b)))
+            raise _float_beside_exact(b)
         if isinstance(b, Fraction) and isinstance(a, float) and not isinstance(a, bool):
-            return Fraction(Decimal(str(a))), b
+            raise _float_beside_exact(a)
         return a, b
 
     # ── Arithmetic ──────────────────────────────────────────────────────────

@@ -271,23 +271,23 @@ exbi = 2**60
 # ── Scaled length (store as metres) ──────────────────────────────────────────
 
 kilometre    = Quantity(1_000,   {metre: 1})
-centimetre   = Quantity(1e-2,    {metre: 1})
-millimetre   = Quantity(1e-3,    {metre: 1})
-micrometre   = Quantity(1e-6,    {metre: 1})
-nanometre    = Quantity(1e-9,    {metre: 1})
+centimetre   = Quantity(Decimal("1e-2"),    {metre: 1})
+millimetre   = Quantity(Decimal("1e-3"),    {metre: 1})
+micrometre   = Quantity(Decimal("1e-6"),    {metre: 1})
+nanometre    = Quantity(Decimal("1e-9"),    {metre: 1})
 
 # ── Scaled mass (store as kilograms) ─────────────────────────────────────────
 
-gram         = Quantity(1e-3,    {kilogram: 1})
-milligram    = Quantity(1e-6,    {kilogram: 1})
-microgram    = Quantity(1e-9,    {kilogram: 1})
+gram         = Quantity(Decimal("1e-3"),    {kilogram: 1})
+milligram    = Quantity(Decimal("1e-6"),    {kilogram: 1})
+microgram    = Quantity(Decimal("1e-9"),    {kilogram: 1})
 tonne        = Quantity(1_000,   {kilogram: 1})
 
 # ── Scaled time (store as seconds) ───────────────────────────────────────────
 
-millisecond  = Quantity(1e-3,    {second: 1})
-microsecond  = Quantity(1e-6,    {second: 1})
-nanosecond   = Quantity(1e-9,    {second: 1})
+millisecond  = Quantity(Decimal("1e-3"),    {second: 1})
+microsecond  = Quantity(Decimal("1e-6"),    {second: 1})
+nanosecond   = Quantity(Decimal("1e-9"),    {second: 1})
 minute       = Quantity(60,      {second: 1})
 hour         = Quantity(3_600,   {second: 1})
 day          = Quantity(86_400,  {second: 1})
@@ -357,7 +357,8 @@ def _make_ratio_unit(name: str) -> Quantity:
     coercion, so exactness here comes from ``_num_pair`` reading a float
     magnitude beside a ``Decimal`` factor as ``Decimal(str(f))``. Give the
     factor a float and that stops: ``gram = Quantity(1e-3, {kilogram: 1})``
-    is why ``7 gram`` is not exactly 0.007. A ratio multiplies against money
+    was why ``7 gram`` was not exactly 0.007 -- every SI-fraction factor is an
+    exact Decimal since 2026-09-18 (Q6, option C). A ratio multiplies against money
     and against the thresholds that decide a case, so it is the last place
     to reintroduce binary floating point.
     """
@@ -398,12 +399,12 @@ lux      = _make_unit_pred("lux",      {candela: 1, metre: -2})                 
 katal    = _make_unit_pred("katal",    {mole: 1, second: -1})                       # kat = mol/s
 
 # Scaled SI pressure (stored as pascal)
-bar        = Quantity(1e5,              {kilogram: 1, metre: -1, second: -2})
+bar        = Quantity(Decimal("1e5"),              {kilogram: 1, metre: -1, second: -2})
 millibar   = Quantity(100,             {kilogram: 1, metre: -1, second: -2})
 atmosphere = Quantity(101_325,         {kilogram: 1, metre: -1, second: -2})
 
 # Scaled SI energy (stored as joule)
-electronvolt = Quantity(1.602176634e-19, {kilogram: 1, metre: 2, second: -2})
+electronvolt = Quantity(Decimal("1.602176634e-19"), {kilogram: 1, metre: 2, second: -2})
 
 # Scaled SI power (stored as watt)
 kilowatt     = Quantity(1_000,         {kilogram: 1, metre: 2, second: -3})

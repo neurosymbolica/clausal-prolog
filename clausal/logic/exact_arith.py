@@ -20,10 +20,9 @@ step 2) and the rulings of the same day:
   "eval_ variable-operand float");
 * a Decimal beside a Fraction goes exact-to-exact as a Fraction (scale
   dropped);
-* a float beside a Decimal RAISES ``type_error(exact_number, Float)`` (Q5:
-  no implicit coercion, it risks loss of precision).  A float beside a
-  Fraction keeps today's behaviour (a float) until step 6, which is
-  sequenced behind a harness question because CLP(Q) results are Fractions.
+* a float beside a Decimal OR a Fraction RAISES ``type_error(exact_number,
+  Float)`` (Q5: no implicit coercion, it risks loss of precision; the Fraction
+  half landed with step 6, 2026-09-18).
 
 Every helper fast-paths ``int op int`` with two pointer compares; the
 compiled tree pays ~30 ns per operator for the call (measured), and exact
@@ -78,6 +77,16 @@ def _dec_parts_of(x, context: str) -> "tuple[int, int] | None":
     return None
 
 
+def _check_float_beside_fraction(l, r, op: str):
+    """Q5 extended to the Fraction (2026-09-18, step 6): a float beside a
+    Fraction would silently produce a float -- a CLP(Q) result meeting a float
+    threshold is the shape -- and is refused like a float beside a Decimal."""
+    if type(l) is Fraction and type(r) is float:
+        raise _float_beside_decimal(r, op)
+    if type(r) is Fraction and type(l) is float:
+        raise _float_beside_decimal(l, op)
+
+
 def _dec_binop(l, r, op: str):
     """``l op r`` with at least one Decimal operand.  Exact, scale-keeping
     for Decimal/int pairs; a Fraction pulls both sides to Fraction; a float
@@ -130,6 +139,7 @@ def exact_add(l, r):
     l, r = _operand(l, "add"), _operand(r, "add")
     if type(l) is Decimal or type(r) is Decimal:
         return _dec_binop(l, r, "add")
+    _check_float_beside_fraction(l, r, "add")
     return l + r
 
 
@@ -139,6 +149,7 @@ def exact_sub(l, r):
     l, r = _operand(l, "sub"), _operand(r, "sub")
     if type(l) is Decimal or type(r) is Decimal:
         return _dec_binop(l, r, "sub")
+    _check_float_beside_fraction(l, r, "sub")
     return l - r
 
 
@@ -148,6 +159,7 @@ def exact_mul(l, r):
     l, r = _operand(l, "mul"), _operand(r, "mul")
     if type(l) is Decimal or type(r) is Decimal:
         return _dec_binop(l, r, "mul")
+    _check_float_beside_fraction(l, r, "mul")
     return l * r
 
 
@@ -160,6 +172,7 @@ def exact_div(l, r):
     l, r = _operand(l, "div"), _operand(r, "div")
     if type(l) is int and type(r) is int:
         return Fraction(l, r)
+    _check_float_beside_fraction(l, r, "div")
     if type(l) is Decimal or type(r) is Decimal:
         if type(l) is float or type(r) is float:
             raise _float_beside_decimal(l if type(l) is float else r, "div")

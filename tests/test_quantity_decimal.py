@@ -20,46 +20,50 @@ class TestDecimalRendering:
 
 
 class TestDecimalArithmeticCoercion:
-    def test_decimal_quantity_times_float_scalar(self):
-        # Decimal * float would raise TypeError without coercion.
-        q = Quantity(Decimal("100.00"), {})  # dimensionless
-        r = q * 0.2
-        assert isinstance(r.value, Decimal)
-        assert r.value == Decimal("20.000")
+    """RULED 2026-09-18 (Q5 + Q6 option C): the shortest-repr bridge lives at
+    CONSTRUCTION (a written float beside an exact factor, or money) and at
+    DECLARATION; at RUN TIME a float beside a Decimal or a Fraction RAISES
+    ``type_error(exact_number, Float)``.  These used to pin the runtime
+    bridge; they now pin its absence and the construction rule."""
 
-    def test_float_scalar_times_decimal_quantity(self):
+    def _raises(self, fn):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            fn()
+        assert "exact_number" in str(ei.value)
+
+    def test_decimal_quantity_times_float_scalar_raises(self):
         q = Quantity(Decimal("100.00"), {})
-        r = 0.2 * q
-        assert r.value == Decimal("20.000")
+        self._raises(lambda: q * 0.2)
 
-    def test_decimal_quantity_divided_by_float(self):
+    def test_float_scalar_times_decimal_quantity_raises(self):
+        q = Quantity(Decimal("100.00"), {})
+        self._raises(lambda: 0.2 * q)
+
+    def test_decimal_quantity_divided_by_float_raises(self):
         q = Quantity(Decimal("10.00"), {})
-        r = q / 4.0
-        assert r.value == Decimal("2.5")
+        self._raises(lambda: q / 4.0)
 
     def test_decimal_quantity_divided_by_int_still_exact(self):
         q = Quantity(Decimal("10.00"), {})
         r = q / 4
         assert r.value == Decimal("2.5")
 
-    def test_dimensionless_decimal_plus_float(self):
+    def test_dimensionless_decimal_plus_float_raises(self):
         q = Quantity(Decimal("1.50"), {})
-        r = q + 0.25
-        assert r.value == Decimal("1.75")
+        self._raises(lambda: q + 0.25)
 
-    def test_coercion_uses_str_not_binary_expansion(self):
-        # The load-bearing rule: Decimal(str(0.2)) == 0.2, NOT Decimal(0.2).
-        q = Quantity(Decimal("1"), {})
-        r = q * 0.2
-        assert r.value == Decimal("0.2")
+    def test_construction_reads_a_written_float_through_str_not_binary_expansion(self):
+        # The load-bearing rule, now at CONSTRUCTION: Decimal(str(0.2)) == 0.2, NOT Decimal(0.2).
+        from clausal.modules.py.units import centimetre
+        r = Quantity(0.2, centimetre)
+        assert r.value == Decimal("0.002")
 
-    def test_mixed_value_quantities_same_dims_add(self):
+    def test_mixed_value_quantities_same_dims_raise(self):
         from clausal.modules.py.units import metre
         a = Quantity(Decimal("1.5"), {metre: 1})
         b = Quantity(0.25, {metre: 1})  # float-valued, same dims
-        r = a + b
-        assert r.value == Decimal("1.75")
-
+        self._raises(lambda: a + b)
 
 class TestNoRegressionFloatQuantities:
     def test_float_quantity_arithmetic_unchanged(self):

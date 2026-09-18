@@ -405,10 +405,12 @@ class TestBritishSpelling:
     def test_metre_family(self):
         """# nv"""
         assert units.kilometre == Quantity(1_000, {units.metre: 1})
-        assert units.centimetre == Quantity(1e-2, {units.metre: 1})
-        assert units.millimetre == Quantity(1e-3, {units.metre: 1})
-        assert units.micrometre == Quantity(1e-6, {units.metre: 1})
-        assert units.nanometre == Quantity(1e-9, {units.metre: 1})
+        # exact Decimal factors since 2026-09-18 (Q6, option C)
+        from decimal import Decimal
+        assert units.centimetre == Quantity(Decimal("1e-2"), {units.metre: 1})
+        assert units.millimetre == Quantity(Decimal("1e-3"), {units.metre: 1})
+        assert units.micrometre == Quantity(Decimal("1e-6"), {units.metre: 1})
+        assert units.nanometre == Quantity(Decimal("1e-9"), {units.metre: 1})
         assert units.km is units.kilometre
         assert units.cm is units.centimetre
         assert units.mm is units.millimetre
