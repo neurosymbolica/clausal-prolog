@@ -259,3 +259,48 @@ and engine-tested; the closed corpus does not CURRENTLY exercise mixed-scale dec
 harness-batch-lane when a domain compares or sorts money of differing scale** (their trigger: any
 sealed body constructing a `Decimal`; one grep, zero today; nobody monitors it). Unification of decimals of different scale
 is still conflated (C unifier) and rides with the int/float todo.
+
+---
+
+# Step 2 BUILT — the evaluator (`9e30afa9`)
+
+`clausal/logic/exact_arith.py` is the ONE spelling: `exact_add/sub/mul/div`, used by
+`_eval_ground` and emitted by `arith_to_ast_expr` as `$add/$sub/$mul/$div` (`//`, `%`, `**` stay
+native). A Decimal is a number in the evaluator (finite only); `+ - *` are exact on
+`(mantissa, scale)` pairs (a 28-digit product that native Decimal rounds is pinned exact); `/` over
+any exact operand is a Fraction, never a Decimal; Decimal ⊕ Fraction goes exact-to-exact as a
+Fraction; **Decimal ⊕ float RAISES `type_error(exact_number, Float)` on both paths (Q5)**; a
+Decimal enters CLP(Q) exactly; a scale-less Decimal presents as int at the binder (the transfer
+form's choke point, applied at the binder). **Runtime `int / int` on the COMPILED path is now
+rational** (`7 / 2` was the float `3.5` there and `Fraction(7, 2)` in `is/2` — the parked "eval_
+variable-operand float", closed). Cost measured: ~30 ns per compiled operator, ~300 ns per exact
+int/int division.
+
+Two LATENT defects the rational compiled division made reachable, fixed and pinned: the four
+comparison entries (`== != < =<`, Python twins and C-backed wrappers) refused a ground Fraction
+beside a ground float as "cannot mix CLP(Q) and CLP(R)" — a value question, now compared by
+exact value ahead of the refusal (`_ground_number_pair`) — in the C-backed wrappers a GROUND
+EXPRESSION TREE is folded first (`_resolve`), which the first fix missed and harness-batch-lane's
+probe `X / Y == 3.5` caught (two paths, one symptom); and `_expr_tree_has_var` isinstance'd
+against still-None lazy node classes on a ground non-var leaf.
+
+Gates: 44 parity/pin tests (every case through `is/2` AND `eval_/2`, same value, TYPE, error), 6
+mutation controls all firing; engine failure-set A/B on a clean base at `506596da`: **NEW 0 /
+GONE 0** (145 / 145 names, +37 passed) at `df187e1f`. Harness axis (harness-batch-lane, frozen corpus, compiled path asserted on every tree): **82/82
+unchanged at 506596da (base), c9a7bfd1, f3c70951 and 9e30afa9**, with TWO positive controls on
+the swept trees — runtime `7 / 2` is `Fraction(7, 2)` there against `3.5` on base (the change is
+LIVE and moves no scorer answer), and the reported shape `X / Y == 3.5` red at 506596da and
+f3c70951, green at 9e30afa9. The c9a7bfd1 run's zero no-score rows is the weak-but-real evidence
+the corpus holds no `X / N == 0.5` shape. Limits, theirs, kept: harness axis only; "reproduces
+canonical" is not "correct"; single replicate whose error mode is spurious MOVEMENT. The
+mixed-scale decimal half stays corpus-unexercised — the CONDITION above, unchanged.
+
+**Their diagnosis, worth keeping:** the defect lived in the GAP between two implementations of one
+contract (Python twins fold a ground tree, the C-backed wrappers — the ones actually loaded — did
+not), and the tests that pass are the Python ones. The question that finds it: "has the CHANGE
+been measured, or the INTERACTION?" — filed as a todo to audit the remaining twin/wrapper pairs.
+
+Not in step 2 (still open): Fraction ⊕ float (a float today; step 6 with the harness question),
+`**` with a Decimal base (native), `writeq` of a rational (step 7, measure first), the registry
+move of Decimal to the transfer table (step 3), unification of decimals of different scale (with
+the int/float todo).
