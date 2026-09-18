@@ -10,6 +10,7 @@ import tempfile
 
 import pytest
 
+from clausal.logic.cells import chars
 from clausal.modules.countries._data import (
     CURRENCIES, CURRENCY_BINDINGS, JURISDICTIONS)
 
@@ -108,7 +109,7 @@ class TestFullVocabulary:
         got = None
         for _ in call("test", v, module=mod):
             got = deref(v); break
-        assert got == "20.00 DEM"
+        assert got == chars("20.00 DEM")
 
     def test_spot_check_known_currencies(self):
         # (jurisdiction, identifier, code, scale) -- a deliberate mix of the
@@ -146,7 +147,7 @@ class TestFullVocabulary:
         got = None
         for _ in call("test", v, module=mod):
             got = deref(v); break
-        assert got == "20.00 THB"
+        assert got == chars("20.00 THB")
 
     def test_zero_scale_currency_rejects_fraction(self):
         from clausal.terms import Quantity, CurrencyPrecisionError

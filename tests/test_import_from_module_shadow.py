@@ -23,6 +23,7 @@ import textwrap
 
 import pytest
 
+from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -107,4 +108,4 @@ def test_the_qualified_form_still_works_through_import_module(tmp_path):
     """)
     v = Var()
     rows = [deref(v) for _ in call("code", v, module=m.__dict__["$module"])]
-    assert rows == ["EUR"], rows
+    assert rows == [chars("EUR")], rows

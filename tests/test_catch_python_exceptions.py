@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal.logic.cells import chars_text
 from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
@@ -72,7 +73,7 @@ def test_class_catcher_matches_python_exception(mod):
 def test_instance_catcher_binds_the_real_args(mod):
     m = Var()
     [msg] = _solutions(mod.c_inst(m), m)
-    assert msg == "invalid literal for int() with base 10: 'nope'"
+    assert chars_text(msg) == "invalid literal for int() with base 10: 'nope'"
 
 
 def test_wrong_class_catcher_stays_selective(mod):

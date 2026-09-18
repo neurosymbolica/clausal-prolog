@@ -156,6 +156,10 @@ def unwrap_atom(val):
     if type(val) is list:
         # one level down too: a list of chars strings is what ", ".join(W)
         # and every other str-consuming call over a list expects (stage 1;
-        # the container itself still crosses raw, atoms inside stay cells)
-        return [chars_text(e) if is_chars(e) else e for e in (deref(x) for x in val)]
+        # atoms inside stay cells).  The container crosses by IDENTITY when
+        # nothing inside is a carrier -- the documented "nothing deeper"
+        # contract -- and as a fresh list only when a carrier had to be read.
+        if any(is_chars(deref(x)) for x in val):
+            return [chars_text(e) if is_chars(e) else e for e in (deref(x) for x in val)]
+        return val
     return _atom_spelling(val) if _term_is_atom(val) else val

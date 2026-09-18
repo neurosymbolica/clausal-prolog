@@ -963,7 +963,7 @@ def test_regression_replicate_str_promotion(fix):
     R = Var()
     # A list of CHAR ATOMS is a string, so the result promotes back to one.
     assert (_first(m, "replicate", 3, char_atom("a"), R)
-            and deref(R) == "aaa")
+            and deref(R) == chars("aaa"))
 
 
 def test_regression_atom_concat_typed_error(fix):
