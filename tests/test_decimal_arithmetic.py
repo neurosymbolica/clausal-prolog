@@ -222,3 +222,27 @@ class TestReifiedComparisonOnAnExactLeaf:
             pytest.fail("no solution")
         held = any(True for _ in call("q", module=mod))
         assert held == (want == "yes")
+
+    @pytest.mark.parametrize("goal, want", [
+        ("X / Y == 3.5", "yes"), ("X / Y == 3.4", "no"), ("X / Y != 3.5", "no"),
+        ("X / Y < 4", "yes"), ("X / Y <= 3.5", "yes"), ("X / Y > 3.5", "no"), ("X / Y >= 3.5", "yes"),
+    ])
+    def test_a_ground_expression_tree_against_a_float(self, tmp_path, goal, want):
+        """harness-batch-lane's probe (2026-09-17): the TREE ``X / Y`` with
+        runtime ints on the left of ``==`` against a float.  The Python
+        comparison twins fold a ground tree before comparing; the C-backed
+        wrappers did not, and went to the mixing refusal -- so the first fix
+        closed only the already-numeric shape."""
+        mod = _module(tmp_path, f"p(X, Y, R) <- if_({goal}, R is yes, R is no)\n"
+                                f"q(X, Y) <- ({goal})\n")
+        r = Var()
+        for _ in call("p", 7, 2, r, module=mod):
+            assert deref(r) == (want,); break
+        else:
+            pytest.fail("no solution")
+        assert any(True for _ in call("q", 7, 2, module=mod)) == (want == "yes")
+
+    def test_a_decimal_expression_tree_against_a_float(self, tmp_path):
+        mod = _module(tmp_path, "q() <- (dec(D), D / 3 == 0.5)\nq2() <- (dec(D), D * 2 == 3.0)\n")
+        assert any(True for _ in call("q", module=mod))
+        assert any(True for _ in call("q2", module=mod))

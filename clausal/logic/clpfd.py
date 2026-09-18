@@ -3541,8 +3541,13 @@ if _USE_C_PROPAGATE:
         if stripped is not None:
             l, r = stripped
         # the ground-number VALUE comparison, ahead of the C impl's mixed
-        # rational/real refusal (see _ground_number_pair)
-        _dl, _dr = deref(l), deref(r)
+        # rational/real refusal (see _ground_number_pair).  ``_resolve`` folds
+        # a GROUND expression tree to its number first, as the Python twin
+        # does: ``X / Y == 3.5`` arrives with the tree on the left, and
+        # without the fold it went straight to the C impl and its refusal
+        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # claimed to close, and had not).
+        _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl == _dr
         # A12-F002: the C fd_eq does not type-check operands, so guard here
@@ -3563,8 +3568,13 @@ if _USE_C_PROPAGATE:
         if stripped is not None:
             l, r = stripped
         # the ground-number VALUE comparison, ahead of the C impl's mixed
-        # rational/real refusal (see _ground_number_pair)
-        _dl, _dr = deref(l), deref(r)
+        # rational/real refusal (see _ground_number_pair).  ``_resolve`` folds
+        # a GROUND expression tree to its number first, as the Python twin
+        # does: ``X / Y == 3.5`` arrives with the tree on the left, and
+        # without the fold it went straight to the C impl and its refusal
+        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # claimed to close, and had not).
+        _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl != _dr
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
@@ -3581,8 +3591,13 @@ if _USE_C_PROPAGATE:
         if stripped is not None:
             l, r = stripped
         # the ground-number VALUE comparison, ahead of the C impl's mixed
-        # rational/real refusal (see _ground_number_pair)
-        _dl, _dr = deref(l), deref(r)
+        # rational/real refusal (see _ground_number_pair).  ``_resolve`` folds
+        # a GROUND expression tree to its number first, as the Python twin
+        # does: ``X / Y == 3.5`` arrives with the tree on the left, and
+        # without the fold it went straight to the C impl and its refusal
+        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # claimed to close, and had not).
+        _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl < _dr
         # The C fd_lt does no clean type-checking: an incomparable ground
@@ -3609,8 +3624,13 @@ if _USE_C_PROPAGATE:
         if stripped is not None:
             l, r = stripped
         # the ground-number VALUE comparison, ahead of the C impl's mixed
-        # rational/real refusal (see _ground_number_pair)
-        _dl, _dr = deref(l), deref(r)
+        # rational/real refusal (see _ground_number_pair).  ``_resolve`` folds
+        # a GROUND expression tree to its number first, as the Python twin
+        # does: ``X / Y == 3.5`` arrives with the tree on the left, and
+        # without the fold it went straight to the C impl and its refusal
+        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # claimed to close, and had not).
+        _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl <= _dr
         _reject_nonnumeric_order(l, r, "(=<)/2")
