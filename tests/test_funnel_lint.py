@@ -333,7 +333,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # deliberately loose to absorb that rather than being re-pinned each time.
     #    Range shifted 1240-1320 -> 1240-1400 by the §4 q1 import-plant's
     #    arities_for/adopt_row/owns/_adopted additions earlier in the file.
-    AllowEntry("clausal/logic/database.py", (1240, 1420),   # END re-anchored 2026-09-18 (stage 1 slice 3 added the carrier arm above the site)
+    AllowEntry("clausal/logic/database.py", (1240, 1470),   # END re-anchored 2026-09-19 (P2 task 2 added the declaration registry above the site; 2026-09-18: stage 1 slice 3 added the carrier arm)
                "task-2 instruction: head_key is the canonical pair function, "
                "left as-is this phase (plan Task 2 file list); task-5 (R11) "
                "added its cell branch"),
@@ -608,7 +608,7 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2339 (2345 before stage 2; 2342 before stage 1 slice 2; 2326 before the P1 fix wave's L4 class-leg
+    """clausal/testing.py:2338 (2339 before P2 task 2; 2345 before stage 2; 2342 before stage 1 slice 2; 2326 before the P1 fix wave's L4 class-leg
     fallback in ``_note_generic_compound_confusion``, 2323 before P1 Task 3's
     comment lines in the same function, 2322 before the tuple-DATA tag's
     TUPLE_TAG import, 2319 before the ``.seam`` alias-extension
@@ -635,7 +635,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2339
+        v.pattern == "functor_fallback" and v.line == 2338
         for v in testing_violations
     ), testing_violations
 

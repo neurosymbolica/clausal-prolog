@@ -291,7 +291,7 @@ def _resolve_module_path(prefix: str, namespace: dict) -> Any:
     return sys.modules.get(prefix)
 
 
-def functor_signature_for(name: str, namespace: "dict | None") -> "tuple[str, ...] | None":
+def functor_signature_for(name: str, namespace: "dict | None", *, classes: bool = True) -> "tuple[str, ...] | None":
     """Resolve *name*'s declared field-name tuple against *namespace*.
 
     Consults *namespace*'s ``__clausal_functor_signatures__`` registry
@@ -320,6 +320,8 @@ def functor_signature_for(name: str, namespace: "dict | None") -> "tuple[str, ..
     registry = namespace.get(FUNCTOR_SIGNATURES_KEY)
     if registry is not None and name in registry:
         return registry[name]
+    if not classes:
+        return None            # the caller resolves a class binding itself (the seam does)
     return term_field_names_of_class(namespace.get(name))
 
 

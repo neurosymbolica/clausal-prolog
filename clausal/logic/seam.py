@@ -125,7 +125,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 # the same cell: post-P3-3 a cell is a goal (``call/N``), and
                 # no class instance is ever minted from a seam.
                 from clausal.logic.compiler.terms_to_ast import functor_signature_for  # noqa: PLC0415
-                fields = functor_signature_for(fname, module_globals)   # P2: the Database first, then the exec-time map
+                fields = functor_signature_for(fname, module_globals, classes=False)   # P2: the Database, then the exec-time map; a CLASS binding is resolved below as before
                 if fields is not None:
                     placed = _place_signature_slots(
                         fields, args, kwargs, functor=fname, missing=Var)
