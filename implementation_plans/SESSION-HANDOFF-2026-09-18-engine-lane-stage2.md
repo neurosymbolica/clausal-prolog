@@ -74,6 +74,8 @@ Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/su
     task 9b eaea192d  roborev round-2 fixes (6 findings): solve/1 refuses ','/0 like call/N; _str_typed_fields
                       (Optional[str] name fields reify raw, memoised); precedence/arity hoist; 3 docstrings;
                       head_key's class arm kept WITH its reason (the head channel names a predicate)
+    task 9c 1c578685  roborev round-3 fixes (4 Low): the name-field rule accepts Union origins only (list[str]
+                      stays out, pinned), is_atom_value docstring, helper placement + import order
     task 9  (this handoff) final gate + announcement
 
 ## Instruments and their controls (all observed; every extraction printed its size)
@@ -87,7 +89,8 @@ Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/su
   - at 2a476126: 144 failed / 16678 passed, NEW 0 / GONE 0, skip sets identical (52)
   - at 0c9b16f1 (after the round-1 fixes): 144 failed / 16682 passed, NEW 0 / GONE 0, skip sets identical (52);
     the one collection error (`tests/test_clportools.py`, ortools) is in both arms
-  - at eaea192d (the 9b tip, FINAL): 144 failed / 16684 passed, NEW 0 / GONE 0, skip sets identical (52)
+  - at eaea192d (the 9b tip): 144 failed / 16684 passed, NEW 0 / GONE 0, skip sets identical (52)
+  - at 1c578685 (the 9c tip, FINAL): 144 failed / 16685 passed, NEW 0 / GONE 0, skip sets identical (52)
 * Survey population (`snap_s2.log` at acbd55f7: 856 failed / 712 NEW over 106 files) -> the agents' brief; the
   population + the red files named in their reports = 108 files, 5109 passed / 0 failed at 2a476126.
 * Spelling parity (`tests/test_chars_carrier.py`, 40 goals, carrier vs char list) green; stage-2 pins in
@@ -99,7 +102,7 @@ Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/su
   `tests/test_atoms_as_str_stage2.py::TestReviewRound1` and the two funnel tests. A second review of the
   post-review commits (8c, 9a): 6 findings (2 Medium: solve/1 lacked the control-construct refusal call/N
   has for a str goal; the reflection name-field rule missed `Optional[str]`; 4 Low), all verified and fixed
-  in 9b with pins. A third pass over 9b alone was not run (see NEXT).
+  in 9b with pins. A third pass (9b + handoff): 4 Low, fixed in 9c with pins. Review is closed on the branch.
 
 ## Rulings applied this session (each is a test that says so)
 
@@ -133,12 +136,12 @@ Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/su
 ## Peers / landing
 
 * harness-batch-lane: stage 2 is a RE-BASELINE (spec §5 step 6), announced beside the stage-1 freeze file in
-  `/workspace/clausify-executor-train/` as `ATOMS-AS-STR-STAGE2-BUILT-2026-09-18.md`; its sweep runs AFTER
+  the lanes' shared announcement directory as `ATOMS-AS-STR-STAGE2-BUILT-2026-09-18.md`; its sweep runs AFTER
   stage 1 lands.
 * iso-export-lane: G3 on the frozen stage-1 sha `73c86686` still gates the stage-1 landing window; the
   exporter goldens are unchanged under stage 2 (task 7).
-* NEXT for the engine lane: a third roborev pass over 9b alone (`roborev review --branch --wait --base 0c9b16f1`
-  in the branch worktree) before the stage-2 landing window; nothing else is open on the branch.
+* NEXT for the engine lane: nothing is open on the branch. Landing waits on stage 1 (iso-export-lane's G3 on
+  `73c86686`) and is the operator's call; stage 2 then lands as its own sha and re-baseline.
 * corpus-lane: the silent-unmatch grep from the stage-1 announcement covers stage 2 too, plus: a `++` escape
   that yields Python strs now yields ATOMS (`++sorted(["a","b"])` is `[a, b]`), so a fixture that compared
   such a result against `"..."` strings under chars mode must compare against atoms or take the string side
