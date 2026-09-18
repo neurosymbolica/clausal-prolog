@@ -5512,6 +5512,9 @@ class EmbedTransformer(NodeTransformer):
         # linted once per file per name — see _warn_deprecated_unit_spelling.
         transformer._warned_unit_spellings: set[str] = set()
         transformer._seen_functors: dict[str, list[str]] = {}
+        # Filled by visit_Module's pre-pass; a transformer used outside a module
+        # walk (the REPL's seam term, a one-off clause) keeps the empty set.
+        transformer._zero_arity_heads = frozenset()
         # Functors whose _seen_functors entry was minted by a -dynamic
         # directive with PLACEHOLDER arg_i field names (A12-F005). The first
         # real clause for such a functor unseats the placeholder so its
