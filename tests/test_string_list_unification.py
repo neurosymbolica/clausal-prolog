@@ -32,27 +32,27 @@ class TestStringUnifiesWithCharList:
 
     def test_basic(self):
         # nv
-        assert unify("abc", _chars("abc"), Trail())
+        assert unify(chars("abc"), _chars("abc"), Trail())
 
     def test_symmetric(self):
         # nv
-        assert unify(_chars("abc"), "abc", Trail())
+        assert unify(_chars("abc"), chars("abc"), Trail())
 
     def test_empty(self):
         # nv — empty str IS the empty list.
-        assert unify("", [], Trail())
+        assert unify(chars(""), [], Trail())
 
     def test_single_char(self):
         # nv
-        assert unify("a", [char_atom("a")], Trail())
+        assert unify(chars("a"), [char_atom("a")], Trail())
 
     def test_unicode(self):
         # nv
-        assert unify("日本語", _chars("日本語"), Trail())
+        assert unify(chars("日本語"), _chars("日本語"), Trail())
 
     def test_emoji(self):
         # nv
-        assert unify("👋🌍", _chars("👋🌍"), Trail())
+        assert unify(chars("👋🌍"), _chars("👋🌍"), Trail())
 
     def test_one_char_str_elements_are_strings_not_chars(self):
         # nv — the inverted half: ["a","b","c"] is three one-element
@@ -104,7 +104,7 @@ class TestStringListVarBinding:
         # nv
         trail = Trail()
         X, Y, Z = Var(), Var(), Var()
-        assert unify("abc", [X, Y, Z], trail)
+        assert unify(chars("abc"), [X, Y, Z], trail)
         assert (deref(X), deref(Y), deref(Z)) == tuple(_chars("abc"))
 
     def test_partial_vars(self):

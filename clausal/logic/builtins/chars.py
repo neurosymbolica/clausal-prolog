@@ -20,8 +20,6 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.predicate import is_zero_field_class
-from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import (
     char_atom,
     is_atom as _term_is_atom,
@@ -77,8 +75,6 @@ def _atom_to_str(val: Any) -> str | None:
     """
     if _term_is_atom(val):
         return spelling(val)
-    if is_zero_field_class(val):
-        return val.__name__
     if _is_empty_list(val):
         return NIL_SPELLING
     return None
@@ -184,16 +180,7 @@ def _char_type__2(char, type_, trail, k):
     # something that is not an atom at all", which every mode rejects.
     type_name = spelling(vt) if t_bound and _term_is_atom(vt) else None
 
-    # F075 (C3 audit): walk a ground SegString to its str form so the
-    # single-char classifier below recognises it.
     if c_bound:
-        from clausal.terms import SegString
-        if isinstance(vc, SegString):
-            walked = vc.__walk__()
-            if is_chars(walked):
-                walked = chars_text(walked)   # stage 1
-            if isinstance(walked, str):
-                vc = walked
         if not is_char_atom(vc):
             return  # fail — not a single character
         vc = spelling(vc)
@@ -282,16 +269,7 @@ def _char_code__2(char, code, trail, k):
     if not c_bound and not n_bound:
         raise LogicException(instantiation_error("char_code/2"))
 
-    # F075 (C3 audit): walk a ground SegString to its str form so the
-    # single-char check below recognises it.
     if c_bound:
-        from clausal.terms import SegString
-        if isinstance(vc, SegString):
-            walked = vc.__walk__()
-            if is_chars(walked):
-                walked = chars_text(walked)   # stage 1
-            if isinstance(walked, str):
-                vc = walked
         if not is_char_atom(vc):
             raise LogicException(type_error("character", vc, "char_code/2"))
         expected = ord(spelling(vc))

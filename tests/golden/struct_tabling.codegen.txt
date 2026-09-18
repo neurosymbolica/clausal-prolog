@@ -10,7 +10,7 @@ def nats__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _m0 = trail.mark()
                 if $unify(_v0, 0, trail):
                     _m1 = trail.mark()
-                    if $unify(_v1, ('nil',), trail):
+                    if $unify(_v1, 'nil', trail):
                         yield (_proceed, None)
                     trail.undo(_m1)
                 trail.undo(_m0)

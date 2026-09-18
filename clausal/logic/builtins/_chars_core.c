@@ -62,7 +62,7 @@ static inline PyObject *atom_from_str(PyObject *s)
     if (PyUnicode_CompareWithASCIIString(s, "[]") == 0) {
         return PyList_New(0);
     }
-    return PyTuple_Pack(1, s);
+    return Py_NewRef(s);   /* STAGE 2: the atom is the str */
 }
 
 

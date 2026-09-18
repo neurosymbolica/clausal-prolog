@@ -250,7 +250,7 @@ class TestEmbedSyntax:
             ns = driver._console.locals
         else:
             ns = driver._ns
-        assert ns.get("my_term") == ("foo",)
+        assert ns.get("my_term") == "foo"
 
 
 class TestSolutionsDisplay:

@@ -327,14 +327,14 @@ class TestCellEmission:
         assert "point(_v" not in src
 
     def test_atoms_lower_to_arity_0_cell_constants_not_to_classes(self):
-        """THE FLIP (spec §5.1): a 0-arity reference is the arity-0 CELL
-        constant ``('nil',)``, not a class and no longer a bare ``str`` --
-        a ``str`` is a STRING now.  Inverts both the pre-pivot pin that atoms
-        "stay class atoms" and the P3-1 pin that they lower to a ``str``."""
+        """THE FLIP (spec §5.1): a 0-arity reference is the ATOM constant --
+        stage 2 (atoms as str): the ``str`` literal ``'nil'`` -- not a class
+        and not the reserved 1-tuple cell ``('nil',)``.  Inverts the pre-pivot
+        pin that atoms "stay class atoms"."""
         src = capture_predicate_codegen(_TAGGED, ["kind"])
-        assert "$unify(_v13, ('nil',), trail)" in src
+        assert "$unify(_v13, 'nil', trail)" in src
         assert "$unify(_v13, nil, trail)" not in src
-        assert "$unify(_v13, 'nil', trail)" not in src
+        assert "$unify(_v13, ('nil',), trail)" not in src
 
     def test_keyword_construction_places_by_field_name(self):
         """P3-2 Task 1: signature placement, not a class fallback.

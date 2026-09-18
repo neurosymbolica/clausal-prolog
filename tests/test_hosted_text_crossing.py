@@ -47,7 +47,7 @@ class TestStrOfAnAtom:
             "def text(n):\n"
             "    return f\"status={ok} n={n} r={ok!r} w={n:>3}\"\n"
         ))
-        assert mod.text(7) == "status=ok n=7 r=('ok',) w=  7"
+        assert mod.text(7) == "status=ok n=7 r='ok' w=  7"
 
     def test_a_module_that_binds_str_itself_is_left_alone(self):
         mod = _load_inline("_txt_shadow", (
@@ -71,8 +71,11 @@ class TestBoundaries:
             "label(X, S) <- (S is f\"v={X}\")\n"
         ))
         s = Var()
-        for _ in call("label", ("ok",), s, module=mod.__dict__["$module"]):
-            assert deref(s) == chars("v=ok")
+        for _ in call("label", "ok", s, module=mod.__dict__["$module"]):
+            # STAGE 2 (atoms-as-str, spec §3 Q1): the f-string's Python str
+            # result crosses the seam as the ATOM ``'v=ok'`` (as ``++`` does),
+            # interpolating the atom's spelling ``ok``, not its repr.
+            assert deref(s) == "v=ok"
             break
         else:
             raise AssertionError("no solution")

@@ -28,7 +28,7 @@ from clausal.logic.predicate import is_atom_value
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
 
-CELL = ("foo",)
+CELL = "foo"
 
 
 def _lm(module):
@@ -71,15 +71,15 @@ def test_callable_1_accepts_cell_atom(mod):       # §6.3 row callable/1
 def test_must_be_atom_accepts_cell_atom_and_cell_type_name(mod):
     # THE FLIP retired Stage A's dual acceptance: a plain ``str`` is a
     # STRING now, so only the cell shape answers.
-    assert _true(("must_be", ("atom",), CELL), mod)
+    assert _true(("must_be", "atom", CELL), mod)
     with pytest.raises(LogicException):
-        list(solve(("must_be", "atom", CELL), _lm(mod)))
+        list(solve(("must_be", chars("atom"), CELL), _lm(mod)))
 
 
 def test_must_be_compound_accepts_cell(mod):
-    assert _true(("must_be", ("compound",), ("f", 1)), mod)
+    assert _true(("must_be", "compound", ("f", 1)), mod)
     with pytest.raises(LogicException):
-        list(solve(("must_be", ("compound",), CELL), _lm(mod)))
+        list(solve(("must_be", "compound", CELL), _lm(mod)))
 
 
 # ── Task 5: the name position (spec §5.4, §6.4; §13 rows 7–12, 18c) ───────────
@@ -116,11 +116,11 @@ def test_functor_3_constructs_a_cell_and_names_an_atom(mod):   # §6.4, §13 row
 
 def test_functor_3_accepts_a_cell_atom_name(mod):              # §6.4, Stage A
     T = Var()
-    (t,) = _one(("functor", T, ("foo",), 2), mod, T)
+    (t,) = _one(("functor", T, "foo", 2), mod, T)
     assert type(t) is tuple and t[0] == "foo" and len(t) == 3
     T0 = Var()
-    (t0,) = _one(("functor", T0, ("foo",), 0), mod, T0)
-    assert t0 == ("foo",)
+    (t0,) = _one(("functor", T0, "foo", 0), mod, T0)
+    assert t0 == "foo"
 
 
 def test_univ_constructs_a_cell_and_round_trips(mod):          # §13 rows 10–11
@@ -128,20 +128,20 @@ def test_univ_constructs_a_cell_and_round_trips(mod):          # §13 rows 10–
     (t,) = _one(("unpack", T, [mint("foo"), 1]), mod, T)
     assert t == ("foo", 1)
     L = Var()
-    (lv,) = _one(("unpack", ("foo", 1, ("bar",)), L), mod, L)
-    assert lv == [mint("foo"), 1, ("bar",)]
+    (lv,) = _one(("unpack", ("foo", 1, "bar"), L), mod, L)
+    assert lv == [mint("foo"), 1, "bar"]
     T2 = Var()
     (t2,) = _one(("unpack", T2, lv), mod, T2)
-    assert t2 == ("foo", 1, ("bar",))
+    assert t2 == ("foo", 1, "bar")
 
 
 def test_univ_accepts_a_cell_atom_name(mod):                   # §6.4, Stage A
     T = Var()
-    (t,) = _one(("unpack", T, [("foo",), 1]), mod, T)
+    (t,) = _one(("unpack", T, ["foo", 1]), mod, T)
     assert t == ("foo", 1)
     T0 = Var()
-    (t0,) = _one(("unpack", T0, [("foo",)]), mod, T0)
-    assert t0 == ("foo",)
+    (t0,) = _one(("unpack", T0, ["foo"]), mod, T0)
+    assert t0 == "foo"
 
 
 def test_functor_3_rejects_number_name_with_arity(mod):
@@ -180,14 +180,14 @@ def test_gensym_and_global_atom_mint_atoms(mod):
     (a,) = _one(("gensym", mint("g"), A), mod, A)
     assert is_atom_value(a)
     A2 = Var()
-    (a2,) = _one(("gensym", ("g",), A2), mod, A2)              # cell prefix, Stage A
+    (a2,) = _one(("gensym", "g", A2), mod, A2)              # cell prefix, Stage A
     assert is_atom_value(a2)
     G = Var()
     (g,) = _one(("global_atom", mint("zzq_probe"), G), mod, G)
     assert g == mint("zzq_probe")
     _one(("global_atom", mint("zzq_probe"), mint("zzq_probe")), mod)  # guard, by ==
     G2 = Var()
-    (g2,) = _one(("global_atom", ("zzq_probe",), G2), mod, G2)  # cell name, Stage A
+    (g2,) = _one(("global_atom", "zzq_probe", G2), mod, G2)  # cell name, Stage A
     assert g2 == mint("zzq_probe")
 
 
@@ -200,13 +200,13 @@ def test_type_error_term_carries_atom_args():
 
 def test_listing_accepts_cell_atom(mod, capsys):
     # ``z0`` is the one fact the probe module defines (see the ``mod`` fixture).
-    assert len(list(solve(("listing", ("z0",)), _lm(mod)))) == 1
+    assert len(list(solve(("listing", "z0"), _lm(mod)))) == 1
     assert "z0/0" in capsys.readouterr().out
 
 
 def test_resolve_module_accepts_a_cell_atom_designator(mod):
     from clausal.logic.solve import resolve_module
-    assert (resolve_module(("_atoms_as_cells_probe",))
+    assert (resolve_module(mint("_atoms_as_cells_probe"))
             is resolve_module("_atoms_as_cells_probe"))
 
 
@@ -265,7 +265,7 @@ def test_ground_seglist_of_cell_chars_round_trips():
     its own elements."""
     from clausal.logic.variables import Trail, Var, deref, unify
     from clausal.terms import ConcreteSeg, SegList, VarSeg
-    chars = [("a",), ("b",)]
+    chars = ["a", "b"]
     sl = SegList([ConcreteSeg(list(chars))])
 
     # The promotion itself (the premise of the bug).
@@ -273,11 +273,11 @@ def test_ground_seglist_of_cell_chars_round_trips():
 
     # __eq__ list arm, __contains__, to_list, iteration, indexing.
     assert sl == chars
-    assert ("a",) in sl and ("b",) in sl
-    assert ("c",) not in sl
+    assert "a" in sl and "b" in sl
+    assert "c" not in sl
     assert sl.to_list() == chars
     assert list(sl) == chars
-    assert sl[0] == ("a",)
+    assert sl[0] == "a"
     assert len(sl) == 2
 
     # __unify__ against the list of the same cell chars.
@@ -290,7 +290,7 @@ def test_ground_seglist_of_cell_chars_round_trips():
     # is the one that unifies with the promoted str; a list of one-element
     # STRINGS does not (spec §6.2: ``("a",)`` vs ``"a"`` still FAILS).
     t3 = Trail()
-    assert not unify(SegList([ConcreteSeg(["a", "b"])]), _chars_carrier("ab"), t3)
+    assert not unify(SegList([ConcreteSeg([_chars_carrier("a"), _chars_carrier("b")])]), _chars_carrier("ab"), t3)
     t4 = Trail()
     assert unify(sl, _chars_carrier("ab"), t4)
 
@@ -298,7 +298,7 @@ def test_ground_seglist_of_cell_chars_round_trips():
     A, B = Var(), Var()
     t3 = Trail()
     assert unify(sl, [A, B], t3)
-    assert deref(A) == ("a",) and deref(B) == ("b",)
+    assert deref(A) == "a" and deref(B) == "b"
 
     # A non-ground SegList still lines up against a str target, whose
     # ELEMENTS are chars and whose star SLICE stays a str (R-S2) —
@@ -313,7 +313,7 @@ def test_ground_seglist_of_cell_chars_round_trips():
     # with a literal 1-tuple matches too — it is the same term.
     Y = Var()
     t6 = Trail()
-    assert unify(SegList([ConcreteSeg([("h",)]), VarSeg(Y)]), _chars_carrier("hi"), t6)
+    assert unify(SegList([ConcreteSeg(["h"]), VarSeg(Y)]), _chars_carrier("hi"), t6)
 
 
 def test_seglist_str_tail_and_head_are_char_lists():
@@ -334,10 +334,10 @@ def test_call_n_folds_cell_atom_goal(mod):
     today's str atom — ``call(atom, foo)`` is ``atom(foo)``.  Nothing in
     ``higher_order._resolve_named_goal`` needed changing (an arity-0 cell
     already answers ``compound_cell_shape``); this pins that it stays so."""
-    assert _true(("call", ("atom",), ("foo",)), mod)
+    assert _true(("call", "atom", "foo"), mod)
     # ... and a STRING goal is refused (THE FLIP, spec §6.4).
     with pytest.raises(LogicException):
-        list(solve(("call", "atom", ("foo",)), _lm(mod)))
+        list(solve(("call", chars("atom"), "foo"), _lm(mod)))
 
 
 def test_is_mangled_accepts_atom():
@@ -352,15 +352,15 @@ def test_is_mangled_accepts_atom():
     assert demangle_for_display(a) == "m.bar"
     # ``mint`` is a str under Plan 0, so drive the CELL shape explicitly too —
     # otherwise this row only re-tests the bare spelling until Stage B.
-    cell = (mangle("m", "bar"),)
+    cell = mangle("m", "bar")
     assert is_mangled(cell)
     assert demangle(cell) == ("m", "bar")
     assert demangle_for_display(cell) == "m.bar"
     # A non-mangled atom is not mangled, and displays as its own spelling.
     assert not is_mangled(mint("bar"))
-    assert not is_mangled(("bar",))
+    assert not is_mangled("bar")
     assert demangle_for_display(mint("bar")) == "bar"
-    assert demangle_for_display(("bar",)) == "bar"
+    assert demangle_for_display("bar") == "bar"
     # The bare-spelling calls are unchanged.
     assert is_mangled(mangle("m", "bar"))
     assert demangle_for_display(mangle("m", "bar")) == "m.bar"
@@ -376,10 +376,10 @@ def test_functor_spelling_accepts_cell_atom():
     the same way today's str binding does (``terms_to_ast._functor_spelling``
     — the declared-data-functor binding shape, R6)."""
     from clausal.logic.compiler.terms_to_ast import _functor_spelling
-    assert _functor_spelling(("pt",), "local_pt") == "pt"
-    # A plain ``str`` binding is a STRING after THE FLIP — not an atom, so
-    # it is "some unrelated value" and the leaf name is the answer.
-    assert _functor_spelling("pt", "local_pt") == "local_pt"
+    assert _functor_spelling("pt", "local_pt") == "pt"
+    # A STRING binding is not an atom, so it is "some unrelated value" and
+    # the leaf name is the answer.
+    assert _functor_spelling(chars("pt"), "local_pt") == "local_pt"
     assert _functor_spelling(None, "local_pt") == "local_pt"
 
 
@@ -392,9 +392,9 @@ def test_atom_shadows_row_accepts_cell_atom():
 
     db = Database()
     db.assertz(Clause(head=Compound("shade", (1,)), body=[True]))
-    assert _atom_shadows_row(("shade",), db, "shade", 1)
-    # A ``str`` binding is a STRING, not an atom, and is trusted as before.
-    assert not _atom_shadows_row("shade", db, "shade", 1)
+    assert _atom_shadows_row("shade", db, "shade", 1)
+    # A STRING binding is not an atom, and is trusted as before.
+    assert not _atom_shadows_row(chars("shade"), db, "shade", 1)
     # No such row → no shadowing; a non-atom binding is trusted as before.
-    assert not _atom_shadows_row(("shade",), db, "shade", 2)
+    assert not _atom_shadows_row("shade", db, "shade", 2)
     assert not _atom_shadows_row(len, db, "shade", 1)

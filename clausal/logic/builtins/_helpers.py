@@ -16,7 +16,7 @@ from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
     is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
 )
-from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
+from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
@@ -55,15 +55,15 @@ def _functor_name_py(term: Any) -> Any:
         return type(term).__name__
     if isinstance(term, list):
         return "[]" if len(term) == 0 else "."
+    if is_chars(term):
+        return "[]" if len(chars_text(term)) == 0 else "."
     if isinstance(term, str):
-        return "[]" if len(term) == 0 else "."
+        return term                    # STAGE 2: an atom is its own functor name
     if isinstance(term, bytes):
         return "[]" if len(term) == 0 else "."
     if isinstance(term, (bool, int, float)) or term is None:
         # A09-F027: the atomic constant IS its own functor name (ISO:
         # functor(3, N, A) → N=3), so it roundtrips. repr(term) did not.
-        return term
-    if is_zero_field_class(term):
         return term
     return None
 
@@ -93,13 +93,13 @@ def _arity_py(term: Any) -> int | None:
         return len(term_field_names(term))
     if isinstance(term, list):
         return 0 if len(term) == 0 else 2
+    if is_chars(term):
+        return 0 if len(chars_text(term)) == 0 else 2
     if isinstance(term, str):
-        return 0 if len(term) == 0 else 2
+        return 0                       # STAGE 2: an atom
     if isinstance(term, bytes):
         return 0 if len(term) == 0 else 2
     if isinstance(term, (bool, int, float)) or term is None:
-        return 0
-    if is_zero_field_class(term):
         return 0
     return None
 
@@ -385,9 +385,9 @@ def _cell_functor(term: Any) -> tuple[bool, Any]:
     leaving it out would make every data tuple answer as the compound
     ``'()'/N`` — a goal, a clause head, an ``assertz`` argument.
     """
-    from clausal.logic.cells import TUPLE_TAG  # noqa: PLC0415
+    from clausal.logic.cells import TUPLE_TAG, CHARS_TAG  # noqa: PLC0415
     if (type(term) is tuple and term and type(term[0]) is str
-            and term[0] != TUPLE_TAG):
+            and term[0] != TUPLE_TAG and term[0] != CHARS_TAG):   # the chars carrier is a STRING, not a cell
         return True, term[0]
     return False, None
 
@@ -425,37 +425,40 @@ _is_compound_precell = _is_compound
 # whatever these arms already answer for.
 
 def _functor_name(term: Any) -> Any:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, f = _cell_functor(term)
     if is_compound_cell:
         return f
     if type(term) is str:
-        return "[]" if not term else "."
+        return ("[]" if not term else ".") if text else term
     return _functor_name_precell(term)
 
 
 def _arity(term: Any) -> int | None:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return len(term) - 1
     if type(term) is str:
-        return 0 if not term else 2
+        return (0 if not term else 2) if text else 0
     return _arity_precell(term)
 
 
 def _nth_arg(term: Any, n: int) -> Any:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         if n < 1 or n > len(term) - 1:
             raise IndexError(f"arg index {n} out of range for {term!r}")
         return term[n]
     if type(term) is str:
-        if term:
+        if term and text:
             if n == 1:
                 return char_atom(term[0])
             if n == 2:
@@ -465,19 +468,21 @@ def _nth_arg(term: Any, n: int) -> Any:
 
 
 def _args_list(term: Any) -> list:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return list(term[1:])
     if type(term) is str:
-        return [] if not term else [char_atom(term[0]), chars(term[1:])]   # stage 1
+        return [char_atom(term[0]), chars(term[1:])] if (term and text) else []
     return _args_list_precell(term)
 
 
 def _is_compound(term: Any) -> bool:
-    if is_chars(term):
-        term = chars_text(term)       # stage 1: the carrier decomposes as its text
+    text = is_chars(term)
+    if text:
+        term = chars_text(term)       # the carrier decomposes as its text; a bare str is an ATOM (stage 2)
     is_compound_cell, _f = _cell_functor(term)
     if is_compound_cell:
         return True
@@ -509,7 +514,8 @@ NIL_SPELLING = _NIL_SPELLING
 
 
 def _is_empty_list(term: Any) -> bool:
-    """True iff *term* is the EMPTY LIST — ``[]``, ``""``, ``b""`` or ``()``.
+    """True iff *term* is the EMPTY LIST — ``[]``, ``chars("")``, ``b""`` or ``()``
+    (STAGE 2: a bare ``""`` is the atom ``''``, not nil).
 
     The empty ``tuple`` is here and NOT in :func:`_is_non_empty_list`
     deliberately: a non-empty tuple is a CELL (or tuple-data), which has its
@@ -530,7 +536,9 @@ def _is_empty_list(term: Any) -> bool:
 
 def _is_non_empty_list(term: Any) -> bool:
     """True iff *term* is a NON-empty list, and so the ``'.'/2`` compound."""
-    return type(term) in (list, str, bytes) and len(term) > 0
+    if is_chars(term):
+        return len(chars_text(term)) > 0
+    return type(term) in (list, bytes) and len(term) > 0
 
 
 # ── Combined functor+arity probe ─────────────────────────────────────────────
@@ -781,34 +789,9 @@ def _standard_order_key(term: Any) -> tuple:
         # `Quantity` sorts among them by magnitude instead of after them.
         return _number_key(term)
     if isinstance(term, str):
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(term, "the standard order of terms")   # interim rule
-        # THE FLIP (spec §6.5): a string keys as the LIST OF CHAR ATOMS it
-        # denotes — so ``"ab"`` and ``[("a",), ("b",)]`` have EQUAL keys and
-        # ``""`` keys like ``[]``.  That equality is what makes ``sort/2``
-        # collapse the two spellings of one term (dedup below is by key, not
-        # by ``==``).  Task 15 item 1: that list is the ``'.'/2`` compound,
-        # and the empty one is the ATOM ``'[]'``.
-        if not term:
-            return _ORD_EMPTY_LIST_KEY
-        return _cons_key(tuple((_ORD_ATOM, c) for c in term))
-    if is_zero_field_class(term):
-        # P3-1 Task 4 (standard-order collapse), status corrected by the
-        # Task 7 sweep: NOT a transient pre-pivot straggler after all. The
-        # compiler stopped minting atom-shaped classes in Task 2, and the
-        # last live production atom-class-construction path
-        # (``global_atom/2``'s mint-on-demand mode) was fixed in Task 7 to
-        # install the interned str instead — but a bare 0-arity PREDICATE
-        # declared with explicit call syntax (``-module(m, [p()])``, as
-        # opposed to the bare-Name atom syntax ``-module(m, [p])``) still
-        # legitimately mints a real ``PredicateMeta`` class with no fields,
-        # and a reference to that predicate BY NAME (not called) reaches
-        # here as a live term value. Per §1b/R2 that class and a
-        # same-spelled str are still the SAME atom for ordering purposes,
-        # so this key must not be distinguishable from the str key above:
-        # no trailing discriminator, ``(_ORD_ATOM, "work")`` for both
-        # ``"work"`` and a 0-arity predicate class named ``work``.
-        return (_ORD_ATOM, term.__name__)
+        # STAGE 2 (spec 2026-09-18 §1): a str is an ATOM and keys in the atom
+        # band by its spelling; the carrier below keys as its char list
+        return (_ORD_ATOM, term)
     if isinstance(term, bytes):
         # A code list (§5.4): the list of its code NUMBERS, so ``b"ab"`` and
         # ``[97, 98]`` are one term in the order exactly as ``"ab"`` and its
@@ -833,13 +816,11 @@ def _standard_order_key(term: Any) -> tuple:
         num = exact_cell_number(term)
         if num is not None:
             return _number_key(num, 1)
-        # A cell (spec §5.1).  Arity 0 is an atom (spec §6.5) and keys in the
-        # atom band by its spelling — the same key a 0-arity predicate class
-        # of that name gets, so the two spellings of one atom are one atom in
-        # the order.  Arity > 0 keys like ``Compound`` — arity first, then name
+        # A cell (spec §5.1).  STAGE 2: an atom is a str and keyed in the
+        # atom band above; the 1-tuple is RESERVED and refuses just below.
+        # Arity > 0 keys like ``Compound`` — arity first, then name
         # (ISO 7.2.1), positional flavour — never as a sequence.
-        if len(term) == 1:
-            return (_ORD_ATOM, term[0])
+        refuse_reserved_1tuple(term)   # STAGE 2: the arity-0 cell is RESERVED
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
                 tuple(_standard_order_key(a) for a in term[1:]))
     if type(term) is tuple and term and term[0] == TUPLE_TAG:

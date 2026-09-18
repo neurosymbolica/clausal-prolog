@@ -58,29 +58,29 @@ def test_quote_atom_escapes():
 
 
 def test_term_str_arity0_cell_is_bare_spelling():
-    assert term_str(("flag",)) == "flag"
-    assert term_str(("foo bar",)) == "'foo bar'"
-    assert term_str(("foo", ("bar",), 1)) == "foo(bar, 1)"
+    assert term_str("flag") == "flag"
+    assert term_str("foo bar") == "'foo bar'"
+    assert term_str(("foo", "bar", 1)) == "foo(bar, 1)"
 
 
 def test_term_pformat_and_html_arity0():
-    assert term_pformat(("flag",)) == "flag"
-    assert "flag" in term_html(("flag",)) and "flag()" not in term_html(("flag",))
+    assert term_pformat("flag") == "flag"
+    assert "flag" in term_html("flag") and "flag()" not in term_html("flag")
 
 
 def test_write_family_prints_cell_atom_bare(mod):
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        list(solve(("write", ("flag",)), mod))
-        list(solve(("write", ("foo", ("foo bar",))), mod))
+        list(solve(("write", "flag"), mod))
+        list(solve(("write", ("foo", "foo bar")), mod))
     assert buf.getvalue() == "flagfoo(foo bar)"
 
 
 def test_writeq_quotes_and_write_canonical_is_cons_form(mod):
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        list(solve(("writeq", ("foo bar",)), mod))
-        list(solve(("write_canonical", ("foo", ("foo bar",), 1)), mod))
+        list(solve(("writeq", "foo bar"), mod))
+        list(solve(("write_canonical", ("foo", "foo bar", 1)), mod))
         list(solve(("write_canonical", [1, 2]), mod))
         list(solve(("write_canonical", []), mod))
     assert buf.getvalue() == "'foo bar'foo('foo bar',1)'.'(1,'.'(2,[]))[]"
@@ -89,7 +89,7 @@ def test_writeq_quotes_and_write_canonical_is_cons_form(mod):
 def test_term_canonical_partial_list_and_nesting():
     from clausal.terms import term_canonical, ConcreteSeg, SegList, VarSeg
     from clausal.logic.variables import Var
-    assert term_canonical(("f", [("a",), ("b c",)])) == "f('.'(a,'.'('b c',[])))"
+    assert term_canonical(("f", ["a", "b c"])) == "f('.'(a,'.'('b c',[])))"
     # A PARTIAL list is a SegList (spec §5.4: a Python list is always a
     # PROPER list), so ``[1 | T]`` -- not ``[1, X]`` -- is what renders with
     # the hole in the tail position: ``'.'(1,_N)``.
@@ -110,7 +110,7 @@ def test_term_canonical_partial_string_walks_to_chars():
 
 
 def test_term_str_hidden_atom_display_unchanged():
-    assert term_str(("m\x1fbar",)) == "m.bar"
+    assert term_str("m\x1fbar") == "m.bar"
 
 
 def test_term_canonical_has_no_operator_forms():
@@ -118,7 +118,7 @@ def test_term_canonical_has_no_operator_forms():
     operator node prints as the ``op(...)`` term it is.  Node fields are
     ``position, left, right``, so the operands must be passed by keyword."""
     from clausal.terms import Add, Div, Mod, Mult, Negate, term_canonical
-    assert term_canonical(Div(left=("foo",), right=2)) == "/(foo,2)"
+    assert term_canonical(Div(left="foo", right=2)) == "/(foo,2)"
     assert term_canonical(Add(left=1, right=Mult(left=2, right=3))) == "+(1,*(2,3))"
     # ISO spells `%` as mod/2 (9.1.3); a unary operator prints as `-(3)`.
     assert term_canonical(Mod(left=7, right=2)) == "mod(7,2)"
@@ -167,7 +167,7 @@ def test_term_canonical_never_colours():
         set_style(TermStyle(colors=ANSI_COLORS))
         assert "\x1b" not in term_canonical(("f", 1))
         assert term_canonical(("f", 1)) == "f(1)"
-        assert "\x1b" not in term_canonical(("f", Var(), [1, ("a",)]))
+        assert "\x1b" not in term_canonical(("f", Var(), [1, "a"]))
     finally:
         set_style(previous)
 
@@ -176,8 +176,8 @@ def test_lone_dot_atom_is_quoted():
     """The end-token hazard: a lone ``.`` atom must re-read as an atom."""
     from clausal.terms import term_canonical
     assert quote_atom(".") == "'.'"
-    assert term_str((".",)) == "'.'"
-    assert term_canonical((".",)) == "'.'"
+    assert term_str(".") == "'.'"
+    assert term_canonical(".") == "'.'"
     # ...and a cell whose functor is spelled `.` is just that cell (§5.4).
     assert term_canonical((".", 1, 2)) == "'.'(1,2)"
 
@@ -204,24 +204,24 @@ class TestTermStrDoubleQuotes:
     ``double_quotes(false)``, and Scryer's default."""
 
     def test_double_quotes_false_prints_the_char_list(self):
-        assert term_str("abc", double_quotes=False) == "[a, b, c]"
-        assert term_str([("a",), ("b",)], double_quotes=False) == "[a, b]"
+        assert term_str(chars("abc"), double_quotes=False) == "[a, b, c]"
+        assert term_str(["a", "b"], double_quotes=False) == "[a, b]"
 
     def test_double_quotes_true_is_the_default_and_prints_a_string(self):
-        assert term_str("abc") == '"abc"'
-        assert term_str("abc", double_quotes=True) == '"abc"'
-        assert term_str("abc", quoted=False) == "abc"
+        assert term_str(chars("abc")) == '"abc"'
+        assert term_str(chars("abc"), double_quotes=True) == '"abc"'
+        assert term_str(chars("abc"), quoted=False) == "abc"
 
     def test_a_char_that_needs_quotes_follows_the_quoted_option(self):
-        assert term_str(" a", double_quotes=False) == "[' ', a]"
-        assert term_str(" a", double_quotes=False, quoted=False) == "[ , a]"
+        assert term_str(chars(" a"), double_quotes=False) == "[' ', a]"
+        assert term_str(chars(" a"), double_quotes=False, quoted=False) == "[ , a]"
 
     def test_the_empty_string_is_the_empty_list_in_both_modes(self):
-        assert term_str("", double_quotes=False) == "[]"
-        assert term_str("", double_quotes=True) == "[]"
+        assert term_str(chars(""), double_quotes=False) == "[]"
+        assert term_str(chars(""), double_quotes=True) == "[]"
 
     def test_it_threads_into_arguments(self):
-        assert term_str(("f", ("a",), "bc"), double_quotes=False) == "f(a, [b, c])"
+        assert term_str(("f", "a", chars("bc")), double_quotes=False) == "f(a, [b, c])"
 
 
 class TestWriteTerm2:
@@ -230,22 +230,22 @@ class TestWriteTerm2:
     ISO family prints NO space after a comma (fix round 1, item 0)."""
 
     def test_quoted_alone_prints_a_string_as_its_char_list(self, mod):
-        assert _out(mod, ("write_term", "abc", [("quoted", True)])) == "[a,b,c]"
+        assert _out(mod, ("write_term", chars("abc"), [("quoted", True)])) == "[a,b,c]"
 
     def test_quoted_and_double_quotes_print_the_double_quoted_spelling(self, mod):
         opts = [("quoted", True), ("double_quotes", True)]
-        assert _out(mod, ("write_term", "abc", opts)) == '"abc"'
+        assert _out(mod, ("write_term", chars("abc"), opts)) == '"abc"'
         # …and the ISO comma spacing is kept even then: this is the writer's
         # SPELLING option, not a switch into the display family.
-        assert _out(mod, ("write_term", ("f", ("a",), "bc"), opts)) == 'f(a,"bc")'
+        assert _out(mod, ("write_term", ("f", "a", chars("bc")), opts)) == 'f(a,"bc")'
 
     def test_no_options_is_exactly_write_1(self, mod):
-        assert _out(mod, ("write_term", [("a",), ("b",)], [])) == "[a,b]"
-        assert _out(mod, ("write_term", ("a b",), [])) == "a b"
+        assert _out(mod, ("write_term", ["a", "b"], [])) == "[a,b]"
+        assert _out(mod, ("write_term", "a b", [])) == "a b"
         assert _out(mod, ("write_term", [1, 2], [])) == "[1,2]"
 
     def test_quoted_quotes_an_atom(self, mod):
-        assert _out(mod, ("write_term", ("a b",), [("quoted", True)])) == "'a b'"
+        assert _out(mod, ("write_term", "a b", [("quoted", True)])) == "'a b'"
 
     def test_ignore_ops_is_accepted(self, mod):
         assert _out(mod, ("write_term", ("f", 1), [("ignore_ops", True)])) == "f(1)"
@@ -255,7 +255,7 @@ class TestWriteTerm2:
         from clausal.logic.exceptions import LogicException
 
         with pytest.raises(LogicException) as exc:
-            list(solve(("write_term", ("a",), [("bogus", True)]), mod))
+            list(solve(("write_term", "a", [("bogus", True)]), mod))
         formal = exc.value.term.args[0]
         assert formal.functor == "domain_error"
         assert formal.args[0] == mint("write_option")
@@ -266,7 +266,7 @@ class TestWriteTerm2:
         from clausal.logic.exceptions import LogicException
 
         with pytest.raises(LogicException) as exc:
-            list(solve(("write_term", ("a",), ("foo",)), mod))
+            list(solve(("write_term", "a", "foo"), mod))
         formal = exc.value.term.args[0]
         assert formal.functor == "type_error"
         assert formal.args[0] == mint("list")
@@ -277,7 +277,7 @@ class TestWriteTerm2:
         from clausal.logic.variables import Var
 
         with pytest.raises(LogicException) as exc:
-            list(solve(("write_term", ("a",), Var()), mod))
+            list(solve(("write_term", "a", Var()), mod))
         assert exc.value.term.args[0] == mint("instantiation_error")
 
     def test_a_partial_option_list_is_an_instantiation_error(self, mod):
@@ -296,7 +296,7 @@ class TestWriteTerm2:
 
         partial = SegList([ConcreteSeg([("quoted", True)]), VarSeg(Var())])
         with pytest.raises(LogicException) as exc:
-            list(call("write_term", ("a",), partial, module=mod))
+            list(call("write_term", "a", partial, module=mod))
         assert exc.value.term.args[0] == mint("instantiation_error")
 
     def test_a_ground_seg_option_list_is_read_normally(self, mod):
@@ -308,7 +308,7 @@ class TestWriteTerm2:
         ground = SegList([ConcreteSeg([("quoted", True)])])
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            assert len(list(call("write_term", ("a b",), ground,
+            assert len(list(call("write_term", "a b", ground,
                                  module=mod))) == 1
         assert buf.getvalue() == "'a b'"
 
@@ -317,8 +317,8 @@ class TestWriteTerm2:
         §8), but a term built by hand may carry the ATOM — both are read."""
         from clausal.logic.atoms import mint
         opts = [("quoted", mint("true")), ("double_quotes", mint("true"))]
-        assert _out(mod, ("write_term", "abc", opts)) == '"abc"'
-        assert _out(mod, ("write_term", ("a b",),
+        assert _out(mod, ("write_term", chars("abc"), opts)) == '"abc"'
+        assert _out(mod, ("write_term", "a b",
                           [("quoted", mint("false"))])) == "a b"
 
 
@@ -342,10 +342,10 @@ class TestTheThreeWriterFamilies:
     """
 
     def test_write_is_iso_and_prints_a_string_as_its_char_list(self, mod):
-        assert _out(mod, ("write", "abc")) == "[a,b,c]"
-        assert _out(mod, ("write", [("a",), ("b",)])) == "[a,b]"
-        assert _out(mod, ("write", ("a b",))) == "a b"
-        assert _out(mod, ("write", "")) == "[]"
+        assert _out(mod, ("write", chars("abc"))) == "[a,b,c]"
+        assert _out(mod, ("write", ["a", "b"])) == "[a,b]"
+        assert _out(mod, ("write", "a b")) == "a b"
+        assert _out(mod, ("write", chars(""))) == "[]"
         assert _out(mod, ("write", [1, 2])) == "[1,2]"
 
     def test_the_iso_family_has_no_space_after_a_comma(self, mod):
@@ -354,10 +354,10 @@ class TestTheThreeWriterFamilies:
         """
         from clausal.terms import Compound, DictTerm
 
-        assert _out(mod, ("write", ("f", ("a",), ("b",)))) == "f(a,b)"
-        assert _out(mod, ("writeq", ("f", ("a",), "b"))) == "f(a,[b])"
+        assert _out(mod, ("write", ("f", "a", "b"))) == "f(a,b)"
+        assert _out(mod, ("writeq", ("f", "a", chars("b")))) == "f(a,[b])"
         assert _out(mod, ("write", Compound("f", (1, 2)))) == "f(1,2)"
-        assert _out(mod, ("write", DictTerm({("k",): ("v",)}))) == "{k:v}"
+        assert _out(mod, ("write", DictTerm({"k": "v"}))) == "{k:v}"
         assert _out(mod, ("write_term", [1, 2], [])) == "[1,2]"
 
     def test_the_iso_family_routes_every_term_shape_through_term_str(self, mod):
@@ -367,17 +367,17 @@ class TestTheThreeWriterFamilies:
         ISO writer's output."""
         from clausal.terms import Compound, DictTerm, KWTerm
 
-        assert _out(mod, ("write", Compound("f", (1, "ab")))) == "f(1,[a,b])"
-        assert _out(mod, ("write", KWTerm("p", a="ab"))) == "p(a=[a,b])"
-        assert _out(mod, ("write", DictTerm({("k",): "ab"}))) == "{k:[a,b]}"
+        assert _out(mod, ("write", Compound("f", (1, chars("ab"))))) == "f(1,[a,b])"
+        assert _out(mod, ("write", KWTerm("p", a=chars("ab")))) == "p(a=[a,b])"
+        assert _out(mod, ("write", DictTerm({"k": chars("ab")}))) == "{k:[a,b]}"
 
     def test_write_equals_the_option_free_write_term(self, mod):
         from clausal.terms import Compound, DictTerm, KWTerm
 
-        for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
-                     ("a b",), [1, 2], "",
-                     Compound("f", (1, "ab")), KWTerm("p", a="ab"),
-                     DictTerm({("k",): "ab"}), b"ab", ()):
+        for term in (chars("abc"), ["a", "b"], ("foo", "bar", chars("baz")),
+                     "a b", [1, 2], chars(""),
+                     Compound("f", (1, chars("ab"))), KWTerm("p", a=chars("ab")),
+                     DictTerm({"k": chars("ab")}), b"ab", ()):
             assert (_out(mod, ("write", term))
                     == _out(mod, ("write_term", term, []))), term
 
@@ -402,7 +402,7 @@ class TestTheThreeWriterFamilies:
 
         for term, want in ((SegList([ConcreteSeg([1, 2])]), "[1,2]"),
                            (SegString(["ab"]), "[a,b]"),
-                           (SegList([ConcreteSeg([("a",), ("b",)])]), "[a,b]")):
+                           (SegList([ConcreteSeg(["a", "b"])]), "[a,b]")):
             assert out_call("write", term) == want, term
             assert out_call("write_term", term, []) == want, term
             assert out_call("writeln", term) == want + "\n", term
@@ -424,7 +424,7 @@ class TestTheThreeWriterFamilies:
 
         assert out_call("write_text", SegString(["ab"])) == "ab"
         assert out_call("write_text",
-                        SegList([ConcreteSeg([("a",), ("b",)])])) == "ab"
+                        SegList([ConcreteSeg(["a", "b"])])) == "ab"
         assert out_call("write_text", SegList([ConcreteSeg([1, 2])])) == "[1, 2]"
         assert out_call("writeln_text", SegString(["ab"])) == "ab\n"
         S = Var()
@@ -437,18 +437,18 @@ class TestTheThreeWriterFamilies:
         both cell tests are FALSY on it, so it used to fall to ``str()`` and
         print ``()``.  ``b""`` had the same shape of hole in the text
         family."""
-        for spelling in ((), "", [], b""):
+        for spelling in ((), chars(""), [], b""):
             assert _out(mod, ("write", spelling)) == "[]", spelling
             assert _out(mod, ("writeq", spelling)) == "[]", spelling
             assert _out(mod, ("write_text", spelling)) == "[]", spelling
             assert _out(mod, ("write_term", spelling, [])) == "[]", spelling
 
     def test_writeq_is_iso_too_and_only_adds_quoting(self, mod):
-        assert _out(mod, ("writeq", "abc")) == "[a,b,c]"
-        assert _out(mod, ("writeq", ("a b",))) == "'a b'"
+        assert _out(mod, ("writeq", chars("abc"))) == "[a,b,c]"
+        assert _out(mod, ("writeq", "a b")) == "'a b'"
         opts = [("quoted", True)]
-        for term in ("abc", [("a",), ("b",)], ("foo", ("bar",), "baz"),
-                     ("a b",), [1, 2], "", b"ab"):
+        for term in (chars("abc"), ["a", "b"], ("foo", "bar", chars("baz")),
+                     "a b", [1, 2], chars(""), b"ab"):
             assert (_out(mod, ("writeq", term))
                     == _out(mod, ("write_term", term, opts))), term
 
@@ -463,8 +463,8 @@ class TestTheThreeWriterFamilies:
 
     def test_the_text_family_prints_a_string_as_its_text(self, mod):
         assert _out(mod, ("write_text", chars("abc"))) == "abc"
-        assert _out(mod, ("write_text", [("a",), ("b",)])) == "ab"
-        assert _out(mod, ("write_text", ("a b",))) == "a b"
+        assert _out(mod, ("write_text", ["a", "b"])) == "ab"
+        assert _out(mod, ("write_text", "a b")) == "a b"
         assert _out(mod, ("write_text", chars(""))) == "[]"
         assert _out(mod, ("write_text", [1, 2])) == "[1, 2]"
         assert _out(mod, ("writeln_text", chars("abc"))) == "abc\n"
@@ -496,8 +496,8 @@ class TestTheThreeWriterFamilies:
         # The display family keeps the ``", "`` the ISO family drops.
         S2 = Var()
         got2 = [deref(S2)
-                for _ in solve(("term_to_string", ("f", ("a",), chars("bc")), S2), mod)]
+                for _ in solve(("term_to_string", ("f", "a", chars("bc")), S2), mod)]
         assert got2 == [chars('f(a, "bc")')]
-        assert _out(mod, ("write_term", ("f", ("a",), chars("bc")),
+        assert _out(mod, ("write_term", ("f", "a", chars("bc")),
                           [("quoted", True), ("double_quotes", True)])) \
             == 'f(a,"bc")'

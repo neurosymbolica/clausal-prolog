@@ -89,7 +89,7 @@ def test_a_malformed_term_RAISES_a_type_error_rather_than_failing_quietly(tmp_pa
         list(call("bad", Var(), module=mod))
     inner = ei.value.term.args[0]
     assert inner.functor == "type_error" and inner.args[0] == mint("quantity")
-    assert inner.args[1] == ("quantity", 5, ("units", 1, ("dimensionless",)))
+    assert inner.args[1] == ("quantity", 5, ("units", 1, "dimensionless"))
 
 
 def test_a_term_slot_holding_a_bound_variable_still_reads(tmp_path):

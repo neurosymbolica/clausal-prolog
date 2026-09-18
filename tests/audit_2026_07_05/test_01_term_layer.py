@@ -411,7 +411,7 @@ class TestF010SliceWithinPrefix:
     def test_segstring_slice_in_prefix(self):
         B = Var()
         ss = SegString(["abc", VarSeg(B)])
-        assert ss[0:2] == "ab"
+        assert ss[0:2] == chars("ab")   # stage 2: a slice of text is TEXT (the carrier)
 
     def test_seglist_slice_in_prefix(self):
         B = Var()
@@ -594,15 +594,16 @@ class TestUnifyModes:
         ``"a"`` is a one-element STRING, not a char, so it never unifies
         with the char atom.
         """
+        # Stage 2: a bare ``str`` is an ATOM; the STRING is ``chars(...)``.
         H, T = Var(), Var()
-        assert unify("ab", [H, T], trail)
+        assert unify(chars("ab"), [H, T], trail)
         assert deref(H) == char_atom("a") and deref(T) == char_atom("b")
         trail.reset()
-        assert unify("", [], trail) and unify([], "", trail)
-        assert unify("a", [char_atom("a")], trail)
-        assert not unify("a", ["a"], trail)     # "a" is a STRING, not a char
-        assert not unify([mint("ab")], "ab", trail)   # 'ab' is 2 chars
-        assert not unify("ab", [char_atom("a")], trail)
+        assert unify(chars(""), [], trail) and unify([], chars(""), trail)
+        assert unify(chars("a"), [char_atom("a")], trail)
+        assert not unify(chars("a"), [chars("a")], trail)     # "a" is a STRING, not a char
+        assert not unify([mint("ab")], chars("ab"), trail)   # 'ab' is 2 chars
+        assert not unify(chars("ab"), [char_atom("a")], trail)
 
     def test_bytes_list_codes_all_modes(self, trail):
         H = Var()

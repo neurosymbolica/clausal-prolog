@@ -64,16 +64,14 @@ call_unify(PyObject *t1, PyObject *t2, TrailObject *trail)
 static inline PyObject *
 char_atom_obj(PyObject *ch1)
 {
-    return PyTuple_Pack(1, ch1);
+    return Py_NewRef(ch1);   /* STAGE 2: the char atom is the 1-char str itself */
 }
 
 /* True iff *e* is a char — the arity-0 cell of a 1-char str. */
 static inline int
 is_char_atom_obj(PyObject *e)
 {
-    return PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1
-        && PyUnicode_Check(PyTuple_GET_ITEM(e, 0))
-        && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(e, 0)) == 1;
+    return PyUnicode_Check(e) && PyUnicode_GET_LENGTH(e) == 1;   /* STAGE 2: a char is the 1-char str */
 }
 
 /* The spelling of the char *e* — BORROWED reference, valid while *e* is.
@@ -83,9 +81,7 @@ is_char_atom_obj(PyObject *e)
 static inline PyObject *
 char_spelling_obj(PyObject *e)
 {
-    if (PyTuple_CheckExact(e) && PyTuple_GET_SIZE(e) == 1)
-        return PyTuple_GET_ITEM(e, 0);
-    return e;
+    return e;   /* STAGE 2: a char atom is its own spelling */
 }
 
 /*

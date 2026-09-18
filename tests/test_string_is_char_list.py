@@ -119,10 +119,10 @@ class TestPartialListUnification:
     """
 
     def test_a_partial_list_on_the_left_destructures_a_string(self):
-        assert _first("partial_left", 2) == [("a",), chars("b")]
+        assert _first("partial_left", 2) == ["a", chars("b")]
 
     def test_a_partial_list_on_the_right_destructures_a_string(self):
-        assert _first("partial_right", 2) == [("a",), chars("b")]
+        assert _first("partial_right", 2) == ["a", chars("b")]
 
     def test_the_head_and_tail_pin_as_the_char_list_spelling(self):
         assert _holds("partial_left_pinned")
@@ -179,7 +179,7 @@ class TestPartialListUnificationAtTheTermLevel:
         h, t = Var(), Var()
         trail = Trail()
         assert unify(SegList([ConcreteSeg([h]), VarSeg(t)]), chars("ab"), trail)
-        assert deref(h) == ("a",)
+        assert deref(h) == "a"
         assert deref(t) == chars("b")
 
     def test_a_string_destructures_a_var_tailed_seglist(self):
@@ -188,7 +188,7 @@ class TestPartialListUnificationAtTheTermLevel:
         h, t = Var(), Var()
         trail = Trail()
         assert unify(chars("ab"), SegList([ConcreteSeg([h]), VarSeg(t)]), trail)
-        assert deref(h) == ("a",)
+        assert deref(h) == "a"
         assert deref(t) == chars("b")
 
     def test_the_tail_of_a_one_char_string_is_the_empty_remainder(self):
@@ -197,7 +197,7 @@ class TestPartialListUnificationAtTheTermLevel:
         h, t = Var(), Var()
         trail = Trail()
         assert unify(chars("a"), SegList([ConcreteSeg([h]), VarSeg(t)]), trail)
-        assert deref(h) == ("a",)
+        assert deref(h) == "a"
         # The empty remainder is the empty string, which IS ``[]``.
         assert deref(t) == chars("")
         assert _holds("empty_eq_nil")
@@ -212,5 +212,5 @@ class TestPartialListUnificationAtTheTermLevel:
             assert unify(SegList([ConcreteSeg([h]), VarSeg(t)]), rest, trail)
             seen.append(deref(h))
             rest = deref(t)
-        assert seen == [("a",), ("b",), ("c",)]
+        assert seen == ["a", "b", "c"]
         assert rest == chars("")

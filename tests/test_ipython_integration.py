@@ -38,9 +38,9 @@ def run_cell(source):
 # ── Basic term embedding ──────────────────────────────────────────────────────
 
 def test_embed_name_produces_the_atom():
-    # nv — THE SEAM: ``--foo`` is the atom cell, a runtime term.
+    # nv — THE SEAM: ``--foo`` is the atom (a str, stage 2), a runtime term.
     ns = run_cell("result = --foo")
-    assert ns["result"] == ("foo",)
+    assert ns["result"] == "foo"
 
 
 def test_embed_integer_is_native_int():

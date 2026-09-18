@@ -433,17 +433,17 @@ def _dims_to_term(dims) -> tuple:
     emitted term is one term. ``dims.items()`` pairs are already
     ``('metre', 1)`` -- functor-first ``metre(1)`` -- so nothing is rebuilt."""
     if not dims:
-        return ("dimensionless",)
+        return "dimensionless"
     return ("dimensions", *sorted(dims.items()))
 
 
 def _dims_from_term(t) -> dict:
     """The reverse: ``('dimensionless',)`` or ``('dimensions', *pairs)`` ->
     an atom-keyed dict. Order-insensitive. Raises on anything else."""
+    if t == "dimensionless":
+        return {}
     if type(t) is not tuple or not t or type(t[0]) is not str:
         raise TypeError("dims slot is not a term")
-    if t == ("dimensionless",):
-        return {}
     if t[0] != "dimensions" or len(t) < 2:
         raise TypeError("dims slot is neither dimensionless nor dimensions/N")
     dims: dict = {}
@@ -567,12 +567,8 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
     tuple becomes the ``('()', ...)`` data form unless it is already a term.
     Anything else uses ``('{module}\\x1f{class}', *match_args)``.
     """
-    if type(value) is str:
-        # STAGE 1 (spec 2026-09-18 §3): a Python str crossing the seam is
-        # TEXT today, and text is the chars carrier -- so a str becomes the
-        # carrier here (a dict KEY too: a string key is already a different
-        # key from the atom of the same spelling).  Stage 2 makes it the ATOM.
-        return chars(value)
+    # STAGE 2 (spec 2026-09-18 §3, Q1): a Python str crossing the seam IS the
+    # atom -- it passes through as a scalar; text is written chars(...)
     if isinstance(value, _SCALARS):
         return value
     if _is_already_engine_term(value):

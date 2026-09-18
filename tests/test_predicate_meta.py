@@ -531,7 +531,7 @@ class TestMakeAtom:
         from clausal.logic.predicate import make_atom
         a = make_atom("a")
         assert a == mint("a")
-        assert type(a) is tuple and len(a) == 1 and type(a[0]) is str
+        assert type(a) is str
         assert not isinstance(a, PredicateMeta)
 
     def test_repeated_calls_agree(self):

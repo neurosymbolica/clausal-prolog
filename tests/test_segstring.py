@@ -121,7 +121,7 @@ class TestSegStringUnification:
     def test_ground_match(self):
         # nv
         ss = SegString(["hello"])
-        assert unify(ss, "hello", Trail())
+        assert unify(ss, chars("hello"), Trail())
 
     def test_ground_mismatch(self):
         # nv
@@ -133,7 +133,7 @@ class TestSegStringUnification:
         trail = Trail()
         X = Var()
         ss = SegString(["hel", VarSeg(X)])
-        assert unify(ss, "hello", trail)
+        assert unify(ss, chars("hello"), trail)
         assert deref(X) == chars("lo")
 
     def test_two_varseg(self):
@@ -141,21 +141,21 @@ class TestSegStringUnification:
         trail = Trail()
         A, B = Var(), Var()
         ss = SegString([VarSeg(A), ",", VarSeg(B)])
-        assert unify(ss, "hello,world", trail)
+        assert unify(ss, chars("hello,world"), trail)
         assert deref(A) == chars("hello")
         assert deref(B) == chars("world")
 
     def test_empty_match(self):
         # nv
-        assert unify(SegString([""]), "", Trail())
-        assert unify(SegString([]), "", Trail())
+        assert unify(SegString([""]), chars(""), Trail())
+        assert unify(SegString([]), chars(""), Trail())
 
     def test_varseg_empty_binding(self):
         # nv
         trail = Trail()
         X = Var()
         ss = SegString([VarSeg(X), "abc"])
-        assert unify(ss, "abc", trail)
+        assert unify(ss, chars("abc"), trail)
         assert deref(X) == chars("")
 
     def test_string_vs_segstring_symmetric(self):
@@ -164,7 +164,7 @@ class TestSegStringUnification:
         trail = Trail()
         X = Var()
         ss = SegString(["hel", VarSeg(X)])
-        assert unify("hello", ss, trail)
+        assert unify(chars("hello"), ss, trail)
         assert deref(X) == chars("lo")
 
     def test_segstring_vs_char_list(self):
@@ -203,7 +203,7 @@ class TestAnEmptySegIsTheEmptyList:
     other directly.
     """
 
-    NIL_SPELLINGS = ([], "", b"", ())
+    NIL_SPELLINGS = ([], chars(""), b"", ())
 
     def _empties(self):
         return (SegList([ConcreteSeg([])]), SegString([""]), SegBytes([b""]))
@@ -235,7 +235,7 @@ class TestAnEmptySegIsTheEmptyList:
         trail = Trail()
         A = Var()
         ss = SegString([VarSeg(A)])
-        assert unify(A, "", trail)
+        assert unify(A, chars(""), trail)
         for nil in self.NIL_SPELLINGS:
             assert unify(ss, nil, Trail()), nil
 
@@ -256,7 +256,7 @@ class TestAnEmptySegIsTheEmptyList:
         # nv
         trail = Trail()
         A = Var()
-        assert unify(SegList([VarSeg(A)]), "", trail)
+        assert unify(SegList([VarSeg(A)]), chars(""), trail)
         assert deref(A) == chars("")
         assert not isinstance(deref(A), list)
         trail2 = Trail()
@@ -317,16 +317,16 @@ class TestConsRuleRetirementLockstep:
         # char atoms, so it unifies with one directly, not only through
         # SegString.  (The retirement was right while a str was an ATOM; it
         # is a STRING now.)
-        assert unify("hi", [char_atom('h'), char_atom('i')], Trail())
+        assert unify(chars("hi"), [char_atom('h'), char_atom('i')], Trail())
 
     def test_char_list_unifies_with_a_bare_str(self):
         # nv — symmetric direction.
-        assert unify([char_atom('h'), char_atom('i')], "hi", Trail())
+        assert unify([char_atom('h'), char_atom('i')], chars("hi"), Trail())
 
     def test_a_one_char_string_is_not_the_char(self):
         # nv — spec §6.2's row: ``"a"`` is the one-element LIST [a], not the
         # char atom, so the two do not unify.
-        assert not unify("a", char_atom("a"), Trail())
+        assert not unify(chars("a"), char_atom("a"), Trail())
 
 
 class TestSegStringOccursCheck:
@@ -394,7 +394,7 @@ class TestSegListStringPreserving:
         trail = Trail()
         T = Var()
         sl = SegList([ConcreteSeg([char_atom("h")]), VarSeg(T)])
-        assert unify(sl, "hello", trail)
+        assert unify(sl, chars("hello"), trail)
         assert deref(T) == chars("ello")
         assert is_chars(deref(T))
 
@@ -403,7 +403,7 @@ class TestSegListStringPreserving:
         trail = Trail()
         A, B = Var(), Var()
         sl = SegList([VarSeg(A), ConcreteSeg([char_atom(",")]), VarSeg(B)])
-        assert unify(sl, "hello,world", trail)
+        assert unify(sl, chars("hello,world"), trail)
         assert deref(A) == chars("hello")
         assert deref(B) == chars("world")
 
@@ -412,7 +412,7 @@ class TestSegListStringPreserving:
         trail = Trail()
         A = Var()
         sl = SegList([VarSeg(A), ConcreteSeg([char_atom("x")])])
-        assert unify(sl, "x", trail)
+        assert unify(sl, chars("x"), trail)
         assert deref(A) == chars("")
 
     def test_walk_handles_string_bound_varseg(self):

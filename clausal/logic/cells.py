@@ -73,7 +73,6 @@ not add representation machinery the engine already has.").
 
 from __future__ import annotations
 
-import os
 import sys
 from typing import Any
 
@@ -85,6 +84,7 @@ __all__ = [
     "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
     "CHARS_TAG", "chars", "is_chars", "chars_text",
+    "is_reserved_1tuple", "refuse_reserved_1tuple",
     "make_cell",
     "make_tuple_cell",
     "is_cell",
@@ -157,24 +157,22 @@ TUPLE_TAG = "()"
 CHARS_TAG = "$chars"
 
 
-# The LOUD INTERIM RULE of stage 1 (RULED 2026-09-18): between the carrier
-# landing and the atom flip, a bare Python ``str`` handed to the engine as
-# TEXT is refused at every text entry point, so that no producer can go on
-# minting bare-str text unnoticed -- the positive control for stage 1.
-# ARMED by default since stage 1 slice 8 (2026-09-18): ``CLAUSAL_BARE_STR_TEXT=allow``
-# is the diagnostic override only.  Stage 2 retires the rule: a bare str
-# becomes the ATOM and is not text at all.
-BARE_STR_TEXT = os.environ.get("CLAUSAL_BARE_STR_TEXT", "refuse")
+def is_reserved_1tuple(x: Any) -> bool:
+    """True for the arity-0 str-headed tuple ``('x',)`` -- the OLD atom cell,
+    RESERVED after stage 2 of the atoms-as-str flip (RULED 2026-09-18: a
+    future opaque Python object reference).  ``(TUPLE_TAG,)`` is the empty
+    tuple-DATA cell and is not it."""
+    return (type(x) is tuple and len(x) == 1 and type(x[0]) is str
+            and x[0] != TUPLE_TAG)
 
 
-def refuse_bare_str(x: Any, where: str) -> None:
-    """Raise if *x* is a bare Python str reaching *where* as text (interim rule)."""
-    if type(x) is str and BARE_STR_TEXT != "allow":
+def refuse_reserved_1tuple(x: Any) -> None:
+    """Raise on the reserved 1-tuple; the ONE spelling of the refusal."""
+    if is_reserved_1tuple(x):
         raise TypeError(
-            f"stage 1 of the atoms-as-str flip: a bare Python str {x!r} reached "
-            f"{where} as TEXT.  Text is the chars carrier ('$chars', s) -- build "
-            f"it with clausal.logic.cells.chars(s) (a ++ escape, to_term and "
-            f"every py-module do) or pass the list of char atoms.")
+            f"the 1-tuple {x!r} is reserved (a future opaque Python object "
+            f"reference); an atom is the str {x[0]!r} -- write mint({x[0]!r}) "
+            f"or the bare name")
 
 
 def chars(text: str) -> tuple:
@@ -325,6 +323,8 @@ def _cell_shape(x: Any) -> tuple[bool, Any]:
     """
     if type(x) is not tuple or len(x) < 1:
         return False, None
+    if len(x) == 1:
+        refuse_reserved_1tuple(x)       # STAGE 2: the old atom cell is RESERVED
     slot0 = x[0]
     return _valid_functor_slot(slot0), slot0
 
@@ -418,9 +418,10 @@ def refuse_control_construct_cell(cell: Any, functor: Any, context: str) -> None
         LogicException, type_error,
     )
     remedy = _CONTROL_CONSTRUCT_REMEDY[functor]
+    arity = 0 if type(cell) is str else len(cell) - 1   # STAGE 2: *cell* is the ATOM itself for the 0-arity case
     raise LogicException(type_error(
         "callable_control_construct_unsupported", cell,
-        f"{context}: {functor}/{len(cell) - 1} is a control construct, and a "
+        f"{context}: {functor}/{arity} is a control construct, and a "
         f"control construct built as a TERM is not callable yet — {remedy} "
         f"(deferred to the ISO-surface phase; see clausal/logic/cells.py "
         f"refuse_control_construct_cell)",

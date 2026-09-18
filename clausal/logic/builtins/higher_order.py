@@ -130,7 +130,9 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # ``existence_error(procedure, '[]'/N)``, exactly what Scryer
         # answers for ``call([])``.
         raise LogicException(string_goal_error("", len(extra_args), "call/N"))
-    elif type(goal_val) is str or is_chars(goal_val):   # stage 1: the carrier too
+    elif type(goal_val) is str:
+        functor, goal_args = goal_val, []   # STAGE 2: an atom is the 0-arity goal of its name
+    elif is_chars(goal_val):
         # THE FLIP (spec §6.4): a ``str`` is a STRING, so ``call("foo")`` is
         # not a call to ``foo/0``.  Task 15 item 3 (ISO alignment): the
         # string IS the compound ``'.'/2`` and so IS callable — what is
@@ -140,13 +142,13 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # a string here is always a mistake about representation, and a
         # silent failure is exactly how that mistake stays invisible.
         raise LogicException(
-            string_goal_error(chars_text(goal_val) if is_chars(goal_val) else goal_val, len(extra_args), "call/N"))
+            string_goal_error(chars_text(goal_val), len(extra_args), "call/N"))
     else:
         return None
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
     # The goal as the fold leaves it — the term both special routes below are
     # decided on (F4), and the culprit the control-construct refusal names.
-    folded = (functor,) + tuple(call_args)
+    folded = ((functor,) + tuple(call_args)) if call_args else functor   # STAGE 2: a 0-arity atom goal is the atom, never the reserved 1-tuple
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
         # Slots 1 and 2 are the qualification; everything past them is an
         # extra the fold has not placed yet, and it belongs to the INNER goal.

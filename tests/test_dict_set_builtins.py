@@ -23,6 +23,7 @@ import pytest
 from clausal.logic.database import Module
 from clausal.logic.solve import solve, query
 from clausal.logic.variables import Var, Trail, deref, unify
+from clausal.logic.cells import chars
 from clausal.terms import Call, LoadName, DictTerm, SetTerm
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_atom, mint, spelling
@@ -824,13 +825,13 @@ class TestInOperatorDictSet:
 
     def test_key_in_a_plain_dict_yields_the_canonical_nil_key(self):
         # nv
-        d = {"": 1, mint("a"): 2}
+        d = {chars(""): 1, mint("a"): 2}
         sols = self._capture("enum_keys", Var(), d)
         assert {s[0] for s in sols} == {(), mint("a")}
 
     def test_pair_in_a_plain_dict_yields_the_canonical_nil_key(self):
         # nv
-        d = {"": 1, mint("a"): 2}
+        d = {chars(""): 1, mint("a"): 2}
         sols = self._capture("enum_pairs", Var(), Var(), d)
         assert {s[0]: s[1] for s in sols} == {(): 1, mint("a"): 2}
 
@@ -838,7 +839,7 @@ class TestInOperatorDictSet:
         """The whole point: ``in`` must agree with itself across the two
         flavours of one term, and with ``gen_dict/3``/``dict_keys/2``."""
         # nv
-        plain, term = {"": 1, mint("a"): 2}, DictTerm({(): 1, mint("a"): 2})
+        plain, term = {chars(""): 1, mint("a"): 2}, DictTerm({(): 1, mint("a"): 2})
         assert (sorted(map(repr, (s[0] for s in
                                   self._capture("enum_keys", Var(), plain))))
                 == sorted(map(repr, (s[0] for s in
@@ -854,8 +855,8 @@ class TestInOperatorDictSet:
     def test_a_nil_key_is_FOUND_by_every_spelling_through_in(self):
         """The membership direction, not just enumeration."""
         # nv
-        for d in ({"": 1}, DictTerm({(): 1})):
-            for key in ([], "", b"", ()):
+        for d in ({chars(""): 1}, DictTerm({(): 1})):
+            for key in ([], chars(""), b"", ()):
                 assert len(self._capture("enum_keys", key, d)) == 1, (d, key)
                 assert len(self._capture("key_absent", key, d)) == 0, (d, key)
 
@@ -1172,7 +1173,7 @@ class TestInPredicateDictSet:
 # WRITERS had the mirror hole: they stored a raw key.
 
 #: Every spelling of nil, as a caller may write it.
-_NIL_SPELLINGS = ([], "", b"", ())
+_NIL_SPELLINGS = ([], chars(""), b"", ())
 
 
 def _nil_dicts():
@@ -1182,7 +1183,7 @@ def _nil_dicts():
     ``DictTerm.__init__``, so its stored key is un-normalised and any reader
     that indexes it directly with a folded key misses.
     """
-    return ({"": 1}, DictTerm({(): 1}))
+    return ({chars(""): 1}, DictTerm({(): 1}))
 
 
 class TestNilKeyAcrossTheDictFamily:

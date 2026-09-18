@@ -1215,7 +1215,11 @@ def term_to_ast_expr(
     # A predicate CLASS (arity ≥ 1 — the zero-arity/atom case returned above)
     # in term position.  Almost always the atom/predicate name clash.
     if isinstance(term, PredicateMeta):
-        raise PredicateAsTermError(term)
+        # STAGE 2 (spec 2026-09-18 §4): a predicate referenced BY NAME in
+        # argument position is the ATOM of that name -- the str.  The
+        # name-clash diagnostic is gone: an atom foo and a predicate foo/N
+        # coexist as in Prolog.
+        return ast.Constant(value=term.__name__)
 
     # A live BOUND Var whose value has no literal lowering (e.g. a
     # ``datetime.date`` produced by an earlier goal): reference the Var itself

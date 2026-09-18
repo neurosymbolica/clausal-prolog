@@ -25,6 +25,7 @@ from clausal.logic.runtime.list_unify import (
 from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.logic.solve import call
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.terms import Compound
@@ -142,10 +143,10 @@ class TestHeadToMatchPattern:
         # strings-as-lists contract). It now compiles to a wildcard capture
         # plus a recorded ("str", cap, literal) guard, mirroring the list path.
         list_guards: list = []
-        p = head_to_match_pattern("hello", {}, list_guards=list_guards)
+        p = head_to_match_pattern(chars("hello"), {}, list_guards=list_guards)
         assert isinstance(p, ast.MatchAs)
         assert p.name.startswith("_scap")
-        assert list_guards == [("str", p.name, "hello")]
+        assert list_guards == [("str", p.name, chars("hello"))]
 
     def test_bytes_gives_wildcard_capture_with_guard(self):
         # nv — bytes-as-lists: a bytes literal head no longer compiles to a
@@ -244,7 +245,7 @@ class TestHeadToMatchPattern:
         v = Var()
         ctx: dict[int, str] = {}
         inner = point(_x=v, _y=0)
-        outer = pair(left=inner, right="done")
+        outer = pair(left=inner, right=chars("done"))
         list_guards: list = []
         p = head_to_match_pattern(outer, ctx, list_guards=list_guards)
         assert isinstance(p, ast.MatchClass)
@@ -257,7 +258,7 @@ class TestHeadToMatchPattern:
         # longer compile to MatchValue, so a char-list caller can match).
         right_pat = p.kwd_patterns[1]
         assert isinstance(right_pat, ast.MatchAs)
-        assert ("str", right_pat.name, "done") in list_guards
+        assert ("str", right_pat.name, chars("done")) in list_guards
         assert v._id in ctx
 
     # ── Undefined term → wildcard ──

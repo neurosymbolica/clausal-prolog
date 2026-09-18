@@ -25,9 +25,9 @@ def test_to_python_unwraps_a_cell_atom():
     # canonical — it is what actually exercises the unwrap.  A cell of
     # arity >= 1 stays a tuple with converted elements, exactly as
     # ``_deep_deref`` preserves tuples today.
-    assert to_python(("bar",)) == "bar"
-    assert to_python([("a",), ("f", ("b",))]) == ["a", ("f", "b")]
-    assert to_python(DictTerm({("k",): ("v",)})) == {"k": "v"}
+    assert to_python(mint("bar")) == "bar"
+    assert to_python([mint("a"), ("f", mint("b"))]) == ["a", ("f", "b")]
+    assert to_python(DictTerm({mint("k"): mint("v")})) == {"k": "v"}
 
 
 def test_to_python_walks_a_ground_segstring():
@@ -127,6 +127,7 @@ def test_a_cell_atom_reaches_a_thunk_as_its_spelling(tmp_path):
     logic_mod = mod.__dict__["$module"]
 
     out = Var()
-    results = [deref(out) for _ in call("to_upper", ("hello",), out,
+    results = [deref(out) for _ in call("to_upper", mint("hello"), out,
                                         module=logic_mod)]
-    assert results == [chars("HELLO")]
+    # Stage 2 (spec §3 Q1): a thunk's str result is the ATOM, not the carrier.
+    assert results == [mint("HELLO")]

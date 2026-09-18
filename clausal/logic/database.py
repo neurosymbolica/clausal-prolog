@@ -1400,7 +1400,12 @@ def head_key(head: Any) -> tuple[str, int]:
         return head.functor, len(head)
     if is_term_instance(head):
         return type(head).__name__, len(term_field_names(head))
-    # Zero-arity PredicateMeta class: the class IS the atom
+    # Zero-arity PredicateMeta class in the HEAD channel -- kept deliberately
+    # (STAGE 2, spec §4 made the class no TERM: the functor/arity twins answer
+    # None for it).  A head names a PREDICATE, and a clause-less DECLARED
+    # 0-arity predicate is still its class with no row (P1: declared
+    # clause-less = class), so its first assertz'd clause arrives here as
+    # that class and must key name/0.
     if isinstance(head, PredicateMeta) and not head._fields:
         return head.__name__, 0
     # A CELL names its predicate in slot 0 (P3-3 Task 5, R11).  Last, because
@@ -1408,6 +1413,8 @@ def head_key(head: Any) -> tuple[str, int]:
     # fires for a tuple.  A ``TUPLE_TAG`` cell and a slot-0-Var tuple are DATA,
     # not a predicate head, and keep the TypeError below -- which is exactly
     # what ``compound_cell_shape`` excludes.
+    if type(head) is str:
+        return head, 0                 # STAGE 2: an atom head is name/0
     is_cell_head, cell_functor_name = compound_cell_shape(head)
     if is_cell_head:
         return cell_functor_name, len(head) - 1

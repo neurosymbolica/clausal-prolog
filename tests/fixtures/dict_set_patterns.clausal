@@ -130,12 +130,15 @@ test("subscript nonground errors") <- (
 test("in present key") <- ("a" in {"a": 1, "b": 2})  # nv
 test("in absent key fails") <- (not ("z" in {"a": 1}))  # nv
 test("in is key not value") <- (not (1 in {"a": 1}))  # nv
+# Stage 2 (spec §3 Q1): a ``++`` escape's Python strs are ATOMS, while the
+# keys enumerated under -double_quotes(chars) are STRINGS -- so the string
+# side is taken through atom_chars/2 before the comparison.
 test("in enumerates keys") <- (
-    findall(K, K in {"a": 1, "b": 2}, KS),
+    findall(A, (K in {"a": 1, "b": 2}, atom_chars(A, K)), KS),
     KS is ++(sorted(["a", "b"])),
 )  # nv
 test("in pair mode") <- (
-    findall([K, V], (K, V) in {"a": 1, "b": 2}, PS),
+    findall([A, V], ((K, V) in {"a": 1, "b": 2}, atom_chars(A, K)), PS),
     PS is ++(sorted([["a", 1], ["b", 2]])),
 )  # nv
 

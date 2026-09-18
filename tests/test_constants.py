@@ -865,12 +865,12 @@ def test_a_bare_name_is_the_atom_and_the_escape_is_the_value(tmp_path):
         v = Var()
         return [deref(v) for _ in call(goal, v, module=mod)]
 
-    assert ask("bare") == [("max_fine",)], "the bare name is the atom"
+    assert ask("bare") == ["max_fine"], "the bare name is the atom"
     assert ask("escaped") == [5000], "++ is the value"
     # And the escape is a LOOKUP, not a fold: rebinding the global moves it.
     # The atom cannot move -- it was compiled into the clause as a literal.
     m.max_fine = 9999
-    assert ask("bare") == [("max_fine",)]
+    assert ask("bare") == ["max_fine"]
     assert ask("escaped") == [9999], "++ resolves the global at solve time"
 
 
@@ -916,7 +916,7 @@ def test_one_name_is_the_atom_bare_and_the_constant_through_the_escape(tmp_path)
         return [deref(v) for _ in call(goal, v, module=mod)]
 
     assert ask("constant_is") == [5000], "++pi is the value"
-    assert ask("atom_is") == [("pi",)], "bare pi is the atom"
+    assert ask("atom_is") == ["pi"], "bare pi is the atom"
     assert len(list(call("agrees", module=mod))) == 1, (
         "the bare form must be the same atom global_atom/2 yields")
 
@@ -938,7 +938,7 @@ def test_the_two_readings_hold_in_either_declaration_order(tmp_path):
         return [deref(v) for _ in call(goal, v, module=mod)]
 
     assert ask("constant_is") == [5000]
-    assert ask("atom_is") == [("pi",)]
+    assert ask("atom_is") == ["pi"]
 
 
 def test_a_private_atom_listing_works_the_same_way(tmp_path):
@@ -959,7 +959,7 @@ def test_a_private_atom_listing_works_the_same_way(tmp_path):
         return [deref(v) for _ in call(goal, v, module=mod)]
 
     assert ask("constant_is") == [5000]
-    assert ask("atom_is") == [("pi",)]
+    assert ask("atom_is") == ["pi"]
 
 
 def test_a_constant_name_used_bare_must_still_be_declared_as_an_atom(tmp_path):
@@ -1156,7 +1156,7 @@ def test_constant_value_2_reflects_a_declaration(tmp_path):
     n, v2 = Var(), Var()
     pairs = [(deref(n), deref(v2))
              for _ in call("enumerate", n, v2, module=mod)]
-    assert (("cvref_pi",), 3.14159) in pairs, pairs
+    assert ("cvref_pi", 3.14159) in pairs, pairs
 
 
 def test_constant_value_2_reads_the_name_as_an_atom(tmp_path):
@@ -1269,8 +1269,8 @@ def test_constant_number_units_3_enumerates_only_united_constants(tmp_path):
     # builtin never sees its calling module), so every united constant any
     # loaded module declared answers here. Unique names keep this test from
     # depending on what else the suite has loaded.
-    assert ("cnu4_fine",) in names
-    assert ("cnu4_plain",) not in names, "a unitless constant is not united"
+    assert "cnu4_fine" in names
+    assert "cnu4_plain" not in names, "a unitless constant is not united"
 
 
 @pytest.mark.parametrize("value", ["[1, 2]", "'hello'", "{a: 1}", "True"])

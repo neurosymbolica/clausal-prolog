@@ -48,8 +48,7 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     """
     d = deref(target)
     if type(d) is str:
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(d, "a star-list pattern target")   # interim rule
+        return False                   # STAGE 2: an atom is not a sequence
 
     # Normalise ground SegList → plain list so the list branch fires.
     # Non-ground SegLists delegate to _head_list_unify_input which returns False.
@@ -484,7 +483,9 @@ def _in_iter(collection, pair_mode):
         # dict is handed back uncopied (two O(1) membership tests), so the
         # common case still iterates in place.
         return data.items() if pair_mode else iter(data)
-    collection = _unwrap(collection)    # stage 1: the carrier iterates as its chars
+    if type(collection) is str:
+        return iter(())                # STAGE 2: an atom is not a collection
+    collection = _unwrap(collection)    # the carrier iterates as its chars
     if type(collection) is str:
         # THE FLIP (spec §6.2): a string is the LIST OF ITS CHAR ATOMS, so
         # ``X in "abc"`` enumerates ``("a",)``, ``("b",)``, ``("c",)`` — the
@@ -669,8 +670,7 @@ def _body_multi_star_unify(target, segments, trail):
     """
     d = deref(target)
     if type(d) is str:
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(d, "a multi-star pattern target")   # interim rule
+        return                         # STAGE 2: an atom is not a sequence -- no solutions
     d = _unwrap(d)
     # Strings and bytes are handled directly (no list conversion) so that star
     # vars bind to substrings/subbytes preserving type.

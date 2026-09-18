@@ -247,68 +247,37 @@ def _spellings_mode(set_local: str) -> ast.expr:
 
 
 def _is_atom_inline(elem_local: str) -> ast.expr:
-    """``elem.__class__ is $tuple and len(elem) == 1 and elem[0].__class__ is
-    $str`` — ``atoms.is_atom`` spelled out in the emitted code.
+    """``elem.__class__ is $str`` — ``atoms.is_atom`` spelled out in the
+    emitted code.
 
-    Inline rather than the ``$cset_atom`` call this replaces on the hot arm,
-    on measurement: the call is 67 ns of a ~110 ns fast path (2 M-iteration
-    ``timeit``, this box), which is most of what the membership goal costs
-    post-flip.  Every conjunct is load-bearing:
-
-    * ``len(elem) == 1`` — without it the compound cell ``("f", 1)`` would
-      look up its FUNCTOR in a spellings set and hit for any atom named
-      ``f``;
-    * ``elem[0].__class__ is $str`` — without it ``([1],)`` would reach
-      ``hash`` and raise ``TypeError`` inside a membership test.
+    STAGE 2 of the atoms-as-str flip: an atom IS the Python ``str``, so the
+    test is one class check (it was ``tuple`` + ``len == 1`` + slot-0 ``str``
+    for the arity-0 cell).  Inline rather than the ``$cset_atom`` call this
+    replaces on the hot arm, on measurement: the call was 67 ns of a ~110 ns
+    fast path.  A string is the chars CARRIER (a 2-tuple) and never passes.
 
     ``elem_local`` is a plain local Name (the prologue's ``$deref`` result),
     so repeating it costs nothing and has no side effect.
     """
-    return _locate(ast.BoolOp(op=ast.And(), values=[
-        _locate(ast.Compare(
-            left=_locate(ast.Attribute(
-                value=_name(elem_local), attr="__class__", ctx=ast.Load(),
-            )),
-            ops=[ast.Is()],
-            comparators=[_name("$tuple")],
+    return _locate(ast.Compare(
+        left=_locate(ast.Attribute(
+            value=_name(elem_local), attr="__class__", ctx=ast.Load(),
         )),
-        _locate(ast.Compare(
-            left=_call(_name("len"), _name(elem_local)),
-            ops=[ast.Eq()],
-            comparators=[_locate(ast.Constant(value=1))],
-        )),
-        _locate(ast.Compare(
-            left=_locate(ast.Attribute(
-                value=_locate(ast.Subscript(
-                    value=_name(elem_local),
-                    slice=_locate(ast.Constant(value=0)),
-                    ctx=ast.Load(),
-                )),
-                attr="__class__", ctx=ast.Load(),
-            )),
-            ops=[ast.Is()],
-            comparators=[_name("$str")],
-        )),
-    ]))
+        ops=[ast.Is()],
+        comparators=[_name("$str")],
+    ))
 
 
 def _const_set_lookup(set_local: str, mode_local: str, elem_local: str) -> ast.expr:
-    """``(elem[0] if <spellings mode> else elem) in set_local``.
+    """``elem in set_local``.
 
-    In spellings mode the guard has already established that the left operand
-    is an atom, so slot 0 exists and is its spelling.  In mixed mode the set
-    holds whole terms and the operand is looked up as it stands.
+    STAGE 2: in spellings mode the set holds the atoms themselves (an atom IS
+    its spelling), and in mixed mode it holds whole terms -- the operand is
+    looked up as it stands in both, so *mode_local* no longer selects a
+    slot-0 read.  It stays in the signature for the guard's sake.
     """
     return _locate(ast.Compare(
-        left=_locate(ast.IfExp(
-            test=_name(mode_local),
-            body=_locate(ast.Subscript(
-                value=_name(elem_local),
-                slice=_locate(ast.Constant(value=0)),
-                ctx=ast.Load(),
-            )),
-            orelse=_name(elem_local),
-        )),
+        left=_name(elem_local),
         ops=[ast.In()],
         comparators=[_name(set_local)],
     ))

@@ -1807,7 +1807,7 @@ def _ensure_text_list_imports() -> None:
     if _TEXT_SPELLINGS:
         return
     from clausal.terms import SegList, SegString  # noqa: PLC0415
-    _TEXT_SPELLINGS = (str, SegString)
+    _TEXT_SPELLINGS = (SegString,)          # STAGE 2: a bare str is an ATOM; the carrier is unwrapped by the caller
     _LIST_SPELLINGS = (list, SegList)
 
 
@@ -1831,32 +1831,57 @@ def _text_list_eq(l, r):
     A char atom against a 1-char str stays UNEQUAL: ``"a"`` is the one-element
     list ``[a]``, not the cell ``a``, and a tuple is neither spelling here.
     """
-    from clausal.logic.cells import is_chars, chars_text, refuse_bare_str  # noqa: PLC0415
-    # (no refuse here: the reflection layer compares reified variable NAMES,
-    # bare strs by design, with ==/!= -- a comparison is not a text entry point)
-    unwrapped = False
-    if is_chars(l):
-        l = chars_text(l); unwrapped = True
-    if is_chars(r):
-        r = chars_text(r); unwrapped = True
+    from clausal.logic.cells import chars, is_chars, chars_text  # noqa: PLC0415
     if not _TEXT_SPELLINGS:
         _ensure_text_list_imports()
-    if unwrapped and isinstance(l, _TEXT_SPELLINGS) and isinstance(r, _TEXT_SPELLINGS):
-        # STAGE 1: a carrier against the bare str it holds (or another
-        # carrier) is one text term in two spellings -- Python's ``==`` on
-        # the ORIGINALS (a tuple against a str) would say no.
+    l_text = is_chars(l) or isinstance(l, _TEXT_SPELLINGS)
+    r_text = is_chars(r) or isinstance(r, _TEXT_SPELLINGS)
+    if is_chars(l):
+        l = chars_text(l)
+    if is_chars(r):
+        r = chars_text(r)
+    if l_text and r_text:
         from clausal.logic.constraints import structural_eq  # noqa: PLC0415
         return structural_eq(l, r)
-    if isinstance(l, _TEXT_SPELLINGS):
+    if l_text:
         if not isinstance(r, _LIST_SPELLINGS):
             return None
-    elif isinstance(l, _LIST_SPELLINGS):
-        if not isinstance(r, _TEXT_SPELLINGS):
+        return _text_eq_list(l, r)
+    if isinstance(l, _LIST_SPELLINGS):
+        if not r_text:
             return None
-    else:
-        return None
-    from clausal.logic.constraints import structural_eq  # noqa: PLC0415
-    return structural_eq(l, r)
+        return _text_eq_list(r, l)
+    return None
+
+
+def _text_eq_list(text, lst) -> bool:
+    """The text (a str already unwrapped from the carrier, or a SegString)
+    against a list: equal iff the list is exactly the text's chars.  STAGE 2:
+    the C unifier reads a bare str as an ATOM, so this compare is done here,
+    char by char (a char is a 1-char str)."""
+    from clausal.logic.cells import chars, is_chars, chars_text  # noqa: PLC0415
+    from clausal.terms import SegString, SegList  # noqa: PLC0415
+    if isinstance(text, SegString):
+        w = text.__walk__()
+        if not is_chars(w):
+            from clausal.logic.constraints import structural_eq  # noqa: PLC0415
+            return structural_eq(text, lst)           # non-ground: the unifier decides
+        text = chars_text(w)
+    if isinstance(lst, SegList):
+        w = lst.__walk__()
+        if is_chars(w):
+            return chars_text(w) == text
+        if not isinstance(w, list):
+            from clausal.logic.constraints import structural_eq  # noqa: PLC0415
+            return structural_eq(chars(text), lst)
+        lst = w
+    if len(lst) != len(text):
+        return False
+    for c, e in zip(text, lst):
+        e = deref(e)
+        if not (type(e) is str and e == c):
+            return False
+    return True
 
 
 def _both_ground(l, r) -> bool:
@@ -2559,14 +2584,13 @@ def _op_spelling(op, context):
     ``None`` and failed silently instead of raising, exactly the reporting
     hole this funnel exists to close.
     """
-    from clausal.logic.runtime._seg_helpers import (  # noqa: PLC0415
-        normalize_seg_input,
-    )
+    from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
     op_as_written = op
-    op = normalize_seg_input(op)
+    op = walk_seg(op)
     if is_atom(op):
         return spelling(op)
-    if type(op) is str:
+    if is_chars(op):                   # STAGE 2: a str IS the atom; the carrier is the string
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error,
         )

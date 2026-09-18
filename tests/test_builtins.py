@@ -470,7 +470,7 @@ class TestWK5:
 
     def test_signature_rejects_a_string_name(self):
         """A string in the name position is a type error, not a silent miss."""
-        # nv — spec §6.4: `signature("mypred", 2, N)` asks about the LIST
+        # nv — spec §6.4: `signature(chars("mypred"), 2, N)` asks about the LIST
         # [m,y,p,r,e,d], which is not a predicate name.
         from clausal.logic.exceptions import LogicException
 
@@ -478,7 +478,7 @@ class TestWK5:
         mod.db.register_signature("mypred", 2, ("arg0", "arg1"))
         names = Var()
         goal = Call(
-            func=LoadName(name="signature"), args=["mypred", 2, names], kwargs=[]
+            func=LoadName(name="signature"), args=[chars("mypred"), 2, names], kwargs=[]
         )
         with pytest.raises(LogicException) as exc:
             sol_var(goal, names, mod=mod)

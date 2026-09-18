@@ -81,9 +81,7 @@ def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
     if is_chars(s):
         return chars_text(s)           # stage 1: a chars string is its text here
     if isinstance(s, str):
-        from clausal.logic.cells import refuse_bare_str  # noqa: PLC0415
-        refuse_bare_str(s, f"regex {pred} argument {arg}")   # interim rule
-        return s
+        return s                       # STAGE 2: an atom -- its spelling is the subject text
     if isinstance(s, (list, tuple)):
         if not s:
             return ""

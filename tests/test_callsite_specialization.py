@@ -11,7 +11,7 @@ and wiring into compile_predicate_trampoline.
 import ast
 import pytest
 
-from clausal.logic.atoms import mint
+from clausal.logic.atoms import mint, spelling
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
 from clausal.logic.compiler.arg_index import (
@@ -118,7 +118,7 @@ class TestIndexPlansExposed:
         assert 0 in pred_cls._index_plans
         # An atom keys as the arity-0 CELL it is: (spelling, 0) — spec §6.9.
         assert set(pred_cls._index_plans[0].keys()) == {
-            (a[0], 0) for a in atoms}
+            (spelling(a), 0) for a in atoms}
 
     def test_index_plans_contains_integer_keys(self):
         """Integer-keyed predicates expose integer keys in _index_plans."""
@@ -277,7 +277,7 @@ class TestStaticCallKey:
         # UNINDEXABLE, so it has no static key either; the ATOM it used to
         # be is now the arity-0 cell, which reaches a call site as an
         # ``ast.Tuple`` (below).
-        assert _static_call_key(ast.Constant(value="red")) is None
+        assert _static_call_key(ast.Constant(value="red")) == ("red", 0)   # STAGE 2: a str constant is the ATOM red/0
 
     def test_atom_cell_constant(self):
         # nv — an atom argument is ``ast.Tuple([Constant("red")])`` after

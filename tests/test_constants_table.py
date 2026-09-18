@@ -98,7 +98,7 @@ def test_money_at_names_a_column_other_than_the_last(tmp_path):
                                    usd_cent, money_at(3))
     """)
     rows = _rows(m, "entry", 4)
-    assert [r[0] for r in rows] == [("revenue",), ("assets",)]
+    assert [r[0] for r in rows] == ["revenue", "assets"]
     assert [r[2].value for r in rows] == [Decimal("2500000000.00"),
                                           Decimal("500000000.00")]
 
@@ -190,7 +190,7 @@ def test_the_units_form_takes_any_unit(tmp_path):
     """)
     rows = _rows(m, "span", 2)
     from clausal.modules.units import metre
-    assert [r[0] for r in rows] == [("short",), ("long",)]
+    assert [r[0] for r in rows] == ["short", "long"]
     assert [r[1].value for r in rows] == [5, 900]
     assert all(r[1].dims == {"metre": 1} for r in rows)
 

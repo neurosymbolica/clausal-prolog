@@ -119,9 +119,7 @@ def wrap_text(val):
     back is TEXT, and text is the chars carrier.  Top level only, the mirror
     of :func:`unwrap_atom`'s one-level outbound rule -- a container crosses
     raw.  Stage 2 makes a bare str the ATOM and this becomes identity."""
-    if type(val) is str:
-        return chars(val)
-    return val
+    return val                         # STAGE 2: a str a thunk hands back IS the atom (identity)
 
 
 def unwrap_atom(val):

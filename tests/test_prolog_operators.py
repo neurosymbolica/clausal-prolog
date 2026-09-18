@@ -188,7 +188,7 @@ class TestEndToEnd:
         lm = mod.__clausal_module__
         v = Var()
         results = [deref(v) for _ in call("color", v, module=lm)]
-        assert {type(r).__name__ for r in results} == {"tuple"}
+        assert {type(r).__name__ for r in results} == {"str"}      # STAGE 2: an atom is a str
         assert set(results) == {mint("red"), mint("green"), mint("blue")}
 
     def test_iso_truncate_div(self, tmp_path):

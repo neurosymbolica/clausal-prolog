@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
@@ -258,7 +259,7 @@ class TestMultipleAccumulators:
             # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may
             # promote to str.
             d = deref(items)
-            assert d == ["c", "b", "a"] or d == "cba"
+            assert d == ["c", "b", "a"] or d == chars("cba")
             break
 
     def test_partial_overlap(self, tmp_path):
@@ -281,7 +282,7 @@ class TestMultipleAccumulators:
             # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may
             # promote to str.
             d = deref(items)
-            assert d == ["x"] or d == "x"
+            assert d == ["x"] or d == chars("x")
             break
 
 
@@ -499,7 +500,7 @@ class TestEdcgFixture:
             # Phase 2 Task 13 Liskov rule: list-of-1-char-strs may
             # promote to str (reversed due to prepend).
             d = deref(items)
-            assert d == ["c", "b", "a"] or d == "cba"
+            assert d == ["c", "b", "a"] or d == chars("cba")
             break
 
 

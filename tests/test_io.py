@@ -163,7 +163,7 @@ class TestWrite:
         TEXT rendering moved to ``write_text/1`` (pinned below)."""
         # nv
         t = Trail()
-        out = _capture_stdout("write", 1, "hello", t)
+        out = _capture_stdout("write", 1, chars("hello"), t)
         assert out == "[h,e,l,l,o]"
 
     def test_write_int(self):
@@ -176,7 +176,7 @@ class TestWrite:
         # nv
         v = Var()
         t = Trail()
-        unify(v, "world", t)
+        unify(v, chars("world"), t)
         out = _capture_stdout("write", 1, v, t)
         assert out == "[w,o,r,l,d]"
 
@@ -187,7 +187,7 @@ class TestWrite:
         x = Var()
         t = Trail()
         unify(x, 42, t)
-        out = _capture_stdout("write", 1, f"hi {x}", t)
+        out = _capture_stdout("write", 1, chars(f"hi {x}"), t)
         assert out == "[h,i, ,4,2]"
 
     def test_write_unbound_var(self):
@@ -286,7 +286,7 @@ class TestWriteText:
     def test_write_text_empty_string_is_the_empty_list(self):
         # nv
         t = Trail()
-        assert _capture_stdout("write_text", 1, "", t) == "[]"
+        assert _capture_stdout("write_text", 1, chars(""), t) == "[]"
 
     def test_writeln_text_appends_a_newline(self):
         # nv
@@ -311,7 +311,7 @@ class TestWriteln:
     def test_writeln_string(self):
         # nv
         t = Trail()
-        out = _capture_stdout("writeln", 1, "hello", t)
+        out = _capture_stdout("writeln", 1, chars("hello"), t)
         assert out == "[h,e,l,l,o]\n"
 
     def test_writeln_int(self):
@@ -339,7 +339,7 @@ class TestWriteln:
         unify(y, 25, t)
         out = _capture_stdout("writeln_text", 1, chars(f"{x} is {y} years old"), t)
         assert out == "Alice is 25 years old\n"
-        out2 = _capture_stdout("writeln", 1, f"{y}!", t)
+        out2 = _capture_stdout("writeln", 1, chars(f"{y}!"), t)
         assert out2 == "[2,5,!]\n"
 
     def test_writeln_succeeds(self):
@@ -362,7 +362,7 @@ class TestPrintTerm:
     def test_print_term_string(self):
         # nv
         t = Trail()
-        out = _capture_stdout("print_term", 1, "hello", t)
+        out = _capture_stdout("print_term", 1, chars("hello"), t)
         # term_str shows a STRING double-quoted (spec §6.7)
         assert out.strip() == '"hello"'
 

@@ -28,7 +28,7 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import (
     NIL_SPELLING, _functor_name, _arity, _nth_arg, _args_list, _is_empty_list,
 )
-from clausal.logic.runtime._seg_helpers import normalize_seg_input
+from clausal.logic.runtime._seg_helpers import walk_seg
 
 
 # ── Python fallbacks for _copy_term / _collect_vars ───────────────────────────
@@ -411,7 +411,7 @@ def _functor__3(term, name, arity, trail, k):
         # surfaces here as a still-Seg* shape; ``_functor_name``
         # returns None for that and we fall through to silent
         # failure, matching the existing "unknown shape" convention.
-        term_val = normalize_seg_input(term_val)
+        term_val = walk_seg(term_val)
         f_val = _functor_name(term_val)
         a_val = _arity(term_val)
         if f_val is None or a_val is None:
@@ -442,7 +442,7 @@ def _arg__3(n, term, arg_out, trail, k):
         # todo/audit-tests-input-output-mode-coverage.md.  Same _nth_arg
         # semantics as the ground mode, so a list enumerates its cons view
         # (1 → head, 2 → tail) and arity-0 terms yield nothing.
-        term_norm = normalize_seg_input(term_val)
+        term_norm = walk_seg(term_val)
         index = 1
         while True:
             try:
@@ -459,7 +459,7 @@ def _arg__3(n, term, arg_out, trail, k):
         return
     # SegList/SegString never appear at the Clausal surface — walk
     # to ground form first (user decision 2026-06-13).
-    term_val = normalize_seg_input(term_val)
+    term_val = walk_seg(term_val)
     try:
         arg_val = _nth_arg(term_val, n_val)
     except IndexError:
@@ -489,7 +489,7 @@ def _univ__2(term, lst, trail, k):
         # Decomposition. SegList/SegString never appear at the
         # Clausal surface — walk to ground form first (user decision
         # 2026-06-13).
-        term_val = normalize_seg_input(term_val)
+        term_val = walk_seg(term_val)
         f_val = _functor_name(term_val)
         if f_val is None:
             return
@@ -697,8 +697,6 @@ def _global_atom__2(name, atom, trail, k):
         # compatibility) a 0-arity PredicateMeta's __name__.
         if _term_is_atom(atom_val):
             cls_name = spelling(atom_val)
-        elif is_zero_field_class(atom_val):
-            cls_name = atom_val.__name__
         else:
             return
         # Equality, never identity (spec §2/§5.2).
@@ -723,7 +721,7 @@ def _global_atom__2(name, atom, trail, k):
         if _term_is_atom(val):
             if spelling(val) != key:
                 continue
-        elif not is_zero_field_class(val):
+        else:
             continue
         mark = trail.mark()
         if unify(name, mint(key), trail) and unify(atom, val, trail):

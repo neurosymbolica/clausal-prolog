@@ -88,7 +88,7 @@ def test_capitalised_quoted_atom_in_argument_position_still_works(tmp_path):
     """An argument was never a functor position, so this always loaded; it is
     pinned because the change is about how a quoted spelling is READ."""
     mod = _load(tmp_path, "arg", "kind('Oral'),\n")
-    assert _answers(mod, "kind", 1) == [(("Oral",),)]
+    assert _answers(mod, "kind", 1) == [("Oral",)]
 
 
 def test_lowercase_quoted_functor_is_unchanged(tmp_path):

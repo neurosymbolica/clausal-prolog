@@ -1302,9 +1302,9 @@ class TestQueryWfsJudgesCompositeGoals:
         X = Var()
         rows = query_wfs(("p", X), {"X": X}, module=mod)
         by = {r["X"]: r for r in rows}
-        assert set(by) == {("a",), ("b",), ("c",), ("d",)}
-        assert by[("d",)]["_truth"] is True and by[("d",)]["_delays"] == frozenset()
-        for k in (("a",), ("b",), ("c",)):
+        assert set(by) == {"a", "b", "c", "d"}
+        assert by["d"]["_truth"] is True and by["d"]["_delays"] == frozenset()
+        for k in ("a", "b", "c"):
             assert by[k]["_truth"] is Undefined
             assert any(dn.functor == "wins" and dn.arity == 1 for dn in by[k]["_delays"])
         # (a conjunction CELL is not callable at the solve surface yet --
@@ -1313,7 +1313,7 @@ class TestQueryWfsJudgesCompositeGoals:
         # definite answers come first, conditional ones after resolution
         Z = Var()
         rows = query_wfs(("p", Z), {"Z": Z}, module=mod)
-        assert rows[0]["Z"] == ("d",) and rows[0]["_truth"] is True
+        assert rows[0]["Z"] == "d" and rows[0]["_truth"] is True
 
     def test_rows_are_not_collapsed_when_no_variables_are_exported(self, tmp_path):
         """Dedup of deferred answers is over the goal's OWN variables; the
@@ -1367,9 +1367,9 @@ class TestAClausePrefixDelayCoversEveryAnswer:
         mod = self._mod(tmp_path, "_cp1")
         X = Var()
         rows = {r["X"]: r for r in query_wfs(("pp", X), {"X": X}, module=mod)}
-        assert set(rows) == {("one",), ("two",), ("three",)}
-        assert rows[("one",)]["_truth"] is Undefined
-        assert rows[("two",)]["_truth"] is Undefined, (
+        assert set(rows) == {"one", "two", "three"}
+        assert rows["one"]["_truth"] is Undefined
+        assert rows["two"]["_truth"] is Undefined, (
             "the second answer stands on the same delayed `not u(one)` as the "
             "first; reporting it True is unsound in the direction a caller "
             "cannot work around")
@@ -1377,10 +1377,10 @@ class TestAClausePrefixDelayCoversEveryAnswer:
         # across answers risks the opposite error -- charging a condition to an
         # answer that never stood on it -- so pin which delay each row carries,
         # not merely that it has one.
-        for k in (("one",), ("two",)):
+        for k in ("one", "two"):
             assert any(dn.functor == "u" and dn.arity == 1
                        for dn in rows[k]["_delays"]), rows[k]["_delays"]
         # The fact clause has no prefix at all: it must come back plain true
         # with NOTHING charged to it, which is the non-leak direction.
-        assert rows[("three",)]["_truth"] is True
-        assert rows[("three",)]["_delays"] == frozenset()
+        assert rows["three"]["_truth"] is True
+        assert rows["three"]["_delays"] == frozenset()

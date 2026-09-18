@@ -49,7 +49,7 @@ def test_a_profile_key_survives_an_import_from_of_the_same_name(tmp_path):
     """)
     v = Var()
     rows = [deref(v) for _ in call("look", v, module=m.__dict__["$module"])]
-    assert rows == [("eur",)], rows
+    assert rows == ["eur"], rows
 
 
 def test_a_single_segment_import_from_does_not_bind_the_module(tmp_path):

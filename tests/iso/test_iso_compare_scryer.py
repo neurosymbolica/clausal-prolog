@@ -19,8 +19,8 @@ import operator as _op
 import pytest
 
 
-_YES = repr(("yes",))
-_NO = repr(("no",))
+_YES = repr("yes")
+_NO = repr("no")
 
 
 def _yesno_src(goal, extra_atoms=()):
@@ -508,6 +508,7 @@ def _identity_table():
     from decimal import Decimal
     from fractions import Fraction
     from clausal.terms import Compound, SegList
+    from clausal.logic.cells import chars
     return [
         # (a, b, structural_eq, iso '==')
         (1, 1.0, True, False),                 # the ISO case
@@ -521,7 +522,7 @@ def _identity_table():
         ({"a": 1}, {"a": 1.0}, True, False),
         ({1}, {1.0}, True, False),
         # Representation, not type: these must stay identical.
-        ("ab", [("a",), ("b",)], True, True),  # a string IS its char list
+        (chars("ab"), ["a", "b"], True, True),  # a string IS its char list
         (b"ab", [97, 98], True, True),         # bytes IS the code list
         # Decimal IS tagged now (spec §4a): leaving it untagged made `==`
         # non-transitive once `1.0 == 1` correctly became false, and

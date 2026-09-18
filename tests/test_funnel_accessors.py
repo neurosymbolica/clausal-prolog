@@ -43,6 +43,7 @@ import dataclasses
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.predicate import (
     PredicateMeta,
     is_zero_field_class,
@@ -178,9 +179,10 @@ class TestFunctorArity:
         assert functor_arity(t) == ("bar", 2)
 
     def test_predicate_meta_atom_class(self):
-        # nv — the atom class IS its own functor value (like a number is
-        # its own functor name), not its __name__ string.
-        assert functor_arity(foo_atom) == (foo_atom, 0)
+        # nv — the atom IS its own functor value (like a number is its own
+        # functor name).  Stage 2 (atoms-as-str): a /0 predicate referenced
+        # as a VALUE is the atom ``'foo'`` — the class is no longer atom-shaped.
+        assert functor_arity(mint("foo")) == ("foo", 0)
 
     def test_dataclass_node_instance(self):
         # nv
@@ -208,8 +210,8 @@ class TestFunctorArity:
         # before P3-1.
         assert functor_arity(mint("abc")) == ("abc", 0)
         assert functor_arity(mint("")) == ("", 0)
-        assert functor_arity("abc") is None
-        assert functor_arity("") is None
+        assert functor_arity(chars("abc")) is None
+        assert functor_arity(chars("")) is None
 
     @pytest.mark.parametrize(
         "term",
@@ -217,9 +219,9 @@ class TestFunctorArity:
             Compound("foo", ()),
             Compound("bar", (1, 2, 3)),
             bar(b=1, a=2),
-            foo_atom,
+            mint("foo"),
             Add(left=1, right=2),
-            make_predicate("baz", []),
+            mint("baz"),
             make_predicate("qux", ["x", "y", "z"])(x=1, y=2, z=3),
         ],
         ids=[
@@ -251,14 +253,18 @@ class TestIsZeroFieldClassAdoptionRegression:
     sites and their answers are the same ones.
     """
 
-    def test_functor_name_of_atom_class_is_itself(self):
-        # nv — _functor_name_py line ~54
-        assert _functor_name(foo_atom) is foo_atom
+    def test_functor_name_of_atom_class_is_none(self):
+        # STAGE 2 of the atoms-as-str flip (spec §4): no class is a term, so
+        # neither twin answers for a zero-field class -- the atom of that name
+        # is the str.  It is still a zero-field CLASS, a different question.
+        assert _functor_name(foo_atom) is None
+        assert _functor_name(mint("foo")) == "foo"
         assert is_zero_field_class(foo_atom)
 
-    def test_arity_of_atom_class_is_zero(self):
-        # nv — _arity_py line ~79
-        assert _arity(foo_atom) == 0
+    def test_arity_of_atom_class_is_none(self):
+        # STAGE 2 (spec §4): as above, for the arity twin
+        assert _arity(foo_atom) is None
+        assert _arity(mint("foo")) == 0
 
     def test_is_ground_of_atom_class_is_true(self):
         # nv — _is_ground_py line ~172 (checked isinstance(term, type) AND
@@ -280,7 +286,7 @@ class TestIsZeroFieldClassAdoptionRegression:
         # break str-vs-same-spelled-class ties is gone — a class atom keys
         # IDENTICALLY to the same-spelled str now, since post-pivot they are
         # the same atom.
-        key = _standard_order_key(foo_atom)
+        key = _standard_order_key(mint("foo"))
         assert key == (2, "foo")  # (_ORD_ATOM, name)
 
     def test_standard_order_key_atom_sorts_adjacent_to_same_named_str(self):

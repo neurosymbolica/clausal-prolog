@@ -32,7 +32,7 @@ def _first(mod, name, *args):
 def test_the_carrier_shape():
     c = chars("ab")
     assert c == (CHARS_TAG, "ab") and is_chars(c) and chars_text(c) == "ab"
-    assert not is_chars(("ab",)) and not is_chars("ab") and not is_chars((CHARS_TAG, 1))
+    assert not is_chars("ab") and not is_chars("ab") and not is_chars((CHARS_TAG, 1))
     assert not is_atom(c)
 
 
@@ -44,7 +44,7 @@ def test_a_chars_literal_compiles_to_the_carrier(tmp_path):
 
 def test_a_single_quoted_literal_is_still_an_atom(tmp_path):
     mod = _mod(tmp_path, "p(X) <- (X is 'ab')\n")
-    (x,) = _first(mod, "p", Var()); assert x == ("ab",) and is_atom(x)
+    (x,) = _first(mod, "p", Var()); assert x == "ab" and is_atom(x)
 
 
 class TestEqualToTheListSpelling:
@@ -56,7 +56,7 @@ class TestEqualToTheListSpelling:
 
     def test_string_1_and_length_2(self, tmp_path):
         mod = _mod(tmp_path, 'p(R) <- if_(string("ab"), R is yes, R is no)\nq(N) <- length("abc", N)\n')
-        (r,) = _first(mod, "p", Var()); assert r == ("yes",)
+        (r,) = _first(mod, "p", Var()); assert r == "yes"
         (n,) = _first(mod, "q", Var()); assert n == 3
 
     def test_append_keeps_the_carrier_kind(self, tmp_path):
@@ -65,12 +65,12 @@ class TestEqualToTheListSpelling:
 
     def test_identity_eq_across_spellings(self, tmp_path):
         mod = _mod(tmp_path, "p(R) <- if_('=='(\"ab\", [a, b]), R is yes, R is no)\n")
-        (r,) = _first(mod, "p", Var()); assert r == ("yes",), r
+        (r,) = _first(mod, "p", Var()); assert r == "yes", r
 
     def test_unify_across_spellings(self, tmp_path):
         """Needs the C list-unify to read the carrier (slice 2)."""
         mod = _mod(tmp_path, "p(R) <- if_('='(\"ab\", [a, b]), R is yes, R is no)\n")
-        (r,) = _first(mod, "p", Var()); assert r == ("yes",), r
+        (r,) = _first(mod, "p", Var()); assert r == "yes", r
 
 
 class TestSlice3Funnels:
@@ -80,7 +80,7 @@ class TestSlice3Funnels:
     def test_univ_conses_a_char_onto_a_carrier(self, tmp_path):
         mod = _mod(tmp_path, "p(T) <- unpack(T, ['.', a, \"bc\"])\nq(T) <- unpack(T, ['.', 1, \"bc\"])\n")
         (t,) = _first(mod, "p", Var()); assert t == chars("abc"), t
-        (u,) = _first(mod, "q", Var()); assert u == [1, ("b",), ("c",)], u
+        (u,) = _first(mod, "q", Var()); assert u == [1, "b", "c"], u
 
     def test_writeq_and_write_never_show_the_tag(self):
         from clausal.terms import term_str, term_canonical
@@ -98,13 +98,10 @@ class TestSlice3Funnels:
     def test_infix_eq_between_a_bare_str_and_the_carrier(self):
         from clausal.logic.clpfd import fd_eq, fd_ne
         from clausal.logic.variables import Trail
-        from clausal.logic.cells import BARE_STR_TEXT
         t = Trail()
         assert fd_eq(chars("ab"), chars("ab"), t) and not fd_eq(chars("ab"), chars("ac"), t)
         assert fd_ne(chars("ab"), chars("ac"), t) and not fd_ne(chars("ab"), chars("ab"), t)
-        if BARE_STR_TEXT == "allow":     # the interim comparator: a bare str against the carrier
-            assert fd_eq("ab", chars("ab"), t) and fd_eq(chars("ab"), "ab", t)
-            assert not fd_eq("ab", chars("ac"), t)
+        assert not fd_eq("ab", chars("ab"), t)          # STAGE 2: the atom ab is not the string "ab"
 
     def test_python_side_crossings_read_the_text(self):
         from clausal.logic.to_python import to_python
@@ -119,9 +116,10 @@ class TestSlice3Funnels:
         the literal (the test runner reads names off stored heads)."""
         mod = _mod(tmp_path, 'p("ab", R) <- (R is yes)\np("cd", R) <- (R is no)\n')
         from clausal.logic.atoms import char_atom
-        assert _first(mod, "p", chars("ab"), Var())[1] == ("yes",)
-        assert _first(mod, "p", "cd", Var())[1] == ("no",)
-        assert _first(mod, "p", [char_atom("a"), char_atom("b")], Var())[1] == ("yes",)
+        assert _first(mod, "p", chars("ab"), Var())[1] == "yes"
+        assert _first(mod, "p", "cd", Var()) is None             # STAGE 2: the atom cd is not the string "cd"
+        assert _first(mod, "p", chars("cd"), Var())[1] == "no"
+        assert _first(mod, "p", [char_atom("a"), char_atom("b")], Var())[1] == "yes"
         assert _first(mod, "p", chars("zz"), Var()) is None
         x = Var(); assert _first(mod, "p", x, Var())[0] == chars("ab")     # output mode binds the carrier
         heads = [c.head for c in mod.__dict__["$module"].db.clauses_for("p", 2)]
@@ -146,13 +144,12 @@ class TestSlice4SegLayer:
         from clausal.logic.runtime.list_unify import _head_list_unify_input_py
         from clausal.logic.runtime._list_unify import _head_list_unify_input
         from clausal.logic.variables import Trail
-        from clausal.logic.cells import BARE_STR_TEXT
-        targets = [chars("abc")] + (["abc"] if BARE_STR_TEXT == "allow" else [])
+        targets = [chars("abc")]
         for fn in (_head_list_unify_input_py, _head_list_unify_input):
             for target in targets:
                 t = Trail(); h = Var(); tl = Var()
                 assert fn(target, [h], tl, [], t) is True
-                assert deref(h) == ("a",) and deref(tl) == chars("bc"), (fn, target, deref(tl))
+                assert deref(h) == "a" and deref(tl) == chars("bc"), (fn, target, deref(tl))
 
     def test_body_multi_star_binds_carriers(self, tmp_path):
         mod = _mod(tmp_path, 'p(A, B) <- ("abc" is [*A, b, *B])\nq(T) <- ("abc" is [_, *T])\n')
@@ -162,7 +159,7 @@ class TestSlice4SegLayer:
     def test_star_list_built_from_carriers_is_a_carrier(self, tmp_path):
         mod = _mod(tmp_path, 'p(R) <- (A is "ab", B is "cd", R is [*A, *B])\nq(R) <- (A is "ab", R is [yes, *A])\n')
         (r,) = _first(mod, "p", Var()); assert r == chars("abcd"), r
-        (s,) = _first(mod, "q", Var()); assert s == [("yes",), ("a",), ("b",)], s
+        (s,) = _first(mod, "q", Var()); assert s == ["yes", "a", "b"], s
 
     def test_ground_segstring_walks_to_the_carrier(self):
         from clausal.terms import SegString, VarSeg
@@ -181,8 +178,8 @@ class TestSlice4SegLayer:
 
     def test_is_list_flatten_and_fresh_shape(self, tmp_path):
         mod = _mod(tmp_path, 'p(R) <- if_(is_list("ab"), R is yes, R is no)\nq(F) <- flatten([[a], "bc"], F)\n')
-        (r,) = _first(mod, "p", Var()); assert r == ("yes",)
-        (f,) = _first(mod, "q", Var()); assert f == [("a",), ("b",), ("c",)], f
+        (r,) = _first(mod, "p", Var()); assert r == "yes"
+        (f,) = _first(mod, "q", Var()); assert f == ["a", "b", "c"], f
 
 
 # ── spelling parity: the positive control for stage 1 ───────────────────────
@@ -235,10 +232,7 @@ def test_the_three_spellings_answer_alike(tmp_path, goal):
     vars_ = sorted(set(re.findall(r"\b([A-Z][A-Za-z0-9]*)\b", goal)) - {"X"})
     head = "p(X" + "".join(", " + v for v in vars_) + ")"
     mod = _mod(tmp_path, f"is_a(a),\n{head} <- ({goal})\n")
-    from clausal.logic.cells import BARE_STR_TEXT
     spellings = [("carrier", chars("ab")), ("list", [char_atom("a"), char_atom("b")])]
-    if BARE_STR_TEXT == "allow":
-        spellings.insert(0, ("str", "ab"))     # the interim comparator, gone once the rule is armed
     answers = {}
     for label, x in spellings:
         args = [Var() for _ in vars_]
@@ -263,12 +257,12 @@ class TestSlice5Crossings:
     def test_thunk_sees_the_text_and_hands_back_the_carrier(self, tmp_path):
         mod = _mod(tmp_path, 'p(N) <- (S is "abc", N is ++len(S))\nq(R) <- (S is "abc", R is ++S.upper())\n')
         (n,) = _first(mod, "p", Var()); assert n == 3, n
-        (r,) = _first(mod, "q", Var()); assert r == chars("ABC"), r
+        (r,) = _first(mod, "q", Var()); assert r == "ABC", r   # STAGE 2: a thunk's str result is the ATOM
 
     def test_to_term_and_from_term_round_trip(self):
         from clausal.logic.python_terms import to_term, from_term
-        assert to_term("ab") == chars("ab") and to_term(["ab", 1]) == [chars("ab"), 1]
-        assert to_term({"k": "v"}) == {chars("k"): chars("v")}
+        assert to_term("ab") == "ab" and to_term(["ab", 1]) == ["ab", 1]     # STAGE 2: a str is the atom
+        assert to_term({"k": "v"}) == {"k": "v"}
         assert from_term(chars("ab")) == "ab" and from_term([chars("ab"), 1]) == ["ab", 1]
 
     def test_module_results_are_carriers(self, tmp_path):
@@ -281,47 +275,3 @@ class TestSlice5Crossings:
         with pytest.raises(LogicException) as ei:
             _first(mod, "p")
         assert "existence_error" in str(ei.value) and "$chars" not in str(ei.value)
-
-
-class TestTheInterimRuleIsArmed:
-    """Stage 1 slice 8: the LOUD interim rule is the default.  A bare Python
-    str handed to the engine as text raises at the entry points; this is the
-    positive control for stage 1 (revert the arming and these fail)."""
-
-    def test_default_is_refuse_unless_overridden(self):
-        import os
-        from clausal.logic.cells import BARE_STR_TEXT
-        expected = os.environ.get("CLAUSAL_BARE_STR_TEXT", "refuse")
-        assert BARE_STR_TEXT == expected
-
-    @pytest.mark.skipif(__import__("os").environ.get("CLAUSAL_BARE_STR_TEXT", "refuse") == "allow",
-                        reason="rule disarmed by the diagnostic override")
-    def test_a_bare_str_is_refused_at_the_entry_points(self):
-        from clausal.logic.builtins.lists import _as_items
-        from clausal.logic.runtime._seg_helpers import normalize_seg_input
-        from clausal.modules.py import to_text
-        from clausal.logic.builtins._helpers import _standard_order_key
-        for fn in (_as_items, normalize_seg_input, to_text, _standard_order_key):
-            with pytest.raises(TypeError, match="bare Python str"):
-                fn("ab")
-        assert _as_items(chars("ab")) == [("a",), ("b",)]      # the carrier is the text
-
-
-class TestReviewRound1:
-    """roborev review of the branch (2026-09-18): the empty carrier is every
-    nil spelling's equal in the C unifier; regex positional groups are
-    tuple-DATA, never a bare tuple whose slot 0 reads as a functor."""
-
-    def test_the_empty_carrier_unifies_with_every_nil_spelling(self):
-        from clausal.logic.variables import unify, Trail
-        from clausal.logic.atoms import NIL_KEY
-        t = Trail()
-        for nil in ([], NIL_KEY, b"", chars("")):
-            assert unify(chars(""), nil, t) and unify(nil, chars(""), t), nil
-
-    def test_regex_positional_groups_are_a_data_tuple_not_a_cell(self, tmp_path):
-        from clausal.logic.cells import compound_cell_shape
-        mod = _mod(tmp_path, '-import_from(regex, [match])\np(G) <- match("(\\\\d)-(\\\\d)", "1-2", G)\nq(A, B) <- match("(\\\\d)-(\\\\d)", "1-2", (A, B))\n')
-        (g,) = _first(mod, "p", Var()); assert g == (chars("1"), chars("2")), g
-        assert compound_cell_shape(g) == (False, None)          # slot 0 is a carrier: never a functor
-        assert _first(mod, "q", Var(), Var()) == [chars("1"), chars("2")]

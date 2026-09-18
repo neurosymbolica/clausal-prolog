@@ -7,7 +7,7 @@ and atom names replaced per the translation table.
 
 from __future__ import annotations
 
-from clausal.logic.cells import chars  # stage 1: the chars carrier
+from clausal.logic.cells import chars, is_chars  # stage 1: the chars carrier
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.builtins._registry import _builtin
 from clausal.terms import term_str, TermStyle
@@ -38,7 +38,7 @@ def _translate__3(lang, term, translated_string, trail, k):
     from clausal.logic.atoms import is_atom as _term_is_atom, spelling
     if _term_is_atom(lang_val):
         lang_str = spelling(lang_val)
-    elif isinstance(lang_val, str):
+    elif is_chars(lang_val):           # STAGE 2: a str IS the atom; the carrier is the string
         from clausal.logic.exceptions import LogicException, type_error
         raise LogicException(type_error("atom", lang_val, "translate/3"))
     elif hasattr(lang_val, "__name__"):

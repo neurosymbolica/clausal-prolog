@@ -254,6 +254,11 @@ class TestModuleState:
         catchable in .clausal via ``catch/3`` (e.g. ``TypeError(_)``).  This pins
         the decided semantics: body *errors* propagate; only body *failure* (no
         solution) yields pass-through.
+
+        Stage 2 of the atoms-as-str flip: the state's ``"nil"`` is the ATOM
+        ``nil`` (a str), so the error is the engine's own
+        ``type_error(evaluable, nil)`` (a ``LogicException``) rather than the
+        raw Python ``TypeError`` that ``str + int`` used to leak.
         """
         # nv
         source = (
@@ -262,8 +267,10 @@ class TestModuleState:
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)
-        with pytest.raises(TypeError):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
+        assert "type_error" in str(exc.value) and "evaluable" in str(exc.value)
 
 
 class TestQuasiQuotation:

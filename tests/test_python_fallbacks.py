@@ -144,7 +144,7 @@ class TestFunctorNameFallback:
         # retired the pre-cell "a str is its own functor" arm from the
         # ``_py`` twin AND from the C accessor together, so all three
         # answers agree even when the fallback is called directly.
-        assert _functor_name("hello") == _functor_name_py("hello") == "."
+        assert _functor_name(chars("hello")) == _functor_name_py(chars("hello")) == "."
 
     def test_string_empty_nil(self):
         # nv
@@ -152,7 +152,7 @@ class TestFunctorNameFallback:
         # unaffected by the P3-1 §1b cons-rule retirement (the empty
         # string is the one str value that legitimately reads as the
         # list-shaped nil atom, matching the empty-list case above).
-        assert _functor_name_py("") == _functor_name("") == "[]"
+        assert _functor_name_py(chars("")) == _functor_name(chars("")) == "[]"
 
 
 class TestArityFallback:
@@ -173,7 +173,8 @@ class TestArityFallback:
 
     def test_atom(self):
         # nv
-        assert _arity_py(Atom) == _arity(Atom) == 0
+        # STAGE 2 (spec §4): no class is a term -- both twins answer None
+        assert _arity_py(Atom) is None and _arity(Atom) is None
 
     def test_string_nonempty_is_arity_two(self):
         # nv
@@ -182,7 +183,7 @@ class TestArityFallback:
         # char atoms — so it decomposes as that list does.  Task 12b
         # retired the pre-cell "a str is atomic" arm from the ``_py``
         # twin AND from the C accessor together.
-        assert _arity("hello") == _arity_py("hello") == 2
+        assert _arity(chars("hello")) == _arity_py(chars("hello")) == 2
 
     def test_string_empty_is_arity_zero(self):
         # nv — unaffected by the retirement (empty str was already 0).
@@ -851,9 +852,9 @@ class TestStringDecompositionTwinParity:
     """
 
     @pytest.mark.parametrize("text,name,arity", [
-        ("hello", ".", 2),
-        ("a", ".", 2),
-        ("", "[]", 0),
+        (chars("hello"), ".", 2),
+        (chars("a"), ".", 2),
+        (chars(""), "[]", 0),
     ])
     def test_c_and_python_agree_with_the_wrapper(self, text, name, arity):
         # nv
@@ -867,11 +868,11 @@ class TestStringDecompositionTwinParity:
         """The reading itself, not just twin agreement: a string answers
         exactly what the list of its char atoms answers (§6.4)."""
         # nv
-        chars = [char_atom(c) for c in "hi"]
-        assert _c_functor_name_raw("hi") == _c_functor_name_raw(chars)
-        assert _c_arity_raw("hi") == _c_arity_raw(chars)
-        assert _c_functor_name_raw("") == _c_functor_name_raw([])
-        assert _c_arity_raw("") == _c_arity_raw([])
+        char_list = [char_atom(c) for c in "hi"]
+        assert _c_functor_name_raw(chars("hi")) == _c_functor_name_raw(char_list)   # stage 2: the string is the carrier
+        assert _c_arity_raw(chars("hi")) == _c_arity_raw(char_list)
+        assert _c_functor_name_raw(chars("")) == _c_functor_name_raw([])
+        assert _c_arity_raw(chars("")) == _c_arity_raw([])
 
 
 class TestWrapperUsesTheCPathAgain:
@@ -1210,12 +1211,12 @@ class TestListUnifyCharTwinParity:
         for impl in _OUTPUT_TWINS:
             target, before, star = Var(), Var(), Var()
             trail = Trail()
-            unify(before, "xy", trail)          # a TWO-char str: not a char
-            unify(star, "ab", trail)
+            unify(before, chars("xy"), trail)   # a TWO-char string: not a char
+            unify(star, chars("ab"), trail)
             assert impl(target, [before], star, [], trail) is True
             got = deref(target)
             assert isinstance(got, list), f"{impl} promoted {got!r}"
-            assert got[0] == "xy"
+            assert got[0] == chars("xy")
             assert all(is_char_atom(c) for c in got[1:])
             outs.append(repr(got))
         assert len(set(outs)) == 1, f"twins disagree: {outs}"
@@ -1234,7 +1235,7 @@ class TestListUnifyCharTwinParity:
         for impl in _OUTPUT_TWINS:
             target, before, star = Var(), Var(), Var()
             trail = Trail()
-            unify(before, ("a",), trail)        # a CELL-shaped char
+            unify(before, "a", trail)           # the char atom
             unify(star, chars("b"), trail)
             assert impl(target, [before], star, [], trail) is True
             outs.append(deref(target))

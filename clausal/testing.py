@@ -1596,8 +1596,9 @@ def _atomize_declared_atoms(reified, path):
         # spelling is in slot 0, and ``_ClauseRenderer``'s Atom branch
         # renders the human ``module.name`` form for it.
         return Atom(name=spelling(reified))
-    if isinstance(reified, str):
-        return reified
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(reified):
+        return chars_text(reified)     # STAGE 2: the carrier is the string; a str above is the atom
     if isinstance(reified, Goal):
         return Goal(
             name=reified.name,
@@ -1651,23 +1652,16 @@ def _reify_value(value, depth: int = 0, path=None):
     value = deref(value)
     if is_var(value):
         return Variable(name="_")
-    if isinstance(value, str):
-        # A STRING (THE FLIP) — it renders as a string literal.  The
-        # declared-atom guess that used to decide whether a bound ``str``
-        # was "really" an atom is retired: an atom is a cell and is caught
-        # by the arity-0 branch below.
-        return value
+    if type(value) is str:
+        return Atom(name=value)        # STAGE 2: a str is the ATOM
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(value):
+        return chars_text(value)       # the carrier is the STRING; the renderer quotes a str
     if value is None or isinstance(value, (bool, int, float, complex, bytes)):
         return value
     if isinstance(value, list):
         return [_reify_value(v, depth + 1, path) for v in value]
     from clausal.logic.cells import TUPLE_TAG  # noqa: PLC0415
-    if type(value) is tuple and len(value) == 1 and type(value[0]) is str and value[0] != TUPLE_TAG:
-        # An ATOM — the arity-0 cell (spec §6.7).  It is a NAME, so it
-        # reifies as ``Atom`` and prints bare; without this branch the cell
-        # branch below would reify it as a 0-argument ``Goal`` and print
-        # ``foo()``, which is not a term form at all.
-        return Atom(name=value[0])
     if type(value) is tuple and value and type(value[0]) is str and value[0] != TUPLE_TAG:
         # A CELL -- ``("cite", art52)``.  P3-2 Task 2 (THE FLIP): this is how
         # a compound term is represented, so it reifies as a ``Goal`` and

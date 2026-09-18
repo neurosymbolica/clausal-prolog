@@ -136,7 +136,7 @@ class TestParityAndValues:
         mod = _module(tmp_path, "p(R) <- (dec(D), if_('<'(1, D), R is yes, R is no))\n")
         r = Var()
         for _ in call("p", r, module=mod):
-            assert deref(r) == ("yes",)
+            assert deref(r) == "yes"
             break
         else:
             pytest.fail("no solution")
@@ -201,7 +201,7 @@ class TestReifiedComparisonOnAnExactLeaf:
         mod = _module(tmp_path, "p(N, R) <- (eval_(1 / N, F), if_(F == 0.5, R is yes, R is no))\n")
         r = Var()
         for _ in call("p", 2, r, module=mod):
-            assert deref(r) == ("yes",)
+            assert deref(r) == "yes"
             break
         else:
             pytest.fail("no solution")
@@ -218,7 +218,7 @@ class TestReifiedComparisonOnAnExactLeaf:
                                 f"q() <- (eval_(1 / 2, F), {goal})\n")
         r = Var()
         for _ in call("p", r, module=mod):
-            assert deref(r) == (want,); break
+            assert deref(r) == want; break
         else:
             pytest.fail("no solution")
         held = any(True for _ in call("q", module=mod))
@@ -238,7 +238,7 @@ class TestReifiedComparisonOnAnExactLeaf:
                                 f"q(X, Y) <- ({goal})\n")
         r = Var()
         for _ in call("p", 7, 2, r, module=mod):
-            assert deref(r) == (want,); break
+            assert deref(r) == want; break
         else:
             pytest.fail("no solution")
         assert any(True for _ in call("q", 7, 2, module=mod)) == (want == "yes")

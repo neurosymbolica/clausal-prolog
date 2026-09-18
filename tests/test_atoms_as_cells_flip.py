@@ -18,7 +18,7 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
-from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import char_atom, is_atom, mint
 from clausal.logic.cells import chars, chars_text, is_chars
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
@@ -79,8 +79,8 @@ def test_row_01_bare_and_quoted_names_are_atoms():
         "r1_is_atom(X) <- atom(X),\n",
     )
     X = Var()
-    assert _answers(("r1_bare", X), mod, X) == [(("bar",),)]
-    assert _answers(("r1_quoted", X), mod, X) == [(("bar",),)]
+    assert _answers(("r1_bare", X), mod, X) == [("bar",)]
+    assert _answers(("r1_quoted", X), mod, X) == [("bar",)]
     assert len(list(solve(("r1_is_atom", mint("bar")), mod))) == 1
 
 
@@ -109,11 +109,11 @@ def test_row_03_atom_equals_quoted_atom_but_not_a_string():
         "r3_string() <- (bar is \"bar\"),\n"
         "r3_value(bar),\n",
     )
-    assert len(list(solve(("r3_same",), mod))) == 1
-    assert list(solve(("r3_string",), mod)) == []
+    assert len(list(solve("r3_same", mod))) == 1
+    assert list(solve("r3_string", mod)) == []
     X = Var()
-    # ``bar == ("bar",)`` seen from Python.
-    assert _answers(("r3_value", X), mod, X) == [(("bar",),)]
+    # ``bar == "bar"`` seen from Python (stage 2: an atom is the str).
+    assert _answers(("r3_value", X), mod, X) == [("bar",)]
 
 
 def test_row_04_a_string_unifies_with_its_char_list():
@@ -123,7 +123,7 @@ def test_row_04_a_string_unifies_with_its_char_list():
         "-private([a, b, c])\n"
         "r4() <- (\"abc\" is [a, b, c]),\n",
     )
-    assert len(list(solve(("r4",), mod))) == 1
+    assert len(list(solve("r4", mod))) == 1
     # …and directly, both orientations.
     assert unify(chars("abc"), [mint("a"), mint("b"), mint("c")], Trail())
     assert unify([mint("a"), mint("b"), mint("c")], chars("abc"), Trail())
@@ -137,7 +137,7 @@ def test_row_05_a_string_destructures_head_and_tail():
         "r5_string(X) <- string(X),\n",
     )
     H, T = Var(), Var()
-    assert _answers(("r5", chars("abc"), H, T), mod, H, T) == [((("a",), chars("bc")))]
+    assert _answers(("r5", chars("abc"), H, T), mod, H, T) == [(("a", chars("bc")))]
     assert len(list(solve(("r5_string", chars("bc")), mod))) == 1
 
 
@@ -154,9 +154,9 @@ def test_row_06_the_empty_string_is_the_empty_list():
 def test_row_07_functor_of_a_cell_answers_an_atom(builtins_mod):
     N, A = Var(), Var()
     assert _answers(
-        ("functor", ("foo", ("a",)), N, A), builtins_mod, N, A
-    ) == [(("foo",), 1)]
-    assert len(list(solve(("atom", ("foo",)), builtins_mod))) == 1
+        ("functor", ("foo", "a"), N, A), builtins_mod, N, A
+    ) == [("foo", 1)]
+    assert len(list(solve(("atom", "foo"), builtins_mod))) == 1
 
 
 def test_row_08_functor_constructs_a_cell(builtins_mod):
@@ -167,15 +167,15 @@ def test_row_08_functor_constructs_a_cell(builtins_mod):
 
 def test_row_09_functor_refuses_a_string_name(builtins_mod):
     with pytest.raises(LogicException) as exc:
-        list(solve(("functor", Var(), "foo", 1), builtins_mod))
+        list(solve(("functor", Var(), chars("foo"), 1), builtins_mod))
     assert "atomic" in str(exc.value)
 
 
 def test_row_10_unpack_answers_the_atom_name(builtins_mod):
     L = Var()
     (parts,), = _answers(
-        ("unpack", ("foo", ("a",), "b"), L), builtins_mod, L)
-    assert parts == [mint("foo"), mint("a"), "b"]
+        ("unpack", ("foo", "a", chars("b")), L), builtins_mod, L)
+    assert parts == [mint("foo"), mint("a"), chars("b")]
     # ``L = [foo, a, [b]]`` is the same answer, spelled as a char list.
     assert unify(parts, [mint("foo"), mint("a"), [char_atom("b")]], Trail())
 
@@ -189,17 +189,17 @@ def test_row_11_unpack_constructs_a_cell(builtins_mod):
 
 def test_row_12_unpack_refuses_a_string_name(builtins_mod):
     with pytest.raises(LogicException) as exc:
-        list(solve(("unpack", Var(), ["foo", 1]), builtins_mod))
+        list(solve(("unpack", Var(), [chars("foo"), 1]), builtins_mod))
     formal = _formal(exc)
     assert formal.functor == "type_error"
     assert formal.args[0] == mint("atom")
-    assert formal.args[1] == "foo"          # the culprit is the STRING
+    assert formal.args[1] == chars("foo")   # the culprit is the STRING
     with pytest.raises(LogicException) as exc:
-        list(solve(("unpack", Var(), ["foo"]), builtins_mod))
+        list(solve(("unpack", Var(), [chars("foo")]), builtins_mod))
     formal = _formal(exc)
     assert formal.functor == "type_error"
     assert formal.args[0] == mint("atomic")
-    assert formal.args[1] == "foo"
+    assert formal.args[1] == chars("foo")
 
 
 def test_row_13_call_takes_an_atom_and_a_string_goal_has_no_procedure():
@@ -217,7 +217,7 @@ def test_row_13_call_takes_an_atom_and_a_string_goal_has_no_procedure():
     X = Var()
     assert _answers(("r13_call", mint("r13_foo"), X), mod, X) == [(1,)]
     with pytest.raises(LogicException) as exc:
-        list(solve(("r13_call", "r13_foo", Var()), mod))
+        list(solve(("r13_call", chars("r13_foo"), Var()), mod))
     formal = _formal(exc)
     assert formal.functor == "existence_error"
     assert formal.args[0] == mint("procedure")
@@ -227,7 +227,7 @@ def test_row_13_call_takes_an_atom_and_a_string_goal_has_no_procedure():
 
 def test_row_13b_a_string_goal_in_solve_has_no_procedure(builtins_mod):
     with pytest.raises(LogicException) as exc:
-        list(solve("r13_nope", builtins_mod))
+        list(solve(chars("r13_nope"), builtins_mod))
     formal = _formal(exc)
     assert formal.functor == "existence_error"
     assert formal.args[0] == mint("procedure")
@@ -239,7 +239,7 @@ def test_row_13c_the_empty_string_goal_names_the_nil_atom(builtins_mod):
     """``""`` is ``[]``, the ATOM ``'[]'``, so the missing procedure is
     ``'[]'/0`` — Scryer's answer for ``call([])`` and ``call("")``."""
     with pytest.raises(LogicException) as exc:
-        list(solve("", builtins_mod))
+        list(solve(chars(""), builtins_mod))
     formal = _formal(exc)
     assert formal.functor == "existence_error"
     assert formal.args[1] == Compound("/", (mint("[]"), 0))
@@ -250,7 +250,7 @@ def test_row_13c_the_empty_string_goal_names_the_nil_atom(builtins_mod):
 
 def test_row_14_atom_chars_reads_and_builds_atoms(builtins_mod):
     A = Var()
-    assert _answers(("atom_chars", A, chars("hi")), builtins_mod, A) == [(("hi",),)]
+    assert _answers(("atom_chars", A, chars("hi")), builtins_mod, A) == [("hi",)]
     assert len(list(solve(("atom_chars", mint("hi"), chars("hi")), builtins_mod))) == 1
     with pytest.raises(LogicException) as exc:
         list(solve(("atom_chars", chars("hi"), Var()), builtins_mod))
@@ -273,9 +273,9 @@ def test_row_16_msort_orders_lists_and_strings_as_cons_compounds(builtins_mod):
     after the arity-1 ``foo(x)``, and among themselves by name ``.`` then by
     elements."""
     L = Var()
-    items = [mint("b"), chars("a"), 1, ("foo", ("x",)), [mint("z")]]
+    items = [mint("b"), chars("a"), 1, ("foo", "x"), [mint("z")]]
     (ordered,), = _answers(("msort", items, L), builtins_mod, L)
-    assert ordered == [1, mint("b"), ("foo", ("x",)), chars("a"), [mint("z")]]
+    assert ordered == [1, mint("b"), ("foo", "x"), chars("a"), [mint("z")]]
 
 
 def test_row_17_sort_dedups_a_string_against_its_char_list(builtins_mod):
@@ -289,7 +289,7 @@ def test_row_17_sort_dedups_a_string_against_its_char_list(builtins_mod):
 
 
 def test_row_18_write_and_writeq():
-    term = ("foo", ("bar",), "baz")
+    term = ("foo", "bar", chars("baz"))
     assert term_str(term, quoted=False) == "foo(bar, baz)"
     assert term_str(term, quoted=True) == 'foo(bar, "baz")'
     assert term_str(mint("a b"), quoted=True) == "'a b'"
@@ -299,10 +299,10 @@ def test_row_18_write_and_writeq():
 def test_row_18b_write_canonical_prints_the_cons_structure(builtins_mod):
     assert term_canonical(chars("hello")) == "'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))"
     assert term_canonical([1, 2]) == "'.'(1,'.'(2,[]))"
-    assert term_canonical(("foo", ("a",), chars("b"))) == "foo(a,'.'(b,[]))"
+    assert term_canonical(("foo", "a", chars("b"))) == "foo(a,'.'(b,[]))"
     N, A, T = Var(), Var(), Var()
     assert _answers(("functor", chars("hello"), N, A), builtins_mod, N, A) == [
-        ((".",), 2)
+        (".", 2)
     ]
     assert _answers(("arg", 2, chars("hello"), T), builtins_mod, T) == [(chars("ello"),)]
 
@@ -311,8 +311,8 @@ def test_row_18c_construction_through_the_name_position_keeps_shapes(
         builtins_mod):
     T = Var()
     (built,), = _answers(
-        ("unpack", T, [mint("."), mint("a"), "bc"]), builtins_mod, T)
-    assert built == "abc"
+        ("unpack", T, [mint("."), mint("a"), chars("bc")]), builtins_mod, T)
+    assert built == chars("abc")
     T2 = Var()
     (built2,), = _answers(
         ("unpack", T2, [mint("."), 1, [2]]), builtins_mod, T2)
@@ -334,16 +334,16 @@ def test_row_18d_write_of_the_empty_string_prints_the_empty_list(capsys):
     """
     from clausal.logic.builtins.io import _format_term_as_text
 
-    assert term_str("", quoted=False) == "[]"
-    assert term_str("", quoted=True) == "[]"
-    assert term_str("", double_quotes=False) == "[]"
-    assert _format_term_as_text("") == "[]"
+    assert term_str(chars(""), quoted=False) == "[]"
+    assert term_str(chars(""), quoted=True) == "[]"
+    assert term_str(chars(""), double_quotes=False) == "[]"
+    assert _format_term_as_text(chars("")) == "[]"
 
     mod = _load_inline_clausal("_flip_row18d", "-double_quotes(chars)\n")
-    list(solve(("write", ""), mod))
+    list(solve(("write", chars("")), mod))
     list(solve(("write", []), mod))
-    list(solve(("write_text", ""), mod))
-    list(solve(("writeq", ""), mod))
+    list(solve(("write_text", chars("")), mod))
+    list(solve(("writeq", chars("")), mod))
     assert capsys.readouterr().out == "[][][][]"
 
 
@@ -473,20 +473,20 @@ class TestEmptyListIsTheAtomNil:
 
     def test_spelling_of_the_empty_list_is_the_two_brackets(self):
         from clausal.logic.atoms import spelling
-        for nil in ([], "", b"", ()):
+        for nil in ([], chars(""), b"", ()):
             assert spelling(nil) == "[]", nil
 
     def test_calling_the_nil_atom_raises_in_every_spelling(self, builtins_mod):
         """Fix round 2, item 4: ``call("")`` raised while ``call([])`` failed
         silently, for one and the same term.  One term, one answer."""
         from clausal.logic.solve import call
-        for nil in ([], "", ()):
+        for nil in ([], chars(""), ()):
             with pytest.raises(LogicException) as exc:
                 list(call("call_goal", nil, module=builtins_mod))
             formal = _formal(exc)
             assert formal.functor == "existence_error", nil
             assert formal.args[1] == Compound("/", (mint("[]"), 0)), nil
-        for nil in ([], ""):
+        for nil in ([], chars("")):
             with pytest.raises(LogicException) as exc:
                 list(solve(nil, builtins_mod))
             assert _formal(exc).functor == "existence_error", nil
@@ -507,19 +507,19 @@ class TestTheNilAtomInAKeyPosition:
         assert key_of("foo") == mint("foo")
         # ...and it is the same TERM as every other nil spelling.
         assert unify(key_of("[]"), [], Trail())
-        assert unify(key_of("[]"), "", Trail())
+        assert unify(key_of("[]"), chars(""), Trail())
 
     def test_dict_term_folds_every_nil_spelling_onto_one_key(self):
         from clausal.terms import DictTerm
-        for spelled in ((), "", b""):
+        for spelled in ((), chars(""), b""):
             d = DictTerm({spelled: 1})
             assert list(d.keys()) == [()], spelled
-            for lookup in ((), "", b"", []):
+            for lookup in ((), chars(""), b"", []):
                 assert d[lookup] == 1, (spelled, lookup)
                 assert lookup in d, (spelled, lookup)
                 assert d.get(lookup) == 1, (spelled, lookup)
         # A raw dict on the right of == / unification is normalised too.
-        assert DictTerm({(): 1}) == {"": 1}
+        assert DictTerm({(): 1}) == {chars(""): 1}
         assert unify(DictTerm({(): 1}), DictTerm({b"": 1}), Trail())
 
     def test_json_parse_makes_a_nil_key_usable(self):
@@ -569,7 +569,7 @@ class TestTheNilAtomInAKeyPosition:
         from clausal.terms import DictTerm
 
         d = DictTerm({(): 1, mint("a"): 2})
-        for nil in ([], "", b"", ()):
+        for nil in ([], chars(""), b"", ()):
             V = Var()
             got = [deref(V)
                    for _ in call("dict_get", nil, d, V, module=builtins_mod)]
@@ -580,7 +580,7 @@ class TestTheNilAtomInAKeyPosition:
         from clausal.logic.solve import call
         from clausal.terms import DictTerm
 
-        for nil in ([], "", b"", ()):
+        for nil in ([], chars(""), b"", ()):
             D2 = Var()
             (built,) = [_deref_walk(D2)
                         for _ in call("dict_put", nil, 9, DictTerm({}), D2,
@@ -597,7 +597,7 @@ class TestTheNilAtomInAKeyPosition:
         )
         D = Var()
         (parsed,), = _answers(("j", chars('{"[]": 1}'), D), mod, D)
-        for nil in ([], "", b"", ()):
+        for nil in ([], chars(""), b"", ()):
             V = Var()
             assert _answers(("g", parsed, nil, V), mod, V) == [(1,)], nil
 
@@ -619,7 +619,7 @@ class TestTheNilAtomInAKeyPosition:
         assert d[[]] == 1
         Y = Var()
         (e,), = _answers(("c2", Y), mod, Y)
-        assert list(e.keys()) == [()] and e[""] == 3
+        assert list(e.keys()) == [()] and e[chars("")] == 3
 
     def test_a_constants_reference_in_key_position_folds_nil(self):
         """Fix round 4, item 4: fix round 3 folded the two nil LITERAL
@@ -644,24 +644,25 @@ class TestTheNilAtomInAKeyPosition:
         X = Var()
         (d,), = _answers(("c1", X), mod, X)
         assert list(d.keys()) == [(), mint("a")]
-        for nil in ([], "", b"", ()):
+        for nil in ([], chars(""), b"", ()):
             assert d[nil] == 1, nil
         Y = Var()
         (e,), = _answers(("c2", Y), mod, Y)
-        assert list(e.keys()) == [()] and e[[]] == 3
-        # A LITERAL empty-string key in a -constants RHS takes the same
-        # ``$dict_key`` wrap (fix round 5, item 2: the quote test above it
-        # guards only the two-character ``"[]"``), so it folds to ``()`` —
-        # while the same literal in a CLAUSE compiles to the atom ``("",)``.
-        # That divergence is the open design question filed as
-        # todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md;
-        # pinned here so the state is recorded rather than merely absent.
+        # Stage 2: a bare Python ``""`` is the ATOM ``''``, NOT nil, so the
+        # reference ``c_s`` keys the dict with that atom -- distinct from
+        # ``[]``.  Only ``[]`` (``c_n``) is a nil spelling here now.
+        assert list(e.keys()) == [""] and e[""] == 3 and [] not in e
+        # A LITERAL empty-string key in a -constants RHS reads the same way,
+        # and so does the same literal in a CLAUSE: stage 2 closes the
+        # divergence fix round 5 pinned here (the ``$dict_key`` wrap folded
+        # ``""`` to ``()`` while the clause literal compiled to the atom).
+        # todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md
         Z = Var()
         (f,), = _answers(("c3", Z), mod, Z)
-        assert list(f.keys()) == [()] and f[[]] == 4
+        assert list(f.keys()) == [""] and f[""] == 4 and [] not in f
         W = Var()
         (clause_dict,), = _answers(("c4", W), mod, W)
-        assert list(clause_dict.keys()) == [("",)]
+        assert list(clause_dict.keys()) == [""]
 
     def test_a_frozen_empty_list_is_the_nil_key(self):
         """The value half of item 4: ``atoms.as_dict_key`` tested the EXACT
@@ -698,7 +699,7 @@ class TestTheNilAtomInAKeyPosition:
         assert d3.data == {mint("a"): 1, mint("b"): 2}
         # A re-iterable list of pairs and a plain mapping keep working.
         assert DictTerm([([], 1)]).data == {(): 1}
-        assert DictTerm({"": 1}).data == {(): 1}
+        assert DictTerm({chars(""): 1}).data == {(): 1}
 
     def test_an_empty_seg_unifies_with_every_nil_spelling(self):
         """Fix round 3, item 3: the three ``Seg*`` ``__unify__``/``__eq__``
@@ -715,12 +716,12 @@ class TestTheNilAtomInAKeyPosition:
                 assert unify(seg, nil, Trail()), (seg, nil)
                 assert seg == nil, (seg, nil)
         # …and each still unifies with its OWN concrete spelling.
-        assert unify(SegList([ConcreteSeg([])]), "", Trail())
-        assert unify(SegString([""]), "", Trail())
+        assert unify(SegList([ConcreteSeg([])]), chars(""), Trail())
+        assert unify(SegString([""]), chars(""), Trail())
         assert unify(SegBytes([b""]), b"", Trail())
         # A non-empty Seg is unaffected.
         assert not unify(SegString(["ab"]), [], Trail())
-        assert unify(SegString(["ab"]), "ab", Trail())
+        assert unify(SegString(["ab"]), chars("ab"), Trail())
         # Fix round 4, item 5: the two str/bytes CROSS pairs -- an empty
         # ``SegString`` against ``b""``, an empty ``SegBytes`` against ``""``
         # -- were the residual non-transitivity round 3 left behind, and now
@@ -731,8 +732,8 @@ class TestTheNilAtomInAKeyPosition:
         # empty-Seg branch.  Full matrix in
         # tests/test_segstring.py::TestAnEmptySegIsTheEmptyList.
         assert unify(SegString([""]), b"", Trail())
-        assert unify(SegBytes([b""]), "", Trail())
-        assert SegString([""]) == b"" and SegBytes([b""]) == ""
+        assert unify(SegBytes([b""]), chars(""), Trail())
+        assert SegString([""]) == b"" and SegBytes([b""]) == chars("")
 
     def test_the_nil_goal_error_is_worded_for_nil(self, builtins_mod):
         """Fix round 3, item 6: the shared context said "a string goal is the
@@ -745,7 +746,7 @@ class TestTheNilAtomInAKeyPosition:
         assert "list of its characters" not in context
         # …and a real string still gets the string wording.
         with pytest.raises(LogicException) as exc:
-            list(call("call_goal", "foo", module=builtins_mod))
+            list(call("call_goal", chars("foo"), module=builtins_mod))
         assert "list of its characters" in exc.value.term.args[1]
 
     def test_a_py_wrapper_option_table_survives_a_nil_name(self):
@@ -764,13 +765,13 @@ class TestTheNilAtomInAKeyPosition:
         Scryer-verified."""
         N = Var()
         assert _answers(("atom_length", [], N), builtins_mod, N) == [(2,)]
-        assert _answers(("atom_length", "", N), builtins_mod, N) == [(2,)]
+        assert _answers(("atom_length", chars(""), N), builtins_mod, N) == [(2,)]
         C = Var()
-        (chars,), = _answers(("atom_chars", [], C), builtins_mod, C)
+        (nil_chars,), = _answers(("atom_chars", [], C), builtins_mod, C)
         # ``['[', ']']`` and ``"[]"`` are the same term; the builtin answers
         # the explicit char list, and both spellings unify with it.
-        assert unify(chars, [char_atom("["), char_atom("]")], Trail())
-        assert unify(chars, "[]", Trail())
+        assert unify(nil_chars, [char_atom("["), char_atom("]")], Trail())
+        assert unify(nil_chars, chars("[]"), Trail())
 
 
 class TestANonEmptyListIsACompound:
@@ -811,7 +812,7 @@ def test_row_19_atom_and_string_dict_keys_are_distinct():
     (d,), = _answers(("r19_atom_dict", D), mod, D)
     assert list(d.keys()) == [mint("foo")]
     assert _answers(("r19_dot", d, V), mod, V) == [(1,)]
-    assert not unify(d, DictTerm({"foo": 1}), Trail())
+    assert not unify(d, DictTerm({chars("foo"): 1}), Trail())
 
 
 def test_row_20_json_parse_makes_atom_keys_and_string_values():
@@ -860,8 +861,10 @@ def test_row_23_an_atom_crossing_to_python_comes_back_a_string():
     X, Y = Var(), Var()
     (x, y), = _answers(("r23", X, Y), mod, X, Y)
     assert x == mint("bar")
-    assert y == chars("bar") and is_chars(y)
-    assert x != y
+    # Stage 2 (spec §3 Q1): the Python ``str`` crossing back through ``++``
+    # is the ATOM, the same term ``bar`` -- not the chars carrier.
+    assert y == mint("bar") and is_atom(y) and not is_chars(y)
+    assert x == y
 
 
 # ── Rows 24-27: the surface ─────────────────────────────────────────────────
@@ -897,7 +900,7 @@ def test_row_26_double_quotes_chars_is_accepted_after_the_flip():
     )
     X = Var()
     assert _answers(("r26", X), chars_mod, X) == [(("$chars", "ab"),)]   # stage 1
-    assert _answers(("r26", X), atom_mod, X) == [(("ab",),)]
+    assert _answers(("r26", X), atom_mod, X) == [("ab",)]
 
 
 def test_row_27_a_pl_file_loads_its_strings_as_strings(tmp_path):
@@ -917,9 +920,9 @@ def test_row_28_the_reader_makes_atoms_and_strings():
     from clausal.tools.prolog_reader import transform_term
 
     cell, _span, _names = transform_term(PAtom("hi"))
-    assert cell == ("hi",)
+    assert cell == "hi"                       # STAGE 2: an atom IS the str
     cell, _span, _names = transform_term(PString("hi"))
-    assert cell == "hi"
+    assert cell == chars("hi")                # ...and a string is the carrier
 
 
 def test_row_29_the_bytecode_tag_invalidates_a_pre_flip_pyc():
@@ -977,11 +980,11 @@ def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):
     capsys.readouterr()
     # A STRING is not a predicate indicator: type_error(predicate, "…").
     with pytest.raises(LogicException) as exc:
-        list(solve(("r30_list", "r30_foo"), mod))
+        list(solve(("r30_list", chars("r30_foo")), mod))
     formal = _formal(exc)
     assert formal.functor == "type_error"
     assert formal.args[0] == mint("predicate")
-    assert formal.args[1] == "r30_foo"
+    assert formal.args[1] == chars("r30_foo")
 
 
 # ── Carry-forward pins (items Stage A deferred to THE FLIP) ─────────────────
@@ -994,9 +997,9 @@ def test_seg_string_iteration_yields_char_atoms():
     ss = SegString(["abc"])
     assert list(ss) == [char_atom("a"), char_atom("b"), char_atom("c")]
     assert ss[0] == char_atom("a")
-    assert ss[1:] == "bc"          # a slice of a string is a string (R-S2)
+    assert ss[1:] == chars("bc")   # a slice of a string is a string (R-S2)
     assert char_atom("b") in ss
-    assert "b" not in ss           # a one-element STRING is not an element
+    assert chars("b") not in ss    # a one-element STRING is not an element
 
 
 def test_membership_over_a_plain_str_yields_char_atoms(builtins_mod):
@@ -1044,10 +1047,10 @@ def test_var_head_cons_onto_a_string_unifies_with_the_string(builtins_mod):
     """Task 5 carry-forward: ``T =.. ['.', X, "bc"]`` with ``X`` unbound is a
     partial string; once ``X = a`` it IS ``"abc"`` (row 4/18c)."""
     X, T = Var(), Var()
-    for _ in solve(("unpack", T, [mint("."), X, "bc"]), builtins_mod):
+    for _ in solve(("unpack", T, [mint("."), X, chars("bc")]), builtins_mod):
         trail = Trail()
         assert unify(X, char_atom("a"), trail)
-        assert unify(_deref_walk(T), "abc", trail)
+        assert unify(_deref_walk(T), chars("abc"), trail)
         break
     else:
         raise AssertionError("=.. with a var head produced no solution")
@@ -1100,7 +1103,7 @@ def test_dispatch_at_refuses_a_string_goal():
     from clausal.logic.predicate import _dispatch_at
 
     with pytest.raises(LogicException) as exc:
-        _dispatch_at("t12_str_goal", 1)
+        _dispatch_at(chars("t12_str_goal"), 1)
     formal = _formal(exc)
     assert formal.functor == "existence_error"
     assert formal.args[0] == mint("procedure")
@@ -1116,11 +1119,11 @@ def test_translate_refuses_a_string_language(builtins_mod):
     """``translate/3``'s *Lang* is an atom read by spelling (§6.4); the Stage A
     arm that took a plain ``str`` as the locale name is gone."""
     with pytest.raises(LogicException) as exc:
-        list(solve(("translate", "th", mint("hi"), Var()), builtins_mod))
+        list(solve(("translate", chars("th"), mint("hi"), Var()), builtins_mod))
     formal = _formal(exc)
     assert formal.functor == "type_error"
     assert formal.args[0] == mint("atom")
-    assert formal.args[1] == "th"
+    assert formal.args[1] == chars("th")
 
 
 def test_listing_refuses_a_string_indicator_name(capsys):
@@ -1144,7 +1147,7 @@ def test_listing_refuses_a_string_indicator_name(capsys):
     assert len(list(_run(("/", mint("t12_pt"), 2)))) == 1
     assert "t12_pt/2" in capsys.readouterr().out
     # …and the STRING name half is refused, not read as the spelling.
-    for shape in (("/", "t12_pt", 2), Compound("/", ("t12_pt", 2))):
+    for shape in (("/", chars("t12_pt"), 2), Compound("/", (chars("t12_pt"), 2))):
         with pytest.raises(LogicException) as exc:
             list(_run(shape))
         formal = exc.value.term.args[0]
@@ -1372,8 +1375,8 @@ def test_sum_and_scalar_product_read_the_operator_as_an_atom():
     )
     N = Var()
     assert _answers(("s_eq", N), mod, N) == [(6,)]
-    assert len(list(solve(("s_lt",), mod))) == 1
-    assert list(solve(("s_lt_fails",), mod)) == []
+    assert len(list(solve("s_lt", mod))) == 1
+    assert list(solve("s_lt_fails", mod)) == []
     assert _answers(("sp", N), mod, N) == [(23,)]
 
 
@@ -1446,8 +1449,8 @@ def test_attribute_keys_are_atoms():
     )
     OUT = Var()
     assert _answers(("roundtrip", OUT), mod, OUT) == [(7,)]
-    assert len(list(solve(("attached",), mod))) == 1
-    assert len(list(solve(("deleted",), mod))) == 1
+    assert len(list(solve("attached", mod))) == 1
+    assert len(list(solve("deleted", mod))) == 1
 
 
 def test_a_string_attribute_key_is_refused(builtins_mod):
@@ -1670,13 +1673,13 @@ def test_os_env_and_working_directory_take_atom_text():
         prev_cwd = _pyos.getcwd()
         prev_env = _pyos.environ.get("t12d_name")
         try:
-            assert len(list(solve(("set_it",), mod))) == 1
+            assert len(list(solve("set_it", mod))) == 1
             assert _pyos.environ["t12d_name"] == "t12d_value"
             V = Var()
             # The wrapper ANSWERS text as a string (§9.4); only the argument
             # positions accept an atom.
             assert _answers(("read_it", V), mod, V) == [(chars("t12d_value"),)]
-            assert len(list(solve(("unset_it",), mod))) == 1
+            assert len(list(solve("unset_it", mod))) == 1
             assert "t12d_name" not in _pyos.environ
             D = Var()
             assert _answers(("cd_and_read", D), mod, D) == [(chars(real_tmpdir),)]
@@ -1751,8 +1754,8 @@ def test_hmac_takes_an_atom_algorithm_and_an_atom_digest():
     )
     H = Var()
     assert _answers(("signed", H), mod, H) == [(chars(expected),)]
-    assert len(list(solve(("ok",), mod))) == 1
-    assert list(solve(("bad",), mod)) == []
+    assert len(list(solve("ok", mod))) == 1
+    assert list(solve("bad", mod)) == []
 
 
 def test_csv_reading_predicates_take_atom_text():
@@ -1777,7 +1780,7 @@ def test_csv_reading_predicates_take_atom_text():
         assert _answers(("row", R), mod, R) == [([chars("a"), chars("b"), chars("c")],)]
         assert _answers(("rows", RS), mod, RS) == [([[chars("a"), chars("b")], [chars("c"), chars("d")]],)]
         assert _answers(("first_name", N), mod, N) == [(chars("alice"),)]
-        assert len(list(solve(("wrote",), mod))) == 1
+        assert len(list(solve("wrote", mod))) == 1
         # The file is where the ATOM said, not where its repr would have been.
         assert os.path.isfile(path)
         assert os.listdir(tmpdir) == ["t12d.csv"]
@@ -1805,7 +1808,7 @@ def test_json_parse_and_file_predicates_take_atom_text():
         assert _answers(("parsed", V), mod, V) == [(1,)]
         V = Var()
         assert _answers(("parsed3", V), mod, V) == [(1,)]
-        assert len(list(solve(("wrote",), mod))) == 1
+        assert len(list(solve("wrote", mod))) == 1
         assert os.listdir(tmpdir) == ["t12d.json"]
         V = Var()
         assert _answers(("read_back", V), mod, V) == [(1,)]
@@ -1852,7 +1855,7 @@ def test_files_write_and_append_take_atom_contents():
             "append_string_to_file(\"" + path + "\", \"world\")),\n"
             "read_back(S) <- read_file_to_string(\"" + path + "\", S),\n",
         )
-        assert len(list(solve(("wrote",), mod))) == 1
+        assert len(list(solve("wrote", mod))) == 1
         S = Var()
         assert _answers(("read_back", S), mod, S) == [(chars("hello world"),)]
         # The bytes on disk, not just what the wrapper says it wrote.

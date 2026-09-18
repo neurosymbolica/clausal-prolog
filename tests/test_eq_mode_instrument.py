@@ -65,9 +65,9 @@ def test_each_path_is_recorded_with_its_own_classification(inst):
     arithmetic site STRUCTURAL — which the first draft of this classifier
     did."""
     mod, path = _load(SRC.format(n="_ei1"), "_ei1")
-    _run(mod, ("test_ground",))
+    _run(mod, "test_ground")
     _run(mod, ("binds", Var()))
-    _run(mod, ("structural", ("lo",)))
+    _run(mod, ("structural", "lo"))
     _run(mod, ("constrains", Var(), Var()))
     by_line = {r["line"]: r["path"] for r in inst.records()}
     assert by_line[3] == instrument.TEST, "1 + 1 == 2 is arithmetic, not structural"
@@ -81,7 +81,7 @@ def test_the_site_is_the_real_clausal_file_not_the_template(inst):
     lives on the frame's globals. Pinning it stops a future refactor from
     silently reporting every site against `<template>`."""
     mod, path = _load(SRC.format(n="_ei2"), "_ei2")
-    _run(mod, ("test_ground",))
+    _run(mod, "test_ground")
     files = {r["file"] for r in inst.records()}
     assert files == {os.path.abspath(path)}
     assert all(f.endswith(".clausal") for f in files)
@@ -91,9 +91,9 @@ def test_one_record_per_execution_duplicates_preserved(inst):
     """The verdict table needs the multiset, not the set: a site is only
     FORCED to `#=` if it took two different paths across executions."""
     mod, _ = _load(SRC.format(n="_ei3"), "_ei3")
-    _run(mod, ("test_ground",))
-    _run(mod, ("test_ground",))
-    _run(mod, ("test_ground",))
+    _run(mod, "test_ground")
+    _run(mod, "test_ground")
+    _run(mod, "test_ground")
     assert len([r for r in inst.records() if r["line"] == 3]) == 3
 
 
@@ -134,7 +134,7 @@ def test_uninstall_restores_and_stops_recording():
         instrument.reset()
     assert predicate._fd_eq_fn is before
     mod, _ = _load(SRC.format(n="_ei5"), "_ei5")
-    _run(mod, ("test_ground",))
+    _run(mod, "test_ground")
     assert instrument.records() == []
 
 
@@ -148,12 +148,12 @@ def test_uninstall_stops_recording_for_ALREADY_COMPILED_predicates():
     instrument.install()
     try:
         mod, _ = _load(SRC.format(n="_eiA"), "_eiA")   # compiled while wrapped
-        _run(mod, ("test_ground",))
+        _run(mod, "test_ground")
         assert instrument.records(), "positive control: it must record first"
     finally:
         instrument.uninstall()
     instrument.reset()
-    _run(mod, ("test_ground",))                        # same, already-compiled
+    _run(mod, "test_ground")                        # same, already-compiled
     assert instrument.records() == []
 
 
@@ -258,7 +258,7 @@ def test_the_full_arithmetic_operator_set_is_numeric(inst):
            "pw <- (2 ** 3 == 8)\n")
     mod, _ = _load(src, "_eiD")
     for g in ("d", "m", "pw"):
-        _run(mod, (g,))
+        _run(mod, g)
     assert {r["path"] for r in inst.records()} == {instrument.TEST}
 
 
@@ -310,7 +310,7 @@ def test_a_reified_NON_NUMERIC_comparison_is_STRUCTURAL_not_TEST(inst):
     src = ("-module(_eiF, [p(A, R), lo, yes, no])\n-double_quotes(chars)\n"
            "p(A, R) <- if_(A == lo, R is yes, R is no)\n")
     mod, _ = _load(src, "_eiF")
-    _run(mod, ("p", ("lo",), Var()))
+    _run(mod, ("p", "lo", Var()))
     assert [r["path"] for r in inst.records()] == [instrument.STRUCTURAL]
 
 

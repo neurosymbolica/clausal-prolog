@@ -25,7 +25,7 @@ from clausal.logic.translations import (
 )
 from clausal.logic.predicate import make_predicate, PredicateMeta
 from clausal.logic.variables import Var, Trail, deref
-from clausal.logic.cells import is_chars, chars_text
+from clausal.logic.cells import chars, is_chars, chars_text
 from clausal.terms import Compound, KWTerm, term_str, TermStyle
 from clausal.import_hook import _load_module
 
@@ -170,9 +170,9 @@ class TestDisplayLocale:
     def test_atom_in_compound_arg(self):
         """Atom names inside compound args are NOT translated (strings are data)."""
         # nv
-        t = Compound("append", ("nil", "hello", []))
+        t = Compound("append", (chars("nil"), chars("hello"), []))
         s = term_str(t, TermStyle(locale="th"))
-        # "nil" is a Python STRING value here, rendered DOUBLE-quoted (spec
+        # "nil" is a STRING (chars) value here, rendered DOUBLE-quoted (spec
         # §6.7) -- not an atom, which would render bare (or translated).
         assert '"nil"' in s
 

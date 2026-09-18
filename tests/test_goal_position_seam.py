@@ -33,27 +33,27 @@ class TestHelpersDirectly:
         from clausal.logic.seam import once_bind, export
         mod = _load_inline("_gp_h1", RULEBASE.format(name="_gp_h1"))
         S, IDS = Var(), Var()
-        goal = ("decide", ("large",), ("verdict", S, IDS))
+        goal = ("decide", "large", ("verdict", S, IDS))
         assert once_bind(goal, mod.__dict__) is True
-        assert export(S) == ("prohibited",) and export(IDS) == [("r1",)]
+        assert export(S) == "prohibited" and export(IDS) == ["r1"]
 
     def test_once_bind_is_false_on_failure(self):
         from clausal import Var
         from clausal.logic.seam import once_bind
         mod = _load_inline("_gp_h2", RULEBASE.format(name="_gp_h2"))
-        assert once_bind(("decide", ("tiny",), Var()), mod.__dict__) is False
+        assert once_bind(("decide", "tiny", Var()), mod.__dict__) is False
 
     def test_each_yields_every_answer_as_a_tuple_or_a_bare_value(self):
         from clausal import Var
         from clausal.logic.seam import each
         mod = _load_inline("_gp_h3", RULEBASE.format(name="_gp_h3"))
         S, IDS = Var(), Var()
-        goal = ("decide", ("large",), ("verdict", S, IDS))
+        goal = ("decide", "large", ("verdict", S, IDS))
         assert list(each(goal, (S, IDS), mod.__dict__)) == [
-            (("prohibited",), [("r1",)]), (("prohibited",), [("r2",)])]
+            ("prohibited", ["r1"]), ("prohibited", ["r2"])]
         V = Var()
-        assert list(each(("decide", ("small",), V), (V,), mod.__dict__)) == [
-            ("verdict", ("permitted",), [("r1",), ("r2",)])]
+        assert list(each(("decide", "small", V), (V,), mod.__dict__)) == [
+            ("verdict", "permitted", ["r1", "r2"])]
 
     def test_export_refuses_an_attributed_unbound_variable(self):
         from clausal import Var, Trail
@@ -79,9 +79,9 @@ class TestHelpersDirectly:
             "wins(X) <- (move(X, Y), not wins(Y))\n"
         ))
         with pytest.raises(UndefinedAnswer):
-            list(each(("wins", ("a",)), (), mod.__dict__))
+            list(each(("wins", "a"), (), mod.__dict__))
         with pytest.raises(UndefinedAnswer):
-            once_bind(("wins", ("a",)), mod.__dict__)
+            once_bind(("wins", "a"), mod.__dict__)
 
 
 class TestIf:
@@ -92,7 +92,7 @@ class TestIf:
             "        seen = True\n"
             "    return S, IDS\n"
         ))
-        assert mod.first(("large",)) == (("prohibited",), [("r1",)])
+        assert mod.first("large") == ("prohibited", ["r1"])
 
     def test_if_assigns_nothing_on_failure(self):
         mod = _load_inline("_gp_if2", RULEBASE.format(name="_gp_if2") + (
@@ -102,7 +102,7 @@ class TestIf:
             "    return S\n"
         ))
         with pytest.raises(UnboundLocalError):
-            mod.first(("tiny",))
+            mod.first("tiny")
 
     def test_if_with_a_unification_pattern(self):
         mod = _load_inline("_gp_if3", RULEBASE.format(name="_gp_if3") + (
@@ -111,7 +111,7 @@ class TestIf:
             "        return S, IDS\n"
             "    return None\n"
         ))
-        assert mod.parts(("verdict", ("permitted",), [])) == (("permitted",), [])
+        assert mod.parts(("verdict", "permitted", [])) == ("permitted", [])
         assert mod.parts(("other", 1)) is None
 
     def test_elif_and_a_conjunction(self):
@@ -123,9 +123,9 @@ class TestIf:
             "        return ('no', IDS)\n"
             "    return 'none'\n"
         ))
-        assert mod.which(("small",)) == ("yes", [("r1",), ("r2",)])
-        assert mod.which(("large",)) == ("no", [("r1",)])
-        assert mod.which(("tiny",)) == "none"
+        assert mod.which("small") == ("yes", ["r1", "r2"])
+        assert mod.which("large") == ("no", ["r1"])
+        assert mod.which("tiny") == "none"
 
     def test_a_thunk_over_a_goal_variable_reads_its_bound_value(self):
         # ``++len(IDS)`` is lowered to ``PyThunk(lambda IDS: len(IDS), [IDS])``:
@@ -139,9 +139,9 @@ class TestIf:
             "        return S, IDS, N\n"
             "    return None\n"
         ))
-        assert mod.count(("small",)) == (
-            ("permitted",), [("r1",), ("r2",)], 2)
-        assert mod.count(("large",)) == (("prohibited",), [("r1",)], 1)
+        assert mod.count("small") == (
+            "permitted", ["r1", "r2"], 2)
+        assert mod.count("large") == ("prohibited", ["r1"], 1)
 
     def test_an_fstring_over_a_goal_variable_reads_its_bound_value(self):
         # Same shape as the ``++`` thunk above: ``visit_JoinedStr`` builds the
@@ -153,7 +153,7 @@ class TestIf:
             "        return S, S2\n"
             "    return None\n"
         ))
-        assert mod.label(("small",)) == (("permitted",), chars("v=permitted"))
+        assert mod.label("small") == ("permitted", "v=permitted")
 
     def test_an_unbound_export_handed_to_an_inner_seam_binds_the_live_object(self):
         # spec §7: "an unbound export handed to an inner seam through ``++``
@@ -183,8 +183,8 @@ class TestIf:
         same, B, C, inner = mod.probe()
         assert inner == "bound"
         assert same is True                  # one live object, not a copy
-        assert deref(B) == ("b",)            # the inner seam bound it
-        assert C == ("seen",)                # the outer seam's other export
+        assert deref(B) == "b"            # the inner seam bound it
+        assert C == "seen"                # the outer seam's other export
 
     def test_an_all_caps_name_inside_an_inner_seams_escape_is_that_seams_variable(self):
         # spec §4, "no sharing across seams": two ``--`` in one function that
@@ -218,7 +218,7 @@ class TestIf:
             "    x = --decide(small, V)\n"
             "    return x[0], x[1]\n"
         ))
-        assert mod.term()[0] == "decide" and mod.term()[1] == ("small",)
+        assert mod.term()[0] == "decide" and mod.term()[1] == "small"
 
     def test_a_goal_seam_if_nested_in_a_goal_seam_if_body(self):
         mod = _load_inline("_gp_if6", RULEBASE.format(name="_gp_if6") + (
@@ -228,8 +228,8 @@ class TestIf:
             "            return S, IDS, S2, IDS2\n"
             "    return None\n"
         ))
-        assert mod.both(("small",), ("large",)) == (
-            ("permitted",), [("r1",), ("r2",)], ("prohibited",), [("r1",)])
+        assert mod.both("small", "large") == (
+            "permitted", ["r1", "r2"], "prohibited", ["r1"])
 
     def test_a_goal_seam_if_nested_in_a_goal_seam_if_else(self):
         mod = _load_inline("_gp_if7", RULEBASE.format(name="_gp_if7") + (
@@ -241,7 +241,7 @@ class TestIf:
             "            return S, IDS\n"
             "    return None\n"
         ))
-        assert mod.either(("small",), ("large",)) == (("prohibited",), [("r1",)])
+        assert mod.either("small", "large") == ("prohibited", ["r1"])
 
 
 class TestNot:
@@ -255,10 +255,10 @@ class TestNot:
             "    if not --decide(++profile, verdict(S, _)):\n"
             "        return S\n"
         ))
-        assert mod.absent(("tiny",)) == "absent"
-        assert mod.absent(("small",)) == "present"
+        assert mod.absent("tiny") == "absent"
+        assert mod.absent("small") == "present"
         with pytest.raises(UnboundLocalError):
-            mod.leaks(("tiny",))
+            mod.leaks("tiny")
 
 
 class TestFor:
@@ -270,9 +270,9 @@ class TestFor:
             "        out.append((S, IDS))\n"
             "    return out, S\n"
         ))
-        out, last = mod.all_ids(("large",))
-        assert out == [(("prohibited",), [("r1",)]), (("prohibited",), [("r2",)])]
-        assert last == ("prohibited",)
+        out, last = mod.all_ids("large")
+        assert out == [("prohibited", ["r1"]), ("prohibited", ["r2"])]
+        assert last == "prohibited"
 
     def test_a_single_target_gets_the_bare_value(self):
         mod = _load_inline("_gp_for2", RULEBASE.format(name="_gp_for2") + (
@@ -282,7 +282,7 @@ class TestFor:
             "        out.append(V)\n"
             "    return out\n"
         ))
-        assert mod.verdicts(("small",)) == [("verdict", ("permitted",), [("r1",), ("r2",)])]
+        assert mod.verdicts("small") == [("verdict", "permitted", ["r1", "r2"])]
 
     def test_a_goal_variable_that_is_not_a_target_is_not_exported(self):
         mod = _load_inline("_gp_for3", RULEBASE.format(name="_gp_for3") + (
@@ -292,7 +292,7 @@ class TestFor:
             "    return IDS\n"
         ))
         with pytest.raises((UnboundLocalError, NameError)):
-            mod.only_status(("large",))
+            mod.only_status("large")
 
     def test_a_target_not_in_the_goal_is_a_load_time_syntax_error(self):
         with pytest.raises(SyntaxError, match="X"):
@@ -321,12 +321,12 @@ class TestFor:
             "def mutate(profile):\n"
             "    out = []\n"
             "    for IDS in --decide(++profile, verdict(_, IDS)):\n"
-            "        IDS.append(('x',))\n"
+            "        IDS.append('x')\n"
             "        out.append(len(IDS))\n"
             "    return out\n"
         ))
-        assert mod.mutate(("large",)) == [2, 2]
-        assert mod.mutate(("large",)) == [2, 2]
+        assert mod.mutate("large") == [2, 2]
+        assert mod.mutate("large") == [2, 2]
 
     def test_break_stops_the_search(self):
         mod = _load_inline("_gp_for7", RULEBASE.format(name="_gp_for7") + (
@@ -335,7 +335,7 @@ class TestFor:
             "        break\n"
             "    return IDS\n"
         ))
-        assert mod.first(("large",)) == [("r1",)]
+        assert mod.first("large") == ["r1"]
 
     def test_a_statement_nested_seam_may_reuse_a_target_name(self):
         # spec §4: statement-nested seams are independent -- `_seam_bound`
@@ -354,10 +354,10 @@ class TestFor:
             "            out.append(S)\n"
             "    return out, outer_ids, S\n"
         ))
-        out, outer_ids, last = mod.nested(("large",), ("small",))
-        assert out == [("permitted",), ("permitted",)]
-        assert outer_ids == [[("r1",)], [("r2",)]]
-        assert last == ("permitted",)
+        out, outer_ids, last = mod.nested("large", "small")
+        assert out == ["permitted", "permitted"]
+        assert outer_ids == [["r1"], ["r2"]]
+        assert last == "permitted"
 
 
 class TestWhile:
@@ -375,7 +375,7 @@ class TestWhile:
             "        path.append(cur)\n"
             "    return path\n"
         ))
-        assert mod.walk(("a",)) == [("a",), ("b",), ("c",)]
+        assert mod.walk("a") == ["a", "b", "c"]
 
     def test_while_not_goal_loops_until_the_goal_succeeds(self):
         # `while not --goal` runs the body for as long as the goal FAILS;
@@ -393,7 +393,7 @@ class TestWhile:
             "        cur = seq[i]\n"
             "    return cur, i\n"
         ))
-        assert mod.find([("a",), ("b",), ("c",)]) == (("c",), 2)
+        assert mod.find(["a", "b", "c"]) == ("c", 2)
 
     def test_while_not_goal_does_not_export_the_fresh_variable(self):
         mod = _load_inline("_gp_while3", (
@@ -409,7 +409,7 @@ class TestWhile:
             "    return N\n"
         ))
         with pytest.raises((UnboundLocalError, NameError)):
-            mod.find([("a",), ("b",), ("c",)])
+            mod.find(["a", "b", "c"])
 
 
 class TestSoundnessThroughTheRewriter:
@@ -513,10 +513,10 @@ class TestSoundnessThroughTheRewriter:
         out = []
         with pytest.raises(UndefinedAnswer):
             mod2.every(out)
-        assert out == [("d",)]                   # the definite one, yielded
+        assert out == ["d"]                   # the definite one, yielded
         # Once-semantics stops at the first answer, which is definite.
         mod3 = _load_inline("_gp_s6", src.format(n="_gp_s6"))
-        assert mod3.any_win() == ("d",)
+        assert mod3.any_win() == "d"
 
     def test_a_non_ground_tabled_call_is_judged_too(self):
         """A tabled call with an UNBOUND argument is judged like a ground one.
@@ -639,7 +639,7 @@ class TestQueryCache:
             "            n += 1\n"
             "    return n\n"
         ))
-        profiles = [("small",), ("large",), ("tiny",)] * 10
+        profiles = ["small", "large", "tiny"] * 10
         assert self._compile_count(lambda: mod.hits(profiles)) == 1
         assert mod.hits(profiles) == 20
 
@@ -650,9 +650,9 @@ class TestQueryCache:
             "        return S\n"
             "    return None\n"
         ))
-        assert mod.status(("small",)) == ("permitted",)
-        assert mod.status(("large",)) == ("prohibited",)
-        assert mod.status(("small",)) == ("permitted",)
+        assert mod.status("small") == "permitted"
+        assert mod.status("large") == "prohibited"
+        assert mod.status("small") == "permitted"
 
     def test_a_unification_pattern_seam_compiles_once(self):
         mod = _load_inline("_gp_c3", RULEBASE.format(name="_gp_c3") + (
@@ -663,9 +663,9 @@ class TestQueryCache:
             "            out.append(S)\n"
             "    return out\n"
         ))
-        answers = [("verdict", ("permitted",), []), ("verdict", ("prohibited",), [])] * 5
+        answers = [("verdict", "permitted", []), ("verdict", "prohibited", [])] * 5
         assert self._compile_count(lambda: mod.parts(answers)) == 1
-        assert mod.parts(answers) == [("permitted",), ("prohibited",)] * 5
+        assert mod.parts(answers) == ["permitted", "prohibited"] * 5
 
     def test_a_thunk_over_a_goal_variable_is_correct_but_uncached(self):
         """A ``++`` over a GOAL variable still reads the bound value, and the
@@ -693,8 +693,8 @@ class TestQueryCache:
             "            out.append((S, len(IDS)))\n"
             "    return out\n"
         ))
-        profiles = [("small",), ("large",)] * 5
-        expected = [(("permitted",), 2), (("prohibited",), 1)] * 5
+        profiles = ["small", "large"] * 5
+        expected = [("permitted", 2), ("prohibited", 1)] * 5
         assert mod.sized(profiles) == expected
         assert self._compile_count(lambda: mod.sized(profiles)) == len(profiles)
         # The cacheable twin: same loop, no var-taking thunk, one compile.
@@ -726,18 +726,18 @@ class TestQueryCache:
             "    for N in --(edge(++node, N), lab(N, ++tag)):\n"
             "        out.append((depth, tag, node, N))\n"
             "        if depth < 1:\n"
-            "            walk(N, ('y',), out, depth + 1)\n"
+            "            walk(N, 'y', out, depth + 1)\n"
             "    return out\n"
         ))
         got = []
-        assert self._compile_count(lambda: mod.walk(("a",), ("x",), got, 0)) == 1
+        assert self._compile_count(lambda: mod.walk("a", "x", got, 0)) == 1
         # The outer execution resumes with ITS tag and sees both of a's edges,
         # interleaved with the inner executions it spawned.
         assert got == [
-            (0, ("x",), ("a",), ("b",)),
-            (1, ("y",), ("b",), ("d",)),
-            (0, ("x",), ("a",), ("c",)),
-            (1, ("y",), ("c",), ("e",)),
+            (0, "x", "a", "b"),
+            (1, "y", "b", "d"),
+            (0, "x", "a", "c"),
+            (1, "y", "c", "e"),
         ]
 
 
@@ -766,8 +766,8 @@ class TestJudgementThroughLoweredArguments:
         "move(pair(d), pair(e)),\n"          # pair(d) wins outright
         "wins(X) <- (move(X, Y), not wins(Y))\n"
         "beats(X, Y) <- (move(X, Y), not wins(Y))\n"
-        "ground_a = ('pair', ('a',))\n"
-        "ground_d = ('pair', ('d',))\n"
+        "ground_a = ('pair', 'a')\n"
+        "ground_d = ('pair', 'd')\n"
         "def compound_conditional():\n"
         "    if --wins(pair(a)):\n"
         "        return 'true'\n"
@@ -785,12 +785,12 @@ class TestJudgementThroughLoweredArguments:
         "        return 'true'\n"
         "    return 'false'\n"
         "def nested_thunk_conditional():\n"
-        "    x = ('a',)\n"
+        "    x = 'a'\n"
         "    if --wins(pair(++x)):\n"
         "        return 'true'\n"
         "    return 'false'\n"
         "def nested_thunk_definite():\n"
-        "    x = ('d',)\n"
+        "    x = 'd'\n"
         "    if --wins(pair(++x)):\n"
         "        return 'true'\n"
         "    return 'false'\n"
@@ -833,12 +833,12 @@ class TestJudgementThroughLoweredArguments:
         mod = self._mod("_gp_l4")
         # pair(d) beats pair(e) outright: wins(pair(e)) is false, so the
         # negation is definite and the answer is exported.
-        assert mod.every_thunk([], ("pair", ("d",))) == [("pair", ("e",))]
+        assert mod.every_thunk([], ("pair", "d")) == [("pair", "e")]
         # pair(a) beats pair(b) only if wins(pair(b)) is false, which is
         # undefined in the 3-cycle: the one answer is conditional.
         out = []
         with pytest.raises(UndefinedAnswer):
-            mod.every_thunk(out, ("pair", ("a",)))
+            mod.every_thunk(out, ("pair", "a"))
         assert out == []
 
     def test_a_thunk_over_a_goal_variable_in_a_tabled_call_is_refused_loudly(self):
@@ -970,7 +970,7 @@ class TestJudgementThroughCompositeGoals:
     def test_the_oracle_shape_profile_through_a_wrapper(self):
         from clausal.logic.seam import UndefinedAnswer
         mod = self._mod("_gp_c1")
-        assert mod.decide_definite() == (("ok",), ("d",))
+        assert mod.decide_definite() == ("ok", "d")
         with pytest.raises(UndefinedAnswer):
             mod.decide_conditional()
         assert self._stack() == []
@@ -978,10 +978,10 @@ class TestJudgementThroughCompositeGoals:
     def test_negation_inside_an_untabled_body_is_judged(self):
         from clausal.logic.seam import UndefinedAnswer
         mod = self._mod("_gp_c2")
-        assert mod.every_beats([], ("d",)) == [("e",)]
+        assert mod.every_beats([], "d") == ["e"]
         out = []
         with pytest.raises(UndefinedAnswer):
-            mod.every_beats(out, ("a",))
+            mod.every_beats(out, "a")
         assert out == []
 
     def test_definite_answers_stream_first_then_the_conditional_raises(self):
@@ -994,13 +994,13 @@ class TestJudgementThroughCompositeGoals:
         out = []
         with pytest.raises(UndefinedAnswer):
             mod.every_wrapped(out)
-        assert out == [("d",)]
+        assert out == ["d"]
 
     def test_break_after_the_first_answer_leaves_no_leader_behind(self):
         mod = self._mod("_gp_c4")
-        assert mod.first_wrapped() == ("d",)
+        assert mod.first_wrapped() == "d"
         assert self._stack() == []
-        assert mod.first_wrapped() == ("d",)
+        assert mod.first_wrapped() == "d"
 
     def test_a_body_exception_leaves_no_leader_behind(self):
         mod = self._mod("_gp_c5")
@@ -1014,7 +1014,7 @@ class TestJudgementThroughCompositeGoals:
         out = []
         with pytest.raises(UndefinedAnswer):
             mod.nested(out)
-        assert out == [(("d",), "d-wins")]
+        assert out == [("d", "d-wins")]
         assert self._stack() == []
 
 
@@ -1156,7 +1156,7 @@ class TestDelaysAreChargedToTheRightAnswer:
         so their delays belong to no answer at all.  ``d``, derived
         delay-free, is WFS-true and must export."""
         mod = self._mod("_gp_d1")
-        assert mod.both_answers([]) == [("d",)]
+        assert mod.both_answers([]) == ["d"]
         assert self._stack() == []
 
     def test_a_tabled_answer_rederived_without_delays_is_true(self):
@@ -1172,7 +1172,7 @@ class TestDelaysAreChargedToTheRightAnswer:
         through ``wins(a)``, the second is the FACT ``r(a)``.  One WFS-true
         answer, exported once — not exported and then raised on."""
         mod = self._mod("_gp_d3")
-        assert mod.r_answers([]) == [("a",)]
+        assert mod.r_answers([]) == ["a"]
         assert self._stack() == []
 
     def test_a_second_judged_goal_does_not_inherit_the_first_s_delays(self):
@@ -1184,13 +1184,13 @@ class TestDelaysAreChargedToTheRightAnswer:
         mod = self._mod("_gp_d4")
         gg, gf = mod.stream_g(), mod.stream_f()
         try:
-            assert next(gg) == ("start",)   # g's own fact, no conditions
-            assert next(gf) == ("one",)
+            assert next(gg) == "start"   # g's own fact, no conditions
+            assert next(gf) == "one"
             # g resumes and DELAYS on the a/b/c branches before reaching its
             # second definite answer -- a distinct atom, so this pins that the
             # delaying branches really ran.
-            assert next(gg) == ("d",)
-            assert next(gf) == ("two",)
+            assert next(gg) == "d"
+            assert next(gf) == "two"
         finally:
             gg.close()
             gf.close()
@@ -1204,7 +1204,7 @@ class TestDelaysAreChargedToTheRightAnswer:
         report a bag built from undefined answers as definitely true."""
         from clausal.logic.seam import UndefinedAnswer
         mod = self._mod("_gp_d5")
-        assert mod.warm([]) == [("e",)]     # drives wins/1 to completion
+        assert mod.warm([]) == ["e"]     # drives wins/1 to completion
         with pytest.raises(UndefinedAnswer):
             mod.bag()
         with pytest.raises(UndefinedAnswer):
@@ -1246,7 +1246,7 @@ class TestDelaysAreChargedToTheRightAnswer:
         whole ``findall`` retracts it: the next clause's answer is a plain
         fact and must be exported as definitely true, not raised on."""
         mod = self._mod("_gp_d9")
-        assert mod.after_the_bag() == ("ok",)
+        assert mod.after_the_bag() == "ok"
         assert self._stack() == []
 
     def test_count_all_keeps_its_conditions_off_a_live_drive_too(self):
@@ -1296,5 +1296,5 @@ class TestDelaysAreChargedToTheRightAnswer:
         answers known when it runs, exactly as a tabled consumer does."""
         mod = self._mod("_gp_e4")
         out = mod.nested_same_table([])
-        assert [x for x, _inner in out] == [("one",), ("two",)]
+        assert [x for x, _inner in out] == ["one", "two"]
         assert self._stack() == []

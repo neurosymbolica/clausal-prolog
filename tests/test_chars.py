@@ -621,14 +621,14 @@ class TestCellAtoms:
     def test_atom_length_accepts_cell_atom(self):
         # nv
         N = Var()
-        answers = _run_collect("atom_length", 2, ("abc",), N,
+        answers = _run_collect("atom_length", 2, mint("abc"), N,
                                snap=lambda: deref(N))
         assert len(answers) == 1 and answers[0] == 3
 
     def test_atom_chars_accepts_cell_atom_and_char_atoms(self):
         # nv
         L = Var()
-        answers = _run_collect("atom_chars", 2, ("ab",), L,
+        answers = _run_collect("atom_chars", 2, mint("ab"), L,
                                snap=lambda: deref(L))
         assert answers == [[char_atom("a"), char_atom("b")]]
         A = Var()
@@ -640,21 +640,21 @@ class TestCellAtoms:
     def test_atom_concat_cell_atoms(self):
         # nv
         X = Var()
-        answers = _run_collect("atom_concat", 3, ("a",), ("b",), X,
+        answers = _run_collect("atom_concat", 3, mint("a"), mint("b"), X,
                                snap=lambda: deref(X))
         assert answers == [mint("ab")]
 
     def test_sub_atom_cell_atom(self):
         # nv
         S = Var()
-        answers = _run_collect("sub_atom", 5, ("abc",), 1, 1, 1, S,
+        answers = _run_collect("sub_atom", 5, mint("abc"), 1, 1, 1, S,
                                snap=lambda: deref(S))
         assert len(answers) == 1 and answers[0] == mint("b")
 
     def test_char_code_cell_char(self):
         # nv
         C = Var()
-        answers = _run_collect("char_code", 2, ("a",), C,
+        answers = _run_collect("char_code", 2, mint("a"), C,
                                snap=lambda: deref(C))
         assert answers == [97]
         Ch = Var()
@@ -664,17 +664,17 @@ class TestCellAtoms:
 
     def test_char_type_cell_char_and_cell_type(self):
         # nv
-        assert _run("char_type", 2, ("a",), ("alpha",)) == 1
+        assert _run("char_type", 2, mint("a"), mint("alpha")) == 1
 
     def test_number_chars_cell_char_atoms(self):
-        """§6.6: number_chars(12, L) → L = [("1",), ("2",)] and back."""
+        """§6.6: number_chars(12, L) → L = ["1", "2"] and back."""
         # nv
         L = Var()
         answers = _run_collect("number_chars", 2, 12, L,
                                snap=lambda: deref(L))
         assert answers == [[char_atom("1"), char_atom("2")]]
         N = Var()
-        answers = _run_collect("number_chars", 2, N, [("1",), ("2",)],
+        answers = _run_collect("number_chars", 2, N, [mint("1"), mint("2")],
                                snap=lambda: deref(N))
         assert answers == [12]
 
@@ -686,7 +686,7 @@ class TestCellAtoms:
         """
         # nv
         A, B = Var(), Var()
-        answers = _run_collect("atom_concat", 3, A, B, ("ab",),
+        answers = _run_collect("atom_concat", 3, A, B, mint("ab"),
                                snap=lambda: (deref(A), deref(B)))
         assert answers == [(mint(""), mint("ab")),
                            (mint("a"), mint("b")),
@@ -700,7 +700,7 @@ class TestCellAtoms:
         """
         # nv
         C = Var()
-        answers = _run_collect("char_type", 2, C, ("control",),
+        answers = _run_collect("char_type", 2, C, mint("control"),
                                snap=lambda: deref(C))
         assert answers == [char_atom(chr(i)) for i in range(32)] + \
             [char_atom(chr(127))]
@@ -712,7 +712,7 @@ class TestCellAtoms:
         """
         # nv
         T = Var()
-        answers = _run_collect("char_type", 2, ("a",), T,
+        answers = _run_collect("char_type", 2, mint("a"), T,
                                snap=lambda: deref(T))
         assert answers == [mint("alpha"), mint("alnum"), mint("lower"),
                            mint("ascii"), mint("print")]

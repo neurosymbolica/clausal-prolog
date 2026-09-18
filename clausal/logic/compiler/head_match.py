@@ -369,7 +369,14 @@ def head_to_match_pattern(
     # name, a ``'...'`` literal and (in the default ``atom`` mode) a ``"..."``
     # literal are ATOMS -- the arity-0 cell -- and take the cell branch at the
     # bottom of this cascade instead.
-    if isinstance(term, str) or is_chars(term):
+    if isinstance(term, str):
+        # STAGE 2: a str head literal is an ATOM -- the capture + unify guard
+        # that binds an unbound (output-mode) caller, never a value pattern
+        cap_name = f"_acap{len(list_guards) if list_guards is not None else 0}"
+        if list_guards is not None:
+            list_guards.append(("atom", cap_name, term))
+        return ast.MatchAs(pattern=None, name=cap_name)
+    if is_chars(term):
         # STAGE 1 (spec 2026-09-18): the chars CARRIER ``('$chars', text)`` is
         # a string literal too and takes the same capture + ``unify`` guard --
         # NOT the compound-cell sequence pattern below, which would match
@@ -933,23 +940,6 @@ def head_to_match_pattern(
     # its own recursion for the same reason.
     _is_cell, _tag = _cell_shape(term)
     if _is_cell:
-        if isinstance(_tag, str) and len(term) == 1:
-            # An ATOM (THE FLIP): an arity-0 cell is an ATOMIC term, not a
-            # structural one — it has no arguments, nothing to destructure,
-            # and no inner Var to couple to the body.  It takes the capture +
-            # ``unify`` guard the PredicateMeta-atom branch below and the
-            # str/bytes branches above take, for the reason they take it: a
-            # bare value PATTERN matches only an already-equal caller, so an
-            # unbound (output-mode) caller would silently fail the match
-            # instead of being BOUND to the atom.  Before the flip an atom
-            # was a ``str`` and reached the str branch, which is exactly this
-            # treatment; routing it through the compound-cell sequence
-            # pattern instead would have been a silent output-mode
-            # regression on every atom-headed fact.
-            cap_name = f"_acap{len(list_guards) if list_guards is not None else 0}"
-            if list_guards is not None:
-                list_guards.append(("atom", cap_name, term))
-            return ast.MatchAs(pattern=None, name=cap_name)
         if isinstance(_tag, str):
             return _cell_match_pattern(_tag, [
                 head_to_match_pattern(a, var_context, dup_guards, list_guards,

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.cells import chars, is_chars, chars_text, refuse_bare_str  # stage 1: the chars carrier
+from clausal.logic.cells import chars, is_chars, chars_text  # the chars carrier
 from clausal.logic.atoms import char_atom, is_char_atom, spelling
 
 
@@ -82,13 +82,26 @@ def normalize_seg_input(x: Any) -> Any:
     # the interim rule is armed).
     if is_chars(x):
         return chars_text(x)
-    refuse_bare_str(x, "a sequence builtin (normalize_seg_input)")   # interim rule
     from clausal.terms import SegList, SegString, SegBytes
     if isinstance(x, (SegList, SegString, SegBytes)):
         w = x.__walk__()
         # a ground text Seg* walks to the CARRIER (stage 1); this funnel's
         # contract is the bare str, so unwrap it here for its consumers
         return chars_text(w) if is_chars(w) else w
+    return x
+
+
+def walk_seg(x: Any) -> Any:
+    """Walk a ``Seg*`` to its ground form, KEEPING the chars carrier: a ground
+    text Seg* answers ``('$chars', s)``, a ground SegList the list, a bare
+    str stays the ATOM it is (stage 2).  ``normalize_seg_input`` is the
+    older funnel that also unwraps the carrier to its str -- for consumers
+    that read a str as text from context; a decomposition funnel
+    (``functor/3``, ``arg/3``, ``=..``) must use THIS one, or an atom and
+    the string of its spelling become indistinguishable."""
+    from clausal.terms import SegList, SegString, SegBytes
+    if isinstance(x, (SegList, SegString, SegBytes)):
+        return x.__walk__()
     return x
 
 

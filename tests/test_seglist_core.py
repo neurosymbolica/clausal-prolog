@@ -2,6 +2,7 @@
 sequence protocol, concat, and __repr__."""
 
 import pytest
+from clausal.logic.cells import chars  # stage 2: a string is the carrier
 from clausal.logic.atoms import char_atom
 from clausal.terms import ConcreteSeg, VarSeg, SegList, _multi_star_splits, _seglist_unify_gen
 from clausal.logic.variables import Var, Trail, walk, unify
@@ -259,8 +260,8 @@ class TestUnify:
         # nv
         # THE FLIP (spec §6.2): a char is the ATOM ("h",).
         sl = SegList([ConcreteSeg([char_atom("h"), char_atom("i")])])
-        assert sl.__unify__("hi", Trail()) is True
-        assert sl.__unify__("ho", Trail()) is False
+        assert sl.__unify__(chars("hi"), Trail()) is True   # stage 2: the string is the carrier
+        assert sl.__unify__(chars("ho"), Trail()) is False
 
     def test_unify_against_seglist_returns_not_implemented(self):
         # nv
@@ -501,7 +502,7 @@ class TestEquality:
         # nv — Symmetric with SegString under the strings-as-lists contract
         # (F019 fix): a ground SegList of 1-char strings equals the matching str.
         sl = SegList([ConcreteSeg([char_atom(c) for c in "abc"])])
-        assert sl == "abc"
+        assert sl == chars("abc")   # stage 2: the string is the carrier; a bare str is an atom
 
     def test_unhashable_unconditionally(self):
         # nv — Phase 2 Task 13 (revised F017/F025 contract): SegList is

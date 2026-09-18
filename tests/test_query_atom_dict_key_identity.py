@@ -24,6 +24,7 @@ from __future__ import annotations
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal import Var, solve
@@ -214,7 +215,7 @@ def test_double_quoted_key_is_an_atom_key(tmp_path):
     assert _one(lambda V: reader.soft_read(
         DictTerm({mint("query_date"): 5}), V)) == 5
     assert _one(lambda V: reader.soft_read(
-        DictTerm({"query_date": 5}), V)) is None
+        DictTerm({chars("query_date"): 5}), V)) is None
 
 
 def test_int_key_control_still_works(tmp_path):
@@ -230,25 +231,28 @@ mk(P) <- ( P is {query_date: 5} )
 """
 
 
-def test_predicate_in_key_position_raises_a_named_error(tmp_path):
-    """A bare name in key position that resolves to a *predicate* (arity ≥ 1)
-    must fail with a Clausal-level diagnostic naming the clash — not a raw
-    ``NotImplementedError: unsupported term type PredicateMeta``.
-
-    It must keep failing: a predicate object is not equal to the same-named
-    atom, so accepting it would trade a loud crash for a key that can never be
-    read back.
+def test_predicate_in_key_position_is_the_atom(tmp_path):
+    """STAGE 2 of the atoms-as-str flip (spec §4, RULED 2026-09-18): no class
+    is a term, so a bare name in key position is the ATOM of that spelling
+    even when a same-named PREDICATE (arity >= 1) exists in the module.  There
+    is nothing to clash with and nothing to refuse: the load succeeds, the key
+    is the atom ``query_date``, and it reads back with the atom -- the
+    ``PredicateAsTermError`` this used to raise is retired with the cell.
     """
-    from clausal.logic.compiler.terms_to_ast import PredicateAsTermError
-
-    with pytest.raises(PredicateAsTermError) as exc:
-        _load(tmp_path, "qk_pred_key", PRED_KEY_SRC)
-    msg = str(exc.value)
-    assert "query_date/2" in msg
-    assert "is a predicate, not a term value" in msg
-    # Points at both escape hatches: qualified atom, or a string key.
-    assert "owner.query_date" in msg
-    assert '"query_date"' in msg
+    mod = _load(tmp_path, "qk_pred_key", PRED_KEY_SRC)
+    P = Var()
+    for _ in solve(mod.mk(P)):
+        built = deref(P)
+        break
+    else:
+        raise AssertionError("mk/1 produced no solution")
+    assert isinstance(built, DictTerm)
+    (key,) = list(built.keys())
+    assert key == mint("query_date") and type(key) is str
+    assert built[mint("query_date")] == 5
+    # ...and the same-named predicate is untouched by the key.
+    X = Var()
+    assert next(solve(mod.query_date(built, X)), None) is not None and deref(X) == 99
 
 
 def test_distinct_dicts_are_not_conflated_by_the_query_cache(mods):

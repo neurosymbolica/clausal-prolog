@@ -994,11 +994,7 @@ char_atom_from_ucs4(Py_UCS4 c)
 {
     if (c < 128 && g_ascii_char_atoms[c] != NULL)
         return Py_NewRef(g_ascii_char_atoms[c]);
-    PyObject *spelling = PyUnicode_FromOrdinal((int)c);
-    if (!spelling) return NULL;
-    PyObject *cell = PyTuple_Pack(1, spelling);
-    Py_DECREF(spelling);
-    return cell;
+    return PyUnicode_FromOrdinal((int)c);   /* STAGE 2: the char atom is the 1-char str */
 }
 
 /* Interned "__unify__", set in PyInit__variables before any unify runs. */
@@ -1037,7 +1033,7 @@ probe_unify_hook(PyObject *obj, PyObject **hook_out)
 static inline int is_nil_spelling(PyObject *t)
 {
     if (PyList_Check(t))    return PyList_GET_SIZE(t) == 0;
-    if (PyUnicode_Check(t)) return PyUnicode_GET_LENGTH(t) == 0;
+    /* STAGE 2: a bare str is an ATOM -- '' is not nil; the empty CARRIER below is */
     if (PyBytes_Check(t))   return PyBytes_GET_SIZE(t) == 0;
     /* the EMPTY chars carrier ('$chars', "") is nil too (stage 1; review 2026-09-18) */
     if (PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
@@ -1221,13 +1217,18 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                         trail, depth + 1, oc);
     }
 
-    /* the chars carrier walks to its text here (see is_chars_carrier) */
-    if (is_chars_carrier(t1) || is_chars_carrier(t2)) {
-        t1 = unwrap_chars(t1);
-        t2 = unwrap_chars(t2);
-        if (PyUnicode_Check(t1) && PyUnicode_Check(t2))
-            return PyUnicode_Compare(t1, t2) == 0;
-    }
+    /* STAGE 2 (spec 2026-09-18): the chars carrier is the ONLY text.  It
+     * walks to its str here, and the str<->list arms below are reachable
+     * only through it (the flags): a bare str is an ATOM, equal to itself,
+     * never to a list and never to the carrier of the same text. */
+    int t1_text = 0, t2_text = 0;
+    PyObject *t1_term = t1, *t2_term = t2;   /* the carrier itself, for the __unify__ hooks below */
+    if (is_chars_carrier(t1)) { t1 = unwrap_chars(t1); t1_text = 1; }
+    if (is_chars_carrier(t2)) { t2 = unwrap_chars(t2); t2_text = 1; }
+    if (t1_text && t2_text)
+        return PyUnicode_Compare(t1, t2) == 0;
+    if ((t1_text && PyUnicode_Check(t2)) || (t2_text && PyUnicode_Check(t1)))
+        return 0;   /* a string is not the atom of its text */
     if (PyList_Check(t1) && PyList_Check(t2)) {
         Py_ssize_t n = PyList_GET_SIZE(t1);
         if (n != PyList_GET_SIZE(t2)) return 0;
@@ -1279,7 +1280,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
      * = "a"`` stays FALSE via the mixed list/tuple guard further down,
      * because "a" is the one-element LIST [("a",)], not the char.
      */
-    if (PyUnicode_Check(t1) && PyList_Check(t2)) {
+    if (t1_text && PyList_Check(t2)) {   /* carrier vs list */
         Py_ssize_t n = PyUnicode_GET_LENGTH(t1);
         if (n != PyList_GET_SIZE(t2)) return 0;
         if (n == 0) return 1;
@@ -1290,11 +1291,9 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             PyObject *elem_raw = PyList_GetItemRef(t2, i);
             if (elem_raw == NULL) return -1;
             PyObject *elem = var_deref(elem_raw);
-            if (!Var_Check(elem) && PyTuple_CheckExact(elem)
-                    && PyTuple_GET_SIZE(elem) == 1
-                    && PyUnicode_Check(PyTuple_GET_ITEM(elem, 0))
-                    && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(elem, 0)) == 1) {
-                Py_UCS4 c2 = PyUnicode_READ_CHAR(PyTuple_GET_ITEM(elem, 0), 0);
+            if (!Var_Check(elem) && PyUnicode_Check(elem)
+                    && PyUnicode_GET_LENGTH(elem) == 1) {
+                Py_UCS4 c2 = PyUnicode_READ_CHAR(elem, 0);
                 Py_DECREF(elem_raw);
                 if (c1 != c2) return 0;
             } else {
@@ -1308,7 +1307,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         }
         return 1;
     }
-    if (PyList_Check(t1) && PyUnicode_Check(t2)) {
+    if (PyList_Check(t1) && t2_text) {   /* list vs carrier */
         /* Symmetric: list on left, str on right. */
         Py_ssize_t n = PyUnicode_GET_LENGTH(t2);
         if (PyList_GET_SIZE(t1) != n) return 0;
@@ -1320,11 +1319,9 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
             PyObject *elem_raw = PyList_GetItemRef(t1, i);
             if (elem_raw == NULL) return -1;
             PyObject *elem = var_deref(elem_raw);
-            if (!Var_Check(elem) && PyTuple_CheckExact(elem)
-                    && PyTuple_GET_SIZE(elem) == 1
-                    && PyUnicode_Check(PyTuple_GET_ITEM(elem, 0))
-                    && PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(elem, 0)) == 1) {
-                Py_UCS4 c1 = PyUnicode_READ_CHAR(PyTuple_GET_ITEM(elem, 0), 0);
+            if (!Var_Check(elem) && PyUnicode_Check(elem)
+                    && PyUnicode_GET_LENGTH(elem) == 1) {
+                Py_UCS4 c1 = PyUnicode_READ_CHAR(elem, 0);
                 Py_DECREF(elem_raw);
                 if (c1 != c2) return 0;
             } else {
@@ -1438,7 +1435,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         if (probe_unify_hook(t1, &hook) < 0) return -1;
         if (hook) {
             PyObject *result = PyObject_CallFunctionObjArgs(
-                hook, t2, (PyObject *)trail, NULL);
+                hook, t2_term, (PyObject *)trail, NULL);   /* STAGE 2: a Seg* hook must see the CARRIER -- a bare str is an atom to it */
             Py_DECREF(hook);
             if (result == NULL) return -1;
             if (result != Py_NotImplemented) {
@@ -1456,7 +1453,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         if (probe_unify_hook(t2, &hook) < 0) return -1;
         if (hook) {
             PyObject *result = PyObject_CallFunctionObjArgs(
-                hook, t1, (PyObject *)trail, NULL);
+                hook, t1_term, (PyObject *)trail, NULL);
             Py_DECREF(hook);
             if (result == NULL) return -1;
             if (result != Py_NotImplemented) {
@@ -2547,10 +2544,14 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
      * together, so calling this accessor directly agrees with the funnel
      * wrapper in builtins/_helpers.py.  The empty string keeps the ISO
      * nil-atom spelling "[]", as the empty list does. */
-    if (PyUnicode_Check(term)) {
-        if (PyUnicode_GET_LENGTH(term) == 0)
+    if (is_chars_carrier(term)) {   /* STAGE 2: the carrier is the STRING -- cons-cell reading */
+        if (PyUnicode_GET_LENGTH(unwrap_chars(term)) == 0)
             return PyUnicode_FromString("[]");
         return PyUnicode_FromString(".");
+    }
+    if (PyUnicode_Check(term)) {    /* STAGE 2: a str IS the atom -- its own functor name */
+        Py_INCREF(term);
+        return term;
     }
     /* Bytes — codes-model cons-cell, untouched by the str~list retirement
      * (§1b: "the adjacent bytes<->list block is KEPT — codes model
@@ -2570,24 +2571,7 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
         return term;
     }
     /* Zero-arity PredicateMeta class (atom) */
-    if (PredicateMeta_type) {
-        r = PyObject_IsInstance(term, PredicateMeta_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *fields = PyObject_GetAttr(term, str_fields);
-            if (fields) {
-                if (!PyTuple_Check(fields)) { Py_DECREF(fields); Py_RETURN_NONE; }
-                int empty = (PyTuple_GET_SIZE(fields) == 0);
-                Py_DECREF(fields);
-                if (empty) {
-                    Py_INCREF(term);
-                    return term;  /* the class IS the functor name */
-                }
-            } else {
-                PyErr_Clear();
-            }
-        }
-    }
+    /* STAGE 2 (spec §4): no class is a term -- the zero-field-class arm is retired with the cell. */
     Py_RETURN_NONE;
 }
 
@@ -2654,8 +2638,11 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
      * retired that reading here and in the Python twin _arity_py together,
      * so calling this accessor directly agrees with the funnel wrapper in
      * builtins/_helpers.py. */
-    if (PyUnicode_Check(term)) {
-        return PyLong_FromLong(PyUnicode_GET_LENGTH(term) == 0 ? 0 : 2);
+    if (is_chars_carrier(term)) {   /* STAGE 2: the carrier is the STRING -- cons-cell reading */
+        return PyLong_FromLong(PyUnicode_GET_LENGTH(unwrap_chars(term)) == 0 ? 0 : 2);
+    }
+    if (PyUnicode_Check(term)) {    /* STAGE 2: a str IS the atom, arity 0 */
+        return PyLong_FromLong(0);
     }
     /* Bytes — codes-model cons-cell. */
     if (PyBytes_Check(term)) {
@@ -2667,21 +2654,7 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
         return PyLong_FromLong(0);
     }
     /* Zero-arity atom */
-    if (PredicateMeta_type) {
-        r = PyObject_IsInstance(term, PredicateMeta_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *fields = PyObject_GetAttr(term, str_fields);
-            if (fields) {
-                if (!PyTuple_Check(fields)) { Py_DECREF(fields); Py_RETURN_NONE; }
-                int empty = (PyTuple_GET_SIZE(fields) == 0);
-                Py_DECREF(fields);
-                if (empty) return PyLong_FromLong(0);
-            } else {
-                PyErr_Clear();
-            }
-        }
-    }
+    /* STAGE 2 (spec §4): no class is a term -- the zero-field-class arm is retired with the cell. */
     Py_RETURN_NONE;
 }
 
@@ -3857,9 +3830,7 @@ PyInit__variables(void)
         PyObject *spelling = PyUnicode_FromOrdinal(i);
         if (!spelling) return NULL;
         PyUnicode_InternInPlace(&spelling);
-        g_ascii_char_atoms[i] = PyTuple_Pack(1, spelling);
-        Py_DECREF(spelling);
-        if (!g_ascii_char_atoms[i]) return NULL;
+        g_ascii_char_atoms[i] = spelling;   /* STAGE 2: a char atom IS the interned 1-char str */
     }
 
     /* Interned before any walk can run — do_walk's fast-path gate uses it. */
