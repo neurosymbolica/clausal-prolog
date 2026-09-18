@@ -23,10 +23,12 @@ split, join, reverse, search, filter, iterate. Maintaining two parallel sets of
 predicates — one for lists, one for strings — doubles the API surface and forces
 users to constantly ask "am I working with a string or a list right now?"
 
-Clausal answers that by making the string *be* the list. Under the hood a string
-is still a Python `str` (fast, compact, interoperable with Python libraries) —
-it is never expanded into a chain of cons cells — but at the logic level
-`"hello"` and `['h', 'e', 'l', 'l', 'o']` are one and the same term.
+Clausal answers that by making the string *be* the list. Under the hood a
+string stays a compact value carrying its text (fast, and never expanded
+into a chain of cons cells) — a bare Python `str` is an atom now, not a
+string, so this isn't literally a `str`; see [Atoms vs
+strings](syntax.md#atoms-vs-strings) — but at the logic level `"hello"` and
+`['h', 'e', 'l', 'l', 'o']` are one and the same term.
 
 The elements are **character atoms**: `'h'` is the atom whose spelling is the
 single character `h`, not the one-character string `"h"`. So
@@ -57,7 +59,8 @@ The empty string unifies with the empty list:
 ## Pattern Matching
 
 Multi-star list patterns work on strings. Star variables bind to
-**substrings** (not character lists), preserving the `str` type:
+**substrings** (not character lists, and not atoms — a substring stays a
+string):
 
 ```clausal
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:pattern_matching"
@@ -173,15 +176,16 @@ Three predicates test sequence types (see [Type Checking](type_checking.md) for 
 
 | Predicate | `"ab"` | `['a','b']` | `[1, 2]` | atoms | Purpose |
 |-----------|--------|-------------|----------|-------|---------|
-| `is_list/1` | Succeeds | Succeeds | Succeeds | Fails | Polymorphic: is this a list-shaped value (a `list` or a char-sequence `str`)? |
+| `is_list/1` | Succeeds | Succeeds | Succeeds | Fails | Polymorphic: is this a list-shaped value (a `list` or a string)? |
 | `is_str/1`, `string/1` | Succeeds | Succeeds | Fails | Fails | Is this a **string** — a sequence of characters? |
 | `is_chars/1` | Succeeds | Succeeds | Succeeds | Fails | union test: is this a character sequence or a list? |
 
-`is_list/1` is polymorphic over `list` and `str` (audit 2026-05-25, F080)
+`is_list/1` is polymorphic over `list` and string (audit 2026-05-25, F080)
 so it agrees with every list-flavoured builtin — `append`, `length`,
 `reverse`, `member`, `maplist`, `take`, `drop`, etc. — all of which
-accept a `str` as a character sequence. Use `is_str/1` when you need to know
-that a value is *text* rather than an arbitrary list.
+accept a string as a character sequence. Use `is_str/1` when you need to know
+that a value is *text* rather than an arbitrary list. A bare atom (a plain
+`str`) satisfies neither — see [Atoms vs strings](syntax.md#atoms-vs-strings).
 
 `is_str/1` tests the **term**, not its storage: `"ab"` and `['a', 'b']` are one
 term, so both answer true, and so do `""` and `[]`.
@@ -229,13 +233,15 @@ list.
 
 ## How It Works
 
-Clausal keeps Python `str` as the internal representation of strings. This
-preserves performance (string comparison, hashing, and concatenation are fast)
-and Python interoperability (strings passed to Python functions remain `str`).
-**The representation is never materialised into cons cells** — a string is a
-`str`, a proper list is a `list`, and a partial list or partial string is the
-engine's `SegList`/`SegString`. The `'.'/2` cons structure is only ever a
-*view* onto those, produced on demand by `functor/3`, `arg/3`, `=..` and
+A bound string is internally a compact value that wraps its Python `str`
+text — not a bare `str` itself, since a bare `str` is now an atom (see
+[Atoms vs strings](syntax.md#atoms-vs-strings)). This preserves performance
+(comparison and concatenation on the wrapped text are fast) and Python
+interoperability (a string crossing to Python arrives as a plain `str`).
+**The representation is never materialised into cons cells** — a proper
+list is a `list`, and a partial list or partial string is the engine's
+`SegList`/`SegString`. The `'.'/2` cons structure is only ever a *view* onto
+those, produced on demand by `functor/3`, `arg/3`, `=..` and
 `write_canonical/1`.
 
 The logic layer makes the string *be* its char list in four places:
@@ -246,8 +252,8 @@ The logic layer makes the string *be* its char list in four places:
 
 2. **Pattern matching:** Multi-star patterns (`[*A, 'l', *B]`) accept strings
    as match targets. Star variables bind to **substrings** (e.g. `A = "he"`,
-   `B = "lo"`), preserving the `str` type throughout — no character-list
-   conversion happens.
+   `B = "lo"`) — still strings throughout, not atoms — with no
+   character-list conversion happening.
 
 3. **Builtins:** List predicates accept strings wherever they accept lists. When
    the result should be a string (all inputs were strings, result is a char
@@ -255,7 +261,7 @@ The logic layer makes the string *be* its char list in four places:
 
 4. **Head patterns:** Compiled clause head patterns like `[H, *T]` work on
    strings. `H` binds to a **char atom**, `T` binds to the remaining
-   substring (`str`, not a list).
+   substring (still a string, not a list — and not an atom).
 
 !!! warning "Strings are not indexed"
     First-argument indexing keys on atoms, numbers and functors. A **string**
@@ -305,11 +311,11 @@ movement in a text editor), use the standard Python library
 Clausal follows [Scryer Prolog](scryer.md) here: a string **is** the list of
 its character atoms, the two never unify with an atom, and the `atom_*` family
 raises `type_error(atom, …)` on a string. Scryer likewise keeps a compact
-internal representation rather than materialising cons cells; Clausal's is the
-Python `str`, so a string handed to a Python callee is a `str` with no
-conversion at all.
+internal representation rather than materialising cons cells; Clausal's wraps
+a Python `str`, so a string handed to a Python callee arrives as a plain
+`str` with no conversion needed.
 
-This doc covers the **`chars`** model (a `str` is the list of its
+This doc covers the **`chars`** model (a string is the list of its
 one-character atoms). Clausal also has the Prolog **`codes`** model for byte
 sequences: a Python `bytes` behaves as a list of integer codes in `[0, 255]`,
 written `b"…"`. See [Bytes as Lists of Codes](bytes_as_lists.md) for
@@ -317,7 +323,7 @@ byte-stream unification and binary-protocol DCGs.
 
 | Feature | Traditional Prolog | Clausal |
 |---------|-------------------|---------|
-| String representation | List of character atoms | Python `str` — the same *term*, a compact representation |
+| String representation | List of character atoms | wraps a Python `str` — the same *term* as the char list, a compact representation |
 | `"abc" = [a, b, c]` | True | True |
 | `atom("abc")` | False | False |
 | `atom_length("abc", N)` | `type_error(atom, …)` | `type_error(atom, …)` |
