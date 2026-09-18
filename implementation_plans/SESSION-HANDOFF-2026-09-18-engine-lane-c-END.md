@@ -11,7 +11,7 @@ note stands: two census sweep tools hardcode the private corpus path).
 | canonical main `/workspace/clausal` | `fb0106f3` | atoms-as-str flip stages 1+2 (merges `1f864b39`, `be5cbc3a`), docs pass, P4 prerequisites |
 | clone main `/workspace/clausal-bug-fix` | `5bf7a8db` | the same, by merge (its main carries other sessions' work) |
 | box `/workspace/clausal` | `fb0106f3` | pushed; extensions force-rebuilt at `3fcfd29e` (x86_64), no C change since |
-| branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `ec06556f` + Task 1's commit when it lands | the P2 PLAN and the P2 census (in flight, see NEXT) |
+| branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `421a9fa0` | the P2 PLAN (`ec06556f`) and the verified P2 census (Task 1 DONE, see NEXT) |
 
 Extensions in the canonical checkout were rebuilt at `3fcfd29e` in a same-sha worktree and swapped by
 copy-then-move (two law-portal runservers had the old ones mapped). No C changed after that.
