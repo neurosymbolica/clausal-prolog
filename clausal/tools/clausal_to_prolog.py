@@ -791,6 +791,55 @@ def _lambda_parameter_names(node) -> list[str] | None:
     return names or None
 
 
+def _unit_divisor_factor(node):
+    """The factor for a `/ <unit>` DIVISOR, or None if it is not a unit at all.
+
+    :func:`_unit_factor` answers 1 for an EMPTY name list, by design: a
+    compound of base units resolves to 1 because every leaf does. A NUMERIC
+    divisor also names no unit, so it reached that same 1 and the division was
+    folded away to nothing -- `PCT * SUB / 10000` emitted `PCT * SUB`, silently,
+    off by four orders of magnitude. Both fold paths went through it and the
+    constant one had shipped with the hole.
+
+    So a divisor must NAME something before its factor is even looked up. This
+    is the divisor-position guard only; a declaration's unit (which is a unit by
+    syntax, not by inference) keeps calling _unit_factor directly.
+    """
+    names = _unit_leaf_names(node)
+    if not names:
+        # A QUANTITY-literal divisor -- `/ 1(euro)` -- names its unit inside a
+        # Call, which _unit_leaf_names does not descend into. Three corpus
+        # sites spell it that way, and they used to fold only by ACCIDENT
+        # through the very hole this function closes: the Call named no leaf,
+        # the factor came back 1, and dividing by 1 happened to be right.
+        unit = _quantity_divisor_unit(node)
+        if unit is None:
+            return None
+        names = [unit]
+    return _unit_factor(names)
+
+
+def _quantity_divisor_unit(node) -> str | None:
+    """The unit of a `1(unit)` Quantity-literal divisor, else None.
+
+    ONLY a magnitude of exactly 1, because only that is a pure unit
+    conversion: `/ 5(euro)` is a division by five euro, and folding it away as
+    though it merely named a unit would be off by a factor of five.
+    """
+    if (not isinstance(node, python_ast.Call) or node.keywords
+            or len(node.args) != 1):
+        return None
+    func = node.func
+    if not (isinstance(func, python_ast.Constant)
+            and not isinstance(func.value, bool)
+            and func.value == 1):
+        return None
+    unit = node.args[0]
+    if not isinstance(unit, python_ast.Name) or _is_var_in_name_position(unit.id):
+        return None
+    return unit.id
+
+
 def _unit_leaf_names(node) -> list[str]:
     """The NAMES a unit expression mentions, in order. Exponents are skipped;
     a qualified ``european_union.euro`` contributes ``euro``."""
@@ -2482,17 +2531,67 @@ class _ClausalToProlog:
         base = self._fold_constant_call(node.left)
         if base is None:
             return None
-        factor = _unit_factor(_unit_leaf_names(node.right))
+        factor = _unit_divisor_factor(node.right)
         if factor is None:
             # A divisor the unit vocabulary does not hold is not a unit at all
-            # -- `constant(c) / COUNT` is division. Refusing here would break
-            # arithmetic that has always been legal.
+            # -- `constant(c) / COUNT` is division, and so is `constant(c) /
+            # 10000`. Refusing here would break arithmetic that has always been
+            # legal.
             return None
         return _unscale_constant_value(base, factor)
+
+    def _fold_term_over_unit(self, node: python_ast.BinOp):
+        """``<term> / <unit>`` -> that term scaled INTO the unit, or None.
+
+        The other half of :meth:`_fold_constant_over_unit`, which requires the
+        left operand to be a ``constant(c)`` Call and so declines the far more
+        common ``CENTS == A / eur_cent`` -- a RUNTIME value asked for in a named
+        unit. The defect is identical: a unit atom is not an evaluable functor,
+        so the surviving divisor makes the goal dead. Measured 2026-09-19 over
+        the emitted AST, 13 of the corpus's 18 `/`-bearing `#=` goals are this
+        shape, across 13 domains, and every one of them was equally dead BEFORE
+        the 2026-09-18 ruling -- `=:=` raises on the atom exactly as `#=` does.
+
+        EMITS MULTIPLICATION, NOT DIVISION, and that is the point rather than a
+        tidier spelling: the reciprocal of every scaled unit in the vocabulary
+        is an exact integer (cents 100, basis points 10000), so the folded goal
+        leaves CLP(Z)'s exact-division limit entirely instead of landing inside
+        it, where an inexact quotient fails SILENTLY.
+
+        REFUSES rather than guesses, on the same discipline as the constant
+        path: a divisor the unit vocabulary does not hold is not a unit at all
+        (`AVG == TOTAL / COUNT` is real division and must stay real division),
+        and a factor whose reciprocal is not an exact integer is left alone
+        rather than rounded -- a wrong factor is a wrong number in an exported
+        legal program.
+        """
+        if not isinstance(node.op, python_ast.Div):
+            return None
+        factor = _unit_divisor_factor(node.right)
+        if factor is None:
+            return None
+        left = self._convert_expr(node.left)
+        if factor == 1:
+            # Dividing by a base unit converts nothing. Return the term
+            # UNCHANGED rather than multiplying by 1, for the same reason
+            # _unscale_constant_value does: it must not acquire arithmetic it
+            # never had.
+            return left
+        if isinstance(left, PNumber):
+            # A literal magnitude converts exactly and stays a number, rather
+            # than becoming `5000*100` for a reader to evaluate.
+            return _unscale_constant_value(left, factor)
+        reciprocal = 1 / factor
+        if reciprocal != int(reciprocal):
+            return None
+        return PCompound("*", (left, PNumber(int(reciprocal))))
 
     def _convert_binop(self, node: python_ast.BinOp) -> PTerm:
         """Convert binary operators to Prolog operators."""
         folded = self._fold_constant_over_unit(node)
+        if folded is not None:
+            return folded
+        folded = self._fold_term_over_unit(node)
         if folded is not None:
             return folded
         left = self._convert_expr(node.left)
