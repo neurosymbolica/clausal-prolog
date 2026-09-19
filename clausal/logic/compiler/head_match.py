@@ -1898,6 +1898,12 @@ def _head_arg_patterns(
     # Extract patterns from the positional args, not from the Call dataclass fields.
     if isinstance(head, Call) and isinstance(head.func, LoadName):
         return [_pat(a) for a in head.args]
+    # P2 (2026-09-19): a head IS the functor-first cell.  Only its ARGUMENTS
+    # are matched -- the arm this builds is ``case (<per-arg patterns>,)`` over
+    # the dispatch function's own parameters, so the head term itself is never
+    # reconstructed at runtime and the cell needs no pattern of its own.
+    if _cell_shape(head)[0]:
+        return [_pat(a) for a in head[1:]]
     if is_term_instance(head):
         return [_pat(getattr(head, name)) for name in term_field_names(head)]
     # Fallback: arity wildcards (accept any args)

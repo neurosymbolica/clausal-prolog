@@ -550,6 +550,9 @@ def _head_arity(head: Any) -> int | None:
     fields = getattr(head, "_fields", None) if isinstance(head, PredicateMeta) else None
     if fields is not None:
         return len(fields)
+    from clausal.logic.cells import _cell_shape  # noqa: PLC0415
+    if _cell_shape(head)[0]:                        # P2: a head is a cell
+        return len(head) - 1
     try:
         args = getattr(head, "args", None)
         if args is not None:

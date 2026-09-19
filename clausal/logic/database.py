@@ -15,7 +15,8 @@ from typing import Any, Callable
 
 from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
-from clausal.logic.cells import TUPLE_TAG, compound_cell_shape, is_chars
+from clausal.logic.cells import (TUPLE_TAG, compound_cell_shape, is_chars,
+                                 cell_args, make_cell)
 from clausal.logic.exceptions import (
     LogicException,
     existence_error,
@@ -1301,8 +1302,28 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
     from clausal.logic.variables import Var
     from clausal.terms import Unify
 
-    replacements: dict[str, Any] = {}
     body: list = []
+
+    # P2 (2026-09-19): a head is the functor-first CELL; the instance arm below
+    # is the pre-flip shape and goes with the class in P4.  Both do the same
+    # thing positionally -- a ground argument becomes a fresh Var plus a body
+    # Unify -- so the only difference is how the head is taken apart and put
+    # back together.
+    is_cell, functor = compound_cell_shape(head)
+    if is_cell:
+        args = list(cell_args(head))
+        changed = False
+        for i, val in enumerate(args):
+            if _is_ground_value(val):
+                v = Var()
+                args[i] = v
+                body.append(Unify(left=v, right=val))
+                changed = True
+        if not changed:
+            return head, [True]
+        return make_cell(functor, *args), body
+
+    replacements: dict[str, Any] = {}
     fields = term_field_names(head)
     for name in fields:
         val = getattr(head, name)
@@ -1410,6 +1431,23 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
     heads (bare Compound/Call/KWTerm) or heads with no structural fields."""
     from clausal.logic.variables import Var
     from clausal.terms import Unify
+
+    # P2 (2026-09-19): a head is the functor-first CELL.  Same hoist,
+    # positionally; the instance arm below goes with the class in P4.
+    is_cell, functor = compound_cell_shape(head)
+    if is_cell:
+        args = list(cell_args(head))
+        prepend: list = []
+        for i, val in enumerate(args):
+            if _is_structural_head_value(val) or (
+                    isinstance(val, list) and _contains_structural_head_value(val)):
+                v = Var()
+                args[i] = v
+                prepend.append(Unify(left=v, right=val))
+        if not prepend:
+            return head, body
+        return make_cell(functor, *args), prepend + list(body)
+
     if not is_term_instance(head) or isinstance(head, (Compound, Call, KWTerm)):
         return head, body
     fields = term_field_names(head)
@@ -1526,6 +1564,12 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
     dataclass instance; None for built-in term types (Compound, Call) and
     non-dataclass values.
     """
+    if compound_cell_shape(head)[0]:
+        # P2: a cell head carries no field NAMES -- they come from the
+        # declaration (``-private([point(x, y)])`` / the -module export list),
+        # which the class already records.  The KWTerm arm below was the only
+        # other producer and its surface spelling is refused since 2026-09-19.
+        return None
     if isinstance(head, KWTerm):
         return tuple(head.keys())
     if not is_term_instance(head):

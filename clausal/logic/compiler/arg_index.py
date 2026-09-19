@@ -31,7 +31,7 @@ from clausal.logic.database import Clause
 
 from ._ast_helpers import _name, _call, _assign  # noqa: F401
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
-from clausal.logic.cells import TUPLE_TAG, CHARS_TAG
+from clausal.logic.cells import TUPLE_TAG, CHARS_TAG, _cell_shape, cell_args
 
 
 # ── First-argument indexing (V2-1) ────────────────────────────────────────────
@@ -702,6 +702,11 @@ def _extract_arg_key(
         if len(head.args) <= pos:
             return _INDEX_VAR
         arg = head.args[pos]
+    elif _cell_shape(head)[0]:                      # P2: a head is a cell
+        cargs = cell_args(head)
+        if len(cargs) <= pos:
+            return _INDEX_VAR
+        arg = cargs[pos]
     elif is_term_instance(head):
         fields = term_field_names(head)
         if len(fields) <= pos:

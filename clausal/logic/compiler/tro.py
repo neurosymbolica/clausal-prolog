@@ -27,6 +27,7 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import StarUnpack, IfExpr, Lambda
 from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.cells import _cell_shape, cell_args
 from clausal.logic.database import Clause, Database
 from clausal.terms import PyThunk, DictTerm, SetTerm
 
@@ -220,24 +221,13 @@ def _tro_args_safe_ir(
 
     head_passthrough_ids: set[int] = set()
     all_head_var_ids: set[int] = set()
-    if is_term_instance(head):
-        fields = list(term_field_names(head))
-        for i, fname in enumerate(fields):
-            head_arg = getattr(head, fname)
-            _collect_var_ids(head_arg, all_head_var_ids)
-            head_arg = deref(head_arg)
-            if is_var(head_arg) and i < len(tail_args):
-                tail_arg = deref(tail_args[i])
-                if is_var(tail_arg) and tail_arg._id == head_arg._id:
-                    head_passthrough_ids.add(head_arg._id)
-    elif isinstance(head, Compound):
-        for i, head_arg in enumerate(head.args):
-            _collect_var_ids(head_arg, all_head_var_ids)
-            head_arg = deref(head_arg)
-            if is_var(head_arg) and i < len(tail_args):
-                tail_arg = deref(tail_args[i])
-                if is_var(tail_arg) and tail_arg._id == head_arg._id:
-                    head_passthrough_ids.add(head_arg._id)
+    for i, head_arg in enumerate(_head_args(head) or ()):
+        _collect_var_ids(head_arg, all_head_var_ids)
+        head_arg = deref(head_arg)
+        if is_var(head_arg) and i < len(tail_args):
+            tail_arg = deref(tail_args[i])
+            if is_var(tail_arg) and tail_arg._id == head_arg._id:
+                head_passthrough_ids.add(head_arg._id)
 
     _check_positions: set[int] = set()
     for arg_idx, arg in enumerate(tail_args):
@@ -253,6 +243,22 @@ def _tro_args_safe_ir(
                 continue
             return (False, frozenset())
     return (True, frozenset(_check_positions))
+
+
+def _head_args(head):
+    """The clause head's positional arguments, whatever shape it is.
+
+    P2 (2026-09-19): a head is the functor-first CELL; the instance arm is
+    the pre-flip shape and goes with the class in P4.  Returns None for a
+    head this file has nothing to say about (a bare name, a ``Call``).
+    """
+    if _cell_shape(head)[0]:
+        return list(cell_args(head))
+    if is_term_instance(head):
+        return [getattr(head, f) for f in term_field_names(head)]
+    if isinstance(head, Compound):
+        return list(head.args)
+    return None
 
 
 def _collect_bound_vars_ir(op: Any, out: set[int]) -> None:
@@ -431,24 +437,13 @@ def _tro_args_safe(
     head_passthrough_ids: set[int] = set()
     # Also collect ALL Var IDs that appear anywhere in the head.
     all_head_var_ids: set[int] = set()
-    if is_term_instance(head):
-        fields = list(term_field_names(head))
-        for i, fname in enumerate(fields):
-            head_arg = getattr(head, fname)
-            _collect_var_ids(head_arg, all_head_var_ids)
-            head_arg = deref(head_arg)
-            if is_var(head_arg) and i < len(tail_args):
-                tail_arg = deref(tail_args[i])
-                if is_var(tail_arg) and tail_arg._id == head_arg._id:
-                    head_passthrough_ids.add(head_arg._id)
-    elif isinstance(head, Compound):
-        for i, head_arg in enumerate(head.args):
-            _collect_var_ids(head_arg, all_head_var_ids)
-            head_arg = deref(head_arg)
-            if is_var(head_arg) and i < len(tail_args):
-                tail_arg = deref(tail_args[i])
-                if is_var(tail_arg) and tail_arg._id == head_arg._id:
-                    head_passthrough_ids.add(head_arg._id)
+    for i, head_arg in enumerate(_head_args(head) or ()):
+        _collect_var_ids(head_arg, all_head_var_ids)
+        head_arg = deref(head_arg)
+        if is_var(head_arg) and i < len(tail_args):
+            tail_arg = deref(tail_args[i])
+            if is_var(tail_arg) and tail_arg._id == head_arg._id:
+                head_passthrough_ids.add(head_arg._id)
 
     # Check each tail call argument.  Collect ALL Var IDs within each arg
     # (not just top-level), since lists/compounds may embed unbound Vars.
@@ -480,11 +475,9 @@ def _head_has_unifying_list_pattern(head: Any) -> bool:
     Example: head field ``[["sum", 0, 0], StarUnpack(GOALS)]`` has the
     constant list ``["sum", 0, 0]`` — TRO is unsafe.
     """
-    if is_term_instance(head):
-        for fname in term_field_names(head):
-            val = getattr(head, fname)
-            if isinstance(val, list) and _list_has_nonvar_constant(val):
-                return True
+    for val in _head_args(head) or ():
+        if isinstance(val, list) and _list_has_nonvar_constant(val):
+            return True
     return False
 
 

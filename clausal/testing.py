@@ -295,6 +295,10 @@ def _test_description_term(head):
     """The description ARGUMENT of a ``test/1`` clause head."""
     if hasattr(head, "args"):
         return head.args[0]
+    from clausal.logic.cells import _cell_shape, cell_args  # noqa: PLC0415
+    if _cell_shape(head)[0]:                        # P2: a head is a cell
+        args = cell_args(head)
+        return args[0] if args else head
     from clausal.logic.predicate import term_field_names
     names = term_field_names(head)
     return getattr(head, names[0]) if names else head
@@ -2210,8 +2214,11 @@ def _head_prefix(head, goal):
 
     args = list(goal.args or ())
     kwargs = list(goal.kwargs or ())
+    from clausal.logic.cells import _cell_shape, cell_args  # noqa: PLC0415
     if hasattr(head, "args"):
         hargs, names = list(head.args), None
+    elif _cell_shape(head)[0]:                      # P2: a head is a cell
+        hargs, names = list(cell_args(head)), None
     else:
         names = list(term_field_names(head))
         hargs = [getattr(head, n) for n in names]

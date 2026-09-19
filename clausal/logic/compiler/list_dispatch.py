@@ -48,7 +48,7 @@ from .head_match import (
 from .terms_to_ast import (  # noqa: F401
     term_to_ast_expr, cell_signature_for_name, _is_opaque_head_literal,
 )
-from clausal.logic.cells import _cell_shape
+from clausal.logic.cells import _cell_shape, cell_args, cell_functor, make_cell
 from .arg_index import _bytelist_to_bytes_or_none
 
 
@@ -58,22 +58,20 @@ from .arg_index import _bytelist_to_bytes_or_none
 def _get_head_arg(clause: Clause, pos: int) -> Any:
     """Return the argument at position *pos* from the clause head (or None).
 
-    No cell branch, deliberately (P3-2 Task 3, plan claim verified rather than
-    assumed; RE-VERIFIED for P3-3 Task 5): this reads the HEAD TERM, and a
-    stored head is still a predicate instance or a ``Compound`` — never a cell.
-
-    Task 5 (R11) made a cell a legal ``assertz`` ARGUMENT, which is a different
-    thing: ``database_ops._check_cell_head_permission`` normalizes it to the
-    class term or ``Compound`` before the clause is built, so what lands in the
-    store is a shape this function reads.  The low-level door stays shut —
-    ``database._stored_head_key`` refuses a cell-headed ``Clause`` outright,
-    naming this absence as the reason (a cell head would compile to a predicate
-    that answers with its argument unbound).  Cell head ARGUMENTS are a
-    different question again and are handled by the callers below.
+    Three head shapes, and the CELL is one of them (P2 head flip, 2026-09-19).
+    It was not, for two releases: a stored head was a predicate instance or a
+    ``Compound``, ``database._stored_head_key`` refused a cell-headed
+    ``Clause`` outright, and this function's missing cell branch was the
+    reason it named — a cell head compiled to a predicate that answered with
+    its argument UNBOUND.  Both are gone now: a head IS the functor-first cell
+    and this reads it positionally, like the other two.
     """
     head = clause.head
     if isinstance(head, Compound):
         return head.args[pos] if pos < len(head.args) else None
+    if _cell_shape(head)[0]:                        # P2: a head is a cell
+        args = cell_args(head)
+        return args[pos] if pos < len(args) else None
     if is_term_instance(head):
         fields = list(term_field_names(head))
         return getattr(head, fields[pos]) if pos < len(fields) else None
@@ -168,6 +166,11 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
         if pos >= len(head.args):
             return clause
         head_arg = deref(head.args[pos])
+    elif _cell_shape(head)[0]:                      # P2: a head is a cell
+        cargs = cell_args(head)
+        if pos >= len(cargs):
+            return clause
+        head_arg = deref(cargs[pos])
     elif is_term_instance(head):
         fields = list(term_field_names(head))
         if pos >= len(fields):
@@ -357,6 +360,10 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
         new_args = list(head.args)
         new_args[pos] = lift_term
         new_head = Compound(head.functor, tuple(new_args))
+    elif _cell_shape(head)[0]:                      # P2: a head is a cell
+        new_args = list(cell_args(head))
+        new_args[pos] = lift_term
+        new_head = make_cell(cell_functor(head), *new_args)
     else:  # is_term_instance
         fields = list(term_field_names(head))
         new_kwargs = term_field_dict(head)

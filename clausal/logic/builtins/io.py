@@ -498,6 +498,12 @@ def _format_clause_term(val):
 
 def _format_clause_head(head):
     """Format a clause head as 'functor(arg1, arg2, ...)'."""
+    from clausal.logic.cells import _cell_shape, cell_args, cell_functor  # noqa: PLC0415
+    if _cell_shape(head)[0]:                        # P2: a head is a cell
+        name, args = cell_functor(head), cell_args(head)
+        if not args:
+            return name
+        return f"{name}({', '.join(_format_clause_term(a) for a in args)})"
     if is_term_instance(head):
         name = type(head).__name__
         fields = term_field_names(head)
