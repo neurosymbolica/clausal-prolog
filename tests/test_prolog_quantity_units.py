@@ -75,7 +75,13 @@ def test_variable_magnitude_quantity():
     # case-free substring "eposit").
     assert "_DEPOSIT" in out
     # no VARIABLE functor in the CODE (the note legitimately says "(baht)")
-    assert "(" not in _code(out).split("X == ")[1].split("\n")[0]
+    # The goal line carries no VARIABLE functor -- `_DEPOSIT(baht)` would be
+    # one. Read from the argument list of the emitted `#=`, not from an
+    # `X == ` prefix: the 2026-09-18 ruling made an unquoted `==` emit
+    # `#=(X, _DEPOSIT)`, so the old split found nothing and raised IndexError
+    # rather than failing on the property under test.
+    goal = [l for l in _code(out).splitlines() if "#=(X," in l][0]
+    assert "(" not in goal.split("#=(X,")[1], goal
 
 
 def test_zero_quantity_is_not_mistaken_for_something_else():
@@ -140,7 +146,9 @@ def test_discarded_units_ride_a_TRAILING_comment_on_their_own_line():
     and the 16 are the one-per-file header.
     """
     out = _tr("p(X) <- ( X == 5000(euro) + 3000(euro) )")
-    assert "X =:= 5000 + 3000.  % Clausal units: 5000 (euro), 3000 (euro)" in out
+    # `#=(X, ...)` since the 2026-09-18 ruling. The property under test is the
+    # TRAILING note, which is unchanged -- only the goal's spelling moved.
+    assert "#=(X, 5000 + 3000).  % Clausal units: 5000 (euro), 3000 (euro)" in out, out
 
 
 def test_variable_magnitude_is_noted_too():
@@ -188,7 +196,10 @@ def test_internal_marker_never_reaches_the_output():
 def test_a_line_with_no_units_gets_no_comment():
     out = _tr("p(X) <- ( X == 5000(euro) )\nq(Y) <- ( Y == 42 )",
               decl="p(X), q(Y)")
-    q_line = [l for l in out.splitlines() if "Y ==" in l or "Y =:=" in l][0]
+    # `#=(Y,` since the 2026-09-18 ruling; the older spellings are kept so
+    # this selector says what the goal line has ever looked like.
+    q_line = [l for l in out.splitlines()
+              if "#=(Y," in l or "Y ==" in l or "Y =:=" in l][0]
     assert "%" not in q_line
 
 # --- the SAFETY property, not just the detail --------------------------------
