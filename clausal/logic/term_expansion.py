@@ -312,7 +312,8 @@ def _head_as_cell(term: Any) -> Any:
 
     Only the TOP term is lowered: nested arguments compile to cells already,
     and the lift back is not needed here -- a cell head reaching the store is
-    turned into the instance at ``Database._with_instance_head``.
+    stored as the cell it is (the head channel takes cells since the P2
+    head flip; ``Database._with_instance_head`` is gone with it).
     """
     from clausal.logic.predicate import is_term_instance, term_field_names
     from clausal.terms import Compound, Call as TermCall, KWTerm

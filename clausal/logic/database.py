@@ -996,27 +996,6 @@ class Database:
 
     # -- the declaration registry (P2 Task 2, R-P2-1) ------------------------
 
-    def _with_instance_head(self, clause):
-        """P2 Task 3 (2026-09-19): the clause store keeps HEADS as class
-        instances (``head_match``/``list_dispatch`` lower an instance, never a
-        cell), while ``PredicateMeta.__call__`` builds the CELL now.  A cell
-        head whose predicate class this module binds at that arity -- the
-        fact normalisers in ``define_predicate`` rebuild heads through the
-        class -- is turned back into the head instance at this door.  The
-        head channel goes with the class in P4."""
-        import dataclasses  # noqa: PLC0415
-        head = clause.head
-        is_cell, functor = compound_cell_shape(head)
-        if not is_cell or self.module_dict is None:
-            return clause
-        cls = self.module_dict.get(functor)
-        if isinstance(cls, PredicateMeta) and len(cls._fields or ()) == len(head) - 1:
-            head = cls._clausal_head(*head[1:])
-            if dataclasses.is_dataclass(clause):
-                return dataclasses.replace(clause, head=head)
-            clause.head = head
-        return clause
-
     def declare_functor(self, functor: str, fields: tuple[str, ...]) -> None:
         """Record that this module declares ``functor/len(fields)`` with these
         field names.  Declaring is not defining: ``row()`` stays None until a
