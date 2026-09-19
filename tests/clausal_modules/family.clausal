@@ -2,7 +2,7 @@
 #
 # parent/2 facts + ancestor/2 rules + sibling/2 rule
 
-parent(PARENT="tom", CHILD="bob"),
+parent("tom", "bob"),
 parent("tom", "liz"),
 parent("bob", "ann"),
 parent("bob", "pat"),

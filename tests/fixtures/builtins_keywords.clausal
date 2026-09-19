@@ -12,17 +12,23 @@ free_fields(TERM, KEYS) <- unbound_keys(TERM, KEYS)
 pred_params(NAME, ARITY, PARAMS) <- signature(NAME, ARITY, PARAMS)
 
 
-# A keyword predicate for testing vary/unbound_keys/signature
-vec(x=0, y=0),
-vec(x=1, y=2),
-vec(x=3, y=4),
+# A predicate whose fields are NAMED, for testing vary/unbound_keys/
+# signature.  The names come from the declaration: the keyword-head
+# spelling `vec(x=0, y=0)` that used to carry them was retired
+# 2026-09-19 (a term is built positionally), and the field names these
+# builtins address are unaffected by that.
+-private([vec(x, y)])
+
+vec(0, 0),
+vec(1, 2),
+vec(3, 4),
 
 # THE FLIP (spec §6.4): the name positions of signature/3 and
 # unbound_keys/2 speak ATOMS, so the literals here are atoms — this file
 # is in the default `-double_quotes(atom)` mode on purpose.
 test("signature vec fields") <- (pred_params("vec", 2, PARAMS), PARAMS == ["x", "y"])  # nv
-test("free fields unbound y") <- (free_fields(vec(x=1), KEYS), "y" in KEYS)  # nv
+test("free fields unbound y") <- (free_fields(vec(1, Y_UNUSED), KEYS), "y" in KEYS)  # nv
 test("vary vec x") <- (
-    update_x(vec(x=1, y=2), 99, UPDATED),
-    UPDATED == vec(x=99, y=2)
+    update_x(vec(1, 2), 99, UPDATED),
+    UPDATED == vec(99, 2)
 )  # nv

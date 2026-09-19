@@ -2,7 +2,30 @@
 
 Keyword predicates let you work with named fields in terms — inspecting which
 fields are bound, copying terms with overrides, and reflecting on predicate
-signatures. They use Python's native keyword argument syntax.
+signatures.
+
+Field names come from the predicate's **declaration**:
+
+```clausal
+-private([point(x, y, z)])
+
+point(1, 2, 3),
+```
+
+!!! note "The keyword CONSTRUCTION spelling was retired on 2026-09-19"
+
+    A term used to be writable as `point(x=1, y=2, z=3)`, and the first clause
+    written that way was what named the fields. A term is built positionally
+    now, and a keyword argument in a term or a clause head is a load-time
+    error. The spelling had no ISO Prolog reading, and it made a functor's
+    field names depend on which of its clauses came first.
+
+    Two keyword spellings are unaffected: a `-directive`'s options
+    (`-specialize(solve, p, alias=q)`) and an EDCG hidden argument
+    (`p(L, _edcg_counter_in=0)`).
+
+    Everything on this page still works — the builtins address fields by
+    NAME, and names now come from the declaration above.
 
 ---
 
@@ -14,19 +37,25 @@ signatures. They use Python's native keyword argument syntax.
 
 ---
 
-## Partial Terms & Keyword Syntax
+## Partial Terms
 
-when you call a predicate with fewer arguments than it has fields, missing
-fields are filled with fresh logic variables (partial terms):
+When you build a term with fewer arguments than the predicate has fields, the
+missing fields are filled with fresh logic variables (a partial term):
 
-```python
-from my_module import point
+```clausal
+-private([point(x, y, z)])
 
-p = point(x=10)        # point(10, Var(), Var())
-p = point(y=20, z=30)  # point(Var(), 20, 30)
+p(P) <- (P is point(10))        # point(10, _, _)
 ```
 
-This is Python's native keyword syntax — no special Clausal syntax needed. See [Syntax](syntax.md) for the full language reference.
+A field you want to leave open in the middle is written as a variable, which
+is what a partial term is anyway:
+
+```clausal
+p(P) <- (P is point(_X, 20, 30))
+```
+
+See [Syntax](syntax.md) for the full language reference.
 
 ---
 
@@ -107,6 +136,10 @@ This is a database-dependent operation — the predicate must have been defined
   imported), it will fail.
 - **Field names are strings** — override dicts use string keys like
   `{"x": 10}`, not variable names.
+- **Field names come from the declaration** — `-private([point(x, y, z)])` or
+  the `-module` export list. An undeclared predicate's fields are `arg_0`,
+  `arg_1`, … , which `vary` and `unbound_keys` will happily use but nobody
+  wants to read.
 
 ---
 

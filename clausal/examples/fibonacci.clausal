@@ -2,7 +2,7 @@
     fib(N, F)
 ])
 
-fib(N=0, F=0),
+fib(0, 0),
 fib(1, 1),
 fib(N, F) <- (
     N > 1,

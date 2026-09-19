@@ -1,6 +1,6 @@
 -table(fib/2)
 
-fib(N=0, R=0),
+fib(0, 0),
 fib(1, 1),
 fib(N, R) <- (
     N > 1,

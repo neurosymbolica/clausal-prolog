@@ -11,7 +11,7 @@
 
 # Sample directed graph.
 
-edge(X=1, Y=2),
+edge(1, 2),
 edge(2, 3),
 edge(3, 4),
 edge(4, 5),
@@ -23,7 +23,7 @@ edge(6, 3),
 
 path(X, Y, PATH) <- path_acc(X, Y, [X], PATH)
 
-path_acc(FROM=0, TO=0, VISITED=[], PATH=[]),
+path_acc(0, 0, [], []),
 path_acc(X, X, _, [X]),
 path_acc(X, Y, VISITED, [X, *REST]) <- (
     edge(X, Z),

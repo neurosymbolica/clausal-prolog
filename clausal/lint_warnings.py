@@ -58,6 +58,30 @@ class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
     """
 
 
+class ClausalKeywordArgumentWarning(ClausalLintWarning):
+    """A term written with KEYWORD arguments (``point(x=1, y=2)``).
+
+    A term is built positionally.  The keyword spelling is Python's
+    keyword-call syntax borrowed as a term form: it has no ISO Prolog
+    reading, it made a functor's field NAMES depend on which clause of it
+    came first (the first head's keywords became the signature), and it is
+    the last surface producer of ``KWTerm`` -- a third term representation
+    beside the cell and the class instance.  Refused as of 2026-09-19 by
+    ``EmbedTransformer._lint_keyword_argument``; the machinery behind it is
+    deleted with the class in P4.
+
+    Two keyword spellings are NOT this warning: a ``-directive``'s options
+    (``-specialize(solve, p, alias=q)``), which are options of the directive
+    rather than arguments of a term, and an EDCG hidden argument
+    (``p(L, _edcg_counter_in=0)``), which is ``_``-led by construction and
+    addresses a GENERATED argument rather than declaring a field name.
+    Hosted Python in the same file, and anything inside a ``++`` escape, is
+    never read.  The severity is ``KEYWORD_ARGUMENT_SEVERITY`` (``"error"``:
+    the same sites raise a load-time ``SyntaxError``; set it to ``"warn"``
+    and this warning is emitted instead).
+    """
+
+
 class ClausalCurrencyLiteralWarning(ClausalLintWarning):
     """A money amount written as a float literal carrying enough significant
     digits that the literal may already have been rounded.

@@ -18,7 +18,7 @@ queens(N, QS) <- (
 
 # ── numlist/3 — generate [Low..High] ──────────────────────────────────────────
 
-numlist(LOW=0, HIGH=0, NS=[]),
+numlist(0, 0, []),
 
 numlist(LOW, HIGH, []) <- (LOW > HIGH)
 
@@ -30,7 +30,7 @@ numlist(LOW, HIGH, [LOW, *REST]) <- (
 
 # ── safe/1 — no two queens attack each other diagonally ───────────────────────
 
-safe(QS=[]),
+safe([]),
 
 safe([Q, *QS]) <- (
     no_attack(Q, QS, 1),
@@ -39,7 +39,7 @@ safe([Q, *QS]) <- (
 
 # ── no_attack/3 — queen Q doesn't attack any queen in QS at distance D+ ───────
 
-no_attack(Q=0, QS=[], D=0),
+no_attack(0, [], 0),
 
 no_attack(_, [], _),
 
