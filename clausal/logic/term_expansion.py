@@ -292,6 +292,30 @@ def _expand_item(item, expansion_module, module_state):
     return item, module_state
 
 
+
+def _head_as_cell(term: Any) -> Any:
+    """P2 Task 4: lower a clause-HEAD INSTANCE to its cell for matching.
+
+    Every TERM a term_expansion pattern compiles to is a cell since Task 3
+    (``cell_signature_for_name`` answers for a predicate functor too), but the
+    clause-HEAD channel still carries instances until P4 -- the transformer
+    emits a head as ``<cls>._clausal_head(...)``.  So an item whose functor HAS
+    clauses arrived as an instance and did not unify with the cell its own
+    pattern built: ``term_expansion(q(key(KEY)), ...)`` silently matched
+    nothing, and the module loaded with the expansion's output missing.
+
+    Only the TOP term is lowered: nested arguments compile to cells already,
+    and the lift back is not needed here -- a cell head reaching the store is
+    turned into the instance at ``Database._with_instance_head``.
+    """
+    from clausal.logic.predicate import is_term_instance, term_field_names
+    from clausal.terms import Compound, Call as TermCall, KWTerm
+    if is_term_instance(term) and not isinstance(term, (Compound, TermCall, KWTerm)):
+        return (type(term).__name__,
+                *(getattr(term, f) for f in term_field_names(term)))
+    return term
+
+
 def _try_te_match(item, match_target, expansion_module, module_state, wrap_head):
     """Solve term_expansion(match_target, Expansion, S0, S) once.
 
@@ -301,6 +325,17 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     Predicate nodes.
     """
     from clausal.logic.solve import call
+
+    # P2 Task 4: the patterns are cells, a head is still an instance.  Only
+    # the HEAD-pattern retry is lowered: a whole-item pattern binds the
+    # Predicate NODE, and rebuilding that node with a lowered head hands the
+    # rules a copy -- the identity and pass-through expansions return the term
+    # they matched, and three of them went red on the copy.  A quoted RULE
+    # pattern (``q(key(K) <- Body)``) would want the same lowering one level
+    # in; no fixture or corpus file writes one, and it is parked in
+    # todo/term-expansion-whole-item-pattern-head-representation-2026-09-19.md.
+    if wrap_head:
+        match_target = _head_as_cell(match_target)
 
     expansion_var = Var()
     state_after = Var()
