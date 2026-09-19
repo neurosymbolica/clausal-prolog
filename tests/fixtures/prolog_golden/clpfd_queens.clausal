@@ -1,3 +1,5 @@
+# library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
+
 safe_queens(N, QUEENS) <- (in_domain(QUEENS, 1, N), all_different(QUEENS), label(QUEENS), check_diagonals(QUEENS))
 
 check_diagonals([]),

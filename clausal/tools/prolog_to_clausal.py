@@ -90,6 +90,11 @@ _REVERSE_ARITY_OVERRIDES: dict[tuple[str, int], str] = {
 }
 
 
+def _has_elements(term) -> bool:
+    """True if *term* is a list with at least one element."""
+    return isinstance(term, PList) and bool(term.elements)
+
+
 def _indicator_arity(term) -> int | None:
     """Integer arity of a ``name/N`` predicate indicator's ``N``, or None when
     it is unbound/non-numeric (a var in a template, say)."""
@@ -126,7 +131,9 @@ _INFIX_MAP = {
     "\\=":  "is not",   # dis-unification
     "\\+":  "not",      # negation-as-failure (prefix, but listed here)
     ";":    "or",       # disjunction
-    "==":   "==",       # structural equality (same)
+# (Prolog ``==``/2 and ``#=``/2 are handled as special cases in
+# ``_emit_compound`` -- ``==`` is not infix in Clausal any more, see the
+# 2026-09-18 ruling.)
     "\\==": "!=",       # structural inequality
     "=<":   "<=",       # arithmetic less-or-equal (Prolog =< → Python <=)
     ">=":   ">=",
@@ -181,6 +188,13 @@ _PREFIX_MAP = {
 }
 
 # Prolog library paths → clausal module names
+#: `(name, arity)` pairs that Clausal spells as an OPERATOR rather than as a
+#: predicate name, so they can never stand in an `-import_from` list. `#=/2` is
+#: here because the forward translator emits `:- use_module(library(clpz),
+#: [(#=)/2]).` alongside every `#=` it emits (ruling 2026-09-18), and the
+#: Clausal spelling of that goal is the `==` operator.
+_OPERATOR_ONLY_IMPORTS: frozenset = frozenset({("#=", 2)})
+
 _LIBRARY_TO_MODULE: dict[str, str] = {
     "clpfd": "clausal.logic.clpfd",
     "clpz": "clausal.logic.clpfd",
@@ -492,11 +506,6 @@ class _PrologToClausal:
             result = self._emit_term(goal.args[0])
             expr = self._emit_expr(goal.args[1])
             return f"eval_({expr}, {result})"
-        # Structural equality: X == Y → X == Y
-        if isinstance(goal, PCompound) and goal.functor == "==" and len(goal.args) == 2:
-            left = self._emit_term(goal.args[0])
-            right = self._emit_term(goal.args[1])
-            return f"{left} == {right}"
         # Structural inequality: X \== Y → X != Y
         if isinstance(goal, PCompound) and goal.functor == "\\==" and len(goal.args) == 2:
             left = self._emit_term(goal.args[0])
@@ -703,6 +712,15 @@ class _PrologToClausal:
         if len(body.args) >= 2:
             # With import list
             imports = self._emit_import_list(body.args[1])
+            if imports == "[]" and _has_elements(body.args[1]):
+                # Every item was operator-only and got dropped, so the import
+                # itself was an artifact of the forward emission. Emitting
+                # `-import_from(m, [])` is NOT the harmless version of this:
+                # the Clausal loader rejects an empty name list outright
+                # (`ValueError: empty names on ImportFrom`), so dropping the
+                # item without dropping the directive fails at LOAD time.
+                return (f"# library import of {clausal_mod} dropped: it named "
+                        "only operator-spelled predicates")
             return f"-import_from({clausal_mod}, {imports})"
         else:
             return f"-import_module({clausal_mod})"
@@ -935,6 +953,29 @@ class _PrologToClausal:
             inner = self._emit_term(args[0])
             return f"not {inner}"
 
+        # Ruling 2026-09-18, reverse direction. These two are handled HERE,
+        # in the compound emitter, rather than beside the other goal-level
+        # special cases, because `#=` occurs in TERM position too -- inside a
+        # meta-call's conjunction, say -- and a goal-only fix leaves that
+        # second shape raising `'#=' is not a valid Python identifier`. The
+        # goal path falls through to here, so one site covers both.
+        #
+        # `#=(X, Y)` → `X == Y`: unquoted `==` in Clausal IS the CLP
+        # arithmetic constraint, and `#=` is what it emits.
+        if functor == "#=" and len(args) == 2:
+            left = self._emit_expr(args[0])
+            right = self._emit_expr(args[1])
+            return f"{left} == {right}"
+        # `==(X, Y)` → `'=='(X, Y)`. The QUOTED form is required, not
+        # stylistic: emitting bare `X == Y` would read back as the CLP
+        # constraint above, so a round trip would silently turn an identity
+        # test into a constraint -- the exact direction the respell that
+        # preceded this ruling existed to prevent.
+        if functor == "==" and len(args) == 2:
+            left = self._emit_term(args[0])
+            right = self._emit_term(args[1])
+            return f"'=='({left}, {right})"
+
         # Unification: X = Y → X is Y
         if functor == "=" and len(args) == 2:
             left = self._emit_term(args[0])
@@ -1158,12 +1199,22 @@ class _PrologToClausal:
         return self._emit_term(term)
 
     def _emit_import_list(self, term: PTerm) -> str:
-        """Emit an import list [pred1, pred2, ...]."""
+        """Emit an import list [pred1, pred2, ...].
+
+        Indicators in :data:`_OPERATOR_ONLY_IMPORTS` are DROPPED. They name
+        Prolog predicates that Clausal writes as an OPERATOR, never as a
+        predicate name, so there is no import list they could legally appear
+        in: `-import_from(m, [==])` is not even valid Python. The forward
+        translator regenerates the import from the emission itself, so
+        dropping it here loses nothing on a round trip.
+        """
         if isinstance(term, PList):
             items = []
             for e in term.elements:
                 if isinstance(e, PCompound) and e.functor == "/" and len(e.args) == 2:
                     name = self._emit_atom_name(e.args[0])
+                    if (name, _indicator_arity(e.args[1])) in _OPERATOR_ONLY_IMPORTS:
+                        continue
                     items.append(self._predicate_name(
                         name, _indicator_arity(e.args[1])))
                 elif isinstance(e, PAtom):

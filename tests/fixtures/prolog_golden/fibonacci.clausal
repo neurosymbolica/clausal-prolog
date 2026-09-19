@@ -1,3 +1,5 @@
+# library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
+
 fib(0, 0),
 
 fib(1, 1),

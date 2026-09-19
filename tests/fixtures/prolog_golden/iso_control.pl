@@ -1,5 +1,7 @@
 :- module(iso_control, [test/1]).
 
+:- use_module(library(clpz), [(#=)/2]).
+
 parent(a, b).
 
 parent(b, c).
@@ -34,8 +36,8 @@ safe_max(X, Y, Y) :-
 test('conjunction binds two vars') :-
     _x = 1,
     _y = 2,
-    _x == 1,
-    _y == 2.
+    #=(_x, 1),
+    #=(_y, 2).
 
 test('conjunction fails if first fails') :-
     \+ (a = b, _x_UNUSED = 1).
@@ -47,7 +49,7 @@ test('triple conjunction') :-
     _x = 1,
     _y = 2,
     _z = 3,
-    _x + _y + _z =:= 6.
+    #=(_x + _y + _z, 6).
 
 test('disjunction first succeeds') :-
     _x = 1 ; _x = 2.
@@ -82,7 +84,7 @@ test('not + member: d not in list') :-
 test('conjunction + negation') :-
     _x = 5,
     \+ _x = 3,
-    _x == 5.
+    #=(_x, 5).
 
 test('choose picks first') :-
     choose(1, 2, 1).
@@ -95,18 +97,18 @@ test('choose with atoms') :-
 
 test('safe_max: first is larger') :-
     safe_max(5, 3, _m),
-    _m == 5.
+    #=(_m, 5).
 
 test('safe_max: second is larger') :-
     safe_max(2, 7, _m),
-    _m == 7.
+    #=(_m, 7).
 
 test('safe_max: equal') :-
     safe_max(4, 4, _m),
-    _m == 4.
+    #=(_m, 4).
 
 test('true succeeds (1 == 1)') :-
-    1 == 1.
+    #=(1, 1).
 
 test('fail fails: not False') :-
     \+ false.

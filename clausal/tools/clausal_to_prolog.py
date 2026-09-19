@@ -193,11 +193,30 @@ def _quote_atom(name: str) -> str:
     return "'" + _escape_body(name, "'") + "'"
 
 
+#: Atoms that are operators in a LIBRARY the emitted file imports, but not in
+#: the ISO operator table. They are deliberately absent from that table -- it
+#: drives INFIX rendering, and `#=` is not ISO, so the emission is functional
+#: `#=(X, Y)` by design. Bracketing is a separate question from rendering: the
+#: reader that consults the emitted file has the library's `:- op/3` in force,
+#: so where an operator atom must be bracketed it must be bracketed here too.
+#: `[#=/2]` in an import list is a syntax error in Scryer
+#: (`syntax_error(incomplete_reduction)`); `[(#=)/2]` is right.
+#:
+#: QUOTING IS NOT A SUBSTITUTE, and the mistake is easy to make because Scryer
+#: ACCEPTS `['(#=)'/2]` -- but a control with a bogus indicator
+#: (`[nonexistent_thing/2]`) is accepted just as happily, so acceptance of the
+#: directive proves nothing about the indicator. `'(#=)'` names an atom spelled
+#: `(#=)`, which is not the operator.
+_LIBRARY_OPERATOR_ATOMS = frozenset({"#=", "#\\=", "#<", "#>", "#=<", "#>="})
+
+
 def _is_operator_atom(name: str, op_table: OperatorTable) -> bool:
-    """True if *name* is declared as an operator in *op_table* (any fixity)."""
+    """True if *name* is declared as an operator in *op_table* (any fixity),
+    or is a library operator the emitted file's reader will have in force."""
     return (op_table.lookup_infix(name) is not None
             or op_table.lookup_prefix(name) is not None
-            or op_table.lookup_postfix(name) is not None)
+            or op_table.lookup_postfix(name) is not None
+            or name in _LIBRARY_OPERATOR_ATOMS)
 
 
 #: Internal sentinel wrapping a discarded unit while a term is being rendered.
@@ -885,6 +904,13 @@ class _ClausalToProlog:
         #: `:- use_module(library(lambda))`. Set by
         #: :meth:`_lower_arrow_lambda_in_term_position`.
         self._emitted_arrow_lambda = False
+        #: True once a CLP arithmetic equality (`#=`) has been emitted, so the
+        #: module imports the dialect's constraint library. `#=` is not ISO and
+        #: no engine has it without the import: the file raises
+        #: `existence_error(procedure, #=/2)` at CALL time, never at consult
+        #: time, so a missing import is a silent wrong answer rather than a
+        #: load failure.
+        self._emitted_clp_arith_eq = False
         #: Variable names bound by the head of the clause currently being
         #: converted. A lambda's body variable that is NOT a parameter and
         #: IS in this set is a CAPTURE, which is the only thing the lowering
@@ -1310,6 +1336,20 @@ class _ClausalToProlog:
             prelude_directives.append(PDirective(PCompound(
                 "use_module", (PCompound("library", (PAtom("lambda"),)),
                                PList(tuple(lambda_exports))))))
+        if self._emitted_clp_arith_eq and self.dialect.clpfd_needs_import:
+            # THE INDICATOR IS PARENTHESISED ON PURPOSE. An import-list item is
+            # read as a TERM, and `#=` is an operator in every system that has
+            # it, so `[#=/2]` is a SYNTAX ERROR and the file does not consult.
+            # `[(#=)/2]` is what both ladder engines accept. Alphanumeric names
+            # are left bare -- `[(dif)/2]` parses but reads as a mistake.
+            #
+            # The list is EXPLICIT for the same reason library(lambda)'s is: a
+            # consumer deciding whether a predicate is already supplied cannot
+            # see inside a library, so a listless import reads as "this might
+            # supply anything" and suppresses every other import the file needs.
+            prelude_directives.append(PDirective(PCompound(
+                "use_module", (PCompound("library", (PAtom(self.dialect.clpfd_module),)),
+                               PList((PCompound("/", (PAtom("#="), PNumber(2))),))))))
         prelude = getattr(self.dialect, "constants_prelude", None)
         if prelude is not None and self._emitted_constant_declaration:
             load, prelude_module = prelude
@@ -2881,9 +2921,21 @@ class _ClausalToProlog:
                 # kit 379075d). Landing this first would have turned 167
                 # identity comparisons into constraints, silently.
                 #
-                # COST, accepted with the ruling: `#=` is `library(clpz)`, not
-                # ISO, so a domain using one is no longer pure-ISO. The export
-                # lane injects that import.
+                # COST, accepted with the ruling: `#=` is the dialect's
+                # constraint library, not ISO, so a domain using one is no
+                # longer pure-ISO. The import travels with the emission --
+                # see `_emitted_clp_arith_eq` and the prelude.
+                #
+                # LIMIT, ruled 2026-09-19 after it was measured: the CLP(Z)
+                # solvers are over the INTEGERS, so a FLOAT operand raises
+                # `domain_error(clpz_expression, F)` where `=:=` would have
+                # succeeded. `#=` therefore expresses INTEGER arithmetic
+                # equality only. Accepted because the alternative is a static
+                # operand-shape test, which is what this ruling replaced, and
+                # which cannot see a float that arrives through a variable
+                # anyway. Corpus exposure when the ruling was taken: 0 of 361
+                # unquoted `==` sites carried a float literal or a Decimal.
+                self._emitted_clp_arith_eq = True
                 return PCompound("#=", (left, right))
 
             if isinstance(op, python_ast.NotEq):

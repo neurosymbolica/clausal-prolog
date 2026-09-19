@@ -1,52 +1,54 @@
 :- module(iso_arithmetic, [test/1]).
 
+:- use_module(library(clpz), [(#=)/2]).
+
 double(X, Y) :-
-    Y =:= X * 2.
+    #=(Y, X * 2).
 
 square(X, Y) :-
-    Y =:= X * X.
+    #=(Y, X * X).
 
 triangle_number(N, T) :-
-    T =:= div(N * (N + 1), 2).
+    #=(T, div(N * (N + 1), 2)).
 
 test('addition: 1+2=3') :-
-    1 + 2 =:= 3.
+    #=(1 + 2, 3).
 
 test('subtraction: 5-3=2') :-
-    5 - 3 =:= 2.
+    #=(5 - 3, 2).
 
 test('multiplication: 3*4=12') :-
-    3 * 4 =:= 12.
+    #=(3 * 4, 12).
 
 test('integer division: 7//2=3') :-
-    div(7, 2) =:= 3.
+    #=(div(7, 2), 3).
 
 test('modulo: 7%2=1') :-
-    7 mod 2 =:= 1.
+    #=(7 mod 2, 1).
 
 test('power: 2**3=8') :-
-    2 ** 3 =:= 8.
+    #=(2 ** 3, 8).
 
 test('negation: -3') :-
-    -3 =:= -3.
+    #=(-3, -3).
 
 test('nested: (2+3)*4=20') :-
-    (2 + 3) * 4 =:= 20.
+    #=((2 + 3) * 4, 20).
 
 test('float addition: 1.5+2.5=4.0') :-
-    1.5 + 2.5 =:= 4.0.
+    #=(1.5 + 2.5, 4.0).
 
 test('double negation: --5=5') :-
-    5 =:= 5.
+    #=(5, 5).
 
 test('subtraction negative: 3-5=-2') :-
-    3 - 5 =:= -2.
+    #=(3 - 5, -2).
 
 test('negative floor div: -7//2=-4') :-
-    div(-7, 2) =:= -4.
+    #=(div(-7, 2), -4).
 
 test('negative mod: -7%2=1') :-
-    -7 mod 2 =:= 1.
+    #=(-7 mod 2, 1).
 
 test('1 < 2') :-
     1 < 2.
@@ -89,7 +91,7 @@ test('succ forward: succ(3,4)') :-
 
 test('succ backward: succ(X,4)=3') :-
     succ(_x, 4),
-    _x == 3.
+    #=(_x, 3).
 
 test('succ zero: succ(0,1)') :-
     succ(0, 1).
@@ -99,11 +101,11 @@ test('plus forward: 2+3=5') :-
 
 test('plus backward x: X+3=5') :-
     plus(_x, 3, 5),
-    _x == 2.
+    #=(_x, 2).
 
 test('plus backward y: 2+Y=5') :-
     plus(2, _y, 5),
-    _y == 3.
+    #=(_y, 3).
 
 test('between check: 3 in 1..5') :-
     between(1, 5, 3).
@@ -117,32 +119,32 @@ test('between generates 1..5') :-
 
 test('abs_ of -5 is 5') :-
     abs(-5, X),
-    X == 5.
+    #=(X, 5).
 
 test('max_ 3 7 is 7') :-
     max(3, 7, X),
-    X == 7.
+    #=(X, 7).
 
 test('min_ 3 7 is 3') :-
     min(3, 7, X),
-    X == 3.
+    #=(X, 3).
 
 test('eval binds var: X == 42') :-
-    X == 42,
-    X == 42.
+    #=(X, 42),
+    #=(X, 42).
 
 test('eval check: 3 == 1+2') :-
-    3 =:= 1 + 2.
+    #=(3, 1 + 2).
 
 test('eval check fails: 4 == 1+2') :-
-    \+ 4 =:= 1 + 2.
+    \+ #=(4, 1 + 2).
 
 test('mixed int/float: 1 + 2.0 == 3.0') :-
-    1 + 2.0 =:= 3.0.
+    #=(1 + 2.0, 3.0).
 
 test('large integer: 10^100 + 1') :-
-    X =:= 10 ** 100,
-    X + 1 =:= 10 ** 100 + 1.
+    #=(X, 10 ** 100),
+    #=(X + 1, 10 ** 100 + 1).
 
 test('mixed int/float compare: not 1 < 1.0') :-
     \+ 1 < 1.0.
@@ -152,47 +154,47 @@ test('mixed int/float compare: 1 <= 1.0') :-
 
 test('double 3 is 6') :-
     double(3, _y),
-    _y == 6.
+    #=(_y, 6).
 
 test('double 0 is 0') :-
     double(0, _y),
-    _y == 0.
+    #=(_y, 0).
 
 test('square 4 is 16') :-
     square(4, _y),
-    _y == 16.
+    #=(_y, 16).
 
 test('square 1 is 1') :-
     square(1, _y),
-    _y == 1.
+    #=(_y, 1).
 
 test('triangle 5 is 15') :-
     triangle_number(5, _t),
-    _t == 15.
+    #=(_t, 15).
 
 test('triangle 1 is 1') :-
     triangle_number(1, _t),
-    _t == 1.
+    #=(_t, 1).
 
 test('triangle 10 is 55') :-
     triangle_number(10, _t),
-    _t == 55.
+    #=(_t, 55).
 
 test('sign positive') :-
     sign(42, S),
-    S == 1.
+    #=(S, 1).
 
 test('sign negative') :-
     sign(-7, S),
-    S =:= -1.
+    #=(S, -1).
 
 test('sign zero') :-
     sign(0, S),
-    S == 0.
+    #=(S, 0).
 
 test('sign float negative') :-
     sign(-3.14, S),
-    S =:= -1.
+    #=(S, -1).
 
 test('sign unbound fails') :-
     \+ sign(_x_UNUSED, _).
@@ -205,40 +207,40 @@ test('sign check mode: wrong fails') :-
 
 test('gcd 12 8 = 4') :-
     gcd(12, 8, G),
-    G == 4.
+    #=(G, 4).
 
 test('gcd coprime 7 13 = 1') :-
     gcd(7, 13, G),
-    G == 1.
+    #=(G, 1).
 
 test('gcd with zero: gcd(0, 5) = 5') :-
     gcd(0, 5, G),
-    G == 5.
+    #=(G, 5).
 
 test('gcd negative: gcd(-12, 8) = 4') :-
     gcd(-12, 8, G),
-    G == 4.
+    #=(G, 4).
 
 test('gcd unbound fails') :-
     \+ gcd(_x_UNUSED, 8, _).
 
 test('divmod 17 5 = (3, 2)') :-
     divmod_(17, 5, Q, R),
-    Q == 3,
-    R == 2.
+    #=(Q, 3),
+    #=(R, 2).
 
 test('divmod exact 10 5 = (2, 0)') :-
     divmod_(10, 5, Q, R),
-    Q == 2,
-    R == 0.
+    #=(Q, 2),
+    #=(R, 0).
 
 test('divmod by zero fails') :-
     \+ divmod_(10, 0, _, _).
 
 test('divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)') :-
     divmod_(-7, 2, Q, R),
-    Q =:= -4,
-    R == 1.
+    #=(Q, -4),
+    #=(R, 1).
 
 test('divmod unbound fails') :-
     \+ divmod_(_x_UNUSED, 5, _, _).

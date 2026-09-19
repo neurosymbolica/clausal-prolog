@@ -1,5 +1,7 @@
 :- module(iso_unification, [test/1]).
 
+:- use_module(library(clpz), [(#=)/2]).
+
 same_value(X, Y) :-
     X = Y,
     X == Y.
@@ -14,7 +16,7 @@ test('var unifies with atom') :-
 
 test('var unifies with integer') :-
     _x = 42,
-    _x == 42.
+    #=(_x, 42).
 
 test('var unifies with list') :-
     _x = [1, 2, 3],
@@ -46,7 +48,7 @@ test('different atoms == fails') :-
     a \== b.
 
 test('same integer ==') :-
-    42 == 42.
+    #=(42, 42).
 
 test('bound var == value') :-
     _x = hello,
@@ -69,11 +71,11 @@ test('same_value: lists') :-
 
 test('integer unifies with itself') :-
     X = 1,
-    X == 1.
+    #=(X, 1).
 
 test('float unifies with itself') :-
     X = 1.0,
-    X == 1.0.
+    #=(X, 1.0).
 
 test('var unifies with var (aliasing)') :-
     X = Y,
@@ -100,13 +102,13 @@ test('different numbers: 1 is not 2') :-
     dif(1, 2).
 
 test('int == float (Python quirk)') :-
-    1 == 1.0.
+    #=(1, 1.0).
 
 test('two fresh vars: X == Y (CLP(FD) posts)') :-
-    _X_UNUSED == _Y_UNUSED.
+    #=(_X_UNUSED, _Y_UNUSED).
 
 test('same var: X == X') :-
-    X == X.
+    #=(X, X).
 
 test('var != atom raises catchable type_error') :-
     catch((_X_UNUSED \== a, false), _, true).

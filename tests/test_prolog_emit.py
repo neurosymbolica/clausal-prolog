@@ -359,11 +359,30 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
         result = clausal_source_to_prolog(source)
         assert "X =< Y" in result
 
-    def test_structural_eq(self):
+    def test_clp_arithmetic_eq(self):
+        """An UNQUOTED `==` is the CLP constraint and emits `#=`, with its import.
+
+        Ruling 2026-09-18. This test asserted `"X == Y" in result` before that
+        ruling; that string now names the OTHER construct, so it is not a
+        rename -- the identity case is :meth:`test_structural_eq` below, and
+        both are kept so neither direction can go green on the other's
+        behaviour.
+        """
         # nv
         source = 'same(X, Y) <- (X == Y)'
         result = clausal_source_to_prolog(source)
-        assert "X == Y" in result
+        assert "#=(X, Y)" in result, result
+        # The import travels with the emission: without it the emitted file
+        # raises existence_error at CALL time, never at consult time.
+        assert ":- use_module(library(clpz), [(#=)/2])." in result, result
+
+    def test_structural_eq(self):
+        """A QUOTED `'=='` is ISO term identity and emits `==`, with NO import."""
+        # nv
+        source = "same(X, Y) <- ('=='(X, Y))"
+        result = clausal_source_to_prolog(source)
+        assert "X == Y" in result, result
+        assert "clpz" not in result, result
 
     def test_structural_neq(self):
         # nv

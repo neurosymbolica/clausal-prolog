@@ -2,6 +2,8 @@
 
 -module(iso_arithmetic, [test/1])
 
+# library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
+
 double(X, Y) <- (Y == X * 2)
 
 square(X, Y) <- (Y == X * X)
@@ -74,7 +76,7 @@ test('between check: 3 in 1..5') <- (between(1, 5, 3))
 
 test('between out of range') <- (not between(1, 5, 6))
 
-test('between generates 1..5') <- (findall(X, between(1, 5, X), L), L == [1, 2, 3, 4, 5])
+test('between generates 1..5') <- (findall(X, between(1, 5, X), L), '=='(L, [1, 2, 3, 4, 5]))
 
 test('abs_ of -5 is 5') <- (abs_(-5, X), X == 5)
 
