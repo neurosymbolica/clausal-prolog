@@ -524,12 +524,14 @@ class TestCellAssertRetract:
 
     def test_the_asserted_clause_has_the_shape_the_source_clauses_have(self, mod):
         """A cell is a SPELLING of the term, so it must not leave a foreign
-        clause shape behind: with a class in scope the head is that class's
-        instance, exactly as ``assertz(p(7))`` written in source produces."""
+        clause shape behind.  Since the P2 head flip (2026-09-19) the shape a
+        source clause leaves IS the cell, so this now pins that the two
+        spellings agree rather than that the cell is converted away."""
         lm = _lm(mod)
         list(pcall("assertz", ("p", 7), module=lm))
-        head = lm.db.clauses_for("p", 1)[-1].head
-        assert type(head) is mod.p
+        heads = [c.head for c in lm.db.clauses_for("p", 1)]
+        assert heads[-1] == ("p", 7)
+        assert all(type(h) is tuple for h in heads), "source clauses too"
 
     def test_collect_by_assert_over_a_cell_stores_one_clause_per_solution(
             self, mod):
@@ -695,49 +697,51 @@ class TestCellAssertRetract:
         assert isinstance(head, Compound) and head.functor == "r"
 
 
-class TestTheLowLevelDoorRefusesACellHead:
-    """``head_key`` reads a cell so the assert builtins can ask about the raw
-    term; STORING a cell-headed clause is a different matter and stays shut.
+class TestTheLowLevelDoorTakesACellHead:
+    """A clause head IS the functor-first cell (P2 head flip, 2026-09-19), so
+    the low-level store door takes one and answers from it.
 
-    Without the guard the clause compiles — and answers with its argument
-    UNBOUND, because no lowering path reads a cell as a head. A silent wrong
-    answer is worse than the ``TypeError`` this door gave before ``head_key``
-    learned about cells, so the door refuses and names ``assertz/1``.
+    It used to REFUSE, and the refusal was right at the time: no lowering path
+    read a cell as a head, so a cell-headed clause compiled to a predicate
+    that answered with its arguments UNBOUND — a silent wrong answer, which is
+    worse than the ``TypeError`` the door gave before ``head_key`` learned
+    about cells.  Every one of those readers takes a cell now, so what these
+    tests pin is the other half of that same contract: it stores, it answers
+    BOUND, and retract by a cell pattern removes the clause it matched.
     """
 
-    def test_database_assertz_refuses_a_cell_head(self):
+    def test_database_assertz_takes_a_cell_head(self):
         from clausal.logic.database import Clause
         db = Database()
-        with pytest.raises(LogicException) as exc_info:
-            db.assertz(Clause(head=("p", 1), body=[]))
-        inner, context = _error_term(exc_info.value)
-        assert inner == Compound("type_error", (mint("callable"), ("p", 1)))
-        assert "Database.assertz" in context and "assertz/1" in context
-        assert db.clauses_for("p", 1) == [], "and it stored nothing"
+        db.assertz(Clause(head=("p", 1), body=[]))
+        assert len(db.clauses_for("p", 1)) == 1
 
-    def test_database_asserta_refuses_a_cell_head(self):
+    def test_database_asserta_takes_a_cell_head(self):
         from clausal.logic.database import Clause
         db = Database()
-        with pytest.raises(LogicException) as exc_info:
-            db.asserta(Clause(head=("p", 1), body=[]))
-        assert "Database.asserta" in _error_term(exc_info.value)[1]
+        db.assertz(Clause(head=("p", 2), body=[]))
+        db.asserta(Clause(head=("p", 1), body=[]))
+        assert [c.head for c in db.clauses_for("p", 1)] == [("p", 1), ("p", 2)]
 
-    def test_database_retract_refuses_a_cell_head(self):
-        """Final review M-c: the retract door read the head with plain
-        ``head_key``, so a cell produced a key, matched no stored clause
-        (stored heads are class terms, never cells) and returned a bare
-        ``False`` — "nothing matched", for a head this door cannot store in
-        the first place.  Same refusal as the assert side, naming the same
-        remedy."""
+    def test_a_cell_headed_clause_answers_BOUND(self, mod):
+        """The defect the refusal existed to prevent, asserted as fixed.
+
+        Through the LOW-LEVEL door (``Database.assertz``, not the assertz/1
+        builtin that used to normalise the cell away), against a predicate
+        with a compiled dispatch — which is the shape that answered UNBOUND
+        before the flip."""
+        from clausal.logic.database import Clause
+        lm = _lm(mod)
+        lm.db.assertz(Clause(head=("p", 7), body=[]))
+        X = Var()
+        assert 7 in [deref(X) for _ in solve(("p", X), lm)]
+
+    def test_database_retract_takes_a_cell_head(self):
         from clausal.logic.database import Clause
         db = Database()
-        db.assertz(Clause(head=Compound("p", (1,)), body=[]))
-        with pytest.raises(LogicException) as exc_info:
-            db.retract(("p", 1))
-        inner, context = _error_term(exc_info.value)
-        assert inner == Compound("type_error", (mint("callable"), ("p", 1)))
-        assert "Database.retract" in context and "assertz/1" in context
-        assert len(db.clauses_for("p", 1)) == 1, "and it removed nothing"
+        db.assertz(Clause(head=("p", 1), body=[]))
+        assert db.retract(("p", 1)) is not False
+        assert db.clauses_for("p", 1) == [], "and it removed the clause"
 
     def test_a_tuple_tag_head_keeps_the_old_typeerror(self):
         from clausal.logic.database import Clause

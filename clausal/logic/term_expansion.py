@@ -38,9 +38,13 @@ def _is_term_expansion_clause(pred_node) -> bool:
     """True if pred_node defines a term_expansion/4 clause."""
     head = pred_node.head
     from clausal.terms import Call, LoadName
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
     if isinstance(head, Call) and isinstance(head.func, LoadName):
         return head.func.name == "term_expansion" and len(head.args) == 4
-    # Also check PredicateMeta instances
+    is_cell, functor = compound_cell_shape(head)      # P2: a head is a cell
+    if is_cell:
+        return functor == "term_expansion" and len(head) - 1 == 4
+    # Also check PredicateMeta instances (pre-flip shape; goes with the class)
     if isinstance(type(head), PredicateMeta):
         return functor_arity(head) == ("term_expansion", 4)
     return False
@@ -294,7 +298,9 @@ def _expand_item(item, expansion_module, module_state):
 
 
 def _head_as_cell(term: Any) -> Any:
-    """P2 Task 4: lower a clause-HEAD INSTANCE to its cell for matching.
+    """Lower a clause-HEAD INSTANCE to its cell for matching (a no-op for the
+    cell a head normally is since the head flip; still reached for a class
+    flagged ``instances=True``, the P2 bridge).
 
     Every TERM a term_expansion pattern compiles to is a cell since Task 3
     (``cell_signature_for_name`` answers for a predicate functor too), but the

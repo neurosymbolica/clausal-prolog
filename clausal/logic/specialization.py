@@ -68,6 +68,12 @@ class MIPattern:
     append_index: int | None        # index of append call (None for split style)
     recursive_call_indices: list[int]  # indices of recursive MI calls in body
     recursive_call_style: str       # "tail" or "split"
+    fields: tuple[str, ...] = ()    # the MI predicate's declared field names.
+                                    # P2 head flip: a head is a CELL and
+                                    # carries no names, and analyze_mi is the
+                                    # one place the class is in scope -- so
+                                    # the names travel on the pattern instead
+                                    # of being re-read off head.__class__.
 
     # Variables from the recursive clause (populated during analysis)
     goal_var: Any = None            # GOAL variable from [GOAL, *GOALS]
@@ -143,13 +149,11 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     head = recursive_clause.head
 
     # Extract GOAL and GOALS variables from head's goal-list field.
-    goal_field_name = fields[goal_arg]
-    goal_list = getattr(head, goal_field_name)
+    goal_list = _head_arg(head, fields, goal_arg)
     goal_var, goals_var = _extract_goal_goals(goal_list)
 
     # Extract PROGRAM variable from head.
-    program_field_name = fields[program_arg]
-    program_var = getattr(head, program_field_name)
+    program_var = _head_arg(head, fields, program_arg)
 
     # Find match_clause call in body.
     match_idx = _find_call(body, "match_clause")
@@ -222,6 +226,7 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     return MIPattern(
         name=name,
         arity=arity,
+        fields=tuple(fields),
         goal_arg=goal_arg,
         program_arg=program_arg,
         extra_args=extra_args,
@@ -457,7 +462,7 @@ def _specialized_fields(pattern: MIPattern) -> list[str]:
 
     Drops the program argument; keeps goal-list and extra args in order.
     """
-    orig_fields = list(pattern.recursive_clause.head.__class__._fields)
+    orig_fields = list(pattern.fields)
     result = []
     for i, f in enumerate(orig_fields):
         if i != pattern.program_arg:
@@ -498,7 +503,7 @@ def _make_base_clause(pattern: MIPattern, pred_cls: PredicateMeta) -> Clause:
     """
     orig_base = pattern.base_clause
     orig_head = orig_base.head
-    orig_fields = orig_head.__class__._fields
+    orig_fields = pattern.fields
 
     # Build new head with fresh vars, but preserve the structure from the
     # base clause ([] for goal list, 0 for count, [] for tree, etc.)
@@ -507,7 +512,7 @@ def _make_base_clause(pattern: MIPattern, pred_cls: PredicateMeta) -> Clause:
     for i, fname in enumerate(orig_fields):
         if i == pattern.program_arg:
             continue
-        val = getattr(orig_head, fname)
+        val = _head_arg(orig_head, orig_fields, i)   # P2: a head is a cell
         new_field_values[fname] = _copy_term(val, var_map)
 
     new_head = pred_cls(**new_field_values)
@@ -561,7 +566,7 @@ def _unfold_tail(
     mi_var_map = {}
     rc = pattern.recursive_clause
     rc_head = rc.head
-    orig_fields = rc_head.__class__._fields
+    orig_fields = pattern.fields
 
     # Fresh GOALS variable.
     fresh_goals = Var()
@@ -571,7 +576,7 @@ def _unfold_tail(
     extra_field_vars = {}
     for i in pattern.extra_args:
         fname = orig_fields[i]
-        orig_var = getattr(rc_head, fname)
+        orig_var = _head_arg(rc_head, orig_fields, i)   # P2: a head is a cell
         fresh = Var()
         mi_var_map[id(orig_var)] = fresh
         extra_field_vars[fname] = fresh
@@ -658,7 +663,7 @@ def _unfold_split(
     mi_var_map = {}
     rc = pattern.recursive_clause
     rc_head = rc.head
-    orig_fields = rc_head.__class__._fields
+    orig_fields = pattern.fields
 
     # Fresh GOALS variable.
     fresh_goals = Var()
@@ -678,7 +683,7 @@ def _unfold_split(
     extra_field_vars = {}
     for i in pattern.extra_args:
         fname = orig_fields[i]
-        orig_val = getattr(rc_head, fname)
+        orig_val = _head_arg(rc_head, orig_fields, i)   # P2: a head is a cell
         # For split style, the extra arg (TREE) has structure that references
         # GOAL and other MI vars.  Substitute those.
         extra_field_vars[fname] = _subst(orig_val, mi_var_map)
@@ -738,16 +743,37 @@ def _find_program_arg(fields: tuple[str, ...]) -> int:
     )
 
 
+def _head_arg(head: Any, fields: tuple[str, ...], i: int) -> Any:
+    """The head's *i*-th argument.
+
+    P2 head flip (2026-09-19): a head is the functor-first CELL, read
+    positionally; *fields* is the declared field list and names the same
+    positions, which is what the instance arm below needs.  The instance arm
+    goes with the class in P4.
+    """
+    from clausal.logic.cells import _cell_shape, cell_args  # noqa: PLC0415
+    if _cell_shape(head)[0]:
+        args = cell_args(head)
+        return args[i] if i < len(args) else None
+    return getattr(head, fields[i])
+
+
+def _is_cell_term(term: Any) -> bool:
+    """True for a functor-first cell — the P2 term (and head) shape."""
+    from clausal.logic.cells import _cell_shape  # noqa: PLC0415
+    return _cell_shape(term)[0]
+
+
 def _find_goal_arg(
     clauses: list[Clause], fields: tuple[str, ...], program_arg: int,
 ) -> int:
     """Identify which field is the goal list by finding the [] base case."""
     for c in clauses:
         head = c.head
-        for i, fname in enumerate(fields):
+        for i in range(len(fields)):
             if i == program_arg:
                 continue
-            val = getattr(head, fname)
+            val = _head_arg(head, fields, i)
             # Check if this field is [] in the base clause (via Unify in body).
             if isinstance(val, list) and val == []:
                 return i
@@ -769,7 +795,7 @@ def _find_goal_arg(
 def _is_base_clause(clause: Clause, fields: tuple[str, ...], goal_arg: int) -> bool:
     """Check if this clause is the MI base case (goal list = [])."""
     head = clause.head
-    val = getattr(head, fields[goal_arg])
+    val = _head_arg(head, fields, goal_arg)
     if isinstance(val, list) and val == []:
         return True
     if is_var(deref(val)):
@@ -787,7 +813,7 @@ def _is_recursive_clause(
 ) -> bool:
     """Check if this clause has a [GOAL, *GOALS] pattern in the goal-list field."""
     head = clause.head
-    val = getattr(head, fields[goal_arg])
+    val = _head_arg(head, fields, goal_arg)
     if not isinstance(val, list):
         return False
     if len(val) < 2:
@@ -840,7 +866,7 @@ def _map_mi_vars(pattern: MIPattern, rc: Clause, mi_var_map: dict) -> None:
     in SolveLimit) — they need fresh copies too.
     """
     rc_head = rc.head
-    orig_fields = rc_head.__class__._fields
+    orig_fields = pattern.fields
 
     # Map GOAL var if not already mapped.
     if id(pattern.goal_var) not in mi_var_map:
@@ -881,6 +907,9 @@ def _ensure_vars_mapped(term: Any, var_map: dict) -> None:
         # BinOp subclasses (Add, Sub, etc.)
         _ensure_vars_mapped(term.left, var_map)
         _ensure_vars_mapped(term.right, var_map)
+    elif _is_cell_term(term):
+        for a in term[1:]:
+            _ensure_vars_mapped(a, var_map)
     elif is_term_instance(term):
         for fname in term_field_names(term):
             _ensure_vars_mapped(getattr(term, fname), var_map)
@@ -924,6 +953,9 @@ def _subst(term: Any, var_map: dict) -> Any:
         # BinOp subclasses (Add, Sub, etc.)
         return type(term)(left=_subst(term.left, var_map),
                           right=_subst(term.right, var_map))
+    if _is_cell_term(term):
+        from clausal.logic.cells import make_cell  # noqa: PLC0415
+        return make_cell(term[0], *(_subst(a, var_map) for a in term[1:]))
     if is_term_instance(term):
         new_fields = {}
         for fname in term_field_names(term):
@@ -944,7 +976,7 @@ def _subst_recursive_call_extra_args(
     Drops the program argument, substitutes the goal argument with
     new_goal_arg, and substitutes extra args.
     """
-    orig_fields = pattern.recursive_clause.head.__class__._fields
+    orig_fields = pattern.fields
     new_fields = pred_cls._fields
 
     # Build the args list for the new Call, in field order.
@@ -1009,7 +1041,7 @@ def _make_residual_clause(
     """
     rc = pattern.recursive_clause
     rc_head = rc.head
-    orig_fields = rc_head.__class__._fields
+    orig_fields = pattern.fields
 
     # Fresh variables for the catch-all.
     mi_var_map = {}
@@ -1022,7 +1054,7 @@ def _make_residual_clause(
     extra_field_vars = {}
     for i in pattern.extra_args:
         fname = orig_fields[i]
-        orig_var = getattr(rc_head, fname)
+        orig_var = _head_arg(rc_head, orig_fields, i)   # P2: a head is a cell
         fresh = Var()
         mi_var_map[id(orig_var)] = fresh
         extra_field_vars[fname] = fresh
@@ -1607,7 +1639,7 @@ def _try_inline_goal(
     spec_fields = pred_cls._fields
     goal_field_idx = None
     for i, fname in enumerate(spec_fields):
-        if fname == pattern.recursive_clause.head.__class__._fields[pattern.goal_arg]:
+        if fname == pattern.fields[pattern.goal_arg]:
             goal_field_idx = i
             break
 
@@ -1973,7 +2005,7 @@ def _get_goal_list_arg(
 ) -> Any:
     """Extract the goal-list argument from a recursive call."""
     spec_fields = pred_cls._fields
-    orig_fields = pattern.recursive_clause.head.__class__._fields
+    orig_fields = pattern.fields
     goal_field_name = orig_fields[pattern.goal_arg]
 
     for i, fname in enumerate(spec_fields):
@@ -2073,7 +2105,7 @@ def _unfold_body_goal(
 
     if needs_chain:
         spec_fields = pred_cls._fields
-        orig_fields = pattern.recursive_clause.head.__class__._fields
+        orig_fields = pattern.fields
         orig_name_to_idx = {fn: i for i, fn in enumerate(orig_fields)}
         rec_call_pat = pattern.recursive_clause.body[
             pattern.recursive_call_indices[0]]
@@ -2150,7 +2182,7 @@ def _unfold_body_goal(
 
 def _get_goal_field_idx(pattern: MIPattern, pred_cls: PredicateMeta) -> int | None:
     """Get the index of the goal-list field in the specialized predicate."""
-    orig_fields = pattern.recursive_clause.head.__class__._fields
+    orig_fields = pattern.fields
     goal_field_name = orig_fields[pattern.goal_arg]
     for i, fname in enumerate(pred_cls._fields):
         if fname == goal_field_name:

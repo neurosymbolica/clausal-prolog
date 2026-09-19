@@ -118,6 +118,10 @@ def _freeze_asserted_head_args(head: Any) -> Any:
         # P2: the store wants the HEAD instance, not the cell ``__call__`` builds.
         return type(head)._clausal_head(*[deref(getattr(head, f))
                                           for f in term_field_names(head)])
+    from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
+    is_cell, functor = compound_cell_shape(head)
+    if is_cell:                                     # P2: a head is a cell
+        return make_cell(functor, *(deref(a) for a in head[1:]))
     return head
 
 
@@ -174,7 +178,7 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
     OBJECTS are shared with the caller's cell, so bindings made against the
     normalized term reach the caller's variables.
     """
-    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
     from clausal.logic.exceptions import existence_error  # noqa: PLC0415
 
     ok, functor = compound_cell_shape(term_val)
@@ -191,8 +195,11 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
     home = _home_db(db, pred_cls)
     row = home.row(functor, arity) if home is not None else None
     if row is not None and row.dynamic:
+        # P2 head flip (2026-09-19): a head IS the cell, so a cell reaching a
+        # dynamic predicate needs no normalisation at all -- it only needs the
+        # CANONICAL functor, which an -import_from alias can differ from.
         if pred_cls is not None:
-            return pred_cls._clausal_head(*args)   # P2: the store wants the HEAD instance, not the cell
+            return term_val if functor == term_val[0] else make_cell(functor, *args)
         return Compound(functor, args)
     if row is None and not _declared_here_at_arity(module_dict, functor, arity):
         raise LogicException(existence_error(

@@ -71,6 +71,16 @@ def _parse_and_collect(source: str):
     return predicate_nodes, module_items, module_dict
 
 
+def _head_functor(head):
+    """The functor of a clause head.  P2 (2026-09-19): a head is the
+    functor-first CELL, so this is ``head[0]``; before the flip it was the
+    class name of an instance."""
+    from clausal.logic.cells import compound_cell_shape
+    is_cell, functor = compound_cell_shape(head)
+    return functor if is_cell else type(head).__name__
+
+
+
 class TestPassThrough:
     """No term_expansion → zero overhead pass-through."""
 
@@ -130,7 +140,7 @@ class TestIdentityExpansion:
         # TE clause removed, two foo items remain
         assert len(result) == 2
         for p in result:
-            assert type(p.head).__name__ == "foo"
+            assert _head_functor(p.head) == "foo"
 
     def test_identity_via_fixture(self):
         """Full import of expansion_passthrough.clausal."""
@@ -186,7 +196,7 @@ class TestTeNotExpanded:
         result = run_term_expansion(preds, md)
         # Only foo should remain — TE clause was separated out
         assert len(result) == 1
-        assert type(result[0].head).__name__ == "foo"
+        assert _head_functor(result[0].head) == "foo"
 
 
 class TestOneToMany:
@@ -203,7 +213,7 @@ class TestOneToMany:
         result = run_term_expansion(preds, md)
         assert len(result) == 2
         for p in result:
-            assert type(p.head).__name__ == "foo"
+            assert _head_functor(p.head) == "foo"
 
     def test_duplicate_full_pipeline(self):
         """Full pipeline: duplicate items → double the clauses."""
@@ -244,7 +254,7 @@ class TestModuleState:
         preds, _, md = _parse_and_collect(source)
         result = run_term_expansion(preds, md)
         assert len(result) == 1
-        assert type(result[0].head).__name__ == "foo"
+        assert _head_functor(result[0].head) == "foo"
 
     def test_state_body_arith_error_propagates(self):
         """A TE rule whose body errors (e.g. arithmetic on a non-number) raises,
@@ -431,7 +441,7 @@ class TestNewFunctorsFromExpansion:
         result = run_term_expansion(preds, md)
         # With identity expansion, src items pass through
         assert len(result) == 1
-        assert type(result[0].head).__name__ == "src"
+        assert _head_functor(result[0].head) == "src"
 
     def test_new_functor_full_pipeline(self):
         """Full pipeline: expansion duplicates items, creating more clauses.

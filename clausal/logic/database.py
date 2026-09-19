@@ -910,7 +910,6 @@ class Database:
         clauses could be changed through (P3-3 Task 2, F3).  Invalidation and
         table abolition moved into the gate's exit; they are not repeated here.
         """
-        clause = self._with_instance_head(clause)
         functor, arity = _stored_head_key(clause.head, "assertz")
         with self.mutate(functor, arity, author=author or self.runtime_author(),
                          kind=WRITE_ASSERT, detail="assertz") as row:
@@ -922,7 +921,6 @@ class Database:
         See ``assertz`` for why no class mirror is needed any more, and for
         what the gate does with *author*.
         """
-        clause = self._with_instance_head(clause)
         functor, arity = _stored_head_key(clause.head, "asserta")
         with self.mutate(functor, arity, author=author or self.runtime_author(),
                          kind=WRITE_ASSERT, detail="asserta") as row:
@@ -1278,8 +1276,18 @@ def _is_ground_value(val: Any) -> bool:
 
 
 def _is_normalizable_fact(head: Any) -> bool:
-    """True if head is a term instance (not a built-in term type) with
-    at least one ground field value that needs normalization."""
+    """True if head is a user term -- a CELL since the P2 head flip, or a
+    term instance before it -- with at least one ground argument that needs
+    normalization.
+
+    The cell arm is here so the flip does not change WHEN a fact is
+    normalized: a ground fact argument becomes a fresh Var plus a body
+    ``Unify`` under both representations.  Without it a cell fact fell
+    through to the structural hoist, which leaves atomics on the match-guard
+    path -- a different lowering for the same program.
+    """
+    if compound_cell_shape(head)[0]:
+        return any(_is_ground_value(a) for a in cell_args(head))
     if not is_term_instance(head):
         return False
     if isinstance(head, (Compound, Call, KWTerm)):
@@ -1526,34 +1534,22 @@ def head_key(head: Any) -> tuple[str, int]:
 
 
 def _stored_head_key(head: Any, channel: str) -> tuple[str, int]:
-    """``head_key``, but refusing a CELL head on the way into the clause store.
+    """``head_key`` for a head on its way INTO the clause store.
 
-    ``head_key`` reads a cell's ``(functor, arity)`` since P3-3 Task 5, because
-    the assert/retract builtins have to ask that question about the raw TERM a
-    caller handed them, before deciding what to do with it.  STORING a
-    cell-headed clause is a different matter: no lowering path understands one
-    as a head (``head_match`` and ``list_dispatch._get_head_arg`` both read a
-    ``Compound`` or a class term), so the clause compiles to a predicate that
-    answers with its argument UNBOUND instead of failing or raising -- a wrong
-    answer, silently, which is worse than the ``TypeError`` this door used to
-    give before ``head_key`` learned about cells.
+    This used to REFUSE a cell head, and the refusal was load-bearing for two
+    releases: no lowering path read a cell as a head (``head_match`` and
+    ``list_dispatch._get_head_arg`` both wanted a ``Compound`` or a class
+    term), so a cell-headed clause compiled to a predicate that answered with
+    its arguments UNBOUND -- a silent wrong answer, which is why the door
+    raised instead.  The head flip (2026-09-19) made every one of those
+    readers take a cell, so there is nothing left to refuse and a head IS a
+    cell.
 
-    So the low-level door refuses, and names the door that does the right
-    thing: ``assertz/1`` normalizes a cell to the class term or ``Compound``
-    the store understands (see
-    ``builtins/database_ops._check_cell_head_permission``), which is what a
-    caller with a cell in hand actually wants.
+    Kept as a distinct name from ``head_key`` because the QUESTION differs:
+    ``head_key`` reads the (functor, arity) of a raw term a caller handed in,
+    this reads a head the store is about to keep.  If storing ever needs a
+    check again, this is where it goes.
     """
-    is_cell_head, functor = compound_cell_shape(head)
-    if is_cell_head:
-        raise LogicException(type_error(
-            "callable", head,
-            f"Database.{channel}: {functor}/{len(head) - 1} was given a CELL "
-            f"as a clause head; no lowering path reads a cell as a head, so "
-            f"storing it would compile a predicate that answers wrongly — "
-            f"assert it through the assertz/1 builtin, which normalizes the "
-            f"cell to the clause head this store understands",
-        ))
     return head_key(head)
 
 

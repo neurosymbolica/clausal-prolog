@@ -4291,19 +4291,19 @@ def _swap_placeholder(block, placeholder=_PM_PLACEHOLDER,
 
 
 def _head_ctor_ast(head_ast):
-    """Route a clause HEAD's construction through ``<cls>._clausal_head(...)``.
+    """A clause HEAD is constructed like any other term: ``<cls>(...)``.
 
-    P2 Task 3 (2026-09-19): ``PredicateMeta.__call__`` builds the CELL now, but
-    the compiler's head channel stores and lowers an INSTANCE (``head_match``,
-    ``list_dispatch``, ``Database._stored_head_key``).  A head written
-    ``w(N=1)`` is therefore emitted as ``w._clausal_head(N=1)``; a bare Name
-    head (arity 0) is left alone.  The channel goes with the class in P4.
+    P2 Task 3 (2026-09-19) routed it through ``<cls>._clausal_head(...)``
+    instead, because ``PredicateMeta.__call__`` had just started building
+    CELLS and the compiler's head channel still stored and lowered an
+    INSTANCE.  The head flip (step B, 2026-09-19) closed that: every head
+    reader takes a cell positionally, so the head channel has no separate
+    constructor and this is the identity again.
+
+    Kept as a named function rather than deleted at its six call sites: it is
+    where "what a head is built as" is decided, and the next change to that
+    question (P4, when the class goes) wants one place to make it.
     """
-    if isinstance(head_ast, Call) and isinstance(head_ast.func, Name):
-        return Call(
-            func=Attribute(value=head_ast.func, attr="_clausal_head", ctx=Load()),
-            args=head_ast.args, keywords=head_ast.keywords,
-        )
     return head_ast
 
 

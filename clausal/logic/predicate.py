@@ -1245,17 +1245,15 @@ class PredicateMeta(type):
             ctx.__exit__(None, None, None)
 
     def _instance_head_clause(cls, clause: Any) -> Any:
-        """P2 Task 3: the clause store keeps HEADS as instances; a cell head of
-        this class (built by __call__, which builds cells now) becomes the
-        head instance at this door -- the twin of Database._with_instance_head."""
-        import dataclasses  # noqa: PLC0415
-        head = clause.head
-        if (type(head) is tuple and head and head[0] == cls.__name__
-                and len(head) - 1 == len(cls._fields or ())):
-            head = cls._clausal_head(*head[1:])
-            if dataclasses.is_dataclass(clause):
-                return dataclasses.replace(clause, head=head)
-            clause.head = head
+        """The clause-store door on the CLASS side.
+
+        P2 Task 3 turned a cell head back into an instance here, because the
+        store kept heads as instances.  The head flip (2026-09-19) made the
+        cell the stored shape, so there is nothing to convert and this is the
+        identity -- kept as the named door so the class-side and
+        ``Database``-side paths stay visibly symmetrical until P4 deletes
+        both.
+        """
         return clause
 
     def _assertz(cls, clause: Any) -> None:
