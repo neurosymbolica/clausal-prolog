@@ -84,6 +84,19 @@ numerators, not the denominator distribution.
 **Only rows 7 and 8 divide by a runtime quantity**, and those two are the ones
 a denominator census actually has to answer.
 
+## A missing output file is not a result
+
+The census **always writes**, even with nothing to report, and the first line
+says how many bindings were armed. That is deliberate: it used to write only
+when it had rows, and a domain that produced no file was indistinguishable
+from a run where the census was never armed — opposite conclusions ("no
+division happens here" vs "the census is blind here"). An armed-and-idle run
+now says so in the file.
+
+A zero-row file still leaves TWO readings, which this tool cannot separate:
+the path does no division, or it divides through a binding not in the list.
+Resolve that by reading the source, or by exercising the predicate directly.
+
 ## Running it over the corpus
 
 The tool loads, but the corpus's per-domain import roots are the harness's
