@@ -89,8 +89,15 @@ annotations only — one signature change, no class-identity dependence.
 4. **iso-export-lane's `==` -> `#=` flip**: the KIT half `79fc9e4` is landed on export-trunk main (theirs); the
    ENGINE half `272e2a3f` sits on `flip/eq-to-clpz-2026-09-19` in the CLONE off `5bf7a8db`, NOT on canonical
    (`733de97a`; needs a cherry-pick + the exporter goldens). Measured G3 10 -> 14, +509 clauses, 0 regressions,
-   three inputs moved (attribution strong, not single-variable). Landing is the operator's word in the engine
-   session; both halves must be present together (the kit half already is).
+   three inputs moved (attribution strong, not single-variable). LANDED as a62853e2 at the operator's word and
+   REVERTED at his word (9faeaae1; clone eada248b; box 9faeaae1): it turned ten of the engine repo's own exporter
+   tests red -- 9 goldens pin the old `==` and ~120 unquoted `==` sites across 8+ golden fixtures need the identity
+   respell BEFORE regeneration (every one a reading; `iso_control` mixes both kinds on adjacent lines), and the
+   Scryer execution matrix loads no library(clpz). The sweep is iso-export-lane's (their handoff
+   `docs/HANDOFF-2026-09-19-iso-export-lane.md` §1 on export-trunk). OPEN RULING for the operator, §1(b): does the
+   translator emit its own `:- use_module(library(clpz), [(#=)/2]).` when it emits `#=`? Engine-lane recommends
+   yes (the exporter already leans on a prelude for in_domain/all_different/label; non-self-sufficient output
+   pushes the knowledge to every consumer). Re-landing waits on both.
 3. Lanes: harness-batch-lane's RE-BASELINE sweep on `fb0106f3` (told); corpus-lane's attribution of the two
    newly-exportable wrong-answer domains (GDPR breach notification, Peppol) — theirs, not an engine block;
    iso-export-lane: done for this window.
