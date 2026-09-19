@@ -557,13 +557,19 @@ test("kwarg degenerate") <- (
 """
 
 
-def test_degenerate_keyword_argument_descends_with_kw_label(capsys, tmp_path):
+def test_a_degenerate_keyword_argument_is_refused_at_load(capsys, tmp_path):
+    """The keyword-argument LABEL path is unreachable from source.
+
+    It used to be pinned through a degenerate intro ("solutions with keyword
+    argument 'R' freed, but none binds …"), because that label is built by its
+    own branch.  A term is built positionally since 2026-09-19, so the source
+    that reached the branch no longer loads; the branch goes with the keyword
+    machinery in P4, and this is the reminder that nothing reaches it.
+    """
     p = write(tmp_path, "kdeg.clausal", KWARG_DEG_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert ("solutions with keyword argument 'R' freed, but none binds "
-            "keyword argument 'R' to a concrete value") in out
-    assert "no clause head unifies" in out
+    assert "keyword arguments" in out and "kdeg/1" in out
 
 
 def test_degenerate_rung2_falls_back_when_descent_finds_nothing(

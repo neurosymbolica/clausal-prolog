@@ -25,7 +25,7 @@ SOLEDOM = """\
 
 decide_sole(IN, VERDICT) <- (
     IN is ok,
-    VERDICT is sole_verdict(STATUS=ok, NOTE=note1)
+    VERDICT is sole_verdict(ok, note1)
 )
 """
 
@@ -43,7 +43,7 @@ VIA_DOTTED = """\
 -import_from(pkg.soledom, [sole_verdict, ok])
 
 classify(VERDICT, matched) <- (
-    VERDICT is sole_verdict(STATUS=ok)
+    VERDICT is sole_verdict(ok)
 )
 """
 

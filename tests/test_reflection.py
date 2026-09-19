@@ -139,10 +139,18 @@ class TestRules:
         (clause,) = clauses_of(items)
         assert clause.goals[0].name == "mod.Other"
 
-    def test_keyword_goal_arguments_become_kwargs_pairs(self):
-        items = reify_source("foo(X) <- bar(Y=X)\n")
-        (clause,) = clauses_of(items)
-        assert clause.goals[0].kwargs == [["Y", Variable("X")]]
+    def test_a_keyword_goal_argument_is_refused_at_load(self):
+        """Was: ``bar(Y=X)`` reifies with ``kwargs == [["Y", Variable("X")]]``.
+
+        The keyword SPELLING was retired 2026-09-19 (a term is built
+        positionally), so no source can produce a goal with kwargs any more.
+        The reified ``Goal.kwargs`` FIELD still exists and is still populated
+        by anything building a Goal directly — what is gone is the surface
+        that reached it, which is why this pins the refusal rather than the
+        reification.
+        """
+        with pytest.raises(SyntaxError, match="keyword arguments"):
+            reify_source("foo(X) <- bar(Y=X)\n")
 
     def test_compound_argument_in_head_reifies_as_goal(self):
         items = reify_source("holds(state(X)) <- check(X)\n")

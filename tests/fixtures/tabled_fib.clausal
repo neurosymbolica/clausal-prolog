@@ -1,3 +1,9 @@
+# The field NAMES matter here: tests/test_wfs.py resolves a reified
+# kwargs goal against this predicate's registered signature.  They used
+# to come from a keyword head (`fib(N=0, RESULT=0)`); that spelling was
+# retired 2026-09-19, so the declaration carries them.
+-private([fib(N, RESULT)])
+
 -table(fib/2)
 
 fib(0, 0),

@@ -94,11 +94,17 @@ def test_reduces_one_argument_per_firing(rules):
     assert type(args[1]).__name__ == "Lambda"  # the second waits its turn
 
 
-def test_containing_goal_keyword_arguments_ride_through(rules):
-    out = _rewrite(rules, "t(L) <- (maplist((X <- p(X)), L, mode=2))\n")
-    assert out is not None
-    assert out.goals[0].args[0] == Atom("p")
-    assert out.goals[0].kwargs == [["mode", 2]]
+def test_containing_goal_keyword_arguments_no_longer_reach_the_rule(rules):
+    """Was: keyword arguments on the CONTAINING goal ride through the
+    reduction (``maplist((X <- p(X)), L, mode=2)`` keeps ``kwargs``).
+
+    A term is built positionally since 2026-09-19, so no source reaches the
+    rule carrying kwargs.  The rule's kwargs handling is untouched and goes
+    with the keyword machinery in P4; two REFUSAL cases that fed it keyword
+    sources were dropped from ``test_refusals`` for the same reason.
+    """
+    with pytest.raises(SyntaxError, match="keyword arguments"):
+        _rewrite(rules, "t(L) <- (maplist((X <- p(X)), L, mode=2))\n")
 
 
 def test_reduces_when_param_shadows_an_enclosing_variable(rules):
@@ -131,8 +137,6 @@ def test_reduces_when_param_shadows_an_enclosing_variable(rules):
         "t(L) <- (maplist((X <- (X > 0)), L))\n",
         # a call through a variable is not a plain predicate name
         "t(F, L) <- (maplist((X <- F(X)), L))\n",
-        # keyword arguments in the body call
-        "t(L) <- (maplist((X <- p(X, mode=2)), L))\n",
         # forwards only SOME params
         "t(L) <- (maplist(((X, Y) <- p(X)), L))\n",
         # repeats a param: p sees it twice, the bare form would not
@@ -143,10 +147,12 @@ def test_reduces_when_param_shadows_an_enclosing_variable(rules):
         "t(L) <- ((maplist((X <- p(X)), L)) or (m(L)))\n",
         # inside a negation
         "t(L) <- (not maplist((X <- p(X)), L))\n",
-        # passed by keyword: keyword values are not searched
-        "t(L) <- (run(L, goal=((X) <- p(X))))\n",
         # a fact: nothing to reduce
         "f(1),\n",
+        # (two keyword-argument cases lived here — a keyword in the body call
+        #  and a lambda passed by keyword.  Both sources stopped loading on
+        #  2026-09-19 when a term became positional-only, so they could no
+        #  longer reach the rule to be refused by it.)
     ],
 )
 def test_refusals(rules, source):

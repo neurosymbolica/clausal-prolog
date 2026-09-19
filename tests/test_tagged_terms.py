@@ -336,23 +336,24 @@ class TestCellEmission:
         assert "$unify(_v13, nil, trail)" not in src
         assert "$unify(_v13, ('nil',), trail)" not in src
 
-    def test_keyword_construction_places_by_field_name(self):
-        """P3-2 Task 1: signature placement, not a class fallback.
+    def test_a_keyword_construction_is_refused_at_load(self):
+        """The keyword SPELLING is retired (2026-09-19): a term is built
+        positionally.
 
-        ``pt(X=1)`` places ``1`` in ``pt``'s declared ``X`` slot and
-        backfills the omitted ``Y`` slot with a fresh ``Var()`` -- see
-        ``TestSignatureConstruction`` for the fuller placement coverage.
-        Superseded ``test_keyword_construction_keeps_class_emission``,
-        which pinned the PRE-Task-1 behaviour this test inverts.
+        This used to pin P3-2 Task 1's signature placement -- ``pt(X=1)``
+        placing 1 in ``pt``'s declared X slot and backfilling Y with a fresh
+        ``Var()``.  The placement itself is unchanged and still pinned, by
+        ``TestSignatureConstruction``'s positional cases and by
+        ``test_the_runtime_constructor_places_slots_the_same_way`` (the
+        Python caller still reaches ``PredicateMeta.__call__``).  What this
+        now pins is that the SOURCE spelling no longer loads.
         """
-        m = _load_inline(
-            "_tt_kw",
-            "-module(_tt_kw, [pt(X, Y), p(A)])\n"
-            "p(pt(X=1)),\n",
-        )
-        src = capture_predicate_codegen("_tt_kw", ["p"])
-        assert "('pt', 1, $Var())" in src
-        assert "pt(X=1)" not in src
+        with pytest.raises(SyntaxError, match="keyword arguments"):
+            _load_inline(
+                "_tt_kw",
+                "-module(_tt_kw, [pt(X, Y), p(A)])\n"
+                "p(pt(X=1)),\n",
+            )
 
     def test_a_dynamic_declaration_is_not_a_data_functor(self):
         """``-dynamic`` leaves a predicate clause-free at compile time.
@@ -402,10 +403,12 @@ class TestSignatureConstruction:
     def _compile(self, name, goal):
         return _load_inline(name, self._MODULE_TEMPLATE.format(name=name, goal=goal))
 
-    def test_keyword_args_place_by_field_name_regardless_of_order(self):
-        self._compile("_tt_sig_kw", "point(y=2, x=1)")
-        src = capture_predicate_codegen("_tt_sig_kw", ["p"])
-        assert "('point', 1, 2)" in src
+    def test_keyword_args_are_refused_whatever_their_order(self):
+        """Was: ``point(y=2, x=1)`` places by NAME and emits
+        ``('point', 1, 2)``.  The spelling is retired (2026-09-19); ordering
+        by name is no longer a question a source term can ask."""
+        with pytest.raises(SyntaxError, match="keyword arguments"):
+            self._compile("_tt_sig_kw", "point(y=2, x=1)")
 
     def test_partial_positional_backfills_the_omitted_slot(self):
         """``point(1)`` supplies ``x`` only; ``y`` backfills with a fresh
@@ -425,11 +428,18 @@ class TestSignatureConstruction:
             self._compile("_tt_sig_overarity", "point(1, 2, 3)")
 
     def test_unknown_keyword_field_raises_naming_the_functor(self):
-        with pytest.raises(SyntaxError, match=r"point/2"):
+        """The refusal names the functor at the WRITTEN arity -- ``point/1``
+        for ``point(z=1)``, not the declared ``point/2``.  That is the
+        keyword lint speaking (the placer's own unknown-field diagnostic is
+        unreachable now that no keyword term loads), and the written arity is
+        the one a reader can see at the site."""
+        with pytest.raises(SyntaxError, match=r"point/1"):
             self._compile("_tt_sig_badfield", "point(z=1)")
 
     def test_duplicate_slot_raises(self):
-        """The same field supplied both positionally and by keyword."""
+        """The same field supplied both positionally and by keyword.  Refused
+        by the keyword lint since 2026-09-19 rather than by the duplicate-slot
+        check behind it, and at the same functor/arity."""
         with pytest.raises(SyntaxError, match=r"point/2"):
             self._compile("_tt_sig_dup", "point(1, x=2)")
 
@@ -540,12 +550,13 @@ class TestPartialHeadReferenceIndexing:
       regression test.
     - ``probe_partial``  (6 clauses, above threshold): ``pt(1)``. BROKEN —
       ``xfail(strict=True)``.
-    - ``probe_kw``       (6 clauses, above threshold): ``pt(y=2)``. BROKEN —
-      ``xfail(strict=True)``.
     - ``probe_partial_below`` (2 clauses, below threshold): ``pt(1)``.
       Correct — pins the unindexed floor the eventual fix must preserve.
-    - ``probe_kw_below``     (2 clauses, below threshold): ``pt(y=2)``.
-      Correct — same floor, keyword form.
+
+    The keyword halves (``probe_kw``/``probe_kw_below``, ``pt(y=2)``) were
+    RETIRED on 2026-09-19: a term is built positionally now and the spelling
+    they covered is a load-time error.  Their positional twins above cover the
+    same indexing question, so nothing was lost but the spelling.
 
     Every query passes the FULL, already-backfilled cell a real caller
     would always hold (construction-side placement backfills every omitted
@@ -559,9 +570,7 @@ class TestPartialHeadReferenceIndexing:
         "    pt(x, y),\n"
         "    probe_sat(S, K),\n"
         "    probe_partial(S, K),\n"
-        "    probe_kw(S, K),\n"
         "    probe_partial_below(S, K),\n"
-        "    probe_kw_below(S, K),\n"
         "])\n"
         "\n"
         'probe_sat(pt(1, 2), "hit"),\n'
@@ -578,18 +587,10 @@ class TestPartialHeadReferenceIndexing:
         'probe_partial(914, "n4"),\n'
         'probe_partial(915, "n5"),\n'
         "\n"
-        'probe_kw(pt(y=2), "hit"),\n'
-        'probe_kw(921, "n1"),\n'
-        'probe_kw(922, "n2"),\n'
-        'probe_kw(923, "n3"),\n'
-        'probe_kw(924, "n4"),\n'
-        'probe_kw(925, "n5"),\n'
         "\n"
         'probe_partial_below(pt(1), "hit"),\n'
         'probe_partial_below(931, "n1"),\n'
         "\n"
-        'probe_kw_below(pt(y=2), "hit"),\n'
-        'probe_kw_below(941, "n1"),\n'
     )
 
     @pytest.fixture(scope="class")
@@ -617,26 +618,11 @@ class TestPartialHeadReferenceIndexing:
     def test_partial_positional_reference_above_threshold_dispatches(self, lm):
         assert self._probe(lm, "probe_partial", ("pt", 1, 9)) == [mint("hit")]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "indexed-dispatch-drops-partial-head-references-2026-09-05: "
-            "keyword-only head reference keys ('pt', 0) positional args "
-            "written, caller probes ('pt', 2) — no bucket match, zero "
-            "solutions."
-        ),
-    )
-    def test_keyword_reference_above_threshold_dispatches(self, lm):
-        assert self._probe(lm, "probe_kw", ("pt", 7, 2)) == [mint("hit")]
-
     def test_partial_positional_reference_below_threshold_dispatches(self, lm):
         """Same clause shape, below ``_INDEX_THRESHOLD``: no bucket exists,
         the unindexed linear scan's full ``unify()`` finds it correctly —
         the regression floor the eventual fix must not narrow."""
         assert self._probe(lm, "probe_partial_below", ("pt", 1, 9)) == [mint("hit")]
-
-    def test_keyword_reference_below_threshold_dispatches(self, lm):
-        assert self._probe(lm, "probe_kw_below", ("pt", 7, 2)) == [mint("hit")]
 
 
 class TestParity:
