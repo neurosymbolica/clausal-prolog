@@ -122,7 +122,7 @@ class TestTermFieldNamesOfClass:
 class TestTermFieldValues:
     def test_predicate_meta_instance_order_matches_declared_fields(self):
         # nv
-        t = bar(b=1, a=2)
+        t = bar._clausal_head(b=1, a=2)   # P2: ``bar(...)`` is the CELL; this is the head-channel instance
         assert term_field_values(t) == (1, 2)  # (b, a) order, not alphabetical
 
     def test_dataclass_instance(self):
@@ -141,7 +141,7 @@ class TestTermFieldValues:
 class TestTermFieldDict:
     def test_predicate_meta_instance(self):
         # nv
-        t = bar(b=1, a=2)
+        t = bar._clausal_head(b=1, a=2)   # P2: ``bar(...)`` is the CELL; this is the head-channel instance
         assert term_field_dict(t) == {"b": 1, "a": 2}
 
     def test_dataclass_instance(self):
@@ -323,7 +323,7 @@ class TestMigrationRegression:
 
         pt = make_predicate("pt", ("a", "b"))
         v = Var()
-        head = pt(a=v, b=99)
+        head = pt._clausal_head(a=v, b=99)   # P2: a clause HEAD is the instance channel
         clause = Clause(head=head, body=[Unify(left=v, right=[1, 2, 3])])
 
         lifted = _lift_clause_at_pos(clause, 0)
@@ -338,7 +338,7 @@ class TestMigrationRegression:
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
         te = make_predicate("term_expansion", ("a", "b", "c", "d"))
-        head = te(a=1, b=2, c=3, d=4)
+        head = te._clausal_head(a=1, b=2, c=3, d=4)   # P2: a clause HEAD is the instance channel
         pred_node = SimpleNamespace(head=head)
         assert _is_term_expansion_clause(pred_node)
 

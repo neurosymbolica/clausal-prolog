@@ -38,8 +38,9 @@ class Atom(metaclass=PredicateMeta):
 class TestIsTermInstanceFallback:
 
     def test_predicate_instance(self):
-        # nv
-        t = Pt(x=1, y=2)
+        # nv — P2: ``Pt(...)`` is the CELL now; the instance arm these twins
+        # still carry is the head channel, built through ``_clausal_head``.
+        t = Pt._clausal_head(x=1, y=2)
         assert _is_term_instance_py(t) == is_term_instance(t) == True
 
     def test_class_not_instance(self):
@@ -81,7 +82,7 @@ class TestTermFieldNamesFallback:
 
     def test_predicate_instance(self):
         # nv
-        t = Pt(x=1, y=2)
+        t = Pt._clausal_head(x=1, y=2)                      # P2: the head-channel instance
         assert _term_field_names_py(t) == term_field_names(t) == ("x", "y")
 
     def test_compound_dataclass(self):
@@ -121,7 +122,7 @@ class TestFunctorNameFallback:
 
     def test_predicate_instance(self):
         # nv
-        t = Pt(x=1, y=2)
+        t = Pt._clausal_head(x=1, y=2)                      # P2: the head-channel instance
         assert _functor_name_py(t) == _functor_name(t) == "Pt"
 
     def test_list_empty(self):
@@ -164,7 +165,7 @@ class TestArityFallback:
 
     def test_predicate_instance(self):
         # nv
-        t = Pt(x=1, y=2)
+        t = Pt._clausal_head(x=1, y=2)                      # P2: the head-channel instance
         assert _arity_py(t) == _arity(t) == 2
 
     def test_int(self):
@@ -234,7 +235,7 @@ class TestArgsListFallback:
 
     def test_predicate_instance(self):
         # nv
-        t = Pt(x=10, y=20)
+        t = Pt._clausal_head(x=10, y=20)                    # P2: the head-channel instance
         assert _args_list_py(t) == _args_list(t) == [10, 20]
 
     def test_non_compound(self):

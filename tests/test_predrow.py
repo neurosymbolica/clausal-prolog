@@ -590,7 +590,9 @@ def test_detached_row_is_private_and_lazy():
 
 def test_predicate_meta_mutators_work_detached_and_respect_the_lock():
     cls = make_predicate("Mut", ["x"])
-    c1, c2 = Clause(head=cls(1), body=[]), Clause(head=cls(2), body=[])
+    # P2: ``cls(...)`` is the CELL; a clause HEAD is the instance channel.
+    c1 = Clause(head=cls._clausal_head(1), body=[])
+    c2 = Clause(head=cls._clausal_head(2), body=[])
     cls._assertz(c1)
     cls._asserta(c2)
     assert cls._clauses == [c2, c1]
@@ -936,7 +938,7 @@ _RELOCATED = (
 
 def test_instances_still_resolve_all_seven_relocated_attributes():
     cls = make_predicate("InstFace", ["x"])
-    inst = cls(1)
+    inst = cls._clausal_head(1)          # P2: the instance, not the cell
     assert [getattr(inst, n) for n in _RELOCATED] == [
         [], None, None, None, None, False, None,
     ], "an instance must read the same defaults the class does"
@@ -948,7 +950,7 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     db = Database()
     cls = make_predicate("InstLive", ["x"])
     cls._bind_row(db, "InstLive", 1)
-    inst = cls(1)
+    inst = cls._clausal_head(1)          # P2: the instance, not the cell
 
     c = _clause("InstLive", 1)
     db.assertz(c)                                   # via the Database
@@ -972,7 +974,7 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     assert inst._dynamic_arities == {1}
 
     # ... and a SECOND instance made after the writes agrees with the first.
-    assert cls(2)._locked is True
+    assert cls._clausal_head(2)._locked is True
 
 
 def test_instance_writes_to_the_relocated_names_still_refuse():
@@ -992,7 +994,7 @@ def test_a_field_named_like_a_relocated_attribute_stays_a_field():
     CLASS-level read still answers from the row."""
     cls = make_predicate("FieldClash", ["_signature"])
     assert cls._fields == ("_signature",)
-    inst = cls("field value")
+    inst = cls._clausal_head("field value")   # P2: the instance, not the cell
     assert inst._signature == "field value", "the field, not the row"
     assert cls._signature is None, "the class still reads the row"
     cls._signature = ("_signature",)

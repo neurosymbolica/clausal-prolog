@@ -52,3 +52,18 @@ plus a decision on whether the §4.2 silent-fail contract covers class terms.
 
 - `.superpowers/sdd/p33-state-relocation/task-5-report.md` (the concern list)
 - R11 in `implementation_plans/p33-state-relocation.md`
+
+## CLOSED 2026-09-19 (P2 Task 3/4)
+
+Closed at the REPRESENTATION, not at `_resolve_named_goal`, so the blast radius
+this note worried about never opened: `PredicateMeta.__call__` builds the cell
+now, so `mod.p(X)` from Python IS `("p", X)` and reaches branch 2 — the two
+spellings are one term. Branch 3's silent-fail contract is untouched, and no
+`call`/`maplist`/`foldl` sweep was needed, because nothing produces a
+class-term instance in argument position any more (the clause-HEAD channel,
+which still does until P4, never reaches `call/N`).
+
+The pin is flipped, same file, renamed:
+`tests/test_cell_goals.py::TestCallNOverCells::
+test_a_runtime_built_class_TERM_goal_answers_like_the_cell` — it now asserts
+the class-term spelling and the cell spelling answer identically.

@@ -205,18 +205,20 @@ class TestCallNOverCells:
         X = Var()
         assert [deref(X) for _ in pcall("cg2", mod.p, X, module=_lm(mod))] == [1, 2]
 
-    def test_a_runtime_built_class_TERM_goal_still_fails_silently(self, mod):
-        """KNOWN ASYMMETRY, deliberately not widened by this task: ``call(G)``
-        resolves a cell and an atom by NAME, but a class-term INSTANCE built at
-        runtime is neither callable nor ``_get_dispatch``-bearing (that
-        protocol lives on the metaclass, so only the CLASS answers it), and
-        still fails silently.  Since the P3-2 flip which of the two a caller
-        gets depends on whether the functor has clauses, so the two spellings
-        of the same goal do not behave alike.  Widening it is a behaviour
-        change outside R11's scope — see
-        todo/call-n-does-not-resolve-a-runtime-built-class-term-goal-2026-09-06.md."""
-        X = Var()
-        assert list(pcall("cg1", mod.p(X), module=_lm(mod))) == []
+    def test_a_runtime_built_class_TERM_goal_answers_like_the_cell(self, mod):
+        """THE ASYMMETRY IS GONE (P2 Task 3, 2026-09-19).  It was: ``call(G)``
+        resolved a cell and an atom by NAME, but ``p(X)`` built at runtime was
+        a class-term INSTANCE — neither callable nor ``_get_dispatch``-bearing,
+        since that protocol lives on the metaclass — and failed silently, so
+        which behaviour a caller got depended on whether the CALLEE had
+        clauses.  P2 closed it at the representation instead of at
+        ``_resolve_named_goal``: ``p(X)`` from Python IS the cell ``("p", X)``
+        now, so both spellings are one term and answer alike.  Closes
+        todo/done/call-n-does-not-resolve-a-runtime-built-class-term-goal-2026-09-06.md."""
+        X, Y = Var(), Var()
+        assert [deref(X) for _ in pcall("cg1", mod.p(X), module=_lm(mod))] == [1, 2]
+        assert ([deref(X) for _ in pcall("cg1", mod.p(X), module=_lm(mod))]
+                == [deref(Y) for _ in pcall("cg1", ("p", Y), module=_lm(mod))])
 
     def test_an_imported_predicate_answers_call_as_it_answers_solve(
             self, tmp_path):
