@@ -204,6 +204,19 @@ def report(path: str | None = None) -> str:
                 + ", ".join(f"{b}={n}" for b, n in _BY_BINDING.most_common()) + "\n")
         f.write("# bindings installed but NEVER fired: "
                 + (", ".join(sorted(set(_INSTALLED) - set(_BY_BINDING))) or "(none)") + "\n")
+        # In the OUTPUT, not only in the README: a reader of this file has
+        # the header in front of them and the docs somewhere else, and a
+        # census that counts evaluations while its reader assumes calls is
+        # off by exactly 2x -- the kind of factor that gets discovered a
+        # month later, inside a conclusion (iso-export-lane, 2026-09-19).
+        f.write("# CAUTION: `count` is EVALUATIONS, not calls. `==` evaluates "
+                "its arithmetic TWICE per solution (measured: one goal, one "
+                "solution, two rows). Exactness per row is unaffected.\n")
+        f.write("# A division by a CONSTANT is decidable without this census: "
+                "`X * Y / 10000` is exact iff X*Y is a multiple of 10000. Six "
+                "of the eight corpus sites divide by 10000 or 4; only "
+                "working_time_average and working_time_reference_period "
+                "divide by a runtime quantity.\n")
         f.write("site\tbinding\tleft\tright\texactness\tcount\n")
         for row in rows():
             f.write("\t".join(str(x) for x in row) + "\n")

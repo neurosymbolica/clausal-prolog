@@ -59,6 +59,31 @@ did the division (compiled bodies run in `<template>` frames, so there is no
 `.clausal` line to report) and `file:line` when a source frame was on the
 stack.
 
+## Six of the eight sites do not need this census at all
+
+iso-export-lane's eight genuine-division sites, re-derived from the emitted
+AST at canonical `172db6b`:
+
+| # | domain | goal |
+|---|---|---|
+| 1 | amlr_beneficial_ownership_threshold | `#=(RESULT_BASIS_POINTS, LEVEL_BASIS_POINTS * TAIL_BASIS_POINTS/10000)` |
+| 2 | amlr_bo_chain | `#=(C, PCT * SUB/10000)` |
+| 3 | crr_output_floor | `#=(FLOORED_CENTS, FACTOR_BPS * SA_TREA_CENTS/10000)` |
+| 4 | crr_output_floor | `#=(REQ_CENTS, RATIO_BPS * EFF_TREA/10000)` |
+| 5 | mica_casp_authorisation | `#=(QUARTER, OVERHEADS/4)` |
+| 6 | mica_casp_authorisation | `#=(QUARTER, PROJ/4)` |
+| 7 | working_time_average | `#=(AVG, TOTAL/COUNT)` |
+| 8 | working_time_reference_period | `#=(AVG, TOTAL_WORK_MINS/QUALIFYING_WEEKS)` |
+
+**Rows 1-6 divide by a CONSTANT** (10000 or 4), so their exactness is a
+property of the numerator alone: `X * Y / 10000` is exact iff `X * Y` is a
+multiple of 10000. That is decidable statically — no runtime census needed,
+and if the census reports INEXACT there the interesting fact is WHICH
+numerators, not the denominator distribution.
+
+**Only rows 7 and 8 divide by a runtime quantity**, and those two are the ones
+a denominator census actually has to answer.
+
 ## Running it over the corpus
 
 The tool loads, but the corpus's per-domain import roots are the harness's
