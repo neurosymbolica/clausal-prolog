@@ -5,8 +5,11 @@
 # fib(N, R) :- N > 1, N1 is N-1, N2 is N-2,
 #              fib(N1, R1), fib(N2, R2), R is R1+R2.
 #
-# The first clause uses keyword syntax (N=0, RESULT=0) to establish field
-# names; subsequent clauses can use positional args mapped to those names.
+# Field names come from the declaration, not from a clause: this file
+# declares none, so fib/2's fields are arg_0 and arg_1.  (The first clause
+# used to read fib(N=0, RESULT=0) and that is what named them; a term is
+# built positionally as of 2026-09-19 and a keyword argument in a term or a
+# head is a load-time error.  Write -private([fib(n, result)]) to name them.)
 
 
 fib(0, 0),
