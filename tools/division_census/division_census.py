@@ -188,9 +188,9 @@ def _patch_clpq() -> None:
     dividing the coefficients directly (``{v: c / rv ...}, lv / rv``), so a
     division that happens inside a posted CONSTRAINT rather than in ground
     arithmetic is invisible to every other binding here.  That is not
-    hypothetical: harness-batch-lane's row 7 (``working_time_average``,
-    ``AVG = TOTAL/COUNT``) produced no census rows at all while five sibling
-    domains produced plenty, and this is the path it would take.
+    hypothetical: harness-batch-lane's row 7 (a scored domain
+    produced no census rows at all while five siblings produced plenty, and
+    this is the path such a site would take.
 
     Only the PROGRAM's division is recorded — the ``_Div`` node the source
     wrote.  The simplex's own pivot arithmetic divides constantly (bound
@@ -259,9 +259,9 @@ def report(path: str | None = None) -> str:
                 "solution, two rows). Exactness per row is unaffected.\n")
         f.write("# A division by a CONSTANT is decidable without this census: "
                 "`X * Y / 10000` is exact iff X*Y is a multiple of 10000. Six "
-                "of the eight corpus sites divide by 10000 or 4; only "
-                "working_time_average and working_time_reference_period "
-                "divide by a runtime quantity.\n")
+                "of the eight corpus sites divide by a constant; only TWO "
+                "divide by a runtime quantity, and those are the live "
+                "question.\n")
         f.write("site\tbinding\tleft\tright\texactness\tcount\n")
         for row in rows():
             f.write("\t".join(str(x) for x in row) + "\n")
