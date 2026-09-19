@@ -18,7 +18,7 @@
 
 test("construct atom: functor(T, a, 0)") <- (
     functor(_t, a, 0),
-    _t == a
+    '=='(_t, a)
 )  # nv
 
 # ── functor/3 — decomposition of atoms ───────────────────────────────────────
@@ -26,7 +26,7 @@ test("construct atom: functor(T, a, 0)") <- (
 
 test("decompose atom: functor('hello', Name, Arity)") <- (
     functor(hello, _n, _a),
-    _n == hello,
+    '=='(_n, hello),
     _a == 0
 )  # nv
 
@@ -52,19 +52,19 @@ test("decompose empty list") <- (
 
 test("construct atom from list: T =.. ['a']") <- (
     unpack(_t, [a]),
-    _t == a
+    '=='(_t, a)
 )  # nv
 
 # ── univ/2 — decomposition of atoms ──────────────────────────────────────────
 
 test("decompose atom: 'a' =.. X") <- (
     unpack(a, _x),
-    _x == [a]
+    '=='(_x, [a])
 )  # nv
 
 test("decompose string: 'hello' =.. X") <- (
     unpack(hello, _x),
-    _x == [hello]
+    '=='(_x, [hello])
 )  # nv
 
 # ── numeric-literal decomposition (migrated from .py) ──────────────────────
@@ -79,5 +79,5 @@ test("decompose float: functor(1.0, N, A)") <- (
 )  # nv
 test("unpack int: 1 =.. X gives [1]") <- (
     unpack(1, _x),
-    _x == [1]
+    '=='(_x, [1])
 )  # nv
