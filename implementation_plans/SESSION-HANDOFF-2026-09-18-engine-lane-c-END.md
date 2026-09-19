@@ -1,4 +1,4 @@
-# Engine lane handoff — 2026-09-18 (session c, END) — the flip landed, P4 prerequisites landed, P2 planned
+# Engine lane handoff — 2026-09-18/19 (session c, END) — the flip landed, P4 prerequisites landed, P2 through Task 3's checkpoint
 
 Follows `SESSION-HANDOFF-2026-09-18-engine-lane-stage2.md` (on the stage-2 branch, now in main's history).
 Everything below is on CANONICAL main unless it says otherwise. Nothing is pushed to GitLab (the standing barrier
@@ -8,9 +8,9 @@ note stands: two census sweep tools hardcode the private corpus path).
 
 | tree | tip | carries |
 | --- | --- | --- |
-| canonical main `/workspace/clausal` | `fb0106f3` | atoms-as-str flip stages 1+2 (merges `1f864b39`, `be5cbc3a`), docs pass, P4 prerequisites |
-| clone main `/workspace/clausal-bug-fix` | `5bf7a8db` | the same, by merge (its main carries other sessions' work) |
-| box `/workspace/clausal` | `fb0106f3` | pushed; extensions force-rebuilt at `3fcfd29e` (x86_64), no C change since |
+| canonical main `/workspace/clausal` | `12c93a4d` (code tree = `fb0106f3`; after it only handoff commits and the exporter flip's land+revert pair `a62853e2`/`9faeaae1`) | atoms-as-str flip stages 1+2, docs pass, P4 prerequisites |
+| clone main `/workspace/clausal-bug-fix` | `eada248b` | the same by merge (its main carries other sessions' work), incl. the flip's land+revert |
+| box `/workspace/clausal` | `9faeaae1` | pushed; extensions force-rebuilt at `3fcfd29e` (x86_64), no C change since |
 | branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `20b32550` | plan, census, registry (Task 2 gated at `b9c127e4`), Task 3 CHECKPOINT (red, see NEXT 3) |
 
 Extensions in the canonical checkout were rebuilt at `3fcfd29e` in a same-sha worktree and swapped by
