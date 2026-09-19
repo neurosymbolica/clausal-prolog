@@ -171,6 +171,7 @@ def install() -> list[str]:
     patch(terms_to_ast, "_exact_div", "terms_to_ast.$div")
     patch(terms_to_ast, "exact_div", "terms_to_ast.$exact_div")
     patch(Quantity, "_exact_div", "Quantity._exact_div")    # units division
+    _patch_clpq()
 
     # The compiled path reads these VALUES into each generated module's
     # namespace at exec time, so the dict has to carry the wrappers too.
@@ -178,6 +179,42 @@ def install() -> list[str]:
     names["$div"] = terms_to_ast._exact_div
     names["$exact_div"] = terms_to_ast.exact_div
     return _INSTALLED
+
+
+def _patch_clpq() -> None:
+    """CLP(Q) divides WITHOUT going through ``exact_div``.
+
+    ``clpq._linearize``'s ``_Div`` arm flattens ``expr.left / expr.right`` by
+    dividing the coefficients directly (``{v: c / rv ...}, lv / rv``), so a
+    division that happens inside a posted CONSTRAINT rather than in ground
+    arithmetic is invisible to every other binding here.  That is not
+    hypothetical: harness-batch-lane's row 7 (``working_time_average``,
+    ``AVG = TOTAL/COUNT``) produced no census rows at all while five sibling
+    domains produced plenty, and this is the path it would take.
+
+    Only the PROGRAM's division is recorded — the ``_Div`` node the source
+    wrote.  The simplex's own pivot arithmetic divides constantly (bound
+    computation, row reduction) and recording that would bury the signal.
+    """
+    from clausal.logic import clpq
+    if getattr(clpq._linearize, "_division_census_original", None):
+        return
+    clpq._ensure_term_imports()
+    div_type = clpq._Div
+    original = clpq._linearize
+
+    def linearize(expr, trail, *a, **kw):
+        result = original(expr, trail, *a, **kw)
+        if isinstance(expr, div_type) and result is not None:
+            left = original(expr.left, trail, *a, **kw)
+            right = original(expr.right, trail, *a, **kw)
+            if left is not None and right is not None and not right[0]:
+                _record("clpq._linearize", left[1], right[1], result[1])
+        return result
+
+    linearize._division_census_original = original
+    clpq._linearize = linearize
+    _INSTALLED.append("clpq._linearize")
 
 
 def rows():
@@ -193,6 +230,14 @@ def report(path: str | None = None) -> str:
     kinds = collections.Counter(k[4] for k in _ROWS)
     sites = {k[0] for k in _ROWS}
     with open(path, "w") as f:
+        f.write(f"# ARMED: {len(_INSTALLED)} bindings wrapped "
+                f"({', '.join(_INSTALLED) or 'NONE — the census is not armed'})\n")
+        if not total:
+            f.write("# NO DIVISION WAS OBSERVED.  This file exists to say that\n"
+                    "# ARMED-AND-SAW-NOTHING is what happened — not that the\n"
+                    "# census failed to run.  Two readings remain and this tool\n"
+                    "# cannot separate them: the code path does no division, or\n"
+                    "# it divides through a binding not in the list above.\n")
         f.write(f"# divisions evaluated: {total}\n")
         f.write(f"# distinct (site, binding, operands, exactness) rows: {len(_ROWS)}\n")
         f.write(f"# distinct corpus sites: {len(sites)}\n")
@@ -260,4 +305,11 @@ def pytest_sessionfinish(session, exitstatus):   # noqa: ARG001
 
 
 install()
-atexit.register(lambda: print(report()) if _ROWS else None)
+
+# ALWAYS write, even with nothing to report.  It used to write only when
+# ``_ROWS`` was non-empty, and harness-batch-lane hit the consequence
+# (2026-09-19): a domain that produced NO FILE is indistinguishable from a run
+# where the census was never armed, and those are opposite conclusions — "no
+# division happens here" versus "the census is blind here".  A zero-row file
+# with the armed bindings listed says which.
+atexit.register(lambda: print(report()))
