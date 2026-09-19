@@ -361,7 +361,7 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
         fields = list(term_field_names(head))
         new_kwargs = term_field_dict(head)
         new_kwargs[fields[pos]] = lift_term
-        new_head = type(head)(**new_kwargs)
+        new_head = type(head)._clausal_head(**new_kwargs)
 
     # Remove the matched Unify from the body
     new_body = clause.body[:unify_idx] + clause.body[unify_idx + 1:]

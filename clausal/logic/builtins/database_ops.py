@@ -115,8 +115,9 @@ def _freeze_asserted_head_args(head: Any) -> Any:
     if isinstance(head, Compound):
         return Compound(head.functor, tuple(deref(a) for a in head.args))
     if is_term_instance(head):
-        return type(head)(*[deref(getattr(head, f))
-                            for f in term_field_names(head)])
+        # P2: the store wants the HEAD instance, not the cell ``__call__`` builds.
+        return type(head)._clausal_head(*[deref(getattr(head, f))
+                                          for f in term_field_names(head)])
     return head
 
 

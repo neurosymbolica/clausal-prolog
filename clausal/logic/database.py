@@ -1317,7 +1317,7 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
         name: replacements.get(name, getattr(head, name))
         for name in fields
     }
-    new_head = type(head)(**new_kwargs)
+    new_head = type(head)._clausal_head(**new_kwargs)   # P2: a HEAD rebuild stays an instance
     return new_head, body
 
 
@@ -1430,7 +1430,7 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
         return head, body
     new_kwargs = term_field_dict(head)
     new_kwargs.update(replacements)
-    new_head = type(head)(**new_kwargs)
+    new_head = type(head)._clausal_head(**new_kwargs)   # P2: a HEAD rebuild stays an instance
     return new_head, prepend + list(body)
 
 
