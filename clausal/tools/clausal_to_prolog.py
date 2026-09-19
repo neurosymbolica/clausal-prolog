@@ -2859,9 +2859,32 @@ class _ClausalToProlog:
                 return PCompound("dif", (left, right))
 
             if isinstance(op, python_ast.Eq):
-                arith = (self._is_arith_operand(node.left)
-                         or self._is_arith_operand(node.comparators[0]))
-                return PCompound("=:=" if arith else "==", (left, right))
+                # Operator ruling 2026-09-18: UNQUOTED `==` in .seam means
+                # arithmetic in the CLP sense. It compiles to `nodes.ArithEq`,
+                # a CLP(FD) constraint that BINDS and PROPAGATES -- not a test
+                # that happens to bind -- so `#=` is the only ISO-reachable
+                # spelling correct in every mode. ISO term identity is written
+                # `'=='(L, R)`, which reaches the quoted-functor path, not this
+                # one.
+                #
+                # WHAT THIS REPLACES. The choice was `_is_arith_operand`: eight
+                # lines, purely syntactic, with NO "cannot tell" branch -- where
+                # it saw no BinOp it did not refuse, it DEFAULTED to structural.
+                # Measured over 641,437 executions at 903 sites, 45 sites take
+                # TWO arithmetic modes at one call site, binding on one call and
+                # testing on another. `=:=` raises instantiation_error on the
+                # binding call and `is` is wrong for the testing one, so no
+                # static rule could have been right for those 45.
+                #
+                # THE ORDER MATTERED. All 167 measured-structural sites were
+                # respelled to `'=='(L, R)` FIRST (corpus 10ed4f72 + ed7f9d21,
+                # kit 379075d). Landing this first would have turned 167
+                # identity comparisons into constraints, silently.
+                #
+                # COST, accepted with the ruling: `#=` is `library(clpz)`, not
+                # ISO, so a domain using one is no longer pure-ISO. The export
+                # lane injects that import.
+                return PCompound("#=", (left, right))
 
             if isinstance(op, python_ast.NotEq):
                 arith = (self._is_arith_operand(node.left)
