@@ -9,7 +9,7 @@
 # names; subsequent clauses can use positional args mapped to those names.
 
 
-fib(N=0, RESULT=0),
+fib(0, 0),
 fib(1, 1),
 fib(N, RESULT) <- (
     N > 1,

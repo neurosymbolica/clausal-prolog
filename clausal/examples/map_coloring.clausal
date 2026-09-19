@@ -13,12 +13,12 @@
 
 # Four-color map coloring for Australia.
 
-color(C=red),
+color(red),
 color(green),
 color(blue),
 color(yellow),
 
-adjacent(X=western_australia,  Y=northern_territory),
+adjacent(western_australia,  northern_territory),
 adjacent(western_australia,    south_australia),
 adjacent(northern_territory,   south_australia),
 adjacent(northern_territory,   queensland),

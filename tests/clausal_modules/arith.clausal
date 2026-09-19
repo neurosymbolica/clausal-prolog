@@ -2,7 +2,7 @@
 #
 # factorial/2, max_of/3, abs_diff/3
 
-factorial(N=0, RESULT=1),
+factorial(0, 1),
 factorial(N, RESULT) <- (
     N > 0,
     N1 == N - 1,

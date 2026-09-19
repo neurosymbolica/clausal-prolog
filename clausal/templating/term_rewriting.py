@@ -783,6 +783,23 @@ TITLECASE_IDENTIFIER_SEVERITY = "error"
 #: warning on it would name a rename the language itself does not perform.
 _TITLECASE_EXEMPT_NAMES = frozenset({"Undefined"})
 
+# ─── Keyword-argument lint ────────────────────────────────────────────────────
+#
+# A term is built POSITIONALLY.  ``point(x=1, y=2)`` is Python's keyword-call
+# syntax borrowed as a term spelling: no ISO reading, and it is the only way a
+# functor's field NAMES could be declared, which made them depend on which
+# clause of the predicate came first.  It is also the last surface producer of
+# ``KWTerm``, a third term representation beside the cell and the class
+# instance.  Refused here; the machinery goes with the class in P4.
+
+#: Severity of the keyword-argument lint: ``"error"`` raises a located
+#: ``SyntaxError`` at the term; ``"warn"`` emits one
+#: ``ClausalKeywordArgumentWarning`` per site instead.  Flip this one constant
+#: to demote the lint.
+KEYWORD_ARGUMENT_SEVERITY = "error"
+
+
+
 #: TitleCase spellings the language itself renamed (``If`` -> ``if_``,
 #: ``Test`` -> ``test``).  ``If`` is also the name of a reified AST node
 #: class seeded into every module namespace, so without this list the lint
@@ -1912,6 +1929,7 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalDeprecatedSpellingWarning,
     ClausalTitleCaseIdentifierWarning,
     ClausalScaleInNameWarning,
+    ClausalKeywordArgumentWarning,
 )
 
 
@@ -6692,6 +6710,80 @@ class EmbedTransformer(NodeTransformer):
             if node is not None:
                 walk_(node)
 
+    def _lint_keyword_argument(transformer, *nodes):
+        """Refuse a TERM written with KEYWORD arguments inside the CLAUSAL
+        subtrees *nodes* (see ClausalKeywordArgumentWarning).
+
+        POSITION.  Only a ``Call`` whose ``func`` is a bare ``Name`` is read
+        -- a clause head, a goal, a term in an argument, at any depth.  Like
+        ``_lint_titlecase`` (whose call sites this piggybacks on, rather than
+        adding nineteen of its own) it sees only what the transformer has
+        recognised as Clausal, so hosted Python in the same file is never
+        read, and it stops at a ``++`` escape, which is Python by definition
+        -- ``++(dict(a=1))`` and ``++(__import__('m', fromlist=['x']))`` are
+        ordinary Python calls that happen to stand in a Clausal position.
+
+        TWO CARVE-OUTS, both surface spellings that are not term arguments:
+
+        * a ``-directive``'s OPTIONS (``-specialize(solve, p, alias=q)``).
+          Nothing is needed here for them: the directive call site hands this
+          walk the directive's ARGS and its keyword VALUES, never the
+          directive ``Call`` itself, so its own ``alias=`` is not in the tree
+          being walked.  (Said out loud because it is load-bearing and
+          invisible: change that call site to pass ``neg.operand`` and every
+          directive option in the repository starts failing to load.)
+        * an EDCG hidden argument (``p(L, _edcg_counter_in=0)``).  Those
+          address a GENERATED argument of an EDCG predicate, are ``_``-led by
+          construction (a bare ``_foo`` is a logic-variable spelling, so no
+          declared field can collide with one), and do not declare a field
+          name.  That is the ``_``-prefix test below.
+        """
+        import warnings  # noqa: PLC0415
+
+        def report(node, functor, named):
+            lineno = getattr(node, "lineno", None)
+            where = transformer._site(lineno) if lineno else "unknown site"
+            snippet = transformer._source_snippet(lineno) if lineno else ""
+            if snippet:
+                snippet = " — " + snippet
+            shown = ", ".join(f"{k}=" if k else "**" for k in named)
+            msg = (
+                f"{where}{snippet}: `{functor}` is written with keyword "
+                f"arguments ({shown}): a term is built positionally. Write "
+                f"the arguments in the declared order — `{functor}(...)` — "
+                f"and declare the functor with `-private([{functor}(...)])` "
+                f"if it is data. (Keyword terms were the only way to name a "
+                f"functor's fields, which made those names depend on clause "
+                f"order; the spelling has no ISO Prolog reading and was "
+                f"retired 2026-09-19. A `-directive`'s options and an EDCG "
+                f"`_`-led hidden argument keep their keywords.)"
+            )
+            if KEYWORD_ARGUMENT_SEVERITY == "error":
+                _raise_located_syntax_error(
+                    msg, node, transformer._source_lines,
+                    transformer._filename)
+            warnings.warn(msg, ClausalKeywordArgumentWarning,
+                          stacklevel=_stacklevel_outside_rewriter())
+
+        def walk_(node):
+            if node is None or isinstance(node, (Constant, JoinedStr)):
+                return
+            if _python_escape_operand(node) is not None:
+                return
+            if isinstance(node, Call):
+                named = [kw.arg for kw in node.keywords
+                         if kw.arg is None or not kw.arg.startswith("_")]
+                if named and isinstance(node.func, Name):
+                    report(node, node.func.id, named)
+                for child in iter_child_nodes(node):
+                    walk_(child)
+                return
+            for child in iter_child_nodes(node):
+                walk_(child)
+
+        for node in nodes:
+            walk_(node)
+
     def _lint_titlecase(transformer, *nodes, root_is_functor=False):
         """Lint every TitleCase ``Name`` in FUNCTOR position within the
         CLAUSAL subtrees *nodes* (see ClausalTitleCaseIdentifierWarning),
@@ -6754,9 +6846,11 @@ class EmbedTransformer(NodeTransformer):
         Severity is ``TITLECASE_IDENTIFIER_SEVERITY``: ``"warn"`` emits the
         warning at the identifier's first site, ``"error"`` raises there.
         """
-        # Same subtrees, different question — see _lint_scale_in_name,
-        # which piggybacks here rather than on nineteen call sites.
+        # Same subtrees, different question — see _lint_scale_in_name and
+        # _lint_keyword_argument, which piggyback here rather than on
+        # nineteen call sites each.
         transformer._lint_scale_in_name(*nodes)
+        transformer._lint_keyword_argument(*nodes)
         import warnings  # noqa: PLC0415
 
         def _is_escape(node):

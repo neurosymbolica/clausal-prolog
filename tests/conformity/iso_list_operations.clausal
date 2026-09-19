@@ -22,7 +22,7 @@
 palindrome(XS) <- reverse(XS, XS)
 
 # Check that a list is in ascending order.
-sorted_asc(XS=[]),
+sorted_asc([]),
 sorted_asc([_]),
 sorted_asc([A, B, *REST]) <- (
     A <= B,

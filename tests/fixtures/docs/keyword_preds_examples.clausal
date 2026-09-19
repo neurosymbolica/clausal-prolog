@@ -1,8 +1,12 @@
 -double_quotes(chars)
 # Doc snippet fixtures for docs/keyword_preds.md
 
-# Shared fact for keyword predicate examples
-point(x=1, y=2, z=3),
+# Shared fact for keyword predicate examples.  The field NAMES these
+# builtins address come from the declaration; the keyword-head spelling
+# that used to carry them was retired 2026-09-19.
+-private([point(x, y, z)])
+
+point(1, 2, 3),
 
 # --8<-- [start:quick_example]
 test("vary") <- (

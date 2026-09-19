@@ -6,7 +6,7 @@
 # `_as_name_arity_indicator` (clausal/logic/builtins/io.py) recognizes that
 # shape as a fourth Name/Arity indicator representation.
 
-fib(N=0, F=1),
+fib(0, 1),
 fib(1, 1),
 fib(N, F) <- (
     N > 1,

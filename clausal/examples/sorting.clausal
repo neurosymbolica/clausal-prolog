@@ -15,7 +15,7 @@ naive_sort(LIST, SORTED) <- (
     is_sorted(SORTED)
 )
 
-is_sorted(XS=[]),
+is_sorted([]),
 is_sorted([_]),
 is_sorted([A, B, *REST]) <- (
     A <= B,
@@ -24,7 +24,7 @@ is_sorted([A, B, *REST]) <- (
 
 # ── Quicksort ─────────────────────────────────────────────────────────────────
 
-qsort(LIST=[], SORTED=[]),
+qsort([], []),
 qsort([PIVOT, *REST], SORTED) <- (
     partition(PIVOT, REST, LO, HI),
     qsort(LO, SORTED_LO),
@@ -32,7 +32,7 @@ qsort([PIVOT, *REST], SORTED) <- (
     append(SORTED_LO, [PIVOT, *SORTED_HI], SORTED)
 )
 
-partition(PIVOT=0, LIST=[], LO=[], HI=[]),
+partition(0, [], [], []),
 partition(_, [], [], []),
 partition(PIVOT, [H, *T], [H, *LO], HI) <- (
     H <= PIVOT,

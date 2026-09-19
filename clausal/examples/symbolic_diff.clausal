@@ -8,7 +8,7 @@
 # predicate call arguments — they are matched/constructed, not evaluated.
 
 # diff(vx)/dVx = 1
-diff(EXPR=0, VAR=0, DERIV=0),
+diff(0, 0, 0),
 diff(X, X, 1),
 
 # Constant number: diff(c)/dVx = 0
