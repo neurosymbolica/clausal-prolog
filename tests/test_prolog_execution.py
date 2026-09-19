@@ -117,6 +117,51 @@ def _run_clausal(goal_factory, *watch_vars):
 
 _USE_MODULE_DIRECTIVE = re.compile(r"^:-\s*use_module\([^\n]*\)\.\n\n?", re.MULTILINE)
 
+#: A Scryer toplevel answer that is a residual CONSTRAINT rather than
+#: `true.`/`false.`/`error(...)`. Matched on the `<module>:` qualifier Scryer
+#: prints for an attributed-variable residual (`clpz:(_A in inf..sup).`).
+_RESIDUAL_GOAL = re.compile(r"^[a-z][A-Za-z0-9_]*:")
+
+#: A Scryer toplevel answer that is a variable BINDING (`After = 1000000.`)
+#: rather than a bare `true.`.
+_BINDING_ANSWER = re.compile(r"^[A-Z_][A-Za-z0-9_]* = .*\.$", re.DOTALL)
+
+
+def _classify_scryer(proc, query: str):
+    """Scryer's toplevel answer -> ("succeeds"|"fails"|"raises", detail).
+
+    ONE classifier, called by both runners below. They each carried their own
+    copy, so teaching one of them about residual constraints would have left
+    the other raising AssertionError on the same answer -- the same defect
+    over a second call site.
+    """
+    line = proc.stdout.strip()
+    if line == "true.":
+        return ("succeeds", None)
+    if line == "false.":
+        return ("fails", None)
+    if line.startswith("error("):
+        return ("raises", line)
+    # A CLP query that succeeds with an UNRESOLVED constraint prints the
+    # residual goal instead of `true.` -- `clpz:(_A in inf..sup).` for
+    # `#=(A, B)` on two fresh variables. That is a SUCCESS carrying a
+    # residual, not an unparsed answer. Before the 2026-09-18 ruling nothing
+    # this harness emitted could post a constraint, so neither classifier had
+    # ever met one.
+    if line.endswith(".") and _RESIDUAL_GOAL.search(line):
+        return ("succeeds", line)
+    # A query whose variables get BOUND prints the bindings, not `true.` --
+    # `After = 1000000.`. Also new after the ruling: `=:=` could only TEST, so
+    # a query with an unbound output raised instantiation_error and this
+    # branch was unreachable. `#=` computes, so the answer is a binding.
+    if line.endswith(".") and _BINDING_ANSWER.match(line):
+        return ("succeeds", line)
+    raise AssertionError(
+        f"unparsed Scryer output for query {query!r}: "
+        f"stdout={proc.stdout!r} stderr={proc.stderr!r} returncode={proc.returncode}"
+    )
+
+
 
 def _run_scryer(tmp_path, pl_source: str, query: str, *, strip_companion_import: bool = False):
     """Consult *pl_source* in real Scryer and run one *query*.
@@ -147,17 +192,7 @@ def _run_scryer(tmp_path, pl_source: str, query: str, *, strip_companion_import:
         text=True,
         timeout=8,
     )
-    line = proc.stdout.strip()
-    if line == "true.":
-        return ("succeeds", None)
-    if line == "false.":
-        return ("fails", None)
-    if line.startswith("error("):
-        return ("raises", line)
-    raise AssertionError(
-        f"unparsed Scryer output for query {query!r}: "
-        f"stdout={proc.stdout!r} stderr={proc.stderr!r} returncode={proc.returncode}"
-    )
+    return _classify_scryer(proc, query)
 
 
 # ── Assertion helpers (the honesty-constraint mechanism) ────────────────────────
@@ -202,64 +237,155 @@ def assert_known_divergence(clausal_outcome, scryer_outcome, *, case: str, spec_
 
 _EQ_SOURCE = "eq(A, B) <- (A == B)\n"
 _EQ_PL = _translate(_EQ_SOURCE)
-assert _EQ_PL.strip() == "eq(A, B) :-\n    A == B."  # pin the shape this matrix depends on
+# PIN the shape this matrix depends on. Ruling 2026-09-18: an unquoted `==` is
+# the CLP arithmetic constraint and emits `#=`, WITH its own import -- so this
+# matrix needs no clpz-awareness of its own, the emitted text is self-sufficient.
+#: The RESPELLED form. `'=='(A, B)` reaches the quoted-functor path and stays
+#: ISO `==`, which is what the arithmetic rows above are contrasted against.
+_IDENT_SOURCE = "ident(A, B) <- ('=='(A, B))\n"
+_IDENT_PL = _translate(_IDENT_SOURCE)
+assert _IDENT_PL.strip() == "ident(A, B) :-\n    A == B.", _IDENT_PL
+
+assert _EQ_PL.strip() == (
+    ":- use_module(library(clpz), [(#=)/2]).\n\neq(A, B) :-\n    #=(A, B)."), _EQ_PL
 
 
-class TestEqStructuralShapeMatrix:
-    """§1.2 (Clausal, Python-driver transcript) vs §1.3 (Scryer transcript)."""
+class TestEqArithmeticLoweringAgrees:
+    """The rows the 2026-09-18 ruling FIXED. Each was a known divergence.
 
-    def test_ground_ground_numeric_different_type(self, tmp_path):
-        # 2500 == 2500.0: Clausal's arithmetic equality succeeds; ISO structural
-        # `==` is type-sensitive and says false.
-        mod = _load_clausal(tmp_path, "eq1", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq(2500, 2500.0))
-        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(2500, 2500.0).")
-        assert_known_divergence(clausal, scryer, case="eq(2500, 2500.0)", spec_section="§1.2/§1.3")
-
-    def test_ground_ground_atom_equal(self, tmp_path):
-        mod = _load_clausal(tmp_path, "eq2", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("foo")))
-        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, foo).")
-        assert_agreement(clausal, scryer, case="eq(foo, foo)")
-
-    def test_ground_ground_atom_unequal(self, tmp_path):
-        mod = _load_clausal(tmp_path, "eq3", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("bar")))
-        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, bar).")
-        assert_agreement(clausal, scryer, case="eq(foo, bar)")
+    `#=` binds and propagates, so the three mode rows that `==`/`=:=` could not
+    serve -- unbound on either side, and two fresh variables -- now agree with
+    the Clausal engine. These assertions replace `assert_known_divergence`
+    calls, which is what this file's docstring says to do when the lowering is
+    genuinely fixed rather than silenced.
+    """
 
     def test_unbound_left_ground_numeric_right(self, tmp_path):
-        # eq(V, 1257000): Clausal BINDS V; ISO `==` cannot bind and says false.
+        # Was §1.2/§1.3's divergence: Clausal BINDS, ISO `==` could not and
+        # said false. `#=` binds, so Scryer now answers `_A = 1257000`.
         mod = _load_clausal(tmp_path, "eq4", _EQ_SOURCE)
         v = Var()
         clausal = _run_clausal(lambda: mod.eq(v, 1257000), v)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, 1257000).")
         assert clausal == ("succeeds", (1257000,))  # the bound value itself, per §1.2
-        assert_known_divergence(clausal, scryer, case="eq(V, 1257000)", spec_section="§1.2/§1.3")
-
-    def test_unbound_left_ground_atom_right(self, tmp_path):
-        # eq(V, foo): Clausal RAISES type_error(evaluable, foo); ISO `==` says false.
-        mod = _load_clausal(tmp_path, "eq5", _EQ_SOURCE)
-        v = Var()
-        clausal = _run_clausal(lambda: mod.eq(v, "foo"), v)
-        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, foo).")
-        assert clausal[0] == "raises"
-        assert_known_divergence(clausal, scryer, case="eq(V, foo)", spec_section="§1.2/§1.3")
+        assert_agreement(clausal, scryer, case="eq(V, 1257000)")
 
     def test_ground_numeric_left_unbound_right(self, tmp_path):
-        # eq(1257000, V): symmetric to the V-first row; Clausal binds, ISO says false.
+        # Symmetric to the row above; was equally divergent.
         mod = _load_clausal(tmp_path, "eq6", _EQ_SOURCE)
         v = Var()
         clausal = _run_clausal(lambda: mod.eq(1257000, v), v)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(1257000, _).")
         assert clausal == ("succeeds", (1257000,))
-        assert_known_divergence(clausal, scryer, case="eq(1257000, V)", spec_section="§1.2/§1.3")
+        assert_agreement(clausal, scryer, case="eq(1257000, V)")
 
-    def test_unbound_unbound(self, tmp_path):
+    def test_unbound_unbound_posts_a_constraint(self, tmp_path):
+        # Both engines now POST rather than decide. Scryer reports the residual
+        # `clpz:(_A in inf..sup).` -- a success carrying a constraint, which is
+        # an answer shape this harness could not produce before the ruling.
         mod = _load_clausal(tmp_path, "eq7", _EQ_SOURCE)
         clausal = _run_clausal(lambda: mod.eq(Var(), Var()))
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, _).")
-        assert_known_divergence(clausal, scryer, case="eq(V, W)", spec_section="§1.2/§1.3")
+        assert_agreement(clausal, scryer, case="eq(V, W)")
+        assert scryer[1] is not None and "clpz" in scryer[1], scryer
+
+    def test_unbound_left_ground_atom_right(self, tmp_path):
+        # Both RAISE: Clausal's type_error(evaluable, foo) against clpz's
+        # domain_error(clpz_expression, foo). Agreement is on the outcome KIND.
+        mod = _load_clausal(tmp_path, "eq5", _EQ_SOURCE)
+        v = Var()
+        clausal = _run_clausal(lambda: mod.eq(v, "foo"), v)
+        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, foo).")
+        assert clausal[0] == "raises"
+        assert_agreement(clausal, scryer, case="eq(V, foo)")
+
+
+class TestEqNonIntegerOperandStillDiverges:
+    """`#=` is CLP over the INTEGERS, so a non-integer operand diverges.
+
+    Measured 2026-09-19 and ruled the same day: the CLP(Z) solvers raise
+    `domain_error(clpz_expression, X)` for any operand that is not an integer,
+    where the Clausal engine's `==` falls back to a ground structural test and
+    decides. Every row here is the SAME defect -- a non-integer handed to an
+    arithmetic site -- and the remedy is not a change to the lowering but a
+    respell of the SOURCE, which :class:`TestIdentStructuralLoweringAgrees`
+    below shows agreeing on exactly these operands.
+
+    These are pinned as divergences rather than deleted because the limit is
+    real, undocumented before this, and invisible to every suite that runs the
+    Clausal engine alone.
+    """
+
+    def test_float_operand(self, tmp_path):
+        # 2500 == 2500.0: Clausal succeeds. `=:=` succeeded here BEFORE the
+        # ruling, so this row is a regression the ruling knowingly accepted.
+        mod = _load_clausal(tmp_path, "eqf", _EQ_SOURCE)
+        clausal = _run_clausal(lambda: mod.eq(2500, 2500.0))
+        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(2500, 2500.0).")
+        assert "domain_error(clpz_expression" in scryer[1], scryer
+        assert_known_divergence(clausal, scryer, case="eq(2500, 2500.0)",
+                                spec_section="§1.2/§1.3 + the 2026-09-19 integer limit")
+
+    def test_ground_atoms_equal(self, tmp_path):
+        mod = _load_clausal(tmp_path, "eq2", _EQ_SOURCE)
+        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("foo")))
+        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, foo).")
+        assert_known_divergence(clausal, scryer, case="eq(foo, foo)",
+                                spec_section="the 2026-09-19 integer limit")
+
+    def test_ground_atoms_unequal(self, tmp_path):
+        mod = _load_clausal(tmp_path, "eq3", _EQ_SOURCE)
+        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("bar")))
+        scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, bar).")
+        assert_known_divergence(clausal, scryer, case="eq(foo, bar)",
+                                spec_section="the 2026-09-19 integer limit")
+
+
+class TestIdentStructuralLoweringAgrees:
+    """The OTHER witness: `'=='(A, B)` is ISO term identity and agrees on 5/5.
+
+    This class is what makes the divergences above a statement about the
+    SPELLING rather than about the translator. The same operands that diverge
+    through the arithmetic spelling agree through this one, including the float
+    and the two-fresh-variable rows.
+    """
+
+    def test_ground_atoms_equal(self, tmp_path):
+        mod = _load_clausal(tmp_path, "id1", _IDENT_SOURCE)
+        clausal = _run_clausal(lambda: mod.ident(chars("foo"), chars("foo")))
+        scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(foo, foo).")
+        assert_agreement(clausal, scryer, case="ident(foo, foo)")
+
+    def test_ground_atoms_unequal(self, tmp_path):
+        mod = _load_clausal(tmp_path, "id2", _IDENT_SOURCE)
+        clausal = _run_clausal(lambda: mod.ident(chars("foo"), chars("bar")))
+        scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(foo, bar).")
+        assert_agreement(clausal, scryer, case="ident(foo, bar)")
+
+    def test_float_operand(self, tmp_path):
+        # The row the arithmetic spelling cannot serve: both say false, because
+        # 2500 and 2500.0 are different TERMS.
+        mod = _load_clausal(tmp_path, "id3", _IDENT_SOURCE)
+        clausal = _run_clausal(lambda: mod.ident(2500, 2500.0))
+        scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(2500, 2500.0).")
+        assert_agreement(clausal, scryer, case="ident(2500, 2500.0)")
+        assert clausal[0] == "fails", clausal
+
+    def test_unbound_left_ground_numeric_right(self, tmp_path):
+        mod = _load_clausal(tmp_path, "id4", _IDENT_SOURCE)
+        v = Var()
+        clausal = _run_clausal(lambda: mod.ident(v, 1257000), v)
+        scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(_, 1257000).")
+        assert_agreement(clausal, scryer, case="ident(V, 1257000)")
+
+    def test_unbound_unbound(self, tmp_path):
+        # Two DISTINCT fresh variables are not identical, in either engine --
+        # and this is the row the arithmetic spelling answers by POSTING.
+        mod = _load_clausal(tmp_path, "id5", _IDENT_SOURCE)
+        clausal = _run_clausal(lambda: mod.ident(Var(), Var()))
+        scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(_, _).")
+        assert_agreement(clausal, scryer, case="ident(V, W)")
+        assert clausal[0] == "fails", clausal
 
 
 # ── §1.4 / §1.5 -- the `uk/tax` witness, minimised ───────────────────────────────
@@ -279,17 +405,24 @@ _WITNESS_PL = _translate(_WITNESS_SOURCE)
 class TestTaxWitnessWorkedExample:
     """§1.4's minimised `eq_witness.pl` pair, plus §1.5's bound-operand chk/1."""
 
-    def test_taxable_unbound_output_diverges(self, tmp_path):
-        # Clausal COMPUTES After = 1000000; the emitted `=:=` needs both sides
-        # ground and raises instantiation_error on the unbound output arg.
+    def test_taxable_unbound_output_agrees(self, tmp_path):
+        """THE HEADLINE ROW OF THE 2026-09-18 RULING, and it now agrees.
+
+        Clausal COMPUTES After = 1000000. The emitted `=:=` needed both sides
+        ground and raised instantiation_error on the unbound output, which is
+        what §1.4 pinned. `#=` computes, so Scryer answers `After = 1000000`
+        -- the same number, from the exported program.
+        """
         mod = _load_clausal(tmp_path, "witness1", _WITNESS_SOURCE)
         after = Var()
         clausal = _run_clausal(lambda: mod.taxable(1257000, 257000, after), after)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "taxable(1257000, 257000, After).")
         assert clausal == ("succeeds", (1000000,))
-        assert_known_divergence(
-            clausal, scryer, case="taxable(1257000, 257000, After) [unbound]", spec_section="§1.4"
-        )
+        assert_agreement(clausal, scryer,
+                         case="taxable(1257000, 257000, After) [unbound]")
+        # Not just the same outcome KIND: the same VALUE. Without this the row
+        # would stay green if Scryer succeeded with any binding at all.
+        assert scryer[1] is not None and "1000000" in scryer[1], scryer
 
     def test_taxable_bound_output_agrees(self, tmp_path):
         # Hand the emitted `=:=` the answer Clausal would have computed, and it
@@ -300,23 +433,37 @@ class TestTaxWitnessWorkedExample:
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "taxable(1257000, 257000, 1000000).")
         assert_agreement(clausal, scryer, case="taxable(1257000, 257000, 1000000) [bound]")
 
-    def test_allow_diverges(self, tmp_path):
-        # liability.clausal:133's own shape: Clausal BINDS A; ISO structural `==`
-        # cannot bind and fails.
+    def test_allow_agrees(self, tmp_path):
+        """liability.clausal:133's own shape, also fixed.
+
+        Clausal BINDS A. ISO structural `==` could not bind and failed, which
+        is what §1.4 pinned; `#=` binds, so both reach 1257000.
+        """
         mod = _load_clausal(tmp_path, "witness3", _WITNESS_SOURCE)
         a = Var()
         clausal = _run_clausal(lambda: mod.allow(a, 1257000), a)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "allow(A, 1257000).")
         assert clausal == ("succeeds", (1257000,))
-        assert_known_divergence(clausal, scryer, case="allow(A, 1257000)", spec_section="§1.4")
+        assert_agreement(clausal, scryer, case="allow(A, 1257000)")
+        assert scryer[1] is not None and "1257000" in scryer[1], scryer
 
     def test_chk_bound_float_diverges(self, tmp_path):
-        # §1.5: even with BOTH operands bound, int-vs-float flips the verdict --
-        # Clausal succeeds (arithmetic equality); ISO `==` is type-sensitive.
+        """§1.5's row still diverges, but for a DIFFERENT reason than it did.
+
+        It was type-sensitivity in ISO `==`: Clausal's arithmetic equality
+        succeeded, `==` said false. It is now the 2026-09-19 integer limit:
+        `#=` raises `domain_error(clpz_expression, 2500.0)`. The outcome kinds
+        still differ, so the assertion is unchanged -- but the REASON moved,
+        and a row whose reason moved silently is the kind this file exists to
+        prevent, so the new reason is asserted explicitly.
+        """
         mod = _load_clausal(tmp_path, "witness4", _WITNESS_SOURCE)
         clausal = _run_clausal(lambda: mod.chk(2500.0))
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "chk(2500.0).")
-        assert_known_divergence(clausal, scryer, case="chk(2500.0)", spec_section="§1.5")
+        assert scryer[0] == "raises", scryer
+        assert "domain_error(clpz_expression" in scryer[1], scryer
+        assert_known_divergence(clausal, scryer, case="chk(2500.0)",
+                                spec_section="§1.5 + the 2026-09-19 integer limit")
 
     def test_chk_bound_int_agrees(self, tmp_path):
         mod = _load_clausal(tmp_path, "witness5", _WITNESS_SOURCE)
@@ -443,17 +590,7 @@ def _run_scryer_multifile(tmp_path, files: dict, query: str):
         cwd=tmp_path, input=query + "\n",
         capture_output=True, text=True, timeout=15,
     )
-    line = proc.stdout.strip()
-    if line == "true.":
-        return ("succeeds", None)
-    if line == "false.":
-        return ("fails", None)
-    if line.startswith("error("):
-        return ("raises", line)
-    raise AssertionError(
-        f"unparsed Scryer output for query {query!r}: "
-        f"stdout={proc.stdout!r} stderr={proc.stderr!r} rc={proc.returncode}"
-    )
+    return _classify_scryer(proc, query)
 
 
 class TestStrLiteralUnifiesWithImportedAtom:
@@ -573,10 +710,14 @@ class TestBracketAtomLiteralAgrees:
 # said no (measured on 9246f385) -- an answer-level disagreement the export
 # would have silently inherited. This pin keeps both sides agreeing.
 
+#: STRUCTURAL, so the comparison is spelled `'=='`. Ruling 2026-09-18: an
+#: unquoted `==` here would be the CLP arithmetic constraint and a char list is
+#: not an integer, so it would raise `domain_error(clpz_expression, ...)` --
+#: which says nothing about whether a string IS its char list.
 _STRING_EQ_SOURCE = """-double_quotes(chars)
 -private([a, b])
-hit(X) <- (X is "ab", X == [a, b])
-hit2(X) <- (X is [a, b], X == "ab")
+hit(X) <- (X is "ab", '=='(X, [a, b]))
+hit2(X) <- (X is [a, b], '=='(X, "ab"))
 """
 
 

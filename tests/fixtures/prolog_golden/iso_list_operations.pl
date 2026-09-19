@@ -1,5 +1,7 @@
 :- module(iso_list_operations, [test/1]).
 
+:- use_module(library(clpz), [(#=)/2]).
+
 palindrome(XS) :-
     reverse(XS, XS).
 
@@ -80,7 +82,7 @@ test('length one') :-
 
 test('length binds') :-
     length([1, 2, 3], _n),
-    _n == 3.
+    #=(_n, 3).
 
 test('last element') :-
     last([1, 2, 3], 3).

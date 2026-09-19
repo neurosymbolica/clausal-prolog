@@ -15,6 +15,11 @@ class Dialect:
     operator_table: OperatorTable = field(repr=False)
     library_map: dict[str, str] = field(default_factory=dict)
     clpfd_module: str = "clpfd"
+    #: Does emitting a CLP arithmetic goal (`#=`) require importing
+    #: :attr:`clpfd_module`, or is the solver built in? GNU Prolog's FD system
+    #: is built in and has no `library(fd)` to import; everywhere else the file
+    #: does not consult at all without the import.
+    clpfd_needs_import: bool = True
     tabling_directive: str = ":- table"
     string_type: str = "string"
     has_dicts: bool = False
@@ -67,6 +72,12 @@ class Dialect:
         return cls(
             name="iso",
             operator_table=OperatorTable.iso_default(),
+            # `#=` is not ISO -- the operator table correctly does not carry
+            # it, and this dialect emits one only under the 2026-09-18 ruling,
+            # as a deliberate exception. When it does, the engines that run
+            # this output are Scryer and Trealla, and BOTH spell the library
+            # `clpz`. "clpfd" is the SWI name and would not resolve in either.
+            clpfd_module="clpz",
         )
 
     @classmethod
@@ -117,6 +128,8 @@ class Dialect:
             operator_table=OperatorTable.gprolog_default(),
             library_map={},  # FD constraints are built-in, no library imports
             clpfd_module="fd",
+            # GNU Prolog's FD solver is built in; there is no library(fd).
+            clpfd_needs_import=False,
             tabling_directive="",  # GNU Prolog has no tabling support
             string_type="atom",
             has_dicts=False,

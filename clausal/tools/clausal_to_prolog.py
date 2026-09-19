@@ -193,11 +193,30 @@ def _quote_atom(name: str) -> str:
     return "'" + _escape_body(name, "'") + "'"
 
 
+#: Atoms that are operators in a LIBRARY the emitted file imports, but not in
+#: the ISO operator table. They are deliberately absent from that table -- it
+#: drives INFIX rendering, and `#=` is not ISO, so the emission is functional
+#: `#=(X, Y)` by design. Bracketing is a separate question from rendering: the
+#: reader that consults the emitted file has the library's `:- op/3` in force,
+#: so where an operator atom must be bracketed it must be bracketed here too.
+#: `[#=/2]` in an import list is a syntax error in Scryer
+#: (`syntax_error(incomplete_reduction)`); `[(#=)/2]` is right.
+#:
+#: QUOTING IS NOT A SUBSTITUTE, and the mistake is easy to make because Scryer
+#: ACCEPTS `['(#=)'/2]` -- but a control with a bogus indicator
+#: (`[nonexistent_thing/2]`) is accepted just as happily, so acceptance of the
+#: directive proves nothing about the indicator. `'(#=)'` names an atom spelled
+#: `(#=)`, which is not the operator.
+_LIBRARY_OPERATOR_ATOMS = frozenset({"#=", "#\\=", "#<", "#>", "#=<", "#>="})
+
+
 def _is_operator_atom(name: str, op_table: OperatorTable) -> bool:
-    """True if *name* is declared as an operator in *op_table* (any fixity)."""
+    """True if *name* is declared as an operator in *op_table* (any fixity),
+    or is a library operator the emitted file's reader will have in force."""
     return (op_table.lookup_infix(name) is not None
             or op_table.lookup_prefix(name) is not None
-            or op_table.lookup_postfix(name) is not None)
+            or op_table.lookup_postfix(name) is not None
+            or name in _LIBRARY_OPERATOR_ATOMS)
 
 
 #: Internal sentinel wrapping a discarded unit while a term is being rendered.
@@ -772,6 +791,55 @@ def _lambda_parameter_names(node) -> list[str] | None:
     return names or None
 
 
+def _unit_divisor_factor(node):
+    """The factor for a `/ <unit>` DIVISOR, or None if it is not a unit at all.
+
+    :func:`_unit_factor` answers 1 for an EMPTY name list, by design: a
+    compound of base units resolves to 1 because every leaf does. A NUMERIC
+    divisor also names no unit, so it reached that same 1 and the division was
+    folded away to nothing -- `PCT * SUB / 10000` emitted `PCT * SUB`, silently,
+    off by four orders of magnitude. Both fold paths went through it and the
+    constant one had shipped with the hole.
+
+    So a divisor must NAME something before its factor is even looked up. This
+    is the divisor-position guard only; a declaration's unit (which is a unit by
+    syntax, not by inference) keeps calling _unit_factor directly.
+    """
+    names = _unit_leaf_names(node)
+    if not names:
+        # A QUANTITY-literal divisor -- `/ 1(euro)` -- names its unit inside a
+        # Call, which _unit_leaf_names does not descend into. Three corpus
+        # sites spell it that way, and they used to fold only by ACCIDENT
+        # through the very hole this function closes: the Call named no leaf,
+        # the factor came back 1, and dividing by 1 happened to be right.
+        unit = _quantity_divisor_unit(node)
+        if unit is None:
+            return None
+        names = [unit]
+    return _unit_factor(names)
+
+
+def _quantity_divisor_unit(node) -> str | None:
+    """The unit of a `1(unit)` Quantity-literal divisor, else None.
+
+    ONLY a magnitude of exactly 1, because only that is a pure unit
+    conversion: `/ 5(euro)` is a division by five euro, and folding it away as
+    though it merely named a unit would be off by a factor of five.
+    """
+    if (not isinstance(node, python_ast.Call) or node.keywords
+            or len(node.args) != 1):
+        return None
+    func = node.func
+    if not (isinstance(func, python_ast.Constant)
+            and not isinstance(func.value, bool)
+            and func.value == 1):
+        return None
+    unit = node.args[0]
+    if not isinstance(unit, python_ast.Name) or _is_var_in_name_position(unit.id):
+        return None
+    return unit.id
+
+
 def _unit_leaf_names(node) -> list[str]:
     """The NAMES a unit expression mentions, in order. Exponents are skipped;
     a qualified ``european_union.euro`` contributes ``euro``."""
@@ -885,6 +953,13 @@ class _ClausalToProlog:
         #: `:- use_module(library(lambda))`. Set by
         #: :meth:`_lower_arrow_lambda_in_term_position`.
         self._emitted_arrow_lambda = False
+        #: True once a CLP arithmetic equality (`#=`) has been emitted, so the
+        #: module imports the dialect's constraint library. `#=` is not ISO and
+        #: no engine has it without the import: the file raises
+        #: `existence_error(procedure, #=/2)` at CALL time, never at consult
+        #: time, so a missing import is a silent wrong answer rather than a
+        #: load failure.
+        self._emitted_clp_arith_eq = False
         #: Variable names bound by the head of the clause currently being
         #: converted. A lambda's body variable that is NOT a parameter and
         #: IS in this set is a CAPTURE, which is the only thing the lowering
@@ -1310,6 +1385,20 @@ class _ClausalToProlog:
             prelude_directives.append(PDirective(PCompound(
                 "use_module", (PCompound("library", (PAtom("lambda"),)),
                                PList(tuple(lambda_exports))))))
+        if self._emitted_clp_arith_eq and self.dialect.clpfd_needs_import:
+            # THE INDICATOR IS PARENTHESISED ON PURPOSE. An import-list item is
+            # read as a TERM, and `#=` is an operator in every system that has
+            # it, so `[#=/2]` is a SYNTAX ERROR and the file does not consult.
+            # `[(#=)/2]` is what both ladder engines accept. Alphanumeric names
+            # are left bare -- `[(dif)/2]` parses but reads as a mistake.
+            #
+            # The list is EXPLICIT for the same reason library(lambda)'s is: a
+            # consumer deciding whether a predicate is already supplied cannot
+            # see inside a library, so a listless import reads as "this might
+            # supply anything" and suppresses every other import the file needs.
+            prelude_directives.append(PDirective(PCompound(
+                "use_module", (PCompound("library", (PAtom(self.dialect.clpfd_module),)),
+                               PList((PCompound("/", (PAtom("#="), PNumber(2))),))))))
         prelude = getattr(self.dialect, "constants_prelude", None)
         if prelude is not None and self._emitted_constant_declaration:
             load, prelude_module = prelude
@@ -2442,17 +2531,67 @@ class _ClausalToProlog:
         base = self._fold_constant_call(node.left)
         if base is None:
             return None
-        factor = _unit_factor(_unit_leaf_names(node.right))
+        factor = _unit_divisor_factor(node.right)
         if factor is None:
             # A divisor the unit vocabulary does not hold is not a unit at all
-            # -- `constant(c) / COUNT` is division. Refusing here would break
-            # arithmetic that has always been legal.
+            # -- `constant(c) / COUNT` is division, and so is `constant(c) /
+            # 10000`. Refusing here would break arithmetic that has always been
+            # legal.
             return None
         return _unscale_constant_value(base, factor)
+
+    def _fold_term_over_unit(self, node: python_ast.BinOp):
+        """``<term> / <unit>`` -> that term scaled INTO the unit, or None.
+
+        The other half of :meth:`_fold_constant_over_unit`, which requires the
+        left operand to be a ``constant(c)`` Call and so declines the far more
+        common ``CENTS == A / eur_cent`` -- a RUNTIME value asked for in a named
+        unit. The defect is identical: a unit atom is not an evaluable functor,
+        so the surviving divisor makes the goal dead. Measured 2026-09-19 over
+        the emitted AST, 13 of the corpus's 18 `/`-bearing `#=` goals are this
+        shape, across 13 domains, and every one of them was equally dead BEFORE
+        the 2026-09-18 ruling -- `=:=` raises on the atom exactly as `#=` does.
+
+        EMITS MULTIPLICATION, NOT DIVISION, and that is the point rather than a
+        tidier spelling: the reciprocal of every scaled unit in the vocabulary
+        is an exact integer (cents 100, basis points 10000), so the folded goal
+        leaves CLP(Z)'s exact-division limit entirely instead of landing inside
+        it, where an inexact quotient fails SILENTLY.
+
+        REFUSES rather than guesses, on the same discipline as the constant
+        path: a divisor the unit vocabulary does not hold is not a unit at all
+        (`AVG == TOTAL / COUNT` is real division and must stay real division),
+        and a factor whose reciprocal is not an exact integer is left alone
+        rather than rounded -- a wrong factor is a wrong number in an exported
+        legal program.
+        """
+        if not isinstance(node.op, python_ast.Div):
+            return None
+        factor = _unit_divisor_factor(node.right)
+        if factor is None:
+            return None
+        left = self._convert_expr(node.left)
+        if factor == 1:
+            # Dividing by a base unit converts nothing. Return the term
+            # UNCHANGED rather than multiplying by 1, for the same reason
+            # _unscale_constant_value does: it must not acquire arithmetic it
+            # never had.
+            return left
+        if isinstance(left, PNumber):
+            # A literal magnitude converts exactly and stays a number, rather
+            # than becoming `5000*100` for a reader to evaluate.
+            return _unscale_constant_value(left, factor)
+        reciprocal = 1 / factor
+        if reciprocal != int(reciprocal):
+            return None
+        return PCompound("*", (left, PNumber(int(reciprocal))))
 
     def _convert_binop(self, node: python_ast.BinOp) -> PTerm:
         """Convert binary operators to Prolog operators."""
         folded = self._fold_constant_over_unit(node)
+        if folded is not None:
+            return folded
+        folded = self._fold_term_over_unit(node)
         if folded is not None:
             return folded
         left = self._convert_expr(node.left)
@@ -2859,9 +2998,44 @@ class _ClausalToProlog:
                 return PCompound("dif", (left, right))
 
             if isinstance(op, python_ast.Eq):
-                arith = (self._is_arith_operand(node.left)
-                         or self._is_arith_operand(node.comparators[0]))
-                return PCompound("=:=" if arith else "==", (left, right))
+                # Operator ruling 2026-09-18: UNQUOTED `==` in .seam means
+                # arithmetic in the CLP sense. It compiles to `nodes.ArithEq`,
+                # a CLP(FD) constraint that BINDS and PROPAGATES -- not a test
+                # that happens to bind -- so `#=` is the only ISO-reachable
+                # spelling correct in every mode. ISO term identity is written
+                # `'=='(L, R)`, which reaches the quoted-functor path, not this
+                # one.
+                #
+                # WHAT THIS REPLACES. The choice was `_is_arith_operand`: eight
+                # lines, purely syntactic, with NO "cannot tell" branch -- where
+                # it saw no BinOp it did not refuse, it DEFAULTED to structural.
+                # Measured over 641,437 executions at 903 sites, 45 sites take
+                # TWO arithmetic modes at one call site, binding on one call and
+                # testing on another. `=:=` raises instantiation_error on the
+                # binding call and `is` is wrong for the testing one, so no
+                # static rule could have been right for those 45.
+                #
+                # THE ORDER MATTERED. All 167 measured-structural sites were
+                # respelled to `'=='(L, R)` FIRST (corpus 10ed4f72 + ed7f9d21,
+                # kit 379075d). Landing this first would have turned 167
+                # identity comparisons into constraints, silently.
+                #
+                # COST, accepted with the ruling: `#=` is the dialect's
+                # constraint library, not ISO, so a domain using one is no
+                # longer pure-ISO. The import travels with the emission --
+                # see `_emitted_clp_arith_eq` and the prelude.
+                #
+                # LIMIT, ruled 2026-09-19 after it was measured: the CLP(Z)
+                # solvers are over the INTEGERS, so a FLOAT operand raises
+                # `domain_error(clpz_expression, F)` where `=:=` would have
+                # succeeded. `#=` therefore expresses INTEGER arithmetic
+                # equality only. Accepted because the alternative is a static
+                # operand-shape test, which is what this ruling replaced, and
+                # which cannot see a float that arrives through a variable
+                # anyway. Corpus exposure when the ruling was taken: 0 of 361
+                # unquoted `==` sites carried a float literal or a Decimal.
+                self._emitted_clp_arith_eq = True
+                return PCompound("#=", (left, right))
 
             if isinstance(op, python_ast.NotEq):
                 arith = (self._is_arith_operand(node.left)

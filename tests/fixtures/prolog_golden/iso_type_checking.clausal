@@ -3,6 +3,8 @@
 
 -module(iso_type_checking, [test/1])
 
+# library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
+
 is_bound_number(X) <- (nonvar(X), number(X))
 
 test("var: unbound var succeeds") <- (var(_x_UNUSED))

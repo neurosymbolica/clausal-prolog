@@ -2,33 +2,35 @@
 
 -module(iso_unification, [test/1])
 
-same_value(X, Y) <- (X is Y, X == Y)
+# library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
 
-test('atom unifies with itself') <- (_x is a, _x == a)
+same_value(X, Y) <- (X is Y, '=='(X, Y))
 
-test('var unifies with atom') <- (_x is a, _x == a)
+test('atom unifies with itself') <- (_x is a, '=='(_x, a))
+
+test('var unifies with atom') <- (_x is a, '=='(_x, a))
 
 test('var unifies with integer') <- (_x is 42, _x == 42)
 
-test('var unifies with list') <- (_x is [1, 2, 3], _x == [1, 2, 3])
+test('var unifies with list') <- (_x is [1, 2, 3], '=='(_x, [1, 2, 3]))
 
-test('different atoms fail') <- (not (_x is a, _x is b, _x == b))
+test('different atoms fail') <- (not (_x is a, _x is b, '=='(_x, b)))
 
-test('list unification') <- (_x is [a], _x == [a])
+test('list unification') <- (_x is [a], '=='(_x, [a]))
 
-test('empty lists unify') <- (_x is [], _x == [])
+test('empty lists unify') <- (_x is [], '=='(_x, []))
 
 test('different atoms: is not succeeds') <- (_x is a, dif(_x, b))
 
 test('same atom: is not fails') <- (_x is a, not dif(_x, a))
 
-test('same atom ==') <- (a == a)
+test('same atom ==') <- ('=='(a, a))
 
 test('different atoms == fails') <- (a != b)
 
 test('same integer ==') <- (42 == 42)
 
-test('bound var == value') <- (_x is hello, _x == hello)
+test('bound var == value') <- (_x is hello, '=='(_x, hello))
 
 test('different atoms !=') <- (a != b)
 
@@ -44,13 +46,13 @@ test('integer unifies with itself') <- (X is 1, X == 1)
 
 test('float unifies with itself') <- (X is 1.0, X == 1.0)
 
-test('var unifies with var (aliasing)') <- (X is Y, X == Y)
+test('var unifies with var (aliasing)') <- (X is Y, '=='(X, Y))
 
 test('different integers fail to unify') <- (not (X is 1, X is 2))
 
 test('int vs float (clausal quirk): 1 is 1.0') <- (X is 1, X is 1.0)
 
-test('list unify with var') <- (X is [1, 2, 3], X == [1, 2, 3])
+test('list unify with var') <- (X is [1, 2, 3], '=='(X, [1, 2, 3]))
 
 test('arithmetic term is structural: 1+2 != 3 in unify') <- (not (X is 1 + 2, X is 3))
 

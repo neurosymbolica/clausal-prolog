@@ -2,6 +2,8 @@
 
 -module(iso_list_operations, [test/1])
 
+# library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
+
 palindrome(XS) <- (reverse(XS, XS))
 
 sorted_asc([]),
@@ -44,7 +46,7 @@ test('append empty right') <- (append([1, 2], [], [1, 2]))
 
 test('append both empty') <- (append([], [], []))
 
-test('append binds result') <- (append([1], [2], _r), _r == [1, 2])
+test('append binds result') <- (append([1], [2], _r), '=='(_r, [1, 2]))
 
 test('length of 3') <- (length([a, b, c], 3))
 
@@ -66,7 +68,7 @@ test('reverse empty') <- (reverse([], []))
 
 test('reverse singleton') <- (reverse([42], [42]))
 
-test('reverse involution') <- (reverse([1, 2, 3], _r), reverse(_r, _rr), _rr == [1, 2, 3])
+test('reverse involution') <- (reverse([1, 2, 3], _r), reverse(_r, _rr), '=='(_rr, [1, 2, 3]))
 
 test('nth0 first') <- (list_item(0, [a, b, c], a))
 
@@ -148,24 +150,24 @@ test('not permutation: different lengths') <- (not is_permutation([1, 2], [1, 2,
 
 test('is_permutation: empty') <- (is_permutation([], []))
 
-test('in_ enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), L == [1, 2, 3])
+test('in_ enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), '=='(L, [1, 2, 3]))
 
-test('in_ with duplicates [a,b,a]') <- (findall(X, in_(X, [a, b, a]), L), L == [a, b, a])
+test('in_ with duplicates [a,b,a]') <- (findall(X, in_(X, [a, b, a]), L), '=='(L, [a, b, a]))
 
-test('in enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), L == [1, 2, 3])
+test('in enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), '=='(L, [1, 2, 3]))
 
-test('append split mode') <- (findall([X, Y], append(X, Y, [1, 2, 3]), L), L == [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]])
+test('append split mode') <- (findall([X, Y], append(X, Y, [1, 2, 3]), L), '=='(L, [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]]))
 
 test('list_item second element') <- (list_item(1, [a, b, c], b))
 
-test('last empty yields no solutions') <- (findall(X, last([], X), L), L == [])
+test('last empty yields no solutions') <- (findall(X, last([], X), L), '=='(L, []))
 
 test('permutation of [1,2,3] yields 6') <- (findall(P, permutation([1, 2, 3], P), L), length(L, 6), [1, 2, 3] in L, [3, 2, 1] in L)
 
-test('permutation of [] is [[]]') <- (findall(P, permutation([], P), L), L == [[]])
+test('permutation of [] is [[]]') <- (findall(P, permutation([], P), L), '=='(L, [[]]))
 
-test('permutation of [42] is [[42]]') <- (findall(P, permutation([42], P), L), L == [[42]])
+test('permutation of [42] is [[42]]') <- (findall(P, permutation([42], P), L), '=='(L, [[42]]))
 
-test('select(2,[1,2,3],[1,3])') <- (select(2, [1, 2, 3], R), R == [1, 3])
+test('select(2,[1,2,3],[1,3])') <- (select(2, [1, 2, 3], R), '=='(R, [1, 3]))
 
-test('select(1,[1,2,3],[2,3])') <- (select(1, [1, 2, 3], R), R == [2, 3])
+test('select(1,[1,2,3],[2,3])') <- (select(1, [1, 2, 3], R), '=='(R, [2, 3]))

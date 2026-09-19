@@ -1,5 +1,7 @@
+:- use_module(library(clpz), [(#=)/2]).
+
 squares(NUMBERS, SQUARES) :-
-    findall(SQUARE, (member(X, NUMBERS), SQUARE =:= X * X), SQUARES).
+    findall(SQUARE, (member(X, NUMBERS), #=(SQUARE, X * X)), SQUARES).
 
 positives(NUMBERS, POSITIVES) :-
     findall(X, (member(X, NUMBERS), X > 0), POSITIVES).

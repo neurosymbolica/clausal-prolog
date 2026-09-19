@@ -1,3 +1,5 @@
+:- use_module(library(clpz), [(#=)/2]).
+
 safe_queens(N, QUEENS) :-
     in_domain(QUEENS, 1, N),
     all_different(QUEENS),
@@ -14,11 +16,11 @@ safe_from(_QUEEN_UNUSED, [], _DISTANCE_UNUSED).
 
 safe_from(QUEEN, [HEAD|TAIL], DISTANCE) :-
     QUEEN \== HEAD,
-    DIFFERENCE1 =:= QUEEN - HEAD,
-    DIFFERENCE2 =:= HEAD - QUEEN,
+    #=(DIFFERENCE1, QUEEN - HEAD),
+    #=(DIFFERENCE2, HEAD - QUEEN),
     DIFFERENCE1 \== DISTANCE,
     DIFFERENCE2 \== DISTANCE,
-    NEXT_DISTANCE =:= DISTANCE + 1,
+    #=(NEXT_DISTANCE, DISTANCE + 1),
     safe_from(QUEEN, TAIL, NEXT_DISTANCE).
 
 test('queens 1') :-

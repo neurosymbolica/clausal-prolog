@@ -619,10 +619,38 @@ def test_F031_floordiv_export_semantics():
 
 
 def test_F032_arith_eq_roundtrip():
-    # A11-F032 (fixed): arithmetic-operand == exports as =:=.
+    """A11-F032: an arithmetic-operand `==` exports as the CLP constraint `#=`.
+
+    THIS ASSERTION WAS DISJUNCTIVE (`"=:=" in back or " is " in back`) and the
+    `==`/mode-lowering design's §5 called it out BY NAME for it: it stayed green
+    under either lowering and so pinned nothing. The 2026-09-18 ruling proved the
+    criticism -- unquoted `==` now emits `#=`, matching neither arm, and this was
+    the only test in the repo the flip took down that a full-suite run did not
+    show, because `tests/audit_2026_07_05` is conventionally excluded.
+
+    Replaced with ONE exact expectation rather than a wider disjunction, so the
+    next lowering change turns it red instead of sliding under it.
+    """
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     back = clausal_source_to_prolog("Q(X, Y) <- (X == Y + 1)\n")
-    assert "=:=" in back or " is " in back
+    assert "#=(X, Y + 1)" in back, back
+    # The import travels with the emission, or the file raises existence_error
+    # at CALL time and never at consult time.
+    assert ":- use_module(library(clpz), [(#=)/2])." in back, back
+    # And the pre-ruling spellings are GONE, not merely not-asserted.
+    assert "=:=" not in back and " is " not in back, back
+
+
+def test_F032_structural_eq_roundtrip():
+    """The identity half of the pair: `'=='(X, Y)` exports as ISO `==`.
+
+    Without this, F032 above pins only one direction and a lowering that emitted
+    `#=` for BOTH spellings would still look green.
+    """
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    back = clausal_source_to_prolog("Q(X, Y) <- ('=='(X, Y))\n")
+    assert "X == Y" in back, back
+    assert "clpz" not in back, back
 
 
 def test_F033_univ_and_qualified_emission():

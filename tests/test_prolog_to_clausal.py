@@ -211,10 +211,31 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
         assert "<=" in result
 
     def test_structural_equality(self):
+        """ISO `==` reads back as the QUOTED `'=='`, not as bare `==`.
+
+        Ruling 2026-09-18: in Clausal an unquoted `==` is the CLP arithmetic
+        constraint and `'=='(L, R)` is ISO term identity. This test asserted
+        `"X == 1" in result` before that ruling, which now names the WRONG
+        construct: a round trip through the bare form would turn an identity
+        test into a constraint silently. The CLP direction is pinned by
+        :meth:`test_clp_arithmetic_equality` below.
+        """
         # nv
         src = "test :- X == 1."
         result = prolog_to_clausal(src)
-        assert "X == 1" in result
+        assert "'=='(X, 1)" in result, result
+        assert "X == 1" not in result, result
+
+    def test_clp_arithmetic_equality(self):
+        """`#=` reads back as the unquoted `==` -- the other half of the pair.
+
+        Without this, the suite would pin only the identity direction and a
+        lowering that dropped `#=` entirely would still look green.
+        """
+        # nv
+        src = "test :- #=(X, 1)."
+        result = prolog_to_clausal(src)
+        assert "X == 1" in result, result
 
     def test_structural_inequality(self):
         # nv

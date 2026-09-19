@@ -2,6 +2,8 @@
 
 -module(iso_control, [test/1])
 
+# library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
+
 parent(a, b),
 
 parent(b, c),
@@ -76,16 +78,16 @@ test('fail fails: not False') <- (not False)
 
 test('conjunction backtracks: 2x2 = 4 solutions') <- (findall([X, Y], (in_(X, [1, 2]), in_(Y, [a, b])), L), length(L, 4), [1, a] in L, [2, b] in L)
 
-test('disjunction yields 2 solutions') <- (findall(X, X is 1 or X is 2, L), L == [1, 2])
+test('disjunction yields 2 solutions') <- (findall(X, X is 1 or X is 2, L), '=='(L, [1, 2]))
 
-test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], (X is 1, Y is a) or (X is 2, Y is b), L), L == [[1, a], [2, b]])
+test('disjunction with conjunction: 2 solutions') <- (findall([X, Y], (X is 1, Y is a) or (X is 2, Y is b), L), '=='(L, [[1, a], [2, b]]))
 
 test('naf does not bind: not(X is a) fails') <- (not not _x_UNUSED is a)
 
-test('color enumerates three') <- (findall(X, color(X), L), L == [red, green, blue])
+test('color enumerates three') <- (findall(X, color(X), L), '=='(L, [red, green, blue]))
 
 test('ancestor: direct parent') <- (ancestor(a, b))
 
 test('ancestor: transitive') <- (ancestor(a, d))
 
-test('ancestor of a yields all descendants') <- (findall(D, ancestor(a, D), L), sort(L, S), S == [b, c, d, e])
+test('ancestor of a yields all descendants') <- (findall(D, ancestor(a, D), L), sort(L, S), '=='(S, [b, c, d, e]))

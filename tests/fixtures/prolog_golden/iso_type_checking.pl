@@ -2,6 +2,8 @@
 
 :- module(iso_type_checking, [test/1]).
 
+:- use_module(library(clpz), [(#=)/2]).
+
 is_bound_number(X) :-
     nonvar(X),
     number(X).
@@ -201,7 +203,7 @@ test("float_: var fails") :-
     \+ float(_x_UNUSED).
 
 test("number: large int (via eval)") :-
-    X =:= 10 ** 100,
+    #=(X, 10 ** 100),
     number(X).
 
 test("is_list: list of mixed types") :-

@@ -124,7 +124,7 @@ test("conjunction backtracks: 2x2 = 4 solutions") <- (
 )  # nv
 test("disjunction yields 2 solutions") <- (
     findall(X, (X is 1 or X is 2), L),
-    L == [1, 2]
+    '=='(L, [1, 2])
 )  # nv
 test("disjunction with conjunction: 2 solutions") <- (
     findall(
@@ -132,7 +132,7 @@ test("disjunction with conjunction: 2 solutions") <- (
         ((X is 1, Y is a) or (X is 2, Y is b)),
         L
     ),
-    L == [[1, a], [2, b]]
+    '=='(L, [[1, a], [2, b]])
 )  # nv
 
 # ── NAF does not bind ──────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ test("naf does not bind: not(X is a) fails") <- (not (not (_x_UNUSED is a)))  # 
 
 test("color enumerates three") <- (
     findall(X, color(X), L),
-    L == [red, green, blue]
+    '=='(L, [red, green, blue])
 )  # nv
 
 # ── Recursive predicate (ancestor/2) ───────────────────────────────────────
@@ -153,5 +153,5 @@ test("ancestor: transitive") <- ancestor(a, d)  # nv
 test("ancestor of a yields all descendants") <- (
     findall(D, ancestor(a, D), L),
     sort(L, S),
-    S == [b, c, d, e]
+    '=='(S, [b, c, d, e])
 )  # nv
