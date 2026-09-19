@@ -6757,18 +6757,22 @@ class EmbedTransformer(NodeTransformer):
         """
         import warnings  # noqa: PLC0415
 
-        def report(node, functor, named):
+        def report(node, functor, named, arity):
             lineno = getattr(node, "lineno", None)
             where = transformer._site(lineno) if lineno else "unknown site"
             snippet = transformer._source_snippet(lineno) if lineno else ""
             if snippet:
                 snippet = " — " + snippet
             shown = ", ".join(f"{k}=" if k else "**" for k in named)
+            # functor/ARITY, not the bare name: the arity is what tells a
+            # reader which declaration to go and look at, and two predicates
+            # of one name at different arities are ordinary here.
+            functor = f"{functor}/{arity}"
             msg = (
                 f"{where}{snippet}: `{functor}` is written with keyword "
                 f"arguments ({shown}): a term is built positionally. Write "
-                f"the arguments in the declared order — `{functor}(...)` — "
-                f"and declare the functor with `-private([{functor}(...)])` "
+                f"the arguments in the declared order, and declare the "
+                f"functor with `-private([...])` "
                 f"if it is data. (Keyword terms were the only way to name a "
                 f"functor's fields, which made those names depend on clause "
                 f"order; the spelling has no ISO Prolog reading and was "
@@ -6791,7 +6795,8 @@ class EmbedTransformer(NodeTransformer):
                 named = [kw.arg for kw in node.keywords
                          if kw.arg is None or not kw.arg.startswith("_")]
                 if named and isinstance(node.func, Name):
-                    report(node, node.func.id, named)
+                    report(node, node.func.id, named,
+                           len(node.args) + len(node.keywords))
                 for child in iter_child_nodes(node):
                     walk_(child)
                 return

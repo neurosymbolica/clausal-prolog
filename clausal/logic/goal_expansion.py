@@ -40,7 +40,9 @@ from clausal.pythonic_ast.nodes import (
 from clausal.logic.cells import is_chars as _is_chars, chars_text as _chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
 from clausal.logic.variables import Var, is_var, deref
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import (is_term_instance, term_field_names,
+                                     PredicateMeta as _PredicateMeta)
+from clausal.logic.cells import compound_cell_shape as _cell_shape_of
 
 
 class _ExpansionContext:
@@ -99,32 +101,61 @@ def run_goal_expansion(
     return expanded
 
 
-def _collect_vars_from_term(term: Any, result: dict[str, Any]) -> None:
+def _cell_slot_names(functor: str, arity: int, module_dict: dict | None):
+    """The field NAMES of a cell's slots, or ``()`` when nothing names them.
+
+    P2 head flip: a head is the functor-first cell and carries no names, but
+    auto-binding matches a regex group to a head VARIABLE by name, so the
+    names have to come from somewhere.  They come from the class the module
+    binds for this functor — which the transformer mints from the head's own
+    variable spellings, which is exactly the set auto-binding wants.  An arity
+    mismatch answers ``()`` rather than guessing: a wrong name here would bind
+    a group to the wrong argument, silently.
+    """
+    cls = (module_dict or {}).get(functor)
+    fields = getattr(cls, "_fields", None) if isinstance(cls, _PredicateMeta) else None
+    return tuple(fields) if fields and len(fields) == arity else ()
+
+
+def _collect_vars_from_term(term: Any, result: dict[str, Any],
+                            module_dict: dict | None = None) -> None:
     """Collect field_name → Var mappings from a term tree.
 
-    Walks into Call args, And/Or/Not branches, and PredicateMeta instances.
+    Walks into Call args, And/Or/Not branches, cells (P2: what a head is) and
+    PredicateMeta instances.
     """
     term = deref(term)
     if is_var(term):
         return
     if isinstance(term, Call):
         for a in term.args:
-            _collect_vars_from_term(a, result)
+            _collect_vars_from_term(a, result, module_dict)
         return
     if isinstance(term, And):
-        _collect_vars_from_term(term.left, result)
-        _collect_vars_from_term(term.right, result)
+        _collect_vars_from_term(term.left, result, module_dict)
+        _collect_vars_from_term(term.right, result, module_dict)
         return
     if isinstance(term, Or):
-        _collect_vars_from_term(term.left, result)
-        _collect_vars_from_term(term.right, result)
+        _collect_vars_from_term(term.left, result, module_dict)
+        _collect_vars_from_term(term.right, result, module_dict)
         return
     if isinstance(term, Not):
-        _collect_vars_from_term(term.operand, result)
+        _collect_vars_from_term(term.operand, result, module_dict)
         return
     if isinstance(term, list):
         for e in term:
-            _collect_vars_from_term(e, result)
+            _collect_vars_from_term(e, result, module_dict)
+        return
+    is_cell, functor = _cell_shape_of(term)
+    if is_cell:
+        names = _cell_slot_names(functor, len(term) - 1, module_dict)
+        for i, val in enumerate(term[1:]):
+            val = deref(val)
+            if is_var(val):
+                if i < len(names) and names[i] not in result:
+                    result[names[i]] = val
+            else:
+                _collect_vars_from_term(val, result, module_dict)
         return
     if is_term_instance(term):
         for fname in term_field_names(term):
@@ -133,7 +164,7 @@ def _collect_vars_from_term(term: Any, result: dict[str, Any]) -> None:
                 if fname not in result:
                     result[fname] = val
             else:
-                _collect_vars_from_term(val, result)
+                _collect_vars_from_term(val, result, module_dict)
 
 
 def _expand_predicate(pred: Predicate, ctx: _ExpansionContext) -> Predicate:
@@ -143,8 +174,8 @@ def _expand_predicate(pred: Predicate, ctx: _ExpansionContext) -> Predicate:
 
     # Collect field_name → Var mapping from the head for auto-binding.
     clause_vars: dict[str, Any] = {}
-    _collect_vars_from_term(pred.head, clause_vars)
-    _collect_vars_from_term(pred.body, clause_vars)
+    _collect_vars_from_term(pred.head, clause_vars, ctx.module_dict)
+    _collect_vars_from_term(pred.body, clause_vars, ctx.module_dict)
     ctx._clause_vars = clause_vars
 
     new_body = _expand_goal(pred.body, ctx)
