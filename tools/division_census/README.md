@@ -47,8 +47,29 @@ exercised — or that the wrap missed.
 `division_census.verify()` is the positive control: it asserts the hook sees a
 division at all and tells an exact one from an inexact one. Run it.
 
+Three outcome classes, because `#=` fails differently for each and lumping
+them together cannot be acted on: `exact` (an integer quotient — `#=` computes
+it), `INEXACT` (an exact non-integer — **`#=` finds no solution, silently**,
+and this is the class the question is about), and `float` (a float operand —
+`#=` raises `domain_error`, which is loud, and 0 corpus sites are exposed).
+
 A `count` is EVALUATIONS, not calls — `==` evaluates its arithmetic twice per
 solution (measured). A site reads `<pred half__2>` when a compiled clause body
 did the division (compiled bodies run in `<template>` frames, so there is no
 `.clausal` line to report) and `file:line` when a source frame was on the
 stack.
+
+## Running it over the corpus
+
+The tool loads, but the corpus's per-domain import roots are the harness's
+knowledge, not this repo's: loading division-bearing domain files directly got
+6 of 25 (`kit.formalize_lib` and per-domain package roots resolve differently
+per domain). Measured working end to end on those 6 — real site attribution
+(`categorisation.clausal:149`) and real operand values — so the instrument is
+not the blocker.
+
+For the full population, hand it to the lane that owns the scorer runs: set
+`PYTHONPATH` to include this directory, set `DIVISION_CENSUS_OUT`, and import
+`division_census` (calling `verify()`) before the run loads any `.clausal`.
+The header line "bindings installed but NEVER fired" is the check that the run
+actually exercised the arithmetic paths.

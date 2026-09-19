@@ -75,22 +75,36 @@ def _site() -> str:
     return "(engine)"
 
 
-def _is_exact(value) -> bool:
-    """Does the quotient sit on an integer?  That is what ``#=`` can express."""
+def _classify(left, right, value) -> str:
+    """How this division fares under clpz ``#=``, which is CLP over the
+    INTEGERS.  Three outcomes, because they fail differently and a census
+    that lumps them together cannot be acted on:
+
+    * ``exact``   -- the quotient is an integer.  ``#=`` computes it.
+    * ``INEXACT`` -- an exact non-integer (a Fraction).  ``#=`` finds NO
+      SOLUTION, silently; this is the case the question is about.
+    * ``float``   -- a float operand.  ``#=`` raises
+      ``domain_error(clpz_expression, F)``, which is loud, and
+      iso-export-lane measured 0 corpus sites exposed to it.  Kept apart so
+      it cannot inflate the INEXACT count: a float divided by 1 is not an
+      integer, but it is not the silent failure either.
+    """
+    if any(type(x) is float for x in (left, right)) or type(value) is float:
+        return "float"
     try:
         if isinstance(value, Fraction):
-            return value.denominator == 1
+            return "exact" if value.denominator == 1 else "INEXACT"
         if isinstance(value, int):
-            return True
-        return Fraction(value).denominator == 1
+            return "exact"
+        return "exact" if Fraction(value).denominator == 1 else "INEXACT"
     except (ValueError, OverflowError, TypeError):
-        return False            # a non-rational (float nan/inf, a Quantity)
+        return "unclassified"          # a Quantity, a Decimal special, ...
 
 
 def _record(binding: str, left, right, result) -> None:
     _BY_BINDING[binding] += 1
     _ROWS[(_site(), binding, repr(left)[:40], repr(right)[:40],
-           "exact" if _is_exact(result) else "INEXACT")] += 1
+           _classify(left, right, result))] += 1
 
 
 #: Re-entrancy guard.  The bindings CHAIN -- ``clpfd`` does
@@ -132,10 +146,24 @@ def install() -> list[str]:
     from clausal.terms import Quantity
 
     def patch(obj, attr, binding):
+        """Wrap one binding, PRESERVING how it is bound.
+
+        ``Quantity._exact_div`` is a ``staticmethod``; assigning a plain
+        function over it makes the wrapper an instance method and the
+        instance arrives as the numerator -- measured, as
+        ``TypeError: _exact_div() takes 2 positional arguments but 3 were
+        given``, the first time this ran against a corpus module that
+        divides a Quantity.  ``inspect.getattr_static`` sees the descriptor
+        rather than what it resolves to, which is the only way to tell.
+        """
+        import inspect  # noqa: PLC0415
+        static = inspect.getattr_static(obj, attr, None)
         fn = getattr(obj, attr, None)
         if fn is None or hasattr(fn, "_division_census_original"):
             return
-        setattr(obj, attr, _wrap(fn, binding))
+        wrapper = _wrap(fn, binding)
+        setattr(obj, attr, staticmethod(wrapper)
+                if isinstance(static, staticmethod) else wrapper)
         _INSTALLED.append(binding)
 
     patch(exact_arith, "exact_div", "exact_arith.exact_div")
@@ -162,12 +190,16 @@ def report(path: str | None = None) -> str:
     path = path or os.environ.get("DIVISION_CENSUS_OUT", "/tmp/division_census.tsv")
     total = sum(_ROWS.values())
     inexact = sum(n for k, n in _ROWS.items() if k[4] == "INEXACT")
+    kinds = collections.Counter(k[4] for k in _ROWS)
     sites = {k[0] for k in _ROWS}
     with open(path, "w") as f:
         f.write(f"# divisions evaluated: {total}\n")
         f.write(f"# distinct (site, binding, operands, exactness) rows: {len(_ROWS)}\n")
         f.write(f"# distinct corpus sites: {len(sites)}\n")
-        f.write(f"# INEXACT divisions: {inexact}\n")
+        f.write(f"# INEXACT divisions (an exact non-integer — the SILENT "
+                f"#= failure): {inexact}\n")
+        f.write("# outcome classes: "
+                + ", ".join(f"{k}={n}" for k, n in kinds.most_common()) + "\n")
         f.write("# bindings that fired: "
                 + ", ".join(f"{b}={n}" for b, n in _BY_BINDING.most_common()) + "\n")
         f.write("# bindings installed but NEVER fired: "
@@ -194,6 +226,12 @@ def verify() -> None:
                        f"re-entrancy guard is not holding")
     kinds = [k[4] for k in list(_ROWS)[-2:]]
     assert "exact" in kinds and "INEXACT" in kinds, f"control exactness: {kinds}"
+
+    # Control for the BINDING SHAPE, not only the value: a staticmethod
+    # wrapped as a plain function receives the instance as its numerator.
+    from clausal.terms import Quantity
+    q = Quantity(10, {})
+    assert (q / 2)._value == 5, "control: a Quantity still divides"
     print("[division census] positive control OK: 2 divisions seen, "
           "exact and INEXACT distinguished")
 
