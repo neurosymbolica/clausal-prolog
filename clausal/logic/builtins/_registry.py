@@ -360,6 +360,29 @@ class BuiltinPredicate:
             if fn is not None:
                 self._arity_map[other._arity] = fn
 
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Construct this builtin's TERM -- the adapter's other role.
+
+        A name in a compiled template stands for two things at once: the
+        DISPATCH (``_dispatch_at(name, n)``) and the term CONSTRUCTOR, used
+        when a goal appears as an argument to a meta-predicate --
+        ``time_goal(listing(append))`` builds a ``listing`` term and then
+        drives it.  The stateless path binds the ``_BUILTIN_CLASSES`` entry,
+        which is callable and does both; a db-dependent builtin binds THIS
+        adapter instead, because it is the only thing carrying the database,
+        and until now it could not be called at all -- every db-dependent
+        builtin in argument position raised "'BuiltinPredicate' object is
+        not callable".  Construction routes to the same class the stateless
+        path would have bound, so both spellings build the same term.
+        """
+        cls = _BUILTIN_CLASSES.get(self._functor)
+        if cls is None:
+            raise TypeError(
+                f"builtin {self._functor}/{self._arity} has no term class to "
+                f"construct -- it can be called as a goal but not built as a term"
+            )
+        return cls(*args, **kwargs)
+
     def __repr__(self) -> str:
         if self._arity_map:
             arities = sorted(self._arity_map)

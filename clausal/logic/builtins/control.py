@@ -20,8 +20,11 @@ from clausal.logic.predicate import (
 )
 
 from clausal.logic.builtins._registry import (
-    _BUILTIN_FIELDS, _builtin,
+    _BUILTIN_FIELDS, _builtin, _DB_BUILTINS,
     _trampoline_builtin, _ensure_trampoline_dispatch,
+)
+from clausal.logic.cells import (
+    compound_cell_shape, CELL_GOAL_CONTROL_FUNCTORS, QUALIFIED_GOAL_FUNCTOR,
 )
 
 
@@ -35,21 +38,36 @@ _BUILTIN_FIELDS[("freeze", 2)] = ("variable", "goal")
 _BUILTIN_FIELDS[("when", 2)] = ("condition", "goal")
 
 
-def _goal_dispatch_and_args(goal_val):
+def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     """Return (dispatch_fn, args_tuple) for a goal value, or (None, None) on failure.
 
     Handles:
     - callable (Python function / lambda) → no extra args
     - object with _get_dispatch() (PredicateMeta class, BuiltinPredicate) → no extra args
     - PredicateMeta instance with compiled dispatch → dispatch from type, args from fields
+    - a CELL, which NAMES a predicate and carries no class (P2)
 
     Both branches already know how many arguments they are about to supply — a
     bare name gets none, an instance gets one per field — so both pass that count
     down, and ``time_goal(citation)`` against ``citation/3`` names the arity
     instead of reporting three missing positional arguments.
+
+    The cell arm is why *db* is here at all: a cell has only a name, and the
+    only correct place to look a name up is the calling module (R-P2-2,
+    module locality) -- the same reason call/N became db-receiving in P3-3
+    Task 5, and phrase/2,3 in this sweep.  It is narrowed the same way: a
+    control construct and a module-qualified goal are turned away, because
+    the shared resolver RAISES for them where time_goal has always failed.
     """
     if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
         return _ensure_trampoline_dispatch(goal_val, 0), ()
+    is_cell, functor = compound_cell_shape(goal_val)
+    if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS and functor != QUALIFIED_GOAL_FUNCTOR:
+        from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+        resolved = _resolve_named_goal(db, goal_val, (), context)
+        if resolved is not None:
+            return resolved
+        return None, None
     if is_term_instance(goal_val):
         cls = type(goal_val)
         # Only dispatch if the class has a compiled dispatch function.
@@ -61,8 +79,26 @@ def _goal_dispatch_and_args(goal_val):
     return None, None
 
 
-@_trampoline_builtin("time_goal", 1)
-def _time_goal__1(this_generator, _proceed, _fail, _catcher, goal, trail):
+def _make_time_goal_factory(impl):
+    """Bind the caller's database into a ``time_goal/N`` dispatch.
+
+    Registered straight into ``_DB_BUILTINS`` rather than through
+    ``@_db_builtin`` because that decorator wraps its product with
+    ``_simple_to_trampoline`` and these are already trampoline-native --
+    the same hand registration ``_make_call_goal_factory`` uses.
+    ``_db_optional``: every goal shape that worked before is resolved
+    without a database, so ``factory(None)`` is the pre-P2 time_goal.
+    """
+    def factory(db):
+        def _time_goal_dispatch(*args):
+            return impl(db, *args)
+        _time_goal_dispatch.__name__ = impl.__name__
+        return _time_goal_dispatch
+    factory._db_optional = True
+    return factory
+
+
+def _time_goal__1(db, this_generator, _proceed, _fail, _catcher, goal, trail):
     """time_goal(Goal) — call Goal and print wall/CPU time after it completes.
 
     Analogous to SWI-Prolog time/1.  Each solution is forwarded to the _proceed;
@@ -74,7 +110,7 @@ def _time_goal__1(this_generator, _proceed, _fail, _catcher, goal, trail):
     - a predicate instance, e.g. in_(X_, [1,2,3]) — dispatched with its fields
     """
     goal_val = deref(goal)
-    dispatch, goal_args = _goal_dispatch_and_args(goal_val)
+    dispatch, goal_args = _goal_dispatch_and_args(goal_val, db, "time_goal/1")
     if dispatch is None:
         yield (_fail, DONE)
         return
@@ -100,8 +136,7 @@ def _time_goal__1(this_generator, _proceed, _fail, _catcher, goal, trail):
     yield (_fail, DONE)
 
 
-@_trampoline_builtin("time_goal", 2)
-def _time_goal__2(this_generator, _proceed, _fail, _catcher, goal, elapsed, trail):
+def _time_goal__2(db, this_generator, _proceed, _fail, _catcher, goal, elapsed, trail):
     """time_goal(Goal, Elapsed) — run Goal; unify Elapsed with wall-clock seconds.
 
     Elapsed is unified after each solution of Goal.  If Goal fails, time_goal/2
@@ -110,7 +145,7 @@ def _time_goal__2(this_generator, _proceed, _fail, _catcher, goal, elapsed, trai
     Goal accepts the same forms as time_goal/1.
     """
     goal_val = deref(goal)
-    dispatch, goal_args = _goal_dispatch_and_args(goal_val)
+    dispatch, goal_args = _goal_dispatch_and_args(goal_val, db, "time_goal/2")
     if dispatch is None:
         yield (_fail, DONE)
         return
@@ -128,6 +163,12 @@ def _time_goal__2(this_generator, _proceed, _fail, _catcher, goal, elapsed, trai
         _st = yield (sg, None)
 
     yield (_fail, DONE)
+
+
+_DB_BUILTINS[("time_goal", 1)] = _make_time_goal_factory(_time_goal__1)
+_BUILTIN_FIELDS[("time_goal", 1)] = ("goal",)
+_DB_BUILTINS[("time_goal", 2)] = _make_time_goal_factory(_time_goal__2)
+_BUILTIN_FIELDS[("time_goal", 2)] = ("goal", "elapsed")
 
 
 # ── Runtime builtins ──────────────────────────────────────────────────────

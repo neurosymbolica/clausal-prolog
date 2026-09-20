@@ -35,9 +35,10 @@ def bench_fib(n: int = 25) -> int:
     """
     import clausal.examples.fibonacci as fib
     from clausal.logic.variables import Var, deref
+    from clausal.logic.solve import solve
 
     F = Var()
-    for _ in fib.fib(n, F):
+    for _ in solve(fib.fib(n, F), fib):
         return int(deref(F))
     raise RuntimeError(f"fib({n}) produced no solutions")
 
@@ -50,10 +51,11 @@ def bench_nqueens(n: int = 8) -> int:
     """
     import clausal.examples.nqueens as nq
     from clausal.logic.variables import Var
+    from clausal.logic.solve import solve
 
     count = 0
     QS = Var()
-    for _ in nq.queens(n, QS):
+    for _ in solve(nq.queens(n, QS), nq):
         count += 1
     return count
 
@@ -67,13 +69,13 @@ def bench_qsort(list_size: int = 20, reps: int = 200) -> int:
     """
     import clausal.examples.sorting as srt
     from clausal.logic.variables import Var, deref
-    from clausal.logic.solve import _deref_walk
+    from clausal.logic.solve import _deref_walk, solve
 
     lst = list(range(list_size, 0, -1))
     result_len = 0
     for _ in range(reps):
         SORTED = Var()
-        for _ in srt.qsort(lst, SORTED):
+        for _ in solve(srt.qsort(lst, SORTED), srt):
             result_len = len(_deref_walk(deref(SORTED)))
             break
     return result_len
@@ -89,11 +91,12 @@ def bench_graph(reps: int = 500) -> int:
     """
     import clausal.examples.graph as g
     from clausal.logic.variables import Var
+    from clausal.logic.solve import solve
 
     total = 0
     for _ in range(reps):
         Y, PATH = Var(), Var()
-        for _ in g.path(1, Y, PATH):
+        for _ in solve(g.path(1, Y, PATH), g):
             total += 1
     return total
 
