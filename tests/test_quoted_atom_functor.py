@@ -245,10 +245,10 @@ class TestReify:
     CPython's."""
 
     def test_a_quoted_titlecase_head_reifies_as_a_clause(self):
-        from clausal.reflection import Clause, reify_source
+        from clausal.reflection import Clause, reify_source, is_v
         items = reify_source("'Foo'(X) <- (bar(X))\n")
         assert [type(i).__name__ for i in items] == ["Clause"]
-        assert isinstance(items[0], Clause)
+        assert is_v(items[0], Clause)
 
     @pytest.mark.parametrize("src", [
         "'foo bar'(1),\n",
@@ -259,7 +259,7 @@ class TestReify:
         """Not "invalid syntax ... (<unknown>, line 4)" -- that is what an
         exemption here produces, because the class name still reaches
         ``parse()``."""
-        from clausal.reflection import ReifyError, reify_source
+        from clausal.reflection import ReifyError, reify_source, is_v
         with pytest.raises(ReifyError) as exc_info:
             reify_source(src)
         message = str(exc_info.value)
@@ -273,14 +273,14 @@ class TestReify:
     def test_the_same_spelling_in_a_BODY_still_reifies(self, src):
         """A goal names an atom and mints no class, so nothing stops it --
         the asymmetry mirrors the representation, it is not an oversight."""
-        from clausal.reflection import reify_source
+        from clausal.reflection import reify_source, is_v
         assert [type(i).__name__ for i in reify_source(src)] == ["Clause"]
 
     def test_a_double_quoted_head_still_reifies(self):
         """The ISO 6.3.3 refusal IS reify-exempt -- its reason (an atom
         spelling) is one reflection does not care about.  Pinned so the two
         rules stay distinguishable."""
-        from clausal.reflection import reify_source
+        from clausal.reflection import reify_source, is_v
         assert reify_source('"foo"(1),\n') != []
 
 

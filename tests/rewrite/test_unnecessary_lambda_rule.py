@@ -17,7 +17,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var
-from clausal.reflection import Atom, Goal, Variable, reify_ast
+from clausal.reflection import Atom, Goal, Variable, reify_ast, vfield
 from clausal.rewrite.driver import rewrite_source
 
 
@@ -49,38 +49,38 @@ def _rewrite(rules_module, source):
 def test_reduces_single_param_forwarding_lambda(rules):
     out = _rewrite(rules, "t(L) <- (maplist(((X) <- add_one(X)), L))\n")
     assert out is not None
-    assert out.goals == [Goal("maplist", [Atom("add_one"), Variable("L")], [])]
+    assert vfield(out, "goals") == [Goal("maplist", [Atom("add_one"), Variable("L")], [])]
 
 
 def test_reduces_multi_param_forwarding_lambda(rules):
     out = _rewrite(rules, "t(L, R) <- (fold(((X, V) <- score(X, V)), L, R))\n")
     assert out is not None
-    assert out.goals[0].args[0] == Atom("score")
+    assert vfield(out, "goals")[0].args[0] == Atom("score")
 
 
 def test_reduces_zero_param_forwarding_lambda(rules):
     out = _rewrite(rules, "t() <- (call_goal((() <- pings())))\n")
     assert out is not None
-    assert out.goals[0].args[0] == Atom("pings")
+    assert vfield(out, "goals")[0].args[0] == Atom("pings")
 
 
 def test_reduces_dotted_callee_to_dotted_reference(rules):
     out = _rewrite(rules, "t(L) <- (maplist((X <- mod.pred(X)), L))\n")
     assert out is not None
-    assert out.goals[0].args[0] == Atom("mod.pred")
+    assert vfield(out, "goals")[0].args[0] == Atom("mod.pred")
 
 
 def test_reduces_a_lambda_in_any_direct_argument_position(rules):
     out = _rewrite(rules, "t(L, R) <- (wrap(L, ((X) <- p(X)), R))\n")
     assert out is not None
-    assert out.goals[0].args[1] == Atom("p")
+    assert vfield(out, "goals")[0].args[1] == Atom("p")
 
 
 def test_reduces_a_mid_body_goal_not_just_the_first(rules):
     out = _rewrite(rules, "t(L) <- (m(L), maplist((X <- p(X)), L), r(L))\n")
     assert out is not None
-    assert out.goals[0] == Goal("m", [Variable("L")], [])
-    assert out.goals[1].args[0] == Atom("p")
+    assert vfield(out, "goals")[0] == Goal("m", [Variable("L")], [])
+    assert vfield(out, "goals")[1].args[0] == Atom("p")
     assert out.goals[2] == Goal("r", [Variable("L")], [])
 
 
@@ -89,7 +89,7 @@ def test_reduces_one_argument_per_firing(rules):
         rules, "t(L) <- (combine((X <- p(X)), (Y <- q(Y)), L))\n"
     )
     assert out is not None
-    args = out.goals[0].args
+    args = vfield(out, "goals")[0].args
     assert args[0] == Atom("p")
     assert type(args[1]).__name__ == "Lambda"  # the second waits its turn
 
@@ -112,7 +112,7 @@ def test_reduces_when_param_shadows_an_enclosing_variable(rules):
     the collision is sound to reduce."""
     out = _rewrite(rules, "t(X, L) <- (m(X), maplist((X <- p(X)), L))\n")
     assert out is not None
-    assert out.goals[1].args[0] == Atom("p")
+    assert vfield(out, "goals")[1].args[0] == Atom("p")
 
 
 # ---- refusals --------------------------------------------------------------

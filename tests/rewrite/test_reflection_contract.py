@@ -16,6 +16,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var, deref
 from clausal.reflection import (
+    vfield,
     Atom,
     Clause,
     Escape,
@@ -47,15 +48,15 @@ def _rules_module(tmp_path, name, text):
 def test_inline_lambda_arrow_and_genuine_lt_reify_differently():
     lam = _reify_stmt("t(B) <- (fold(((X) <- p(X)), B))\n")
     lt = _reify_stmt("t(A, B) <- (check(A < -B))\n")
-    assert repr(lam.goals) != repr(lt.goals)
+    assert repr(vfield(lam, "goals")) != repr(vfield(lt, "goals"))
     assert "< -" not in render_source(lam)
     assert "A < -B" in render_source(lt)
 
 
 def test_unify_goal_reifies_as_matchable_operator_node():
     clause = _reify_stmt("r(K, S) <- (m(K, M), S is unknown(M))\n")
-    assert len(clause.goals) == 2
-    assert type(clause.goals[1]).__name__ == "Unify"
+    assert len(vfield(clause, "goals")) == 2
+    assert type(vfield(clause, "goals")[1]).__name__ == "Unify"
 
 
 def test_clausal_pattern_matches_unify_goal_and_extracts_sides(tmp_path):
@@ -69,7 +70,7 @@ def test_clausal_pattern_matches_unify_goal_and_extracts_sides(tmp_path):
     clause = _reify_stmt("r(K, S) <- (m(K, M), S is unknown(M))\n")
     left, right = Var(), Var()
     hits = 0
-    for _ in call("unify_sides", clause.goals[1], left, right, module=module):
+    for _ in call("unify_sides", vfield(clause, "goals")[1], left, right, module=module):
         hits += 1
         assert deref(left) == Variable("S")
         assert deref(right) == Goal("unknown", [Variable("M")], [])
@@ -85,7 +86,7 @@ def test_reified_subterm_walks_goal_lists_and_finds_variables(tmp_path):
         occurs_in(X, V) <- reified_subterm(X, V)
         """)
     clause = _reify_stmt("r(K, S) <- (m(K, M), S is unknown(M))\n")
-    rest = [clause.goals[0]]  # the body minus the unify goal
+    rest = [vfield(clause, "goals")[0]]  # the body minus the unify goal
 
     def occurs(container, name):
         for _ in call("occurs_in", container, Variable(name), module=module):
@@ -128,8 +129,8 @@ def test_render_of_mutated_clause_emits_valid_clausal():
     clause = _reify_stmt("r(K, S) <- (m(K, M), S is unknown(M))\n")
     folded = Clause(
         Goal("r", [Variable("K"), Goal("unknown", [Variable("M")], [])], []),
-        [clause.goals[0]],
-        clause.position,
+        [vfield(clause, "goals")[0]],
+        vfield(clause, "position"),
     )
     text = render_source(folded)
     assert "r(K, unknown(M))" in text
@@ -226,7 +227,7 @@ def test_forwarding_lambda_reifies_as_lambda_node_with_atom_params():
     """The shape the rule MATCHES: a raw ``Lambda`` node whose body is a
     ``Goal``, with param references reified as ``Atom`` (never ``Variable``)."""
     clause = _reify_stmt("t(L, R) <- (maplist(((X, Y) <- add_one(X, Y)), L, R))\n")
-    lam = clause.goals[0].args[0]
+    lam = vfield(clause, "goals")[0].args[0]
     assert type(lam).__name__ == "Lambda"
     assert type(lam).__module__ == "clausal.pythonic_ast.nodes"
     assert [type(p).__name__ for p in lam.params.params] == ["PosOrKwParam"] * 2
@@ -237,7 +238,7 @@ def test_forwarding_lambda_reifies_as_lambda_node_with_atom_params():
 def test_bare_reference_reifies_as_atom():
     """The shape the rule CONSTRUCTS -- plain and dotted."""
     clause = _reify_stmt("t(L, R) <- (maplist(add_one, L, R))\n")
-    assert clause.goals[0].args[0] == Atom("add_one")
+    assert vfield(clause, "goals")[0].args[0] == Atom("add_one")
     dotted = _reify_stmt("t(L) <- (maplist(mod.pred, L))\n")
     assert dotted.goals[0].args[0] == Atom("mod.pred")
 
@@ -247,26 +248,26 @@ def test_captured_enclosing_variable_reifies_as_variable_in_lambda_body():
     ``Variable`` term, which can never equal the ``Atom`` a param reifies to.
     The rule's exact param/argument match is therefore also its capture fence."""
     clause = _reify_stmt("t(Z, L) <- (maplist((X <- add(X, Z)), L))\n")
-    assert clause.goals[0].args[0].body == Goal("add", [Atom("X"), Variable("Z")], [])
+    assert vfield(clause, "goals")[0].args[0].body == Goal("add", [Atom("X"), Variable("Z")], [])
 
 
 def test_shadowing_param_reference_still_reifies_as_atom():
     """Reification agrees with the engine's shadowing: even when the clause has
     its own X, the lambda body's X is the param -- an ``Atom``."""
     clause = _reify_stmt("t(X, L) <- (m(X), maplist((X <- p(X)), L))\n")
-    assert clause.goals[1].args[0].body == Goal("p", [Atom("X")], [])
+    assert vfield(clause, "goals")[1].args[0].body == Goal("p", [Atom("X")], [])
 
 
 def test_variable_callee_lambda_body_is_not_a_goal():
     """``(X <- F(X))`` with F a clause variable is a call through a variable;
     it reifies as an ``Escape``, so a body-is-a-Goal match refuses it."""
     clause = _reify_stmt("t(F, L) <- (maplist((X <- F(X)), L))\n")
-    assert isinstance(clause.goals[0].args[0].body, Escape)
+    assert isinstance(vfield(clause, "goals")[0].args[0].body, Escape)
 
 
 def test_zero_param_forwarding_lambda_reifies_with_empty_params():
     clause = _reify_stmt("t() <- (call_goal((() <- pings())))\n")
-    lam = clause.goals[0].args[0]
+    lam = vfield(clause, "goals")[0].args[0]
     assert type(lam).__name__ == "Lambda"
     assert lam.params.params == []
     assert lam.body == Goal("pings", [], [])

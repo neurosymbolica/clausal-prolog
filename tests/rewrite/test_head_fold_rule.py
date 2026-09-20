@@ -21,7 +21,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var
-from clausal.reflection import Atom, Goal, Variable, reify_ast
+from clausal.reflection import Atom, Goal, Variable, reify_ast, vfield
 
 
 @pytest.fixture(scope="module")
@@ -50,28 +50,28 @@ def _rewrite(rules_module, source):
 def test_folds_constructor_term_into_head(rules):
     out = _rewrite(rules, "r(K, S) <- (m(K, M), S is unknown(M))\n")
     assert out is not None
-    assert out.head == Goal(
+    assert vfield(out, "head") == Goal(
         "r", [Variable("K"), Goal("unknown", [Variable("M")], [])], []
     )
-    assert len(out.goals) == 1  # the unify goal is gone
+    assert len(vfield(out, "goals")) == 1  # the unify goal is gone
 
 
 def test_folds_atom(rules):
     out = _rewrite(rules, "s(P, V) <- (m(P), V is eligible)\n")
     assert out is not None
-    assert out.head == Goal("s", [Variable("P"), Atom("eligible")], [])
+    assert vfield(out, "head") == Goal("s", [Variable("P"), Atom("eligible")], [])
 
 
 def test_folds_whole_body_to_fact(rules):
     out = _rewrite(rules, "p(X) <- (X is 5)\n")
-    assert out.head == Goal("p", [5], [])
-    assert out.goals == []
+    assert vfield(out, "head") == Goal("p", [5], [])
+    assert vfield(out, "goals") == []
 
 
 def test_folds_mid_body_goal_not_just_last(rules):
     out = _rewrite(rules, "r(A, B) <- (x(1), B is tag(2), y(A))\n")
     assert out is not None
-    assert out.goals == [
+    assert vfield(out, "goals") == [
         Goal("x", [1], []),
         Goal("y", [Variable("A")], []),
     ]
@@ -80,31 +80,31 @@ def test_folds_mid_body_goal_not_just_last(rules):
 def test_folds_variable_on_right_side(rules):
     out = _rewrite(rules, "r(K, S) <- (m(K), unknown(K) is S)\n")
     assert out is not None
-    assert out.head.args[1] == Goal("unknown", [Variable("K")], [])
+    assert vfield(out, "head").args[1] == Goal("unknown", [Variable("K")], [])
 
 
 def test_substitutes_every_head_occurrence(rules):
     out = _rewrite(rules, "r(S, S) <- (S is ok)\n")
     assert out is not None
-    assert out.head == Goal("r", [Atom("ok"), Atom("ok")], [])
+    assert vfield(out, "head") == Goal("r", [Atom("ok"), Atom("ok")], [])
 
 
 def test_folds_a_list_of_constructor_shapes(rules):
     out = _rewrite(rules, "r(S) <- (S is [a, b])\n")
     assert out is not None
-    assert out.head == Goal("r", [[Atom("a"), Atom("b")]], [])
+    assert vfield(out, "head") == Goal("r", [[Atom("a"), Atom("b")]], [])
 
 
 def test_folds_into_a_list_in_the_head(rules):
     out = _rewrite(rules, "b(X, [a, X]) <- (X is 7)\n")
     assert out is not None
-    assert out.head == Goal("b", [7, [Atom("a"), 7]], [])
+    assert vfield(out, "head") == Goal("b", [7, [Atom("a"), 7]], [])
 
 
 def test_folds_a_nested_goal_term(rules):
     out = _rewrite(rules, "r(K, S) <- (m(K, M), S is outer(inner(M), tag))\n")
     assert out is not None
-    assert out.head.args[1] == Goal(
+    assert vfield(out, "head").args[1] == Goal(
         "outer", [Goal("inner", [Variable("M")], []), Atom("tag")], []
     )
 

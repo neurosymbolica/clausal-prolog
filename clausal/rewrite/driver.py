@@ -51,6 +51,8 @@ from clausal.logic.variables import Var
 from clausal.reflection import (
     _LAMBDA_ARROW_MARKER,
     Goal,
+    is_v,
+    vfield,
     ReifyError,
     RenderError,
     reify_ast,
@@ -178,15 +180,21 @@ def _first_rewrite(rules, reified_clause):
 def _splice(table, old_statement, reified_in, reified_out, position):
     """Build the replacement statement, reusing every matched goal's node."""
     old_goals = _top_level_goal_nodes(old_statement)
-    if len(old_goals) != len(reified_in.goals):
+    # P2: a reified Clause is a CELL, so its fields are read by name through
+    # the vocabulary's own accessor.  Bound once here rather than inline at
+    # each of the eleven uses below, which would read worse than the
+    # attribute access it replaces.
+    in_goals = vfield(reified_in, "goals")
+    out_goals = vfield(reified_out, "goals")
+    if len(old_goals) != len(in_goals):
         raise RewriteError(
             f"goal correspondence lost at {position}: {len(old_goals)} nodes "
-            f"against {len(reified_in.goals)} reified goals"
+            f"against {len(in_goals)} reified goals"
         )
 
-    consumed = [False] * len(reified_in.goals)
+    consumed = [False] * len(in_goals)
     new_goals = []
-    if len(reified_out.goals) == len(reified_in.goals):
+    if len(out_goals) == len(in_goals):
         # Equal goal counts: the correspondence is positional.  Each output
         # goal is its input goal verbatim (node reused, comments never in
         # question) or a MODIFICATION of it (rendered fresh, comments ride
@@ -195,14 +203,14 @@ def _splice(table, old_statement, reified_in, reified_out, position):
         # input goal is a reordering in disguise, and pairing it with the
         # goal that happens to share its position would hand it that goal's
         # comments; refused instead.
-        for index, out_goal in enumerate(reified_out.goals):
+        for index, out_goal in enumerate(out_goals):
             consumed[index] = True
-            if out_goal == reified_in.goals[index]:
+            if out_goal == in_goals[index]:
                 new_goals.append(old_goals[index])
                 continue
             if any(
                 out_goal == other
-                for other_index, other in enumerate(reified_in.goals)
+                for other_index, other in enumerate(in_goals)
                 if other_index != index
             ):
                 raise RewriteError(
@@ -216,8 +224,8 @@ def _splice(table, old_statement, reified_in, reified_out, position):
             new_goals.append(new_node)
     else:
         cursor = 0
-        for out_goal in reified_out.goals:
-            matched = _match(reified_in.goals, consumed, cursor, out_goal)
+        for out_goal in out_goals:
+            matched = _match(in_goals, consumed, cursor, out_goal)
             if matched is None:
                 raise RewriteError(
                     f"cannot splice the result at {position}: {out_goal!r} is "
@@ -231,10 +239,10 @@ def _splice(table, old_statement, reified_in, reified_out, position):
             cursor = matched + 1
             new_goals.append(old_goals[matched])
 
-    if reified_out.head == reified_in.head:
+    if vfield(reified_out, "head") == vfield(reified_in, "head"):
         head_node = _head_node(old_statement)
     else:
-        head_node = _render_head(reified_out.head, position)
+        head_node = _render_head(vfield(reified_out, "head"), position)
 
     new_statement = _build_statement(old_statement, head_node, new_goals, table)
 
@@ -307,7 +315,7 @@ def _render_goal_node(table, goal, position):
     ``or``/``not`` operands -- and a goal that is not a ``Goal`` has no
     rendering this driver can vouch for.
     """
-    if not isinstance(goal, Goal):
+    if not is_v(goal, Goal):
         raise RewriteError(
             f"cannot splice a modified goal at {position}: {goal!r} is not a "
             f"plain Goal, and no other goal shape has a rendering this driver "

@@ -604,10 +604,10 @@ def test_a_private_listing_declares_the_atom_and_leaves_the_value(tmp_path):
 def test_private_declaration_no_longer_carries_a_constants_list():
     """The other half of the dropped behaviour: PrivateDeclaration.constants
     is gone, so a -private directive reifies with one argument."""
-    from clausal.reflection import reify_source, ModuleDirective
+    from clausal.reflection import reify_source, ModuleDirective, is_v, vfield
     items = reify_source("-private([helper, other])\nhelper,\nother,\n")
     (priv,) = [d for d in items
-               if isinstance(d, ModuleDirective) and d.name == "private"]
+               if is_v(d, ModuleDirective) and vfield(d, "name") == "private"]
     assert priv.args == [["helper", "other"]]
 
 

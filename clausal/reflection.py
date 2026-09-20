@@ -98,15 +98,76 @@ class RenderError(Exception):
 # fewer arguments auto-fills the missing trailing fields with fresh variables,
 # so ``Clause(HEAD, GOALS)`` written in a matcher head wildcards ``position``.
 
-Clause = make_predicate("Clause", ["head", "goals", "position"], instances=True)
-Goal = make_predicate("Goal", ["name", "args", "kwargs"], instances=True)
-Variable = make_predicate("Variable", ["name"], instances=True)
-Atom = make_predicate("Atom", ["name"], instances=True)
-Escape = make_predicate("Escape", ["code", "vars", "position"], instances=True)
-FormatString = make_predicate("FormatString", ["code", "vars", "position"], instances=True)
-IfThenElse = make_predicate("IfThenElse", ["condition", "then", "otherwise"], instances=True)
-ModuleDirective = make_predicate("ModuleDirective", ["name", "args", "position"], instances=True)
-PythonCode = make_predicate("PythonCode", ["kind", "name", "position"], instances=True)
+Clause = make_predicate("Clause", ["head", "goals", "position"])
+Goal = make_predicate("Goal", ["name", "args", "kwargs"])
+Variable = make_predicate("Variable", ["name"])
+Atom = make_predicate("Atom", ["name"])
+Escape = make_predicate("Escape", ["code", "vars", "position"])
+FormatString = make_predicate("FormatString", ["code", "vars", "position"])
+IfThenElse = make_predicate("IfThenElse", ["condition", "then", "otherwise"])
+ModuleDirective = make_predicate("ModuleDirective", ["name", "args", "position"])
+PythonCode = make_predicate("PythonCode", ["kind", "name", "position"])
+
+
+# The vocabulary's field order, DERIVED from the declarations above so it
+# cannot drift from them.  P2: constructing one of these builds a CELL -- a
+# functor and POSITIONS -- so a reader that wants a field by NAME resolves it
+# here.  ONLY the reified vocabulary is in this map: ``.name``, ``.args`` and
+# ``.position`` are field names on ``pythonic_ast`` nodes too, and that is a
+# different layer which is NOT changing, so a blind rewrite of those
+# spellings would break far more than it fixed.
+_VOCAB_FIELDS = {
+    _c.__name__: _c._fields
+    for _c in (Clause, Goal, Variable, Atom, Escape,
+               FormatString, IfThenElse, ModuleDirective, PythonCode)
+}
+
+_VFIELD_REQUIRED = object()
+
+
+def is_v(term, cls):
+    """Is *term* a reified-vocabulary CELL of *cls* (or of any in a tuple)?
+
+    The cell replacement for ``is_v(term, Goal)``.  A cell is a tuple,
+    so ``isinstance`` against the vocabulary class answers False for every
+    term the vocabulary builds -- and answers it QUIETLY, which is how a
+    dispatch chain of these turns into a wrong branch rather than an error.
+    The class objects stay the argument so the call still names the term
+    shape it is asking about, and so the names cannot drift from the
+    declarations.
+    """
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+
+    is_cell, functor = compound_cell_shape(term)
+    if not is_cell:
+        return False
+    if isinstance(cls, tuple):
+        return any(functor == c.__name__ for c in cls)
+    return functor == cls.__name__
+
+
+def vfield(term, field, default=_VFIELD_REQUIRED):
+    """Field *field* of a reified-vocabulary CELL.
+
+    Answers *default* when *term* is not one of the nine (an AST node, a
+    plain value).  With no default it RAISES, because a miss is then a
+    representation mistake -- and the silent version of this read is exactly
+    what hid one in term expansion, where ``getattr(state, 'init', [])``
+    answered its default for a cell and the whole init/final injection
+    vanished without a word.
+    """
+    from clausal.logic.cells import compound_cell_shape, cell_args  # noqa: PLC0415
+
+    is_cell, functor = compound_cell_shape(term)
+    fields = _VOCAB_FIELDS.get(functor) if is_cell else None
+    if fields is None or field not in fields:
+        if default is not _VFIELD_REQUIRED:
+            return default
+        raise TypeError(
+            f"vfield: {term!r} is not a reified-vocabulary cell with a "
+            f"{field!r} field"
+        )
+    return cell_args(term)[fields.index(field)]
 
 
 # ── Static evaluation of constructor code ────────────────────────────────────
@@ -365,9 +426,9 @@ class _ClauseReifier:
         if node is None:
             return None
         reified = self.term(node)
-        if isinstance(reified, Goal) and reified.name == "$intern_atom":
-            args = reified.args
-            if len(args) == 1 and isinstance(args[0], Atom):
+        if is_v(reified, Goal) and vfield(reified, "name") == "$intern_atom":
+            args = vfield(reified, "args")
+            if len(args) == 1 and is_v(args[0], Atom):
                 return args[0]             # STAGE 2: the str constant reified as the Atom already
             if len(args) == 1 and isinstance(args[0], str):
                 return Atom(args[0])
@@ -633,8 +694,8 @@ class _ClauseRenderer:
         ``HEAD,`` (bare head + trailing comma, no wrapping parens).  A rule
         renders as the ``Compare(head, [Lt], [USub(body)])`` shape that surface
         ``HEAD <- BODY`` parses to and that ``_unparse_clause`` repairs."""
-        head = self.term(term.head)
-        goals = _deref_seq_field(term.goals, "clause goals")
+        head = self.term(vfield(term, "head"))
+        goals = _deref_seq_field(vfield(term, "goals"), "clause goals")
         if not goals:
             return ast.Expr(value=ast.Tuple(elts=[head], ctx=ast.Load()))
         if len(goals) == 1:
@@ -705,23 +766,23 @@ class _ClauseRenderer:
         value = deref(value)
         if is_var(value):
             raise RenderError(f"cannot render unbound variable: {value!r}")
-        if isinstance(value, Variable):
+        if is_v(value, Variable):
             # Anonymous vars reify to non-identifier names (#anon1, …); render
             # each as `_`.  Per-clause anon numbering is deterministic by
             # encounter order, so `_` re-reifies to the same #anonN.
-            name = _deref_field(value.name)
+            name = _deref_field(vfield(value, "name"))
             if not isinstance(name, str):
                 raise RenderError(f"cannot render non-string variable name: {name!r}")
             display = "_" if name.startswith("#") else name
             return ast.Name(id=display, ctx=ast.Load())
-        if isinstance(value, Atom):
+        if is_v(value, Atom):
             # P3-1 Task 6 (§1b): a hidden atom's runtime str carries
             # HIDDEN_SEP; the writer renders the human ``module.name``
             # form (matching how a qualified predicate reference already
             # prints via ``_name_ast``'s dotted-chain support) while the
             # RAW str keeps the separator everywhere else.
             from clausal.logic.atoms import demangle_for_display
-            display = demangle_for_display(value.name)
+            display = demangle_for_display(vfield(value, "name"))
             if not isinstance(display, str):
                 raise RenderError(f"cannot render non-string name: {display!r}")
             if _is_dotted_identifier(display):
@@ -731,7 +792,7 @@ class _ClauseRenderer:
             # every ``-double_quotes`` mode, so the output re-reads as the
             # atom it rendered.  (Before this it was a ``RenderError``.)
             return _raw_source(_single_quoted(display))
-        if isinstance(value, Goal):
+        if is_v(value, Goal):
             return self._goal_ast(value)
         if value is None or value is Ellipsis:
             # The reifier yields an `ast.Constant`'s payload as itself, so
@@ -755,7 +816,7 @@ class _ClauseRenderer:
             # string apart from a quoted atom (or from a ``b'…'`` literal,
             # which it used to rewrite by mistake).
             return _raw_source(_double_quoted(value))
-        if isinstance(value, (ModuleDirective, PythonCode)):
+        if is_v(value, (ModuleDirective, PythonCode)):
             raise RenderError(
                 f"cannot render {type(value).__name__} — only clause bodies "
                 "are in scope for the renderer"
@@ -764,6 +825,39 @@ class _ClauseRenderer:
             return ast.List(
                 elts=[self.term(item) for item in value], ctx=ast.Load()
             )
+        # P2 ORDERING: these three must precede the generic str-headed
+        # CELL branch below.  Every vocabulary term is such a cell now, so
+        # that branch catches them first and renders the RAW form --
+        # `Escape("X + 1", [X], (1, 20, 1, 29))` instead of `++(X + 1)` --
+        # which then fails to re-reify, because the raw form is TitleCase
+        # and TitleCase is a load-time error.  Variable/Atom/Goal/
+        # ModuleDirective/PythonCode already sit above it for this reason.
+        if is_v(value, IfThenElse):
+            # Rendering always emits the canonical spelling, so a round-trip
+            # through the reifier is also a migration off the old one.
+            from clausal.templating.term_rewriting import (  # noqa: PLC0415
+                ITE_NAME,
+            )
+            return ast.Call(
+                func=ast.Name(id=ITE_NAME, ctx=ast.Load()),
+                args=[
+                    self.term(vfield(value, "condition")),
+                    self.term(vfield(value, "then")),
+                    self.term(vfield(value, "otherwise")),
+                ],
+                keywords=[],
+            )
+        if is_v(value, Escape):
+            # `++(<code>)`: the escaped expression text re-parsed and wrapped in
+            # two adjacent unary `+` — ast.unparse emits `++(code)`, which the
+            # reifier re-detects as an escape and re-collects the captured vars.
+            inner = self._parse_code(vfield(value, "code"), "Escape")
+            return ast.UnaryOp(
+                op=ast.UAdd(),
+                operand=ast.UnaryOp(op=ast.UAdd(), operand=inner),
+            )
+        if is_v(value, FormatString):
+            return self._parse_code(vfield(value, "code"), "FormatString")
         if type(value) is tuple and value and type(value[0]) is str and value[0] != _CELL_TUPLE_TAG:
             # A str-functor CELL (P3-2 Task 7) -- the tagged-tuple runtime
             # representation of a plain compound term, e.g. built by
@@ -817,32 +911,6 @@ class _ClauseRenderer:
                 keys=key_nodes,
                 values=[self.term(val) for val in value.values()],
             )
-        if isinstance(value, IfThenElse):
-            # Rendering always emits the canonical spelling, so a round-trip
-            # through the reifier is also a migration off the old one.
-            from clausal.templating.term_rewriting import (  # noqa: PLC0415
-                ITE_NAME,
-            )
-            return ast.Call(
-                func=ast.Name(id=ITE_NAME, ctx=ast.Load()),
-                args=[
-                    self.term(value.condition),
-                    self.term(value.then),
-                    self.term(value.otherwise),
-                ],
-                keywords=[],
-            )
-        if isinstance(value, Escape):
-            # `++(<code>)`: the escaped expression text re-parsed and wrapped in
-            # two adjacent unary `+` — ast.unparse emits `++(code)`, which the
-            # reifier re-detects as an escape and re-collects the captured vars.
-            inner = self._parse_code(value.code, "Escape")
-            return ast.UnaryOp(
-                op=ast.UAdd(),
-                operand=ast.UnaryOp(op=ast.UAdd(), operand=inner),
-            )
-        if isinstance(value, FormatString):
-            return self._parse_code(value.code, "FormatString")
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return self._operator_ast(value)
         raise RenderError(f"cannot render term: {value!r}")
@@ -1068,7 +1136,7 @@ class _ClauseRenderer:
         param_names = []
         for param in param_items:
             name = _deref_field(_deref_field(param).name)
-            if isinstance(name, Atom):
+            if is_v(name, Atom):
                 name = _deref_field(name.name)   # STAGE 2: a param NAME constant reifies as an Atom
             if not isinstance(name, str) or not name.isidentifier():
                 raise RenderError(f"cannot render non-identifier lambda param: {name!r}")
@@ -1106,11 +1174,11 @@ class _ClauseRenderer:
     def _dict_key_ast(self, key):
         """A DictLiteral key: ``$intern_atom(<name>)`` → the bare name node."""
         key = _deref_field(key)
-        if isinstance(key, Goal) and _deref_field(key.name) == "$intern_atom":
-            args = _deref_seq_field(key.args, "$intern_atom key args")
+        if is_v(key, Goal) and _deref_field(vfield(key, "name")) == "$intern_atom":
+            args = _deref_seq_field(vfield(key, "args"), "$intern_atom key args")
             arg0 = _deref_field(args[0]) if len(args) == 1 else None
-            if isinstance(arg0, Atom):
-                arg0 = _deref_field(arg0.name)   # STAGE 2: the name constant reified as an Atom
+            if is_v(arg0, Atom):
+                arg0 = _deref_field(vfield(arg0, "name"))   # STAGE 2: the name constant reified as an Atom
             if len(args) == 1 and isinstance(arg0, str):
                 return self._name_ast(arg0)
         return self.term(key)
@@ -1122,8 +1190,8 @@ class _ClauseRenderer:
         bound logic vars (or garbage) on a matcher-built goal — deref/guard them
         so the call renders or raises ``RenderError``, never leaking a
         ``TypeError`` on the raw var."""
-        args = _deref_seq_field(goal.args, "goal args")
-        kwargs = _deref_seq_field(goal.kwargs, "goal kwargs")
+        args = _deref_seq_field(vfield(goal, "args"), "goal args")
+        kwargs = _deref_seq_field(vfield(goal, "kwargs"), "goal kwargs")
         keywords = []
         for entry in kwargs:
             try:
@@ -1135,7 +1203,7 @@ class _ClauseRenderer:
                 raise RenderError(f"cannot render non-string keyword name: {name!r}")
             keywords.append(ast.keyword(arg=name, value=self.term(value)))
         return ast.Call(
-            func=self._name_ast(goal.name),
+            func=self._name_ast(vfield(goal, "name")),
             args=[self.term(arg) for arg in args],
             keywords=keywords,
         )
@@ -1324,8 +1392,9 @@ def reify_source(text, filename="<reflected>"):
         ):
             clause = _ClauseReifier(field_order=field_order).clause(call.args[0])
             items.append(clause)
-            if clause.position is not None:
-                clause_lines.update(range(clause.position[0], clause.position[2] + 1))
+            pos = vfield(clause, "position")
+            if pos is not None:
+                clause_lines.update(range(pos[0], pos[2] + 1))
 
     # Original-AST pass: anything that is neither a directive nor covered by
     # a reified clause's line span is embedded Python.
@@ -1342,7 +1411,7 @@ def reify_source(text, filename="<reflected>"):
 
     def sort_key(indexed_item):
         index, item = indexed_item
-        position = item.position
+        position = vfield(item, "position", None)
         line = position[0] if isinstance(position, tuple) else 0
         return (line, index)
 
@@ -1488,7 +1557,7 @@ def render_ast(term):
     kind the renderer does not handle (never emits malformed source)."""
     term = deref(term)  # a top-level var bound to a Clause must take the clause path
     renderer = _ClauseRenderer()
-    if isinstance(term, Clause):
+    if is_v(term, Clause):
         node = renderer.clause(term)
     else:
         node = renderer.term(term)

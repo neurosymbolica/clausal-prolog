@@ -103,25 +103,25 @@ class TestShapeMatching:
 
 class TestCapture:
     def test_pattern_variable_captures_reified_variable(self, matchers):
-        from clausal.reflection import Variable
+        from clausal.reflection import Variable, is_v, vfield
 
         captured = Var()
         for _ in call("capture_first_arg", chars(_TARGET), captured, module=matchers):
             break
         value = deref(captured)
-        assert isinstance(value, Variable)
-        assert value.name == "X"
+        assert is_v(value, Variable)
+        assert vfield(value, "name") == "X"
 
     def test_variable_body_captures_goal_list(self, matchers):
-        from clausal.reflection import Goal
+        from clausal.reflection import Goal, is_v, vfield
 
         goals = Var()
         for _ in call("capture_body", chars(_TARGET), goals, module=matchers):
             break
         value = deref(goals)
         assert isinstance(value, list)
-        assert [g.name for g in value] == ["goalx", "goaly"]
-        assert all(isinstance(g, Goal) for g in value)
+        assert [vfield(g, "name") for g in value] == ["goalx", "goaly"]
+        assert all(is_v(g, Goal) for g in value)
 
 
 class TestPatternForms:

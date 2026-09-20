@@ -273,25 +273,25 @@ def test_F010_a_keyword_head_is_refused_at_load():
     on the way past, because the spelling it asked about is gone.
     """
     import pytest
-    from clausal.reflection import reify_source
+    from clausal.reflection import reify_source, vfield
     with pytest.raises(SyntaxError, match="keyword arguments"):
         reify_source('kp(x=1, y=2),\nkp(y=20, x=10),\n')
 
 
 def test_F011_anon_var_does_not_alias_user_underscore_one():
     # A11-F011 (fixed): anonymous vars use non-identifier #anonN names.
-    from clausal.reflection import reify_source
+    from clausal.reflection import reify_source, vfield
     clause = reify_source('foo(_1, _, X) <- bar(_1, _, X)\n')[0]
-    a0, a1 = clause.head.args[0], clause.head.args[1]
+    a0, a1 = vfield(clause, "head").args[0], vfield(clause, "head").args[1]
     assert a0 != a1  # user _1 and anonymous _ are distinct at runtime
 
 
 def test_F012_reify_ast_preserves_lt_negative():
     # A11-F012 (fixed): only the top-level arrow is repaired.
-    from clausal.reflection import reify_ast, reify_source
+    from clausal.reflection import reify_ast, reify_source, vfield
     got = reify_ast(ast.parse('foo(X) <- (X < -1)'))
     want = reify_source('foo(X) <- (X < -1)')[0]
-    assert type(got.goals[0]).__name__ == type(want.goals[0]).__name__ == "Lt"
+    assert type(vfield(got, "goals")[0]).__name__ == type(vfield(want, "goals")[0]).__name__ == "Lt"
 
 
 def test_F013_dict_literal_pattern_matches(tmp_path):

@@ -126,11 +126,11 @@ def test_bound_text_match_succeeds(matchers):
 def test_rendered_text_re_reifies(matchers):
     """clause_source output is real source: it reifies back to a clause with
     the same head functor."""
-    from clausal.reflection import Clause, reify_source
+    from clausal.reflection import Clause, reify_source, is_v, vfield
 
     text = Var()
     [(rendered,)] = _solutions(
         "source", chars("path(A, B) <- (edge(A, B),)\n"), text, module=matchers)
     (again,) = [i for i in reify_source(chars_text(rendered) + "\n")
-                if isinstance(i, Clause)]
-    assert deref(again.head).name == "path"
+                if is_v(i, Clause)]
+    assert deref(vfield(again, "head")).name == "path"

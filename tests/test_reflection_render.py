@@ -10,6 +10,7 @@ import pytest
 
 from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.reflection import (
+    is_v,
     Atom,
     Clause,
     Escape,
@@ -30,6 +31,18 @@ def strip_positions(term):
     anyway to reach nested position-bearing terms)."""
     if isinstance(term, list):
         return [strip_positions(x) for x in term]
+    # P2: a reified-vocabulary term is a CELL, so it must be recognised
+    # BEFORE the generic tuple branch below -- which would otherwise walk
+    # its slots as plain data and never null the `position` one, leaving
+    # every round-trip comparison to fail on positions it meant to ignore.
+    from clausal.reflection import _VOCAB_FIELDS
+    if (isinstance(term, tuple) and term and isinstance(term[0], str)
+            and term[0] in _VOCAB_FIELDS):
+        names = _VOCAB_FIELDS[term[0]]
+        return (term[0], *[
+            None if name == "position" else strip_positions(value)
+            for name, value in zip(names, term[1:])
+        ])
     if isinstance(term, tuple):
         return tuple(strip_positions(x) for x in term)
     if isinstance(term, dict):
@@ -49,7 +62,7 @@ def strip_positions(term):
 
 
 def only_clause(src):
-    clauses = [i for i in reify_source(src) if isinstance(i, Clause)]
+    clauses = [i for i in reify_source(src) if is_v(i, Clause)]
     assert len(clauses) == 1, f"expected one clause, got {len(clauses)}"
     return clauses[0]
 
@@ -297,7 +310,7 @@ class TestCompareChain:
         # (`0 < X` then `Y < 10`) cannot be written as a Python chain at all —
         # emitting `0 < X < 10` would silently drop Y. Refuse.
         from clausal.pythonic_ast.nodes import CompareChain, Lt
-        from clausal.reflection import Variable
+        from clausal.reflection import Variable, is_v, vfield
 
         chain = CompareChain(comparisons=[
             Lt(left=0, right=Variable("X")),
@@ -310,7 +323,7 @@ class TestCompareChain:
         # A one-comparison CompareChain has no chain surface: `0 < X` re-reifies
         # to a bare Lt node, not a CompareChain. Refuse rather than corrupt.
         from clausal.pythonic_ast.nodes import CompareChain, Lt
-        from clausal.reflection import Variable
+        from clausal.reflection import Variable, is_v, vfield
 
         with pytest.raises(RenderError):
             render_source(CompareChain(comparisons=[Lt(left=0, right=Variable("X"))]))
@@ -487,7 +500,7 @@ class TestBoundLogicVarsInFields:
         assert render_source(clause) == "H() <- (g())"
 
     def test_variable_name_bound_var_renders(self):
-        from clausal.reflection import Variable
+        from clausal.reflection import Variable, is_v, vfield
 
         assert render_source(Variable(_bound("X"))) == "X"
 
@@ -529,7 +542,7 @@ class TestBoundLogicVarsInFields:
     def test_lambda_param_name_bound_var_renders(self):
         import ast as _ast
         import dataclasses
-        from clausal.reflection import reify_ast
+        from clausal.reflection import reify_ast, is_v, vfield
 
         lam = reify_ast(_ast.parse("((X, Y) <- foo(X, Y))", mode="eval").body)
         ground = render_source(lam)
@@ -628,7 +641,7 @@ class TestComprehensions:
         assert isinstance(bindings[0], simple_ast.ListComp)
 
         clause = only_clause(self.DECLARED_LOOP_VAR)
-        assert isinstance(clause.goals[0].right, simple_ast.ListComp)
+        assert isinstance(vfield(clause, "goals")[0].right, simple_ast.ListComp)
 
     def test_the_reachable_clause_round_trips(self):
         """It raised `RenderError: cannot render operator node: ListComp`."""
@@ -665,7 +678,7 @@ class TestComprehensions:
         a tuple target — only a mutated one can, and `ast.unparse` would write it
         bare, which does not read back."""
         from clausal.pythonic_ast import nodes as simple_ast
-        from clausal.reflection import Variable
+        from clausal.reflection import Variable, is_v, vfield
 
         node = simple_ast.ListComp(
             element=Atom("x"),
@@ -743,7 +756,7 @@ def _emittable_node_class_names():
 
 def test_emittable_node_kinds_are_all_decided():
     """No emittable node kind may be silently unrenderable."""
-    from clausal.reflection import RENDER_NODE_CLASS_NAMES
+    from clausal.reflection import RENDER_NODE_CLASS_NAMES, is_v, vfield
 
     emittable = _emittable_node_class_names()
     assert emittable, "node_ast sweep found nothing — the extraction broke"
@@ -757,7 +770,7 @@ def test_emittable_node_kinds_are_all_decided():
 def test_render_exclusions_are_not_stale():
     """Every documented exclusion must still be emittable and still unhandled —
     otherwise the list is lying about the renderer's coverage."""
-    from clausal.reflection import RENDER_NODE_CLASS_NAMES
+    from clausal.reflection import RENDER_NODE_CLASS_NAMES, is_v, vfield
 
     emittable = _emittable_node_class_names()
     assert not (set(RENDER_EXCLUSIONS) - emittable), (
@@ -794,12 +807,12 @@ def test_corpus_clause_round_trips(path):
         items = reify_source(open(path, encoding="utf-8").read(), filename=path)
     except ReifyError as exc:
         pytest.skip(f"source not reifiable ({exc})")
-    clauses = [i for i in items if isinstance(i, Clause)]
+    clauses = [i for i in items if is_v(i, Clause)]
     if not clauses:
         pytest.skip("no clauses in file")
     for clause in clauses:
         rendered = render_source(clause)              # must not raise RenderError
-        reparsed = [i for i in reify_source(rendered + "\n") if isinstance(i, Clause)]
+        reparsed = [i for i in reify_source(rendered + "\n") if is_v(i, Clause)]
         assert len(reparsed) == 1, f"{path}: render produced {len(reparsed)} clauses:\n{rendered}"
         assert strip_positions(reparsed[0]) == strip_positions(clause), (
             f"{path}: round-trip mismatch\n  rendered: {rendered!r}"
@@ -835,7 +848,7 @@ class TestCorruptionGuards:
         # I1: rendering a lambda sub-term directly (the auditor's use case) must
         # not leak the sentinel marker.
         clause = only_clause("ho(F) <- run((X <- base(X)), F)\n")
-        lambda_term = clause.goals[0].args[0]
+        lambda_term = vfield(clause, "goals")[0].args[0]
         rendered = render_source(lambda_term)
         assert "__clausal_lambda_arrow__" not in rendered, (
             f"sentinel leaked in standalone lambda render: {rendered!r}"
@@ -930,7 +943,7 @@ class TestRawCellRendering:
         cell and the static-reification vocabulary (``Goal``) are different
         representations of the same call by design (see the module
         docstring: "Goal ... a predicate call *and* any compound term")."""
-        from clausal.reflection import reify_ast
+        from clausal.reflection import reify_ast, is_v, vfield
 
         node = render_ast(("point", 1, 2))
         assert reify_ast(node) == Goal("point", [1, 2], [])

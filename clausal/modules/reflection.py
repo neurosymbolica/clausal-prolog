@@ -61,6 +61,8 @@ from clausal.terms import Compound, KWTerm
 from clausal.reflection import (
     Atom,
     Clause,
+    is_v,
+    vfield,
     Escape,
     FormatString,
     Goal,
@@ -164,7 +166,7 @@ def _reified_clause_2(this_generator, _proceed, _fail, _catcher,
         return
     clauses = [
         candidate for candidate in _items_from_text(source)
-        if isinstance(candidate, Clause)
+        if is_v(candidate, Clause)
     ]
     yield from _yield_matches(clauses, clause, _proceed, _fail, trail)
 
@@ -223,13 +225,13 @@ def _reified_subterm_2(this_generator, _proceed, _fail, _catcher,
 
 def _clause_head_2(clause, head, trail, k):
     clause = deref(clause)
-    if isinstance(clause, Clause) and unify(head, clause.head, trail):
+    if is_v(clause, Clause) and unify(head, vfield(clause, "head"), trail):
         yield None
 
 
 def _clause_body_2(clause, goals, trail, k):
     clause = deref(clause)
-    if isinstance(clause, Clause) and unify(goals, clause.goals, trail):
+    if is_v(clause, Clause) and unify(goals, vfield(clause, "goals"), trail):
         yield None
 
 
@@ -251,7 +253,7 @@ def _clause_source_2(term, text, trail, k):
 
 def _goal_functor_3(goal, name, arity, trail, k):
     goal = deref(goal)
-    if not isinstance(goal, Goal):
+    if not is_v(goal, Goal):
         return
     args = deref(goal.args)
     kwargs = deref(goal.kwargs)

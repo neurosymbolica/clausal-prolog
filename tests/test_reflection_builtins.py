@@ -15,7 +15,7 @@ from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from clausal.reflection import Clause
+from clausal.reflection import Clause, is_v
 
 
 EXAMPLES_DIR = os.path.join(
@@ -233,7 +233,7 @@ literal_file_name(NAME) <- (
     def test_reified_item_reads_a_source_written_text(self, literal_matchers):
         items = _all_bindings("literal_item", module=literal_matchers)
         assert len(items) == 2
-        assert all(isinstance(item, Clause) for item in items)
+        assert all(is_v(item, Clause) for item in items)
 
     def test_reified_file_item_reads_a_source_written_path(
         self, literal_matchers

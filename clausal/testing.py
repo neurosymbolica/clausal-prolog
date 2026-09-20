@@ -690,7 +690,7 @@ def _reified_goals(path, clause, arity):
     if item is None:
         return None
     try:
-        goals = list(item.goals or ())
+        goals = list(vfield(item, "goals") or ())
     except Exception:  # noqa: BLE001
         return None
     return goals if len(goals) == arity else None
@@ -705,7 +705,7 @@ def _goal_sources(body, reified) -> list[str]:
         text = None
         if reified is not None:
             try:
-                from clausal.reflection import render_source
+                from clausal.reflection import render_source, is_v, vfield
 
                 text = render_source(reified[i])
             except Exception:  # noqa: BLE001
@@ -924,17 +924,17 @@ def _pair_vars(runtime, reified, out) -> bool:
     """
     from clausal.logic.predicate import term_field_names
     from clausal.logic.variables import Var
-    from clausal.reflection import Atom, Goal, Variable
+    from clausal.reflection import Atom, Goal, Variable, is_v, vfield
     from clausal.terms import Call, LoadName
 
-    if isinstance(reified, Variable):
+    if is_v(reified, Variable):
         # ``isinstance``, not ``is_var``: the latter derefs, so a Var already
         # bound by the prefix would read as "not a variable" and abort the walk.
         if isinstance(runtime, Var):
-            out.append((str(reified.name), runtime))
+            out.append((str(vfield(reified, "name")), runtime))
             return True
         return False
-    if isinstance(reified, Goal):
+    if is_v(reified, Goal):
         if not isinstance(runtime, Call):
             return False
         func = runtime.func
@@ -951,7 +951,7 @@ def _pair_vars(runtime, reified, out) -> bool:
         if len(kws) != len(rkws):
             return False
         return all(_pair_vars(k.value, r[1], out) for k, r in zip(kws, rkws))
-    if isinstance(reified, Atom):
+    if is_v(reified, Atom):
         return True
     if isinstance(reified, list):
         if not isinstance(runtime, list) or len(runtime) != len(reified):
@@ -1009,15 +1009,15 @@ def _forall_shape(goal):
 def _forall_var_name(reified_goal) -> str | None:
     """Source name of the loop variable, from the reified ``forall`` twin."""
     from clausal.pythonic_ast.nodes import in_
-    from clausal.reflection import Goal, Variable
+    from clausal.reflection import Goal, Variable, is_v, vfield
 
-    if not isinstance(reified_goal, Goal) or str(reified_goal.name) != "forall":
+    if not is_v(reified_goal, Goal) or str(reified_goal.name) != "forall":
         return None
     rargs = list(reified_goal.args or ())
     if not rargs or not isinstance(rargs[0], in_):
         return None
     left = rargs[0].left
-    return str(left.name) if isinstance(left, Variable) else None
+    return str(left.name) if is_v(left, Variable) else None
 
 
 def _report_forall(diag, goal, reified_goal, logic_module, deadline) -> bool:
@@ -1464,11 +1464,11 @@ def _render_probe_solution(goal, reified_goal, holes, kw_holes,
                             path=None) -> str:
     """One all-holes solution as surface text, holes replaced by their values."""
     from clausal.logic.solve import _deref_walk_py
-    from clausal.reflection import Goal, render_source
+    from clausal.reflection import Goal, render_source, is_v, vfield
 
     values = [_deref_walk_py(h) for h in holes]
     kw_values = [(str(k.name), _deref_walk_py(k.value)) for k in kw_holes]
-    if isinstance(reified_goal, Goal):
+    if is_v(reified_goal, Goal):
         try:
             return render_source(Goal(
                 name=reified_goal.name,
@@ -1494,9 +1494,9 @@ def _render_nearest(goal, reified_goal, kind, index, value,
     ``.clausal`` surface syntax.  Without a reified twin we fall back to naming
     the argument and its value.
     """
-    from clausal.reflection import Goal, render_source
+    from clausal.reflection import Goal, render_source, is_v, vfield
 
-    if isinstance(reified_goal, Goal):
+    if is_v(reified_goal, Goal):
         try:
             reified_value = _reify_value(value, path=path)
             # Show the goal's *other* variables at the values the prefix gave
@@ -1540,13 +1540,13 @@ def _bound_reified(goal, reified_goal, path=None) -> dict[str, object]:
 
 def _substitute_bound(reified, bound):
     """Replace ``Variable(name)`` by ``bound[name]`` throughout a reified term."""
-    from clausal.reflection import Goal, Variable
+    from clausal.reflection import Goal, Variable, is_v, vfield
 
     if not bound:
         return reified
-    if isinstance(reified, Variable):
+    if is_v(reified, Variable):
         return bound.get(str(reified.name), reified)
-    if isinstance(reified, Goal):
+    if is_v(reified, Goal):
         return Goal(
             name=reified.name,
             args=[_substitute_bound(a, bound) for a in (reified.args or ())],
@@ -1586,7 +1586,7 @@ def _atomize_declared_atoms(reified, path):
     ``str`` leaf is a STRING and is left to be quoted.  *path* is carried for
     the pipeline's benefit, not read here.  See the module-level note above."""
     from clausal.logic.atoms import is_atom as _term_is_atom, spelling
-    from clausal.reflection import Atom, Goal
+    from clausal.reflection import Atom, Goal, is_v, vfield
 
     if _term_is_atom(reified):
         # THE FLIP (2026-09-06-atoms-as-cells-strings §6.7): an atom is the
@@ -1602,7 +1602,7 @@ def _atomize_declared_atoms(reified, path):
     from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
     if is_chars(reified):
         return chars_text(reified)     # STAGE 2: the carrier is the string; a str above is the atom
-    if isinstance(reified, Goal):
+    if is_v(reified, Goal):
         return Goal(
             name=reified.name,
             args=[_atomize_declared_atoms(a, path)
@@ -1623,7 +1623,7 @@ def _atomize_declared_atoms(reified, path):
 def _render_value(value, path=None) -> str:
     """A computed runtime value as ``.clausal`` surface text."""
     try:
-        from clausal.reflection import render_source
+        from clausal.reflection import render_source, is_v, vfield
 
         return render_source(_reify_value(value, path=path))
     except Exception:  # noqa: BLE001
@@ -1647,7 +1647,7 @@ def _reify_value(value, depth: int = 0, path=None):
         PredicateMeta, is_term_instance, term_field_names,
     )
     from clausal.logic.variables import deref, is_var
-    from clausal.reflection import Atom, Goal, Variable
+    from clausal.reflection import Atom, Goal, Variable, is_v, vfield
     from clausal.terms import Compound, KWTerm
 
     if depth > DIAG_MAX_DEPTH:
@@ -2048,7 +2048,7 @@ def _reified_findall_body_goal(goal, path, index):
             _REIFY_CACHE[key] = items
 
         def find(node):
-            if (isinstance(node, Goal) and str(node.name) == "findall"
+            if (is_v(node, Goal) and str(node.name) == "findall"
                     and len(node.args or ()) == 3):
                 inner = node.args[1]
                 flat: list = []
@@ -2107,11 +2107,11 @@ def _flatten_reified(node, out):
 
 def _reified_children(node):
     """Immediate reified sub-nodes worth recursing into for the findall search."""
-    from clausal.reflection import Clause, Goal
+    from clausal.reflection import Clause, Goal, is_v, vfield
 
-    if isinstance(node, Clause):
-        yield from (node.goals or ())
-    elif isinstance(node, Goal):
+    if is_v(node, Clause):
+        yield from (vfield(node, "goals") or ())
+    elif is_v(node, Goal):
         yield from (node.args or ())
         for kw in (node.kwargs or ()):
             yield kw[1]
@@ -2320,7 +2320,7 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
     # Unify goals for structural head args, so the runtime body may be longer
     # than its source.  k is that prepended count.
     reified = _reified_clause(path, clause)
-    rgoals = list(reified.goals or ()) if reified is not None else None
+    rgoals = list(vfield(reified, "goals") or ()) if reified is not None else None
     k = 0
     if rgoals is not None:
         k = len(body) - len(rgoals)
@@ -2460,9 +2460,9 @@ def _head_listing(cls, clauses, path) -> list[str]:
         reified = _reified_clause(path, clause)
         if reified is not None:
             try:
-                from clausal.reflection import render_source
+                from clausal.reflection import render_source, is_v, vfield
 
-                text = render_source(_atomize_declared_atoms(reified.head, path))
+                text = render_source(_atomize_declared_atoms(vfield(reified, "head"), path))
             except Exception:  # noqa: BLE001
                 text = None
         if text is None:
@@ -2483,7 +2483,7 @@ def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
     text = None
     if reified_leaf is not None:
         try:
-            from clausal.reflection import render_source
+            from clausal.reflection import render_source, is_v, vfield
 
             text = render_source(_atomize_declared_atoms(reified_leaf, path))
         except Exception:  # noqa: BLE001

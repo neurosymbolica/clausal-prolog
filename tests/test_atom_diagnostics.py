@@ -444,7 +444,7 @@ def test_the_deferred_item_never_reaches_reflection_output():
     message.  ``BareAtomRefs`` is skipped for exactly this reason; so is
     this.  The fixture is loaded as well as reified, so the pin cannot pass
     by the item having quietly stopped being emitted."""
-    from clausal.reflection import reify_source, ModuleDirective
+    from clausal.reflection import reify_source, ModuleDirective, is_v, vfield
     from clausal.import_hook import _load_module
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref
@@ -455,8 +455,8 @@ def test_the_deferred_item_never_reaches_reflection_output():
         source = fh.read()
     items = reify_source(source)
     leaked = [d for d in items
-              if isinstance(d, ModuleDirective)
-              and d.name == "AtomAppliedAsFunctor"]
+              if is_v(d, ModuleDirective)
+              and vfield(d, "name") == "AtomAppliedAsFunctor"]
     assert not leaked, leaked
 
     _load_module("tests.fixtures.t4f2_owner_functor",
