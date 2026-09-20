@@ -95,6 +95,39 @@ def _warn_strict_atoms_deprecated() -> None:
     )
 
 
+_implicit_atoms_deprecation_files: set = set()
+
+
+class ClausalImplicitAtomsDeprecationWarning(DeprecationWarning):
+    """``-implicit_atoms`` is deprecated: declare the names instead."""
+
+
+def _warn_implicit_atoms_deprecated(module_name: str) -> None:
+    """Emit the ``-implicit_atoms`` deprecation notice once per FILE.
+
+    Per file, not per process (which is what ``-strict_atoms`` does): this
+    notice asks the reader to go and EDIT something, so every file that still
+    carries the directive has to be named.  A once-per-process guard would
+    report the first and hide the rest, which is the opposite of what a
+    migration notice is for.
+
+    Guarded by a module-level set rather than the warnings-filter dedup, so
+    it is exactly-once-per-file regardless of the consumer's filters.
+    """
+    if module_name in _implicit_atoms_deprecation_files:
+        return
+    _implicit_atoms_deprecation_files.add(module_name)
+    import warnings
+    warnings.warn(
+        f"{module_name}: -implicit_atoms is deprecated (2026-09-18). "
+        "Declare the names this file mints -- list them in -private([...]) "
+        "or -module(name, [...]), or -hide them -- and delete the directive. "
+        "It is removed in the next landing. (Shown once per file.)",
+        ClausalImplicitAtomsDeprecationWarning,
+        stacklevel=2,
+    )
+
+
 def compile_module(
     predicate_nodes: list,
     module_items: list,
@@ -1587,6 +1620,8 @@ def _process_bare_atom_refs(
     effective_strict = not implicit_mode
     if strict_mode:
         _warn_strict_atoms_deprecated()
+    if implicit_mode:
+        _warn_implicit_atoms_deprecated(module_name)
     undeclared: list[str] = []
 
     for item in module_items:

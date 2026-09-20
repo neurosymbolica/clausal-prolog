@@ -1,5 +1,11 @@
 # Migrating to strict-atoms-by-default
 
+> **`-implicit_atoms` is deprecated as of 2026-09-18** and is removed in the
+> next landing. It still works and still opts a file out of strict resolution,
+> but loading such a file now warns once, naming it. This guide is how to get
+> off it: declare the names, then delete the directive.
+
+
 ## What changed
 
 Clausal used to **auto-mint** any bare atom you referenced: writing `pending`

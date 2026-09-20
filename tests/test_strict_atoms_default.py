@@ -162,6 +162,59 @@ def test_strict_atoms_deprecation_warns_once_per_process():
     assert len(dep) == 1
 
 
+# ── -implicit_atoms deprecation (P2 Task 8, R-P2-3) ─────────────────────────
+
+
+def test_implicit_atoms_warns_deprecated():
+    """`-implicit_atoms` still opts the file into loose atoms, and says so."""
+    from clausal.logic.compiler_v2 import ClausalImplicitAtomsDeprecationWarning
+    _compiler_v2._implicit_atoms_deprecation_files = set()   # reset guard
+    src = "-implicit_atoms\n-module(m, [ok])\nuse(loose_one),\n"
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _load_inline_clausal("_ia_dep_warns", src)
+    dep = [w for w in caught
+           if issubclass(w.category, ClausalImplicitAtomsDeprecationWarning)]
+    assert len(dep) == 1, [str(w.message) for w in caught]
+    text = str(dep[0].message)
+    assert "-implicit_atoms" in text
+    assert "-private" in text and "-module" in text, "say what to do instead"
+
+
+def test_a_declared_only_module_does_not_warn():
+    """The mirror: the warning must fire on the DIRECTIVE, not on every load.
+
+    Without this the pin above passes for a warning that fires unconditionally,
+    which would bury every clean module in deprecation noise."""
+    from clausal.logic.compiler_v2 import ClausalImplicitAtomsDeprecationWarning
+    _compiler_v2._implicit_atoms_deprecation_files = set()
+    src = "-module(m, [ok])\n-private([declared_one])\nuse(declared_one),\n"
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _load_inline_clausal("_ia_dep_clean", src)
+    dep = [w for w in caught
+           if issubclass(w.category, ClausalImplicitAtomsDeprecationWarning)]
+    assert dep == []
+
+
+def test_implicit_atoms_warns_once_per_FILE_not_once_per_process():
+    """Once per file: re-loading one file stays quiet, but a SECOND file that
+    still carries the directive has to be named too — a once-per-process guard
+    would hide every file after the first, which is the opposite of what a
+    migration notice is for."""
+    from clausal.logic.compiler_v2 import ClausalImplicitAtomsDeprecationWarning
+    _compiler_v2._implicit_atoms_deprecation_files = set()
+    src = "-implicit_atoms\n-module(m, [ok])\nuse(loose_two),\n"
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _load_inline_clausal("_ia_dep_once_a", src)
+        _load_inline_clausal("_ia_dep_once_a", src)   # same file again
+        _load_inline_clausal("_ia_dep_once_b", src)   # a DIFFERENT file
+    dep = [w for w in caught
+           if issubclass(w.category, ClausalImplicitAtomsDeprecationWarning)]
+    assert len(dep) == 2, [str(w.message) for w in dep]
+
+
 def test_runtime_dict_key_intern_strict_by_default_no_pollution():
     """A neither-directive file (strict default) with an undeclared bare-atom
     dict key must fail WITHOUT the eager runtime key-intern minting the atom.

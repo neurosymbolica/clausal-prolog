@@ -178,6 +178,13 @@ A bare reference that satisfies none of the above raises a compile-time `NameErr
 
 ### -implicit_atoms
 
+> **Deprecated 2026-09-18 (still supported, warns once per file).** Declare the
+> names the file mints — list them in `-private([...])` or `-module(name, [...])`,
+> or [`-hide`](#-hide) them — and delete the directive. It is **removed in the
+> next landing**, at which point a file carrying it will not load. Loading a file
+> that still has it emits a `ClausalImplicitAtomsDeprecationWarning` naming that
+> file.
+
 **Problem**: Strict atom resolution is the default (a typo in a bare atom is a
 compile-time `NameError`). Some files — prototypes, exploratory scripts, and
 code that deliberately relies on Prolog-style ceremony-free tag atoms — want the
