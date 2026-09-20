@@ -1,0 +1,12 @@
+# A module that declares -dynamic(bo_p/1), imports gate_alias_owner's bo_p/1
+# under an ALIAS, and has CLAUSES OF ITS OWN under the canonical spelling.
+# The declaration then does NOT name the import: a local definition keeps its
+# own predicate, the rule ``Database.adopt_row`` states for rows.  See
+# gate_alias_user for the case with no local clauses.
+-dynamic(bo_p/1)
+-module(gate_alias_clash, [bo_p/1, gc_add(X)])
+-import_from(tests.fixtures.gate_alias_owner, [alias(bo_p, AliasC)])
+
+bo_p(7),
+
+gc_add(X) <- assertz(bo_p(X))

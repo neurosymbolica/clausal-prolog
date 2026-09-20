@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import textwrap
+import types
 
 import pytest
 
@@ -568,3 +569,60 @@ def test_an_aliased_import_asserts_ON_ITS_OWNER():
                if s.author.startswith("runtime-assert:")]
     assert runtime, f"the assert stamped nothing on the owner: {owner_row.writes}"
     assert "gate_alias_user" in runtime[-1].author
+
+
+def test_a_local_definition_wins_a_clash_with_an_aliased_import():
+    """A ``-dynamic`` declaration names the import only when the module has no
+    predicate of its own under the name.
+
+    The sibling of ``test_an_aliased_import_asserts_ON_ITS_OWNER``: there the
+    declaration is the module's only mention of ``bo_p``, so it names the
+    import.  Here the module also writes ``bo_p(7),``, and a local definition
+    keeps its own predicate — the rule ``Database.adopt_row`` states for rows,
+    applied to the binding.  Without this, the reroute would send a module's
+    writes to a predicate it never meant to touch."""
+    owner = _load_fixture("gate_alias_owner")
+    clash = _load_fixture("gate_alias_clash")
+
+    assert clash.__dict__["bo_p"] is not owner.bo_p, (
+        "the local definition, not the import, holds the canonical spelling"
+    )
+    assert _answers(owner, "bo_p") == [1]
+    assert _answers(clash, "bo_p") == [7]
+
+    next(call("gc_add", 9, module=clash.__dict__["$module"]), None)
+
+    assert _answers(clash, "bo_p") == [7, 9], "the write stayed local"
+    assert _answers(owner, "bo_p") == [1], "and the owner is untouched"
+    assert len(_db_of(owner).row("bo_p", 1).clauses) == 1
+
+
+def test_a_permitted_write_to_a_foreign_row_is_told_where_to_declare_it():
+    """The vocabulary refusal's REMEDY names the owning module, not this one.
+
+    ``_check_cell_head_permission`` refuses a cell head whose row is not
+    dynamic, and its remedy is "declare it -dynamic(f/N)".  For a row reached
+    through an ``-import_from`` that advice is wrong in this module: the
+    declaration has to go where the predicate lives.  Reached only when the
+    ownership gate PERMITS the write (an adopted row that is neither dynamic
+    nor locked), so the verdict is unchanged — it is the remedy that moves."""
+    from clausal.logic.builtins.database_ops import _check_cell_head_permission
+
+    owner, importer = Database(), Database()
+    owner.module_dict = {"__name__": "gate_vocab_owner"}
+    row = owner.row("vp", 1, create=True)
+    row.ensure_clauses().append(_clause("vp", 1))
+    owner._clauses[("vp", 1)] = row.clauses
+    assert not row.locked and not row.dynamic, "the gate must PERMIT this one"
+
+    assert importer.adopt_row("vp", 1, row) is True
+    importer.module_dict = {"$module": types.SimpleNamespace(db=importer)}
+    assert importer.row("vp", 1) is row, "the importer reaches the owner's row"
+
+    with pytest.raises(LogicException) as exc_info:
+        _check_cell_head_permission(("vp", 2), "assertz/1", importer,
+                                    importer.module_dict)
+    text = _refusal_text(exc_info.value)
+    assert "vp/1 is a static procedure" in text
+    assert "it belongs to gate_vocab_owner" in text, text
+    assert "belongs there, not here" in text, text

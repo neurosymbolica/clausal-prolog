@@ -201,7 +201,8 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
         if pred_cls is not None:
             return term_val if functor == term_val[0] else make_cell(functor, *args)
         return Compound(functor, args)
-    if row is not None and home is not db:
+    foreign = row is not None and row.db is not db
+    if foreign:
         # THE OWNERSHIP REFUSAL SPEAKS FIRST for somebody else's row
         # (2026-09-21, the P2 aliased-assertz ruling's channel-4 half).  This
         # check is about THIS module's vocabulary — "is that name data here" —
@@ -210,9 +211,13 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
         # wrong thing to say: declaring it here would not help and must not,
         # and the reader needs to be told whose predicate it is.  The gate's
         # policy is the one that has an answer, so ask it before refusing in
-        # this function's own words; when it permits, the vocabulary refusal
-        # below still stands (a shared row that is neither dynamic nor locked
-        # is a static procedure like any other).
+        # this function's own words.
+        #
+        # ON THE ROW, not ``home is not db`` (roborev job 78, finding 3):
+        # ``_home_db`` answers *db* whenever there is no class, and this
+        # module's Database still resolves an ADOPTED key to the exporter's
+        # row — so the class-shaped test missed exactly the shape this block
+        # exists for.  A row knows its own database; that is the question.
         from clausal.logic.database import (  # noqa: PLC0415
             WRITE_ASSERT, WRITE_RETRACT, refusal_error, write_refusal,
         )
@@ -231,6 +236,31 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
             f"from a plain data tuple, so the target must already be declared "
             f"-dynamic({functor}/{arity})",
         ))
+    # THE REMEDY NAMES THE RIGHT MODULE (roborev job 78, finding 4).  For a
+    # row this module merely reaches through an ``-import_from``, "declare it
+    # -dynamic here" is advice that would not work and must not: the
+    # declaration belongs in the module that OWNS the predicate.  Reached only
+    # when the gate above permitted the write (a shared row that is neither
+    # dynamic nor locked), so the refusal is still this function's — it is the
+    # remedy, not the verdict, that changes.
+    # ``module_name`` answers a placeholder (``<detached>``, ``<anonymous>``)
+    # for a Database with no module dict, which names nothing a reader can act
+    # on — prefer the load that supplied the clauses, and say "another module"
+    # rather than print a placeholder.
+    owner = row.source[1] if row is not None and row.source else None
+    if owner is None and row is not None:
+        named = row.db.module_name()
+        owner = None if named.startswith("<") else named
+    remedy = (f" — declare it -dynamic({functor}/{arity}) to modify it at "
+              f"runtime")
+    if foreign:
+        remedy = (f" — it belongs to {owner}, so the -dynamic({functor}/"
+                  f"{arity}) declaration that would permit this write "
+                  f"belongs there, not here"
+                  if owner else
+                  f" — it belongs to another module, so the "
+                  f"-dynamic({functor}/{arity}) declaration that would permit "
+                  f"this write belongs there, not here")
     raise LogicException(permission_error(
         "modify", "static_procedure",
         Compound("/", (functor, arity)),
@@ -238,7 +268,7 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
         + ("is a static procedure" if row is not None and row.clauses else
            "is a data functor (declared with fields and given no clauses), "
            "so its terms compile to cells and it has no clause list")
-        + f" — declare it -dynamic({functor}/{arity}) to modify it at runtime",
+        + remedy,
     ))
 
 

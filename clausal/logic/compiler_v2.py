@@ -323,7 +323,7 @@ def compile_module(
                 # cells-2026-09-20.md``).  Binding the import here is what
                 # makes the two spellings ONE case.
                 imported = _imported_class_by_canonical_name(
-                    module_dict, db, functor, arity)
+                    origins, db, functor, arity)
                 if imported is not None and not db.is_defined(functor, arity):
                     # NOT when this module has clauses of its own under the
                     # name: that is a genuine clash, and a local definition
@@ -334,6 +334,18 @@ def compile_module(
                 # state — the ``_refuse_call_at`` fallback only reads it while
                 # the clause list is EMPTY, which includes the retract-back-
                 # to-empty return leg of a predicate that did have clauses.
+                #
+                # ON AN IMPORTED CLASS THIS WRITES THE OWNER'S ROW (roborev
+                # job 78, finding 5): ``_dynamic_arities`` reads through to
+                # ``cls._row``, which for an import is the exporter's.  That
+                # is DELIBERATE and not new — the non-aliased sibling has
+                # always done it, because the declared-arity set is a property
+                # of the PREDICATE, not of the module that mentioned it, and
+                # ``_refuse_call_at`` reads it through the same shared class.
+                # The rebind above only makes the aliased spelling reach the
+                # same place.  Gate-exempt for the same reason every
+                # ``_dynamic_arities`` write is: it records a DECLARATION, not
+                # a clause, and changes no answers.
                 stamped = module_dict.get(functor)
                 # THE WART (P1 spec 2026-09-17 §2): ``_dynamic_arities`` is a
                 # per-NAME set living on the CLASS's OWN row, which is the row
@@ -816,30 +828,33 @@ def _belongs_elsewhere(pred_cls, db) -> bool:
     return row is not None and not row.detached and row.db is not db
 
 
-def _imported_class_by_canonical_name(module_dict: dict, db, functor: str,
+def _imported_class_by_canonical_name(origins: dict, db, functor: str,
                                       arity: int):
     """The predicate this module IMPORTED whose own name is *functor* at
-    *arity*, whatever local spelling it is bound under here — or None.
+    *arity* — or None.
 
     A class carries the exporter's ``__name__`` wherever it goes, so an
     ``-import_from(m, [alias(bo_p, AliasS)])`` leaves the canonical spelling
-    bound to nothing and ``AliasS`` bound to a class that calls itself
-    ``bo_p``.  This is the one place that has to see through that: a
-    ``-dynamic`` declaration is written in the CANONICAL spelling (it names a
-    predicate, not a local alias), and a scan by ``__name__`` is how the two
-    meet.  ``_belongs_elsewhere`` is what keeps it to imports: a class on this
-    module's own row, or on its private detached row, is not an import and
-    answers None, so a module's own declaration is never rerouted.
+    bound to nothing in ``module_dict`` and ``AliasS`` bound to a class that
+    calls itself ``bo_p``.  ``_import_from_origins`` has ALREADY seen through
+    that — it indexes an aliased import under both the alias and
+    ``bound.__name__`` — so this is ``_imported_class`` plus the two checks
+    that call site needs and it does not:
+
+    * ARITY.  ``origins`` is keyed by name alone, and a name bound at another
+      arity is not the predicate this ``-dynamic(f/N)`` declares.
+    * FOREIGNNESS.  ``_belongs_elsewhere`` keeps a module's own declaration
+      from ever being rerouted, including the degenerate import-from-self.
+
+    NOT a scan of ``module_dict.values()`` by ``__name__`` (roborev job 78,
+    finding 1): that also matches a class reached by a plain Python import, a
+    ``-specialize`` target, or anything another rewrite pass left in the dict,
+    none of which is an ``-import_from``.
     """
-    if module_dict is None:
+    bound = _imported_class(origins, functor)
+    if bound is None or len(bound._fields or ()) != arity:
         return None
-    for value in module_dict.values():
-        if (isinstance(value, PredicateMeta)
-                and value.__name__ == functor
-                and len(value._fields or ()) == arity
-                and _belongs_elsewhere(value, db)):
-            return value
-    return None
+    return bound if _belongs_elsewhere(bound, db) else None
 
 
 def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
