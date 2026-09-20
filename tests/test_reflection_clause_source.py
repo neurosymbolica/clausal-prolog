@@ -133,4 +133,4 @@ def test_rendered_text_re_reifies(matchers):
         "source", chars("path(A, B) <- (edge(A, B),)\n"), text, module=matchers)
     (again,) = [i for i in reify_source(chars_text(rendered) + "\n")
                 if is_v(i, Clause)]
-    assert deref(vfield(again, "head")).name == "path"
+    assert vfield(deref(vfield(again, "head")), "name") == "path"

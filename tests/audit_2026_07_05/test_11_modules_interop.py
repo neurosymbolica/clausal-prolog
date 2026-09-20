@@ -282,7 +282,7 @@ def test_F011_anon_var_does_not_alias_user_underscore_one():
     # A11-F011 (fixed): anonymous vars use non-identifier #anonN names.
     from clausal.reflection import reify_source, vfield
     clause = reify_source('foo(_1, _, X) <- bar(_1, _, X)\n')[0]
-    a0, a1 = vfield(clause, "head").args[0], vfield(clause, "head").args[1]
+    a0, a1 = vfield(vfield(clause, "head"), "args")[0], vfield(vfield(clause, "head"), "args")[1]
     assert a0 != a1  # user _1 and anonymous _ are distinct at runtime
 
 

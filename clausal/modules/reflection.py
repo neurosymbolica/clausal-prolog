@@ -255,8 +255,8 @@ def _goal_functor_3(goal, name, arity, trail, k):
     goal = deref(goal)
     if not is_v(goal, Goal):
         return
-    args = deref(goal.args)
-    kwargs = deref(goal.kwargs)
+    args = deref(vfield(goal, "args"))
+    kwargs = deref(vfield(goal, "kwargs"))
     count = len(args) if isinstance(args, list) else 0
     count += len(kwargs) if isinstance(kwargs, list) else 0
     # NAME is a NAME position (§6.4): the accessor answers an ATOM, so

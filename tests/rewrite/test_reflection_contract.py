@@ -120,7 +120,7 @@ def test_occurs_check_sees_into_a_freshly_built_term(tmp_path):
         sees_direct(H, N) <- reified_subterm(H, Variable(N))
         sees_rebuilt(H, N) <- (rebuild(H, H2), reified_subterm(H2, Variable(N)))
         """)
-    head = _reify_stmt("star(P, [a, *T]) <- (helper(P), T is [b])\n").head
+    head = vfield(_reify_stmt("star(P, [a, *T]) <- (helper(P), T is [b])\n"), "head")
     assert any(True for _ in call("sees_direct", head, "T", module=module))
     assert any(True for _ in call("sees_rebuilt", head, "T", module=module))
 
@@ -136,7 +136,7 @@ def test_render_of_mutated_clause_emits_valid_clausal():
     assert "r(K, unknown(M))" in text
     assert "is unknown" not in text
     reparsed = reify_ast(ast.parse(text).body[0], source=text)
-    assert reparsed.head == folded.head
+    assert vfield(reparsed, "head") == vfield(folded, "head")
 
 
 # ---- eta-reduction (unnecessary_lambda) assumptions ------------------------
@@ -227,7 +227,7 @@ def test_forwarding_lambda_reifies_as_lambda_node_with_atom_params():
     """The shape the rule MATCHES: a raw ``Lambda`` node whose body is a
     ``Goal``, with param references reified as ``Atom`` (never ``Variable``)."""
     clause = _reify_stmt("t(L, R) <- (maplist(((X, Y) <- add_one(X, Y)), L, R))\n")
-    lam = vfield(clause, "goals")[0].args[0]
+    lam = vfield(vfield(clause, "goals")[0], "args")[0]
     assert type(lam).__name__ == "Lambda"
     assert type(lam).__module__ == "clausal.pythonic_ast.nodes"
     assert [type(p).__name__ for p in lam.params.params] == ["PosOrKwParam"] * 2
@@ -238,9 +238,9 @@ def test_forwarding_lambda_reifies_as_lambda_node_with_atom_params():
 def test_bare_reference_reifies_as_atom():
     """The shape the rule CONSTRUCTS -- plain and dotted."""
     clause = _reify_stmt("t(L, R) <- (maplist(add_one, L, R))\n")
-    assert vfield(clause, "goals")[0].args[0] == Atom("add_one")
+    assert vfield(vfield(clause, "goals")[0], "args")[0] == Atom("add_one")
     dotted = _reify_stmt("t(L) <- (maplist(mod.pred, L))\n")
-    assert dotted.goals[0].args[0] == Atom("mod.pred")
+    assert vfield(dotted, "goals")[0].args[0] == Atom("mod.pred")
 
 
 def test_captured_enclosing_variable_reifies_as_variable_in_lambda_body():
@@ -248,26 +248,26 @@ def test_captured_enclosing_variable_reifies_as_variable_in_lambda_body():
     ``Variable`` term, which can never equal the ``Atom`` a param reifies to.
     The rule's exact param/argument match is therefore also its capture fence."""
     clause = _reify_stmt("t(Z, L) <- (maplist((X <- add(X, Z)), L))\n")
-    assert vfield(clause, "goals")[0].args[0].body == Goal("add", [Atom("X"), Variable("Z")], [])
+    assert vfield(vfield(clause, "goals")[0], "args")[0].body == Goal("add", [Atom("X"), Variable("Z")], [])
 
 
 def test_shadowing_param_reference_still_reifies_as_atom():
     """Reification agrees with the engine's shadowing: even when the clause has
     its own X, the lambda body's X is the param -- an ``Atom``."""
     clause = _reify_stmt("t(X, L) <- (m(X), maplist((X <- p(X)), L))\n")
-    assert vfield(clause, "goals")[1].args[0].body == Goal("p", [Atom("X")], [])
+    assert vfield(vfield(clause, "goals")[1], "args")[0].body == Goal("p", [Atom("X")], [])
 
 
 def test_variable_callee_lambda_body_is_not_a_goal():
     """``(X <- F(X))`` with F a clause variable is a call through a variable;
     it reifies as an ``Escape``, so a body-is-a-Goal match refuses it."""
     clause = _reify_stmt("t(F, L) <- (maplist((X <- F(X)), L))\n")
-    assert isinstance(vfield(clause, "goals")[0].args[0].body, Escape)
+    assert isinstance(vfield(vfield(clause, "goals")[0], "args")[0].body, Escape)
 
 
 def test_zero_param_forwarding_lambda_reifies_with_empty_params():
     clause = _reify_stmt("t() <- (call_goal((() <- pings())))\n")
-    lam = vfield(clause, "goals")[0].args[0]
+    lam = vfield(vfield(clause, "goals")[0], "args")[0]
     assert type(lam).__name__ == "Lambda"
     assert lam.params.params == []
     assert lam.body == Goal("pings", [], [])

@@ -80,7 +80,7 @@ def test_folds_mid_body_goal_not_just_last(rules):
 def test_folds_variable_on_right_side(rules):
     out = _rewrite(rules, "r(K, S) <- (m(K), unknown(K) is S)\n")
     assert out is not None
-    assert vfield(out, "head").args[1] == Goal("unknown", [Variable("K")], [])
+    assert vfield(vfield(out, "head"), "args")[1] == Goal("unknown", [Variable("K")], [])
 
 
 def test_substitutes_every_head_occurrence(rules):
@@ -104,7 +104,7 @@ def test_folds_into_a_list_in_the_head(rules):
 def test_folds_a_nested_goal_term(rules):
     out = _rewrite(rules, "r(K, S) <- (m(K, M), S is outer(inner(M), tag))\n")
     assert out is not None
-    assert vfield(out, "head").args[1] == Goal(
+    assert vfield(vfield(out, "head"), "args")[1] == Goal(
         "outer", [Goal("inner", [Variable("M")], []), Atom("tag")], []
     )
 

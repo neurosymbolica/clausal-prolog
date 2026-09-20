@@ -59,12 +59,12 @@ class TestFacts:
         head = vfield(clause, "head")
         assert is_v(head, Goal)
         assert vfield(head, "name") == "edge"
-        assert head.args == [1, 2]
-        assert head.kwargs == []
+        assert vfield(head, "args") == [1, 2]
+        assert vfield(head, "kwargs") == []
 
     def test_multiple_facts_in_order(self):
         items = reify_source("edge(1, 2),\nedge(2, 3),\n")
-        heads = [vfield(c, "head").args for c in clauses_of(items)]
+        heads = [vfield(vfield(c, "head"), "args") for c in clauses_of(items)]
         assert heads == [[1, 2], [2, 3]]
 
     def test_quoted_atom_reifies_as_atom_and_a_float_stays_raw(self):
@@ -73,30 +73,30 @@ class TestFacts:
         # name ``widget`` reifies to (see the next test).  A number stays raw.
         items = reify_source("item('widget', 2.5),\n")
         (clause,) = clauses_of(items)
-        assert vfield(clause, "head").args == [Atom("widget"), 2.5]
+        assert vfield(vfield(clause, "head"), "args") == [Atom("widget"), 2.5]
 
     def test_string_literal_stays_raw(self):
         # A STRING (chars mode) reifies as the plain ``str`` it is.
         items = reify_source('-double_quotes(chars)\nitem("widget", 2.5),\n')
         (clause,) = clauses_of(items)
-        assert vfield(clause, "head").args == ["widget", 2.5]   # STAGE 2: the vocabulary spells a string as the str; an atom is Atom(name)
+        assert vfield(vfield(clause, "head"), "args") == ["widget", 2.5]   # STAGE 2: the vocabulary spells a string as the str; an atom is Atom(name)
 
     def test_atom_argument_reifies_as_atom(self):
         items = reify_source("status(ok, 1),\n")
         (clause,) = clauses_of(items)
-        atom, one = vfield(clause, "head").args
+        atom, one = vfield(vfield(clause, "head"), "args")
         assert atom == Atom("ok")
         assert one == 1
 
     def test_negative_number_literal(self):
         items = reify_source("temp(-40),\n")
         (clause,) = clauses_of(items)
-        assert vfield(clause, "head").args == [-40]
+        assert vfield(vfield(clause, "head"), "args") == [-40]
 
     def test_list_argument_reifies_elementwise(self):
         items = reify_source("path([1, 2, 3]),\n")
         (clause,) = clauses_of(items)
-        assert vfield(clause, "head").args == [[1, 2, 3]]
+        assert vfield(vfield(clause, "head"), "args") == [[1, 2, 3]]
 
 
 # ── Rules ────────────────────────────────────────────────────────────────────
@@ -122,24 +122,24 @@ class TestRules:
     def test_head_and_body_share_variable_terms(self):
         items = reify_source("connected(X, Y) <- edge(X, Y)\n")
         (clause,) = clauses_of(items)
-        assert vfield(clause, "head").args == vfield(clause.goals[0], "args")
+        assert vfield(vfield(clause, "head"), "args") == vfield(vfield(clause, "goals")[0], "args")
 
     def test_anonymous_variables_are_numbered_distinctly(self):
         items = reify_source("reachable(X) <- edge(_, _)\n")
         (clause,) = clauses_of(items)
-        a, b = vfield(clause, "goals")[0].args
+        a, b = vfield(vfield(clause, "goals")[0], "args")
         assert is_v(a, Variable) and is_v(b, Variable)
-        assert a.name != b.name
+        assert vfield(a, "name") != vfield(b, "name")
 
     def test_leading_underscore_variable_keeps_its_name(self):
         items = reify_source("foo(_x) <- bar(_x)\n")
         (clause,) = clauses_of(items)
-        assert vfield(clause, "head").args == [Variable("_x")]
+        assert vfield(vfield(clause, "head"), "args") == [Variable("_x")]
 
     def test_qualified_goal_gets_dotted_name(self):
         items = reify_source("uses(X) <- mod.Other(X)\n")
         (clause,) = clauses_of(items)
-        assert vfield(clause, "goals")[0].name == "mod.Other"
+        assert vfield(vfield(clause, "goals")[0], "name") == "mod.Other"
 
     def test_a_keyword_goal_argument_is_refused_at_load(self):
         """Was: ``bar(Y=X)`` reifies with ``kwargs == [["Y", Variable("X")]]``.
@@ -157,7 +157,7 @@ class TestRules:
     def test_compound_argument_in_head_reifies_as_goal(self):
         items = reify_source("holds(state(X)) <- check(X)\n")
         (clause,) = clauses_of(items)
-        (arg,) = vfield(clause, "head").args
+        (arg,) = vfield(vfield(clause, "head"), "args")
         assert arg == Goal("state", [Variable("X")], [])
 
     def test_clause_position_covers_source_line(self):
@@ -226,7 +226,7 @@ class TestOperatorGoals:
         ite = goal.right
         assert is_v(ite, IfThenElse)
         assert vfield(ite, "then") == 1
-        assert ite.otherwise == -1
+        assert vfield(ite, "otherwise") == -1
 
 
 # ── Escapes and f-strings ────────────────────────────────────────────────────
@@ -240,7 +240,7 @@ class TestEscapes:
         esc = goal.right
         assert is_v(esc, Escape)
         assert vfield(esc, "code") == "len(L)"
-        assert esc.vars == [Variable("L")]
+        assert vfield(esc, "vars") == [Variable("L")]
 
     def test_goal_escape_reifies_as_escape_goal(self):
         items = reify_source("show(X) <- ++print(X)\n")
@@ -260,7 +260,7 @@ class TestEscapes:
         fs = goal.right
         assert is_v(fs, FormatString)
         assert vfield(fs, "vars") == [Variable("X")]
-        assert "value" in fs.code
+        assert "value" in vfield(fs, "code")
 
 
 # ── Directives ───────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ class TestReifyAst:
         node = ast.parse("connected(X, Y) <- edge(X, Y)").body[0]
         clause = reify_ast(node)
         assert is_v(clause, Clause)
-        assert vfield(clause, "head").name == "connected"
+        assert vfield(vfield(clause, "head"), "name") == "connected"
 
     def test_reify_ast_on_expression_node(self):
         node = ast.parse("edge(X, 1)", mode="eval").body
@@ -358,7 +358,7 @@ class TestRealExamples:
         assert {vfield(d, "name") for d in directives} >= {"module", "private"}
         edge_facts = [
             c for c in clauses
-            if vfield(c, "head").name == "edge" and c.goals == []
+            if vfield(vfield(c, "head"), "name") == "edge" and vfield(c, "goals") == []
         ]
         assert len(edge_facts) == 7
         path_rules = [c for c in clauses if c.head.name == "path"]

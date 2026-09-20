@@ -608,7 +608,7 @@ def test_private_declaration_no_longer_carries_a_constants_list():
     items = reify_source("-private([helper, other])\nhelper,\nother,\n")
     (priv,) = [d for d in items
                if is_v(d, ModuleDirective) and vfield(d, "name") == "private"]
-    assert priv.args == [["helper", "other"]]
+    assert vfield(priv, "args") == [["helper", "other"]]
 
 
 def test_the_export_listing_works_in_either_order(tmp_path):
