@@ -18,6 +18,7 @@ from __future__ import annotations
 import clausal.import_hook  # noqa: F401  (installs the import hook)
 from clausal.import_hook import _load_module
 from clausal import Var, solve
+from clausal.logic.cells import cell_functor, make_cell
 from clausal.logic.database import Clause
 
 
@@ -36,32 +37,41 @@ def _solutions(pred, a, lm):
     return out
 
 
-def _head_class(lm):
-    return type(lm.db.clauses_for("p", 2)[0].head)
+def _head_maker(lm):
+    """A builder for a head shaped like the ones already stored.
+
+    P2: a stored head is a CELL, so ``type(head)`` is ``tuple`` and there is
+    no class to reconstruct from -- the functor and the arguments ARE the
+    head.  Reading the functor off a stored clause keeps this test asking
+    what it always asked: build a head the way the module's own heads are
+    built, then assert it through the low-level API."""
+    head = lm.db.clauses_for("p", 2)[0].head
+    functor = cell_functor(head)
+    return lambda *args: make_cell(functor, *args)
 
 
 def test_db_assertz_visible_to_solve(tmp_path):
     mod, lm = _make_dynamic_module(tmp_path, "lvl_assertz")
-    cls = _head_class(lm)
+    head = _head_maker(lm)
     assert _solutions(mod.p, 3, lm) == []
-    lm.db.assertz(Clause(head=cls(arg_0=3, arg_1=30), body=[]))
+    lm.db.assertz(Clause(head=head(3, 30), body=[]))
     assert _solutions(mod.p, 3, lm) == [30]
 
 
 def test_db_asserta_visible_to_solve(tmp_path):
     mod, lm = _make_dynamic_module(tmp_path, "lvl_asserta")
-    cls = _head_class(lm)
-    lm.db.asserta(Clause(head=cls(arg_0=4, arg_1=40), body=[]))
+    head = _head_maker(lm)
+    lm.db.asserta(Clause(head=head(4, 40), body=[]))
     assert _solutions(mod.p, 4, lm) == [40]
 
 
 def test_db_retract_visible_to_solve(tmp_path):
     mod, lm = _make_dynamic_module(tmp_path, "lvl_retract")
-    cls = _head_class(lm)
+    head = _head_maker(lm)
     # Assert a literal-headed clause (not Var+Is-normalized) so the structural
     # match in Database.retract can find it; this isolates the sync behaviour.
-    lm.db.assertz(Clause(head=cls(arg_0=3, arg_1=30), body=[]))
+    lm.db.assertz(Clause(head=head(3, 30), body=[]))
     assert _solutions(mod.p, 3, lm) == [30]
-    removed = lm.db.retract(cls(arg_0=3, arg_1=30))
+    removed = lm.db.retract(head(3, 30))
     assert removed is True
     assert _solutions(mod.p, 3, lm) == []

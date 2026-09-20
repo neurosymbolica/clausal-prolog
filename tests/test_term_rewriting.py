@@ -766,27 +766,36 @@ def _make_functor_class(functor_name: str, *field_names: str):
     return ns[functor_name]
 
 
+def _pf(term, cls, name):
+    """The value of field *name* in a term CELL built from *cls*.
+
+    P2: construction yields a functor and POSITIONS; the names stay on the
+    class that declared them."""
+    from clausal.logic.cells import cell_args
+    return cell_args(term)[cls._fields.index(name)]
+
+
 def test_partial_term_unspecified_field_is_var():
     # nv
     point = _make_functor_class("point", "x_", "y_")
     result = point(x_=1)
-    assert result.x_ == 1
-    assert isinstance(result.y_, RealVar)
+    assert _pf(result, point, "x_") == 1
+    assert isinstance(_pf(result, point, "y_"), RealVar)
 
 
 def test_partial_term_explicit_none_preserved():
     # nv
     point = _make_functor_class("point", "x_", "y_")
     result = point(x_=1, y_=None)
-    assert result.y_ is None
+    assert _pf(result, point, "y_") is None
 
 
 def test_partial_term_no_args_all_vars():
     # nv
     point = _make_functor_class("point", "x_", "y_")
     result = point()
-    assert isinstance(result.x_, RealVar)
-    assert isinstance(result.y_, RealVar)
+    assert isinstance(_pf(result, point, "x_"), RealVar)
+    assert isinstance(_pf(result, point, "y_"), RealVar)
 
 
 def test_partial_term_fresh_vars_each_call():
@@ -794,7 +803,7 @@ def test_partial_term_fresh_vars_each_call():
     point = _make_functor_class("point", "x_", "y_")
     r1 = point(x_=1)
     r2 = point(x_=1)
-    assert r1.y_ is not r2.y_
+    assert _pf(r1, point, "y_") is not _pf(r2, point, "y_")
 
 
 # ── TermTransformer: anonymous variable _ ─────────────────────────────────────

@@ -173,10 +173,23 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None):
     return _simple_to_trampoline(goal_val)
 
 
-def _db_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None):
-    """Decorator: register a factory as a db-dependent built-in (auto-wrapped to trampoline)."""
+def _db_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None,
+                db_optional: bool = False):
+    """Decorator: register a factory as a db-dependent built-in (auto-wrapped to trampoline).
+
+    ``db_optional`` marks the builtin as answering correctly, if in reduced
+    form, for ``db=None`` -- see ``_stateless_dispatch``.  It has to be set
+    HERE rather than on the factory: ``_stateless_dispatch`` reads the flag
+    off the object stored in ``_DB_BUILTINS``, which is the wrapper, and a
+    decorator cannot see an attribute the decorated function has not been
+    given yet.  Until this parameter existed, no ``@_db_builtin`` could be
+    db-optional at all -- only the hand-registered families could.
+    """
     def decorator(factory: Callable) -> Callable:
-        _DB_BUILTINS[(functor, arity)] = _wrap_db_factory(factory)
+        wrapped = _wrap_db_factory(factory)
+        if db_optional:
+            wrapped._db_optional = True
+        _DB_BUILTINS[(functor, arity)] = wrapped
         if fields is not None:
             _BUILTIN_FIELDS[(functor, arity)] = fields
         else:

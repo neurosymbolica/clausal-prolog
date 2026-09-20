@@ -3,7 +3,10 @@ unbound_keys/2, signature/3."""
 
 from __future__ import annotations
 
-from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
+from clausal.logic.cells import (
+    is_chars, chars_text,                  # stage 1: the chars carrier
+    compound_cell_shape, cell_args, cell_arity, make_cell,
+)
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, type_error,
@@ -53,41 +56,72 @@ def _field_keys(mapping, context: str):
     return out
 
 
-@_builtin("vary", 3)
-def _vary__3(overrides, term, new_term, trail, k):
-    """vary(Overrides, Term, NewTerm) — copy Term with field overrides.
+def _declared_field_names(db, term_val):
+    """The field names of a CELL, or ``None``.
 
-    Overrides is a Python dict {field_name: new_value}.
-    Term must be a functor dataclass or KWTerm.
-    NewTerm is unified with the resulting copy.
+    P2: a cell is a functor and POSITIONS -- it carries no field names.  The
+    names come from where they are DECLARED (``-private([point(x, y, z)])``),
+    which is the database's signature registry, and that is the whole reason
+    these two builtins became db-receiving.  ``signature/3`` has always read
+    the same registry; this makes ``vary/3`` and ``unbound_keys/2`` address
+    fields by the same names ``signature/3`` answers with.
     """
-    overrides_val = deref(overrides)
-    term_val = deref(term)
-    if is_var(overrides_val) or is_var(term_val):
-        return
-    if isinstance(overrides_val, DictTerm):
-        overrides_val = overrides_val.data
-    if not isinstance(overrides_val, dict):
-        return
-    overrides_val = _field_keys(overrides_val, "vary/3")
-    if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
-        try:
-            kwargs = term_field_dict(term_val)
-            kwargs.update(overrides_val)
-            result = type(term_val)(**kwargs)
-        except (TypeError, ValueError):
+    if db is None:
+        return None
+    is_cell, functor = compound_cell_shape(term_val)
+    if not is_cell:
+        return None
+    return db.signature_for(functor, cell_arity(term_val))
+
+
+@_db_builtin("vary", 3, fields=("overrides", "term", "new_term"), db_optional=True)
+def _vary_factory(db):
+    def _vary__3(overrides, term, new_term, trail, k):
+        """vary(Overrides, Term, NewTerm) — copy Term with field overrides.
+
+        Overrides is a Python dict {field_name: new_value}.
+        Term is a declared functor CELL, a functor dataclass, or a KWTerm.
+        NewTerm is unified with the resulting copy.
+        """
+        overrides_val = deref(overrides)
+        term_val = deref(term)
+        if is_var(overrides_val) or is_var(term_val):
             return
-    elif isinstance(term_val, KWTerm):
-        try:
-            result = term_val.with_overrides(**overrides_val)
-        except KeyError:
+        if isinstance(overrides_val, DictTerm):
+            overrides_val = overrides_val.data
+        if not isinstance(overrides_val, dict):
             return
-    else:
-        return
-    mark = trail.mark()
-    if unify(new_term, result, trail):
-        yield None
-    trail.undo(mark)
+        overrides_val = _field_keys(overrides_val, "vary/3")
+        names = _declared_field_names(db, term_val)
+        if names is not None:
+            args = list(cell_args(term_val))
+            for key, value in overrides_val.items():
+                if key not in names:
+                    # An override naming no field of this term is "no variation",
+                    # which is what the class path answered too -- its
+                    # ``type(term)(**kwargs)`` raised TypeError and fell here.
+                    return
+                args[names.index(key)] = value
+            result = make_cell(compound_cell_shape(term_val)[1], *args)
+        elif is_term_instance(term_val) and not isinstance(term_val, KWTerm):
+            try:
+                kwargs = term_field_dict(term_val)
+                kwargs.update(overrides_val)
+                result = type(term_val)(**kwargs)
+            except (TypeError, ValueError):
+                return
+        elif isinstance(term_val, KWTerm):
+            try:
+                result = term_val.with_overrides(**overrides_val)
+            except KeyError:
+                return
+        else:
+            return
+        mark = trail.mark()
+        if unify(new_term, result, trail):
+            yield None
+        trail.undo(mark)
+    return _vary__3
 
 
 @_builtin("extend", 3)
@@ -120,32 +154,39 @@ def _extend__3(additions, term, new_term, trail, k):
     trail.undo(mark)
 
 
-@_builtin("unbound_keys", 2)
-def _unbound_keys__2(term, keys_list, trail, k):
-    """unbound_keys(Term, Keys) — Keys is the list of field names holding unbound Vars.
+@_db_builtin("unbound_keys", 2, fields=("term", "keys"), db_optional=True)
+def _unbound_keys_factory(db):
+    def _unbound_keys__2(term, keys_list, trail, k):
+        """unbound_keys(Term, Keys) — Keys is the list of field names holding unbound Vars.
 
-    Works for functor dataclass instances and KWTerm.
+        Works for functor dataclass instances and KWTerm.
 
-    THE FLIP (spec §6.4): a field NAME handed back to the program is an
-    ATOM.  The registry stays keyed by the identifier spelling (a ``str``);
-    only the answer is minted.
-    """
-    term_val = deref(term)
-    if is_var(term_val):
-        return
-    keys: list[tuple] = []
-    if is_term_instance(term_val) and not isinstance(term_val, KWTerm):
-        for name in term_field_names(term_val):
-            if is_var(deref(getattr(term_val, name))):
-                keys.append(mint(name))
-    elif isinstance(term_val, KWTerm):
-        for fname, val in term_val.items():
-            if is_var(deref(val)):
-                keys.append(mint(fname))
-    mark = trail.mark()
-    if unify(keys_list, keys, trail):
-        yield None
-    trail.undo(mark)
+        THE FLIP (spec §6.4): a field NAME handed back to the program is an
+        ATOM.  The registry stays keyed by the identifier spelling (a ``str``);
+        only the answer is minted.
+        """
+        term_val = deref(term)
+        if is_var(term_val):
+            return
+        keys: list[tuple] = []
+        names = _declared_field_names(db, term_val)
+        if names is not None:
+            for name, val in zip(names, cell_args(term_val)):
+                if is_var(deref(val)):
+                    keys.append(mint(name))
+        elif is_term_instance(term_val) and not isinstance(term_val, KWTerm):
+            for name in term_field_names(term_val):
+                if is_var(deref(getattr(term_val, name))):
+                    keys.append(mint(name))
+        elif isinstance(term_val, KWTerm):
+            for fname, val in term_val.items():
+                if is_var(deref(val)):
+                    keys.append(mint(fname))
+        mark = trail.mark()
+        if unify(keys_list, keys, trail):
+            yield None
+        trail.undo(mark)
+    return _unbound_keys__2
 
 
 @_db_builtin("signature", 3, fields=("functor_name", "arity", "names"))
