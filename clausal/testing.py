@@ -2095,10 +2095,17 @@ def _reified_findall_body_goal(goal, path, index):
         for item in items:
             if not is_v(item, ReifiedClause):
                 continue
-            cpos = getattr(item, "position", None)
+            # vfield, not getattr-with-a-default: a reified Clause is a CELL
+            # and has no `.position` attribute, so the default answered for
+            # EVERY item, `owner` stayed None, and this fell back to the
+            # whole-file walk -- which returns whichever findall the FILE
+            # opens with rather than the one in the owning clause.  That is
+            # precisely the misattribution the owner search exists to prevent.
+            cpos = vfield(item, "position", None)
             if (isinstance(cpos, (tuple, list)) and cpos
                     and cpos[0] <= goal_line
-                    and (owner is None or cpos[0] > owner.position[0])):
+                    and (owner is None
+                         or cpos[0] > vfield(owner, "position")[0])):
                 owner = item
         if owner is not None:
             hit = find(owner)
