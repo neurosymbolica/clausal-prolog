@@ -1,5 +1,13 @@
 """Tests for the `_clausal_new` generated fast constructor (Phase 0, Task 1).
 
+P2 (2026-09-20): a class applied to arguments builds the functor-first CELL, so
+a term needs no constructor at all and the fast path is unreachable for one —
+the compiler emits a cell literal instead.  It survives for the classes still
+flagged ``instances=True`` (the reflection vocabulary, clpb, term-expansion
+state), which is why every class here is built that way: the subject is
+unchanged, the population is now named.  ``_clausal_new`` retires with the
+class in P4, and this file with it.
+
 ``PredicateMeta.__call__`` (the slow path) is unchanged.  ``_clausal_new`` is
 an ADDITIVE, per-class, exec-generated classmethod: positional-only, no
 missing-field backfill, no arity checking.  It exists so a later compiler
@@ -26,7 +34,7 @@ from clausal.pythonic_ast.nodes import BinOp
 class TestFastConstructorBasics:
     def test_fast_new_matches_slow_path(self):
         # nv
-        foo = make_predicate("foo", ["x", "y"])
+        foo = make_predicate("foo", ["x", "y"], instances=True)
         fast = foo._clausal_new(1, 2)
         slow = foo(1, 2)
         assert type(fast) is foo
@@ -37,7 +45,7 @@ class TestFastConstructorBasics:
 
     def test_fast_new_single_field(self):
         # nv
-        bar = make_predicate("bar", ["a"])
+        bar = make_predicate("bar", ["a"], instances=True)
         fast = bar._clausal_new(42)
         assert fast.a == 42
         assert fast == bar(42)
@@ -46,21 +54,21 @@ class TestFastConstructorBasics:
 class TestAtomsGetNoFastConstructor:
     def test_atom_class_has_no_clausal_new(self):
         # nv
-        red = make_predicate("red", [])
+        red = make_predicate("red", [], instances=True)
         assert "_clausal_new" not in vars(red)
 
 
 class TestFieldNamedClausalNew:
     def test_field_named_clausal_new_uses_slow_path_only(self):
         # nv
-        weird = make_predicate("weird", ["_clausal_new"])
+        weird = make_predicate("weird", ["_clausal_new"], instances=True)
         # class creation must not raise, and the slow path still works
         t = weird(_clausal_new=5)
         assert t._clausal_new == 5
 
     def test_field_named_clausal_new_gets_no_fast_constructor(self):
         # nv
-        weird = make_predicate("weird2", ["_clausal_new"])
+        weird = make_predicate("weird2", ["_clausal_new"], instances=True)
         # "_clausal_new" is a field name here, so __slots__ owns the class
         # attribute (a member descriptor) at that name. The fast-new factory
         # must not clobber it with a classmethod.
@@ -71,8 +79,8 @@ class TestFieldNamedClausalNew:
 class TestCacheShareByFieldTuple:
     def test_two_same_named_classes_each_get_working_fast_new(self):
         # nv
-        foo1 = make_predicate("foo", ["x"])
-        foo2 = make_predicate("foo", ["x"])
+        foo1 = make_predicate("foo", ["x"], instances=True)
+        foo2 = make_predicate("foo", ["x"], instances=True)
         assert foo1 is not foo2
         f1 = foo1._clausal_new(10)
         f2 = foo2._clausal_new(20)
@@ -85,7 +93,7 @@ class TestCacheShareByFieldTuple:
 class TestStructuralParity:
     def test_fast_path_instances_unhashable(self):
         # nv
-        baz = make_predicate("baz", ["x"])
+        baz = make_predicate("baz", ["x"], instances=True)
         fast = baz._clausal_new(1)
         assert baz.__hash__ is None
         with pytest.raises(TypeError):
@@ -93,7 +101,7 @@ class TestStructuralParity:
 
     def test_fast_path_equal_to_slow_path(self):
         # nv
-        qux = make_predicate("qux", ["x", "y"])
+        qux = make_predicate("qux", ["x", "y"], instances=True)
         fast = qux._clausal_new(1, 2)
         slow = qux(x=1, y=2)
         assert fast == slow
@@ -101,7 +109,7 @@ class TestStructuralParity:
 
     def test_fast_path_match_args_pattern_matching(self):
         # nv
-        quux = make_predicate("quux", ["x", "y"])
+        quux = make_predicate("quux", ["x", "y"], instances=True)
         fast = quux._clausal_new(1, 2)
         match fast:
             case quux(x=vx, y=vy):
@@ -126,7 +134,7 @@ class TestStructuralParity:
 class TestEmitterFastPathUnit:
     def test_plain_predicate_meta_term_emits_clausal_new(self):
         # nv
-        foo = make_predicate("emit_foo", ["x", "y"])
+        foo = make_predicate("emit_foo", ["x", "y"], instances=True)
         term = foo(x=1, y=2)
         expr = term_to_ast_expr(term, {})
         src = ast.unparse(expr)
@@ -155,7 +163,7 @@ class TestEmitterFastPathUnit:
         # nv — a PredicateMeta class with a field literally named "position"
         # hits the pre-existing skip-filter and must NOT take the fast path,
         # even though it has a working _clausal_new.
-        posy = make_predicate("emit_posy", ["position"])
+        posy = make_predicate("emit_posy", ["position"], instances=True)
         assert "_clausal_new" in vars(posy)  # sanity: otherwise eligible
         term = posy(position=1)
         expr = term_to_ast_expr(term, {})
@@ -168,7 +176,7 @@ class TestEmitterFastPathUnit:
 
     def test_underscore_position_field_class_keeps_keyword_emission(self):
         # nv
-        posy2 = make_predicate("emit_posy2", ["_position"])
+        posy2 = make_predicate("emit_posy2", ["_position"], instances=True)
         term = posy2(_position=1)
         expr = term_to_ast_expr(term, {})
         assert "_clausal_new" not in ast.unparse(expr)
@@ -188,7 +196,7 @@ class TestEmitterFastPathUnit:
         # ``vars(cls)["_clausal_new"]`` IS a classmethod, not whether the
         # name is merely present, so this must keep the keyword-call
         # (slow-path) emission.
-        weird = make_predicate("weird_pred", ["_clausal_new"])
+        weird = make_predicate("weird_pred", ["_clausal_new"], instances=True)
         assert "_clausal_new" in vars(weird)  # present ...
         assert not isinstance(vars(weird)["_clausal_new"], classmethod)  # ... but not a classmethod
         term = weird(_clausal_new=5)
@@ -214,7 +222,7 @@ class TestEmitterFastPathIntegration:
         # nv — a clause body that constructs a saturated compound as data
         # (``R is pt(X, Y)``): the compiled source takes the fast path, and
         # the answer it produces is the SAME as one built via the slow path.
-        pt = make_predicate("emit_pt", ["x", "y"])
+        pt = make_predicate("emit_pt", ["x", "y"], instances=True)
         assert "_clausal_new" in vars(pt)  # sanity: fast-path eligible
 
         hx, hy, hr = Var(), Var(), Var()
@@ -261,8 +269,8 @@ class TestDerefWalkFastPath:
         from clausal.logic.solve import _deref_walk_py
         from clausal.logic.variables import Var, Trail, unify
 
-        inner = make_predicate("dw_inner", ["a", "b"])
-        outer = make_predicate("dw_outer", ["p", "q"])
+        inner = make_predicate("dw_inner", ["a", "b"], instances=True)
+        outer = make_predicate("dw_outer", ["p", "q"], instances=True)
 
         calls = []
         real_fast_new = inner.__dict__["_clausal_new"]
@@ -310,7 +318,7 @@ class TestDerefWalkFastPath:
         # ``vars()``; the gate must reject it and fall back to kwargs.
         from clausal.logic.solve import _deref_walk_py
 
-        weird = make_predicate("dw_weird", ["_clausal_new"])
+        weird = make_predicate("dw_weird", ["_clausal_new"], instances=True)
         term = weird(_clausal_new=7)
         result = _deref_walk_py(term)
         assert result == term
@@ -321,7 +329,7 @@ class TestDerefWalkFastPath:
         # ``term_field_names`` must drive positional assignment correctly.
         from clausal.logic.solve import _deref_walk_py
 
-        p = make_predicate("dw_p", ["b", "a"])
+        p = make_predicate("dw_p", ["b", "a"], instances=True)
         assert p._fields == ("b", "a")
         term = p(b=1, a=2)
         result = _deref_walk_py(term)
@@ -337,8 +345,8 @@ class TestCopyTermFastPath:
         from clausal.logic.builtins.inspection import _copy_term_py
         from clausal.logic.variables import Var, is_var
 
-        inner = make_predicate("ct_inner", ["a", "b"])
-        outer = make_predicate("ct_outer", ["p", "q"])
+        inner = make_predicate("ct_inner", ["a", "b"], instances=True)
+        outer = make_predicate("ct_outer", ["p", "q"], instances=True)
 
         calls = []
         real_fast_new = inner.__dict__["_clausal_new"]
@@ -381,7 +389,7 @@ class TestCopyTermFastPath:
         # nv
         from clausal.logic.builtins.inspection import _copy_term_py
 
-        weird = make_predicate("ct_weird", ["_clausal_new"])
+        weird = make_predicate("ct_weird", ["_clausal_new"], instances=True)
         term = weird(_clausal_new=7)
         result = _copy_term_py(term, {})
         assert result == term
@@ -391,7 +399,7 @@ class TestCopyTermFastPath:
         # nv
         from clausal.logic.builtins.inspection import _copy_term_py
 
-        p = make_predicate("ct_p", ["b", "a"])
+        p = make_predicate("ct_p", ["b", "a"], instances=True)
         assert p._fields == ("b", "a")
         term = p(b=1, a=2)
         result = _copy_term_py(term, {})
@@ -452,8 +460,8 @@ def _c_walker_corpus():
     skip-filter cares about — the walkers have no such filter, so this must
     still take the fast path here).
     """
-    inner = make_predicate("cw_inner", ["a", "b"])
-    outer = make_predicate("cw_outer", ["p", "q"])
+    inner = make_predicate("cw_inner", ["a", "b"], instances=True)
+    outer = make_predicate("cw_outer", ["p", "q"], instances=True)
     v_bound = Var()
     v_unbound = Var()
     trail = Trail()
@@ -462,10 +470,10 @@ def _c_walker_corpus():
 
     node = BinOp(left=1, right=2)
 
-    weird = make_predicate("cw_weird", ["_clausal_new"])
+    weird = make_predicate("cw_weird", ["_clausal_new"], instances=True)
     weird_term = weird(_clausal_new=7)
 
-    posy = make_predicate("cw_posy", ["position"])
+    posy = make_predicate("cw_posy", ["position"], instances=True)
     posy_term = posy(position=v_bound)
 
     return [nested, node, weird_term, posy_term]
@@ -493,8 +501,8 @@ class TestCWalkerFastPathParity:
         # nv — parity of VALUES isn't enough on its own (a bug that always
         # took the slow path would still pass the ``==`` checks above); pin
         # down the identity/freshness properties the fast path must preserve.
-        inner = make_predicate("cw_fresh_inner", ["a", "b"])
-        outer = make_predicate("cw_fresh_outer", ["p", "q"])
+        inner = make_predicate("cw_fresh_inner", ["a", "b"], instances=True)
+        outer = make_predicate("cw_fresh_outer", ["p", "q"], instances=True)
         v = Var()
         trail = Trail()
         unify(v, 7, trail)
@@ -507,8 +515,8 @@ class TestCWalkerFastPathParity:
 
     def test_walk_produces_fresh_fully_derefed_object(self):
         # nv
-        inner = make_predicate("cw_fresh2_inner", ["a", "b"])
-        outer = make_predicate("cw_fresh2_outer", ["p", "q"])
+        inner = make_predicate("cw_fresh2_inner", ["a", "b"], instances=True)
+        outer = make_predicate("cw_fresh2_outer", ["p", "q"], instances=True)
         v = Var()
         trail = Trail()
         unify(v, 7, trail)
@@ -524,7 +532,7 @@ class TestCWalkerFastPathParity:
         # (rather than trusting alphabetical field order by accident),
         # mirroring TestDerefWalkFastPath.test_field_order_non_alphabetical
         # and TestCopyTermFastPath.test_field_order_non_alphabetical above.
-        p = make_predicate("cw_nonalpha", ["b", "a"])
+        p = make_predicate("cw_nonalpha", ["b", "a"], instances=True)
         assert p._fields == ("b", "a")
         term = p(b=1, a=2)
 
@@ -546,8 +554,8 @@ class TestCWalkerFastPathActuallyFires:
 
     def test_deref_walk_c_uses_fast_new_for_nested_term(self):
         # nv
-        inner = make_predicate("cwf_inner", ["a", "b"])
-        outer = make_predicate("cwf_outer", ["p", "q"])
+        inner = make_predicate("cwf_inner", ["a", "b"], instances=True)
+        outer = make_predicate("cwf_outer", ["p", "q"], instances=True)
 
         calls = []
         real_fast_new = inner.__dict__["_clausal_new"]
@@ -573,8 +581,8 @@ class TestCWalkerFastPathActuallyFires:
 
     def test_walk_uses_fast_new_for_nested_term(self):
         # nv
-        inner = make_predicate("cwf2_inner", ["a", "b"])
-        outer = make_predicate("cwf2_outer", ["p", "q"])
+        inner = make_predicate("cwf2_inner", ["a", "b"], instances=True)
+        outer = make_predicate("cwf2_outer", ["p", "q"], instances=True)
 
         calls = []
         real_fast_new = inner.__dict__["_clausal_new"]
@@ -603,7 +611,7 @@ class TestCWalkerFastPathActuallyFires:
         # literally named "_clausal_new" must NOT be treated as the fast
         # constructor (it's a __slots__ member descriptor there, not a
         # classmethod — calling it would raise TypeError).
-        weird = make_predicate("cwf_weird", ["_clausal_new"])
+        weird = make_predicate("cwf_weird", ["_clausal_new"], instances=True)
         term = weird(_clausal_new=7)
         result = _tabling_core._deref_walk(term)
         assert result == term
@@ -612,7 +620,7 @@ class TestCWalkerFastPathActuallyFires:
 
     def test_walk_field_named_clausal_new_uses_slow_path(self):
         # nv
-        weird = make_predicate("cwf2_weird", ["_clausal_new"])
+        weird = make_predicate("cwf2_weird", ["_clausal_new"], instances=True)
         term = weird(_clausal_new=7)
         result = _variables_c.walk(term)
         assert result == term
@@ -643,8 +651,8 @@ class TestCWalkerFastPathActuallyFires:
 
 def _c_copy_term_corpus():
     # nv
-    inner = make_predicate("cct_p_inner", ["a", "b"])
-    outer = make_predicate("cct_p_outer", ["p", "q"])
+    inner = make_predicate("cct_p_inner", ["a", "b"], instances=True)
+    outer = make_predicate("cct_p_outer", ["p", "q"], instances=True)
     v_bound = Var()
     trail = Trail()
     unify(v_bound, 42, trail)
@@ -652,10 +660,10 @@ def _c_copy_term_corpus():
 
     node = BinOp(left=1, right=2)
 
-    weird = make_predicate("cct_p_weird", ["_clausal_new"])
+    weird = make_predicate("cct_p_weird", ["_clausal_new"], instances=True)
     weird_term = weird(_clausal_new=7)
 
-    posy = make_predicate("cct_p_posy", ["position"])
+    posy = make_predicate("cct_p_posy", ["position"], instances=True)
     posy_term = posy(position=1)
 
     return [nested, node, weird_term, posy_term]
@@ -681,8 +689,8 @@ class TestCCopyTermFastPathParity:
         # the same fresh Var within one copy).
         from clausal.logic.builtins.inspection import _copy_term
 
-        inner = make_predicate("cct_fresh_inner", ["a", "b"])
-        outer = make_predicate("cct_fresh_outer", ["p", "q"])
+        inner = make_predicate("cct_fresh_inner", ["a", "b"], instances=True)
+        outer = make_predicate("cct_fresh_outer", ["p", "q"], instances=True)
         v = Var()
         term = outer(p=inner(a=1, b=v), q=[v, "tail"])
 
@@ -706,7 +714,7 @@ class TestCCopyTermFastPathParity:
         # accelerator's own term-instance arm.
         from clausal.logic.builtins.inspection import _copy_term
 
-        weird = make_predicate("cct_p_weird2", ["_clausal_new"])
+        weird = make_predicate("cct_p_weird2", ["_clausal_new"], instances=True)
         term = weird(_clausal_new=7)
         result = _copy_term(term, {})
         assert result == term
@@ -722,8 +730,8 @@ class TestCCopyTermFastPathActuallyFires:
         # accelerator's term-instance arm.
         from clausal.logic.builtins.inspection import _copy_term
 
-        inner = make_predicate("cct_fire_inner", ["a", "b"])
-        outer = make_predicate("cct_fire_outer", ["p", "q"])
+        inner = make_predicate("cct_fire_inner", ["a", "b"], instances=True)
+        outer = make_predicate("cct_fire_outer", ["p", "q"], instances=True)
 
         calls = []
         real_fast_new = inner.__dict__["_clausal_new"]
