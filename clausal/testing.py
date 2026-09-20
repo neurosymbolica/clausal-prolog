@@ -691,6 +691,7 @@ def _reified_goals(path, clause, arity):
     conjunct-count mismatch (a body shape whose runtime form does not
     correspond 1:1 with its source conjuncts) declines rather than guesses.
     """
+    from clausal.reflection import vfield  # noqa: PLC0415
     item = _reified_clause(path, clause)
     if item is None:
         return None
@@ -2068,6 +2069,7 @@ def _reified_findall_body_goal(goal, path, index):
             _REIFY_CACHE[key] = items
 
         def find(node):
+            from clausal.reflection import is_v  # noqa: PLC0415
             if (is_v(node, Goal) and str(node.name) == "findall"
                     and len(node.args or ()) == 3):
                 inner = node.args[1]
@@ -2328,6 +2330,7 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
     structural arg failed to unify — this clause was never a route) or
     ``"skip"`` (probe artifact or re-run disagreement — say nothing); for the
     non-``"leaves"`` states ``groups`` is empty."""
+    from clausal.reflection import vfield  # noqa: PLC0415
     from clausal.logic.variables import Trail
     from clausal.pythonic_ast.nodes import Unify
 
