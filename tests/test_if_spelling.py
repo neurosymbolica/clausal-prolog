@@ -166,8 +166,11 @@ class TestCanonicalOutput:
         src = f"pick(X, Y) <- (Y is {ite}(X > 0, 1, 2))\n"
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ClausalDeprecatedSpellingWarning)
+            # P2: a reified Clause is a CELL, so `hasattr(item, "goals")`
+            # is False for every item -- the kind is the functor.
+            from clausal.logic.cells import compound_cell_shape
             (clause,) = [item for item in reify_source(src)
-                         if hasattr(item, "goals")]
+                         if compound_cell_shape(item)[1] == "Clause"]
         (goal,) = clause.goals
         assert isinstance(goal.right, IfThenElse)
         rendered = render_source(clause)

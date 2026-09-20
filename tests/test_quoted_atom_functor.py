@@ -32,6 +32,17 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
 
+def _kind(item):
+    """The reified item's KIND.
+
+    P2: a reified item is a CELL, so `type(item).__name__` is
+    "tuple" for every one of them; the kind is the functor."""
+    from clausal.logic.cells import compound_cell_shape
+
+    is_cell, functor = compound_cell_shape(item)
+    return functor if is_cell else type(item).__name__
+
+
 def _load(tmp_path, name, text):
     path = tmp_path / f"{name}.clausal"
     path.write_text(textwrap.dedent(text).lstrip())
@@ -247,7 +258,7 @@ class TestReify:
     def test_a_quoted_titlecase_head_reifies_as_a_clause(self):
         from clausal.reflection import Clause, reify_source, is_v
         items = reify_source("'Foo'(X) <- (bar(X))\n")
-        assert [type(i).__name__ for i in items] == ["Clause"]
+        assert [_kind(i) for i in items] == ["Clause"]
         assert is_v(items[0], Clause)
 
     @pytest.mark.parametrize("src", [
@@ -274,7 +285,7 @@ class TestReify:
         """A goal names an atom and mints no class, so nothing stops it --
         the asymmetry mirrors the representation, it is not an oversight."""
         from clausal.reflection import reify_source, is_v
-        assert [type(i).__name__ for i in reify_source(src)] == ["Clause"]
+        assert [_kind(i) for i in reify_source(src)] == ["Clause"]
 
     def test_a_double_quoted_head_still_reifies(self):
         """The ISO 6.3.3 refusal IS reify-exempt -- its reason (an atom

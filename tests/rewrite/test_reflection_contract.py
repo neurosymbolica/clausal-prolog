@@ -261,8 +261,9 @@ def test_shadowing_param_reference_still_reifies_as_atom():
 def test_variable_callee_lambda_body_is_not_a_goal():
     """``(X <- F(X))`` with F a clause variable is a call through a variable;
     it reifies as an ``Escape``, so a body-is-a-Goal match refuses it."""
+    from clausal.reflection import is_v  # noqa: PLC0415
     clause = _reify_stmt("t(F, L) <- (maplist((X <- F(X)), L))\n")
-    assert isinstance(vfield(vfield(clause, "goals")[0], "args")[0].body, Escape)
+    assert is_v(vfield(vfield(clause, "goals")[0], "args")[0].body, Escape)
 
 
 def test_zero_param_forwarding_lambda_reifies_with_empty_params():

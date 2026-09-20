@@ -298,7 +298,8 @@ reify_source("-double_quotes(chars)\np(X) <- (X is ++(1 + 2))\n")
 assert "clausal.logic.compiler.predicate" not in sys.modules, "probe is void: compiler imported"
 items = reify_source(src)
 assert "clausal.import_hook" not in sys.modules, "probe is void: import hook imported"
-clauses = [it for it in items if type(it).__name__ == "Clause"]
+clauses = [it for it in items
+           if isinstance(it, tuple) and it and it[0] == "Clause"]  # P2: kind is the cell functor
 assert len(clauses) == 2, items
 print("REIFIED", len(clauses))
 '''

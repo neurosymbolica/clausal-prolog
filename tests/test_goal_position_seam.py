@@ -599,7 +599,8 @@ class TestBoundaries:
         from clausal.reflection import reify_source
         src = RULEBASE.format(name="_gp_r") + "def f():\n    if --decide(small, V):\n        return V\n"
         dumped = "\n".join(repr(vars(i)) if hasattr(i, "__dict__") else repr(i) for i in reify_source(src))
-        assert "PythonCode(kind='function', name='f'" in dumped and "$once_bind" not in dumped
+        # P2: a reified item prints as its CELL -- ('PythonCode', kind, name, pos)
+        assert "('PythonCode', 'function', 'f'" in dumped and "$once_bind" not in dumped
 
 
 class TestQueryCache:

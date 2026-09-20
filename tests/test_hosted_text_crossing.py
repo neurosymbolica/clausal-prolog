@@ -88,7 +88,8 @@ class TestBoundaries:
         # rendering; pin that the item is still there and carries no helper.
         items = reify_source(src)
         dumped = "\n".join(repr(vars(i)) if hasattr(i, "__dict__") else repr(i) for i in items)
-        assert "PythonCode(kind='function', name='text'" in dumped
+        # P2: a reified item prints as its CELL -- ('PythonCode', kind, name, pos)
+        assert "('PythonCode', 'function', 'text'" in dumped
         assert "$text" not in dumped
 
 

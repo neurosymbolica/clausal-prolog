@@ -25,6 +25,17 @@ from clausal.reflection import (
 )
 
 
+def _kind(item):
+    """The reified item's KIND.
+
+    P2: a reified item is a CELL, so `type(item).__name__` is
+    "tuple" for every one of them; the kind is the functor."""
+    from clausal.logic.cells import compound_cell_shape
+
+    is_cell, functor = compound_cell_shape(item)
+    return functor if is_cell else type(item).__name__
+
+
 def strip_positions(term):
     """Recursively null every ``position`` field so structural == ignores
     source location. Reified terms carry ``_fields``; simple_ast operator
@@ -409,13 +420,13 @@ class TestInertPythonExprNodes:
 class TestOutOfScope:
     def test_module_directive_raises(self):
         items = reify_source("-module(m)\n")
-        directive = next(i for i in items if type(i).__name__ == "ModuleDirective")
+        directive = next(i for i in items if _kind(i) == "ModuleDirective")
         with pytest.raises(RenderError):
             render_source(directive)
 
     def test_python_code_raises(self):
         items = reify_source("def helper():\n    return 1\n")
-        pycode = next(i for i in items if type(i).__name__ == "PythonCode")
+        pycode = next(i for i in items if _kind(i) == "PythonCode")
         with pytest.raises(RenderError):
             render_source(pycode)
 
@@ -856,7 +867,8 @@ class TestCorruptionGuards:
         )
         # And it must re-parse to the same lambda structure.
         reparsed = only_clause(f"wrap(G) <- run({rendered}, G)\n")
-        assert strip_positions(reparsed.goals[0].args[0]) == strip_positions(lambda_term)
+        assert (strip_positions(vfield(vfield(reparsed, "goals")[0], "args")[0])
+                == strip_positions(lambda_term))
 
     def test_escape_with_invalid_code_raises_render_error(self):
         # I3: a mutated Escape whose code is not valid Python must raise
