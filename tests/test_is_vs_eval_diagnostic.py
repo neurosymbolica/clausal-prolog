@@ -13,6 +13,8 @@ These tests pin that they say so.  See ``todo/done/`` for the request.
 
 from __future__ import annotations
 
+import pytest
+
 import textwrap
 
 from clausal.logic.atoms import mint
@@ -200,21 +202,20 @@ test("keyword argument") <- (
 
 
 def test_nearest_solution_note_fires_on_a_keyword_argument(capsys, tmp_path):
-    """``_report_nearest`` reads `kwargs[i].value` on the kw path.
+    """The kw branch of ``_report_nearest`` is UNREACHABLE FROM SOURCE.
 
-    That is a distinct branch from the positional one, and a wrong index there
-    would compare the wrong pair — silently, since a missing note looks the
-    same as a note declining.
+    It reads ``kwargs[i].value``, a distinct branch from the positional one,
+    and a wrong index there would compare the wrong pair silently — which is
+    why it was pinned.  Since 2026-09-19 a term is built positionally and the
+    source that reached that branch does not load, so what can be pinned is
+    the refusal.  The branch itself still exists and goes with the keyword
+    machinery in P4; if that removal leaves it behind, this test is the
+    reminder that nothing reaches it.
     """
     p = write(tmp_path, "kwarg.clausal", KEYWORD_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert "did not unify" in out
-    assert IS_VS_EQ in out
-    # It really is the kw branch: the label names the keyword, so this cannot
-    # start passing via the positional path without the assertion noticing.
-    assert "keyword argument 'R' differs" in out
-    assert "keyword argument 'R' pairs an unevaluated" in out
+    assert "keyword arguments" in out and "eff/1" in out
 
 
 def test_a_boolean_opposite_an_arith_term_does_not_fire():

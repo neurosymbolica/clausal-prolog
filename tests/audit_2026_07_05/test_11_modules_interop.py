@@ -261,13 +261,21 @@ def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_F010_keyword_head_reify_matches_runtime_order():
-    # A11-F010 (fixed): keyword heads reify as [name, value] kwargs pairs.
+def test_F010_a_keyword_head_is_refused_at_load():
+    """A11-F010 asked whether a keyword head reifies in canonical FIELD order
+    or as kwargs pairs.  A term is built positionally since 2026-09-19, so
+    neither: the source does not load.
+
+    Worth noting what it was: ``assert args == [10, 20] or ["x", 10] in
+    kwargs`` — a DISJUNCTION satisfied by two different reifications, so it
+    would have passed whichever one the engine produced and pinned neither.
+    Same species as F032's ``"=:=" in back or " is " in back``.  Not repaired
+    on the way past, because the spelling it asked about is gone.
+    """
+    import pytest
     from clausal.reflection import reify_source
-    items = reify_source('kp(x=1, y=2),\nkp(y=20, x=10),\n')
-    second = items[1].head
-    # Either canonical field order, or kwargs pairs preserving the names.
-    assert list(second.args) == [10, 20] or ["x", 10] in list(second.kwargs)
+    with pytest.raises(SyntaxError, match="keyword arguments"):
+        reify_source('kp(x=1, y=2),\nkp(y=20, x=10),\n')
 
 
 def test_F011_anon_var_does_not_alias_user_underscore_one():

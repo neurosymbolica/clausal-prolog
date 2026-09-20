@@ -374,17 +374,21 @@ class TestShorterHeadAfterLongerIsRefused:
         """)
         assert len(mod.foo._clauses) == 2
 
-    def test_a_keyword_subset_head_still_loads(self, tmp_path):
-        """``f(A=1)`` binds by NAME; the unbound remainder is explicit."""
-        mod = _load(tmp_path, "merge_kw", """
-            -module(m, [
-                f(A, B)
-            ])
+    def test_a_keyword_subset_head_is_refused(self, tmp_path):
+        """``f(A=1)`` was the arity-conflict EXEMPTION: binding by name made
+        the unbound remainder explicit, so a short head was not a conflict.
+        The spelling is retired (2026-09-19), so the exemption has nothing
+        left to except — a short POSITIONAL head is covered by the conflict
+        tests around this one, which are the rule this was the exception to.
+        """
+        with pytest.raises(SyntaxError, match="keyword arguments"):
+            _load(tmp_path, "merge_kw", """
+                -module(m, [
+                    f(A, B)
+                ])
 
-            f(A=1),
-        """)
-        assert mod.f._fields == ("A", "B")
-        assert len(mod.f._clauses) == 1
+                f(A=1),
+            """)
 
     def test_edcg_visible_arity_head_still_loads(self, tmp_path):
         """``r(1),`` against a class minted at /3 is at the VISIBLE arity."""

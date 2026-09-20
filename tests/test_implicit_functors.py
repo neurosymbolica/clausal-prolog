@@ -227,44 +227,29 @@ class TestImplicitFunctors:
         with pytest.raises(SyntaxError, match=r"point/2"):
             _load_fixture("implicit_functors_arity_plain")
 
-    # -- keyword construction still needs a real signature ------------------
+    # -- keyword construction is refused, flag or no flag --------------------
 
-    def test_keyword_construction_of_an_owa_unknown_functor_still_errors(self):
-        with pytest.raises(SyntaxError) as exc_info:
-            _load_inline(
-                "_if_kwunknown",
-                "-implicit_functors\n"
-                "-module(_if_kwunknown, [p(A)])\n"
-                "p(wobble(x=1)),\n",
-            )
-        message = str(exc_info.value)
-        assert "wobble" in message
-        assert "signature" in message
-
-    def test_keyword_construction_of_a_declared_functor_is_unaffected_by_the_flag(self):
-        """A functor WITH a matching registry signature still places
-        keywords by field name exactly as it does without the flag -- OWA
-        only makes KEYWORD-FREE construction advisory."""
-        mod = _load_inline(
-            "_if_kwplace",
-            "-implicit_functors\n"
-            "-module(_if_kwplace, [point(x, y), p(A)])\n"
-            "p(point(y=2, x=1)),\n",
-        )
-        src = capture_predicate_codegen("_if_kwplace", ["p"])
-        assert "('point', 1, 2)" in src
-
-    def test_keyword_over_arity_field_name_still_raises_naming_the_functor(self):
-        """A declared functor's keyword placement keeps its own field-name
-        check under the flag -- an unknown FIELD name is still rejected,
-        the same way it is without ``-implicit_functors``."""
-        with pytest.raises(SyntaxError, match=r"point/2"):
-            _load_inline(
-                "_if_kwbadfield",
-                "-implicit_functors\n"
-                "-module(_if_kwbadfield, [point(x, y), p(A)])\n"
-                "p(point(z=1)),\n",
-            )
+    def test_keyword_construction_is_refused_under_the_flag_too(self):
+        """Three tests lived here: an OWA-unknown functor built with keywords
+        errored naming its missing signature; a DECLARED functor placed its
+        keywords by field name; an unknown FIELD name was rejected naming
+        ``point/2``.  All three asked what keyword construction does under
+        ``-implicit_functors``, and the answer since 2026-09-19 is that it
+        does not load at all — the flag makes KEYWORD-FREE construction
+        advisory and has nothing to say about a spelling the language has
+        retired.  What the flag still does is covered by the OWA tests below.
+        """
+        for source in (
+            "p(wobble(x=1)),\n",           # OWA-unknown functor
+            "p(point(y=2, x=1)),\n",       # declared functor, keywords by name
+            "p(point(z=1)),\n",            # unknown field name
+        ):
+            with pytest.raises(SyntaxError, match="keyword arguments"):
+                _load_inline(
+                    "_if_kw" + str(abs(hash(source)) % 10000),
+                    "-implicit_functors\n"
+                    "-module(_if_kw, [point(x, y), p(A)])\n" + source,
+                )
 
     # -- predicate references keep class/goal emission under OWA -----------
 

@@ -686,8 +686,12 @@ def test_constants_rhs_functor_over_arity_is_a_load_error(tmp_path):
 
 
 def test_constants_rhs_functor_unknown_field_is_a_load_error(tmp_path):
+    """Still a load error naming the functor, but the KEYWORD LINT speaks
+    first now (2026-09-19: a term is built positionally), so the arity in the
+    message is the WRITTEN one -- ``pair/1`` for ``pair(NOPE=1)`` -- not the
+    declared ``pair/2`` the field check would have named."""
     _load_const_functor_owner()
-    with pytest.raises(SyntaxError, match=r"pair/2"):
+    with pytest.raises(SyntaxError, match=r"pair/1"):
         _load(tmp_path, "cfo2", """
             -import_from(tests.fixtures.const_functor_owner, [pair])
             -constant_value(c_bad, pair(NOPE=1))

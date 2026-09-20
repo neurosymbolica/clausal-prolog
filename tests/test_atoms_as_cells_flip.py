@@ -1250,6 +1250,16 @@ def _class_test_offenders(root, repo_root, skip):
     for path in sorted(root.rglob("*.py")):
         if path.resolve() in skip:
             continue
+        # ``__transformed__/`` holds DUMPS of transformed Clausal source
+        # (clausal.tools.dump_transformed writes them there).  They carry
+        # ``$``-names, so they are not valid Python and ``ast.parse`` dies on
+        # them — the guard then fails for a reason that has nothing to do with
+        # the name it exists to police.  They are gitignored, so a clean
+        # worktree never has any and a long-lived CHECKOUT does: two from
+        # 2026-03-11 are why /workspace/clausal read one more failure than any
+        # worktree at the same sha for six months.
+        if "__transformed__" in path.parts:
+            continue
         package_parts = _dotted_package(path, repo_root)
         tree = ast.parse(path.read_text(encoding="utf-8"))
         module_aliases = set()

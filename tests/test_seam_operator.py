@@ -110,14 +110,18 @@ class TestVariablesAndEscapes:
         ))
         assert mod.build([1, 2]) == ("outer", [("inner", 1), ("inner", 2)], "done")
 
-    def test_keyword_construction_places_named_slots(self):
-        mod = _load_inline("_seam_kw", (
-            "-module(_seam_kw, [verdict(A, B)])\n"
-            "-double_quotes(chars)\n"
-            "def build():\n"
-            "    return --verdict(B=2, A=1)\n"
-        ))
-        assert mod.build() == ("verdict", 1, 2)
+    def test_keyword_construction_in_a_seam_is_refused(self):
+        """A seam operand is a CLAUSAL subtree, so the keyword refusal reaches
+        it: ``--verdict(B=2, A=1)`` used to place by name and build
+        ``("verdict", 1, 2)``.  The positional seam construction it placed
+        INTO is unchanged and covered by the tests around this one."""
+        with pytest.raises(SyntaxError, match="keyword arguments"):
+            _load_inline("_seam_kw", (
+                "-module(_seam_kw, [verdict(A, B)])\n"
+                "-double_quotes(chars)\n"
+                "def build():\n"
+                "    return --verdict(B=2, A=1)\n"
+            ))
 
 
 class TestHostModuleRulesApply:

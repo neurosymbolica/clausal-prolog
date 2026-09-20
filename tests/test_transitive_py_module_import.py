@@ -94,7 +94,7 @@ def test_transitive_python_backed_module_import(tmp_path):
     """))
     (tmp_path / "use_dt.clausal").write_text(textwrap.dedent("""\
         -import_from(mod_dt, [days_between])
-        Test("transitive import of a date_time module") <- (days_between(2026,1,1, 2026,4,1, N), N == 90)
+        test("transitive import of a date_time module") <- (days_between(2026,1,1, 2026,4,1, N), N == 90)
     """))
 
     proc = subprocess.run(
@@ -121,7 +121,7 @@ def test_direct_python_backed_module_import(tmp_path):
     """A single .clausal file importing a py-backed module also works from any cwd."""
     (tmp_path / "direct_dt.clausal").write_text(textwrap.dedent("""\
         -import_from(date_time, [date, date_diff])
-        Test("direct date_time import") <- (
+        test("direct date_time import") <- (
             S is date(2026,1,1), E is date(2026,4,1), date_diff(E, S, TD), ++TD.days == 90)
     """))
 
