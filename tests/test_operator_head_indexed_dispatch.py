@@ -113,7 +113,7 @@ class TestOperatorHeadUnderArgIndexing:
         """Guard against an over-broad fix: a * b must not match the + clause."""
         n = Var()
         goal = indexed.kind(Mult(left=indexed.p, right=indexed.q), n)
-        got = [deref(n) for _ in solve(goal)]
+        got = [deref(n) for _ in solve(goal, indexed)]
         assert got == [mint("times_")]
 
     def test_non_operator_clause_unaffected(self, indexed):

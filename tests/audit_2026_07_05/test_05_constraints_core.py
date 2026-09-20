@@ -726,8 +726,8 @@ class TestLanguageIntegration:
     def test_immediate_not_unify_point_in_time(self, load):
         m = load("lang", LANG_SRC)
         # two unbound vars unify → not(is) fails immediately
-        assert once(m.imm(Var(), Var())) is None
-        assert once(m.imm(1, 2)) is not None
+        assert once(m.imm(Var(), Var()), module=m) is None
+        assert once(m.imm(1, 2), module=m) is not None
 
     def test_reified_builtins_from_source(self, load):
         m = load("lang", LANG_SRC)

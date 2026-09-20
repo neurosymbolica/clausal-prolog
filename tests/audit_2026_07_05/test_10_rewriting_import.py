@@ -45,9 +45,12 @@ def _logic(mod):
     return mod.__dict__["$module"]
 
 
-def _values(goal, var):
+def _values(goal, var, *, module=None):
+    """P2: a cell goal carries no module and ``solve`` refuses to guess one
+    (R-P2-2, module locality), so the caller passes the module the goal's
+    predicate came off."""
     out = []
-    for _ in solve(goal):
+    for _ in solve(goal, module):
         out.append(var.value)
     return out
 
@@ -172,7 +175,7 @@ def test_F004_local_clause_does_not_clobber_imported_predicate(tmp_path):
     lib = _load_module("a10_f004_lib", str(lib_path))
 
     b = Var()
-    assert _values(lib.twice(4, b), b) == [8]
+    assert _values(lib.twice(4, b), b, module=lib) == [8]
 
     with pytest.raises(SyntaxError) as exc_info:
         _load(tmp_path, """
@@ -183,7 +186,7 @@ def test_F004_local_clause_does_not_clobber_imported_predicate(tmp_path):
     assert "twice/2" in str(exc_info.value)
 
     b2 = Var()
-    assert _values(lib.twice(4, b2), b2) == [8], \
+    assert _values(lib.twice(4, b2), b2, module=lib) == [8], \
         "importer's local clause destroyed the library's own predicate"
 
 
@@ -196,9 +199,9 @@ def test_F004_guard_plain_import_does_not_disturb_source(tmp_path):
         use(A, B) <- twice(A, B)
     """)
     b = Var()
-    assert _values(lib.twice(4, b), b) == [8]
+    assert _values(lib.twice(4, b), b, module=lib) == [8]
     b2 = Var()
-    assert _values(m.use(4, b2), b2) == [8]
+    assert _values(m.use(4, b2), b2, module=m) == [8]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -218,7 +221,7 @@ def test_F005_regex_body_only_group_binds(tmp_path):
         )
     """)
     r = Var()
-    vals = _values(m.grab(chars("42x"), r), r)
+    vals = _values(m.grab(chars("42x"), r), r, module=m)
     assert vals == [chars("42")]
 
 
@@ -230,7 +233,7 @@ def test_F005_guard_regex_head_var_group_binds(tmp_path):
         )
     """)
     y = Var()
-    assert _values(m.year_of(chars("2026-03"), y), y) == [chars("2026")]
+    assert _values(m.year_of(chars("2026-03"), y), y, module=m) == [chars("2026")]
 
 
 def test_F005_guard_regex_pattern_precompiled(tmp_path):
@@ -252,7 +255,7 @@ def test_F006_lambda_body_lt_negative_literal(tmp_path):
         f(L, R) <- include((X <- (X< -3)), L, R)
     """)
     r = Var()
-    assert _values(m.f([-10, -5, 0, 2], r), r) == [[-10, -5]]
+    assert _values(m.f([-10, -5, 0, 2], r), r, module=m) == [[-10, -5]]
 
 
 def test_F006_guard_top_level_lt_negative_literal(tmp_path):
@@ -268,7 +271,7 @@ def test_F006_guard_lambda_body_spaced_comparison(tmp_path):
         f(L, R) <- include((X <- (X < -3)), L, R)
     """)
     r = Var()
-    assert _values(m.f([-10, -5, 0, 2], r), r) == [[-10, -5]]
+    assert _values(m.f([-10, -5, 0, 2], r), r, module=m) == [[-10, -5]]
 
 
 def test_F006_guard_module_atom_in_lambda_body(tmp_path):
@@ -280,7 +283,7 @@ def test_F006_guard_module_atom_in_lambda_body(tmp_path):
     a, b = Var(), Var()
     for _ in solve(m.mk(a, b), m):
         r = Var()
-        vals = _values(m.pick([a.value, b.value], r), r)
+        vals = _values(m.pick([a.value, b.value], r), r, module=m)
         assert len(vals) == 1 and len(vals[0]) == 1
 
 
@@ -566,7 +569,7 @@ def test_F017_guard_titlecase_alias_works(tmp_path):
         use(A, B) <- dbl(A, B)
     """)
     b = Var()
-    assert _values(m.use(4, b), b) == [8]
+    assert _values(m.use(4, b), b, module=m) == [8]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -594,7 +597,7 @@ def test_guard_bare_atom_automint(tmp_path):
     # -implicit_atoms: this test verifies the auto-mint behaviour itself
     m = _load(tmp_path, "-implicit_atoms\nv(X) <- (X is a10_minted_atom)")
     x = Var()
-    assert _values(m.v(x), x) == [mint("a10_minted_atom")]
+    assert _values(m.v(x), x, module=m) == [mint("a10_minted_atom")]
 
 
 def test_guard_dcg_parse_generate_if_not_str(tmp_path):
@@ -651,7 +654,7 @@ def test_guard_qualified_import_and_var_rejection(tmp_path):
         use(A, B) <- a10_qlib.twice(A, B)
     """)
     b = Var()
-    assert _values(m.use(3, b), b) == [6]
+    assert _values(m.use(3, b), b, module=m) == [6]
     with pytest.raises(SyntaxError, match="Logic variable"):
         _load(tmp_path, "u(A) <- a10_qlib.FOO.twice(A, 1)")
 
@@ -675,13 +678,13 @@ def test_guard_escapes_and_literals(tmp_path):
     assert m.term[0] == "p" and is_var(m.term[1]) and m.term[2] == 1
     assert [type(g).__name__ for g in m.goals] == ["Call", "Call"]
     x = Var()
-    assert _values(m.p(x), x) == [-3, 2]
+    assert _values(m.p(x), x, module=m) == [-3, 2]
     v = Var()
-    assert _values(m.d({"k": 7}, v), v) == [7]
+    assert _values(m.d({"k": 7}, v), v, module=m) == [7]
     e = Var()
-    assert _values(m.sub([0, 1, 2, 3], e), e) == [[1, 2]]
+    assert _values(m.sub([0, 1, 2, 3], e), e, module=m) == [[1, 2]]
     s = Var()
-    assert _values(m.greet(chars("bob"), s), s) == ["hello bob!"]
+    assert _values(m.greet(chars("bob"), s), s, module=m) == ["hello bob!"]
 
 
 def test_guard_binop_structural_unify(tmp_path):
