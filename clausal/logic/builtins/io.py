@@ -11,7 +11,9 @@ from clausal.logic.atoms import (
     is_atom as _term_is_atom,
     spelling,
 )
-from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
+from clausal.logic.cells import (
+    TUPLE_TAG, chars, is_chars, chars_text, compound_cell_shape,
+)
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import (
     term_str as _term_str,
@@ -751,6 +753,22 @@ def _make_listing__1(db):
                 name, arity = spelling(val), 0
             elif indicator is not None:
                 name, arity, pred_cls = indicator
+            elif not is_indicator_shaped and compound_cell_shape(val)[0]:
+                # A compound CELL names its predicate: ``listing(color(R, H))``
+                # is ``listing(color/2)``.  P2: what used to arrive here as a
+                # term INSTANCE, and resolved through ``type(val)`` above, is a
+                # cell now -- it carries the same two facts that class did, the
+                # functor and the arity, and none of the rest.  Which is why it
+                # lands in THIS branch and not that one: a cell has no class to
+                # read ``_clauses`` off, so it resolves against the caller's
+                # database like the atom and indicator shapes (R-P2-2, module
+                # locality).  ``is_indicator_shaped`` is re-tested rather
+                # than assumed spent: an UNFINISHED indicator (``X/2``, arity
+                # still unbound) reaches here with ``indicator is None``, and
+                # without the guard this arm read ``('/', name, _G1)`` as the
+                # predicate ``'/'/2`` and swallowed the instantiation_error
+                # below.  A TUPLE_TAG cell is tuple DATA and names nothing.
+                name, arity = compound_cell_shape(val)[1], len(val) - 1
             else:
                 # An indicator-SHAPED value with an unbound operand is not a
                 # malformed indicator, it is an unfinished one (final review

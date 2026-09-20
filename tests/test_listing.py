@@ -101,12 +101,19 @@ class TestListing:
         assert "animal(" in output
         assert '"cat"' in output
 
-    def test_instance_resolves_to_class(self):
-        """listing with a PredicateMeta instance resolves to its class."""
+    def test_a_cell_resolves_to_its_predicate(self):
+        """P2: what used to arrive here as a term INSTANCE is a CELL.
+
+        The instance resolved through ``type(val)`` and needed no database.
+        A cell carries the functor and the arity and no class, so it
+        resolves against the caller's database instead -- the same route
+        the atom and ``Name/Arity`` shapes take, and for the same reason
+        (R-P2-2, module locality).
+        """
         # nv
-        color._assertz(Clause(color("red", "#ff0000"), []))
-        inst = color("red", "#ff0000")
-        output = _capture_listing(inst)
+        db = _db_with_fact("color", 2)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        output = _run_listing(dispatch, ("color", "red", "#ff0000"))
         assert "color/2" in output
 
     def test_non_predicate_error(self):
