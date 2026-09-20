@@ -162,6 +162,7 @@ class TestCanonicalOutput:
     @pytest.mark.parametrize("ite", ["if_"])
     def test_renderer_emits_if_underscore(self, ite):
         """The spelling reifies to IfThenElse and renders back as ``if_``."""
+        from clausal.reflection import vfield  # noqa: PLC0415
         # nv
         src = f"pick(X, Y) <- (Y is {ite}(X > 0, 1, 2))\n"
         with warnings.catch_warnings():
@@ -169,10 +170,11 @@ class TestCanonicalOutput:
             # P2: a reified Clause is a CELL, so `hasattr(item, "goals")`
             # is False for every item -- the kind is the functor.
             from clausal.logic.cells import compound_cell_shape
+            from clausal.reflection import is_v
             (clause,) = [item for item in reify_source(src)
                          if compound_cell_shape(item)[1] == "Clause"]
-        (goal,) = clause.goals
-        assert isinstance(goal.right, IfThenElse)
+        (goal,) = vfield(clause, "goals")
+        assert is_v(goal.right, IfThenElse)
         rendered = render_source(clause)
         assert "if_(" in rendered
         assert "If(" not in rendered

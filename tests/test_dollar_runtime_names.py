@@ -424,15 +424,19 @@ class TestReifierReadsEveryDollarSpellingBack:
         assert _ClauseReifier().term(ast.Name(id="$Params", ctx=ast.Load())) == Atom("Params")
 
     def test_lambda_clauses_round_trip_without_a_dollar(self):
-        from clausal.reflection import reify_source, render_source
+        from clausal.reflection import vfield  # noqa: PLC0415
+        from clausal.reflection import reify_source, render_source, Clause, is_v
         clauses = [it for it in reify_source(_EMIT_SOURCE)
-                   if type(it).__name__ == "Clause"]
-        rendered = {c.head.name: render_source(c) for c in clauses}
+                   if is_v(it, Clause)]   # P2: the kind is the cell functor
+        rendered = {vfield(vfield(c, "head"), "name"): render_source(c) for c in clauses}
         assert "$" not in repr(clauses)
         # The unit sugar is a PyThunk whose body names $Quantity; the
         # escape's CODE reads back bare, exactly as before the twins.
-        speed = next(c for c in clauses if c.head.name == "speed")
-        assert speed.goals[0].right.code == "Quantity(5, m)"
+        speed = next(c for c in clauses
+                     if vfield(vfield(c, "head"), "name") == "speed")
+        # goals[0] is a Unify NODE (a dataclass, so `.right` stands); its
+        # right operand is an Escape CELL, so `code` goes through vfield.
+        assert vfield(vfield(speed, "goals")[0].right, "code") == "Quantity(5, m)"
         assert rendered["speed"] == "speed(V) <- (V == ++Quantity(5, m))"
         assert rendered["lam"] == "lam(F) <- (F is ((X,) <-(X + 1)))"
         assert rendered["lam0"] == "lam0(F) <- (F is (() <-(42)))"

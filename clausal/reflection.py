@@ -138,7 +138,16 @@ def is_v(term, cls):
     """
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
 
-    is_cell, functor = compound_cell_shape(term)
+    try:
+        is_cell, functor = compound_cell_shape(term)
+    except TypeError:
+        # The RESERVED 1-tuple ``('x',)`` makes ``compound_cell_shape``
+        # refuse.  That refusal belongs where a cell is built or consumed,
+        # not where something merely ASKS "is this a Goal?" -- a predicate
+        # that raises cannot be used in a dispatch chain, and this one sits
+        # above the generic cell branch in the renderer, so it turned
+        # ``render_source(('atom_like',))`` from an answer into a crash.
+        return False
     if not is_cell:
         return False
     if isinstance(cls, tuple):
@@ -158,7 +167,10 @@ def vfield(term, field, default=_VFIELD_REQUIRED):
     """
     from clausal.logic.cells import compound_cell_shape, cell_args  # noqa: PLC0415
 
-    is_cell, functor = compound_cell_shape(term)
+    try:
+        is_cell, functor = compound_cell_shape(term)
+    except TypeError:
+        is_cell, functor = False, None   # the reserved 1-tuple is not one of the nine
     fields = _VOCAB_FIELDS.get(functor) if is_cell else None
     if fields is None or field not in fields:
         if default is not _VFIELD_REQUIRED:
