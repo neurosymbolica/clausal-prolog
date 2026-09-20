@@ -88,8 +88,15 @@ check that it still mints one: a plain class constructs a CELL now.
 NEW 0 is "no regressions against main". Task 4's own exit criterion is
 UNMET and is the next thing:
 
-    is_term_instance(   79  ->  77
-    term_field_names(   76  ->  74      (in clausal/, outside predicate.py)
+    is_term_instance(   79      (in clausal/, outside predicate.py)
+    term_field_names(   76
+
+**Unmoved this half, and that is the honest reading, not a stall.** Every
+cell arm this session added sits BESIDE an instance arm rather than
+replacing it -- phrase, time_goal, vary, unbound_keys, listing,
+_collect_head_types, _collect_functor_arities all grew a cell branch while
+the instance branch stayed, because instances still arrive from the bridge.
+The count falls only when the arms can be DELETED.
 
 Those fall to 0 only once nothing PRODUCES an instance, and the last
 producers are the **Task 6** bridge — 16 `instances=True` declarations:
