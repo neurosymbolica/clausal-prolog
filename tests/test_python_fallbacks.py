@@ -495,6 +495,13 @@ def _corpus():
     purpose (F092/F093 — the C twins have never known about them), so raw-C
     parity is not claimed for them.  They are covered through the wrapper by
     the ``TestWrapperUsesTheCPathAgain`` Seg* tests below.
+
+    THE INSTANCE ROWS SPELL ``Pt._clausal_head(...)``, NOT ``Pt(...)``.  P2
+    Task 3 made the plain call build the CELL, so the three rows named for an
+    instance quietly became cells and the C instance arms stopped being
+    covered here — a hole exactly where Task 5 has to decide whether those
+    arms can go.  ``TestTheCorpusStillCoversInstances`` pins it.  When P4
+    retires ``_clausal_head``, these rows go with the arms, together.
     """
     X, Y, Z = Var(), Var(), Var()
     bound = Var()
@@ -513,7 +520,7 @@ def _corpus():
         ("compound", Compound("f", (1, X))),
         ("compound_var_functor", Compound(X, (1, 2))),
         ("kwterm", KWTerm("r", a=X, b=2)),
-        ("instance", Pt(x=X, y=2)),
+        ("instance", Pt._clausal_head(x=X, y=2)),
         ("atom_class", Atom),
         ("class_with_fields", Pt),
         # --- cells ---
@@ -532,8 +539,8 @@ def _corpus():
         ("cell_in_list_in_cell", ("f", [("g", X)], Y)),
         ("cell_in_compound", Compound("f", (("g", X), 2))),
         ("cell_in_kwterm", KWTerm("r", a=("g", X))),
-        ("cell_in_instance", Pt(x=("g", X), y=2)),
-        ("instance_in_cell", ("f", Pt(x=X, y=2))),
+        ("cell_in_instance", Pt._clausal_head(x=("g", X), y=2)),
+        ("instance_in_cell", ("f", Pt._clausal_head(x=X, y=2))),
         ("compound_in_cell", ("f", Compound("g", (X,)))),
         ("list_of_lists_of_cells", [[("p", X)], [("q", Y), ("r", Z)]]),
         # --- shared structure across two cells ---
@@ -600,6 +607,44 @@ def _shape(term):
         return ("opaque", repr(t))
 
     return go(term)
+
+
+@requires_c
+class TestTheCorpusStillCoversInstances:
+    """The corpus rows named for an INSTANCE must actually hold one.
+
+    P2 Task 3 flipped ``PredicateMeta.__call__`` to build the CELL.  These
+    three rows were written when ``Pt(x=..., y=...)`` WAS an instance, and
+    they silently became cells -- duplicating shapes the corpus already
+    covers, while the C instance arms (``c_is_term_instance`` and
+    ``c_term_field_names``, which is what ``_shape`` reaches an instance
+    through) stopped being exercised by this file at all.  Nothing failed:
+    the parity assertions still passed, over the wrong terms.
+
+    That matters for Task 5, whose whole question is whether those arms can
+    go.  ``_clausal_head`` is the instance channel until P4 removes it.
+    """
+
+    def test_the_instance_row_is_an_instance(self):
+        # nv
+        assert is_term_instance(dict(_corpus())["instance"])
+
+    def test_the_cell_in_instance_row_is_an_instance(self):
+        # nv
+        assert is_term_instance(dict(_corpus())["cell_in_instance"])
+
+    def test_the_instance_in_cell_row_holds_an_instance(self):
+        # nv
+        assert is_term_instance(dict(_corpus())["instance_in_cell"][1])
+
+    def test_the_cell_rows_are_still_cells(self):
+        """The mirror: this guard must not be satisfiable by turning
+        everything into an instance."""
+        # nv
+        corpus = dict(_corpus())
+        for name in ("cell_ground", "cell_with_var", "cell_nested"):
+            assert type(corpus[name]) is tuple
+            assert not is_term_instance(corpus[name])
 
 
 @requires_c
