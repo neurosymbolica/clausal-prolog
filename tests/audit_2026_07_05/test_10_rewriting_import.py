@@ -259,8 +259,8 @@ def test_F006_guard_top_level_lt_negative_literal(tmp_path):
     m = _load(tmp_path, """
         g(X) <- (X< -3)
     """)
-    assert len(list(solve(m.g(-10)))) == 1
-    assert len(list(solve(m.g(0)))) == 0
+    assert len(list(solve(m.g(-10), m))) == 1
+    assert len(list(solve(m.g(0), m))) == 0
 
 
 def test_F006_guard_lambda_body_spaced_comparison(tmp_path):
@@ -278,7 +278,7 @@ def test_F006_guard_module_atom_in_lambda_body(tmp_path):
         mk(A, B) <- (A is red, B is blue)
     """)
     a, b = Var(), Var()
-    for _ in solve(m.mk(a, b)):
+    for _ in solve(m.mk(a, b), m):
         r = Var()
         vals = _values(m.pick([a.value, b.value], r), r)
         assert len(vals) == 1 and len(vals[0]) == 1
@@ -361,16 +361,16 @@ def test_F009_compare_chain_goal(tmp_path):
     m = _load(tmp_path, """
         mid(X) <- (0 < X < 10)
     """)
-    assert len(list(solve(m.mid(5)))) == 1
-    assert len(list(solve(m.mid(20)))) == 0
+    assert len(list(solve(m.mid(5), m))) == 1
+    assert len(list(solve(m.mid(20), m))) == 0
 
 
 def test_F009_guard_single_comparisons(tmp_path):
     m = _load(tmp_path, """
         mid(X) <- (0 < X, X < 10)
     """)
-    assert len(list(solve(m.mid(5)))) == 1
-    assert len(list(solve(m.mid(20)))) == 0
+    assert len(list(solve(m.mid(5), m))) == 1
+    assert len(list(solve(m.mid(20), m))) == 0
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -690,11 +690,11 @@ def test_guard_binop_structural_unify(tmp_path):
         un(T, A, B) <- (T is A + B)
     """)
     t = Var()
-    for _ in solve(m.mk(1, 2, t)):
+    for _ in solve(m.mk(1, 2, t), m):
         term = t.value
         a, b = Var(), Var()
         assert [(x, y) for x, y in
-                ((a.value, b.value) for _ in solve(m.un(term, a, b)))] == [(1, 2)]
+                ((a.value, b.value) for _ in solve(m.un(term, a, b), m))] == [(1, 2)]
 
 
 def test_guard_facts_inside_module_level_if(tmp_path):

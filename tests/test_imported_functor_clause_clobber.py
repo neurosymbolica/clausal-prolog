@@ -271,7 +271,7 @@ class TestRuntimeAssertzIsAlreadySafe:
         az = _load_module("tests.fixtures.impclob_az",
                           str(tmp_path / "impclob_az.clausal"))
         with pytest.raises(LogicException) as exc_info:
-            next(solve(az.go(Var())), None)
+            next(solve(az.go(Var()), az), None)
         assert "permission_error" in str(exc_info.value)
         assert sorted(_solutions(owner.impclob_colour, 1)) == [
             (mint("green"),), (mint("red"),)]

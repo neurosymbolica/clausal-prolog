@@ -453,25 +453,25 @@ class TestClausalSurface:
     def test_xor_pair_labeling(self, clpb_mod, clear_query_cache):
         from clausal import solve
         x, y = Var(), Var()
-        got = [(int(x), int(y)) for _ in solve(clpb_mod.xor_pair(x, y))]
+        got = [(int(x), int(y)) for _ in solve(clpb_mod.xor_pair(x, y), clpb_mod)]
         assert sorted(got) == [(0, 1), (1, 0)]
 
     def test_sat_count_builtin(self, clpb_mod, clear_query_cache):
         from clausal import solve
         n = Var()
-        got = [int(n) for _ in solve(clpb_mod.count_or(n))]
+        got = [int(n) for _ in solve(clpb_mod.count_or(n), clpb_mod)]
         assert got == [3]
 
     def test_taut_builtin(self, clpb_mod, clear_query_cache):
         from clausal import solve
         t = Var()
-        got = [int(t) for _ in solve(clpb_mod.taut_dm(t))]
+        got = [int(t) for _ in solve(clpb_mod.taut_dm(t), clpb_mod)]
         assert got == [1]
 
     def test_half_adder_forward(self, clpb_mod, clear_query_cache):
         from clausal import solve
         s, c = Var(), Var()
-        got = [(int(s), int(c)) for _ in solve(clpb_mod.adder(1, 1, s, c))]
+        got = [(int(s), int(c)) for _ in solve(clpb_mod.adder(1, 1, s, c), clpb_mod)]
         assert got == [(0, 1)]
 
     def test_half_adder_all_rows(self, clpb_mod, clear_query_cache):
@@ -479,14 +479,14 @@ class TestClausalSurface:
         table = {(0, 0): (0, 0), (0, 1): (1, 0), (1, 0): (1, 0), (1, 1): (0, 1)}
         for (x, y), (es, ec) in table.items():
             s, c = Var(), Var()
-            got = [(int(s), int(c)) for _ in solve(clpb_mod.adder(x, y, s, c))]
+            got = [(int(s), int(c)) for _ in solve(clpb_mod.adder(x, y, s, c), clpb_mod)]
             assert got == [(es, ec)], f"adder({x},{y})"
 
     @needs_pysat
     def test_pysat_builtin_surface(self, clpb_mod, clear_query_cache):
         from clausal import solve
         x, y = Var(), Var()
-        got = sorted((int(x), int(y)) for _ in solve(clpb_mod.psolve(x, y)))
+        got = sorted((int(x), int(y)) for _ in solve(clpb_mod.psolve(x, y), clpb_mod))
         # (X | Y) & (~X | Y)  ⇒  Y = 1
         assert got == [(0, 1), (1, 1)]
 

@@ -89,7 +89,7 @@ def test_distinct_date_term_args_all_answer(tmp_path):
 
     def run(d):
         v = Var()
-        for _ in solve(mod.echo(d, v)):
+        for _ in solve(mod.echo(d, v), mod):
             return deref(v)
         return None
 

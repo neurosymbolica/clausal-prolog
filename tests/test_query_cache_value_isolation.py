@@ -36,7 +36,7 @@ def plus_ten_module(tmp_path):
 
 def _solve_once(module, x):
     V = Var()
-    for _ in solve(module.plus_ten(x, V)):
+    for _ in solve(module.plus_ten(x, V), module):
         return V.value
     return None
 
@@ -65,7 +65,7 @@ def test_string_args_not_pinned(tmp_path):
 
     def run(name):
         V = Var()
-        for _ in solve(mod.echo(name, V)):
+        for _ in solve(mod.echo(name, V), mod):
             return V.value
         return None
 

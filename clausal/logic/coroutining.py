@@ -137,15 +137,31 @@ def _install_when_condition(condition, goal_thunk, trail):
     trail : the current Trail
     """
     from clausal.logic.predicate import is_term_instance, term_field_names
+    from clausal.logic.cells import compound_cell_shape, cell_args  # noqa: PLC0415
 
     cond = deref(condition)
 
-    # nonvar(X) — check if X is a term with one field named 'term'
-    # and the class name is 'nonvar'
-    if is_term_instance(cond) and type(cond).__name__ == "nonvar":
-        fields = term_field_names(cond)
-        if fields:
-            x = deref(getattr(cond, fields[0]))
+    def _shape(c):
+        """``(functor, args)`` for a condition, or ``(None, ())``.
+
+        P2: a condition is the functor-first CELL ``('nonvar', X)``; before it
+        it was a class instance whose CLASS NAME was the functor.  Both are
+        read here, positionally, and the instance arm goes with the class in
+        P4.  The order matters -- see the conjunction arm below.
+        """
+        is_cell, functor = compound_cell_shape(c)
+        if is_cell:
+            return functor, tuple(cell_args(c))
+        if is_term_instance(c):
+            return type(c).__name__, tuple(getattr(c, f) for f in term_field_names(c))
+        return None, ()
+
+    cond_functor, cond_args = _shape(cond)
+
+    # nonvar(X)
+    if cond_functor == "nonvar":
+        if cond_args:
+            x = deref(cond_args[0])
             if is_var(x):
                 _freeze_var(x, goal_thunk, trail)
             else:
@@ -155,14 +171,19 @@ def _install_when_condition(condition, goal_thunk, trail):
         return
 
     # ground(X)
-    if is_term_instance(cond) and type(cond).__name__ == "ground":
-        fields = term_field_names(cond)
-        if fields:
-            _install_when_ground(getattr(cond, fields[0]), goal_thunk, trail)
+    if cond_functor == "ground":
+        if cond_args:
+            _install_when_ground(cond_args[0], goal_thunk, trail)
         return
 
-    # Conjunction: (C1, C2) represented as a tuple or list of conditions
-    if isinstance(cond, (tuple, list)) and len(cond) == 2:
+    # Conjunction: (C1, C2) as a bare 2-tuple or list of conditions.
+    #
+    # ``cond_functor is None`` is load-bearing, not defensive.  A CELL is a
+    # tuple, so ``('nonvar', X)`` has length 2 and this arm used to swallow it
+    # — destructuring a condition into c1='nonvar', c2=X and then failing on
+    # the bare atom, reported as "Unsupported when condition: 'nonvar'".  A
+    # cell is never a conjunction; only a functor-less pair is.
+    if cond_functor is None and isinstance(cond, (tuple, list)) and len(cond) == 2:
         c1, c2 = cond
         # when(C1, when(C2, Goal))
         def _inner_thunk():

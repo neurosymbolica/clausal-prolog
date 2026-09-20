@@ -193,7 +193,7 @@ class TestClausalSourceRepro:
             ),
         """)
         from clausal.logic.solve import solve
-        assert len(list(solve(mod.check(mint("cite"))))) == 1
+        assert len(list(solve(mod.check(mint("cite")), mod))) == 1
 
     def test_the_field_body_verbatim_now_succeeds(self, tmp_path):
         """``test_load.clausal:57``, reduced to one module.
@@ -218,7 +218,7 @@ class TestClausalSourceRepro:
             ),
         """)
         from clausal.logic.solve import solve
-        assert len(list(solve(mod.cite_term_constructs(Var())))) == 1
+        assert len(list(solve(mod.cite_term_constructs(Var()), mod))) == 1
 
     def test_functor_3_decomposition_names_the_functor_as_a_string(self, tmp_path):
         """What the same body *does* yield, once nothing raises."""
@@ -234,4 +234,4 @@ class TestClausalSourceRepro:
             ),
         """)
         from clausal.logic.solve import solve
-        assert len(list(solve(mod.roundtrip(Var())))) == 1
+        assert len(list(solve(mod.roundtrip(Var()), mod))) == 1

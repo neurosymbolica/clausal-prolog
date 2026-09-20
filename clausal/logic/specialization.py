@@ -2118,8 +2118,8 @@ def _unfold_body_goal(
             e = orig_name_to_idx.get(spec_fields[k])
             if e is None or e >= len(rec_call_pat.args):
                 continue
-            head_role = deref(getattr(pattern.recursive_clause.head,
-                                      orig_fields[e]))
+            head_role = deref(_head_arg(pattern.recursive_clause.head,
+                                        orig_fields, e))   # P2: a head is a cell
             rec_role = deref(rec_call_pat.args[e])
             if not is_var(rec_role):
                 continue                     # pass-through extra: no chaining

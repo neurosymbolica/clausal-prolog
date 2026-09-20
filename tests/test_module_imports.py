@@ -329,7 +329,7 @@ class TestQualifiedValueAtoms:
         mod = _load_fixture("qualified_atom_import_module_only.clausal",
                             "qualified_atom_import_module_only")
         euro = vocab.euro  # foreign atom; its bare name is not in mod's globals
-        results = list(solve(mod.known_currency(euro)))
+        results = list(solve(mod.known_currency(euro), mod))
         assert len(results) == 1
 
 

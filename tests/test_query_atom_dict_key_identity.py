@@ -91,7 +91,7 @@ def mods(tmp_path):
 def _clausal_built_profile(atoms):
     """The dict as built *inside* Clausal (crosses the boundary via solve)."""
     P = Var()
-    for _ in solve(atoms.mk_profile(P)):
+    for _ in solve(atoms.mk_profile(P), atoms):
         return deref(P)
     raise AssertionError("mk_profile/1 produced no solution")
 
@@ -137,7 +137,7 @@ def test_reported_repro_eligible_yields_one_solution(mods):
     """The exact reproduction filed in the todo."""
     atoms, reader = mods
     profile = _clausal_built_profile(atoms)
-    assert len(list(solve(reader.eligible(profile)))) == 1
+    assert len(list(solve(reader.eligible(profile), reader))) == 1
 
 
 def test_python_built_dictterm_atom_key_survives(mods):
@@ -241,7 +241,7 @@ def test_predicate_in_key_position_is_the_atom(tmp_path):
     """
     mod = _load(tmp_path, "qk_pred_key", PRED_KEY_SRC)
     P = Var()
-    for _ in solve(mod.mk(P)):
+    for _ in solve(mod.mk(P), mod):
         built = deref(P)
         break
     else:
@@ -252,7 +252,7 @@ def test_predicate_in_key_position_is_the_atom(tmp_path):
     assert built[mint("query_date")] == 5
     # ...and the same-named predicate is untouched by the key.
     X = Var()
-    assert next(solve(mod.query_date(built, X)), None) is not None and deref(X) == 99
+    assert next(solve(mod.query_date(built, X), mod), None) is not None and deref(X) == 99
 
 
 def test_distinct_dicts_are_not_conflated_by_the_query_cache(mods):

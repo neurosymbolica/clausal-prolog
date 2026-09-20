@@ -397,7 +397,7 @@ class TestModeMatrixGuards:
         assert once(m.pa(7, Var()), m) is None
         # module inference from the goal term
         Z = Var()
-        assert answers(solve(m.pa(3, Z)), Z) == [(3,)]
+        assert answers(solve(m.pa(3, Z), m), Z) == [(3,)]
         # call with string functor and with the predicate class
         V = Var()
         assert answers(call("pa", 1, V, module=m), V) == [(2,)]

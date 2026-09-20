@@ -30,7 +30,7 @@ def test_distinct_int_args_reuse_one_compiled_query(tmp_path):
 
     def run(x):
         V = Var()
-        for _ in solve(mod.plus_ten(x, V)):
+        for _ in solve(mod.plus_ten(x, V), mod):
             return V.value
         return None
 
@@ -48,7 +48,7 @@ def test_string_args_reuse_one_compiled_query(tmp_path):
 
     def run(name):
         V = Var()
-        for _ in solve(mod.echo(name, V)):
+        for _ in solve(mod.echo(name, V), mod):
             return V.value
         return None
 
@@ -61,7 +61,7 @@ def test_all_ground_query_reuse(tmp_path):
     _solve_mod._query_cache.clear()
 
     def holds(a, b):
-        for _ in solve(mod.edge(a, b)):
+        for _ in solve(mod.edge(a, b), mod):
             return True
         return False
 
@@ -79,7 +79,7 @@ def test_parameterized_arg_multi_solution_and_interleaved(tmp_path):
 
     def succs(a):
         Y = Var()
-        return sorted(Y.value for _ in solve(mod.edge(a, Y)))
+        return sorted(Y.value for _ in solve(mod.edge(a, Y), mod))
 
     assert succs(1) == [2, 3]
     assert succs(2) == [4]
