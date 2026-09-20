@@ -174,7 +174,7 @@ def _collect_imported_te_clauses(module_dict: dict) -> list:
 
 def _make_module_state(init_list, final_list, user_state):
     """Create a module_expansion_state(Init, Final, State) term."""
-    module_cls = make_predicate("module_expansion_state", ["init", "final", "state"], instances=True)
+    module_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
     return module_cls(init_list, final_list, user_state)
 
 
@@ -245,11 +245,11 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     lm.module_dict["unify"] = structural_unify
 
     # Create the term_expansion PredicateMeta class.
-    te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"], instances=True)
+    te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"])
     lm.module_dict["term_expansion"] = te_cls
 
     # Also ensure module_expansion_state class exists for state threading.
-    mod_cls = make_predicate("module_expansion_state", ["init", "final", "state"], instances=True)
+    mod_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
     lm.module_dict["module_expansion_state"] = mod_cls
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
@@ -263,7 +263,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     for name, arity in functor_arities.items():
         if name not in lm.module_dict:
             lm.module_dict[name] = make_predicate(
-                name, [f"arg{i}" for i in range(arity)], instances=True)
+                name, [f"arg{i}" for i in range(arity)])
 
     # assertz each expansion clause.
     for pred_node in expansion_clauses:
@@ -398,13 +398,39 @@ def _wrap_as_predicate(term):
 
 
 def _extract_init_final(module_state):
-    """Extract init and final item lists from the final module state."""
+    """Extract init and final item lists from the final module state.
+
+    P2: the state carrier is a CELL -- ``('module_expansion_state', Init,
+    Final, State)`` -- so Init and Final are read at their POSITIONS.
+
+    The ``getattr(module_state, 'init', [])`` this replaces was fail-open in
+    the worst way available: a cell has no ``.init``, so the DEFAULT answered,
+    both lists came back empty, and the whole init/final injection produced
+    NOTHING -- silently, with the module loading fine and no error anywhere.
+    It is what kept ``instances=True`` load-bearing on this carrier.
+    """
     from clausal.logic.variables import deref as _deref
-    try:
-        init = _deref(getattr(module_state, 'init', []))
-        final = _deref(getattr(module_state, 'final', []))
-    except (AttributeError, TypeError):
-        init, final = [], []
+    from clausal.logic.cells import compound_cell_shape, cell_args  # noqa: PLC0415
+
+    is_cell, _functor = compound_cell_shape(module_state)
+    if is_cell:
+        args = cell_args(module_state)
+        # Positions 0 and 1 are Init and Final; a carrier too short to hold
+        # them is not this term, and falls through to the empty pair below.
+        if len(args) >= 2:
+            init, final = _deref(args[0]), _deref(args[1])
+        else:
+            init, final = [], []
+    else:
+        # The pre-P2 INSTANCE carrier.  Kept because an expansion rule may
+        # still hand one back through the bridge; ``hasattr`` rather than a
+        # default, so an unrecognised shape is the empty pair by DECISION
+        # rather than by a silent miss.
+        try:
+            init = _deref(module_state.init) if hasattr(module_state, 'init') else []
+            final = _deref(module_state.final) if hasattr(module_state, 'final') else []
+        except (AttributeError, TypeError):
+            init, final = [], []
 
     init = _flatten_cons_list(init)
     final = _flatten_cons_list(final)
