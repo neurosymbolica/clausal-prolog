@@ -1,6 +1,19 @@
 # An aliased/imported `assertz` no longer reaches the owner's row
 
-**Status:** open (parked for the operator). Found 2026-09-20 during the P2
+**Status:** **RULED 2026-09-20 by the operator — (a) ADOPTION WINS.**
+`-import_from` makes `db.row(name, arity)` in the importer BE the exporter's
+row; a local `-dynamic` on an imported name is an error or is ignored. The cell
+then resolves correctly by name with no new carrier, and both `xfail(strict)`
+tests pass as written — so when this is implemented, REMOVE those two xfail
+markers rather than leaving them (strict, so they fail loudly if not).
+The channel-4 wrong-refusal message is fixed by the same change: once the
+importer's row IS the owner's, the ownership gate gets the chance to speak
+before the static check.
+
+Options (b) "the alias carries its module" and (c) "module locality wins, the
+tests are wrong" are CLOSED. Do not re-open.
+
+Originally filed as: Found 2026-09-20 during the P2
 Task 4 sweep on `feat/predmeta-p2-head-cells-2026-09-19`. Two tests parked
 `xfail(strict=True)` in `tests/test_mutation_gate.py`:
 `test_an_aliased_import_asserts_ON_ITS_OWNER` and
