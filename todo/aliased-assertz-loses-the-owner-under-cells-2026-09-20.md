@@ -87,3 +87,93 @@ without a corpus check, since it silently moves where a write lands.
 
 The other channels in `test_mutation_gate.py` pass unchanged — this is
 specifically the IMPORTED/ALIASED write, not the gate itself.
+
+---
+
+## 2026-09-21 — IMPLEMENTATION ATTEMPTED AND BACKED OUT. Read this first.
+
+The ruling is clear; the implementation is not a small change, and four
+routes were tried and measured. **Nothing landed** — the tree is exactly as
+Task 7 left it, and the two `xfail(strict=True)` markers STAY until this is
+finished.
+
+### The chain, established by measurement
+
+1. `AliasS(X)` builds the cell `('bo_p', X)` — the exporter class's
+   `__name__`, correctly — and a cell carries no module.
+2. `assertz__1` (`database_ops.py`) resolves the write's home through
+   `_find_pred_cls(functor, arity, module_dict, head)` → `_home_db(db,
+   pred_cls)` → `pred_cls._row.db`. **It is the CLASS, not the row, that
+   decides where the clause lands.**
+3. `_find_pred_cls`'s IDENTITY-RESOLVED leg settled the aliased case from
+   `type(head)` — the head was an INSTANCE of the exporter's class. **Under
+   P2 the head is a cell, `type(head)` is `tuple`, and that leg is dead.**
+   Its docstring still describes the instance behaviour.
+4. So resolution falls through to `module_dict.get("bo_p")`, which in the
+   importer is the **local shadow class** that its own `-dynamic(bo_p/1)`
+   minted. The clause lands there. Silently.
+
+### The four routes, and exactly how each failed
+
+* **(i) Plant the exporter's canonical spelling as an adopted row too**
+  (`_plant_imported_rows` adopting under `orig_name` as well as
+  `local_name`). Makes `db.row("bo_p", 1)` answer the owner's row — and
+  **directly contradicts an existing named invariant**,
+  `tests/shared_rows/test_import_plants_a_row.py::
+  test_an_aliased_import_does_NOT_plant_the_exporter_s_spelling`. Caught by
+  the full gate as NEW 1, not by the mutation-gate file.
+* **(ii) Make `row()` prefer `_adopted` when the only local claim is a
+  `-dynamic` marking.** Non-breaking but INERT: `row()` returns a cached
+  `self._rows` entry before it ever consults `_adopted`, so once a local row
+  exists it wins permanently.
+* **(iii) Skip `mark_dynamic` for an imported name** (the ruling's "a local
+  `-dynamic` on an imported name is ignored"). Breaks the two NON-aliased
+  tests — `test_an_imported_dynamic_predicate_is_asserted_ON_ITS_OWNER` and
+  `test_an_assert_through_a_shared_class_keeps_the_owners_namespace` — with
+  "locked static procedure": those rely on the IMPORTER's own `-dynamic` to
+  permit the write, because the permission gate reads `row.locked` on
+  whichever row the write reaches.
+* **(iv) Resolve the alias by scanning `module_dict.values()` for a class
+  whose `__name__` is the cell's functor** (what `type(head)` used to do,
+  without planting a row). Keeps `shared_rows` green — but **cannot fire for
+  the fixture**: the importer's `-dynamic(bo_p/1)` makes
+  `module_dict["bo_p"]` a valid arity-checked class, so `candidate` answers
+  first. Guarding on "candidate is None" makes the leg dead code.
+
+### The knot
+
+Every route runs into the same question, which the ruling states but does not
+resolve mechanically: **`gate_alias_user.clausal` declares BOTH
+`-dynamic(bo_p/1)` AND `-import_from(..., [alias(bo_p, AliasS)])`.** Is
+`bo_p` in that module its own predicate or the import? The ruling says the
+import wins ("a local `-dynamic` on an imported name is an error or is
+ignored") — but the permission gate reads `row.locked` on the reached row,
+and the two non-aliased tests depend on the importer's own `-dynamic` to
+unlock the write. **So "ignore the local `-dynamic`" and "the importer's
+`-dynamic` is what permits the write" are both load-bearing today, and they
+contradict.**
+
+Resolving that is the actual work, and it is a design step, not a patch:
+
+* If the local `-dynamic` is ignored, the permission gate must stop reading
+  the importer's `_dynamic` and read the OWNER's row instead — which is
+  `row.locked` on the adopted row, so adoption has to reach the gate first.
+* An `-import_from`'d name may then need to be refused a local `-dynamic`
+  outright (the ruling's "or is an error"), which makes `gate_dyn_user`
+  and `gate_alias_user` both ILLEGAL as written and the fixtures change.
+
+**Recommended next step:** decide whether a module may declare `-dynamic` on
+a name it imports. If NO (error), the fixtures change and route (iii) plus a
+row-reading gate is the implementation. If YES (ignored), the gate must read
+the owner's row and route (iii) needs the gate fixed in the same commit.
+
+### Cheap facts for whoever picks this up
+
+* `--runxfail` shows the real failures behind the two markers; without it
+  they read as a clean `2 xfailed`.
+* Do NOT probe by `_load_module`-ing owner and user separately — that makes
+  two copies of the owner and every row identity comparison lies. Load
+  through the test's own `_load_fixture`.
+* `tests/shared_rows/` is the invariant suite for adoption and is NOT in
+  `test_mutation_gate.py`. Run both, and gate on the FULL house run: route
+  (i) looked green on the mutation-gate file alone.
