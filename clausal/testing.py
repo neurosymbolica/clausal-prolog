@@ -1023,7 +1023,7 @@ def _forall_var_name(reified_goal) -> str | None:
     if not rargs or not isinstance(rargs[0], in_):
         return None
     left = rargs[0].left
-    return str(left.name) if is_v(left, Variable) else None
+    return str(vfield(left, "name")) if is_v(left, Variable) else None
 
 
 def _report_forall(diag, goal, reified_goal, logic_module, deadline) -> bool:
@@ -2120,11 +2120,36 @@ def _flatten_reified(node, out):
     # tuple (verified against the reflection layer); a single-goal body reifies
     # to a bare Goal.  Anything else is left as one opaque leaf, which degrades
     # to unreified rendering rather than misattributing.
-    if isinstance(node, tuple):
+    from clausal.reflection import _VOCAB_FIELDS  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+
+    _is_cell, _functor = compound_cell_shape(node)
+    if _is_cell and _functor in _VOCAB_FIELDS:
+        # P2: a reified vocabulary term IS a tuple now, so the conjunction
+        # branch below would flatten a Goal's own SLOTS into separate
+        # "leaves" and `flat[index]` would pick one out -- which is how a
+        # collapse leaf came to render as the bare functor (`between`) where
+        # the whole goal (`usable(L)`) belongs.  A vocabulary cell is ONE
+        # leaf; only a genuine comma-conjunction tuple is flattened.
+        out.append(node)
+    elif isinstance(node, tuple):
         for e in node:
             _flatten_reified(e, out)
     else:
         out.append(node)
+
+
+def _is_vocabulary_cell(node) -> bool:
+    """Is *node* one of clausal.reflection's nine reified-vocabulary cells?
+
+    P2 made every one of them a tuple, so the generic "is this a tuple?"
+    branches that predate the flip now catch them and walk their slots as if
+    they were data. Three walkers in this file needed this test."""
+    from clausal.reflection import _VOCAB_FIELDS  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+
+    is_cell, functor = compound_cell_shape(node)
+    return is_cell and functor in _VOCAB_FIELDS
 
 
 def _reified_children(node):
@@ -2137,6 +2162,12 @@ def _reified_children(node):
         yield from (vfield(node, "args") or ())
         for kw in (vfield(node, "kwargs") or ()):
             yield kw[1]
+    elif _is_vocabulary_cell(node):
+        # P2: the other seven vocabulary terms ARE tuples, so the generic
+        # branch below would yield their own SLOTS as candidate goal nodes --
+        # a Variable's name, an Atom's spelling.  They carry no goal children;
+        # Clause and Goal, which do, are handled above.
+        return
     elif isinstance(node, (list, tuple)):
         yield from node
 
