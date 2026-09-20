@@ -1618,16 +1618,20 @@ def _atomize_declared_atoms(reified, path):
     if isinstance(reified, list):
         return [_atomize_declared_atoms(v, path) for v in reified]
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    from clausal.reflection import _VOCAB_FIELDS  # noqa: PLC0415
     _is_cell, _functor = compound_cell_shape(reified)
-    if _is_cell:
-        # P2: a CELL's slot 0 is its FUNCTOR, not an argument.  The generic
-        # tuple branch below walks every slot, so it atomized the functor --
-        # ("Variable", "N") came back as (("Atom", "Variable"), "N"), which
-        # the renderer cannot recognise as a Variable, and the descent
-        # diagnostics printed `(_ > 100)` where `(N > 100)` belongs.  Only
-        # the ARGUMENTS are rewrapped.
-        return (_functor, *[_atomize_declared_atoms(v, path)
-                            for v in reified[1:]])
+    if _is_cell and _functor in _VOCAB_FIELDS:
+        # A reified-vocabulary term is returned UNCHANGED, which is exactly
+        # what it got pre-P2: these were INSTANCES then, this function has no
+        # dataclass branch, and they fell through to the `return reified` at
+        # the bottom.  As CELLS they are tuples, so the generic tuple branch
+        # below would walk them -- and every slot of a Variable or an Atom is
+        # a bare str, which IS an atom (stage 2), so each one would be rewrapped
+        # into a fresh vocabulary `Atom`: ("Variable", "N") became
+        # (("Atom", "Variable"), ("Atom", "N")), and the renderer refuses it
+        # with "cannot render non-string variable name".  Goal is the one that
+        # must be walked, and its branch above does that already.
+        return reified
     if isinstance(reified, tuple):
         return tuple(_atomize_declared_atoms(v, path) for v in reified)
     if isinstance(reified, dict):
