@@ -29,3 +29,23 @@ parse, which is the fail-open shape this repo keeps hitting.
 
 Do NOT "fix" it by deleting the artifacts: they belong to whoever generated them, and the test
 would break again the next time anyone dumps a transform.
+
+## CLOSED 2026-09-19 (6090d1d6)
+
+`_class_test_offenders` skips any path with `__transformed__` in its parts.
+The guard's own positive control (`test_the_class_test_pin_actually_bites`,
+which feeds it a live offender in each of the three spellings) still bites, so
+the skip narrowed the walk without blunting it.
+
+Gated in a REPRODUCED room rather than in the canonical working tree: a
+worktree plus all twelve `.so`, a `venv` symlink (the sibling test's skipif
+uses `abspath`, not `realpath`, so a symlink satisfies it) and a copy of the
+two untracked dumps. Baseline arm reproduced all three checkout-only failures
+with zero skips — that control is what makes the diff mean anything — then
+NEW 0 / GONE 1, this test being the one that went.
+
+**Found twice.** This note is dated 2026-09-12; I rediscovered the same defect
+on 2026-09-19 from the failure text, fixed it, and only then read the todo
+list. The note had already measured what I re-measured, including the
+`File "<unknown>", line 18` no-attribution shape. Read `todo/` before chasing
+a suite failure that smells environmental.
