@@ -49,6 +49,62 @@ from clausal.modules.provenance._registration import is_bottom_up, is_pure
 from clausal.modules.provenance._pure_default import is_default_pure
 
 
+# ── Term shape helpers ──────────────────────────────────────────────────
+#
+# P2 (clausal 2026-09): a compound term is a CELL -- the functor-first tuple
+# ``(name, *args)`` -- not a ``PredicateMeta`` instance.  This engine is built
+# around predicate CLASSES (they carry ``_clauses``, and ``-bottom_up`` /
+# ``pure_`` registration hangs off them), so a cell has to be resolved back to
+# its class through the module.  These three readers are the only places that
+# know how a term is shaped; everything below goes through them.
+
+
+def _term_args(term: Any) -> tuple:
+    """The ARGUMENT tuple of a term -- positions for a cell, fields for an
+    instance, ``args`` for a ``Compound``.  Raises for anything else."""
+    if type(term) is tuple:
+        return term[1:]
+    if is_term_instance(term):
+        return tuple(getattr(term, n) for n in term_field_names(term))
+    if isinstance(term, Compound):
+        return tuple(term.args)
+    raise TypeError(
+        f"Cannot read the arguments of {term!r}; expected a cell, a "
+        "PredicateMeta instance or a Compound."
+    )
+
+
+def _class_for_term(term: Any, module: Any = None) -> PredicateMeta | None:
+    """The predicate CLASS a term names, or None.
+
+    An instance still answers from ``type(term)``.  A CELL carries only its
+    functor, so the class is resolved by ``(functor, arity)`` through the
+    module dict -- the same lookup ``_discover_bottom_up_predicates`` already
+    does for a clause-body callee.  Arity is checked, not assumed: one name
+    can be several predicates.
+    """
+    if is_term_instance(term):
+        return type(term)
+    if isinstance(term, type) and isinstance(term, PredicateMeta):
+        return term
+    if type(term) is not tuple:
+        return None
+    try:
+        name, arity = head_key(term)
+    except TypeError:
+        # head_key REFUSES the reserved 1-tuple ('x',), the empty tuple, and
+        # a TUPLE_TAG data tuple.  "Which class does this term name?" is a
+        # question in a dispatch chain -- it has to ANSWER.  None means "no
+        # class", and the caller turns that into its own diagnostic.
+        return None
+    md = module.module_dict if hasattr(module, "module_dict") else None
+    if md is not None:
+        obj = md.get(name)
+        if isinstance(obj, PredicateMeta) and obj._arity == arity:
+            return obj
+    return None
+
+
 # ── Term grounding helpers ──────────────────────────────────────────────
 
 
@@ -103,12 +159,13 @@ def _term_to_tuple(term: Any) -> tuple:
     tuple is stored — keyed by ``(functor, arity)``).
     """
     term = _walk_term(term)
-    if is_term_instance(term):
-        return tuple(getattr(term, n) for n in term_field_names(term))
-    if isinstance(term, Compound):
-        return tuple(term.args)
+    # Test the shape, do not catch _term_args' TypeError: catching would also
+    # swallow one raised from INSIDE a legitimate read and report it as the
+    # wrong diagnostic.
+    if type(term) is tuple or is_term_instance(term) or isinstance(term, Compound):
+        return _term_args(term)
     raise TypeError(
-        f"Cannot ground-key non-term value {term!r}; expected a "
+        f"Cannot ground-key non-term value {term!r}; expected a cell, a "
         "PredicateMeta instance or Compound."
     )
 
@@ -570,7 +627,7 @@ def evaluate(
         key = head_key(term)
         if key in pred_classes:
             continue
-        cls = type(term) if is_term_instance(term) else None
+        cls = _class_for_term(term, module)
         if cls is None or not is_bottom_up(cls):
             raise ValueError(
                 f"Fact {term!r} has key {key} which is not a -bottom_up "
@@ -608,15 +665,14 @@ def _discover_bottom_up_predicates(
     out: dict[tuple[str, int], PredicateMeta] = {}
     stack: list[PredicateMeta] = []
 
-    if is_term_instance(goal):
-        cls = type(goal)
-    elif isinstance(goal, PredicateMeta):
-        cls = goal
-    else:
+    cls = _class_for_term(goal, module)
+    if cls is None:
         raise TypeError(
-            f"Goal {goal!r} is not a predicate term (expected PredicateMeta "
-            "instance or class)."
+            f"Goal {goal!r} is not a predicate term (expected a cell whose "
+            "functor names a predicate in this module, a PredicateMeta "
+            "instance, or a class)."
         )
+    root_cls = cls
     stack.append(cls)
 
     md = module.module_dict if hasattr(module, "module_dict") else None
@@ -631,7 +687,7 @@ def _discover_bottom_up_predicates(
                 continue
             # Goal is required to be bottom_up; if the *root* fails this,
             # error early.
-            if not out and cls is goal_cls_initial(stack, goal):
+            if not out and cls is root_cls:
                 raise ValueError(
                     f"Goal predicate {cls.__name__}/{cls._arity} is not "
                     f"registered as -bottom_up. Add `bottom_up_({cls.__name__})` "
@@ -662,11 +718,17 @@ def _discover_bottom_up_predicates(
     return out
 
 
-def goal_cls_initial(stack, goal):
-    """Helper: re-derive the original goal class for error messages."""
-    if is_term_instance(goal):
-        return type(goal)
-    return goal
+def goal_cls_initial(stack, goal, module=None):
+    """Helper: re-derive the original goal class for error messages.
+
+    NEEDS THE MODULE to answer for a CELL -- a cell carries only its functor,
+    and without a module dict to resolve it this returns the TERM, which is
+    the right thing for a message but is NOT the class.  The root-predicate
+    check in ``_discover_bottom_up_predicates`` used to compare against this
+    and silently stopped matching when the goal became a cell; it now holds
+    the root class directly, from the one place the module is in scope.
+    """
+    return _class_for_term(goal, module) or goal
 
 
 def _filter_by_goal(
@@ -681,12 +743,16 @@ def _filter_by_goal(
     unify with the goal term; on success, build a fresh ground term and
     record (term, recovered_tag).
     """
-    if is_term_instance(goal):
-        cls = type(goal)
+    # No ``module`` here -- ``pred_classes`` is already the resolved map, so a
+    # CELL goal keys straight into it rather than repeating the lookup.
+    cls = _class_for_term(goal)
+    if cls is not None:
         key = (cls._functor, cls._arity)
-    elif isinstance(goal, PredicateMeta):
-        cls = goal
-        key = (cls._functor, cls._arity)
+    elif type(goal) is tuple:
+        key = head_key(goal)
+        cls = pred_classes.get(key)
+        if cls is None:
+            raise TypeError(f"Cannot match goal {goal!r}.")
     else:
         raise TypeError(f"Cannot match goal {goal!r}.")
 
@@ -694,15 +760,20 @@ def _filter_by_goal(
     if rel is None:
         return []
 
-    fields = term_field_names(goal) if is_term_instance(goal) else cls._fields
+    fields = cls._fields
+    # A goal supplies the patterns its arguments must match; a bare CLASS
+    # supplies none, so every slot is a fresh Var and everything matches.
+    if isinstance(goal, type):
+        patterns: tuple = tuple(Var() for _ in fields)
+    else:
+        patterns = _term_args(goal)
     out: list[tuple[Any, Any]] = []
     trail = Trail()
     for tup, tag in rel.tuples.items():
         mark = trail.mark()
         ok = True
-        for fname, val in zip(fields, tup):
-            if not unify(getattr(goal, fname) if is_term_instance(goal) else Var(),
-                         val, trail):
+        for pattern, val in zip(patterns, tup):
+            if not unify(pattern, val, trail):
                 ok = False
                 break
         if ok:

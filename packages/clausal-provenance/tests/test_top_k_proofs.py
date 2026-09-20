@@ -297,8 +297,10 @@ def test_engine_boolean_equivalence_at_zero_one_inputs():
     ]
     out_topk = evaluate(top_k_proofs(k=4), facts_topk, Path(Var(), Var()), module=mod)
     out_bool = evaluate(boolean, facts_bool, Path(Var(), Var()), module=mod)
-    reachable_topk = {(t.a, t.b) for t, p in out_topk if p > 0.5}
-    reachable_bool = {(t.a, t.b) for t, p in out_bool if p}
+    # A result term is a CELL -- ``('path', A, B)`` -- so its arguments are
+    # read at their POSITIONS.  ``t.a``/``t.b`` was the instance spelling.
+    reachable_topk = {(t[1], t[2]) for t, p in out_topk if p > 0.5}
+    reachable_bool = {(t[1], t[2]) for t, p in out_bool if p}
     # Edges with prob 1.0 plus their reach closure; the prob-0 edge a→d
     # contributes nothing, so a→e (only reachable through d) is absent.
     assert reachable_topk == {("a", "b"), ("b", "c"), ("a", "c"), ("d", "e")}
