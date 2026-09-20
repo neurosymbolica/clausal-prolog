@@ -33,6 +33,7 @@ builds the *declared* one — only the generic shape's spelling moved.
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import is_cell, cell_functor, cell_arity
 from clausal.logic.builtins.inspection import _functor__3, _univ__2
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.variables import Var, Trail, deref, unify
@@ -70,9 +71,14 @@ def cite():
 def test_class_name_builds_the_declared_term(cite):
     """The case that motivated this: hand construction the class itself."""
     built = built_by(_functor__3, cite, 1)
-    assert isinstance(built, cite), (
-        f"built {type(built).__name__}, not a {cite.__name__} instance"
-    )
+    # P2: construction yields a CELL, so the class-name / atom-name
+    # distinction these tests used to draw has COLLAPSED -- both name
+    # positions build the same term.  What is still worth pinning is that
+    # it is the DECLARED functor at the declared arity; the property that
+    # motivated the original fix is stated as unification in the sibling
+    # test below, and it passes unchanged.
+    assert is_cell(built) and cell_functor(built) == cite._functor
+    assert cell_arity(built) == 1
 
 
 def test_constructed_term_unifies_with_the_real_thing(cite):
@@ -138,7 +144,7 @@ def test_metaclass_minted_class_also_rebuilds():
         _fields = ("key",)
 
     built = built_by(_functor__3, tfcdt_minted, 1)
-    assert isinstance(built, tfcdt_minted)
+    assert is_cell(built) and cell_functor(built) == "tfcdt_minted"
     assert unify(built, tfcdt_minted(Var()), Trail())
 
 
@@ -166,9 +172,8 @@ def test_decompose_then_reconstruct_round_trips(cite):
 def test_unpack_class_name_builds_the_declared_term(cite):
     """``unpack/2`` shares the defect and must move with ``functor/3``."""
     built = built_by(_univ__2, [cite, 42])
-    assert isinstance(built, cite), (
-        f"built {type(built).__name__}, not a {cite.__name__} instance"
-    )
+    assert is_cell(built) and cell_functor(built) == cite._functor
+    assert cell_arity(built) == 1
 
 
 def test_unpack_carries_the_argument_values(cite):

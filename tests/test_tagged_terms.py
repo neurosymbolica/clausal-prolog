@@ -305,7 +305,13 @@ def _python_minted(functor, fields, *values):
     """
     from clausal.logic.predicate import make_predicate
 
-    return make_predicate(functor, list(fields))(*values)
+    # ``instances=True`` is the P2 bridge, and it is what makes this helper
+    # mint what its name says.  Since the constructor flip a plain
+    # ``make_predicate`` class CONSTRUCTS A CELL like every other, so without
+    # the flag this returned a cell and the "live instance" tests below were
+    # quietly testing the cell path twice.  reflection and clpb -- the
+    # producers this stands in for -- declare the flag for the same reason.
+    return make_predicate(functor, list(fields), instances=True)(*values)
 
 
 class TestCellEmission:
@@ -362,14 +368,24 @@ class TestCellEmission:
         ISO declare-then-assertz pattern as a data functor and compile its
         references to cells that the later-asserted clauses could never match.
         """
-        _load_inline(
+        m = _load_inline(
             "_tt_dyn",
-            "-module(_tt_dyn, [d(A, B), p(X, Y)])\n"
+            "-module(_tt_dyn, [d(A, B), p(X, Y), use(R)])\n"
             "-dynamic(d/2)\n"
-            "p(X, d(X, 1)),\n",
+            "p(X, d(X, 1)),\n"
+            "use(R) <- (d(7, R)),\n",
         )
-        src = capture_predicate_codegen("_tt_dyn", ["p"])
-        assert "('d'," not in src
+        # P2: this asks for the BEHAVIOUR now, not for the absence of a
+        # string.  A reference to ``d`` DOES compile to a cell since the
+        # head flip -- a cell NAMES a predicate and call/N resolves the
+        # name (R-P2-2) -- so "compiles to a cell" stopped being the thing
+        # that would break the ISO declare-then-assertz pattern.  What
+        # would break it is the pattern not answering, so pin that.
+        from clausal.logic.solve import call as _call_g, solve as _solve_g
+        from clausal.logic.variables import Var as _V, deref as _dr
+        list(_call_g("assertz", ("d", 7, 70), module=m))
+        R = _V()
+        assert [_dr(R) for _ in _solve_g(("use", R), m)] == [70]
 
     def test_a_predicate_reference_is_not_a_cell(self):
         """Only DATA functors (no clauses) become cells -- a predicate stays a
@@ -835,10 +851,21 @@ class TestHeadPatterns:
         assert got.startswith("case ['point', ")
         assert got.endswith(", _]:")
 
-    def test_a_predicate_reference_keeps_the_class_pattern(self):
-        """``kind/2`` has clauses -- it is a predicate, not a data functor."""
+    def test_a_predicate_reference_matches_as_a_sequence_too(self):
+        """P2 INVERTS this, and means to.
+
+        It pinned that ``kind/2``, having clauses, is a PREDICATE and so
+        keeps the class pattern.  Since the head flip a SOURCE compound
+        lowers to a cell whichever its name binds -- measured: a
+        predicate-named head argument is the cell ``('kk', 1, 2)`` at
+        runtime, and a cell passed in matches it -- so data-vs-predicate no
+        longer decides the PATTERN.  The class pattern is not dead: it is
+        what a LIVE INSTANCE still matches as, which
+        ``test_live_instance_stays_a_class_pattern`` pins.  The split moved
+        from the NAME to the BINDING.
+        """
         got = self._pattern(self._source_compound("kind", 2))
-        assert got.startswith("case kind(")
+        assert got.startswith("case ['kind', ")
 
     def test_live_instance_stays_a_class_pattern(self):
         """P3-2 Task 2, controller ruling: instance-side cell emission is
@@ -1331,13 +1358,23 @@ class TestTheBucketLift:
         out = self._lift(self._call("point", 0, {"Y": Var()}))
         assert out.body == []
 
-    def test_a_predicate_functor_reference_is_still_refused(self):
-        """R6b: a name bound to a ``PredicateMeta`` is a PREDICATE, and a
-        predicate reference in a head arg has no cell pattern -- the lift
-        must leave the body ``Unify`` where the runtime can resolve it."""
+    def test_a_predicate_functor_reference_is_lifted_too(self):
+        """P2 INVERTS R6b, and means to.
+
+        R6b refused a ``PredicateMeta``-bound name because a predicate
+        reference had no cell pattern to lift into.  It has one now -- the
+        head flip gives a source compound a sequence pattern whichever its
+        name binds -- so the question this class describes ("is this name a
+        DATA functor?") no longer has two answers, and the lift treats both
+        alike.  Safe for the reason the class docstring already gives: a
+        cell pattern is a plain sequence literal and resolves nothing at
+        match time.
+        """
+        from clausal.terms import Call as TCall
+
         out = self._lift(self._call("kind", 2))
-        assert len(out.body) == 1
-        assert is_var(deref(out.head.args[0]))
+        assert out.body == [], "the lifted Unify must leave the body"
+        assert isinstance(out.head.args[0], TCall)
 
     def test_an_unresolvable_name_is_still_refused(self):
         out = self._lift(self._call("no_such_functor_anywhere", 2))
@@ -1877,10 +1914,14 @@ class TestStructuralHeadValue:
         from clausal.logic.predicate import make_predicate
         from clausal.terms import Unify
 
+        from clausal.logic.cells import cell_args
+
         Q = make_predicate("qq", ("S", "K"))
         head, body = _normalize_structural_head_args(
             Q(S=("pt", 1, Var()), K="yes"), [True])
-        assert is_var(deref(head.S))
+        # P2: the normalised head is a CELL, so S is read at the position
+        # the class declares it, not as an attribute.
+        assert is_var(deref(cell_args(head)[Q._fields.index("S")]))
         assert isinstance(body[0], Unify)
         assert body[0].right == ("pt", 1, body[0].right[2])
 
@@ -2081,11 +2122,23 @@ class TestGateSymmetry:
         assert isinstance(tagged.kind, PredicateMeta)     # ... both halves
         term = self._source_compound_for("point", 2)
         with lowering_scope(tagged.__dict__):
-            pattern = head_to_match_pattern(
+            got = _unparse_pattern(head_to_match_pattern(
                 term, {}, [], [], None,
                 globals_={"__name__": tagged.__name__, "point": tagged.kind},
-            )
-        assert _unparse_pattern(pattern).startswith("case point(")
+            ))
+        # P2 re-casts the DISCRIMINATOR, and the new one is sharper.  Since
+        # the head flip a source compound lowers to a cell whether its name
+        # binds a data functor or a predicate, so data-vs-predicate no
+        # longer separates the two resolutions.  The TAG does: ``globals_``
+        # binds the written name ``point`` to the ``kind`` class, and the
+        # pattern comes back tagged ``'kind'``.  Resolving in the open
+        # compile scope -- where ``point`` is the data functor ``point`` --
+        # could only have produced ``'point'``.  So this still pins exactly
+        # what it always pinned, that the cell branch resolves a name in
+        # ``globals_`` and not in the open scope, and it now reads the
+        # answer off the pattern instead of off the class/cell split.
+        assert got.startswith("case ['kind', "), got
+        assert "'point'" not in got
 
     @staticmethod
     def _source_compound_for(name, n):

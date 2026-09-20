@@ -40,6 +40,15 @@ from clausal import Var
 # ── Run time: positional overflow ──────────────────────────────────────────
 
 
+def _cf(term, cls, name):
+    """The value of field *name* in a term CELL built from *cls*.
+
+    P2: construction yields a functor and POSITIONS; the field names stay on
+    the class that declared them."""
+    from clausal.logic.cells import cell_args
+    return cell_args(term)[cls._fields.index(name)]
+
+
 class TestPositionalOverflowRaises:
     """Positional arguments past ``len(_fields)`` are an error, not silence."""
 
@@ -92,20 +101,20 @@ class TestPositionalOverflowRaises:
     def test_exact_arity_still_constructs(self):
         cls = make_predicate("fac_ok", ["left", "right"])
         term = cls(1, 2)
-        assert term.left == 1 and term.right == 2
+        assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
     def test_partial_positional_still_fills_with_vars(self):
         from clausal.logic.variables import is_var
 
         cls = make_predicate("fac_partial", ["left", "right"])
         term = cls(1)
-        assert term.left == 1
-        assert is_var(term.right)
+        assert _cf(term, cls, "left") == 1
+        assert is_var(_cf(term, cls, "right"))
 
     def test_mixed_positional_and_keyword_within_arity_still_constructs(self):
         cls = make_predicate("fac_mixed", ["left", "right"])
         term = cls(1, right=2)
-        assert term.left == 1 and term.right == 2
+        assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
     def test_zero_arity_no_args_still_returns_the_class_itself(self):
         atom = make_predicate("fac_identity", [])

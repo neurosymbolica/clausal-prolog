@@ -40,6 +40,15 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 # ── Unit level: the raise site itself ──────────────────────────────────────
 
 
+def _cf(term, cls, name):
+    """The value of field *name* in a term CELL built from *cls*.
+
+    P2: construction yields a functor and POSITIONS; the field names stay on
+    the class that declared them."""
+    from clausal.logic.cells import cell_args
+    return cell_args(term)[cls._fields.index(name)]
+
+
 class TestConstructionErrorShape:
     """The error is a TypeError subclass carrying structured attributes."""
 
@@ -83,10 +92,17 @@ class TestConstructionErrorShape:
     def test_matching_field_names_still_construct(self):
         cls = make_predicate("fnd_ok", ["left", "right"])
         term = cls(left=1, right=2)
-        assert term.left == 1 and term.right == 2
+        assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
-    def test_unrelated_type_error_is_not_swallowed(self):
-        """A TypeError whose kwargs all ARE fields is re-raised untouched."""
+    def test_init_is_not_consulted_at_all_any_more(self):
+        """P2 INVERTS this pin, and means to.
+
+        It used to pin that a TypeError raised by ``__init__`` -- whose
+        kwargs all ARE fields, so the field-name diagnostic must not claim
+        it -- is re-raised untouched.  Construction no longer makes an
+        INSTANCE: it builds a cell, and ``__init__`` is never called, so
+        there is no longer any such TypeError to swallow or re-raise.  The
+        pin becomes the fact that replaced it."""
 
         class fnd_raiser(metaclass=PredicateMeta):
             _fields = ("boom",)
@@ -95,10 +111,8 @@ class TestConstructionErrorShape:
             raise TypeError("something else entirely")
 
         fnd_raiser.__init__ = _explode
-        with pytest.raises(TypeError) as exc_info:
-            fnd_raiser(boom=1)
-        assert not isinstance(exc_info.value, ClausalTermConstructionError)
-        assert "something else entirely" in str(exc_info.value)
+        # No raise, and the cell is built from the kwargs as usual.
+        assert _cf(fnd_raiser(boom=1), fnd_raiser, "boom") == 1
 
 
 # ── Cause 1: directive-minted arg_N placeholders vs derived names ──────────
