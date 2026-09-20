@@ -350,9 +350,12 @@ def cell_signature_for_name(
       (``compiler_v2._process_declarations``) and a predicate keeps its
       class, so "resolves to a class" means "not data".  This is also what
       keeps a functor minted in PYTHON and imported into a ``.clausal`` file
-      (``clausal.reflection``'s ``Goal``/``Clause``, ``clpb``'s ``BoolEq``)
-      on class construction: its Python producers build instances at
-      runtime, and a cell-compiled clause could never match one;
+      on class construction WHILE IT STILL CARRIES THE BRIDGE FLAG: its
+      Python producers build instances at runtime, and a cell-compiled
+      clause could never match one.  Task 6 emptied the flag, so the
+      vocabularies that used to be the examples here --
+      ``clausal.reflection``'s ``Goal``/``Clause`` and ``clpb``'s
+      ``BoolEq``/``BoolImpl`` -- now compile to cells on BOTH sides;
     * no signature is known for it — neither the module's
       ``__clausal_functor_signatures__`` registry nor a resolved class's
       ``_fields`` names its fields, so there is no slot layout to place
@@ -559,8 +562,10 @@ def unnameable_instance_cell_functor(term: Any) -> "str | None":
     remove:
 
     * the compile scope binds this class under its own name -> nameable,
-      class emission (every Python-minted functor: ``clausal.reflection``'s
-      ``Goal``, ``clpb``'s ``BoolEq``).  Returns None.
+      class emission.  Returns None.  (Reaching here at all takes a live
+      INSTANCE; since Task 6 emptied the bridge, no in-repo vocabulary
+      builds one -- ``clausal.reflection``'s ``Goal`` and ``clpb``'s
+      ``BoolEq`` used to be the examples and are cells now.)
     * the name resolves as DATA (str binding + signature registry) and the
       registry's slot layout is this class's own -> a cell, the identical
       shape every other reference to that functor in this module compiles to.
@@ -1094,8 +1099,8 @@ def term_to_ast_expr(
     if is_term_instance(term):
         cls = type(term)
         # ``$``-twin for a class the runtime table binds (a simple_ast node
-        # such as ``Add``, an injected class such as ``BoolEq``), bare for
-        # a user's own predicate class -- see ``generated_names.dollar_ref``.
+        # such as ``Add``, or another injected class), bare for a user's own
+        # predicate class -- see ``generated_names.dollar_ref``.
         cls_name = dollar_ref(cls)
         fields = term_field_names(term)
         # A live term INSTANCE ALWAYS keeps class emission (P3-2 Task 2,
@@ -1103,9 +1108,10 @@ def term_to_ast_expr(
         # on the BINDING (R6): a declared data functor binds its interned
         # spelling, so post-flip no ``.clausal`` module can produce an
         # instance of one at all.  Every instance that still reaches here was
-        # minted in PYTHON (``clausal.reflection``'s ``Goal``/``Clause``,
-        # ``clpb``'s ``BoolEq``) and belongs to the class world: those
-        # producers build instances at runtime, and lowering them to cells
+        # minted in PYTHON and belongs to the class world -- since Task 6
+        # emptied the bridge that means an out-of-tree producer, the
+        # reflection vocabulary and ``clpb``'s ``BoolEq`` having become cells
+        # -- and lowering such an instance to a cell
         # here would emit a shape the NAME side of the same functor compiles a
         # class pattern for -- "builds one shape, matches another", the clause
         # that can never fire.  Answering uniformly at the class instead of

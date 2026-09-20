@@ -39,6 +39,10 @@ from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
+# clpb OWNS the BoolEq/BoolImpl declarations, so it owns the reader for
+# them too -- a second spelling here is how the two backends drift apart
+# on what counts as one.  No cycle: clpb imports nothing from clpz3.
+from clausal.logic.clpb import _bool_binary_operands
 from clausal.logic.variables import (
     present_number,
     Var, Trail, deref, is_var, unify, put_attr, get_attr,
@@ -624,14 +628,19 @@ def clausal_bool_to_z3(expr: Any, trail: Trail) -> Any:
     # int 0/1 treated as boolean constants (unlike clausal_to_z3 which gives IntVal)
     if isinstance(expr, int):
         return _z3.BoolVal(bool(expr))
-    # BoolEq / BoolImpl — make_predicate instances, detected via _functor
-    functor = getattr(type(expr), '_functor', None)
-    if functor == 'BoolEq':
-        return (clausal_bool_to_z3(expr.left, trail) ==
-                clausal_bool_to_z3(expr.right, trail))
-    if functor == 'BoolImpl':
-        return _z3.Implies(clausal_bool_to_z3(expr.left, trail),
-                           clausal_bool_to_z3(expr.right, trail))
+    # BoolEq / BoolImpl — CELLS since P2 Task 6 slice C, so their operands
+    # are read at their POSITIONS, through clpb's own reader.  The
+    # ``getattr(type(expr), '_functor', None)`` this replaces answers None
+    # for a tuple, so a cell fell straight through to ``clausal_to_z3``
+    # below, where a 3-tuple is not a term it knows either.
+    operands = _bool_binary_operands(expr)
+    if operands is not None:
+        functor, left, right = operands
+        if functor == 'BoolEq':
+            return (clausal_bool_to_z3(left, trail) ==
+                    clausal_bool_to_z3(right, trail))
+        return _z3.Implies(clausal_bool_to_z3(left, trail),
+                           clausal_bool_to_z3(right, trail))
     # All other nodes (Var, BitAnd/BitOr/BitXor/Invert, And/Or/Not, comparisons)
     return clausal_to_z3(expr, trail, default_sort=_z3.BoolSort())
 

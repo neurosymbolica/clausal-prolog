@@ -1,4 +1,4 @@
--import_from(clausal.logic.clpb, [BoolEq])  # the term constructor is a Python class: declared in the import list
+-import_from(clausal.logic.clpb, [BoolEq])  # the name must resolve at compile time; BoolEq(A, B) lowers to the cell ('BoolEq', A, B)
 # CLP(B) circuit integration fixture
 #
 # half_adder: SUM = X XOR Y, CARRY = X AND Y

@@ -1144,10 +1144,14 @@ class PredicateMeta(type):
         # site is the constructor flip; the class stays as the predicate
         # handle until P4 deletes it.  Unknown keywords still raise.
         if cls.__dict__.get("_clausal_instances"):
-            # P2 bridge: a class whose CONSUMERS still read attributes (the
-            # reflection vocabulary, clpb's BoolEq/BoolImpl, term expansion's
-            # state) keeps building instances until Task 4/6 convert them;
-            # ``make_predicate(..., instances=True)`` sets the flag.
+            # P2 bridge: a class whose CONSUMERS still read attributes keeps
+            # building instances; ``make_predicate(..., instances=True)``
+            # sets the flag.  Task 6 emptied it -- the reflection vocabulary
+            # (slice A), term expansion's state (slice B) and clpb's
+            # ``BoolEq``/``BoolImpl`` (slice C) were the last three, and NO
+            # class in this repo sets it now.  The branch stays for the tests
+            # that exercise the instance path itself and for out-of-tree
+            # callers, and goes with the class in P4.
             return cls._clausal_head(*args, **kwargs)
         unknown = [k for k in kwargs if k not in fields]
         if unknown:

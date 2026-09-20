@@ -43,25 +43,46 @@ REPO_ROOT = str(Path(__file__).resolve().parents[2])
 
 # ── Brute-force truth-table oracle ───────────────────────────────────────────
 
+def _node(e):
+    """``(functor, operands)`` for one Boolean-expression node.
+
+    P2 Task 6 slice C: ``BoolEq``/``BoolImpl`` are CELLS -- the functor is
+    slot 0 and the operands are POSITIONS -- while ``BitAnd``/``BitOr``/
+    ``BitXor``/``Invert`` are still ``pythonic_ast`` instances read by
+    attribute.  The oracle below deliberately does not call any clpb walker,
+    since those walkers are what it exists to check; it cannot, however, be
+    independent of the term REPRESENTATION, so the representation is read
+    here, once, rather than at each arm.
+    """
+    if isinstance(e, tuple):
+        if e and isinstance(e[0], str):
+            return e[0], list(e[1:])
+        raise TypeError(f"not a Boolean-expression cell: {e!r}")
+    n = type(e).__name__
+    if n == "Invert":
+        return n, [e.operand]
+    return n, [e.left, e.right]
+
+
 def _eval_expr(e, env):
     """Independent Boolean evaluator (does not use clpb code paths)."""
     if isinstance(e, Var):
         return env[id(e)]
     if isinstance(e, (int, bool)):
         return int(e)
-    n = type(e).__name__
+    n, ops = _node(e)
     if n == "BitAnd":
-        return _eval_expr(e.left, env) & _eval_expr(e.right, env)
+        return _eval_expr(ops[0], env) & _eval_expr(ops[1], env)
     if n == "BitOr":
-        return _eval_expr(e.left, env) | _eval_expr(e.right, env)
+        return _eval_expr(ops[0], env) | _eval_expr(ops[1], env)
     if n == "BitXor":
-        return _eval_expr(e.left, env) ^ _eval_expr(e.right, env)
+        return _eval_expr(ops[0], env) ^ _eval_expr(ops[1], env)
     if n == "Invert":
-        return 1 - _eval_expr(e.operand, env)
+        return 1 - _eval_expr(ops[0], env)
     if n == "BoolEq":
-        return int(_eval_expr(e.left, env) == _eval_expr(e.right, env))
+        return int(_eval_expr(ops[0], env) == _eval_expr(ops[1], env))
     if n == "BoolImpl":
-        return int((not _eval_expr(e.left, env)) or _eval_expr(e.right, env))
+        return int((not _eval_expr(ops[0], env)) or _eval_expr(ops[1], env))
     raise TypeError(n)
 
 
@@ -71,10 +92,8 @@ def _used_vars(e, acc):
         return acc
     if isinstance(e, (int, bool)):
         return acc
-    if type(e).__name__ == "Invert":
-        return _used_vars(e.operand, acc)
-    _used_vars(e.left, acc)
-    _used_vars(e.right, acc)
+    for operand in _node(e)[1]:
+        _used_vars(operand, acc)
     return acc
 
 

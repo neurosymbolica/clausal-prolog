@@ -15,10 +15,12 @@ from clausal.logic.clpb import (
     BoolEq, BoolImpl,
     enumerate_var, make_node, apply, negate, restrict,
     _expr_to_bdd, _collect_bool_var_objects, _collect_bdd_var_ids,
+    _bool_binary_operands,
     _propagate_forced,
     sat, taut, sat_count, bool_labeling,
 )
 from clausal.pythonic_ast.nodes import BitAnd, BitOr, BitXor, Invert
+from clausal.logic.cells import compound_cell_shape
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -319,6 +321,66 @@ class TestExprToBDD:
         fake_bool_impl = make_predicate("BoolImpl", ["x"])
         with pytest.raises(TypeError, match="unsupported"):
             _expr_to_bdd(fake_bool_impl(1))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BoolEq / BoolImpl are CELLS (P2 Task 6, slice C)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBoolTermsAreCells:
+    """``BoolEq``/``BoolImpl`` build the functor-first CELL, not an instance.
+
+    They were the last two ``make_predicate(..., instances=True)`` bridge
+    classes.  These tests pin the REPRESENTATION rather than any consumer's
+    behaviour, because the representation is what the bridge was hiding: a
+    consumer reading ``.left`` off a cell gets an ``AttributeError`` at best
+    and a silently-defaulted wrong answer at worst, and neither shows up in a
+    test that only asks whether ``sat`` answered.
+    """
+
+    def test_bool_eq_builds_a_cell(self):
+        # nv
+        x, y = Var(), Var()
+        term = BoolEq(left=x, right=y)
+        is_cell, functor = compound_cell_shape(term)
+        assert is_cell
+        assert functor == "BoolEq"
+        assert len(term) == 3
+        assert term[1] is x and term[2] is y
+
+    def test_bool_impl_builds_a_cell(self):
+        # nv
+        x, y = Var(), Var()
+        term = BoolImpl(left=x, right=y)
+        is_cell, functor = compound_cell_shape(term)
+        assert is_cell
+        assert functor == "BoolImpl"
+        assert len(term) == 3
+        assert term[1] is x and term[2] is y
+
+    def test_positional_and_keyword_build_the_same_cell(self):
+        """``.clausal`` writes ``BoolEq(A, B)``; Python callers in this suite
+        write ``BoolEq(left=A, right=B)``.  Both must land on the same cell,
+        in the declared field order."""
+        # nv
+        x, y = Var(), Var()
+        assert BoolEq(x, y) == ("BoolEq", x, y) == BoolEq(left=x, right=y)
+        assert BoolImpl(x, y) == ("BoolImpl", x, y) == BoolImpl(left=x, right=y)
+
+    def test_no_arguments_fills_fresh_vars(self):
+        # nv
+        term = BoolEq()
+        assert compound_cell_shape(term) == (True, "BoolEq")
+        assert len(term) == 3
+        assert is_var(term[1]) and is_var(term[2])
+        assert term[1] is not term[2]
+
+    def test_unknown_keyword_still_raises(self):
+        """The cell constructor must not silently drop a misspelled field."""
+        # nv
+        with pytest.raises(TypeError):
+            BoolEq(left=Var(), rihgt=Var())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -754,18 +816,41 @@ class TestTrailSafety:
 
 class TestTermConstructors:
     def test_bool_eq_construction(self):
+        """The module's own operand reader recovers what was constructed.
+
+        This used to read ``eq.left``/``eq.right`` off an instance.  The
+        shape itself is pinned in ``TestBoolTermsAreCells``; what is worth a
+        test HERE is that the reader the three walkers share agrees with the
+        constructor -- a cell whose operands the reader cannot recover is a
+        silently empty ``sat``, not an error."""
         # nv
         x, y = Var(), Var()
         eq = BoolEq(left=x, right=y)
-        assert eq.left is x
-        assert eq.right is y
+        assert _bool_binary_operands(eq) == ("BoolEq", x, y)
 
     def test_bool_impl_construction(self):
         # nv
         x, y = Var(), Var()
         impl = BoolImpl(left=x, right=y)
-        assert impl.left is x
-        assert impl.right is y
+        assert _bool_binary_operands(impl) == ("BoolImpl", x, y)
+
+    def test_operand_reader_declines_a_same_named_term_of_another_arity(self):
+        """The functor name is not owned: a ``BoolEq`` declared elsewhere at
+        another arity means something else, and the reader must decline it
+        rather than destructure it."""
+        # nv
+        from clausal.logic.predicate import make_predicate
+        assert _bool_binary_operands(make_predicate("BoolEq", ["x"])(1)) is None
+        assert _bool_binary_operands(
+            make_predicate("BoolImpl", ["a", "b", "c"])(1, 2, 3)) is None
+
+    def test_operand_reader_answers_for_a_reserved_1_tuple(self):
+        """``('x',)`` is RESERVED and makes ``compound_cell_shape`` refuse.
+        A question of the form "is this a BoolEq?" has to answer, not
+        propagate -- a predicate that raises cannot sit in a dispatch
+        chain."""
+        # nv
+        assert _bool_binary_operands(("x",)) is None
 
     def test_bool_eq_in_sat(self):
         """sat(BoolEq(X, Y)) — X ↔ Y must hold."""

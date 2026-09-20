@@ -38,6 +38,7 @@ from clausal.logic.variables import (
     register_attr_hook,
 )
 from clausal.logic.predicate import is_term_instance, make_predicate
+from clausal.logic.cells import compound_cell_shape, cell_args
 from clausal.logic.builtins._helpers import _functor_name
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -49,12 +50,8 @@ BDD_FALSE = 0
 
 # ── Term constructors for equivalence / implication ──────────────────────────
 
-BoolEq = make_predicate("BoolEq", ["left", "right"], instances=True)
-BoolImpl = make_predicate("BoolImpl", ["left", "right"], instances=True)
-
-# Presence-check sentinel for _expr_to_bdd's BoolEq/BoolImpl getattr guard --
-# see the comment there.
-_MISSING = object()
+BoolEq = make_predicate("BoolEq", ["left", "right"])
+BoolImpl = make_predicate("BoolImpl", ["left", "right"])
 
 # ── BDD node representation ─────────────────────────────────────────────────
 
@@ -366,6 +363,47 @@ def _ensure_node_imports():
         _Invert = Invert
 
 
+def _bool_binary_operands(expr):
+    """``(functor, left, right)`` for a ``BoolEq``/``BoolImpl`` term, else None.
+
+    P2 Task 6 slice C: the two constructors build CELLS, so their operands
+    live at POSITIONS.  THE ONE SPELLING -- three walkers in this module ask
+    this question (``_expr_to_bdd`` and both variable collectors), and the
+    collectors are the reason it is a function: they reached the operands
+    through a generic ``hasattr(expr, 'left')`` arm, which a cell misses.
+    That miss was SILENT -- no vars collected, so ``sat`` bound nothing and
+    answered False, with no error anywhere -- unlike ``_expr_to_bdd``, whose
+    miss lands on a TypeError.
+
+    The functor name is not proof: ``make_predicate("BoolEq", ["x"])``
+    declared elsewhere builds a well-formed ``('BoolEq', X)`` meaning
+    something else, so the ARITY decides.
+    """
+    try:
+        is_cell, functor = compound_cell_shape(expr)
+    except TypeError:
+        # The RESERVED 1-tuple ('x',) makes compound_cell_shape REFUSE.  A
+        # question of the form "is this a BoolEq?" has to ANSWER -- a
+        # predicate that raises cannot sit in a dispatch chain.
+        is_cell, functor = False, None
+    if is_cell and (functor == 'BoolEq' or functor == 'BoolImpl'):
+        args = cell_args(expr)
+        if len(args) == 2:
+            return functor, args[0], args[1]
+        return None
+
+    # The pre-P2 INSTANCE shape.  Nothing in this repo builds one now -- the
+    # class constructor returns the cell -- but an out-of-tree caller holding
+    # a pre-flip instance still reaches here.  hasattr, never a default: an
+    # unrecognised shape is a miss by DECISION rather than by a silent one.
+    if is_term_instance(expr):
+        functor = _functor_name(expr)
+        if (functor == 'BoolEq' or functor == 'BoolImpl') and \
+                hasattr(expr, 'left') and hasattr(expr, 'right'):
+            return functor, expr.left, expr.right
+    return None
+
+
 def _expr_to_bdd(expr, trail: Trail | None = None):
     """Convert a Boolean expression tree to a BDD."""
     expr = deref(expr)
@@ -388,25 +426,15 @@ def _expr_to_bdd(expr, trail: Trail | None = None):
 
     _ensure_node_imports()
 
-    # BoolEq / BoolImpl term constructors.  is_term_instance() is wider than
-    # "is actually a BoolEq/BoolImpl" -- it admits any dataclass/PredicateMeta
-    # instance, so a term-shaped value that merely happens to be *named*
-    # BoolEq/BoolImpl (e.g. an unrelated predicate declared under the same
-    # name elsewhere) but lacks .left/.right must fall through to the
-    # unsupported-expression TypeError below, not blow up with an
-    # AttributeError.  getattr(..., _MISSING) is the presence check for that.
-    if is_term_instance(expr):
-        functor = _functor_name(expr)
-        left = getattr(expr, 'left', _MISSING)
-        right = getattr(expr, 'right', _MISSING)
-        if functor == 'BoolEq' and left is not _MISSING and right is not _MISSING:
-            left_bdd = _expr_to_bdd(left, trail)
-            right_bdd = _expr_to_bdd(right, trail)
-            return apply('equiv', left_bdd, right_bdd)
-        if functor == 'BoolImpl' and left is not _MISSING and right is not _MISSING:
-            left_bdd = _expr_to_bdd(left, trail)
-            right_bdd = _expr_to_bdd(right, trail)
-            return apply('impl', left_bdd, right_bdd)
+    # BoolEq / BoolImpl term constructors.  An unrecognised shape falls
+    # through to the unsupported-expression TypeError at the bottom.
+    operands = _bool_binary_operands(expr)
+    if operands is not None:
+        functor, left, right = operands
+        left_bdd = _expr_to_bdd(left, trail)
+        right_bdd = _expr_to_bdd(right, trail)
+        return apply('equiv' if functor == 'BoolEq' else 'impl',
+                     left_bdd, right_bdd)
 
     # Bitwise operators from AST nodes
     if isinstance(expr, _BitAnd):
@@ -447,9 +475,18 @@ def _collect_bool_vars(expr, result: set | None = None) -> set:
         _collect_bool_vars(expr.right, result)
     elif isinstance(expr, _Invert):
         _collect_bool_vars(expr.operand, result)
-    elif hasattr(expr, 'left') and hasattr(expr, 'right'):
-        _collect_bool_vars(expr.left, result)
-        _collect_bool_vars(expr.right, result)
+    else:
+        # BoolEq/BoolImpl FIRST, and only then the generic left/right arm --
+        # the generic one is wider (any node carrying both fields) and a
+        # cell carries neither, so a cell reaching it collects NOTHING and
+        # sat() goes on to bind no variables at all.
+        operands = _bool_binary_operands(expr)
+        if operands is not None:
+            _collect_bool_vars(operands[1], result)
+            _collect_bool_vars(operands[2], result)
+        elif hasattr(expr, 'left') and hasattr(expr, 'right'):
+            _collect_bool_vars(expr.left, result)
+            _collect_bool_vars(expr.right, result)
     return result
 
 
@@ -470,9 +507,18 @@ def _collect_bool_var_objects(expr, result: list | None = None) -> list:
         _collect_bool_var_objects(expr.right, result)
     elif isinstance(expr, _Invert):
         _collect_bool_var_objects(expr.operand, result)
-    elif hasattr(expr, 'left') and hasattr(expr, 'right'):
-        _collect_bool_var_objects(expr.left, result)
-        _collect_bool_var_objects(expr.right, result)
+    else:
+        # BoolEq/BoolImpl FIRST, and only then the generic left/right arm --
+        # the generic one is wider (any node carrying both fields) and a
+        # cell carries neither, so a cell reaching it collects NOTHING and
+        # sat() goes on to bind no variables at all.
+        operands = _bool_binary_operands(expr)
+        if operands is not None:
+            _collect_bool_var_objects(operands[1], result)
+            _collect_bool_var_objects(operands[2], result)
+        elif hasattr(expr, 'left') and hasattr(expr, 'right'):
+            _collect_bool_var_objects(expr.left, result)
+            _collect_bool_var_objects(expr.right, result)
     return result
 
 

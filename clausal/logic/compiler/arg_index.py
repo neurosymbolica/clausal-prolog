@@ -469,7 +469,7 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
         if isinstance(func, ast.Name):
             n_args = len(arg_expr.args) + len(arg_expr.keywords)
             # A runtime-table class is constructed through its ``$`` twin
-            # (``$BoolEq(...)``); the head side keys on ``cls.__name__``.
+            # (``$Quantity(...)``); the head side keys on ``cls.__name__``.
             return (bare_name_of(func.id), n_args)
         if isinstance(func, ast.Attribute):
             n_args = len(arg_expr.args) + len(arg_expr.keywords)
