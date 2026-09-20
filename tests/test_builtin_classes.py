@@ -16,8 +16,21 @@ from clausal.logic.builtins import (
     MultiArityBuiltin,
     get_builtin_class,
 )
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.logic.cells import is_cell, cell_functor, cell_args, cell_arity
+from clausal.logic.predicate import PredicateMeta, is_term_instance
 from clausal.logic.variables import Var, deref
+
+
+def _field(term, name):
+    """The value of the field *name* in a builtin CELL.
+
+    P2: constructing a builtin class yields a cell -- a functor and
+    POSITIONS -- so a field name is no longer carried by the term and is
+    resolved through the registry that declares it.  The tests keep naming
+    fields because the names are the thing worth pinning; what changed is
+    where the name lives."""
+    fields = _BUILTIN_FIELDS[(cell_functor(term), cell_arity(term))]
+    return cell_args(term)[fields.index(name)]
 
 
 # ── Registry completeness ─────────────────────────────────────────────────────
@@ -63,34 +76,35 @@ class TestSingleArityConstruction:
         # nv
         append = get_builtin_class("append")
         t = append([1, 2], [3], [1, 2, 3])
-        assert is_term_instance(t)
-        assert t.l1 == [1, 2]
-        assert t.l2 == [3]
-        assert t.l3 == [1, 2, 3]
+        assert is_cell(t)
+        assert cell_functor(t) == "append"
+        assert _field(t, "l1") == [1, 2]
+        assert _field(t, "l2") == [3]
+        assert _field(t, "l3") == [1, 2, 3]
 
     def test_append_keyword(self):
         # nv
         append = get_builtin_class("append")
         t = append(l1=[1], l2=[2])
-        assert t.l1 == [1]
-        assert t.l2 == [2]
+        assert _field(t, "l1") == [1]
+        assert _field(t, "l2") == [2]
         # l3 should be auto-filled with Var()
-        assert isinstance(deref(t.l3), Var)
+        assert isinstance(deref(_field(t, "l3")), Var)
 
     def test_between_partial(self):
         # nv
         between = get_builtin_class("between")
         t = between(low=1, high=10)
-        assert t.low == 1
-        assert t.high == 10
-        assert isinstance(deref(t.x), Var)
+        assert _field(t, "low") == 1
+        assert _field(t, "high") == 10
+        assert isinstance(deref(_field(t, "x")), Var)
 
     def test_length_positional(self):
         # nv
         length = get_builtin_class("length")
         t = length([1, 2, 3], 3)
-        assert t.lst == [1, 2, 3]
-        assert t.n == 3
+        assert _field(t, "lst") == [1, 2, 3]
+        assert _field(t, "n") == 3
 
     def test_zero_arity(self):
         # nv
@@ -102,8 +116,8 @@ class TestSingleArityConstruction:
         # nv
         in_ = get_builtin_class("in_")
         t = in_()
-        assert isinstance(deref(t.elem), Var)
-        assert isinstance(deref(t.lst), Var)
+        assert isinstance(deref(_field(t, "elem")), Var)
+        assert isinstance(deref(_field(t, "lst")), Var)
 
 
 # ── Field names ───────────────────────────────────────────────────────────────
@@ -139,10 +153,11 @@ class TestFieldNames:
         assert _BUILTIN_FIELDS[("abolish_table", 2)] == ("functor", "arity")
 
     def test_term_field_names_on_instance(self):
+        """P2: the REGISTRY names a cell's fields -- the term does not."""
         # nv
         append = get_builtin_class("append")
         t = append([1], [2], [1, 2])
-        assert term_field_names(t) == ("l1", "l2", "l3")
+        assert _BUILTIN_FIELDS[(cell_functor(t), cell_arity(t))] == ("l1", "l2", "l3")
 
 
 # ── PredicateMeta protocol ────────────────────────────────────────────────────
@@ -214,17 +229,19 @@ class TestInstanceProtocols:
         between = get_builtin_class("between")
         t = between(low=1, high=10, x=99)
         r = repr(t)
+        # P2: a cell's repr is the TUPLE's -- functor first, then positions.
+        # The field names moved to the registry, so they are not in the repr.
         assert "between" in r
-        assert "low=1" in r
-        assert "high=10" in r
-        assert "x=99" in r
+        assert r == repr(("between", 1, 10, 99))
 
     def test_match_args(self):
         # nv
         append = get_builtin_class("append")
         t = append([1], [2], [1, 2])
+        # P2: a cell matches as the SEQUENCE it is -- functor then arguments.
+        # A class pattern needed an instance to destructure; this needs none.
         match t:
-            case append(a, b, c):  # type: ignore[misc]
+            case ("append", a, b, c):
                 assert a == [1]
                 assert b == [2]
                 assert c == [1, 2]
@@ -245,15 +262,15 @@ class TestMultiArity:
         # nv
         ml = get_builtin_class("maplist")
         t = ml("goal", [1, 2])
-        assert is_term_instance(t)
-        assert type(t)._arity == 2
+        assert is_cell(t)
+        assert cell_arity(t) == 2
 
     def test_maplist_3_construction(self):
         # nv
         ml = get_builtin_class("maplist")
         t = ml("goal", [1, 2], [2, 4])
-        assert is_term_instance(t)
-        assert type(t)._arity == 3
+        assert is_cell(t)
+        assert cell_arity(t) == 3
 
     def test_maplist_dispatch(self):
         # nv
@@ -270,13 +287,13 @@ class TestMultiArity:
         # nv
         p = get_builtin_class("phrase")
         t = p("rule", [1, 2])
-        assert type(t)._arity == 2
+        assert cell_arity(t) == 2
 
     def test_phrase_3_construction(self):
         # nv
         p = get_builtin_class("phrase")
         t = p("rule", [1, 2], [])
-        assert type(t)._arity == 3
+        assert cell_arity(t) == 3
 
     def test_multi_repr(self):
         # nv
@@ -293,7 +310,7 @@ class TestTermHelpers:
         # nv
         append = get_builtin_class("append")
         t = append([1], [2], [1, 2])
-        assert is_term_instance(t)
+        assert is_cell(t)
 
     def test_is_term_instance_false_on_class(self):
         # nv
@@ -304,7 +321,7 @@ class TestTermHelpers:
         # nv
         in_ = get_builtin_class("in_")
         t = in_(1, [1, 2])
-        assert term_field_names(t) == ("elem", "lst")
+        assert _BUILTIN_FIELDS[(cell_functor(t), cell_arity(t))] == ("elem", "lst")
 
 
 # ── Execution: dispatch from class ───────────────────────────────────────────
@@ -476,10 +493,11 @@ class TestCallAPI:
         append = get_builtin_class("append")
         Z_ = Var()
         term = append([1], [2], Z_)
-        # unpack: the term's fields give us the args in the right order
-        args = [getattr(term, f) for f in type(term)._fields]
+        # P2: unpacking IS the cell -- the functor and the arguments in
+        # order, with no field-name round trip to get them back.
+        args = list(cell_args(term))
         mod = self._module()
         results = []
-        for _ in call(type(term)._functor, *args, module=mod):
+        for _ in call(cell_functor(term), *args, module=mod):
             results.append(deref(Z_))
         assert results == [[1, 2]]

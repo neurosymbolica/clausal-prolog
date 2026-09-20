@@ -3,6 +3,7 @@
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import is_cell, cell_functor, cell_args, cell_arity
 from clausal.logic.predicate import PredicateMeta, _MISSING
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var, is_var
@@ -21,6 +22,15 @@ class point(metaclass=PredicateMeta):
 
 class atom(metaclass=PredicateMeta):
     _fields = ()
+
+
+def _f(term, cls, name):
+    """The value of the field *name* in a term cell built from *cls*.
+
+    P2: constructing a predicate class yields a CELL -- a functor and
+    POSITIONS -- so the term no longer carries its field names.  The class
+    that DECLARED them still does, which is where a name is resolved."""
+    return cell_args(term)[cls._fields.index(name)]
 
 
 # ── Properties ────────────────────────────────────────────────────────────────
@@ -51,53 +61,56 @@ class TestTermConstruction:
     def test_full_kwargs(self):
         # nv
         t = fib(n=0, f=0)
-        assert t.n == 0
-        assert t.f == 0
+        assert _f(t, fib, "n") == 0
+        assert _f(t, fib, "f") == 0
 
     def test_partial_kwargs_fills_var(self):
         # nv
         t = fib(n=5)
-        assert t.n == 5
-        assert is_var(t.f)
+        assert _f(t, fib, "n") == 5
+        assert is_var(_f(t, fib, "f"))
 
     def test_no_args_all_vars(self):
         # nv
         t = fib()
-        assert is_var(t.n)
-        assert is_var(t.f)
+        assert is_var(_f(t, fib, "n"))
+        assert is_var(_f(t, fib, "f"))
 
     def test_each_call_fresh_vars(self):
         # nv
         t1 = fib()
         t2 = fib()
-        assert t1.n is not t2.n
-        assert t1.f is not t2.f
+        assert _f(t1, fib, "n") is not _f(t2, fib, "n")
+        assert _f(t1, fib, "f") is not _f(t2, fib, "f")
 
     def test_positional_args(self):
         # nv
         t = fib(1, 2)
-        assert t.n == 1
-        assert t.f == 2
+        assert _f(t, fib, "n") == 1
+        assert _f(t, fib, "f") == 2
 
     def test_isinstance_works(self):
-        """fib is a class, so isinstance works (unlike singleton pattern)."""
+        """P2: a term is a CELL, so class membership is not what identifies
+        it -- the functor is.  isinstance was the old spelling of this."""
         # nv
         t = fib(n=0, f=1)
-        assert isinstance(t, fib)
+        assert is_cell(t)
+        assert cell_functor(t) == "fib"
+        assert cell_arity(t) == 2
 
     def test_three_fields_partial(self):
         # nv
         t = point(x=1)
-        assert t.x == 1
-        assert is_var(t.y)
-        assert is_var(t.z)
+        assert _f(t, point, "x") == 1
+        assert is_var(_f(t, point, "y"))
+        assert is_var(_f(t, point, "z"))
 
     def test_none_is_not_missing(self):
         """Explicitly passing None should NOT be replaced with Var()."""
         # nv
         t = fib(n=None, f=5)
-        assert t.n is None
-        assert t.f == 5
+        assert _f(t, fib, "n") is None
+        assert _f(t, fib, "f") == 5
 
     def test_zero_arity_returns_class(self):
         """Zero-arity __call__ returns the class itself — class IS the atom."""
@@ -124,7 +137,9 @@ class TestEqRepr:
     def test_repr(self):
         # nv
         t = fib(n=1, f=2)
-        assert repr(t) == "fib(n=1, f=2)"
+        # P2: a cell's repr is the TUPLE's -- the field names moved to the
+        # class that declares them, so they are not in the term's repr.
+        assert repr(t) == repr(("fib", 1, 2))
 
     def test_repr_zero_arity(self):
         # atom() is atom (the class), so repr is the class name
@@ -143,8 +158,9 @@ class TestPatternMatch:
     def test_match_case(self):
         # nv
         t = fib(n=1, f=1)
+        # P2: a cell matches as the SEQUENCE it is -- functor then arguments.
         match t:
-            case fib(n=1, f=f_val):
+            case ("fib", 1, f_val):
                 assert f_val == 1
             case _:
                 pytest.fail("Pattern match failed")
@@ -396,11 +412,16 @@ class TestEdgeCases:
         # nv
         assert _MISSING is not None
 
-    def test_hash_disabled(self):
-        """Mutable terms should not be hashable by default."""
+    def test_hash_is_structural(self):
+        """P2 INVERTS this pin, and means to.
+
+        The old instance was mutable, so it was deliberately unhashable.
+        A cell is an immutable tuple, which is the whole point of the
+        representation -- Prolog compounds do not change -- so it hashes,
+        and it hashes STRUCTURALLY: equal terms have equal hashes."""
         # nv
-        with pytest.raises(TypeError):
-            hash(fib(n=1, f=1))
+        assert hash(fib(n=1, f=1)) == hash(("fib", 1, 1))
+        assert hash(fib(n=1, f=1)) == hash(fib(n=1, f=1))
 
 
 # ── Dataclass compatibility ──────────────────────────────────────────────────
@@ -411,8 +432,7 @@ class TestTermHelpers:
 
     def test_is_term_instance_true(self):
         # nv
-        from clausal.logic.predicate import is_term_instance
-        assert is_term_instance(fib(n=1, f=2))
+        assert is_cell(fib(n=1, f=2))
 
     def test_is_term_instance_class_false(self):
         # nv
@@ -421,8 +441,10 @@ class TestTermHelpers:
 
     def test_term_field_names(self):
         # nv
-        from clausal.logic.predicate import term_field_names
-        assert term_field_names(fib(n=1, f=2)) == ("n", "f")
+        # P2: the CLASS names the fields of a cell it built; the cell
+        # itself carries positions.
+        assert fib._fields == ("n", "f")
+        assert cell_arity(fib(n=1, f=2)) == len(fib._fields)
 
     def test_term_field_names_on_class(self):
         # nv
@@ -509,8 +531,8 @@ class TestAtomIdentity:
         # nv
         t = fib(n=1, f=2)
         assert t is not fib
-        assert isinstance(t, fib)
-        assert t.n == 1
+        assert is_cell(t) and cell_functor(t) == "fib"
+        assert _f(t, fib, "n") == 1
 
 
 # ── make_atom ─────────────────────────────────────────────────────────────────
