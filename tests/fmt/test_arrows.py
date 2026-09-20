@@ -17,6 +17,7 @@ import ast
 
 import pytest
 
+from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.fmt import format_source, format_tree
 from clausal.fmt.comments import CommentTable
 
@@ -108,7 +109,7 @@ def test_a_formatted_lambda_still_runs(tmp_path):
     from clausal.logic.variables import Var, deref
 
     out = Var()
-    solutions = list(module.doubles([1, 2, 3], out))
+    solutions = list(solve(module.doubles([1, 2, 3], out), module))
     assert solutions, "the formatted lambda no longer solves"
 
 

@@ -8,6 +8,7 @@ import os
 
 import pytest
 
+from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.reflection import (
     Atom,
     Clause,
@@ -620,7 +621,7 @@ class TestComprehensions:
 
         result = Var()
         bindings = []
-        for _ in module.sq([1, 2, 3], result):
+        for _ in solve(module.sq([1, 2, 3], result), module):
             bindings.append(deref(result))
 
         assert len(bindings) == 1, "the clause must yield exactly one solution"

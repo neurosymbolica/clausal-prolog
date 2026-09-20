@@ -23,6 +23,7 @@ from fractions import Fraction
 
 import pytest
 
+from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, is_var, unify, get_attr, put_attr
@@ -107,17 +108,17 @@ class TestOracles:
     def test_queens6_count(self, load):
         m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.clausal"))
         qs = [Var() for _ in range(6)]
-        assert sum(1 for _ in m.safe_queens(6, qs)) == 4
+        assert sum(1 for _ in solve(m.safe_queens(6, qs), m)) == 4
 
     def test_queens8_count(self, load):
         m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.clausal"))
         qs = [Var() for _ in range(8)]
-        assert sum(1 for _ in m.safe_queens(8, qs)) == 92
+        assert sum(1 for _ in solve(m.safe_queens(8, qs), m)) == 92
 
     def test_sendmore_unique(self, load):
         m = load("sendmore", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_sendmore.clausal"))
         vs = [Var() for _ in range(8)]
-        sols = [tuple(deref(v) for v in vs) for _ in m.sendmoney(*vs)]
+        sols = [tuple(deref(v) for v in vs) for _ in solve(m.sendmoney(*vs), m)]
         assert sols == [(9, 5, 6, 7, 1, 0, 8, 2)]
 
 
@@ -210,9 +211,9 @@ bad(X, Y) <- (X + 1 != Y, X is 1, Y is 2)
 good(X, Y) <- (X + 1 != Y, X is 1, Y is 5)
 """)
         x, y = Var(), Var()
-        assert sum(1 for _ in m.bad(x, y)) == 0
+        assert sum(1 for _ in solve(m.bad(x, y), m)) == 0
         x, y = Var(), Var()
-        assert sum(1 for _ in m.good(x, y)) == 1
+        assert sum(1 for _ in solve(m.good(x, y), m)) == 1
 
     def test_ne_ground_expr_at_post_ok(self):
         # _resolve evaluates ground expressions before posting — correct today.
@@ -244,7 +245,7 @@ class TestOutputModeLinearEq:
 double(X, Y) <- (Y == 2 * X)
 """)
         x = Var()
-        got = [deref(x) for _ in m.double(x, 8)]
+        got = [deref(x) for _ in solve(m.double(x, 8), m)]
         assert got == [4]
 
     def test_bounded_output_mode_works(self):
@@ -262,7 +263,7 @@ double(X, Y) <- (Y == 2 * X)
 double(X, Y) <- (Y == 2 * X)
 """)
         y = Var()
-        assert [deref(y) for _ in m.double(3, y)] == [6]
+        assert [deref(y) for _ in solve(m.double(3, y), m)] == [6]
 
 
 # ── A06-F003 / A06-F004: double-precision over-pruning (UNSOUND) ─────────────
