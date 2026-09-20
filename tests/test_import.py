@@ -262,10 +262,12 @@ def test_runtime_assertz_adds_clause():
     dispatch = logic_mod.db.get_dispatch("edge", 2)
     assert _run_dispatch(dispatch, 3, 4, Trail()) == []
 
-    # Add Edge(3, 4) at runtime.  We need an Edge instance — get the class
-    # from the module namespace (it was created by _make_functor_class_ast).
-    edge_cls = type(logic_mod.db.clauses_for("edge", 2)[0].head)
-    new_head = edge_cls(arg_0=3, arg_1=4)
+    # Add edge(3, 4) at runtime.  P2: a clause head IS the functor-first cell,
+    # so a new head is built with ``make_cell`` — there is no class to fetch
+    # out of the namespace and no constructor to call.  (This read
+    # ``type(head)`` and called it with keywords, which is ``tuple`` now.)
+    from clausal.logic.cells import make_cell
+    new_head = make_cell("edge", 3, 4)
     # P3-3 Task 3: ``Edge/2`` is a locked static predicate, and the
     # mutation gate refuses an anonymous runtime write to one -- that
     # low-level door used to be the one channel a static procedure could
@@ -438,7 +440,10 @@ q(X) <- (p(X), X > 1),
 def _answers(pred, *args):
     """Every solution's argument bindings, in solution order."""
     from clausal.logic.variables import deref
-    return [tuple(deref(a) for a in args) for _ in pred(*args)]
+    from clausal.logic.solve import call
+    # R-P2-2: calling the class builds the TERM (a cell since P2), it does not
+    # drive the predicate — iterating it yielded the tuple's elements.
+    return [tuple(deref(a) for a in args) for _ in call(pred, *args)]
 
 
 @pytest.fixture

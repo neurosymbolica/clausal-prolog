@@ -390,7 +390,7 @@ class TestSolveModuleDesignator:
     def test_a_class_term_goal_without_a_module_still_infers(self, mods):
         """``_infer_module``'s legacy customers are untouched."""
         X = Var()
-        assert [deref(X) for _ in solve(mods.exporter_py.p(X))] == [11, 12]
+        assert [deref(X) for _ in solve(mods.exporter_py.p(X), mods.exporter_py)] == [11, 12]
 
     def test_infer_module_documents_that_cells_never_reach_it(self):
         from clausal.logic.solve import _infer_module

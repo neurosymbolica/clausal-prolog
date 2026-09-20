@@ -58,37 +58,39 @@ def mod(tmp_path):
     return _load_module("cpe", str(src))
 
 
-def _solutions(goal, out=None):
+def _solutions(goal, out=None, *, module):
+    """R-P2-2: a cell goal carries no module and ``solve`` will not guess one
+    (module locality), so the caller — which has it in scope — passes it."""
     vals = []
-    for _ in solve(goal):
+    for _ in solve(goal, module):
         vals.append(deref(out) if out is not None else True)
     return vals
 
 
 def test_class_catcher_matches_python_exception(mod):
     r = Var()
-    assert _solutions(mod.c_class(r), r) == [mint("caught")]
+    assert _solutions(mod.c_class(r), r, module=mod) == [mint("caught")]
 
 
 def test_instance_catcher_binds_the_real_args(mod):
     m = Var()
-    [msg] = _solutions(mod.c_inst(m), m)
+    [msg] = _solutions(mod.c_inst(m), m, module=mod)
     assert chars_text(msg) == "invalid literal for int() with base 10: 'nope'"
 
 
 def test_wrong_class_catcher_stays_selective(mod):
     with pytest.raises(ValueError):
-        _solutions(mod.c_wrong(Var()))
+        _solutions(mod.c_wrong(Var()), module=mod)
 
 
 def test_wrong_instance_catcher_stays_selective(mod):
     with pytest.raises(ValueError):
-        _solutions(mod.c_inst_wrong(Var()))
+        _solutions(mod.c_inst_wrong(Var()), module=mod)
 
 
 def test_superclass_catcher_matches_by_isinstance(mod):
     r = Var()
-    assert _solutions(mod.c_super(r), r) == [mint("caught_super")]
+    assert _solutions(mod.c_super(r), r, module=mod) == [mint("caught_super")]
 
 
 def test_structural_titlecase_catcher_is_a_syntax_error(tmp_path):
@@ -105,7 +107,7 @@ def test_structural_titlecase_catcher_is_a_syntax_error(tmp_path):
 
 def test_python_catcher_does_not_match_a_logic_ball(mod):
     with pytest.raises(LogicException):
-        _solutions(mod.c_logic(Var()))
+        _solutions(mod.c_logic(Var()), module=mod)
 
 
 def test_superclass_python_catcher_does_not_match_a_logic_ball(mod):
@@ -114,4 +116,4 @@ def test_superclass_python_catcher_does_not_match_a_logic_ball(mod):
     # boundary is Python-only: logic balls keep their own catch-all spelling,
     # catch(G, _, R).
     with pytest.raises(LogicException):
-        _solutions(mod.c_logic_super(Var()))
+        _solutions(mod.c_logic_super(Var()), module=mod)

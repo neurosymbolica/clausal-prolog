@@ -830,7 +830,12 @@ class TestF004EngineNamespaceLeak:
         # a user predicate can use those public names.
         m = load(f"f004_{name}", f'{name}("a", "b"),\n')
         x = Var()
-        got = [deref(x) for _ in solve(getattr(m, name)(mint("a"), x))]
+        # R-P2-2: the goal is a cell, which carries no module — ``solve``
+        # refuses to guess one rather than break module locality.  (The
+        # ``getattr`` spelling is why the AST sweep for ``solve(m.p(...))``
+        # did not reach this one: the goal's func is a Call, not an
+        # Attribute.)
+        got = [deref(x) for _ in solve(getattr(m, name)(mint("a"), x), m)]
         assert got == [mint("b")]
 
     def test_leak_is_observable_in_module_dict(self, load):

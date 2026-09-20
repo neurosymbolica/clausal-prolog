@@ -41,7 +41,12 @@ def mod():
 def _answers(pred, arity=1):
     """All solutions of *pred* as a list of fully-dereferenced arg tuples."""
     args = [Var() for _ in range(arity)]
-    return [tuple(_deref_walk(a) for a in args) for _ in pred(*args)]
+    # R-P2-2: calling the CLASS builds the term, it does not drive the
+    # predicate — and since P2 that term is a cell, so ``for _ in pred(...)``
+    # iterated the TUPLE and yielded one "solution" per element, every
+    # argument unbound.  ``call`` takes a PredicateMeta directly.
+    from clausal.logic.solve import call
+    return [tuple(_deref_walk(a) for a in args) for _ in call(pred, *args)]
 
 
 # ── the bug ──────────────────────────────────────────────────────────────────
@@ -134,7 +139,10 @@ def test_system_exit_from_a_trampolined_callee_is_not_caught(mod):
 def test_generator_exit_still_closes_a_catch_wrapped_search(mod):
     """Abandoning the iterator mid-search must not be routed as an error."""
     n = Var()
-    gen = iter(mod.catch_multi(n))
+    # R-P2-2 again: ``iter(mod.catch_multi(n))`` iterated the CELL, not the
+    # predicate — ``next`` handed back the functor and left ``n`` unbound.
+    from clausal.logic.solve import call
+    gen = iter(call(mod.catch_multi, n))
     next(gen)
     assert _deref_walk(n) == 1
     gen.close()          # raises GeneratorExit inside the driver
