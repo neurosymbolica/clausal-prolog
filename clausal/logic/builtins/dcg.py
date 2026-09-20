@@ -8,9 +8,14 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.trampoline import DONE, StepGenerator
 
-from clausal.logic.builtins._registry import _trampoline_builtin
+from clausal.logic.builtins._registry import (
+    _trampoline_builtin, _DB_BUILTINS, _BUILTIN_FIELDS,
+)
 from clausal.logic.runtime._seg_helpers import normalize_seg_input, str_chars
-from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
+from clausal.logic.cells import (
+    chars, is_chars, chars_text,           # stage 1: the chars carrier
+    compound_cell_shape, CELL_GOAL_CONTROL_FUNCTORS, QUALIFIED_GOAL_FUNCTOR,
+)
 
 
 def _text_out(x):
@@ -76,8 +81,83 @@ def _empty_remainder_like(list_val):
     return []
 
 
-@_trampoline_builtin("phrase", 2)
-def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, trail):
+
+def _resolve_nonterminal(db, rule_val, extra_args, context):
+    """A CELL nonterminal -> ``(dispatch, call_args)``, else ``None``.
+
+    P2: a cell names a predicate and carries no class, so the name has to be
+    looked up, and the only correct place to look it up is the CALLING module
+    (R-P2-2, module locality) -- which is why phrase/2,3 became db-receiving,
+    exactly as the call/N family did in P3-3 Task 5.
+
+    THE ARITY FALLS OUT.  ``_resolve_named_goal``'s ISO argument fold IS the
+    ``_DCG_ARITY_NOTE`` convention: the cell's own arguments come first and the
+    caller's extras follow, so ``phrase(digit(D), L, R)`` folds to ``digit/3``
+    with S0/S as the extras.  Reusing that resolver keeps ONE name-resolution
+    rule (the db's dispatch table, then the module namespace) rather than a
+    second copy of it here.
+
+    NARROWED to the shapes phrase already accepted, because the shared
+    resolver is stricter than phrase is: call/N RAISES for a control
+    construct, for a string and for ``[]``, where phrase has always FAILED.
+    A DCG body is not a goal tree -- ``phrase((a, b), L)`` never named a
+    nonterminal here -- so those functors are turned away before the resolver
+    can raise, and the silent failure they have always had is preserved.  A
+    module-qualified nonterminal is left out on the same ground: it resolved
+    to nothing here before, and making it work is a feature, not this sweep.
+    """
+    from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+    is_cell, functor = compound_cell_shape(rule_val)
+    if not is_cell:
+        # A CELL only.  A bare atom naming a 0-arity nonterminal is pinned
+        # NOT to resolve here (``test_phrase_bare_str_rule_reference_fails_
+        # cleanly``) and does not need to: while predicate CLASSES exist the
+        # arm above answers ``phrase(greeting, L)``.  When P4 retires the
+        # class this has to become the atom's arm and that pin has to flip --
+        # a ruling for P4, not a side effect of this sweep.
+        return None
+    if functor in CELL_GOAL_CONTROL_FUNCTORS or functor == QUALIFIED_GOAL_FUNCTOR:
+        return None
+    # _DCG_ARITY_NOTE, on the cell: a nonterminal cell is built at the class's
+    # TRANSLATED arity, so ``tok//1`` arrives as ``("tok", T, S0, S)`` -- its
+    # last two slots are the difference-list pair, and phrase supplies that
+    # pair itself.  Drop them, exactly as the class arm's ``fields[:-2]`` does,
+    # and let the caller's own S0/S take their place.  ``[1:-2]`` truncates to
+    # empty for a cell of arity 0 or 1, which is what that note asks for.
+    user_args = [deref(a) for a in rule_val[1:-2]]
+    # Resolve the FUNCTOR with every argument as an extra.  The atom route
+    # through the shared resolver contributes no arguments of its own, so the
+    # ISO fold lands at exactly ``len(user_args) + 2`` -- the arity the class
+    # arm asks ``_dispatch_at`` for.  Handing it the cell itself would fold
+    # the cell's own S0/S slots in on top of the pair phrase is supplying, and
+    # ask for a nonterminal two arities too wide.
+    return _resolve_named_goal(db, functor, user_args + list(extra_args), context)
+
+
+def _make_phrase_factory(impl):
+    """Bind the caller's database into a ``phrase/N`` dispatch.
+
+    Registered straight into ``_DB_BUILTINS`` rather than through the
+    ``@_db_builtin`` decorator, because that decorator wraps its product with
+    ``_simple_to_trampoline`` and phrase is already trampoline-native -- the
+    same reason ``_make_call_goal_factory`` registers itself by hand.
+
+    ``_db_optional``: everything phrase did before this -- dispatching a
+    nonterminal CLASS -- needs no database at all, so ``factory(None)`` is the
+    pre-P2 phrase exactly, minus the name resolution it has no db to do.  That
+    keeps the db-less paths (the builtin CLASS table, a ``BuiltinPredicate``
+    built without a db) answering as they always have.
+    """
+    def factory(db):
+        def _phrase_dispatch(*args):
+            return impl(db, *args)
+        _phrase_dispatch.__name__ = impl.__name__
+        return _phrase_dispatch
+    factory._db_optional = True
+    return factory
+
+
+def _phrase__2(db, this_generator, _proceed, _fail, _catcher, rule_body, list_arg, trail):
     """phrase(RuleBody, List) — invoke DCG rule, must consume entire list.
 
     Strings are accepted natively (per the Liskov "strings-as-lists" rule):
@@ -115,8 +195,14 @@ def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, t
         dispatch = _dispatch_at(cls, len(user_args) + 2)
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, empty, trail)
     else:
-        yield (_fail, DONE)
-        return
+        # A CELL names the nonterminal and brings no class with it --
+        # resolve the name against the calling module.
+        resolved = _resolve_nonterminal(db, rule_val, (list_val, empty), "phrase/2")
+        if resolved is None:
+            yield (_fail, DONE)
+            return
+        dispatch, call_args = resolved
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *call_args, trail)
 
     _st = yield (sg, None)
     while _st is not DONE:
@@ -125,8 +211,7 @@ def _phrase__2(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, t
     yield (_fail, DONE)
 
 
-@_trampoline_builtin("phrase", 3)
-def _phrase__3(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, rest_arg, trail):
+def _phrase__3(db, this_generator, _proceed, _fail, _catcher, rule_body, list_arg, rest_arg, trail):
     """phrase(RuleBody, List, Rest) — invoke DCG rule, partial parse.
 
     Strings are accepted natively (per the Liskov "strings-as-lists" rule):
@@ -156,14 +241,26 @@ def _phrase__3(this_generator, _proceed, _fail, _catcher, rule_body, list_arg, r
         dispatch = _dispatch_at(cls, len(user_args) + 2)
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *user_args, list_val, rest_val, trail)
     else:
-        yield (_fail, DONE)
-        return
+        # A CELL names the nonterminal and brings no class with it --
+        # resolve the name against the calling module.
+        resolved = _resolve_nonterminal(db, rule_val, (list_val, rest_val), "phrase/3")
+        if resolved is None:
+            yield (_fail, DONE)
+            return
+        dispatch, call_args = resolved
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *call_args, trail)
 
     _st = yield (sg, None)
     while _st is not DONE:
         yield (_proceed, None)
         _st = yield (sg, None)
     yield (_fail, DONE)
+
+
+_DB_BUILTINS[("phrase", 2)] = _make_phrase_factory(_phrase__2)
+_BUILTIN_FIELDS[("phrase", 2)] = ("rule_body", "list_arg")
+_DB_BUILTINS[("phrase", 3)] = _make_phrase_factory(_phrase__3)
+_BUILTIN_FIELDS[("phrase", 3)] = ("rule_body", "list_arg", "rest_arg")
 
 
 @_trampoline_builtin("sequence", 3, fields=("list", "s0", "s"))
