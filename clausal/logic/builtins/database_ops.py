@@ -201,6 +201,28 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
         if pred_cls is not None:
             return term_val if functor == term_val[0] else make_cell(functor, *args)
         return Compound(functor, args)
+    if row is not None and home is not db:
+        # THE OWNERSHIP REFUSAL SPEAKS FIRST for somebody else's row
+        # (2026-09-21, the P2 aliased-assertz ruling's channel-4 half).  This
+        # check is about THIS module's vocabulary — "is that name data here" —
+        # and its remedy, "declare it -dynamic(f/N)", is advice about THIS
+        # module.  Reached for a row an ``-import_from`` shares, both are the
+        # wrong thing to say: declaring it here would not help and must not,
+        # and the reader needs to be told whose predicate it is.  The gate's
+        # policy is the one that has an answer, so ask it before refusing in
+        # this function's own words; when it permits, the vocabulary refusal
+        # below still stands (a shared row that is neither dynamic nor locked
+        # is a static procedure like any other).
+        from clausal.logic.database import (  # noqa: PLC0415
+            WRITE_ASSERT, WRITE_RETRACT, refusal_error, write_refusal,
+        )
+        kind = (WRITE_RETRACT if context.startswith("retract")
+                else WRITE_ASSERT)
+        author = db.runtime_author()
+        reason = write_refusal(row, author, kind)
+        if reason is not None:
+            raise refusal_error(functor, arity, author, kind, reason,
+                                channel=context)
     if row is None and not _declared_here_at_arity(module_dict, functor, arity):
         raise LogicException(existence_error(
             "procedure", Compound("/", (functor, arity)),

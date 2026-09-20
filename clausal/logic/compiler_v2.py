@@ -306,6 +306,30 @@ def compile_module(
     for item in module_items:
         if isinstance(item, DirectiveItem) and item.name == "dynamic":
             for functor, arity in item.specs:
+                # THE DECLARATION NAMES THE IMPORT (2026-09-21, the P2
+                # aliased-assertz ruling).  A module that writes
+                # ``-dynamic(bo_p/1)`` while importing that very predicate
+                # under an ALIAS has named the import: "I intend to assert
+                # against this", the same thing the non-aliased sibling says.
+                # There the ``-import_from`` binds the exporter's class under
+                # ``bo_p`` itself, so the canonical spelling already resolves
+                # to the shared class and the write reaches the owner's row.
+                # Under an alias only ``AliasS`` is bound, and the shadow
+                # class ``term_rewriting`` mints for the declaration takes the
+                # canonical spelling instead — so ``_find_pred_cls`` answered
+                # with a predicate that is nobody's, and the clause landed on
+                # the importer's own row while the shared class kept reading
+                # the owner's (``todo/aliased-assertz-loses-the-owner-under-
+                # cells-2026-09-20.md``).  Binding the import here is what
+                # makes the two spellings ONE case.
+                imported = _imported_class_by_canonical_name(
+                    module_dict, db, functor, arity)
+                if imported is not None and not db.is_defined(functor, arity):
+                    # NOT when this module has clauses of its own under the
+                    # name: that is a genuine clash, and a local definition
+                    # keeps its own predicate — the same rule
+                    # ``Database.adopt_row`` states for rows.
+                    module_dict[functor] = imported
                 # Stamp the declared arity on the class whatever its clause
                 # state — the ``_refuse_call_at`` fallback only reads it while
                 # the clause list is EMPTY, which includes the retract-back-
@@ -790,6 +814,32 @@ def _belongs_elsewhere(pred_cls, db) -> bool:
     foreign."""
     row = getattr(pred_cls, "_row", None)
     return row is not None and not row.detached and row.db is not db
+
+
+def _imported_class_by_canonical_name(module_dict: dict, db, functor: str,
+                                      arity: int):
+    """The predicate this module IMPORTED whose own name is *functor* at
+    *arity*, whatever local spelling it is bound under here — or None.
+
+    A class carries the exporter's ``__name__`` wherever it goes, so an
+    ``-import_from(m, [alias(bo_p, AliasS)])`` leaves the canonical spelling
+    bound to nothing and ``AliasS`` bound to a class that calls itself
+    ``bo_p``.  This is the one place that has to see through that: a
+    ``-dynamic`` declaration is written in the CANONICAL spelling (it names a
+    predicate, not a local alias), and a scan by ``__name__`` is how the two
+    meet.  ``_belongs_elsewhere`` is what keeps it to imports: a class on this
+    module's own row, or on its private detached row, is not an import and
+    answers None, so a module's own declaration is never rerouted.
+    """
+    if module_dict is None:
+        return None
+    for value in module_dict.values():
+        if (isinstance(value, PredicateMeta)
+                and value.__name__ == functor
+                and len(value._fields or ()) == arity
+                and _belongs_elsewhere(value, db)):
+            return value
+    return None
 
 
 def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,

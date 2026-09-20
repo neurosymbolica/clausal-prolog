@@ -1,6 +1,7 @@
 # An aliased/imported `assertz` no longer reaches the owner's row
 
-**Status:** **RULED 2026-09-20 by the operator — (a) ADOPTION WINS.**
+**Status:** **CLOSED 2026-09-21 — implemented; see the last section.**
+Ruled 2026-09-20 by the operator — (a) ADOPTION WINS.
 `-import_from` makes `db.row(name, arity)` in the importer BE the exporter's
 row; a local `-dynamic` on an imported name is an error or is ignored. The cell
 then resolves correctly by name with no new carrier, and both `xfail(strict)`
@@ -177,3 +178,97 @@ the owner's row and route (iii) needs the gate fixed in the same commit.
 * `tests/shared_rows/` is the invariant suite for adoption and is NOT in
   `test_mutation_gate.py`. Run both, and gate on the FULL house run: route
   (i) looked green on the mutation-gate file alone.
+
+---
+
+## 2026-09-21 — DONE. The knot was a false one; here is what dissolved it.
+
+**The blocking question was "may a module declare `-dynamic` on a name it
+imports?" It is answered by MEASUREMENT, not by a ruling: it already may, and
+the non-aliased sibling has always relied on it.**
+
+`gate_dyn_user.clausal` declares BOTH `-dynamic(gd_p/1)` and
+`-import_from(..., [gd_p])`, and its test has always passed. Measured on the
+branch, that is because **the import WINS the name binding**:
+`user.__dict__["gd_p"] is owner.gd_p`. The shadow class the declaration mints
+is simply overwritten, so there is no contradiction between "ignore the local
+`-dynamic`" and "the importer's `-dynamic` permits the write" — those are two
+DIFFERENT effects of the same directive, and only the second survives:
+
+* the NAME resolves to the import (the shadow class loses), and
+* the MARK stays on the importer's database — which is what keeps step 7
+  ("lock non-dynamic predicates") from locking the shared class's row, since
+  that loop walks `module_dict.values()` and an imported class's `_row` is the
+  OWNER's row.
+
+Route (iii) broke the two non-aliased tests because it removed the second
+effect. Nothing ever required removing the first.
+
+### What the aliased case was missing
+
+Under an alias, only `AliasS` is bound, so the shadow class keeps the
+canonical spelling `bo_p` and `_find_pred_cls` answers with it. That is the
+whole defect. The fix is one rule, stated where the directive is processed:
+
+> **A `-dynamic(f/N)` declaration in a module that imports a predicate whose
+> own name is `f` at arity N NAMES THAT IMPORT.** The canonical spelling binds
+> to the imported class, exactly as it already does when the import is not
+> aliased.
+
+`compiler_v2._imported_class_by_canonical_name` finds it by `__name__` among
+the module's bindings (`_belongs_elsewhere` keeps it to imports, so a module's
+own declaration is never rerouted), and step 4a binds it — unless this module
+has clauses of its own under the name, which is a genuine clash the local
+definition wins, the same rule `Database.adopt_row` states for rows.
+
+Everything downstream then runs the PROVEN non-aliased path: `_find_pred_cls`
+returns the shared class by its last leg, `_home_db` reaches the owner's row,
+and the gate asks the ownership question against it.
+
+### Channel 4 was a separate, smaller defect
+
+The refusal came from `_check_cell_head_permission`, not from the gate at all:
+a cell head whose row is not dynamic raises that function's OWN
+static-procedure error, and it fires before `assertz__1` ever opens the gate.
+Pre-P2 the head was an INSTANCE, `compound_cell_shape` said no, and the
+function returned without checking anything — which is why the gate used to
+speak. The check now asks the gate first **when the row belongs to another
+database** (`home is not db`): that is exactly the case where its own remedy
+("declare it `-dynamic(f/N)`") is advice the reader must not take. A row in
+this module's own database is untouched, so no local refusal text moved.
+
+### Measured after the fix
+
+    user bo_p binding is the exporter class?   True
+    user AliasS binding is the exporter class? True
+    u.row(AliasS, 1) is the owner's row?       True
+    u.row(bo_p, 1) is the owner's row?         False   # inert local row, as
+                                                       # in the non-aliased
+                                                       # case; nothing reads it
+
+Note the ruling's literal wording — "`-import_from` makes `db.row(name,
+arity)` in the importer BE the exporter's row" — is NOT what makes either case
+work, and never was: the importer's own `-dynamic` mints a local row first
+(`row()` answers `_rows` before `_adopted`), so `db.row("gd_p", 1)` is a local
+row in the WORKING case too. The write reaches the owner through the shared
+CLASS. The ruling's intent — the write lands on the owner — is met.
+
+* Both `xfail(strict=True)` markers are REMOVED and both tests pass.
+* `tests/shared_rows/` green, including
+  `test_an_aliased_import_does_NOT_plant_the_exporter_s_spelling`: no row is
+  planted under the exporter's spelling. That invariant is about a module that
+  never wrote the name; `gate_alias_user` writes it, in its `-dynamic`.
+* House gate NEW 0 / GONE 0 vs main `bd774c46`, extraction 146 = summary 146
+  on both arms.
+* Blast radius, censused: **1** file in the engine tree (the fixture) and
+  **0** of 235,663 corpus `.clausal`/`.seam` files declare `-dynamic` on a
+  name they import under an alias.
+
+### The one judgement call, for the record
+
+A module that declares `-dynamic(f/N)` while importing a DIFFERENT module's
+`f/N` under an alias now has its declaration rerouted to the import rather
+than minting a local predicate. That is ruling (a) applied consistently, and
+the census says no such file exists. If a local predicate is wanted there, the
+module should give it clauses (the local definition then wins) or not spell it
+in the canonical name.
