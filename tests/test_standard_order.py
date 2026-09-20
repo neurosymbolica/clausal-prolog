@@ -302,7 +302,7 @@ def test_msort_of_domain_local_compounds_end_to_end():
         "two_arg(SORTED) <- msort([pt(1, 15), pt(1, 2), pt(1, 9)], SORTED)\n",
     )
     S = Var()
-    got = [deref(S) for _ in mod.two_arg(S)]
+    got = [deref(S) for _ in solve(mod.two_arg(S), mod)]
     # P3-2 Task 2 (THE FLIP, R6): ``pt`` is a data functor, so the sorted
     # answers are cells.  The ORDER is what this test is about and it is
     # unchanged.

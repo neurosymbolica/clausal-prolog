@@ -33,6 +33,7 @@ from clausal.logic.cells import chars
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
+from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.logic.predicate import (
     PredicateMeta, is_zero_field_class, is_atom_value, make_predicate,
 )
@@ -373,7 +374,7 @@ def test_private_names_are_importable_and_share_identity():
     assert consumer.priv_imp_helper is owner.priv_imp_helper
 
     # Shared identity is the point: the query actually solves.
-    assert list(consumer.priv_imp_use(Var())) != []
+    assert list(solve(consumer.priv_imp_use(Var()), consumer)) != []
 
     # No warning: importing a private name is a supported pattern, not a
     # smell.  A `ClausalPrivateAtomImportWarning`-style diagnostic would
