@@ -658,7 +658,7 @@ def _reified_clause(path, clause):
     if path is None or not clause.position:
         return None
     try:
-        from clausal.reflection import Clause as ReifiedClause, reify_file
+        from clausal.reflection import Clause as ReifiedClause, reify_file, is_v, vfield
 
         key = str(path)
         items = _REIFY_CACHE.get(key)
@@ -669,9 +669,14 @@ def _reified_clause(path, clause):
             _REIFY_CACHE[key] = items
         want = tuple(clause.position)
         for item in items:
-            if not isinstance(item, ReifiedClause):
+            if not is_v(item, ReifiedClause):
                 continue
-            pos = getattr(item, "position", None)
+            # vfield with an explicit default, not getattr: a cell has no
+            # `.position` attribute, so the getattr default answered None for
+            # EVERY item and the position match never fired -- which is how
+            # the descent diagnostics lost their source text and printed
+            # `(_ > 100)` for `(N > 100)`.
+            pos = vfield(item, "position", None)
             if pos is not None and tuple(pos) == want:
                 return item
     except Exception:  # noqa: BLE001 - source text is a nicety, never fatal
@@ -938,16 +943,16 @@ def _pair_vars(runtime, reified, out) -> bool:
         if not isinstance(runtime, Call):
             return False
         func = runtime.func
-        if isinstance(func, LoadName) and str(func.name) != str(reified.name):
+        if isinstance(func, LoadName) and str(func.name) != str(vfield(reified, "name")):
             return False
         args = list(runtime.args or ())
-        rargs = list(reified.args or ())
+        rargs = list(vfield(reified, "args") or ())
         if len(args) != len(rargs):
             return False
         if not all(_pair_vars(a, r, out) for a, r in zip(args, rargs)):
             return False
         kws = list(runtime.kwargs or ())
-        rkws = list(reified.kwargs or ())
+        rkws = list(vfield(reified, "kwargs") or ())
         if len(kws) != len(rkws):
             return False
         return all(_pair_vars(k.value, r[1], out) for k, r in zip(kws, rkws))
@@ -1011,9 +1016,9 @@ def _forall_var_name(reified_goal) -> str | None:
     from clausal.pythonic_ast.nodes import in_
     from clausal.reflection import Goal, Variable, is_v, vfield
 
-    if not is_v(reified_goal, Goal) or str(reified_goal.name) != "forall":
+    if not is_v(reified_goal, Goal) or str(vfield(reified_goal, "name")) != "forall":
         return None
-    rargs = list(reified_goal.args or ())
+    rargs = list(vfield(reified_goal, "args") or ())
     if not rargs or not isinstance(rargs[0], in_):
         return None
     left = rargs[0].left
@@ -1471,7 +1476,7 @@ def _render_probe_solution(goal, reified_goal, holes, kw_holes,
     if is_v(reified_goal, Goal):
         try:
             return render_source(Goal(
-                name=reified_goal.name,
+                name=vfield(reified_goal, "name"),
                 args=[_reify_value(v, path=path) for v in values],
                 kwargs=[[n, _reify_value(v, path=path)]
                         for n, v in kw_values],
@@ -1504,16 +1509,16 @@ def _render_nearest(goal, reified_goal, kind, index, value,
             # diff against the assertion rather than a half-open pattern.
             bound = _bound_reified(goal, reified_goal, path)
             args = [_substitute_bound(a, bound)
-                    for a in (reified_goal.args or ())]
+                    for a in (vfield(reified_goal, "args") or ())]
             kwargs = [[k[0], _substitute_bound(k[1], bound)]
-                      for k in (reified_goal.kwargs or ())]
+                      for k in (vfield(reified_goal, "kwargs") or ())]
             if kind == "arg" and index < len(args):
                 args[index] = reified_value
             elif kind == "kw" and index < len(kwargs):
                 kwargs[index][1] = reified_value
             else:
                 raise _Unrenderable("argument index out of range")
-            return render_source(Goal(name=reified_goal.name, args=args,
+            return render_source(Goal(name=vfield(reified_goal, "name"), args=args,
                                       kwargs=kwargs))
         except Exception:  # noqa: BLE001
             pass
@@ -1545,13 +1550,13 @@ def _substitute_bound(reified, bound):
     if not bound:
         return reified
     if is_v(reified, Variable):
-        return bound.get(str(reified.name), reified)
+        return bound.get(str(vfield(reified, "name")), reified)
     if is_v(reified, Goal):
         return Goal(
-            name=reified.name,
-            args=[_substitute_bound(a, bound) for a in (reified.args or ())],
+            name=vfield(reified, "name"),
+            args=[_substitute_bound(a, bound) for a in (vfield(reified, "args") or ())],
             kwargs=[[k[0], _substitute_bound(k[1], bound)]
-                    for k in (reified.kwargs or ())],
+                    for k in (vfield(reified, "kwargs") or ())],
         )
     if isinstance(reified, list):
         return [_substitute_bound(v, bound) for v in reified]
@@ -1604,14 +1609,25 @@ def _atomize_declared_atoms(reified, path):
         return chars_text(reified)     # STAGE 2: the carrier is the string; a str above is the atom
     if is_v(reified, Goal):
         return Goal(
-            name=reified.name,
+            name=vfield(reified, "name"),
             args=[_atomize_declared_atoms(a, path)
-                  for a in (reified.args or ())],
+                  for a in (vfield(reified, "args") or ())],
             kwargs=[[k[0], _atomize_declared_atoms(k[1], path)]
-                    for k in (reified.kwargs or ())],
+                    for k in (vfield(reified, "kwargs") or ())],
         )
     if isinstance(reified, list):
         return [_atomize_declared_atoms(v, path) for v in reified]
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    _is_cell, _functor = compound_cell_shape(reified)
+    if _is_cell:
+        # P2: a CELL's slot 0 is its FUNCTOR, not an argument.  The generic
+        # tuple branch below walks every slot, so it atomized the functor --
+        # ("Variable", "N") came back as (("Atom", "Variable"), "N"), which
+        # the renderer cannot recognise as a Variable, and the descent
+        # diagnostics printed `(_ > 100)` where `(N > 100)` belongs.  Only
+        # the ARGUMENTS are rewrapped.
+        return (_functor, *[_atomize_declared_atoms(v, path)
+                            for v in reified[1:]])
     if isinstance(reified, tuple):
         return tuple(_atomize_declared_atoms(v, path) for v in reified)
     if isinstance(reified, dict):
@@ -2037,7 +2053,7 @@ def _reified_findall_body_goal(goal, path, index):
     if not path or not isinstance(pos, (tuple, list)) or not pos:
         return None
     try:
-        from clausal.reflection import Clause as ReifiedClause, Goal, reify_file
+        from clausal.reflection import Clause as ReifiedClause, Goal, reify_file, is_v, vfield
 
         key = str(path)
         items = _REIFY_CACHE.get(key)
@@ -2071,7 +2087,7 @@ def _reified_findall_body_goal(goal, path, index):
         goal_line = pos[0]
         owner = None
         for item in items:
-            if not isinstance(item, ReifiedClause):
+            if not is_v(item, ReifiedClause):
                 continue
             cpos = getattr(item, "position", None)
             if (isinstance(cpos, (tuple, list)) and cpos
