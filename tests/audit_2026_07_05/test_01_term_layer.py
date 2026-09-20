@@ -347,7 +347,14 @@ class TestF008WalkFunctorTerms:
     def test_walk_snapshot_of_term_instance_survives_undo(self, trail):
         X = Var()
         assert unify(X, 1, trail)
-        inst = _fresh_pred_class()(X, 2)
+        # P2: a plain class CONSTRUCTS A CELL now, so a live INSTANCE --
+        # which is what this test is about, and which the bridge still
+        # produces (reflection, clpb, term expansion) -- has to be minted
+        # with the bridge flag.  Without it this was testing the cell path
+        # under a name that says instance.
+        cls = _fresh_pred_class()
+        cls._clausal_instances = True
+        inst = cls(X, 2)
         snap = walk(inst)
         trail.reset()
         assert deref(snap.a) == 1 and snap.b == 2

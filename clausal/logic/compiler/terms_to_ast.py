@@ -326,7 +326,7 @@ def functor_signature_for(name: str, namespace: "dict | None", *, classes: bool 
 
 
 def cell_signature_for_name(
-    name: str, resolve_globals: "dict | None" = None
+    name: str, resolve_globals: "dict | None" = None, *, arity: "int | None" = None
 ) -> "tuple[str, tuple[str, ...]] | None":
     """Resolve *name* to ``(functor, fields)`` for a DATA functor, or None.
 
@@ -387,6 +387,18 @@ def cell_signature_for_name(
         # now, so the class-call path would only cost a runtime construction.
         cls_fields = term_field_names_of_class(binding)
         if cls_fields is None:
+            return None
+        if arity is not None and arity > len(cls_fields):
+            # ... but a PREDICATE class is not the authority on the arity the
+            # way a data-functor DECLARATION is.  A class holds exactly one
+            # arity, while one predicate NAME may legitimately be written at
+            # several: ``p(-3), p(2),`` declares p/1 and ``--(p(X, 1))`` is a
+            # p/2 goal cell in the same file.  Before Task 3 this arm answered
+            # None and the caller built the cell at the WRITTEN arity; letting
+            # the class's field tuple through made that a load-time
+            # "constructed with 2 positional argument(s) but ... 1 field(s)".
+            # A data functor keeps the old answer, because its declaration
+            # really does fix the slots -- over-supplying THOSE is an error.
             return None
         return _functor_spelling(binding, leaf), tuple(cls_fields)
     fields = functor_signature_for(leaf, leaf_namespace)

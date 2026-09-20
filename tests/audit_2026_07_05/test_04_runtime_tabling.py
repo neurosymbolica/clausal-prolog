@@ -552,7 +552,13 @@ class TestF008DerefWalkTemplateFreeze:
         from clausal.logic.predicate import PredicateMeta
         from clausal.terms import Compound
         _deref_walk, t, X = self._bound()
-        pt = PredicateMeta("audit_f008", (), {"_fields": ("a", "b")})
+        # P2: a plain class CONSTRUCTS A CELL now, so a live INSTANCE --
+        # which is what this test is about, and which the bridge still
+        # produces (reflection, clpb, term expansion) -- has to be minted
+        # with the bridge flag.  Without it this was testing the cell path
+        # under a name that says instance.
+        pt = PredicateMeta("audit_f008", (),
+                           {"_fields": ("a", "b"), "_clausal_instances": True})
         snap = _deref_walk(Compound("f", (pt(X, 2),)))
         t.reset()
         assert deref(snap.args[0].a) == 1 and snap.args[0].b == 2

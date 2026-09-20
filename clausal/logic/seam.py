@@ -108,7 +108,9 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             args = [build(a) for a in term.args]
             kwargs = [(kw.name, build(kw.value)) for kw in (term.kwargs or [])]
             with lowering_scope(module_globals):
-                sig = cell_signature_for_name(fname)
+                # The WRITTEN arity: a predicate class cannot narrow it.
+                sig = cell_signature_for_name(
+                    fname, arity=len(args) + len(kwargs))
                 owa = loose or _implicit_functors_active(module_globals)
                 if sig is not None:
                     functor, fields = sig

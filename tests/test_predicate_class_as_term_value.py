@@ -143,8 +143,16 @@ class TestCallingConventionDiscriminator:
         assert cite.__unify__(cite, Trail()) is True
         assert cite.__unify__("pcatv_cite", Trail()) is NotImplemented
 
-    def test_instance_side_call_still_needs_all_three(self, cite):
+    def test_instance_side_call_still_needs_all_three(self):
         # And still recurses into the fields rather than taking the class arm.
+        # P2: a plain class CONSTRUCTS A CELL now, so a live INSTANCE --
+        # which is what this test is about, and which the bridge still
+        # produces (reflection, clpb, term expansion) -- has to be minted
+        # with the bridge flag.  Without it this was testing the cell path
+        # under a name that says instance.
+        from clausal.logic.predicate import make_predicate
+
+        cite = make_predicate("pcatv_cite_inst", ["key"], instances=True)
         v = Var()
         assert cite(key=v).__unify__(cite(key=5), Trail()) is True
         from clausal.logic.variables import deref

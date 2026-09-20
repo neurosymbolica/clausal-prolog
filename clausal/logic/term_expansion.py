@@ -186,10 +186,26 @@ def _collect_functor_arities(node, out: dict, seen: set) -> None:
     time term_expansion clauses reach here."""
     from clausal.pythonic_ast.nodes import Call as _Call, LoadName as _LoadName
     from clausal.logic.predicate import is_term_instance, term_field_names
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
 
     if id(node) in seen:
         return
     seen.add(id(node))
+
+    _is_cell, _cell_functor = compound_cell_shape(node)
+    if _is_cell:
+        # P2: an expansion pattern's terms are CELLS now, not Call nodes, so
+        # without this arm the whole collection came back EMPTY and nothing
+        # was pre-minted -- which is the "not in scope as a term class"
+        # failure this pre-mint exists to prevent, arriving by a new route.
+        # Same recognition rule as the Call arm: an ordinary lowercase
+        # functor identifier, recorded at the arity it is WRITTEN at.
+        if (_cell_functor.isidentifier() and _cell_functor[:1].islower()
+                and not _cell_functor.startswith("_")):
+            out.setdefault(_cell_functor, len(node) - 1)
+        for a in node[1:]:
+            _collect_functor_arities(a, out, seen)
+        return
 
     if isinstance(node, _Call):
         func = node.func
