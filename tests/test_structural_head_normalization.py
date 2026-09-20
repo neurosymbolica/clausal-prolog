@@ -40,6 +40,15 @@ class TestIsStructuralHeadValue:
         ) is False
 
 
+def _hf(head, cls, name):
+    """The value of field *name* in a normalised head CELL.
+
+    P2: ``_normalize_structural_head_args`` returns a cell -- a functor and
+    POSITIONS -- so a field is read at the position the class declares it."""
+    from clausal.logic.cells import cell_args
+    return cell_args(head)[cls._fields.index(name)]
+
+
 class TestNormalizeStructuralHeadArgs:
     def test_structural_field_hoisted_to_prepended_unify(self):
         pt = make_predicate("pt", ("a", "b"))
@@ -47,10 +56,11 @@ class TestNormalizeStructuralHeadArgs:
         head = pt(a=Var(), b=compound)
         new_head, new_body = _normalize_structural_head_args(head, [True])
         # field b replaced by a Var
-        assert is_var(new_head.b)
+        new_b = _hf(new_head, pt, "b")
+        assert is_var(new_b)
         # one Unify prepended, binding that Var to the original compound
         assert isinstance(new_body[0], Unify)
-        assert new_body[0].left is new_head.b
+        assert new_body[0].left is new_b
         assert new_body[0].right is compound
         assert new_body[1] is True  # original body preserved after prepend
 
@@ -58,7 +68,7 @@ class TestNormalizeStructuralHeadArgs:
         pt = make_predicate("pt", ("a", "b"))
         head = pt(a=Var(), b=20000)
         new_head, new_body = _normalize_structural_head_args(head, [True])
-        assert new_head.b == 20000      # untouched
+        assert _hf(new_head, pt, "b") == 20000      # untouched
         assert new_body == [True]       # no goals added
 
     def test_no_structural_fields_is_noop(self):

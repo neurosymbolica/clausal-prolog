@@ -27,6 +27,7 @@ from clausal.logic.predicate import (
     PredicateMeta,
     describe_term_identity_mismatch,
     is_term_instance,
+    is_zero_field_class,
     module_source_path,
     term_field_names,
     term_field_dict,
@@ -1492,7 +1493,7 @@ def head_key(head: Any) -> tuple[str, int]:
     # 0-arity predicate is still its class with no row (P1: declared
     # clause-less = class), so its first assertz'd clause arrives here as
     # that class and must key name/0.
-    if isinstance(head, PredicateMeta) and not head._fields:
+    if is_zero_field_class(head):
         return head.__name__, 0
     # A CELL names its predicate in slot 0 (P3-3 Task 5, R11).  Last, because
     # every branch above is a cheaper and far commoner shape and this one only
