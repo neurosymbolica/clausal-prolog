@@ -235,7 +235,7 @@ class TestDictLiteral:
         # A var key must reify to the SAME shape whether or not the literal
         # also splats — one DictLiteral representation for the auditor.
         splat = vfield(only_clause("A(K, B) <- (X is {**B, K: 2})\n"), "goals")[0]
-        plain = only_clause("A(K, B) <- (X is {K: 2})\n").goals[0]
+        plain = vfield(only_clause("A(K, B) <- (X is {K: 2})\n"), "goals")[0]
         splat_key = strip_positions(splat).right.keys[-1]
         plain_key = strip_positions(plain).right.keys[-1]
         assert splat_key == plain_key, (
@@ -246,7 +246,7 @@ class TestDictLiteral:
         # An atom key must reify to the SAME shape whether or not the literal
         # also splats — one DictLiteral representation for the auditor.
         splat = vfield(only_clause("A(B) <- (X is {**B, foo: B})\n"), "goals")[0]
-        plain = only_clause("A(B) <- (X is {foo: B})\n").goals[0]
+        plain = vfield(only_clause("A(B) <- (X is {foo: B})\n"), "goals")[0]
         splat_key = strip_positions(splat).right.keys[-1]
         plain_key = strip_positions(plain).right.keys[-1]
         assert splat_key == plain_key, (
@@ -437,7 +437,7 @@ class TestBoundLogicVars:
         assert render_source(node) == "5 > 1"
         # and it re-reifies to a Gt over the dereferenced operands
         back = vfield(reify_source("H <- (5 > 1)\n")[0], "goals")[0]
-        rebuilt = reify_source(f"H <- ({render_source(node)})\n")[0].goals[0]
+        rebuilt = vfield(reify_source(f"H <- ({render_source(node)})\n")[0], "goals")[0]
         assert strip_positions(rebuilt) == strip_positions(back)
 
     def test_bound_var_nested_deeper_in_term_renders(self):
@@ -849,7 +849,7 @@ class TestCorruptionGuards:
         # I1: rendering a lambda sub-term directly (the auditor's use case) must
         # not leak the sentinel marker.
         clause = only_clause("ho(F) <- run((X <- base(X)), F)\n")
-        lambda_term = vfield(clause, "goals")[0].args[0]
+        lambda_term = vfield(vfield(clause, "goals")[0], "args")[0]
         rendered = render_source(lambda_term)
         assert "__clausal_lambda_arrow__" not in rendered, (
             f"sentinel leaked in standalone lambda render: {rendered!r}"

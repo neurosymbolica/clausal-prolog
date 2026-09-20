@@ -264,7 +264,7 @@ def _goal_functor_3(goal, name, arity, trail, k):
     # atoms and a matcher can write the name as a source literal.  The
     # reified ``Goal.name`` FIELD stays the raw spelling ``str`` — a pattern
     # that destructures ``Goal(NAME, _, _)`` directly still sees that.
-    goal_name = deref(goal.name)
+    goal_name = deref(vfield(goal, "name"))
     if type(goal_name) is str:
         goal_name = mint(goal_name)
     mark = trail.mark()

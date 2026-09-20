@@ -2070,9 +2070,9 @@ def _reified_findall_body_goal(goal, path, index):
 
         def find(node):
             from clausal.reflection import is_v  # noqa: PLC0415
-            if (is_v(node, Goal) and str(node.name) == "findall"
-                    and len(node.args or ()) == 3):
-                inner = node.args[1]
+            if (is_v(node, Goal) and str(vfield(node, "name")) == "findall"
+                    and len(vfield(node, "args") or ()) == 3):
+                inner = vfield(node, "args")[1]
                 flat: list = []
                 _flatten_reified(inner, flat)
                 if 0 <= index < len(flat):
@@ -2134,8 +2134,8 @@ def _reified_children(node):
     if is_v(node, Clause):
         yield from (vfield(node, "goals") or ())
     elif is_v(node, Goal):
-        yield from (node.args or ())
-        for kw in (node.kwargs or ()):
+        yield from (vfield(node, "args") or ())
+        for kw in (vfield(node, "kwargs") or ()):
             yield kw[1]
     elif isinstance(node, (list, tuple)):
         yield from node

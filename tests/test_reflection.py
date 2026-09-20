@@ -361,7 +361,7 @@ class TestRealExamples:
             if vfield(vfield(c, "head"), "name") == "edge" and vfield(c, "goals") == []
         ]
         assert len(edge_facts) == 7
-        path_rules = [c for c in clauses if c.head.name == "path"]
+        path_rules = [c for c in clauses if vfield(c, "head").name == "path"]
         assert len(path_rules) == 1
 
     def test_symbolic_diff_example_reifies_operator_heads(self):

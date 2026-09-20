@@ -240,7 +240,7 @@ def test_bare_reference_reifies_as_atom():
     clause = _reify_stmt("t(L, R) <- (maplist(add_one, L, R))\n")
     assert vfield(vfield(clause, "goals")[0], "args")[0] == Atom("add_one")
     dotted = _reify_stmt("t(L) <- (maplist(mod.pred, L))\n")
-    assert vfield(dotted, "goals")[0].args[0] == Atom("mod.pred")
+    assert vfield(vfield(dotted, "goals")[0], "args")[0] == Atom("mod.pred")
 
 
 def test_captured_enclosing_variable_reifies_as_variable_in_lambda_body():
