@@ -77,3 +77,62 @@ from "4 passed" to "1000 passed" and `clausal-scipy` from "4 passed" to
    suggest purity/protocol drift, not the cell flip.
 4. When gating, **assert the contribution actually imported** (a
    `PKG_PROBE`-style positive control), never just that the run finished.
+
+## The harness, verbatim
+
+Saved because two wrong versions both reported NEW 0. Run as
+`PYTHONPATH=<dir> PKG_ROOT=packages/clausal-X [PKG_PROBE=clausal.modules.X]
+venv/bin/python -m pytest packages/clausal-X/tests -q -rfE -p no:cacheprovider
+-p pkg_path --continue-on-collection-errors`, from the room (never as a script
+file -- `sys.path[0]` would be the script's directory and you would silently
+test canonical).
+
+```python
+"""Contribute a package's clausal/ tree to the already-imported clausal packages.
+
+What `pip install -e packages/clausal-X` would do, scoped to THIS pytest
+process -- /workspace/clausal/venv is shared with other lanes and an editable
+install there would point all of them at whichever room installed last.
+
+THREE layouts, and missing any one of them is a silent no-op that makes every
+test in the package fail with ModuleNotFoundError *identically on both sides*
+-- a NEW-0 that proves nothing because the real code never ran:
+
+    clausal/modules/py/<name>.py   most wrappers (jax, torch, scipy, yaml, ...)
+    clausal/modules/<name>/        provenance
+    clausal/<name>/                the backends (gprolog, scryer, trealla)
+
+Each target is a REGULAR package (it has __init__.py), so PEP 420 does not
+merge them -- the __path__ has to be extended explicitly, which is what the
+core's own clausal/modules/__init__.py does for installed distributions.
+"""
+import os
+
+CONTRIBUTED = []
+
+
+def pytest_configure(config):
+    root = os.environ["PKG_ROOT"]
+    import clausal, clausal.modules
+    targets = [
+        (os.path.join(root, "clausal", "modules", "py"), "clausal.modules.py"),
+        (os.path.join(root, "clausal", "modules"), "clausal.modules"),
+        (os.path.join(root, "clausal"), "clausal"),
+    ]
+    import importlib
+    for d, modname in targets:
+        if not os.path.isdir(d):
+            continue
+        mod = importlib.import_module(modname)
+        if d not in mod.__path__:
+            mod.__path__.append(d)
+        CONTRIBUTED.append((modname, d))
+    assert CONTRIBUTED, "no clausal/ contribution found under %s" % root
+    probe = os.environ.get("PKG_PROBE")
+    if probe:
+        importlib.import_module(probe)
+
+
+def pytest_report_header(config):
+    return "pkg_path contributed: %s" % ", ".join(m for m, _ in CONTRIBUTED)
+```
