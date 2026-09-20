@@ -157,10 +157,13 @@ def test_an_import_that_names_no_predicate_plants_nothing(mods):
 def test_imported_predicates_still_answer_end_to_end(mods):
     """The behaviour the whole change must not break."""
     from clausal.logic.variables import Var
+    from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
     X, Z = Var(), Var()
-    assert sorted((X.value, Z.value) for _ in mods["plain"].two_hop(X, Z)) == [(1, 3)]
+    assert sorted((X.value, Z.value)
+                  for _ in solve(mods["plain"].two_hop(X, Z), mods["plain"])) == [(1, 3)]
     A, B = Var(), Var()
-    assert sorted((A.value, B.value) for _ in mods["alias"].hop(A, B)) == [(1, 2), (2, 3)]
+    assert sorted((A.value, B.value)
+                  for _ in solve(mods["alias"].hop(A, B), mods["alias"])) == [(1, 2), (2, 3)]
 
 
 def test_a_local_definition_takes_over_a_name_that_was_adopted_first():

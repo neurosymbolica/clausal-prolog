@@ -236,6 +236,24 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
             cls = _record_term_type(types, term)
             for name in term_field_names(term):
                 _walk(getattr(term, name))
+        elif _cell_shape(term)[0]:
+            # A CELL -- the same arm ``_collect_globals_info._walk_head``
+            # carries, and it has to stay the same arm: this function is not
+            # called in production, it is the REFERENCE the single-pass
+            # collector is differentially tested against
+            # (``test_head_types_collected``), so a difference here reads as
+            # a defect in the collector.  It drifted once already: the cell
+            # arm went into the combined walker in P3-2 Task 3 fix round 1
+            # and not into this one, and stayed invisible until P2's head
+            # flip made a clause HEAD a cell and gave the comparison
+            # something to disagree about.  See the combined walker for why
+            # the slots are recursed into AND the whole-cell entry kept.
+            for e in term[1:]:
+                _walk(e)
+            if _is_opaque_head_literal(term):
+                types[headlit_global_key(term)] = term
+        elif _is_opaque_head_literal(term):
+            types[headlit_global_key(term)] = term
 
     for clause in clauses:
         _walk(clause.head)

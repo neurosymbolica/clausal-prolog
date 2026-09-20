@@ -123,8 +123,10 @@ class TestSlice3Funnels:
         assert _first(mod, "p", chars("zz"), Var()) is None
         x = Var(); assert _first(mod, "p", x, Var())[0] == chars("ab")     # output mode binds the carrier
         heads = [c.head for c in mod.__dict__["$module"].db.clauses_for("p", 2)]
-        from clausal.logic.predicate import term_field_names
-        assert [getattr(h, term_field_names(h)[0]) for h in heads] == [chars("ab"), chars("cd")], heads
+        # P2: a stored head is a CELL, so its first argument is read at its
+        # POSITION -- there are no field names on the term to go through.
+        from clausal.logic.cells import cell_args
+        assert [cell_args(h)[0] for h in heads] == [chars("ab"), chars("cd")], heads
 
     def test_runner_reads_chars_test_names_and_runs_the_right_body(self, tmp_path):
         from clausal.testing import collect_tests, run_test
