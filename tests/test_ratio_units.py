@@ -86,7 +86,7 @@ def test_every_ratio_factor_is_decimal_never_float():
 
 def test_every_declared_ratio_unit_is_bound_in_the_module():
     """Enumerate from the AUTHORITY, not from a list written beside it
-    (harness-batch-lane's rule, 2026-09-12). Adding a ratio unit to
+    (the harness lane's rule, 2026-09-12). Adding a ratio unit to
     `RATIO_UNITS` and forgetting to bind it fails here rather than surfacing
     as a NameError in a rulebase.
     """

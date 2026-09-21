@@ -14,7 +14,7 @@ NEXT item 2 (the transfer form + quantity_number/2) is BUILT on this branch:
 c6819b7e..440a526d, gated NEW 0 against qt-baseline (e43d2fa6),
 49 tests added. Spec docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md,
 plan docs/superpowers/plans/2026-09-16-quantity-transfer-form.md. Not promoted:
-it lands with the dates-are-terms work, behind harness-batch-lane's date
+it lands with the dates-are-terms work, behind the harness lane's date
 migration. The exporter's Prolog-side quantity_number/2 is still theirs.
 OPEN for the consumer design: `from_transfer` converts any tuple headed
 `quantity`/`rdiv` at any depth, so the first real boundary needs a ruling on
@@ -100,7 +100,7 @@ if it ever starts passing because `row()` changed meaning, the three sites
 left on the class for this reason (`compiler_v2.py` 930/968 and
 `_find_pred_cls`'s fallback) can be reconsidered.
 
-harness-batch-lane measured 82 of 82 sealed harnesses UNCHANGED at branch tip
+the harness lane measured 82 of 82 sealed harnesses UNCHANGED at branch tip
 `6aab7b14` — a CUMULATIVE null across the range `c69a59b9..6aab7b14`
 containing the arity-exact change, NOT an attributable "P1 moved no row" (it
 is written exactly that way on purpose). **That sweep PREDATES `13dcd93e`
@@ -153,7 +153,7 @@ session, not yet committed).
 
     box  /workspace/clausal        main 42160eb5 + both branches above
     box  the corpus tree                    (72 commits, ff'd)
-    box  the kit tree                       (126 commits, ff'd)
+    box  the library tree                       (126 commits, ff'd)
 
 **The `_dims` rekey is FULLY GATED on both axes and is not promoted.** Promotion
 is now a decision, not a dependency. It needs the operator's direct word.
@@ -256,12 +256,12 @@ asserted the thing that changed.
     engine A/B vs a plain-canonical twin    NEW 0, GONE 0
                                             145/16278 -> 145/16305
                                             +27 passed = exactly the tests added
-    domain axis (harness-batch-lane)        82/82 unchanged, one fingerprint,
+    domain axis (the harness lane)        82/82 unchanged, one fingerprint,
                                             0 torn / 0 scoreless, COMPILED path
     dims-key reads                          0 corpus-side, 0 sealed-side
     sort x quantity                         does not exist on either side
 
-**The A/B could not be run on the feature branch.** harness-batch-lane found
+**The A/B could not be run on the feature branch.** the harness lane found
 why: the unresolved dates-are-terms change sits 73 commits below the `_dims`
 range and refuses a Python date, so 23 of 74 domains fail for reasons unrelated
 to atoms. The measurable tree is the five rekey commits cherry-picked onto
@@ -287,7 +287,7 @@ did: it is the only violation in the tree, so widening hides nothing.)
 
 ---
 
-# 4. Coordination with harness-batch-lane — the model to repeat
+# 4. Coordination with the harness lane — the model to repeat
 
 Each lane found the other's blind spot. Their date-masking argument made the
 engine A/B possible; that A/B surfaced the lint regression my gate could not
@@ -297,10 +297,10 @@ report. Both of us corrected findings that favoured us.
 a cross-product of 5 files; I traced all eleven sort sites TO GROUND rather than
 reading variable names, at their insistence:
 
-    selection_criteria_limb_ids([suitability_to_pursue_professional_activity, ...])
-    selection_criteria_lawfulness_ground_ids([permitted_criteria_scope, ...])
+    <downstream-domain>_limb_ids([suitability_to_pursue_professional_activity, ...])
+    <downstream-domain>_lawfulness_ground_ids([permitted_criteria_scope, ...])
     modification_gateway_satisfied's GATEWAY_ID is a literal atom in every head
-    us/snap sorts missing_keys output -- key NAMES, not money values
+    <downstream-domain> sorts missing_keys output -- key NAMES, not money values
 
 Literal fact lists in every one. Their side: 232 sorts in the sealed bodies, 0
 over quantities, 0 occurrences of the Quantity class. **The product does not
@@ -330,7 +330,7 @@ Full list in the memory. The ones this session earned:
 * **Abbreviated SHAs of different lengths compare unequal.** `d9ae9f4` vs
   `d9ae9f4a` — one a prefix of the other. Compare full SHAs.
 
-**THE NEW SHAPE, and it is harness-batch-lane's formulation:**
+**THE NEW SHAPE, and it is the harness lane's formulation:**
 
 > **An instrument's breakage masquerades as a CAVEAT, not only as a finding —
 > and a caveat gets less scrutiny precisely because it sounds like humility.

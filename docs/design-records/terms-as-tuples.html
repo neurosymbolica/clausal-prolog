@@ -476,12 +476,12 @@ aliased:  aliaser.link IS exporter.edge        <span class="ok">True</span>
 
   <figure class="evidence">
     <figcaption><span>The canary, first row</span><span class="chip c-retracted">Caught</span></figcaption>
-<pre>branch      eu/procurement/selection_criteria   score = (none), <span class="no">EXIT=1</span>
+<pre>branch      <downstream-domain>   score = (none), <span class="no">EXIT=1</span>
             NotImplementedError: unsupported term type date: datetime.date(2023, 6, 1)
 canonical,  same domain, same minute            <span class="ok">341/341, EXIT=0</span></pre>
   </figure>
 
-  <p>The claim behind the change was that the corpus never imports the date module and so could not be affected. The sweep was accurate; the claim generalised past it. <strong>The sealed scorer bodies are not in the corpus tree</strong>, they construct <code>datetime.date</code> and pass it into goals, and that is exactly the path the change closed. Five of the first six procurement scorers went scoreless; the sweep was stopped there rather than watching the same traceback fifty more times.</p>
+  <p>The claim behind the change was that the corpus never imports the date module and so could not be affected. The sweep was accurate; the claim generalised past it. <strong>The downstream caller bodies are not in the corpus tree</strong>, they construct <code>datetime.date</code> and pass it into goals, and that is exactly the path the change closed. Five of the first six procurement scorers went scoreless; the sweep was stopped there rather than watching the same traceback fifty more times.</p>
 
   <p>Four claims failed the same way in one day, and the cause is structural rather than careless. <strong>The sealed bodies are excluded from every other lane's census by the seal</strong> — one lane cannot read them, the exporter skips their directory, engine sweeps cover the corpus tree. So <em>“the corpus costs nothing”</em> is silent about the harnesses <em>by construction</em>, and that population exercises the engine more directly than any other.</p>
 

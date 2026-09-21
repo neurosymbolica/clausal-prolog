@@ -19,7 +19,7 @@ The pre-existing ``test_atom_shadowing.py`` suite exercises the *narrowed
 shadowing warning* by running ``_process_declarations`` in isolation, so it
 never binds an actual imported class and cannot observe the identity outcome.
 These tests close that gap: they load real modules through the import hook and
-assert identity is shared and solutions flow across a ``kit → queries →
+assert identity is shared and solutions flow across a ``vocab → queries →
 downstream`` re-export chain.
 
 If someone ever changes the narrowed trigger to re-mint predicate functors
@@ -67,30 +67,30 @@ class TestFunctorReExport:
     identity), rather than shadowing the import with a fresh empty class."""
 
     def test_intermediate_shares_identity_with_kit(self):
-        kit = _load_fixture("functor_reexport_vocab")
+        vocab = _load_fixture("functor_reexport_vocab")
         queries = _load_fixture("functor_reexport_queries")
 
-        assert isinstance(kit.flip, PredicateMeta)
+        assert isinstance(vocab.flip, PredicateMeta)
         # Re-declaring the imported functor in -module must NOT re-mint.
-        assert queries.flip is kit.flip
-        # The re-exported class carries the kit's clauses, not an empty class.
+        assert queries.flip is vocab.flip
+        # The re-exported class carries the vocab's clauses, not an empty class.
         assert len(queries.flip._clauses) == 2
 
     def test_downstream_import_resolves_to_kit_class(self):
-        kit = _load_fixture("functor_reexport_vocab")
+        vocab = _load_fixture("functor_reexport_vocab")
         _queries = _load_fixture("functor_reexport_queries")
         downstream = _load_fixture("functor_reexport_downstream")
 
         # A downstream -import_from of the re-exported functor resolves to the
-        # kit's class through the intermediate module.
-        assert downstream.flip is kit.flip
+        # vocab's class through the intermediate module.
+        assert downstream.flip is vocab.flip
 
     def test_downstream_query_sees_kit_facts(self):
         _kit = _load_fixture("functor_reexport_vocab")
         _queries = _load_fixture("functor_reexport_queries")
         downstream = _load_fixture("functor_reexport_downstream")
 
-        # The whole point: goals over the re-exported functor find the kit's
+        # The whole point: goals over the re-exported functor find the vocab's
         # facts rather than silently finding nothing.
         assert _solutions(downstream.check, 2) == [(mint("a"), mint("x")), (mint("b"), mint("y"))]
 
@@ -99,5 +99,5 @@ class TestFunctorReExport:
         queries = _load_fixture("functor_reexport_queries")
 
         # A clause in the intermediate module that uses the imported functor
-        # also resolves to the kit's class.
+        # also resolves to the vocab's class.
         assert _solutions(queries.my_query, 1) == [(mint("x"),), (mint("y"),)]

@@ -10,14 +10,14 @@ Fix site: `clausal/logic/compiler/arg_index.py::_arg_to_index_key` (the bare `Lo
 ## 1. Repro matrix
 
 Runner: `/workspace/clausal/venv/bin/python -m clausal.testing <file>`, cwd `<downstream-domains-corpus>`,
-`PYTHONPATH=[<engine>:]<downstream-kit>:<downstream-trunk>:<downstream-domains-corpus>`.
+`PYTHONPATH=[<engine>:]<downstream-library>:<downstream-trunk>:<downstream-domains-corpus>`.
 `clausal.__file__` verified on every run.
 
 | test file | pre-sync `4d870b17` shadow | canonical main (`/workspace/clausal`) | canonical main + 1-line patch (§6) |
 |---|---|---|---|
-| `eu/ai_act/prohibited_practices/tests/test_queries.clausal` | 22 passed, 0 failed | **19 passed, 3 failed** | 22 passed, 0 failed |
-| `eu/procurement/scope_exclusions/tests/test_queries.clausal` | 9 passed, 0 failed | **8 passed, 1 failed** | 9 passed, 0 failed |
-| `eu/aml/amlr_cdd_obligations/tests/test_public_interface.clausal` | 29 passed, 0 failed | **1 passed, 28 failed** | 29 passed, 0 failed |
+| `<downstream-domain>.clausal` | 22 passed, 0 failed | **19 passed, 3 failed** | 22 passed, 0 failed |
+| `<downstream-domain>.clausal` | 9 passed, 0 failed | **8 passed, 1 failed** | 9 passed, 0 failed |
+| `<downstream-domain>.clausal` | 29 passed, 0 failed | **1 passed, 28 failed** | 29 passed, 0 failed |
 
 Engine paths printed on each side:
 - pre-sync: `/tmp/claude-1000/<pre-sync-shadow-worktree>/clausal/__init__.py`
@@ -31,7 +31,7 @@ straight from 1/29 to 29/29 with no other change.
 ### amlr_cdd_obligations — FIRST failure
 
 ```
-  eu/aml/amlr_cdd_obligations/tests/test_public_interface.clausal:64 :: PI business relationship -> standard
+  <downstream-domain>.clausal:64 :: PI business relationship -> standard
     goal 2 of 2 failed:
       eu.aml.amlr_cdd_obligations.cdd_level(P, eu.aml.amlr_cdd_obligations.standard)
     bindings at failure: P = {'establishing_business_relationship': True}
@@ -265,11 +265,11 @@ unrelated to this mechanism (unchanged on both sides).
 By domain area (tests fixed):
 
 ```
-eu/procurement 328   eu/customs 52   eu/aml 40   au/merger_clearance 37
-eu/chemicals 31      us/social_security 31       us/csa_scheduling 20
-au/corps_act_disclosure 19          eu/crypto_assets 17   eu/peppol_einvoicing 17
-eu/vat 12   eu/mifid 11   uk/traffic_highway_code 10   eu/ai_act 3
-eu/market_integrity 2   eu/product_safety 2   us/securities 1
+<downstream-domain> 328   <downstream-domain> 52   <downstream-domain> 40   <downstream-domain> 37
+<downstream-domain> 31      <downstream-domain> 31       <downstream-domain> 20
+<downstream-domain> 19          <downstream-domain> 17   <downstream-domain> 17
+<downstream-domain> 12   <downstream-domain> 11   uk/traffic_highway_code 10   <downstream-domain> 3
+<downstream-domain> 2   <downstream-domain> 2   <downstream-domain> 1
 ```
 
 The three escalated files are a 32-test slice of a 633-test regression.
@@ -283,18 +283,18 @@ arg naming an `-import_from`'d identifier in a predicate with ≥ 4 clauses.
 files with >=1 at-risk predicate: 57
 at-risk predicates:               99
 domain areas touched:             29
-top: eu/procurement 33, uk/traffic_highway_code 7, eu/chemicals 6,
-     eu/crypto_assets 5, eu/aml 5, au/corps_act_disclosure 4,
-     us/social_security 3, eu/state_aid 3, then ~2 each across
-     us/securities, us/sara_irc_tax, us/irc_s121, au/firb, eu/customs,
-     eu/mifid, eu/vat, eu/gdpr, eu/banking, eu/labour, eu/emir, th/visa …
+top: <downstream-domain> 33, uk/traffic_highway_code 7, <downstream-domain> 6,
+     <downstream-domain> 5, <downstream-domain> 5, <downstream-domain> 4,
+     <downstream-domain> 3, <downstream-domain> 3, then ~2 each across
+     <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>,
+     <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, th/visa …
 ```
 
 This is an upper bound on *predicates* (an at-risk predicate only misbehaves when actually called
 with that argument bound) and a lower bound on *impact* (a broken predicate poisons many downstream
 queries — one broken `cdd_level/2` produced 28 red tests). It agrees with the measured sweep on the
-ranking (`eu/procurement` far in front, then `eu/aml`, `eu/chemicals`, `eu/crypto_assets`,
-`us/social_security`, `au/corps_act_disclosure`, `uk/traffic_highway_code`).
+ranking (`<downstream-domain>` far in front, then `<downstream-domain>`, `<downstream-domain>`, `<downstream-domain>`,
+`<downstream-domain>`, `<downstream-domain>`, `uk/traffic_highway_code`).
 
 Anything outside the corpus that uses the same decomposition idiom (a shared vocabulary module +
 sibling rule modules, ≥ 4 clauses) is equally exposed. Everything single-module, or below the

@@ -16,7 +16,7 @@
 - Stage explicit paths only. Never `git add -A`, never bare `git stash` (shared clone).
 - Python is `/workspace/clausal/venv/bin/python`, run FROM the worktree (cwd wins for `import clausal`). Every probe prints `clausal.__file__` and you check it starts with the worktree path.
 - Tests are named as sentences, `test_<what_the_test_pins>`, matching the existing files.
-- Do NOT edit `to_term`, `from_term`, `TO_TERM`, `FROM_TERM`, `register`, or `clausal/modules/py/datetime.py`. The spec's whole mechanism is that the seam stays untouched, and harness-batch-lane's date migration measures against those.
+- Do NOT edit `to_term`, `from_term`, `TO_TERM`, `FROM_TERM`, `register`, or `clausal/modules/py/datetime.py`. The spec's whole mechanism is that the seam stays untouched, and the harness lane's date migration measures against those.
 - Do NOT edit `clausal/terms.py` structurally. If any line is inserted above `term_str`, `tests/test_funnel_lint.py` trips on its line-range allowlist; the plan inserts nothing there.
 - Encoding, verbatim from the spec (the plan's tests assert exactly these):
 
@@ -1201,7 +1201,7 @@ NEXT item 2 (the transfer form + quantity_number/2) is BUILT on this branch:
 <first sha>..<last sha>, gated NEW 0 against qt-baseline (<baseline sha>),
 <N> tests added. Spec docs/superpowers/specs/2026-09-16-quantity-transfer-form-design.md,
 plan docs/superpowers/plans/2026-09-16-quantity-transfer-form.md. Not promoted:
-it lands with the dates-are-terms work, behind harness-batch-lane's date
+it lands with the dates-are-terms work, behind the harness lane's date
 migration. The exporter's Prolog-side quantity_number/2 is still theirs.
 ```
 

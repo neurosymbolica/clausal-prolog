@@ -3592,7 +3592,7 @@ if _USE_C_PROPAGATE:
         # a GROUND expression tree to its number first, as the Python twin
         # does: ``X / Y == 3.5`` arrives with the tree on the left, and
         # without the fold it went straight to the C impl and its refusal
-        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # (the harness lane's probe, 2026-09-17 -- the shape this fix
         # claimed to close, and had not).
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
@@ -3619,7 +3619,7 @@ if _USE_C_PROPAGATE:
         # a GROUND expression tree to its number first, as the Python twin
         # does: ``X / Y == 3.5`` arrives with the tree on the left, and
         # without the fold it went straight to the C impl and its refusal
-        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # (the harness lane's probe, 2026-09-17 -- the shape this fix
         # claimed to close, and had not).
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
@@ -3642,7 +3642,7 @@ if _USE_C_PROPAGATE:
         # a GROUND expression tree to its number first, as the Python twin
         # does: ``X / Y == 3.5`` arrives with the tree on the left, and
         # without the fold it went straight to the C impl and its refusal
-        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # (the harness lane's probe, 2026-09-17 -- the shape this fix
         # claimed to close, and had not).
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
@@ -3675,7 +3675,7 @@ if _USE_C_PROPAGATE:
         # a GROUND expression tree to its number first, as the Python twin
         # does: ``X / Y == 3.5`` arrives with the tree on the left, and
         # without the fold it went straight to the C impl and its refusal
-        # (harness-batch-lane's probe, 2026-09-17 -- the shape this fix
+        # (the harness lane's probe, 2026-09-17 -- the shape this fix
         # claimed to close, and had not).
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):

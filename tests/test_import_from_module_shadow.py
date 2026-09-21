@@ -37,7 +37,7 @@ def _load(tmp_path, name, text):
 
 def test_a_profile_key_survives_an_import_from_of_the_same_name(tmp_path):
     """The bug, in the shape corpus-lane hit within a minute of writing
-    peppol's real data: `currency` is both a kit module and the invoice's own
+    <downstream-domain>'s real data: `currency` is both a vocab module and the invoice's own
     profile key."""
     m = _load(tmp_path, "shadow", """
         -module(shadow, [look/1])

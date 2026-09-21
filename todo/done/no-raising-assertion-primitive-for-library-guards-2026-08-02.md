@@ -14,8 +14,8 @@ return a default, and every verdict downstream flips silently.
 
 A rolling date-window authoring run — four full retry allowances could not locate the defect from the
 test report (see `failed-goals-have-no-derivation-trace-2026-08-02.md` in this
-directory for full measurements). The defect: the model passed a date OBJECT where kit
-predicate `window_days_used` expects a `[Y,M,D]` triple (`REF_YMD`). The kit predicate
+directory for full measurements). The defect: the model passed a date OBJECT where library
+predicate `window_days_used` expects a `[Y,M,D]` triple (`REF_YMD`). The library predicate
 failed logically. The `findall` collapsed to `[0]`. The test report showed only:
 
 ```
@@ -27,7 +27,7 @@ have propagated through the `findall` as an exception and appeared in the report
 RAISED path — which is the loud, well-diagnosed channel. The failure would have been
 located on attempt 1.
 
-The same shape applies to any kit predicate that receives unbound variables or wrong
+The same shape applies to any library predicate that receives unbound variables or wrong
 shapes: `intervals_wf`, `distinct_days_total`, and other layer-2 wrappers all fail
 logically on malformed input and all collapse `findall` silently.
 
@@ -57,7 +57,7 @@ A parallel investigation may find an existing mechanism. This todo is written
    that `findall` re-raises rather than catches.
 
 3. **Callable from Clausal clause bodies without py-interop syntax.** The guard should
-   be expressible as a normal Clausal goal so kit authors do not need to embed Python.
+   be expressible as a normal Clausal goal so library authors do not need to embed Python.
 
 4. **Composable with the existing `diagnose_failure` report.** Ideally the raised error
    includes enough context (predicate name, argument position, bad value) that the
@@ -76,7 +76,7 @@ interacts with it.
 A documented, supported module (e.g. `clausal.guards`) that exposes assertion
 predicates (`assert_ground/2`, `assert_shape/3`) callable as Clausal goals. These
 raise Python exceptions that the engine already propagates through `findall` as RAISED.
-No new engine primitive is needed; the cost is that kit authors import a py-interop
+No new engine primitive is needed; the cost is that library authors import a py-interop
 module.
 
 **Candidate 3 — wf-guard macro or annotation.**
@@ -86,7 +86,7 @@ interface and the largest scope; it may subsume candidates 1 and 2 but requires
 a design for the declaration syntax.
 
 Any of the three candidates converts a silent `findall` collapse into a located,
-translatable error on the first attempt, for the class of kit-call arity/shape
+translatable error on the first attempt, for the class of library-call arity/shape
 mistakes that the training harness has measured as the dominant repair-blocking case.
 
 ## Outcome
@@ -136,7 +136,7 @@ threw a plain string; the structured constructors had only ever been called from
   as a spurious failure).
 - **Docs:** new section "Raising well-formedness guards in library code" in
   `docs/exceptions.md`, with two compilable+tested example blocks (own-functor and
-  imported-`type_error`) showing kit authors the pattern and the strict-atoms spelling.
+  imported-`type_error`) showing library authors the pattern and the strict-atoms spelling.
 
 ### Suite
 

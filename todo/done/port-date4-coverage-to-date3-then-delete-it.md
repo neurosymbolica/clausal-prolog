@@ -19,8 +19,8 @@ components↔object relation, under a name that does not collide with the
 incoming arity-3 `date` TERM. `_date_4` is its live implementation. Deleting it
 would break every caller:
 
-    clausify/kit          61 sites in  9 files
-    clausify-domains      26 sites in 11 files
+    downstream/library          61 sites in  9 files
+    downstream-corpus      26 sites in 11 files
     clausal itself         4 sites
 
 The registration comment already states the real condition — **"DELETE when it
@@ -59,7 +59,7 @@ The blocker recorded here earlier was real and was resolved by an operator
 ruling rather than by code: **bad dates should fail fast and loudly.**
 
 `ymd_date/4` FAILED on a calendrically-invalid triple where the `date/3` TERM
-RAISES, and `kit/rolling_window`'s E-malformed tests required the failure. That
+RAISES, and `library/rolling_window`'s E-malformed tests required the failure. That
 looked like it needed a construct-or-fail primitive to preserve. It did not —
 the behaviour being preserved was a SILENT one, and explicitly out of contract:
 `max_stay.clausal` §6.3 / DIFFERENTIAL E2 classed a malformed history item as
@@ -70,9 +70,9 @@ it raise, and update the out-of-contract tests to say so.
 
 | phase | what | commits |
 |---|---|---|
-| 1 | 82 ground-literal sites | clausify `156ef73`, domains `4e7160d3`, train `d8ed0e7` |
-| 2a | 6 computed-component sites (sara_irc_tax, irc_s121) | domains `dcb7d62d` |
-| 2b | 3 transitional compat clauses | clausify `35521d6`, train `21a991b` |
+| 1 | 82 ground-literal sites | downstream `156ef73`, domains `4e7160d3`, train `d8ed0e7` |
+| 2a | 6 computed-component sites (sara_irc_tax, <downstream-domain>21) | domains `dcb7d62d` |
+| 2b | 3 transitional compat clauses | downstream `35521d6`, train `21a991b` |
 | 2c | rolling_window + its tests; schengen E2 re-pinned | this change |
 | 3 | `_date_4` and the `ymd_date/4` registration deleted | this change |
 
@@ -110,7 +110,7 @@ and nothing else (full collect-only set diffed, no other item moved).
 
 Corpus: schengen_90_180_max_stay 81/81, schengen_90_180 27/27,
 working_time_average 3639/3639, posted_workers 32/32, de_minimis 39/39 —
-all unchanged. Kit suites at baseline except test_rolling_window 35 -> 36
+all unchanged. Library suites at baseline except test_rolling_window 35 -> 36
 (two E-malformed tests became three).
 
 The `++` error-bridge todo is no longer a dependency of this one; it was routed

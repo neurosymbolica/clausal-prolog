@@ -601,7 +601,7 @@ own use is 4 sites, all display tests.
 Those 5,259 `test(...)` and 57 `--pred(...)` invocations all run THROUGH the engine. A
 representation change with zero corpus EDIT sites can still move corpus ANSWERS, and site analysis
 is a different claim from an answer-set re-run. Both changes still need the oracle gate — ask
-harness-batch-lane to re-run the sealed scorers — before promotion.
+the harness lane to re-run the sealed answer-set scorers — before promotion.
 
 ---
 
@@ -878,7 +878,7 @@ Three kinds, and only the third needs a decision:
 ## Still not measured
 
 Whether any corpus rulebase compares dates at all, and with what. The oracle gate
-(harness-batch-lane, the sealed scorers) is the check that matters before promotion, and it has not
+(the harness lane, the sealed answer-set scorers) is the check that matters before promotion, and it has not
 been asked for on any of this session's changes.
 
 ---
@@ -948,7 +948,7 @@ swept those too — for `--`/`++` usage, answering a different question — and 
 `re.Match` methods because `m.group(` was the top row.
 
 Three earlier instances the same day: the sealed bodies outside the corpus tree; "the corpus never
-imports py.datetime" (the import is spelled `date_time`); and harness-batch-lane's own
+imports py.datetime" (the import is spelled `date_time`); and the harness lane's own
 population-vs-work estimate. **The rule, now stated four times: name the glob in the sentence.**
 "No `.py` file does X" is a fact. "The corpus does not do X" is an inference across a boundary,
 and it reads identically in a report.
@@ -988,7 +988,7 @@ a tuple the seam made. Testing the thing built, not the place it was installed.
 
 ## The §4 q3 figure again, verified at source and HIGHER
 
-harness-batch-lane re-measured on the sealed bodies rather than inheriting my number:
+the harness lane re-measured on the sealed bodies rather than inheriting my number:
 
     module-attribute reaches   296   across 245 distinct names   (I reported ~200 / 160)
     getattr(m, <variable>)      98                               (I reported ~101)
@@ -1001,7 +1001,7 @@ actually matters.
 
 ### And the STRUCTURAL reason, which is better than the rule I wrote
 
-I filed four of these as repeated carelessness. harness-batch-lane named the cause instead:
+I filed four of these as repeated carelessness. the harness lane named the cause instead:
 
 > *the sealed bodies are excluded from every other lane's census BY THE SEAL -- corpus-lane cannot
 > read them, the exporter skips `eval/`, your sweeps are over the corpus tree. So any claim of the
@@ -1011,7 +1011,7 @@ That is not four lapses. It is one population that is invisible to every lane ex
 owns it — and which consumes the engine more directly than anything else. "Put the glob in the
 sentence" catches the wording; this catches the reason, and it has a counter-move:
 
-**ASK HARNESS-BATCH-LANE.** Any sweep whose conclusion would cover the harnesses goes to that lane
+**ASK THE HARNESS LANE.** Any sweep whose conclusion would cover the harnesses goes to that lane
 as a question. They answer most in one AST pass. That is cheaper than a fifth discovery arriving
 mid-landing, and it is the standing protocol from here.
 
@@ -1046,7 +1046,7 @@ demand out of the Database row. Measured on a real loaded module:
 
     engine, enumeration sites                    3   all already dispositioned
                                                      "enumerate the db's rows"
-    sealed bodies, enumeration of a RULEBASE      0   (harness-batch-lane, AST)
+    sealed bodies, enumeration of a RULEBASE      0   (the harness lane, AST)
 
 The detector found 164 enumeration sites in the sealed bodies and every one is the same line in the
 82 launchers — `globals().update({k: v for k, v in vars(_body).items() ...})` — enumerating the

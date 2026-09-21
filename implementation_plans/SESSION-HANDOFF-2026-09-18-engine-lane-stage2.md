@@ -135,7 +135,7 @@ Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/su
 
 ## Peers / landing
 
-* harness-batch-lane: stage 2 is a RE-BASELINE (spec §5 step 6), announced beside the stage-1 freeze file in
+* the harness lane: stage 2 is a RE-BASELINE (spec §5 step 6), announced beside the stage-1 freeze file in
   the lanes' shared announcement directory as `ATOMS-AS-STR-STAGE2-BUILT-2026-09-18.md`; its sweep runs AFTER
   stage 1 lands.
 * iso-export-lane: G3 on the frozen stage-1 sha `73c86686` still gates the stage-1 landing window; the

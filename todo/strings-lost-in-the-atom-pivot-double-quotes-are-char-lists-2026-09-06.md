@@ -124,7 +124,7 @@ backward compatible with something? Clausal is very new, there are no
 legacy systems written in it. If we want to support Prologs with strings,
 I'd prefer a translation system. So if we have double_quotes/1 then it
 should be a ratchet, migrate, and remove it, not deprecate." So: insert
-the directive mechanically into every existing corpus/kit module, migrate
+the directive mechanically into every existing corpus/library module, migrate
 domain by domain with the suites + G4 as oracle, DELETE the directive from
 the engine when the last module drops it, and pin a test that REFUSES the
 directive afterwards. Support for string-bearing Prologs is a
@@ -169,12 +169,12 @@ string, `mint`/`is_atom`/`spelling` live in `atoms.py`. What changes:
 
 ## 4. Facts the implementer needs (all measured 2026-09-06)
 
-- **Corpus census** (`/workspace/clausify-domains`, comments stripped):
+- **Corpus census** (`<downstream-corpus>`, comments stripped):
   **15,849 double-quoted literals** — 6,580 identifier-shaped (used as
   atoms today: test names, profile keys, verdict values), 8,303 free text
   (verbatim legal text, labels), 966 empty; single-quoted: 199, ALL
   apostrophes inside text/comments (effectively zero real quoted atoms).
-  Kit (`clausify-executor-train/kit`): 427 double-quoted, 0 single. The kit
+  Library (`downstream-trunk/library`): 427 double-quoted, 0 single. The library
   has consumers in six corpus repos — migrate it first and carefully.
 - **The Python AST discards quote style.** `ast.Constant(value='hello')`
   is identical for `'hello'` and `"hello"`. Quote kind must come from the
@@ -202,7 +202,7 @@ string, `mint`/`is_atom`/`spelling` live in `atoms.py`. What changes:
   (`terms.py::term_str`, Python `repr` quoting) — no `writeq/1`, no
   `write_canonical/1` today.
 - The `.venv` `.pth` makes every trunk/corpus run use canonical
-  `/workspace/clausal` LIVE (memory: "eval_harness hardcode defeats the
+  `/workspace/clausal` LIVE (memory: "<harness-library> hardcode defeats the
   seal"). An engine flip is instantly visible to every lane.
 - Two stale-doc todos fold into this:
   `todo/docs-strings-as-lists-md-stale-after-cons-rule-retirement-2026-09-04.md`,
@@ -259,7 +259,7 @@ H. **Boundaries:** Python interop (`++`, `py.*` modules) — text in = string,
    str → string.
 I. **`double_quotes/1` ratchet (R-S4):** per-module directive; default
    `chars`; mechanical insertion of `-double_quotes(atom)` into every
-   existing corpus + kit module BEFORE the engine flip lands on canonical
+   existing corpus + library module BEFORE the engine flip lands on canonical
    (the `.pth` makes it live at once); a census tool that lists modules
    still carrying it; removal + refusal test at the end.
 J. **ISO translator (`clausal_to_prolog.py`):** `'x'`/tagged atom →
@@ -269,10 +269,10 @@ J. **ISO translator (`clausal_to_prolog.py`):** `'x'`/tagged atom →
    narrow that rule to atoms); execution-harness agreement pins
    (`tests/test_prolog_execution.py`) for every Scryer-table row, both
    engines; re-run the ISO export gates on the 8 publishable domains.
-K. **Corpus + kit migration:** tool that rewrites identifier-shaped `"x"`
+K. **Corpus + library migration:** tool that rewrites identifier-shaped `"x"`
    used as an atom to `'x'` and leaves text as `"..."`, per module, gated
    by that module's suite + G4 + (where armed) G5; drop the directive as
-   each module goes green; kit first; every score unchanged.
+   each module goes green; library first; every score unchanged.
 L. **Docs:** fold the two stale-doc todos; user docs for `'…'` vs `"…"`,
    the tag (out-of-warranty forging), the ratchet's lifetime.
 
@@ -284,7 +284,7 @@ L. **Docs:** fold the two stale-doc todos; user docs for `'…'` vs `"…"`,
    (execution harness).
 3. Corpus: all suites green, G4 green on all 74 roster domains, the 8
    publishable domains still clear all five gates, scores unchanged.
-4. `grep -r "double_quotes" corpus kit` → 0; the directive is deleted from
+4. `grep -r "double_quotes" corpus library` → 0; the directive is deleted from
    the engine; a test asserts it is refused. Only then move this todo to
    `done/`.
 
@@ -304,7 +304,7 @@ L. **Docs:** fold the two stale-doc todos; user docs for `'…'` vs `"…"`,
 5. Foreign-text default (Python/JSON in = string): confirm; and the JSON
    profile loader's atom-by-vocabulary rule.
 6. `-double_quotes(atom)` mass insertion: one commit per repo by the lane
-   that owns it (corpus: executor-train lanes; kit: trunk) — coordinate
+   that owns it (corpus: executor-train lanes; library: trunk) — coordinate
    so it lands BEFORE the engine flip reaches canonical.
 7. Whether the reverse translator (`prolog_to_clausal`) and the Prolog
    reader (`prolog_reader.py`) already emit `'x'` vs `"x"` correctly — the
@@ -314,10 +314,10 @@ L. **Docs:** fold the two stale-doc todos; user docs for `'…'` vs `"…"`,
 
 - Owner: `clausal-bug-fix` instance (P3 lane). Reporter/consumer: ISO
   export lane (executor-train), which will re-run the export gates and
-  owns items J/K's export side; kit/corpus migration is the corpus lanes'.
+  owns items J/K's export side; library/corpus migration is the corpus lanes'.
 - Engine-main hold rules unchanged (hold canonical commits only during
   P3-3's announced landing sync). The flip must not reach canonical before
-  the ratchet directive is in every corpus/kit module (item I) — the
+  the ratchet directive is in every corpus/library module (item I) — the
   `.pth` makes it live instantly for every lane.
 - Markus Triska's question is the external clock; the honest interim
   answer given to him (2026-09-06): Clausal has no `write_canonical`,

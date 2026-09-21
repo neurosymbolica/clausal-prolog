@@ -110,7 +110,7 @@ is red; enumerate already-red tests in every touched test file first). The arg-i
 (`tests/test_first_arg_index.py`, `tests/test_optimisations_call_site.py`,
 `tests/test_bucket_refs_ir_parallel.py`, `tests/test_deep_indexing.py`) and
 `tests/predmeta_p1/` run alone as well. Because part 3 changes which index plans a call site
-can use, the landing is followed by a QUESTION to harness-batch-lane for the 82-row answer diff
+can use, the landing is followed by a QUESTION to the harness lane for the 82-row answer diff
 (their protocol; ~3 minutes on their side) — not by an engine-side claim that answers cannot move.
 
 ## 5. Not in scope

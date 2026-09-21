@@ -35,7 +35,7 @@ A downstream helper library lists eight names in both lists on
 purpose: `absent`, `assessment`, `attribute`, `item`, `labels`, `unknown`,
 `unmet`, `value`. Its own comment explains why:
 
-> These same functors are ALSO in the `-module` export list (they are the kit's
+> These same functors are ALSO in the `-module` export list (they are the library's
 > public data vocabulary ...). Declaring them here lets this library build them
 > and match works across modules.
 

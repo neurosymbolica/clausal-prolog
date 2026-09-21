@@ -69,7 +69,7 @@ overloaded (contrast: overloading it for dimensioned quantities, which was consi
 declined 2026-09-09).
 
 It is REQUIRED by the measurement. `clausal/tools/eq_analysis/instrument.py` recorded
-430,945 executions over 1933 corpus+kit sites (log: trunk
+430,945 executions over 1933 corpus+library sites (log: trunk
 `docs/eq-measurement-2026-09-09-f5ad9a5d.log`). **33 sites take two arithmetic modes** —
 every one `{BIND, TEST}`, the same site binding on one call and testing on another. For
 those no single ISO spelling is correct: `'is'` errors when both sides are ground under

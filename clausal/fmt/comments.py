@@ -158,7 +158,7 @@ def directive_list(stmt: ast.AST) -> ast.List | None:
     """The trailing ``List`` argument of a directive statement, or ``None``.
 
     A directive is ``Expr(UnaryOp(USub, Call))`` -- ``-module(m, [...])``,
-    ``-import_from(kit, [...])``, ``-private([...])``.  Its list elements are
+    ``-import_from(vocab, [...])``, ``-private([...])``.  Its list elements are
     attachment nodes: the corpus writes section comments against individual
     export-list entries, and those must ride their entries through an
     explosion (emit) rather than evict to above the whole statement."""

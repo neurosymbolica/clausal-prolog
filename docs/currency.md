@@ -490,7 +490,7 @@ would otherwise satisfy every ratio claim there is. And the Prolog exporter **re
 ratio-unit amount, declaration or inline, for the reason it refuses every scaled unit: units
 are discarded on export, and discarding `basis_point` would emit `300` against a stored
 `0.03`. That is a 10000x error rather than the minor unit's 100x, and
-`eu/banking/crr_leverage_ratio` is on the export roster — so the refusal is load-bearing
+`<downstream-domain>` is on the export roster — so the refusal is load-bearing
 there, and lifts with the same fix
 (`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`).
 

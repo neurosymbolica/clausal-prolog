@@ -56,7 +56,7 @@ Full spec: `docs/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answ
    `('quantity', <magnitude>, <unit>)`, but units are live corpus vocabulary. Do not assume.
 3. **The oracle gate has NOT been run on any of this.** Engine-green is a different claim from
    corpus-answers-unchanged, and dates and money are live corpus vocabulary. Ask
-   harness-batch-lane for the 28 sealed scorers before promoting anything here.
+   the harness lane for the 28 sealed answer-set scorers before promoting anything here.
 4. **Named-zone narrowing.** A tz-aware datetime now carries its UTC offset in minutes, so a
    `ZoneInfo` reduces to its offset AT THAT INSTANT and DST-crossing arithmetic would differ from
    Python's. Exact for fixed offsets (`timezone.utc`, `now_utc/1`). Revisit if the corpus needs
@@ -124,22 +124,22 @@ Written after the handoff above; it supersedes that section's "oracle gate has N
 
 ## The canary caught what my corpus sweep could not
 
-    branch   eu/procurement/selection_criteria   score = (none), EXIT=1
+    branch   <downstream-domain>   score = (none), EXIT=1
              NotImplementedError: term_to_ast_expr: unsupported term type date
     canonical, same domain, same minute          341/341, EXIT=0
 
 **My claim "the corpus cost is zero" for dates was wrong, and precisely how matters.** I swept
 the corpus tree (787 .clausal, 88 .seam, 263 .py), found nothing importing
-`py.datetime` from code, and reported it as a fact about "the corpus". The SEALED SCORER BODIES are
+`py.datetime` from code, and reported it as a fact about "the corpus". The DOWNSTREAM CALLER BODIES are
 not in that tree. They construct `datetime.date` and pass it into goals — exactly the path the
 change closed. The number was right; the CLAIM generalised across a boundary I had not measured.
 
-harness-batch-lane named it as a shape three lanes have now hit: **the population you measured,
+the harness lane named it as a shape three lanes have now hit: **the population you measured,
 named as the population that matters.** Recorded in [[instruments-that-fail-open]].
 
 ## Blast radius, measured and predictable
 
-harness-batch-lane's predictor — "the body imports or constructs a `datetime`" — validated exact on
+the harness lane's predictor — "the body imports or constructs a `datetime`" — validated exact on
 the observed data (10 predicted failures, 10 observed, 0 missed, 0 false alarms). Corpus-wide:
 **23 of 74 domains**. A fix has a number to hit.
 
@@ -176,13 +176,13 @@ A value with a canonical term encoding gets a suggestion; one without gets the p
 that asymmetry is pinned by a test — it IS the distinction the ruling turns on. Shapes come from
 `modules.py.datetime`'s own emit table so there is one definition.
 
-LEFT, harness-batch-lane's, gated on the operator's DIRECT word for sealed files:
+LEFT, the harness lane's, gated on the operator's DIRECT word for sealed files:
 85 sites to the term form. 31 starred triples are `("date", *v)`; 54 scalar sites are
 `("date", y, m, d)`. **The 37 `timedelta()` calls are keyword-only and the term is positional** —
 `timedelta(days=1.5)` is `('timedelta', 1, 43200, 0)`, not `('timedelta', 1.5)`. Those want reading,
 not a sed.
 
-Then: the 28, then the full 82, with harness-batch-lane saying which of the four changes each
+Then: the 28, then the full 82, with the harness lane saying which of the four changes each
 result does and does not cover.
 
 ---
@@ -263,9 +263,9 @@ in C over GMP — writing against the Python one means rewriting twice.
 2. `Quantity` is unruled. Same shape as `Decimal`, but units are live corpus
    vocabulary — do not assume it follows.
 3. The date migration on the HARNESS side: ruled (b) + the better error, then
-   harness-batch-lane measured the real shape — 85 constructions vs 70 crossings
+   the harness lane measured the real shape — 85 constructions vs 70 crossings
    in 62 wrappers, and a migration of the constructions produced a SILENT WRONG
-   answer (`framework_agreements` 1413/1423). Their kit changes (capability probe,
+   answer (`framework_agreements` 1413/1423). Their library changes (capability probe,
    recogniser, pass-through) are correct and uncommitted. **The cost basis has
    moved three times; nothing should proceed there without a fresh ruling.**
 
@@ -278,7 +278,7 @@ the Database row. Verified: attribute reach, `getattr` by literal AND by variabl
 every REACH and cannot ENUMERATE** -- that is the entire distinction.
 
 Enumeration count: engine **3** (all already dispositioned "enumerate the db's rows");
-sealed bodies **ZERO** (harness-batch-lane, by AST, calibrated 6 positive / 5 negative
+sealed bodies **ZERO** (the harness lane, by AST, calibrated 6 positive / 5 negative
 before running). Their 164 hits are all one launcher line enumerating the harness's own
 PYTHON sibling -- 0 of 82 bodies declare a clause head, 82 of 82 export lists are empty.
 
@@ -296,17 +296,17 @@ SEQUENCING: the hook cannot fire until names leave `module_dict` (P4). Add both 
 **§4 q3 is not free.** I reported corpus object-shaped predicate access as ~0 and
 "the engine's own 209 sites are the whole migration". Measured: corpus `.seam`
 harnesses use `m.<predicate>(` ~200 times across 160 names, plus ~101
-`getattr(m, <var>)`. **~446 sites in the 82 SEALED BODIES alone** (harness-batch-lane's own count: 296
+`getattr(m, <var>)`. **~446 sites in the 82 SEALED BODIES alone** (the harness lane's own count: 296
 module-attribute reaches across 245 names, 98 `getattr(m, <var>)`, 52
 `getattr(m, 'literal')` -- a shape I did not count), plus the engine's 209.
 
 Four times in one day I generalised a sweep past the file type it covered -- but the
-CAUSE is structural, not carelessness, and harness-batch-lane named it: the sealed
+CAUSE is structural, not carelessness, and the harness lane named it: the sealed
 bodies are excluded from every other lane's census BY THE SEAL, so "the corpus costs
 nothing" is silent about the harnesses BY CONSTRUCTION.
 
 **STANDING PROTOCOL FROM HERE: any sweep whose conclusion would cover the harnesses
-goes to harness-batch-lane as a question.** They answer most in one AST pass. See
+goes to the harness lane as a question.** They answer most in one AST pass. See
 [[instruments-that-fail-open]] (count 15).
 
 ## NEXT, in order
@@ -316,5 +316,5 @@ goes to harness-batch-lane as a question.** They answer most in one AST pass. Se
    the canonical tree nobody edits). 4 of the 14 TIGHTEN an arity-blind test.
    `globals_env.py:550` is marked NO — re-read it now imports are planted.
 2. **The oracle gate is the instrument that matters**, not the engine suite. It
-   caught what a green suite and a corpus sweep both missed. Ask harness-batch-lane.
+   caught what a green suite and a corpus sweep both missed. Ask the harness lane.
 3. `rdiv`/`decimal` arithmetic, sequenced with the CLP(Q) port.

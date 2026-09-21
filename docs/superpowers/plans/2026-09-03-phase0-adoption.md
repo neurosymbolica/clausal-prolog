@@ -14,7 +14,7 @@ touch /workspace/clausal.
 - Sites that build heads from possibly-partial field dicts (specialization.py, reflection.py, modules/reflection.py) are OUT OF SCOPE — slow path stays.
 - "KEEP THE THREE WALKERS IN SYNC" (solve.py:78 comment) binds: the Python walkers and their C twins must make the same fast/slow decision on the same terms.
 - TDD for Python; C verified by parity tests + full-suite failure-set diff vs baseline_failures.txt (worktree root; capture in flight at plan time — Task 1 must confirm it exists and has ~142-145 lines before relying on it).
-- eval_harness is GATE_CORE — do not touch it.
+- <harness-library> is GATE_CORE — do not touch it.
 
 ## Task 1: Python rebuilders adopt the fast path
 

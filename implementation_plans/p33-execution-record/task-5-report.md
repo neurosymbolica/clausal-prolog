@@ -393,7 +393,7 @@ $ comm -3 .superpowers/sdd/p33-state-relocation/task-3-base-failed-names.txt \
   then open the transaction" property Task 3 fix round 2 established is
   untouched — the gate raises or normalizes, it opens no transaction.
 - The frozen `_get_dispatch` protocol and the 4-tuple dispatch plan were not
-  touched. `eval_harness*` was not touched. `_belongs_elsewhere`,
+  touched. `<harness-library>*` was not touched. `_belongs_elsewhere`,
   `_SKIPPED_ITEMS` and Task 4's backend seam were not touched.
 - Perf: `call/N` resolution moved from a dict lookup to a factory call, but
   only at COMPILE time — `globals_env` resolves the target once into

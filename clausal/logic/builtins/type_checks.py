@@ -142,7 +142,7 @@ def _number__1(x, trail, k):
     A ``Quantity`` is a number carrying a unit, and a guard that silently
     dropped one was the most dangerous defect this vocabulary produced. A
     rulebase summing money behind ``number(V)`` — the documented shape in
-    ``eu/peppol_einvoicing``'s ``sum_field/3``, "a member whose KEY is absent
+    ``eu/<downstream-domain>_einvoicing``'s ``sum_field/3``, "a member whose KEY is absent
     or non-numeric contributes nothing... empty list -> 0" — would, on
     attaching units, total ZERO for every field, compare 0 against 0 in every
     consistency rule, and turn a legal conformance surface vacuously true with

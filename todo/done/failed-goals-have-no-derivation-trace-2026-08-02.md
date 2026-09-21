@@ -26,8 +26,8 @@ max_additional_days ... MAX == 90 / bindings at failure: MAX = 0
 
 The actual defect chain, reconstructed post-mortem:
 
-- the model calls kit `window_days_used(EXTENDED_HISTORY, CURRENT_DATE, ...)` with a
-  date OBJECT where the kit wants `[Y,M,D]` (`REF_YMD`), and/or builds interval terms
+- the model calls library `window_days_used(EXTENDED_HISTORY, CURRENT_DATE, ...)` with a
+  date OBJECT where the library wants `[Y,M,D]` (`REF_YMD`), and/or builds interval terms
   containing UNBOUND variables (`[ENTRY_TRIPLE, EXIT_TRIPLE]` with `ENTRY_TRIPLE` never
   bound in the clause);
 - `intervals_wf` and the offset arithmetic FAIL logically, quietly;

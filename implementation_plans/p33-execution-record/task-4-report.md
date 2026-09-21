@@ -436,7 +436,7 @@ so no ruling citation is needed.
 
 Untouched, as instructed:
 `todo/importer-without-dynamic-locks-shared-dynamic-predicate-for-its-owner-2026-09-05.md`
-(still untracked). No C sources touched. `eval_harness` not touched.
+(still untracked). No C sources touched. `<harness-library>` not touched.
 `compiler_v2._belongs_elsewhere` left as the ledgered second copy.
 
 ---

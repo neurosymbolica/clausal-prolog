@@ -3,9 +3,9 @@
 Filed 2026-09-11. Operator's call, same session: minor CURRENCY units now, ratios in a todo.
 
 **Why it is worth doing.** It is corpus-lane's live blocker, not a hypothetical.
-`eu/banking/crr_leverage_ratio` computes in basis points **throughout**: `leverage_ratio_bps/2`
-is EXPORTED, the kit supplies `ratio_bps`, and 15 `bps` references span the public interface,
-the queries and the tests. `au/merger_clearance` has the same shape with `_cents`
+`<downstream-domain>` computes in basis points **throughout**: `leverage_ratio_bps/2`
+is EXPORTED, the library supplies `ratio_bps`, and 15 `bps` references span the public interface,
+the queries and the tests. `<downstream-domain>` has the same shape with `_cents`
 (8 parameters, 69 references). The approved corpus migration told those parameters to become
 plain decimals, which is exactly what makes the migration expensive — it redirects the two
 groups that are hardest to convert.
@@ -111,7 +111,7 @@ the lint no longer used.
   `check_ratio_gte/6` — are invisible to the lint, because the discriminator is the FUNCTOR's
   name. Unchanged by this landing, and the callee's-parameter design in the handoff is still
   the promising fix.
-* **The exporter refuses a ratio-unit amount**, so `crr_leverage_ratio` cannot migrate and
+* **The exporter refuses a ratio-unit amount**, so `<downstream-domain>` cannot migrate and
   stay on the export roster until option 2 lands
   (`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`). That todo was
   already load-bearing; this makes it block corpus-lane's stated blocker too.

@@ -188,7 +188,7 @@ def _patch_clpq() -> None:
     dividing the coefficients directly (``{v: c / rv ...}, lv / rv``), so a
     division that happens inside a posted CONSTRAINT rather than in ground
     arithmetic is invisible to every other binding here.  That is not
-    hypothetical: harness-batch-lane's row 7 (a scored domain
+    hypothetical: the harness lane's row 7 (a scored domain
     produced no census rows at all while five siblings produced plenty, and
     this is the path such a site would take.
 
@@ -307,7 +307,7 @@ def pytest_sessionfinish(session, exitstatus):   # noqa: ARG001
 install()
 
 # ALWAYS write, even with nothing to report.  It used to write only when
-# ``_ROWS`` was non-empty, and harness-batch-lane hit the consequence
+# ``_ROWS`` was non-empty, and the harness lane hit the consequence
 # (2026-09-19): a domain that produced NO FILE is indistinguishable from a run
 # where the census was never armed, and those are opposite conclusions — "no
 # division happens here" versus "the census is blind here".  A zero-row file

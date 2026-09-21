@@ -33,7 +33,7 @@ variable moving inside a measurement of the first answers neither question. Thei
 "engine 25 commits behind" before the run — an instrument that reports what it is ACTUALLY
 measuring.
 
-**harness-batch-lane — the domain axis is vacuous in the STRICT sense.** My argument was "no corpus
+**the harness lane — the domain axis is vacuous in the STRICT sense.** My argument was "no corpus
 file declares a constant". Theirs was better and they said so: **that is a claim about the CORPUS;
 reachability is decided by the IMPORT GRAPH.** They measured it — atexit hook on `sys.modules` over
 a real scored domain (crr_lcr, 33/33): CHANGED modules imported NONE, any `clausal.tools.*` at all
@@ -74,14 +74,14 @@ not apply"**, which is worse than a wrong number. **Convert those twelve LAST.**
 
 ## Corrected a stale memory of this lane's own
 
-`ratio-units-status` asserted the exporter REFUSES ratio units, so `crr_leverage_ratio` stayed
+`ratio-units-status` asserted the exporter REFUSES ratio units, so `<downstream-domain>` stayed
 blocked. **False as of option 3.** Checked by RUNNING it, not by reading:
 
     _unit_factor(['percent'])      -> Decimal('0.01')
     _unit_factor(['basis_point'])  -> Decimal('0.0001')
     _unit_factor(['nonesuch_xyz']) -> None          (the refusal that should remain, remains)
 
-**`crr_leverage_ratio` is UNBLOCKED** — 21 pairs across 9 domains, corpus-lane's migration, not this
+**`<downstream-domain>` is UNBLOCKED** — 21 pairs across 9 domains, corpus-lane's migration, not this
 lane's. The memory had stated a REFUSAL as a standing property of a tree and it went stale in ONE
 DAY. State the CHANGE; carry the command that re-measures it.
 
@@ -121,7 +121,7 @@ previous handoff that were NOT caught lacked it.
    rather than measurement.
 5. Adopting `decimal_repr="rational"` for the roster is still a separate decision from having the
    capability, and still needs its own export-bytes run.
-6. `crr_leverage_ratio` migration — corpus-lane's, now genuinely unblocked.
+6. `<downstream-domain>` migration — corpus-lane's, now genuinely unblocked.
 
 ## Numbers, with their trees, because they do not transfer
 
@@ -153,4 +153,4 @@ and changing its failure set now is the very trap they avoided today.
 the CLONE, and a count from one tree says nothing about another. What the landing is actually
 cleared by is narrower and stronger: **zero failures anywhere in the exporter / constants /
 currency / prelude area**, from a name set whose extraction was positive-controlled, plus the
-before/after probe, plus iso-export-lane's byte zero, plus harness-batch-lane's import-graph null.
+before/after probe, plus iso-export-lane's byte zero, plus the harness lane's import-graph null.

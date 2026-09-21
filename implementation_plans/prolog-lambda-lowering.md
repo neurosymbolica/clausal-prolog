@@ -8,11 +8,11 @@ refusal (`884c16eb`, `d0f92892`) and deferred lambda *lifting* to this note.
 **Problem in one sentence:** a Clausal `<-` lambda in term position is a **closure**, and
 ISO Prolog has no closure term — so `clausal/tools/clausal_to_prolog.py` used to emit the
 lambda's parse as inert `</2` operator soup that no meta-call can ever invoke, and now
-refuses it, leaving 390 real corpus/kit sites untranslatable.
+refuses it, leaving 390 real corpus/library sites untranslatable.
 
 Everything below was re-derived in this session against
-`/workspace/clausify-domains` (705 non-`_` published-domain `.clausal` files that
-translate), `/workspace/clausify-executor-train/kit` (40 files that translate),
+`<downstream-corpus>` (705 non-`_` published-domain `.clausal` files that
+translate), `<downstream-trunk>/library` (40 files that translate),
 `/workspace/clausal/venv/bin/python`, the live Clausal engine, the translator at
 `884c16eb^` (extracted with `git show` into a scratch module, so the pre-refusal
 emission is the real one and not a reconstruction), and
@@ -46,7 +46,7 @@ closure, invoked by the callee through the engine's `call_goal/1..8` builtin
 (`clausal/logic/builtins/higher_order.py:22-44`; `call/1..8` are registered as aliases of
 the same trampolines at `:46-50`).
 
-The kit's `call_goal` protocol is the whole idiom. `kit/formalize_lib.clausal:622-627`:
+The library's `call_goal` protocol is the whole idiom. `library/<downstream-library>.clausal:622-627`:
 
 ```
 eval_requirements([], _, _, []),
@@ -58,7 +58,7 @@ eval_requirements([REQ, *REQS], PROFILE, REQ_PRED, [ITEM, *ITEMS]) <- (
 ```
 
 and a domain hands it a closure —
-`/workspace/clausify-domains/au/aml_ctf/reporting_entity_obligations.clausal:512-517`:
+`<downstream-corpus>/<downstream-domain>.clausal:512-517`:
 
 ```
 aml_ctf_checklist(PROFILE, CHECKLIST) <- (
@@ -221,7 +221,7 @@ corpus: 246 sites in 97 files (705 files translated, 0 raised before translation
    class a: 184 sites, 79 files
    class b: 10 sites, 8 files
    class c: 52 sites, 28 files
-kit: 144 sites in 15 files (40 files translated, 3 raised before translation)
+library: 144 sites in 15 files (40 files translated, 3 raised before translation)
    class a: 134 sites, 13 files
    class c: 10 sites, 4 files
 ```
@@ -230,7 +230,7 @@ kit: 144 sites in 15 files (40 files translated, 3 raised before translation)
 
 ### 2.2 The split
 
-| class | shape | corpus | kit | **total** | share |
+| class | shape | corpus | library | **total** | share |
 |---|---|---:|---:|---:|---:|
 | **(a)** eta-reducible † | pure same-order pass-through, no captures, no extra goals | 184 sites / 79 files | 134 sites / 13 files | **318 sites / 92 files** | **81.5 %** |
 | **(b)** partial-application-shaped | prefix captures + pass-through tail | 10 sites / 8 files | 0 | **10 sites / 8 files** | **2.6 %** |
@@ -241,8 +241,8 @@ kit: 144 sites in 15 files (40 files translated, 3 raised before translation)
 3 carry all three — 92 + 8 + 32 = 132 class-file pairs over 112 distinct files.)*
 
 † **The class-(a) row is the census figure, and it is one site wide.** The
-engine-faithful count is **317 sites / 92 files (81.3 %)** — corpus 184, **kit 133** (92.4 %
-of the kit's 144, not 93.1 %) — for the reason in the footnote immediately below. Every
+engine-faithful count is **317 sites / 92 files (81.3 %)** — corpus 184, **library 133** (92.4 %
+of the library's 144, not 93.1 %) — for the reason in the footnote immediately below. Every
 later section quotes 317; the 318 above is retained only so the census stdout in §2.1 and
 this table agree.
 
@@ -252,7 +252,7 @@ this table agree.
 >
 > ```
 > === sites whose head is NOT a lambda param list per the engine's _extract_arrow_lambda_params: 1 ===
->    [a] /workspace/clausify-executor-train/kit/repros/callgoal_imported_lambda_repro.clausal:28 :: (ID, P, St, C) < -requirement(ID, P, St, C)
+>    [a] <downstream-trunk>/library/repros/callgoal_imported_lambda_repro.clausal:28 :: (ID, P, St, C) < -requirement(ID, P, St, C)
 > ```
 >
 > `St` is mixed-case, so `"St".isupper()` is false and it is not a logic variable. The
@@ -264,7 +264,7 @@ this table agree.
 >
 > So the site is **counted class (a) by the transliteration and is not eta-reducible**: it
 > is not a lambda at all. The engine-faithful class-(a) count is **317 sites, not 318**
-> (kit 133, not 134) — 0.26 % of 390, immaterial to every headline in this note, and
+> (library 133, not 134) — 0.26 % of 390, immaterial to every headline in this note, and
 > stated because the transliteration's fidelity is the census's whole warrant. The
 > translator is *right* to refuse the site (it is untranslatable either way); only the
 > classification is wide. Any implementation of §4.1 A2 must carry `_is_logic_var_name`
@@ -272,8 +272,8 @@ this table agree.
 > `((ID, P, St, C) <- requirement(ID, P, St, C))` is **not** treated as eta-reducible.
 
 **The operator's hypothesis is confirmed, and more strongly than stated: four in five
-refused sites are redundant eta-expansions** — 317 of 390, 81.3 %. The kit is more extreme
-than the corpus: 133 of 144 kit sites (92.4 %) are class (a), against 184 of 246 (74.8 %)
+refused sites are redundant eta-expansions** — 317 of 390, 81.3 %. The library is more extreme
+than the corpus: 133 of 144 library sites (92.4 %) are class (a), against 184 of 246 (74.8 %)
 in the corpus.
 
 Class (c), by reason (census stdout):
@@ -285,7 +285,7 @@ Class (c), by reason (census stdout):
      14  callee argument is not a bare variable
       7  captures interleaved with parameters
       5  comparison/unification body
--- kit
+-- library
       4  multi-goal body (conjunction)
       4  comparison/unification body
       2  captures interleaved with parameters
@@ -297,7 +297,7 @@ Three further facts about class (a), each measured over the 317 engine-faithful 
   *not* eta-equivalent to `p` (each `_` is independent, so the lambda drops the caller's
   second argument where the bare reference passes it), and `unnecessary_lambda`'s
   `Distinct/1` check does not catch a single `_`. The hazard is real and **latent, with
-  zero corpus/kit instances** — worth pinning as a refusal in any implementation, not
+  zero corpus/library instances** — worth pinning as a refusal in any implementation, not
   worth blocking on.
 - **0 sites** have a dotted callee, and **0** have a callee that is not a lowercase-initial
   predicate name. 128 distinct callees.
@@ -339,16 +339,16 @@ separately-testable widening.
 
 **16 of the 390 sites pass their lambda to an engine builtin** — `include/3` (6),
 `max_by/3` (5), `min_by/3` (2), `call_goal/5` (2), `call_goal/3` (1). The other **374 pass
-it to a kit predicate** (`formalize_lib`, `query_combinators`, `compliance_lib`,
+it to a library predicate** (`<downstream-library>`, `<downstream-library>`, `<downstream-library>`,
 `optimization_lib`, the planner libraries), each of which is itself exported as a `.pl`.
-That ratio decides the shape of the remedy: this is overwhelmingly a *kit-library
+That ratio decides the shape of the remedy: this is overwhelmingly a *library-library
 meta-call* problem, not a *builtin* problem.
 
 `unnecessary_lambda`'s KNOWN CAVEAT — "a predicate that instead stores its argument and
 structurally inspects it could tell a closure from an atom" — was checked by reading the
-three largest kit hosts. `eval_requirements/4`
-(`kit/formalize_lib.clausal:622-627`), `flip_scan/4` and `bisect_flip/4`
-(`kit/query_combinators.clausal:304-355`) each thread the closure through unchanged and
+three largest library hosts. `eval_requirements/4`
+(`library/<downstream-library>.clausal:622-627`), `flip_scan/4` and `bisect_flip/4`
+(`library/<downstream-library>.clausal:304-355`) each thread the closure through unchanged and
 only ever `call_goal` it; none unifies it against a pattern. This is a **per-host
 precondition** of the remedy, not a global fact, and the remaining 36 hosts have not each
 been read.
@@ -366,12 +366,12 @@ files with a further refusal class too:       38
     also: ('negmem', 'other') ->  4 files
 
 files whose lambda sites are ALL class a: 77 of 112
-  ... and whose only refusal class is the lambda: 47  {'corpus': 40, 'kit': 7}
+  ... and whose only refusal class is the lambda: 47  {'corpus': 40, 'library': 7}
 ```
 
 **Migrating class (a) alone moves 47 files from dirty to clean under strict — 40 corpus,
-7 kit.** That is the honest ratchet payoff of §4.1, and it is measured over this
-document's file walk (705 corpus + 40 kit files that translate), not over the ratchet's own
+7 library.** That is the honest ratchet payoff of §4.1, and it is measured over this
+document's file walk (705 corpus + 40 library files that translate), not over the ratchet's own
 manifest-driven set, so the baseline must be re-measured rather than added to.
 The `('other',)` residue is 43 `unsupported call target` + 14 `unsupported expression` +
 11 `-import_from(py.datetime, …)` + 1 dict splat.
@@ -384,64 +384,64 @@ be read before the recommendation is accepted, not after.
 Of the 74 files whose only refusal class is the lambda, 47 clear entirely through the
 class-(a) migration (§2.4). **The other 27 stay refused solely because of a class-(b) or
 class-(c) lambda** — nothing else in them is untranslatable. 23 corpus files across 22
-domains (22 of the 23 are `queries.clausal` or `tests/test_queries.clausal`), 4 kit files. Census stdout, `b=`/`c=` being that file's site counts by class:
+domains (22 of the 23 are `queries.clausal` or `tests/test_queries.clausal`), 4 library files. Census stdout, `b=`/`c=` being that file's site counts by class:
 
 ```
 === files still refused SOLELY by class (b)/(c) lambdas: 27 ===
-   corpus b=0 c=1  au/merger_clearance/threshold.clausal
-   corpus b=0 c=5  eu/aml/amlr_bo_chain/queries.clausal
-   corpus b=1 c=0  eu/cbam/declarant_scope/queries.clausal
-   corpus b=0 c=6  eu/chemicals/reach_registration_tonnage_band/tests/test_queries.clausal
-   corpus b=0 c=1  eu/crypto_assets/mica_casp_authorisation_conditions/queries.clausal
-   corpus b=0 c=1  eu/data_protection/gdpr_arts33_34_breach_notification/queries.clausal
-   corpus b=0 c=2  eu/derivatives/emir_nfc_clearing/tests/test_queries.clausal
-   corpus b=0 c=1  eu/labour/blue_card_eligibility/queries.clausal
-   corpus b=0 c=1  eu/labour/posted_workers_long_term_trigger/queries.clausal
-   corpus b=0 c=1  eu/labour/working_time_average/tests/test_queries.clausal
-   corpus b=0 c=1  eu/labour/working_time_reference_period/tests/test_queries.clausal
-   corpus b=1 c=1  eu/merger/eumr_jurisdiction_turnover/queries.clausal
-   corpus b=0 c=2  eu/mifid/client_categorisation/queries.clausal
-   corpus b=1 c=1  eu/peppol_einvoicing/queries.clausal
-   corpus b=0 c=1  eu/procurement/light_regime/queries.clausal
-   corpus b=1 c=1  eu/procurement/selection_criteria/queries.clausal
-   corpus b=1 c=0  eu/procurement/shortlisting/queries.clausal
-   corpus b=2 c=3  eu/schengen_90_180/queries.clausal
-   corpus b=1 c=4  eu/schengen_90_180_max_stay/queries.clausal
-   corpus b=0 c=1  eu/state_aid/de_minimis_cumulation/queries.clausal
-   corpus b=2 c=0  eu/state_aid/de_minimis_cumulation/tests/test_queries.clausal
-   corpus b=0 c=3  eu/vat/pro_rata_deduction/tests/test_queries.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=0 c=5  <downstream-domain>.clausal
+   corpus b=1 c=0  <downstream-domain>.clausal
+   corpus b=0 c=6  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=0 c=2  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=1 c=1  <downstream-domain>.clausal
+   corpus b=0 c=2  <downstream-domain>.clausal
+   corpus b=1 c=1  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=1 c=1  <downstream-domain>.clausal
+   corpus b=1 c=0  <downstream-domain>.clausal
+   corpus b=2 c=3  <downstream-domain>.clausal
+   corpus b=1 c=4  <downstream-domain>.clausal
+   corpus b=0 c=1  <downstream-domain>.clausal
+   corpus b=2 c=0  <downstream-domain>.clausal
+   corpus b=0 c=3  <downstream-domain>.clausal
    corpus b=0 c=1  th/visa/queries.clausal
-   kit    b=0 c=2  optimization_lib.clausal
-   kit    b=0 c=3  query_combinators.clausal
-   kit    b=0 c=3  tests/test_kit_gap_wave2.clausal
-   kit    b=0 c=2  tests/test_validate_props.clausal
+   library    b=0 c=2  optimization_lib.clausal
+   library    b=0 c=3  <downstream-library>.clausal
+   library    b=0 c=3  tests/test_kit_gap_wave2.clausal
+   library    b=0 c=2  tests/test_validate_props.clausal
 ```
 
 *(Paths abbreviated to the repo-relative form; the census prints them absolute under
-`/workspace/clausify-domains` and `/workspace/clausify-executor-train/kit`.)*
+`<downstream-corpus>` and `<downstream-trunk>/library`.)*
 
 Three things this list says that the aggregate does not:
 
 - **22 of the 23 corpus files are `queries.clausal` or `tests/test_queries.clausal`** —
-  `au/merger_clearance/threshold.clausal` is the single exception. These are the query / what-if
+  `<downstream-domain>.clausal` is the single exception. These are the query / what-if
   surfaces (`flip_scan`, `bisect_flip`, `what_if_nth`, `aggregate_over`), not the normative
   rule files. A domain whose `queries.clausal` stays refused still exports its rules; it
   loses its boundary-probe and minimal-cause surface. That is a smaller loss than
   "21 domains blocked", and the distinction should not be lost when the deferral is scored.
 - **Only 6 of the 27 involve class (b) at all**, and 3 of those 6 also carry class (c). So
   teaching the engine `call_goal/N` partial application (§4.2) would unblock at most
-  **3 files on its own** — `eu/cbam/declarant_scope/queries.clausal`,
-  `eu/procurement/shortlisting/queries.clausal`, and
-  `eu/state_aid/de_minimis_cumulation/tests/test_queries.clausal`. Class (c) lifting is
+  **3 files on its own** — `<downstream-domain>.clausal`,
+  `<downstream-domain>.clausal`, and
+  `<downstream-domain>.clausal`. Class (c) lifting is
   where the residual actually lives: it alone would unblock 24 of the 27.
-- **Two of the four kit files are libraries** — `query_combinators.clausal` (3 class-(c)
-  sites) and `optimization_lib.clausal` (2). A kit library that will not translate blocks
+- **Two of the four library files are libraries** — `<downstream-library>.clausal` (3 class-(c)
+  sites) and `optimization_lib.clausal` (2). A library library that will not translate blocks
   every domain importing it at G2/G3 regardless of that domain's own cleanliness, so these
-  two are worth more than their file count. `query_combinators` is the host of
+  two are worth more than their file count. `<downstream-library>` is the host of
   `flip_scan` / `bisect_flip` / `what_if`, i.e. of most of the 27.
 
 The honest summary of the deferral: **27 files, 22 corpus domains' query surfaces, and two
-kit libraries stay refused**, and the class-(c) half is 24 of the 27.
+library libraries stay refused**, and the class-(c) half is 24 of the 27.
 
 ---
 
@@ -451,7 +451,7 @@ This is the finding that reshapes the remedies, and it is not in any prior docum
 
 ### 3.1 Clausal `call_goal/N` resolves the closure in the *caller's* module
 
-`kit/query_combinators.clausal:15` states the contract — "The closure resolves its body in
+`library/<downstream-library>.clausal:15` states the contract — "The closure resolves its body in
 the DOMAIN module". Verified on the live engine with a two-module layout that mirrors the
 export exactly (library module `flib` owns `eval_requirements/4` and does the `call_goal`;
 domain module `dquery` owns `local_req/4` and passes it). Python driver stdout:
@@ -473,8 +473,8 @@ The same layout in Scryer. Three files:
 :- module(out_floor, [requirement/4]).
 requirement("r1", _, met, "s45").
 
-% formalize_lib.pl
-:- module(formalize_lib, [eval_requirements/4]).
+% <downstream-library>.pl
+:- module(<downstream-library>, [eval_requirements/4]).
 call_goal(G, A, B, C, D) :- call(G, A, B, C, D).
 eval_requirements([], _, _, []).
 eval_requirements([R|Rs], P, Pred, [I|Is]) :-
@@ -484,7 +484,7 @@ eval_requirements([R|Rs], P, Pred, [I|Is]) :-
 % queries.pl
 :- module(queries, [chk/3, chk_q/3]).
 :- use_module('out_floor', [requirement/4]).
-:- use_module('formalize_lib', [eval_requirements/4]).
+:- use_module('<downstream-library>', [eval_requirements/4]).
 chk(Ids, P, Chk)   :- eval_requirements(Ids, P, requirement, Chk).
 chk_q(Ids, P, Chk) :- eval_requirements(Ids, P, out_floor:requirement, Chk).
 ```
@@ -495,7 +495,7 @@ $ printf 'chk(["r1"], p, C).\nchk_q(["r1"], p, C).\n' | scryer-prolog queries.pl
    C = [item("r1",met,"s45")].
 ```
 
-The bare atom **raises**. `call/5` runs inside `formalize_lib`, where `requirement/4` was
+The bare atom **raises**. `call/5` runs inside `<downstream-library>`, where `requirement/4` was
 never imported. The module-qualified term works.
 
 The same is true for a callee defined in the *same* module as the lambda site — this is
@@ -515,15 +515,15 @@ exists to find.
 ### 3.3 `meta_predicate/1` is the fix, and Scryer honours it
 
 ```prolog
-% formalize_lib2.pl
-:- module(formalize_lib2, [eval2/4]).
+% <downstream-library>2.pl
+:- module(<downstream-library>2, [eval2/4]).
 :- meta_predicate(eval2(?, ?, 4, ?)).
 eval2([], _, _, []).
 eval2([R|Rs], P, Pred, [I|Is]) :- call(Pred, R, P, S, C), I = item(R,S,C), eval2(Rs,P,Pred,Is).
 
 % queries3.pl
 :- module(queries3, [chk3/3]).
-:- use_module('formalize_lib2', [eval2/4]).
+:- use_module('<downstream-library>2', [eval2/4]).
 local_req("r1", _, met, "s45").
 chk3(Ids, P, Chk) :- eval2(Ids, P, local_req, Chk).
 ```
@@ -547,7 +547,7 @@ Clausal source construct that would produce one — a Clausal library declares n
 which of its arguments are goals.
 
 **Consequence for the whole note: every remedy below is conditional on emitting
-`meta_predicate` declarations for the higher-order kit predicates, or on module-qualifying
+`meta_predicate` declarations for the higher-order library predicates, or on module-qualifying
 every emitted predicate reference. Without one of the two, a lambda remedy converts a
 silently-wrong export into a loudly-wrong one — an improvement, but not a fix.**
 
@@ -572,7 +572,7 @@ lifted auxiliary need not pollute a published legal ontology's public surface.
 
 **The engine accepts a bare predicate reference wherever it accepts a forwarding lambda.**
 Re-derived rather than quoted from `fe43afc0`, and through the *real corpus idiom* rather
-than through `maplist` — a verbatim copy of `kit/formalize_lib.clausal:622-627`, with the
+than through `maplist` — a verbatim copy of `library/<downstream-library>.clausal:622-627`, with the
 witness's own closure (Python driver stdout):
 
 ```
@@ -595,22 +595,22 @@ the 116 of 317 class-(a) sites whose callee is not defined in the same file (201
 engine imposes no qualification requirement. Scryer does (§3.2), and that is the whole
 difficulty.
 
-**Option A1 — respell the corpus and kit source; emit `meta_predicate` from the
+**Option A1 — respell the corpus and library source; emit `meta_predicate` from the
 exporter.**
 
 `((ID, PR, S, C) <- aml_ctf_requirement(ID, PR, S, C))` becomes `aml_ctf_requirement`, in
-317 places across 92 files in two sibling repos. The exported kit libraries gain a
+317 places across 92 files in two sibling repos. The exported library libraries gain a
 `:- meta_predicate(…)` directive per higher-order predicate.
 
 - *Correctness:* exact on the engine (measured above, three shapes). Exact in Scryer once
   the `meta_predicate` directives exist (§3.3, measured). The construct is **removed**
   rather than lowered, so there is nothing left for a later front end to get wrong.
-- *Cost:* 317 source edits in `/workspace/clausify-domains` and
-  `/workspace/clausify-executor-train/kit`, plus one directive per exported higher-order
-  kit predicate. Not an engine change at all, except for the directive emission. Per the
-  standing note, kit edits must be validated against the corpus's own Clausal test suites
-  and checked against kit consumers in the six sibling repos before landing.
-- *Benefit:* 47 files (40 corpus, 7 kit) go clean under strict (§2.4).
+- *Cost:* 317 source edits in `<downstream-corpus>` and
+  `<downstream-trunk>/library`, plus one directive per exported higher-order
+  library predicate. Not an engine change at all, except for the directive emission. Per the
+  standing note, library edits must be validated against the corpus's own Clausal test suites
+  and checked against library consumers in the six sibling repos before landing.
+- *Benefit:* 47 files (40 corpus, 7 library) go clean under strict (§2.4).
 - *Risk:* the per-host caveat of §2.3 — a host that structurally inspects its closure
   argument would see an atom where it saw a `Lambda`. Three hosts read and clear; 36 not.
 - *Tests to pin it:* (i) an engine test that
@@ -653,16 +653,16 @@ All 10 are corpus, all 8 files are `queries.clausal` or `tests/test_queries.clau
 all 10 are the same shape: a probe closure over a captured scenario. Verbatim:
 
 ```
-eu/cbam/declarant_scope/queries.clausal:222                  bisect_flip/4  (X, V) < -cbam_what_if_kg(GOODS, N, X, V)
-eu/merger/eumr_jurisdiction_turnover/queries.clausal:324     bisect_flip/4  (X, V) < -eumr_what_if_party(PARTIES, INDEX, COORD, X, V)
-eu/peppol_einvoicing/queries.clausal:188                     flip_scan/4    (X, V) < -verdict_with(INVOICE, KEY, X, V)
-eu/procurement/selection_criteria/queries.clausal:172        bisect_flip/4  (PROBE_VALUE_EUR_CENTS, IN_SCOPE) < -selection_criteria_scope_probe(PROFILE, PROBE_VALUE_EUR_CENTS, IN_SCOPE)
-eu/procurement/shortlisting/queries.clausal:64               flip_scan/4    (X, STATUS) < -threshold_probe(PROFILE, KEY, X, STATUS)
-eu/schengen_90_180/queries.clausal:163                       bisect_flip/4  (K, V) < -continuous_day_verdict(STAYS, ENTRY_YMD, K, V)
-eu/schengen_90_180/queries.clausal:210                       bisect_flip/4  (K, V) < -entry_trip_verdict(STAYS, FROM_YMD, TRIP_DAYS, K, V)
-eu/schengen_90_180_max_stay/queries.clausal:59               bisect_flip/4  (X, V) < -stay_eligibility(HISTORY, ENTRY_DATE, X, V)
-eu/state_aid/de_minimis_cumulation/tests/test_queries.clausal:178  flip_scan/4  (X, V) < -de_minimis_what_if(GS, REF, X, V)
-eu/state_aid/de_minimis_cumulation/tests/test_queries.clausal:189  flip_scan/4  (X, V) < -de_minimis_what_if(GS, REF, X, V)
+<downstream-domain>.clausal:222                  bisect_flip/4  (X, V) < -cbam_what_if_kg(GOODS, N, X, V)
+<downstream-domain>.clausal:324     bisect_flip/4  (X, V) < -eumr_what_if_party(PARTIES, INDEX, COORD, X, V)
+<downstream-domain>.clausal:188                     flip_scan/4    (X, V) < -verdict_with(INVOICE, KEY, X, V)
+<downstream-domain>.clausal:172        bisect_flip/4  (PROBE_VALUE_EUR_CENTS, IN_SCOPE) < -<downstream-domain>_scope_probe(PROFILE, PROBE_VALUE_EUR_CENTS, IN_SCOPE)
+<downstream-domain>.clausal:64               flip_scan/4    (X, STATUS) < -threshold_probe(PROFILE, KEY, X, STATUS)
+<downstream-domain>.clausal:163                       bisect_flip/4  (K, V) < -continuous_day_verdict(STAYS, ENTRY_YMD, K, V)
+<downstream-domain>.clausal:210                       bisect_flip/4  (K, V) < -entry_trip_verdict(STAYS, FROM_YMD, TRIP_DAYS, K, V)
+<downstream-domain>.clausal:59               bisect_flip/4  (X, V) < -stay_eligibility(HISTORY, ENTRY_DATE, X, V)
+<downstream-domain>.clausal:178  flip_scan/4  (X, V) < -de_minimis_what_if(GS, REF, X, V)
+<downstream-domain>.clausal:189  flip_scan/4  (X, V) < -de_minimis_what_if(GS, REF, X, V)
 ```
 
 Every one is a prefix of captures followed by the parameters in order — the textbook
@@ -741,19 +741,19 @@ argument, 9 with captures interleaved among parameters, 9 with a comparison/unif
 body. Hand-verified examples, from the real source:
 
 ```
-eu/merger/eumr_jurisdiction_turnover/queries.clausal:105  aggregate_over/3
+<downstream-domain>.clausal:105  aggregate_over/3
     aggregate_over(PARTIES, ((P, V) <- (P is [V, _, _])), TOTAL_CENTS)
 
-au/firb/notifiability.clausal:407  max_by/3
+<downstream-domain>.clausal:407  max_by/3
     (E, K) <- (E is [D2, _], K is D2)
 
-eu/aml/amlr_beneficial_ownership_threshold/queries.clausal:131  flip_scan/4
+<downstream-domain>.clausal:131  flip_scan/4
     (B, V) <- amlr_bo_status([[B], *CHAINS], V)
 
-eu/labour/posted_workers_long_term_trigger/queries.clausal:191  bisect_flip/4
+<downstream-domain>.clausal:191  bisect_flip/4
     (N, V) <- ongoing_verdict(PRIOR_PERIODS, ONGOING_START_YMD, N, NOTIFIED, V)
 
-eu/market_integrity/mar_insider_dealing/queries.clausal:179  include/3
+<downstream-domain>.clausal:179  include/3
     X <- (X is not E)
 ```
 
@@ -896,7 +896,7 @@ Note the two `meta_predicate` directives: without them the companion has exactly
 problem — `call(G, X)` would run in `clausal_hof`.
 
 **This is gated on closures translating at all.** Handed the pre-refusal emission of the
-real `eu/market_integrity/mar_insider_dealing:179` site, the companion above raises a
+real `<downstream-domain>:179` site, the companion above raises a
 *different* error, not an answer — the companion consulted with
 `t(R) :- include(X < -(dif(X, e)), [a,b], R).`:
 
@@ -907,7 +907,7 @@ $ printf 't(R).\n' | scryer-prolog incsoup.pl
 
 `existence_error((<)/3)` instead of `existence_error(include/3)`. **All six** of the 390
 sites that pass a lambda to `include/3` are class (c) — the four corpus sites plus two in
-`kit/query_combinators.clausal` (`:165`, `:224`). Landing the companion before the lambda
+`library/<downstream-library>.clausal` (`:165`, `:224`). Landing the companion before the lambda
 remedy trades one loud error for a different loud error and moves no domain to green. **Order: lambda remedy first, companion second.** The companion
 is nonetheless cheap, self-contained, and survives every refactor (Scryer will still lack
 `include/3`), so it can be written now and landed second.
@@ -968,9 +968,9 @@ refusal hook, which only ever sees **term**-position arrows; the divergence here
 the translator at all:
 
 - **File set:** the same walk as §2 — `rglob("*.clausal")` under
-  `/workspace/clausify-domains` and `/workspace/clausify-executor-train/kit`, skipping any
+  `<downstream-corpus>` and `<downstream-trunk>/library`, skipping any
   path with a `_`-prefixed component. 748 files; 3 fail `ast.parse` and are skipped;
-  **745 walked** (705 corpus, 40 kit).
+  **745 walked** (705 corpus, 40 library).
 - **"Top-level" is `ast.parse(source).body`, nothing deeper.** A statement qualifies when
   it is an `ast.Expr` whose `.value` is an `ast.Compare` — exactly the shape
   `convert_module` hands to `_convert_stmt` → `_detect_arrow`
@@ -991,7 +991,7 @@ stdout):
 
 ```
 corpus: 705 files (0 unparseable), 8645 top-level Compare stmts, 8645 arrows, 0 divergent
-kit:     40 files (3 unparseable),  963 top-level Compare stmts,  963 arrows, 0 divergent
+library:     40 files (3 unparseable),  963 top-level Compare stmts,  963 arrows, 0 divergent
 ```
 
 **9,608 top-level `Compare` statements, every one of them a `<-` clause arrow both
@@ -1002,9 +1002,9 @@ would be a statement with no effect. The scan's real content is therefore the ne
 **no file in either tree writes a top-level `X < -N`**, so nothing today is mis-emitted as
 `_X :- N.`
 
-*(An earlier run of this same scan, before the trunk kit migration landed as
-`clausify-executor-train@1587802` mid-session, returned 9,600; the 8-statement difference
-is clauses that commit added to 8 kit files. The §2 lambda census was re-run against the
+*(An earlier run of this same scan, before the trunk library migration landed as
+`downstream-trunk@1587802` mid-session, returned 9,600; the 8-statement difference
+is clauses that commit added to 8 library files. The §2 lambda census was re-run against the
 post-migration trees and is **row-for-row identical** — 390 rows, the same 246/97 and
 144/15 splits, the same per-site class for every row.)*
 
@@ -1070,17 +1070,17 @@ classes (b) and (c) refused until the refactor.** In order:
    runs the emitted `.pl` in Scryer, runs the same predicate on the Clausal engine, and
    compares answer lists. §3.1/§3.2's two blocks are its first two rows and they are red
    today, in opposite directions.
-2. **Stage 1 — `meta_predicate` emission** for the exported higher-order kit predicates.
+2. **Stage 1 — `meta_predicate` emission** for the exported higher-order library predicates.
    This has to precede the source migration, not follow it: without it, eta-reduction
    turns a silently-wrong export into `existence_error` (§3.2), and the ratchet would
    record a "clean" count for files that cannot run.
 3. **Stage 2 — the class-(a) source migration**, 317 sites across 92 files in the two
-   sibling repos, validated against each domain's own Clausal test suites and against kit
+   sibling repos, validated against each domain's own Clausal test suites and against library
    consumers in the six sibling repos. The migration must **skip**
-   `kit/repros/callgoal_imported_lambda_repro.clausal:28` — the census counts it class (a)
+   `library/repros/callgoal_imported_lambda_repro.clausal:28` — the census counts it class (a)
    and it is not one; respelling it would destroy the fixture whose whole purpose is to
    assert `type_error(callable)` (§2.2 footnote). Expected effect, measured: 47 files (40 corpus, 7
-   kit) go clean under strict; the refusal un-refuses naturally as sites migrate, exactly
+   library) go clean under strict; the refusal un-refuses naturally as sites migrate, exactly
    as the negated-membership migration was designed to. Before it lands, the per-host
    caveat of §2.3 should be discharged for the remaining 36 host predicates — a read, not
    a run.
@@ -1095,8 +1095,8 @@ classes (b) and (c) refused until the refactor.** In order:
    the engine), class (c)'s lifting (converter surgery against a converter the refactor
    replaces), and translator-side eta-reduction (a duplicate of an engine rule). All 72
    sites stay refused, which is today's behaviour and the honest one — **at the cost named
-   in §2.5: 27 files, being 22 corpus domains' `queries.clausal` surfaces plus two kit
-   libraries (`query_combinators`, `optimization_lib`), stay refused for a (b)/(c) lambda
+   in §2.5: 27 files, being 22 corpus domains' `queries.clausal` surfaces plus two library
+   libraries (`<downstream-library>`, `optimization_lib`), stay refused for a (b)/(c) lambda
    and nothing else.** 24 of the 27 turn on class (c) alone, so if the operator wants to
    buy some of that back before the refactor, class-(c) lifting is the purchase and
    class-(b) `call/N` (3 files) is not.
@@ -1111,8 +1111,8 @@ without a corresponding `meta_predicate` declaration (§3.2 — it raises).
 
 | claim | source | re-derived verdict |
 |---|---|---|
-| 390 refused lambda sites — 246 corpus / 97 files, 144 kit / 15 files | migration worklist | **confirmed exactly**, through the translator's own refusal hook |
-| many of the 390 are redundant eta-expansions | operator hypothesis | **confirmed and quantified — 317 of 390 sites (81.3 %), 92 files**; kit 92.4 %, corpus 74.8 %. (The census reports 318/81.5 %; one of those is not a lambda at all — §2.2's footnote and the row below.) |
+| 390 refused lambda sites — 246 corpus / 97 files, 144 library / 15 files | migration worklist | **confirmed exactly**, through the translator's own refusal hook |
+| many of the 390 are redundant eta-expansions | operator hypothesis | **confirmed and quantified — 317 of 390 sites (81.3 %), 92 files**; library 92.4 %, corpus 74.8 %. (The census reports 318/81.5 %; one of those is not a lambda at all — §2.2's footnote and the row below.) |
 | the pre-refusal emission was inert operator soup | `884c16eb` message | **confirmed**, and its canonical form measured: `<(','(Id,…), -(goal))`, a `(<)/2` term; it raises `existence_error((<)/6)` in Scryer |
 | the engine's `call_goal` accepts a bare predicate reference | `fe43afc0` spike | **confirmed in the real corpus idiom** (`eval_requirements/4`), same-module and `-import_from`'d, identical solutions |
 | respelling to a bare predicate reference fixes the export | implied by the refusal's own message | **FALSE as stated** — Scryer resolves the meta-call in the *library's* module and raises `existence_error`; the fix is `:- meta_predicate`, which nothing in the engine or exporter emits today (§3) |
@@ -1122,8 +1122,8 @@ without a corresponding `meta_predicate` declaration (§3.2 — it raises).
 | Scryer lacks `include/3` | brief | **confirmed**, and widened: `exclude/3`, `partition/4`, `msort/2`, `last/2`, `max_by/3`, `min_by/3`, `take_while/3`, `filter_map/3` are also absent; `maplist/2,3` and **`foldl/4` are present** |
 | the translator's clause-level `_detect_arrow` does no adjacency check | refusal work | **confirmed**, with the emission measured (`X < -1` → `_X :- 1.`) — and **0 live instances** across all 9,608 top-level `Compare` statements in the two trees (§6 states the scan's method and denominators) |
 | lambda lifting can emit aux clauses next to their host | — | **would fire the `:- discontiguous` post-pass** (`clausal_to_prolog.py:486-528`); aux clauses must be blocked at the module end (§4.3) |
-| the Python-AST transliteration of "is a raw `Lambda` node" is faithful | §2.1, first draft | **one site wide** — it omits `_is_logic_var_name`, so the mixed-case head at `kit/repros/callgoal_imported_lambda_repro.clausal:28` classifies as (a) though the engine reifies it as a `Predicate`. Engine-faithful class (a) is **317, not 318** (§2.2 footnote) |
-| deferring classes (b) and (c) is free, since they are already refused | implied by §7 | **has a named cost** — 27 files stay refused for a (b)/(c) lambda and nothing else: 22 corpus domains' query surfaces plus `query_combinators` and `optimization_lib`; 24 of the 27 are class (c) alone (§2.5) |
+| the Python-AST transliteration of "is a raw `Lambda` node" is faithful | §2.1, first draft | **one site wide** — it omits `_is_logic_var_name`, so the mixed-case head at `library/repros/callgoal_imported_lambda_repro.clausal:28` classifies as (a) though the engine reifies it as a `Predicate`. Engine-faithful class (a) is **317, not 318** (§2.2 footnote) |
+| deferring classes (b) and (c) is free, since they are already refused | implied by §7 | **has a named cost** — 27 files stay refused for a (b)/(c) lambda and nothing else: 22 corpus domains' query surfaces plus `<downstream-library>` and `optimization_lib`; 24 of the 27 are class (c) alone (§2.5) |
 | a lifted aux must be exported to be reachable | — | **false** — a non-exported aux resolves both via a `meta_predicate` host and via `Module:aux` (§3.3) |
 
 ---
@@ -1163,13 +1163,13 @@ So **every predicate a meta-argument transits needs its own directive**, and the
 it needs is the *ultimate consumer's* — routinely in another file.
 
 **The population half.** A scan attributing all 390 lambda sites to their host and
-classifying each kit host by whether its own bodies apply a meta-caller to a head
+classifying each library host by whether its own bodies apply a meta-caller to a head
 parameter (the scan reproduces §2.3's 390 sites / 39 hosts and its top-ten table
 row-for-row, which is its warrant):
 
 ```
-sites at kit hosts with a body-local meta arg : 258   (66 %)
-sites at kit hosts that ONLY thread           : 116   (30 %)
+sites at library hosts with a body-local meta arg : 258   (66 %)
+sites at library hosts that ONLY thread           : 116   (30 %)
 sites whose host is an engine builtin         :  16   (4 %, §5's companion)
 ```
 
@@ -1177,7 +1177,7 @@ The 116 sit at **13 threading hosts** — `plan_entry/8` (30), `find_mus/4` (22)
 `failing_ids/4` (20), `shrink_while/3` (9), `find_plan_once/7` (9), `assess/6` (7),
 `override_where/4` (4), `find_plans/8` (3), `optimal_plan/8` (3), `optimize/8` (3),
 `permitted_action/6` (2), `compliance_check/7` (2), `prop_missing_key_coverage/3` (2).
-`find_mus/4` and `failing_ids/4` reach their consumer (`formalize_lib`'s
+`find_mus/4` and `failing_ids/4` reach their consumer (`<downstream-library>`'s
 `eval_requirements/4`) across a **module boundary**, which a single-module translator
 cannot see: `convert_module` takes one module's AST and `_convert_import_from` never
 opens the imported file.
@@ -1203,7 +1203,7 @@ still wrong** — the failure mode this ladder exists to remove.
   defines are declared.
 - The **cross-module fixpoint** lives in the exporter's pass 1
   (`tools/iso_export/export.py`, `collect_meta_modes`), beside `collect_signatures`
-  and built the same way: it already translates every module in the domain+kit
+  and built the same way: it already translates every module in the domain+library
   universe, so it seeds each with its body-local evidence and propagates along
   argument-passing edges to a fixpoint, resolving a called predicate to its real
   defining module first (local, else whichever import defines it) so two unrelated
@@ -1274,7 +1274,7 @@ at the source.
 For the same reason `META_CALLER_SIGNATURES` carries **only what a real host reaches** —
 `call_goal/N` and its engine alias `call/N`. An earlier draft also listed `include/3`,
 `exclude/3`, `max_by/3` and `min_by/3` on the reasoning that a host reaching one *would*
-be a meta host; they were dropped, because no kit host reaches any of them and they are
+be a meta host; they were dropped, because no library host reaches any of them and they are
 exactly the shapes a legal corpus is most likely to use as ordinary data constructors.
 Step B re-adds `include/3` when the `clausal_hof` companion exists and something
 consumes it. Removing them changed no measured figure.
@@ -1291,10 +1291,10 @@ through the staged tree.
 byte-stable. A hand-written `:- meta_predicate` in source suppresses the generated one
 for that predicate.
 
-### 10.3 What the mechanism achieves, measured on the real kit
+### 10.3 What the mechanism achieves, measured on the real library
 
-Running the exporter's fixpoint over the real kit and corpus, all **34 kit-defined
-hosts** resolve at least one meta position — covering all **374** kit-hosted sites of
+Running the exporter's fixpoint over the real library and corpus, all **34 library-defined
+hosts** resolve at least one meta position — covering all **374** library-hosted sites of
 the 390, **including all 116 at the 13 threading hosts** (zero under body-local
 alone). Spot values, each matching the host's own documented contract:
 
@@ -1312,7 +1312,7 @@ The remaining 16 sites pass their lambda to an engine builtin (`include/3`, `max
 Re-exporting five real domains with and without the fixpoint changes **nothing but
 added `:- meta_predicate` lines** — identical error sets, no other line added, none
 removed. For `th/visa`, body-local detection alone emits 3 directives in
-`formalize_lib.pl` and the fixpoint adds the 4th, `assess/6` — precisely the threading
+`<downstream-library>.pl` and the fixpoint adds the 4th, `assess/6` — precisely the threading
 host.
 
 Both measurements in this section are re-runnable rather than transcribed:
@@ -1328,7 +1328,7 @@ Stage 1 does **not** by itself make any refused site translate: the 390 lambdas 
 still refused, exactly as §8 intends. What it removes is the trap §8's ordering names
 — that Stage 2's eta-respell would otherwise convert a refusal into a runtime
 `existence_error` while the ratchet counted the file clean. Scryer still has no
-`call_goal/N` (§5), so a staged kit library that calls one needs the companion before
+`call_goal/N` (§5), so a staged library library that calls one needs the companion before
 it can run; that is step B.
 
 ---

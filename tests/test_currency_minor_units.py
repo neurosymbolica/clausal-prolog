@@ -1282,7 +1282,7 @@ def test_compatible_units_raises_rather_than_fails_in_clausal(tmp_path):
 #
 # The third defect is the one that shaped this: `"EUR"` written in a rulebase
 # is an ATOM, `iso_code` is a Python STRING, and they do not unify — so even
-# the forward CHECK was a trap, and peppol writes a third spelling (`eur`)
+# the forward CHECK was a trap, and <downstream-domain> writes a third spelling (`eur`)
 # again. Operator, 2026-09-11: one relation, accepting either spelling.
 
 
@@ -1293,7 +1293,7 @@ def _codes(module, goal, arity=1):
 
 
 def test_a_code_binds_its_currency_in_every_spelling(tmp_path):
-    """`eur` is peppol's spelling, `"EUR"` the one a reader writes, `++"EUR"`
+    """`eur` is <downstream-domain>'s spelling, `"EUR"` the one a reader writes, `++"EUR"`
     the Python string. All three must reach the same currency."""
     m = _load(tmp_path, "code_rev", """
         -module(code_rev, [lower/1, upper/1, pystr/1])
@@ -1385,7 +1385,7 @@ def test_the_accessors_still_work_when_bound(tmp_path):
 # ── number/1 accepts a quantity; quantity/1 says it explicitly ───────────────
 #
 # The most dangerous thing found this session, and it was found by building
-# the migration rather than by reading it (corpus-lane, 2026-09-11). peppol
+# the migration rather than by reading it (corpus-lane, 2026-09-11). <downstream-domain>
 # guards every money field with `number(V)` in `sum_field/3`, documented as
 # "a member whose KEY is absent or non-numeric contributes nothing... empty
 # list -> 0". Measured before the fix:
@@ -1393,7 +1393,7 @@ def test_the_accessors_still_work_when_bound(tmp_path):
 #     total, guard number/1, bare money    -> 10000
 #     total, guard number/1, united money  -> 0        SILENTLY
 #
-# So attaching units to peppol's twelve money fields would make every total
+# So attaching units to <downstream-domain>'s twelve money fields would make every total
 # zero, every BR-CO consistency rule compare 0 against 0, and the domain's
 # entire conformance surface vacuously TRUE with a green suite.
 #
@@ -1510,7 +1510,7 @@ def test_number_still_refuses_what_it_always_refused(tmp_path):
 def test_sum_list_sums_quantities(tmp_path):
     """`number/1` passing quantities through is only half the chain: the
     aggregate has to add them. Python's `sum()` seeds with a bare 0, so
-    `0 + Quantity` raised — loud rather than silent, but it left peppol's
+    `0 + Quantity` raised — loud rather than silent, but it left <downstream-domain>'s
     totals unbuildable. Seeding from the first element fixes it and keeps
     every other case identical."""
     from clausal.modules.countries.european_union import euro
@@ -1538,7 +1538,7 @@ def test_sum_list_sums_quantities(tmp_path):
 
 
 def test_summing_mixed_currencies_raises(tmp_path):
-    """The property that makes peppol's BR-CO rules worth uniting: a
+    """The property that makes <downstream-domain>'s BR-CO rules worth uniting: a
     mixed-currency invoice cannot total silently."""
     from clausal.terms import UnitsMismatch
     m = _load(tmp_path, "summix", """
@@ -1639,7 +1639,7 @@ def test_the_inline_refusal_names_the_directive_that_was_WRITTEN():
 
 
 def test_sum_list_still_accepts_every_numeric_kind(tmp_path):
-    """REGRESSION, found on canonical by harness-batch-lane's answer diff.
+    """REGRESSION, found on canonical by the harness lane's answer diff.
 
     `06290b23` added pre-validation to `sum_list/2` so that a single
     non-numeric element could not be returned unchanged by the new

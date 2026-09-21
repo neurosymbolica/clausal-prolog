@@ -87,13 +87,13 @@ Two pieces of evidence redirected the fix:
 - A downstream helper library had already hit this and written it down as settled
   behaviour rather than a defect — its own "ATTR-LIST
   BRANCH — VERIFIED SEMANTICS (2026-07-19 interpreter probe)" note, including the
-  consequence that "after a kit `world_set` on an attr-list world the entry is
+  consequence that "after a library `world_set` on an attr-list world the entry is
   a generic Compound — the domain's class-constructor read will NOT see it".
 - The corpus sweep's headline risk was backwards. `entry_key/2` was read as
   depending on decomposition yielding the *class*; its own docstring says the
   opposite — "atom-shaped KEY -> its functor-name string, via a build-then-
   decompose roundtrip". It needs the **string** arm. Option 3 would have broken
-  the kit; option 2 would have broken 3 ISO golden tests and contradicted the
+  the library; option 2 would have broken 3 ISO golden tests and contradicted the
   recorded A09-F027 round-trip principle.
 
 **Fixed** in `clausal/logic/builtins/inspection.py::_construct_named`, shared by
@@ -102,7 +102,7 @@ requested arity now builds that class's instance. Everything else is untouched �
 a `str` name still builds a Compound and is deliberately not resolved back to a
 class (which module's `cite` a bare string names is ambiguous under module-local
 atom identity), and an arity that disagrees with the class falls through to the
-Compound rather than raising, which is what keeps the kit's
+Compound rather than raising, which is what keeps the library's
 `functor(PROBE, KEY, 1)` over an arity-0 schema atom working.
 
 Decomposition is unchanged, so the type asymmetry this todo was named for still

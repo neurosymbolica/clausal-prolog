@@ -1456,7 +1456,7 @@ def _scale_suffixes() -> frozenset:
         # go on checking a set the lint no longer uses.
         out = _derived_scale_words()
         # DECLARED UNION, and the two halves have different maintenance
-        # obligations (harness-batch-lane, 2026-09-12, who built the
+        # obligations (the harness lane, 2026-09-12, who built the
         # derive-from-the-authority rule as code and bounded it).
         #
         # Deriving from `MINOR_UNIT_WORDS` answers "does this conform to the
@@ -1470,7 +1470,7 @@ def _scale_suffixes() -> frozenset:
         out.update(_HAND_MAINTAINED_SCALE_WORDS)
         assert out, "positive control: the suffix set is not empty"
         # A half expected to SHRINK needs something that notices when it
-        # should have (harness-batch-lane, 2026-09-12). The control above
+        # should have (the harness lane, 2026-09-12). The control above
         # catches an empty hand list; nothing caught a REDUNDANT one — a word
         # the authority has since taken over, left behind here, which is the
         # same staleness in the other direction. Overlap is exactly that

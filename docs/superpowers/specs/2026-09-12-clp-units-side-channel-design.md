@@ -328,7 +328,7 @@ money result adds to a Decimal literal exactly.
   exactly; a float operand keeps float semantics. Consequence for the
   corpus: a money or SI quotient that used to print as a float or a
   28-digit Decimal now prints as the exact rational (`10/3 euro`), which
-  is the ruling, and the sealed eu/procurement scorers must be re-run
+  is the ruling, and the sealed <downstream-domain> scorers must be re-run
   before this is promoted (see the report). The whole-units guard checks
   only positions that were quantities; an expression element beside units
   material in a list builtin throws `units_unsupported`; `label_targets`
@@ -405,7 +405,7 @@ money result adds to a Decimal literal exactly.
   one that fires, and is loud at the next channel use otherwise; a foreign
   leaf beside units material in a list builtin throws `units_unsupported`;
   the rational result type through `strip_units/2` is pinned by a test
-  because it is corpus-visible (the sealed scorers must be re-run).
+  because it is corpus-visible (the sealed answer-set scorers must be re-run).
 
 ### 3.9 Where units and values meet inside a solver: nowhere
 

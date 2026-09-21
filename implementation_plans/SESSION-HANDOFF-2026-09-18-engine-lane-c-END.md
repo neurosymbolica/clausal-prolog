@@ -86,7 +86,7 @@ annotations only — one signature change, no class-identity dependence.
    still reaches a clause store through a door other than the four patched; use the `_stored_head_key`
    refusal as the probe. Do NOT gate this tip against the base (red by design); gate after Task 4 clears the
    worklist. `q(...)` is quasi-quotation -- never name a probe predicate `q`.
-4. **iso-export-lane's `==` -> `#=` flip**: the KIT half `79fc9e4` is landed on export-trunk main (theirs); the
+4. **iso-export-lane's `==` -> `#=` flip**: the LIBRARY half `79fc9e4` is landed on export-trunk main (theirs); the
    ENGINE half `272e2a3f` sits on `flip/eq-to-clpz-2026-09-19` in the CLONE off `5bf7a8db`, NOT on canonical
    (`733de97a`; needs a cherry-pick + the exporter goldens). Measured G3 10 -> 14, +509 clauses, 0 regressions,
    three inputs moved (attribution strong, not single-variable). LANDED as a62853e2 at the operator's word and
@@ -98,8 +98,8 @@ annotations only — one signature change, no class-identity dependence.
    translator emit its own `:- use_module(library(clpz), [(#=)/2]).` when it emits `#=`? Engine-lane recommends
    yes (the exporter already leans on a prelude for in_domain/all_different/label; non-self-sufficient output
    pushes the knowledge to every consumer). Re-landing waits on both.
-3. Lanes: harness-batch-lane's RE-BASELINE sweep on `fb0106f3` (told); corpus-lane's attribution of the two
-   newly-exportable wrong-answer domains (GDPR breach notification, Peppol) — theirs, not an engine block;
+3. Lanes: the harness lane's RE-BASELINE sweep on `fb0106f3` (told); corpus-lane's attribution of the two
+   newly-exportable wrong-answer domains (GDPR breach notification, <downstream-domain>) — theirs, not an engine block;
    iso-export-lane: done for this window.
 4. Parked from earlier: Q3 writeq, the operator's `-float_literals` idea, the 8 `normalize_seg_input` callers that
    read a bare-str atom as text in `phrase/2` and friends (not a regression).

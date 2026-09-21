@@ -6,7 +6,7 @@ BEHAVES correctly on either suffix; they INSTRUCT as though only one exists.
 
 ## The class
 
-harness-batch-lane found the shape in their tooling and named it well: *the tool behaves
+the harness lane found the shape in their tooling and named it well: *the tool behaves
 right and instructs wrong*. A refusal message synthesises a filename with one suffix into
 the sentence telling a human which file to open, while the code beside it resolved the real
 path correctly. iso-export-lane found it in five of their messages, where it is worse: the

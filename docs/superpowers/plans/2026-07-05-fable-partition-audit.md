@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Produce a self-contained "audit kit" — output scaffolding plus 12 ready-to-paste Fable prompts — so the user can launch each audit of the `clausal` package as its own interactive Fable session.
+**Goal:** Produce a self-contained "audit library" — output scaffolding plus 12 ready-to-paste Fable prompts — so the user can launch each audit of the `clausal` package as its own interactive Fable session.
 
 **Architecture:** This plan builds *artifacts the user launches*, not code that runs here. Task 1 creates the on-disk output tree, ledger/README templates, a pytest smoke harness, and a path-checker script. Task 2 writes the shared prompt preamble (rubric, required reading, method, output contract) once. Tasks 3–7 assemble the 12 self-contained prompt files (each = preamble + a subsystem-specific block) plus a launch runbook. Every prompt file is validated by the path-checker so it names only real files.
 
@@ -58,7 +58,7 @@ docs/superpowers/audits/2026-07-05-fable-partition/
 tests/audit_2026_07_05/
   __init__.py                            # (Task 1)
   conftest.py                            # per-file run guard + helpers (Task 1)
-  test_00_smoke.py                       # kit self-test (Task 1)
+  test_00_smoke.py                       # library self-test (Task 1)
 scripts/audit_2026_07_05/
   check_prompt_paths.py                  # asserts every path named in a prompt exists (Task 1)
 todo/audit-2026-07-05/
@@ -301,12 +301,12 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 ```
 
-- [ ] **Step 6: Write the kit smoke test**
+- [ ] **Step 6: Write the library smoke test**
 
 Write `tests/audit_2026_07_05/test_00_smoke.py`:
 
 ```python
-"""Smoke test for the audit kit itself: scaffolding exists and imports clean."""
+"""Smoke test for the audit library itself: scaffolding exists and imports clean."""
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -352,7 +352,7 @@ Expected: `test_scaffolding_exists`, `test_todo_index_exists`, `test_conftest_fi
 
 ```bash
 git add docs/superpowers/audits/2026-07-05-fable-partition tests/audit_2026_07_05 scripts/audit_2026_07_05 todo/audit-2026-07-05
-git commit -m "test(audit): scaffold 2026-07-05 Fable partition audit kit"
+git commit -m "test(audit): scaffold 2026-07-05 Fable partition audit library"
 ```
 
 ---
@@ -1004,7 +1004,7 @@ read (not edit) any subsystem file for seam work.
 Run: `python scripts/audit_2026_07_05/check_prompt_paths.py docs/superpowers/audits/2026-07-05-fable-partition/prompts/12-seams.md`
 Expected: `OK: all repo paths in 1 prompt(s) resolve`.
 
-- [ ] **Step 3: Full-kit validation + smoke**
+- [ ] **Step 3: Full-library validation + smoke**
 
 Validate the 12 numbered prompts (the `??-*.md` glob matches `01-…`…`12-…`, and excludes `_shared-preamble.md` and `RUNBOOK.md`, whose illustrative `prompts/NN-slug.md` tokens are not real paths):
 
