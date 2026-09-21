@@ -354,6 +354,19 @@ def _to_boundary(value: Any) -> Any:
     if is_chars(value):
         return chars_text(value)
     if type(value) is tuple:
+        if len(value) == 1:
+            # THE RESERVED 1-TUPLE crosses OPAQUE.  ``('x',)`` is reserved —
+            # ``compound_cell_shape`` REFUSES it, and the reservation is for a
+            # future opaque Python object reference — so it is neither an atom
+            # nor a compound and must not be walked.  Recursing produced
+            # ``(atom('c'),)``, which READS as a legitimate compound with
+            # functor ``c`` and no arguments: the generic-tuple branch
+            # swallowing a shape that has a specific meaning, which is the
+            # mirror this codebase keeps meeting.  Pass-through matches
+            # ``to_python``, the engine's other deep converter, which also
+            # leaves it alone rather than raising — ``export`` is not the place
+            # to start refusing a shape the rest of the engine tolerates.
+            return value
         return tuple(_to_boundary(v) for v in value)
     if type(value) is list:
         return [_to_boundary(v) for v in value]

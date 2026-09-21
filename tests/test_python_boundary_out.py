@@ -146,3 +146,47 @@ class TestTheLeakRule:
         from clausal.logic.to_python import wrap_text
         assert wrap_text('text') == 'text'
         assert type(wrap_text('text')) is str
+
+
+class TestShapesTheWalkMustNotInvent:
+    """The boundary walk converts atoms and strings and recurses through
+    compounds.  Two shapes are NEITHER, and a generic tuple branch will
+    swallow both if it is allowed to go first."""
+
+    def test_a_reserved_1_tuple_crosses_opaque(self):
+        """``('x',)`` is RESERVED — ``compound_cell_shape`` refuses it, and the
+        reservation is for a future opaque Python object reference.  Recursing
+        into it produced ``(atom('c'),)``, which reads as a legitimate compound
+        with functor ``c`` and no arguments.  It must cross untouched, which is
+        also what ``to_python``, the engine's other deep converter, does."""
+        from clausal.logic.seam import _to_boundary
+        assert _to_boundary(('c',)) == ('c',)
+        assert type(_to_boundary(('c',))[0]) is str, "not tagged as an atom"
+
+    def test_a_reserved_1_tuple_nested_inside_a_compound(self):
+        from clausal.logic.seam import _to_boundary
+        from clausal.logic.atoms import atom
+        out = _to_boundary(('a', ('b', ('c',))))
+        assert out == (atom('a'), (atom('b'), ('c',)))
+        assert type(out[1][1]) is tuple and type(out[1][1][0]) is str, (
+            "the reserved tuple must be untouched INSIDE a compound too — the "
+            "walk recurses, so this is where it would be missed"
+        )
+
+    def test_the_engine_itself_refuses_that_shape(self):
+        """Pinned so the reason above cannot quietly stop being true."""
+        import pytest
+        from clausal.logic.cells import compound_cell_shape
+        with pytest.raises(TypeError, match="reserved"):
+            compound_cell_shape(('c',))
+
+    def test_nil_crosses_unchanged_for_now(self):
+        """``()`` and ``[]`` are NIL, which IS an atom (spelling ``[]``) — but
+        rendering it as ``atom('[]')`` would turn an empty sequence into a
+        string for every Python caller, and that is a separate decision.
+        Pinned as UNCHANGED so the choice is visible rather than accidental."""
+        from clausal.logic.seam import _to_boundary
+        from clausal.logic.atoms import is_nil
+        assert is_nil(()) and is_nil([])
+        assert _to_boundary(()) == ()
+        assert _to_boundary([]) == []
