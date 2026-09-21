@@ -3,7 +3,7 @@
 Two shapes that used to translate SILENTLY WRONG now refuse (untranslatable
 → strict raises). See docs/iso-export-pilot-2026-09.md, "Operator decision —
 2026-09-03 (dict-membership fail-open, class P census)", in the
-clausify-executor-train repo.
+downstream repo.
 
 1. Negated membership (`X not in XS` / `not (X in XS)`) whose RHS is not
    PROVABLY a list. Over an exported dict (an attribute-list) the old
@@ -317,31 +317,30 @@ class TestArrowSpacingDiscrimination:
         assert "library(lambda)" not in spaced_out, spaced_out
 
 
-# ── The kit witness: the RED fixture named by the decision ─────────────
+# ── The witness: the RED fixture named by the decision ────────────────
 
 # The witness is SYNTHETIC (tests/fixtures/lambda_in_term_position_witness.clausal):
 # three `<-` lambdas in term position written for this test. Its predecessor was
-# a verbatim 706-line snapshot of a closed-side kit file (c7f29564); closed-side
+# a verbatim snapshot of a closed-side file (c7f29564); closed-side
 # source does not enter this tree, so it was replaced (operator ruling
 # 2026-09-08). The shapes are the same three the class docstring names.
-KIT_QUERY_COMBINATORS_PRE_MIGRATION = (
+LAMBDA_TERM_POSITION_WITNESS = (
     pathlib.Path(__file__).parent / "fixtures"
     / "lambda_in_term_position_witness.clausal"
 )
 
 
-class TestKitWitness:
-    """The live kit file this class originally witnessed against has since
-    been migrated to strict-clean (clausify-executor-train commit
-    76afe6d, "kit: hand-lift the last 10 class-(c) `<-` closures"). Two
+class TestWitness:
+    """The live file this class originally witnessed against has since
+    been migrated to strict-clean (a downstream commit
+    76afe6d, "hand-lift the last 10 class-(c) `<-` closures"). Two
     tests, two different responses to that drift:
 
-    * the live-file pin (``test_kit_query_combinators_is_strict_clean``)
-      was RELOCATED 2026-09-08 to the repository that ships the kit
-      library, and is pinned there: reading a sibling repository by
+    * the live-file pin was RELOCATED 2026-09-08 to the repository that
+      ships that library, and is pinned there: reading a sibling repository by
       absolute path fails on any other machine and tied this open tree
       to source it does not ship.
-    * ``test_kit_witness_names_the_construct`` needs an actual refusal to
+    * ``test_witness_names_the_construct`` needs an actual refusal to
       assert the construct-naming shape against, which the live file no
       longer has. Re-pointed at a FROZEN in-repo fixture (a vendored
       snapshot of the pre-migration source, see the fixture file's own
@@ -351,12 +350,12 @@ class TestKitWitness:
       current state, not on anything this translator controls.
     """
 
-    def test_kit_witness_lowers_all_three_closures(self):
+    def test_witness_lowers_all_three_closures(self):
         """Frozen fixture, not the live file (see class docstring). It held
         the three shapes the refusal was written for; all three now LOWER,
         which is what makes it a witness for the 2026-09-14 change rather
         than a stale pin."""
-        source = KIT_QUERY_COMBINATORS_PRE_MIGRATION.read_text()
+        source = LAMBDA_TERM_POSITION_WITNESS.read_text()
         assert _refusals(source) == [], _refusals(source)
         out = clausal_source_to_prolog(source, strict=True)
         assert out.count("\\ ") >= 3, out

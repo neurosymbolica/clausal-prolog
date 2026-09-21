@@ -636,7 +636,7 @@ class TestStrLiteralUnifiesWithImportedAtom:
 # ── Class G: a str literal containing newlines must still consult ─────────────
 #
 # 16 corpus domains failed G2 on error(syntax_error(missing_quote)) -- e.g.
-# us/tax/irc_s1_income_tax_brackets/parameters.pl, whose `verbatim` parameter is
+# a downstream parameters.pl, whose `verbatim` parameter is
 # a multi-KB statutory table carrying real newlines. The root cause is the
 # EMITTER: `emit_term`'s PString branch escaped only backslash and `"`, so an
 # embedded newline was written raw and the double-quoted string ran off the end

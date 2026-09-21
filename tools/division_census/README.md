@@ -77,7 +77,7 @@ The site list itself is closed-side; ask the export lane for it.
 
 The tool loads, but the corpus's per-domain import roots are the harness's
 knowledge, not this repo's: loading division-bearing domain files directly got
-6 of 25 (`kit.formalize_lib` and per-domain package roots resolve differently
+only a subset (the downstream corpus's own import roots resolve differently
 per domain). Measured working end to end on those 6 — real site attribution
 (`categorisation.clausal:149`) and real operand values — so the instrument is
 not the blocker.

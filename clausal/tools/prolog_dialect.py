@@ -267,9 +267,8 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     # clausal/logic/builtins/lists.py. It used to sit in the CLP(FD) block
     # above (between all_different and in_domain) mapped to "in", i.e. read
     # as clpfd's ``X in 1..10`` domain constraint. That was wrong twice
-    # over: no ISO engine defines in/2 without clpfd, so every kit library
-    # that spells membership as a call (query_combinators, formalize_lib,
-    # compliance_lib) exported a program that died with
+    # over: no ISO engine defines in/2 without clpfd, so every downstream library
+    # that spells membership as a call exported a program that died with
     # existence_error(procedure, in/2) on first use -- and under a dialect
     # that DOES load clpfd it would have resolved and silently meant a
     # finite-domain constraint instead of list membership, which is worse.
