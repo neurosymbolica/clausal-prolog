@@ -7,10 +7,10 @@ from clausal.fmt.comments import CommentLeakError
 
 
 def test_directive_layout_and_blank_lines():
-    src = "-module(m, [p(A)])\n-import_from(kit, [met])\nrate(1),\n"
+    src = "-module(m, [p(A)])\n-import_from(vocab, [met])\nrate(1),\n"
     out = format_source(src)
     # one blank line between top-level statements
-    assert out == "-module(m, [p(A)])\n\n-import_from(kit, [met])\n\nrate(1),\n"
+    assert out == "-module(m, [p(A)])\n\n-import_from(vocab, [met])\n\nrate(1),\n"
 
 
 def test_fact_table_stays_adjacent():
@@ -205,7 +205,7 @@ def test_comment_before_a_closing_body_paren_stays_with_the_clause():
 # ---------------------------------------------------------------------------
 
 def test_short_directive_stays_on_one_line():
-    src = "-import_from(kit, [met, unmet])\n"
+    src = "-import_from(vocab, [met, unmet])\n"
     assert format_source(src) == src
 
 

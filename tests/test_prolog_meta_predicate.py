@@ -14,7 +14,7 @@ WHAT ACCEPTANCE MEANS HERE. "A directive appears in the emitted text" is NOT
 acceptance and no test in the end-to-end section settles for it: every case in
 ``TestScryerCallThrough`` consults real translator output in real Scryer and CALLS
 THROUGH a bare reference, asserting the answer. The three shapes are the three the
-controller required (2026-09-05, A-3), and each is a reduction of a real kit host
+controller required (2026-09-05, A-3), and each is a reduction of a real vocab host
 measured in this session's host scan:
 
   (i)   a BODY-LOCAL host          -- ``eval_requirements/4`` shape (43 real sites)
@@ -220,7 +220,7 @@ def test_meta_caller_table_is_keyed_by_functor_and_arity():
     ("include", 3), ("exclude", 3), ("max_by", 3), ("min_by", 3),
 ])
 def test_the_table_carries_nothing_speculative(functor, arity):
-    """No kit host reaches these, and they are plausible DATA constructors.
+    """No vocab host reaches these, and they are plausible DATA constructors.
 
     An earlier draft carried them on the reasoning that a host reaching one *would*
     be a meta host. In a legal corpus `include(...)`, `max_by(...)` and friends are

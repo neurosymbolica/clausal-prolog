@@ -415,7 +415,7 @@ class TestThrowInFindAll:
 # ── Raising well-formedness guards for library code ──────────────────────────
 #
 # A .clausal library predicate can RAISE on malformed input instead of failing
-# logically and collapsing silently inside a findall.  This is the pattern kit
+# logically and collapsing silently inside a findall.  This is the pattern vocab
 # authors reach for so a bad argument (wrong shape / unbound / wrong type)
 # lands on the loud RAISED diagnostic channel rather than turning a findall
 # into an indistinguishable empty result.  The mechanism is just throw/1 with a
