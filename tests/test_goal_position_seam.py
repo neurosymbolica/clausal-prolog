@@ -1298,3 +1298,113 @@ class TestDelaysAreChargedToTheRightAnswer:
         out = mod.nested_same_table([])
         assert [x for x, _inner in out] == ["one", "two"]
         assert self._stack() == []
+
+
+class TestDottedRuntimeModuleGoal:
+    """``--m.pred(X)`` where *m* is a Python value holding a module.
+
+    THE HARNESS SHAPE.  A sealed scorer loads the rulebase under test at
+    RUNTIME (``module = _RULE.get()``) and calls into it.  The seam resolves a
+    goal's NAME at compile time against the host file's own rules, so before
+    this the only spelling that worked was ``solve(module.pred(X))`` through
+    the Python API — which stopped naming a module when a term became a cell.
+
+    The module is a LOCAL in every one of these, deliberately: the seam is
+    handed ``globals()``, so a design that only reads globals passes a
+    module-level test and fails every real caller.  The rulebase is written to
+    a path that OUTLIVES the load, because the host re-loads it at call time.
+    """
+
+    RB = (
+        "-module({name}, [sp/1, pair(K, V)])\n"
+        "-private([a, b])\n"
+        "sp(1),\n"
+        "sp(2),\n"
+        "pair(a, 1),\n"
+        "pair(b, 2),\n"
+    )
+
+    def _rulebase(self, tmp_path, tag):
+        path = tmp_path / f"_dyn_rb_{tag}.clausal"
+        path.write_text(self.RB.format(name=f"_dyn_rb_{tag}"))
+        return str(path)
+
+    def _host(self, tag, body, decls=""):
+        return _load_inline(f"_dyn_host_{tag}", (
+            f"-module(_dyn_host_{tag}, [{decls}])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            + body
+        ))
+
+    def test_for_iterates_a_runtime_module_s_predicate(self, tmp_path):
+        rb = self._rulebase(tmp_path, "for")
+        host = self._host("for", (
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_for_alias', path)\n"
+            "    got = []\n"
+            "    for X in --m.sp(X):\n"
+            "        got.append(X)\n"
+            "    return sorted(got)\n"
+        ))
+        assert host.run(rb) == [1, 2]
+
+    def test_if_tests_a_runtime_module_s_predicate(self, tmp_path):
+        rb = self._rulebase(tmp_path, "if")
+        host = self._host("if", (
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_if_alias', path)\n"
+            "    if --m.sp(2):\n"
+            "        return 'yes'\n"
+            "    return 'no'\n"
+        ))
+        assert host.run(rb) == "yes"
+
+    def test_a_two_variable_for_binds_both(self, tmp_path):
+        rb = self._rulebase(tmp_path, "two")
+        host = self._host("two", (
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_two_alias', path)\n"
+            "    d = {}\n"
+            "    for K, V in --m.pair(K, V):\n"
+            "        d[K] = V\n"
+            "    return sorted(d.items())\n"
+        ))
+        assert host.run(rb) == [("a", 1), ("b", 2)]
+
+    def test_the_goal_runs_against_the_RUNTIME_module_not_the_host(self, tmp_path):
+        """The module SWITCH is the whole point, so the host declares the same
+        name at the same arity with a different clause: a fix that resolved
+        ``sp/1`` in the HOST would pass every other test in this class."""
+        rb = self._rulebase(tmp_path, "switch")
+        host = self._host("switch", (
+            "sp(99),\n"
+            "\n"
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_switch_alias', path)\n"
+            "    got = []\n"
+            "    for X in --m.sp(X):\n"
+            "        got.append(X)\n"
+            "    return sorted(got)\n"
+        ), decls="sp/1")
+        assert host.run(rb) == [1, 2], (
+            "the RUNTIME module's sp/1 answered, not the host's sp(99)"
+        )
+
+    def test_a_non_module_base_still_refuses_and_names_the_spelling(self, tmp_path):
+        """A base that is bound but is not a module is left EXACTLY as it was —
+        no new diagnostic can fire on a spelling that used to resolve
+        statically — so the pre-existing refusal is what speaks, and it still
+        names what the author wrote."""
+        rb = self._rulebase(tmp_path, "bad")
+        host = self._host("bad", (
+            "def run(path):\n"
+            "    m = 17\n"
+            "    for X in --m.sp(X):\n"
+            "        pass\n"
+            "    return 'unreachable'\n"
+        ))
+        with pytest.raises(Exception) as exc_info:
+            host.run(rb)
+        assert "m.sp" in str(exc_info.value), str(exc_info.value)

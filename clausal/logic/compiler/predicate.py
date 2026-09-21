@@ -309,6 +309,7 @@ from clausal.logic.seam import (
     text_value as _text_value,
     once_bind as _once_bind,
     each as _each,
+    with_bases as _with_bases,
     export as _export,
 )
 from clausal.logic.compiler.terms_to_ast import (  # noqa: E402
@@ -395,6 +396,9 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # Goal-position `--`: if/for/while/not run the goal (clausal.logic.seam).
     "$once_bind": _once_bind,
     "$each": _each,
+    # The DOTTED RUNTIME MODULE form: resolves ``--m.pred(X)`` against the
+    # live value of ``m`` before the goal reaches ``solve`` (seam.with_bases).
+    "$with_bases": _with_bases,
     "$export": _export,
     # The computed-dict-literal-key helper (``runtime.dict_ops._dict_key``):
     # deref, refuse an unbound key with a catchable instantiation error, and

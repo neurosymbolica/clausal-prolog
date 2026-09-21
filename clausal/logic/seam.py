@@ -34,6 +34,7 @@ from typing import Any
 
 from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName, Node
 from clausal.terms import PyThunk, Var
+from clausal.logic.cells import QUALIFIED_GOAL_FUNCTOR
 
 
 def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
@@ -615,6 +616,77 @@ def _definite_answers(goal: Any, module,
                 f"--: {goal!r} has a conditional (undefined) answer; use "
                 f"clausal.query_wfs for truth values and delays")
         yield
+
+
+def with_bases(goal: Any, bases: dict) -> Any:
+    """Resolve a goal written ``--m.pred(A, B)`` against the RUNTIME value of
+    *m*, returning the module-qualified goal ``(":", m, pred(A, B))``.
+
+    THE DOTTED RUNTIME MODULE FORM (2026-09-21).  The seam resolves a goal's
+    NAME at compile time against the host file's own rules, so ``m.pred``
+    reached ``solve`` as the dotted FUNCTOR ``"m.pred"`` and failed with
+    ``name 'm.pred' is not defined``.  That shut out the shape every sealed
+    scorer is built on -- load the rulebase under test at runtime
+    (``module = _RULE.get()``), then call into it -- which had been reaching
+    the engine through ``solve(module.pred(X))`` until a term stopped being a
+    self-describing goal.
+
+    *bases* maps each dotted base NAME in the goal to a zero-argument thunk
+    that reads it where it was written, so a base that is a LOCAL resolves.
+    The rewriter emits the thunks; a module-level ``globals()`` read would
+    miss every real caller, since the harness binds its module inside a
+    function.
+
+    CONSERVATIVE BY CONSTRUCTION.  A base is rewritten ONLY when its thunk
+    both evaluates and yields something ``resolve_module`` accepts.  An
+    unbound name, a non-module value, or a base this function was handed no
+    thunk for leaves the node EXACTLY as it was, so every spelling that
+    resolved statically before still does and no new diagnostic can fire on
+    working code.
+
+    TOP-LEVEL GOAL ONLY.  A conjunction seam (``--(m.p(X), m.q(Y))``) is left
+    alone: the qualified cell is a goal form, and nesting one inside a
+    conjunction node is a lowering this has not been measured against.  Each
+    ``if``/``for``/``while``/statement seam is one goal, which is the shape
+    the harnesses use.
+    """
+    from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName
+
+    if not isinstance(goal, Call) or not isinstance(goal.func, LoadAttr):
+        return goal
+    attr = goal.func
+    if not isinstance(attr.object, LoadName):
+        return goal                      # a chain deeper than one dot
+    base_name = attr.object.name
+    thunk = (bases or {}).get(base_name)
+    if thunk is None:
+        return goal
+    try:
+        value = thunk()
+    except NameError:
+        return goal
+    module = _module_designator(value)
+    if module is None:
+        return goal
+    inner = Call(func=LoadName(name=attr.attr), args=goal.args,
+                 kwargs=goal.kwargs)
+    return (QUALIFIED_GOAL_FUNCTOR, module, inner)
+
+
+def _module_designator(value: Any) -> Any:
+    """*value* if it is something ``resolve_module`` accepts, else None.
+
+    Asked of the SAME function the qualified goal will use, so this cannot
+    drift from what the goal then does with the answer -- but asked here in a
+    swallowing form, because "is this a module?" is a test and
+    ``resolve_module`` is a refusal.
+    """
+    from clausal.logic.solve import resolve_module
+    try:
+        resolve_module(value, None, "--")
+    except Exception:
+        return None
+    return value
 
 
 def once_bind(goal: Any, module_globals: dict) -> bool:

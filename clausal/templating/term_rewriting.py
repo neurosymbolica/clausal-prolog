@@ -6220,7 +6220,66 @@ class EmbedTransformer(NodeTransformer):
         # `And`/`TupleLiteral`-as-conjunction all pass straight through
         # `_term_to_goal`) — `build()` only knows how to collapse a node
         # into a plain VALUE, which is term position's job, not a goal's.
+        goal_ast = transformer._wrap_runtime_bases(expression, goal_ast, anchor)
         return pre, goal_ast, fresh
+
+    def _wrap_runtime_bases(transformer, expression, goal_ast, anchor):
+        """Wrap *goal_ast* in ``$with_bases(goal, {"m": lambda: m})`` when the
+        goal is written ``--m.pred(...)`` over a dotted base.
+
+        THE DOTTED RUNTIME MODULE FORM (2026-09-21).  The seam resolves a
+        goal's NAME at compile time, so ``m.pred`` reached ``solve`` as the
+        dotted functor ``"m.pred"``.  The base's live VALUE is the missing
+        half, and it cannot be read at run time from ``globals()``: the
+        harnesses this exists for bind their module INSIDE a function
+        (``module = _RULE.get()``), so it is a local.  A thunk closes over it
+        where it was written, which is the only spelling that sees a local.
+
+        LAZY, and that is load-bearing: a base that is not a Python binding at
+        all (a qualified spelling an ``-import_from`` remap already resolved
+        statically) must not be EVALUATED here, or emitting the environment
+        would turn a working goal into a ``NameError``.  ``with_bases`` calls
+        the thunk and swallows that failure; nothing is evaluated unless it
+        is about to be used.
+
+        Emitted ONLY when such a base exists, so every goal in the corpus that
+        does not use the form lowers to byte-identical code.
+        """
+        bases = []
+        for node in walk(expression):
+            if not isinstance(node, Attribute):
+                continue
+            root = node
+            while isinstance(root, Attribute):
+                root = root.value
+            if not isinstance(root, Name):
+                continue
+            # A logic-variable base is the DICT-ATTRIBUTE sugar (``P.status``
+            # -> ``P[status]``), not a qualified name -- ``visit_Attribute``
+            # draws the same line, and a thunk over a logic variable would
+            # read a name Python never bound.
+            if (_is_logic_var_name(root.id)
+                    and root.id not in transformer._clause_scope_exclusions()):
+                continue
+            if root.id not in bases:
+                bases.append(root.id)
+        if not bases:
+            return goal_ast
+        env = replace(Dict(
+            keys=[replace(Constant(value=b), anchor) for b in bases],
+            values=[replace(Lambda(
+                args=arguments(posonlyargs=[], args=[], vararg=None,
+                               kwonlyargs=[], kw_defaults=[], kwarg=None,
+                               defaults=[]),
+                body=replace(Name(id=b, ctx=Load()), anchor),
+            ), anchor) for b in bases],
+        ), anchor)
+        wrapped = replace(Call(
+            func=replace(Name(id="$with_bases", ctx=Load()), anchor),
+            args=[goal_ast, env], keywords=[],
+        ), anchor)
+        fix_missing_locations(wrapped)
+        return wrapped
 
     def _export_stmts(transformer, names, anchor):
         """``NAME = $export($v_NAME)`` — one assignment per exported name."""
