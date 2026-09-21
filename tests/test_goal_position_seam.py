@@ -1540,3 +1540,42 @@ class TestTheHarnessShapeEndToEnd:
             "    return sorted({K: V for K, V in --m.pair(K, V)}.items())\n"
         ))
         assert host.run(str(path)) == [("a", 1), ("b", 2)]
+
+    def test_the_real_corpus_idiom_migrated_verbatim(self, tmp_path):
+        """The exact shape of the most common blocked site, migrated.
+
+        From ``us/tax/irc_s1_income_tax_brackets`` (and 109 siblings):
+
+            [_answer(R.value) for _ in solve(m.income_tax(P, R))]
+
+        becomes
+
+            [_answer(R) for R in --m.income_tax(++p, R)]
+
+        — the goal moves into the iterable, the loop target becomes the
+        variable being read (``each`` exports it, so ``.value`` goes), and the
+        Python-side input crosses with ``++``.  Everything this feature has to
+        support is in one line: a RUNTIME module, a comprehension iterable, a
+        Python escape as an input argument, a helper over the exported value,
+        and a second goal variable that is not the target.
+        """
+        path = tmp_path / "_hs_rb3.clausal"
+        path.write_text(
+            "-module(_hs_rb3, [income_tax(P, R)])\n"
+            "income_tax(100, 10),\n"
+            "income_tax(200, 20),\n"
+        )
+        host = _load_inline("_hs_host3", (
+            "-module(_hs_host3, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "def _answer(v):\n"
+            "    return ('rate', v)\n"
+            "\n"
+            "def run(p, income):\n"
+            "    m = _load_module('_hs_rb3_alias', p)\n"
+            "    return [_answer(R) for R in --m.income_tax(++income, R)]\n"
+        ))
+        assert host.run(str(path), 200) == [("rate", 20)]
+        assert host.run(str(path), 100) == [("rate", 10)]
