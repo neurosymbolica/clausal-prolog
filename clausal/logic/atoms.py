@@ -274,6 +274,70 @@ def as_dict_key(key):
     return key
 
 
+class atom(str):
+    """An atom at the PYTHON BOUNDARY: a ``str`` that is TAGGED as an atom.
+
+    Spec: ``docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-
+    design.md``, ruled by the operator 2026-09-21, amended the same day to the
+    ADVISORY form.
+
+    In clausal source, quote style says which you mean — ``an_atom`` and
+    ``'quoted atom'`` are atoms, ``"text"`` is a string.  Python has ONE string
+    form, so a value crossing ``++`` cannot be told apart lexically and is told
+    apart by TYPE instead.  This class is the missing lexical form.  It is
+    spelled lower case because it is a Python class at the same level as
+    ``str``.
+
+    ADVISORY, NOT STRICT.  ``atom('a') == 'a'`` is TRUE, and deliberately so.
+    The discriminator is the TYPE::
+
+        isinstance(value, atom)     # this is an atom
+        type(value) is str          # this is text
+
+    Equality is left alone because ``==`` is not the mechanism: ``++`` reads
+    the type, so a strict ``__eq__`` would buy nothing for the round trip and
+    would cost every downstream comparison of an atom against a plain string
+    literal — measured at 1007 sites across every one of the 82 downstream
+    bodies, each silently flipping True to False.  Introducing a comparison
+    that quietly changes its answer is the exact defect class this whole
+    boundary exists to remove, so the strict form was rejected.
+
+    THE TAG IS A HINT AND IT IS FRAGILE.  It survives being stored and moved —
+    a dict value or key, a list, a tuple, ``sorted``, a function argument — and
+    it is LOST by anything that builds a new string: ``.upper()``, a slice, an
+    f-string, ``''.join``, ``+``, ``str()``.  That is a property of subclassing
+    ``str`` and NOT a cost of being advisory: a strict class loses the tag in
+    exactly the same places.  Derive a new spelling and you have text; tag it
+    again with ``atom(...)`` if you meant an atom.
+
+    INTERNED, so ``atom('a') is atom('a')`` and identity tests work — the same
+    discipline the engine already applies to atom spellings.  The table is
+    permanent, which bounds it by the program's atom set rather than by its
+    running time.
+
+    NOT A TERM, AND ``is_atom`` SAYS SO.  ``is_atom`` is ``type(term) is str``,
+    which is False for an instance of this class.  That is deliberate: ``atom``
+    lives only at the boundary, ``++`` normalises it to a plain ``str`` on the
+    way in, and no term ever holds one.  A leaked instance is therefore
+    INVISIBLE to ``is_atom`` rather than silently accepted, which is what makes
+    the leak detectable.  A class named ``atom`` for which ``is_atom`` answers
+    False reads oddly for exactly one good reason: ``is_atom`` asks whether a
+    TERM is an atom, and this is not a term.
+    """
+
+    __slots__ = ()
+    _interned: dict = {}
+
+    def __new__(cls, spelling: str):
+        got = cls._interned.get(spelling)
+        if got is None:
+            got = cls._interned[spelling] = str.__new__(cls, spelling)
+        return got
+
+    def __repr__(self) -> str:
+        return f"atom({str.__repr__(self)})"
+
+
 def is_atom(term) -> bool:
     """True iff *term* is an atom: STAGE 2 of the atoms-as-str flip (spec §1),
     an atom IS the Python ``str``.  A STRING is the chars carrier

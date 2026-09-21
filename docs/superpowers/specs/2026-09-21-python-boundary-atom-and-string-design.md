@@ -1,4 +1,4 @@
-# The Python boundary: `Atom` out, text in
+# The Python boundary: `atom` out, text in
 
 **RULED by the operator 2026-09-21. NOT IMPLEMENTED — this is the spec, not a
 description of the engine.**
@@ -7,12 +7,12 @@ description of the engine.**
 
 | | `--` (out, to Python) | `++` (in, to a term) |
 |---|---|---|
-| **atom** | `Atom('x')` — a `str` SUBCLASS | an `Atom` becomes the atom |
+| **atom** | `atom('x')` — a `str` SUBCLASS, advisory | an `atom` becomes the atom |
 | **string** | `'text'` — a plain Python `str` | a plain `str` becomes the string |
 
 In clausal source, quote style discriminates — `atom` and `'quoted atom'` are
 atoms, `"text"` is a string. Python has one string form, so the `++` direction
-cannot discriminate lexically and discriminates by TYPE instead. `Atom` is the
+cannot discriminate lexically and discriminates by TYPE instead. `atom` is the
 missing lexical form.
 
 ## Why
@@ -34,76 +34,82 @@ three become impossible rather than merely discouraged:
 * a string reaching `sorted`/`set`/dict-key code as a tuple — a string is a
   plain `str` at the boundary and behaves;
 * `isinstance(v, str)` silently changing which question it answers — it stays
-  True for both, and the question "is this an atom" is `isinstance(v, Atom)`,
+  True for both, and the question "is this an atom" is `isinstance(v, atom)`,
   which has one meaning and always did.
 
-## `Atom`
+## `atom` — ADVISORY (amended 2026-09-21, after the strict form was costed)
+
+Lower case: a Python class at the same level as `str`.
 
 ```python
-class Atom(str):
-    """An atom at the Python boundary. Text-shaped, but never equal to text."""
+class atom(str):
+    """An atom at the Python boundary: a str that is TAGGED as an atom."""
     __slots__ = ()
-    _interned = {}
+    _interned: dict = {}
 
     def __new__(cls, spelling):
         got = cls._interned.get(spelling)
         if got is None:
             got = cls._interned[spelling] = str.__new__(cls, spelling)
         return got
-
-    def __eq__(self, other):
-        return isinstance(other, Atom) and str.__eq__(self, other)
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __hash__(self):
-        return str.__hash__(self)
 ```
 
-Acceptance test, as the operator wrote it:
+**`atom('a') == 'a'` is TRUE.** The discriminator is the TYPE:
 
 ```python
-def test_atom_class(Atom):
-    assert Atom('a') == Atom('a')
-    assert Atom('a') != 'a'
-    assert 'a' != Atom('a')
+isinstance(value, atom)     # an atom
+type(value) is str          # text
 ```
 
-Measured properties: interned, so `Atom('a') is Atom('a')`; distinct dict keys
-and set members from the same text; text-shaped for `.upper()`, `join`,
-f-strings and `sorted`; `isinstance(x, str)` True; `type(x) is str` False.
+### Why advisory, and why the strict form was rejected
 
-### Two traps, both load-bearing
+`++` reads the TYPE, so equality is not the mechanism and a strict `__eq__`
+buys nothing for the round trip. It only costs: **1007 `==`/`!=` comparisons
+against plain string literals, across ALL 82 downstream bodies**, every
+atom-side one of which would silently flip True to False. Introducing a
+comparison that quietly changes its answer is the exact defect class this
+boundary exists to remove.
 
-1. **`return str == atom` recurses forever.** `==` re-enters `Atom.__eq__`.
-   Compare through `str.__eq__(self, other)`.
-2. **`__eq__` alone is NOT enough when subclassing `str`, and the failure is
-   one-sided.** `str` defines its own `__ne__`, which `Atom` inherits without
-   overriding — so the reflected-operand priority rule does not fire, and
-   `'a' != Atom('a')` runs `str.__ne__` and answers False while
-   `Atom('a') != 'a'` answers True. `__ne__` must be defined explicitly.
+The strict form also carried two traps that no longer exist: `__eq__` had to
+compare through `str.__eq__` or recurse to the stack limit, and `__ne__` had to
+be defined explicitly because `str` supplies its own — an omission that failed
+ONE-SIDED (`atom('a') != 'a'` True while `'a' != atom('a')` False). Both are
+gone with the overrides. Recorded here because a future reader may reach for
+strict equality again, and these are what it costs.
 
-`__eq__` returns `False` rather than `NotImplemented` deliberately:
-`NotImplemented` hands the comparison back to `str.__eq__`, which answers True.
+### The tag is a hint, and it is fragile
+
+It survives being STORED and MOVED — dict value, dict key, list, tuple,
+`sorted`, a function argument — and is LOST by anything that builds a new
+string: `.upper()`, a slice, an f-string, `''.join`, `+`, `str()`.
+
+**That is a property of subclassing `str`, not a cost of being advisory**: a
+strict class loses the tag in exactly the same places. Derive a new spelling
+and you have text; tag it again with `atom(...)` if you meant an atom.
+
+### One consequence to be deliberate about
+
+An atom and its text are **one** dict key, not two. That follows from advisory
+equality and inherited hashing, and it is wanted: a split key space is what
+made a downstream failure silent in the first place.
 
 ## THE LEAK RULE
 
-`type(term) is str` IS the engine's `is_atom`, and it is False for an `Atom`.
+`type(term) is str` IS the engine's `is_atom`, and it is False for an `atom`.
 So:
 
-> **`Atom` exists only at the boundary. `++` normalises it to a plain `str` on
+> **`atom` exists only at the boundary. `++` normalises it to a plain `str` on
 > the way in, and no term ever holds one.**
 
-An `Atom` that reaches term space is invisible to `is_atom` and is a fourth
+An `atom` that reaches term space is invisible to `is_atom` and is a fourth
 failure class of the same family as the three above. This wants a test that
-asserts no `Atom` survives into a term, not a comment saying it must not.
+asserts no `atom` survives into a term, not a comment saying it must not.
 
 ## Implementation notes
 
 The conversion registry (`clausal/logic/python_terms.py`, ruled 2026-09-15)
-is the hook: `TO_TERM` gains `str` (-> the string) and `Atom` (-> the atom).
-Keyed by EXACT type, which this design needs anyway — `Atom` is a `str`
+is the hook: `TO_TERM` gains `str` (-> the string) and `atom` (-> the atom).
+Keyed by EXACT type, which this design needs anyway — `atom` is a `str`
 subclass, and an `isinstance` walk would match it as `str` and lose it.
 
 `FROM_TERM` is keyed by FUNCTOR, which covers the string carrier but not an
@@ -112,8 +118,7 @@ therefore needs an atom case outside the functor table.
 
 ## Not ruled here
 
-* the explicit constructor's spelling — `atom('x')` vs `Atom('x')`;
-* whether `sorted()` mixing `Atom` and `str` by text is the wanted order (it
+* whether `sorted()` mixing `atom` and `str` by text is the wanted order (it
   is what falls out; it means a sort cannot be relied on to separate them);
 * migration sequencing downstream, which needs the count of sites currently
   using a string as a dict key or set member.
