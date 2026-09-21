@@ -1579,3 +1579,74 @@ class TestTheHarnessShapeEndToEnd:
         ))
         assert host.run(str(path), 200) == [("rate", 20)]
         assert host.run(str(path), 100) == [("rate", 10)]
+
+    def test_a_FRESHLY_RELOADED_module_is_re_resolved_every_call(self, tmp_path):
+        """``fresh_per_case`` means *m* is a DIFFERENT object per case.
+
+        The goal node is structurally identical across calls, so anything that
+        resolved the base once — at rewrite time, or into a cache keyed on the
+        goal's shape — would answer the FIRST case's module for every later
+        one, silently.  That is the failure this has to be measured against
+        rather than reasoned about: two rulebases with the same predicate and
+        different clauses, loaded under the same call, alternating.
+        """
+        first = tmp_path / "first.clausal"
+        first.write_text("-module(first, [sp/1])\nsp(1),\n")
+        second = tmp_path / "second.clausal"
+        second.write_text("-module(second, [sp/1])\nsp(2),\n")
+        host = _load_inline("_hs_fresh", (
+            "-module(_hs_fresh, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "_n = [0]\n"
+            "\n"
+            "def run(p):\n"
+            "    _n[0] += 1\n"
+            "    m = _load_module('_fresh_%d' % _n[0], p)\n"
+            "    return sorted([X for X in --m.sp(X)])\n"
+        ))
+        assert host.run(str(first)) == [1]
+        assert host.run(str(second)) == [2], (
+            "the SECOND module's clause — a base resolved once would answer [1]"
+        )
+        assert host.run(str(first)) == [1], "and back again"
+
+    def test_the_module_object_itself_is_untouched_by_the_form(self, tmp_path):
+        """The whole-object uses keep working, because nothing wraps *m*.
+
+        The alternative route considered here was a PROXY returned by
+        ``RuleModule.get()``, and its real risk was never the call sites: the
+        kit passes the module WHOLE to ``profile_atom``/``profile_terms`` and
+        friends, and ``profile_atom`` does ``getattr(module, value)`` and
+        RAISES on a miss BY DESIGN, which two domains depend on.  This form
+        touches the GOAL SITE only, so that risk does not transfer — pinned
+        here so a later refactor cannot quietly reintroduce it.
+        """
+        path = tmp_path / "_hs_whole.clausal"
+        path.write_text(
+            "-module(_hs_whole, [sp/1, marker])\n"
+            "-private([marker])\n"
+            "sp(1),\n"
+        )
+        host = _load_inline("_hs_whole_host", (
+            "-module(_hs_whole_host, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "def run(p):\n"
+            "    m = _load_module('_hs_whole_alias', p)\n"
+            "    got = sorted([X for X in --m.sp(X)])\n"
+            "    return got, type(m).__name__, getattr(m, 'marker'), hasattr(m, 'sp')\n"
+            "\n"
+            "def missing(p):\n"
+            "    m = _load_module('_hs_whole_alias2', p)\n"
+            "    return getattr(m, 'not_there')\n"
+        ))
+        got, kind, marker, has_sp = host.run(str(path))
+        assert got == [1]
+        assert kind == "module", "m is still a plain module object, not a proxy"
+        assert marker is not None, "a whole-object getattr still answers"
+        assert has_sp is True
+        with pytest.raises(AttributeError):
+            host.missing(str(path))     # still fail-closed on a miss
