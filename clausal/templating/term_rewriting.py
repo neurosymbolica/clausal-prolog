@@ -5529,11 +5529,6 @@ class EmbedTransformer(NodeTransformer):
         # TitleCase unit names in an ``-import_from(py.units, …)`` list are
         # linted once per file per name — see _warn_deprecated_unit_spelling.
         transformer._warned_unit_spellings: set[str] = set()
-        # Statements to splice ABOVE the statement currently being visited.
-        # One list per nesting level; a comprehension's goal seam pushes its
-        # ``$Var()`` binds here because a comprehension has nowhere of its own
-        # to put them — see ``_visit_comprehension``.
-        transformer._hoisted: list[list] = []
         transformer._seen_functors: dict[str, list[str]] = {}
         # Filled by visit_Module's pre-pass; a transformer used outside a module
         # walk (the REPL's seam term, a one-off clause) keeps the empty set.
@@ -6250,8 +6245,14 @@ class EmbedTransformer(NodeTransformer):
         Emitted ONLY when such a base exists, so every goal in the corpus that
         does not use the form lowers to byte-identical code.
         """
+        # ONLY the root of the CALL'S OWN func chain (roborev job 79, finding
+        # 6).  Walking the whole expression collected the root of every
+        # Attribute in it — inside ``++`` escapes, inside argument terms —
+        # and ``with_bases`` reads exactly one of them, so the rest were
+        # lambdas built into the emitted AST and never called.
         bases = []
-        for node in walk(expression):
+        for node in ([expression.func]
+                     if isinstance(expression, Call) else []):
             if not isinstance(node, Attribute):
                 continue
             root = node
@@ -6398,28 +6399,6 @@ class EmbedTransformer(NodeTransformer):
         fix_missing_locations(node)
         return pre + [declare, node]
 
-    def visit(transformer, node):
-        """Dispatch, splicing any statements a nested seam asked to HOIST.
-
-        A comprehension's iterable cannot hold the ``$Var()`` binds its goal
-        needs: Python refuses an assignment expression there, which is what
-        the generic expression lowering would emit.  The binds have to become
-        real statements ABOVE the statement holding the comprehension, and
-        only the statement walk knows where that is.  So a comprehension
-        pushes them here and this splices them in — the same shape
-        ``visit_For`` gets for free by being a statement itself.
-        """
-        if not isinstance(node, _ast_module.stmt):
-            return super().visit(node)
-        transformer._hoisted.append([])
-        result = super().visit(node)
-        hoisted = transformer._hoisted.pop()
-        if not hoisted:
-            return result
-        if result is None:
-            return hoisted
-        return hoisted + (result if isinstance(result, list) else [result])
-
     def _visit_comprehension(transformer, node):
         """Lower a goal seam in the FIRST generator's iterable.
 
@@ -6438,11 +6417,20 @@ class EmbedTransformer(NodeTransformer):
         over the sealed corpus at the time this was written: 119 of 119
         comprehension-iterable goals are outermost and none is inner.
         """
-        for index, generator in enumerate(node.generators):
-            found = transformer._goal_operand(generator.iter)
-            if found is None or found[1]:
-                continue
+        # SCANNED UP FRONT (roborev job 79, finding 2).  Refusing inside the
+        # loop only fired when clause 1 had NO goal: with a goal in clause 1
+        # AND a later one, clause 1 lowered, the method returned, and the
+        # later clause went through the generic TERM-position seam — which
+        # emits the assignment expression CPython then rejects with the bare
+        # "cannot be used in a comprehension iterable expression", pointing at
+        # generated code and carrying none of the explanation this refusal
+        # exists to give.
+        carrying = [i for i, g in enumerate(node.generators)
+                    if (found := transformer._goal_operand(g.iter)) is not None
+                    and not found[1]]
+        for index in carrying:
             if index != 0:
+                generator = node.generators[index]
                 raise SyntaxError(
                     f"{transformer._filename}:{node.lineno}: a `--goal` in a "
                     f"comprehension must be in the FIRST `for` clause; this "
@@ -6451,6 +6439,9 @@ class EmbedTransformer(NodeTransformer):
                     f"clause re-runs per outer iteration and would share one "
                     f"logic variable across all of them.  Bind it to a name "
                     f"above the comprehension instead.")
+        for index in carrying:
+            generator = node.generators[index]
+            found = transformer._goal_operand(generator.iter)
             expression, _ = found
             transformer._lint_titlecase(expression)
             target = generator.target
@@ -6471,25 +6462,40 @@ class EmbedTransformer(NodeTransformer):
                     raise SyntaxError(
                         f"{transformer._filename}:{node.lineno}: `{t}` is not "
                         f"a variable of the goal `{unparse(expression)}`")
-            non_targets = [n for n in fresh if n not in targets]
-            var_refs = replace(Tuple(
-                elts=[replace(Name(id=f"$v_{t}", ctx=Load()), generator.iter)
-                      for t in targets],
-                ctx=Load()), generator.iter)
+            # RE-ENTRANT, NOT HOISTED (roborev job 79, finding 1).  ``pre`` is
+            # the ``$v_N = $Var()`` statements ``visit_For`` puts before the
+            # loop; a comprehension has nowhere to put a statement, and
+            # hoisting them above the enclosing STATEMENT is correct only
+            # where that statement is re-executed per evaluation.  In a lambda
+            # body, a ``while`` test or a nested comprehension it is not, and
+            # one ``Var`` is then shared across every evaluation -- measured,
+            # a live generator left unexhausted made the next evaluation see
+            # one answer instead of three.  So the binds become PARAMETERS of
+            # a lambda that ``each_fresh`` calls once per evaluation, which
+            # needs no statement and no walrus (Python refuses an assignment
+            # expression in a comprehension iterable even inside a lambda).
+            del pre
+            maker = replace(Lambda(
+                args=arguments(
+                    posonlyargs=[],
+                    args=[replace(arg(arg=f"$v_{n}", annotation=None),
+                                  generator.iter) for n in fresh],
+                    vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None,
+                    defaults=[]),
+                body=replace(Tuple(elts=[
+                    goal_ast,
+                    replace(Tuple(
+                        elts=[replace(Name(id=f"$v_{t}", ctx=Load()),
+                                      generator.iter) for t in targets],
+                        ctx=Load()), generator.iter),
+                ], ctx=Load()), generator.iter),
+            ), generator.iter)
             new_iter = replace(Call(
-                func=Name(id="$each", ctx=Load()),
-                args=[goal_ast, var_refs,
-                      transformer._globals_call(generator.iter)],
+                func=Name(id="$each_fresh", ctx=Load()),
+                args=[maker, transformer._globals_call(generator.iter)],
                 keywords=[]), generator.iter)
             fix_missing_locations(new_iter)
             generator.iter = new_iter
-            # HOISTED, not emitted here: see ``visit``.  ``_hoisted`` is empty
-            # only for a comprehension outside any statement, which the
-            # grammar cannot produce.
-            if transformer._hoisted:
-                transformer._hoisted[-1].extend(pre)
-                transformer._hoisted[-1].append(
-                    transformer._declare_locals(non_targets, generator.iter))
             # Everything EXCEPT the lowered iterable still needs visiting —
             # generic_visit would walk back into the goal we just lowered.
             generator.ifs = [transformer.visit(i) for i in generator.ifs]

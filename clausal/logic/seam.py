@@ -618,6 +618,43 @@ def _definite_answers(goal: Any, module,
         yield
 
 
+def each_fresh(make, module_globals: dict):
+    """``each``, but the goal's logic variables are MINTED PER EVALUATION.
+
+    THE RE-ENTRANT FORM (roborev job 79, finding 1 -- CONFIRMED by probe, and
+    the first three probes of it passed by COINCIDENCE).  A comprehension has
+    nowhere to put a statement, so the first version of this hoisted
+    ``$v_S = $Var()`` above the enclosing statement.  That is correct only
+    where the statement is re-executed per evaluation.  It is not, for a
+    comprehension in a lambda body, a ``while`` test, or a nested
+    comprehension -- and there one ``Var`` is shared across every evaluation.
+
+    Measured, with the discriminating probe (``sp/1`` has three clauses):
+
+        f = lambda: (S for S in --sp(S))
+        g1 = f(); first = next(g1)      # g1 LEFT LIVE, $v_S still bound to 1
+        g2 = f(); list(g2)              # saw [1]   -- should be [1, 2, 3]
+
+    Counting ``g2``'s answers is what exposes it: asking only for its FIRST
+    answer returns 1 either way, which is why ``(1, 1, 2)`` from the obvious
+    probe looked like a pass.
+
+    *make* takes one fresh ``Var`` per goal variable, in the order the
+    rewriter emitted its parameters, and returns ``(goal, exported_vars)``.
+    Calling it here -- once per evaluation of the iterable -- is what makes
+    the binding per-evaluation without any statement to hoist to, and a
+    plain CALL is legal in a comprehension iterable where an assignment
+    expression is not (the restriction reaches into a lambda body too, so
+    the walrus ``while`` uses cannot simply be moved inside one).
+    """
+    # ``__code__.co_argcount``, NOT ``inspect.signature``: the rewriter names
+    # these parameters ``$v_S``, which is a legal name in a compiled AST and
+    # not a legal Python IDENTIFIER, and ``inspect`` validates identifiers.
+    arity = make.__code__.co_argcount
+    goal, variables = make(*(Var() for _ in range(arity)))
+    yield from each(goal, variables, module_globals)
+
+
 def with_bases(goal: Any, bases: dict) -> Any:
     """Resolve a goal written ``--m.pred(A, B)`` against the RUNTIME value of
     *m*, returning the module-qualified goal ``(":", m, pred(A, B))``.
@@ -674,19 +711,31 @@ def with_bases(goal: Any, bases: dict) -> Any:
 
 
 def _module_designator(value: Any) -> Any:
-    """*value* if it is something ``resolve_module`` accepts, else None.
+    """*value* if it is a MODULE OBJECT, else None.
 
-    Asked of the SAME function the qualified goal will use, so this cannot
-    drift from what the goal then does with the answer -- but asked here in a
-    swallowing form, because "is this a module?" is a test and
-    ``resolve_module`` is a refusal.
+    NARROWER THAN ``resolve_module`` ON PURPOSE (roborev job 79, finding 3).
+    That function is the designator chain, and a designator includes a ``str``
+    or an ATOM looked up in ``sys.modules`` — so accepting everything it
+    accepts would mean a base bound to a plain string, or to a declared atom
+    whose spelling collides with any loaded module (``json``, ``time``,
+    ``io``, ``code``), silently turned the goal into a qualified call into
+    that Python module.  A base written ``m.pred`` is a module OBJECT or it is
+    not this form, and "is this a module?" must not be answered by "would a
+    designator resolve?".
+
+    A ``Module`` itself, and an imported ``.clausal`` module (which carries
+    its ``Module`` under ``$module`` / ``__clausal_module__``), both answer.
+    Anything else — a str, an atom, an int, a class — answers None and leaves
+    the goal exactly as it was.
     """
-    from clausal.logic.solve import resolve_module
-    try:
-        resolve_module(value, None, "--")
-    except Exception:
-        return None
-    return value
+    from clausal.logic.database import Module
+    if isinstance(value, Module):
+        return value
+    namespace = getattr(value, "__dict__", None)
+    if isinstance(namespace, dict) and (
+            "__clausal_module__" in namespace or "$module" in namespace):
+        return value
+    return None
 
 
 def once_bind(goal: Any, module_globals: dict) -> bool:

@@ -1405,8 +1405,13 @@ class TestDottedRuntimeModuleGoal:
             "        pass\n"
             "    return 'unreachable'\n"
         ))
-        with pytest.raises(Exception) as exc_info:
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises((LogicException, NameError)) as exc_info:
             host.run(rb)
+        # The TYPE matters (roborev job 79, finding 7): `pytest.raises(
+        # Exception)` plus a substring passes on any failure at all, including
+        # a TypeError from the new env plumbing, so it could not tell "the
+        # pre-existing refusal still speaks" from "the new code broke".
         assert "m.sp" in str(exc_info.value), str(exc_info.value)
 
 
@@ -1650,3 +1655,154 @@ class TestTheHarnessShapeEndToEnd:
         assert has_sp is True
         with pytest.raises(AttributeError):
             host.missing(str(path))     # still fail-closed on a miss
+
+
+class TestComprehensionGoalsAreReEntrant:
+    """A comprehension's goal variables are minted PER EVALUATION.
+
+    roborev job 79 finding 1, confirmed by probe.  The first lowering hoisted
+    ``$v_S = $Var()`` above the enclosing STATEMENT, which is re-executed per
+    evaluation only in ordinary statement positions.  In a lambda body, a
+    ``while`` test or a nested comprehension it is executed ONCE, and one
+    logic variable is then shared across every evaluation.
+
+    THE FIRST THREE PROBES OF THIS PASSED BY COINCIDENCE, which is why the
+    tests below count answers rather than reading the first one: with the
+    shared variable still bound to 1, a second evaluation's FIRST answer is 1
+    either way.  Only the COUNT distinguishes a leak from correct isolation.
+    """
+
+    RB = ("-module({name}, [sp/1])\n" "sp(1),\n" "sp(2),\n" "sp(3),\n")
+
+    def test_a_live_generator_does_not_bind_a_later_evaluation(self):
+        """THE DISCRIMINATING CASE.  ``g1`` is left unexhausted, so the shared
+        variable it bound is still bound when ``g2`` starts.  ``g2`` must see
+        all three answers, not the one that variable is stuck on."""
+        mod = _load_inline("_re_live", self.RB.format(name="_re_live") + (
+            "def go():\n"
+            "    f = lambda: (S for S in --sp(S))\n"
+            "    g1 = f()\n"
+            "    first = next(g1)\n"
+            "    g2 = f()\n"
+            "    return first, sorted(g2)\n"
+        ))
+        first, rest = mod.go()
+        assert first == 1
+        assert rest == [1, 2, 3], (
+            "a leaked shared variable would answer [1] — the count is the "
+            "only thing that tells the two apart"
+        )
+
+    def test_two_live_generators_interleave(self):
+        mod = _load_inline("_re_inter", self.RB.format(name="_re_inter") + (
+            "def go():\n"
+            "    f = lambda: (S for S in --sp(S))\n"
+            "    g1, g2 = f(), f()\n"
+            "    return next(g1), next(g2), next(g1), next(g2)\n"
+        ))
+        assert mod.go() == (1, 1, 2, 2)
+
+    def test_a_comprehension_in_a_while_test_is_re_evaluated_cleanly(self):
+        mod = _load_inline("_re_while", self.RB.format(name="_re_while") + (
+            "def go():\n"
+            "    seen = []\n"
+            "    while len(seen) < 3:\n"
+            "        seen.append(len([S for S in --sp(S)]))\n"
+            "    return seen\n"
+        ))
+        assert mod.go() == [3, 3, 3]
+
+    def test_a_nested_comprehension_does_not_share_the_inner_variable(self):
+        mod = _load_inline("_re_nest", self.RB.format(name="_re_nest") + (
+            "def go():\n"
+            "    outer = [1, 2]\n"
+            "    return [len([T for T in --sp(T)]) for _u in outer]\n"
+        ))
+        assert mod.go() == [3, 3], (
+            "the inner goal's variable is minted per outer iteration"
+        )
+
+    def test_an_abandoned_generator_leaves_nothing_bound(self):
+        mod = _load_inline("_re_aband", self.RB.format(name="_re_aband") + (
+            "def go():\n"
+            "    f = lambda: sorted([S for S in --sp(S)])\n"
+            "    g = (S for S in --sp(S))\n"
+            "    next(g)\n"
+            "    return f(), f()\n"
+        ))
+        assert mod.go() == ([1, 2, 3], [1, 2, 3])
+
+
+class TestTheDottedFormStaysNarrow:
+    """What the dotted runtime form must NOT capture.
+
+    ``with_bases`` rewrites a goal only when the base is a MODULE OBJECT.  The
+    two ways that could go wrong both change what already-working code means,
+    so both are pinned.
+    """
+
+    RB = ("-module({name}, [sp/1])\n" "sp(1),\n" "sp(2),\n")
+
+    def test_a_string_base_that_names_a_python_module_is_NOT_captured(self):
+        """roborev job 79, finding 3.  ``resolve_module`` accepts a ``str`` or
+        an atom by looking it up in ``sys.modules``, so testing with it would
+        have let a base bound to ``"json"`` — or to a declared atom whose
+        spelling collides with any loaded module — silently turn the goal into
+        a qualified call into that Python module."""
+        from clausal.logic.seam import _module_designator
+        import json as _json
+        assert _module_designator("json") is None, "a str is not a module base"
+        assert _module_designator("time") is None
+        assert _module_designator(17) is None
+        assert _module_designator(_json) is None, (
+            "a plain Python module is not a clausal module either"
+        )
+
+    def test_a_statically_qualified_goal_still_answers(self, tmp_path):
+        """The other half of finding 3: an ``-import_from``'d spelling must
+        keep resolving exactly as it did, and its answers must not move."""
+        lib = tmp_path / "_narrow_lib.clausal"
+        lib.write_text("-module(_narrow_lib, [sp/1])\nsp(1),\nsp(2),\n")
+        _load_module("_narrow_lib", str(lib))
+        host = _load_inline("_narrow_host", (
+            "-module(_narrow_host, [])\n"
+            "-import_from(_narrow_lib, [sp])\n"
+            "\n"
+            "def run():\n"
+            "    return sorted([X for X in --sp(X)])\n"
+        ))
+        assert host.run() == [1, 2]
+
+
+class TestComprehensionRefusesAGoalInALaterClause:
+    """roborev job 79, finding 2: the crafted refusal has to fire even when
+    the FIRST clause also carries a goal.
+
+    Before the up-front scan, clause 1 lowered and the method returned, so the
+    later clause went through the generic term-position seam and CPython
+    rejected the walrus with a bare message pointing at generated code.
+    """
+
+    RB = ("-module({name}, [sp/1, tw/1])\n" "sp(1),\n" "sp(2),\n" "tw(9),\n")
+
+    def test_a_goal_in_the_second_clause_only(self):
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_inline("_lc_second", self.RB.format(name="_lc_second") + (
+                "def go():\n"
+                "    return [(A, T) for A in [1, 2] for T in --tw(T)]\n"
+            ))
+        assert "FIRST" in str(exc_info.value), str(exc_info.value)
+
+    def test_a_goal_in_the_first_AND_the_second_clause(self):
+        """The case the loop-internal refusal could not see."""
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_inline("_lc_both", self.RB.format(name="_lc_both") + (
+                "def go():\n"
+                "    return [(S, T) for S in --sp(S) for T in --tw(T)]\n"
+            ))
+        text = str(exc_info.value)
+        assert "FIRST" in text, text
+        assert "clause 2" in text, (
+            f"the refusal must name WHICH clause, not just that one is wrong: "
+            f"{text}"
+        )
