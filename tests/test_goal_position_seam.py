@@ -1303,8 +1303,8 @@ class TestDelaysAreChargedToTheRightAnswer:
 class TestDottedRuntimeModuleGoal:
     """``--m.pred(X)`` where *m* is a Python value holding a module.
 
-    THE HARNESS SHAPE.  A sealed scorer loads the rulebase under test at
-    RUNTIME (``module = _RULE.get()``) and calls into it.  The seam resolves a
+    THE DOWNSTREAM-CALLER SHAPE.  A caller loads the module under test at
+    RUNTIME and calls into it.  The seam resolves a
     goal's NAME at compile time against the host file's own rules, so before
     this the only spelling that worked was ``solve(module.pred(X))`` through
     the Python API — which stopped naming a module when a term became a cell.
@@ -1429,9 +1429,9 @@ class TestComprehensionGoalPosition:
     OUTERMOST CLAUSE ONLY, deliberately.  Only the first generator's iterable
     is evaluated in the enclosing scope; a later clause is re-evaluated per
     outer iteration and a hoisted ``$Var()`` would be shared across them.
-    Censused over the sealed corpus: 119 of 119 comprehension-iterable goals
-    are outermost and none is inner, so the unsound case is REFUSED rather
-    than built.
+    Measured over the downstream callers: every comprehension-iterable goal
+    was in the first clause and none in a later one, so the unsound case is
+    REFUSED rather than built.
     """
 
     def test_a_list_comprehension_iterates_a_goal(self):
@@ -1498,8 +1498,8 @@ class TestTheHarnessShapeEndToEnd:
     """Both halves together: a RUNTIME module's predicate, in a
     COMPREHENSION's iterable.
 
-    This is the shape the sealed scorers are written in — 119 of their goal
-    calls sit in a comprehension iterable and every one addresses a rulebase
+    This is the shape downstream callers are written in — many of their goal
+    calls sit in a comprehension iterable and every one addresses a module
     loaded at runtime — so it is the one test that says the two features
     compose rather than merely coexisting.
     """
@@ -1547,15 +1547,15 @@ class TestTheHarnessShapeEndToEnd:
         assert host.run(str(path)) == [("a", 1), ("b", 2)]
 
     def test_the_real_corpus_idiom_migrated_verbatim(self, tmp_path):
-        """The exact shape of the most common blocked site, migrated.
+        """The exact shape of the common blocked site, migrated.
 
-        From ``us/tax/irc_s1_income_tax_brackets`` (and 109 siblings):
+        The common downstream shape:
 
-            [_answer(R.value) for _ in solve(m.income_tax(P, R))]
+            [_answer(R.value) for _ in solve(m.band_rate(P, R))]
 
         becomes
 
-            [_answer(R) for R in --m.income_tax(++p, R)]
+            [_answer(R) for R in --m.band_rate(++p, R)]
 
         — the goal moves into the iterable, the loop target becomes the
         variable being read (``each`` exports it, so ``.value`` goes), and the
@@ -1566,9 +1566,9 @@ class TestTheHarnessShapeEndToEnd:
         """
         path = tmp_path / "_hs_rb3.clausal"
         path.write_text(
-            "-module(_hs_rb3, [income_tax(P, R)])\n"
-            "income_tax(100, 10),\n"
-            "income_tax(200, 20),\n"
+            "-module(_hs_rb3, [band_rate(P, R)])\n"
+            "band_rate(100, 10),\n"
+            "band_rate(200, 20),\n"
         )
         host = _load_inline("_hs_host3", (
             "-module(_hs_host3, [])\n"
@@ -1580,7 +1580,7 @@ class TestTheHarnessShapeEndToEnd:
             "\n"
             "def run(p, income):\n"
             "    m = _load_module('_hs_rb3_alias', p)\n"
-            "    return [_answer(R) for R in --m.income_tax(++income, R)]\n"
+            "    return [_answer(R) for R in --m.band_rate(++income, R)]\n"
         ))
         assert host.run(str(path), 200) == [("rate", 20)]
         assert host.run(str(path), 100) == [("rate", 10)]
@@ -1620,11 +1620,10 @@ class TestTheHarnessShapeEndToEnd:
     def test_the_module_object_itself_is_untouched_by_the_form(self, tmp_path):
         """The whole-object uses keep working, because nothing wraps *m*.
 
-        The alternative route considered here was a PROXY returned by
-        ``RuleModule.get()``, and its real risk was never the call sites: the
-        kit passes the module WHOLE to ``profile_atom``/``profile_terms`` and
-        friends, and ``profile_atom`` does ``getattr(module, value)`` and
-        RAISES on a miss BY DESIGN, which two domains depend on.  This form
+        The alternative route considered here was a proxy returned by the loader, and its real risk was never the call
+        sites: callers pass the module WHOLE to helpers that do
+        ``getattr(module, name)`` and RAISE on a miss BY DESIGN, which some
+        of them depend on.  This form
         touches the GOAL SITE only, so that risk does not transfer — pinned
         here so a later refactor cannot quietly reintroduce it.
         """

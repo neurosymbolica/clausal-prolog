@@ -662,16 +662,16 @@ def with_bases(goal: Any, bases: dict) -> Any:
     THE DOTTED RUNTIME MODULE FORM (2026-09-21).  The seam resolves a goal's
     NAME at compile time against the host file's own rules, so ``m.pred``
     reached ``solve`` as the dotted FUNCTOR ``"m.pred"`` and failed with
-    ``name 'm.pred' is not defined``.  That shut out the shape every sealed
-    scorer is built on -- load the rulebase under test at runtime
-    (``module = _RULE.get()``), then call into it -- which had been reaching
-    the engine through ``solve(module.pred(X))`` until a term stopped being a
-    self-describing goal.
+    ``name 'm.pred' is not defined``.  That shut out the shape a
+    downstream caller is built on -- load the module under test at runtime,
+    then call into it -- which had been reaching the engine through
+    ``solve(module.pred(X))`` until a term stopped being a self-describing
+    goal.
 
     *bases* maps each dotted base NAME in the goal to a zero-argument thunk
     that reads it where it was written, so a base that is a LOCAL resolves.
     The rewriter emits the thunks; a module-level ``globals()`` read would
-    miss every real caller, since the harness binds its module inside a
+    miss every real caller, since such a caller binds its module inside a
     function.
 
     CONSERVATIVE BY CONSTRUCTION.  A base is rewritten ONLY when its thunk
@@ -685,7 +685,7 @@ def with_bases(goal: Any, bases: dict) -> Any:
     alone: the qualified cell is a goal form, and nesting one inside a
     conjunction node is a lowering this has not been measured against.  Each
     ``if``/``for``/``while``/statement seam is one goal, which is the shape
-    the harnesses use.
+    such callers use.
     """
     from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName
 

@@ -6237,7 +6237,7 @@ class EmbedTransformer(NodeTransformer):
         goal's NAME at compile time, so ``m.pred`` reached ``solve`` as the
         dotted functor ``"m.pred"``.  The base's live VALUE is the missing
         half, and it cannot be read at run time from ``globals()``: the
-        harnesses this exists for bind their module INSIDE a function
+        callers this exists for bind their module INSIDE a function
         (``module = _RULE.get()``), so it is a local.  A thunk closes over it
         where it was written, which is the only spelling that sees a local.
 
@@ -6419,9 +6419,10 @@ class EmbedTransformer(NodeTransformer):
         iteration, so hoisted binds would be created ONCE and silently shared
         across every iteration — one logic variable for the whole
         comprehension.  That is refused by name rather than emitted, because
-        the wrong answer it produces looks like a rulebase defect.  Censused
-        over the sealed corpus at the time this was written: 119 of 119
-        comprehension-iterable goals are outermost and none is inner.
+        the wrong answer it produces looks like a defect in the module being
+        called.  Measured over the downstream callers at the time this was
+        written: every comprehension-iterable goal was in the first clause
+        and none in a later one.
         """
         # SCANNED UP FRONT (roborev job 79, finding 2).  Refusing inside the
         # loop only fired when clause 1 had NO goal: with a goal in clause 1
