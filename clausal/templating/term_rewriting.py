@@ -5529,6 +5529,11 @@ class EmbedTransformer(NodeTransformer):
         # TitleCase unit names in an ``-import_from(py.units, …)`` list are
         # linted once per file per name — see _warn_deprecated_unit_spelling.
         transformer._warned_unit_spellings: set[str] = set()
+        # Statements to splice ABOVE the statement currently being visited.
+        # One list per nesting level; a comprehension's goal seam pushes its
+        # ``$Var()`` binds here because a comprehension has nowhere of its own
+        # to put them — see ``_visit_comprehension``.
+        transformer._hoisted: list[list] = []
         transformer._seen_functors: dict[str, list[str]] = {}
         # Filled by visit_Module's pre-pass; a transformer used outside a module
         # walk (the REPL's seam term, a one-off clause) keeps the empty set.
@@ -6392,6 +6397,116 @@ class EmbedTransformer(NodeTransformer):
         node.orelse = transformer._visit_stmts(node.orelse)
         fix_missing_locations(node)
         return pre + [declare, node]
+
+    def visit(transformer, node):
+        """Dispatch, splicing any statements a nested seam asked to HOIST.
+
+        A comprehension's iterable cannot hold the ``$Var()`` binds its goal
+        needs: Python refuses an assignment expression there, which is what
+        the generic expression lowering would emit.  The binds have to become
+        real statements ABOVE the statement holding the comprehension, and
+        only the statement walk knows where that is.  So a comprehension
+        pushes them here and this splices them in — the same shape
+        ``visit_For`` gets for free by being a statement itself.
+        """
+        if not isinstance(node, _ast_module.stmt):
+            return super().visit(node)
+        transformer._hoisted.append([])
+        result = super().visit(node)
+        hoisted = transformer._hoisted.pop()
+        if not hoisted:
+            return result
+        if result is None:
+            return hoisted
+        return hoisted + (result if isinstance(result, list) else [result])
+
+    def _visit_comprehension(transformer, node):
+        """Lower a goal seam in the FIRST generator's iterable.
+
+        Mirrors ``visit_For``: the goal's fresh logic variables are bound by
+        hoisted ``$Var()`` statements and the iterable becomes a plain
+        ``$each(...)`` call, which is legal where an assignment expression is
+        not.  The comprehension's target binds the exported values exactly as
+        a ``for`` target does.
+
+        FIRST CLAUSE ONLY.  Only the outermost iterable is evaluated in the
+        enclosing scope; a later ``for`` clause is re-evaluated once per outer
+        iteration, so hoisted binds would be created ONCE and silently shared
+        across every iteration — one logic variable for the whole
+        comprehension.  That is refused by name rather than emitted, because
+        the wrong answer it produces looks like a rulebase defect.  Censused
+        over the sealed corpus at the time this was written: 119 of 119
+        comprehension-iterable goals are outermost and none is inner.
+        """
+        for index, generator in enumerate(node.generators):
+            found = transformer._goal_operand(generator.iter)
+            if found is None or found[1]:
+                continue
+            if index != 0:
+                raise SyntaxError(
+                    f"{transformer._filename}:{node.lineno}: a `--goal` in a "
+                    f"comprehension must be in the FIRST `for` clause; this "
+                    f"one is clause {index + 1}.  Only the outermost iterable "
+                    f"is evaluated once in the enclosing scope — a later "
+                    f"clause re-runs per outer iteration and would share one "
+                    f"logic variable across all of them.  Bind it to a name "
+                    f"above the comprehension instead.")
+            expression, _ = found
+            transformer._lint_titlecase(expression)
+            target = generator.target
+            if isinstance(target, Name):
+                targets = [target.id]
+            elif (isinstance(target, Tuple)
+                    and all(isinstance(e, Name) for e in target.elts)):
+                targets = [e.id for e in target.elts]
+            else:
+                raise SyntaxError(
+                    f"{transformer._filename}:{node.lineno}: `for ... in "
+                    f"--goal` binds plain names (a name or a tuple of names); "
+                    f"got {unparse(target)}")
+            pre, goal_ast, fresh = transformer._goal_seam(
+                expression, generator.iter)
+            for t in targets:
+                if t not in fresh:
+                    raise SyntaxError(
+                        f"{transformer._filename}:{node.lineno}: `{t}` is not "
+                        f"a variable of the goal `{unparse(expression)}`")
+            non_targets = [n for n in fresh if n not in targets]
+            var_refs = replace(Tuple(
+                elts=[replace(Name(id=f"$v_{t}", ctx=Load()), generator.iter)
+                      for t in targets],
+                ctx=Load()), generator.iter)
+            new_iter = replace(Call(
+                func=Name(id="$each", ctx=Load()),
+                args=[goal_ast, var_refs,
+                      transformer._globals_call(generator.iter)],
+                keywords=[]), generator.iter)
+            fix_missing_locations(new_iter)
+            generator.iter = new_iter
+            # HOISTED, not emitted here: see ``visit``.  ``_hoisted`` is empty
+            # only for a comprehension outside any statement, which the
+            # grammar cannot produce.
+            if transformer._hoisted:
+                transformer._hoisted[-1].extend(pre)
+                transformer._hoisted[-1].append(
+                    transformer._declare_locals(non_targets, generator.iter))
+            # Everything EXCEPT the lowered iterable still needs visiting —
+            # generic_visit would walk back into the goal we just lowered.
+            generator.ifs = [transformer.visit(i) for i in generator.ifs]
+            for other in node.generators[index + 1:]:
+                other.iter = transformer.visit(other.iter)
+                other.ifs = [transformer.visit(i) for i in other.ifs]
+            for field in ("elt", "key", "value"):
+                if getattr(node, field, None) is not None:
+                    setattr(node, field, transformer.visit(getattr(node, field)))
+            fix_missing_locations(node)
+            return node
+        return transformer.generic_visit(node)
+
+    visit_ListComp = _visit_comprehension
+    visit_SetComp = _visit_comprehension
+    visit_DictComp = _visit_comprehension
+    visit_GeneratorExp = _visit_comprehension
 
     def visit_While(transformer, node):
         found = transformer._goal_operand(node.test)

@@ -1408,3 +1408,135 @@ class TestDottedRuntimeModuleGoal:
         with pytest.raises(Exception) as exc_info:
             host.run(rb)
         assert "m.sp" in str(exc_info.value), str(exc_info.value)
+
+
+class TestComprehensionGoalPosition:
+    """``--goal(X)`` in a comprehension's ITERABLE.
+
+    Python refuses an assignment expression in a comprehension iterable —
+    ``[x for x in (y := f())]`` parses but will not compile — and before this
+    a seam there fell through to the GENERIC EXPRESSION lowering, which
+    introduces its logic vars inline as exactly that.  The goal-position
+    lowering never needed a walrus: ``visit_For`` hoists ``$v_X = $Var()`` to
+    a preceding STATEMENT and emits a plain ``$each(...)`` call, which is
+    legal in an iterable.  So this is a missing visitor, not a restriction.
+
+    OUTERMOST CLAUSE ONLY, deliberately.  Only the first generator's iterable
+    is evaluated in the enclosing scope; a later clause is re-evaluated per
+    outer iteration and a hoisted ``$Var()`` would be shared across them.
+    Censused over the sealed corpus: 119 of 119 comprehension-iterable goals
+    are outermost and none is inner, so the unsound case is REFUSED rather
+    than built.
+    """
+
+    def test_a_list_comprehension_iterates_a_goal(self):
+        mod = _load_inline("_gp_lc1", RULEBASE.format(name="_gp_lc1") + (
+            "def go():\n"
+            "    return sorted([S for S in --decide(large, verdict(S, IDS))])\n"
+        ))
+        assert mod.go() == ["prohibited", "prohibited"]
+
+    def test_a_set_comprehension_iterates_a_goal(self):
+        mod = _load_inline("_gp_sc1", RULEBASE.format(name="_gp_sc1") + (
+            "def go():\n"
+            "    return sorted({S for S in --decide(large, verdict(S, IDS))})\n"
+        ))
+        assert mod.go() == ["prohibited"]
+
+    def test_a_dict_comprehension_binds_two_variables(self):
+        mod = _load_inline("_gp_dc1", RULEBASE.format(name="_gp_dc1") + (
+            "def go():\n"
+            "    d = {P: S for P, S in --decide(P, verdict(S, IDS))}\n"
+            "    return sorted(d.items())\n"
+        ))
+        assert mod.go() == [("large", "prohibited"), ("small", "permitted")]
+
+    def test_a_generator_expression_iterates_a_goal(self):
+        mod = _load_inline("_gp_ge1", RULEBASE.format(name="_gp_ge1") + (
+            "def go():\n"
+            "    return sorted(S for S in --decide(large, verdict(S, IDS)))\n"
+        ))
+        assert mod.go() == ["prohibited", "prohibited"]
+
+    def test_the_hoist_lands_above_the_statement_that_holds_it(self):
+        """The comprehension is inside a ``return``, so the hoisted
+        ``$Var()`` has to be spliced ABOVE that statement — not into the
+        comprehension, where it would be the illegal assignment expression."""
+        mod = _load_inline("_gp_hoist", RULEBASE.format(name="_gp_hoist") + (
+            "def go():\n"
+            "    return len([S for S in --decide(large, verdict(S, IDS))])\n"
+        ))
+        assert mod.go() == 2
+
+    def test_a_comprehension_condition_still_sees_the_bound_variable(self):
+        mod = _load_inline("_gp_cond", RULEBASE.format(name="_gp_cond") + (
+            "def go():\n"
+            "    return [S for S in --decide(P, verdict(S, IDS)) if S == prohibited]\n"
+        ))
+        assert mod.go() == ["prohibited", "prohibited"]
+
+    def test_a_goal_in_a_LATER_for_clause_is_refused_by_name(self):
+        """The one case a hoist cannot serve.  It must say so rather than
+        emit something that silently shares one logic variable across every
+        outer iteration."""
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_inline("_gp_inner", RULEBASE.format(name="_gp_inner") + (
+                "def go():\n"
+                "    return [(A, S) for A in [small, large]\n"
+                "            for S in --decide(A, verdict(S, IDS))]\n"
+            ))
+        text = str(exc_info.value)
+        assert "first" in text or "outermost" in text, text
+
+
+class TestTheHarnessShapeEndToEnd:
+    """Both halves together: a RUNTIME module's predicate, in a
+    COMPREHENSION's iterable.
+
+    This is the shape the sealed scorers are written in — 119 of their goal
+    calls sit in a comprehension iterable and every one addresses a rulebase
+    loaded at runtime — so it is the one test that says the two features
+    compose rather than merely coexisting.
+    """
+
+    RB = (
+        "-module({name}, [sp/1, pair(K, V)])\n"
+        "-private([a, b])\n"
+        "sp(1),\n"
+        "sp(2),\n"
+        "pair(a, 1),\n"
+        "pair(b, 2),\n"
+    )
+
+    def test_a_comprehension_over_a_runtime_module_s_predicate(self, tmp_path):
+        path = tmp_path / "_hs_rb.clausal"
+        path.write_text(self.RB.format(name="_hs_rb"))
+        host = _load_inline("_hs_host", (
+            "-module(_hs_host, [sp/1])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "sp(99),\n"
+            "\n"
+            "def run(p):\n"
+            "    m = _load_module('_hs_rb_alias', p)\n"
+            "    return sorted([X for X in --m.sp(X)])\n"
+        ))
+        assert host.run(str(path)) == [1, 2], (
+            "the runtime module's sp/1 answered from inside the comprehension, "
+            "not the host's sp(99)"
+        )
+
+    def test_a_dict_comprehension_over_a_runtime_module(self, tmp_path):
+        path = tmp_path / "_hs_rb2.clausal"
+        path.write_text(self.RB.format(name="_hs_rb2"))
+        host = _load_inline("_hs_host2", (
+            "-module(_hs_host2, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "def run(p):\n"
+            "    m = _load_module('_hs_rb2_alias', p)\n"
+            "    return sorted({K: V for K, V in --m.pair(K, V)}.items())\n"
+        ))
+        assert host.run(str(path)) == [("a", 1), ("b", 2)]
