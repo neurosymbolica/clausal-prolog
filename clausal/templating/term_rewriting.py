@@ -1926,6 +1926,7 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalLintWarning,
     ClausalSingletonWarning,
     ClausalSeamLiteralWarning,
+    ClausalShadowedVariableWarning,
     ClausalDeprecatedSpellingWarning,
     ClausalTitleCaseIdentifierWarning,
     ClausalScaleInNameWarning,
@@ -5529,6 +5530,9 @@ class EmbedTransformer(NodeTransformer):
         # TitleCase unit names in an ``-import_from(py.units, …)`` list are
         # linted once per file per name — see _warn_deprecated_unit_spelling.
         transformer._warned_unit_spellings: set[str] = set()
+        # Names the AUTHOR bound as Python locals in each enclosing scope, for
+        # the shadowed-variable lint — see ``_author_bound_locals``.
+        transformer._python_locals: list[set] = []
         transformer._seen_functors: dict[str, list[str]] = {}
         # Filled by visit_Module's pre-pass; a transformer used outside a module
         # walk (the REPL's seam term, a one-off clause) keeps the empty set.
@@ -6221,6 +6225,8 @@ class EmbedTransformer(NodeTransformer):
         # `_term_to_goal`) — `build()` only knows how to collapse a node
         # into a plain VALUE, which is term position's job, not a goal's.
         goal_ast = transformer._wrap_runtime_bases(expression, goal_ast, anchor)
+        transformer._warn_shadowed_variables(fresh, expression, anchor,
+                                             goal_ast)
         return pre, goal_ast, fresh
 
     def _wrap_runtime_bases(transformer, expression, goal_ast, anchor):
@@ -7312,9 +7318,118 @@ class EmbedTransformer(NodeTransformer):
         if is_template_func(node):
             return compile_template_func(node, transformer._quote_map)
         transformer._scope_depth += 1
-        result = transformer.generic_visit(node)
-        transformer._scope_depth -= 1
+        # Scanned BEFORE the walk, so the lint sees the names the AUTHOR
+        # bound and not the ones the seam lowering is about to add: an
+        # exported goal variable becomes a local (``_export_stmts``,
+        # ``_declare_locals``), and scanning afterwards would report every
+        # correct site in the corpus.
+        transformer._python_locals.append(
+            transformer._author_bound_locals(node))
+        try:
+            result = transformer.generic_visit(node)
+        finally:
+            transformer._python_locals.pop()
+            transformer._scope_depth -= 1
         return result
+
+    def _author_bound_locals(transformer, node) -> set:
+        """Names *node*'s own body binds as Python locals, author-written.
+
+        Params, assignments, ``with``/``except``/``import`` aliases, and
+        ``for`` targets — but NOT a ``for`` target over a ``--goal`` iterable,
+        which is a binding the SEAM introduces and is the name of a logic
+        variable by construction.  Counting those would fire the lint on
+        every correct goal-position seam ever written.
+
+        Nested ``def``/``class`` bodies are their own scope and are skipped;
+        comprehension targets are comprehension-scoped in Python 3 and are
+        not function locals at all.
+        """
+        bound: set = set()
+        for a in (list(node.args.posonlyargs) + list(node.args.args)
+                  + list(node.args.kwonlyargs)
+                  + [node.args.vararg, node.args.kwarg]):
+            if a is not None:
+                bound.add(a.arg)
+
+        def _targets(target):
+            if isinstance(target, Name):
+                bound.add(target.id)
+            elif isinstance(target, (Tuple, List)):
+                for e in target.elts:
+                    _targets(e)
+
+        def _walk(body):
+            for item in body:
+                if isinstance(item, (FunctionDef, AsyncFunctionDef, ClassDef)):
+                    bound.add(item.name)
+                    continue                       # its own scope
+                if isinstance(item, (Assign, AugAssign, AnnAssign)):
+                    for t in (item.targets if isinstance(item, Assign)
+                              else [item.target]):
+                        _targets(t)
+                elif isinstance(item, (For, AsyncFor)):
+                    found = transformer._goal_operand(item.iter)
+                    if found is None:
+                        _targets(item.target)      # an ordinary Python loop
+                elif isinstance(item, With):
+                    for w in item.items:
+                        if w.optional_vars is not None:
+                            _targets(w.optional_vars)
+                elif isinstance(item, Try):
+                    for h in item.handlers:
+                        if h.name:
+                            bound.add(h.name)
+                elif isinstance(item, (Import, ImportFrom)):
+                    for alias_node in item.names:
+                        spelling = alias_node.asname or alias_node.name
+                        bound.add(spelling.split(".")[0])
+                for field in ("body", "orelse", "finalbody"):
+                    inner = getattr(item, field, None)
+                    if isinstance(inner, list):
+                        _walk(inner)
+                for h in getattr(item, "handlers", []) or []:
+                    _walk(h.body)
+        _walk(node.body)
+        return bound
+
+    def _warn_shadowed_variables(transformer, fresh, expression, anchor,
+                                 goal_ast=None):
+        """Warn for each name lowered as a LOGIC VARIABLE that is also an
+        author-bound Python local in this scope.
+
+        Two sources, and the second is the one that bites.  ``fresh`` is the
+        goal's own variables.  A name captured by a ``++`` escape is NOT in
+        it: the escape lowers to ``PyThunk(lambda P: P, [(P := $Var())])``,
+        whose walrus REBINDS the author's own name to a fresh variable — so
+        the local's value is clobbered on the way in, and reading the emitted
+        walrus targets is what finds it.  Measured: ``P = 2`` then
+        ``for V in --pair(++P, V)`` answers every row.
+        """
+        if not transformer._python_locals:
+            return
+        locals_here = transformer._python_locals[-1]
+        captured = set(fresh)
+        if goal_ast is not None:
+            for node in walk(goal_ast):
+                if (isinstance(node, NamedExpr)
+                        and isinstance(node.target, Name)):
+                    captured.add(node.target.id)
+        for name in sorted(captured):
+            if name not in locals_here:
+                continue
+            import warnings  # noqa: PLC0415
+            warnings.warn(ClausalShadowedVariableWarning(
+                f"{transformer._filename}:{getattr(anchor, 'lineno', '?')}: "
+                f"`{name}` is bound as a Python local here, but inside the "
+                f"seam `{unparse(expression)}` it is a LOGIC VARIABLE — the "
+                f"local's value does not reach the goal, and `++{name}` does "
+                f"not change that. The goal is less constrained than it "
+                f"reads, so it answers every row rather than the one you "
+                f"meant, and nothing raises. Rename the local to lower case "
+                f"(`{name.lower()}`) and pass `++{name.lower()}`, or rename "
+                f"the variable if you did mean a fresh one."
+            ), stacklevel=2)
 
     visit_AsyncFunctionDef = visit_FunctionDef
 

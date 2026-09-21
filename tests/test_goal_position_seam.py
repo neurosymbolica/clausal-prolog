@@ -1806,3 +1806,111 @@ class TestComprehensionRefusesAGoalInALaterClause:
             f"the refusal must name WHICH clause, not just that one is wrong: "
             f"{text}"
         )
+
+
+class TestAllCapsLocalReadAsAVariableWarns:
+    """A Python local whose name is ALL_CAPS is read as a logic VARIABLE
+    inside a seam — even under ``++`` — and that is silent.
+
+    Measured before the warning existed, with ``P = 2`` a Python local:
+
+        for V in --pair(++P, V)   ->  [10, 20, 30]   should be [20]
+        if  --pair(++P, V)        ->  10             should be 20
+
+    No error, no exception: the escape does not cross the value, ``P`` is a
+    fresh variable, and the goal is simply less constrained than it reads.
+    The corpus convention is ALL_CAPS for exactly these locals (``P``, ``D``,
+    ``S``, ``C``, ``R``), so the migration would meet it at a large fraction
+    of sites.
+
+    THE SIGNAL IS A CONJUNCTION, available at lowering time with no runtime
+    information: the name is being lowered as a logic variable AND the same
+    name is bound as a Python local in the enclosing scope.  Neither half
+    alone is a signal — a lone ALL_CAPS name in a goal is an ordinary logic
+    variable, and a lone ALL_CAPS local is ordinary Python.
+    """
+
+    RB = ("-module({name}, [pair(K, V)])\n"
+          "pair(1, 10),\n" "pair(2, 20),\n" "pair(3, 30),\n")
+
+    def _warns(self, tag, body):
+        import warnings as _w
+        from clausal.lint_warnings import ClausalLintWarning
+        with _w.catch_warnings(record=True) as caught:
+            _w.simplefilter("always")
+            _load_inline(f"_ac_{tag}", self.RB.format(name=f"_ac_{tag}")
+                         + "def go():\n" + body)
+        return [str(x.message) for x in caught
+                if issubclass(x.category, ClausalLintWarning)]
+
+    def test_it_warns_when_an_allcaps_local_is_read_as_a_variable(self):
+        msgs = self._warns("warn", (
+            "    P = 2\n"
+            "    out = []\n"
+            "    for V in --pair(++P, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        hit = [m for m in msgs if "P" in m]
+        assert hit, f"no warning for the collision; got {msgs}"
+        text = hit[0]
+        # BOTH readings must be named: the failure mode is that the author
+        # believes the opposite of what the compiler did.
+        lowered = text.lower()
+        assert "logic variable" in lowered, text
+        assert "local" in lowered, text
+        assert "P" in text
+        assert "++P does not change that" in text.replace("`", ""), (
+            "the message must say the ++ escape does NOT rescue it — that is "
+            f"the belief the author holds: {text}")
+
+    def test_it_does_NOT_warn_on_a_lowercase_local(self):
+        """The workaround must be silent, or the lint trains people to ignore
+        it through the migration."""
+        msgs = self._warns("lower", (
+            "    p_val = 2\n"
+            "    out = []\n"
+            "    for V in --pair(++p_val, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        assert not [m for m in msgs if "p_val" in m], msgs
+
+    def test_it_does_NOT_warn_on_a_goal_variable_that_is_not_a_local(self):
+        """A plain ALL_CAPS logic variable in a goal is ordinary — half the
+        conjunction is not a signal."""
+        msgs = self._warns("plain", (
+            "    out = []\n"
+            "    for V in --pair(K, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        assert not [m for m in msgs if "'K'" in m or " K " in m], msgs
+
+    def test_it_does_NOT_warn_on_the_seam_s_own_loop_target(self):
+        """``V`` is the ``for`` target of the seam itself, so it is a Python
+        binding only because the seam made it one.  Warning here would fire on
+        every correct site in the corpus."""
+        msgs = self._warns("target", (
+            "    out = []\n"
+            "    for V in --pair(K, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        assert not [m for m in msgs if "'V'" in m], msgs
+
+    def test_the_warning_does_not_refuse_the_load(self):
+        """Warn, never refuse: the construct is legal and an author may mean
+        it.  A refusal would also make this unlandable mid-migration."""
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            mod = _load_inline("_ac_live", self.RB.format(name="_ac_live") + (
+                "def go():\n"
+                "    P = 2\n"
+                "    out = []\n"
+                "    for V in --pair(++P, V):\n"
+                "        out.append(V)\n"
+                "    return out\n"
+            ))
+        assert mod.go() == [10, 20, 30], "still loads, still runs, still wrong"
