@@ -309,7 +309,25 @@ class ResidualConstraints(Exception):
 
 
 def export(var: Any) -> Any:
-    """The fully dereferenced copy of *var*'s value for Python to keep."""
+    """The fully dereferenced copy of *var*'s value for Python to keep, in the
+    PYTHON BOUNDARY representation.
+
+    THE OUT BOUNDARY (spec 2026-09-21).  This is the one place a term becomes a
+    value Python keeps, so it is where the representation stops::
+
+        an atom    ->  atom('x')   a ``str`` SUBCLASS, advisory: == its text
+        a string   ->  'text'      a plain Python ``str``
+
+    Both directions matter.  Tagging the atom is what lets a caller — and
+    ``++`` on the way back — tell an atom from text when Python has only one
+    string form.  Rendering the string as plain text is what stops the carrier
+    tuple leaking into code that sorts, hashes or dict-keys it: a downstream
+    sweep met exactly that as ``TypeError: '<' not supported between instances
+    of 'tuple' and 'str'``, and as two key spaces that silently never joined.
+
+    Applied at EVERY DEPTH, not just the top: an answer is usually a compound,
+    and a caller reading ``v[2]`` has crossed the boundary just as much as one
+    reading ``v``."""
     from clausal.logic.solve import _deref_walk
     from clausal.logic.variables import deref, is_var
     d = deref(var)
@@ -318,7 +336,28 @@ def export(var: Any) -> Any:
             f"--: exported variable is unbound and constrained "
             f"({sorted(d.attrs)}); exports are answers. Keep the store alive "
             f"with an explicit Trail, or ask for the residue inside the goal")
-    return _deref_walk(var)
+    return _to_boundary(_deref_walk(var))
+
+
+def _to_boundary(value: Any) -> Any:
+    """*value* in the Python boundary representation, recursively.
+
+    Ordering matters: the chars carrier is a TUPLE, so it must be recognised
+    before the generic tuple walk, or a string would be rebuilt element-wise
+    as a 2-tuple of ('$chars', text).  That is the generic-branch-ahead-of-the-
+    specific-one mirror, and it is why this is a chain rather than a dispatch
+    table."""
+    from clausal.logic.atoms import atom as _atom, is_atom as _is_atom
+    from clausal.logic.cells import is_chars, chars_text
+    if _is_atom(value):
+        return _atom(value)
+    if is_chars(value):
+        return chars_text(value)
+    if type(value) is tuple:
+        return tuple(_to_boundary(v) for v in value)
+    if type(value) is list:
+        return [_to_boundary(v) for v in value]
+    return value
 
 
 def _module_of(module_globals: dict):

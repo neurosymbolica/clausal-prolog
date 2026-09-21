@@ -32,7 +32,7 @@ need an atom back mint one.
 
 from __future__ import annotations
 
-from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
+from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling, atom
 from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import deref, walk
 from clausal.terms import DictTerm, SegString
@@ -118,7 +118,20 @@ def wrap_text(val):
     spec 2026-09-18): a Python ``str`` a ``++`` escape or an f-string hands
     back is TEXT, and text is the chars carrier.  Top level only, the mirror
     of :func:`unwrap_atom`'s one-level outbound rule -- a container crosses
-    raw.  Stage 2 makes a bare str the ATOM and this becomes identity."""
+    raw.  Stage 2 makes a bare str the ATOM and this becomes identity for a
+    plain ``str``.
+
+    THE LEAK RULE (boundary spec 2026-09-21): an ``atom`` INSTANCE handed back
+    here is normalised to a plain ``str``.  ``atom`` is a boundary type — it
+    exists so ``--`` can tell Python which it has — and ``is_atom`` is
+    ``type(term) is str``, so an instance that reached term space would be
+    INVISIBLE to it.  ``--`` now hands atoms out tagged, so an author who feeds
+    one straight back through ``++`` is the ordinary round trip, not a misuse:
+    this is where it becomes a term again.
+
+    What a plain ``str`` MEANS here is unchanged and is step 4's question."""
+    if type(val) is atom:
+        return str.__str__(val)        # the LEAK RULE: a boundary tag never enters a term
     return val                         # STAGE 2: a str a thunk hands back IS the atom (identity)
 
 
