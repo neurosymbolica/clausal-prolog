@@ -6,18 +6,30 @@ class, peer of `str`); `sorted()` mixing `atom` and `str` by text is accepted
 for now — standard order of terms belongs on the Clausal side, returned as a
 list; the downstream dict-key count comes from the corpus lane.
 
-**The headline, and it is not what the design implies: `++` HAS NO CONVERSION
-TODAY.** `to_term` exists, has a registry, and is called by NOTHING on the
-escape path — verified by spying on it through a live `++` evaluation:
+**CORRECTED 2026-09-21, after steps 1 and 2 landed.** My original headline
+said `++` has no conversion and that wiring one was the whole risk. That was
+WRONG, and wrong in the expensive direction.
 
-    to_term called during ++ ?  False
+`to_term` is indeed called by nothing on the escape path — I verified that by
+spying on it — but I drew the wrong conclusion. The `++` path does not use the
+registry; it uses `clausal/logic/to_python.py`, which ALREADY has both hooks:
 
-So this is not "register two types". It is "wire a conversion into a hot path
-that has none", and that is the whole risk.
+    wrap_text(val)     $text_in       INBOUND  — currently identity for a
+                                                plain str, BY the stage-2
+                                                decision ("a str a thunk hands
+                                                back IS the atom")
+    unwrap_atom(val)   $unwrap_atom   OUTBOUND — a top-level atom -> spelling
+
+So step 4 is largely CHANGING ONE FUNCTION, not threading a converter through
+779 sites. The 779 still matters for what those sites MEAN afterwards, but the
+mechanism exists and is exercised.
+
+The lesson is the one this file keeps finding: "no caller" is a fact about the
+thing I grepped for, not about the path.
 
 ## The three pieces
 
-### 1. The `atom` class — small, specified, low risk
+### 1. The `atom` class — LANDED (`818143d2`), advisory form
 
 New, in `clausal/logic/atoms.py` beside `mint`/`is_atom`/`spelling`. The spec
 carries the implementation and the acceptance test. Two traps, both measured
@@ -30,7 +42,7 @@ and both easy to reintroduce:
   priority does not fire, and `'a' != atom('a')` answers False while
   `atom('a') != 'a'` answers True.
 
-### 2. The OUT boundary (`--`) — one function, wide reach
+### 2. The OUT boundary (`--`) — LANDED (`ec30f483`), with the leak rule
 
 `seam.export()` is the single point where a term becomes a value Python keeps
 (`each`/`once_bind` both go through it). It must wrap an atom as `atom(...)`
