@@ -1534,28 +1534,101 @@ def _term_field_names_py(obj: Any) -> tuple[str, ...]:
     raise TypeError(f"Not a term instance: {obj!r}")
 
 
-def term_field_names_of_class(cls: Any) -> tuple[str, ...] | None:
-    """Return field name strings for a term CLASS (not instance), or None.
+def _db_for_module_name(module_name: str):
+    """The Database of a LOADED module, by name, or None.
 
-    The class-level twin of ``term_field_names``: a ``PredicateMeta`` class
-    (including a zero-arity atom class) yields ``cls._fields``; a bare
-    ``@dataclass`` class yields its declared field names in declaration
-    order — the same set ``term_field_names`` yields for an *instance* of
-    it, nothing excluded. Anything else (a non-term class, or a non-class
-    value) yields None rather than raising, since callers use this to test
-    "is this class term-shaped" rather than asserting it.
-
-    Models ``compiler/head_match.py``'s ``_resolved_field_names`` (read
-    that first) but lives here as the canonical version; that function
-    delegates its class-cases to this one.
+    Split out so the mangled-name arm can be tested without a real module
+    load, and so the lookup has one home when W4b-2 adds callers.
     """
-    if not isinstance(cls, type):
+    import sys  # noqa: PLC0415
+    mod = sys.modules.get(module_name)
+    return getattr(mod, "db", None)
+
+
+def field_names_for(value, *, arity=None, db=None, namespace=None):
+    """Field names for a declared functor, or None.
+
+    FIRST a declaredness reader, second a shape reader: ``None`` means the
+    value names nothing declared, ``()`` means declared with ZERO fields (the
+    0-arity predicate written ``p()``), and ``len()`` is the arity.  The
+    compiler's dominant use of the signature registry is the presence test
+    ("a declared functor, or an atom being applied as one?"), which never
+    reads a name -- see the spec's premise check.
+
+    Four arms, in order:
+
+    1. a ``@dataclass`` class -> its declared field names.  Permanent.
+    2. a ``PredicateMeta`` class -> ``cls._fields``.  DELETED AT W4b-3; it is
+       the legacy answer and the census in ``tools/w4b1_census`` measures
+       whether arm 3 agrees with it everywhere.
+    3. a NAME (``str``, plain or mangled) -> the registry chain below.
+       Permanent, and the point of the change: at W4b-2 a module attribute
+       for a predicate becomes a mangled atom, and this arm already answers.
+    4. anything else -> ``None``.
+    """
+    if isinstance(value, str):
+        return _field_names_for_name(value, arity, db, namespace)
+    if not isinstance(value, type):
         return None
-    if isinstance(cls, PredicateMeta):
-        return cls._fields
-    if dataclasses.is_dataclass(cls):
-        return tuple(f.name for f in dataclasses.fields(cls))
+    if isinstance(value, PredicateMeta):
+        return value._fields
+    if dataclasses.is_dataclass(value):
+        return tuple(f.name for f in dataclasses.fields(value))
     return None
+
+
+def _field_names_for_name(name, arity, db, namespace):
+    """Arm 3.  Demangle -> exact db read -> by-name db read -> the
+    namespace's exec-time carrier -> the builtin registry -> None."""
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    if is_mangled(name):
+        # A handle carries its module: resolve against the OWNER's db, never
+        # the caller's, or a name declared in both answers for the wrong one.
+        module_name, name = demangle(name)
+        db = _db_for_module_name(module_name)
+    if db is not None:
+        if arity is not None:
+            found = db.signature_for(name, arity)
+            if found is not None:
+                return found
+        else:
+            # ``signature_for`` needs an arity; the by-name read is the only
+            # thing that can answer without one, and it resolves a two-arity
+            # name to the LAST declaration (database.py:1010).
+            found = db.declared_fields_by_name(name)
+            if found is not None:
+                return found
+    if namespace is not None:
+        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY  # noqa: PLC0415
+        found = (namespace.get(FUNCTOR_SIGNATURES_KEY) or {}).get(name)
+        if found is not None:
+            return tuple(found)
+    # A name that cannot be answered during bootstrap (this module mid-import)
+    # IS the None case -- the accessor's whole contract is to answer None
+    # rather than raise, so a bootstrap ImportError here is swallowed, not
+    # propagated.
+    try:
+        from clausal.logic.builtins import _BUILTIN_FIELDS  # noqa: PLC0415
+    except ImportError:
+        return None
+    if arity is not None:
+        return _BUILTIN_FIELDS.get((name, arity))
+    for (functor, _a), fields in _BUILTIN_FIELDS.items():
+        if functor == name:
+            return fields
+    return None
+
+
+def term_field_names_of_class(cls: Any) -> tuple[str, ...] | None:
+    """Field names for a term CLASS, or None.
+
+    RETAINED ALIAS (W4b-1): ``field_names_for`` is the accessor now.  This
+    name is in ``__all__`` and out-of-tree callers use it, so it survives
+    until W4b-3 retires it with the class.  A ``str`` reaching here would
+    take arm 3 with no db and no namespace, which is the same ``None`` the
+    old class-only implementation gave -- no caller changes behaviour.
+    """
+    return field_names_for(cls)
 
 
 def term_field_values(obj: Any) -> tuple:
@@ -1808,6 +1881,6 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            # not break in the same commit that renames it.
            "is_atom",
            "is_atom_value",
-           "term_field_names", "term_field_names_of_class",
+           "term_field_names", "term_field_names_of_class", "field_names_for",
            "term_field_values", "term_field_dict",
            "make_predicate", "make_atom"]
