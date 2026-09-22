@@ -67,16 +67,39 @@ class TestTranslationSyntax:
 
     @pytest.mark.parametrize("source_path,golden_path", ALL_CASES, ids=[_case_id(c) for c in ALL_CASES])
     def test_every_clause_ends_with_dot(self, source_path, golden_path):
-        """Every non-empty, non-directive line sequence ends with a period."""
+        """Every emitted clause is terminated.
+
+        A continuation line (an indented body goal) does not end with '.', so
+        the unit is the CLAUSE, not the line: the emitter separates clauses --
+        facts, rules, DCG rules and directives alike -- with a blank line, so a
+        run of consecutive non-blank lines is one clause and its LAST line
+        carries the terminator.
+
+        This assertion is the whole test. It previously consisted of a loop
+        whose body was three comments, so all 11 parametrisations passed
+        against any output whatsoever, including output with no terminators at
+        all; the group count is asserted below so it cannot go hollow that way
+        again by the groups silently becoming empty.
+        """
         # nv
         golden = golden_path.read_text(encoding="utf-8")
-        for line in golden.strip().split("\n"):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            # Continuation lines (indented body goals) don't end with '.'
-            # Only top-level clause-ending lines end with '.'
-            # Directive lines start with ':-' — also end with '.'
+        groups, cur = [], []
+        for line in golden.split("\n"):
+            if line.strip():
+                cur.append(line)
+            elif cur:
+                groups.append(cur)
+                cur = []
+        if cur:
+            groups.append(cur)
+
+        assert groups, f"{golden_path.name}: no clauses found -- nothing was checked"
+        for group in groups:
+            last = group[-1].strip()
+            assert last.endswith("."), (
+                f"{golden_path.name}: clause beginning {group[0].strip()!r} "
+                f"is not terminated; its last line is {last!r}"
+            )
 
     @pytest.mark.parametrize("source_path,golden_path", ALL_CASES, ids=[_case_id(c) for c in ALL_CASES])
     def test_no_trailing_whitespace(self, source_path, golden_path):
