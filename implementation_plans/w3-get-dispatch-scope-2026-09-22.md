@@ -177,3 +177,62 @@ list_dispatch, database_ops, solve), the instance unification hooks, and
 the C instance arms 0/2/3 (Task 5 step 2, blocked behind exactly this) —
 with the tests that exercise that path migrated or retired deliberately,
 and their disappearance accounted for in the gate. After that, the class.
+
+### W4a LANDED (2026-09-22) — the instance path is gone, Python and C
+
+`main` a3452a88 -> b9e40edd, five commits, ff (main had not moved). Plan
+`docs/superpowers/plans/2026-09-22-w4a-instance-path-retirement.md`, spec
+`docs/superpowers/specs/2026-09-22-w4a-instance-path-retirement-design.md`.
+
+What went: `_clausal_head` (a raising `RetiredStateError` tombstone, the
+name kept so an out-of-tree minter fails loudly), the `_clausal_instances`
+bridge branch AND its last reader in `terms_to_ast`, `make_predicate(...,
+instances=True)`, `_make_fast_new`/`_clausal_new`, the instance-rebuild arms
+(database.py x2 -> the dataclass constructor, list_dispatch -> not liftable,
+database_ops -> deleted, solve.py -> `cls`), the PredicateMeta arm of both
+Python twins, and C arms 0/2/3. `py_register_predicate_meta`,
+`PredicateMeta_type` and the four C CLASS arms STAY — W4b's, and a test
+asserts this landing did not take them.
+
+Gate: house suite NEW 0 / GONE 0 (146 failures before and after, 16782
+passed); package gate NEW 0 / GONE 0 (105 = 105, 1566 passed). Barrier scan
+of the range: 0 hits over 639 lines.
+
+TWO METHOD NOTES worth more than the diff:
+
+1. **The plan's gate rule could not hold as written.** "GONE == the retired
+   test list" compares FAILURE sets, and every retired test was PASSING on
+   main, so it can never appear in GONE. The instrument that actually sees a
+   retirement is the COLLECTED NODE ID diff: 17080 ids on main, 17020 after,
+   72 lost = 67 retired + 5 renamed in place, 12 added = those 5 + 3 carried
+   over + 4 new pins. Every retired id was read and classified individually.
+
+2. **The C change needed a positive control that could not come from the
+   corpus.** With every constructor retired, no term exists that the C and
+   Python twins can disagree about, so a parity probe passes on the OLD `.so`
+   exactly as happily as on the new one. The test therefore smuggles an
+   instance past the constructors — `cls.__new__(cls)` calls neither
+   `__call__` nor `_clausal_head` — and asks the C entry point directly: True
+   on the old `.so` against the twin's False, verified red before the
+   rebuild, green only after it.
+
+`.so`: built in a same-sha worktree, cp-then-mv'd into the room and then into
+the clone (`ec439fb1a262f758...`). TWO LIVE IMPORTERS held the clone's old
+`.so` at landing time (a law-portal `manage.py runserver`, pids 1046864 and
+2933588); they keep the old inode until restart, so that server is running
+pre-W4a C against post-W4a Python until it is restarted. The mix is benign
+(the new Python cannot build the instance the old C arm would recognise) but
+it is not the tree.
+
+W4b's inbox, recorded rather than smuggled into this landing:
+* the five dead `_clausal_new` gates (solve, inspection, terms_to_ast,
+  arg_index, and three C arms) plus the interned `str__clausal_new` in both
+  extensions — each site now says it is dead and points at the rule in
+  solve.py;
+* `c_term_field_names`, now a constant NULL, and its seven call sites;
+* `reflection.py`'s vestigial `_clausal_head` call-node rewrite;
+* a class BODY can still carry `_clausal_instances` as inert data (the
+  tombstone is a metaclass data descriptor; a namespace key bypasses it).
+  Refusing it needs a check in `PredicateMeta.__new__` against every retired
+  name — a new refusal W2 deliberately did not make, so not made here either.
+  Nothing reads the flag any more.

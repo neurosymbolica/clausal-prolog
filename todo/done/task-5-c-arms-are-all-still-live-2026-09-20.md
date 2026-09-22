@@ -1,6 +1,30 @@
 # Task 5 (the C arms) is BLOCKED: all 17 arms still fire — measured
 
-**Status:** open. Task 5 step 1 (twin-parity pins) is DONE; step 2 (delete the
+**Status:** CLOSED 2026-09-22 by W4a (main b9e40edd). Arms 0, 2 and 3 are
+deleted; arms 4-7 and `py_register_predicate_meta` wait for W4b (the class),
+and arm 1 (the `@dataclass` probe) never goes. The unblocking was exactly
+what this file said it would take: the INSTANCE PATH had to go first, so
+nothing could produce the term those arms classified. Everything below is
+the measurement that established that, kept as the record of why the
+original Task 5 sequencing was wrong.
+
+The corpus fix recorded under "What DID get done" was itself undone by W4a,
+deliberately and in the same breath as the arms: the three rows spelling
+`Pt._clausal_head(...)` and `TestTheCorpusStillCoversInstances` are gone,
+because the term they restored can no longer be built. The class's mirror
+guard survives as
+`TestTheCorpusRowsAreTheShapesTheyAreNamedFor::test_the_cell_rows_are_still_cells`,
+which keeps the lesson (a row's NAME is a claim about its shape) pointed at
+the half that is still checkable.
+
+W4a's own positive control for the deletion is in
+`tests/test_instance_path_retired.py`: an instance smuggled past the retired
+constructors via `cls.__new__(cls)`, which the old `.so` classified as a term
+and the new one does not.
+
+---
+
+**Original status:** open. Task 5 step 1 (twin-parity pins) is DONE; step 2 (delete the
 instance arms) cannot be done yet, and this records exactly why and what has
 to move first.
 
