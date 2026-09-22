@@ -139,3 +139,16 @@ channel" the P2 notes re-sequenced W5's C-arm deletions behind. W4's
 in-tree core is therefore the head channel (heads as cells), BEFORE the
 class can go; it is compiler + database + C-side work, gated by the house
 suite and the package gate, and independent of the downstream census.
+
+## RULED 2026-09-22 (operator) — W4's Python boundary
+
+* **GO for the downstream census** (the corpus lane's two-number
+  definition). Relayed.
+* **`m.pred` becomes the module-qualified atom** (the `-hide` mangling,
+  `m<US>pred`), and the engine DEMANGLES it at the dispatch funnel and in
+  `solve`, so a held handle resolves with no `module=`. Approved.
+* **`--` should work anywhere** — the operator's intent is that a
+  hold-and-call site wraps `handle(X)` in the seam rather than rewriting
+  it to a tuple by hand, in any expression position (lambda bodies,
+  arguments, expression statements). What that needs from the seam is
+  being verified: the seam's functor slot is resolved by NAME today.
