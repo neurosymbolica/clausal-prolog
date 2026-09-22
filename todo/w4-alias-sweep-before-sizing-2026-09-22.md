@@ -189,3 +189,16 @@ boundary pieces land); 1 classification site + 22 type-name sites +
 field reads in a handful of tooling files, all migratable to
 `is_v`/`vkind`/`vfield`/`vitems` today; and a runtime-hook pass for
 shapes 4/5 outside the sealed bodies, not yet built.
+
+**Result 3 closed (the corpus lane, same day):** the silently dead module is
+REPAIRED — `_kind` delegates to `reflection.vkind` (1 line, 18 guards; the
+callers keep asking "what kind" and the question is finally aimed at the
+vocabulary, not the Python type), 28 field reads to `vfield`. Positive
+control through the classification path: a file with an import directive
+yielded 0 before, a full two-name structure after. Suites unchanged
+(2 pre-existing failures before and after, caches CLEARED between runs).
+Recorded for W4's sizing: NO TEST could have found this — the module's own
+tests asserted on what it returned for their inputs and it returned a
+consistent, plausible, EMPTY answer for every one. Only a census that asks
+"what touches a retiring name" (Q2) rather than "what fails" (Q1) sees it.
+Still open: the runtime pass for shapes 4/5, which also settles shape 3.
