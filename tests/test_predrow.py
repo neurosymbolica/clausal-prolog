@@ -375,7 +375,7 @@ from clausal.logic.predicate import PredicateMeta, make_predicate  # noqa: E402
 
 def test_bound_class_clauses_is_the_database_row_list_itself():
     """The whole point of the inversion: one list, not two that must be kept
-    in step. Before Task 2 ``cls._state_row().clauses`` was a private per-class list and
+    in step. Before Task 2 ``cls._clauses`` was a private per-class list and
     ``Database.assertz`` had to mirror every append onto it."""
     db = Database()
     p = make_predicate("p", ["a"])
@@ -994,6 +994,21 @@ def test_a_field_named_like_a_retired_attribute_stays_a_field():
     cls._lock()
     assert cls._state_row().locked is True
     assert inst._locked == "field value"
+
+
+def test_ordinary_class_introspection_never_meets_a_tombstone():
+    """The tombstones sit on the METACLASS, and ``dir(cls)`` does not list
+    metaclass attributes -- so ``inspect.getmembers``/``help``/``vars`` on a
+    predicate class never fetch a retired name (roborev on 9028f9b3 assumed
+    the opposite; this pins the measured answer).  Only a walker that brings
+    the retired NAMES itself sees the error, which is what it is for."""
+    import inspect
+    cls = make_predicate("Introspect", ["x"])
+    names = {name for name, _ in inspect.getmembers(cls)}
+    assert names.isdisjoint(_RETIRED)
+    assert "_row" in names, "the raw slot is an ordinary class attribute"
+    with pytest.raises(RetiredStateError):
+        getattr(cls, "_clauses", None)
 
 
 # ── F2: reading never mints; ensure_clauses() is the one promotion point ────

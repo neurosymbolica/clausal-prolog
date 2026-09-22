@@ -148,7 +148,7 @@ for the strict-walker check (`assert_all_nodes_located`).
 **Phase 7 — Install**  (`predicate._install`)
 The top-level dispatch wrapper is registered with the database
 (`db.set_dispatch(functor, arity, fn)`) and/or installed on the
-`PredicateMeta` class (`pred_cls._dispatch_fn = fn`).
+`PredicateMeta` class's row (`pred_cls._state_row().dispatch_fn = fn`).
 
 ---
 

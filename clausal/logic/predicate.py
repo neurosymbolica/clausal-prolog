@@ -620,6 +620,12 @@ class RetiredStateError(Exception):
     exists to prevent -- the engine's own goal resolver probed exactly that way
     before W2 migrated it.  Not a ``RuntimeError`` either: the drive loop reads
     a ``RuntimeError`` out of a generator as exhaustion.
+
+    Collateral, measured: none for the ordinary introspection of a predicate
+    CLASS.  The tombstones live on the metaclass, and ``dir(cls)`` does not
+    list metaclass attributes, so ``inspect.getmembers(cls)``, ``help(cls)``
+    and ``vars(cls)`` never touch them.  A walker that fetches one of the
+    retired NAMES from a list of its own sees the error, which is the point.
     """
 
 

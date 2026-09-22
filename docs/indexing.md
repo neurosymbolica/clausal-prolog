@@ -538,7 +538,7 @@ The indexing optimisations described above all apply to the *callee*: how quickl
 Without call-site specialisation, a call to a locked predicate looks like:
 
 ```python
-# base_globals["_disp_Color_1"] = Color._dispatch_fn  (captured at compile time)
+# base_globals["_disp_Color_1"] = Color._state_row().dispatch_fn  (captured at compile time)
 StepGenerator(_disp_Color_1, this_generator, 'red', trail)
 ```
 
@@ -574,10 +574,10 @@ The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier,
 
 ??? abstract "Implementation"
 
-    **Bucket dict exposure** — `_index_plans`. After the final dispatch fn is built inside `compile_predicate_trampoline`, the per-position dicts are stored on the predicate class with every bucket wrapped by `_make_call_site_bucket_trampoline` — call sites drive these functions *directly* via `StepGenerator`, so each SIGNAL-mode bucket is completed to the full trampoline contract (terminal `(fail, DONE)` yield, TRO re-dispatch through the dispatch fn):
+    **Bucket dict exposure** — `_index_plans`. After the final dispatch fn is built inside `compile_predicate_trampoline`, the per-position dicts are stored on the predicate's row with every bucket wrapped by `_make_call_site_bucket_trampoline` — call sites drive these functions *directly* via `StepGenerator`, so each SIGNAL-mode bucket is completed to the full trampoline contract (terminal `(fail, DONE)` yield, TRO re-dispatch through the dispatch fn):
 
     ```python
-    pred_cls._index_plans = {
+    pred_cls._state_row().index_plans = {
         pos: {key: _make_call_site_bucket_trampoline(bfn, fn, DONE, ...)
               for key, bfn in idx_dict.items()}
         for pos, idx_dict, _ in plans

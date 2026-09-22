@@ -79,7 +79,7 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
-        assert pred_cls._row is not None, "compiled into a module, so on its row"
+        assert pred_cls._row is not None, "no db was passed: _install minted the class's private detached row"
         assert isinstance(pred_cls._state_row().index_plans, dict)
 
     def test_index_plans_keys_are_positions(self):
@@ -139,7 +139,7 @@ class TestIndexPlansExposed:
         clauses = _make_fact_clauses("tiny", [("a",)])
         pred_cls = _make_pred_cls("tiny", ["x"])
         compile_predicate("tiny", 1, clauses, pred_cls=pred_cls)
-        assert pred_cls._row is not None, "compiled into a module, so on its row"
+        assert pred_cls._row is not None, "no db was passed: _install minted the class's private detached row"
         assert pred_cls._state_row().index_plans == {}
 
     def test_index_plans_not_set_when_no_pred_cls(self):
@@ -219,7 +219,7 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("lookup", ["key", "val"])
         compile_predicate("lookup", 2, clauses, pred_cls=pred_cls)
-        assert pred_cls._row is not None, "compiled into a module, so on its row"
+        assert pred_cls._row is not None, "no db was passed: _install minted the class's private detached row"
         # Position 1 should be indexed (all values distinct)
         assert 1 in pred_cls._state_row().index_plans
 

@@ -422,7 +422,7 @@ from clausal.logic.variables import Var
 
 fib = make_predicate("fib", ["n", "result"])
 fib._assertz(Clause(head=fib(n=Var(), result=Var()), body=[True]))
-compile_predicate("fib", 2, fib._clauses, pred_cls=fib)
+compile_predicate("fib", 2, fib._state_row().clauses, pred_cls=fib)
 
 mod = Module("test", module_dict={"fib": fib})
 ```
@@ -508,7 +508,7 @@ mod = Module("test", module_dict={"fib": fib})
     1. Check that the target predicate is not locked (see [Directives](directives.md) for `-dynamic`)
     2. assertz/retract the clause on the [Database](database_ops.md)
     3. Look up the PredicateMeta class from `db.module_dict`
-    4. Sync `pred_cls._clauses` with the database
+    4. Nothing to sync: the class reads the database's row (`pred_cls._state_row()` is `db.row(functor, arity)` once bound)
     5. Recompile with module globals
 
     ### `++()` Implementation

@@ -514,7 +514,7 @@ def _clause_author(pred_cls, exporter, exporter_module):
     so rather than guess.
     """
     # The ROW, not the `_clauses_source` facade (W2, 2026-09-22).  The
-    # facade was `cls._state_row().source`, so this
+    # facade was `(cls._row or cls._detached_row()).source`, so this
     # diagnostic MINTED a private throwaway row for any class that had
     # none -- to read a field that is `None` on a fresh row anyway.
     # `getattr` keeps the old contract of answering for a non-class too.

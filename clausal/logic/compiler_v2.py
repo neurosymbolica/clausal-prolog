@@ -474,7 +474,7 @@ def compile_module(
     # name like ``term_expansion`` that is present but defined elsewhere.
     #
     # Locking one of those used to MINT A DETACHED ROW as a side effect --
-    # ``_locked`` was a facade over ``cls._state_row()`` -- and
+    # ``_locked`` was a facade over ``(cls._row or cls._detached_row())`` -- and
     # then wrote the lock into a private single-predicate Database nobody else
     # can reach.  So the lock had no enforcement effect: the refusal path is
     # ``database.write_refusal(row, ...)`` reading ``row.locked`` off the REAL
@@ -2012,7 +2012,7 @@ def _process_declarations(module_items: list, module_dict: dict,
                 if name in predicate_functors:
                     continue
                 # ``existing._row`` RAW, not ``existing._clauses``: the
-                # facade was `cls._state_row().clauses`, so
+                # facade was `(cls._row or cls._detached_row()).clauses`, so
                 # merely ASKING whether a class carries clauses MINTED a
                 # private throwaway row for every data functor that reached
                 # here (measured: 6 of the 12 detached rows over 56 fixtures

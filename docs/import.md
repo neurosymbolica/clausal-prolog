@@ -77,7 +77,7 @@ Called once per `head <- body` clause as the module executes. Steps:
 1. `logic_module.define_predicate(predicate_node)` — flattens the `And`-chain body, normalises fact heads (ground values → `Var + Is`), asserts the resulting `Clause` to the database, and registers the keyword signature.
 
 2. Look up the predicate class from `module_dict` by functor name. If it is a `PredicateMeta` instance:
-   - Replace `pred_cls._clauses[:]` with the DB's full clause list (the DB performs normalisation; pred_cls stays in sync).
+   - Replace the class's clause list in place (`pred_cls._ensure_clauses()[:] = ...`) with the DB's full clause list (the DB performs normalisation; the class reads the DB row, so it stays in sync).
    - Set `pred_cls._signature = pred_cls._fields` if not yet set.
 
 3. Record `(functor, arity) → pred_cls` in the pending dict. Compilation is deferred until all clauses have been asserted.

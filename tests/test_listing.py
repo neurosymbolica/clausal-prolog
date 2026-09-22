@@ -141,7 +141,7 @@ class TestListing:
 # ── Golden: byte-identical output for a class argument (P3-3 Task 8) ─────────
 #
 # Pinned at BASE (commit 4687fc18), before ``listing/1`` moved from a class-
-# reading (``val._state_row().clauses`` off a ``PredicateMeta``) builtin to a db-receiving
+# reading (``val._clauses`` off a ``PredicateMeta``, then) builtin to a db-receiving
 # one that also accepts a bare str atom and a ``Name/Arity`` cell (P3-3 Task
 # 8's new (d)/(e) argument shapes). The class-argument path must keep
 # printing this EXACT text — not just "contains the right substrings" like

@@ -131,11 +131,11 @@ _inject_resolved_targets(call_targets, base_globals, db, globals_)
 
 ### Locked dispatch caching
 
-For predicates that are **locked** (non-dynamic, `_locked = True`) at compilation time, `_inject_resolved_targets` also captures the dispatch function directly into `base_globals` under a stable key:
+For predicates that are **locked** (non-dynamic, `row.locked` is `True`) at compilation time, `_inject_resolved_targets` also captures the dispatch function directly into `base_globals` under a stable key:
 
 ```python
 _disp_key("Edge", 2)  →  "_disp_Edge_2"
-base_globals["_disp_Edge_2"] = Edge._dispatch_fn
+base_globals["_disp_Edge_2"] = Edge._state_row().dispatch_fn
 ```
 
 The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter`) check the current compilation context for cached keys. when a callee's dispatch key is present, the generated `StepGenerator` construction uses the cached local directly instead of calling `._get_dispatch()` at every invocation:
@@ -161,7 +161,7 @@ Locked dispatch caching captures the dispatch *closure* for locked callees. Call
 `_inject_bucket_refs_trampoline` runs after `_inject_resolved_targets`. It scans each clause body for `Call` nodes whose callee is locked and has `_index_plans`. For each such call site it converts the term-level argument to an AST expression, extracts a static key via `_static_call_key`, and — if the key appears in the callee's bucket dict — injects the bucket function into `base_globals` under a readable string key:
 
 ```python
-base_globals["Color.bucket(pos=0, 'red')"] = Color._index_plans[0]["red"]
+base_globals["Color.bucket(pos=0, 'red')"] = Color._state_row().index_plans[0]["red"]
 ```
 
 `_dispatch_call_trampoline` then emits an `ast.Name` referencing that key instead of either `_disp_Color_1` or `Color._get_dispatch()`:
@@ -456,10 +456,10 @@ compile_predicate(
 ### _install
 
 `_install` stores the dispatch function in two places:
-1. `pred_cls._dispatch_fn = fn` — the PredicateMeta class holds dispatch directly.
+1. `pred_cls._state_row().dispatch_fn = fn` — the row the PredicateMeta class faces (the Database's once bound; a private detached one on the `db=None` path).
 2. `db.set_dispatch(functor, arity, fn, lazy_fn)` — the Database entry is also updated (kept for backward compatibility with code that looks up dispatch through the Database).
 
-A lazy recompile closure is also registered in both locations. when `assertz`/`retract` invalidates dispatch by setting `_dispatch_fn = None`, the next call to `_get_dispatch()` invokes the lazy closure to recompile from the current clause list.
+A lazy recompile closure is also registered in both locations. when `assertz`/`retract` invalidates dispatch by setting `row.dispatch_fn = None`, the next call to `_get_dispatch()` invokes the lazy closure to recompile from the current clause list.
 
 ---
 
@@ -521,7 +521,7 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
 | 2. [Directives](directives.md) | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
 | 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |
-| 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. Clauses are synced to `pred_cls._clauses` |
+| 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. The class is bound to the Database row (`_bind_row`), so `pred_cls._state_row().clauses` IS the database's list |
 | 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
 | 6. [Tabling](tabling.md) | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
 | 7. Locking | Non-[dynamic](directives.md) predicates are locked (`pred_cls._lock()`) to prevent runtime modification |

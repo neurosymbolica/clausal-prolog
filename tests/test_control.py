@@ -108,3 +108,19 @@ class TestTimeGoal:
         err = capsys.readouterr().err
         # Both inner and outer emit a timing line
         assert err.count("solution(s)") == 2
+
+
+def test_time_goal_resolution_of_a_dataclass_term_still_falls_through():
+    """``is_term_instance`` is also true of a ``@dataclass`` instance, whose
+    class is no ``PredicateMeta`` and has no ``_row``.  The W2 rewrite of the
+    ``getattr(cls, '_dispatch_fn', None)`` probe in ``_goal_dispatch_and_args``
+    must keep answering ``(None, None)`` for it, not raise (roborev on
+    9028f9b3, confirmed by a probe before the fix)."""
+    import dataclasses
+    from clausal.logic.builtins.control import _goal_dispatch_and_args
+
+    @dataclasses.dataclass
+    class NotAPredicate:
+        x: int
+
+    assert _goal_dispatch_and_args(NotAPredicate(1)) == (None, None)

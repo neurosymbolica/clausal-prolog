@@ -42,7 +42,7 @@ idiom keeps working.  The refusal fires only where clauses exist to lose.
 And it must be accurate about ownership
 ---------------------------------------
 ``todo/done/imported-clause-refusal-misattributes-ownership.md``: an earlier attempt
-read ``len(pred_cls._state_row().clauses)`` and credited them all to the module named in
+read ``len(pred_cls._clauses)`` (the facade of the day) and credited them all to the module named in
 the ``-import_from``.  Where a *previous importer* had implemented a
 clause-free export, that blamed a module which had declared nothing — and,
 because ownership was keyed on the module NAME, loading one file twice under
