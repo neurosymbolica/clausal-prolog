@@ -152,3 +152,40 @@ migrator to swap it for `cell_functor`.
 
 Two remaining failures in that gate's suite are stale TITLECASE heads in
 the tests' own inline fixtures (a load-time error since 2d48769f), not W2's.
+
+## Downstream result 3 of 3 (the corpus lane, 2026-09-22) — THE CENSUS IS IN
+
+    ENGINE 4f404716 start = end (a first run VOIDED when main moved mid-census)
+    POPULATION 9233 .py scanned / 9233 parsed / 0 unparsed / 0 unresolved
+
+    shape                                     Q1 broken-now       Q2 blast radius
+    1 isinstance through an in-scope name     0                   1  (the classification site)
+    2 type(x) is Name / literal "Name"        19 SILENTLY WRONG   22 (19 live + 3 tests)
+    3 cell-field read (LOWER BOUND)           4                   4
+    4 class held as a value, called later     NOT STATICALLY ANSWERABLE
+    5 .__name__/.__module__ off a predicate   NOT STATICALLY ANSWERABLE
+
+**A THIRD CATEGORY, neither broken-loud nor fine-until-W4: SILENTLY DEAD
+NOW.** One downstream assessment module defines `_kind(term) =
+type(term).__name__`; every reified item is a tuple, so all 18 of its
+`_kind(x) != "Clause"`-style guards are permanently true and the module
+matches nothing, returns nothing, raises nothing. Its importer is the
+classification site. `reflection.vkind` (main 05ebcd91) is the drop-in:
+`_kind = vkind` moves the contract from "the type's name" to "the
+vocabulary's name". Repair is the corpus lane's, awaiting their operator.
+
+Shape 3's lower bound is weaker than it looks: that same module holds 30
+field reads and was OUTSIDE the "names reflection" denominator (it imports
+`reify_file` by name). Read shape 3 as 4 confirmed + at least 30 in one
+known file; the true figure needs the runtime pass shapes 4/5 need.
+
+Two instrument bugs fixed mid-run: an unresolvable binding counted as a
+hit; `from clausal import reflection as R` invisible (caught by the
+planted positive). Planted positives 3/3, 1/1, 2/2.
+
+**W4 sizing, downstream, from all three results:** the sealed bodies'
+31 hold-and-call sites (migrate by wrapping `--handle(X)` once the
+boundary pieces land); 1 classification site + 22 type-name sites +
+field reads in a handful of tooling files, all migratable to
+`is_v`/`vkind`/`vfield`/`vitems` today; and a runtime-hook pass for
+shapes 4/5 outside the sealed bodies, not yet built.
