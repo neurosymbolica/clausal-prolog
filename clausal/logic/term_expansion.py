@@ -25,6 +25,7 @@ from typing import Any
 from clausal.logic.atoms import mint as _mint
 from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
+from clausal.logic.variables import Var as _Var
 from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.builtins._helpers import functor_arity
 from clausal.logic.variables import Var, Trail, deref, unify
@@ -172,10 +173,75 @@ def _collect_imported_te_clauses(module_dict: dict) -> list:
     return result
 
 
+#: The field order of the ``module_expansion_state`` term, in one place.
+_MODULE_STATE_FIELDS = ("init", "final", "state")
+
+_FRESH = object()
+
+
+def module_expansion_state(init=_FRESH, final=_FRESH, state=_FRESH):
+    """The ``module_expansion_state(Init, Final, State)`` TERM.
+
+    A constructor, not a ``make_predicate`` class.  It was never a predicate
+    -- no clauses, never a goal -- and post-P2 the class built a cell anyway,
+    so all the class added was a ``PredicateMeta`` with no Database row, i.e.
+    a private throwaway row on the first facade read.  ``_make_module_state``
+    minted a FRESH CLASS on every call to construct one term.
+
+    Keeps what the class did: positional, keyword, partial construction
+    filling the missing trailing fields with fresh variables (TE clause
+    bodies destructure this by unification), and ``TypeError`` on a
+    misspelled field.
+    """
+    return ("module_expansion_state",
+            _Var() if init is _FRESH else init,
+            _Var() if final is _FRESH else final,
+            _Var() if state is _FRESH else state)
+
+
+def _data_functor_ctor(functor: str, arity: int):
+    """A constructor for a data functor whose NAME is only known here.
+
+    The expansion patterns can introduce a brand-new functor (a
+    ``logged_fact`` an expansion invents), and constructing it at expansion
+    time needs SOMETHING CALLABLE bound to the name -- the globals placeholder
+    raises "not in scope as a term class" when nothing is.  A
+    ``make_predicate`` class satisfied that and left a row-less
+    ``PredicateMeta`` behind; a constructor satisfies it and does not.
+
+    Keeps the class's behaviour: positional, the ``arg0..argN-1`` keyword
+    names it generated, partial construction filling the rest with fresh
+    variables, and ``TypeError`` rather than a silent drop.
+    """
+    fields = tuple(f"arg{i}" for i in range(arity))
+
+    def ctor(*args, **kwargs):
+        if len(args) > arity:
+            raise TypeError(
+                f"{functor}() takes at most {arity} positional argument"
+                f"{'' if arity == 1 else 's'} ({len(args)} given)")
+        slots = list(args) + [_FRESH] * (arity - len(args))
+        for key, value in kwargs.items():
+            if key not in fields:
+                raise TypeError(
+                    f"{functor}() got an unexpected keyword argument {key!r}")
+            index = fields.index(key)
+            if index < len(args):
+                raise TypeError(
+                    f"{functor}() got multiple values for argument {key!r}")
+            slots[index] = value
+        return (functor, *(_Var() if slot is _FRESH else slot
+                           for slot in slots))
+
+    ctor.__name__ = functor
+    ctor.__qualname__ = functor
+    ctor._fields = fields
+    return ctor
+
+
 def _make_module_state(init_list, final_list, user_state):
     """Create a module_expansion_state(Init, Final, State) term."""
-    module_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
-    return module_cls(init_list, final_list, user_state)
+    return module_expansion_state(init_list, final_list, user_state)
 
 
 def _collect_functor_arities(node, out: dict, seen: set) -> None:
@@ -248,9 +314,11 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"])
     lm.module_dict["term_expansion"] = te_cls
 
-    # Also ensure module_expansion_state class exists for state threading.
-    mod_cls = make_predicate("module_expansion_state", ["init", "final", "state"])
-    lm.module_dict["module_expansion_state"] = mod_cls
+    # Also ensure module_expansion_state is constructible for state threading.
+    # A CONSTRUCTOR, not a class: the globals placeholder that raises "not in
+    # scope as a term class" fires when nothing CALLABLE is bound to the name,
+    # so a function satisfies it and leaves no row-less PredicateMeta behind.
+    lm.module_dict["module_expansion_state"] = module_expansion_state
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
     # the (quasi-quoted) expansion patterns — e.g. a brand-new ``logged_fact``
@@ -262,8 +330,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
         _collect_functor_arities(pred_node, functor_arities, _seen_ids)
     for name, arity in functor_arities.items():
         if name not in lm.module_dict:
-            lm.module_dict[name] = make_predicate(
-                name, [f"arg{i}" for i in range(arity)])
+            lm.module_dict[name] = _data_functor_ctor(name, arity)
 
     # assertz each expansion clause.
     for pred_node in expansion_clauses:
