@@ -66,3 +66,33 @@ is not a handle and keeps its old error. Review round: roborev 82, four
 findings fixed, three not reproduced and pinned. Gates NEW 0 / GONE 0 both
 ways. Piece 3 (hosted dotted-base seam) NOT done; W4 proper (mint handles
 with the import name; the head channel; the class) not started.
+
+## The seam gap (2026-09-22, found by the downstream lane) — built on feat/seam-local-handle-2026-09-22, not yet landed
+
+My "``h = m.pred; --h(X)`` works today" held only for a MODULE-LEVEL binding.
+The seam resolved functor names against module globals, so a handle in a
+function local, a parameter, a lambda parameter or a comprehension target
+raised ``NameError`` (and under ``-implicit_functors`` silently built a cell
+named after the VARIABLE). Fixed: the seam-mode term transformer hands such a
+name to the seam as a thunk of its VALUE; the cell's functor is read off the
+value. **A HANDLE CARRIES ITS MODULE**: a class-built handle cell is the
+module-qualified goal ``(":", <the class's module>, (name, args...))``, a
+mangled-atom handle says the same in one spelling. Goal position
+(``for``/``if``/comprehension iterable) builds the goal through the seam
+builder first, since it is solved in the HOST module. Also fixed:
+``seam.dotted()`` (``.object``, not ``.value``), piece 3.
+
+### THE MIGRATION RULE for the downstream hold-and-call sites (measured by
+### the downstream lane on 7d843d35): WRAP THE CALL, NEVER THE ITERABLE
+
+    handle(X)                       ->  --handle(X)          a VALUE: the qualified goal cell
+    solve(cell, module=m)           ->  solve(cell)          module= now redundant, harmless
+    for K in --handle(K, V): ...    ->  DO NOT WRITE THIS in a body that also solves
+
+``--handle(...)`` built and handed to ``solve()`` stays on the solve path:
+plain ``str`` atoms, carrier tuples for strings, no ``export()``. The
+ITERABLE / test form is goal position and EXPORTS (``atom``-tagged atoms,
+plain-str strings) — the exact mix the all-solve ruling forbids. Until the
+two-out-paths question (``todo/two-out-paths-disagree-about-atom-tagging-
+2026-09-22.md``) is ruled, this is a discipline. The operator's word to put
+``--`` back at those 31 sites must reach the downstream lane directly.
