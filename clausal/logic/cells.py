@@ -527,6 +527,33 @@ def resolve_qualified_goal_cell(
     return module, goal
 
 
+def qualify_mangled_goal(goal: Any) -> Any:
+    """A goal whose functor is a MANGLED atom (``module<US>name``, the
+    ``-hide`` spelling) as the module-qualified goal ``(":", module_name,
+    inner)`` the engine already resolves; anything else comes back untouched.
+
+    W4's Python boundary (ruled 2026-09-22): a predicate HANDLE is the
+    module-qualified atom, so a goal built from one -- ``(handle, X)`` from
+    the seam, or the bare handle as an arity-0 goal -- carries its module in
+    its own spelling and needs no ``module=``.  Pure data: the module is
+    named by its dotted string, and ``resolve_qualified_goal_cell`` looks
+    that up as it does any designator.  Called at the three entry points
+    (``solve``'s goal normalisation, ``call/N``, ``_dispatch_at``).
+    """
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+
+    if type(goal) is str:
+        if is_mangled(goal):
+            module_name, name = demangle(goal)
+            return (QUALIFIED_GOAL_FUNCTOR, module_name, name)
+        return goal
+    is_cell, functor = _cell_shape(goal) if isinstance(goal, tuple) else (False, None)
+    if is_cell and type(functor) is str and is_mangled(functor):
+        module_name, name = demangle(functor)
+        return (QUALIFIED_GOAL_FUNCTOR, module_name, (name, *goal[1:]))
+    return goal
+
+
 def make_cell(functor: Any, *args: Any) -> tuple:
     """Construct a cell ``(functor, *args)``, enforcing the slot-0 ruling.
 

@@ -35,6 +35,7 @@ from typing import Any
 from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName, Node
 from clausal.terms import PyThunk, Var
 from clausal.logic.cells import QUALIFIED_GOAL_FUNCTOR
+from clausal.logic.atoms import is_atom
 
 
 def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
@@ -137,6 +138,16 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 resolved = _resolve_functor_binding(fname, module_globals)
                 if resolved is not None:
                     binding = resolved[0]
+                if is_atom(binding):
+                    # W4 (ruled 2026-09-22): a name bound to an ATOM is a
+                    # predicate HANDLE -- after the class goes, ``h = m.pred``
+                    # binds the module-qualified atom -- and the cell's
+                    # functor is that spelling, so the module travels in it.
+                    if kwargs:
+                        raise SyntaxError(
+                            f"--: {fname!r} is bound to a predicate handle; a "
+                            f"goal cell takes positional arguments only")
+                    return (sys.intern(binding), *args)
                 if isinstance(binding, PredicateMeta):
                     if kwargs:
                         raise SyntaxError(

@@ -55,6 +55,7 @@ from clausal.logic.cells import (
     compound_cell_shape,
     refuse_control_construct_cell,
     resolve_qualified_goal_cell,
+    qualify_mangled_goal,
 )
 from clausal.terms import Compound, Undefined
 from clausal.terms import (
@@ -216,6 +217,7 @@ def _term_to_goal(term: Any) -> Any:
 
     Simple_ast nodes and other goal forms pass through unchanged.
     """
+    term = qualify_mangled_goal(term)      # W4: a mangled functor is a qualified goal
     from clausal.logic.predicate import PredicateMeta
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
@@ -852,6 +854,7 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
         goal for class-instance terms, and its failure is the same ``TypeError``
         it has always raised.
     """
+    goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
     is_cell_goal, functor = compound_cell_shape(goal)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3:
@@ -916,6 +919,7 @@ def _strip_module_qualification(goal, module):
 
     Non-qualified goals come back untouched.
     """
+    goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
     is_cell_goal, functor = compound_cell_shape(goal)
     if not (is_cell_goal
             and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
@@ -1005,6 +1009,13 @@ def call(
     ------
     KeyError  if the predicate is not defined in module.
     """
+    # W4: a module-qualified NAME (the mangled handle) is its own module
+    # designator -- switch to that module and continue with the bare name.
+    if type(functor) is str:
+        from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+        if is_mangled(functor):
+            _mod_name, functor = demangle(functor)
+            module = resolve_module(_mod_name, module, "call/N")
     # Fast path: predicate class passed directly — no module lookup needed.
     if hasattr(functor, '_get_dispatch'):
         dispatch_fn = functor._get_dispatch()

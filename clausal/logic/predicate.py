@@ -1454,6 +1454,26 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         )
         raise LogicException(string_goal_error(chars_text(obj), arity, "call/N"))
     if type(obj) is str:   # STAGE 2: the atom (was the arity-0 cell)
+        from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+        if is_mangled(obj):
+            # W4 (ruled 2026-09-22): a MANGLED atom is a module-qualified
+            # predicate HANDLE -- the value a held ``m.pred`` becomes once the
+            # class goes -- and a compiled body calling a name bound to one
+            # arrives here.  Resolve it in ITS module, off the row.
+            from clausal.logic.solve import resolve_module  # noqa: PLC0415
+            _mod_name, _name = demangle(obj)
+            _module = resolve_module(_mod_name, None, "call/N")
+            _fn = _module.db.get_dispatch(_name, arity)
+            if _fn is not None:
+                return _fn
+            from clausal.logic.exceptions import (  # noqa: PLC0415
+                LogicException, existence_error,
+            )
+            from clausal.terms import Compound  # noqa: PLC0415
+            raise LogicException(existence_error(
+                "procedure", Compound("/", (_name, arity)),
+                f"{_mod_name}.{_name}/{arity} is not defined in module "
+                f"{_mod_name!r} (reached through a module-qualified handle)"))
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
         # through THE FLIP: a bare atom is the arity-0 CELL, reached here
         # whenever a goal resolves to a NAME that turned out to be data, not
