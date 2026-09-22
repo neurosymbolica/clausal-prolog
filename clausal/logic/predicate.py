@@ -1497,8 +1497,22 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             culprit = obj.__name__
             what = f"module {obj.__name__!r}"
         else:
-            culprit = type(obj).__name__
-            what = f"a {type(obj).__name__} value {obj!r}"
+            # The CULPRIT is the offending value itself, as an ISO
+            # type_error's is (roborev on e7ac22ad); the human context carries
+            # a BOUNDED repr that cannot itself raise -- building an exception
+            # must never be the thing that fails.
+            import reprlib as _reprlib  # noqa: PLC0415
+            try:
+                repr(obj)
+                culprit = obj
+            except Exception:  # noqa: BLE001 - a repr that raises loses nothing
+                # ``LogicException`` renders its term with ``repr`` when it
+                # is built, so a value whose repr raises cannot be the
+                # culprit without the diagnostic itself failing; its TYPE
+                # stands in.  (``reprlib.repr`` alone cannot decide this: it
+                # swallows the failure and returns a placeholder.)
+                culprit = type(obj).__name__
+            what = f"a {type(obj).__name__} value {_reprlib.repr(obj)}"
         raise DispatchTargetError(type_error(
             "callable", culprit,
             f"DispatchTargetError: the goal at arity {arity} resolved to "

@@ -33,8 +33,8 @@ def test_a_module_target_raises_dispatch_target_error():
     assert inner.args[0] == "callable"
     rendered = str(exc)
     assert "DispatchTargetError" in rendered, "the token the downstream gates key on"
-    assert "some.package" in rendered, "what the goal actually resolved to"
-    assert "module" in rendered
+    assert "module 'some.package'" in rendered, "what the goal actually resolved to"
+    assert inner.args[1] == "some.package", "the culprit is the module's name"
 
 
 def test_any_object_without_the_protocol_raises_the_same_class():
@@ -42,8 +42,29 @@ def test_any_object_without_the_protocol_raises_the_same_class():
     mistake, and it must never surface as a raw AttributeError again."""
     with pytest.raises(DispatchTargetError):
         _dispatch_at(object(), 1)
-    with pytest.raises(DispatchTargetError):
+    with pytest.raises(DispatchTargetError) as info:
         _dispatch_at(42, 0)
+    inner = info.value.term.args[0]
+    assert inner.args[1] == 42, "the culprit is the offending VALUE, not its type"
+    assert "a int value 42" in str(info.value)
+
+
+def test_a_huge_or_hostile_repr_cannot_break_the_diagnostic():
+    """Building an exception must never itself raise, and must not render a
+    multi-megabyte message: the context repr is bounded and guarded."""
+    class Hostile:
+        def __repr__(self):
+            raise RuntimeError("repr exploded")
+
+    with pytest.raises(DispatchTargetError) as info:
+        _dispatch_at(Hostile(), 1)
+    assert "Hostile" in str(info.value)
+    assert info.value.term.args[0].args[1] == "Hostile", (
+        "a value whose repr raises cannot be the culprit; its type stands in")
+    with pytest.raises(DispatchTargetError) as info:
+        _dispatch_at(list(range(100_000)), 1)
+    assert "a list value [0, 1, 2, 3, 4, 5, ...]" in str(info.value), (
+        "the context shows a BOUNDED repr")
 
 
 def test_a_foreign_implementor_is_still_called_bare():
@@ -62,10 +83,12 @@ def test_a_foreign_implementor_is_still_called_bare():
 def test_a_predicate_class_is_still_arity_aware():
     cls = make_predicate("W3Pred", ["a", "b"])
     assert isinstance(cls, PredicateMeta)
-    with pytest.raises(Exception) as info:
-        _dispatch_at(cls, 5)          # wrong arity: the class refuses
-    assert not isinstance(info.value, DispatchTargetError), (
-        "a wrong-arity call on a real predicate is a different mistake")
+    with pytest.raises(NotImplementedError) as info:
+        _dispatch_at(cls, 5)
+    # The CLASS arm was taken: a clause-less predicate has no dispatch and
+    # says so its own way.  Had the value arm been taken, this would have been
+    # a DispatchTargetError -- a predicate class is never "not a predicate".
+    assert not isinstance(info.value, DispatchTargetError)
 
 
 def test_the_atom_case_keeps_its_own_shape():
@@ -76,3 +99,39 @@ def test_the_atom_case_keeps_its_own_shape():
         _dispatch_at("just_an_atom", 1)
     assert not isinstance(info.value, DispatchTargetError)
     assert info.value.term.args[0].functor == "existence_error"
+
+
+def _write(tmp_path, name, src):
+    import textwrap
+    p = tmp_path / name
+    p.write_text(textwrap.dedent(src).lstrip())
+    return p
+
+
+def test_a_compiled_dotted_goal_that_lands_on_a_submodule_raises_it(tmp_path, monkeypatch):
+    """END TO END, the shape the downstream tooling actually meets: a
+    ``.clausal`` body calls ``pkg.shadow(X)``, and ``pkg.shadow`` is a
+    SUBMODULE of the imported package rather than a predicate inside it (a
+    module-shadow collision).  The compiled goal goes through the runtime
+    funnel ``$dispatch_at(pkg.shadow, 1)`` and must surface as
+    ``DispatchTargetError`` -- a ``LogicException`` -- not as CPython's
+    ``AttributeError: module ... has no attribute '_get_dispatch'``."""
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var
+
+    monkeypatch.syspath_prepend(str(tmp_path))
+    pkg = tmp_path / "w3shadowpkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from . import shadow\n")
+    (pkg / "shadow.py").write_text("VALUE = 1\n")
+    use = _write(tmp_path, "w3shadowuse.clausal", """
+        -import_module(w3shadowpkg)
+
+        w3_use(X) <- w3shadowpkg.shadow(X)
+    """)
+    mod = _load_module("_w3shadowuse", str(use))
+    with pytest.raises(LogicException) as info:
+        list(call("w3_use", Var(), module=mod.__dict__["$module"]))
+    assert isinstance(info.value, DispatchTargetError)
+    assert "module 'w3shadowpkg.shadow'" in str(info.value)
