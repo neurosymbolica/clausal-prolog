@@ -71,7 +71,10 @@ def test_signature_for_falls_back_to_the_class_for_a_hand_built_dict():
     from clausal.logic.predicate import make_predicate
 
     cls = make_predicate("foo", ["a", "b"])
-    cls._signature = cls._fields
+    # The DETACHED row explicitly: this test is the hand-built-dict, no-
+    # Database case, so the class has no row and `_detached_row()` is what
+    # the retired `_signature` facade would have minted here.
+    (cls._row or cls._detached_row()).signature = cls._fields
     env = _GlobalsDb({"foo": cls})
     assert env.signature_for("foo", 2) == ("a", "b")
     # the arity check M2 was conditioned on: same name, wrong arity, no answer

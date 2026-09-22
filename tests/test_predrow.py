@@ -435,7 +435,7 @@ def test_class_writes_land_in_the_database():
     with p._mutate("test", "recompile"):        # the gate, P3-3 Task 3
         p._dispatch_fn = fn
     p._lazy_recompile = lazy
-    p._signature = ("a",)
+    p._row.signature = ("a",)   # the row; the facade is retired
     p._locked = True
     p._row.source = ("m", "/tmp/m.clausal")   # the row; the facade is retired
     row = db.row("p", 1)
@@ -545,7 +545,6 @@ def test_bare_make_predicate_is_a_working_predicate_with_no_database():
     assert cls._clauses == []
     assert cls._dispatch_fn is None
     assert cls._lazy_recompile is None
-    assert cls._signature is None
     assert cls._locked is False
 
     c = Clause(head=cls(1), body=[])
@@ -908,21 +907,20 @@ _RELOCATED = (
     "_clauses",
     "_dispatch_fn",
     "_lazy_recompile",
-    "_signature",
     "_locked",
 )
 
 
-def test_instances_still_resolve_all_five_relocated_attributes():
+def test_instances_still_resolve_all_four_relocated_attributes():
     cls = make_predicate("InstFace", ["x"])
     inst = cls._clausal_head(1)          # P2: the instance, not the cell
     assert [getattr(inst, n) for n in _RELOCATED] == [
-        [], None, None, None, False,
+        [], None, None, False,
     ], "an instance must read the same defaults the class does"
     # A POSITIVE CONTROL on the list itself: a stale `_RELOCATED` with a name
     # the engine no longer relocates would make the comparison above pass on
     # a shorter list without anyone noticing which name went.
-    assert len(_RELOCATED) == 5
+    assert len(_RELOCATED) == 4
 
 
 def test_instance_reads_of_all_seven_are_live_through_the_class():
@@ -940,7 +938,7 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     with cls._mutate("test", "recompile"):          # via the class, gated
         cls._dispatch_fn = fn
     cls._lazy_recompile = lazy
-    cls._signature = ("x",)
+    cls._row.signature = ("x",)
     cls._locked = True
     cls._row.source = ("m", "/tmp/m.clausal")
 
@@ -948,7 +946,6 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     assert inst._clauses is db._clauses[("InstLive", 1)]
     assert inst._dispatch_fn is fn
     assert inst._lazy_recompile is lazy
-    assert inst._signature == ("x",)
     assert inst._locked is True
 
     # ... and a SECOND instance made after the writes agrees with the first.
@@ -970,14 +967,17 @@ def test_a_field_named_like_a_relocated_attribute_stays_a_field():
     """``__slots__`` has already claimed that name; injecting a property of the
     same name would be a ValueError at class creation. The field wins, and the
     CLASS-level read still answers from the row."""
-    cls = make_predicate("FieldClash", ["_signature"])
-    assert cls._fields == ("_signature",)
+    # ``_locked`` as the example: ``_signature`` was the one until W2 retired
+    # that facade (2026-09-22), and the property this pins belongs to whichever
+    # names are STILL relocated.
+    cls = make_predicate("FieldClash", ["_locked"])
+    assert cls._fields == ("_locked",)
     inst = cls._clausal_head("field value")   # P2: the instance, not the cell
-    assert inst._signature == "field value", "the field, not the row"
-    assert cls._signature is None, "the class still reads the row"
-    cls._signature = ("_signature",)
-    assert cls._signature == ("_signature",)
-    assert inst._signature == "field value"
+    assert inst._locked == "field value", "the field, not the row"
+    assert cls._locked is False, "the class still reads the row"
+    cls._locked = True
+    assert cls._locked is True
+    assert inst._locked == "field value"
 
 
 # ── F2: reading never mints; ensure_clauses() is the one promotion point ────

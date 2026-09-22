@@ -190,8 +190,15 @@ class _GlobalsDb:
         # bound here answers — arity-checked, because a module dict holds one
         # class per NAME and this shim is handed the arity.
         cls = self._globals.get(functor)
-        return (cls._signature if isinstance(cls, PredicateMeta)
-                and len(cls._fields or ()) == arity else None)
+        if not (isinstance(cls, PredicateMeta)
+                and len(cls._fields or ()) == arity):
+            return None
+        # `cls._row` RAW, not the `_signature` facade (W2).  The facade would
+        # MINT a private row for a class that has none, to read a field that
+        # is `None` on a fresh row anyway -- so `None` here is the same answer
+        # without the allocation.
+        _row = cls._row
+        return _row.signature if _row is not None else None
 
 
 def _record_term_type(types: dict[str, type], term: Any) -> type:

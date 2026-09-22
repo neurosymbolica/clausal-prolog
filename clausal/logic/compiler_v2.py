@@ -290,8 +290,10 @@ def compile_module(
                 # to land in the Database, not in an unminted per-row list.
                 pred_cls._ensure_clauses()[:] = db_clauses
                 record_clause_source(pred_cls, module_name, module_dict)
-                if pred_cls._signature is None:
-                    pred_cls._signature = pred_cls._fields
+                # THE ROW, not the `_signature` facade (W2): bound just above.
+                _sig_row = pred_cls._row
+                if _sig_row.signature is None:
+                    _sig_row.signature = pred_cls._fields
                 pending[key] = pred_cls
             else:
                 pending[key] = None
@@ -389,8 +391,12 @@ def compile_module(
                     # first clause arrives by runtime assertz, so its class
                     # must already be reading the row that assertz appends to.
                     pred_cls._bind_row(db, functor, arity, authorized=True)
-                    if pred_cls._signature is None:
-                        pred_cls._signature = pred_cls._fields
+                    # THE ROW, not the `_signature` facade (W2): `_bind_row`
+                    # on the line above guarantees it, so there is nothing for
+                    # the facade's `or _detached_row()` arm to do here.
+                    _sig_row = pred_cls._row
+                    if _sig_row.signature is None:
+                        _sig_row.signature = pred_cls._fields
                     pending[key] = pred_cls
                 else:
                     pending[key] = None

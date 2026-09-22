@@ -578,7 +578,6 @@ _RELOCATED_STATE_NAMES = (
     "_clauses",
     "_dispatch_fn",
     "_lazy_recompile",
-    "_signature",
     "_locked",
 )
 
@@ -597,6 +596,8 @@ _RETIRED_STATE_NAMES = {
     "_clauses_source":
         "the row's `source` field; reach it as "
         "`(cls._row or cls._detached_row()).source`",
+    "_signature":
+        "the row's `signature` field, or `db.row(f, n).signature`",
 }
 
 
@@ -729,7 +730,7 @@ class PredicateMeta(type):
     needed.
 
     It also adds predicate dispatch machinery:
-      _clauses, _dispatch_fn, _lazy_recompile, _signature, _locked,
+      _clauses, _dispatch_fn, _lazy_recompile, _locked
       _clauses_source
     all of which are READ-THROUGH PROPERTIES onto one
     :class:`~clausal.logic.database.PredRow` held in ``cls._row`` (P3-3
@@ -1050,14 +1051,6 @@ class PredicateMeta(type):
     @_lazy_recompile.setter
     def _lazy_recompile(cls, value: "Callable | None") -> None:
         (cls._row or cls._detached_row()).lazy_recompile = value
-
-    @property
-    def _signature(cls) -> "tuple[str, ...] | None":
-        return (cls._row or cls._detached_row()).signature
-
-    @_signature.setter
-    def _signature(cls, value: "tuple[str, ...] | None") -> None:
-        (cls._row or cls._detached_row()).signature = value
 
     @property
     def _locked(cls) -> bool:
