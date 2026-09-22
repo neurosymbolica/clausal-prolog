@@ -56,7 +56,7 @@ from clausal.logic.compiler.terms_to_ast import (
     term_to_ast_expr,
 )
 from clausal.logic.atoms import is_atom as _term_is_atom
-from clausal.logic.predicate import PredicateMeta, is_zero_field_class
+from clausal.logic.predicate import field_names_for
 from clausal.logic.variables import deref, is_var
 from clausal.pythonic_ast.nodes import literal_value
 from clausal.terms import LoadName
@@ -126,8 +126,9 @@ def _is_const_element(term) -> bool:
         return False
     if isinstance(term, LoadName):
         return True
-    if isinstance(term, PredicateMeta):
-        return is_zero_field_class(term)
+    fields = field_names_for(term)
+    if fields is not None:
+        return fields == ()
     if _term_is_atom(term):
         # The arity-0 cell ``("foo",)``.  ``literal_value`` hands a tuple
         # back unchanged and ``tuple`` is not (and must not be) a
