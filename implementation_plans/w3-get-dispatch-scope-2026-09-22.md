@@ -82,3 +82,47 @@ is W4's (the class going), not this workstream's.
   (`DispatchTargetError`? it becomes a token other lanes key on — pick once).
 * Q3. Whether W3 waits for the two P2 counterexamples to be diagnosed. W3 is
   independent of P2 in code, but every gate run stacks on the same rooms.
+
+## RULED 2026-09-22 (operator) — do not re-open
+
+* **Q1: FROZEN PERMANENTLY.** Foreign `_get_dispatch(self)` is the protocol
+  for good; no deprecation window. `_dispatch_at`'s bare-call arm stays.
+* **Q2: `DispatchTargetError(LogicException)`**, raised by `_dispatch_at`
+  when the callee has no `_get_dispatch` at all (a module, or any Python
+  value), carrying the ISO term `type_error(callable, Target)`. The class
+  name is in the message itself, so a chained or re-raised copy keeps the
+  token. The atom case keeps its own, different shape
+  (`existence_error(procedure, ...)`, plain LogicException).
+* **Q3: W3 started the same day**, in the engine lane's session.
+
+## Implemented (branch feat/w3-get-dispatch-2026-09-22)
+
+* `exceptions.DispatchTargetError`; `_dispatch_at`'s tail probes
+  `getattr(obj, "_get_dispatch", None)` and raises it. Tests in
+  `tests/test_dispatch_target_error.py` (module, arbitrary value, foreign
+  implementor still called bare, predicate class still arity-aware, atom
+  shape unchanged) — watched red, then green.
+* `compiler_v2` step 6 reads the tabled predicate's dispatch off the ROW
+  (`db.get_dispatch`) rather than the class: same store, same three-step.
+
+**The count, corrected again:** the "31 in-tree call sites" above counted
+every line with `_get_dispatch(` on it. CODE call sites are 9: `_dispatch_at`
+x2 (the funnel), `solve.py` x2, `_registry.py` x1, `specialization.py` x1,
+`repl.py` x2, `compiler_v2.py` x1 — and all but the funnel and `compiler_v2`
+already guard with `hasattr` and are duck-typed over the frozen protocol, so
+they need no change before W4. The rest were docstrings and comments.
+
+**The verbatim rendered first line, for the downstream gates** (the module
+case; a non-module value renders `a <type> value <repr>` in place of
+`module '...'`):
+
+    clausal.logic.exceptions.DispatchTargetError: Uncaught logic exception: Compound(functor='error', args=(Compound(functor='type_error', args=('callable', 'some.package')), "DispatchTargetError: the goal at arity 2 resolved to module 'some.package', not a predicate; a dotted target must name a predicate inside the module (or import it), and a Python value is not callable as a goal"))
+
+**Is the old AttributeError path still reachable?** NO, for any input: the
+only place that called `obj._get_dispatch()` unguarded was the funnel's
+tail, and it probes first now. An object whose `_get_dispatch` attribute
+itself raises something other than AttributeError would propagate that, as
+before.
+
+Remaining for W3: nothing structural. `PredicateMeta._get_dispatch(arity)`
+and the funnel's `PredicateMeta` arm go with the class at W4.

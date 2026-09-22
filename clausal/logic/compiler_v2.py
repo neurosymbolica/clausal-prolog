@@ -442,10 +442,11 @@ def compile_module(
     for (functor, arity), pred_cls in pending.items():
         if db.is_tabled(functor, arity):
             from clausal.logic.tabling import ensure_tabled_wrapper
-            original_fn = (
-                pred_cls._get_dispatch() if pred_cls is not None
-                else db.get_dispatch(functor, arity)
-            )
+            # THE ROW, not the class (W3): every class in ``pending`` was
+            # bound to this db's row at step 4/4a, so ``db.get_dispatch`` is
+            # the same three-step ``PredicateMeta._get_dispatch`` ran (installed
+            # -> lazy recompile -> registry), read off the store both share.
+            original_fn = db.get_dispatch(functor, arity)
             wrapped = ensure_tabled_wrapper(db, functor, arity, original_fn)
             if wrapped is original_fn:
                 continue
