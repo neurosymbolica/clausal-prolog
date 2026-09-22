@@ -96,3 +96,23 @@ plain-str strings) — the exact mix the all-solve ruling forbids. Until the
 two-out-paths question (``todo/two-out-paths-disagree-about-atom-tagging-
 2026-09-22.md``) is ruled, this is a discipline. The operator's word to put
 ``--`` back at those 31 sites must reach the downstream lane directly.
+
+## RULED 2026-09-22 (operator, evening) — the 31 hold-and-call sites: LITERAL TUPLES NOW, a dated exception
+
+Options put to the operator with the measurement that the attribute-backed
+form ``(m.thing, K, V)`` does NOT run before W4 (the slot holds a CLASS and
+the goal compiler refuses it; only ``("thing", K, V)`` with ``module=`` runs
+today). Ruled: **write the literal tuples now** — ``("thing", K, V)`` solved
+with ``module=`` explicit, tables of names, handles passed as names.
+
+This is a KNOWING, DATED EXCEPTION to the 2026-09-21 spec's "no term space
+in hand-written source" (docs/superpowers/specs/2026-09-21-python-boundary-
+atom-and-string-design.md), taken because: the sites' bodies already run
+the all-solve convention; no engine change is needed; the seam form is
+parked (todo/seam-handle-form-for-hold-and-call-sites-parked-2026-09-22.md).
+The cost the spec names is real (the atoms-flip sweep) and is accepted for
+these 31 sites in 5 bodies. At W4 landing the same sites may move to
+``(m.thing, K, V)`` (no literal, no ``module=``) — the todo says when to
+look. The downstream lane holds a sealed-body edit that reverses a spec
+until the operator confirms it to them DIRECTLY; that confirmation is theirs
+to give, not this file's.
