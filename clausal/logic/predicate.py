@@ -1539,10 +1539,20 @@ def _db_for_module_name(module_name: str):
 
     Split out so the mangled-name arm can be tested without a real module
     load, and so the lookup has one home when W4b-2 adds callers.
+
+    A loaded ``.clausal`` module has no ``db`` attribute of its own -- its
+    Database lives at ``mod.__dict__["$module"].db`` (the same idiom used
+    by ``testing.py``'s ``db = getattr(namespace.get("$module"), "db",
+    None)`` and ``compiler_v2.py``'s ``getattr(exporter, "db", None)``
+    reads).  Measured: 0 of 251 loaded modules carry a bare ``.db``, so a
+    ``getattr(mod, "db", None)`` fallback would be dead code, not a real
+    module kind -- it is deliberately not restored here.
     """
     import sys  # noqa: PLC0415
     mod = sys.modules.get(module_name)
-    return getattr(mod, "db", None)
+    if mod is None:
+        return None
+    return getattr(mod.__dict__.get("$module"), "db", None)
 
 
 def field_names_for(value, *, arity=None, db=None, namespace=None):

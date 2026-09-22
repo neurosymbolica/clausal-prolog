@@ -7,9 +7,12 @@ length of the tuple is the arity.  Arm 3 (a NAME) is the point of the
 change: at W4b-2 a module attribute becomes a mangled atom, and arm 3
 already answers for it."""
 import dataclasses
+import os
 
 import pytest
 
+import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
+from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.database import Database
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
@@ -96,6 +99,26 @@ def test_arm3_mangled_owner_loaded_but_silent_does_not_fall_through_either(
     ns = {FUNCTOR_SIGNATURES_KEY: {"thing": ("CALLERS", "OWN", "FIELDS")}}
     assert field_names_for(mangle("owner", "thing"), arity=3,
                            namespace=ns) is None
+
+
+def test_arm3_mangled_name_resolves_against_a_REAL_loaded_module_NO_monkeypatch():
+    """CRITICAL 1 (final fix wave, 2026-09-23): the three ``arm3_mangled``
+    tests above all monkeypatch ``_db_for_module_name`` itself, so the real
+    lookup -- ``sys.modules.get(module_name)`` then ``getattr(mod, "db",
+    None)`` -- had zero coverage.  A loaded ``.clausal`` module has no bare
+    ``.db``; its Database lives at ``mod.__dict__["$module"].db`` (the same
+    idiom ``testing.py`` and ``compiler_v2.py`` already use).  This test
+    loads the real fixture and resolves through arm 3 with nothing faked,
+    which is the coverage the branch's whole thesis rests on.
+    """
+    fixture = os.path.join(
+        os.path.dirname(__file__), "fixtures", "hide_owner.clausal")
+    _load_module("hide_owner", fixture)
+
+    assert field_names_for(mangle("hide_owner", "same"), arity=2) == (
+        "x", "y")
+    assert field_names_for(mangle("hide_owner", "holds"), arity=1) is not None
+    assert field_names_for(mangle("hide_owner", "label"), arity=1) is not None
 
 
 def test_arm4_a_non_class_non_name_value_is_None():
