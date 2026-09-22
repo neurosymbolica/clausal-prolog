@@ -182,3 +182,28 @@ state never pays" is right at 99%. Do not propose it.
 * Twice, a sound derivation was rejected by arguing against a SINGLE-KEY
   version of it (my import objection; `database.py`'s "cannot be
   reconstructed"). Check which object the derivation starts from.
+
+
+---
+
+## APPENDIX 2026-09-22 — two facades retired; the rest wait for P4
+
+Tip `0758019a`. `_dynamic_arities` and `_clauses_source` are both gone, each
+with a RAISING TOMBSTONE on the metaclass (`_RETIRED_STATE_NAMES`), because
+deleting a property's SETTER is SILENT -- measured: the assignment succeeds as
+a plain class-attribute write and the row never sees it.
+
+**Only 3 engine sites ever see a row-less class in a whole suite run**
+(compiler_v2:485, compiler_v2:1110, specialization.py:106). But three shapes
+make the remaining facades unre-pointable ahead of P4:
+`builtins/_registry.py` mints builtin classes **deliberately detached**
+(and they never show in a census because they run at import, before a plugin
+can patch -- absence there is an artifact);
+`compiler/predicate.py`'s `_clauses`/`_index_plans` sites sit on the
+**documented `db=None` path**; and `builtins/io.py:743` reads `val._clauses`
+off an **arbitrary term value**.
+
+**The pattern that works is ELIMINATION, not re-pointing**: find a facade
+whose production users can be removed, then delete it and leave a tombstone.
+Both retirements went that way. `_signature` (5 sites) is the next candidate
+to assess.
