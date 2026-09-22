@@ -69,7 +69,9 @@ Planted positive first (it failed on its first run — the sample had two
 `.__name__` where one was expected — and was fixed before any number was
 printed). Three trees, ~190k lines.
 
-    shape 1  isinstance      6 + 0 + 1  — and one is a GATE MODULE that
+    shape 1  isinstance      9 + 0 + 1  (their first count said 6: the pattern
+             admitted only a BARE class name and missed the dotted
+             `reflection.Clause` receiver — corrected by them) — and one is a GATE MODULE that
              imports Clause/Goal/ModuleDirective by name and does
              `isinstance` AND `.name` reads together: BROKEN ON MAIN TODAY
              (constructors since W2), silently False on the P2 candidate.
@@ -87,3 +89,11 @@ printed). Three trees, ~190k lines.
     corpus   clean: 1 tooling isinstance (above), 1 .seam comment.
 
 Their instrument (selftest-refusing) takes `label|root|globs` triples.
+
+**Follow-up (export lane, same day):** two of their three broken files
+migrated to `is_v`/`vfield` with a positive control (a domain the gate MUST
+flag, before and after, plus a check that `is_v` actually matches). The
+third needs a GENERIC walk — "this node's fields without knowing its type"
+— which `is_v`/`vfield` cannot give; built as `reflection.vkind` /
+`vfields` / `vitems` on feat/reflection-vkind-2026-09-22 (with `is_v` and
+`vfield` finally in `__all__`).
