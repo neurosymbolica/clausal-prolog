@@ -128,7 +128,7 @@ is still GROWING. None of this blocks L3, which targets `.pl`.
 *The figures in the next two paragraphs are the PLAN's, dated 2026-09-14 — neither measured by
 this session nor re-derived. Treat them as a starting point and re-measure before acting.*
 
-~1228 tracked files sit on the suffix to be reclaimed (787 corpus, 431 engine, 10 kit).
+~1228 tracked files sit on the suffix to be reclaimed (787 corpus, 431 engine, 10 library).
 
 For the pure dialect: cut `!` is already at ZERO sites — "Clausal is cut-free" is literally true
 of the corpus today, and what remains are the disguises. `once` 229 domain sites, `findall` 169

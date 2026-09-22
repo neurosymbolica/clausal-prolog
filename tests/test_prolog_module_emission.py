@@ -104,7 +104,7 @@ def test_no_discontiguous_directive_for_contiguous_dcg_run():
 IMPORTER_SRC = """-module(prohibition, [limb_status(A, B, C, D)])
 -import_from(eu.ai_act.prohibited_practices.kernel, [ai_act_verdict])
 -import_from(eu.ai_act.prohibited_practices.citations, [cite, eu_reg_x])
--import_from(formalize_lib, [check_gte])
+-import_from(shared_lib, [check_gte])
 -import_from(clausal.stdlib.kleene, [and3, or3])
 limb_status(a, b, c, d),
 """
@@ -112,7 +112,7 @@ limb_status(a, b, c, d),
 SIGS = {
     "eu.ai_act.prohibited_practices.kernel": set(),          # signature-only
     "eu.ai_act.prohibited_practices.citations": {("citation", 2)},
-    "formalize_lib": {("check_gte", 5)},
+    "shared_lib": {("check_gte", 5)},
     "clausal.stdlib.kleene": {("and3", 3), ("or3", 3)},
 }
 
@@ -135,7 +135,7 @@ def test_relative_paths_and_filtered_import_lists():
     assert ("% skipped: eu.ai_act.prohibited_practices.citations exports none "
             "of the requested names") in out
     # root libraries: relative climb from a 3-deep package
-    assert ":- use_module('../../../formalize_lib', [check_gte/5])." in out
+    assert ":- use_module('../../../shared_lib', [check_gte/5])." in out
     assert ":- use_module('../../../clausal_kleene', [and3/3, or3/3])." in out
 
 
@@ -145,7 +145,7 @@ def test_no_signatures_falls_back_to_listless_use_module():
         module_path="eu.ai_act.prohibited_practices.prohibition",
     )
     assert ":- use_module('kernel')." in out
-    assert ":- use_module('../../../formalize_lib')." in out
+    assert ":- use_module('../../../shared_lib')." in out
 
 
 PASCAL_IMPORTER_SRC = """-import_from(eu.ai_act.prohibited_practices.kernel, [AiActVerdict])
@@ -237,18 +237,18 @@ def test_dialect_libraries_keep_library_form_in_relative_mode():
 # and one nested deeper inside it to '..'. Both are directory references
 # Scryer cannot consult, so neither may reach the emitted file — the import
 # is an untranslatable construct instead.
-SELF_PACKAGE_SRC = """-import_from(formalize_lib, [check_gte])
+SELF_PACKAGE_SRC = """-import_from(shared_lib, [check_gte])
 noop(a),
 """
 
-SELF_PACKAGE_SIGS = {"formalize_lib": {("check_gte", 5)}}
+SELF_PACKAGE_SIGS = {"shared_lib": {("check_gte", 5)}}
 
 
 def test_unresolvable_relative_path_raises_under_strict():
     with pytest.raises(UntranslatableConstructError):
         clausal_source_to_prolog(
             SELF_PACKAGE_SRC, strict=True,
-            module_path="formalize_lib.helper",
+            module_path="shared_lib.helper",
             module_signatures=SELF_PACKAGE_SIGS,
         )
 
@@ -256,7 +256,7 @@ def test_unresolvable_relative_path_raises_under_strict():
 def test_unresolvable_relative_path_emits_no_dot_path_when_lenient():
     out = clausal_source_to_prolog(
         SELF_PACKAGE_SRC,
-        module_path="formalize_lib.helper",
+        module_path="shared_lib.helper",
         module_signatures=SELF_PACKAGE_SIGS,
     )
     assert "use_module('.'" not in out
@@ -269,11 +269,11 @@ def test_parent_package_target_is_unresolvable_too():
     with pytest.raises(UntranslatableConstructError):
         clausal_source_to_prolog(
             SELF_PACKAGE_SRC, strict=True,
-            module_path="formalize_lib.sub.helper",
+            module_path="shared_lib.sub.helper",
             module_signatures=SELF_PACKAGE_SIGS,
         )
     out = clausal_source_to_prolog(
-        SELF_PACKAGE_SRC, module_path="formalize_lib.sub.helper",
+        SELF_PACKAGE_SRC, module_path="shared_lib.sub.helper",
         module_signatures=SELF_PACKAGE_SIGS,
     )
     assert "use_module('..'" not in out
@@ -282,6 +282,6 @@ def test_parent_package_target_is_unresolvable_too():
 def test_import_module_unresolvable_path_is_untranslatable():
     with pytest.raises(UntranslatableConstructError):
         clausal_source_to_prolog(
-            "-import_module(formalize_lib)\nnoop(a),\n", strict=True,
-            module_path="formalize_lib.helper",
+            "-import_module(shared_lib)\nnoop(a),\n", strict=True,
+            module_path="shared_lib.helper",
         )

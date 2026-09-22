@@ -288,8 +288,8 @@ a clause, confirm the count moves. Without it, an enumerator that silently sees 
   defect is attributed to the layer that introduced it rather than found in the finished whole.
 
 * **A corpus-answer gate — the fifth instrument.** Under the `{...}` ruling CLP(Q) becomes the
-  default arithmetic surface, so its answers are corpus-visible. The 28 sealed scorers
-  (`eu/procurement` et al.) exist precisely to catch engine changes that move corpus answers, and
+  default arithmetic surface, so its answers are corpus-visible. The 28 sealed answer-set scorers
+  (`<downstream-domain>` et al.) exist precisely to catch engine changes that move corpus answers, and
   they run port-vs-`clpq.py` at the `ineq` stage and again at freeze. **Differences are EXPECTED**
   — removed SWI defects are the point — so each is triaged as defect-removal or regression, by
   corpus-lane, and recorded. Without this the port is faithful to Holzbaur, all instruments green,

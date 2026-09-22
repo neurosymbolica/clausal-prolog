@@ -63,7 +63,7 @@ zero today:
   only unit-bearing literals are `euro` 34, `baht` 7, `dollar` 5 — all BASE currencies. Zero
   occurrences of `cent`, `satang`, `penny`, `day`, `hour`, `minute`, `week`, `month`, `year`,
   `kilometre`, `km`, `gram`, `kg`, `tonne`. `-constant_number_units` appears zero times in
-  the corpus and zero times in kit.
+  the corpus and zero times in library.
 * **corpus exports** (same lane, the `% Clausal units:` comments across 754 staged `.pl`):
   `euro` 23, `baht` 9, `dollar` 4, nothing else. The two censuses agree, which is the point
   of running both — a scaled unit reaching the exporter by an ungrepped path would show in

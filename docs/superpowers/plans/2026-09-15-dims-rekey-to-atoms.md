@@ -32,7 +32,7 @@ sections `quantity RULED — 2026-09-15` and `The dims map: a DICT inside, a TUP
   use `gate_run.sh` — it `cd`s to the main checkout and gates the wrong tree.
 - **Regenerate the baseline in THIS tree.** Never trust a remembered number.
 - **Nothing is promoted by this plan.** It stays on `feat/iso-l3-lowering-2026-09-14`. Units are
-  live corpus vocabulary, so promotion needs the ORACLE gate (harness-batch-lane's 28 sealed
+  live corpus vocabulary, so promotion needs the ORACLE gate (the harness lane's 28 sealed
   scorers), not the engine suite. A green suite is exactly what missed the date breakage.
 - `quantity.__hash__` is `hash((self._value, frozenset(self._dims.items())))`. It never touches
   `_dims` directly, which is why a plain dict costs it nothing — but it DOES mean a caller who
@@ -876,8 +876,8 @@ MSG
 - **The transfer form, the registry TO_TERM/FROM_TERM entries, and `quantity_number/2`.** They sit
   on top of this and want their own plan.
 - **Promotion.** Nothing here leaves `feat/iso-l3-lowering-2026-09-14`. Units are live corpus
-  vocabulary, so promotion needs the ORACLE gate — harness-batch-lane's 28 sealed scorers — and
-  `eu/procurement/selection_criteria` is the canary to run first, being the one units-DECLARING
+  vocabulary, so promotion needs the ORACLE gate — the harness lane's 28 sealed answer-set scorers — and
+  `<downstream-domain>` is the canary to run first, being the one units-DECLARING
   domain with an unexplained reading.
 - **`units_clp.py` and `arithmetic.py`.** Not edited, but they hold 15 `_dims` references between
   them and are where a rekey break would surface. Task 4's gate is what covers them.

@@ -355,7 +355,7 @@ it copies (`database_ops.py:197-202`) carries a diagnostic sentence.
 
 ### Constraints check
 
-- `_get_dispatch` duck type, `eval_harness`, `_belongs_elsewhere`, `_SKIPPED_ITEMS`,
+- `_get_dispatch` duck type, `<harness-library>`, `_belongs_elsewhere`, `_SKIPPED_ITEMS`,
   backend `$disp_` seam, `write_refusal`, Task 5b step 3b-ter, Task 6
   `resolve_module`: **untouched** — the diff touches six files only
   (`io.py`, `docs/builtins.md`, `docs/io.md`, two test files, one todo rename);

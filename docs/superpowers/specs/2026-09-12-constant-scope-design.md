@@ -100,7 +100,7 @@ enumeration must be module-scoped too or the leak returns through the back door.
 ## Blast radius: measured zero
 
 corpus-lane censused **call sites**, not names, across four surfaces: **zero** `/3` call sites in
-rulebase bodies, Python/harness, and the kit; the 18 files matching are all DIRECTIVES, verified
+rulebase bodies, Python/harness, and the library; the 18 files matching are all DIRECTIVES, verified
 specifically so declarations are not counted as goals. Sites relying on `/3` FAILING were
 searched as their own shape (`\+ constant_number_units(...)`) — zero. **With a planted positive
 control**, so the zeros are the absence of call sites, not of a detector.
@@ -125,4 +125,4 @@ TDD, with mutation controls on every gate:
   exactly the raise tests
 
 Three axes before landing: engine suite (failure **and skip** name sets), export bytes
-(iso-export-lane), domain answers (harness-batch-lane).
+(iso-export-lane), domain answers (the harness lane).

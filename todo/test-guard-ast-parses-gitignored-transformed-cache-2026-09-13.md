@@ -52,7 +52,7 @@ known not to be Python; keep failing on everything else.
 ## NOT APPLIED, deliberately, and this is the reason
 
 Two peer lanes are mid-measurement against the engine suite right now — iso-export-lane has just
-taken an export baseline and harness-batch-lane is running a full 82-domain sweep. **Changing the
+taken an export baseline and the harness lane is running a full 82-domain sweep. **Changing the
 engine-suite failure SET while they are measuring against it is a second variable moving inside a
 measurement of the first** — exactly the trap iso-export-lane avoided today by disabling their own
 change for their arm. Apply this when no one is measuring, and announce the failure-set delta (-1

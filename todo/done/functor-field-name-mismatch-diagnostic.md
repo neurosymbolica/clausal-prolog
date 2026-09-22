@@ -174,9 +174,9 @@ and neither ordering can be made an error**:
   same name. That is the blessed re-export idiom
   (`tests/test_functor_reexport.py`,
   `todo/done/module-reexport-imported-functor-shadows.md`). Both textual orderings
-  occur in working domains: `eu/data_handling/lawfulness.clausal` and
-  `eu/labour/trigger_threshold_rule/__init__.clausal` declare first
-  and import later; `us/tax_credit/eligibility.clausal` imports first.
+  occur in working domains: `<downstream-domain>.clausal` and
+  `<downstream-domain>.clausal` declare first
+  and import later; `<downstream-domain>.clausal` imports first.
 * 2 corpus modules — the shape `tests/fixtures/impord_atom_then_pred.clausal`
   pins — import a 0-arity vocabulary atom and then define a same-named
   *predicate*, relying on the clause-head class block re-minting over the
@@ -438,7 +438,7 @@ so the original reproduction is kept here verbatim — it is the starting point
 for whoever fixes the real bug.
 
 A reproducing package is preserved at `repro-arg1-scratch/` in the repo root.
-**It is untracked** — 29 files, a copy of the `eu/compliance/compliance_threshold_rule` domain. Do
+**It is untracked** — 29 files, a copy of the `<downstream-domain>` domain. Do
 not clean it up without first confirming a minimal repro exists, or the
 reproduction is lost.
 
@@ -446,7 +446,7 @@ reproduction is lost.
 python3 -c "
 from pathlib import Path
 from external_harness import run_clausal   # a downstream authoring harness's runner
-p = Path('repro-arg1-scratch/eu/compliance/compliance_threshold_rule/tests/test_load.clausal')
+p = Path('repro-arg1-scratch/<downstream-domain>.clausal')
 print(run_clausal(p)[1])"
 ```
 
@@ -482,8 +482,8 @@ answers "what, where, and what did you expect":
 ```
 functor compliance_verdict/2 was constructed with field names (arg_0, arg_1)
 but its class was registered with (status, citations)
-  registered by: eu/compliance/compliance_threshold_rule/schema.clausal:11
-  constructed at: eu/compliance/compliance_threshold_rule/tests/test_load.clausal:17
+  registered by: <downstream-domain>.clausal:11
+  constructed at: <downstream-domain>.clausal:17
   (a functor minted by a directive keeps placeholder arg_N names until a real
    clause unseats it — check whether both modules declare the same functor)
 ```

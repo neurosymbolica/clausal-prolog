@@ -98,7 +98,7 @@ which behaves differently, and neither had been run. One grep-and-run settled bo
 - **Ratio units (`basis_points`, `percent`) — the obvious next task.** Designed, not built:
   `todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md`. This landing proved
   the mechanism needs nothing new, so it is small. It is **corpus-lane's live blocker**
-  (`crr_leverage_ratio` computes in bps throughout, with `leverage_ratio_bps/2` EXPORTED).
+  (`<downstream-domain>` computes in bps throughout, with `leverage_ratio_bps/2` EXPORTED).
   One thing to verify first, don't assume it: the exactness that makes currency safe comes
   from the CURRENCY coercion path, and a DIMENSIONLESS quantity may not have it.
 - **Only EUR and USD have a minor unit.** Adding one is a `MINOR_UNITS` entry plus a
@@ -186,7 +186,7 @@ that does not. In the last two the assertion was already right and was being eva
 too small a space — the fixes were to change what the test OBSERVES (render differently;
 subprocess into fresh interpreters) rather than what it asserts.
 
-Companion, from harness-batch-lane: **name the instrument, not the commit.** "Re-measure on
+Companion, from the harness lane: **name the instrument, not the commit.** "Re-measure on
 the new sha" collects the cheapest thing resembling measurement, which is a load census, and
 a load census cannot see a compiler change.
 
@@ -411,7 +411,7 @@ a count of BINDINGS rather than names it will differ from the 139 in both direct
 
 ## CORRECTION to the section above: the lint misses the site it was motivated by
 
-Measured by corpus-lane and reproduced here. On `crr_leverage_ratio` the lint warns at `:93`,
+Measured by corpus-lane and reproduced here. On `<downstream-domain>` the lint warns at `:93`,
 the scale-named fact that no longer decides anything, and is **silent at `:111`**, which is
 `check_ratio_gte(P, tier1, total, 300, ...)` — the 3% floor that does decide. The
 discriminator is the FUNCTOR'S name, so a bare literal in an argument of a functor claiming
@@ -444,9 +444,9 @@ parameter-side version is also the one that would make the migration mean someth
 it checks the site that decides.
 
 **corpus-lane's static prediction, for checking the load census against when this lands:**
-76 (file, identifier) pairs across 23 domains, 1 under `eval/` — 15 `us/snap`, 12 `th/visa`,
-10 `au/merger_clearance`, 5 each `au/corps_act_disclosure` and
-`eu/procurement/selection_criteria/tests`, 3 each for five more. A materially different load
+76 (file, identifier) pairs across 23 domains, 1 under `eval/` — 15 `<downstream-domain>`, 12 `th/visa`,
+10 `<downstream-domain>`, 5 each `<downstream-domain>` and
+`<downstream-domain>`, 3 each for five more. A materially different load
 census means one of the two instruments is wrong, and the difference is the finding.
 
 ---
@@ -493,7 +493,7 @@ string.
   MODULE; a bare profile key is the interned atom `('currency',)`; they are different kinds of
   thing competing for one namespace slot, which is why the shadow is SILENT rather than a
   redefinition error. Reproduced at engine level by corpus-lane, and the first thing anyone
-  writing the peppol migration will hit. **The resolution-order ruling is open and is this
+  writing the <downstream-domain> migration will hit. **The resolution-order ruling is open and is this
   lane's.** Deliberately not smuggled into a currency landing.
 - **Option 2 for the exporter** — fold to the BASE magnitude. Now load-bearing, not optional:
   the operator ruled "follow statutes, it's daft but that's law", so minor units go wherever
@@ -502,7 +502,7 @@ string.
   ruling — ISO Prolog cannot carry a quantity — so option 2 fixes only the MAGNITUDE
   (`pay(1550)` rather than `pay(155000)`), not the unit.
 - **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, still corpus-lane's blocker.
-- **peppol** proceeds as a separate migration. Its BR-CO tolerance is a READ-THE-STANDARD
+- **<downstream-domain>** proceeds as a separate migration. Its BR-CO tolerance is a READ-THE-STANDARD
   question, ruled: `within_one`'s "1" is one of WHAT? Comparing a base-unit `.value` against a
   bare `1` makes it 1 euro rather than 1 cent — a 100x widening with a green suite, measured.
 - **`Undefined` -> `undefined`**: corpus-side uses the alias; the engine rename is NOT bundled
@@ -516,7 +516,7 @@ string.
 | --- | --- | --- |
 | engine suite | me, on the promoted tree | 144 failed / 15966 passed / 1 error — failure NAME SET identical to the `946d7296` baseline |
 | export bytes | iso-export-lane, canonical `3b0e3547` | 0 across 1560 files, RAW **and** normalised, both engine trees content-pinned, corpus `b6f2c367` |
-| domain answers | harness-batch-lane, `26c1fdc0` | 82 rows, 82 unchanged, 0 moved, 0 no-score, 0 torn, one fingerprint — **after it caught a regression at `7449448b`** |
+| domain answers | the harness lane, `26c1fdc0` | 82 rows, 82 unchanged, 0 moved, 0 no-score, 0 torn, one fingerprint — **after it caught a regression at `7449448b`** |
 
 **This landing is the cleanest demonstration yet that none of the three implies another.** The
 engine suite was green and the export roster was zero bytes across 1560 files while a domain
@@ -541,7 +541,7 @@ code RAN 1560 times and agreed. "The changed code ran and produced the same byte
 They also ran a NORMALISED arm beside the raw one, which excludes two changes cancelling
 within one file — cheap once it exists, and it closes the reading a sceptic raises next.
 
-### Why the domain axis stays in the set (harness-batch-lane, recorded at their request)
+### Why the domain axis stays in the set (the harness lane, recorded at their request)
 
 It has now been measured across **101 engine commits** from `820dc66f` without a single moved
 answer — and **twice in that span the sweep was the thing that found a defect the other two
@@ -593,13 +593,13 @@ importing only names) can be renamed; nothing depends on it.
 | --- | --- | --- |
 | engine suite | me | 144 failed / 15973 passed / 1 error — name set identical to the `946d7296` baseline |
 | export bytes | iso-export-lane | 0 across 1560 files, raw and normalised, both trees content-pinned |
-| domain answers | harness-batch-lane | 82 unchanged, 0 moved, zero torn — `64f04898/so1789092742`, 106 commits from `820dc66f` |
+| domain answers | the harness lane | 82 unchanged, 0 moved, zero torn — `64f04898/so1789092742`, 106 commits from `820dc66f` |
 
 **Measured on BOTH execution paths.** The clone sweep at `6d609eb1` ran the interpreted
 trampoline (the clone has 12 loadable extensions to canonical's 13); this one ran the
 compiled path. Same 82 answers, no row moved on either.
 
-`eu/peppol_einvoicing` was run ALONE first — 59/59 — because corpus-lane's census makes it the
+`<downstream-domain>` was run ALONE first — 59/59 — because corpus-lane's census makes it the
 only surviving module-name/profile-key pair in the corpus, so it is the one domain where the
 change has anything to act on. Retiring the shape with a named mechanism before the broad run
 means a later move would have moved WITHOUT one, which changes how hard to chase it. Worth
@@ -609,7 +609,7 @@ doing whenever a census has already named the candidate.
 
 **The reportable unit is not the number — it is the number plus what the instrument could not
 see.** This landing's gap (the fix measured only on the interpreted path) was findable ONLY
-because harness-batch-lane volunteered that the clone lacked the compiled trampoline. Reported
+because the harness lane volunteered that the clone lacked the compiled trampoline. Reported
 as "82 unchanged, clean", it would have been a null that was silent on the axis that mattered,
 and nobody would have known to look.
 
@@ -630,7 +630,7 @@ without either side being wrong.
 - **Option 2 for the exporter** — fold to the BASE magnitude. Load-bearing since the "follow
   statutes" ruling. Export stays LOSSY: it fixes the magnitude, not the unit.
 - **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, corpus-lane's blocker.
-- **peppol** as a separate migration; its BR-CO tolerance is a read-the-standard question.
+- **<downstream-domain>** as a separate migration; its BR-CO tolerance is a read-the-standard question.
 - **CLP units via a side channel** — `todo/clp-units-side-channel-2026-09-12.md`, earmarked
   for a fable agent. NOTE recorded there and in its commit: the "extract the rule from a
   Prolog definition" half has NO basis in this repo, and the only real `library(clpfd)` source
@@ -669,7 +669,7 @@ BUG #2: `-import_from` binds the names it lists, not the module.
 | domain answers | 82 unchanged, 0 moved, zero torn — `a25bc430/so1789092742`, **147 commits from `820dc66f`** |
 
 The answer diff was ordered: a census named the four bodies carrying a renamed unit word in a
-string literal (`us/diversity_jurisdiction`, `us/irc_s121`, `us/sara_irc_tax`, `us/snap`),
+string literal (`<downstream-domain>`, `<downstream-domain>`, `<downstream-domain>`, `<downstream-domain>`),
 those four ran ALONE first and were at their recorded numbers, then the full 82.
 
 ## Two rules this day produced, both about instruments rather than code
@@ -687,7 +687,7 @@ missing shape was the worst kind: `'10/3 (usd)'` parses as `10 / 3(usd)`, same m
 **inverted dimension**. Looks right, is not.
 
 **The failure mode is not that the instrument was wrong; it is that it stayed the same while
-the world it measures moved** (harness-batch-lane's formulation). That is a maintenance
+the world it measures moved** (the harness lane's formulation). That is a maintenance
 obligation distinct from correctness, and nothing was watching it.
 
 ### The shape for it: derive the instrument's coverage from the AUTHORITY
@@ -706,11 +706,11 @@ has no way to notice it has stopped being.
 - Option 2 for the exporter (fold to the BASE magnitude) — load-bearing since "follow
   statutes"; export stays lossy, it fixes the magnitude not the unit.
 - Ratio units (`basis_points`, `percent`) — designed, unbuilt.
-- peppol as a separate migration; its BR-CO tolerance is a READ-THE-STANDARD question.
+- <downstream-domain> as a separate migration; its BR-CO tolerance is a READ-THE-STANDARD question.
 - The decimal-literal gap: source `292.00` is a float and loses its trailing zero before any
   Quantity exists. Minor units preserve it exactly, which is one more argument for declaring
   in cents where the statute states cents.
-- corpus-lane migrates `us/snap` (30 rows) and `eu/procurement/common` (81), and retires the
+- corpus-lane migrates `<downstream-domain>` (30 rows) and `<downstream-domain>` (81), and retires the
   import-order mitigation — RE-POINTING its regression test at the new guarantee, not
   deleting it.
 - **Box is the only tree still on the old vocabulary.**
@@ -751,7 +751,7 @@ same magnitude, **INVERTED dimension**, dollars-per-unit rather than dollars. It
 and survived a passing suite.
 
 **The failure mode is not that the instrument was wrong; it is that it stayed the same while
-the world it measures moved** (harness-batch-lane). That is a maintenance obligation distinct
+the world it measures moved** (the harness lane). That is a maintenance obligation distinct
 from correctness, and nothing watches it by default.
 
 Two shapes for it, and the second bounds the first:
@@ -785,7 +785,7 @@ owner knows the content. The less informative-sounding sentence is the more usef
   statutes"; export stays lossy, it fixes the magnitude not the unit.
 - Ratio units (`basis_points`, `percent`) — designed, unbuilt; when they land, the scale
   lint's hand-maintained half must shrink and its overlap control will say so.
-- peppol as a separate migration; its BR-CO tolerance is a READ-THE-STANDARD question.
+- <downstream-domain> as a separate migration; its BR-CO tolerance is a READ-THE-STANDARD question.
 - The decimal-literal gap: source `292.00` is a float and loses its trailing zero before any
   Quantity exists. Minor units preserve it exactly.
 - **Box is the only tree still on the old vocabulary.**
@@ -803,7 +803,7 @@ The functor claims a scale and carries a bare literal, and **`money_at(N)` lives
 DECLARATION — a call site does not carry it**, so the discriminator cannot tell a key column
 from a money column there.
 
-**It moves the count the WRONG WAY on migration.** `us/snap`'s tables are read with literal
+**It moves the count the WRONG WAY on migration.** `<downstream-domain>`'s tables are read with literal
 keys throughout (household size 1..8), so converting its 30 rows silences 30 declaration
 warnings and lights up every call site naming a size — each a false positive telling an author
 to declare a household size as money.

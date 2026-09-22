@@ -708,7 +708,7 @@ No inversions: nothing in the tree changed outcome.
   No new "foreign row" predicate (the ruling's one policy is `_bind_row`'s,
   and `_home_db` from fix round 1 already answers the home question); no
   change to `_get_dispatch`, to the 4-tuple dispatch plans, to
-  `eval_harness`, or to `compile_predicate_trampoline`'s signature; no new
+  `<harness-library>`, or to `compile_predicate_trampoline`'s signature; no new
   runtime namespace names, so no `STRICTNESS_EXEMPT_RUNTIME_NAMES` entry.
 * **Hot path** — `_find_pred_cls`'s new scan runs only when the name lookup
   disagrees with the term's own class, i.e. only on the aliased/shadowed

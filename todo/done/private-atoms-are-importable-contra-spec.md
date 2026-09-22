@@ -73,7 +73,7 @@ Resolved sweep of `-import_from` in `.clausal` across three downstream repos
 | ...of those, the imported name is a bare **atom** | **2** |
 
 The 6 are a downstream helper library's own tests importing `delta` from a
-second helper module (×2, the kit is vendored into a second downstream repo as
+second helper module (×2, the library is vendored into a second downstream repo as
 well), and a tax-credit domain's `test_public_interface` importing four private
 citation atoms (`us_code_ref_1_a/_1_c/_1_d`, `us_code_ref_3301`) from `constants` and
 `computation`. None of these are workarounds; they are how those libraries are
@@ -91,7 +91,7 @@ Measured by actually implementing a minimal Option-2 check and running the
 suite: `1 failed, 10684 passed` → `9 failed, 10680 passed`. The new failures
 were the whole `tests/test_functor_reexport.py` suite (4 tests) plus its two
 fixture loads, and the new pin plus its fixture. `test_functor_reexport` is a
-real in-repo regression suite for the `kit → queries → downstream` re-export
+real in-repo regression suite for the `library → queries → downstream` re-export
 chain; it depends on importing a `-private` functor.
 
 **5. The anonymous-module premise is false — Option 2 was NOT blocked by it.**
@@ -123,7 +123,7 @@ items and 6+ downstream call sites for a guarantee it cannot make. Notably
 *not* rejected for the reason the todo expected; point 5 disproves that.
 
 **Option 3, warn.** Rejected because it would fire on deliberate, correct,
-shipped library code — the kit's `delta` re-export and the tax-credit domain's citation
+shipped library code — the library's `delta` re-export and the tax-credit domain's citation
 atoms are not mistakes. The brief required that a warning "cannot fire on the
 legitimate anonymous-fixture pattern"; since that pattern *is* the `-private`
 import (`test_gate_test_profiles`), the warning has no way to tell the two

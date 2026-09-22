@@ -122,3 +122,29 @@ class ClausalScaleInNameWarning(ClausalLintWarning):
     corpus sites warning once each is a worklist; warning per occurrence is
     noise.
     """
+
+
+class ClausalShadowedVariableWarning(ClausalLintWarning):
+    """A Python local whose name is ALL_CAPS, read inside a seam as a logic
+    VARIABLE rather than as the local.
+
+    The corpus convention is ALL_CAPS for exactly these locals (``P``, ``D``,
+    ``S``, ``C``, ``R``), and the two readings look identical in the source:
+
+        P = 2
+        for V in --pair(++P, V): ...        # P is a fresh VARIABLE, not 2
+
+    ``++`` does not rescue it — the name is decided to be a variable before
+    the escape is considered — so the goal is silently LESS CONSTRAINED than
+    it reads, and it answers every row instead of one.  There is no error and
+    no exception; the wrong answer simply comes back.
+
+    THE SIGNAL IS THE CONJUNCTION, and both halves are needed: an ALL_CAPS
+    name in a goal is an ordinary logic variable, and an ALL_CAPS Python local
+    is ordinary Python.  Only a name that is BOTH is likely a mistake.
+
+    A WARNING, NOT A REFUSAL: the construct is legal, an author may mean the
+    variable, and refusing would make the lint unlandable in the middle of a
+    migration that is exactly when it is most useful.
+    """
+

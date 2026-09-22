@@ -747,7 +747,7 @@ load error (R-S4). Tiny; owned by this lane, scheduled by the lanes' report.
    `mint("goal")`, or the cell `("goal", Arg)`. `call(name, *args)` is
    unaffected: its first parameter is a predicate NAME in the Python
    signature, not a term, so `call("goal", X, module=m)` keeps working.
-3. Request: insert `-double_quotes(atom)` in every module (kit first, then
+3. Request: insert `-double_quotes(atom)` in every module (library first, then
    the repos that consume it); report when a grep shows every module carries
    it. Plan 2 waits on that report.
 4. After Plan 2: migrate domain by domain (drop the directive, write strings

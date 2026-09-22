@@ -28,7 +28,7 @@ the changed code.
 ## Open, in rough priority
 
 1. **The later landings have no export-bytes or domain arm.** Expected vacuous (no corpus file
-   declares a constant) but unmeasured. iso-export-lane and harness-batch-lane both know the
+   declares a constant) but unmeasured. iso-export-lane and the harness lane both know the
    pattern; ask rather than assume.
 2. **Adopting `decimal_repr="rational"` for the roster** is a separate decision from promoting the
    capability. It changes every constant-declaring file, so it needs its own export-bytes run.
@@ -37,7 +37,7 @@ the changed code.
    `prolog_load_context/2`, but there is no `swipl` here. Reasoning, not measurement.
 5. **SICStus `r/2`** (`155000r100`) unimplemented: no SICStus here, and `3r2` is a syntax error in
    both systems that are.
-6. `crr_leverage_ratio` can migrate to ratio units now that the exporter carries them — corpus-lane
+6. `<downstream-domain>` can migrate to ratio units now that the exporter carries them — corpus-lane
    owns that, 21 pairs across 9 domains.
 
 ## Things that will cost the next person time if not known
@@ -84,7 +84,7 @@ instances this session, each reporting cleanly while doing nothing:
    immediately surfaced a real Trealla defect that would have broken every exported file.
 
 **Two peer rules better than mine:**
-* harness-batch-lane: **a control that exercises one AXIS says nothing about the other.** Their
+* the harness lane: **a control that exercises one AXIS says nothing about the other.** Their
   differ's identity run printed "919 identical, 0 different" — also what a differ stuck on
   "identical" prints.
 * iso-export-lane: **a measured skip is about a CHANGE, not a claim about a TREE.** Their export

@@ -57,7 +57,7 @@ of two unknowns are nonlinear and belong to Z3 either way.
   variable by design.
 - Corpus side: exact quotients now print as rationals (`10/3 euro`) and the
   comparators accept quantities they used to refuse. The sealed
-  eu/procurement scorers (harness-batch-lane) must be re-run before this is
+  <downstream-domain> scorers (the harness lane) must be re-run before this is
   promoted to canonical; that is a claim this repo cannot make.
 - Round 22 (lows, unfixed): `Quantity._all_finite` checks Decimals only, so a
   non-finite FLOAT reaching `//`, `%` or the Fraction↔float bridge in

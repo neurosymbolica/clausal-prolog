@@ -23,7 +23,7 @@ starts fresh. Nothing is pushed to GitLab (operator: not soon; barrier todo list
    + `tools/atoms_flip/STR_SITES.tsv` (147 str type tests, disposition column blank). RULED: proceed;
    `$chars` carrier; carrier FIRST under a LOUD interim rule (bare str as text raises), then the atom
    flip (`('x',)` refused after). Open §8: Q1 (str at the seam = atom), Q3, Q4, Q5 — recommendations given.
-   Named dependencies: the kit's raw-string escape hatch (conditional, fail-closed BY DESIGN — its
+   Named dependencies: the library's raw-string escape hatch (conditional, fail-closed BY DESIGN — its
    undeclared branch must emit `$chars`); closed-side sizing is 214 sites/72 files CEILING (84 in sealed
    bodies this lane cannot read); stage 1 is SWEPT before landing, stages keep separate shas; landing
    waits for iso-export-lane's first G3 result on a frozen sha; do the flip BEFORE P4.
@@ -35,7 +35,7 @@ starts fresh. Nothing is pushed to GitLab (operator: not soon; barrier todo list
    `normalize_seg_input`, Seg* walkers, `atom_chars`/text builtins) re-keys on the tag; a bare Python
    str reaching a text site RAISES (the interim rule = positive control); transfer layer carries the
    tag as itself. Gate: A/B, exporter goldens, standard-order + twin-parity suites; then FREEZE and ask
-   harness-batch-lane (informative diff). The §7 human read of STR_SITES.tsv (TEXT sites flip) is the
+   the harness lane (informative diff). The §7 human read of STR_SITES.tsv (TEXT sites flip) is the
    size of this step; corpus-lane's silent-unmatch grep (quoted literals in term patterns) before it lands.
 2. Stage 2 (the atom flip) behind the atoms API — separate sha; harness RE-BASELINE at landing.
 3. Small, parked: Q3 writeq recommendation; the operator's `-float_literals(decimal|rational)`
@@ -49,7 +49,7 @@ loaded (defect in the GAP); a read-only census silent about sealed bodies BY RUL
 `git branch --contains` reading a cherry-pick as "not landed".
 
 ## Peers
-harness-batch-lane [803e60] (sequential sweeps; atom-literal census tool on the box; re-baseline
+the harness lane [803e60] (sequential sweeps; atom-literal census tool on the box; re-baseline
 protocol agreed); iso-export-lane [e8cdc5] (G3 first run on a frozen sha before stage 1 lands);
 corpus-lane [0dfae0] (AST instruments immune by construction; rulebase axis unaffected).
 
@@ -76,7 +76,7 @@ The operator chose to begin in this context ("spec-writing is lossy"). Branch
           PyUnicode sites (2517/2624: standard order / type in C?), the exporter's 37 branch lines
     OPEN  THEN arm the loud interim rule (a bare str reaching a text entry point RAISES) as the positive
           control; THEN gate (engine A/B on a clean base + exporter goldens) and FREEZE for
-          harness-batch-lane's pre-landing sweep (informative diff, not a re-baseline)
+          the harness lane's pre-landing sweep (informative diff, not a re-baseline)
     RULE  bare str is ACCEPTED as text at every patched site until the interim rule is armed — the
           suite must stay runnable between slices; commit each slice
 
@@ -106,7 +106,7 @@ Fallout snapshots vs the canonical-engine failure set (145 names): slice 1 = NEW
   money, python_fallbacks, … — rewrite `'text'` expectations to `chars('text')` (or compare through
   `chars_text`); a helper in `tests/` conftest would make this one edit per file.
 * **THEN** arm the loud interim rule (bare str at a text entry raises) as the positive control, run the
-  engine A/B on a clean base + exporter goldens, and FREEZE for harness-batch-lane's pre-landing sweep.
+  engine A/B on a clean base + exporter goldens, and FREEZE for the harness lane's pre-landing sweep.
 
 Method that worked: fix a funnel, rerun the neighbour set (chars, double_quotes, dcg, bytes, standard
 order, iso, value_terms, seam, the carrier file — green at 728 after slice 1), commit, full snapshot in

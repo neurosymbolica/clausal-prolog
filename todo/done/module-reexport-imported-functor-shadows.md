@@ -23,7 +23,7 @@ shadowing *warning* by running `_process_declarations` in isolation, so it never
 binds a real imported class and cannot observe the identity outcome. The new
 `tests/test_functor_reexport.py` closes that gap: it loads real modules through
 the import hook and asserts identity is shared and solutions flow across a
-`kit → queries → downstream` re-export chain.
+`library → queries → downstream` re-export chain.
 
 ## What the "0 solutions" symptom actually was
 The re-export chain was a red herring. The real cause of the observed

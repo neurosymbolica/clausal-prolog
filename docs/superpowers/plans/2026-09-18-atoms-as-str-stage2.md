@@ -455,6 +455,6 @@ not fixed. Six parallel agents over `git grep -l` groups balanced by count; each
 - [ ] **Step 1:** clean-base A/B per Global Constraints (base = stage 1 tip `1c24bd65`); extract BOTH failure-name sets
   (assert non-empty) and BOTH skip sets; NEW 0 / GONE 0 required; classify anything else and go back to the task it belongs to.
 - [ ] **Step 2:** `tests/test_comparison_twin_parity.py`, exporter goldens, `tests/rewrite`, `tests/iso` green.
-- [ ] **Step 3:** harness RE-BASELINE request to harness-batch-lane (announcement file beside
-  `CHARS-CARRIER-STAGE1-FROZEN-2026-09-18.md`): every row moves by construction; the kit's escape hatch keeps its carrier.
+- [ ] **Step 3:** harness RE-BASELINE request to the harness lane (announcement file beside
+  `CHARS-CARRIER-STAGE1-FROZEN-2026-09-18.md`): every row moves by construction; the library's escape hatch keeps its carrier.
 - [ ] **Step 4:** handoff `implementation_plans/SESSION-HANDOFF-<date>-engine-lane-stage2.md`; memory note updated; commit.

@@ -1456,7 +1456,7 @@ def _scale_suffixes() -> frozenset:
         # go on checking a set the lint no longer uses.
         out = _derived_scale_words()
         # DECLARED UNION, and the two halves have different maintenance
-        # obligations (harness-batch-lane, 2026-09-12, who built the
+        # obligations (the harness lane, 2026-09-12, who built the
         # derive-from-the-authority rule as code and bounded it).
         #
         # Deriving from `MINOR_UNIT_WORDS` answers "does this conform to the
@@ -1470,7 +1470,7 @@ def _scale_suffixes() -> frozenset:
         out.update(_HAND_MAINTAINED_SCALE_WORDS)
         assert out, "positive control: the suffix set is not empty"
         # A half expected to SHRINK needs something that notices when it
-        # should have (harness-batch-lane, 2026-09-12). The control above
+        # should have (the harness lane, 2026-09-12). The control above
         # catches an empty hand list; nothing caught a REDUNDANT one — a word
         # the authority has since taken over, left behind here, which is the
         # same staleness in the other direction. Overlap is exactly that
@@ -1926,6 +1926,7 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalLintWarning,
     ClausalSingletonWarning,
     ClausalSeamLiteralWarning,
+    ClausalShadowedVariableWarning,
     ClausalDeprecatedSpellingWarning,
     ClausalTitleCaseIdentifierWarning,
     ClausalScaleInNameWarning,
@@ -5546,6 +5547,9 @@ class EmbedTransformer(NodeTransformer):
         # TitleCase unit names in an ``-import_from(py.units, …)`` list are
         # linted once per file per name — see _warn_deprecated_unit_spelling.
         transformer._warned_unit_spellings: set[str] = set()
+        # Names the AUTHOR bound as Python locals in each enclosing scope, for
+        # the shadowed-variable lint — see ``_author_bound_locals``.
+        transformer._python_locals: list[set] = []
         transformer._seen_functors: dict[str, list[str]] = {}
         # Filled by visit_Module's pre-pass; a transformer used outside a module
         # walk (the REPL's seam term, a one-off clause) keeps the empty set.
@@ -6237,7 +6241,74 @@ class EmbedTransformer(NodeTransformer):
         # `And`/`TupleLiteral`-as-conjunction all pass straight through
         # `_term_to_goal`) — `build()` only knows how to collapse a node
         # into a plain VALUE, which is term position's job, not a goal's.
+        goal_ast = transformer._wrap_runtime_bases(expression, goal_ast, anchor)
+        transformer._warn_shadowed_variables(fresh, expression, anchor,
+                                             goal_ast)
         return pre, goal_ast, fresh
+
+    def _wrap_runtime_bases(transformer, expression, goal_ast, anchor):
+        """Wrap *goal_ast* in ``$with_bases(goal, {"m": lambda: m})`` when the
+        goal is written ``--m.pred(...)`` over a dotted base.
+
+        THE DOTTED RUNTIME MODULE FORM (2026-09-21).  The seam resolves a
+        goal's NAME at compile time, so ``m.pred`` reached ``solve`` as the
+        dotted functor ``"m.pred"``.  The base's live VALUE is the missing
+        half, and it cannot be read at run time from ``globals()``: the
+        callers this exists for bind their module INSIDE a function
+        (``module = _RULE.get()``), so it is a local.  A thunk closes over it
+        where it was written, which is the only spelling that sees a local.
+
+        LAZY, and that is load-bearing: a base that is not a Python binding at
+        all (a qualified spelling an ``-import_from`` remap already resolved
+        statically) must not be EVALUATED here, or emitting the environment
+        would turn a working goal into a ``NameError``.  ``with_bases`` calls
+        the thunk and swallows that failure; nothing is evaluated unless it
+        is about to be used.
+
+        Emitted ONLY when such a base exists, so every goal in the corpus that
+        does not use the form lowers to byte-identical code.
+        """
+        # ONLY the root of the CALL'S OWN func chain (roborev job 79, finding
+        # 6).  Walking the whole expression collected the root of every
+        # Attribute in it — inside ``++`` escapes, inside argument terms —
+        # and ``with_bases`` reads exactly one of them, so the rest were
+        # lambdas built into the emitted AST and never called.
+        bases = []
+        for node in ([expression.func]
+                     if isinstance(expression, Call) else []):
+            if not isinstance(node, Attribute):
+                continue
+            root = node
+            while isinstance(root, Attribute):
+                root = root.value
+            if not isinstance(root, Name):
+                continue
+            # A logic-variable base is the DICT-ATTRIBUTE sugar (``P.status``
+            # -> ``P[status]``), not a qualified name -- ``visit_Attribute``
+            # draws the same line, and a thunk over a logic variable would
+            # read a name Python never bound.
+            if (_is_logic_var_name(root.id)
+                    and root.id not in transformer._clause_scope_exclusions()):
+                continue
+            if root.id not in bases:
+                bases.append(root.id)
+        if not bases:
+            return goal_ast
+        env = replace(Dict(
+            keys=[replace(Constant(value=b), anchor) for b in bases],
+            values=[replace(Lambda(
+                args=arguments(posonlyargs=[], args=[], vararg=None,
+                               kwonlyargs=[], kw_defaults=[], kwarg=None,
+                               defaults=[]),
+                body=replace(Name(id=b, ctx=Load()), anchor),
+            ), anchor) for b in bases],
+        ), anchor)
+        wrapped = replace(Call(
+            func=replace(Name(id="$with_bases", ctx=Load()), anchor),
+            args=[goal_ast, env], keywords=[],
+        ), anchor)
+        fix_missing_locations(wrapped)
+        return wrapped
 
     def _export_stmts(transformer, names, anchor):
         """``NAME = $export($v_NAME)`` — one assignment per exported name."""
@@ -6350,6 +6421,122 @@ class EmbedTransformer(NodeTransformer):
         node.orelse = transformer._visit_stmts(node.orelse)
         fix_missing_locations(node)
         return pre + [declare, node]
+
+    def _visit_comprehension(transformer, node):
+        """Lower a goal seam in the FIRST generator's iterable.
+
+        Mirrors ``visit_For``: the goal's fresh logic variables are bound by
+        hoisted ``$Var()`` statements and the iterable becomes a plain
+        ``$each(...)`` call, which is legal where an assignment expression is
+        not.  The comprehension's target binds the exported values exactly as
+        a ``for`` target does.
+
+        FIRST CLAUSE ONLY.  Only the outermost iterable is evaluated in the
+        enclosing scope; a later ``for`` clause is re-evaluated once per outer
+        iteration, so hoisted binds would be created ONCE and silently shared
+        across every iteration — one logic variable for the whole
+        comprehension.  That is refused by name rather than emitted, because
+        the wrong answer it produces looks like a defect in the module being
+        called.  Measured over the downstream callers at the time this was
+        written: every comprehension-iterable goal was in the first clause
+        and none in a later one.
+        """
+        # SCANNED UP FRONT (roborev job 79, finding 2).  Refusing inside the
+        # loop only fired when clause 1 had NO goal: with a goal in clause 1
+        # AND a later one, clause 1 lowered, the method returned, and the
+        # later clause went through the generic TERM-position seam — which
+        # emits the assignment expression CPython then rejects with the bare
+        # "cannot be used in a comprehension iterable expression", pointing at
+        # generated code and carrying none of the explanation this refusal
+        # exists to give.
+        carrying = [i for i, g in enumerate(node.generators)
+                    if (found := transformer._goal_operand(g.iter)) is not None
+                    and not found[1]]
+        for index in carrying:
+            if index != 0:
+                generator = node.generators[index]
+                raise SyntaxError(
+                    f"{transformer._filename}:{node.lineno}: a `--goal` in a "
+                    f"comprehension must be in the FIRST `for` clause; this "
+                    f"one is clause {index + 1}.  Only the outermost iterable "
+                    f"is evaluated once in the enclosing scope — a later "
+                    f"clause re-runs per outer iteration and would share one "
+                    f"logic variable across all of them.  Bind it to a name "
+                    f"above the comprehension instead.")
+        for index in carrying:
+            generator = node.generators[index]
+            found = transformer._goal_operand(generator.iter)
+            expression, _ = found
+            transformer._lint_titlecase(expression)
+            target = generator.target
+            if isinstance(target, Name):
+                targets = [target.id]
+            elif (isinstance(target, Tuple)
+                    and all(isinstance(e, Name) for e in target.elts)):
+                targets = [e.id for e in target.elts]
+            else:
+                raise SyntaxError(
+                    f"{transformer._filename}:{node.lineno}: `for ... in "
+                    f"--goal` binds plain names (a name or a tuple of names); "
+                    f"got {unparse(target)}")
+            pre, goal_ast, fresh = transformer._goal_seam(
+                expression, generator.iter)
+            for t in targets:
+                if t not in fresh:
+                    raise SyntaxError(
+                        f"{transformer._filename}:{node.lineno}: `{t}` is not "
+                        f"a variable of the goal `{unparse(expression)}`")
+            # RE-ENTRANT, NOT HOISTED (roborev job 79, finding 1).  ``pre`` is
+            # the ``$v_N = $Var()`` statements ``visit_For`` puts before the
+            # loop; a comprehension has nowhere to put a statement, and
+            # hoisting them above the enclosing STATEMENT is correct only
+            # where that statement is re-executed per evaluation.  In a lambda
+            # body, a ``while`` test or a nested comprehension it is not, and
+            # one ``Var`` is then shared across every evaluation -- measured,
+            # a live generator left unexhausted made the next evaluation see
+            # one answer instead of three.  So the binds become PARAMETERS of
+            # a lambda that ``each_fresh`` calls once per evaluation, which
+            # needs no statement and no walrus (Python refuses an assignment
+            # expression in a comprehension iterable even inside a lambda).
+            del pre
+            maker = replace(Lambda(
+                args=arguments(
+                    posonlyargs=[],
+                    args=[replace(arg(arg=f"$v_{n}", annotation=None),
+                                  generator.iter) for n in fresh],
+                    vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None,
+                    defaults=[]),
+                body=replace(Tuple(elts=[
+                    goal_ast,
+                    replace(Tuple(
+                        elts=[replace(Name(id=f"$v_{t}", ctx=Load()),
+                                      generator.iter) for t in targets],
+                        ctx=Load()), generator.iter),
+                ], ctx=Load()), generator.iter),
+            ), generator.iter)
+            new_iter = replace(Call(
+                func=Name(id="$each_fresh", ctx=Load()),
+                args=[maker, transformer._globals_call(generator.iter)],
+                keywords=[]), generator.iter)
+            fix_missing_locations(new_iter)
+            generator.iter = new_iter
+            # Everything EXCEPT the lowered iterable still needs visiting —
+            # generic_visit would walk back into the goal we just lowered.
+            generator.ifs = [transformer.visit(i) for i in generator.ifs]
+            for other in node.generators[index + 1:]:
+                other.iter = transformer.visit(other.iter)
+                other.ifs = [transformer.visit(i) for i in other.ifs]
+            for field in ("elt", "key", "value"):
+                if getattr(node, field, None) is not None:
+                    setattr(node, field, transformer.visit(getattr(node, field)))
+            fix_missing_locations(node)
+            return node
+        return transformer.generic_visit(node)
+
+    visit_ListComp = _visit_comprehension
+    visit_SetComp = _visit_comprehension
+    visit_DictComp = _visit_comprehension
+    visit_GeneratorExp = _visit_comprehension
 
     def visit_While(transformer, node):
         found = transformer._goal_operand(node.test)
@@ -7149,9 +7336,118 @@ class EmbedTransformer(NodeTransformer):
         if is_template_func(node):
             return compile_template_func(node, transformer._quote_map)
         transformer._scope_depth += 1
-        result = transformer.generic_visit(node)
-        transformer._scope_depth -= 1
+        # Scanned BEFORE the walk, so the lint sees the names the AUTHOR
+        # bound and not the ones the seam lowering is about to add: an
+        # exported goal variable becomes a local (``_export_stmts``,
+        # ``_declare_locals``), and scanning afterwards would report every
+        # correct site in the corpus.
+        transformer._python_locals.append(
+            transformer._author_bound_locals(node))
+        try:
+            result = transformer.generic_visit(node)
+        finally:
+            transformer._python_locals.pop()
+            transformer._scope_depth -= 1
         return result
+
+    def _author_bound_locals(transformer, node) -> set:
+        """Names *node*'s own body binds as Python locals, author-written.
+
+        Params, assignments, ``with``/``except``/``import`` aliases, and
+        ``for`` targets — but NOT a ``for`` target over a ``--goal`` iterable,
+        which is a binding the SEAM introduces and is the name of a logic
+        variable by construction.  Counting those would fire the lint on
+        every correct goal-position seam ever written.
+
+        Nested ``def``/``class`` bodies are their own scope and are skipped;
+        comprehension targets are comprehension-scoped in Python 3 and are
+        not function locals at all.
+        """
+        bound: set = set()
+        for a in (list(node.args.posonlyargs) + list(node.args.args)
+                  + list(node.args.kwonlyargs)
+                  + [node.args.vararg, node.args.kwarg]):
+            if a is not None:
+                bound.add(a.arg)
+
+        def _targets(target):
+            if isinstance(target, Name):
+                bound.add(target.id)
+            elif isinstance(target, (Tuple, List)):
+                for e in target.elts:
+                    _targets(e)
+
+        def _walk(body):
+            for item in body:
+                if isinstance(item, (FunctionDef, AsyncFunctionDef, ClassDef)):
+                    bound.add(item.name)
+                    continue                       # its own scope
+                if isinstance(item, (Assign, AugAssign, AnnAssign)):
+                    for t in (item.targets if isinstance(item, Assign)
+                              else [item.target]):
+                        _targets(t)
+                elif isinstance(item, (For, AsyncFor)):
+                    found = transformer._goal_operand(item.iter)
+                    if found is None:
+                        _targets(item.target)      # an ordinary Python loop
+                elif isinstance(item, With):
+                    for w in item.items:
+                        if w.optional_vars is not None:
+                            _targets(w.optional_vars)
+                elif isinstance(item, Try):
+                    for h in item.handlers:
+                        if h.name:
+                            bound.add(h.name)
+                elif isinstance(item, (Import, ImportFrom)):
+                    for alias_node in item.names:
+                        spelling = alias_node.asname or alias_node.name
+                        bound.add(spelling.split(".")[0])
+                for field in ("body", "orelse", "finalbody"):
+                    inner = getattr(item, field, None)
+                    if isinstance(inner, list):
+                        _walk(inner)
+                for h in getattr(item, "handlers", []) or []:
+                    _walk(h.body)
+        _walk(node.body)
+        return bound
+
+    def _warn_shadowed_variables(transformer, fresh, expression, anchor,
+                                 goal_ast=None):
+        """Warn for each name lowered as a LOGIC VARIABLE that is also an
+        author-bound Python local in this scope.
+
+        Two sources, and the second is the one that bites.  ``fresh`` is the
+        goal's own variables.  A name captured by a ``++`` escape is NOT in
+        it: the escape lowers to ``PyThunk(lambda P: P, [(P := $Var())])``,
+        whose walrus REBINDS the author's own name to a fresh variable — so
+        the local's value is clobbered on the way in, and reading the emitted
+        walrus targets is what finds it.  Measured: ``P = 2`` then
+        ``for V in --pair(++P, V)`` answers every row.
+        """
+        if not transformer._python_locals:
+            return
+        locals_here = transformer._python_locals[-1]
+        captured = set(fresh)
+        if goal_ast is not None:
+            for node in walk(goal_ast):
+                if (isinstance(node, NamedExpr)
+                        and isinstance(node.target, Name)):
+                    captured.add(node.target.id)
+        for name in sorted(captured):
+            if name not in locals_here:
+                continue
+            import warnings  # noqa: PLC0415
+            warnings.warn(ClausalShadowedVariableWarning(
+                f"{transformer._filename}:{getattr(anchor, 'lineno', '?')}: "
+                f"`{name}` is bound as a Python local here, but inside the "
+                f"seam `{unparse(expression)}` it is a LOGIC VARIABLE — the "
+                f"local's value does not reach the goal, and `++{name}` does "
+                f"not change that. The goal is less constrained than it "
+                f"reads, so it answers every row rather than the one you "
+                f"meant, and nothing raises. Rename the local to lower case "
+                f"(`{name.lower()}`) and pass `++{name.lower()}`, or rename "
+                f"the variable if you did mean a fresh one."
+            ), stacklevel=2)
 
     visit_AsyncFunctionDef = visit_FunctionDef
 

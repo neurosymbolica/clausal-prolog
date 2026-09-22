@@ -516,7 +516,7 @@ memory, not in a committed file.
   commits — project names, their battery sizes, their corpus domain names. Write
   them in the git-ignored ledger; genericize in anything committed. Scan before
   merging or syncing.
-- `eval_harness` is GATE_CORE — off limits (editing it requires syncing two
+- `<harness-library>` is GATE_CORE — off limits (editing it requires syncing two
   out-of-tree forks). The `_get_dispatch` signature is frozen (~22 out-of-tree
   implementors); P3-3 preserved it through `_detached_row`, and Phase 4 must too.
 - C changes are allowed where they make sense (user ruling, standing since

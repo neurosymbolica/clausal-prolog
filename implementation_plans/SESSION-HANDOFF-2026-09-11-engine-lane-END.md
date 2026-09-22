@@ -18,7 +18,7 @@ START of the day — every landing below moved it by zero. The extraction is at
 | --- | --- | --- | --- |
 | engine suite | me | 946d7296 | 0 new failures vs the 9a719536 baseline |
 | corpus loads | corpus-lane | 946d7296 predecessors | 71 asserted clean / 0 defects / 7 not checked, cold AND warm |
-| batch bodies | harness-batch-lane | not re-run today | — ask before relying on it |
+| batch bodies | the harness lane | not re-run today | — ask before relying on it |
 
 ## 2. What landed today, in order
 
@@ -69,13 +69,13 @@ parameter needs a module-list entry" came from a test that wrote the name BARE, 
 different thing, and it inflated the estimate by 88 edits.
 
 *Much larger per domain*, which is the finding that matters. corpus-lane staged
-`eu/banking/crr_leverage_ratio` and stopped before editing:
+`<downstream-domain>` and stopped before editing:
 
-- The domain **computes in bps throughout**. `leverage_ratio_bps/2` is EXPORTED, the kit
+- The domain **computes in bps throughout**. `leverage_ratio_bps/2` is EXPORTED, the library
   supplies `ratio_bps`, 15 `bps` references span the public interface, queries and tests.
   Converting the parameter to `0.03` without rescaling its producers and consumers makes the
-  comparison wrong; rescaling means changing a public predicate, a kit helper, the tests and
-  the oracle. `au/merger_clearance` shows the same shape: 8 `_cents` parameters, 69 `_cents`
+  comparison wrong; rescaling means changing a public predicate, a library helper, the tests and
+  the oracle. `<downstream-domain>` shows the same shape: 8 `_cents` parameters, 69 `_cents`
   references.
 - **The value is already in two places** — `minimum_leverage_bps(300)` and a bare `300` at
   `leverage_ratio.clausal:111`. Converting the fact leaves the literal, so the DRY problem the
@@ -151,7 +151,7 @@ it decides whether this is a new kind of unit or an ordinary scaled one.
   corpus-lane's: `sum_cents -> sum_eur_cents`,
   `sga_monthly_amount_cents -> sga_monthly_amount_usd_cents`. Gates and oracles byte-identical.
 - **71 further ambiguous `_cents` names are NOT one lane's**: 13 are profile keys (oracle
-  interface), 56 reach `eval/` bodies (harness-batch-lane), 27 are anchored in mutation
+  interface), 56 reach `eval/` bodies (the harness lane), 27 are anchored in mutation
   catalogs.
 - **Worth putting to the operator when reporting**: once these units exist, those names can
   carry the currency in the DECLARATION instead of the identifier, which may make most of the
@@ -269,7 +269,7 @@ needs a positive control, and you read the evidence line, not the verdict.
 ## 7. Lanes
 
 corpus-lane [0dfae0] holds the migration and is the most active. iso-export-lane [e8cdc5],
-harness-batch-lane [803e60], law-portal-1a [718243] have not been engaged today — none of
+the harness lane [803e60], law-portal-1a [718243] have not been engaged today — none of
 today's landings was flagged to them, which is worth doing if anything here reaches their
 trees. The `.so` changed today (`7e825cdf`, `25fe9dce`), so **any lane with a long-lived
 process that imported the engine before ~09:00 is running the old extension.**

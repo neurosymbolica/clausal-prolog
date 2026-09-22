@@ -78,11 +78,11 @@ def test_tri_get_passes_through():
 # engine's throw-on-missing semantics exactly, rather than reusing
 # `profile_get`'s fail semantics. This module lowers to THAT name. Full
 # findings: .superpowers/sdd/2026-09-05-class-M/c-pre-report.md in the
-# clausify-executor-train repo.
+# downstream repo.
 #
 # `is`/2 is symmetric in Clausal (`_convert_compare` treats `X is Y` and
 # `Y is X` identically — both sides just get `_convert_expr`'d), and the
-# corpus witness (eu/procurement/exclusion_grounds) actually uses BOTH
+# downstream witness actually uses BOTH
 # orders: `V is P[K]` (the shape named in the brief) and `P[K] is V` (three
 # real sites in queries.clausal, e.g. `PROFILE[grounds] is GROUND_LIST`) —
 # so the lowering matches a subscript on EITHER side of a goal-position `is`.
@@ -94,7 +94,7 @@ def test_tri_get_passes_through():
 # argument to `expiry_date/3`), both still fail-closed under strict mode.
 #
 # Chained subscripts (`P[a][b]`) and subscript-on-a-call-result (`f()[a]`)
-# also stay refused — the corpus census (clausify-domains, 850 files) found
+# also stay refused — the downstream census found
 # zero instances of either shape, so there is nothing to support beyond
 # falling through to the existing generic "unsupported expression" fallback.
 
@@ -117,7 +117,7 @@ def test_subscript_goal_position_is_rhs_str_key_lowers_same_as_name_key():
 
 def test_subscript_goal_position_is_lhs_lowers_to_profile_get_strict():
     """`P[key] is V` -- the mirror-image goal-position shape the corpus
-    witness (eu/procurement/exclusion_grounds/queries.clausal) actually
+    downstream witness actually
     uses three times (`PROFILE[grounds] is GROUND_LIST`). `is`/2 is
     symmetric, so this lowers the same way with sides swapped."""
     out = clausal_source_to_prolog(
@@ -151,7 +151,7 @@ def test_subscript_in_membership_position_still_untranslatable():
 
 def test_chained_subscript_still_untranslatable():
     """`P[a][b]` -- chained subscript. Zero corpus instances (census:
-    clausify-domains, 850 files, 41 subscript sites, 0 chained); refuses
+    every subscript site unchained); refuses
     rather than trying to invent semantics for an unwitnessed shape."""
     import pytest
     from clausal.tools.clausal_to_prolog import UntranslatableConstructError

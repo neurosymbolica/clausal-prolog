@@ -26,7 +26,7 @@ the tree today; **this builds the encoding, not the plumbing.**
 
 The ruling is that a same-interpreter seam **passes the object**. The existing registry
 (`TO_TERM` / `FROM_TERM`) is the seam's registry: `clausal/modules/py/datetime.py` reads it
-through a scope-narrowed wrapper, and harness-batch-lane has measured a `++` hook that would
+through a scope-narrowed wrapper, and the harness lane has measured a `++` hook that would
 convert every non-tuple entry in it (their handoff of 2026-09-16, §6 — kept for engine-lane's
 use). Registering `Quantity` there would make that hook, or the next widening of the date
 wrapper, convert quantities at the seam and break the ruling silently. A `Fraction` entry is
@@ -190,7 +190,7 @@ already contains, so the gate is:
   the date migration measures against those, and this design's whole point is that the seam is
   untouched.
 
-## 8. Interaction with the date migration (harness-batch-lane)
+## 8. Interaction with the date migration (the harness lane)
 
 Their work is corpus-side crossing sites in another repo; they never edit the engine, and their
 harness reads the registry only through `date_term_to_python`. This design adds no entry to the

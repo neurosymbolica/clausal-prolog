@@ -84,7 +84,7 @@ and green (every domain decision-preserving; all SMT domains re-proved G3 PROVED
 read/op coverage lives in `tests/test_dict_set_compiler.py` + `tests/fixtures/dict_set_patterns.clausal`.
 
 ## Core promotion — STATUS + remaining (2026-07-14)
-The design planned "kit module now, promote to Clausal core later." The implementation **skipped the kit
+The design planned "library module now, promote to Clausal core later." The implementation **skipped the library
 step and put the dict ops directly in the interpreter as global core builtins**, so the "promotion" is
 effectively already realized at the runtime level:
 - `get/3`, `get/4`, `delete/3` — registered builtins in `clausal/logic/builtins/dict_set.py`

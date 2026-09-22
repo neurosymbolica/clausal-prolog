@@ -1299,3 +1299,618 @@ class TestDelaysAreChargedToTheRightAnswer:
         out = mod.nested_same_table([])
         assert [x for x, _inner in out] == ["one", "two"]
         assert self._stack() == []
+
+
+class TestDottedRuntimeModuleGoal:
+    """``--m.pred(X)`` where *m* is a Python value holding a module.
+
+    THE DOWNSTREAM-CALLER SHAPE.  A caller loads the module under test at
+    RUNTIME and calls into it.  The seam resolves a
+    goal's NAME at compile time against the host file's own rules, so before
+    this the only spelling that worked was ``solve(module.pred(X))`` through
+    the Python API — which stopped naming a module when a term became a cell.
+
+    The module is a LOCAL in every one of these, deliberately: the seam is
+    handed ``globals()``, so a design that only reads globals passes a
+    module-level test and fails every real caller.  The rulebase is written to
+    a path that OUTLIVES the load, because the host re-loads it at call time.
+    """
+
+    RB = (
+        "-module({name}, [sp/1, pair(K, V)])\n"
+        "-private([a, b])\n"
+        "sp(1),\n"
+        "sp(2),\n"
+        "pair(a, 1),\n"
+        "pair(b, 2),\n"
+    )
+
+    def _rulebase(self, tmp_path, tag):
+        path = tmp_path / f"_dyn_rb_{tag}.clausal"
+        path.write_text(self.RB.format(name=f"_dyn_rb_{tag}"))
+        return str(path)
+
+    def _host(self, tag, body, decls=""):
+        return _load_inline(f"_dyn_host_{tag}", (
+            f"-module(_dyn_host_{tag}, [{decls}])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            + body
+        ))
+
+    def test_for_iterates_a_runtime_module_s_predicate(self, tmp_path):
+        rb = self._rulebase(tmp_path, "for")
+        host = self._host("for", (
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_for_alias', path)\n"
+            "    got = []\n"
+            "    for X in --m.sp(X):\n"
+            "        got.append(X)\n"
+            "    return sorted(got)\n"
+        ))
+        assert host.run(rb) == [1, 2]
+
+    def test_if_tests_a_runtime_module_s_predicate(self, tmp_path):
+        rb = self._rulebase(tmp_path, "if")
+        host = self._host("if", (
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_if_alias', path)\n"
+            "    if --m.sp(2):\n"
+            "        return 'yes'\n"
+            "    return 'no'\n"
+        ))
+        assert host.run(rb) == "yes"
+
+    def test_a_two_variable_for_binds_both(self, tmp_path):
+        rb = self._rulebase(tmp_path, "two")
+        host = self._host("two", (
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_two_alias', path)\n"
+            "    d = {}\n"
+            "    for K, V in --m.pair(K, V):\n"
+            "        d[K] = V\n"
+            "    return sorted(d.items())\n"
+        ))
+        assert host.run(rb) == [("a", 1), ("b", 2)]
+
+    def test_the_goal_runs_against_the_RUNTIME_module_not_the_host(self, tmp_path):
+        """The module SWITCH is the whole point, so the host declares the same
+        name at the same arity with a different clause: a fix that resolved
+        ``sp/1`` in the HOST would pass every other test in this class."""
+        rb = self._rulebase(tmp_path, "switch")
+        host = self._host("switch", (
+            "sp(99),\n"
+            "\n"
+            "def run(path):\n"
+            "    m = _load_module('_dyn_rb_switch_alias', path)\n"
+            "    got = []\n"
+            "    for X in --m.sp(X):\n"
+            "        got.append(X)\n"
+            "    return sorted(got)\n"
+        ), decls="sp/1")
+        assert host.run(rb) == [1, 2], (
+            "the RUNTIME module's sp/1 answered, not the host's sp(99)"
+        )
+
+    def test_a_non_module_base_still_refuses_and_names_the_spelling(self, tmp_path):
+        """A base that is bound but is not a module is left EXACTLY as it was —
+        no new diagnostic can fire on a spelling that used to resolve
+        statically — so the pre-existing refusal is what speaks, and it still
+        names what the author wrote."""
+        rb = self._rulebase(tmp_path, "bad")
+        host = self._host("bad", (
+            "def run(path):\n"
+            "    m = 17\n"
+            "    for X in --m.sp(X):\n"
+            "        pass\n"
+            "    return 'unreachable'\n"
+        ))
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises((LogicException, NameError)) as exc_info:
+            host.run(rb)
+        # The TYPE matters (roborev job 79, finding 7): `pytest.raises(
+        # Exception)` plus a substring passes on any failure at all, including
+        # a TypeError from the new env plumbing, so it could not tell "the
+        # pre-existing refusal still speaks" from "the new code broke".
+        assert "m.sp" in str(exc_info.value), str(exc_info.value)
+
+
+class TestComprehensionGoalPosition:
+    """``--goal(X)`` in a comprehension's ITERABLE.
+
+    Python refuses an assignment expression in a comprehension iterable —
+    ``[x for x in (y := f())]`` parses but will not compile — and before this
+    a seam there fell through to the GENERIC EXPRESSION lowering, which
+    introduces its logic vars inline as exactly that.  The goal-position
+    lowering never needed a walrus: ``visit_For`` hoists ``$v_X = $Var()`` to
+    a preceding STATEMENT and emits a plain ``$each(...)`` call, which is
+    legal in an iterable.  So this is a missing visitor, not a restriction.
+
+    OUTERMOST CLAUSE ONLY, deliberately.  Only the first generator's iterable
+    is evaluated in the enclosing scope; a later clause is re-evaluated per
+    outer iteration and a hoisted ``$Var()`` would be shared across them.
+    Measured over the downstream callers: every comprehension-iterable goal
+    was in the first clause and none in a later one, so the unsound case is
+    REFUSED rather than built.
+    """
+
+    def test_a_list_comprehension_iterates_a_goal(self):
+        mod = _load_inline("_gp_lc1", RULEBASE.format(name="_gp_lc1") + (
+            "def go():\n"
+            "    return sorted([S for S in --decide(large, verdict(S, IDS))])\n"
+        ))
+        assert mod.go() == ["prohibited", "prohibited"]
+
+    def test_a_set_comprehension_iterates_a_goal(self):
+        mod = _load_inline("_gp_sc1", RULEBASE.format(name="_gp_sc1") + (
+            "def go():\n"
+            "    return sorted({S for S in --decide(large, verdict(S, IDS))})\n"
+        ))
+        assert mod.go() == ["prohibited"]
+
+    def test_a_dict_comprehension_binds_two_variables(self):
+        mod = _load_inline("_gp_dc1", RULEBASE.format(name="_gp_dc1") + (
+            "def go():\n"
+            "    d = {P: S for P, S in --decide(P, verdict(S, IDS))}\n"
+            "    return sorted(d.items())\n"
+        ))
+        assert mod.go() == [("large", "prohibited"), ("small", "permitted")]
+
+    def test_a_generator_expression_iterates_a_goal(self):
+        mod = _load_inline("_gp_ge1", RULEBASE.format(name="_gp_ge1") + (
+            "def go():\n"
+            "    return sorted(S for S in --decide(large, verdict(S, IDS)))\n"
+        ))
+        assert mod.go() == ["prohibited", "prohibited"]
+
+    def test_the_hoist_lands_above_the_statement_that_holds_it(self):
+        """The comprehension is inside a ``return``, so the hoisted
+        ``$Var()`` has to be spliced ABOVE that statement — not into the
+        comprehension, where it would be the illegal assignment expression."""
+        mod = _load_inline("_gp_hoist", RULEBASE.format(name="_gp_hoist") + (
+            "def go():\n"
+            "    return len([S for S in --decide(large, verdict(S, IDS))])\n"
+        ))
+        assert mod.go() == 2
+
+    def test_a_comprehension_condition_still_sees_the_bound_variable(self):
+        mod = _load_inline("_gp_cond", RULEBASE.format(name="_gp_cond") + (
+            "def go():\n"
+            "    return [S for S in --decide(P, verdict(S, IDS)) if S == prohibited]\n"
+        ))
+        assert mod.go() == ["prohibited", "prohibited"]
+
+    def test_a_goal_in_a_LATER_for_clause_is_refused_by_name(self):
+        """The one case a hoist cannot serve.  It must say so rather than
+        emit something that silently shares one logic variable across every
+        outer iteration."""
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_inline("_gp_inner", RULEBASE.format(name="_gp_inner") + (
+                "def go():\n"
+                "    return [(A, S) for A in [small, large]\n"
+                "            for S in --decide(A, verdict(S, IDS))]\n"
+            ))
+        text = str(exc_info.value)
+        assert "first" in text or "outermost" in text, text
+
+
+class TestTheHarnessShapeEndToEnd:
+    """Both halves together: a RUNTIME module's predicate, in a
+    COMPREHENSION's iterable.
+
+    This is the shape downstream callers are written in — many of their goal
+    calls sit in a comprehension iterable and every one addresses a module
+    loaded at runtime — so it is the one test that says the two features
+    compose rather than merely coexisting.
+    """
+
+    RB = (
+        "-module({name}, [sp/1, pair(K, V)])\n"
+        "-private([a, b])\n"
+        "sp(1),\n"
+        "sp(2),\n"
+        "pair(a, 1),\n"
+        "pair(b, 2),\n"
+    )
+
+    def test_a_comprehension_over_a_runtime_module_s_predicate(self, tmp_path):
+        path = tmp_path / "_hs_rb.clausal"
+        path.write_text(self.RB.format(name="_hs_rb"))
+        host = _load_inline("_hs_host", (
+            "-module(_hs_host, [sp/1])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "sp(99),\n"
+            "\n"
+            "def run(p):\n"
+            "    m = _load_module('_hs_rb_alias', p)\n"
+            "    return sorted([X for X in --m.sp(X)])\n"
+        ))
+        assert host.run(str(path)) == [1, 2], (
+            "the runtime module's sp/1 answered from inside the comprehension, "
+            "not the host's sp(99)"
+        )
+
+    def test_a_dict_comprehension_over_a_runtime_module(self, tmp_path):
+        path = tmp_path / "_hs_rb2.clausal"
+        path.write_text(self.RB.format(name="_hs_rb2"))
+        host = _load_inline("_hs_host2", (
+            "-module(_hs_host2, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "def run(p):\n"
+            "    m = _load_module('_hs_rb2_alias', p)\n"
+            "    return sorted({K: V for K, V in --m.pair(K, V)}.items())\n"
+        ))
+        assert host.run(str(path)) == [("a", 1), ("b", 2)]
+
+    def test_the_real_corpus_idiom_migrated_verbatim(self, tmp_path):
+        """The exact shape of the common blocked site, migrated.
+
+        The common downstream shape:
+
+            [_answer(R.value) for _ in solve(m.band_rate(P, R))]
+
+        becomes
+
+            [_answer(R) for R in --m.band_rate(++p, R)]
+
+        — the goal moves into the iterable, the loop target becomes the
+        variable being read (``each`` exports it, so ``.value`` goes), and the
+        Python-side input crosses with ``++``.  Everything this feature has to
+        support is in one line: a RUNTIME module, a comprehension iterable, a
+        Python escape as an input argument, a helper over the exported value,
+        and a second goal variable that is not the target.
+        """
+        path = tmp_path / "_hs_rb3.clausal"
+        path.write_text(
+            "-module(_hs_rb3, [band_rate(P, R)])\n"
+            "band_rate(100, 10),\n"
+            "band_rate(200, 20),\n"
+        )
+        host = _load_inline("_hs_host3", (
+            "-module(_hs_host3, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "def _answer(v):\n"
+            "    return ('rate', v)\n"
+            "\n"
+            "def run(p, income):\n"
+            "    m = _load_module('_hs_rb3_alias', p)\n"
+            "    return [_answer(R) for R in --m.band_rate(++income, R)]\n"
+        ))
+        assert host.run(str(path), 200) == [("rate", 20)]
+        assert host.run(str(path), 100) == [("rate", 10)]
+
+    def test_a_FRESHLY_RELOADED_module_is_re_resolved_every_call(self, tmp_path):
+        """``fresh_per_case`` means *m* is a DIFFERENT object per case.
+
+        The goal node is structurally identical across calls, so anything that
+        resolved the base once — at rewrite time, or into a cache keyed on the
+        goal's shape — would answer the FIRST case's module for every later
+        one, silently.  That is the failure this has to be measured against
+        rather than reasoned about: two rulebases with the same predicate and
+        different clauses, loaded under the same call, alternating.
+        """
+        first = tmp_path / "first.clausal"
+        first.write_text("-module(first, [sp/1])\nsp(1),\n")
+        second = tmp_path / "second.clausal"
+        second.write_text("-module(second, [sp/1])\nsp(2),\n")
+        host = _load_inline("_hs_fresh", (
+            "-module(_hs_fresh, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "_n = [0]\n"
+            "\n"
+            "def run(p):\n"
+            "    _n[0] += 1\n"
+            "    m = _load_module('_fresh_%d' % _n[0], p)\n"
+            "    return sorted([X for X in --m.sp(X)])\n"
+        ))
+        assert host.run(str(first)) == [1]
+        assert host.run(str(second)) == [2], (
+            "the SECOND module's clause — a base resolved once would answer [1]"
+        )
+        assert host.run(str(first)) == [1], "and back again"
+
+    def test_the_module_object_itself_is_untouched_by_the_form(self, tmp_path):
+        """The whole-object uses keep working, because nothing wraps *m*.
+
+        The alternative route considered here was a proxy returned by the loader, and its real risk was never the call
+        sites: callers pass the module WHOLE to helpers that do
+        ``getattr(module, name)`` and RAISE on a miss BY DESIGN, which some
+        of them depend on.  This form
+        touches the GOAL SITE only, so that risk does not transfer — pinned
+        here so a later refactor cannot quietly reintroduce it.
+        """
+        path = tmp_path / "_hs_whole.clausal"
+        path.write_text(
+            "-module(_hs_whole, [sp/1, marker])\n"
+            "-private([marker])\n"
+            "sp(1),\n"
+        )
+        host = _load_inline("_hs_whole_host", (
+            "-module(_hs_whole_host, [])\n"
+            "\n"
+            "from clausal.import_hook import _load_module\n"
+            "\n"
+            "def run(p):\n"
+            "    m = _load_module('_hs_whole_alias', p)\n"
+            "    got = sorted([X for X in --m.sp(X)])\n"
+            "    return got, type(m).__name__, getattr(m, 'marker'), hasattr(m, 'sp')\n"
+            "\n"
+            "def missing(p):\n"
+            "    m = _load_module('_hs_whole_alias2', p)\n"
+            "    return getattr(m, 'not_there')\n"
+        ))
+        got, kind, marker, has_sp = host.run(str(path))
+        assert got == [1]
+        assert kind == "module", "m is still a plain module object, not a proxy"
+        assert marker is not None, "a whole-object getattr still answers"
+        assert has_sp is True
+        with pytest.raises(AttributeError):
+            host.missing(str(path))     # still fail-closed on a miss
+
+
+class TestComprehensionGoalsAreReEntrant:
+    """A comprehension's goal variables are minted PER EVALUATION.
+
+    roborev job 79 finding 1, confirmed by probe.  The first lowering hoisted
+    ``$v_S = $Var()`` above the enclosing STATEMENT, which is re-executed per
+    evaluation only in ordinary statement positions.  In a lambda body, a
+    ``while`` test or a nested comprehension it is executed ONCE, and one
+    logic variable is then shared across every evaluation.
+
+    THE FIRST THREE PROBES OF THIS PASSED BY COINCIDENCE, which is why the
+    tests below count answers rather than reading the first one: with the
+    shared variable still bound to 1, a second evaluation's FIRST answer is 1
+    either way.  Only the COUNT distinguishes a leak from correct isolation.
+    """
+
+    RB = ("-module({name}, [sp/1])\n" "sp(1),\n" "sp(2),\n" "sp(3),\n")
+
+    def test_a_live_generator_does_not_bind_a_later_evaluation(self):
+        """THE DISCRIMINATING CASE.  ``g1`` is left unexhausted, so the shared
+        variable it bound is still bound when ``g2`` starts.  ``g2`` must see
+        all three answers, not the one that variable is stuck on."""
+        mod = _load_inline("_re_live", self.RB.format(name="_re_live") + (
+            "def go():\n"
+            "    f = lambda: (S for S in --sp(S))\n"
+            "    g1 = f()\n"
+            "    first = next(g1)\n"
+            "    g2 = f()\n"
+            "    return first, sorted(g2)\n"
+        ))
+        first, rest = mod.go()
+        assert first == 1
+        assert rest == [1, 2, 3], (
+            "a leaked shared variable would answer [1] — the count is the "
+            "only thing that tells the two apart"
+        )
+
+    def test_two_live_generators_interleave(self):
+        mod = _load_inline("_re_inter", self.RB.format(name="_re_inter") + (
+            "def go():\n"
+            "    f = lambda: (S for S in --sp(S))\n"
+            "    g1, g2 = f(), f()\n"
+            "    return next(g1), next(g2), next(g1), next(g2)\n"
+        ))
+        assert mod.go() == (1, 1, 2, 2)
+
+    def test_a_comprehension_in_a_while_test_is_re_evaluated_cleanly(self):
+        mod = _load_inline("_re_while", self.RB.format(name="_re_while") + (
+            "def go():\n"
+            "    seen = []\n"
+            "    while len(seen) < 3:\n"
+            "        seen.append(len([S for S in --sp(S)]))\n"
+            "    return seen\n"
+        ))
+        assert mod.go() == [3, 3, 3]
+
+    def test_a_nested_comprehension_does_not_share_the_inner_variable(self):
+        mod = _load_inline("_re_nest", self.RB.format(name="_re_nest") + (
+            "def go():\n"
+            "    outer = [1, 2]\n"
+            "    return [len([T for T in --sp(T)]) for _u in outer]\n"
+        ))
+        assert mod.go() == [3, 3], (
+            "the inner goal's variable is minted per outer iteration"
+        )
+
+    def test_an_abandoned_generator_leaves_nothing_bound(self):
+        mod = _load_inline("_re_aband", self.RB.format(name="_re_aband") + (
+            "def go():\n"
+            "    f = lambda: sorted([S for S in --sp(S)])\n"
+            "    g = (S for S in --sp(S))\n"
+            "    next(g)\n"
+            "    return f(), f()\n"
+        ))
+        assert mod.go() == ([1, 2, 3], [1, 2, 3])
+
+
+class TestTheDottedFormStaysNarrow:
+    """What the dotted runtime form must NOT capture.
+
+    ``with_bases`` rewrites a goal only when the base is a MODULE OBJECT.  The
+    two ways that could go wrong both change what already-working code means,
+    so both are pinned.
+    """
+
+    RB = ("-module({name}, [sp/1])\n" "sp(1),\n" "sp(2),\n")
+
+    def test_a_string_base_that_names_a_python_module_is_NOT_captured(self):
+        """roborev job 79, finding 3.  ``resolve_module`` accepts a ``str`` or
+        an atom by looking it up in ``sys.modules``, so testing with it would
+        have let a base bound to ``"json"`` — or to a declared atom whose
+        spelling collides with any loaded module — silently turn the goal into
+        a qualified call into that Python module."""
+        from clausal.logic.seam import _module_designator
+        import json as _json
+        assert _module_designator("json") is None, "a str is not a module base"
+        assert _module_designator("time") is None
+        assert _module_designator(17) is None
+        assert _module_designator(_json) is None, (
+            "a plain Python module is not a clausal module either"
+        )
+
+    def test_a_statically_qualified_goal_still_answers(self, tmp_path):
+        """The other half of finding 3: an ``-import_from``'d spelling must
+        keep resolving exactly as it did, and its answers must not move."""
+        lib = tmp_path / "_narrow_lib.clausal"
+        lib.write_text("-module(_narrow_lib, [sp/1])\nsp(1),\nsp(2),\n")
+        _load_module("_narrow_lib", str(lib))
+        host = _load_inline("_narrow_host", (
+            "-module(_narrow_host, [])\n"
+            "-import_from(_narrow_lib, [sp])\n"
+            "\n"
+            "def run():\n"
+            "    return sorted([X for X in --sp(X)])\n"
+        ))
+        assert host.run() == [1, 2]
+
+
+class TestComprehensionRefusesAGoalInALaterClause:
+    """roborev job 79, finding 2: the crafted refusal has to fire even when
+    the FIRST clause also carries a goal.
+
+    Before the up-front scan, clause 1 lowered and the method returned, so the
+    later clause went through the generic term-position seam and CPython
+    rejected the walrus with a bare message pointing at generated code.
+    """
+
+    RB = ("-module({name}, [sp/1, tw/1])\n" "sp(1),\n" "sp(2),\n" "tw(9),\n")
+
+    def test_a_goal_in_the_second_clause_only(self):
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_inline("_lc_second", self.RB.format(name="_lc_second") + (
+                "def go():\n"
+                "    return [(A, T) for A in [1, 2] for T in --tw(T)]\n"
+            ))
+        assert "FIRST" in str(exc_info.value), str(exc_info.value)
+
+    def test_a_goal_in_the_first_AND_the_second_clause(self):
+        """The case the loop-internal refusal could not see."""
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_inline("_lc_both", self.RB.format(name="_lc_both") + (
+                "def go():\n"
+                "    return [(S, T) for S in --sp(S) for T in --tw(T)]\n"
+            ))
+        text = str(exc_info.value)
+        assert "FIRST" in text, text
+        assert "clause 2" in text, (
+            f"the refusal must name WHICH clause, not just that one is wrong: "
+            f"{text}"
+        )
+
+
+class TestAllCapsLocalReadAsAVariableWarns:
+    """A Python local whose name is ALL_CAPS is read as a logic VARIABLE
+    inside a seam — even under ``++`` — and that is silent.
+
+    Measured before the warning existed, with ``P = 2`` a Python local:
+
+        for V in --pair(++P, V)   ->  [10, 20, 30]   should be [20]
+        if  --pair(++P, V)        ->  10             should be 20
+
+    No error, no exception: the escape does not cross the value, ``P`` is a
+    fresh variable, and the goal is simply less constrained than it reads.
+    The corpus convention is ALL_CAPS for exactly these locals (``P``, ``D``,
+    ``S``, ``C``, ``R``), so the migration would meet it at a large fraction
+    of sites.
+
+    THE SIGNAL IS A CONJUNCTION, available at lowering time with no runtime
+    information: the name is being lowered as a logic variable AND the same
+    name is bound as a Python local in the enclosing scope.  Neither half
+    alone is a signal — a lone ALL_CAPS name in a goal is an ordinary logic
+    variable, and a lone ALL_CAPS local is ordinary Python.
+    """
+
+    RB = ("-module({name}, [pair(K, V)])\n"
+          "pair(1, 10),\n" "pair(2, 20),\n" "pair(3, 30),\n")
+
+    def _warns(self, tag, body):
+        import warnings as _w
+        from clausal.lint_warnings import ClausalLintWarning
+        with _w.catch_warnings(record=True) as caught:
+            _w.simplefilter("always")
+            _load_inline(f"_ac_{tag}", self.RB.format(name=f"_ac_{tag}")
+                         + "def go():\n" + body)
+        return [str(x.message) for x in caught
+                if issubclass(x.category, ClausalLintWarning)]
+
+    def test_it_warns_when_an_allcaps_local_is_read_as_a_variable(self):
+        msgs = self._warns("warn", (
+            "    P = 2\n"
+            "    out = []\n"
+            "    for V in --pair(++P, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        hit = [m for m in msgs if "P" in m]
+        assert hit, f"no warning for the collision; got {msgs}"
+        text = hit[0]
+        # BOTH readings must be named: the failure mode is that the author
+        # believes the opposite of what the compiler did.
+        lowered = text.lower()
+        assert "logic variable" in lowered, text
+        assert "local" in lowered, text
+        assert "P" in text
+        assert "++P does not change that" in text.replace("`", ""), (
+            "the message must say the ++ escape does NOT rescue it — that is "
+            f"the belief the author holds: {text}")
+
+    def test_it_does_NOT_warn_on_a_lowercase_local(self):
+        """The workaround must be silent, or the lint trains people to ignore
+        it through the migration."""
+        msgs = self._warns("lower", (
+            "    p_val = 2\n"
+            "    out = []\n"
+            "    for V in --pair(++p_val, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        assert not [m for m in msgs if "p_val" in m], msgs
+
+    def test_it_does_NOT_warn_on_a_goal_variable_that_is_not_a_local(self):
+        """A plain ALL_CAPS logic variable in a goal is ordinary — half the
+        conjunction is not a signal."""
+        msgs = self._warns("plain", (
+            "    out = []\n"
+            "    for V in --pair(K, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        assert not [m for m in msgs if "'K'" in m or " K " in m], msgs
+
+    def test_it_does_NOT_warn_on_the_seam_s_own_loop_target(self):
+        """``V`` is the ``for`` target of the seam itself, so it is a Python
+        binding only because the seam made it one.  Warning here would fire on
+        every correct site in the corpus."""
+        msgs = self._warns("target", (
+            "    out = []\n"
+            "    for V in --pair(K, V):\n"
+            "        out.append(V)\n"
+            "    return out\n"
+        ))
+        assert not [m for m in msgs if "'V'" in m], msgs
+
+    def test_the_warning_does_not_refuse_the_load(self):
+        """Warn, never refuse: the construct is legal and an author may mean
+        it.  A refusal would also make this unlandable mid-migration."""
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            mod = _load_inline("_ac_live", self.RB.format(name="_ac_live") + (
+                "def go():\n"
+                "    P = 2\n"
+                "    out = []\n"
+                "    for V in --pair(++P, V):\n"
+                "        out.append(V)\n"
+                "    return out\n"
+            ))
+        assert mod.go() == [10, 20, 30], "still loads, still runs, still wrong"

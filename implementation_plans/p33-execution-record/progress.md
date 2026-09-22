@@ -24,7 +24,7 @@ Plan committed on branch: d3cfe27a. build_ext clean.
 | T4 fold-ins | deep-gate instance half + $cells consolidation + OWA-lift cheap pass | All in files T4 already opens; each with own tests/criteria |
 | T2/T4×deep_gate | 4-tuple plans must survive closure restructuring | Global constraint + explicit steps both tasks; P3-2 driven-bucket tests are the net |
 | T6×legacy walk | resolve_module must NOT re-point _tabled_entry_for_goal's caller-dict walk (R10 legacy note) | Plan edited accordingly (post-review revision); convergence todo filed at close-out |
-| All tasks | Global constraints | No .c planned (allowed if measured); eval_harness/_get_dispatch protocol untouched; STRICTNESS_EXEMPT expectation noted T4 |
+| All tasks | Global constraints | No .c planned (allowed if measured); <harness-library>/_get_dispatch protocol untouched; STRICTNESS_EXEMPT expectation noted T4 |
 | Self-consistency | Interfaces block names (PredRow/row/mutate/invalidate/set_backend_chooser/resolve_module) | Consistent across T1-T8; T2's detached-row compatibility mode pinned |
 
 Scan verdict: no conflicts requiring pre-execution rulings.

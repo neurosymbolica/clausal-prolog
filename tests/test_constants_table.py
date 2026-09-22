@@ -305,7 +305,7 @@ def test_the_scale_suffixes_are_a_DECLARED_UNION(tmp_path):
     vocabulary". Asking whether an identifier claims a scale nothing
     represents is about words the authority may already have FORGOTTEN — and
     the forgetting is the event that makes the question necessary
-    (harness-batch-lane, 2026-09-12, who found that a census deriving only
+    (the harness lane, 2026-09-12, who found that a census deriving only
     from the authority would have reported a confident zero on the four
     bodies carrying `dollar` after the rename).
 
@@ -325,7 +325,7 @@ def test_the_scale_suffixes_are_a_DECLARED_UNION(tmp_path):
 
 def test_the_hand_maintained_half_notices_when_it_should_SHRINK():
     """A half expected to shrink needs something that notices when it should
-    have (harness-batch-lane, 2026-09-12). The non-empty control catches an
+    have (the harness lane, 2026-09-12). The non-empty control catches an
     empty hand list; nothing caught a REDUNDANT one — a word the authority has
     since taken over, left behind by hand, which is the same staleness in the
     other direction.

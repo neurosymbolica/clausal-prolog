@@ -140,7 +140,7 @@ Both stay true whoever built the term, in the same way as
 ### False positives: none in the corpus
 
 Scanned every `.clausal` file in a downstream rulebase corpus plus its helper
-library's kit with `ast.parse` (`.clausal` is Python-parseable — `<-`
+library's library with `ast.parse` (`.clausal` is Python-parseable — `<-`
 is `<` then unary minus), counting `Compare` nodes whose op is `Is`/`Eq` and
 whose comparator is an arithmetic `BinOp`:
 

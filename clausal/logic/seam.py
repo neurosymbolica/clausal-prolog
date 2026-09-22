@@ -34,6 +34,7 @@ from typing import Any
 
 from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName, Node
 from clausal.terms import PyThunk, Var
+from clausal.logic.cells import QUALIFIED_GOAL_FUNCTOR
 
 
 def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
@@ -310,7 +311,25 @@ class ResidualConstraints(Exception):
 
 
 def export(var: Any) -> Any:
-    """The fully dereferenced copy of *var*'s value for Python to keep."""
+    """The fully dereferenced copy of *var*'s value for Python to keep, in the
+    PYTHON BOUNDARY representation.
+
+    THE OUT BOUNDARY (spec 2026-09-21).  This is the one place a term becomes a
+    value Python keeps, so it is where the representation stops::
+
+        an atom    ->  atom('x')   a ``str`` SUBCLASS, advisory: == its text
+        a string   ->  'text'      a plain Python ``str``
+
+    Both directions matter.  Tagging the atom is what lets a caller — and
+    ``++`` on the way back — tell an atom from text when Python has only one
+    string form.  Rendering the string as plain text is what stops the carrier
+    tuple leaking into code that sorts, hashes or dict-keys it: a downstream
+    sweep met exactly that as ``TypeError: '<' not supported between instances
+    of 'tuple' and 'str'``, and as two key spaces that silently never joined.
+
+    Applied at EVERY DEPTH, not just the top: an answer is usually a compound,
+    and a caller reading ``v[2]`` has crossed the boundary just as much as one
+    reading ``v``."""
     from clausal.logic.solve import _deref_walk
     from clausal.logic.variables import deref, is_var
     d = deref(var)
@@ -319,7 +338,41 @@ def export(var: Any) -> Any:
             f"--: exported variable is unbound and constrained "
             f"({sorted(d.attrs)}); exports are answers. Keep the store alive "
             f"with an explicit Trail, or ask for the residue inside the goal")
-    return _deref_walk(var)
+    return _to_boundary(_deref_walk(var))
+
+
+def _to_boundary(value: Any) -> Any:
+    """*value* in the Python boundary representation, recursively.
+
+    Ordering matters: the chars carrier is a TUPLE, so it must be recognised
+    before the generic tuple walk, or a string would be rebuilt element-wise
+    as a 2-tuple of ('$chars', text).  That is the generic-branch-ahead-of-the-
+    specific-one mirror, and it is why this is a chain rather than a dispatch
+    table."""
+    from clausal.logic.atoms import atom as _atom, is_atom as _is_atom
+    from clausal.logic.cells import is_chars, chars_text
+    if _is_atom(value):
+        return _atom(value)
+    if is_chars(value):
+        return chars_text(value)
+    if type(value) is tuple:
+        if len(value) == 1:
+            # THE RESERVED 1-TUPLE crosses OPAQUE.  ``('x',)`` is reserved —
+            # ``compound_cell_shape`` REFUSES it, and the reservation is for a
+            # future opaque Python object reference — so it is neither an atom
+            # nor a compound and must not be walked.  Recursing produced
+            # ``(atom('c'),)``, which READS as a legitimate compound with
+            # functor ``c`` and no arguments: the generic-tuple branch
+            # swallowing a shape that has a specific meaning, which is the
+            # mirror this codebase keeps meeting.  Pass-through matches
+            # ``to_python``, the engine's other deep converter, which also
+            # leaves it alone rather than raising — ``export`` is not the place
+            # to start refusing a shape the rest of the engine tolerates.
+            return value
+        return tuple(_to_boundary(v) for v in value)
+    if type(value) is list:
+        return [_to_boundary(v) for v in value]
+    return value
 
 
 def _module_of(module_globals: dict):
@@ -617,6 +670,126 @@ def _definite_answers(goal: Any, module,
                 f"--: {goal!r} has a conditional (undefined) answer; use "
                 f"clausal.query_wfs for truth values and delays")
         yield
+
+
+def each_fresh(make, module_globals: dict):
+    """``each``, but the goal's logic variables are MINTED PER EVALUATION.
+
+    THE RE-ENTRANT FORM (roborev job 79, finding 1 -- CONFIRMED by probe, and
+    the first three probes of it passed by COINCIDENCE).  A comprehension has
+    nowhere to put a statement, so the first version of this hoisted
+    ``$v_S = $Var()`` above the enclosing statement.  That is correct only
+    where the statement is re-executed per evaluation.  It is not, for a
+    comprehension in a lambda body, a ``while`` test, or a nested
+    comprehension -- and there one ``Var`` is shared across every evaluation.
+
+    Measured, with the discriminating probe (``sp/1`` has three clauses):
+
+        f = lambda: (S for S in --sp(S))
+        g1 = f(); first = next(g1)      # g1 LEFT LIVE, $v_S still bound to 1
+        g2 = f(); list(g2)              # saw [1]   -- should be [1, 2, 3]
+
+    Counting ``g2``'s answers is what exposes it: asking only for its FIRST
+    answer returns 1 either way, which is why ``(1, 1, 2)`` from the obvious
+    probe looked like a pass.
+
+    *make* takes one fresh ``Var`` per goal variable, in the order the
+    rewriter emitted its parameters, and returns ``(goal, exported_vars)``.
+    Calling it here -- once per evaluation of the iterable -- is what makes
+    the binding per-evaluation without any statement to hoist to, and a
+    plain CALL is legal in a comprehension iterable where an assignment
+    expression is not (the restriction reaches into a lambda body too, so
+    the walrus ``while`` uses cannot simply be moved inside one).
+    """
+    # ``__code__.co_argcount``, NOT ``inspect.signature``: the rewriter names
+    # these parameters ``$v_S``, which is a legal name in a compiled AST and
+    # not a legal Python IDENTIFIER, and ``inspect`` validates identifiers.
+    arity = make.__code__.co_argcount
+    goal, variables = make(*(Var() for _ in range(arity)))
+    yield from each(goal, variables, module_globals)
+
+
+def with_bases(goal: Any, bases: dict) -> Any:
+    """Resolve a goal written ``--m.pred(A, B)`` against the RUNTIME value of
+    *m*, returning the module-qualified goal ``(":", m, pred(A, B))``.
+
+    THE DOTTED RUNTIME MODULE FORM (2026-09-21).  The seam resolves a goal's
+    NAME at compile time against the host file's own rules, so ``m.pred``
+    reached ``solve`` as the dotted FUNCTOR ``"m.pred"`` and failed with
+    ``name 'm.pred' is not defined``.  That shut out the shape a
+    downstream caller is built on -- load the module under test at runtime,
+    then call into it -- which had been reaching the engine through
+    ``solve(module.pred(X))`` until a term stopped being a self-describing
+    goal.
+
+    *bases* maps each dotted base NAME in the goal to a zero-argument thunk
+    that reads it where it was written, so a base that is a LOCAL resolves.
+    The rewriter emits the thunks; a module-level ``globals()`` read would
+    miss every real caller, since such a caller binds its module inside a
+    function.
+
+    CONSERVATIVE BY CONSTRUCTION.  A base is rewritten ONLY when its thunk
+    both evaluates and yields something ``resolve_module`` accepts.  An
+    unbound name, a non-module value, or a base this function was handed no
+    thunk for leaves the node EXACTLY as it was, so every spelling that
+    resolved statically before still does and no new diagnostic can fire on
+    working code.
+
+    TOP-LEVEL GOAL ONLY.  A conjunction seam (``--(m.p(X), m.q(Y))``) is left
+    alone: the qualified cell is a goal form, and nesting one inside a
+    conjunction node is a lowering this has not been measured against.  Each
+    ``if``/``for``/``while``/statement seam is one goal, which is the shape
+    such callers use.
+    """
+    from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName
+
+    if not isinstance(goal, Call) or not isinstance(goal.func, LoadAttr):
+        return goal
+    attr = goal.func
+    if not isinstance(attr.object, LoadName):
+        return goal                      # a chain deeper than one dot
+    base_name = attr.object.name
+    thunk = (bases or {}).get(base_name)
+    if thunk is None:
+        return goal
+    try:
+        value = thunk()
+    except NameError:
+        return goal
+    module = _module_designator(value)
+    if module is None:
+        return goal
+    inner = Call(func=LoadName(name=attr.attr), args=goal.args,
+                 kwargs=goal.kwargs)
+    return (QUALIFIED_GOAL_FUNCTOR, module, inner)
+
+
+def _module_designator(value: Any) -> Any:
+    """*value* if it is a MODULE OBJECT, else None.
+
+    NARROWER THAN ``resolve_module`` ON PURPOSE (roborev job 79, finding 3).
+    That function is the designator chain, and a designator includes a ``str``
+    or an ATOM looked up in ``sys.modules`` — so accepting everything it
+    accepts would mean a base bound to a plain string, or to a declared atom
+    whose spelling collides with any loaded module (``json``, ``time``,
+    ``io``, ``code``), silently turned the goal into a qualified call into
+    that Python module.  A base written ``m.pred`` is a module OBJECT or it is
+    not this form, and "is this a module?" must not be answered by "would a
+    designator resolve?".
+
+    A ``Module`` itself, and an imported ``.clausal`` module (which carries
+    its ``Module`` under ``$module`` / ``__clausal_module__``), both answer.
+    Anything else — a str, an atom, an int, a class — answers None and leaves
+    the goal exactly as it was.
+    """
+    from clausal.logic.database import Module
+    if isinstance(value, Module):
+        return value
+    namespace = getattr(value, "__dict__", None)
+    if isinstance(namespace, dict) and (
+            "__clausal_module__" in namespace or "$module" in namespace):
+        return value
+    return None
 
 
 def once_bind(goal: Any, module_globals: dict) -> bool:

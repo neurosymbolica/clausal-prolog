@@ -75,7 +75,7 @@ times.
    or every legitimate WFS program becomes noisy.
 3. A stratified program using negation freely produces no diagnostic at all. Most of the
    corpus is in this category, including the composition rulebase
-   (`/workspace/clausify/auto/assess/rules/eu_procurement_2014_24.clausal`), which uses
+   (`<downstream-repo>/auto/assess/rules/eu_procurement_2014_24.clausal`), which uses
    `not` throughout and is not defeasible. False positives here would be worse than the
    current silence.
 
@@ -120,7 +120,7 @@ Acceptance: (1) the two-clause untabled program warns by name at load;
 recursion are silent — `tests/test_stratification.py`. The full engine suite
 (hundreds of `not`-using fixtures) runs with no new stratification noise.
 The eu_procurement corpus check could not be run directly (its import chain
-crosses clausify snapshots that no longer line up); the suite-wide silence
+crosses downstream snapshots that no longer line up); the suite-wide silence
 plus the term/goal-position distinction is the false-positive evidence.
 
 Note: this analysis is per-module, like the `$naf_tabled` lowering — a

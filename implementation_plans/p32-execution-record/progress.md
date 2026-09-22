@@ -18,7 +18,7 @@ Setup: build_ext --inplace clean 2026-09-04.
 | T3×T5 | T3 live-cell head branch checks slot 0 raw; cells._cell_shape still derefs until T5 | Window: bound-Var-functor cell head arg misses T3's branch, falls to ground-literal capture+unify guard — answers correct either way |
 | T2×T4 | T2 leaves cells keying _INDEX_VAR (all-clauses fallback) until T4 | Answer-preserving window by design; parity suite is the witness |
 | T4×T5 | T4 key fns use inline type checks, not _valid_functor_slot | No coupling |
-| All tasks | Global constraints | No task touches .c files, eval_harness, _get_dispatch, or dict/set pairs — plan text consistent |
+| All tasks | Global constraints | No task touches .c files, <harness-library>, _get_dispatch, or dict/set pairs — plan text consistent |
 | Self-consistency | Each task's tests vs steps vs gate | OK. Note for reviewers: golden REGENERATION is plan-mandated with a read-the-diff step — not a rubric defect per se; regenerating without reading is |
 
 Scan verdict: no conflicts requiring pre-execution rulings.

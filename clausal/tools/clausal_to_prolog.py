@@ -70,7 +70,6 @@ class UntranslatableConstructError(NotImplementedError):
 # so every exported module can reach them by climbing to the root.
 _LIBRARY_REMAP = {
     "clausal.stdlib.kleene": "clausal_kleene",
-    "formalize_lib": "formalize_lib",
 }
 
 
@@ -1728,8 +1727,8 @@ class _ClausalToProlog:
         resolves a consulted path against the consulting file.
 
         Returns None when the relative path does not name a file: a consumer
-        whose own package IS the target (``formalize_lib.helper`` importing
-        ``formalize_lib``) relativizes to ``'.'``, and one nested inside it
+        whose own package IS the target (``shared_lib.helper`` importing
+        ``shared_lib``) relativizes to ``'.'``, and one nested inside it
         to ``'..'``. Both are directory references that Scryer cannot consult,
         so the import is recorded as an untranslatable construct instead —
         raising under strict, a warning comment otherwise — rather than
@@ -2640,8 +2639,8 @@ class _ClausalToProlog:
     # ── Interim refusals (operator decision, 2026-09-03) ──────────────
     #
     # See docs/iso-export-pilot-2026-09.md, "Operator decision — 2026-09-03
-    # (dict-membership fail-open, class P census)" in the clausify-executor-
-    # train repo. Two shapes that used to translate SILENTLY WRONG now refuse.
+    # (dict-membership fail-open, class P census)", recorded downstream.
+    # Two shapes that used to translate SILENTLY WRONG now refuse.
 
     # Goals whose output argument is guaranteed to be a proper list, keyed by
     # (name, arity) → index of that output argument. Deliberately tiny: each
@@ -3017,7 +3016,7 @@ class _ClausalToProlog:
                 #
                 # THE ORDER MATTERED. All 167 measured-structural sites were
                 # respelled to `'=='(L, R)` FIRST (corpus 10ed4f72 + ed7f9d21,
-                # kit 379075d). Landing this first would have turned 167
+                # downstream 379075d). Landing this first would have turned 167
                 # identity comparisons into constraints, silently.
                 #
                 # COST, accepted with the ruling: `#=` is the dialect's
@@ -3182,7 +3181,7 @@ class _ClausalToProlog:
         """Lower ``X is {**D, k1: v1, ...}`` to
         ``attrs_put(D, [attribute(k1, v1), ...], X)``.
 
-        Only the single-splat-FIRST shape (the kit's ``override_key``
+        Only the single-splat-FIRST shape (the downstream ``override_key``
         idiom) is translatable this way. Returns ``None`` for any other
         shape — no splat, splat not first, or more than one splat — so the
         caller falls through to the generic ``is``/dict handling, which
@@ -3206,8 +3205,7 @@ class _ClausalToProlog:
         ``is``/2 is symmetric in Clausal (``_convert_compare`` just converts
         both sides and unifies them), and the corpus actually uses both
         spellings: ``V is P[K]`` (the shape named in the C-pre brief) and
-        ``P[K] is V`` (three real sites in
-        eu/procurement/exclusion_grounds/queries.clausal, e.g.
+        ``P[K] is V`` (three real downstream sites, e.g.
         ``PROFILE[grounds] is GROUND_LIST``). Whichever side is the
         Subscript becomes ``profile_get_strict``'s first two arguments; the
         other side becomes its third.
@@ -3219,9 +3217,9 @@ class _ClausalToProlog:
         - neither side is a Subscript (an ordinary ``is``, unrelated to this
           lowering);
         - the Subscript's own base is itself a Subscript (chained, ``P[a][b]``)
-          or a Call result (``f()[a]``) — no corpus consumer for either
-          (census: clausify-domains, 850 files, 41 subscript sites, 0
-          chained, 0 call-based), so these refuse rather than inventing
+          or a Call result (``f()[a]``) — no downstream consumer for either
+          (censused: every subscript site is unchained and none is
+          call-based), so these refuse rather than inventing
           semantics for an unwitnessed shape; falling through re-converts
           the Subscript via the generic ``_convert_expr`` path, which has no
           Subscript case and so warns/strict-raises, same as before this
@@ -3441,14 +3439,14 @@ def _run_key(item: PItem) -> tuple[str, int] | None:
 #: The appended count IS the mode Scryer wants: ``call_goal(G, A, B, C)`` applies G
 #: to three arguments, so G's position is mode ``3`` (§3.3, measured).
 #:
-#: `call_goal/N` is the kit's whole higher-order protocol and, measured over the kit,
+#: `call_goal/N` is the downstream higher-order protocol and, measured over it,
 #: the only meta-caller a real host reaches. `call/N` is registered in the engine as
 #: an alias of the same trampolines
 #: (``clausal/logic/builtins/higher_order.py:46-50``) and is here for that reason.
 #:
 #: NOTHING SPECULATIVE BELONGS IN THIS TABLE. An earlier draft carried `include/3`,
 #: `exclude/3`, `max_by/3` and `min_by/3` on the reasoning that a host reaching one
-#: *would* be a meta host. They were removed: no kit host reaches any of them, and
+#: *would* be a meta host. They were removed: no downstream host reaches any of them, and
 #: they are exactly the shapes a legal corpus is most likely to use as ordinary data
 #: constructors, so carrying them bought nothing and risked annotating a data
 #: position. Step B re-adds `include/3` when the `clausal_hof` companion exists and
@@ -3540,7 +3538,7 @@ def collect_local_meta_modes(pmodule: PModule) -> dict[tuple[str, int], dict[int
     Returns ``{(name, arity): {argument index: mode}}``. This is a LOWER BOUND, and
     deliberately so: a host that only threads its argument onward has no body-local
     evidence at all, and guessing one would be worse than the loud failure. Measured
-    over the kit, the bound covers the hosts of 258 of the 390 lambda sites; the other
+    over the downstream sources, the bound covers most lambda-site hosts; the other
     116 sit at threading hosts and are the exporter fixpoint's job.
 
     THE AMBIGUOUS-POSITION CONTRACT (controller ruling of 2026-09-05, implemented with

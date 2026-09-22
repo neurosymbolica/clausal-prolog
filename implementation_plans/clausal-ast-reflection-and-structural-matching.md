@@ -88,9 +88,9 @@ independent of Python's own capitalised-name meaning.
 
 Python-facing (compile-time reflection):
 - `reify_ast(node) -> Compound` — one AST node → a reified Clausal term.
-- `reify_source(text) -> list[Compound]` — parse `.clausal` text (no directive execution, no kit
+- `reify_source(text) -> list[Compound]` — parse `.clausal` text (no directive execution, no library
   import) and reify every top-level item. Pure and dependency-light — the property an external
-  static analyser needs (analyse without loading the engine or the kit).
+  static analyser needs (analyse without loading the engine or the library).
 
 Clausal-facing (the metacircular surface):
 - `reified_clause(SOURCE_TERM, CLAUSE)` / `reified_item(SOURCE, ITEM)` — enumerate reified items.
@@ -114,7 +114,7 @@ undefined_call(SOURCE, NAME, ARITY) <- (
 ## Phasing
 
 1. **`reify_ast` / `reify_source` (Python).** The pure AST → `Compound` mapping above + tests over
-   real kit files (`kit/*.clausal`). No engine load, no kit import. This alone unblocks external
+   real library files (`library/*.clausal`). No engine load, no library import. This alone unblocks external
    static analysers (they call `reify_source` instead of hand-walking `ast`).
 2. **Clausal destructuring builtins.** `reified_clause/2`, `clause_head/2`, `clause_body/2`,
    `goal_functor/3`, `is_var/1`, `is_escape/2` — so matchers can be written in Clausal.
@@ -136,7 +136,7 @@ undefined_call(SOURCE, NAME, ARITY) <- (
 ## Non-goals
 
 - Not replacing the standard-Prolog reader (`prolog_parser`); this targets the Python-AST substrate.
-- Not requiring the engine or the kit to be importable for `reify_source` (phase 1 must stay pure).
+- Not requiring the engine or the library to be importable for `reify_source` (phase 1 must stay pure).
 - Not a full macro system in phase 1 — reflection first, expansion later.
 
 ---

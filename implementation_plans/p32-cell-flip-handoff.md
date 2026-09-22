@@ -149,7 +149,7 @@ vs data) — emitter tags exactly the data occurrences; dict/set pairs stay plai
 - Perf gate: interleaved A/B vs the branch base on bench_struct_tabling + bench_fib,
   >3% regression fails. P3-2 is where cells become default — the Phase-2 measurement
   (B/A = 0.561 walker-heavy) predicts a WIN; verify it materializes end-to-end.
-- eval_harness is GATE_CORE — off limits. `_get_dispatch` signature frozen.
+- <harness-library> is GATE_CORE — off limits. `_get_dispatch` signature frozen.
 
 ## After P3-2
 

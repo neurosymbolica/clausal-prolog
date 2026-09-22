@@ -6,7 +6,7 @@
 # param named D (so the message carries "D < -"), a membership-negation
 # closure, and a two-parameter projection closure. Written for this test;
 # it vendors NOTHING: the earlier fixture here was a verbatim snapshot of a
-# closed-side kit file (c7f29564) and is replaced by this (operator ruling
+# closed-side vocab file (c7f29564) and is replaced by this (operator ruling
 # 2026-09-08, "synthetic witness"). Fact clauses end in a comma (fixture trap
 # noted in the class docstring).
 -private([met, unmet])

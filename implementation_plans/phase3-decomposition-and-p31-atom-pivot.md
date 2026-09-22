@@ -91,7 +91,7 @@ harnesses for the perf gate.
 - Perf gate: interleaved A/B (old main vs branch head) on `bench_struct_tabling` and
   `bench_fib` — no metric regresses >3% (Phase-1 precedent).
 - `_get_dispatch` protocol untouched (frozen, ~22 out-of-tree implementors).
-- `eval_harness` is GATE_CORE — not touched by this plan; if any task drifts into it, STOP.
+- `<harness-library>` is GATE_CORE — not touched by this plan; if any task drifts into it, STOP.
 - Semantic inversions are LEGITIMATE only where §1b/§5 rules them; every pinned-test
   change cites the ruling in a comment.
 

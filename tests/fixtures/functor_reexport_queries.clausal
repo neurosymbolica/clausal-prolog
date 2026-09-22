@@ -1,4 +1,4 @@
-# Intermediate module that imports `flip/2` from the kit AND lists it in its
+# Intermediate module that imports `flip/2` from the vocab AND lists it in its
 # own -module export list to RE-EXPORT it downstream.  Listing an imported
 # functor in -module must SHARE identity with the import, not re-mint a fresh
 # (empty) class.  See todo/done/module-reexport-imported-functor-shadows.md.

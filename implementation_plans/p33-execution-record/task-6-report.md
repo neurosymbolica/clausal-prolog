@@ -555,7 +555,7 @@ and re-probed directly (not just the new pins).
 ### Untouched surfaces
 
 Confirmed via `grep` over the diff: no hits for `_get_dispatch`,
-`_belongs_elsewhere`, `_SKIPPED_ITEMS`, `$disp_`, `eval_harness`,
+`_belongs_elsewhere`, `_SKIPPED_ITEMS`, `$disp_`, `<harness-library>`,
 `_stored_head_key`, `compiler_v2`, or `3b-ter`. Only 6 files touched
 (`higher_order.py`, `cells.py`, `solve.py`, one fixture, two test files) —
 matches the diffstat. `_tabled_entry_for_goal`'s legacy dotted walk body is

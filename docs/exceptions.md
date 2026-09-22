@@ -160,7 +160,7 @@ The context field is typically a string identifying where the error occurred.
 
 ## Raising well-formedness guards in library code
 
-Shared library predicates (a harness's `kit/` modules, for example) often want to
+Shared library predicates (a harness's `library/` modules, for example) often want to
 **raise** on malformed input — a non-ground term, the wrong shape, the wrong type —
 rather than *fail logically*. Logical failure inside a `findall` is indistinguishable
 from a legitimate empty result: the `findall` collapses to `[]`, a downstream

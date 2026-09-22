@@ -1,7 +1,7 @@
 # TODO: structural head-arg normalization doesn't recurse into LIST elements
 
 **Opened 2026-06-25** from real-world exercise (an external authoring harness's
-formalization kit). Direct
+formalization library). Direct
 follow-on to `compound-head-literal-output-mode.md` (RESOLVED 2026-06-23): that fix
 binds **top-level** structural head args in output mode, but the normalization does
 not recurse into **list elements**, so a compound nested in a head list whose inner

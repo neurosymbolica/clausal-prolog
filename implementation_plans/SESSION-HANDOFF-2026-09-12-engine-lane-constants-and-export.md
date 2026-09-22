@@ -39,7 +39,7 @@ switch CONFINED that rather than solving it — `iso` needs no prelude, so the r
 
 * **the expansion prelude** (above) — inline per file, or one library file
 * **box** — still the only tree on the old vocabulary
-* ratio units do not unblock `crr_leverage_ratio` by themselves; option 3 is the piece that does,
+* ratio units do not unblock `<downstream-domain>` by themselves; option 3 is the piece that does,
   once promoted
 * the scale lint's three known distortions are unchanged (`docs/currency.md`)
 * `todo/constant-number-units-3-answers-across-modules-2026-09-12.md` is CLOSED by `a92a3e74`
@@ -64,7 +64,7 @@ process AGE** — a process older than the command inspecting it cannot be that 
 
 **Two rules from peers, both better than what I had:**
 
-* harness-batch-lane: **a control that exercises one AXIS of an instrument says nothing about the
+* the harness lane: **a control that exercises one AXIS of an instrument says nothing about the
   other.** Their differ's identity run printed "919 identical, 0 different" — which is also what a
   differ stuck on "identical" prints. They proved the diff axis separately.
 * iso-export-lane: **a measured skip is about a CHANGE; it is not a claim about a TREE.** Their

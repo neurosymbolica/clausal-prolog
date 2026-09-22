@@ -184,7 +184,7 @@ the differential, nothing landed); its own resume list is in its handoff and is 
 
 The todo's hazard — "the term appears the moment any `++` auto-conversion that includes Decimal
 lands" — is removed by construction under B: with Decimal in the transfer table the hook never
-produces the cell, the same way it never produces `rdiv`. harness-batch-lane's narrowed date-only
+produces the cell, the same way it never produces `rdiv`. the harness lane's narrowed date-only
 hook stays correct as is. Under A the hook may convert only after the whole numeric surface is done.
 
 ## 6. Gates, before any of it is promoted
@@ -192,7 +192,7 @@ hook stays correct as is. Under A the hook may convert only after the whole nume
 * Engine failure-set A/B on a CLEAN base (the branch baseline cannot see what it already
   contains), with a positive control per instrument.
 * Anything that moves what `compare/3`, `msort/2` or the evaluator answers for a value the sealed
-  bodies handle goes to harness-batch-lane as a QUESTION first — the 82-scorer answer diff, sha
+  bodies handle goes to the harness lane as a QUESTION first — the 82-scorer answer diff, sha
   frozen before asking; they have the reference. Money is live corpus vocabulary, so the evaluator
   change qualifies; the ordering guard for the two cells does not move any answer today (nothing
   emits a cell) but is cheap to include in the same run.
@@ -236,7 +236,7 @@ section-4 answer) — that is the literal surface and a corpus migration, **park
 | Q2 | **distinct terms, equal value**. They do NOT unify: `=`/2 is syntactic identity on numbers (ISO `1 = 1.0` fails), so `10.0 = 10.00` fails, `10.0 =:= 10.00` succeeds, `10.0 == 10.00` fails, `compare/3` orders by value then scale | the Decimal order key and `_numeric_tag` carry the scale; unification of two Decimals is exact-type-and-scale, and does NOT inherit the engine's int/float conflation (the deferred divergence stays what it is) |
 | Q3 | **measure first**, then decide `writeq`; `write` keeps `10.01` | step added: measure Scryer and Trealla's `writeq` of a rational |
 | Q4 | **no**: `10.01` in source IS a float, that is ISO | the explicit spellings `decimal(M, S)` and `rdiv(N, D)` are the only way to write an exact non-integer; no literal flip, ever, on this ruling |
-| Q5 | **no implicit coercion — raise**. Decimal beside a float is an error; it risks loss of precision | §3's "Decimal ⊕ float → Decimal(str(f))" is REVERSED, and so is the same rule inside `Quantity._num_pair` (it is the same pair): a float beside a Decimal or a Fraction raises a type error. This changes money-path behaviour and goes to harness-batch-lane as a QUESTION before it lands |
+| Q5 | **no implicit coercion — raise**. Decimal beside a float is an error; it risks loss of precision | §3's "Decimal ⊕ float → Decimal(str(f))" is REVERSED, and so is the same rule inside `Quantity._num_pair` (it is the same pair): a float beside a Decimal or a Fraction raises a type error. This changes money-path behaviour and goes to the harness lane as a QUESTION before it lands |
 
 ---
 
@@ -249,21 +249,21 @@ evaluates, a `decimal` cell stays LOUD until step 2. 20 tests, 5 mutation contro
 first Q2 assertion was vacuous — list `==` ignores Decimal scale — and control 5 caught it).
 
 Gates: engine failure-set A/B on a clean base at `5d53aeea`: NEW 0 / GONE 0 (145 / 145 names,
-+20 passed). Harness axis (harness-batch-lane, base AND guard run, .so premise verified by their
++20 passed). Harness axis (the harness lane, base AND guard run, .so premise verified by their
 own diff): **82/82 unchanged on both, ATTRIBUTABLE for the cell-ordering half; SILENT on
 mixed-scale decimal comparison** — their population has 0 bodies mentioning Decimal and 1 rulebase
 source of 849, so a clean result there is not coverage of the Q2 behaviour. Recorded as a CONDITION, not a
-status (harness-batch-lane's refinement, so it cannot rot into a standing property): **ruled (Q2)
+status (the harness lane's refinement, so it cannot rot into a standing property): **ruled (Q2)
 and engine-tested; the closed corpus does not CURRENTLY exercise mixed-scale decimal comparison —
-0 of 82 sealed scorers construct a Decimal — so the harness axis is silent on that half. RE-ASK
-harness-batch-lane when a domain compares or sorts money of differing scale** (their trigger: any
+0 of 82 sealed answer-set scorers construct a Decimal — so the harness axis is silent on that half. RE-ASK
+the harness lane when a domain compares or sorts money of differing scale** (their trigger: any
 sealed body constructing a `Decimal`; one grep, zero today; nobody monitors it).
 
-**Corrected 2026-09-18 (harness-batch-lane, their own correction):** the reason above was
+**Corrected 2026-09-18 (the harness lane, their own correction):** the reason above was
 "unmeasured"; the true reason is stronger. The ONE Decimal money-arithmetic site in the closed
 corpus is a pure-Python GOLD model that imports nothing from the engine — no engine change can reach
 it. So the only Decimal arithmetic in the corpus is structurally unreachable from the engine, and
-the 82 sealed scorers ARE the engine-reaching population, re-derived structurally (their roster tool
+the 82 sealed answer-set scorers ARE the engine-reaching population, re-derived structurally (their roster tool
 classifies every evaluation file outside the 82 by whether it reaches the engine: 92 outside, 5
 reach it — unmigrated scorers of unformalised domains with nothing yet to score — 0 genuine gaps,
 calibrated on a synthetic gap). The condition stands unchanged; "82 of 82" now means all of them.
@@ -290,13 +290,13 @@ Two LATENT defects the rational compiled division made reachable, fixed and pinn
 comparison entries (`== != < =<`, Python twins and C-backed wrappers) refused a ground Fraction
 beside a ground float as "cannot mix CLP(Q) and CLP(R)" — a value question, now compared by
 exact value ahead of the refusal (`_ground_number_pair`) — in the C-backed wrappers a GROUND
-EXPRESSION TREE is folded first (`_resolve`), which the first fix missed and harness-batch-lane's
+EXPRESSION TREE is folded first (`_resolve`), which the first fix missed and the harness lane's
 probe `X / Y == 3.5` caught (two paths, one symptom); and `_expr_tree_has_var` isinstance'd
 against still-None lazy node classes on a ground non-var leaf.
 
 Gates: 44 parity/pin tests (every case through `is/2` AND `eval_/2`, same value, TYPE, error), 6
 mutation controls all firing; engine failure-set A/B on a clean base at `506596da`: **NEW 0 /
-GONE 0** (145 / 145 names, +37 passed) at `df187e1f`. Harness axis (harness-batch-lane, frozen corpus, compiled path asserted on every tree): **82/82
+GONE 0** (145 / 145 names, +37 passed) at `df187e1f`. Harness axis (the harness lane, frozen corpus, compiled path asserted on every tree): **82/82
 unchanged at 506596da (base), c9a7bfd1, f3c70951 and 9e30afa9**, with TWO positive controls on
 the swept trees — runtime `7 / 2` is `Fraction(7, 2)` there against `3.5` on base (the change is
 LIVE and moves no scorer answer), and the reported shape `X / Y == 3.5` red at 506596da and
@@ -347,7 +347,7 @@ wrapper (no ground fold) makes the tree case diverge and the matrix sees it.
 Found while scoping step 3: a spelling written in source (`decimal(1001, 2)`, `rdiv(1, 3)`, declared
 `-private`) reaches the COMPILED tree as a cell tuple, and the exact helpers fell to Python's tuple
 operators — `eval_(decimal(1001, 2) * 2, R)` answered the tuple REPEATED, `('yes',) * 2` the atom
-DOUBLED: a value of the right shape to keep flowing (harness-batch-lane's control, live on canonical
+DOUBLED: a value of the right shape to keep flowing (the harness lane's control, live on canonical
 before the fix). The four helpers now normalise a tuple operand: a canonical cell evaluates as its
 number (parity with `_eval_ground`'s leaf), any other tuple raises `type_error(evaluable)` on both
 paths; the `--` seam maps that to the Python `TypeError` it always raised. Gates: engine A/B on the
@@ -390,7 +390,7 @@ with Python's `/` (a float the TEST made, not the engine).
 
 Gates: 19 step-6 tests + 3 mutation controls; value-term tests follow the move; engine A/B on the
 canonical-engine baseline at `4f0af19b`: **NEW 0** (GONE 1 = the load-marginal perf test). Harness axis
-(harness-batch-lane, sequential, base 053fbdbe and branch 4f0af19b, .so premise re-verified): **82/82
+(the harness lane, sequential, base 053fbdbe and branch 4f0af19b, .so premise re-verified): **82/82
 unchanged on both**, with a control behind each mechanism on the swept trees — `2.5(centimetre)`
 0.025 → Decimal('0.025'); `5(centimetre)` 0.05 → Decimal('0.05'); compiled `eval_(Q * 1.5, R)`
 `quantity(0.07500000000000001, …)` → `type_error(exact_number, 1.5)` (the float error the ruling exists
@@ -398,6 +398,6 @@ to remove, sitting in a quantity on the base); `eval_(2.5 * 2, R)` 5.0 both (neg
 Their readings, kept verbatim: for the refusal, "no sealed harness performs compiled arithmetic
 mixing a float with a quantity or other exact number" — a property of the population; for the two
 spelling mechanisms, **a CONDITION, not a status**: the closed corpus does not CURRENTLY write a
-unit-bearing quantity literal (0 rulebases), so re-ask harness-batch-lane when any rulebase writes
+unit-bearing quantity literal (0 rulebases), so re-ask the harness lane when any rulebase writes
 one. Limits, theirs: harness axis only; "reproduces canonical" is not "correct"; single replicate
 whose error mode is spurious movement.

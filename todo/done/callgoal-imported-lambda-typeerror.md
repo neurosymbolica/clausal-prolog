@@ -25,7 +25,7 @@ given`.
 This also explains why the earlier minimization attempts failed: they used
 all-uppercase head names (`I, P, S, C`) which ARE logic vars, so those arrows
 became proper Lambdas and worked. The trigger was purely the `St` naming — fully
-reproducible **kit-free** with `((K, V, St) <- loc(K, V))`.
+reproducible **library-free** with `((K, V, St) <- loc(K, V))`.
 
 **Fix.** `clausal/logic/builtins/_registry.py::_ensure_trampoline_dispatch` now
 rejects Pythonic AST `Node` goal values with
@@ -46,9 +46,9 @@ unrelated failures as baseline.
 
 **STATUS: OPEN — active investigation target for this bug-fix clone.**
 
-**Opened 2026-06-25** from real-world exercise (an external authoring harness's formalization kit). Filed
+**Opened 2026-06-25** from real-world exercise (an external authoring harness's formalization library). Filed
 as an investigation, not a minimized bug — the trigger is context-dependent and I
-could not reduce it below the shape in the repro. **Does not block the kit** (its
+could not reduce it below the shape in the repro. **Does not block the library** (its
 own 6-arity dispatcher predicate uses the same `call_goal/5` and passes), so low urgency; but it is
 a real Python-level crash surfaced to user code, which should never happen.
 
@@ -63,7 +63,7 @@ Raised at solve time (a raw Python `TypeError`, not a Clausal failure/exception)
 ## Repro
 
 `todo/callgoal_imported_lambda_repro.clausal` — run from a downstream helper
-library's kit checkout (so the library's own module resolves). The CONTROL passes; the BUG test raises the TypeError:
+library's library checkout (so the library's own module resolves). The CONTROL passes; the BUG test raises the TypeError:
 
 ```clausal
 -import_from(vocab_lib, [check_ge, attr, unmet])
@@ -83,7 +83,7 @@ Test("BUG") <- (
 | `call_goal` of 4-arg lambda, **local** body (`q/4` that just binds) | OK |
 | `call_goal` of 2-arg lambda → local pred that calls imported `check_ge` | OK |
 | **`call_goal` of 4-arg lambda → `requirement/4` → imported `check_ge` (list profile arg)** | **TypeError** |
-| The SAME `call_goal/5` driven through the kit's own dispatcher predicate (call site *inside* the downstream helper library, lambda passed as a var across the module boundary) | **OK** (19/19) |
+| The SAME `call_goal/5` driven through the library's own dispatcher predicate (call site *inside* the downstream helper library, lambda passed as a var across the module boundary) | **OK** (19/19) |
 
 So it is NOT just "imported predicate in body" and NOT just arity. The distinguishing
 factors between the failing top-level case and the working dispatcher-predicate case are
@@ -96,7 +96,7 @@ candidates for the root cause:
 
 ## Minimization attempts (negative results — narrowing, 2026-06-25)
 
-Two self-contained, **kit-free** repros with the SAME structural shape **do NOT
+Two self-contained, **library-free** repros with the SAME structural shape **do NOT
 reproduce** (both pass against stable clausal at HEAD `725a6ca5`):
 1. A minimal exported `mcheck/5` doing list-profile lookup, reached via a 4-arg
    lambda `((I,P,S,C) <- req(I,P,S,C))` where `req` calls the imported `mcheck`.
@@ -107,8 +107,8 @@ So the trigger is **NOT** merely "a 4-arg lambda whose body reaches a cross-modu
 imported predicate." It depends on something specific to the real downstream helper
 library (size / compilation path, or a particular predicate/clause in the
 `requirement -> check_ge -> profile_get` chain the minimal stand-in doesn't capture).
-The reliable repro is the kit-based `callgoal_imported_lambda_repro.clausal` (run
-from the downstream helper library's kit checkout so its module resolves). **Next
+The reliable repro is the library-based `callgoal_imported_lambda_repro.clausal` (run
+from the downstream helper library's library checkout so its module resolves). **Next
 minimization step:** copy the helper library's module locally and delete
 clauses/exports until the crash vanishes — the last deletion points at the cause.
 

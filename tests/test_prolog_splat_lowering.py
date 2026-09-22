@@ -36,9 +36,9 @@ def test_splat_outside_is_rhs_still_untranslatable():
 
 
 def test_is_rhs_splat_lowering_applies_to_a_kit_shaped_predicate():
-    """The is-RHS splat lowering fires on the shape the kit's
-    query_combinators uses (a goal-position `X is {**D, k: v}` inside a
-    clause body). Until 2026-09-08 this read the LIVE kit file from a
+    """The is-RHS splat lowering fires on the shape the vocab's
+    a downstream library uses (a goal-position `X is {**D, k: v}` inside a
+    clause body). Until 2026-09-08 this read the LIVE vocab file from a
     sibling repository by absolute path — a dependency that failed on any
     other machine and tied this open tree to source it does not ship; the shape is
     reproduced here synthetically instead, in lenient mode as before.

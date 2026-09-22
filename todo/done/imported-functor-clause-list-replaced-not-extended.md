@@ -145,7 +145,7 @@ Nothing stops it being added later; refusing now is forward-compatible.
 
 **Corpus sweep (2026-08-25, redone rather than trusted).** 767 `.clausal` files
 over this repo (including `packages/`) plus the downstream rulebase corpora and
-kit available on this box. Live instances of "imports N and defines a clause
+library available on this box. Live instances of "imports N and defines a clause
 for N": two downstream modules, each importing a 0-arity vocabulary atom
 (`dependents_count`, `query_date`) — both the 0-arity vocabulary-atom
 shape, both with a **clause-free** exporter. The `packages/clausal-provenance`

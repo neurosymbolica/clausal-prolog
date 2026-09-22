@@ -198,7 +198,7 @@ Enforcing the private row — rejecting `-import_from(M, [a])` when `M` lists
 of a three-row table whose other rows are equally unenforced, so it could not
 deliver encapsulation anyway (an undeclared name stays importable); and it
 breaks working code — in-repo, `tests/test_functor_reexport.py` and its two
-fixtures; downstream, a helper library's `query_combinators` re-export of
+fixtures; downstream, a helper library's `<downstream-library>` re-export of
 `delta`, a downstream domain module's citation atoms, and the `test_gate_test_profiles`
 fixtures. A warning was rejected for the same reason: it would fire on
 deliberate, correct code, including the anonymous-fixture pattern that has no

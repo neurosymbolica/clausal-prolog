@@ -229,7 +229,7 @@ class TestReifiedComparisonOnAnExactLeaf:
         ("X / Y < 4", "yes"), ("X / Y <= 3.5", "yes"), ("X / Y > 3.5", "no"), ("X / Y >= 3.5", "yes"),
     ])
     def test_a_ground_expression_tree_against_a_float(self, tmp_path, goal, want):
-        """harness-batch-lane's probe (2026-09-17): the TREE ``X / Y`` with
+        """the harness lane's probe (2026-09-17): the TREE ``X / Y`` with
         runtime ints on the left of ``==`` against a float.  The Python
         comparison twins fold a ground tree before comparing; the C-backed
         wrappers did not, and went to the mixing refusal -- so the first fix

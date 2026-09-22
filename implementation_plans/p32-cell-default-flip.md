@@ -96,7 +96,7 @@ below re-verified 2026-09-04 against clone main `5bcd66ec`.
   (Co-Authored-By + Claude-Session lines, copied from any recent commit).
 - **NO C changes.** If a task appears to need one, STOP and surface it — that
   falsifies the Phase-2 "cells ride the tuple branches" result and needs a decision.
-- `_get_dispatch` protocol frozen (~22 out-of-tree implementors); `eval_harness` is
+- `_get_dispatch` protocol frozen (~22 out-of-tree implementors); `<harness-library>` is
   GATE_CORE — off limits; dict/set pairs stay plain 2-tuples (Phase 4, do NOT
   migrate); `clausal-provenance` reconstructs via `cls(**kwargs)` — under R6
   (revised) the attribute is a plain str for data functors, so the CALL breaks

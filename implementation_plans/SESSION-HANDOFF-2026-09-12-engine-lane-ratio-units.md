@@ -70,7 +70,7 @@ was blind — the same half-covered-surface shape corpus-lane found on 2026-09-1
 `pay(155000(cent))` reached `_try_quantity` rather than `_collect_constant`.
 
 **It matters more here than for `cent`:** dropping `basis_point` from `300(basis_point)` emits
-`300` against a stored `0.03`, a **10000x** error, and `eu/banking/crr_leverage_ratio` — the
+`300` against a stored `0.03`, a **10000x** error, and `<downstream-domain>` — the
 domain that motivated ratio units — is on the export roster.
 
 **The clause excluded NOTHING on the day it was written.** There were zero dimensionless
@@ -105,7 +105,7 @@ saying they move to the derived half when ratios land. They did.
 Done deliberately in two steps: the derivation was extended **first, with the hand list
 untouched**, purely to watch the overlap assertion fire. It did, naming both words to drop.
 A half designed to shrink now has a demonstrated way of noticing that it should have — which
-is the property harness-batch-lane asked for when they built it and which nothing had yet
+is the property the harness lane asked for when they built it and which nothing had yet
 exercised.
 
 `bps` and `pct` stay: abbreviations no vocabulary holds and no derivation will produce. The
@@ -122,7 +122,7 @@ already in the set by hand, so the lint's population barely moves.
 
 ## 5. Where this leaves corpus-lane's blocker — read this before migrating
 
-Ratio units are built, and `crr_leverage_ratio` **still cannot migrate and stay exported**:
+Ratio units are built, and `<downstream-domain>` **still cannot migrate and stay exported**:
 the exporter refuses a ratio-unit amount for the same reason it refuses every scaled unit.
 Option 2 (`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`) was already
 load-bearing after the "follow statutes" ruling; it now also blocks the blocker this landing
@@ -146,7 +146,7 @@ Unchanged and still true from the todo's own analysis:
 | doc blocks | me | 38 before and after — and the scanner was **positive-controlled** into the new section: breaking one new ```clausal block took it to 39, restoring took it back to 38. |
 | scale lint noise floor | me | 2 warnings in each arm, unchanged from the recorded floor. |
 | export bytes | iso-export-lane | **NOT RUN.** `clausal/tools/clausal_to_prolog.py` changed. |
-| domain answers | harness-batch-lane | **NOT RUN.** `clausal/templating/term_rewriting.py` and `clausal/modules/units.py` changed, and term_rewriting is on the load path for all 82 harness bodies. |
+| domain answers | the harness lane | **NOT RUN.** `clausal/templating/term_rewriting.py` and `clausal/modules/units.py` changed, and term_rewriting is on the load path for all 82 harness bodies. |
 
 **How the engine-suite arm was measured, because the method is the claim.** Both arms ran in
 ONE throwaway worktree (`.claude/worktrees/ratio-baseline`, detached at `c8f38336`, with the
@@ -177,7 +177,7 @@ baseline, not an independent confirmation of it in the primary tree.
   as well as minor-unit migration; export stays lossy either way (it fixes the magnitude, not
   the unit).
 - **The lint is still blind to a bare literal under an unscaled functor**, which is where
-  `crr_leverage_ratio`'s deciding `300` sits. Ratio units do not change that. The
+  `<downstream-domain>`'s deciding `300` sits. Ratio units do not change that. The
   callee's-parameter design is the fix worth building, because it checks the site that decides.
 - **Only two ratio units.** `per_mille` and friends are one `RATIO_UNITS` entry plus a
   binding; `test_every_declared_ratio_unit_is_bound_in_the_module` fails until the binding
@@ -218,17 +218,17 @@ The number neither of us had, which is the one worth keeping:
 
     ratio-suffixed functors carrying a bare literal:  21 (file, identifier) pairs, 9 domains
 
-      5  au/corps_act_disclosure        5  us/snap
-      2  eu/banking/crr_large_exposures_limit
-      2  eu/banking/crr_lcr             2  eu/banking/crr_leverage_ratio
-      2  eu/procurement/in_house_exemption
-      1  eu/aml/amlr_bo_chain           1  eu/vat/pro_rata_deduction
+      5  <downstream-domain>        5  <downstream-domain>
+      2  <downstream-domain>
+      2  <downstream-domain>             2  <downstream-domain>
+      2  <downstream-domain>
+      1  <downstream-domain>           1  <downstream-domain>
 
 45 ratio-suffixed functors exist corpus-wide; 21 pairs carry a bare literal and are therefore
 migratable. Money was 171 values across 15 domains, so **ratios are about an eighth of the
 work across 9 domains rather than 15.**
 
-They also record that `us/snap`'s five `_percent` warnings were previously reported to Mike as
+They also record that `<downstream-domain>`'s five `_percent` warnings were previously reported to Mike as
 "genuinely not migratable", and that sentence is now wrong — they are migratable the moment
 this reaches canonical. Their own framing: an accounting of a domain's remaining warnings had
 a shelf life measured in HOURS. That is the shape-list-ages rule from 2026-09-11 in different
@@ -237,9 +237,9 @@ clothes, and it applies to counts reported upward, not only to instruments.
 ## iso-export-lane: no export arm, on a measured basis — and they checked what I did not
 
 They skipped the export-bytes run, having measured reachability rather than taking my word:
-**no corpus or kit file writes a ratio unit as a unit literal** — `basis_point`,
+**no corpus or library file writes a ratio unit as a unit literal** — `basis_point`,
 `basis_points`, `percent`, `percentage`, `bps`, `pct` all return zero `N (unit)` sites across
-the pinned corpus and kit. What `crr_leverage_ratio` carries is `leverage_ratio_bps`,
+the pinned corpus and library. What `<downstream-domain>` carries is `leverage_ratio_bps`,
 `minimum_leverage_bps`, `gsii_buffer_rate_bps`, `gold_ratio_bps` — bare integers with the
 scale in the NAME, the identical pattern to the 139 `_cents`/`_satang` identifiers. So the
 changed selection is unreached and a zero would have been the cheap kind.
@@ -264,7 +264,7 @@ blocker makes it a sequencing fact rather than a preference**, and iso-export-la
 it to Mike in those terms while he decides whether option 2 stands alongside the Prolog units
 library.
 
-## harness-batch-lane: canonical is clean, and the transform-time argument is VERIFIED not agreed
+## the harness lane: canonical is clean, and the transform-time argument is VERIFIED not agreed
 
     82 rows on c8f38336, fingerprint c8f38336/so1789092742, one value, zero torn
     82 unchanged   0 moved   0 no-score   0 unpinned
@@ -277,7 +277,7 @@ in advance, because a moved row would have had a 5-commit range and not a 1-comm
 **On whether the clone's missing compiled trampoline matters for these two commits.** I argued
 it does not, because both load-path changes are transform-time rather than runtime. That is
 the kind of argument that is convenient enough to deserve checking, and it was checked twice —
-by harness-batch-lane and then independently here:
+by the harness lane and then independently here:
 
     _name_claims_a_scale  has exactly TWO call sites, term_rewriting.py:6424 and :7986,
     and both terminate in `warnings.warn`. Neither mutates the AST or the emitted Python.
@@ -286,7 +286,7 @@ So widening the suffix set cannot change the transformed output by a byte, and w
 trampoline later solves is identical either way. The `units.py` half is additive module-level
 names nothing imports — import-time only, equally out of the trampoline's reach.
 
-**The bound harness-batch-lane put on that, which is the part worth keeping:** it holds
+**The bound the harness lane put on that, which is the part worth keeping:** it holds
 because those two call sites were read, NOT because transform-time changes are a category
 that is exempt. A transform-time change that altered emitted output would be exactly as
 exposed as `sum_list/2` was. The argument is about these two commits, not about a kind of
@@ -296,7 +296,7 @@ commit.
 [[rename-swap-so-under-live-importers]] has a SIGBUS failure mode that lands on whichever lane
 has the clone mapped — a risk taken in someone else's session to measure two commits that are
 going to canonical anyway. Promote-then-sweep gets the compiled path for free and puts the
-risk nowhere. harness-batch-lane will run it on canonical once promotion is approved.
+risk nowhere. the harness lane will run it on canonical once promotion is approved.
 
 ## A design property for assertions, from this landing's one genuinely new idea
 
@@ -366,7 +366,7 @@ only visible signal, and I nearly explained it away.
 | --- | --- | --- |
 | engine suite | me | 147 failed / 16218 passed / 1 error on canonical; all 3 above the worktree pair's 144 run down to skips and working-tree artifacts, none to these commits |
 | export bytes | iso-export-lane | **0** across 1560 files, raw and normalised, engine content-pinned across the run |
-| domain answers | harness-batch-lane | sweeping `cc008788`, extensions verified byte-identical to the `c8f38336` sweep so these two commits are the only variable |
+| domain answers | the harness lane | sweeping `cc008788`, extensions verified byte-identical to the `c8f38336` sweep so these two commits are the only variable |
 
 ## iso-export-lane's finding, which outlives this landing
 
@@ -395,13 +395,13 @@ recorded baseline is itself a measurement with a date and a tree, and nothing wa
 either. The existing answer in this lane's notes is "never trust a written-down baseline,
 regenerate it", which is safe because regeneration is ~3 minutes. That answer stops scaling
 exactly where regeneration gets expensive, which is where iso-export-lane and
-harness-batch-lane live.
+the harness lane live.
 
 ---
 
 # A DEFECT IN THE PROMOTED LANDING, found and fixed: canonical is `dfe1d8f0`
 
-Found by **checking a peer's exoneration instead of accepting it.** harness-batch-lane read
+Found by **checking a peer's exoneration instead of accepting it.** the harness lane read
 one row as 340/341 once in fourteen sweeps and attributed it to their own instrument. I knew
 something about my diff they could not, so I looked.
 
@@ -431,8 +431,8 @@ subprocess because the flag is process-global, **with a positive control** — a
 only "units not imported" would also pass if the lint had stopped reading the vocabulary
 entirely.
 
-**It was NOT the cause of the 340/341.** harness-batch-lane scanned all 82 domains for
-constraint operators, `all_different` and `label(` — zero hits, `selection_criteria` included.
+**It was NOT the cause of the 340/341.** the harness lane scanned all 82 domains for
+constraint operators, `all_different` and `label(` — zero hits, `<downstream-domain>` included.
 So the branch this enabled is one their axis never takes. A real candidate eliminated by
 measurement rather than an absence of one. Their anomaly stays open and theirs; they have
 since measured their own error rate at **1 unexplained deviation in 986 row-measurements**,
@@ -441,7 +441,7 @@ with 3 of the 4 deviations being true positives.
 ## The reasoning error, which is the reusable part
 
 I told both lanes the load-path change was "warning-only and cannot change emitted bytes".
-harness-batch-lane verified it by tracing `_name_claims_a_scale` to its two call sites and
+the harness lane verified it by tracing `_name_claims_a_scale` to its two call sites and
 confirming both terminate in `warnings.warn`. **That was true, and it is still true.**
 
 What neither of us asked is what the function IMPORTS.
@@ -482,9 +482,9 @@ the ESC, leaves the literal `[33m`, and every `^ANCHOR` grep then fails silently
     engine suite   144 failed / 16284 passed / 1 error -- failure NAME SET identical to the
                    pre-fix arm, 0 new / 0 fixed, both non-empty at 144
     skip set       52 lines, extracted and recorded for the first time
-    domain axis    harness-batch-lane re-running selection_criteria against the fix
+    domain axis    the harness lane re-running <downstream-domain> against the fix
 
-**A shared box note, from harness-batch-lane's contention experiment:** four `while :; do :;
+**A shared box note, from the harness lane's contention experiment:** four `while :; do :;
 done` spinners leaked for ten minutes because `LOADPIDS=$(jobs -p)` inside a non-interactive
 `zsh -c` captures nothing, so `kill $LOADPIDS` fired at nothing with its error hidden by
 `2>/dev/null`. **A deliberate-load experiment needs its teardown verified the same way its
@@ -498,7 +498,7 @@ property of my own fix rather than checking `ps`, I would have had a confident w
 | --- | --- | --- |
 | engine suite | me | 144 failed / 16284 passed / 1 error — failure NAME SET identical to the pre-fix arm, 0 new / 0 fixed, both non-empty at 144; **skip set (52) extracted for the first time** |
 | export bytes | iso-export-lane | 0 across 1560 files, raw and normalised, engine content-pinned across the run |
-| domain answers | harness-batch-lane | **82 unchanged, 0 moved, 0 no-score, 0 unpinned, one fingerprint, zero torn**, quiet box, 158 commits from `820dc66f` |
+| domain answers | the harness lane | **82 unchanged, 0 moved, 0 no-score, 0 unpinned, one fingerprint, zero torn**, quiet box, 158 commits from `820dc66f` |
 
 **My named candidate mover was censused before the run and came back empty**, which is what makes
 the null informative rather than decorative:
@@ -519,11 +519,11 @@ known gap rather than a resolved one.
 
 ## An open lead for whoever next touches the units surface
 
-`eu/procurement/selection_criteria` — the anomalous domain — **is one of the 19 that declare
+`<downstream-domain>` — the anomalous domain — **is one of the 19 that declare
 units**, currency units in its queries file. So the one unexplained reading in 1068 sits on a
 units-using domain, on the axis of the engine that has moved most this week.
 
-**That is a coincidence worth recording, not an explanation**, and harness-batch-lane declined
+**That is a coincidence worth recording, not an explanation**, and the harness lane declined
 to dress it as more. It does not reproduce: 14 targeted runs green on the unfixed tip (6 of them
 under genuine four-way load) and 6 green on the fix. Recorded here because the next person to
 change the units surface should know which domain to run alone first, and because a lead with no

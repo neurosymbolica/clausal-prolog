@@ -1,7 +1,7 @@
 # `==` and ordering comparisons: mode- and type-correct ISO lowering
 
 **Status:** DESIGN — no code, no test changes. Written for
-`.superpowers/sdd/2026-09-02-iso-export-wave-2` Task 5 (`clausify-executor-train`),
+`.superpowers/sdd/2026-09-02-iso-export-wave-2` Task 5 (`downstream-trunk`),
 scope-extended by controller ruling to cover date-term ordering (Task 6's §7 concern).
 
 **Problem in one sentence:** `clausal/tools/clausal_to_prolog.py::_convert_compare`
@@ -11,7 +11,7 @@ exported ISO program either checks a value it can no longer compute or raises on
 term ISO's arithmetic evaluator has never heard of.
 
 Everything below was re-derived in this session against
-`/workspace/clausify-domains` (765 published-domain `.clausal` files),
+`<downstream-corpus>` (765 published-domain `.clausal` files),
 `/workspace/clausal/venv/bin/python -c "from clausal.tools.clausal_to_prolog import
 clausal_source_to_prolog"`, the Clausal engine itself, and
 `/workspace/scryer-prolog/target/release/scryer-prolog`. Every output block is unedited terminal
@@ -60,7 +60,7 @@ So the memory-note "Clausal `is/2` means the OPPOSITE of ISO `is/2`" is **confir
 from source, with a correction to its usual phrasing**: Clausal `is` ≈ ISO `=`, and the
 Clausal operator that plays ISO `is/2`'s role is **`==`**, not `eval_` — because
 **the corpus calls `eval_` exactly 0 times** (`grep -rn --include='*.clausal' "eval_("`
-over `/workspace/clausify-domains`, excluding `_`-prefixed scratch trees: 0 hits) while
+over `<downstream-corpus>`, excluding `_`-prefixed scratch trees: 0 hits) while
 it writes `==` in 826 goal positions (§2.1). The `eval_` path in the translator is
 dead for this corpus.
 
@@ -119,7 +119,7 @@ neither reproduces the two binding rows at all.
 
 ### 1.4 Worked example — the `uk/tax` witness, run in Scryer
 
-Source, `/workspace/clausify-domains/uk/tax/income_tax_rates_allowances/liability.clausal`,
+Source, `<downstream-corpus>/uk/tax/income_tax_rates_allowances/liability.clausal`,
 lines re-derived by `grep -n` in this session. Three of the four line numbers the Task 5
 brief names (133, 169, 217) are confirmed; the fourth, **229, is not a `==` witness** —
 `liability.clausal:229` is `total_income in PROFILE`, a membership goal belonging to the
@@ -228,7 +228,7 @@ that still guesses.
 
 ## 2. Inventory — which Clausal operators reach which emitted ISO forms
 
-**Method.** Every `.clausal` file under `/workspace/clausify-domains` whose path does not
+**Method.** Every `.clausal` file under `<downstream-corpus>` whose path does not
 start with a `_`-prefixed top-level directory (`_dpo`, `_work`, `_training`, `_tools`) —
 **765 files, all 765 translating without exception** under
 `clausal_source_to_prolog(source)` with default arguments. (The 10 files that raise
@@ -302,12 +302,12 @@ binds.** The 429 `==` goals in column 1 are the §1.5 latent-divergence populati
 Sample rows, verbatim from the pass:
 
 ```
-=:=  head-arg-only     au/corps_act_disclosure/classification.clausal | N =:= C1 + C2 + C3.
-=:=  head-arg-only     eu/aml/amlr_bo_chain/ownership_interest.clausal | C =:= Pct * Sub/10000.
-=:=  never bound       au/corps_act_disclosure/substantial_holding.clausal | Delta =:= Current_bps - Previous_bps,
-==   bound earlier     au/aml_ctf/tests/test_output_mode.clausal | Tranche == 1.
-==   bound earlier     au/aml_ctf/tests/test_output_mode.clausal | Comm == date(2026, 7, 1).
-==   head-arg-only     eu/aml/amlr_bo_chain/ownership_interest.clausal | C == Pct.
+=:=  head-arg-only     <downstream-domain>.clausal | N =:= C1 + C2 + C3.
+=:=  head-arg-only     <downstream-domain>.clausal | C =:= Pct * Sub/10000.
+=:=  never bound       <downstream-domain>.clausal | Delta =:= Current_bps - Previous_bps,
+==   bound earlier     <downstream-domain>.clausal | Tranche == 1.
+==   bound earlier     <downstream-domain>.clausal | Comm == date(2026, 7, 1).
+==   head-arg-only     <downstream-domain>.clausal | C == Pct.
 ==   never bound       th/visa/tests/test_negative_controls.clausal | Age == 45,
 ```
 
@@ -517,7 +517,7 @@ CLAUSAL mixed(date(2018,4,3), 42) -> raises LogicException Uncaught logic except
 
 ### 6.2 Witness, re-derived and run
 
-`/workspace/clausify-domains/au/aml_ctf/reporting_entity_obligations.clausal:257-259`:
+`<downstream-corpus>/<downstream-domain>.clausal:257-259`:
 
 ```
 service_in_force(CATEGORY, QUERY_DATE) <- (
@@ -573,23 +573,23 @@ propagated interprocedurally to a fixpoint over head-argument positions.
 **Union: 11 non-test files**, in 11 distinct domain directories:
 
 ```
-au/aml_ctf/reporting_entity_obligations.clausal
-au/corps_act_disclosure/classification.clausal
-au/firb/notifiability.clausal
-au/merger_clearance/threshold.clausal
-eu/procurement/common/thresholds.clausal
-eu/procurement/contract_termination/contract_termination.clausal
-eu/procurement/electronic_auction/electronic_auction.clausal
-eu/procurement/exclusion_grounds/exclusion.clausal
-eu/procurement/framework_agreements/framework_agreements.clausal
-eu/procurement/light_regime/light_regime.clausal
-eu/procurement/selection_criteria/selection_criteria.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
+<downstream-domain>.clausal
 ```
 
 This **corroborates Task 6's "at least 9 non-test files" and raises it to 11** — the
-data-flow pass finds `eu/procurement/common/thresholds.clausal`
+data-flow pass finds `<downstream-domain>.clausal`
 (`As_of_date >= Period_start`, `As_of_date < Period_end`) which a `*DATE*`-name grep
-misses, and drops `au/corps_act_disclosure/deadline.clausal`, whose `Diff >= 0` and
+misses, and drops `<downstream-domain>.clausal`, whose `Diff >= 0` and
 `Diff < 0` compare the **integer** output of `date_diff/3`, not a date. Both figures are
 lower bounds: a date reaching a comparison through a generic accumulator variable is
 invisible to both passes.
@@ -691,13 +691,13 @@ without leaving the export emitting calls to predicates that do not exist.
 |---|---|---|
 | `==` maps by operand shape to `=:=` / `==`, both test-only | pilot §5.1 | **confirmed**, `clausal_to_prolog.py:1130-1144, 1191-1199` |
 | `uk/tax` `liability.clausal:133,169,217` witnesses | pilot §5.1 | **confirmed**, plus `:148, 155, 156, 163, 188, 196, 209` |
-| `us/tax/irc_s1` is a second instance | pilot §5.1 | **confirmed** — 11 emitted goals, `.pl:103,109,134,138,143,147,151,157,163,180,185` |
+| `<downstream-domain>` is a second instance | pilot §5.1 | **confirmed** — 11 emitted goals, `.pl:103,109,134,138,143,147,151,157,163,180,185` |
 | `liability.clausal:163` (`ALLOWANCE == 0`) | — | **new witness**, not in the triage doc |
 | the defect is only about binding mode | pilot §5.1 | **narrower than the truth** — §1.5, 429 further goals diverge on numeric type even fully bound |
 | Clausal `==` is "evaluate-and-bind" | pilot §5.1 | **imprecise** — it is a CLP(FD) equality constraint with a documented 7-row behaviour (§1.2), including a raise |
 | Clausal `is/2` is the opposite of ISO `is/2` | memory note | **confirmed with correction** — Clausal `is` ≈ ISO `=`; the ISO-`is` role is played by `==`, not by `eval_`, which the corpus uses 0 times |
 | NO engine test pins either behaviour | brief | **false as stated** — 4 assertions pin the *emission* (§5); none pins the *behaviour*, and all 4 are `# nv`-marked |
-| date ordering raises `type_error(evaluable, date/3)` | task-6 §7 | **confirmed**, reproduced in Scryer on the emitted `au/aml_ctf` text |
+| date ordering raises `type_error(evaluable, date/3)` | task-6 §7 | **confirmed**, reproduced in Scryer on the emitted `<downstream-domain>` text |
 | "≥9 non-test files" carry date ordering | task-6 §7 | **raised to 11 non-test files / 11 domains**, by data-flow rather than name grep |
 
 ---

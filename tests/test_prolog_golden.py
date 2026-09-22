@@ -128,8 +128,8 @@ class TestInNotIn:
     # exactly one place -- clausal/logic/builtins/lists.py, ``_member__2`` --
     # and it is member/2, so the ISO name has to be member/2 too. It used to
     # resolve to a bare ``in/2`` (see prolog_dialect.BUILTIN_NAME_MAP), which
-    # no ISO engine defines: every kit library that spells membership as a
-    # call (query_combinators, formalize_lib, compliance_lib) exported a
+    # no ISO engine defines: every downstream library that spells membership as a
+    # call (three downstream helper libraries) exported a
     # program that died with existence_error(procedure, in/2) on first use.
 
     def test_in_call_form_translates_to_member(self):
@@ -157,7 +157,7 @@ class TestInNotIn:
         """
         # nv
         # Parenthesised because `<-` parses as Lt+USub, and Python refuses a
-        # bare `not` directly after an operator (the kit spells it the same
+        # bare `not` directly after an operator (downstream spells it the same
         # way, inside a parenthesised body).
         call_form = clausal_source_to_prolog(
             "Test() <- (not in_(_x, [1, 2, 3]))")
