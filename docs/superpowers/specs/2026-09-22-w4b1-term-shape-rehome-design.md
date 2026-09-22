@@ -98,23 +98,24 @@ resolving in this order:
 
 **Arm 3 in full**, because two things in it are lossy if left implicit:
 
-* **Arity.** `db.declared_fields(functor, arity)` is the exact read and
-  `db.declared_fields_by_name(functor)` is the by-name fallback, which
-  resolves a name declared at two arities to the LAST declaration — a
-  documented lossiness it inherited from the exec-time registry map. So arm 3
-  prefers the exact read whenever an *arity* is known, and falls back to the
-  by-name read only when it is not. Callers that hold an arity pass it; the
-  plan records, per migrated site, which of the two it uses, because a site
-  that silently takes the by-name read on a two-arity name is a defect this
-  spec would otherwise have introduced.
+* **Arity.** `db.signature_for(functor, arity)` is the exact read — it
+  chains `_signatures` then `_declared`, so it sees both registration routes.
+  `db.declared_fields_by_name(functor)` is the by-name fallback and resolves a
+  name declared at two arities to the LAST declaration, a documented lossiness
+  inherited from the exec-time registry map, and it sees only `_declared`. So
+  arm 3 prefers `signature_for` whenever an *arity* is known and falls back to
+  the by-name read only when it is not. Callers that hold an arity pass it;
+  the plan records, per migrated site, which of the two it uses, because a
+  site that silently takes the by-name read on a two-arity name is a defect
+  this spec would otherwise have introduced.
 * **Mangling.** A mangled name (`is_mangled`, `clausal.logic.atoms`) is
   `demangle`d to its module and bare name, and resolved against THAT module's
   db — not the caller's. A plain name resolves against *db* as given, else
   *namespace*, else answers `None`. Arm 3 never guesses a module.
 
-The resolution order within arm 3 is therefore: demangle if mangled → exact
-read by `(functor, arity)` if an arity is known → by-name read → the
-namespace's `FUNCTOR_SIGNATURES_KEY` map → `None`.
+The resolution order within arm 3 is therefore: demangle if mangled →
+`db.signature_for(functor, arity)` if an arity is known → the by-name read →
+the namespace's `FUNCTOR_SIGNATURES_KEY` map → `_BUILTIN_FIELDS` → `None`.
 
 `term_field_names_of_class` stays as a thin alias for the duration of W4b-1
 — it is in `predicate.__all__`, so out-of-tree callers keep working. It
@@ -138,31 +139,48 @@ about the Python type, and one arm 3 can answer from a name alone.
 
 ### 2. The registry precedence, stated
 
-`db._declared` is the authority. `__clausal_functor_signatures__` in the
-module dict is its exec-time carrier for a namespace with no db in hand —
-already how `-import_from` crosses a module boundary. `cls._fields` is the
-legacy answer and **must agree**; a disagreement is a defect, not a
-fallback, and section 4's census is what says so.
+**CORRECTED while writing the plan, 2026-09-22.** There are FIVE homes,
+not three, and two of them are already chained:
 
-### 3. Populating the authority
+| home | populated by | read by |
+|---|---|---|
+| `cls._fields` | every minter | arm 2 (the legacy answer) |
+| `db._signatures` | `db.register_signature` | `db.signature_for`, FIRST |
+| `db._declared` | `db.declare_functor` | `db.signature_for`, as fallback |
+| `__clausal_functor_signatures__` | generated code; copied by `-import_from` | `functor_signature_for` |
+| `_BUILTIN_FIELDS` (`builtins/_registry.py:52`) | the `@_builtin` decorators | the registry itself |
 
-`declare_functor` has **two** call sites today, both in
-`compiler_v2._process_directives`. Six engine minters bypass it and each
-registers its declaration where it mints:
+`db.signature_for(functor, arity)` **already chains `_signatures` then
+`_declared`** (database.py:992–997). So arm 3's db read is `signature_for`,
+not `declared_fields_by_name` — using the narrower read would have missed
+every predicate registered through `register_signature`, which is how
+`-specialize` registers (see section 3).
 
-| minter | what it mints |
+Precedence, stated: `db.signature_for` is the authority for anything a
+Database knows; `__clausal_functor_signatures__` is its exec-time carrier for
+a namespace with no db in hand; `_BUILTIN_FIELDS` is the authority for
+builtins, which are minted detached ON PURPOSE and have no module db to be
+registered with. `cls._fields` is the legacy answer and **must agree**; a
+disagreement is a defect, not a fallback, and section 4's census is what says
+so.
+
+### 3. Populating the authority — THREE gaps, not six
+
+The spec originally listed six minters as bypassing `declare_functor`. Writing
+the plan checked each, as the spec required, and **three of the six were
+already covered**:
+
+| minter | verdict |
 |---|---|
-| `specialization.py` ×3 (439, 1489, 1827) | `-specialize` aliases |
-| `compiler_v2.py:1229` | a `-rename`d declaration |
-| `term_expansion.py:314` | the `term_expansion/4` predicate class |
-| `builtins/_registry.py` ×2 (515, 535) | the builtin registry's classes |
-| `modules/py/datetime.py:204` | `_DatePattern`, a direct `metaclass=` mint |
+| `specialization.py` ×3 (439, 1489, 1827) | **COVERED.** All three `specialize_mi*` variants route through `_install_specialized` (300), which calls `db.register_signature(new_name, arity, tuple(fields))` at line 388. `signature_for` reads `_signatures` first, so arm 3 answers. |
+| `builtins/_registry.py` ×2 (515, 535) | **NOT A GAP.** These are minted DETACHED on purpose — the comment at 516–519 calls it "the engine's one DELIBERATE minter of a detached row". `_BUILTIN_FIELDS` is already the name-keyed registry for builtins, populated at decoration time. Arm 3 reads it; nothing is wired to a db. |
+| `compiler_v2._preregister_specializations` (1229) | **GAP.** Its signature is `(module_items, module_dict)` — no db, deliberately, because it runs before `_install_specialized`. The db must be threaded from its caller, which already holds one. |
+| `term_expansion.py:314` | **GAP, easily closed.** It binds into a synthetic `LogicModule("_term_expansion_")`; `lm.db` is in hand at the mint site. |
+| `modules/py/datetime.py:204` (`_DatePattern`) | **GAP, and it carries a stale premise.** Its docstring justifies `metaclass=PredicateMeta` on the grounds that "the engine's clause copier rebuilds *term instances* … and it recognises them via PredicateMeta or @dataclass (`c_is_term_instance`)". **W4a retired the instance path and deleted that C arm**, so the stated reason no longer holds and a partially-instantiated date now builds a cell. The plan re-reads it rather than assuming either that it still needs the metaclass or that it does not. |
 
-Each of these has a db in hand or can reach one; the plan's first task
-confirms that per site rather than assuming it. **Bare `make_predicate` out
-of tree has no db** and keeps arm 2 until W4b-3 — that is the detached-row
-population, and it is named here so it stays a known residue rather than
-becoming a silent gap.
+Bare `make_predicate` out of tree has no db and keeps arm 2 until W4b-3 —
+that is the detached-row population, named here so it stays a known residue
+rather than becoming a silent gap.
 
 ### 4. The site migration: classify, never sweep
 
@@ -207,8 +225,11 @@ landing.
 * A name declared at TWO arities: the exact read answers each correctly; the
   by-name fallback answers the last declaration, pinned so the lossiness is a
   recorded property rather than a surprise.
-* One test per minter from section 3: after the mint, the db's
-  `declared_fields_by_name` answers, with the fields the class carries.
+* One test per GAP minter from section 3 (three, not six): after the mint,
+  `db.signature_for` answers with the fields the class carries. Plus one test
+  each for the two already-covered routes — `_install_specialized`'s
+  `register_signature` and `_BUILTIN_FIELDS` — so a later change that removes
+  the coverage fails here rather than silently.
 * `term_field_names_of_class` still answers, unchanged, for its 8 existing
   callers' inputs — the alias is load-bearing until W4b-3.
 
