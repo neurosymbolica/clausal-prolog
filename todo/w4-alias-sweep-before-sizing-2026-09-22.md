@@ -97,3 +97,26 @@ third needs a GENERIC walk — "this node's fields without knowing its type"
 — which `is_v`/`vfield` cannot give; built as `reflection.vkind` /
 `vfields` / `vitems` on feat/reflection-vkind-2026-09-22 (with `is_v` and
 `vfield` finally in `__all__`).
+
+## Census CONTRACT (the corpus lane, adopted 2026-09-22) — two numbers, never one
+
+    Q1  BROKEN NOW      sites that fail on main today (W2 made the nine
+                        constructors functions)  -> sizes the REPAIR, which
+                        happens regardless of W4
+    Q2  BLAST RADIUS    sites that WORK today and stop when the class goes
+                        (`isinstance(x, PredicateMeta)` at a classification
+                        site is the type specimen: verified live, True today,
+                        `pred._clauses` raises but the metaclass is intact)
+                        -> sizes W4
+
+Today's 8 / 9 / 10 / 13+31 were all correct answers to DIFFERENT unstated
+questions (alias-pattern matches; the same with a dotted receiver; sites
+broken by W2; isinstance vs field reads). A local `class Atom` in a test
+file is OUT (name resolution stated, with an UNRESOLVED bucket rather than a
+silent choice); three receiver spellings incl. `reflection as R` ->
+`R.Clause`; per-shape denominators (shape 3's = files that can obtain a
+cell); a planted positive per shape with its expected count asserted.
+Definition: the corpus lane's `_w4-census-definition.md`, under review by the
+export lane. **NOT STARTED — waits on the operator's go.** Correction to
+result 2 above: the export lane's sweep covered THREE trees, not the corpus
+only; the differing counts were definition, not scope.
