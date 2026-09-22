@@ -127,7 +127,15 @@ subst_term(X, N, T, X2) <- (
     subst_list(X, N, T, X2)
 )
 subst_term(X, _, _, X) <- (
-    STRUCTURED is ++isinstance(X, (Variable, Goal, list)),
+    # ``list`` ALONE: post-P2 the reified vocabulary builds CELLS, and a cell
+    # is a tuple, so `isinstance(X, (Variable, Goal))` answered False for
+    # every term this rule can see -- the two class arms matched nothing and
+    # the test already reduced to `isinstance(X, list)`.  Spelled as it
+    # behaves, now that the vocabulary is constructors rather than classes.
+    # Whether this guard SHOULD exclude a Variable/Goal cell is a separate
+    # question about the rule -- see
+    # todo/head-fold-structured-guard-never-excluded-a-vocabulary-cell-2026-09-22.md
+    STRUCTURED is ++isinstance(X, list),
     STRUCTURED is False
 )
 

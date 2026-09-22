@@ -55,8 +55,7 @@ import warnings
 
 from clausal.logic.generated_names import bare_name_of
 from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG, CHARS_TAG as _CHARS_TAG, is_chars as _is_chars, chars_text as _chars_text
-from clausal.logic.predicate import make_predicate
-from clausal.logic.variables import deref, is_var
+from clausal.logic.variables import Var as _Var, deref, is_var
 from clausal.pythonic_ast import nodes as simple_ast
 
 
@@ -94,19 +93,91 @@ class RenderError(Exception):
 
 
 # ── Reified vocabulary ───────────────────────────────────────────────────────
-# PredicateMeta classes: instances unify structurally, and construction with
-# fewer arguments auto-fills the missing trailing fields with fresh variables,
-# so ``Clause(HEAD, GOALS)`` written in a matcher head wildcards ``position``.
+# The FIELD ORDER IS THE DECLARATION.  Constructing one of these builds a CELL
+# -- a functor and POSITIONS -- so the field names live here once and the
+# constructors are generated from them, rather than the names being declared
+# on nine classes and the map derived back off them.
+#
+# These were nine ``make_predicate`` classes.  Nothing about the TERMS changes:
+# the functor spellings and the field orders are exactly as they were, and a
+# constructor still returns ``('Clause', head, goals, position)``.  What goes
+# is the CLASS: none of the nine was ever a predicate -- they are a term
+# vocabulary -- and a ``PredicateMeta`` with no Database row is precisely what
+# ``_detached_row`` exists for, so every module dict that named one carried a
+# private throwaway row minted on the first facade read.
+_VOCAB_FIELDS = {
+    "Clause": ("head", "goals", "position"),
+    "Goal": ("name", "args", "kwargs"),
+    "Variable": ("name",),
+    "Atom": ("name",),
+    "Escape": ("code", "vars", "position"),
+    "FormatString": ("code", "vars", "position"),
+    "IfThenElse": ("condition", "then", "otherwise"),
+    "ModuleDirective": ("name", "args", "position"),
+    "PythonCode": ("kind", "name", "position"),
+}
 
-Clause = make_predicate("Clause", ["head", "goals", "position"])
-Goal = make_predicate("Goal", ["name", "args", "kwargs"])
-Variable = make_predicate("Variable", ["name"])
-Atom = make_predicate("Atom", ["name"])
-Escape = make_predicate("Escape", ["code", "vars", "position"])
-FormatString = make_predicate("FormatString", ["code", "vars", "position"])
-IfThenElse = make_predicate("IfThenElse", ["condition", "then", "otherwise"])
-ModuleDirective = make_predicate("ModuleDirective", ["name", "args", "position"])
-PythonCode = make_predicate("PythonCode", ["kind", "name", "position"])
+#: "No argument given", so that ``None`` stays a value a caller may pass.
+_FRESH = object()
+
+
+def _vocab_ctor(functor: str, fields: tuple):
+    """The constructor for one reified-vocabulary functor.
+
+    Keeps all four behaviours the ``make_predicate`` class had, every one of
+    which is in use:
+
+    1. positional -- ``Clause(H, G, P)``;
+    2. KEYWORD -- ``Goal(name=..., args=...)``, 324 sites across the engine
+       and the suite, so this is the common form, not a convenience;
+    3. PARTIAL construction, auto-filling the missing trailing fields with
+       FRESH variables, so ``Clause(HEAD, GOALS)`` in a matcher head
+       wildcards ``position``;
+    4. ``TypeError`` on a misspelled or duplicated field, rather than
+       silently dropping it.
+    """
+    arity = len(fields)
+
+    def ctor(*args, **kwargs):
+        if len(args) > arity:
+            raise TypeError(
+                f"{functor}() takes at most {arity} positional argument"
+                f"{'' if arity == 1 else 's'} ({len(args)} given)")
+        slots = list(args) + [_FRESH] * (arity - len(args))
+        for key, value in kwargs.items():
+            if key not in fields:
+                raise TypeError(
+                    f"{functor}() got an unexpected keyword argument {key!r}")
+            index = fields.index(key)
+            if index < len(args):
+                raise TypeError(
+                    f"{functor}() got multiple values for argument {key!r}")
+            slots[index] = value
+        return (functor, *(_Var() if slot is _FRESH else slot
+                           for slot in slots))
+
+    ctor.__name__ = functor
+    ctor.__qualname__ = functor
+    ctor.__doc__ = (
+        f"Build the reified ``{functor}`` cell "
+        f"``({functor!r}, {', '.join(fields)})``.")
+    # The classes carried this and ``is_v``/``vfield`` reach the names through
+    # ``_VOCAB_FIELDS`` now -- kept so an out-of-tree reader of
+    # ``Clause._fields`` still answers.  Removing it is a deprecation, not
+    # part of this change.
+    ctor._fields = fields
+    return ctor
+
+
+Clause = _vocab_ctor("Clause", _VOCAB_FIELDS["Clause"])
+Goal = _vocab_ctor("Goal", _VOCAB_FIELDS["Goal"])
+Variable = _vocab_ctor("Variable", _VOCAB_FIELDS["Variable"])
+Atom = _vocab_ctor("Atom", _VOCAB_FIELDS["Atom"])
+Escape = _vocab_ctor("Escape", _VOCAB_FIELDS["Escape"])
+FormatString = _vocab_ctor("FormatString", _VOCAB_FIELDS["FormatString"])
+IfThenElse = _vocab_ctor("IfThenElse", _VOCAB_FIELDS["IfThenElse"])
+ModuleDirective = _vocab_ctor("ModuleDirective", _VOCAB_FIELDS["ModuleDirective"])
+PythonCode = _vocab_ctor("PythonCode", _VOCAB_FIELDS["PythonCode"])
 
 
 # The vocabulary's field order, DERIVED from the declarations above so it
@@ -116,12 +187,6 @@ PythonCode = make_predicate("PythonCode", ["kind", "name", "position"])
 # ``.position`` are field names on ``pythonic_ast`` nodes too, and that is a
 # different layer which is NOT changing, so a blind rewrite of those
 # spellings would break far more than it fixed.
-_VOCAB_FIELDS = {
-    _c.__name__: _c._fields
-    for _c in (Clause, Goal, Variable, Atom, Escape,
-               FormatString, IfThenElse, ModuleDirective, PythonCode)
-}
-
 _VFIELD_REQUIRED = object()
 
 
