@@ -49,21 +49,22 @@ Both commands run from the repo root, with `./venv/bin/python`.
 1. `N == 0`.
 2. `DISAGREED` non-zero, for a functor NOT accounted for by the positive
    control test itself.
-3. A residue name not explained by the out-of-tree/detached-row population
-   (spec `docs/superpowers/specs/2026-09-22-w4b1-term-shape-rehome-design.md`
-   §3): a `PredicateMeta` class whose `_row` was never bound into a real
-   module `Database` — bare `make_predicate(...)` calls, direct
-   `class X(metaclass=PredicateMeta)` test classes, or a predicate DECLARED
-   (`-dynamic`, `-private`, `-module`/`-import_from`) but never given
-   clauses in that compiled unit, so it has no row either. For all of
-   these, `cls._state_row()` mints a throwaway single-predicate detached
-   `Database` on first access; the shadow read derives its probe `db` from
-   that class's own row, so it is reading the WRONG (private, empty)
-   database rather than the real module's — it therefore cannot see a
-   declaration that legitimately exists elsewhere. This is a known
-   limitation of the shadow probe's `db` derivation, not evidence that a
-   real arm-3 caller (which is handed the compiling module's own `db`
-   directly, never derives it from a class) would fail the same way.
+3. A residue name not explained. **The residue is not one story — it is at
+   least three genuinely distinct mechanisms, confirmed by direct
+   measurement, not by an assumption that unbound-row implies absence.**
+   See "Reading the residue" below.
+
+**There are zero production call sites of arm 3 (the NAME path) today.**
+`compiler_v2.py`'s directive-target validation (`term_field_names_of_class(cls)`
+at lines 1056/1095) is a real, executed call site — but it always passes a
+CLASS, so it only ever exercises arm 2. It is not an arm-3 caller and does
+not "already agree" with anything. All 41 arm-3 calls measured in this run
+come from three test files: `tests/test_field_names_for.py`,
+`tests/test_declaration_registration.py`, and
+`tests/test_w4b1_census_positive_control.py`. Arm 3 has no production
+readers to protect yet — which is a materially different claim from "arm 3
+already has production callers that agree with arm 2," and is the claim
+this document makes.
 
 ## The positive control
 
@@ -158,39 +159,109 @@ Reading it against the fail conditions:
    under `tests/` and is naturally swept into the full run). Excluding it,
    real engine/test code produced **zero** disagreements over 240 arm-2
    calls.
-3. Every one of the 29 residue names traced back (verified by hand, this
-   run, not assumed) to a `PredicateMeta` class with no row bound to a real
-   module `Database`:
-   * bare `make_predicate(...)` calls or direct
-     `class X(metaclass=PredicateMeta)` test scaffolding with no db at all
-     — `P0`, `Pt`, `PtAlias` (`tests/test_field_names_for.py`), `bar`,
-     `foo` (`tests/test_funnel_accessors.py`), `p`
-     (`tests/test_predrow.py`), `animal`, `empty_pred`
-     (`tests/test_listing.py`, literal `class animal(metaclass=
-     PredicateMeta)`);
-   * predicates DECLARED but never given clauses in the compiled unit that
-     reaches them — `-dynamic(...)`: `color`, `dfact`, `fact`, `f`, `d`,
-     `n`, `q`, `lp`, `seen`; `-private([...])`: `marker`, `verdict`;
-     `-module(...)`/`-import_from(...)` vocabulary exports with no local
-     clauses: `debug`, `key`, `cite`, `gv_free`, `impclob_verdict`,
-     `impord_fverdict`; `-table(...)` targets named directly in
-     `clausal/logic/compiler_v2.py`'s own comment as "declared, none with a
-     row": `ghost`, `solve_tiny`, `solve_count_tabled`; `zonkish` is a
-     `-private([...])` fixture in `tests/predmeta_p1/test_p1_sites_
-     rerouted.py`.
+3. A residue name not explained? No — see "Reading the residue" below;
+   every one of the 29 traces to one of three named mechanisms.
 
-   In every one of these cases `cls._row` is unbound, so
-   `cls._state_row()` mints a fresh, private, single-predicate `Database`
-   that never saw the real module's `declare_functor`/`register_signature`
-   call — the shadow probe's `db = cls._state_row()._db` reads that empty
-   private database, not the module's real one. A genuine arm-3 caller at
-   a production site (`compiler_v2.py`'s directive-target validation, the
-   only place these 29 names are actually probed) is handed the compiling
-   module's own `db` directly and never derives it from the class, so this
-   residue does not describe a live behavioural gap today — it is a
-   property of the shadow probe's `db` derivation, named here per spec §3
-   so it is a recorded, explained residue rather than a silent one.
+## Reading the residue (corrected 2026-09-22, fix round 1)
 
-No fail condition holds. No new todo filed: nothing in this run needed
-widening arm 3, and the one disagreement found is the positive control
-working as designed.
+**The first version of this README explained all 29 residue names with one
+story — "unbound row, so the shadow probe reads the wrong `db`" — and that
+story is FALSE for at least one confirmed case, caught by a peer review
+that loaded a real `-dynamic(dfact/3)` module and measured it directly.
+The corrected account below distinguishes what was actually measured from
+what is inferred by pattern, and says so at every step — because an
+instrument whose own README states a false cause is exactly how a
+fail-open gets built.**
+
+Three genuinely distinct mechanisms produce a `None` shadow read. All are
+consistent with the fail condition (residue is "explained," not silent) —
+but they are different facts, and only one of them is a live todo.
+
+**Mechanism 1 — a real declaredness gap, not a probe artifact.** A
+`-dynamic(functor/arity)` directive, or a plain `name/arity` entry (no
+field list) in a `-module(...)` export header, declares an ARITY, never
+field names. Measured directly for two cases, using the REAL module `db`
+(not derived from the residue class's own row):
+
+```
+-dynamic(dfact/3):  cls._row is bound (detached=False); db.signature_for
+                     and db.declared_fields_by_name both None; arm2 answers
+                     synthesized ('arg_0','arg_1','arg_2'); arm3 answers None.
+-module(gate_vocab, [gv_free/1, ...]):  same result — checked against the
+                     real module db via a SIBLING bound predicate, not
+                     derived from gv_free's own (unbound) row.
+```
+
+No signature is EVER registered for these, on any `db`, at any time — this
+is not about which `db` the shadow probe happens to derive. It is a
+genuine bug in the declaredness contract, filed as
+`todo/dynamic-declarations-are-invisible-to-arm-3-2026-09-22.md`, with the
+measurement above, why it bites at W4b-3, and candidate fixes (not
+decided here). Confirmed for `dfact` and `gv_free`; the same "arm 2
+returned synthesized `arg_N` placeholder names" signature also appears for
+9 more residue members (`cite`, `debug`, `fact`, `ghost`, `impclob_verdict`,
+`impord_fverdict`, `lp`, `p`, `seen`) — consistent with the same mechanism,
+**not individually re-verified against a fresh full-compile db** the way
+`dfact`/`gv_free` were, and left as open follow-up rather than claimed as
+measured.
+
+**Mechanism 2 — a genuine shadow-probe artifact** (this is what the first
+version of this README wrongly generalized to ALL 29 names). A
+field-NAMED clause-free declaration — `-private([zonkish(X, Y)])`
+(`tests/predmeta_p1/test_p1_sites_rerouted.py`) — DOES register its real
+names on the compiling module's `db`:
+
+```
+real module db.declared_fields_by_name('zonkish') -> ('X', 'Y')   # found!
+cls._row.detached                                 -> True          # but
+                                                                     # zonkish's
+                                                                     # OWN row
+                                                                     # is a
+                                                                     # different,
+                                                                     # private
+                                                                     # db that
+                                                                     # never
+                                                                     # saw it
+```
+
+Here the shadow probe's `db = cls._row._db` genuinely reads the wrong
+database — a real arm-3 caller, handed the compiling module's own `db`
+directly (never derived from the class), WOULD find `('X', 'Y')`. This is
+the probe-derivation limitation, confirmed for `zonkish` only. Not claimed
+for the other 17 real-field-named residue members without individual
+verification (see below).
+
+**Mechanism 3 — genuinely never declared anywhere.** Bare
+`make_predicate(...)` calls or direct `class X(metaclass=PredicateMeta)`
+test scaffolding, with no compiling module and no declaration on any `db`
+at all: `P0`, `Pt`, `PtAlias` (`tests/test_field_names_for.py`), `bar`,
+`foo` (`tests/test_funnel_accessors.py`), `animal`, `empty_pred`
+(`tests/test_listing.py`, literal `class animal(metaclass=PredicateMeta)`)
+— confirmed by source (the field names these carry are exactly the ones
+passed at construction) plus row inspection. Here arm 3's `None` is
+correct — there is nothing anywhere to find.
+
+**What is NOT individually confirmed.** 10 of the 29 names carry real,
+programmer-chosen field names (`color`, `d`, `f`, `key`, `marker`, `n`,
+`q`, `solve_count_tabled`, `solve_tiny`, `verdict`) and have not each been
+traced to a specific compiling module the way `zonkish` was — grep-based
+guessing at their origin turned out to be unreliable during this
+correction (the same bare name recurs across dozens of unrelated test
+files at different arities with different declaration styles — `lp` and
+`p`, for instance, each grep-matched a plausible source whose measured
+fields did not match what the census actually captured). They are
+Mechanism 2 or Mechanism 3 — not Mechanism 1, since they carry real names
+— but which of the two, per name, is unresolved and not claimed here.
+
+**Summary count:** 2 confirmed Mechanism 1 (+9 pattern-consistent,
+unverified) = up to 11; 1 confirmed Mechanism 2; 7 confirmed Mechanism 3;
+10 real-named names of unconfirmed mechanism (2 or 3). All 29 are
+"explained" in the sense the fail condition asks (none is a silent,
+untraceable gap) — but only Mechanism 1 is an actual defect, and it has
+its own todo rather than being folded back into "the residue is fine."
+
+No fail condition holds in the sense of blocking this task: `N` is
+nonzero, the one `DISAGREED` is self-planted, and every residue name maps
+to one of three named, evidenced mechanisms rather than an unexplained
+gap. One genuine defect (Mechanism 1) was found and is filed as a todo for
+W4b-2, per the instructions for this task — it does not block W4b-1.
