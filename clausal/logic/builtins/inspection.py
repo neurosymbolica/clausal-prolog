@@ -315,6 +315,14 @@ def _construct_named(name_val, args, who: str):
     under module-local atom identity, and downstream callers depend on the
     name arm behaving exactly as it does.
 
+    ``field_names_for`` answering is NOT by itself "this is a class": its
+    arm 3 (final fix wave, CRITICAL 2, 2026-09-23) also answers for a NAME
+    -- a mangled atom string resolves through its owner module's registry
+    and gets real field names back, with no class in sight.  So the class
+    arms below are gated on ``isinstance(name_val, type)`` as well as the
+    fields being known; a name that only resolves through arm 3 falls
+    through to the generic shape, same as any other atom.
+
     An arity that disagrees with the class's field count is not that term, so
     it falls through to the generic shape rather than raising — which keeps a
     downstream ``functor/3`` probe over an arity-0 schema atom working.
@@ -325,8 +333,13 @@ def _construct_named(name_val, args, who: str):
     unifies with the same term written longhand.  §5.4 carves out ``'.'``/2,
     which builds the engine's list shape instead (see :func:`_cons`).
     """
-    _ctor_fields = field_names_for(name_val)
-    if _ctor_fields is not None:
+    # arity is already in hand (IMPORTANT 2, 2026-09-23): pass it so arm 3's
+    # exact-arity read (``signature_for``, which chains ``_signatures``
+    # before ``_declared``) is used instead of the lossier no-arity
+    # by-name read.  Harmless for a plain (un-mangled) atom name, which
+    # still answers None here with no db/namespace supplied.
+    _ctor_fields = field_names_for(name_val, arity=len(args))
+    if isinstance(name_val, type) and _ctor_fields is not None:
         # ``field_names_for`` is the field list whatever minted the class — a
         # generated ``class <functor>(metaclass=PredicateMeta)`` block (the
         # usual route for an in-file predicate, see
