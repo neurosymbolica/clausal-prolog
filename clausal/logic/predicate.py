@@ -1481,7 +1481,31 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
                 f"predicate, or call it by its local name)",
             )
         )
-    return obj._get_dispatch()
+    getter = getattr(obj, "_get_dispatch", None)
+    if getter is None:
+        # W3 (ruled 2026-09-22): the callee is not a predicate of any kind --
+        # a MODULE when a dotted name landed on a package, or any other Python
+        # value.  A NAMED LogicException rather than CPython's AttributeError:
+        # downstream gates classify this failure by its rendered text, and the
+        # class name is the token they may key on, so it is put in the message
+        # itself.  See ``exceptions.DispatchTargetError``.
+        import types as _types  # noqa: PLC0415
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            DispatchTargetError, type_error,
+        )
+        if isinstance(obj, _types.ModuleType):
+            culprit = obj.__name__
+            what = f"module {obj.__name__!r}"
+        else:
+            culprit = type(obj).__name__
+            what = f"a {type(obj).__name__} value {obj!r}"
+        raise DispatchTargetError(type_error(
+            "callable", culprit,
+            f"DispatchTargetError: the goal at arity {arity} resolved to "
+            f"{what}, not a predicate; a dotted target must name a predicate "
+            f"inside the module (or import it), and a Python value is not "
+            f"callable as a goal"))
+    return getter()
 
 
 # ── Python reference implementations (kept as fallbacks) ─────────────────────

@@ -125,6 +125,26 @@ class LogicException(Exception):
         return f"{message}\nnote: {note}" if note else message
 
 
+class DispatchTargetError(LogicException):
+    """A goal's callee resolved to something that is not a predicate at all.
+
+    W3 of the PredicateMeta retirement (ruled 2026-09-22).  Raised by
+    ``predicate._dispatch_at`` when the object a goal resolved to has no
+    ``_get_dispatch`` -- a MODULE, most often, when a dotted name lands on a
+    package instead of on a predicate inside it; any other Python value takes
+    the same exit.  Before W3 that fell through to ``obj._get_dispatch()`` and
+    surfaced as CPython's own ``AttributeError: module 'x.y' has no attribute
+    '_get_dispatch'``, whose wording downstream gates had to match to
+    classify the failure.  The CLASS NAME is the stable token now: it is in
+    the rendered text (in the message itself, so a chained or re-raised copy
+    still carries it), and the term is the ISO ``type_error(callable, Target)``
+    so ``catch/3`` and every ``except LogicException`` see it as they see the
+    atom case (``existence_error(procedure, ...)``, deliberately a DIFFERENT
+    shape: "resolved to data" and "resolved to a module" are told apart by
+    it).
+    """
+
+
 def python_error_term(exc: Exception) -> Compound:
     """Convert a Python exception to a catchable logic term.
 
