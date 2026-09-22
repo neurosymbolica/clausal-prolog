@@ -1454,24 +1454,33 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         )
         raise LogicException(string_goal_error(chars_text(obj), arity, "call/N"))
     if type(obj) is str:   # STAGE 2: the atom (was the arity-0 cell)
-        from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
-        if is_mangled(obj):
-            # W4 (ruled 2026-09-22): a MANGLED atom is a module-qualified
-            # predicate HANDLE -- the value a held ``m.pred`` becomes once the
-            # class goes -- and a compiled body calling a name bound to one
-            # arrives here.  Resolve it in ITS module, off the row.
+        from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
+        _q = qualify_mangled_goal(obj)
+        if _q is not obj:
+            # W4 (ruled 2026-09-22): a MANGLED atom naming a LOADED module is
+            # a module-qualified predicate HANDLE -- the value a held
+            # ``m.pred`` becomes once the class goes -- and a compiled body
+            # calling a name bound to one arrives here.  Resolve it in ITS
+            # module: the row first (W4-proof), then the module's namespace,
+            # which is where an ``-import_from``'d predicate is reachable --
+            # it lives on the EXPORTER's row, and following the binding is
+            # what ``call/N`` does too, so the two paths agree.
             from clausal.logic.solve import resolve_module  # noqa: PLC0415
-            _mod_name, _name = demangle(obj)
+            _mod_name, _name = _q[1], _q[2]
             _module = resolve_module(_mod_name, None, "call/N")
             _fn = _module.db.get_dispatch(_name, arity)
             if _fn is not None:
                 return _fn
+            _bound = (_module.module_dict or {}).get(_name)
+            if _bound is not None and _bound is not obj:
+                return _dispatch_at(_bound, arity)
             from clausal.logic.exceptions import (  # noqa: PLC0415
                 LogicException, existence_error,
             )
             from clausal.terms import Compound  # noqa: PLC0415
             raise LogicException(existence_error(
-                "procedure", Compound("/", (_name, arity)),
+                "procedure",
+                Compound(":", (_mod_name, Compound("/", (_name, arity)))),
                 f"{_mod_name}.{_name}/{arity} is not defined in module "
                 f"{_mod_name!r} (reached through a module-qualified handle)"))
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried

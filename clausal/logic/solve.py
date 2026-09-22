@@ -1012,10 +1012,10 @@ def call(
     # W4: a module-qualified NAME (the mangled handle) is its own module
     # designator -- switch to that module and continue with the bare name.
     if type(functor) is str:
-        from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
-        if is_mangled(functor):
-            _mod_name, functor = demangle(functor)
-            module = resolve_module(_mod_name, module, "call/N")
+        _q = qualify_mangled_goal(functor)
+        if _q is not functor:
+            module = resolve_module(_q[1], module, "call/N")
+            functor = _q[2]
     # Fast path: predicate class passed directly — no module lookup needed.
     if hasattr(functor, '_get_dispatch'):
         dispatch_fn = functor._get_dispatch()

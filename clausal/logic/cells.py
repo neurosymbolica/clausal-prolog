@@ -539,18 +539,29 @@ def qualify_mangled_goal(goal: Any) -> Any:
     named by its dotted string, and ``resolve_qualified_goal_cell`` looks
     that up as it does any designator.  Called at the three entry points
     (``solve``'s goal normalisation, ``call/N``, ``_dispatch_at``).
+
+    WHAT COUNTS AS A HANDLE, in one place: a mangled atom whose module half
+    is a LOADED module (a ``sys.modules`` key -- the import name, which for
+    a package-nested module is dotted).  A ``-hide`` data atom carries the
+    BARE declared module name instead, which need not be an import name;
+    one of those reaching a goal position is the pre-existing "atom is not
+    callable" mistake, and it comes back untouched here so the caller's
+    existing atom path reports it, not a new "no such module" error.
     """
+    import sys  # noqa: PLC0415
     from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
 
     if type(goal) is str:
         if is_mangled(goal):
             module_name, name = demangle(goal)
-            return (QUALIFIED_GOAL_FUNCTOR, module_name, name)
+            if module_name in sys.modules:
+                return (QUALIFIED_GOAL_FUNCTOR, module_name, name)
         return goal
     is_cell, functor = _cell_shape(goal) if isinstance(goal, tuple) else (False, None)
     if is_cell and type(functor) is str and is_mangled(functor):
         module_name, name = demangle(functor)
-        return (QUALIFIED_GOAL_FUNCTOR, module_name, (name, *goal[1:]))
+        if module_name in sys.modules:
+            return (QUALIFIED_GOAL_FUNCTOR, module_name, (name, *goal[1:]))
     return goal
 
 
