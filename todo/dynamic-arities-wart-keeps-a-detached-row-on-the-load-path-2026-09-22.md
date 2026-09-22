@@ -57,3 +57,80 @@ above the answer on the load path is "only here". Once this is re-keyed, the
 remaining users of the detached row are `make_predicate` classes minted
 outside a load — which is a smaller and much more tractable question than the
 one W2 started with.
+
+---
+
+## 2026-09-22, later — QUANTIFIED, and the fix is a DESIGN CHOICE
+
+Full-suite census (all 16,950 tests, `_detached_row` instrumented and each
+mint attributed to the frame that triggered the FACADE READ):
+
+    detached mints TOTAL        314   (was 897 before this session's commits)
+      compiler_v2.py:361        207   <- THIS WART
+      test / out-of-engine      100   (tests calling make_predicate; not ours)
+      compiler_v2.py:493          4
+      compiler_v2.py:1118         2
+      specialization.py:106       1
+
+**207 of the 214 engine-side mints are this one site.** The remaining three
+engine sites are 7 mints between them. `specialization.py`'s three
+`make_predicate` calls and `builtins/_registry.py`'s two contribute nothing —
+they bind. So this is THE blocker, not one of several.
+
+## The population is tiny; the semantics are not
+
+Real code touching `_dynamic_arities` (the other 17 hits are comments):
+
+    compiler_v2.py:361-363   the WRITE (this wart)
+    predicate.py:1066-1082   the property pair (the facade)
+    predicate.py:1431        the ONE reader, inside `_declared_arity`
+    predicate.py:578         a name-list entry
+    tests/                   30 sites
+
+## Why the obvious fix is WRONG, and this is the bit to decide
+
+`Database._dynamic` already holds `(functor, arity)` pairs, so the per-name set
+looks derivable:
+
+    declared = {a for (f, a) in db._dynamic if f == cls.__name__}
+
+**That changes behaviour for IMPORTS.** `compiler_v2.py:339` records the
+current semantics as deliberate:
+
+    # ON AN IMPORTED CLASS THIS WRITES THE OWNER'S ROW (roborev job 78,
+    # finding 5) [...] the declared-arity set is a property of the PREDICATE,
+    # not of the module that mentioned it, and ``_refuse_call_at`` reads it
+    # through the same shared class.
+
+Today the set lives on the row, and an `-import_from` SHARES the class, so an
+importer sees the OWNER's declarations. A db-derived set would read the
+IMPORTER's Database, which does not carry the owner's `-dynamic` marks — so a
+declared-but-clause-free imported predicate would stop being refused at the
+wrong arity. Silent, and only visible in a diagnostic.
+
+**THE CHOICE:**
+
+* **(A) Keep it on the row, name the row properly.** At step 4a reach the
+  CLASS's OWN row — `db.row(functor, len(stamped._fields), create=True)` —
+  rather than `db.row(functor, arity)` with the DECLARED arity. Keeps the
+  shared-class import semantics exactly. The snag: for a clause-less
+  `-dynamic` the class is not bound yet, so `create=True` mints a row that
+  `_bind_row` may later not be the one the class settles on, and the set could
+  end up stranded on an orphan row. Needs the bind ordering worked out.
+* **(B) Move it to the Database as a per-NAME map** (`functor -> set[int]`),
+  and make an importer consult the OWNER's Database. That needs a way to get
+  from an imported class to its owning db, which is `cls._row.db` — available
+  once bound, absent before, which is the same ordering problem from the other
+  side.
+* **(C) Leave the wart.** It is 207 detached rows per suite run and one
+  documented comment; nothing is WRONG today. W2 then proceeds on the basis
+  that a facade read can still find `_row is None` on exactly this path, and
+  each W2 call site is checked against it individually.
+
+Engine-lane does not recommend one: (A) and (B) both hinge on bind ordering,
+which is P1 spec §2's subject, and (C) trades a known cost for not touching
+declaration semantics. **This wants the operator, with that spec open.**
+
+Also worth noting for whoever takes it: `_declared_arity` reads `cls._clauses`
+as its FIRST line, which is itself a facade read and mints for a row-less
+class. Whatever fix lands should cover that read too.
