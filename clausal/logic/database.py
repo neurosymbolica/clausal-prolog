@@ -115,15 +115,16 @@ class PredRow:
     locked: bool = False
     source: "tuple[str, str] | None" = None
     writes: list = dataclasses.field(default_factory=list)
-    # Arities the NAME was DECLARED at (``-dynamic(f/N)``).  Row-LOCAL, not
-    # derived from ``dynamic`` (P3-3 Task 2): ``dynamic`` is per-``(f, a)``
-    # and answers "is THIS key dynamic", while ``_dynamic_arities`` is a
-    # per-NAME set whose two load-bearing distinctions — ``None`` ("nothing
-    # was declared") vs a set, and a set of size 1 vs >1 — cannot be
-    # reconstructed from one key's boolean.  See ``PredicateMeta.
+    # (REMOVED 2026-09-22, option D.)  ``dynamic_arities`` used to live here
+    # as a per-NAME set, on the argument that it "cannot be reconstructed from
+    # one key's boolean".  True of ONE key; false of the SET: scanning
+    # ``self._dynamic`` for every entry with a given functor recovers both
+    # distinctions that mattered — "nothing declared" (an empty result, which
+    # ``_declared_arity`` treats exactly as the old ``None``) and size 1 vs
+    # >1.  ``PredicateMeta._declared_arity`` derives it that way now, so the
+    # Database is the single store for a declaration.  See ``PredicateMeta.
     # _declared_arity``, which declines on ``None``, declines on
     # ``len(...) != 1``, and reports the single element otherwise.
-    dynamic_arities: "set[int] | None" = None
     # Index plans (arg_index): the call-site bucket functions the compiler
     # exposes per argument position. Row-LOCAL (P1, 2026-09-17): they were
     # class-only state, the one thing an index-hint pass could not find by

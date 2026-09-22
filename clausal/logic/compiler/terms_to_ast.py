@@ -221,7 +221,7 @@ def _implicit_functors_active(namespace: "dict | None") -> bool:
 # a ``PredicateMeta`` is a predicate/class reference, a name bound to its
 # interned spelling with a signature-registry entry is data.  Nothing asks the
 # question of a CLASS any more -- a live instance always keeps class emission
-# -- so a gate that inspected ``_fields``/``_clauses``/``_dynamic_arities``/
+# -- so a gate that inspected ``_fields``/``_clauses``/
 # ``position`` had no callers left.)
 
 

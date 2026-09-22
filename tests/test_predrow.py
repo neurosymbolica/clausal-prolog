@@ -438,14 +438,12 @@ def test_class_writes_land_in_the_database():
     p._signature = ("a",)
     p._locked = True
     p._clauses_source = ("m", "/tmp/m.clausal")
-    p._dynamic_arities = {1}
     row = db.row("p", 1)
     assert db._dispatch[("p", 1)] is fn
     assert db._lazy_recompile[("p", 1)] is lazy
     assert db.signature_for("p", 1) == ("a",)
     assert row.locked is True
     assert row.source == ("m", "/tmp/m.clausal")
-    assert row.dynamic_arities == {1}
 
 
 def test_clauses_wholesale_rebind_goes_through_the_row():
@@ -550,7 +548,6 @@ def test_bare_make_predicate_is_a_working_predicate_with_no_database():
     assert cls._signature is None
     assert cls._locked is False
     assert cls._clauses_source is None
-    assert cls._dynamic_arities is None
 
     c = Clause(head=cls(1), body=[])
     cls._clauses.append(c)
@@ -630,7 +627,7 @@ def test_bind_row_uses_the_passed_functor_not_the_class_name():
     assert len(cls._clauses) == 1
 
 
-def test_rebinding_carries_dynamic_arities_locked_and_source():
+def test_rebinding_carries_locked_and_source():
     """These three were per-CLASS slots before the inversion, so they travel
     with the class when it is re-bound (a clause-free import getting clauses
     downstream, a file compiled twice, a name defined at two arities).
@@ -642,17 +639,15 @@ def test_rebinding_carries_dynamic_arities_locked_and_source():
     db1, db2 = Database(), Database()
     cls = make_predicate("p", ["a"])
     cls._bind_row(db1, "p", 1)
-    cls._dynamic_arities = {1}
     cls._locked = True
     cls._clauses_source = ("m1", "/tmp/m1.clausal")
     cls._bind_row(db2, "p", 3, authorized=True)
-    assert cls._dynamic_arities == {1}
     assert cls._locked is True
     assert cls._clauses_source == ("m1", "/tmp/m1.clausal")
-    # ... and the union, not a replacement, when the target has its own.
-    cls._dynamic_arities = {3}
-    cls._bind_row(db1, "p", 1, authorized=True)
-    assert cls._dynamic_arities == {1, 3}
+    # ``dynamic_arities`` used to travel here too, unioned across rebinds.  It
+    # is DERIVED from the Database now (option D, 2026-09-22), so there is no
+    # per-class set to carry: a rebound class reads the declarations of
+    # whichever Database its new row belongs to.
 
 
 def test_rebinding_leaves_the_old_rows_clauses_where_they_were():
@@ -789,35 +784,20 @@ class TestBindRowCarriesDetachedClauses:
         assert len(mod.db.row("dq", 1).clauses) == 1
 
 
-# ── _dynamic_arities keeps its None-vs-set semantics (row-LOCAL, not derived)
-
-
-def test_dynamic_arities_is_row_local_and_independent_of_row_dynamic():
-    """``row.dynamic`` is a per-(f, a) boolean; ``_dynamic_arities`` is a
-    per-NAME set whose None-vs-set and size-1-vs-larger distinctions both
-    decide ``_declared_arity``. Deriving one from the other would be lossy, so
-    the set stays its own row field."""
-    db = Database()
-    cls = make_predicate("p", ["a"])
-    cls._bind_row(db, "p", 1)
-    db.mark_dynamic("p", 1)
-    assert db.row("p", 1).dynamic is True
-    assert cls._dynamic_arities is None, "declared-at is not the same question"
-    cls._dynamic_arities = set()
-    assert cls._dynamic_arities == set()
-    assert cls._dynamic_arities is not None, "empty set != never stamped"
-
-
-# ── _predicate_functor_names must agree with Database truth ─────────────────
+# ── the declared-at set is DERIVED from the Database (option D, 2026-09-22) ──
 #
-# Step 3 asks "will this declared name have clauses?" from the CLAUSE NODES,
-# before step 4 attaches anything, and the answer decides the binding shape:
-# a predicate keeps its ``PredicateMeta`` class, a data functor is unbound to
-# its interned spelling so its terms compile to cells (R6).  A divergence
-# between that answer and what the Database ends up holding silently flips
-# goal-vs-data-cell emission, with no error anywhere — so it is pinned here,
-# one case each way, against the row-backed truth the inversion installs.
-
+# There used to be a test here --
+# ``test_dynamic_arities_is_row_local_and_independent_of_row_dynamic`` --
+# pinning that the set was row-LOCAL and "cannot be reconstructed" from
+# ``row.dynamic``, on the grounds that a per-(f, a) BOOLEAN cannot express
+# either "nothing was declared" or "more than one arity".
+#
+# That is true of ONE key and false of the SET.  Scanning ``db._dynamic`` for
+# every entry with a given functor recovers both distinctions, so
+# ``_declared_arity`` derives the set that way and the per-class property is
+# gone.  The one thing the old shape could express and this cannot is an
+# explicitly EMPTY stamp as distinct from never having been stamped --
+# meaningless here, since ``_declared_arity`` declines on both.
 
 def _load_pfn_module(tmp_path, monkeypatch, name, source):
     import textwrap
@@ -932,16 +912,19 @@ _RELOCATED = (
     "_lazy_recompile",
     "_signature",
     "_locked",
-    "_dynamic_arities",
 )
 
 
-def test_instances_still_resolve_all_seven_relocated_attributes():
+def test_instances_still_resolve_all_six_relocated_attributes():
     cls = make_predicate("InstFace", ["x"])
     inst = cls._clausal_head(1)          # P2: the instance, not the cell
     assert [getattr(inst, n) for n in _RELOCATED] == [
-        [], None, None, None, None, False, None,
+        [], None, None, None, None, False,
     ], "an instance must read the same defaults the class does"
+    # A POSITIVE CONTROL on the list itself: a stale `_RELOCATED` with a name
+    # the engine no longer relocates would make the comparison above pass on
+    # a shorter list without anyone noticing which name went.
+    assert len(_RELOCATED) == 6
 
 
 def test_instance_reads_of_all_seven_are_live_through_the_class():
@@ -962,7 +945,6 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     cls._signature = ("x",)
     cls._locked = True
     cls._clauses_source = ("m", "/tmp/m.clausal")
-    cls._dynamic_arities = {1}
 
     assert inst._clauses == [c]
     assert inst._clauses is db._clauses[("InstLive", 1)]
@@ -971,7 +953,6 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     assert inst._signature == ("x",)
     assert inst._locked is True
     assert inst._clauses_source == ("m", "/tmp/m.clausal")
-    assert inst._dynamic_arities == {1}
 
     # ... and a SECOND instance made after the writes agrees with the first.
     assert cls._clausal_head(2)._locked is True
@@ -1014,13 +995,12 @@ def test_reading_a_bound_clauseless_class_leaves_is_defined_false():
     db = Database()
     cls = make_predicate("declared_only", ["x"])
     cls._bind_row(db, "declared_only", 1)
-    db.mark_dynamic("declared_only", 1)
-    cls._dynamic_arities = {1}
+    db.mark_dynamic("declared_only", 1)   # the ONE declaration channel now
 
     assert cls._clauses == []
     assert repr(cls)                     # __repr__ reads _clauses and len()s it
     assert cls._clause_arity() is None   # walks the clause list
-    assert cls._declared_arity(2) == 1   # reads _clauses then _dynamic_arities
+    assert cls._declared_arity(2) == 1   # row.clauses, then the db's marks
 
     assert db.is_defined("declared_only", 1) is False
     assert ("declared_only", 1) not in db._clauses

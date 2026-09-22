@@ -358,11 +358,12 @@ def compile_module(
                 pred_cls = module_dict.get(functor)
                 # P1 (spec 2026-09-17 §2.2): the class's OWN ROW names its
                 # arity, so this is the arity-checked membership test with no
-                # class test and no ``_fields`` read.  ``_row`` is set for
-                # every predicate class that reaches here — the stamp above
-                # reads ``_dynamic_arities``, a property over the class's row,
-                # which mints the detached row when there is none — and absent
-                # on a non-predicate binding.
+                # class test and no ``_fields`` read.  ``_row`` is absent on
+                # a non-predicate binding.  (It used to be set for every
+                # predicate class reaching here as a SIDE EFFECT: the stamp
+                # above read ``_dynamic_arities``, a property over the row,
+                # which minted a detached row when there was none.  The stamp
+                # is gone, so nothing here mints one.)
                 #
                 # NOT ``db.row(functor, arity) is not None``: step 2's
                 # ``mark_dynamic`` already put ``(functor, arity)`` in this

@@ -575,7 +575,6 @@ _RELOCATED_STATE_NAMES = (
     "_lazy_recompile",
     "_signature",
     "_locked",
-    "_dynamic_arities",
 )
 
 
@@ -700,7 +699,7 @@ class PredicateMeta(type):
 
     It also adds predicate dispatch machinery:
       _clauses, _dispatch_fn, _lazy_recompile, _signature, _locked,
-      _clauses_source, _dynamic_arities
+      _clauses_source
     all of which are READ-THROUGH PROPERTIES onto one
     :class:`~clausal.logic.database.PredRow` held in ``cls._row`` (P3-3
     Task 2) — the Database's row for this predicate once the class is bound
@@ -793,8 +792,8 @@ class PredicateMeta(type):
         #
         # P3-3 Task 2 (THE INVERSION): none of it lives on the class any more.
         # ``_clauses``, ``_clauses_source``, ``_dispatch_fn``,
-        # ``_lazy_recompile``, ``_signature``, ``_locked`` and
-        # ``_dynamic_arities`` are now read-through PROPERTIES (defined on this
+        # ``_lazy_recompile``, ``_signature`` and ``_locked``
+        # are now read-through PROPERTIES (defined on this
         # metaclass, just below) onto ONE ``PredRow`` — the Database's
         # per-``(functor, arity)`` row.  ``_row`` is the single slot that used
         # to be seven, so every read and write keeps its old
@@ -898,12 +897,14 @@ class PredicateMeta(type):
         to somebody else's predicate -- before the bind is reached.  See the
         body.
         A REAL old row keeps its own contents (it is the Database's, not the
-        class's); three pieces of state that were per-CLASS rather than
+        class's); the pieces of state that were per-CLASS rather than
         per-key before this task travel with the class so the move stays
-        lossless — ``dynamic_arities`` (unioned: it is a set ACROSS arities by
-        construction), ``locked`` (or-ed: locking was one-way on the class,
-        never undone by a later module), and ``source`` (only when the target
-        has none; step 4 re-stamps it immediately after binding anyway).
+        lossless — ``locked`` (or-ed: locking was one-way on the class, never
+        undone by a later module), and ``source`` (only when the target has
+        none; step 4 re-stamps it immediately after binding anyway).
+        ``dynamic_arities`` used to be carried here too, unioned; it is
+        derived from the Database now (option D, 2026-09-22) so there is
+        nothing to carry.
 
         A DETACHED old row holding clauses is the exception, and it is the one
         case where the clauses travel too (final review I-1): a detached row
@@ -979,12 +980,6 @@ class PredicateMeta(type):
                     carried = getattr(old_row, _plans)
                     if carried and not getattr(new_row, _plans):
                         setattr(new_row, _plans, carried)
-            old_declared = old_row.dynamic_arities
-            if old_declared:
-                if new_row.dynamic_arities is None:
-                    new_row.dynamic_arities = set(old_declared)
-                else:
-                    new_row.dynamic_arities |= old_declared
             if old_row.locked:
                 new_row.locked = True
             if new_row.source is None:
@@ -1061,26 +1056,6 @@ class PredicateMeta(type):
     @_locked.setter
     def _locked(cls, value: bool) -> None:
         (cls._row or cls._detached_row()).locked = value
-
-    @property
-    def _dynamic_arities(cls) -> "set[int] | None":
-        """Arities this NAME was DECLARED at (``-dynamic(f/N)``), stamped by
-        compiler_v2 at load.  ``None`` everywhere else.  A declaration is
-        the one arity source that cannot be a stale inference — unlike
-        ``_fields`` (stale on the re-minted vocabulary atom) and unlike an
-        empty ``_clauses`` (which says nothing) — so ``_refuse_call_at``
-        may consult it when, and only when, the clause list is empty.
-
-        Row-LOCAL storage, deliberately NOT derived from ``row.dynamic``
-        (P3-3 Task 2): ``dynamic`` is a per-``(f, a)`` boolean and this is a
-        per-NAME set whose ``None``-vs-set and size-1-vs-larger distinctions
-        both decide behavior in ``_declared_arity``.  Deriving would be lossy.
-        """
-        return (cls._row or cls._detached_row()).dynamic_arities
-
-    @_dynamic_arities.setter
-    def _dynamic_arities(cls, value: "set[int] | None") -> None:
-        (cls._row or cls._detached_row()).dynamic_arities = value
 
     @property
     def _index_plans(cls) -> dict:
@@ -1408,10 +1383,10 @@ class PredicateMeta(type):
 
         - the class has clauses (the heads were the authority and declined;
           a declaration must not outvote them);
-        - nothing was declared (``_dynamic_arities`` is ``None`` on every
-          class the compiler did not stamp — vocabulary atoms, forward
+        - nothing was declared (the derived set is EMPTY for every name the
+          Database holds no ``-dynamic`` mark for — vocabulary atoms, forward
           declarations, plain predicates — so all of those decline exactly
-          as before);
+          as before, where the old class-stamped set answered ``None``);
         - more than one arity was declared (one number in the message means
           one declared arity; guessing which to blame would be wrong half
           the time);

@@ -699,7 +699,8 @@ class TestDynamicDeclaredArity:
     def test_undeclared_stays_declined(self):
         """The default is ``None`` — every pre-existing decline is untouched."""
         plain = make_predicate("arcm_dynnone", ["a", "b", "c"])
-        assert plain._dynamic_arities is None
+        # No Database has a mark for it, so the derived set is EMPTY -- which
+        # is what the old class-stamped `None` meant.
         plain._refuse_call_at(2)                 # must not raise
 
 
