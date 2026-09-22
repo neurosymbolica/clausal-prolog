@@ -71,16 +71,56 @@ to free, against the plan's 361 + 118 refs.
 
 **Detached rows on the load path: 18 -> 0.** The `instances=True` bridge is 0.
 
-## NEXT ACTION — the 66-site re-point, and it needs NO ruling
+## NEXT ACTION — the re-point is ~26 sites, NOT 66, and it is NOT MECHANICAL
 
-    _clauses 31   _dispatch_fn 16   _lazy_recompile 9
-    _signature 5  _index_plans 3    _locked 2        _clauses_source 0
+**Both halves of what I first wrote here were wrong. I tried three sites and
+found out.**
 
-Re-point these ENGINE sites from `cls._X` to `cls._row.X`. Safe, because ~100
-of the 102 suite-wide detached mints are facade reads **from test code
-directly** (no engine frame below `predicate.py`), so the facades stay for
-test/external callers and die at P4 with the class. This is a reference-count
-win; the structural deletion is P4's, as the phase plan intends.
+### The count was inflated ~2.5x by a grep that conflated two objects
+
+`_clauses`, `_dispatch_fn` and `_lazy_recompile` are attribute names on the
+**Database** as well as on `PredicateMeta`. `db._clauses` is
+`dict[(functor, arity), list[Clause]]`; `cls._clauses` is the facade. Counting
+`\._clauses\b` counted both.
+
+    attribute         total   db-ish (NOT a target)   class-ish (a target)
+    _clauses             31          16                      9
+    _dispatch_fn         16           8                      5
+    _lazy_recompile       9           6                      1
+    _signature            5           0                      5
+    _locked               2           0                      2
+    _index_plans          3           0                      3
+    _clauses_source       0           0                      0
+                                                   ~25, +2 in _registry.py
+                                                   (`other._dispatch_fn`)
+
+### And it is not a textual swap — three DIFFERENT shapes in the first three sites
+
+1. **Row guaranteed → re-pointable.** The ordinary compiler sites.
+2. **Receiver is an arbitrary TERM value.** `builtins/io.py:743` does
+   `clauses = val._clauses` under only `isinstance(val, PredicateMeta)` — a
+   user-facing listing builtin, so `val` can be a bare `make_predicate` class
+   from user Python and `_row` CAN be None. Needs the fallback AT the site.
+3. **The site exists FOR the no-row case and can never be re-pointed.**
+   `compiler/predicate.py:1470` and `:2061`:
+
+       if db is not None:
+           next_clauses = db.clauses_for(functor, arity)
+       else:
+           next_clauses = pred_cls._clauses if pred_cls is not None else clauses
+
+   That `else` IS the no-Database path, and `db=None` is the DOCUMENTED
+   DEFAULT of `compile_predicate_trampoline` / `compile_predicate_shallow` /
+   `compile_predicate` (see `compiler/README.md`). Re-pointing it to
+   `pred_cls._row.clauses` would be wrong by construction.
+
+### So W2's completion is gated on P4, not on the load path
+
+The load path being clean makes the *guaranteed-row subset* re-pointable, and
+that subset has to be identified SITE BY SITE — there is no blanket rewrite.
+Every site whose receiver can be a class minted outside a load keeps the
+facade until `make_predicate` goes at P4. Budget an audit of ~26 sites with a
+per-site decision, not a sweep.
 
 ## Rulings taken (do not re-open)
 
