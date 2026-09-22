@@ -724,7 +724,7 @@ Expected: NEW 0 / GONE 0 both ways.
 - [ ] **Step 6: Barrier scan, then hand back for review**
 
 ```bash
-git log main..HEAD -p | grep -niE "clausify|<the closed-side terms>" || echo "0 hits"
+git log main..HEAD -p | grep -niE "<the closed-side terms -- see the barrier memory>" || echo "0 hits"
 git log --oneline main..HEAD
 ```
 Report: the census before/after, both gate results, the classification totals, and the residue list by name. Do NOT land without an explicit go — the landing rewrites source under any lane reading the tree.
