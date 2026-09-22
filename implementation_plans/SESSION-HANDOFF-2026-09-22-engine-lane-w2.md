@@ -27,8 +27,8 @@ both arms. Do NOT trust that number from this file — regenerate it.
 
 P2 merges onto current main with NO conflicts and gates NEW 0 / GONE 0
 (146 / 16804 vs 146 / 16777). `b45171ab` CONTAINS main, so landing is a plain
-ff. **DO NOT LAND YET**: harness-batch-lane's verdict is 26 of 28 sealed
-scorers red, every red attributed to unmigrated residue and none to the seam
+ff. **DO NOT LAND YET**: the downstream lane's verdict is 26 of 28 downstream
+answer-set checks red, every red attributed to unmigrated residue and none to the seam
 (the 2 rows with a clean import graph score 42/42 and 110/110, identical to
 main).
 
@@ -37,21 +37,21 @@ module object the bodies already hold. NOT the `(':', m, (NAME, args))` tuple,
 which I recommended first and withdrew: it writes internal term
 representation into 111 hand-written call sites, against the 2026-09-21
 boundary ruling ("No term space in hand-written source"). 80 tuple sites in 38
-bodies were re-pointed; harness-batch-lane verified `module=` on both engines
-INCLUDING the `fresh_per_case` reload case, and eu/procurement
-selection_criteria scores 341/341 on the P2 candidate with per-site solution
+bodies were re-pointed; the downstream lane verified `module=` on both engines
+INCLUDING the `fresh_per_case` reload case, and the downstream domain
+one downstream row scores 341/341 on the P2 candidate with per-site solution
 counts and lint identical.
 
 **A phantom dependency cost ~24h**: memory and the P2 handoff both recorded the
-28-scorer run as "dispatched 2026-09-21". That lane had no such request. Confirm
+28-answer-set check run as "dispatched 2026-09-21". That lane had no such request. Confirm
 receipt, or the record manufactures a blocker.
 
 ## W1 HAS REPORTED — P4 is a MIGRATION, not a flag day
 
     W1a goal-call shape        230 sites / 81 bodies  (119 migrated, 111 not)
         + computed-name form     9 sites /  7 bodies  (getattr-of-call)
-    W1b non-goal object access  31 sealed / 5 bodies;  ~0 non-sealed
-    W6  Compound / KWTerm        0 sealed; 28 non-sealed, ALL IN TEST FILES
+    W1b non-goal object access  31 downstream / 5 bodies;  ~0 non-downstream
+    W6  Compound / KWTerm        0 downstream; 28 non-downstream, ALL IN TEST FILES
 
 Everything large has a dual-engine migration path. W6 downstream looks close
 to free, against the plan's 361 + 118 refs.
@@ -234,3 +234,210 @@ nothing structurally and duplicates the facade. Leave them for P4.
 
 **So W2 is not "the bulk of the diff" the plan expects.** It is three
 eliminations and four blocked attributes. Re-scope it on that basis.
+
+
+## APPENDIX 3 — W2 CLOSED at 7 of 7; tip `9028f9b3`
+
+The operator said "work on them", so the four blocked attributes got a
+second look, and Appendix 2's blocking reasons dissolve under one
+observation: **`_detached_row()` already returned `cls._row` when it was
+set.**  Every facade body `(cls._row or cls._detached_row()).x` was
+therefore `cls._detached_row().x` — the accessor existed, it was just named
+as if it always minted.  Renamed `_state_row()`, it IS "the row obtained
+from the class" that the todo's honest version asked for.
+
+That makes the per-site decision three-valued and mechanical, not blocked:
+
+    a Database in hand          db.row(f, n).<field>
+    class only, WRITE           cls._state_row().<field>       (mints, as before)
+    class only, READ, no mint   cls._row.<field> if cls._row is not None else <default>
+
+Appendix 2's four "cannot move" entries, resolved that way:
+
+    _clauses          compiler/predicate.py db=None closures: _state_row()
+                      (the class's row IS the only store there);
+                      io.py listing/1: the no-mint read; compiler_v2's
+                      -table check: the no-mint read
+    _dispatch_fn      _install: `row = pred_cls._state_row()` inside the
+                      ctx (bound by the branch above when db is given,
+                      minted by `_mutate` when it is not); _registry.py:
+                      `row = cls._state_row()` -- detached ON PURPOSE, still
+    _lazy_recompile   same `row` in _install
+    _locked           _registry.py: same `row`
+    _index_plans*     `_plan_row = pred_cls._state_row()` once per branch
+
+"Spelling the fallback at the site duplicates the facade" was the wrong
+objection: with the facades DELETED there is nothing to duplicate, and the
+one accessor is documented once.  The detached mode survives (goes with
+`make_predicate` at P4, as ruled) as one method, not 7 properties + 4
+injected instance descriptors + the `_RELOCATED_STATE_NAMES` machinery.
+
+**Tombstones now raise `RetiredStateError(Exception)`, not
+`AttributeError`.**  Found while migrating: `builtins/control.py` probed
+`getattr(cls, '_dispatch_fn', None)` — an AttributeError tombstone makes
+that answer None SILENTLY, which is the failure a tombstone exists to
+prevent.  Not RuntimeError either (the drive loop reads one out of a
+generator as exhaustion).  The three earlier tombstones moved to it.  The
+metaclass tombstone is a data descriptor, so `cls._locked` raises even on a
+class with a FIELD named `_locked`; the instance still reads the field.
+
+Sweep size, measured: ~26 engine sites by hand; ~240 test sites by a
+receiver-aware regex (Database receivers `db`/`owner`/`self` excluded), 16
+getattr/hasattr probes by hand (7 `hasattr(pred_cls, "_index_plans")`
+assertions were VACUOUS — the attribute always existed — and now assert the
+class is on its row), test_predrow's F1 section rewritten to pin the new
+contract, 4 sites in `packages/clausal-provenance` (a local `_clauses_of`
+helper; that suite has no working gate, see W3).  C reads none of the names.
+
+Gate: baseline REGENERATED at 34a6dc79 (146 / 16804), candidate 146 / 16804,
+NEW 0 / GONE 0.  One transient NEW — test_funnel_lint pins a MECHANICAL
+line number in testing.py, moved by one line; the pin's trail is updated.
+
+Left for P4 proper: `_state_row()` itself and the detached mode; the
+`db=None` default of the compile entrypoints; `make_predicate`.  W2 is done.
+
+### Review round — `23a371ea`
+
+roborev job 80 on 9028f9b3, each finding VERIFIED before acting: the
+dataclass-goal regression in `builtins/control.py` was REAL (`is_term_instance`
+is true of a `@dataclass`; its class has no `_row`) — fixed with
+`getattr(cls, "_row", None)` and a test; the "`inspect.getmembers` blows up"
+finding was WRONG (tombstones are metaclass attributes, `dir(cls)` never lists
+them — measured, pinned). Sweep-mangled prose restored; user docs updated.
+The branch tip for landing is `23a371ea`; gate re-run on it is the last
+number in this file's scratch (`cand3`).
+
+## APPENDIX 4 — coordination round (operator: "get as far as you can towards P4")
+
+**P2's picture in this file is STALE — corrected by the downstream lane 2026-09-22:**
+the `module=` migration is DONE (their own initiative, never dispatched):
+102 module-explicit goal sites, 9 implicit left (helpers that take the goal
+or predicate as a parameter, no single receiver in scope — their tool
+refuses rather than picks). The fix was at ~111 sites in ~49 bodies, not 38.
+Answer-set checks on b45171ab vs main: **23 IDENTICAL, 5 red** (was 2/26). Of the 5,
+three have exactly one implicit site left. **TWO ARE REAL P2 COUNTEREXAMPLES
+with ZERO residue**: `row R1` 12/12 -> 7/12
+and `row R2` 1423/1423 -> 1413/1423 — clean runs, some cases
+answering differently. **DO NOT LAND b45171ab.** Repro requested from
+the downstream lane (per-case diffs, a one-case command against a room path);
+my suspects, unmeasured: answer ORDER over cells vs instances, a dedup/
+equality edge, a bare-class handle used as a value.
+
+**Downstream census for W2/W3** (all three lanes, same day): 0 retired-facade
+reads and 0 `_get_dispatch` calls in the downstream trees; W2 needs no shim. The
+constraints on W3 are in `todo/w3-get-dispatch-protocol-downstream-constraints-2026-09-22.md`.
+
+**W3 has a gate now**: `tools/w3_package_gate.sh` (c7cddb55), own venv, 105 /
+1566 baseline at 34a6dc79, W2 tip NEW 0 / GONE 0.
+
+Branch tip for landing W2: `c7cddb55` (code at 23a371ea, gate NEW 0 / GONE 0).
+
+### Appendix 4 correction — the two "P2 counterexamples" are DOWNSTREAM-SIDE
+
+the downstream lane measured both rows at SOLVE level on both engines: every
+predicate identical in call count, answer count, distinct-answer count and
+content under a representation-independent digest (cell `('f', a, b)` and
+instance `f(a, b)` fold together). Nothing lost, merged, reordered or
+changed. The divergence is the downstream lane's hand-rolled walk over the
+answer term (`_atoms_in(item)`: "item malformed", "checklist is missing the
+publication row") — the atoms-as-str class-3 family, code inspecting terms
+by hand rather than through the seam. **P2 is cleared for both rows.** Not
+yet pinned: which representation difference the walker trips on (their
+lane). The rulebases: row R1 sort/2 findall/20,
+row R2 sort/0 findall/22, no tabling, no NAF, no handle tables.
+
+**Seal lesson, recorded so it is not repeated:** I asked for per-case gold
+(case id, expected, answer on each engine) and a `--case` driver. Both are
+the §9 leak; a peer cannot waive it and I cannot accept it. The MECHANISM
+was the right ask and was all that was needed.
+
+**b45171ab landing now waits on the downstream lane alone**: the 9 implicit
+helper sites threaded with `module=`, their walker fixed, the 28 re-run.
+No engine change is pending for P2.
+
+### Appendix 4, second correction — the moved rows were the PYTHON BOUNDARY, read through `type(x) is str`
+
+the downstream lane pinned it: their `_atoms_in` collector filtered leaves with
+`type(x) is str`, which collected 3/5 atoms per item on their "main" and ZERO
+on the candidate, because the candidate's leaves are `atom` (a `str`
+subclass). They read that as an engine inconsistency (`is_atom` refuses the
+engine's own `atom` class). VERIFIED, it is not:
+
+* `class atom(str)` and `export()` handing out `atom` for an atom and plain
+  `str` for text are the RULED Python boundary (2026-09-21; 818143d2 step 1,
+  ec30f483 step 2), on CURRENT main f3caddd5 as well as b45171ab. Their
+  reference engine 11c38df0 is an ancestor of main that PREDATES both.
+* `is_atom` is a TERM-space test and refuses `atom` BY DESIGN (docstring:
+  "NOT A TERM, AND is_atom SAYS SO"). Nothing to change in the engine.
+* The boundary discriminator is `isinstance(v, atom)`. `isinstance(v, str)`
+  (their applied fix, the downstream bodies) also collects TEXT leaves, silently, since
+  strings export as plain str on both engines — told them.
+* Lesson for both lanes: a "main" reference room must be current main; and a
+  digest that folds representation together (theirs folded atom/str via repr)
+  cannot see a representation change — agreement is not a result.
+
+P2 stays cleared. b45171ab landing waits on the downstream lane: re-baseline on
+current main, the 9 helper sites, the collector fix, re-run the 28.
+
+the downstream lane confirmed, room asserted, and their table is the whole
+change in one place:
+
+    engine                     an ATOM comes out as    a STRING comes out as
+    11c38df0 (their old ref)   str                     ('$chars', s) tuple
+    f3caddd5 (main now)        atoms.atom              plain str
+    b45171ab (P2 candidate)    atoms.atom              plain str
+
+`isinstance(value, atom)` applied across the downstream bodies, 12/12 on both engines;
+no degrade-to-old-engine form kept. EVERY NUMBER THEY SENT TODAY BEFORE THIS
+(incl. 23/28) was against the dead reference; a full sweep on f3caddd5 and a
+fresh 28 on b45171ab are running and supersede it.
+
+**OPERATOR CALL, surfaced, not mine or theirs:** the downstream lane's
+the downstream sweep reference (dated 2026-09-16) is stale on two axes — the atoms
+flip and the boundary landing. Regenerating at a red count would freeze
+breakage as expected; it needs re-baselining against current main with the
+reds marked KNOWN-RED.
+
+**RULED (operator, 2026-09-22, relayed to the downstream lane):** re-baseline
+the downstream sweep reference against current main (f3caddd5), reds recorded as
+KNOWN-RED, not frozen as correct. Awaiting their sweep table and the fresh 28.
+
+## APPENDIX 5 — P2 GATE CLEARED: 28 of 28 on b45171ab
+
+the downstream lane, re-baselined downstream checks: **28 match, 0 differ** on b45171ab.
+The last three reds were the three bodies with an implicit goal site; ZERO
+implicit sites remain (230/230 module-explicit). The two afternoon rows are
+green on both engines.
+
+Route change ruled by the operator in their lane: every downstream checks goal site is
+`solve(goal, module=m)`; the `--` seam form is DROPPED in the downstream checks (119
+sites reverted, 0 remain). Reason: the two out-paths disagree at the boundary
+— `--`/`export()` tags atoms as `atoms.atom`, a `solve`+deref answer is a
+plain `str` — so no single local atom test is right in a body that mixes
+them. All-solve is uniform. Filed engine-side as
+`todo/two-out-paths-disagree-about-atom-tagging-2026-09-22.md` (design
+question, parked).
+
+Caveats they attached, honestly: the 28/28 was taken BEFORE a units migration
+(many downstream corpus files being rewritten by a lane that is not the corpus lane, not
+downstream checks, not engine — citations/parameters .clausal, new .seam siblings,
+a downstream key-spelling helper) reached the downstream declaration files; five domains
+currently die on `strict_atoms: undeclared atom 'units' used as a dict key`
+in a sweep on main, which is that half-applied migration, not the engine.
+They will re-run the 28 alongside the downstream sweep reference re-baseline once the
+tree is quiescent. Their 82 eval bodies are UNCOMMITTED pending the
+operator's commit-boundary call.
+
+**Landing:** W2 branch tip carries P2; `main..tip` is a fast-forward. Engine
+gates on 23a371ea: house NEW 0 / GONE 0, packages NEW 0 / GONE 0. Awaiting the
+operator's "land it" (recommended: after the settled-tree confirmation run).
+
+**Appendix 5 follow-up:** the many downstream corpus files rewrite was the corpus lane — the
+operator ruled "a dict key is an ATOM", so every chars-carrier key in the downstream corpus become bare atoms, and `_key_spelling` now REFUSES the
+carrier and the reserved 1-tuple. Applied in place, broke five domains via
+inherited `-strict_atoms` (downstream declaration files with no directive of their own are
+still strict), REVERTED; tree consistent at 8309eab7 + the 82 eval bodies.
+Redo goes through a worktree and lands in one pass. Two consequences for P4:
+the downstream re-baseline and the settled-tree 28 wait for that single pass;
+and the corpus lane now counts an ATOM read as an object-shaped access, so the
+non-downstream W1 answer is 3, not 0 — note for W4's sizing, not a blocker.

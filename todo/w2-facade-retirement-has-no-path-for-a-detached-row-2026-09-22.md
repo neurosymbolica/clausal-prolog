@@ -114,3 +114,36 @@ What remains before the 19 facades can go:
 * the decision on whether `_detached_row` survives at all, which is now a
   much smaller question: it serves classes minted outside a load, nothing on
   the load path.
+
+
+---
+
+## 2026-09-22 (later) — CLOSED: all seven facades retired, `9028f9b3`
+
+The question this note opened with was mis-posed.  "Point callers at
+`db.row(functor, arity)`" was never available for a class on no row — but
+the class already HAD the accessor the facades were built on:
+`_detached_row()` returned `cls._row` whenever it was set, so every facade
+body `(cls._row or cls._detached_row()).x` was just `cls._detached_row().x`
+under a name that said "mint".  Renamed `_state_row()`, it is the ONE face:
+the Database's row when bound, the private detached row otherwise.
+
+So the three options above collapse to a fourth: delete the facades, and
+have each site say which case it is in —
+
+* a Database in hand → `db.row(f, n).<field>`;
+* the class only, WRITING → `cls._state_row().<field>` (mints if unbound,
+  exactly as the facade did);
+* the class only, READING, and must not mint → `cls._row.<field> if
+  cls._row is not None else <default>` (the facade minted here; the new
+  spelling does not, and answers the same).
+
+The "blocked until P4" sites in the handoff all fit one of those.  The
+detached mode SURVIVES (it goes with `make_predicate` at P4, as ruled), but
+it is now one method with one docstring, not seven properties and four
+injected instance descriptors.
+
+Tombstones raise `RetiredStateError(Exception)` — not `AttributeError`,
+because `getattr(cls, "_dispatch_fn", None)` was a live in-tree spelling
+(builtins/control.py) and would have gone silent.  Gate NEW 0 / GONE 0
+against a baseline regenerated at `34a6dc79`.
