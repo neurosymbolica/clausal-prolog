@@ -62,3 +62,28 @@ detectable shape before each sweep.
 So the sealed side's whole W4 cliff is the 31 hold-and-call sites, and the
 alias blind spot did not hide anything there; it was real only in the
 corpus tooling (13 isinstance + 31 field reads, already migrated).
+
+## Downstream result 2 of 3 (the export lane, 2026-09-22) — and a LIVE break
+
+Planted positive first (it failed on its first run — the sample had two
+`.__name__` where one was expected — and was fixed before any number was
+printed). Three trees, ~190k lines.
+
+    shape 1  isinstance      6 + 0 + 1  — and one is a GATE MODULE that
+             imports Clause/Goal/ModuleDirective by name and does
+             `isinstance` AND `.name` reads together: BROKEN ON MAIN TODAY
+             (constructors since W2), silently False on the P2 candidate.
+             Told them: migrate to is_v/vfield now with a positive control.
+             One more corpus tooling site the earlier 13 missed — told the
+             corpus lane.
+    shape 2  type-name string: the 1 test already known; bare quoted
+             names 23, mostly prose, unsplit
+    shape 3  NOT a count: the token census (1623/494/270) is meaningless
+             without receivers. The USABLE denominator: only 6 files in
+             those trees import reflection or PredicateMeta at all, so a
+             cell-field read can only live there. Read the set, not a number.
+    shapes 4, 5  NOT answerable statically (receiver typing); the
+             instrument would be a runtime hook, as for the division census.
+    corpus   clean: 1 tooling isinstance (above), 1 .seam comment.
+
+Their instrument (selftest-refusing) takes `label|root|globs` triples.
