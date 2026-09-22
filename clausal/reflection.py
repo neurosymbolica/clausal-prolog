@@ -76,6 +76,14 @@ __all__ = [
     "ReifyError",
     "RenderError",
     "Variable",
+    # The cell-side accessors for the vocabulary: ``is_v`` / ``vfield`` when
+    # the caller can NAME the class or the field, ``vkind`` / ``vfields`` /
+    # ``vitems`` for a GENERIC walk that cannot.
+    "is_v",
+    "vfield",
+    "vfields",
+    "vitems",
+    "vkind",
     "reify_ast",
     "reify_file",
     "reify_source",
@@ -245,6 +253,58 @@ def vfield(term, field, default=_VFIELD_REQUIRED):
             f"{field!r} field"
         )
     return cell_args(term)[fields.index(field)]
+
+
+def _vocab_shape(term):
+    """``(functor, fields)`` when *term* is one of the nine vocabulary cells,
+    else ``(None, None)``.  Never raises: the reserved 1-tuple, a plain value
+    and a body cell all answer ``(None, None)``."""
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+
+    try:
+        is_cell, functor = compound_cell_shape(term)
+    except TypeError:
+        return None, None
+    if not is_cell:
+        return None, None
+    fields = _VOCAB_FIELDS.get(functor)
+    return (functor, fields) if fields is not None else (None, None)
+
+
+def vkind(term):
+    """Which of the nine vocabulary cells *term* is -- ``"Clause"``,
+    ``"Goal"``, ... -- or ``None`` for anything else (a body cell such as
+    ``('Unify', A, B)``, an atom, a Python value, the reserved 1-tuple).
+
+    For a walk that cannot name the class it is asking about -- where
+    ``is_v(term, Clause)`` would need one call per vocabulary name.  A
+    body cell is NOT vocabulary: its functor and positional arguments are
+    reached with ``clausal.logic.cells.cell_functor`` / ``cell_args``.
+    """
+    return _vocab_shape(term)[0]
+
+
+def vfields(term):
+    """The field NAMES of vocabulary cell *term*, in constructor order --
+    the declaration itself -- or ``None`` when *term* is not one of the nine.
+    """
+    return _vocab_shape(term)[1]
+
+
+def vitems(term):
+    """``{field: value}`` for vocabulary cell *term*, in declaration order,
+    or ``None`` when *term* is not one of the nine.
+
+    The generic replacement for reading ``__dict__`` or ``_fields`` off an
+    instance: the instance had attributes, the cell has positions, and this
+    is the one place the names are put back on them.
+    """
+    from clausal.logic.cells import cell_args  # noqa: PLC0415
+
+    functor, fields = _vocab_shape(term)
+    if fields is None:
+        return None
+    return dict(zip(fields, cell_args(term)))
 
 
 # ── Static evaluation of constructor code ────────────────────────────────────
