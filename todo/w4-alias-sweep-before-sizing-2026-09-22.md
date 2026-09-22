@@ -120,3 +120,15 @@ Definition: the corpus lane's `_w4-census-definition.md`, under review by the
 export lane. **NOT STARTED — waits on the operator's go.** Correction to
 result 2 above: the export lane's sweep covered THREE trees, not the corpus
 only; the differing counts were definition, not scope.
+
+**Withdrawn (export lane, same day): the "6 files that import reflection"
+denominator for shape 3.** A callee that receives a cell as a PARAMETER
+reads its fields with no reflection import and no constructor call, so the
+importing set is not the set that can hold a cell: measured 7 name
+reflection, 224 read a cell-ish field, 6 both, 218 read without naming.
+Neither 6 nor 224 is the answer; the record is a LOWER BOUND with its rule
+stated and the remainder unexamined. Rule kept: a sweep verifies its own
+arithmetic; only a reader verifies its premises.
+
+The generic accessors (`reflection.vkind` / `vfields` / `vitems`) LANDED on
+main at 05ebcd91.
