@@ -41,7 +41,7 @@ from clausal.logic.cells import is_chars as _is_chars, chars_text as _chars_text
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
 from clausal.logic.variables import Var, is_var, deref
 from clausal.logic.predicate import (is_term_instance, term_field_names,
-                                     PredicateMeta as _PredicateMeta)
+                                     field_names_for)
 from clausal.logic.cells import compound_cell_shape as _cell_shape_of
 
 
@@ -113,7 +113,7 @@ def _cell_slot_names(functor: str, arity: int, module_dict: dict | None):
     a group to the wrong argument, silently.
     """
     cls = (module_dict or {}).get(functor)
-    fields = getattr(cls, "_fields", None) if isinstance(cls, _PredicateMeta) else None
+    fields = field_names_for(cls)
     return tuple(fields) if fields and len(fields) == arity else ()
 
 
