@@ -124,7 +124,13 @@ def record_clause_source(pred_cls, module_name: str, module_dict: dict) -> None:
     module reloading its own clauses from a module about to destroy
     another's, and it is keyed on the source PATH for that reason.
     """
-    pred_cls._clauses_source = (module_name, module_source_path(module_dict))
+    # THE ROW, not the retired `_clauses_source` facade (W2, 2026-09-22).
+    # This is the one WRITER, and it needs a row to write to -- `_ensure_row`
+    # gives it the same one the facade's `(cls._row or cls._detached_row())`
+    # would have, so a class not yet bound to a Database still records its
+    # source exactly as before.
+    (pred_cls._row or pred_cls._detached_row()).source = (
+        module_name, module_source_path(module_dict))
 
 
 def _source_site(depth: int) -> tuple[str, int] | None:
@@ -570,12 +576,37 @@ def _head_arity(head: Any) -> int | None:
 # ``instance._locked``.
 _RELOCATED_STATE_NAMES = (
     "_clauses",
-    "_clauses_source",
     "_dispatch_fn",
     "_lazy_recompile",
     "_signature",
     "_locked",
 )
+
+
+#: Facades W2 has retired, and where their state lives now.  A RAISING
+#: TOMBSTONE rather than a plain deletion, because deleting a property's
+#: SETTER is SILENT: `cls._clauses_source = x` would go on succeeding as an
+#: ordinary class-attribute write while the row never saw it (measured --
+#: the assignment returned cleanly and `row.source` stayed None).  A caller
+#: that has not been migrated must fail, not be quietly ignored.  These go
+#: with the class at P4.
+_RETIRED_STATE_NAMES = {
+    "_dynamic_arities":
+        "the Database's -dynamic marks; read them with "
+        "`PredicateMeta._declared_arity`, or `db.is_dynamic(functor, arity)`",
+    "_clauses_source":
+        "the row's `source` field; reach it as "
+        "`(cls._row or cls._detached_row()).source`",
+}
+
+
+def _make_retired_tombstone(name: str, where: str) -> property:
+    """A property that RAISES on read and on write, naming the replacement."""
+    def _fail(*_args):
+        raise AttributeError(
+            f"{name!r} was retired (W2 of the PredicateMeta retirement, "
+            f"2026-09-22). Its state lives in {where}.")
+    return property(_fail, _fail, doc=f"RETIRED -- see {where}.")
 
 
 def _make_instance_state_property(name: str) -> property:
@@ -1003,24 +1034,6 @@ class PredicateMeta(type):
     @_clauses.setter
     def _clauses(cls, value: list) -> None:
         (cls._row or cls._detached_row()).clauses = value
-
-    @property
-    def _clauses_source(cls) -> "tuple[str, str] | None":
-        """``(module_name, source_path)`` of the load that last wrote
-        ``_clauses``, or ``None`` while the class has none.  An
-        ``-import_from`` SHARES this class across modules, so "whose clauses
-        are these" is the only thing separating a module reloading its own
-        work from a second module quietly overwriting someone else's — see
-        ``compiler_v2._reject_redefinition_of_imported_predicates``.  The
-        source PATH is the identity that matters, not the module name: one
-        file legitimately compiles under two names in one process (a dotted
-        import and ``clausal.testing.load_clausal_module``).
-        """
-        return (cls._row or cls._detached_row()).source
-
-    @_clauses_source.setter
-    def _clauses_source(cls, value: "tuple[str, str] | None") -> None:
-        (cls._row or cls._detached_row()).source = value
 
     @property
     def _dispatch_fn(cls) -> "Callable | None":
@@ -1802,6 +1815,15 @@ def _describe_term_identity_mismatch(obj: Any) -> str:
         "copy while new imports build a second. Fix the import surgery, not the "
         "term: one clausal package per process.\n"
     )
+
+
+# Install the raising tombstones for the facades W2 retired.  On the
+# METACLASS, so `cls._clauses_source` -- where *cls* is a predicate class,
+# i.e. an INSTANCE of this metaclass -- resolves to them.
+for _retired_name, _retired_where in _RETIRED_STATE_NAMES.items():
+    setattr(PredicateMeta, _retired_name,
+            _make_retired_tombstone(_retired_name, _retired_where))
+del _retired_name, _retired_where
 
 
 def make_predicate(name: str, fields: list[str], *, instances: bool = False) -> "PredicateMeta":

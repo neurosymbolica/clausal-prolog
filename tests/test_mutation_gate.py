@@ -360,7 +360,7 @@ def test_a_refused_load_writes_nothing_at_all():
         "the LEGAL earlier write must not have landed either — the refusal "
         "is for the load, not for one predicate of it"
     )
-    assert vocab.gv_free._clauses_source is None, (
+    assert vocab.gv_free._row.source is None, (
         "and the exporter's class must not be attributed to a module that "
         "failed to load"
     )

@@ -513,7 +513,13 @@ def _clause_author(pred_cls, exporter, exporter_module):
     Returns ``(None, None)`` when nothing was recorded, so the caller can say
     so rather than guess.
     """
-    source = getattr(pred_cls, "_clauses_source", None)
+    # The ROW, not the `_clauses_source` facade (W2, 2026-09-22).  The
+    # facade is `(cls._row or cls._detached_row()).source`, so this
+    # diagnostic MINTED a private throwaway row for any class that had
+    # none -- to read a field that is `None` on a fresh row anyway.
+    # `getattr` keeps the old contract of answering for a non-class too.
+    _row = getattr(pred_cls, "_row", None)
+    source = _row.source if _row is not None else None
     if not (isinstance(source, tuple) and len(source) == 2):
         return None, None
     name, path = source

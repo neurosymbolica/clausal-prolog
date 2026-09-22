@@ -437,7 +437,7 @@ def test_class_writes_land_in_the_database():
     p._lazy_recompile = lazy
     p._signature = ("a",)
     p._locked = True
-    p._clauses_source = ("m", "/tmp/m.clausal")
+    p._row.source = ("m", "/tmp/m.clausal")   # the row; the facade is retired
     row = db.row("p", 1)
     assert db._dispatch[("p", 1)] is fn
     assert db._lazy_recompile[("p", 1)] is lazy
@@ -547,7 +547,6 @@ def test_bare_make_predicate_is_a_working_predicate_with_no_database():
     assert cls._lazy_recompile is None
     assert cls._signature is None
     assert cls._locked is False
-    assert cls._clauses_source is None
 
     c = Clause(head=cls(1), body=[])
     cls._clauses.append(c)
@@ -640,10 +639,10 @@ def test_rebinding_carries_locked_and_source():
     cls = make_predicate("p", ["a"])
     cls._bind_row(db1, "p", 1)
     cls._locked = True
-    cls._clauses_source = ("m1", "/tmp/m1.clausal")
+    cls._row.source = ("m1", "/tmp/m1.clausal")
     cls._bind_row(db2, "p", 3, authorized=True)
     assert cls._locked is True
-    assert cls._clauses_source == ("m1", "/tmp/m1.clausal")
+    assert cls._row.source == ("m1", "/tmp/m1.clausal")
     # ``dynamic_arities`` used to travel here too, unioned across rebinds.  It
     # is DERIVED from the Database now (option D, 2026-09-22), so there is no
     # per-class set to carry: a rebound class reads the declarations of
@@ -907,7 +906,6 @@ def _run_goal(module, functor, arg):
 
 _RELOCATED = (
     "_clauses",
-    "_clauses_source",
     "_dispatch_fn",
     "_lazy_recompile",
     "_signature",
@@ -915,16 +913,16 @@ _RELOCATED = (
 )
 
 
-def test_instances_still_resolve_all_six_relocated_attributes():
+def test_instances_still_resolve_all_five_relocated_attributes():
     cls = make_predicate("InstFace", ["x"])
     inst = cls._clausal_head(1)          # P2: the instance, not the cell
     assert [getattr(inst, n) for n in _RELOCATED] == [
-        [], None, None, None, None, False,
+        [], None, None, None, False,
     ], "an instance must read the same defaults the class does"
     # A POSITIVE CONTROL on the list itself: a stale `_RELOCATED` with a name
     # the engine no longer relocates would make the comparison above pass on
     # a shorter list without anyone noticing which name went.
-    assert len(_RELOCATED) == 6
+    assert len(_RELOCATED) == 5
 
 
 def test_instance_reads_of_all_seven_are_live_through_the_class():
@@ -944,7 +942,7 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     cls._lazy_recompile = lazy
     cls._signature = ("x",)
     cls._locked = True
-    cls._clauses_source = ("m", "/tmp/m.clausal")
+    cls._row.source = ("m", "/tmp/m.clausal")
 
     assert inst._clauses == [c]
     assert inst._clauses is db._clauses[("InstLive", 1)]
@@ -952,7 +950,6 @@ def test_instance_reads_of_all_seven_are_live_through_the_class():
     assert inst._lazy_recompile is lazy
     assert inst._signature == ("x",)
     assert inst._locked is True
-    assert inst._clauses_source == ("m", "/tmp/m.clausal")
 
     # ... and a SECOND instance made after the writes agrees with the first.
     assert cls._clausal_head(2)._locked is True
