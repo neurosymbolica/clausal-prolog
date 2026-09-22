@@ -38,7 +38,7 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
-    term_field_names_of_class,
+    term_field_names_of_class, field_names_for,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -623,7 +623,8 @@ def _imported_reference(mod, orig_name: str, value):
     and ``assertz`` still find the /0 predicate through the namespace (see
     ``higher_order._namespace_dispatch`` → ``database_ops._find_pred_cls``).
     """
-    if not isinstance(value, PredicateMeta) or value._fields:
+    fields = field_names_for(value)
+    if fields != ():
         return value
     declared = getattr(mod, "__dict__", {}).get(DECLARED_ATOMS_KEY)
     if not declared or orig_name not in declared:
