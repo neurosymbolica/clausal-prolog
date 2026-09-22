@@ -2222,18 +2222,18 @@ py_register_term_types(PyObject *Py_UNUSED(module), PyObject *args)
 static int
 c_is_term_instance(PyObject *obj)
 {
-    if (PredicateMeta_type == NULL) {
-        /* Fix #7: not registered yet — defensively return 0 rather than
-         * silently misclassifying.  Registration happens at import time
-         * from predicate.py before any caller can reach here. */
-        return 0;
-    }
+    /* (Fix #7's "PredicateMeta not registered yet -> 0" guard went with the
+     * instance arm in W4a: this no longer consults the registration at all,
+     * and answering 0 for a @dataclass instance because an unrelated class
+     * had not registered would be the misclassification that guard existed
+     * to avoid -- and a divergence from the Python twin.) */
     /* Exclude types/classes themselves */
     if (PyType_Check(obj)) return 0;
-    /* Fast path: PredicateMeta instance */
-    int r = PyObject_IsInstance((PyObject *)Py_TYPE(obj), PredicateMeta_type);
-    if (r < 0) return -1;  /* Fix #3: propagate errors */
-    if (r) return 1;
+    /* W4a (2026-09-22): the PredicateMeta-INSTANCE arm that stood here is
+     * gone with the instance path -- a predicate class builds a CELL, and a
+     * cell is a tuple, not a term instance.  A @dataclass instance is the
+     * one shape left, and its probe is below.  The CLASS arms elsewhere in
+     * this file, and the registration above, stay: they are W4b's. */
     /* Fix #2: C-level fast-reject for dataclass check.
      * dataclasses.is_dataclass() internally checks for __dataclass_fields__.
      * We do the same attribute probe at C level — no Python call needed. */
@@ -2259,22 +2259,8 @@ py_is_term_instance(PyObject *Py_UNUSED(module), PyObject *obj)
 static PyObject *
 py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
 {
-    PyObject *cls = (PyObject *)Py_TYPE(obj);
-    if (PredicateMeta_type) {
-        int r = PyObject_IsInstance(cls, PredicateMeta_type);
-        if (r < 0) return NULL;  /* Fix #3 */
-        if (r) {
-            PyObject *fields = PyObject_GetAttr(cls, str_fields);
-            if (!fields) return NULL;
-            /* Fix #4: verify _fields is actually a tuple */
-            if (!PyTuple_Check(fields)) {
-                Py_DECREF(fields);
-                PyErr_SetString(PyExc_TypeError, "_fields is not a tuple");
-                return NULL;
-            }
-            return fields;  /* new reference from GetAttr */
-        }
-    }
+    /* W4a: the PredicateMeta-INSTANCE arm is gone (see c_is_term_instance);
+     * a @dataclass instance is the only term instance there is. */
     /* @dataclass fallback — uses module-level dc_fields_func (Fix #5) */
     if (!dc_fields_func) {
         PyErr_SetString(PyExc_RuntimeError,
@@ -2305,30 +2291,19 @@ py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
     }
 }
 
-/* Internal: get field names tuple for PredicateMeta instances.
- * Returns new reference on success, NULL if not PredicateMeta (no exception)
- * or NULL with exception set on error.
- * Callers must check PyErr_Occurred() to distinguish "not PredicateMeta" from error. */
+/* Internal: the fast field-name lookup for a PredicateMeta INSTANCE.
+ *
+ * W4a (2026-09-22): that instance cannot exist any more, so the arm is gone
+ * and this answers NULL-without-exception for everything.  Every caller
+ * already handled that answer by falling back to py_term_field_names (the
+ * @dataclass route), which is now the only route -- so the fallback is not a
+ * fallback any more, and retiring this function along with its seven call
+ * sites is W4b's cleanup, kept out of a landing whose claim is that no
+ * answer moves. */
 static PyObject *
-c_term_field_names(PyObject *obj)
+c_term_field_names(PyObject *Py_UNUSED(obj))
 {
-    PyObject *cls = (PyObject *)Py_TYPE(obj);
-    if (PredicateMeta_type) {
-        int r = PyObject_IsInstance(cls, PredicateMeta_type);
-        if (r < 0) return NULL;  /* Fix #3: error, exception set */
-        if (r) {
-            PyObject *fields = PyObject_GetAttr(cls, str_fields);
-            if (!fields) return NULL;
-            /* Fix #4: verify _fields is actually a tuple */
-            if (!PyTuple_Check(fields)) {
-                Py_DECREF(fields);
-                PyErr_SetString(PyExc_TypeError, "_fields is not a tuple");
-                return NULL;
-            }
-            return fields;  /* new ref */
-        }
-    }
-    return NULL;  /* not PredicateMeta, no exception */
+    return NULL;  /* no term instance has PredicateMeta fields any more */
 }
 
 /*

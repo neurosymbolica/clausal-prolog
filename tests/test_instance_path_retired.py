@@ -88,3 +88,56 @@ def test_a_dataclass_node_is_emitted_as_a_keyword_call():
     assert isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name)
     assert expr.func.id == "$BinOp"
     assert expr.keywords != []
+
+
+# ── the C twins ─────────────────────────────────────────────────────────────
+
+
+def _c_module():
+    from clausal.logic.variables import _variables as C
+    return C
+
+
+def test_c_and_python_twins_agree_and_neither_knows_an_instance():
+    """A positive control that OBSERVES the C arm's removal.
+
+    The retirement closed every door that BUILDS an instance, so no ordinary
+    term can tell the two twins apart -- which would make a corpus-parity
+    probe here pass on the old ``.so`` as happily as on the new one.  So the
+    probe smuggles one past the constructors (``cls.__new__(cls)`` touches
+    neither ``__call__`` nor ``_clausal_head``) and asks the C entry point
+    directly: with the arm present it answers True while the Python twin
+    answers False, and that disagreement is exactly what the rebuilt ``.so``
+    removes.  A ``@dataclass`` instance must still be a term instance on both
+    sides -- the arm that stays.
+    """
+    import dataclasses
+
+    C = _c_module()
+    from clausal.logic import predicate as P
+
+    @dataclasses.dataclass
+    class D:
+        a: int
+
+    Pt = make_predicate("Pt5", ["x"])
+    smuggled = Pt.__new__(Pt)          # no constructor was called
+    for obj in (D(1), Pt, Pt(x=1), "atom", ("f", 1), smuggled):
+        assert bool(C.is_term_instance(obj)) == P._is_term_instance_py(obj), obj
+    assert C.is_term_instance(smuggled) is False, (
+        "the C PredicateMeta-instance arm is still live in the loaded .so"
+    )
+    assert bool(C.is_term_instance(D(1))) is True, "the dataclass arm stays"
+
+
+def test_the_c_source_no_longer_carries_the_instance_arm():
+    import pathlib
+
+    from clausal.logic import predicate as P
+
+    src = (pathlib.Path(P.__file__).parent / "variables" / "_variables.c").read_text()
+    assert "Fast path: PredicateMeta instance" not in src
+    # ... and the registration and the CLASS arms are NOT what W4a takes:
+    # arms 4-7 and py_register_predicate_meta belong to W4b.
+    assert "py_register_predicate_meta" in src
+    assert "PyType_Check(term) && PredicateMeta_type" in src
