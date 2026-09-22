@@ -1564,6 +1564,9 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
     3. a NAME (``str``, plain or mangled) -> the registry chain below.
        Permanent, and the point of the change: at W4b-2 a module attribute
        for a predicate becomes a mangled atom, and this arm already answers.
+       NO builtin-registry fallback (removed W4b-1 fix round 1): a bare
+       string that spells a registered builtin name is an ordinary ATOM,
+       not a declared functor, and answers ``None`` here.
     4. anything else -> ``None``.
     """
     if isinstance(value, str):
@@ -1579,16 +1582,22 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
 
 def _field_names_for_name(name, arity, db, namespace):
     """Arm 3.  Demangle -> exact db read -> by-name db read -> the
-    namespace's exec-time carrier -> the builtin registry -> None.
+    namespace's exec-time carrier -> None.
 
     A MANGLED name is module-qualified by construction, so it is handled
     entirely by the branch below and returns from it -- it never reaches
-    the shared tail.  Both ``namespace`` and the builtin registry are
-    bare-name carriers: letting either answer for a mangled name would
-    silently un-qualify the handle, so once a name demangles, the OWNER's
-    db is the sole authority for it.  If the owner module isn't loaded, or
-    is loaded but doesn't know the name, the answer is None -- never a
-    fallthrough to the caller's namespace or to _BUILTIN_FIELDS."""
+    the shared tail.  ``namespace`` is a bare-name carrier: letting it
+    answer for a mangled name would silently un-qualify the handle, so
+    once a name demangles, the OWNER's db is the sole authority for it.
+    If the owner module isn't loaded, or is loaded but doesn't know the
+    name, the answer is None -- never a fallthrough to the caller's
+    namespace.
+
+    NO builtin-registry fallback (removed W4b-1 fix round 1): a bare name
+    that happens to spell a registered builtin -- ``'when'``, ``'freeze'``,
+    ``'call_nth'`` -- is an ordinary ATOM, not a declared functor, and must
+    answer ``None`` here.  See the comment at the tail of this function for
+    the full defect this caused before the fallback was removed."""
     from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
     if is_mangled(name):
         # A handle carries its module: resolve against the OWNER's db,
@@ -1618,19 +1627,24 @@ def _field_names_for_name(name, arity, db, namespace):
         found = (namespace.get(FUNCTOR_SIGNATURES_KEY) or {}).get(name)
         if found is not None:
             return tuple(found)
-    # A name that cannot be answered during bootstrap (this module mid-import)
-    # IS the None case -- the accessor's whole contract is to answer None
-    # rather than raise, so a bootstrap ImportError here is swallowed, not
-    # propagated.
-    try:
-        from clausal.logic.builtins import _BUILTIN_FIELDS  # noqa: PLC0415
-    except ImportError:
-        return None
-    if arity is not None:
-        return _BUILTIN_FIELDS.get((name, arity))
-    for (functor, _a), fields in _BUILTIN_FIELDS.items():
-        if functor == name:
-            return fields
+    # NO ``_BUILTIN_FIELDS`` FALLBACK (removed W4b-1 fix round 1, review
+    # finding): a bare string that happens to spell a registered builtin
+    # name -- ``'when'``, ``'freeze'``, ``'call_nth'`` -- is an ordinary
+    # ATOM everywhere outside the registry, not a declared functor, and
+    # post atoms-as-str a bare string reaches this accessor constantly.
+    # Answering builtin fields for it here made an atom look declared,
+    # which crashed or silently mis-shaped five independent call sites the
+    # moment they were migrated onto this accessor (``functor(T, when,
+    # 2)`` raised ``TypeError: 'str' object is not callable`` building
+    # ``when(...)``; ``_is_const_element('when')`` flipped to ``False``;
+    # ``_cell_slot_names('when', 2, ns)`` answered ``('condition',
+    # 'goal')`` instead of ``()``) -- five sites tripping on the same
+    # fallback is the accessor's defect, not five call-site bugs. This
+    # fallback had zero production callers: builtins are minted detached
+    # on purpose, with no db/namespace entry to be found here by design. A
+    # caller that specifically wants a builtin's field names should ask
+    # the builtin registry directly (``clausal.logic.builtins.
+    # _BUILTIN_FIELDS``), not this accessor -- do not re-add this branch.
     return None
 
 

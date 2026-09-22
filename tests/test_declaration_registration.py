@@ -97,9 +97,26 @@ def test_specialize_route_still_registers_through_register_signature():
                             db=db) == pred_cls._fields
 
 
-def test_builtins_answer_from_the_builtin_registry_with_no_db():
-    """ALREADY COVERED -- builtins are minted DETACHED on purpose and
-    _BUILTIN_FIELDS is their registry.  Arm 3 must reach it."""
+def test_a_bare_name_colliding_with_a_builtin_answers_none_not_the_builtin_fields():
+    """W4b-1 fix round 1 (review): pins the OPPOSITE of what this test used
+    to assert.  The retired version (``test_builtins_answer_from_the_
+    builtin_registry_with_no_db``) pinned a ``_BUILTIN_FIELDS`` fallback in
+    ``_field_names_for_name`` -- arm 3 answering a builtin's fields for its
+    bare name with no db/namespace at all.  That fallback had zero
+    production callers and a real defect: post atoms-as-str, a bare string
+    reaches ``field_names_for`` constantly, and any string that happens to
+    spell a registered builtin (``'when'``, ``'freeze'``, ``'call_nth'``)
+    was answered as though it were a DECLARED FUNCTOR rather than an
+    ordinary atom -- confirmed to crash or silently mis-shape five
+    independent call sites the moment W4b-1 Task 5 migrated them onto this
+    accessor.  The fallback is removed; this test pins that a bare name
+    colliding with a builtin now answers ``None``, the same answer any
+    other undeclared atom gets."""
     from clausal.logic.builtins import _BUILTIN_FIELDS
     (functor, arity), fields = next(iter(_BUILTIN_FIELDS.items()))
-    assert field_names_for(functor, arity=arity) == fields
+    assert field_names_for(functor, arity=arity) is None
+    assert field_names_for(functor, arity=arity) != fields
+    # The specific case the coordinator reproduced: 'when' must not answer
+    # the builtin registry's ('condition', 'goal').
+    assert field_names_for("when", arity=2) is None
+    assert field_names_for("when", arity=2) != ("condition", "goal")

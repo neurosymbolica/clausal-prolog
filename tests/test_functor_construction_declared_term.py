@@ -127,6 +127,20 @@ def test_arity_zero_atom_asked_at_arity_one_is_still_generic():
     assert built[0] == "tfcdt_applicant_age"
 
 
+def test_builtin_name_atom_builds_a_generic_cell_not_a_type_error():
+    """W4b-1 fix round 1 (review): ``field_names_for`` used to have a
+    ``_BUILTIN_FIELDS`` fallback, so ``functor(T, when, 2)`` -- an ordinary
+    atom that happens to spell a registered builtin -- resolved to
+    ``('condition', 'goal')`` in ``_construct_named``'s class arm and then
+    called ``name_val(*args)`` on a plain ``str``, raising ``TypeError:
+    'str' object is not callable``.  The fallback is removed; a bare
+    builtin-shaped name must build the generic cell exactly like any other
+    atom name (``test_atom_name_builds_a_generic_cell`` above), never raise."""
+    built = built_by(_functor__3, mint("when"), 2)
+    assert is_cell(built) and cell_functor(built) == "when"
+    assert cell_arity(built) == 2
+
+
 def test_arity_zero_still_yields_the_name_itself():
     """``functor(T, Name, 0)`` binds T to Name unchanged — the A09-F027
     round-trip property for atomic constants."""
