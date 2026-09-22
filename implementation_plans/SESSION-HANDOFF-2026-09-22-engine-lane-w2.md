@@ -488,3 +488,21 @@ remaining 102 are assertion/KeyError shapes with ZERO RetiredStateError and
 zero tuple-attribute errors: the checker now RUNS and reports content its
 tests disagree with — the first honest look at that suite since P2, and not
 the engine's.
+
+## APPENDIX 7 — W3 LANDED on main `c5d62557` (operator: "when W3 is ready, land it")
+
+Three commits, fast-forward: `DispatchTargetError(LogicException)` from the
+funnel's tail (e7ac22ad), the tabling pass reading dispatch off the row plus
+the rulings in the scope note (a58d38f9), and the review round (c5d62557:
+culprit is the value, repr bounded, end-to-end module-shadow test with a
+stdin-probe positive control). Gates on c5d62557: house 146 / 16814 vs
+146 / 16807, NEW 0 / GONE 0; package gate 105 / 1566, NEW 0 / GONE 0.
+Barrier scan of the range: 0 hits. Both downstream gates were re-keyed
+BEFORE landing (two-arm markers); told to drop the old arm now. The
+downstream lane told main moved. NOT pushed to box or GitLab.
+
+**W3 is done.** Left for W4: `PredicateMeta._get_dispatch(arity)` and the
+funnel's `PredicateMeta` arm, which go with the class; and BEFORE W4 is
+sized, the alias sweep — every exported vocabulary name (reflection's nine,
+clpb's, term_expansion's two) and every cell-FIELD read, since three
+censuses today each turned out to be a floor.
