@@ -120,14 +120,12 @@ def _deref_walk_py(term: Any) -> Any:
                 _deref_walk_py(getattr(term, name))
                 for name in term_field_names(term)
             ))
-        # P2: a PredicateMeta class builds the CELL when called, so an
-        # INSTANCE is rebuilt through the head-channel constructor.  Any other
-        # class -- a pythonic_ast node like ``BinOp``, a plain dataclass term
-        # -- has no ``_clausal_head`` and is rebuilt by calling it, which is
-        # what this always did.  Asking for the attribute rather than the
-        # metaclass keeps it true for anything that grows one later.
-        rebuild = getattr(cls, "_clausal_head", cls)
-        return rebuild(**{
+        # W4a: ``is_term_instance`` is dataclass-only, so *cls* is a
+        # dataclass term class -- a pythonic_ast node like ``BinOp``, a
+        # ``Compound`` -- and calling it is the rebuild.  (It used to look up
+        # ``_clausal_head`` first, for the predicate-INSTANCE shape that no
+        # longer exists.)
+        return cls(**{
             name: _deref_walk_py(getattr(term, name))
             for name in term_field_names(term)
         })

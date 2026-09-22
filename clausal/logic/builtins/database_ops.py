@@ -114,10 +114,6 @@ def _freeze_asserted_head_args(head: Any) -> Any:
     """
     if isinstance(head, Compound):
         return Compound(head.functor, tuple(deref(a) for a in head.args))
-    if is_term_instance(head):
-        # P2: the store wants the HEAD instance, not the cell ``__call__`` builds.
-        return type(head)._clausal_head(*[deref(getattr(head, f))
-                                          for f in term_field_names(head)])
     from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(head)
     if is_cell:                                     # P2: a head is a cell

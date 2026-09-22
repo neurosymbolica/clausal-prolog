@@ -1499,12 +1499,14 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
 def _is_term_instance_py(obj: Any) -> bool:
     """True if obj is a term instance with named fields (not a type/class).
 
-    Works for both PredicateMeta instances and @dataclass instances.
+    A ``@dataclass`` instance, and only that: W4a (2026-09-22) retired the
+    predicate-INSTANCE path, so a predicate class builds a CELL and there is
+    no second shape left for this to answer about.  A cell is a tuple and is
+    NOT a term instance -- callers discriminate the two, they do not conflate
+    them.
     """
     if isinstance(obj, type):
         return False
-    if isinstance(type(obj), PredicateMeta):
-        return True
     return dataclasses.is_dataclass(obj)
 
 
@@ -1520,10 +1522,12 @@ def _is_zero_field_class_py(obj: Any) -> bool:
 
 
 def _term_field_names_py(obj: Any) -> tuple[str, ...]:
-    """Return field name strings for a term instance."""
-    cls = type(obj)
-    if isinstance(cls, PredicateMeta):
-        return cls._fields
+    """Return field name strings for a term instance (a ``@dataclass`` one).
+
+    W4a: the predicate-instance arm went with the instance path.  The CLASS
+    twin, ``term_field_names_of_class``, still answers for a predicate class
+    -- that is a different question and it stays until W4b.
+    """
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return tuple(f.name for f in dataclasses.fields(obj))
     raise TypeError(f"Not a term instance: {obj!r}")

@@ -31,6 +31,25 @@ def test_no_fast_instance_constructor_is_attached():
     assert not hasattr(Pt, "_clausal_new")
 
 
+def test_is_term_instance_is_dataclass_only():
+    import dataclasses
+    from clausal.logic.predicate import is_term_instance, term_field_names
+    @dataclasses.dataclass
+    class D:
+        a: int
+    assert is_term_instance(D(1)) is True and term_field_names(D(1)) == ("a",)
+    Pt = make_predicate("Pt4", ["x"])
+    assert is_term_instance(Pt(x=1)) is False, "a cell is not an instance"
+    assert is_term_instance(Pt) is False, "nor is the class"
+
+
+def test_the_python_twins_no_longer_carry_a_predicatemeta_instance_arm():
+    import inspect
+    from clausal.logic import predicate as P
+    src = inspect.getsource(P._is_term_instance_py) + inspect.getsource(P._term_field_names_py)
+    assert "PredicateMeta" not in src, "the instance arm is gone; only the dataclass arm remains"
+
+
 # ── what SURVIVES the retirement ────────────────────────────────────────────
 #
 # The three assertions below came from ``tests/test_fast_construction.py``,

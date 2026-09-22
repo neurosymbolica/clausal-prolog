@@ -364,11 +364,13 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
         new_args = list(cell_args(head))
         new_args[pos] = lift_term
         new_head = make_cell(cell_functor(head), *new_args)
-    else:  # is_term_instance
-        fields = list(term_field_names(head))
-        new_kwargs = term_field_dict(head)
-        new_kwargs[fields[pos]] = lift_term
-        new_head = type(head)._clausal_head(**new_kwargs)
+    else:
+        # W4a: the predicate-INSTANCE arm that stood here is retired with the
+        # instance path.  A head is a Compound or a cell; anything else is a
+        # shape this lift was never written for, and saying so beats
+        # rebuilding it wrongly.
+        raise TypeError(
+            f"head is neither a Compound nor a cell: {head!r}")
 
     # Remove the matched Unify from the body
     new_body = clause.body[:unify_idx] + clause.body[unify_idx + 1:]
