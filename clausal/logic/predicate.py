@@ -367,37 +367,6 @@ def _make_init(fields: tuple[str, ...]):
     return fn
 
 
-_fast_new_cache: dict[tuple[str, ...], Callable] = {}
-
-
-def _make_fast_new(fields: tuple[str, ...]):
-    """Generate a ``_clausal_new`` classmethod: positional, no checks.
-
-    Additive fast path alongside ``_make_init`` / ``PredicateMeta.__call__``.
-    Callers must supply every field, in ``_fields`` order — there is no
-    missing-field backfill (no ``Var()`` defaults) and no arity checking.
-    Parameters are named ``_a0.._aN`` (not the field names) so a field
-    literally named e.g. ``x`` can never shadow a parameter.
-
-    This path bypasses ``PredicateMeta.__call__`` entirely, so any future
-    construction-time hook (interning, validation, provenance) must be
-    added in both places.
-    """
-    cached = _fast_new_cache.get(fields)
-    if cached is not None:
-        return cached
-    params = ", ".join(f"_a{i}" for i in range(len(fields)))
-    assigns = "\n    ".join(
-        f"inst.{f} = _a{i}" for i, f in enumerate(fields)
-    )
-    code = f"def _clausal_new(cls, {params}):\n    inst = cls.__new__(cls)\n    {assigns}\n    return inst"
-    globs: dict[str, Any] = {}
-    exec(code, globs)  # noqa: S102
-    fn = globs["_clausal_new"]
-    _fast_new_cache[fields] = fn
-    return fn
-
-
 def _term_iter(self):
     """Iterate solutions for this term as a goal.
 
@@ -608,6 +577,16 @@ _RETIRED_STATE_NAMES = {
     "_index_plans_hierarchical":
         "the row's `index_plans_hierarchical`: "
         "`cls._state_row().index_plans_hierarchical`",
+    "_clausal_instances":
+        "nothing -- the P2 instance bridge is gone (W4a); a class builds "
+        "cells",
+}
+
+#: The wave a retired name goes with, where it is not W2's (the default the
+#: tombstone factory carries).  A reader who hits the refusal is told which
+#: landing took the door away, so the spec is findable.
+_RETIRED_STATE_WAVES = {
+    "_clausal_instances": "W4a of the PredicateMeta retirement, 2026-09-22",
 }
 
 
@@ -629,12 +608,13 @@ class RetiredStateError(Exception):
     """
 
 
-def _make_retired_tombstone(name: str, where: str) -> property:
+def _make_retired_tombstone(name: str, where: str,
+                            wave: str = "W2 of the PredicateMeta retirement, "
+                                        "2026-09-22") -> property:
     """A property that RAISES on read and on write, naming the replacement."""
     def _fail(*_args):
         raise RetiredStateError(
-            f"{name!r} was retired (W2 of the PredicateMeta retirement, "
-            f"2026-09-22). Its state lives in {where}.")
+            f"{name!r} was retired ({wave}). Its state lives in {where}.")
     return property(_fail, _fail, doc=f"RETIRED -- see {where}.")
 
 
@@ -755,14 +735,6 @@ class PredicateMeta(type):
         if fields:
             cls.__unify__ = _make_unify(fields, cls)
             cls.__occurs_check__ = _make_occurs_check(fields)
-            # Additive fast constructor (Phase 0 Task 1): skip when a field
-            # is literally named "_clausal_new" -- __slots__ already put a
-            # member descriptor at that class attribute, and attaching a
-            # classmethod over it would silently shadow the field. Atoms
-            # (fields == ()) get nothing; there is no positional payload to
-            # accelerate.
-            if "_clausal_new" not in fields:
-                cls._clausal_new = classmethod(_make_fast_new(fields))
         # For zero-field classes (atoms), skip __unify__/__occurs_check__: the
         # class IS the value, so identity comparison (C line 886: t1 == t2) and
         # the fallback PyObject_RichCompareBool handle unification correctly,
@@ -1040,16 +1012,6 @@ class PredicateMeta(type):
         # clpb, term expansion, the packages) goes through here, so this one
         # site is the constructor flip; the class stays as the predicate
         # handle until P4 deletes it.  Unknown keywords still raise.
-        if cls.__dict__.get("_clausal_instances"):
-            # P2 bridge: a class whose CONSUMERS still read attributes keeps
-            # building instances; ``make_predicate(..., instances=True)``
-            # sets the flag.  Task 6 emptied it -- the reflection vocabulary
-            # (slice A), term expansion's state (slice B) and clpb's
-            # ``BoolEq``/``BoolImpl`` (slice C) were the last three, and NO
-            # class in this repo sets it now.  The branch stays for the tests
-            # that exercise the instance path itself and for out-of-tree
-            # callers, and goes with the class in P4.
-            return cls._clausal_head(*args, **kwargs)
         unknown = [k for k in kwargs if k not in fields]
         if unknown:
             raise _term_construction_error(cls, kwargs, _source_site(1))
@@ -1057,31 +1019,11 @@ class PredicateMeta(type):
         return (cls.__name__, *(kwargs[f] if f in kwargs else Var() for f in fields))
 
     def _clausal_head(cls, *args: Any, **kwargs: Any) -> Any:
-        """The clause-HEAD constructor: the instance the compiler's head
-        channel stores and lowers (``head_match``, ``list_dispatch``,
-        ``Database._stored_head_key`` read an instance or a Compound, never a
-        cell).  This is the pre-P2 ``__call__`` body, kept for that one
-        channel; the channel goes with the class in P4."""
-        if not cls._fields and not args and not kwargs:
-            return cls
-        fields = cls._fields
-        if args:
-            if len(args) > len(fields):
-                raise _term_arity_error(cls, len(args), kwargs, _source_site(1))
-            for i, val in enumerate(args):
-                kwargs[fields[i]] = val
-        instance = cls.__new__(cls)
-        try:
-            cls.__init__(instance, **kwargs)
-        except TypeError:
-            if all(k in fields for k in kwargs):
-                raise
-            raise _term_construction_error(cls, kwargs, _source_site(1)) from None
-        from clausal.logic.variables import Var  # noqa: PLC0415
-        for f in fields:
-            if getattr(instance, f) is _MISSING:
-                object.__setattr__(instance, f, Var())
-        return instance
+        """RETIRED (W4a, 2026-09-22): the clause-HEAD instance constructor.
+        A head is a CELL; ``cls(...)`` builds it.  Raises, never builds."""
+        raise RetiredStateError(
+            f"{cls.__name__}._clausal_head was retired (W4a, 2026-09-22): a "
+            f"clause head is a cell; call {cls.__name__}(...) for the cell")
 
     # ── Predicate properties ──────────────────────────────────────────────
 
@@ -1799,11 +1741,14 @@ def _describe_term_identity_mismatch(obj: Any) -> str:
 # i.e. an INSTANCE of this metaclass -- resolves to them.
 for _retired_name, _retired_where in _RETIRED_STATE_NAMES.items():
     setattr(PredicateMeta, _retired_name,
-            _make_retired_tombstone(_retired_name, _retired_where))
+            _make_retired_tombstone(
+                _retired_name, _retired_where,
+                **({"wave": _RETIRED_STATE_WAVES[_retired_name]}
+                   if _retired_name in _RETIRED_STATE_WAVES else {})))
 del _retired_name, _retired_where
 
 
-def make_predicate(name: str, fields: list[str], *, instances: bool = False) -> "PredicateMeta":
+def make_predicate(name: str, fields: list[str], **refused) -> "PredicateMeta":
     """Dynamically create a PredicateMeta class.
 
     Useful in tests and runtime code that needs a predicate without a
@@ -1814,10 +1759,11 @@ def make_predicate(name: str, fields: list[str], *, instances: bool = False) -> 
         compile_predicate("foo", 2, foo._state_row().clauses, pred_cls=foo)
         fn = foo._get_dispatch()
     """
-    cls = PredicateMeta(name, (), {"_fields": tuple(fields)})
-    if instances:
-        cls._clausal_instances = True   # P2 bridge (see PredicateMeta.__call__)
-    return cls
+    if refused:
+        raise TypeError(
+            f"make_predicate() got {sorted(refused)}: the `instances=` bridge "
+            f"was retired (W4a, 2026-09-22); a predicate class builds cells")
+    return PredicateMeta(name, (), {"_fields": tuple(fields)})
 
 
 def make_atom(name: str) -> tuple[str]:
