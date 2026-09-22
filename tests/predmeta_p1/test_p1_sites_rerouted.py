@@ -91,12 +91,18 @@ def test_signature_for_answers_None_without_a_module_handle():
 # ── clausal/logic/compiler_v2.py step 4a: the -dynamic sites ────────────────
 
 
-def test_a_dynamic_declaration_at_a_second_arity_keeps_the_size_two_set(tmp_path):
-    """THE WART (spec §2): ``_dynamic_arities`` is a per-NAME set on the
-    CLASS's own row, so both declarations land in ONE set."""
+def test_a_dynamic_declaration_at_a_second_arity_records_both(tmp_path):
+    """Both declarations are recorded, and the per-NAME set has both arities.
+
+    THE WART IS GONE (option D, 2026-09-22): the set used to be stamped onto
+    the CLASS's own row, which is what made it a per-NAME set living on a
+    per-(name, arity) row.  It is derived from the Database now, so this
+    asserts the DECLARATIONS rather than the stamp.
+    """
     mod = _load(tmp_path, "p1_dyn", "-dynamic(d/1)\n-dynamic(d/2)\nd(1),\n")
-    cls = mod.module_dict["d"]
-    assert cls._dynamic_arities == {1, 2}
+    db = mod.module_dict["$module"].db
+    assert db.is_dynamic("d", 1) and db.is_dynamic("d", 2)
+    assert {a for (f, a) in db._dynamic if f == "d"} == {1, 2}
 
 
 def test_the_declared_arity_row_already_exists_when_step_4a_looks(tmp_path):
@@ -135,7 +141,8 @@ def test_a_clause_less_dynamic_predicate_still_compiles(tmp_path):
     querying it fails with 0 solutions rather than raising."""
     mod = _load(tmp_path, "p1_dyn3", "-dynamic(e/1)\nq(1),\n")
     assert _answers(mod, "e") == []
-    assert mod.module_dict["e"]._dynamic_arities == {1}
+    # The DECLARATION, not the class stamp (option D, 2026-09-22).
+    assert mod.module_dict["$module"].db.is_dynamic("e", 1)
 
 
 # ── -import_from: an adopted row answers every rerouted membership test ─────

@@ -1426,9 +1426,25 @@ class PredicateMeta(type):
           never the arity the refusal reports — so the stale-``_fields``
           hazard the clause walk exists to avoid cannot return through it.
         """
-        if cls._clauses:
+        # THE ROW RAW, and the OWNER's Database (option D, 2026-09-22).  Both
+        # reads here used to go through facades -- `_clauses` and
+        # `_dynamic_arities` -- which for a class with no row MINT a private
+        # throwaway one.  `cls._row` is a plain attribute, so this mints
+        # nothing, and no row means nothing was declared and no clauses exist,
+        # which is `None` either way.
+        #
+        # IMPORT SEMANTICS ARE PRESERVED BY CONSTRUCTION: for an
+        # `-import_from` the shared class's `_row` IS the exporter's row, so
+        # `row._db` is the OWNER's Database -- the same place the old
+        # class-stamped set lived.  Deriving from the COMPILING module's db
+        # would have read the importer's and silently lost the owner's
+        # declarations.
+        row = cls._row
+        if row is None:
             return None
-        declared = cls._dynamic_arities
+        if row.clauses:
+            return None
+        declared = {a for (f, a) in row._db._dynamic if f == cls.__name__}
         if not declared or len(declared) != 1 or calling in declared:
             return None
         arity = next(iter(declared))

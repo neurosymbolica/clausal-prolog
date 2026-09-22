@@ -330,37 +330,28 @@ def compile_module(
                     # keeps its own predicate — the same rule
                     # ``Database.adopt_row`` states for rows.
                     module_dict[functor] = imported
-                # Stamp the declared arity on the class whatever its clause
-                # state — the ``_refuse_call_at`` fallback only reads it while
-                # the clause list is EMPTY, which includes the retract-back-
-                # to-empty return leg of a predicate that did have clauses.
+                # NO STAMP HERE ANY MORE (option D, 2026-09-22).  The
+                # declared arity used to be written onto the CLASS at this
+                # point, which for a clause-less ``-dynamic`` has no row yet,
+                # so the write MINTED a private throwaway row -- 207 of the
+                # 214 engine-side detached rows in a suite run came from that
+                # one statement, and it was the last thing keeping the
+                # detached row on the load path.  Nothing is lost: step 2's
+                # ``mark_dynamic`` already records ``(functor, arity)`` in
+                # ``db._dynamic``, and ``_declared_arity`` derives the
+                # per-NAME set from there.  It still reads only while the
+                # clause list is EMPTY, which includes the retract-back-to-
+                # empty return leg of a predicate that did have clauses.
                 #
-                # ON AN IMPORTED CLASS THIS WRITES THE OWNER'S ROW (roborev
-                # job 78, finding 5): ``_dynamic_arities`` reads through to
-                # ``cls._row``, which for an import is the exporter's.  That
-                # is DELIBERATE and not new — the non-aliased sibling has
-                # always done it, because the declared-arity set is a property
-                # of the PREDICATE, not of the module that mentioned it, and
-                # ``_refuse_call_at`` reads it through the same shared class.
-                # The rebind above only makes the aliased spelling reach the
-                # same place.  Gate-exempt for the same reason every
-                # ``_dynamic_arities`` write is: it records a DECLARATION, not
-                # a clause, and changes no answers.
-                stamped = module_dict.get(functor)
-                # THE WART (P1 spec 2026-09-17 §2): ``_dynamic_arities`` is a
-                # per-NAME set living on the CLASS's OWN row, which is the row
-                # of the class's own arity — not of ``arity``, the arity being
-                # declared.  That row cannot be named through ``db`` here: for
-                # a clause-less ``-dynamic`` declaration the class is still on
-                # its DETACHED row at this point (measured 2026-09-17), so
-                # ``db.row(...)`` reaches a different object, and a row-side
-                # membership test would skip the stamp altogether.  So the
-                # class stays for both the test and the write; the set does
-                # not move.  ``_bind_row`` carries the set onto the real row.
-                if isinstance(stamped, PredicateMeta):
-                    if stamped._dynamic_arities is None:
-                        stamped._dynamic_arities = set()
-                    stamped._dynamic_arities.add(arity)
+                # THE OWNER'S DECLARATIONS ARE WHAT AN IMPORTER SEES, and
+                # that survives option D unchanged (it used to be roborev job
+                # 78 finding 5's observation about the WRITE).  The
+                # declared-arity set is a property of the PREDICATE, not of
+                # the module that mentioned it: `_declared_arity` derives it
+                # from `cls._row._db`, and for an `-import_from` the shared
+                # class's row IS the exporter's, so the read lands on the
+                # OWNER's Database. Deriving from the COMPILING module's db
+                # instead would have lost exactly that.
                 key = (functor, arity)
                 if key in pending:
                     continue

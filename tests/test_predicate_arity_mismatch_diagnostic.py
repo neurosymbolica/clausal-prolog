@@ -29,7 +29,7 @@ import textwrap
 import pytest
 
 from clausal.logic.atoms import mint
-from clausal.logic.database import Clause
+from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import make_predicate
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
@@ -569,6 +569,32 @@ class TestForeignSingleArgumentImplementor:
 # ── a -dynamic declaration is an arity source clause heads cannot be ─────────
 
 
+
+def _declared(name, fields, arities):
+    """A class declared ``-dynamic`` at *arities*, the way the compiler does.
+
+    ``_declared_arity`` derives the declaration from the OWNER's Database via
+    the class's row (option D, 2026-09-22), so a test has to DECLARE rather
+    than assign ``_dynamic_arities``: that property lost its only production
+    writer when the step-4a stamp went, and assigning it no longer declares
+    anything.  Binding at the class's OWN arity is what the compiler does --
+    the declared arity may legitimately differ, which several tests below rely
+    on.
+    """
+    db = Database()
+    cls = make_predicate(name, fields)
+    for arity in arities:
+        db.mark_dynamic(name, arity)
+    cls._bind_row(db, name, len(fields))
+    # POSITIVE CONTROL, here so all five callers get it: four of them assert
+    # only that `_refuse_call_at` DECLINES, which a declaration that never
+    # took would also satisfy.  This makes "declined for the right reason"
+    # distinguishable from "nothing was declared".
+    assert all(db.is_dynamic(name, a) for a in arities), \
+        f"the -dynamic declaration did not take for {name}"
+    return cls
+
+
 class TestDynamicDeclaredArity:
     """A clause-free ``-dynamic`` predicate refuses on its *declared* arity.
 
@@ -626,8 +652,7 @@ class TestDynamicDeclaredArity:
     def test_retracting_back_to_empty_keeps_the_declaration(self):
         """assertz → retract → the declared arity still refuses."""
         pair = make_predicate("arcm_dynpair", ["k", "v", "w"])
-        moving = make_predicate("arcm_dyndecl", ["a", "b", "c"])
-        moving._dynamic_arities = {3}
+        moving = _declared("arcm_dyndecl", ["a", "b", "c"], {3})
         with pytest.raises(PredicateArityMismatchError):
             moving._refuse_call_at(2)
         moving._assertz(Clause(head=pair(1, 2, 3), body=[]))
@@ -646,14 +671,13 @@ class TestDynamicDeclaredArity:
         half the time, so the fallback declines exactly like an unreadable
         head shape does.
         """
-        both = make_predicate("arcm_dynboth", ["a", "b", "c"])
-        both._dynamic_arities = {2, 3}
+        both = _declared("arcm_dynboth", ["a", "b", "c"], {2, 3})
         both._refuse_call_at(4)                  # must not raise
         both._refuse_call_at(1)
 
     def test_a_declared_arity_is_never_itself_refused(self):
-        one = make_predicate("arcm_dynself", ["a", "b", "c"])
-        one._dynamic_arities = {2}               # declaration disagrees with
+        one = _declared("arcm_dynself", ["a", "b", "c"], {2})
+                                                 # declaration disagrees with
         one._refuse_call_at(2)                   # _fields: the call wins
 
     def test_a_declaration_for_a_differently_shaped_class_declines(self):
@@ -666,11 +690,10 @@ class TestDynamicDeclaredArity:
         (roborev job 9).  ``_fields`` acts only as a VETO here, never as
         the arity source, so the stale-``_fields`` hazard cannot return.
         """
-        atom = make_predicate("arcm_dynatom", [])         # authored at /0
-        atom._dynamic_arities = {3}              # declared at /3
+        atom = _declared("arcm_dynatom", [], {3})   # authored /0, declared /3
         atom._refuse_call_at(1)                  # must not raise
-        pair = make_predicate("arcm_dynpair2", ["k", "v"])
-        pair._dynamic_arities = {3}              # /2 class, /3 declaration
+        pair = _declared("arcm_dynpair2", ["k", "v"], {3})
+                                                 # /2 class, /3 declaration
         pair._refuse_call_at(1)                  # must not raise
 
     def test_undeclared_stays_declined(self):
