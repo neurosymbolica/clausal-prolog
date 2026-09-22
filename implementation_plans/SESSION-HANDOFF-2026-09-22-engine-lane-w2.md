@@ -479,3 +479,12 @@ a units report 0 -> 1, a 24-test suite 2 -> 24 passed). Every green from
 that check between P2 and now was over an EMPTY population. Open: their
 `_tools/test_check_provisions.py` is 259 failed / 12 passed with tooling
 unmodified, before and after — asked for error SHAPES to say if it is ours.
+
+**Answered:** of the 259, 257 were the `isinstance` TypeError from one
+tooling line — P2's representation change, repaired by the `vfield`
+migration (259 -> 102 once stale `__pycache__` was cleared; the "identical
+before and after" was two trees running the same pre-fix `.pyc`). The
+remaining 102 are assertion/KeyError shapes with ZERO RetiredStateError and
+zero tuple-attribute errors: the checker now RUNS and reports content its
+tests disagree with — the first honest look at that suite since P2, and not
+the engine's.
