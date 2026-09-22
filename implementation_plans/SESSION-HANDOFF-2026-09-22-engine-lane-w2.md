@@ -441,3 +441,29 @@ Redo goes through a worktree and lands in one pass. Two consequences for P4:
 the downstream re-baseline and the settled-tree 28 wait for that single pass;
 and the corpus lane now counts an ATOM read as an object-shaped access, so the
 non-downstream W1 answer is 3, not 0 — note for W4's sizing, not a blocker.
+
+## APPENDIX 6 — LANDED on main `1c1afb76`; one downstream break surfaced, and it is P2's
+
+Landed as a fast-forward of a rebuilt branch (code trees byte-identical to
+the gated one; notes rewritten neutrally). The downstream lane's re-baseline
+is done and the downstream answer-set checks are 28/28 on the landed engine.
+
+**The break**: a downstream pre-commit check does
+`isinstance(item, reflection.Clause)` then reads `item.goals` (10 sites, 2
+files). Measured on three engines: on the OLD engine the nine reflection
+vocabulary names were classes whose calls built instances; on the P2
+candidate they were still classes but their calls built CELLS, so
+`isinstance` was already FALSE and `.goals` already gone — the check had
+been silently skipping every item since P2; on main they are constructor
+FUNCTIONS (c2c977bd) and `isinstance` raises TypeError. W2 made a silent
+skip loud. NOT reverted. The migration spellings predate W2 and are
+exported from `clausal.reflection`: `is_v(term, Clause)` (False, never
+raises, on a non-cell; accepts a tuple) and `vfield(term, "goals")` (by
+field NAME off `_VOCAB_FIELDS`; raises unless `default=`). Handed to the
+corpus lane, whose tooling it is.
+
+**Census lesson (the downstream lane's, kept):** W1b's "31 sites hold a
+class as a value / 0 isinstance on PredicateMeta" is a FLOOR. A census keyed
+on the NAME `PredicateMeta` cannot see an ALIAS of a vocabulary class —
+`reflection.Clause`, `Goal`, `Atom`, `Variable`, clpb's, term_expansion's.
+Before W4, sweep the aliases: every exported vocabulary name, by name.
