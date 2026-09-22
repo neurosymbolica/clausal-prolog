@@ -132,3 +132,23 @@ arithmetic; only a reader verifies its premises.
 
 The generic accessors (`reflection.vkind` / `vfields` / `vitems`) LANDED on
 main at 05ebcd91.
+
+## All three broken downstream gates closed (export lane, same day) — and a
+## CORRECTION to guidance given here
+
+Migrated with positive controls: the clause-less gate (was deciding
+blind), the ledger tool (dotted receivers), the ordered-vocab gate
+(scanning nothing; `vitems` was the accessor it needed). Each guarded for
+both eras, since pinned study trees have no `vitems`/`vfield`.
+
+**WRONG guidance, measured before it was applied: a BODY GOAL in a reified
+term (`Unify`, `And`, ... — `simple_ast` nodes) is still a plain OBJECT,
+not a cell.** `vkind(unify)` is None and `cell_functor(unify)` raises. Only
+the nine VOCABULARY names moved to cells. So a generic walk is
+`vitems(node)` FIRST (None is the dispatch), with the object-era
+`__dict__`/`_fields` branches kept beneath it for body goals; a
+`type(node).__name__ == "Unify"` test stays correct. Do not tell the next
+migrator to swap it for `cell_functor`.
+
+Two remaining failures in that gate's suite are stale TITLECASE heads in
+the tests' own inline fixtures (a load-time error since 2d48769f), not W2's.
