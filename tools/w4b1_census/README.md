@@ -54,17 +54,31 @@ Both commands run from the repo root, with `./venv/bin/python`.
    measurement, not by an assumption that unbound-row implies absence.**
    See "Reading the residue" below.
 
-**There are zero production call sites of arm 3 (the NAME path) today.**
-`compiler_v2.py`'s directive-target validation (`term_field_names_of_class(cls)`
-at lines 1056/1095) is a real, executed call site — but it always passes a
-CLASS, so it only ever exercises arm 2. It is not an arm-3 caller and does
-not "already agree" with anything. All 41 arm-3 calls measured in this run
-come from three test files: `tests/test_field_names_for.py`,
+**UPDATED 2026-09-23 (final fix wave, IMPORTANT 1 + IMPORTANT 2) — the claim
+below is SUPERSEDED, see "Numbers actually measured, 2026-09-23" further
+down.** It is kept here, struck through in spirit, as the record of what the
+instrument wrongly believed while it was blind: `compiler_v2.py`'s
+directive-target validation (`term_field_names_of_class(cls)` at lines
+1056/1095) is a real, executed call site — but it always passes a CLASS, so
+it only ever exercises arm 2. It is not an arm-3 caller and does not
+"already agree" with anything. All 41 arm-3 calls measured in *that* run
+came from three test files: `tests/test_field_names_for.py`,
 `tests/test_declaration_registration.py`, and
-`tests/test_w4b1_census_positive_control.py`. Arm 3 has no production
-readers to protect yet — which is a materially different claim from "arm 3
-already has production callers that agree with arm 2," and is the claim
-this document makes.
+`tests/test_w4b1_census_positive_control.py`.
+
+**This "zero production call sites" claim was itself an artifact of the
+census's own blind spot (fixed 2026-09-23, see IMPORTANT 1 in the final fix
+wave).** `pytest_configure` only ever rebound `predmod.field_names_for`;
+`clausal/logic/builtins/inspection.py` (`functor/3`, `copy_term/2`,
+`term_variables/2`, `numbervars/3`, `=../2`) and
+`clausal/logic/compiler/_lower_goalop_shared.py` each hold their own
+`from clausal.logic.predicate import field_names_for` module-level binding,
+made at import time — untouched by rebinding the attribute on
+`clausal.logic.predicate` itself. Every call routed through those bindings
+was invisible to the census. `N` for the full house suite went from `689` to
+`15004` once the sweep started repointing every already-imported reference
+by identity — the 689 was never "all the calls in the suite," it was "all
+the calls that happened to go through the one binding the plugin patched."
 
 ## The positive control
 
@@ -150,7 +164,9 @@ RESIDUE -- functors arm 3 could not answer (29), BY NAME:
   marker, n, p, q, seen, solve_count_tabled, solve_tiny, verdict, zonkish
 ```
 
-Reading it against the fail conditions:
+Reading it against the fail conditions (as they stood 2026-09-22 — **these
+689/240/29 numbers are SUPERSEDED, see the 2026-09-23 section below; they
+undercounted because of the blind spot IMPORTANT 1 fixed**):
 
 1. `N == 0`? No — 689.
 2. `DISAGREED` non-zero for a functor other than the positive control's own
@@ -162,7 +178,77 @@ Reading it against the fail conditions:
 3. A residue name not explained? No — see "Reading the residue" below;
    every one of the 29 traces to one of three named mechanisms.
 
-## Reading the residue (corrected 2026-09-22, fix round 1)
+## Numbers actually measured, 2026-09-23 (final fix wave — SUPERSEDES the
+## 2026-09-22 numbers above)
+
+Re-derived after fixing the census's own blind spot (IMPORTANT 1: the
+sweep now repoints every already-imported reference to the original
+`field_names_for`, not just `clausal.logic.predicate`'s own attribute) and
+after IMPORTANT 2 (three production call sites — `inspection.py:328`'s
+`_construct_named`, `goal_expansion.py`'s `_cell_slot_names`, and
+`testing.py:892` — now pass the `arity`/`db`/`namespace` they already had
+in hand instead of calling arm 3 with nothing, which is what let `dfact`,
+`fnm_verdict` and friends reach arm 3's exact-match read at all). Full
+house suite, same command as above:
+
+```
+N (total field_names_for calls)          15004
+  arm 1  @dataclass class                      6  (0.0% of 15004)
+  arm 2  PredicateMeta class               11208  (74.7% of 15004)
+  arm 3  a NAME                              552  (3.7% of 15004)
+  arm 4  not term-shaped                    3238  (21.6% of 15004)
+
+SHADOW READ, over the 11208 arm-2 answers (the denominator):
+  agreed                                     437  (3.9% of 11208)
+  DISAGREED                                    5  (0.0% of 11208)
+  could not answer                         10766  (96.1% of 11208)
+
+DISAGREEMENTS (each is a defect, not a fallback):
+  fnm_verdict: arm2=('arg_0', 'arg_1') arm3=('STATUS', 'CITATIONS')
+  fnm_verdict: arm2=('arg_0', 'arg_1') arm3=('STATUS', 'CITATIONS')
+  fnm_verdict: arm2=('arg_0', 'arg_1') arm3=('STATUS', 'CITATIONS')
+  fnm_verdict: arm2=('arg_0', 'arg_1') arm3=('STATUS', 'CITATIONS')
+  PlantedDisagreement: arm2=('x', 'y') arm3=('WRONG', 'ALSO_WRONG')
+
+RESIDUE -- functors arm 3 could not answer (1396), BY NAME (truncated here;
+see a fresh run for the full list — 1396 names does not fit usefully in a
+markdown file):
+  AI, Atom, Bar, FA, FOO, Foo, G1, G2, G3, LP, M, M2, P, P0, Pt, PtAlias, Q,
+  R, R4, SQ, T, a, a_or_c, a_rule, aa, ab, ab_and, ab_rule, abcd, abs_diff,
+  acc4, acc_factorial, acc_length, acc_reverse, acc_sum, add_len, add_lp,
+  add_nums, add_one, add_step, add_three, add_user, add_z, ... (1396 total)
+```
+
+Reading it against the fail conditions:
+
+1. `N == 0`? No — 15004 (was wrongly 689; the blind spot hid ~96% of the
+   real call volume).
+2. `DISAGREED` non-zero for a functor other than the positive control's own
+   `PlantedDisagreement`? **Yes — `fnm_verdict`, 4 times.** This is NOT a
+   new defect and NOT a regression from this fix wave: `fnm_verdict` is
+   `tests/fixtures/fnmismatch_schema.clausal`'s own deliberate fixture for
+   `tests/test_functor_field_name_diagnostic.py` /
+   `tests/test_functor_import_ordering.py` — a `-dynamic(fnm_verdict/2)`
+   directive mints the class with placeholder fields `('arg_0', 'arg_1')`
+   while the `-module` export list separately registers the real signature
+   `('STATUS', 'CITATIONS')` on the module's `db`. This is exactly
+   "Mechanism 1" from `todo/dynamic-declarations-are-invisible-to-arm-3-2026-09-22.md`,
+   now visible as a genuine arm2/arm3 DISAGREEMENT (not a residue `None`)
+   because IMPORTANT 2 made a real call site pass `db`/`arity` and reach
+   arm 3's exact-match read for it. Same status as `PlantedDisagreement`:
+   a deliberate, test-owned, already-filed mismatch, not a new finding.
+3. A residue name not explained? **Not re-triaged in this fix wave** — the
+   residue population grew from 29 to 1396 (consistent with `N` growing
+   ~21.8x, 15004/689), because IMPORTANT 2's three sites now feed arm 3 far
+   more calls than the three test files that exercised it before. Retriaging
+   1396 names into the Mechanism 1/2/3 framework below is out of scope for
+   this fix wave (it is diagnostic work on top of an already-fixed
+   instrument, not a defect the instrument itself has) and is left to
+   whoever owns W4b-2/W4b-3 next, same as the existing todo already covers
+   Mechanism 1 for the smaller, pre-fix population.
+
+## Reading the residue (corrected 2026-09-22, fix round 1; population size
+## superseded 2026-09-23 as noted above, mechanisms unchanged)
 
 **The first version of this README explained all 29 residue names with one
 story — "unbound row, so the shadow probe reads the wrong `db`" — and that
