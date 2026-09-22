@@ -19,18 +19,26 @@ no drift to report.
 
 | bucket | count |
 |---|---|
-| SHAPE (migrates to `field_names_for` in Task 5) | **23** |
-| IDENTITY (stays `isinstance`, feeds W4b-2) | **40** |
+| SHAPE (migrates to `field_names_for` in Task 5) | **21** |
+| IDENTITY (stays `isinstance`, feeds W4b-2) | **42** |
 | UNRESOLVED | **0** |
 | **denominator** | **63** |
 
-23 + 40 + 0 = 63. No sites lost.
+21 + 42 + 0 = 63. No sites lost.
 
-Zero UNRESOLVED does not mean every row was equally easy — nine rows below
-are flagged **(moderate confidence)** with the specific reason the call was
-harder than the rest, so a reader auditing this document knows where to look
-first if a later defect turns up. None of them was a guess: each has a
-traced reason, just a less clean-cut one than the majority.
+Zero UNRESOLVED does not mean every row was equally easy — two rows below
+(39 and 46) are flagged **(moderate confidence)** with the specific reason
+the call was harder than the rest, so a reader auditing this document knows
+where to look first if a later defect turns up. Neither is a guess: each has
+a traced reason, just a less clean-cut one than the majority. (Two other
+rows, 43 and 44, carried this tag in the first pass and no longer do — fix
+round 1 resolved them outright rather than leaving them hedged; see the note
+below the table.)
+
+**Fix round 1 (review):** rows 43 and 44 were moved from SHAPE to IDENTITY
+— see their rows below and the note after the table. Everything else in
+this document was independently re-checked (grep count, every `file:line`
+row, all three special-row claims) and confirmed as originally written.
 
 ## The question asked, restated
 
@@ -90,8 +98,8 @@ Legend: **S** = SHAPE, **I** = IDENTITY.
 | 40 | `logic/builtins/inspection.py:52` | S | `_copy_term_py`: exact `is_zero_field_class` inline pattern | yes, wanted |
 | 41 | `logic/builtins/inspection.py:142` | S | `_collect_vars_py`: same pattern as #40 | yes, wanted |
 | 42 | `logic/builtins/inspection.py:327` | S | `functor/3` decompose: "Only the class arm resolves... `_fields` is the field list whatever minted the class" | yes, wanted |
-| 43 | `logic/builtins/inspection.py:394` | S (moderate confidence) | `functor/3` construct: is `name_val` ATOMIC (ISO 8.5.1.3e)? `PredicateMeta` accepted regardless of field count, "resolves it for itself" downstream | leans yes — the declaredness framing ("a declared functor class is an atom value") matches SHAPE, but the check itself doesn't gate on zero-fields, unlike its siblings, so I can't be certain a dataclass reaching this and being accepted as "atomic" is harmless in the same way |
-| 44 | `logic/builtins/inspection.py:524` | S (moderate confidence) | `=../2` construct direction, identical pattern to #43 | same caveat as #43 |
+| 43 | `logic/builtins/inspection.py:394` | I | `functor/3` construct: `isinstance(name_val, (PredicateMeta, int, float, bool, bytes))` inside the ISO 8.5.1.3(e) atomicity gate — `PredicateMeta` sits in a tuple alongside `int`/`float`/`bool`/`bytes` | wrong — this is not a shape read at all; it is the same predicate-name-as-atom coercion as rows 23 and 46 (**fix round 1**: moved from SHAPE, see note below the table) |
+| 44 | `logic/builtins/inspection.py:524` | I | `=../2` construct direction, identical pattern to #43 | wrong, same reason as #43 (**fix round 1**: moved from SHAPE, see note below the table) |
 | 45 | `tools/iso_l3.py:98` | S | generated-code TEMPLATE string (P1 lowering): `isinstance({name}, PredicateMeta) and getattr({name}, "_fields", None) != {fields_src}` — a redeclaration guard reading `_fields` | yes, wanted (this is a text template, not a direct call site — the generated code performs the SHAPE read when it runs) |
 | 46 | `logic/builtins/type_checks.py:363` | I (moderate confidence) | `callable_/1` (ISO `callable`): a bare PredicateMeta class is callable/atomic per the predicate-name-as-atom rule (same rule as #23) | leans wrong — parallels #23's predicate-specific coercion, but ISO "callable" (atomic-or-compound) is a broad enough concept that treating any term-shaped class as atomic might also be defensible; kept IDENTITY for consistency with #23 |
 | 47 | `logic/term_expansion.py:112` | I | stamps `te_cls._te_predicate_nodes = ...` on the class, a cross-module carrier | wrong — same class-stamping pattern as #17 |
@@ -114,6 +122,45 @@ Legend: **S** = SHAPE, **I** = IDENTITY.
 
 \* row 10 is self-referential (it is inside `field_names_for` itself) — see note.
 † rows 62–63 are prose/docstring text, not executable `isinstance` calls — see note.
+
+## Fix round 1: rows 43 and 44 corrected from SHAPE to IDENTITY (caught in review)
+
+The first pass classified `inspection.py:394` and `:524` as SHAPE
+"(moderate confidence)" on the reasoning that the surrounding code frames
+the question as declaredness ("a declared functor class is an atom value").
+That framing was a rationalisation of the comment's wording, not a reading
+of what the `isinstance` check actually tests.
+
+Both lines read:
+
+    isinstance(name_val, (PredicateMeta, int, float, bool, bytes))
+
+`PredicateMeta` sitting in a tuple beside `int`, `float`, `bool`, `bytes` is
+the tell: this is never a shape test (nothing there has "field names" as a
+concept), it is an ISO 8.5.1.3(e) **atomicity** gate. A bare predicate class
+counts as atomic because it denotes the atom of its own name — the exact
+same predicate-name-as-atom coercion already ruled IDENTITY at row 23
+(`terms_to_ast.py:1261`) and reasoned through at row 46
+(`type_checks.py:363`, ruled IDENTITY "for consistency with #23"). Rows 23,
+43, 44, and 46 are one family and now read the same way.
+
+**Why the widening would be wrong, concretely:** `field_names_for`'s arm 1
+answers for *any* `@dataclass` class. Migrated naively, `functor(T,
+SomeUnrelatedDataclass, 0)` — which today raises `type_error(atomic, ...)`
+per the ISO 8.5.1.3(e) reference the code itself cites — would silently
+succeed and bind `T` to the raw class object. An ISO-conformance check with
+a cited spec section would stop firing for a whole class of inputs, and the
+house suite is exactly the kind of gap the brief warned about: nothing in
+it feeds a bare dataclass class through `functor/3`/`=../2` to catch the
+regression.
+
+**The generalisable tell for the next reader:** `PredicateMeta` appearing in
+an `isinstance(..., (PredicateMeta, <ordinary scalar types>))` tuple is
+always the atomicity/predicate-vs-data coercion, never a shape read — a
+shape read has no reason to be listed beside `int`/`float`/`bool`/`bytes`.
+Grep for that shape (`PredicateMeta` co-occurring with a scalar-type tuple)
+before trusting any row whose reasoning leans on "it's declared, so it's
+shape."
 
 ## Notes on rows 62–63 (and the population's mechanical edge)
 
@@ -144,15 +191,16 @@ this line — there is nothing to migrate here until the class itself goes.
 
 ## Observed pattern: "predicate vs. data" is usually IDENTITY, not SHAPE
 
-The single largest source of IDENTITY sites (rows 6, 12, 19, 21, 23, 38, 46,
-49, 50, 52 — 10 of the 40) is not dispatch/row machinery but a **different**
+The single largest source of IDENTITY sites (rows 6, 12, 19, 21, 23, 38, 43,
+44, 46, 49, 50, 52 — 12 of the 42, after fix round 1 moved rows 43 and 44
+into this same family) is not dispatch/row machinery but a **different**
 recurring question: "is this specifically a PREDICATE reference (as opposed
 to a data functor, which may legitimately be `@dataclass`-shaped), because a
 goal is not data and a predicate class in term position denotes the ATOM of
 its name." This reads like a shape question on first pass (it's asking
 "what kind of term is this") but it is not answerable by field names at
 all — a data functor can have the exact same field shape as a predicate and
-still need the OPPOSITE answer here. This is why the SHAPE count (23) came
+still need the OPPOSITE answer here. This is why the SHAPE count (21) came
 in well under the spec's ~30 estimate: the estimate's grep-context pass
 couldn't see that this pattern, which shows up over and over, is identity
 even though it superficially resembles a declaredness check.
