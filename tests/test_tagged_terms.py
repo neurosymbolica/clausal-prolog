@@ -292,26 +292,6 @@ def _logic_module(mod):
     return mod.__dict__["$module"]
 
 
-def _python_minted(functor, fields, *values):
-    """A live term INSTANCE, minted the way PYTHON producers mint one.
-
-    P3-2 Task 2 (THE FLIP, R6): a ``.clausal`` data functor's name binds its
-    interned spelling, so ``mod.point(1, 2)`` is no longer a construction --
-    ``mod.point`` is the str.  Instances have not gone away, though: modules
-    like ``clausal.reflection`` and ``clausal.logic.clpb`` mint their own
-    functor classes with ``make_predicate`` and build instances at runtime,
-    and those keep CLASS emission everywhere (controller ruling on the gate
-    asymmetry).  Tests that need a live instance mint one the same way.
-    """
-    from clausal.logic.predicate import make_predicate
-
-    # ``instances=True`` is the P2 bridge, and it is what makes this helper
-    # mint what its name says.  Since the constructor flip a plain
-    # ``make_predicate`` class CONSTRUCTS A CELL like every other, so without
-    # the flag this returned a cell and the "live instance" tests below were
-    # quietly testing the cell path twice.  reflection and clpb -- the
-    # producers this stands in for -- declare the flag for the same reason.
-    return make_predicate(functor, list(fields), instances=True)(*values)
 
 
 class TestCellEmission:
@@ -867,18 +847,6 @@ class TestHeadPatterns:
         got = self._pattern(self._source_compound("kind", 2))
         assert got.startswith("case ['kind', ")
 
-    def test_live_instance_stays_a_class_pattern(self):
-        """P3-2 Task 2, controller ruling: instance-side cell emission is
-        REMOVED.  A live ``PredicateMeta`` instance always matches as a
-        class, because it always CONSTRUCTS as one -- cell-vs-class is
-        decided on the BINDING, and an instance's producer is by definition
-        class-world (``clausal.reflection``, ``clpb``).  Inverts
-        ``test_live_instance_becomes_a_sequence_pattern``, which pinned the
-        bridge-era instance gate.
-        """
-        got = self._pattern(_python_minted("point", ("X", "Y"), 1, 2))
-        assert got.startswith("case point(")
-
     def test_another_modules_functor_matches_as_a_cell_too(self):
         """P3-2 Task 2 (THE FLIP, R5): the own-module gate is deleted.
 
@@ -1044,27 +1012,6 @@ class TestBucketPatternIntegration:
         got = [deref(K) for _t in call(self.PROBE, shape, K, module=lm)]
         assert got == expected
 
-    def test_a_class_instance_caller_finds_nothing(self):
-        """The documented representation limit, asserted rather than assumed.
-
-        Every compound compiles to a cell now (P3-2 Task 2, R6), so a caller
-        that hands in a class INSTANCE -- which post-R6 only a Python-side
-        producer can mint -- simply does not unify.  It is not an error, it
-        is no solutions.
-        """
-        from clausal.logic.database import Module
-
-        db, _src = self._compile_cell_headed_kind()
-        lm = Module("_tt_bucket_probe")
-        lm.db = db
-        K = Var()
-        assert [
-            deref(K)
-            for _t in call(self.PROBE,
-                           _python_minted("point", ("X", "Y"), 3, 4),
-                           K, module=lm)
-        ] == []
-
     def test_asserted_cell_and_compile_time_compound_share_a_bucket(self):
         """P3-2 Task 4: bucket-sharing across producers, end to end.
 
@@ -1194,12 +1141,6 @@ class TestHeadPatternReachability:
         from clausal.logic.compiler import arg_index
 
         assert arg_index._runtime_arg_key(("point", 3, 4)) == ("point", 2)
-        # ... and a class INSTANCE of the same functor still keys, and
-        # indexes, identically -- the class branch predates this task and
-        # stays live for Python-side producers (R6: no ``.clausal`` module
-        # mints one any more, but ``clausal.reflection`` etc. still do).
-        assert arg_index._runtime_arg_key(
-            _python_minted("point", ("X", "Y"), 3, 4)) == ("point", 2)
 
         # Demonstrate the SELECTION, not just the key: instrument the
         # compiled bucket and fallback functions of a real, >threshold
@@ -1993,29 +1934,17 @@ class TestNormalizer:
     class-era answers stay the regression anchor for cell-era results.
     """
 
-    def test_cell_and_class_term_canonicalise_alike(self):
-        # R6: the class half is Python-minted now -- which is exactly the
-        # case the normalizer still has to cover, since those are the only
-        # class terms left.
-        instance = _python_minted("point", ("X", "Y"), 1, 2)
-        assert normalize_term(instance) == normalize_term(("point", 1, 2))
-        assert normalize_term(instance) == ("point", 1, 2)
-
     def test_nesting_is_canonicalised_all_the_way_down(self):
         """P3-1 atom pivot (§1b): ``plain.nil`` is the interned str "nil",
         not a 0-arity class, so it canonicalises to itself -- no ("nil",)
         wrapping (phase3-decomposition-and-p31-atom-pivot Task 7 work item
         1)."""
         plain = _fixture(_PLAIN)
-        chain = _python_minted(
-            "point", ("X", "Y"), 3,
-            _python_minted("point", ("X", "Y"), 2, plain.nil))
-        assert normalize_term(chain) == ("point", 3, ("point", 2, mint("nil")))
         assert normalize_term(("point", 3, ("point", 2, plain.nil))) \
             == ("point", 3, ("point", 2, mint("nil")))
 
     def test_different_functors_stay_different(self):
-        assert (normalize_term(_python_minted("point", ("X", "Y"), 1, 2))
+        assert (normalize_term(("point", 1, 2))
                 != normalize_term(("circle", 1, 2)))
 
     def test_different_arities_stay_different(self):
@@ -2038,7 +1967,7 @@ class TestNormalizer:
         """P3-1 atom pivot (§1b): no ("nil",) wrapping -- see Task 7 work
         item 1."""
         plain = _fixture(_PLAIN)
-        rows = [{"T": _python_minted("point", ("X", "Y"), 1, plain.nil)},
+        rows = [{"T": ("point", 1, plain.nil)},
                 ("point", 1, plain.nil)]
         assert normalize_answers(rows) == [
             {"T": ("point", 1, mint("nil"))},
@@ -2185,9 +2114,9 @@ class TestCellsAtTheBuiltinSurface:
     Each of these asked a question about a term and answered differently for
     a cell than for the class term it replaced -- which is an ANSWER
     difference, not a representation one, and so forbidden by this phase's
-    own invariant.  The class twin is minted the way a PYTHON producer mints
-    one (``_python_minted``), since post-R6 that is the only place class
-    terms still come from.
+    own invariant.  The class-twin half of each comparison went with W4a
+    (2026-09-22): a PredicateMeta INSTANCE can no longer be minted at all,
+    so the cell is the only shape left to ask about.
     """
 
     def _module(self):
@@ -2204,9 +2133,6 @@ class TestCellsAtTheBuiltinSurface:
         ground" tail."""
         assert self._nsol("ground", ("pt", 1, 2)) == 1
         assert self._nsol("ground", ("pt", 1, Var())) == 0
-        # ... and the class twin agrees, which is the actual requirement.
-        assert self._nsol(
-            "ground", _python_minted("pt", ("a", "b"), 1, Var())) == 0
 
     def test_ground_1_reaches_a_cell_nested_in_a_list(self):
         assert self._nsol("ground", [1, ("pt", Var())]) == 0
@@ -2214,8 +2140,6 @@ class TestCellsAtTheBuiltinSurface:
     def test_compound_1_answers_for_a_cell(self):
         """The one type check that did not route through the funnel."""
         assert self._nsol("compound", ("pt", 1, 2)) == 1
-        assert self._nsol(
-            "compound", _python_minted("pt", ("a", "b"), 1, 2)) == 1
         # An atom and a 0-arity shape are still not compound.
         assert self._nsol("compound", mint("pt")) == 0
         # Task 15 item 2 (ISO alignment): the STRING ``"pt"`` is the list of
@@ -2299,10 +2223,6 @@ class TestCallableAndTheTupleDataEdge:
         assert self._nsol("callable_", ("pt", 1, 2)) == 1
         assert (self._nsol("callable_", ("pt", 1, 2))
                 == self._nsol("callable_", Compound("pt", (1, 2))))
-        # ... and like the class twin, the only other producer left post-R6.
-        assert (self._nsol("callable_", ("pt", 1, 2))
-                == self._nsol(
-                    "callable_", _python_minted("pt", ("a", "b"), 1, 2)))
 
     def test_a_var_functor_tuple_is_no_longer_callable_unlike_its_compound_twin(self):
         """INVERTED (P3-2 Task 5, §1b): the bridge's higher-order

@@ -136,27 +136,17 @@ class TestCallingConventionDiscriminator:
     unification silently answers about the wrong operands.  A missing third
     argument is the only signal, and only the class-side call can be missing
     one.
+
+    W4a (2026-09-22) retired the INSTANCE path, so the three-argument half of
+    the discriminator has no caller that can reach it any more and its test
+    went with the path.  The branch itself is left inert until W4b takes the
+    class; what stays pinned here is the class-side call, which is live.
     """
 
     def test_class_side_call_is_the_two_argument_one(self, cite):
         # Exactly what the C side does with a class-valued term.
         assert cite.__unify__(cite, Trail()) is True
         assert cite.__unify__("pcatv_cite", Trail()) is NotImplemented
-
-    def test_instance_side_call_still_needs_all_three(self):
-        # And still recurses into the fields rather than taking the class arm.
-        # P2: a plain class CONSTRUCTS A CELL now, so a live INSTANCE --
-        # which is what this test is about, and which the bridge still
-        # produces (reflection, clpb, term expansion) -- has to be minted
-        # with the bridge flag.  Without it this was testing the cell path
-        # under a name that says instance.
-        from clausal.logic.predicate import make_predicate
-
-        cite = make_predicate("pcatv_cite_inst", ["key"], instances=True)
-        v = Var()
-        assert cite(key=v).__unify__(cite(key=5), Trail()) is True
-        from clausal.logic.variables import deref
-        assert deref(v) == 5
 
     def test_class_side_occurs_check_is_the_one_argument_one(self, cite):
         assert cite.__occurs_check__(Var()) is False

@@ -37,12 +37,6 @@ class Atom(metaclass=PredicateMeta):
 
 class TestIsTermInstanceFallback:
 
-    def test_predicate_instance(self):
-        # nv — P2: ``Pt(...)`` is the CELL now; the instance arm these twins
-        # still carry is the head channel, built through ``_clausal_head``.
-        t = Pt._clausal_head(x=1, y=2)
-        assert _is_term_instance_py(t) == is_term_instance(t) == True
-
     def test_class_not_instance(self):
         # nv
         assert _is_term_instance_py(Pt) == is_term_instance(Pt) == False
@@ -80,11 +74,6 @@ class TestIsZeroFieldClassFallback:
 
 class TestTermFieldNamesFallback:
 
-    def test_predicate_instance(self):
-        # nv
-        t = Pt._clausal_head(x=1, y=2)                      # P2: the head-channel instance
-        assert _term_field_names_py(t) == term_field_names(t) == ("x", "y")
-
     def test_compound_dataclass(self):
         # nv
         c = Compound("f", (1, 2))
@@ -119,11 +108,6 @@ class TestFunctorNameFallback:
         # nv
         t = KWTerm("rel", a=1)
         assert _functor_name_py(t) == _functor_name(t) == "rel"
-
-    def test_predicate_instance(self):
-        # nv
-        t = Pt._clausal_head(x=1, y=2)                      # P2: the head-channel instance
-        assert _functor_name_py(t) == _functor_name(t) == "Pt"
 
     def test_list_empty(self):
         # nv
@@ -162,11 +146,6 @@ class TestArityFallback:
         # nv
         c = Compound("f", (1, 2, 3))
         assert _arity_py(c) == _arity(c) == 3
-
-    def test_predicate_instance(self):
-        # nv
-        t = Pt._clausal_head(x=1, y=2)                      # P2: the head-channel instance
-        assert _arity_py(t) == _arity(t) == 2
 
     def test_int(self):
         # nv
@@ -232,11 +211,6 @@ class TestArgsListFallback:
         # nv
         c = Compound("f", (1, 2, 3))
         assert _args_list_py(c) == _args_list(c) == [1, 2, 3]
-
-    def test_predicate_instance(self):
-        # nv
-        t = Pt._clausal_head(x=10, y=20)                    # P2: the head-channel instance
-        assert _args_list_py(t) == _args_list(t) == [10, 20]
 
     def test_non_compound(self):
         # nv
@@ -496,12 +470,13 @@ def _corpus():
     parity is not claimed for them.  They are covered through the wrapper by
     the ``TestWrapperUsesTheCPathAgain`` Seg* tests below.
 
-    THE INSTANCE ROWS SPELL ``Pt._clausal_head(...)``, NOT ``Pt(...)``.  P2
-    Task 3 made the plain call build the CELL, so the three rows named for an
-    instance quietly became cells and the C instance arms stopped being
-    covered here — a hole exactly where Task 5 has to decide whether those
-    arms can go.  ``TestTheCorpusStillCoversInstances`` pins it.  When P4
-    retires ``_clausal_head``, these rows go with the arms, together.
+    THERE ARE NO PredicateMeta-INSTANCE ROWS.  W4a (2026-09-22) retired the
+    instance path: ``_clausal_head`` raises, so no such term can be built,
+    and the C arms that classified one went with it.  The three rows that
+    held one (``instance``, ``cell_in_instance``, ``instance_in_cell``) were
+    deleted with those arms, together, as their predecessor promised.  A
+    ``@dataclass`` term (``Compound``, ``KWTerm``) is the term-instance shape
+    the twins still carry, and it is covered by rows of its own.
     """
     X, Y, Z = Var(), Var(), Var()
     bound = Var()
@@ -520,7 +495,6 @@ def _corpus():
         ("compound", Compound("f", (1, X))),
         ("compound_var_functor", Compound(X, (1, 2))),
         ("kwterm", KWTerm("r", a=X, b=2)),
-        ("instance", Pt._clausal_head(x=X, y=2)),
         ("atom_class", Atom),
         ("class_with_fields", Pt),
         # --- cells ---
@@ -539,8 +513,6 @@ def _corpus():
         ("cell_in_list_in_cell", ("f", [("g", X)], Y)),
         ("cell_in_compound", Compound("f", (("g", X), 2))),
         ("cell_in_kwterm", KWTerm("r", a=("g", X))),
-        ("cell_in_instance", Pt._clausal_head(x=("g", X), y=2)),
-        ("instance_in_cell", ("f", Pt._clausal_head(x=X, y=2))),
         ("compound_in_cell", ("f", Compound("g", (X,)))),
         ("list_of_lists_of_cells", [[("p", X)], [("q", Y), ("r", Z)]]),
         # --- shared structure across two cells ---
@@ -610,36 +582,18 @@ def _shape(term):
 
 
 @requires_c
-class TestTheCorpusStillCoversInstances:
-    """The corpus rows named for an INSTANCE must actually hold one.
+class TestTheCorpusRowsAreTheShapesTheyAreNamedFor:
+    """The rows named for a CELL must actually hold one.
 
-    P2 Task 3 flipped ``PredicateMeta.__call__`` to build the CELL.  These
-    three rows were written when ``Pt(x=..., y=...)`` WAS an instance, and
-    they silently became cells -- duplicating shapes the corpus already
-    covers, while the C instance arms (``c_is_term_instance`` and
-    ``c_term_field_names``, which is what ``_shape`` reaches an instance
-    through) stopped being exercised by this file at all.  Nothing failed:
-    the parity assertions still passed, over the wrong terms.
-
-    That matters for Task 5, whose whole question is whether those arms can
-    go.  ``_clausal_head`` is the instance channel until P4 removes it.
+    Its predecessor guarded the three PredicateMeta-INSTANCE rows, which had
+    silently become cells when P2 flipped ``__call__`` -- parity assertions
+    passing over the wrong terms.  W4a deleted those rows with the C arms
+    they covered, so what is left to pin is the other half of the same
+    lesson: a row's NAME is a claim about its shape, and a cell row holding
+    something that is not a cell would be the same silent drift.
     """
 
-    def test_the_instance_row_is_an_instance(self):
-        # nv
-        assert is_term_instance(dict(_corpus())["instance"])
-
-    def test_the_cell_in_instance_row_is_an_instance(self):
-        # nv
-        assert is_term_instance(dict(_corpus())["cell_in_instance"])
-
-    def test_the_instance_in_cell_row_holds_an_instance(self):
-        # nv
-        assert is_term_instance(dict(_corpus())["instance_in_cell"][1])
-
     def test_the_cell_rows_are_still_cells(self):
-        """The mirror: this guard must not be satisfiable by turning
-        everything into an instance."""
         # nv
         corpus = dict(_corpus())
         for name in ("cell_ground", "cell_with_var", "cell_nested"):

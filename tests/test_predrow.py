@@ -585,9 +585,8 @@ def test_detached_row_is_private_and_lazy():
 
 def test_predicate_meta_mutators_work_detached_and_respect_the_lock():
     cls = make_predicate("Mut", ["x"])
-    # P2: ``cls(...)`` is the CELL; a clause HEAD is the instance channel.
-    c1 = Clause(head=cls._clausal_head(1), body=[])
-    c2 = Clause(head=cls._clausal_head(2), body=[])
+    c1 = Clause(head=cls(1), body=[])      # a head is a CELL (W4a)
+    c2 = Clause(head=cls(2), body=[])
     cls._assertz(c1)
     cls._asserta(c2)
     assert cls._state_row().clauses == [c2, c1]
@@ -909,6 +908,10 @@ _RETIRED = (
     "_clauses", "_dispatch_fn", "_lazy_recompile", "_locked",
     "_index_plans", "_index_plans_joint", "_index_plans_hierarchical",
     "_dynamic_arities", "_clauses_source", "_signature",
+    # W4a (2026-09-22): the P2 instance bridge.  A tombstone rather than a
+    # deletion because setting it used to CHANGE WHAT ``cls(...)`` BUILT --
+    # silently doing nothing would be the worst of the three outcomes.
+    "_clausal_instances",
 )
 
 
@@ -939,21 +942,6 @@ def test_a_getattr_probe_with_a_default_does_not_go_quiet():
         "the drive loop reads a RuntimeError out of a generator as exhaustion"
 
 
-def test_instances_no_longer_carry_a_state_face():
-    """The instance face was a property injected into every class namespace
-    (P3-3 Task 2 fix round 1).  It went with the facades it delegated to, and
-    an instance has no ``__dict__``, so the read fails PLAINLY."""
-    cls = make_predicate("InstFace", ["x"])
-    inst = cls._clausal_head(1)          # P2: the instance, not the cell
-    for name in ("_clauses", "_dispatch_fn", "_lazy_recompile", "_locked"):
-        with pytest.raises(AttributeError):
-            getattr(inst, name)
-        with pytest.raises(AttributeError):
-            setattr(inst, name, object())
-    # The class namespace holds no such property any more.
-    assert not any(n in vars(cls) for n in _RETIRED)
-
-
 def test_the_row_is_the_one_face_and_reads_are_live():
     """Mutate through the class's row (and through the Database), read back
     through ``_state_row()`` -- the accessor the facades collapsed into."""
@@ -982,18 +970,20 @@ def test_the_row_is_the_one_face_and_reads_are_live():
 
 
 def test_a_field_named_like_a_retired_attribute_stays_a_field():
-    """``__slots__`` claims the name on the INSTANCE; the metaclass tombstone
-    is a data descriptor and wins for ``cls._locked``.  The field is what an
-    instance reads; the class read is the tombstone like any other."""
+    """A FIELD may be spelled like a retired facade; the metaclass tombstone
+    is a data descriptor and wins for ``cls._locked``, and the field keeps
+    its slot in the term the class builds.
+
+    (W4a: the instance half of this claim -- ``inst._locked`` reading the
+    field rather than the row -- went with the instance path.  The cell
+    carries the field positionally instead, which is asserted here.)"""
     cls = make_predicate("FieldClash", ["_locked"])
     assert cls._fields == ("_locked",)
-    inst = cls._clausal_head("field value")   # P2: the instance, not the cell
-    assert inst._locked == "field value", "the field, not the row"
+    assert cls("field value") == ("FieldClash", "field value")
     with pytest.raises(RetiredStateError):
         cls._locked
     cls._lock()
     assert cls._state_row().locked is True
-    assert inst._locked == "field value"
 
 
 def test_ordinary_class_introspection_never_meets_a_tombstone():

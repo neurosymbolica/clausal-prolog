@@ -118,11 +118,16 @@ def test_two_package_copies_really_are_distinct(tmp_path):
     assert "PRECONDITION-OK" in r.stdout
 
 
-def test_first_copy_keeps_term_identity_after_second_copy_is_imported(tmp_path):
+def test_first_copy_keeps_class_identity_after_second_copy_is_imported(tmp_path):
     """The C fast path must not start disagreeing with its Python fallback.
 
-    This is the fault in its smallest form: one term instance, built and checked
-    by the first copy, before and after a second copy appears.
+    This is the fault in its smallest form, asked of the arms that still
+    consult the C slot.  W4a (2026-09-22) retired the INSTANCE path, so the
+    term the fault was first reported on cannot be built any more -- but the
+    slot it turns on, ``PredicateMeta_type``, is the same one the CLASS arms
+    read (``is_zero_field_class``/``is_atom``), and overwriting it breaks
+    them in exactly the way it broke ``is_term_instance``.  So the question
+    is put to a predicate CLASS minted by the first copy.
     """
     r = _run(
         tmp_path,
@@ -130,41 +135,34 @@ def test_first_copy_keeps_term_identity_after_second_copy_is_imported(tmp_path):
         import clausal.logic.predicate as first
 
         class demo(metaclass=first.PredicateMeta):
-            # P2: a plain class CONSTRUCTS A CELL, and this test is about a
-            # term INSTANCE's identity across package copies, so it mints one
-            # through the bridge flag (the reflection/clpb route).
-            _fields = ("a", "b")
-            _clausal_instances = True
+            _fields = ()
 
-        inst = demo(1, 2)
-        assert first.is_term_instance(inst) is True, "broken before the wipe"
+        assert first.is_zero_field_class(demo) is True, "broken before the wipe"
         """,
         _WIPE,
         """
         import clausal.logic.predicate as second   # noqa: F401  — second copy
 
         # The accelerated check and the reference implementation must agree, and
-        # both must still recognise the first copy's own term instance.
-        assert first._is_term_instance_py(inst) is True, "reference impl regressed"
-        assert first.is_term_instance(inst) is True, (
-            "first copy's is_term_instance lost its own term instance after a "
-            "second package copy was imported"
+        # both must still recognise the first copy's own predicate class.
+        assert first._is_zero_field_class_py(demo) is True, "reference impl regressed"
+        assert first.is_zero_field_class(demo) is True, (
+            "first copy's is_zero_field_class lost its own predicate class "
+            "after a second package copy was imported"
         )
-        assert first.term_field_names(inst) == ("a", "b"), (
-            f"first copy's term_field_names regressed: "
-            f"{first.term_field_names(inst)!r}"
+        assert first.term_field_names_of_class(demo) == (), (
+            f"first copy's term_field_names_of_class regressed: "
+            f"{first.term_field_names_of_class(demo)!r}"
         )
 
         # ...and the second copy must be self-consistent too, on its own terms.
         class demo2(metaclass=second.PredicateMeta):
             _fields = ("x",)
-            _clausal_instances = True
 
-        inst2 = demo2(3)
-        assert second.is_term_instance(inst2) is True, (
-            "second copy cannot recognise its own term instance"
+        assert second.is_zero_field_class(demo2) is False, (
+            "second copy cannot classify its own predicate class"
         )
-        assert second.term_field_names(inst2) == ("x",)
+        assert second.term_field_names_of_class(demo2) == ("x",)
         print("IDENTITY-OK")
         """,
     )

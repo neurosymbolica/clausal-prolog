@@ -29,3 +29,43 @@ def test_calling_a_class_always_builds_the_cell():
 def test_no_fast_instance_constructor_is_attached():
     Pt = make_predicate("Pt3", ["x"])
     assert not hasattr(Pt, "_clausal_new")
+
+
+# ── what SURVIVES the retirement ────────────────────────────────────────────
+#
+# The three assertions below came from ``tests/test_fast_construction.py``,
+# deleted with ``_clausal_new`` (W4a).  Their subject was the FAST path, but
+# each also pinned the slow, kwargs-based path a ``@dataclass`` term still
+# takes -- the one rebuild route W4a deliberately leaves in place -- so they
+# are carried here rather than dropped, minus the now-vacuous "no class has
+# a fast constructor" half, which its own test above pins once for all.
+
+
+def test_a_dataclass_node_still_walks_through_the_kwargs_path():
+    from clausal.logic.solve import _deref_walk_py
+    from clausal.pythonic_ast.nodes import BinOp
+
+    node = BinOp(left=1, right=2)
+    result = _deref_walk_py(node)
+    assert result == node and result is not node
+
+
+def test_a_dataclass_node_still_copies_through_the_kwargs_path():
+    from clausal.logic.builtins.inspection import _copy_term_py
+    from clausal.pythonic_ast.nodes import BinOp
+
+    node = BinOp(left=1, right=2)
+    result = _copy_term_py(node, {})
+    assert result == node and result is not node
+
+
+def test_a_dataclass_node_is_emitted_as_a_keyword_call():
+    import ast
+
+    from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
+    from clausal.pythonic_ast.nodes import BinOp
+
+    expr = term_to_ast_expr(BinOp(left=1, right=2), {})
+    assert isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name)
+    assert expr.func.id == "$BinOp"
+    assert expr.keywords != []

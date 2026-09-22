@@ -344,20 +344,18 @@ class TestF008WalkFunctorTerms:
         assert deref(snap.a) == 1
         assert snap.functor == "r" and snap.b == 2
 
-    def test_walk_snapshot_of_term_instance_survives_undo(self, trail):
+    def test_walk_snapshot_of_a_predicate_cell_survives_undo(self, trail):
         X = Var()
         assert unify(X, 1, trail)
-        # P2: a plain class CONSTRUCTS A CELL now, so a live INSTANCE --
-        # which is what this test is about, and which the bridge still
-        # produces (reflection, clpb, term expansion) -- has to be minted
-        # with the bridge flag.  Without it this was testing the cell path
-        # under a name that says instance.
-        cls = _fresh_pred_class()
-        cls._clausal_instances = True
-        inst = cls(X, 2)
-        snap = walk(inst)
+        # W4a (2026-09-22): a predicate class builds the CELL and the
+        # instance path is retired, so F008's claim -- a walk SNAPSHOT keeps
+        # the bound value the trail is about to take back -- is asked of the
+        # cell the class actually builds.
+        cell = _fresh_pred_class()(X, 2)
+        assert type(cell) is tuple, "the class builds a cell, not an instance"
+        snap = walk(cell)
         trail.reset()
-        assert deref(snap.a) == 1 and snap.b == 2
+        assert deref(snap[1]) == 1 and snap[2] == 2
 
     def test_walk_preserves_compound_position(self, trail):
         X = Var()

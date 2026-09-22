@@ -548,20 +548,20 @@ class TestF008DerefWalkTemplateFreeze:
         assert deref(snap.args[0]) == 1
         assert snap._position == (1, 2, 3, 4)  # was dropped by the Compound arm
 
-    def test_term_instance_nested_in_compound_frozen(self):
+    def test_predicate_cell_nested_in_compound_frozen(self):
         from clausal.logic.predicate import PredicateMeta
         from clausal.terms import Compound
         _deref_walk, t, X = self._bound()
-        # P2: a plain class CONSTRUCTS A CELL now, so a live INSTANCE --
-        # which is what this test is about, and which the bridge still
-        # produces (reflection, clpb, term expansion) -- has to be minted
-        # with the bridge flag.  Without it this was testing the cell path
-        # under a name that says instance.
-        pt = PredicateMeta("audit_f008", (),
-                           {"_fields": ("a", "b"), "_clausal_instances": True})
-        snap = _deref_walk(Compound("f", (pt(X, 2),)))
+        # W4a (2026-09-22): a predicate class builds the CELL and the
+        # instance path is retired, so F008's freeze claim is asked of the
+        # cell -- nested inside a Compound, which is the shape that made the
+        # original arm reachable.
+        pt = PredicateMeta("audit_f008", (), {"_fields": ("a", "b")})
+        cell = pt(X, 2)
+        assert type(cell) is tuple, "the class builds a cell, not an instance"
+        snap = _deref_walk(Compound("f", (cell,)))
         t.reset()
-        assert deref(snap.args[0].a) == 1 and snap.args[0].b == 2
+        assert deref(snap.args[0][1]) == 1 and snap.args[0][2] == 2
 
 
 class TestCToolkitGuards:

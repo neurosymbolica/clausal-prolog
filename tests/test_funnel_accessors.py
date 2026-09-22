@@ -120,11 +120,6 @@ class TestTermFieldNamesOfClass:
 
 
 class TestTermFieldValues:
-    def test_predicate_meta_instance_order_matches_declared_fields(self):
-        # nv
-        t = bar._clausal_head(b=1, a=2)   # P2: ``bar(...)`` is the CELL; this is the head-channel instance
-        assert term_field_values(t) == (1, 2)  # (b, a) order, not alphabetical
-
     def test_dataclass_instance(self):
         # nv
         node = Add(left=10, right=20)
@@ -139,11 +134,6 @@ class TestTermFieldValues:
 
 
 class TestTermFieldDict:
-    def test_predicate_meta_instance(self):
-        # nv
-        t = bar._clausal_head(b=1, a=2)   # P2: ``bar(...)`` is the CELL; this is the head-channel instance
-        assert term_field_dict(t) == {"b": 1, "a": 2}
-
     def test_dataclass_instance(self):
         # nv
         node = Add(left=10, right=20)
@@ -315,30 +305,13 @@ class TestMigrationRegression:
     focused suite — see task-2-report.md for the per-file mapping.
     """
 
-    def test_list_dispatch_rebuilds_term_instance_head_at_pos(self):
-        # nv — list_dispatch.py ~170
-        from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
-        from clausal.logic.database import Clause
-        from clausal.terms import Unify
-
-        pt = make_predicate("pt", ("a", "b"))
-        v = Var()
-        head = pt._clausal_head(a=v, b=99)   # P2: a clause HEAD is the instance channel
-        clause = Clause(head=head, body=[Unify(left=v, right=[1, 2, 3])])
-
-        lifted = _lift_clause_at_pos(clause, 0)
-
-        assert lifted.head.a == [1, 2, 3]  # lifted field
-        assert lifted.head.b == 99  # untouched field preserved via term_field_dict
-        assert lifted.body == []  # matched Unify removed from body
-
-    def test_term_expansion_instance_head_matching_functor_and_arity_detected(self):
+    def test_term_expansion_head_matching_functor_and_arity_detected(self):
         # nv — term_expansion.py ~40
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
         te = make_predicate("term_expansion", ("a", "b", "c", "d"))
-        head = te._clausal_head(a=1, b=2, c=3, d=4)   # P2: a clause HEAD is the instance channel
+        head = te(a=1, b=2, c=3, d=4)                 # a head is a CELL (W4a)
         pred_node = SimpleNamespace(head=head)
         assert _is_term_expansion_clause(pred_node)
 
