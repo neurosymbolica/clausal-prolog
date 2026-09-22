@@ -1,0 +1,80 @@
+"""W4b-1: every engine minter's declaration reaches a registry, so
+``field_names_for`` can answer from a NAME after W4b-2 takes the class away.
+
+Three gaps are closed here.  The two routes that were ALREADY covered are
+pinned too, so a later change that removes the coverage fails here rather
+than silently leaving a name unanswerable."""
+from clausal.logic.database import Database
+from clausal.logic.predicate import field_names_for
+
+
+def _specialize_items_fixture(module_dict):
+    """One ``SpecializeItem`` naming a real, already-compiled MI class.
+
+    ``analyze_mi`` needs clauses shaped like a genuine meta-interpreter
+    (base + recursive, ``match_clause``, a recursive self-call) -- hand
+    assembling that shape would just re-implement
+    ``clausal.examples.metainterpreters``.  Reusing ``solve_count`` from
+    there is the smallest fixture that actually satisfies ``analyze_mi``,
+    and it is the same class ``tests/fixtures/specialize_natnum.clausal``
+    specializes end-to-end in ``test_specialization_pipeline.py``.
+    """
+    import clausal.examples.metainterpreters as mi_mod
+    from clausal.pythonic_ast.nodes import SpecializeDirective as SpecializeItem
+
+    module_dict["solve_count"] = mi_mod.solve_count
+    return [
+        SpecializeItem(
+            mi_name="solve_count",
+            source_program="natnum_program",
+            new_name="solve_count_preregistered",
+        )
+    ]
+
+
+def _expected_specializations(items, module_dict):
+    """(new_name, fields) pairs the fixture's items ought to register."""
+    from clausal.logic.specialization import analyze_mi, _specialized_fields
+
+    out = []
+    for item in items:
+        mi_cls = module_dict[item.mi_name]
+        pattern = analyze_mi(mi_cls)
+        fields = tuple(_specialized_fields(pattern))
+        out.append((item.new_name, fields))
+    return out
+
+
+def test_preregistered_specialization_is_registered(tmp_path):
+    from clausal.logic.compiler_v2 import _preregister_specializations
+    from clausal.logic.specialization import _specialized_fields  # noqa: F401
+    db = Database()
+    module_dict = {}
+    items = _specialize_items_fixture(module_dict)
+    _preregister_specializations(items, module_dict, db)
+    for name, fields in _expected_specializations(items, module_dict):
+        assert db.signature_for(name, len(fields)) == fields, name
+
+
+def test_term_expansion_class_is_registered():
+    """term_expansion/4 is minted into a synthetic LogicModule; its own db
+    must know the declaration."""
+    from clausal.logic.term_expansion import _term_expansion_module
+    lm = _term_expansion_module({})
+    assert lm.db.signature_for("term_expansion", 4) == (
+        "term", "expansion", "module_before", "module_after")
+
+
+def test_specialize_route_still_registers_through_register_signature():
+    """ALREADY COVERED (specialization.py:388) -- pinned so it stays so."""
+    db = Database()
+    db.register_signature("solve_natnum", 2, ("goal", "depth"))
+    assert field_names_for("solve_natnum", arity=2, db=db) == ("goal", "depth")
+
+
+def test_builtins_answer_from_the_builtin_registry_with_no_db():
+    """ALREADY COVERED -- builtins are minted DETACHED on purpose and
+    _BUILTIN_FIELDS is their registry.  Arm 3 must reach it."""
+    from clausal.logic.builtins import _BUILTIN_FIELDS
+    (functor, arity), fields = next(iter(_BUILTIN_FIELDS.items()))
+    assert field_names_for(functor, arity=arity) == fields

@@ -180,7 +180,7 @@ def compile_module(
     # ── Step 1c: Pre-register specialized predicates ─────────────────────
     #    Create empty PredicateMeta classes for -specialize targets so that
     #    later clauses (e.g. Test) can reference them during compilation.
-    _preregister_specializations(module_items, module_dict)
+    _preregister_specializations(module_items, module_dict, db)
 
     # ── Step 2: Process directives ───────────────────────────────────────
     _process_directives(module_items, db, module_dict)
@@ -1199,6 +1199,7 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
 def _preregister_specializations(
     module_items: list,
     module_dict: dict,
+    db: Any,
 ) -> None:
     """Pre-register specialized predicate classes for -specialize directives.
 
@@ -1228,6 +1229,12 @@ def _preregister_specializations(
         if item.new_name not in module_dict:
             cls = make_predicate(item.new_name, fields)
             module_dict[item.new_name] = cls
+            # W4b-1: the class is not the only place these fields may be
+            # read from.  Register the declaration so ``field_names_for``
+            # answers from the NAME once W4b-2 makes the module attribute a
+            # mangled atom.  ``_install_specialized`` registers again later
+            # through ``register_signature``; both write the same tuple.
+            db.declare_functor(item.new_name, tuple(fields))
 
 
 def _run_specialization(
