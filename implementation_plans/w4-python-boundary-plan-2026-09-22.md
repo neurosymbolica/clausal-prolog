@@ -52,3 +52,17 @@ surface; what changes at W4 is what the name is bound TO.
 Values come back through whichever run path the body already uses; the
 two-out-paths note (`todo/two-out-paths-disagree-about-atom-tagging-2026-09-22.md`)
 still applies to a body that MIXES `--` runs with `solve` runs.
+
+## LANDED — pieces 1 and 2, main `f73ccc65` (2026-09-22, operator: "go for both")
+
+Two commits (3108a41f, f73ccc65 as cherry-picked onto main; gated as
+2dc84e40 + acb2877e with code trees byte-identical): the seam's functor
+slot accepts a name bound to a MANGLED atom; `cells.qualify_mangled_goal`
+turns a mangled functor whose module is LOADED into the `(":", M, G)` form
+at `solve`, `call` by name, `call/N` and `_dispatch_at` (row first, then the
+module namespace so imports resolve; indicator `M:(name/N)`). The handle's
+module half is the IMPORT name; a `-hide` data atom (bare declared name)
+is not a handle and keeps its old error. Review round: roborev 82, four
+findings fixed, three not reproduced and pinned. Gates NEW 0 / GONE 0 both
+ways. Piece 3 (hosted dotted-base seam) NOT done; W4 proper (mint handles
+with the import name; the head channel; the class) not started.
