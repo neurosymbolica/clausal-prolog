@@ -36,7 +36,7 @@ the venv, so an engine change can break all twelve with the gate still green —
 the same blind spot as `_get_dispatch`'s out-of-tree implementors. Sampled
 causes are purity/protocol drift, NOT the cell flip.
 
-## The harness, and why it is in the todo verbatim
+## The downstream checks, and why it is in the todo verbatim
 
 **I got it wrong twice, and both wrong versions reported NEW 0.** There are
 THREE contribution layouts (`clausal/modules/py/<n>.py`,

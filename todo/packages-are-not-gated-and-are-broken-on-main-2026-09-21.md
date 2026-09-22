@@ -59,10 +59,10 @@ Each target is a REGULAR package, so PEP 420 does not merge it -- `__path__`
 must be extended explicitly, the way the core's own
 `clausal/modules/__init__.py` does for installed distributions.
 
-I got this wrong twice before getting a real measurement. The first harness
+I got this wrong twice before getting a real measurement. The first downstream checks
 covered only `clausal/modules`, which crashed pytest in `pytest_configure` for
 the three backends (nothing extracted at all) and made the nine `py/` wrappers
-look catastrophically broken. Under the corrected harness `clausal-jax` went
+look catastrophically broken. Under the corrected downstream checks `clausal-jax` went
 from "4 passed" to "1000 passed" and `clausal-scipy` from "4 passed" to
 "1493 passed". **Both versions reported NEW 0.**
 
@@ -78,7 +78,7 @@ from "4 passed" to "1000 passed" and `clausal-scipy` from "4 passed" to
 4. When gating, **assert the contribution actually imported** (a
    `PKG_PROBE`-style positive control), never just that the run finished.
 
-## The harness, verbatim
+## The downstream checks, verbatim
 
 Saved because two wrong versions both reported NEW 0. Run as
 `PYTHONPATH=<dir> PKG_ROOT=packages/clausal-X [PKG_PROBE=clausal.modules.X]

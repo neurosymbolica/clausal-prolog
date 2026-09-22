@@ -1,7 +1,7 @@
 # P2 breaks `solve(m.pred(X))` — every downstream caller, and the API contract
 
 **Status:** **OPEN, BLOCKING the P2 line.** Found 2026-09-21 by
-the downstream harness lane running the sealed answer-set scorers against tip `3d17fdf8`.
+the downstream downstream lane running the downstream answer-set answer-set checks against tip `3d17fdf8`.
 Reproduced engine-side here. **The branch is held.**
 
 ## What happens
@@ -41,7 +41,7 @@ walked back to it.
 **This does not move an ANSWER. It removes the ability to ASK**, uniformly, at
 the Python API. That is why the in-repo suite is NEW 0 / GONE 0 and all 12
 packages are NEW 0 / GONE 0: nothing in-repo calls a rulebase through a module
-attribute the way the sealed bodies do.
+attribute the way the downstream bodies do.
 
 **`docs/terms-are-tuples.md` currently claims "`m.pred(X)` still works."**
 That line is the defect in the announcement: `m.pred(X)` still BUILDS a term,
@@ -50,22 +50,22 @@ but it is no longer a self-describing GOAL.
 ## Measured, so the cost is not guessed
 
 * **218** `solve(X.pred(…))` call sites in the downstream corpus:
-  **181 in 73 `<harness body>.seam`** files, 25 in `<harness>.py`,
-  7 + 3 in other sealed bodies, 1 in a `kernel.clausal`.
+  **181 in 73 `<downstream body>`** files, 25 in `<downstream body>`,
+  7 + 3 in other downstream bodies, 1 in a `kernel.clausal`.
   (A `.py`-only census finds 5 of these. `.seam` is where they live.)
 * The module variable is bound the SAME way everywhere:
   `module = loader.get()`, `_RULE = the loader(RULEBASE, …)` from
-  **`auto/<the shared harness kit>` — GATE_CORE** (editing it requires syncing the
+  **`auto/<the shared downstream checks downstream helper library>` — GATE_CORE** (editing it requires syncing the
   two downstream forks).
-* 41 distinct attribute names are read off that variable in the sealed
-  harnesses, plus 2 `getattr(m, …)` sites, plus it is passed whole to
+* 41 distinct attribute names are read off that variable in the downstream
+  downstream checks, plus 2 `getattr(m, …)` sites, plus it is passed whole to
   `a strict getattr helper(m, …)` / `another helper(…)`.
 * **The qualified form works on BOTH engines** — measured:
   `solve((':', mod, ('gd_p', 1)))` answers 1 solution on `bd774c46` AND on
-  `3d17fdf8`. So a harness-side fix can be dual-engine, which is the
-  `_DATES_ARE_TERMS` policy `<the shared harness kit>` already states in its own words:
-  *"a harness has to run on BOTH while the representation change is on an
-  unpromoted branch — otherwise migrating the harnesses takes the measurement
+  `3d17fdf8`. So a downstream checks-side fix can be dual-engine, which is the
+  `_DATES_ARE_TERMS` policy `<the shared downstream checks downstream helper library>` already states in its own words:
+  *"a downstream checks has to run on BOTH while the representation change is on an
+  unpromoted branch — otherwise migrating the downstream checks takes the measurement
   axis dark exactly when it is needed to measure the landing."*
 
 ## THE QUESTION FOR THE OPERATOR
@@ -94,12 +94,12 @@ it, not a bug in the implementation.
 
 ### If NO — the doc is amended and callers qualify
 
-* **(C) One harness file.** `the loader.get()` hands back a proxy whose
-  attribute access builds `(':', module, cell)`. **Zero sealed-body edits**,
+* **(C) One downstream checks file.** `the loader.get()` hands back a proxy whose
+  attribute access builds `(':', module, cell)`. **Zero downstream-body edits**,
   dual-engine safe. Cost: a GATE_CORE edit, two fork syncs, and the proxy has
   to be faithful to the 41 attribute names, the 2 `getattr` sites and the
   whole-object uses.
-* **(D) 218 sites across ~79 sealed bodies.** The expensive direction, and
+* **(D) 218 sites across ~79 downstream bodies.** The expensive direction, and
   every one needs a §6 answer-preservation run afterwards.
 
 **Note that (C) fixes THIS corpus and leaves the regression live for every
@@ -120,9 +120,9 @@ insert the current module — the `--goal(…)` seam — and the question is whi
 Python positions it covers (`if`, `for`, `while`, statement, comprehension).
 
 **He is right about the mechanism and right that the comprehension form is
-missing. He is wrong about this fixing the harnesses, for one reason nobody
+missing. He is wrong about this fixing the downstream checks, for one reason nobody
 had written down: the seam's module is the HOST module, resolved at COMPILE
-time, and the sealed harnesses address a rulebase loaded at RUNTIME.**
+time, and the downstream downstream checks address a rulebase loaded at RUNTIME.**
 
 ### Measured — the five positions, `mainnow bd774c46` vs `kwwt 3d17fdf8`
 
@@ -152,9 +152,9 @@ not a P2 regression. `EmbedTransformer` has `visit_If`, `visit_For`,
 (`GeneratorExp`/`ListComp`/`DictComp`/`SetComp`). The operator asked for this
 form; it needs building either way.
 
-### Measured — THE REASON THE SEAM DOES NOT COVER THE HARNESSES
+### Measured — THE REASON THE SEAM DOES NOT COVER THE DOWNSTREAM CHECKS
 
-    m = _load_module("rb_under_test", path)     # the harness's own shape
+    m = _load_module("rb_under_test", path)     # the downstream lane's own shape
     for X in --m.sp(X): ...
 
     mainnow   NameError: name 'm.sp' is not defined
@@ -164,7 +164,7 @@ form; it needs building either way.
 
 The seam resolves a goal's name at compile time against the host module's
 rules. `m` is a Python variable holding a module object loaded at runtime, so
-`m.sp` names nothing the compiler can see. **The sealed harnesses are built
+`m.sp` names nothing the compiler can see. **The downstream downstream checks are built
 around exactly that** — `module = loader.get()`, with `fresh_per_case` reloading
 the rulebase per case for the domains that need isolation. No static import can
 express it.
@@ -181,7 +181,7 @@ express it.
   One place, in `EmbedTransformer`.
 
   **Sequencing matters and it is what makes this safe:** (E) is independent of
-  P2 and works on main. Land the seam form on MAIN first, migrate the sealed
+  P2 and works on main. Land the seam form on MAIN first, migrate the downstream
   bodies on MAIN, prove zero drift there with the instrument still live, and
   only then retest P2. That is the `_DATES_ARE_TERMS` policy followed exactly,
   and it never takes the measurement axis dark. The body migration is still
@@ -189,7 +189,7 @@ express it.
   against a green baseline.
 
   It also retires the proxy idea (C) and its real risk, which
-  the downstream harness lane measured: the module object is passed WHOLE to
+  the downstream downstream lane measured: the module object is passed WHOLE to
   `a strict getattr helper`, `another helper`, `_gold`, `_build_profile`, `_show`,
   `_answer`, `_atom`, `_profile_to_term`, `_profile`, plus 72 `getattr(m, …)`
   sites across 22 files and 168 distinct predicate attribute names — and
@@ -198,7 +198,7 @@ express it.
 
 ## Scope note on the call-site count
 
-the downstream harness lane re-derived it and the number depends on its definition:
+the downstream downstream lane re-derived it and the number depends on its definition:
 
     112  in 37 files   goal LEXICALLY inside solve/once/call(…)   — a FLOOR
     218  in ~79 files  calls that become goals (engine-lane)
@@ -213,7 +213,7 @@ are never solved. Quote the definition with the number.
 
 ## 2026-09-21 (later) — THE COMPREHENSION GAP, and why it is SMALLER than it looks
 
-the downstream harness lane raised the comprehension restriction as a collision that
+the downstream downstream lane raised the comprehension restriction as a collision that
 halves the value of the seam route. The restriction is real and I reproduced
 it. **The conclusion does not follow, and the reason is in the lowering.**
 
@@ -229,7 +229,7 @@ it. **The conclusion does not follow, and the reason is in the lowering.**
 
 Iterable position only; condition and element are fine. **`ast.parse` cannot
 see it** — it is enforced in the symbol-table pass, so only `compile()` raises.
-(the downstream harness lane measured this independently on 2026-09-09 as their defect
+(the downstream downstream lane measured this independently on 2026-09-09 as their defect
 class 6; two of their tools validated generated bodies with `ast.parse` and
 were blind to it. The gap is STABLE, not something P2 disturbed.)
 
@@ -265,7 +265,7 @@ A hoist is only sound for the OUTERMOST `for` clause: that iterable is
 evaluated in the enclosing scope, while a later clause is re-evaluated per
 outer iteration and would need fresh vars each time.
 
-Censused over the sealed bodies — 161 files, **all 161 parsed**, no rubble:
+Censused over the downstream bodies — 161 files, **all 161 parsed**, no rubble:
 
     goal calls (solve/once/call) total        264   in 85 files
       in a COMPREHENSION ITERABLE             119   in 45 files   (45%)
@@ -277,7 +277,7 @@ only the outermost iterable — the case the existing hoist already fits —
 covers 119 of 119 real sites, and the inner-clause complication can be
 REFUSED with a diagnostic rather than built.
 
-(the downstream harness lane counted 110 of 230 = 47%; mine is 119 of 264 = 45%. The
+(the downstream downstream lane counted 110 of 230 = 47%; mine is 119 of 264 = 45%. The
 gap is scope — which files count as a body — not disagreement. Quote the
 definition with the number.)
 
@@ -291,7 +291,7 @@ asked for in its own right.
 ### Sequencing, unchanged and still the point
 
 (E) and the comprehension visitor are both independent of P2 and work on main.
-Land them on MAIN, migrate the sealed bodies on MAIN, prove zero drift there
-with the instrument live, then retest P2. Per the downstream harness lane: the census
+Land them on MAIN, migrate the downstream bodies on MAIN, prove zero drift there
+with the instrument live, then retest P2. Per the downstream downstream lane: the census
 guard and `<the migration tool>` must learn the dotted form in the same window,
 or body 83 is written the old way — fix-then-arm, not arm-then-fix.

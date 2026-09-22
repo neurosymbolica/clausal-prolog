@@ -13,7 +13,7 @@
 * **R-P2-1** One declaration registry on the Database with a `data`/`predicate` kind. A fielded declaration starts as `data`; clauses, `-dynamic`, or a `-discontiguous`/`-table`/`-shallow` directive naming it make it `predicate`. `row()` answers only for predicates (the P4-prerequisite landing fb0106f3 already mints those rows); `signature_for` answers for both. The module-level `FUNCTOR_SIGNATURES_KEY` map is retired.
 * **R-P2-2** `m.pred(X)` from Python is retired WITH the class (P4), not replaced by a proxy: the calling forms are `call("pred", X, module=m)` and `solve(("pred", X), module=m)`. P2 does not touch it; P2 must not add a new dependency on it.
 * **R-P2-3** `-implicit_atoms` is deprecated this landing (warning), removed the next.
-* **R-P2-4 (sequencing, option 2)** P2 runs BEFORE L3's rules/directives phases; L3 stays at facts and its harness (`tests/iso_l3/`) is one of P2's controls. L3's later phases are written against the tuple AST once.
+* **R-P2-4 (sequencing, option 2)** P2 runs BEFORE L3's rules/directives phases; L3 stays at facts and its downstream checks (`tests/iso_l3/`) is one of P2's controls. L3's later phases are written against the tuple AST once.
 
 ## Global Constraints
 
@@ -21,7 +21,7 @@
 * `_get_dispatch` is a frozen duck-typed protocol with out-of-tree implementors; it is NOT touched by P2.
 * A predicate's CLASS still exists after P2 (P4 deletes it). P2 removes INSTANCES and DATA-functor classes only.
 * Every site change is one of three rewrites (below, "The three rewrites"); anything else is reported, not improvised.
-* Gate per task: the file's neighbour tests green; gate per landing: clean-base engine A/B NEW 0 / GONE 0 on DETACHED worktrees with the same extension set + positive controls, twin-parity, exporter goldens (`tests/test_clausal_to_prolog*`), `tests/iso`, `tests/rewrite`, `tests/iso_l3`; then the corpus ANSWER-SET axis (harness-batch-lane, 28 sealed scorers) before promotion. Report class count and the construct/unify benchmark (spec §7) before and after; they are exit criteria.
+* Gate per task: the file's neighbour tests green; gate per landing: clean-base engine A/B NEW 0 / GONE 0 on DETACHED worktrees with the same extension set + positive controls, twin-parity, exporter goldens (`tests/test_clausal_to_prolog*`), `tests/iso`, `tests/rewrite`, `tests/iso_l3`; then the corpus ANSWER-SET axis (the downstream lane, the downstream answer-set checks) before promotion. Report class count and the construct/unify benchmark (spec §7) before and after; they are exit criteria.
 * `git add` explicit paths only; `git branch --show-current` before every commit; build in a same-sha worktree and copy-then-move extensions under live importers.
 
 ---
@@ -172,7 +172,7 @@ Exit: `make_predicate(` callers in `clausal/` = the three in `specialization.py`
 - [ ] Clean-base A/B: base = canonical main at P2's branch point (own build, 13 extensions), candidate = detached tip, positive controls (`deref(P) == ('point', 1, 2)`; census hook 0; `is_term_instance` grep 0). NEW 0 / GONE 0, skips identical.
 - [ ] `tests/iso_l3`, `tests/iso`, `tests/rewrite`, exporter goldens, twin-parity: green.
 - [ ] Spec §7 exit numbers in the handoff: class count before/after (`gc.get_objects()` filtered by `PredicateMeta` after loading the docs fixtures), construct/unify microbench before/after.
-- [ ] corpus ANSWER-SET axis: ask harness-batch-lane to run the 28 sealed scorers on the frozen tip; landing waits for that, as the flip's did.
+- [ ] corpus ANSWER-SET axis: ask the downstream lane to run the downstream answer-set checks on the frozen tip; landing waits for that, as the flip's did.
 - [ ] Handoff `implementation_plans/SESSION-HANDOFF-<date>-engine-lane-p2.md`; announcement beside the atoms ones: what a downstream reader of a term must know (a data term is a tuple; field names come from `signature_for`; `m.pred` unchanged until P4).
 
 ## Not in P2 (so nobody folds it in)

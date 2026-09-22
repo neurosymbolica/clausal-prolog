@@ -25,7 +25,7 @@ produces instances. Slice C is what makes that true, and Task 5 (17 C
 
 ## Slice C — sized, and it needs NO operator ruling
 
-corpus-lane swept `.clausal` AND `.seam` (931 files), the kit (43), the sealed
+the corpus lane swept `.clausal` AND `.seam` (931 files), the downstream helper library, the downstream
 `eval/` trees (256), then every file of every type with no filter: **ZERO**
 references to `BoolEq`/`BoolImpl` in any spelling. Engine-internal. Their
 framing, better than mine: the retirement therefore cannot break a corpus file

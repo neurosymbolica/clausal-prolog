@@ -5,7 +5,7 @@ Tip at the time of writing: see `git log -1`. 0 behind `main` (`bd774c46`).
 **Nothing has landed in C** — main and branch C are identical.
 
 Rooms: `/tmp/claude-1000/-workspace-clausal-bug-fix/823f67d2-.../scratchpad/{kwwt,mainnow}`,
-12 `.so` each, venv symlinked. Package harness: see the todo named below.
+12 `.so` each, venv symlinked. Package downstream checks: see the todo named below.
 
 ## Gates, all re-run today
 
@@ -56,8 +56,8 @@ markers in `tests/test_mutation_gate.py` STAY until it is finished.
 
 ## Task 9, what is NOT done
 
-* **The corpus ANSWER-SET axis.** Ask harness-batch-lane to run the 28 sealed
-  scorers on the frozen tip. **Landing waits for that**, as the atoms flip's
+* **The corpus ANSWER-SET axis.** Ask the downstream lane to run the 28 downstream
+  answer-set checks on the frozen tip. **Landing waits for that**, as the atoms flip's
   did. Not started — it is another lane's run and the user was away.
 * The clean-base A/B with its own 13-extension build. The NEW 0 above is
   against the `mainnow` room, which is a faithful room but not a fresh build.
@@ -69,4 +69,4 @@ markers in `tests/test_mutation_gate.py` STAY until it is finished.
 2. **A constructor flip silently re-points every test fixture that used the
    constructor**, and the fixture keeps passing under its old name.
 3. **A NEW-0 is evidence only if the run printed a summary AND the thing under
-   test actually imported.** Two wrong package harnesses both reported NEW 0.
+   test actually imported.** Two wrong package gatees both reported NEW 0.

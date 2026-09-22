@@ -83,8 +83,8 @@ the exporter's row.
 
 **One thing, and it is another lane's run.**
 
-* **The corpus ANSWER-SET axis.** Ask the downstream harness lane to run the sealed
-  answer-set scorers on the frozen tip `27a4f8c4`. **Landing waits for
+* **The corpus ANSWER-SET axis.** Ask the downstream downstream lane to run the downstream
+  answer-set answer-set checks on the frozen tip `27a4f8c4`. **Landing waits for
   it**, as the atoms flip's did. Not started. Run the units-DECLARING domain alone first — it holds the one
   unexplained reading, so it is the cheapest early warning.
 
