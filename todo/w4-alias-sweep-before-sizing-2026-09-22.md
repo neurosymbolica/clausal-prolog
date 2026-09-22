@@ -41,3 +41,24 @@ Downstream: requested from the three lanes 2026-09-22, by this list.
 Replacements that already exist: `reflection.is_v(x, Name)` for shape 1,
 `reflection.vfield(x, "field")` for shape 3 on reflection cells; the atom /
 `(functor, arity)` key for shapes 4–5 is W4's design, not yet written.
+
+## Downstream result 1 of 3 (the downstream lane, 2026-09-22)
+
+Population: the downstream roster bodies, all parsed. Alias resolution
+covers `import X as Y`, `from clausal import reflection`, and
+`import clausal.reflection as r`; a planted positive fires on every
+detectable shape before each sweep.
+
+    shape 1  isinstance against a vocabulary class            0
+    shape 2  type(x) is/== / __name__ == / "PredicateMeta"    0
+    shape 3  cell-field read on a PROVABLE vocabulary value   0
+             (unrestricted `.value/.args/.name/.head` on anything: 328,
+              an UPPER BOUND — `X.value` on a Var is the commonest idiom;
+              a true figure inside it needs dataflow, not a name match)
+    shape 4  a predicate class held as a VALUE, called later  31 in 5 bodies
+             (UNCHANGED from W1b under the widened net)
+    shape 5  __name__/__module__ off a predicate class         0
+
+So the sealed side's whole W4 cliff is the 31 hold-and-call sites, and the
+alias blind spot did not hide anything there; it was real only in the
+corpus tooling (13 isinstance + 31 field reads, already migrated).
