@@ -389,17 +389,21 @@ def _expand_item(item, expansion_module, module_state):
 
 
 def _head_as_cell(term: Any) -> Any:
-    """Lower a clause-HEAD INSTANCE to its cell for matching (a no-op for the
-    cell a head normally is since the head flip; still reached for a class
-    flagged ``instances=True``, the P2 bridge).
+    """Lower a clause-HEAD term instance to its cell for matching.
 
-    Every TERM a term_expansion pattern compiles to is a cell since Task 3
-    (``cell_signature_for_name`` answers for a predicate functor too), but the
-    clause-HEAD channel still carries instances until P4 -- the transformer
-    emits a head as ``<cls>._clausal_head(...)``.  So an item whose functor HAS
-    clauses arrived as an instance and did not unify with the cell its own
-    pattern built: ``term_expansion(q(key(KEY)), ...)`` silently matched
-    nothing, and the module loaded with the expansion's output missing.
+    A NO-OP for a predicate head since W4a (2026-09-22): a head is a cell,
+    and the predicate-INSTANCE shape this was written for cannot be built any
+    more.  What it still lowers is a ``@dataclass`` term that is not one of
+    the three excluded carriers, which is why it stays rather than going with
+    the bridge.
+
+    The defect it was written for: every TERM a term_expansion pattern
+    compiles to is a cell since Task 3 (``cell_signature_for_name`` answers
+    for a predicate functor too), while the clause-HEAD channel still carried
+    instances.  So an item whose functor HAS clauses arrived as an instance
+    and did not unify with the cell its own pattern built:
+    ``term_expansion(q(key(KEY)), ...)`` silently matched nothing, and the
+    module loaded with the expansion's output missing.
 
     Only the TOP term is lowered: nested arguments compile to cells already,
     and the lift back is not needed here -- a cell head reaching the store is

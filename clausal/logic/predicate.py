@@ -585,6 +585,8 @@ _RETIRED_STATE_NAMES = {
 #: The wave a retired name goes with, where it is not W2's (the default the
 #: tombstone factory carries).  A reader who hits the refusal is told which
 #: landing took the door away, so the spec is findable.
+_DEFAULT_RETIRED_WAVE = "W2 of the PredicateMeta retirement, 2026-09-22"
+
 _RETIRED_STATE_WAVES = {
     "_clausal_instances": "W4a of the PredicateMeta retirement, 2026-09-22",
 }
@@ -609,8 +611,7 @@ class RetiredStateError(Exception):
 
 
 def _make_retired_tombstone(name: str, where: str,
-                            wave: str = "W2 of the PredicateMeta retirement, "
-                                        "2026-09-22") -> property:
+                            wave: str = _DEFAULT_RETIRED_WAVE) -> property:
     """A property that RAISES on read and on write, naming the replacement."""
     def _fail(*_args):
         raise RetiredStateError(
@@ -1747,12 +1748,13 @@ for _retired_name, _retired_where in _RETIRED_STATE_NAMES.items():
     setattr(PredicateMeta, _retired_name,
             _make_retired_tombstone(
                 _retired_name, _retired_where,
-                **({"wave": _RETIRED_STATE_WAVES[_retired_name]}
-                   if _retired_name in _RETIRED_STATE_WAVES else {})))
+                wave=_RETIRED_STATE_WAVES.get(_retired_name,
+                                              _DEFAULT_RETIRED_WAVE)))
 del _retired_name, _retired_where
 
 
-def make_predicate(name: str, fields: list[str], **refused) -> "PredicateMeta":
+def make_predicate(name: str, fields: list[str], *,
+                   instances: Any = _MISSING) -> "PredicateMeta":
     """Dynamically create a PredicateMeta class.
 
     Useful in tests and runtime code that needs a predicate without a
@@ -1763,10 +1765,13 @@ def make_predicate(name: str, fields: list[str], **refused) -> "PredicateMeta":
         compile_predicate("foo", 2, foo._state_row().clauses, pred_cls=foo)
         fn = foo._get_dispatch()
     """
-    if refused:
+    if instances is not _MISSING:
         raise TypeError(
-            f"make_predicate() got {sorted(refused)}: the `instances=` bridge "
-            f"was retired (W4a, 2026-09-22); a predicate class builds cells")
+            "make_predicate() got `instances=`: that bridge was retired "
+            "(W4a, 2026-09-22); a predicate class builds cells.  (The "
+            "parameter is still declared so passing it says THIS, rather "
+            "than the bare 'unexpected keyword argument' every other typo "
+            "should get.)")
     return PredicateMeta(name, (), {"_fields": tuple(fields)})
 
 

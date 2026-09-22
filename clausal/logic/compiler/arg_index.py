@@ -473,6 +473,8 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
             return (bare_name_of(func.id), n_args)
         if isinstance(func, ast.Attribute):
             n_args = len(arg_expr.args) + len(arg_expr.keywords)
+            # DEAD SINCE W4a: the emitter can no longer produce this
+            # attribute (see solve.py's gate rule); retired in W4b.
             # Cls._clausal_new(...) (Phase 0 construction fast path,
             # term_to_ast_expr): unlike a qualified mod.Dog(...) call, the
             # class name is the ATTRIBUTE'S VALUE, not its attr string — the

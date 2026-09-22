@@ -1328,8 +1328,8 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
         for name in fields
     }
     # W4a: the tail of this function is the DATACLASS path (its gate,
-    # ``_needs_dataclass_fact_normalization``, excludes cells and the
-    # Compound/Call/KWTerm shapes), so the rebuild is the class's own
+    # ``_is_normalizable_fact``, excludes cells and the Compound/Call/KWTerm
+    # shapes), so the rebuild is the class's own
     # constructor.  It used to be ``_clausal_head``, for the predicate
     # INSTANCE that path also carried until W4a retired it.
     new_head = type(head)(**new_kwargs)

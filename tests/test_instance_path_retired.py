@@ -44,10 +44,24 @@ def test_is_term_instance_is_dataclass_only():
 
 
 def test_the_python_twins_no_longer_carry_a_predicatemeta_instance_arm():
+    """The CODE of each twin, docstrings excluded -- prose may name the
+    metaclass (it has to, to say what went), an executable line may not."""
+    import ast
     import inspect
+    import textwrap
+
     from clausal.logic import predicate as P
-    src = inspect.getsource(P._is_term_instance_py) + inspect.getsource(P._term_field_names_py)
-    assert "PredicateMeta" not in src, "the instance arm is gone; only the dataclass arm remains"
+
+    for fn in (P._is_term_instance_py, P._term_field_names_py):
+        body = ast.parse(textwrap.dedent(inspect.getsource(fn))).body[0].body
+        if (isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)):
+            body = body[1:]                       # drop the docstring
+        assert body, f"{fn.__name__} has no body left to check"
+        code = "\n".join(ast.unparse(node) for node in body)
+        assert "PredicateMeta" not in code, (
+            f"{fn.__name__} still carries the instance arm:\n{code}")
 
 
 # ── what SURVIVES the retirement ────────────────────────────────────────────
@@ -141,3 +155,25 @@ def test_the_c_source_no_longer_carries_the_instance_arm():
     # arms 4-7 and py_register_predicate_meta belong to W4b.
     assert "py_register_predicate_meta" in src
     assert "PyType_Check(term) && PredicateMeta_type" in src
+
+
+def test_a_dataclass_head_is_not_liftable_and_the_clause_comes_back_unchanged():
+    """The lift's gate and its rebuild admit the same head shapes.
+
+    Review finding (2026-09-22): the gate used to admit anything
+    ``is_term_instance`` accepted, while the rebuild below it called
+    ``_clausal_head`` -- which a ``@dataclass`` term has not got.  A
+    non-Compound dataclass head therefore passed the gate and died in the
+    rebuild.  W4a's deletion made that a ``TypeError`` instead of an
+    ``AttributeError``, which is no better, so the gate lost the arm: a head
+    is a Compound or a cell, and anything else is simply not liftable.
+    """
+    from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
+    from clausal.logic.database import Clause
+    from clausal.pythonic_ast.nodes import BinOp
+    from clausal.terms import Unify
+
+    v = Var()
+    clause = Clause(head=BinOp(left=v, right=2),
+                    body=[Unify(left=v, right=[1, 2, 3])])
+    assert _lift_clause_at_pos(clause, 0) is clause

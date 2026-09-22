@@ -37,7 +37,7 @@ from clausal.terms import (
     DictTerm, SetTerm, KWTerm,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
-from clausal.logic.predicate import is_term_instance, term_field_names, term_field_dict
+from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.database import Clause
 
 from ._ast_helpers import _name, _call, _assign, _if, _MARK_PREFIX  # noqa: F401
@@ -72,9 +72,12 @@ def _get_head_arg(clause: Clause, pos: int) -> Any:
     if _cell_shape(head)[0]:                        # P2: a head is a cell
         args = cell_args(head)
         return args[pos] if pos < len(args) else None
-    if is_term_instance(head):
-        fields = list(term_field_names(head))
-        return getattr(head, fields[pos]) if pos < len(fields) else None
+    # W4a: no third head shape.  The predicate-INSTANCE arm that stood here
+    # went with the instance path, and it never served the OTHER shape
+    # `is_term_instance` admits -- a non-Compound @dataclass head -- because
+    # the rebuild it fed called `_clausal_head`, which a dataclass has not
+    # got.  So an unsupported head is "not liftable", which is what the
+    # callers already handle.
     return None
 
 
@@ -171,13 +174,8 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
         if pos >= len(cargs):
             return clause
         head_arg = deref(cargs[pos])
-    elif is_term_instance(head):
-        fields = list(term_field_names(head))
-        if pos >= len(fields):
-            return clause
-        head_arg = deref(getattr(head, fields[pos]))
     else:
-        return clause
+        return clause          # W4a: see _head_arg_at -- Compound or cell
 
     # Only lift when the head arg is an unbound Var
     if not is_var(head_arg):
@@ -365,10 +363,10 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
         new_args[pos] = lift_term
         new_head = make_cell(cell_functor(head), *new_args)
     else:
-        # W4a: the predicate-INSTANCE arm that stood here is retired with the
-        # instance path.  A head is a Compound or a cell; anything else is a
-        # shape this lift was never written for, and saying so beats
-        # rebuilding it wrongly.
+        # Unreachable: the gate above returned `clause` for every head that is
+        # neither a Compound nor a cell.  Loud rather than silent if the two
+        # ever drift apart again -- which is the defect this shape had before
+        # W4a, when the gate admitted a shape the rebuild could not build.
         raise TypeError(
             f"head is neither a Compound nor a cell: {head!r}")
 

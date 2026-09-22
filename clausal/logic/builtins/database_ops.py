@@ -7,9 +7,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
-from clausal.logic.predicate import (
-    PredicateMeta, is_term_instance, term_field_names,
-)
+from clausal.logic.predicate import PredicateMeta
 from clausal.terms import Compound
 from clausal.logic.exceptions import LogicException, permission_error
 

@@ -383,8 +383,11 @@ def cell_signature_for_name(
         return None
     binding, leaf, leaf_namespace = resolved
     if isinstance(binding, PredicateMeta):
-        if binding.__dict__.get("_clausal_instances"):
-            return None            # P2 bridge: this class still builds instances (its consumers read attributes)
+        # (W4a: the `_clausal_instances` gate that stood here is gone with the
+        # bridge.  It read the flag straight out of `cls.__dict__`, so it kept
+        # honouring a class-body assignment after the attribute itself became
+        # a tombstone -- the one door left through which the retired flag
+        # still changed what the compiler emitted.)
         # P2 Task 3: a PREDICATE functor in term position compiles to the cell
         # too; its class only ever built instances, and __call__ builds cells
         # now, so the class-call path would only cost a runtime construction.
@@ -1139,6 +1142,11 @@ def term_to_ast_expr(
             and isinstance(vars(cls).get("_clausal_new"), classmethod)
             and not any(name in ("_position", "position") for name in fields)
         ):
+            # DEAD SINCE W4a: no class carries the generated constructor any
+            # more, so this gate never matches and the keyword emission below
+            # is the only path.  Retired with the other four gates in W4b --
+            # see the rule in solve.py's _deref_walk_py.
+            #
             # Saturated, no position field, generated fast constructor
             # available: emit a positional call to it instead of the
             # keyword-based slow-path constructor call below.  Gate on

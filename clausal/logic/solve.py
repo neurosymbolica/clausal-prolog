@@ -107,6 +107,17 @@ def _deref_walk_py(term: Any) -> Any:
         # of truth for the gate rule; the C sites' comments point back here
         # rather than restating it.
         #
+        # DEAD SINCE W4a (2026-09-22), AT ALL FIVE SITES: `_make_fast_new`
+        # and the `_clausal_new` attachment are gone, and `is_term_instance`
+        # is dataclass-only, so no class reaching here carries the
+        # classmethod and every one of the five gates falls straight through
+        # to the slow path.  Retiring the gates themselves (and the interned
+        # `str__clausal_new` in both extensions, and arg_index's call-key
+        # special case for an attribute the emitter can no longer emit) is
+        # W4b's cleanup: it touches two C files, and W4a's claim is that no
+        # answer moves.  The rule below is kept verbatim until then so the
+        # five sites still describe one thing.
+        #
         # The rule: cls's OWN dict (never an inherited attribute -- `vars(cls)`
         # in Python, `PyType_GetDict` + `PyDict_GetItemRef` on the type's own
         # dict in C) has "_clausal_new" bound as a classmethod iff

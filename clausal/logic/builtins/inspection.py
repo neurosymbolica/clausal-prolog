@@ -112,6 +112,7 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         return SegString(new_segments)
     if is_term_instance(term):
         cls = type(term)
+        # Dead since W4a -- see the gate rule in solve.py's _deref_walk_py.
         fast = vars(cls).get("_clausal_new")
         if isinstance(fast, classmethod):
             return cls._clausal_new(*(
