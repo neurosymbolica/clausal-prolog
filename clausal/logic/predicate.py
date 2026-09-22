@@ -1579,13 +1579,28 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
 
 def _field_names_for_name(name, arity, db, namespace):
     """Arm 3.  Demangle -> exact db read -> by-name db read -> the
-    namespace's exec-time carrier -> the builtin registry -> None."""
+    namespace's exec-time carrier -> the builtin registry -> None.
+
+    A MANGLED name is module-qualified by construction, so it is handled
+    entirely by the branch below and returns from it -- it never reaches
+    the shared tail.  Both ``namespace`` and the builtin registry are
+    bare-name carriers: letting either answer for a mangled name would
+    silently un-qualify the handle, so once a name demangles, the OWNER's
+    db is the sole authority for it.  If the owner module isn't loaded, or
+    is loaded but doesn't know the name, the answer is None -- never a
+    fallthrough to the caller's namespace or to _BUILTIN_FIELDS."""
     from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
     if is_mangled(name):
-        # A handle carries its module: resolve against the OWNER's db, never
-        # the caller's, or a name declared in both answers for the wrong one.
-        module_name, name = demangle(name)
-        db = _db_for_module_name(module_name)
+        # A handle carries its module: resolve against the OWNER's db,
+        # never the caller's -- a name declared in both answers for the
+        # wrong one -- and never fall through past this branch either.
+        module_name, bare_name = demangle(name)
+        owner_db = _db_for_module_name(module_name)
+        if owner_db is None:
+            return None
+        if arity is not None:
+            return owner_db.signature_for(bare_name, arity)
+        return owner_db.declared_fields_by_name(bare_name)
     if db is not None:
         if arity is not None:
             found = db.signature_for(name, arity)

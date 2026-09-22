@@ -68,6 +68,36 @@ def test_arm3_mangled_name_resolves_against_its_OWN_module_db(monkeypatch):
                            db=caller_db) == ("a",)
 
 
+def test_arm3_mangled_owner_not_loaded_does_not_fall_through_to_namespace(
+        monkeypatch):
+    """Fix round 1: a mangled name is module-qualified by construction.  If
+    the owner module isn't loaded, the caller's namespace must NOT answer
+    for it under the bare name -- that would silently un-qualify the
+    handle back onto the caller."""
+    import clausal.logic.predicate as predmod
+
+    monkeypatch.setattr(
+        predmod, "_db_for_module_name", lambda name: None, raising=False)
+    ns = {FUNCTOR_SIGNATURES_KEY: {"thing": ("CALLERS", "OWN", "FIELDS")}}
+    assert field_names_for(mangle("no_such_module_xyz", "thing"), arity=3,
+                           namespace=ns) is None
+
+
+def test_arm3_mangled_owner_loaded_but_silent_does_not_fall_through_either(
+        monkeypatch):
+    """Same shape, but the owner db IS loaded and simply doesn't know the
+    name -- the owner's registry is the SOLE authority for a mangled name,
+    so this is still None, not a fallthrough to namespace."""
+    import clausal.logic.predicate as predmod
+
+    owner_db = Database()  # knows nothing about "thing"
+    monkeypatch.setattr(
+        predmod, "_db_for_module_name", lambda name: owner_db, raising=False)
+    ns = {FUNCTOR_SIGNATURES_KEY: {"thing": ("CALLERS", "OWN", "FIELDS")}}
+    assert field_names_for(mangle("owner", "thing"), arity=3,
+                           namespace=ns) is None
+
+
 def test_arm4_a_non_class_non_name_value_is_None():
     assert field_names_for(42) is None
     assert field_names_for(object()) is None
