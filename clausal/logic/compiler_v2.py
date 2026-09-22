@@ -465,9 +465,30 @@ def compile_module(
     _run_specialization(module_items, predicate_nodes, module_dict, db)
 
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
+    #
+    # ONLY names this Database actually holds a row for.  The walk sees every
+    # value in the module dict, and plenty of them are ``PredicateMeta`` with
+    # ``_fields`` while being no predicate of this Database: declared data
+    # functors (the P4 prerequisite mints a row only for a functor a directive
+    # names as a PREDICATE), the CLP(B) constraint term classes, and a hook
+    # name like ``term_expansion`` that is present but defined elsewhere.
+    #
+    # Locking one of those used to MINT A DETACHED ROW as a side effect --
+    # ``_locked`` is a facade over ``(cls._row or cls._detached_row())`` -- and
+    # then wrote the lock into a private single-predicate Database nobody else
+    # can reach.  So the lock had no enforcement effect: the refusal path is
+    # ``database.write_refusal(row, ...)`` reading ``row.locked`` off the REAL
+    # row, and ``compiler/globals_env.py`` and ``compiler/arg_index.py`` both
+    # already spell the same test as ``row is None or not row.locked``.
+    # Measured over the house suite before narrowing this: 897 detached rows
+    # minted across 157 names, and 31 ``_locked`` reads in the whole suite, of
+    # which the only engine-side readers on a detached class were ``__repr__``
+    # and the instance read-through shim -- neither an enforcement path.
     for obj in module_dict.values():
         if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):
             key = (obj.__name__, len(obj._fields))
+            if db.row(*key) is None:
+                continue        # not a predicate of this Database; nothing to lock
             if not db.is_dynamic(*key):
                 obj._lock()
 

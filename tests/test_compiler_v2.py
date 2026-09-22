@@ -246,16 +246,39 @@ class TestV2CompileModule:
         assert isinstance(lm, LogicModule)
 
     def test_predicate_locking(self):
-        """Non-dynamic predicates are locked after compile_module."""
+        """A non-dynamic predicate THIS Database holds is locked after
+        compile_module -- and a class it holds no row for is left alone.
+
+        This used to re-walk step 7's OWN condition and assert the walk had
+        happened, so it passed on ``BoolEq/2`` -- a CLP(B) constraint TERM
+        class, present in every module dict and a predicate of no Database.
+        Locking one of those minted a DETACHED row as a side effect and wrote
+        the lock into a private single-predicate Database nobody else can
+        reach, so it had no enforcement effect: the refusal reads
+        ``row.locked`` off the REAL row (``database.write_refusal``).  A test
+        that mirrors the implementation cannot see that.
+        """
         # nv
         path = os.path.join(FIXTURES_DIR, "static_pred.clausal")
         md = _load_via_v2(path, "_v2_static_pred")
-        # All PredicateMeta classes should be locked
+        db = md["$module"].db
+
+        # THE REQUIREMENT: held by this Database, not dynamic => locked.
+        checked = 0
         for obj in md.values():
-            if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):
+            if isinstance(obj, PredicateMeta) and hasattr(obj, "_fields"):
                 key = (obj.__name__, len(obj._fields))
-                if not md["$module"].db.is_dynamic(*key):
-                    assert obj._locked
+                if db.row(*key) is None:
+                    continue
+                if not db.is_dynamic(*key):
+                    assert obj._locked, key
+                    checked += 1
+        assert checked, "fixture exercised no non-dynamic predicate at all"
+
+        # THE OTHER HALF, pinned so the narrowing cannot silently come undone:
+        # a class this Database has no row for is NOT locked.
+        assert db.row("BoolEq", 2) is None
+        assert not md["BoolEq"]._locked
 
     def test_dynamic_not_locked(self):
         """Dynamic predicates are NOT locked after compile_module."""
