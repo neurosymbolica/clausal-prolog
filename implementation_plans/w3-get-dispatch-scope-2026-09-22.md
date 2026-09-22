@@ -152,3 +152,28 @@ suite and the package gate, and independent of the downstream census.
   it to a tuple by hand, in any expression position (lambda bodies,
   arguments, expression statements). What that needs from the seam is
   being verified: the seam's functor slot is resolved by NAME today.
+
+### CORRECTION (2026-09-22, evening) — heads are CELLS already; the "head channel" is the INSTANCE PATH
+
+The section above was verified by READING comments, not by measuring, and
+it is wrong. Measured on main: a loaded clause stores its head as a cell
+(facts and rules alike); `_head_ctor_ast` is the identity since the
+2026-09-19 head flip; `__call__` builds a cell. The "a HEAD rebuild stays an
+instance" arms fire only when an INSTANCE arrives.
+
+Whole-suite census (a plugin counting every `_clausal_head` construction by
+caller site): **1006 total; 919 from tests** (906 from one file that pins
+the C instance arms on purpose; 13 more in 5 test files), **87 from the
+engine, all three sites downstream of a TEST-SET bridge**: 83 via
+`PredicateMeta.__call__`'s `_clausal_instances` branch (no engine class sets
+it — 55 test sites in 7 files do), 3 via `solve.py`'s instance rebuild, 1
+via `list_dispatch`'s. So the engine's own production paths build ZERO
+instance heads.
+
+W4's engine core is therefore the retirement of the INSTANCE PATH:
+`_clausal_head`, the `_clausal_instances` bridge and `make_predicate(...,
+instances=True)`, the four instance-rebuild arms (database.py x2,
+list_dispatch, database_ops, solve), the instance unification hooks, and
+the C instance arms 0/2/3 (Task 5 step 2, blocked behind exactly this) —
+with the tests that exercise that path migrated or retired deliberately,
+and their disappearance accounted for in the gate. After that, the class.
