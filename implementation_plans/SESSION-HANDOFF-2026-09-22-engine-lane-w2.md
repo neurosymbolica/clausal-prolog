@@ -207,3 +207,30 @@ off an **arbitrary term value**.
 whose production users can be removed, then delete it and leave a tombstone.
 Both retirements went that way. `_signature` (5 sites) is the next candidate
 to assess.
+
+
+## APPENDIX 2 — W2 closed out at 3 of 7; tip `ff19d57f`
+
+Retired by ELIMINATION, each with a raising tombstone:
+`_dynamic_arities`, `_clauses_source`, `_signature`. The instance
+read-through face is down from 7 names to 4.
+
+**The remaining four cannot move before P4, with a reason each:**
+
+    _clauses          compiler/predicate.py:1470,2061 = the `else` of
+                      `if db is not None`; builtins/io.py:743 reads it off an
+                      ARBITRARY TERM value under only an isinstance guard
+    _dispatch_fn      _install writes inside `with ctx` where `_bind_row` ran
+                      ONLY `if db is not None`; _registry.py's builtins are
+                      deliberately detached
+    _lazy_recompile   same _install site (its ONE production site)
+    _locked           _registry.py x2, deliberately detached
+    _index_plans      _compile_predicate_trampoline_impl(..., db=None,
+                      pred_cls=None)
+
+`db=None` is the DOCUMENTED DEFAULT of every compile entrypoint, so these
+sites exist FOR the row-less case. Spelling the fallback at the site buys
+nothing structurally and duplicates the facade. Leave them for P4.
+
+**So W2 is not "the bulk of the diff" the plan expects.** It is three
+eliminations and four blocked attributes. Re-scope it on that basis.
