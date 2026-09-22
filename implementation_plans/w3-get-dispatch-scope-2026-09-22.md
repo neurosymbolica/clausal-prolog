@@ -126,3 +126,16 @@ before.
 
 Remaining for W3: nothing structural. `PredicateMeta._get_dispatch(arity)`
 and the funnel's `PredicateMeta` arm go with the class at W4.
+
+## Verified after W3, for W4's sizing: HEADS ARE STILL INSTANCES
+
+P2 made argument-position terms cells (`PredicateMeta.__call__` builds a
+cell), but a clause HEAD is still an instance: the transformer spells a
+head as `cls._clausal_head(...)`, `database.py`'s head rebuilds "stay an
+instance" (two sites), `solve.py` rebuilds through `_clausal_head`, and
+`term_expansion` emits heads the same way. So the class is load-bearing
+for the clause store, head indexing and head unification — the "P4 head
+channel" the P2 notes re-sequenced W5's C-arm deletions behind. W4's
+in-tree core is therefore the head channel (heads as cells), BEFORE the
+class can go; it is compiler + database + C-side work, gated by the house
+suite and the package gate, and independent of the downstream census.
