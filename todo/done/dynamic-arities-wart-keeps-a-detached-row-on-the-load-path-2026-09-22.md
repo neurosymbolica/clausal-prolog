@@ -134,3 +134,26 @@ declaration semantics. **This wants the operator, with that spec open.**
 Also worth noting for whoever takes it: `_declared_arity` reads `cls._clauses`
 as its FIRST line, which is itself a facade read and mints for a row-less
 class. Whatever fix lands should cover that read too.
+
+---
+
+## CLOSED 2026-09-22 — option (D), operator-approved, commit `ae51facc`
+
+Not (A), (B) or (C): a fourth option this note had missed. `_declared_arity`
+derives the set from `cls._row._db._dynamic` and the step-4a stamp is deleted.
+
+**The import objection above was MY error.** I wrote that a db-derived set
+"would read the IMPORTER's Database". It reads whatever db the ROW belongs to,
+and for an `-import_from` the shared class's `_row` IS the exporter's row — so
+deriving via the row lands on the OWNER's Database, exactly where the stamped
+set lived. The objection only applies to deriving from the *compiling*
+module's db, which is not what (D) does.
+
+**Detached rows on the load path: 0**, over 56 fixture loads (18 at the start
+of the branch). House gate NEW 0 / GONE 0.
+
+Cost: five test sites that assigned `_dynamic_arities` by hand. One failed;
+the other four would have gone VACUOUS, since they assert only that
+`_refuse_call_at` declines — which a declaration that never took also
+satisfies. All five now declare through a helper that marks the Database and
+binds the row, with a positive control in the helper.

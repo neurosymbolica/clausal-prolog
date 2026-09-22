@@ -87,3 +87,30 @@ Does the detached row survive P4?
 
 Both are defects in the detached-row/bind-row seam, which is evidence the mode
 is subtle enough to be worth retiring rather than spreading to 76 call sites.
+
+
+---
+
+## 2026-09-22 — THE LOAD-PATH HALF IS CLOSED
+
+Detached rows minted over 56 fixture loads: **18 -> 0**. Five commits did it —
+step 7 narrowed (`443b2e3b`), the clause-existence read and term_expansion's
+unbound compile (`bec725ea`), and the `_dynamic_arities` wart via option D
+(`ae51facc`, which also removed `_declared_arity`'s two facade reads).
+
+**So a facade read no longer finds `_row is None` anywhere on the load path.**
+The three options this note opened with are moot for load-path callers: the
+substitution IS available for them now.
+
+What remains before the 19 facades can go:
+
+* `make_predicate` classes minted OUTSIDE a load — tests (100 of the 314
+  suite-wide mints came from test code) and any out-of-tree caller. The engine
+  itself no longer has a production writer of `_dynamic_arities`, and
+  `reflection`/`clpb`/`term_expansion`'s term vocabularies are constructors
+  now, so what is left is `make_predicate` used as a PREDICATE factory:
+  `specialization.py` x3, `builtins/_registry.py` x2, `compiler_v2.py` x1.
+  Measured: those contribute 0 detached rows — they bind.
+* the decision on whether `_detached_row` survives at all, which is now a
+  much smaller question: it serves classes minted outside a load, nothing on
+  the load path.
