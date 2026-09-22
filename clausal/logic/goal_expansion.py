@@ -113,7 +113,13 @@ def _cell_slot_names(functor: str, arity: int, module_dict: dict | None):
     a group to the wrong argument, silently.
     """
     cls = (module_dict or {}).get(functor)
-    fields = field_names_for(cls)
+    # IMPORTANT 2 (final fix wave, 2026-09-23): both arity and the
+    # namespace are already parameters of this function -- pass them so
+    # arm 3 can answer once ``cls`` is a mangled NAME rather than a class
+    # (the later sub-project this accessor exists for), instead of only
+    # ever answering via arm 1/2 as today.  Harmless today: arm 1/2 ignore
+    # arity/namespace entirely.
+    fields = field_names_for(cls, arity=arity, namespace=module_dict)
     return tuple(fields) if fields and len(fields) == arity else ()
 
 

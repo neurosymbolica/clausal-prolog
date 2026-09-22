@@ -889,7 +889,13 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
             # so dropping the class read silenced this note for the shape it
             # was written for.  Arity-checked here, because the class read has
             # no key to do it for it.
-            declared_fields = field_names_for(declared)
+            # IMPORTANT 2 (final fix wave, 2026-09-23): arity and db are
+            # already in hand here (arity computed just above, db at the
+            # top of this function) -- pass them so arm 3 can use the
+            # exact-arity read instead of falling through the no-arity,
+            # no-db, no-namespace call that answers None unconditionally
+            # for a NAME.
+            declared_fields = field_names_for(declared, arity=arity, db=db)
             declared_here = (
                 (db is not None and db.row(functor, arity) is not None)
                 or (declared_fields is not None and len(declared_fields) == arity)
