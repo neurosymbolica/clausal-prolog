@@ -43,7 +43,7 @@ def _locked_indexed_callee(db, name, arity, facts):
     cls._bind_row(db, name, arity)
     clauses = [_normalize_fact_clause(Compound(name, tuple(a))) for a in facts]
     compile_predicate_trampoline(name, arity, clauses, pred_cls=cls)
-    cls._locked = True
+    cls._state_row().locked = True
     return cls
 
 
@@ -282,7 +282,7 @@ def test_a_dotted_callee_resolves_through_the_object_at_that_spelling():
     # ... and the same spelling at another arity resolves to nothing
     assert hint_row(importer, "pkg.mod.colour", 1, base_globals) is None
     # ... and an unlocked callee is still refused
-    cls._locked = False
+    cls._state_row().locked = False
     assert hint_row(importer, "pkg.mod.colour", 2, base_globals) is None
 
 
@@ -316,7 +316,7 @@ def test_a_rowless_callee_keeps_its_hints_through_the_class_fallback():
     # a same-name class at ANOTHER arity is not borrowed
     assert hint_row(compiling, "colour", 1, base_globals) is None
     # an unlocked callee is still refused
-    cls._locked = False
+    cls._state_row().locked = False
     assert hint_row(compiling, "colour", 2, base_globals) is None
 
 

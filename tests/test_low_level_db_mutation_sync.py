@@ -3,7 +3,7 @@ keep the predicate class in sync so ``solve()`` sees the mutation.
 
 Background
 ----------
-There are two parallel clause stores: ``Database._clauses`` (+ ``_dispatch``)
+There are two parallel clause stores: ``Database._state_row().clauses`` (+ ``_dispatch``)
 and ``PredicateMeta._clauses`` (+ ``_dispatch_fn``). ``solve()`` resolves a
 predicate call through the *class*. The ``assertz/1`` *builtin* syncs both, but
 the low-level ``Database.assertz()`` Python API only updated the DB store — so

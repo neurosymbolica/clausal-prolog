@@ -73,7 +73,9 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
         # Only dispatch if the class has a compiled dispatch function.
         # This excludes AST nodes (And, Or, in_ as structural nodes, etc.) which
         # are PredicateMeta instances but do not have a compiled predicate body.
-        if getattr(cls, '_dispatch_fn', None) is not None:
+        # The ROW's dispatch (W2).  A class on no row has none; the probe
+        # must not mint one for an AST node.
+        if cls._row is not None and cls._row.dispatch_fn is not None:
             args = tuple(getattr(goal_val, f) for f in term_field_names(goal_val))
             return _dispatch_at(cls, len(args)), args
     return None, None

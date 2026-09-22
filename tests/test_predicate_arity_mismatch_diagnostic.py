@@ -355,13 +355,13 @@ class TestExceptionType:
         passed the whole file.
         """
         pair = make_predicate("arcm_typed", ["k", "v"])
-        pair._clauses.append(Clause(head=pair(1, 2), body=[]))
+        pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
         with pytest.raises(PredicateArityMismatchError):
             pair._get_dispatch(1)
 
     def test_caught_as_a_type_error_at_the_raise_site(self):
         pair = make_predicate("arcm_typed_te", ["k", "v"])
-        pair._clauses.append(Clause(head=pair(1, 2), body=[]))
+        pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
         with pytest.raises(TypeError):
             pair._get_dispatch(3)
 
@@ -535,10 +535,10 @@ class TestForeignSingleArgumentImplementor:
         assert _dispatch_at(foreign_pair, 99) is _foreign_pair_dispatch
         # A PredicateMeta: the arity is forwarded and a disagreement refused.
         pair = make_predicate("arcm_routed", ["k", "v"])
-        pair._clauses.append(Clause(head=pair(1, 2), body=[]))
+        pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
         with pair._mutate("test", "recompile"):    # the gate, P3-3 Task 3
-            pair._dispatch_fn = lambda *a: None
-        assert _dispatch_at(pair, 2) is pair._dispatch_fn
+            pair._state_row().dispatch_fn = lambda *a: None
+        assert _dispatch_at(pair, 2) is pair._state_row().dispatch_fn
         with pytest.raises(PredicateArityMismatchError):
             _dispatch_at(pair, 3)
 
@@ -796,7 +796,7 @@ def _stale_predicate(name, n_clauses):
     """
     pair = make_predicate(name + "_pair", ["k", "v"])
     stale = make_predicate(name, [])
-    stale._clauses.extend(_CountingClause(pair(i, i)) for i in range(n_clauses))
+    stale._state_row().clauses.extend(_CountingClause(pair(i, i)) for i in range(n_clauses))
     assert stale._arity == 0          # stale, permanently
     return stale
 
@@ -815,15 +815,15 @@ class TestTheWalkIsNotPerCall:
     def test_an_agreeing_call_reads_one_head(self):
         stale = _stale_predicate("arcm_hot", 2000)
         stale._refuse_call_at(2)        # the call the corpus makes, every time
-        assert sum(c.reads for c in stale._clauses) == 1
+        assert sum(c.reads for c in stale._state_row().clauses) == 1
 
     def test_the_cost_does_not_grow_with_the_clause_list(self):
         small = _stale_predicate("arcm_small", 2)
         big = _stale_predicate("arcm_big", 2000)
         small._refuse_call_at(2)
         big._refuse_call_at(2)
-        assert (sum(c.reads for c in small._clauses)
-                == sum(c.reads for c in big._clauses) == 1)
+        assert (sum(c.reads for c in small._state_row().clauses)
+                == sum(c.reads for c in big._state_row().clauses) == 1)
 
     def test_a_real_mismatch_is_still_refused(self):
         """The short-circuit must not cost the refusal it is guarding."""
@@ -888,7 +888,7 @@ class TestZeroArityFactAtomHead:
             arcm_flag,
         """)))
         flag = mod.arcm_flag
-        assert flag._clauses                    # the bare fact IS a clause
+        assert flag._state_row().clauses                    # the bare fact IS a clause
         assert flag._clause_arity() == 0        # used to raise TypeError
 
     def test_calling_an_atom_fact_at_arity_one(self, tmp_path, monkeypatch):
@@ -975,7 +975,7 @@ class TestCompoundHead:
     def test_str_functor(self):
         from clausal.terms import Compound
         pred = make_predicate("arcm_compound", [])
-        pred._clauses.append(Clause(head=Compound("arcm_compound", (1, 2)),
+        pred._state_row().clauses.append(Clause(head=Compound("arcm_compound", (1, 2)),
                                     body=[]))
         assert pred._clause_arity() == 2
         with pytest.raises(PredicateArityMismatchError) as exc:
@@ -986,7 +986,7 @@ class TestCompoundHead:
         from clausal.logic.variables import Var
         from clausal.terms import Compound
         pred = make_predicate("arcm_compound_var", [])
-        pred._clauses.append(Clause(head=Compound(Var(), (1, 2, 3)), body=[]))
+        pred._state_row().clauses.append(Clause(head=Compound(Var(), (1, 2, 3)), body=[]))
         assert pred._clause_arity() == 3
         pred._refuse_call_at(3)          # agrees: nothing refused
 
@@ -996,15 +996,15 @@ class TestAHeadShapeNobodyAnticipated:
 
     def test_an_unreadable_head_refuses_nothing(self):
         junk = make_predicate("arcm_junk", [])
-        junk._clauses.append(Clause(head=object(), body=[]))
+        junk._state_row().clauses.append(Clause(head=object(), body=[]))
         assert junk._clause_arity() is None
         junk._refuse_call_at(3)          # must not raise at all
 
     def test_one_unreadable_head_makes_the_whole_arity_unknown(self):
         pair = make_predicate("arcm_mixed_pair", ["k", "v"])
         mixed = make_predicate("arcm_mixed", [])
-        mixed._clauses.append(Clause(head=pair(1, 2), body=[]))
-        mixed._clauses.append(Clause(head=object(), body=[]))
+        mixed._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
+        mixed._state_row().clauses.append(Clause(head=object(), body=[]))
         assert mixed._clause_arity() is None
         mixed._refuse_call_at(1)         # refusable on the first head alone
 
@@ -1020,7 +1020,7 @@ class TestAHeadShapeNobodyAnticipated:
                 raise RuntimeError("a diagnostic must survive this")
 
         boom = make_predicate("arcm_boom", [])
-        boom._clauses.append(Exploding())
+        boom._state_row().clauses.append(Exploding())
         boom._refuse_call_at(2)
 
 

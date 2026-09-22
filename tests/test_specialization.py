@@ -224,7 +224,7 @@ class TestSpecializeSolve:
         pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveNatnum")
         # 1 base + 2 object clauses = 3
-        assert len(pred_cls._clauses) == 3
+        assert len(pred_cls._state_row().clauses) == 3
 
     def test_field_count(self, mi_module):
         """Specialized predicate drops PROGRAM field."""
@@ -276,7 +276,7 @@ class TestSpecializeSolveGraph:
         pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_graph_program(), "SolveGraph")
         # 1 base + 5 object clauses = 6
-        assert len(pred_cls._clauses) == 6
+        assert len(pred_cls._state_row().clauses) == 6
 
     def test_solve_edge(self, mi_module):
         # nv
@@ -327,7 +327,7 @@ class TestSpecializeSolveCount:
         pattern = analyze_mi(mi_module.solve_count)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveCountNatnum")
         # 1 base + 2 object clauses = 3
-        assert len(pred_cls._clauses) == 3
+        assert len(pred_cls._state_row().clauses) == 3
 
     def test_fields(self, mi_module):
         # nv
@@ -420,7 +420,7 @@ class TestSpecializeSolveLimit:
         # nv
         pattern = analyze_mi(mi_module.solve_limit)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveLimitNatnum")
-        assert len(pred_cls._clauses) == 3
+        assert len(pred_cls._state_row().clauses) == 3
 
     def test_fields(self, mi_module):
         # nv
@@ -486,7 +486,7 @@ class TestSpecializeSolveTree:
         # nv
         pattern = analyze_mi(mi_module.solve_tree)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveTreeNatnum")
-        assert len(pred_cls._clauses) == 3
+        assert len(pred_cls._state_row().clauses) == 3
 
     def test_fields(self, mi_module):
         # nv
@@ -677,7 +677,7 @@ class TestSpecializeSolveFactorial:
         # nv
         pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_factorial_program(), "SolveFactorial")
-        assert len(pred_cls._clauses) == 4
+        assert len(pred_cls._state_row().clauses) == 4
 
     def test_fields(self, mi_module):
         # nv
@@ -752,7 +752,7 @@ class TestSpecializeSolveCountFactorial:
         pred_cls = specialize_mi(
             pattern, _make_factorial_program(), "SolveCountFactorial",
         )
-        assert len(pred_cls._clauses) == 4
+        assert len(pred_cls._state_row().clauses) == 4
 
     def test_count_factorial_0(self, mi_module):
         """factorial(0, 1) needs 1 step."""
@@ -890,14 +890,14 @@ class TestNoResidualNoCatchAll:
         pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_natnum_program(), "SolveNatnumNoCatch")
         # 1 base + 2 object = 3 (no catch-all)
-        assert len(pred_cls._clauses) == 3
+        assert len(pred_cls._state_row().clauses) == 3
 
     def test_graph_no_catchall(self, mi_module):
         # nv
         pattern = analyze_mi(mi_module.solve)
         pred_cls = specialize_mi(pattern, _make_graph_program(), "SolveGraphNoCatch")
         # 1 base + 5 object = 6 (no catch-all)
-        assert len(pred_cls._clauses) == 6
+        assert len(pred_cls._state_row().clauses) == 6
 
 
 class TestCustomGoalMap:
@@ -1214,13 +1214,13 @@ class TestSpecializeDeep:
 
         # Shallow specialization.
         shallow_cls = specialize_mi(pattern, program, "ShallowNatnum")
-        shallow_count = len(shallow_cls._clauses)
+        shallow_count = len(shallow_cls._state_row().clauses)
 
         # Deep with depth=0.
         deep_cls = specialize_mi_deep(
             pattern, program, "DeepNatnum0", max_depth=0,
         )
-        deep_count = len(deep_cls._clauses)
+        deep_count = len(deep_cls._state_row().clauses)
 
         assert shallow_count == deep_count
 
@@ -1332,7 +1332,7 @@ class TestSpecializeDeep:
             pattern, program, "DeepNatnum_d1", max_depth=1,
         )
         # Should have at least the base clause count.
-        assert len(pred_cls._clauses) >= 3  # 1 base + 2 object
+        assert len(pred_cls._state_row().clauses) >= 3  # 1 base + 2 object
 
     def test_equivalence_natnum(self, mi_module):
         """Deep-specialized natnum matches shallow for all small values."""
@@ -1592,7 +1592,7 @@ class TestCpdSolveNatnum:
         pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_natnum_program(), "SolveSh1")
         cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd1")
-        assert len(cpd._clauses) >= len(shallow._clauses)
+        assert len(cpd._state_row().clauses) >= len(shallow._state_row().clauses)
 
     def test_natnum_0(self, mi_module):
         # nv
@@ -1640,7 +1640,7 @@ class TestCpdSolveGraph:
         pattern = analyze_mi(mi_module.solve)
         shallow = specialize_mi(pattern, _make_graph_program(), "SolveGSh1")
         cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd1")
-        assert len(cpd._clauses) > len(shallow._clauses)
+        assert len(cpd._state_row().clauses) > len(shallow._state_row().clauses)
 
     def test_path_a_b(self, mi_module):
         # nv
@@ -1823,7 +1823,7 @@ class TestCpdTermination:
         cpd = specialize_mi_cpd(
             pattern, _make_natnum_program(), "SolveTerm1", max_depth=20,
         )
-        assert len(cpd._clauses) > 0
+        assert len(cpd._state_row().clauses) > 0
 
     def test_graph_terminates(self, mi_module):
         # nv
@@ -1831,7 +1831,7 @@ class TestCpdTermination:
         cpd = specialize_mi_cpd(
             pattern, _make_graph_program(), "SolveTerm2", max_depth=20,
         )
-        assert len(cpd._clauses) > 0
+        assert len(cpd._state_row().clauses) > 0
 
     def test_factorial_terminates(self, mi_module):
         # nv
@@ -1839,7 +1839,7 @@ class TestCpdTermination:
         cpd = specialize_mi_cpd(
             pattern, _make_factorial_program(), "SolveTerm3", max_depth=20,
         )
-        assert len(cpd._clauses) > 0
+        assert len(cpd._state_row().clauses) > 0
 
     def test_even_terminates(self, mi_module):
         # nv
@@ -1847,7 +1847,7 @@ class TestCpdTermination:
         cpd = specialize_mi_cpd(
             pattern, _make_even_odd_program(), "SolveTerm4", max_depth=20,
         )
-        assert len(cpd._clauses) > 0
+        assert len(cpd._state_row().clauses) > 0
 
 
 # ── P3-3 Task 7: the specialized predicate is a Database ROW ─────────────────

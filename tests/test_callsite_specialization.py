@@ -79,8 +79,8 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
-        assert hasattr(pred_cls, "_index_plans")
-        assert isinstance(pred_cls._index_plans, dict)
+        assert pred_cls._row is not None, "compiled into a module, so on its row"
+        assert isinstance(pred_cls._state_row().index_plans, dict)
 
     def test_index_plans_keys_are_positions(self):
         """Keys of _index_plans are argument positions (ints)."""
@@ -91,7 +91,7 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
-        for pos in pred_cls._index_plans:
+        for pos in pred_cls._state_row().index_plans:
             assert isinstance(pos, int)
 
     def test_index_plans_values_are_dicts_of_callables(self):
@@ -103,7 +103,7 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
-        for pos, idx_dict in pred_cls._index_plans.items():
+        for pos, idx_dict in pred_cls._state_row().index_plans.items():
             assert isinstance(idx_dict, dict)
             for key, bucket_fn in idx_dict.items():
                 assert callable(bucket_fn), f"bucket for key {key!r} is not callable"
@@ -115,9 +115,9 @@ class TestIndexPlansExposed:
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
         compile_predicate("color", 1, clauses, pred_cls=pred_cls)
-        assert 0 in pred_cls._index_plans
+        assert 0 in pred_cls._state_row().index_plans
         # An atom keys as the arity-0 CELL it is: (spelling, 0) — spec §6.9.
-        assert set(pred_cls._index_plans[0].keys()) == {
+        assert set(pred_cls._state_row().index_plans[0].keys()) == {
             (spelling(a), 0) for a in atoms}
 
     def test_index_plans_contains_integer_keys(self):
@@ -128,8 +128,8 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("fib", ["n", "f"])
         compile_predicate("fib", 2, clauses, pred_cls=pred_cls)
-        assert 0 in pred_cls._index_plans
-        assert set(pred_cls._index_plans[0].keys()) == {0, 1, 2, 3, 4, 5}
+        assert 0 in pred_cls._state_row().index_plans
+        assert set(pred_cls._state_row().index_plans[0].keys()) == {0, 1, 2, 3, 4, 5}
 
     def test_index_plans_empty_when_below_threshold(self):
         """Below the indexing threshold, _index_plans is set to {}."""
@@ -139,8 +139,8 @@ class TestIndexPlansExposed:
         clauses = _make_fact_clauses("tiny", [("a",)])
         pred_cls = _make_pred_cls("tiny", ["x"])
         compile_predicate("tiny", 1, clauses, pred_cls=pred_cls)
-        assert hasattr(pred_cls, "_index_plans")
-        assert pred_cls._index_plans == {}
+        assert pred_cls._row is not None, "compiled into a module, so on its row"
+        assert pred_cls._state_row().index_plans == {}
 
     def test_index_plans_not_set_when_no_pred_cls(self):
         """when pred_cls is None, no _index_plans attribute is injected."""
@@ -189,12 +189,12 @@ class TestIndexPlansExposed:
             (mint("a"),), (mint("b"),), (mint("c"),), (mint("d"),),
             (mint("e"),)])
         compile_predicate("tiny", 1, clauses5, pred_cls=pred_cls)
-        assert pred_cls._index_plans != {}
+        assert pred_cls._state_row().index_plans != {}
 
         # Second compile: just one clause — should clear _index_plans
         clauses1 = _make_fact_clauses("tiny", [("a",)])
         compile_predicate("tiny", 1, clauses1, pred_cls=pred_cls)
-        assert pred_cls._index_plans == {}
+        assert pred_cls._state_row().index_plans == {}
 
     def test_two_arg_predicate_indexes_first_arg(self):
         """Two-argument predicate: _index_plans[0] keyed on first argument."""
@@ -206,8 +206,8 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("edge", ["from_node", "to_node"])
         compile_predicate("edge", 2, clauses, pred_cls=pred_cls)
-        assert 0 in pred_cls._index_plans
-        assert set(pred_cls._index_plans[0].keys()) == {
+        assert 0 in pred_cls._state_row().index_plans
+        assert set(pred_cls._state_row().index_plans[0].keys()) == {
             ("a", 0), ("b", 0), ("c", 0), ("d", 0)}
 
     def test_second_position_indexed_when_more_selective(self):
@@ -219,9 +219,9 @@ class TestIndexPlansExposed:
         ])
         pred_cls = _make_pred_cls("lookup", ["key", "val"])
         compile_predicate("lookup", 2, clauses, pred_cls=pred_cls)
-        assert hasattr(pred_cls, "_index_plans")
+        assert pred_cls._row is not None, "compiled into a module, so on its row"
         # Position 1 should be indexed (all values distinct)
-        assert 1 in pred_cls._index_plans
+        assert 1 in pred_cls._state_row().index_plans
 
 
 # ── Phase 10a: joint _index_plans_joint (Phase 9b) ───────────────────────────
@@ -240,8 +240,8 @@ class TestIndexPlansJoint:
         compile_predicate("pair", 2, clauses, pred_cls=pred_cls)
         # May or may not use joint dispatch depending on coverage threshold;
         # just check that if it's set it has the right structure.
-        if hasattr(pred_cls, "_index_plans_joint") and pred_cls._index_plans_joint:
-            for (pi, pj), jdict in pred_cls._index_plans_joint.items():
+        if pred_cls._state_row().index_plans_joint:
+            for (pi, pj), jdict in pred_cls._state_row().index_plans_joint.items():
                 assert isinstance(pi, int)
                 assert isinstance(pj, int)
                 assert pi != pj
@@ -258,8 +258,8 @@ class TestIndexPlansJoint:
         ])
         pred_cls = _make_pred_cls("pair", ["x", "y"])
         compile_predicate("pair", 2, clauses, pred_cls=pred_cls)
-        if hasattr(pred_cls, "_index_plans_joint") and pred_cls._index_plans_joint:
-            for (pi, pj), jdict in pred_cls._index_plans_joint.items():
+        if pred_cls._state_row().index_plans_joint:
+            for (pi, pj), jdict in pred_cls._state_row().index_plans_joint.items():
                 for jk in jdict:
                     assert isinstance(jk, tuple), f"Expected tuple key, got {jk!r}"
 
@@ -459,7 +459,7 @@ def _make_locked_pred_cls(name, facts, db=None):
     pred_cls._bind_row(db if db is not None else Database(), name, arity)
     clauses = _make_fact_clauses(name, facts)
     compile_predicate(name, arity, clauses, pred_cls=pred_cls)
-    pred_cls._locked = True
+    pred_cls._state_row().locked = True
     return pred_cls, arity
 
 
@@ -471,7 +471,7 @@ class TestInjectBucketRefs:
             (mint("red"),), (mint("green"),), (mint("blue"),),
             (mint("yellow"),), (mint("purple"),),
         ])
-        assert hasattr(callee_cls, "_index_plans") and callee_cls._index_plans
+        assert callee_cls._state_row().index_plans
 
         # Build a caller clause: caller(_x) <- color(red)
         # We test inject directly, so we just need the Call term in the body.
@@ -514,8 +514,8 @@ class TestInjectBucketRefs:
             (cat(name="tom"),),
         ]
         callee_cls, callee_arity = _make_locked_pred_cls("shape", facts)
-        assert hasattr(callee_cls, "_index_plans") and callee_cls._index_plans
-        assert ("Dog", 2) in callee_cls._index_plans[0]
+        assert callee_cls._state_row().index_plans
+        assert ("Dog", 2) in callee_cls._state_row().index_plans[0]
 
         # Build a caller clause: caller(_x) <- shape(Dog(name=.., age=..))
         # -- at shape/1's arity, since hints are arity-exact.
@@ -584,7 +584,7 @@ class TestInjectBucketRefs:
             (mint("red"),), (mint("green"),), (mint("blue"),),
             (mint("yellow"),), (mint("purple"),),
         ])
-        callee_cls._locked = False  # explicitly unlock
+        callee_cls._state_row().locked = False  # explicitly unlock
 
         x = Var()
         # At the callee's arity, so the LOCKED guard is what fires here.
@@ -651,14 +651,14 @@ class TestCallsiteCorrectnessAndFallback:
         # Compile a caller: find_red(_x) <- color("red", _x)
         # We test that after compile_predicate_trampoline the callee's bucket
         # is accessible by checking _index_plans was used.
-        assert ("red", 0) in callee_cls._index_plans.get(0, {})
+        assert ("red", 0) in callee_cls._state_row().index_plans.get(0, {})
 
     def test_locked_callee_returns_correct_results(self):
         """Calling a locked callee with a literal arg returns expected results."""
         # nv
         atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
-        dispatch = callee_cls._dispatch_fn
+        dispatch = callee_cls._state_row().dispatch_fn
 
         trail = Trail()
         arg = mint("green")
@@ -670,7 +670,7 @@ class TestCallsiteCorrectnessAndFallback:
         # nv
         atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls, _ = _make_locked_pred_cls("color", [(a,) for a in atoms])
-        dispatch = callee_cls._dispatch_fn
+        dispatch = callee_cls._state_row().dispatch_fn
 
         trail = Trail()
         arg = Var()
@@ -699,7 +699,7 @@ class TestCallsiteCorrectnessAndFallback:
         assert expected_gkey in base_globals
         # The injected function should be the same as the bucket fn in _index_plans
         assert base_globals[expected_gkey] is \
-            callee_cls._index_plans[0][("red", 0)]
+            callee_cls._state_row().index_plans[0][("red", 0)]
 
     def test_dynamic_predicate_not_specialised(self):
         """A dynamic predicate (not locked) never gets bucket specialisation."""
@@ -709,7 +709,7 @@ class TestCallsiteCorrectnessAndFallback:
         clauses = _make_fact_clauses("dyn_color", [(a,) for a in atoms])
         compile_predicate("dyn_color", 1, clauses, pred_cls=callee_cls)
         # Ensure it's NOT locked
-        callee_cls._locked = False
+        callee_cls._state_row().locked = False
 
         x = Var()
         call_goal = Call(func=LoadName(name="dyn_color"), args=[mint("red")])
@@ -731,7 +731,7 @@ class TestCallsiteCorrectnessAndFallback:
         pred_cls = _make_pred_cls("color", ["name"])
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         # pred_cls not locked yet (simulating compile-time self-call)
-        pred_cls._locked = False
+        pred_cls._state_row().locked = False
 
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
@@ -786,7 +786,7 @@ class TestCallsiteCorrectnessAndFallback:
         bucket_fn = base_globals[gkey]
 
         # The injected fn is identical to the one stored in _index_plans
-        assert bucket_fn is callee_cls._index_plans[0][("blue", 0)]
+        assert bucket_fn is callee_cls._state_row().index_plans[0][("blue", 0)]
         # It is callable
         assert callable(bucket_fn)
 

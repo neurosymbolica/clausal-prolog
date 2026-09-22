@@ -49,7 +49,7 @@ class TestSecondaryDispatchTro:
         silently stops exercising the secondary path."""
         # nv
         hop = hop_mod.__dict__["hop"]
-        assert getattr(hop, "_index_plans_hierarchical", None)
+        assert hop._state_row().index_plans_hierarchical
 
     def test_tro_is_active(self, hop_mod):
         """Pin TRO eligibility of the tail-recursive clause — the compiled
@@ -57,7 +57,7 @@ class TestSecondaryDispatchTro:
         selected it. Guards against the test passing vacuously."""
         # nv
         hop = hop_mod.__dict__["hop"]
-        for idx_dict in hop._index_plans.values():
+        for idx_dict in hop._state_row().index_plans.values():
             for wrapper in idx_dict.values():
                 for cell in wrapper.__closure__ or ():
                     g = getattr(cell.cell_contents, "__globals__", None)
@@ -104,7 +104,7 @@ class TestSecondaryDispatchTroBucketLanding:
     def test_strategy_is_hierarchical(self, hop_mod):
         # nv
         hop2 = hop_mod.__dict__["hop2"]
-        assert getattr(hop2, "_index_plans_hierarchical", None)
+        assert hop2._state_row().index_plans_hierarchical
 
     def test_redispatch_lands_in_bucket(self, hop_mod):
         """Unbound start signals from the fallback; the updated args are

@@ -103,7 +103,10 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     CannotSpecialize
         If the clauses don't match a recognized MI pattern.
     """
-    clauses = pred_cls._clauses
+    # The ROW's clauses (W2); a class on no row has none, and this read
+    # must not mint one.
+    _row = pred_cls._row
+    clauses = _row.clauses if _row is not None else []
     fields = pred_cls._fields
     name = pred_cls.__name__
     arity = len(fields)

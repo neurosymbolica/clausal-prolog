@@ -381,7 +381,7 @@ class TestShorterHeadAfterLongerIsRefused:
             foo(a, b),
             foo(a, _),
         """)
-        assert len(mod.foo._clauses) == 2
+        assert len(mod.foo._state_row().clauses) == 2
 
     def test_a_keyword_subset_head_is_refused(self, tmp_path):
         """``f(A=1)`` was the arity-conflict EXEMPTION: binding by name made

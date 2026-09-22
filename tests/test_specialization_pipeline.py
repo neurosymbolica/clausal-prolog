@@ -62,12 +62,12 @@ class TestDirectiveParsing:
     def test_specialized_has_clauses(self, specialize_natnum):
         """Specialized predicate should have compiled clauses."""
         # nv
-        assert len(specialize_natnum.solve_count_natnum._clauses) == 3
+        assert len(specialize_natnum.solve_count_natnum._state_row().clauses) == 3
 
     def test_specialized_has_dispatch(self, specialize_natnum):
         """Specialized predicate should have a dispatch function."""
         # nv
-        assert specialize_natnum.solve_count_natnum._dispatch_fn is not None
+        assert specialize_natnum.solve_count_natnum._state_row().dispatch_fn is not None
 
 
 # ── SolveCount specialization tests ─────────────────────────────────────────
@@ -287,7 +287,7 @@ class TestSpecializeFactorial:
         """Factorial has builtins → specialized predicate should have catch-all."""
         # 1 base + 2 object clauses + 1 catch-all = 4
         # nv
-        assert len(specialize_builtins.solve_factorial._clauses) == 4
+        assert len(specialize_builtins.solve_factorial._state_row().clauses) == 4
 
     def test_factorial_0(self, specialize_builtins):
         # nv
@@ -480,7 +480,7 @@ class TestDeepPipeline:
         """The depth parameter should be accessible in some form."""
         # Basic check: deep predicate has clauses.
         # nv
-        assert len(specialize_deep.deep_natnum._clauses) >= 3
+        assert len(specialize_deep.deep_natnum._state_row().clauses) >= 3
 
 
 # ── Error handling tests ────────────────────────────────────────────────────

@@ -368,7 +368,7 @@ class TestF001TroNondetPrefix:
         from clausal.logic.compiler.optimisations import tro as tro_pass
         bad = []
         for name in ("trm", "tri", "tac"):
-            cl = getattr(mod, name)._clauses[-1]
+            cl = getattr(mod, name)._state_row().clauses[-1]
             plan = tro_pass.analyse(terms_to_goalop(cl.body, db=None), cl.head, name, 3)
             if plan.eligible:
                 bad.append(name)

@@ -58,7 +58,7 @@ def _case_unlocked_predicate():
     callee_cls, _ = _make_locked_pred_cls("color_unl", [
         ("red",), ("green",), ("blue",), ("yellow",), ("purple",),
     ])
-    callee_cls._locked = False
+    callee_cls._state_row().locked = False
     x = Var()
     body = [Call(func=LoadName(name="color_unl"), args=["red"], kwargs=[])]
     return ("unlocked_predicate", callee_cls, "color_unl", Clause(

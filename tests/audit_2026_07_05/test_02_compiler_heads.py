@@ -355,10 +355,10 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
         for name, n_plans in (("acc4", 1), ("sgl4", 1), ("mp5", 2), ("str5", 2)):
             fn = moddict[name]._get_dispatch()
             assert "tro_state" in fn.__code__.co_freevars, name
-            assert len(moddict[name]._index_plans) == n_plans, name
+            assert len(moddict[name]._state_row().index_plans) == n_plans, name
         jfn = moddict["jt3"]._get_dispatch()
         assert "tro_state" in jfn.__code__.co_freevars
-        assert getattr(moddict["jt3"], "_index_plans_joint", None)
+        assert moddict["jt3"]._state_row().index_plans_joint
 
     # controls: TRO recursion itself works through each dispatch variant
     def test_control_single_plan_tro_recursion(self, mod):
@@ -658,8 +658,8 @@ class TestJointAndSecondaryDispatchGuards:
     def test_strategies_actually_fired(self, moddict):
         # protects the F001 joint/secondary xfails from silently probing the
         # wrong strategy if thresholds ever change
-        assert getattr(moddict["jnt2"], "_index_plans_joint", None)
-        assert getattr(moddict["sec2"], "_index_plans_hierarchical", None)
+        assert moddict["jnt2"]._state_row().index_plans_joint
+        assert moddict["sec2"]._state_row().index_plans_hierarchical
 
     def test_joint_modes(self, mod):
         R = Var()

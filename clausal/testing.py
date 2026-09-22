@@ -2256,7 +2256,8 @@ def _resolve_predicate(goal, logic_module, caller_path):
         candidates.append(getattr(sys.modules.get(prefix), last, None))
         candidates.append(md.get(last))
     for cls in candidates:
-        if isinstance(cls, PredicateMeta) and cls._clauses:
+        if (isinstance(cls, PredicateMeta) and cls._row is not None
+                and cls._row.clauses):
             if cls.__module__ == getattr(logic_module, "name", None):
                 return cls, logic_module, caller_path
             defining = sys.modules.get(cls.__module__)
@@ -2321,7 +2322,7 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
     if key in seen:
         return [], "none"
     seen = seen | {key}
-    clauses = list(cls._clauses)
+    clauses = list(cls._row.clauses)     # non-None: filtered on it above
     total = len(clauses)
     if total > DIAG_MAX_DESCENT_CLAUSES:
         notes.append(

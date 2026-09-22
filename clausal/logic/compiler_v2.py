@@ -391,9 +391,8 @@ def compile_module(
                     # first clause arrives by runtime assertz, so its class
                     # must already be reading the row that assertz appends to.
                     pred_cls._bind_row(db, functor, arity, authorized=True)
-                    # THE ROW, not the `_signature` facade (W2): `_bind_row`
-                    # on the line above guarantees it, so there is nothing for
-                    # the facade's `or _detached_row()` arm to do here.
+                    # THE ROW (W2): `_bind_row` on the line above guarantees
+                    # it, so there is nothing for `_state_row()` to mint here.
                     _sig_row = pred_cls._row
                     if _sig_row.signature is None:
                         _sig_row.signature = pred_cls._fields
@@ -454,7 +453,10 @@ def compile_module(
                            kind=WRITE_LOAD_DISPATCH, detail="table-wrap",
                            through=pred_cls):
                 if pred_cls is not None:
-                    pred_cls._dispatch_fn = wrapped
+                    # ``_row``, not a facade: every class in ``pending`` was
+                    # bound to THIS db's row at step 4/4a, so this is the
+                    # same store ``set_dispatch`` writes on the next line.
+                    pred_cls._row.dispatch_fn = wrapped
                 db.set_dispatch(functor, arity, wrapped)
 
     # ── Step 6b: Meta-interpreter specialization ────────────────────────
@@ -472,7 +474,7 @@ def compile_module(
     # name like ``term_expansion`` that is present but defined elsewhere.
     #
     # Locking one of those used to MINT A DETACHED ROW as a side effect --
-    # ``_locked`` is a facade over ``(cls._row or cls._detached_row())`` -- and
+    # ``_locked`` was a facade over ``cls._state_row()`` -- and
     # then wrote the lock into a private single-predicate Database nobody else
     # can reach.  So the lock had no enforcement effect: the refusal path is
     # ``database.write_refusal(row, ...)`` reading ``row.locked`` off the REAL
@@ -1113,7 +1115,8 @@ def _refuse_untablable_target(
             f"instead, or drop the directive."
         )
 
-    if is_pred and cls._clauses:
+    # A read that must not mint: a class still on NO row has no clauses.
+    if is_pred and cls._row is not None and cls._row.clauses:
         origin = getattr(cls, "__module__", None)
         where = f" (defined in {origin})" if origin else ""
         raise SyntaxError(
@@ -2009,7 +2012,7 @@ def _process_declarations(module_items: list, module_dict: dict,
                 if name in predicate_functors:
                     continue
                 # ``existing._row`` RAW, not ``existing._clauses``: the
-                # facade is `(cls._row or cls._detached_row()).clauses`, so
+                # facade was `cls._state_row().clauses`, so
                 # merely ASKING whether a class carries clauses MINTED a
                 # private throwaway row for every data functor that reached
                 # here (measured: 6 of the 12 detached rows over 56 fixtures

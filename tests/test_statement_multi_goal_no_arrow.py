@@ -60,7 +60,7 @@ def test_trailing_comma_fact_still_works(tmp_path):
         "edge(1, 2),\n",
         "mgd_c",
     )
-    assert len(mod.edge._clauses) == 1
+    assert len(mod.edge._state_row().clauses) == 1
 
 
 def test_parenthesized_rule_body_still_works(tmp_path):
@@ -74,7 +74,7 @@ def test_parenthesized_rule_body_still_works(tmp_path):
         "q(R) <- (fact(R), other(R))\n",
         "mgd_d",
     )
-    assert len(mod.q._clauses) == 1
+    assert len(mod.q._state_row().clauses) == 1
 
 
 def test_arrow_first_multi_goal_still_raises_arrow_error(tmp_path):

@@ -59,6 +59,15 @@ from clausal.modules.provenance._pure_default import is_default_pure
 # know how a term is shaped; everything below goes through them.
 
 
+
+def _clauses_of(cls) -> list:
+    """The clause list of a predicate class -- its ROW's (W2, 2026-09-22).
+
+    A class still on no row has no clauses, and reading must not mint one.
+    """
+    row = getattr(cls, "_row", None)
+    return row.clauses if row is not None else []
+
 def _term_args(term: Any) -> tuple:
     """The ARGUMENT tuple of a term -- positions for a cell, fields for an
     instance, ``args`` for a ``Compound``.  Raises for anything else."""
@@ -273,7 +282,7 @@ def validate_purity(
     bu_keys = set(bottom_up_classes.keys())
     md = module.module_dict if (module is not None and hasattr(module, "module_dict")) else None
     for key, cls in bottom_up_classes.items():
-        for clause in cls._clauses:
+        for clause in _clauses_of(cls):
             for callee in _collect_body_callees(clause.body):
                 if callee in bu_keys:
                     continue
@@ -549,7 +558,7 @@ def _evaluate_stratum(
         for key in scc:
             cls = pred_classes[key]
             rel = relations[key]
-            for rule_idx, rule in enumerate(cls._clauses):
+            for rule_idx, rule in enumerate(_clauses_of(cls)):
                 for tup, tag, proof_key in _evaluate_rule(
                     rule, cls, relations, pred_classes, semiring, module,
                 ):
@@ -647,7 +656,7 @@ def evaluate(
     validate_purity(pred_classes, module=module)
 
     # ── Stratify and evaluate ────────────────────────────────────────
-    program = {key: list(cls._clauses) for key, cls in pred_classes.items()}
+    program = {key: list(_clauses_of(cls)) for key, cls in pred_classes.items()}
     sccs = stratify(program)
     for scc in sccs:
         _evaluate_stratum(scc, relations, pred_classes, semiring, module)
@@ -699,7 +708,7 @@ def _discover_bottom_up_predicates(
             continue
         out[key] = cls
         # Walk callees in clause bodies
-        for clause in cls._clauses:
+        for clause in _clauses_of(cls):
             for callee in _collect_body_callees(clause.body):
                 callee_cls = None
                 if md is not None:

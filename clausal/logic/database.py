@@ -180,7 +180,7 @@ class PredRow:
         Database has no entry for this key, the getter hands back a per-row
         empty list and leaves ``Database._clauses`` untouched, so
         ``is_defined(functor, arity)`` stays False. That matters because
-        Task 2 routed every ``PredicateMeta._clauses`` read through here: a
+        Task 2 routed every clause read off a ``PredicateMeta`` through here: a
         setdefault in the getter would have turned each of those reads —
         ``__repr__``, ``_clause_arity``, ``_declared_arity``, the compiler's
         own inspections — into a minting site, and a clause-less
@@ -214,7 +214,7 @@ class PredRow:
 
         This one DOES mint: an explicit assignment is an explicit statement
         that this predicate has a clause list. Exists for the legacy spelling
-        that rebinds rather than mutates (``pred_cls._clauses = []``, used by
+        that rebinds rather than mutates (``row.clauses = []``, used by
         several tests to reset a class between cases). Every in-tree
         production write is an in-place mutation of the list the getter hands
         back.
@@ -261,7 +261,7 @@ class PredRow:
         Writing ``None`` is not a clobber: it is invalidation, and a cleared
         dispatch recompiles from the OWNER's clause list, so it can lose no
         answers.  It routes to ``invalidate()`` — the one invalidation point —
-        which keeps every ``x._dispatch_fn = None`` spelling in the tree
+        which keeps every ``row.dispatch_fn = None`` spelling in the tree
         working without a transaction.
         """
         if value is None:

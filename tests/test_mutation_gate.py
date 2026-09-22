@@ -143,7 +143,7 @@ def test_a_dispatch_install_through_the_class_property_outside_a_txn_raises():
     cls = make_predicate("gd", ["x"])
     cls._bind_row(db, "gd", 1)
     with pytest.raises(RuntimeError) as exc_info:
-        cls._dispatch_fn = lambda *a: iter(())
+        cls._state_row().dispatch_fn = lambda *a: iter(())
     assert "dispatch_fn" in str(exc_info.value)
     assert db.row("gd", 1).dispatch_fn is None, "and nothing was written"
 
@@ -154,7 +154,7 @@ def test_a_dispatch_install_through_the_class_gate_is_allowed():
     cls._bind_row(db, "gd2", 1)
     fn = lambda *a: iter(())  # noqa: E731
     with cls._mutate("test", "recompile"):
-        cls._dispatch_fn = fn
+        cls._state_row().dispatch_fn = fn
     assert db.row("gd2", 1).dispatch_fn is fn
 
 
@@ -165,8 +165,8 @@ def test_assigning_none_is_invalidation_and_needs_no_txn():
     cls = make_predicate("gd3", ["x"])
     cls._bind_row(db, "gd3", 1)
     with cls._mutate("test", "recompile"):
-        cls._dispatch_fn = lambda *a: iter(())
-    cls._dispatch_fn = None                      # no txn — allowed
+        cls._state_row().dispatch_fn = lambda *a: iter(())
+    cls._state_row().dispatch_fn = None                      # no txn — allowed
     assert db.row("gd3", 1).dispatch_fn is None
 
 
@@ -187,7 +187,7 @@ def _locked_module(tmp_path, name):
 
 def test_channel_1_low_level_db_assertz_from_a_non_owner_is_refused(tmp_path):
     module, db, cls = _locked_module(tmp_path, "gate_c1")
-    assert cls._locked is True
+    assert cls._state_row().locked is True
     with pytest.raises(LogicException) as exc_info:
         db.assertz(Clause(head=cls(2), body=[]))
     assert "may not write gate_c1_p/1" in _refusal_text(exc_info.value)
@@ -217,7 +217,7 @@ def test_channel_4_the_assertz_builtin_from_a_non_owner_is_refused(tmp_path):
     with pytest.raises(LogicException) as exc_info:
         next(call("go", Var(), module=module.__dict__["$module"]), None)
     assert "may not write impclob_colour/1" in _refusal_text(exc_info.value)
-    assert len(owner.impclob_colour._clauses) == 2
+    assert len(owner.impclob_colour._state_row().clauses) == 2
 
 
 def test_channel_2_the_compiler_from_a_non_owner_is_refused_with_the_same_text():
@@ -317,7 +317,7 @@ def test_alias_scenario_2_an_aliased_import_cannot_clobber_the_exporter():
     with pytest.raises(SyntaxError) as exc_info:
         _load_fixture("impclob_alias_redefine")
     assert "may not write impclob_colour/1" in str(exc_info.value)
-    assert len(owner.impclob_colour._clauses) == 2
+    assert len(owner.impclob_colour._state_row().clauses) == 2
 
 
 def test_alias_scenario_3_a_second_implementer_of_a_vocabulary_is_refused():
@@ -350,13 +350,13 @@ def test_a_refused_load_writes_nothing_at_all():
     The gate's policy is pure, so the load now runs it over every key it is
     about to write BEFORE writing any of them."""
     vocab = _load_fixture("gate_vocab")
-    assert len(vocab.gv_free._clauses) == 0, "the vocabulary starts clause-free"
+    assert len(vocab.gv_free._state_row().clauses) == 0, "the vocabulary starts clause-free"
 
     with pytest.raises(SyntaxError) as exc_info:
         _load_fixture("gate_rival")
     assert "may not write gv_owned/1" in str(exc_info.value)
 
-    assert len(vocab.gv_free._clauses) == 0, (
+    assert len(vocab.gv_free._state_row().clauses) == 0, (
         "the LEGAL earlier write must not have landed either — the refusal "
         "is for the load, not for one predicate of it"
     )
@@ -364,7 +364,7 @@ def test_a_refused_load_writes_nothing_at_all():
         "and the exporter's class must not be attributed to a module that "
         "failed to load"
     )
-    assert len(vocab.gv_owned._clauses) == 1
+    assert len(vocab.gv_owned._state_row().clauses) == 1
 
 
 def test_a_raise_inside_a_transaction_still_invalidates_and_stamps():

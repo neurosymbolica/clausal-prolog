@@ -611,7 +611,7 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2406 (2399 and 2368 midway through P2 Task 6 slice A; 2345 before it; 2338 before P2's head-cells flip; 2339 before P2 task 2; 2345 before stage 2; 2342 before stage 1 slice 2; 2326 before the P1 fix wave's L4 class-leg
+    """clausal/testing.py:2407 (2406 before W2 split the row read in ``_resolve_predicate_class`` over two lines; 2399 and 2368 midway through P2 Task 6 slice A; 2345 before it; 2338 before P2's head-cells flip; 2339 before P2 task 2; 2345 before stage 2; 2342 before stage 1 slice 2; 2326 before the P1 fix wave's L4 class-leg
     fallback in ``_note_generic_compound_confusion``, 2323 before P1 Task 3's
     comment lines in the same function, 2322 before the tuple-DATA tag's
     TUPLE_TAG import, 2319 before the ``.seam`` alias-extension
@@ -638,7 +638,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2406
+        v.pattern == "functor_fallback" and v.line == 2407
         for v in testing_violations
     ), testing_violations
 

@@ -65,12 +65,12 @@ class empty_pred(metaclass=PredicateMeta):
 class TestListing:
     def setup_method(self):
         """Reset predicate clauses before each test."""
-        color._clauses = []
-        color._locked = False
-        animal._clauses = []
-        animal._locked = False
-        empty_pred._clauses = []
-        empty_pred._locked = False
+        color._state_row().clauses = []
+        color._state_row().locked = False
+        animal._state_row().clauses = []
+        animal._state_row().locked = False
+        empty_pred._state_row().clauses = []
+        empty_pred._state_row().locked = False
 
     def test_no_clauses(self):
         # nv
@@ -141,7 +141,7 @@ class TestListing:
 # ── Golden: byte-identical output for a class argument (P3-3 Task 8) ─────────
 #
 # Pinned at BASE (commit 4687fc18), before ``listing/1`` moved from a class-
-# reading (``val._clauses`` off a ``PredicateMeta``) builtin to a db-receiving
+# reading (``val._state_row().clauses`` off a ``PredicateMeta``) builtin to a db-receiving
 # one that also accepts a bare str atom and a ``Name/Arity`` cell (P3-3 Task
 # 8's new (d)/(e) argument shapes). The class-argument path must keep
 # printing this EXACT text — not just "contains the right substrings" like
@@ -150,8 +150,8 @@ class TestListing:
 
 class TestListingClassArgumentGoldenOutput:
     def test_multi_clause_class_output_is_byte_identical(self):
-        color._clauses = []
-        color._locked = False
+        color._state_row().clauses = []
+        color._state_row().locked = False
         color._assertz(Clause(color("red", "#ff0000"), []))
         color._assertz(Clause(color("green", "#00ff00"), []))
         color._assertz(Clause(color("blue", "#0000ff"), []))
@@ -522,7 +522,7 @@ class TestListingBuiltinClassHasDispatch:
         from clausal.logic.builtins._registry import _BUILTIN_CLASSES
 
         cls = _BUILTIN_CLASSES["listing"]
-        assert cls._dispatch_fn is not None
+        assert cls._state_row().dispatch_fn is not None
 
     def test_stateless_dispatch_answers_for_listing(self):
         from clausal.logic.builtins._registry import _stateless_dispatch
@@ -579,8 +579,8 @@ class TestCellValuedClauseArgument:
         assert _format_clause_term((TUPLE_TAG, 1, 2)) == "(1, 2)"
 
     def test_listing_prints_a_cell_valued_field_as_a_term_not_a_repr(self):
-        color._clauses = []
-        color._locked = False
+        color._state_row().clauses = []
+        color._state_row().locked = False
         color._assertz(Clause(color("red", ("rgb", 255, 0, 0)), []))
         output = _capture_listing(color)
         assert "rgb(255, 0, 0)" in output

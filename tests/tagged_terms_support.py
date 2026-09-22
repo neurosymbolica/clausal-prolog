@@ -183,7 +183,7 @@ def module_predicate_names(module) -> list[str]:
     for name, obj in vars(module).items():
         if not isinstance(obj, PredicateMeta):
             continue
-        if not getattr(obj, "_clauses", None):
+        if obj._row is None or not obj._row.clauses:
             continue
         if getattr(obj, "__module__", None) != module.__name__:
             continue
@@ -220,7 +220,7 @@ def capture_predicate_codegen(module_name: str, pred_names=None) -> str:
     try:
         for name in pred_names:
             pred = getattr(module, name)
-            pred._dispatch_fn = None
+            pred._state_row().dispatch_fn = None
             pred._get_dispatch()
     finally:
         _predicate_mod.functiondef_to_function = original

@@ -115,7 +115,7 @@ def module_source_path(module_dict_or_module):
 
 
 def record_clause_source(pred_cls, module_name: str, module_dict: dict) -> None:
-    """Note whose load wrote ``pred_cls._clauses``.
+    """Note whose load wrote the class's clause list (its row's).
 
     Called at the one site that assigns the clause list wholesale
     (``compiler_v2`` step 4; the two deferred paths in
@@ -125,11 +125,10 @@ def record_clause_source(pred_cls, module_name: str, module_dict: dict) -> None:
     another's, and it is keyed on the source PATH for that reason.
     """
     # THE ROW, not the retired `_clauses_source` facade (W2, 2026-09-22).
-    # This is the one WRITER, and it needs a row to write to -- `_ensure_row`
-    # gives it the same one the facade's `(cls._row or cls._detached_row())`
-    # would have, so a class not yet bound to a Database still records its
-    # source exactly as before.
-    (pred_cls._row or pred_cls._detached_row()).source = (
+    # This is the one WRITER, and it needs a row to write to -- `_state_row`
+    # gives it the same one the facade would have, so a class not yet bound
+    # to a Database still records its source exactly as before.
+    pred_cls._state_row().source = (
         module_name, module_source_path(module_dict))
 
 
@@ -568,89 +567,69 @@ def _head_arity(head: Any) -> int | None:
         return None
 
 
-# The seven relocated predicate-state names (P3-3 Task 2).  Defined here
-# because two different descriptors have to serve them: the metaclass
-# properties on ``PredicateMeta`` (below), which answer ``cls._locked``, and
-# the plain class-level properties injected into every predicate class's
-# namespace (``_INSTANCE_STATE_PROPERTIES``), which answer
-# ``instance._locked``.
-_RELOCATED_STATE_NAMES = (
-    "_clauses",
-    "_dispatch_fn",
-    "_lazy_recompile",
-    "_locked",
-)
-
-
-#: Facades W2 has retired, and where their state lives now.  A RAISING
-#: TOMBSTONE rather than a plain deletion, because deleting a property's
-#: SETTER is SILENT: `cls._clauses_source = x` would go on succeeding as an
-#: ordinary class-attribute write while the row never saw it (measured --
-#: the assignment returned cleanly and `row.source` stayed None).  A caller
-#: that has not been migrated must fail, not be quietly ignored.  These go
-#: with the class at P4.
+#: The predicate-state facades W2 retired, and where their state lives now.
+#: A RAISING TOMBSTONE rather than a plain deletion, because deleting a
+#: property's SETTER is SILENT: `cls._clauses_source = x` would go on
+#: succeeding as an ordinary class-attribute write while the row never saw it
+#: (measured -- the assignment returned cleanly and `row.source` stayed None).
+#: A caller that has not been migrated must fail, not be quietly ignored.
+#: These go with the class at P4.
+#:
+#: The state is the ROW's.  A caller holding the Database reads
+#: ``db.row(functor, arity).<field>``; a caller holding only the class reads
+#: ``cls._state_row().<field>`` -- the Database's row once the class is bound
+#: into a module, the class's private detached row otherwise (minted on first
+#: use, which is the compatibility mode for a class minted outside a load).
+#: A READ that must not mint anything spells the unbound case out:
+#: ``cls._row.clauses if cls._row is not None else []``.
 _RETIRED_STATE_NAMES = {
     "_dynamic_arities":
         "the Database's -dynamic marks; read them with "
         "`PredicateMeta._declared_arity`, or `db.is_dynamic(functor, arity)`",
     "_clauses_source":
-        "the row's `source` field; reach it as "
-        "`(cls._row or cls._detached_row()).source`",
+        "the row's `source` field: `cls._state_row().source`",
     "_signature":
         "the row's `signature` field, or `db.row(f, n).signature`",
+    "_clauses":
+        "the row's `clauses`: `cls._state_row().clauses`, or "
+        "`db.row(f, n).clauses`",
+    "_dispatch_fn":
+        "the row's `dispatch_fn`: `cls._state_row().dispatch_fn`, or "
+        "`db.row(f, n).dispatch_fn` (installs need an open `Database.mutate`)",
+    "_lazy_recompile":
+        "the row's `lazy_recompile`: `cls._state_row().lazy_recompile`",
+    "_locked":
+        "the row's `locked`: `cls._state_row().locked`, or "
+        "`db.row(f, n).locked`",
+    "_index_plans":
+        "the row's `index_plans`: `cls._state_row().index_plans`",
+    "_index_plans_joint":
+        "the row's `index_plans_joint`: `cls._state_row().index_plans_joint`",
+    "_index_plans_hierarchical":
+        "the row's `index_plans_hierarchical`: "
+        "`cls._state_row().index_plans_hierarchical`",
 }
+
+
+class RetiredStateError(Exception):
+    """What a retired facade's tombstone raises, on read and on write.
+
+    Deliberately NOT an ``AttributeError``.  ``getattr(cls, "_dispatch_fn",
+    None)`` and ``hasattr(cls, "_clauses")`` swallow that class, and a probe
+    that quietly answered ``None`` would be the silent failure the tombstone
+    exists to prevent -- the engine's own goal resolver probed exactly that way
+    before W2 migrated it.  Not a ``RuntimeError`` either: the drive loop reads
+    a ``RuntimeError`` out of a generator as exhaustion.
+    """
 
 
 def _make_retired_tombstone(name: str, where: str) -> property:
     """A property that RAISES on read and on write, naming the replacement."""
     def _fail(*_args):
-        raise AttributeError(
+        raise RetiredStateError(
             f"{name!r} was retired (W2 of the PredicateMeta retirement, "
             f"2026-09-22). Its state lives in {where}.")
     return property(_fail, _fail, doc=f"RETIRED -- see {where}.")
-
-
-def _make_instance_state_property(name: str) -> property:
-    """A read-only class-level property giving INSTANCES the class's state.
-
-    Before P3-3 Task 2 these seven were plain per-class attributes, so an
-    instance resolved them through the ordinary MRO walk —
-    ``some_term._locked`` found the class attribute and returned it.  Moving
-    them to METACLASS properties would have broken that silently: a metaclass
-    descriptor is consulted for ``cls.x``, never for ``instance.x``, and
-    ``__slots__`` leaves instances no ``__dict__`` to fall back on, so every
-    one of the seven would raise ``AttributeError`` on an instance where it
-    used to return a value.  Out-of-tree code reading ``instance._locked`` is
-    unguarded against that.
-
-    So each predicate class also carries a plain property of the same name,
-    which delegates to the class (and therefore to the row).  The two faces
-    coexist: ``type.__getattribute__`` finds the METACLASS property first for
-    ``cls.x``, and instance lookup finds THIS one for ``instance.x``.  Reads
-    are live — mutate through the class, see it through any instance.
-
-    Read-ONLY on purpose: ``instance._locked = True`` raised ``AttributeError``
-    before this task too (the name is not in ``__slots__`` and there is no
-    instance ``__dict__``), so a setter here would be a new capability, not a
-    restored one.
-    """
-    def _get(self):
-        return getattr(type(self), name)
-
-    _get.__name__ = name
-    return property(
-        _get,
-        doc=f"Live read-through to ``type(self).{name}`` (P3-3 Task 2).",
-    )
-
-
-_INSTANCE_STATE_PROPERTIES = {
-    name: _make_instance_state_property(name)
-    for name in _RELOCATED_STATE_NAMES
-}
-"""One shared property object per name — a property takes its instance at call
-time, so the same descriptor serves every predicate class and class creation
-allocates nothing."""
 
 
 def _describe_row(row) -> str:
@@ -673,7 +652,7 @@ def _migrate_detached_clauses(old_row, new_row) -> None:
 
     Final review I-1.  ``make_predicate`` mints a class with no Database, so
     ``P._assertz(...)`` before any load lands on the private row
-    ``_detached_row`` created for it.  Binding that class to a real row used
+    ``_state_row`` created for it.  Binding that class to a real row used
     to move only ``dynamic_arities``/``locked``/``source``: the clauses stayed
     on a row that nothing could reach again, and since Task 2 made the row the
     single store there is no longer a second copy to recover them from — a
@@ -729,13 +708,14 @@ class PredicateMeta(type):
     ``__match_args__``, and ``__slots__`` from that tuple — no ``@dataclass``
     needed.
 
-    It also adds predicate dispatch machinery:
-      _clauses, _dispatch_fn, _lazy_recompile, _locked
-      _clauses_source
-    all of which are READ-THROUGH PROPERTIES onto one
-    :class:`~clausal.logic.database.PredRow` held in ``cls._row`` (P3-3
-    Task 2) — the Database's row for this predicate once the class is bound
-    into a module, a private detached row otherwise.
+    It also carries the predicate dispatch machinery — but none of the
+    predicate STATE.  That is one :class:`~clausal.logic.database.PredRow`
+    held in ``cls._row`` (P3-3 Task 2): the Database's row for this predicate
+    once the class is bound into a module, a private detached row otherwise.
+    ``cls._state_row()`` answers it either way; the per-attribute facades
+    (``_clauses``, ``_dispatch_fn``, ``_locked``, ...) that used to read
+    through to it are retired (W2, 2026-09-22) and raise
+    :class:`RetiredStateError`.
     """
 
     def __new__(
@@ -751,18 +731,12 @@ class PredicateMeta(type):
         namespace["__slots__"] = fields
         namespace["__match_args__"] = fields
 
-        # P3-3 Task 2 fix round 1 — the INSTANCE face of the seven relocated
-        # state attributes.  Injected into the namespace (not assigned after
-        # class creation) for two reasons: ``cls.__dict__`` is a read-only
-        # mappingproxy, and a post-hoc ``setattr`` would be intercepted by the
-        # metaclass property of the same name and written to the ROW instead
-        # of the class.  A name that is also a FIELD is skipped — ``__slots__``
-        # has already claimed that slot descriptor, and declaring both is a
-        # ``ValueError`` at class creation (same rule the ``_clausal_new`` and
-        # ``_registered_at`` guards below follow).
-        for _state_name, _state_prop in _INSTANCE_STATE_PROPERTIES.items():
-            if _state_name not in fields:
-                namespace[_state_name] = _state_prop
+        # No INSTANCE face for the predicate state any more (W2, 2026-09-22).
+        # P3-3 Task 2 injected a read-only property per relocated name here so
+        # ``instance._locked`` kept answering the class's row; the facades it
+        # delegated to are retired, and an instance has no ``__dict__``
+        # (``__slots__`` above), so that read now raises a plain
+        # ``AttributeError`` — loud, never silent.
 
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
 
@@ -823,23 +797,21 @@ class PredicateMeta(type):
         # Predicate machinery — per-class, not inherited.
         #
         # P3-3 Task 2 (THE INVERSION): none of it lives on the class any more.
-        # ``_clauses``, ``_clauses_source``, ``_dispatch_fn``,
-        # ``_lazy_recompile``, ``_signature`` and ``_locked``
-        # are now read-through PROPERTIES (defined on this
-        # metaclass, just below) onto ONE ``PredRow`` — the Database's
-        # per-``(functor, arity)`` row.  ``_row`` is the single slot that used
-        # to be seven, so every read and write keeps its old
-        # last-writer-wins-on-one-class shape; what changes is WHERE the value
-        # lands, and that a bound class and its Database can no longer disagree.
+        # The clause list, dispatch, lazy recompile, signature, lock and index
+        # plans all live on ONE ``PredRow`` — the Database's per-``(functor,
+        # arity)`` row.  ``_row`` is the single slot that used to be seven,
+        # so a bound class and its Database can no longer disagree.  The
+        # per-attribute read-through facades that Task 2 put on this metaclass
+        # are retired (W2): callers read the row, ``cls._state_row()``.
         #
         # ``None`` until first use.  A class the compiler binds into a module
         # gets the owning Database's row (``_bind_row``); a class minted with
         # no Database anywhere — bare ``make_predicate`` from Python, the
         # out-of-tree pattern, ``clausal.reflection``, ``clpb``, the builtin
         # registry — lazily gets a PRIVATE DETACHED row over a private
-        # Database of its own (``_detached_row``).  That is the compatibility
-        # mode: the duck type (``_clauses`` append, ``_get_dispatch()``,
-        # ``_locked``) behaves exactly as before with no Database in sight.
+        # Database of its own (``_state_row``).  That is the compatibility
+        # mode: the duck type (``_assertz``, ``_get_dispatch()``, ``_lock``)
+        # behaves exactly as before with no Database in sight.
         cls._row = None
         # The Database of the module that declared this predicate ``-table``,
         # stamped by ``Database.mark_tabled`` at load.  ``None`` everywhere
@@ -854,32 +826,29 @@ class PredicateMeta(type):
         # carries only the pointer.
         cls._tabled_home_db = None  # Database | None
 
-    # ── Predicate state: read-throughs onto the Database row ──────────────
+    # ── Predicate state: the Database row ─────────────────────────────────
     #
-    # P3-3 Task 2.  Each of these WAS a plain per-class attribute set in
-    # ``__init__`` above; each is now a property over ``cls._row``.  The
-    # storage moved; the semantics did not — one slot per class, last writer
-    # wins, ``None``/``False``/``[]`` defaults unchanged — so every existing
-    # reader and writer (``cls._clauses.append(...)``,
-    # ``cls._clauses[:] = ...``, ``cls._dispatch_fn = fn``, ``cls._locked``,
-    # ``getattr(cls, "_clauses_source", None)``, the tests that reset a class
-    # with ``cls._clauses = []``) keeps working verbatim.
+    # P3-3 Task 2 moved the state onto ``cls._row``; W2 (2026-09-22) retired
+    # the per-attribute properties that read through to it.  ``_state_row``
+    # is the one accessor left: the row itself, whichever kind it is.
 
-    def _detached_row(cls):
-        """Mint and cache this class's PRIVATE row — the compatibility mode.
+    def _state_row(cls):
+        """The row this class's predicate state lives on.
 
-        A ``PredicateMeta`` minted outside a ``.clausal`` load has no Database
-        to be a row OF, and must still behave like a predicate: append to
-        ``_clauses``, get a ``_dispatch_fn``, answer ``_get_dispatch()``.  It
-        gets a ``PredRow`` over a private single-predicate ``Database`` nobody
-        else can reach, so all seven attributes keep their old semantics with
-        no Database anywhere in the caller's world.  ``_bind_row`` later
-        replaces it if the class is compiled into a module.
+        The Database's row for ``(functor, arity)`` once the class is bound
+        into a module (``_bind_row``).  Otherwise — a ``PredicateMeta`` minted
+        outside a ``.clausal`` load, which has no Database to be a row OF and
+        must still behave like a predicate — a PRIVATE DETACHED row, minted
+        here on first use over a single-predicate ``Database`` nobody else can
+        reach, and cached in ``cls._row``.  That is the compatibility mode;
+        ``_bind_row`` later replaces the private row if the class is compiled
+        into a module.  Goes with ``make_predicate`` at P4.
 
         Lazy (not minted in ``__init__``) for two reasons: ``database.py``
         imports ``predicate.py``, so eager construction would need a
         module-level cycle; and a class whose predicate state is never touched
-        — a pure term/data class — never pays for one.
+        — a pure term/data class — never pays for one.  A READ that must not
+        mint tests ``cls._row is None`` itself instead of calling this.
         """
         row = cls._row
         if row is not None:
@@ -887,8 +856,8 @@ class PredicateMeta(type):
         from clausal.logic.database import Database  # noqa: PLC0415
         # ``getattr``, not ``cls._fields``: a bare
         # ``class X(metaclass=PredicateMeta): pass`` declares none, and
-        # reading its ``_clauses`` used to be a plain attribute read that
-        # could not fail.  The key is private to this row's private Database,
+        # reading its state used to be a plain attribute read that could not
+        # fail.  The key is private to this row's private Database,
         # so an arity of 0 there costs nothing.
         fields = getattr(cls, "_fields", ()) or ()
         row = Database().row(cls.__name__, len(fields), create=True)
@@ -906,7 +875,7 @@ class PredicateMeta(type):
         Called at the sites that make a class the compiled face of a stored
         predicate: ``compiler_v2`` step 4 (clauses attached), step 4a (a
         clause-less ``-dynamic`` declaration) and ``compiler._install`` (a
-        dispatch installed).  After it, ``cls._clauses`` IS
+        dispatch installed).  After it, ``cls._state_row().clauses`` IS
         ``db._clauses[(functor, arity)]``, so ``db.assertz`` needs no mirror.
 
         *functor* is passed rather than read off ``cls.__name__`` because an
@@ -1022,70 +991,11 @@ class PredicateMeta(type):
         """Mint this class's clause list in its row's Database and return it.
 
         The class-side spelling of ``PredRow.ensure_clauses`` — called by the
-        mutators below before they append/insert, because a plain ``_clauses``
-        READ deliberately mints nothing (P3-3 Task 2 fix round 1; see
-        ``PredRow.clauses``).
+        mutators below before they append/insert, because a plain ``clauses``
+        READ off the row deliberately mints nothing (P3-3 Task 2 fix round 1;
+        see ``PredRow.clauses``).
         """
-        return (cls._row or cls._detached_row()).ensure_clauses()
-
-    @property
-    def _clauses(cls) -> list:
-        return (cls._row or cls._detached_row()).clauses
-
-    @_clauses.setter
-    def _clauses(cls, value: list) -> None:
-        (cls._row or cls._detached_row()).clauses = value
-
-    @property
-    def _dispatch_fn(cls) -> "Callable | None":
-        return (cls._row or cls._detached_row()).dispatch_fn
-
-    @_dispatch_fn.setter
-    def _dispatch_fn(cls, value: "Callable | None") -> None:
-        (cls._row or cls._detached_row()).dispatch_fn = value
-
-    @property
-    def _lazy_recompile(cls) -> "Callable | None":
-        return (cls._row or cls._detached_row()).lazy_recompile
-
-    @_lazy_recompile.setter
-    def _lazy_recompile(cls, value: "Callable | None") -> None:
-        (cls._row or cls._detached_row()).lazy_recompile = value
-
-    @property
-    def _locked(cls) -> bool:
-        """Runtime-mutation lock.  Set by ``_lock`` after a module load
-        completes; read by ``_assertz``/``_asserta``/``_retract`` and by the
-        ``assertz/1``-family builtins before they touch the clause list."""
-        return (cls._row or cls._detached_row()).locked
-
-    @_locked.setter
-    def _locked(cls, value: bool) -> None:
-        (cls._row or cls._detached_row()).locked = value
-
-    @property
-    def _index_plans(cls) -> dict:
-        return (cls._row or cls._detached_row()).index_plans
-
-    @_index_plans.setter
-    def _index_plans(cls, value: dict) -> None:
-        (cls._row or cls._detached_row()).index_plans = value
-
-    @property
-    def _index_plans_joint(cls) -> dict:
-        return (cls._row or cls._detached_row()).index_plans_joint
-
-    @_index_plans_joint.setter
-    def _index_plans_joint(cls, value: dict) -> None:
-        (cls._row or cls._detached_row()).index_plans_joint = value
-
-    @property
-    def _index_plans_hierarchical(cls) -> dict:
-        return (cls._row or cls._detached_row()).index_plans_hierarchical
-
-    @_index_plans_hierarchical.setter
-    def _index_plans_hierarchical(cls, value: dict) -> None:
-        (cls._row or cls._detached_row()).index_plans_hierarchical = value
+        return cls._state_row().ensure_clauses()
 
     # ── Term construction ─────────────────────────────────────────────────
 
@@ -1190,8 +1100,7 @@ class PredicateMeta(type):
         the row that class currently reads, not only the one this Database
         holds.
         """
-        row = cls._row or cls._detached_row()
-        return row.mutate(author, kind, detail, through=cls)
+        return cls._state_row().mutate(author, kind, detail, through=cls)
 
     def _runtime_author(cls) -> str:
         """``runtime-assert:<module>`` — who a runtime assert/retract made
@@ -1292,17 +1201,15 @@ class PredicateMeta(type):
         if arity is not None and arity != len(cls._fields):
             cls._refuse_call_at(arity)
         # P3-3 Task 2: the state is the Database row's now.  Read the row's
-        # backing dicts DIRECTLY rather than through the ``_dispatch_fn`` /
-        # ``_lazy_recompile`` properties — this is the once-per-goal-invocation
-        # path, and three property calls where there used to be two plain
-        # attribute lookups is exactly the overhead the phase must not add.
+        # backing dicts DIRECTLY rather than through the row's properties —
+        # this is the once-per-goal-invocation path, and three property calls
+        # where there used to be two plain attribute lookups is exactly the
+        # overhead the phase must not add.
         # The logic below is the same three-step it always was: use the
         # installed dispatch; else recompile through the lazy callback and
         # prefer whatever ``_install`` stored over what the callback returned;
         # else refuse.
-        row = cls._row
-        if row is None:
-            row = cls._detached_row()
+        row = cls._state_row()
         db = row._db
         key = row._key
         dispatch = db._dispatch
@@ -1367,7 +1274,8 @@ class PredicateMeta(type):
         of those would either suppress a real refusal or refuse a call that had
         become correct.  Reading one head cannot go stale.
         """
-        clauses = cls._clauses
+        row = cls._row
+        clauses = row.clauses if row is not None else ()
         if not clauses:
             return None
         first = _head_arity(clauses[0].head)
@@ -1474,18 +1382,21 @@ class PredicateMeta(type):
 
     def _lock(cls) -> None:
         """Lock the predicate, preventing runtime assertz/retract."""
-        cls._locked = True
+        cls._state_row().locked = True
 
     def _unlock(cls) -> None:
         """Unlock the predicate, allowing runtime assertz/retract."""
-        cls._locked = False
+        cls._state_row().locked = False
 
     def __repr__(cls) -> str:
         if not cls._fields:
             return cls.__name__
-        compiled = "compiled" if cls._dispatch_fn is not None else "uncompiled"
-        n = len(cls._clauses)
-        locked = ", locked" if cls._locked else ""
+        # A repr must not mint a row: an unbound class reports the defaults.
+        row = cls._row
+        compiled = ("compiled" if row is not None and row.dispatch_fn is not None
+                    else "uncompiled")
+        n = len(row.clauses) if row is not None else 0
+        locked = ", locked" if row is not None and row.locked else ""
         return (
             f"<Predicate {cls.__name__}/{cls._arity}, "
             f"{n} clause(s), {compiled}{locked}>"
@@ -1827,7 +1738,7 @@ def make_predicate(name: str, fields: list[str], *, instances: bool = False) -> 
 
         foo = make_predicate("foo", ["a", "b"])
         foo._assertz(Clause(head=foo(a=Var(), b=Var()), body=[...]))
-        compile_predicate("foo", 2, foo._clauses, pred_cls=foo)
+        compile_predicate("foo", 2, foo._state_row().clauses, pred_cls=foo)
         fn = foo._get_dispatch()
     """
     cls = PredicateMeta(name, (), {"_fields": tuple(fields)})
@@ -1862,7 +1773,7 @@ def make_atom(name: str) -> tuple[str]:
     return mint(name)
 
 
-__all__ = ["PredicateMeta", "_MISSING", "is_term_instance",
+__all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "is_zero_field_class",
            # ``is_atom`` is the DEPRECATED alias of ``is_zero_field_class``
            # (Task 12); exported for one release so out-of-tree importers do

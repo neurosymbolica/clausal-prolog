@@ -101,9 +101,9 @@ class TestImportedTabledCallSite:
         """No bucket refs may exist for a tabled callee."""
         # nv
         tcat, _ = self._lib()
-        assert getattr(tcat, "_index_plans", {}) == {}
+        assert tcat._state_row().index_plans == {}
         caller = tabled_use_mod.module_dict["tabled_ground"]
-        caller_globals = caller._dispatch_fn.__globals__
+        caller_globals = caller._state_row().dispatch_fn.__globals__
         assert not any("t_cat.bucket(" in k for k in caller_globals)
 
 
@@ -142,14 +142,14 @@ class TestImportedJointGroundCallSite:
         # nv
         import sys
         lib = sys.modules["tests.fixtures.callsite_joint_lib"]
-        assert getattr(lib.__dict__["j_cat"], "_index_plans_joint", None)
+        assert lib.__dict__["j_cat"]._state_row().index_plans_joint
         caller = joint_use_mod.module_dict["j_both"]
         # The compiled clause must reference the JOINT gkey (joint hints are
         # preferred over single-position ones) — co_names pins the emission,
         # not just the globals injection.
         assert any(
             ".j_cat.bucket(pos=(" in n
-            for n in caller._dispatch_fn.__code__.co_names
+            for n in caller._state_row().dispatch_fn.__code__.co_names
         )
 
     def test_joint_ground_hit(self, joint_use_mod):

@@ -25,9 +25,9 @@ def test_the_class_attribute_reads_through_to_the_row(tmp_path):
     cls = mod.module_dict["colour"]
     row = mod.db.row("colour", 2)
     assert row is not None
-    assert cls._index_plans is row.index_plans
-    assert cls._index_plans_joint is row.index_plans_joint
-    assert cls._index_plans_hierarchical is row.index_plans_hierarchical
+    assert cls._state_row().index_plans is row.index_plans
+    assert cls._state_row().index_plans_joint is row.index_plans_joint
+    assert cls._state_row().index_plans_hierarchical is row.index_plans_hierarchical
 
 
 def test_the_compiler_wrote_plans_onto_the_row(tmp_path):
@@ -40,16 +40,16 @@ def test_the_compiler_wrote_plans_onto_the_row(tmp_path):
 def test_assignment_on_the_class_lands_on_the_row(tmp_path):
     mod = _load(tmp_path, "ip_c", SRC)
     cls = mod.module_dict["colour"]
-    cls._index_plans = {"marker": {}}
+    cls._state_row().index_plans = {"marker": {}}
     assert mod.db.row("colour", 2).index_plans == {"marker": {}}
 
 
 def test_a_detached_class_still_has_plans_through_its_private_row():
     class Loose(metaclass=PredicateMeta):
         pass
-    assert Loose._index_plans == {}
-    Loose._index_plans = {0: {}}
-    assert Loose._index_plans == {0: {}}
+    assert Loose._state_row().index_plans == {}
+    Loose._state_row().index_plans = {0: {}}
+    assert Loose._state_row().index_plans == {0: {}}
 
 
 def test_a_fresh_row_has_empty_plans(tmp_path):
@@ -95,7 +95,7 @@ def test_plans_written_on_a_detached_row_survive_the_bind():
         "the plans the compiler wrote through the class were left behind on "
         "its detached row: _bind_row migrates clauses but not index_plans*"
     )
-    assert cls._index_plans is row.index_plans
+    assert cls._state_row().index_plans is row.index_plans
 
 
 def test_a_real_to_real_rebind_leaves_the_targets_plans_alone(tmp_path):
@@ -107,7 +107,7 @@ def test_a_real_to_real_rebind_leaves_the_targets_plans_alone(tmp_path):
     a, b = Database(), Database()
     cls = PredicateMeta("hue", (), {"_fields": ("arg0",)})
     cls._bind_row(a, "hue", 1)
-    cls._index_plans = {"from-a": {}}
+    cls._state_row().index_plans = {"from-a": {}}
     target = b.row("hue", 1, create=True)
     target.index_plans = {"already-here": {}}
     cls._bind_row(b, "hue", 1, authorized=True)
@@ -122,7 +122,7 @@ def test_a_detached_rows_plans_do_not_overwrite_a_populated_target():
 
     db = Database()
     cls = PredicateMeta("tint", (), {"_fields": ("arg0",)})
-    cls._index_plans = {"detached": {}}   # mints the private detached row
+    cls._state_row().index_plans = {"detached": {}}   # mints the private detached row
     assert cls._row.detached
     target = db.row("tint", 1, create=True)
     target.index_plans = {"target": {}}
@@ -149,8 +149,8 @@ def test_plans_do_not_migrate_onto_a_row_with_a_DIFFERENT_key():
     # ``_install`` binds nothing, which is the documented out-of-tree shape.
     cls = _detached_indexed_class("shade", 2, [(i, i * 10) for i in range(8)], None)
     assert cls._row.detached and cls._row.key == ("shade", 2)
-    assert cls._index_plans, "the fixture must actually have plans"
-    cls._locked = True
+    assert cls._state_row().index_plans, "the fixture must actually have plans"
+    cls._state_row().locked = True
 
     cls._bind_row(db, "tint", 2)
 

@@ -1234,13 +1234,13 @@ class TestHeadPatternReachability:
         pred = getattr(module, "kind")
         predicate_mod.functiondef_to_function = _spy
         try:
-            pred._dispatch_fn = None
+            pred._state_row().dispatch_fn = None
             lm = _logic_module(module)
             K = Var()
             got = [deref(K) for _t in call("kind", ("point", 1, 2), K, module=lm)]
         finally:
             predicate_mod.functiondef_to_function = original
-            pred._dispatch_fn = None  # don't leak the instrumented closures
+            pred._state_row().dispatch_fn = None  # don't leak the instrumented closures
 
         assert got == [mint("pt")]
         assert calls == {"bucket": 1, "fallback": 0}, calls
@@ -1943,7 +1943,7 @@ def _capture_bucket_functions(module_name: str, pred_name: str) -> dict:
     predicate_mod.functiondef_to_function = _spy
     try:
         pred = getattr(module, pred_name)
-        pred._dispatch_fn = None
+        pred._state_row().dispatch_fn = None
         pred._get_dispatch()
     finally:
         predicate_mod.functiondef_to_function = original

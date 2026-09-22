@@ -241,7 +241,7 @@ class TestDynamicAfterCache:
 
             # Runtime assertz — dynamic should still work.
             color_cls = mod.__dict__["color"]
-            assert not color_cls._locked
+            assert not color_cls._state_row().locked
         finally:
             sys.modules.pop(mod_name, None)
             pycache = tmp_path / "__pycache__"

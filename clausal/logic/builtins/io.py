@@ -680,7 +680,7 @@ def _make_listing__1(db):
 
     P3-3 Task 8: migrated off a bare class-only builtin.  The class/instance/
     ``BuiltinPredicate`` argument shapes need no database at all — a
-    ``PredicateMeta``'s ``_clauses`` has read through its row since Task 2 —
+    ``PredicateMeta``'s clauses are its row's (Task 2; W2 reads the row) —
     so ``db=None`` (the db-less path ``get_builtin_dispatch("listing", 1,
     None)`` and ``tests/test_listing.py`` exercise) keeps working for those
     three exactly as before.  The two NEW shapes below (a name ATOM, a
@@ -740,7 +740,11 @@ def _make_listing__1(db):
         if isinstance(val, PredicateMeta):
             name = val.__name__
             arity = len(term_field_names_of_class(val))
-            clauses = val._clauses
+            # *val* is whatever the caller passed: a bare ``make_predicate``
+            # class from user Python may be on NO row, and a listing must not
+            # mint one.
+            _row = val._row
+            clauses = _row.clauses if _row is not None else []
         elif isinstance(val, BuiltinPredicate):
             name = val._functor
             arity = val._arity

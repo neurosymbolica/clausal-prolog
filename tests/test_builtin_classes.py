@@ -184,7 +184,7 @@ class TestPredicateMetaProtocol:
     def test_locked(self):
         # nv
         append = get_builtin_class("append")
-        assert append._locked is True
+        assert append._state_row().locked is True
 
     def test_assertz_raises_on_locked(self):
         # nv
@@ -195,7 +195,7 @@ class TestPredicateMetaProtocol:
     def test_dispatch_fn_set(self):
         # nv
         append = get_builtin_class("append")
-        assert append._dispatch_fn is not None
+        assert append._state_row().dispatch_fn is not None
 
     def test_get_dispatch(self):
         # nv
@@ -207,7 +207,7 @@ class TestPredicateMetaProtocol:
         """DB-dependent builtins should not have dispatch set (needs db)."""
         # nv
         assertz = get_builtin_class("assertz")
-        assert assertz._dispatch_fn is None
+        assert assertz._state_row().dispatch_fn is None
 
 
 # ── __eq__ / __repr__ / __match_args__ ────────────────────────────────────────
@@ -342,7 +342,7 @@ class TestExecution:
         dispatch_fn = (
             cls_or_wrapper._get_dispatch()
             if hasattr(cls_or_wrapper, '_get_dispatch')
-            else cls_or_wrapper._dispatch_fn
+            else cls_or_wrapper._state_row().dispatch_fn
         )
         trail = Trail()
         capture = capture_vars or []

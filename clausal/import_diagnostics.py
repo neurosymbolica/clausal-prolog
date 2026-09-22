@@ -514,7 +514,7 @@ def _clause_author(pred_cls, exporter, exporter_module):
     so rather than guess.
     """
     # The ROW, not the `_clauses_source` facade (W2, 2026-09-22).  The
-    # facade is `(cls._row or cls._detached_row()).source`, so this
+    # facade was `cls._state_row().source`, so this
     # diagnostic MINTED a private throwaway row for any class that had
     # none -- to read a field that is `None` on a fresh row anyway.
     # `getattr` keeps the old contract of answering for a non-class too.
@@ -553,7 +553,8 @@ def describe_imported_predicate_redefinition(
     because "you cannot write this" alone leaves the author with a rule and
     nowhere to put it.
     """
-    n = len(getattr(pred_cls, "_clauses", ()) or ())
+    _row = getattr(pred_cls, "_row", None)      # the ROW's clauses (W2)
+    n = len(_row.clauses) if _row is not None else 0
     plural = "clause" if n == 1 else "clauses"
     subject = "that 1 clause" if n == 1 else f"those {n} clauses"
     was = "was" if n == 1 else "were"

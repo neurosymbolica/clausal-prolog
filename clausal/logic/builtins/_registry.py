@@ -513,27 +513,32 @@ def _build_all_builtin_classes() -> None:
             arity = arities[0]
             fields = _BUILTIN_FIELDS[(functor, arity)]
             cls = make_predicate(functor, list(fields))
+            # The class's own private row -- these classes are minted
+            # DETACHED on purpose and never join a module Database (W2: the
+            # engine's one DELIBERATE minter of a detached row; goes with
+            # ``make_predicate`` at P4).
+            row = cls._state_row()
             dispatch_fn = _stateless_dispatch(functor, arity)
             if dispatch_fn is not None:
                 # Through the mutation gate (P3-3 Task 3): a dispatch install
-                # needs an open transaction, builtins included.  The row here
-                # is the class's own private one -- these classes are minted
-                # detached and never join a module Database -- so the write is
-                # unowned, permitted, and stamped to the registry.
+                # needs an open transaction, builtins included.  The row is
+                # private, so the write is unowned, permitted, and stamped to
+                # the registry.
                 with cls._mutate("builtin-registry", "recompile"):
-                    cls._dispatch_fn = dispatch_fn
-            cls._locked = True
+                    row.dispatch_fn = dispatch_fn
+            row.locked = True
             _BUILTIN_CLASSES[functor] = cls
         else:
             wrapper = MultiArityBuiltin(functor)
             for arity in sorted(arities):
                 fields = _BUILTIN_FIELDS[(functor, arity)]
                 cls = make_predicate(f"{functor}", list(fields))
+                row = cls._state_row()          # detached on purpose, as above
                 dispatch_fn = _stateless_dispatch(functor, arity)
                 if dispatch_fn is not None:
                     with cls._mutate("builtin-registry", "recompile"):
-                        cls._dispatch_fn = dispatch_fn
-                cls._locked = True
+                        row.dispatch_fn = dispatch_fn
+                row.locked = True
                 wrapper._add(arity, cls, dispatch_fn)
             _BUILTIN_CLASSES[functor] = wrapper
 

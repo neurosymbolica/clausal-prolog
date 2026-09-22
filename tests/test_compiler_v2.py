@@ -271,7 +271,7 @@ class TestV2CompileModule:
                 if db.row(*key) is None:
                     continue
                 if not db.is_dynamic(*key):
-                    assert obj._locked, key
+                    assert obj._state_row().locked, key
                     checked += 1
         assert checked, "fixture exercised no non-dynamic predicate at all"
 
@@ -299,7 +299,7 @@ class TestV2CompileModule:
 
         # Re-run step 7 over the dict now holding the orphan.
         compile_module([], [], md, md["__name__"])
-        assert not orphan._locked
+        assert not orphan._state_row().locked
 
     def test_dynamic_not_locked(self):
         """Dynamic predicates are NOT locked after compile_module."""
@@ -308,4 +308,4 @@ class TestV2CompileModule:
         md = _load_via_v2(path, "_v2_dynamic_pred2")
         Color = md.get("color")
         assert Color is not None and isinstance(Color, PredicateMeta)
-        assert not Color._locked
+        assert not Color._state_row().locked

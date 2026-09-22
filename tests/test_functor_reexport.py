@@ -74,7 +74,7 @@ class TestFunctorReExport:
         # Re-declaring the imported functor in -module must NOT re-mint.
         assert queries.flip is vocab.flip
         # The re-exported class carries the vocab's clauses, not an empty class.
-        assert len(queries.flip._clauses) == 2
+        assert len(queries.flip._state_row().clauses) == 2
 
     def test_downstream_import_resolves_to_kit_class(self):
         vocab = _load_fixture("functor_reexport_vocab")

@@ -150,7 +150,7 @@ class TestDynamicImport:
         mod = _load_fixture("dynamic_pred.clausal")
         color_cls = mod.__dict__["color"]
         assert isinstance(color_cls, PredicateMeta)
-        assert not color_cls._locked
+        assert not color_cls._state_row().locked
 
     def test_dynamic_predicate_allows_runtime_assertz(self):
         # nv
@@ -159,14 +159,14 @@ class TestDynamicImport:
         logic_mod = mod.__dict__["$module"]
         initial_count = len(logic_mod.db.clauses_for("color", 2))
         color_cls._assertz(Clause(head=color_cls("fire", "red"), body=[]))
-        assert len(color_cls._clauses) == initial_count + 1
+        assert len(color_cls._state_row().clauses) == initial_count + 1
 
     def test_static_predicate_is_locked(self):
         # nv
         mod = _load_fixture("static_pred.clausal")
         fact_cls = mod.__dict__["fact"]
         assert isinstance(fact_cls, PredicateMeta)
-        assert fact_cls._locked
+        assert fact_cls._state_row().locked
 
     def test_static_predicate_rejects_runtime_assertz(self):
         # nv

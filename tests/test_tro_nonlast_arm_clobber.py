@@ -49,7 +49,7 @@ class TestTroNonLastArmClobber:
         """Guard against a vacuous pass: the fixture must actually compile the
         recursive clause in signal-mode TRO (bucket carries ``$tro_state``)."""
         prc = prc_mod.__dict__["prc"]
-        for idx_dict in getattr(prc, "_index_plans", {}).values():
+        for idx_dict in prc._state_row().index_plans.values():
             for wrapper in idx_dict.values():
                 for cell in wrapper.__closure__ or ():
                     g = getattr(cell.cell_contents, "__globals__", None)

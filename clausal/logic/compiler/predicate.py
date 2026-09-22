@@ -1374,12 +1374,19 @@ def _compile_predicate_trampoline_impl(
             # no answer dedup, no SLG suspension, wrong WFS/NAF semantics.
             # Empty plans here keep every bucket-ref walker (legacy inject,
             # call_site.analyse, the D6c shadow) consistently hint-free.
-            if pred_cls is not None and _is_tabled:
-                pred_cls._index_plans = {}
-                pred_cls._index_plans_joint = {}
-                pred_cls._index_plans_hierarchical = {}
-            elif pred_cls is not None:
-                pred_cls._index_plans = {
+            # The plans are ROW state (P1 Task 1), written through the row
+            # the class currently faces: the Database's if it is bound, its
+            # private detached one otherwise (a compile with ``db=None`` --
+            # the documented default of every compile entrypoint -- or one
+            # that binds only in ``_install`` afterwards, which carries the
+            # plans across; see ``PredicateMeta._bind_row``).
+            _plan_row = pred_cls._state_row() if pred_cls is not None else None
+            if _plan_row is not None and _is_tabled:
+                _plan_row.index_plans = {}
+                _plan_row.index_plans_joint = {}
+                _plan_row.index_plans_hierarchical = {}
+            elif _plan_row is not None:
+                _plan_row.index_plans = {
                     pos: {
                         key: _make_call_site_bucket_trampoline(
                             bfn, fn, DONE,
@@ -1393,7 +1400,7 @@ def _compile_predicate_trampoline_impl(
                 # stale bucket dicts (wrapping the OLD clause set) behind.
                 if _joint_exposed is not None:
                     _jpos, _jdict = _joint_exposed
-                    pred_cls._index_plans_joint = {
+                    _plan_row.index_plans_joint = {
                         _jpos: {
                             jk: _make_call_site_bucket_trampoline(
                                 jfn, fn, DONE,
@@ -1402,24 +1409,25 @@ def _compile_predicate_trampoline_impl(
                         }
                     }
                 else:
-                    pred_cls._index_plans_joint = {}
+                    _plan_row.index_plans_joint = {}
                 # Hierarchical dicts stay RAW (level-0 entries are
                 # (level1_fns, level1_default_fn) tuples, not drivable
                 # bucket fns) — no walker consumes them for call-site
                 # specialisation; exposure is informational only.
                 if _hier_exposed is not None:
                     _hpos, _hdict = _hier_exposed
-                    pred_cls._index_plans_hierarchical = {_hpos: _hdict}
+                    _plan_row.index_plans_hierarchical = {_hpos: _hdict}
                 else:
-                    pred_cls._index_plans_hierarchical = {}
+                    _plan_row.index_plans_hierarchical = {}
         else:
             # Phase 10a: no indexing — clear any stale plan dicts from a
             # previous compilation (e.g. after retract reduced clause count
             # below the indexing threshold).
             if pred_cls is not None:
-                pred_cls._index_plans = {}
-                pred_cls._index_plans_joint = {}
-                pred_cls._index_plans_hierarchical = {}
+                _plan_row = pred_cls._state_row()
+                _plan_row.index_plans = {}
+                _plan_row.index_plans_joint = {}
+                _plan_row.index_plans_hierarchical = {}
 
             # TRO: detect tail-recursive clauses with deterministic prefixes.
             # Disabled for tabled predicates (SLG has its own suspension
@@ -1467,7 +1475,9 @@ def _compile_predicate_trampoline_impl(
         if db is not None:
             next_clauses = db.clauses_for(functor, arity)
         else:
-            next_clauses = pred_cls._clauses if pred_cls is not None else clauses
+            # The ``db=None`` path: the class's own row is the only store.
+            next_clauses = (pred_cls._state_row().clauses
+                            if pred_cls is not None else clauses)
         return compile_predicate_trampoline(
             functor, arity, next_clauses, db,
             body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
@@ -2058,7 +2068,9 @@ def _compile_predicate_shallow_impl(
         if db is not None:
             next_clauses = db.clauses_for(functor, arity)
         else:
-            next_clauses = pred_cls._clauses if pred_cls is not None else clauses
+            # The ``db=None`` path: the class's own row is the only store.
+            next_clauses = (pred_cls._state_row().clauses
+                            if pred_cls is not None else clauses)
         return compile_predicate_shallow(
             functor, arity, next_clauses, db,
             body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
@@ -2233,15 +2245,16 @@ def _install(
     if db is not None:
         db.set_dispatch(functor, arity, fn, lazy_recompile=lazy_recompile)
     if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
-        # P3-3 Task 2: bind first, then write THROUGH the class properties —
-        # one spelling, unchanged from before, now landing in the Database row
-        # rather than in a parallel per-class slot.  Binding here as well as at
+        # P3-3 Task 2: bind first, then write the ROW the class faces —
+        # the Database's once bound, the class's private detached row on the
+        # ``db=None`` path (W2 retired the per-attribute facades that used to
+        # spell this).  Binding here as well as at
         # ``compiler_v2`` step 4 covers the paths that install a dispatch
         # without ever going through a load (a bare-query compile, a
         # specialization target, a runtime recompile after assertz), and is a
         # no-op whenever the class is already on this row.
         #
-        # P3-3 Task 3: THROUGH THE GATE.  ``pred_cls._dispatch_fn`` is the
+        # P3-3 Task 3: THROUGH THE GATE.  The class's row is the
         # second door onto the same state — gating ``Database.mutate`` alone
         # would leave the very channel the aliased-import clobber came through
         # wide open — so the install runs inside a transaction.  When this is
@@ -2259,8 +2272,9 @@ def _install(
         with ctx:
             if db is not None:
                 pred_cls._bind_row(db, functor, arity)
-            pred_cls._dispatch_fn = fn
+            row = pred_cls._state_row()
+            row.dispatch_fn = fn
             if lazy_recompile is not None:
-                pred_cls._lazy_recompile = lazy_recompile
+                row.lazy_recompile = lazy_recompile
     return fn
 

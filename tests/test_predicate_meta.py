@@ -175,10 +175,10 @@ class pred_a(metaclass=PredicateMeta):
 
 class TestClauseManagement:
     def setup_method(self):
-        pred_a._clauses = []
-        pred_a._dispatch_fn = None
-        pred_a._lazy_recompile = None
-        pred_a._locked = False
+        pred_a._state_row().clauses = []
+        pred_a._state_row().dispatch_fn = None
+        pred_a._state_row().lazy_recompile = None
+        pred_a._state_row().locked = False
 
     def test_assertz_appends(self):
         # nv
@@ -186,7 +186,7 @@ class TestClauseManagement:
         c2 = Clause(head=pred_a(x=2), body=[])
         pred_a._assertz(c1)
         pred_a._assertz(c2)
-        assert pred_a._clauses == [c1, c2]
+        assert pred_a._state_row().clauses == [c1, c2]
 
     def test_asserta_prepends(self):
         # nv
@@ -194,14 +194,14 @@ class TestClauseManagement:
         c2 = Clause(head=pred_a(x=2), body=[])
         pred_a._assertz(c1)
         pred_a._asserta(c2)
-        assert pred_a._clauses == [c2, c1]
+        assert pred_a._state_row().clauses == [c2, c1]
 
     def test_assertz_clears_dispatch(self):
         # nv
         with pred_a._mutate("test", "recompile"):   # the gate, P3-3 Task 3
-            pred_a._dispatch_fn = lambda: None
+            pred_a._state_row().dispatch_fn = lambda: None
         pred_a._assertz(Clause(head=pred_a(x=1), body=[]))
-        assert pred_a._dispatch_fn is None
+        assert pred_a._state_row().dispatch_fn is None
 
     def test_retract_removes_first_match(self):
         # nv
@@ -210,8 +210,8 @@ class TestClauseManagement:
         pred_a._assertz(Clause(head=h1, body=[]))
         pred_a._assertz(Clause(head=h2, body=[]))
         assert pred_a._retract(h1) is True
-        assert len(pred_a._clauses) == 1
-        assert pred_a._clauses[0].head == h2
+        assert len(pred_a._state_row().clauses) == 1
+        assert pred_a._state_row().clauses[0].head == h2
 
     def test_retract_nonexistent_returns_false(self):
         # nv
@@ -223,9 +223,9 @@ class TestClauseManagement:
         h = pred_a(x=1)
         pred_a._assertz(Clause(head=h, body=[]))
         with pred_a._mutate("test", "recompile"):   # the gate, P3-3 Task 3
-            pred_a._dispatch_fn = lambda: None
+            pred_a._state_row().dispatch_fn = lambda: None
         pred_a._retract(h)
-        assert pred_a._dispatch_fn is None
+        assert pred_a._state_row().dispatch_fn is None
 
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -237,25 +237,25 @@ class pred_b(metaclass=PredicateMeta):
 
 class TestDispatch:
     def setup_method(self):
-        pred_b._clauses = []
-        pred_b._dispatch_fn = None
-        pred_b._lazy_recompile = None
-        pred_b._locked = False
+        pred_b._state_row().clauses = []
+        pred_b._state_row().dispatch_fn = None
+        pred_b._state_row().lazy_recompile = None
+        pred_b._state_row().locked = False
 
     def test_get_dispatch_returns_fn(self):
         # nv
         fn = lambda *a: iter([])
         with pred_b._mutate("test", "recompile"):   # the gate, P3-3 Task 3
-            pred_b._dispatch_fn = fn
+            pred_b._state_row().dispatch_fn = fn
         assert pred_b._get_dispatch() is fn
 
     def test_get_dispatch_lazy_recompile(self):
         # nv
         fn = lambda *a: iter([])
-        pred_b._lazy_recompile = lambda: fn
+        pred_b._state_row().lazy_recompile = lambda: fn
         result = pred_b._get_dispatch()
         assert result is fn
-        assert pred_b._dispatch_fn is fn
+        assert pred_b._state_row().dispatch_fn is fn
 
     def test_get_dispatch_no_fn_raises(self):
         # nv
@@ -271,10 +271,10 @@ class TestDispatch:
             return lambda *a: iter([])
 
         with pred_b._mutate("test", "recompile"):   # the gate, P3-3 Task 3
-            pred_b._dispatch_fn = lambda *a: iter([])
-        pred_b._lazy_recompile = recompile
+            pred_b._state_row().dispatch_fn = lambda *a: iter([])
+        pred_b._state_row().lazy_recompile = recompile
         pred_b._assertz(Clause(head=pred_b(x=1), body=[]))
-        assert pred_b._dispatch_fn is None
+        assert pred_b._state_row().dispatch_fn is None
         pred_b._get_dispatch()
         assert len(calls) == 1
 
@@ -288,25 +288,25 @@ class pred_locked(metaclass=PredicateMeta):
 
 class TestLocking:
     def setup_method(self):
-        pred_locked._clauses = []
-        pred_locked._dispatch_fn = None
-        pred_locked._lazy_recompile = None
-        pred_locked._locked = False
+        pred_locked._state_row().clauses = []
+        pred_locked._state_row().dispatch_fn = None
+        pred_locked._state_row().lazy_recompile = None
+        pred_locked._state_row().locked = False
 
     def test_starts_unlocked(self):
         # nv
-        assert pred_locked._locked is False
+        assert pred_locked._state_row().locked is False
 
     def test_lock(self):
         # nv
         pred_locked._lock()
-        assert pred_locked._locked is True
+        assert pred_locked._state_row().locked is True
 
     def test_unlock(self):
         # nv
         pred_locked._lock()
         pred_locked._unlock()
-        assert pred_locked._locked is False
+        assert pred_locked._state_row().locked is False
 
     def test_locked_assertz_raises(self):
         # nv
@@ -331,7 +331,7 @@ class TestLocking:
         pred_locked._lock()
         pred_locked._unlock()
         pred_locked._assertz(Clause(head=pred_locked(x=1), body=[]))
-        assert len(pred_locked._clauses) == 1
+        assert len(pred_locked._state_row().clauses) == 1
 
 
 # ── Isolation ─────────────────────────────────────────────────────────────────
@@ -347,22 +347,22 @@ class pred_y(metaclass=PredicateMeta):
 
 class TestIsolation:
     def setup_method(self):
-        pred_x._clauses = []
-        pred_y._clauses = []
-        pred_x._locked = False
-        pred_y._locked = False
+        pred_x._state_row().clauses = []
+        pred_y._state_row().clauses = []
+        pred_x._state_row().locked = False
+        pred_y._state_row().locked = False
 
     def test_clauses_are_per_class(self):
         # nv
         pred_x._assertz(Clause(head=pred_x(v=1), body=[]))
-        assert len(pred_x._clauses) == 1
-        assert len(pred_y._clauses) == 0
+        assert len(pred_x._state_row().clauses) == 1
+        assert len(pred_y._state_row().clauses) == 0
 
     def test_locking_is_per_class(self):
         # nv
         pred_x._lock()
-        assert pred_x._locked is True
-        assert pred_y._locked is False
+        assert pred_x._state_row().locked is True
+        assert pred_y._state_row().locked is False
 
 
 # ── Repr (class-level) ───────────────────────────────────────────────────────
@@ -378,10 +378,10 @@ class TestClassRepr:
     def test_repr_compiled(self):
         # nv
         with fib._mutate("test", "recompile"):      # the gate, P3-3 Task 3
-            fib._dispatch_fn = lambda: None
+            fib._state_row().dispatch_fn = lambda: None
         r = repr(fib)
         assert "compiled" in r
-        fib._dispatch_fn = None
+        fib._state_row().dispatch_fn = None
 
     def test_repr_locked(self):
         # nv
