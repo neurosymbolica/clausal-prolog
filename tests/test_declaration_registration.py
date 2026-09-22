@@ -66,10 +66,35 @@ def test_term_expansion_class_is_registered():
 
 
 def test_specialize_route_still_registers_through_register_signature():
-    """ALREADY COVERED (specialization.py:388) -- pinned so it stays so."""
-    db = Database()
-    db.register_signature("solve_natnum", 2, ("goal", "depth"))
-    assert field_names_for("solve_natnum", arity=2, db=db) == ("goal", "depth")
+    """ALREADY COVERED (specialization.py:388) -- pinned by driving the REAL
+    route, not a hand-built stand-in.
+
+    A hand call to ``db.register_signature(...)`` only proves
+    ``database.py``'s own plumbing works -- nobody is changing that.  This
+    drives ``specialize_mi`` (the public entry point, called by
+    ``compiler_v2`` at Step 5) through to ``_install_specialized``, which is
+    the actual site that writes ``db.register_signature(new_name, arity,
+    tuple(fields))`` at specialization.py:388.  Fix round 1: verified by
+    temporarily commenting out that line -- this test went red; restoring
+    it, green again (see task-2-report.md)."""
+    from clausal.logic.specialization import analyze_mi, specialize_mi
+    from clausal.logic.variables import Var
+    import clausal.examples.metainterpreters as mi_mod
+
+    x = Var()
+    natnum_program = [
+        [["natnum", 0], []],
+        [["natnum", ["s", x]], [["natnum", x]]],
+    ]
+    db = Database(module_dict={"__name__": "t_pin_register_signature"})
+    pattern = analyze_mi(mi_mod.solve)
+    pred_cls = specialize_mi(
+        pattern, natnum_program, "solve_pin_natnum", db=db,
+    )
+    assert db.signature_for("solve_pin_natnum", len(pred_cls._fields)) == (
+        pred_cls._fields)
+    assert field_names_for("solve_pin_natnum", arity=len(pred_cls._fields),
+                            db=db) == pred_cls._fields
 
 
 def test_builtins_answer_from_the_builtin_registry_with_no_db():
