@@ -202,3 +202,22 @@ tests asserted on what it returned for their inputs and it returned a
 consistent, plausible, EMPTY answer for every one. Only a census that asks
 "what touches a retiring name" (Q2) rather than "what fails" (Q1) sees it.
 Still open: the runtime pass for shapes 4/5, which also settles shape 3.
+
+## The hold-and-call population is GONE (the downstream lane, evening 2026-09-22)
+
+The operator confirmed the literal-tuple form to that lane directly (their
+own session, before my relay arrived). 31 sites migrated in SIX bodies, not
+five — one domain holds two bodies at different depths and every
+per-domain label collapsed them (the third instrument that nested file
+fooled today; they now label by BODY, never by domain). Each body gated
+alone on score + per-site solution counts + lint, rollback armed; the two
+known-red rows kept their known-red values. Every site carries a comment
+naming the ruling, its date, and WHY the attribute-backed form was not
+used (the measured refusal), with `(m.thing, K, V)` named as the W4-landing
+destination. **W4 alias sweep re-run: 0 in every shape, shape 4 included.**
+Full downstream sweep running; the commit will state on its face that it
+departs from the 2026-09-21 spec on an explicit dated ruling.
+
+So W4's DOWNSTREAM cliff, as far as any instrument can see, is now zero.
+What remains for W4 is the engine: the head channel, minting handles with
+the import name, the class.
