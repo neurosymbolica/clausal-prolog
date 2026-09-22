@@ -37,7 +37,7 @@ from clausal.logic.variables import (
     get_attr,
     register_attr_hook,
 )
-from clausal.logic.predicate import is_term_instance, make_predicate
+from clausal.logic.predicate import is_term_instance
 from clausal.logic.cells import compound_cell_shape, cell_args
 from clausal.logic.builtins._helpers import _functor_name
 
@@ -50,8 +50,46 @@ BDD_FALSE = 0
 
 # ── Term constructors for equivalence / implication ──────────────────────────
 
-BoolEq = make_predicate("BoolEq", ["left", "right"])
-BoolImpl = make_predicate("BoolImpl", ["left", "right"])
+#: Sentinel for "no operand given", so that ``None`` stays a value a caller
+#: may legitimately pass. ``make_predicate`` filled an omitted field with a
+#: fresh logic variable; these keep that, which is what
+#: ``BoolEq()`` -> ``('BoolEq', _G1, _G2)`` relies on.
+_FRESH = object()
+
+
+def BoolEq(left=_FRESH, right=_FRESH):
+    """The CLP(B) equivalence TERM ``('BoolEq', left, right)``.
+
+    A FUNCTION, not a ``make_predicate`` class.  These two were the last
+    members of the ``instances=True`` bridge (Task 6 took it 15 -> 2) and the
+    last term vocabulary in the engine still minted as a ``PredicateMeta``.
+    They were never predicates: nothing calls them as goals, nothing
+    type-tests them, and ``clpb``'s own reader ``_bool_binary_operands``
+    already discriminates on the FUNCTOR and the ARITY of a cell rather than
+    on a class.  Post-P2 the class constructor built a cell anyway, so the
+    class contributed a name, a callable, and — because a ``PredicateMeta``
+    with no Database row is what ``_detached_row`` exists for — a detached row
+    in every module dict that named it.
+
+    The full contract this keeps, all four pinned by ``tests/test_clpb.py``:
+    positional ``BoolEq(A, B)`` (what ``.clausal`` writes), keyword
+    ``BoolEq(left=A, right=B)`` (what Python callers in the suite write), a
+    bare ``BoolEq()`` filling two DISTINCT fresh variables, and ``TypeError``
+    on a misspelled field name rather than silently dropping it.
+    """
+    return ("BoolEq",
+            Var() if left is _FRESH else left,
+            Var() if right is _FRESH else right)
+
+
+def BoolImpl(left=_FRESH, right=_FRESH):
+    """The CLP(B) implication TERM ``('BoolImpl', left, right)``.
+
+    See :func:`BoolEq` for why these are functions.
+    """
+    return ("BoolImpl",
+            Var() if left is _FRESH else left,
+            Var() if right is _FRESH else right)
 
 # ── BDD node representation ─────────────────────────────────────────────────
 

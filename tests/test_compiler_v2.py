@@ -275,10 +275,31 @@ class TestV2CompileModule:
                     checked += 1
         assert checked, "fixture exercised no non-dynamic predicate at all"
 
-        # THE OTHER HALF, pinned so the narrowing cannot silently come undone:
-        # a class this Database has no row for is NOT locked.
-        assert db.row("BoolEq", 2) is None
-        assert not md["BoolEq"]._locked
+    def test_a_class_this_database_has_no_row_for_is_not_locked(self):
+        """The other half of step 7's narrowing, pinned directly.
+
+        Locking a row-less class used to MINT A DETACHED ROW and write the
+        lock into a private Database nobody can reach -- a no-op with a side
+        effect.  Pinned with a class minted HERE rather than with one the
+        fixture happens to contain, because which incidental classes land in
+        a module dict changes as term vocabularies stop being classes (the
+        CLP(B) ``BoolEq``/``BoolImpl`` were the subject until they became
+        plain functions), and a pin that depends on that is a pin that goes
+        vacuous without failing.
+        """
+        # nv
+        from clausal.logic.predicate import make_predicate
+        path = os.path.join(FIXTURES_DIR, "static_pred.clausal")
+        md = _load_via_v2(path, "_v2_static_pred_norow")
+        db = md["$module"].db
+
+        orphan = make_predicate("zz_no_row_here", ["a"])
+        assert db.row("zz_no_row_here", 1) is None, "fixture must not define it"
+        md["zz_no_row_here"] = orphan
+
+        # Re-run step 7 over the dict now holding the orphan.
+        compile_module([], [], md, md["__name__"])
+        assert not orphan._locked
 
     def test_dynamic_not_locked(self):
         """Dynamic predicates are NOT locked after compile_module."""
