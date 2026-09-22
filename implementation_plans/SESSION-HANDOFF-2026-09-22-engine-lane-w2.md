@@ -467,3 +467,15 @@ class as a value / 0 isinstance on PredicateMeta" is a FLOOR. A census keyed
 on the NAME `PredicateMeta` cannot see an ALIAS of a vocabulary class —
 `reflection.Clause`, `Goal`, `Atom`, `Variable`, clpb's, term_expansion's.
 Before W4, sweep the aliases: every exported vocabulary name, by name.
+
+**Appendix 6 follow-up:** the corpus lane migrated its tooling (their
+e2066b11) and the pre-commit check runs again. CORRECTED COUNT: **13
+`isinstance(x, reflection.<Name>)` sites + 31 cell-FIELD reads**
+(`.name` 11, `.args` 6, `.kwargs` 3, `.position` 3, `.goals` 3, `.head` 2,
+`.value/.keys/.values` 3) — the field reads are the larger half and break
+identically (`('Atom', 'units').name` is an AttributeError); a census of
+`isinstance` cannot see them. Verified by positive control (traceback 1 -> 0,
+a units report 0 -> 1, a 24-test suite 2 -> 24 passed). Every green from
+that check between P2 and now was over an EMPTY population. Open: their
+`_tools/test_check_provisions.py` is 259 failed / 12 passed with tooling
+unmodified, before and after — asked for error SHAPES to say if it is ours.
