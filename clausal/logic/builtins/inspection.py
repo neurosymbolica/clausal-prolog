@@ -8,6 +8,7 @@ from typing import Any
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.predicate import (
     PredicateMeta, is_zero_field_class, is_term_instance, term_field_names,
+    field_names_for,
 )
 # ``predicate.is_zero_field_class`` above is the zero-field-CLASS test;
 # ``atoms.is_atom`` is the TERM test (spec §6.1) and the one the name position
@@ -49,7 +50,7 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         return var_map[vid]
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
         return term
-    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
+    if field_names_for(term) == ():
         return term
     if isinstance(term, list):
         return [_copy_term_py(e, var_map) for e in term]
@@ -139,7 +140,7 @@ def _collect_vars_py(term: Any, result: list, _seen: set | None = None) -> None:
         return
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
         return
-    if isinstance(term, type) and isinstance(term, PredicateMeta) and not term._fields:
+    if field_names_for(term) == ():
         return
     if isinstance(term, list):
         for e in term:
@@ -324,15 +325,18 @@ def _construct_named(name_val, args, who: str):
     unifies with the same term written longhand.  §5.4 carves out ``'.'``/2,
     which builds the engine's list shape instead (see :func:`_cons`).
     """
-    if isinstance(name_val, PredicateMeta):
-        # ``_fields`` is the field list whatever minted the class — a generated
-        # ``class <functor>(metaclass=PredicateMeta)`` block (the usual route
-        # for an in-file predicate, see ``_make_functor_class_ast``) or
-        # ``make_predicate``.  ``PredicateMeta.__call__`` fills missing trailing
-        # fields with fresh Vars and rejects only *overflow*, so it is this
-        # exact-match gate, not the constructor, that makes ``name_val(*args)``
-        # bind every field positionally with nothing left over.
-        if len(name_val._fields) == len(args):
+    _ctor_fields = field_names_for(name_val)
+    if _ctor_fields is not None:
+        # ``field_names_for`` is the field list whatever minted the class — a
+        # generated ``class <functor>(metaclass=PredicateMeta)`` block (the
+        # usual route for an in-file predicate, see
+        # ``_make_functor_class_ast``), ``make_predicate``, or a declared
+        # ``@dataclass`` functor.  ``PredicateMeta.__call__`` fills missing
+        # trailing fields with fresh Vars and rejects only *overflow*, so it
+        # is this exact-match gate, not the constructor, that makes
+        # ``name_val(*args)`` bind every field positionally with nothing
+        # left over.
+        if len(_ctor_fields) == len(args):
             return name_val(*args)
         # Arity disagrees → not this class; fall through as the bare name.
         name_val = mint(name_val.__name__)
