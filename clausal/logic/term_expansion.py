@@ -273,6 +273,14 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     functor, arity = "term_expansion", 4
     clauses = lm.db.clauses_for(functor, arity)
     if clauses:
+        # BIND THE ROW FIRST.  The clauses were asserted into ``lm.db``, so
+        # this class IS the compiled face of a stored predicate and
+        # ``_bind_row`` is the documented call for that.  Without it the
+        # class is still on NO row when the compile writes ``_index_plans``
+        # through the facade, which minted a private detached row -- 4 of the
+        # 12 detached rows over 56 fixtures came from here -- and the index
+        # plans then landed on a throwaway instead of on ``lm.db``'s row.
+        te_cls._bind_row(lm.db, functor, arity)
         compile_predicate_trampoline(
             functor, arity, clauses, lm.db,
             globals_=lm.module_dict, pred_cls=te_cls,

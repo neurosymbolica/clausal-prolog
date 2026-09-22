@@ -2010,8 +2010,19 @@ def _process_declarations(module_items: list, module_dict: dict,
                 existing = module_dict.get(name)
                 if name in predicate_functors:
                     continue
-                if isinstance(existing, PredicateMeta) and existing._clauses:
-                    continue
+                # ``existing._row`` RAW, not ``existing._clauses``: the
+                # facade is `(cls._row or cls._detached_row()).clauses`, so
+                # merely ASKING whether a class carries clauses MINTED a
+                # private throwaway row for every data functor that reached
+                # here (measured: 6 of the 12 detached rows over 56 fixtures
+                # came from this one read).  A class with no row cannot have
+                # been given clauses, so the answer is the same and nothing
+                # is minted.  ``_row`` is a plain class attribute -- reading
+                # it is not a facade read.
+                if isinstance(existing, PredicateMeta):
+                    _row = existing._row
+                    if _row is not None and _row.clauses:
+                        continue
                 # Bound in THIS module's namespace only -- deliberately NOT
                 # through the process-wide ``predicate_builtins`` pool the
                 # bare-atom branch above shares.  That pool is the ATOM
