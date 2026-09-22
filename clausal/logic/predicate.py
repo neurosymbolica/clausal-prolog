@@ -521,7 +521,7 @@ def _head_arity(head: Any) -> int | None:
     whose arity is right there — because it needs a str functor and this needs
     only a count.
     """
-    fields = getattr(head, "_fields", None) if isinstance(head, PredicateMeta) else None
+    fields = field_names_for(head)
     if fields is not None:
         return len(fields)
     from clausal.logic.cells import _cell_shape  # noqa: PLC0415
