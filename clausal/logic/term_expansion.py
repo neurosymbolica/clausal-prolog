@@ -300,8 +300,13 @@ def _collect_functor_arities(node, out: dict, seen: set) -> None:
             _collect_functor_arities(kid, out, seen)
 
 
-def _compile_expansion_rules(expansion_clauses, module_dict):
-    """Compile term_expansion clauses into a mini LogicModule."""
+def _term_expansion_module(module_dict):
+    """Mint the synthetic ``_term_expansion_`` LogicModule and its term class.
+
+    Split out from ``_compile_expansion_rules`` (W4b-1) so a caller — or a
+    test — can build the module and its ``term_expansion`` class without
+    running an actual expansion.
+    """
     from clausal.logic.database import Module as LogicModule
     from clausal.logic.builtins import structural_unify
 
@@ -313,12 +318,23 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     # Create the term_expansion PredicateMeta class.
     te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"])
     lm.module_dict["term_expansion"] = te_cls
+    # W4b-1: register the declaration on the synthetic module's own db, so
+    # ``term_expansion/4`` is answerable by NAME and not only off the class.
+    lm.db.declare_functor(
+        "term_expansion", ("term", "expansion", "module_before", "module_after"))
 
     # Also ensure module_expansion_state is constructible for state threading.
     # A CONSTRUCTOR, not a class: the globals placeholder that raises "not in
     # scope as a term class" fires when nothing CALLABLE is bound to the name,
     # so a function satisfies it and leaves no row-less PredicateMeta behind.
     lm.module_dict["module_expansion_state"] = module_expansion_state
+    return lm
+
+
+def _compile_expansion_rules(expansion_clauses, module_dict):
+    """Compile term_expansion clauses into a mini LogicModule."""
+    lm = _term_expansion_module(module_dict)
+    te_cls = lm.module_dict["term_expansion"]
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
     # the (quasi-quoted) expansion patterns — e.g. a brand-new ``logged_fact``

@@ -868,7 +868,7 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
     # never a predicate's ``_row.db``, a different Database for an imported
     # name.
     db = getattr(namespace.get("$module"), "db", None)
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import field_names_for
     seen: set[str] = set()
     for name, var in named:
         for compound in _generic_compounds_in(deref(var)):
@@ -889,10 +889,16 @@ def _note_generic_compound_confusion(diag, namespace, named) -> None:
             # so dropping the class read silenced this note for the shape it
             # was written for.  Arity-checked here, because the class read has
             # no key to do it for it.
+            # IMPORTANT 2 (final fix wave, 2026-09-23): arity and db are
+            # already in hand here (arity computed just above, db at the
+            # top of this function) -- pass them so arm 3 can use the
+            # exact-arity read instead of falling through the no-arity,
+            # no-db, no-namespace call that answers None unconditionally
+            # for a NAME.
+            declared_fields = field_names_for(declared, arity=arity, db=db)
             declared_here = (
                 (db is not None and db.row(functor, arity) is not None)
-                or (isinstance(declared, PredicateMeta)
-                    and len(declared._fields or ()) == arity)
+                or (declared_fields is not None and len(declared_fields) == arity)
             )
             if not declared_here:
                 # THE FLIP (spec §5.1): a declared DATA functor binds the
@@ -1665,7 +1671,7 @@ def _reify_value(value, depth: int = 0, path=None):
     it says.
     """
     from clausal.logic.predicate import (
-        PredicateMeta, is_term_instance, term_field_names,
+        is_term_instance, term_field_names, field_names_for,
     )
     from clausal.logic.variables import deref, is_var
     from clausal.reflection import Atom, Goal, Variable, is_v, vfield
@@ -1700,7 +1706,7 @@ def _reify_value(value, depth: int = 0, path=None):
                     kwargs=[])
     if isinstance(value, tuple):
         return tuple(_reify_value(v, depth + 1, path) for v in value)
-    if isinstance(value, type) and isinstance(value, PredicateMeta):
+    if field_names_for(value) is not None:
         return Atom(name=value.__name__)
     if isinstance(value, Compound):
         return Goal(name=str(value.functor),

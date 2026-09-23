@@ -127,6 +127,20 @@ def test_arity_zero_atom_asked_at_arity_one_is_still_generic():
     assert built[0] == "tfcdt_applicant_age"
 
 
+def test_builtin_name_atom_builds_a_generic_cell_not_a_type_error():
+    """W4b-1 fix round 1 (review): ``field_names_for`` used to have a
+    ``_BUILTIN_FIELDS`` fallback, so ``functor(T, when, 2)`` -- an ordinary
+    atom that happens to spell a registered builtin -- resolved to
+    ``('condition', 'goal')`` in ``_construct_named``'s class arm and then
+    called ``name_val(*args)`` on a plain ``str``, raising ``TypeError:
+    'str' object is not callable``.  The fallback is removed; a bare
+    builtin-shaped name must build the generic cell exactly like any other
+    atom name (``test_atom_name_builds_a_generic_cell`` above), never raise."""
+    built = built_by(_functor__3, mint("when"), 2)
+    assert is_cell(built) and cell_functor(built) == "when"
+    assert cell_arity(built) == 2
+
+
 def test_arity_zero_still_yields_the_name_itself():
     """``functor(T, Name, 0)`` binds T to Name unchanged — the A09-F027
     round-trip property for atomic constants."""
@@ -214,3 +228,61 @@ def test_non_atom_name_raises_type_error_naming_its_own_site(builtin, args, who)
         built_by(builtin, *args)
     assert who in str(exc_info.value)
     assert "atom" in str(exc_info.value)
+
+
+# ── CRITICAL 2 (final fix wave, 2026-09-23): a mangled NAME is not a class ──
+#
+# CRITICAL 1's fix made ``field_names_for``'s arm 3 actually answer for a
+# mangled atom string resolved against a real loaded module.  That answering
+# is not by itself "this is a class" -- ``_construct_named``'s class arms
+# used to be gated on ``_ctor_fields is not None`` alone, so once arm 3
+# started answering for a plain ``str``, the exact-arity match branch called
+# ``name_val(*args)`` on a string (``TypeError: 'str' object is not
+# callable``) and the mismatch branch read ``name_val.__name__`` on a string
+# (``AttributeError: 'str' object has no attribute '__name__'``).  These two
+# defects used to cancel (arm 3 was inert, so ``_ctor_fields`` was always
+# ``None`` for a mangled name) -- fixing CRITICAL 1 alone would have made
+# ``functor/3`` crash on every migrated call site that hands it a mangled
+# name at a mismatched arity.
+
+
+@pytest.fixture
+def loaded_hide_owner():
+    """Load the real fixture module once; ``same/2`` has real field names
+    ``('x', 'y')`` (declared ``-module(hide_owner, [holds/1, label/1,
+    same/2])``)."""
+    import os
+
+    import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
+    from clausal.import_hook import _load_module
+
+    fixture = os.path.join(
+        os.path.dirname(__file__), "fixtures", "hide_owner.clausal")
+    return _load_module("hide_owner", fixture)
+
+
+def test_mangled_name_at_matching_arity_does_not_crash(loaded_hide_owner):
+    """Exact arity match (2 args for ``same/2``) used to take the
+    ``name_val(*args)`` branch and raise ``TypeError: 'str' object is not
+    callable``; a mangled name is not a class, so it must fall through to
+    the generic cell shape instead, same as any other atom name."""
+    from clausal.logic.atoms import mangle
+
+    name = mangle("hide_owner", "same")
+    built = built_by(_functor__3, name, 2)
+    assert built == (name, built[1], built[2])
+    assert len(built) == 3
+
+
+def test_mangled_name_at_mismatched_arity_does_not_crash(loaded_hide_owner):
+    """Arity mismatch (1 arg for ``same/2``, declared at 2) used to take the
+    ``mint(name_val.__name__)`` fall-through branch and raise
+    ``AttributeError: 'str' object has no attribute '__name__'`` -- a
+    string has no ``__name__``.  Must fall through to the generic cell
+    shape cleanly instead."""
+    from clausal.logic.atoms import mangle
+
+    name = mangle("hide_owner", "same")
+    built = built_by(_functor__3, name, 1)
+    assert built == (name, built[1])
+    assert len(built) == 2

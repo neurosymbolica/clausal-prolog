@@ -3481,9 +3481,9 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
 
     # PredicateMeta instances with locale translation.
     if style.locale is not None:
-        from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+        from clausal.logic.predicate import is_term_instance, term_field_names, field_names_for
         # Zero-arity atom class (the class IS the value).
-        if isinstance(t, type) and isinstance(t, PredicateMeta) and not t._fields:
+        if field_names_for(t) == ():
             return _c(_locale_name(t.__name__, style), 'atom', style)
         if is_term_instance(t):
             cls_name = _locale_name(type(t).__name__, style, len(term_field_names(t)))

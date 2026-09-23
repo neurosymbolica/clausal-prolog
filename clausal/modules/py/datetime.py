@@ -209,11 +209,22 @@ class _DatePattern(metaclass=PredicateMeta):
     form works in decompose mode, and it disappears the moment it unifies
     against a real date.
 
-    PredicateMeta (rather than a plain class) because the engine's clause
-    copier rebuilds *term instances* with fresh variables on each
-    resolution step, and it recognises them via PredicateMeta or
-    @dataclass (``c_is_term_instance`` in logic/variables/_variables.c).
-    A plain class would silently share variables across resolution steps.
+    STALE PREMISE (found in W4b-1 Task 2, corrected 2026-09-22): this used to
+    justify ``metaclass=PredicateMeta`` on the grounds that the engine's
+    clause copier rebuilds *term instances* with fresh variables on each
+    resolution step, and recognises them via PredicateMeta or @dataclass
+    (``c_is_term_instance`` in logic/variables/_variables.c). W4a (commit
+    ``5879b0be``) deleted that instance-recognition arm entirely, and
+    ``PredicateMeta.__call__`` already built a CELL rather than an instance
+    for every in-tree caller (P2 Task 3, 2026-09-19) -- so ``_DatePattern(...)``
+    would now build a cell like any other PredicateMeta class, not the kind of
+    term instance this reasoning describes. In practice nothing constructs a
+    ``_DatePattern`` instance any more: ``date/3`` builds a raw cell directly
+    (see below), and a repo-wide grep for ``_DatePattern(`` finds only this
+    class statement. See
+    ``todo/datepattern-metaclass-premise-is-stale-2026-09-22.md`` -- the class
+    is left as-is pending a decision to delete or convert it; that is out of
+    scope here.
     """
 
     _fields = ("year", "month", "day")
