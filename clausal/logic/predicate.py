@@ -1574,7 +1574,7 @@ def _db_for_module_name(module_name: str):
     return getattr(mod.__dict__.get("$module"), "db", None)
 
 
-def _resolve_mangled_owner(binding, arity: int):
+def _resolve_mangled_owner(binding):
     """``(db, functor)`` for a mangled *binding* whose owner module is a
     LOADED Clausal module, or ``None``.
 
@@ -1585,10 +1585,12 @@ def _resolve_mangled_owner(binding, arity: int):
     tests-only-sys-modules-2026-09-23.md`` records the live bug that check
     causes: a mangled handle whose module half collides with an unrelated
     loaded Python module, e.g. ``json``, would otherwise read as resolved).
-    ``arity`` is accepted but unused here -- it is threaded through by both
-    callers for the db read that follows, not consulted by this lookup
-    itself; kept as a parameter (rather than dropped) so both callers pass
-    the same three arguments and a future caller cannot forget it.
+
+    Takes no ``arity`` (review round, 2026-09-23): this lookup answers
+    "which db and functor", never consults an arity to do it, and both
+    callers already have their own copy for the read that follows -- an
+    unused parameter here was speculative generality on a private
+    two-caller helper, not a real shared need.
     """
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     module_name, functor = demangle(binding)
@@ -1641,7 +1643,7 @@ def resolve_predicate_row(binding, *, arity: int) -> "PredRow | None":
         return binding._row
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
-        resolved = _resolve_mangled_owner(binding, arity)
+        resolved = _resolve_mangled_owner(binding)
         if resolved is None:
             return None
         db, functor = resolved
@@ -1663,12 +1665,24 @@ def is_declared_predicate(binding, *, arity: int) -> bool:
 
     Three cases:
 
-    1. ``binding`` is a ``PredicateMeta`` class -> ``True``, unconditionally
-       -- a ``PredicateMeta`` class IS a predicate by construction (today's
-       bare ``isinstance(x, PredicateMeta)``, which the 15 sites use
-       exactly this way, ignoring arity too -- see
-       ``test_kind_predicate_class_ignores_a_mismatched_arity_like_legacy_
-       isinstance``).
+    1. ``binding`` is a ``PredicateMeta`` class -> ``len(binding._fields) ==
+       arity`` (``getattr``-guarded: a bare ``class X(metaclass=
+       PredicateMeta): pass`` with no ``_fields`` of its own answers
+       ``False`` rather than raising).  ARITY-STRICT (review round,
+       2026-09-23; ruled, not merely tightened) -- the first cut answered
+       ``True`` unconditionally here, mirroring today's bare
+       ``isinstance(x, PredicateMeta)`` sites, which do not check arity
+       either.  That is exactly the trap: those 15 sites would have
+       migrated arity-blind and then silently flipped to arity-STRICT the
+       moment a binding became a mangled atom (arm 2 already requires an
+       exact match) -- a behaviour change landing at the one moment no gate
+       covers it, the same shape this campaign has already been bitten by
+       twice.  F2's own stated question is "is this a predicate AT THIS
+       EXACT ARITY" -- strict is the intent in both eras, not a new
+       restriction, so any site that turns out to depend on arity-blindness
+       needs to surface as a suite failure now, under the full gate, not at
+       the flip.  See
+       ``test_kind_predicate_class_is_arity_strict_in_both_eras``.
     2. ``binding`` is a mangled atom naming a loaded Clausal module ->
        ``db.declared_kind(functor, arity) == "predicate"`` at the owner's
        db.  Exact arity, exact string match against ``declared_kind``'s
@@ -1682,10 +1696,10 @@ def is_declared_predicate(binding, *, arity: int) -> bool:
        refuses) -> ``False``.
     """
     if isinstance(binding, PredicateMeta):
-        return True
+        return len(getattr(binding, "_fields", ())) == arity
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
-        resolved = _resolve_mangled_owner(binding, arity)
+        resolved = _resolve_mangled_owner(binding)
         if resolved is None:
             return False
         db, functor = resolved
