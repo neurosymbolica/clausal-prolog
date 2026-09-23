@@ -23,12 +23,14 @@ from clausal.logic.exceptions import (
     permission_error,
     type_error,
 )
+from clausal.logic.atoms import is_mangled
 from clausal.logic.predicate import (
     PredicateMeta,
     describe_term_identity_mismatch,
     is_term_instance,
     is_zero_field_class,
     module_source_path,
+    resolve_predicate_row,
     term_field_names,
     term_field_dict,
 )
@@ -378,6 +380,54 @@ _RUNTIME_KINDS = frozenset((WRITE_ASSERT, WRITE_RETRACT))
 _CLAUSE_KINDS = frozenset((WRITE_LOAD_CLAUSES, WRITE_ASSERT, WRITE_RETRACT))
 
 RUNTIME_AUTHOR_PREFIX = "runtime-assert:"
+
+
+def _resolve_through_row(through: Any, arity: int) -> "PredRow | None":
+    """The extra row ``through=`` names, era-agnostically -- see
+    :meth:`Database._write_rows`.
+
+    ``through=`` used to be read with ``getattr(through, "_row", None)``,
+    which is duck-typed on the RESULT: a ``PredicateMeta`` class answers its
+    bound row (possibly ``None``, unbound), and literally anything else --
+    including the two shapes this campaign's flip introduces, a mangled atom
+    and a bare ``PredRow`` -- also answers ``None``, indistinguishably from
+    "this class has no second row yet".  That is the bug: a dropped second
+    row does not raise, so the mutation gate silently ends up policing only
+    the target row, on exactly the write ``through=`` exists to widen.
+
+    So the discriminator here is on the INPUT'S SHAPE, not on the result.
+    Two shapes are RECOGNISED, and each may legitimately answer no row:
+
+    1. a ``PredicateMeta`` class (today's era) -- ``None`` when the class is
+       not yet bound to any row;
+    2. a mangled atom naming a loaded module's predicate (the post-flip
+       binding) -- ``None`` when that module is not loaded, or is loaded but
+       has no row at exactly *arity*.
+
+    Both are resolved by :func:`resolve_predicate_row` (``predicate.py``,
+    F1), which already carries this exact class/mangled-atom distinction for
+    its other era-agnostic call sites -- its own docstring names "a mutation
+    gate's ``through=``" as an intended consumer, so this reuses it rather
+    than re-deriving the same two cases a second time, differently.
+
+    Anything ELSE -- a bare ``PredRow``, an un-mangled string, a dataclass
+    instance, ``None`` is handled above this and is the one silent case --
+    is UNRECOGNISED and raises, naming the value and its type.  Nothing here
+    widens past what a caller actually passes today (a ``PredicateMeta``
+    class, always); a bare row is deliberately not accepted merely because it
+    would be easy to resolve -- accepting it would make a typo'd or
+    stale-shaped ``through=`` indistinguishable from a real one, which is the
+    exact failure mode this function exists to end.
+    """
+    if through is None:
+        return None
+    if isinstance(through, PredicateMeta) or is_mangled(through):
+        return resolve_predicate_row(through, arity=arity)
+    raise TypeError(
+        f"through= does not recognise this value: {through!r} "
+        f"(a {type(through).__name__}); expected a PredicateMeta class or "
+        f"a mangled atom naming a loaded module's predicate, or None"
+    )
 
 
 def write_refusal(row: "PredRow", author: str, kind: str) -> "str | None":
@@ -813,7 +863,10 @@ class Database:
     def _write_rows(self, functor: str, arity: int, through: Any = None,
                     create: bool = True) -> "list[PredRow]":
         """Every row in the blast radius of a write to ``(functor, arity)``
-        made *through* an optional ``PredicateMeta``.
+        made *through* an optional binding: a ``PredicateMeta`` class (today)
+        or a mangled atom naming a loaded module's predicate (post-flip) --
+        see :func:`_resolve_through_row`, which also raises loudly for any
+        *through* shape that is neither.
 
         One definition, used by both :meth:`mutate` and :meth:`refusal_for`,
         so a dry run cannot ask about a different set of rows than the write
@@ -823,10 +876,9 @@ class Database:
         target = self.row(functor, arity, create=create)
         if target is not None:
             rows.append(target)
-        if through is not None:
-            other = getattr(through, "_row", None)
-            if isinstance(other, PredRow) and all(r is not other for r in rows):
-                rows.append(other)
+        other = _resolve_through_row(through, arity)
+        if other is not None and all(r is not other for r in rows):
+            rows.append(other)
         return rows
 
     def refusal_for(self, functor: str, arity: int, *, author: str, kind: str,
