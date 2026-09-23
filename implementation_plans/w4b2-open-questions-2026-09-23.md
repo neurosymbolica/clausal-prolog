@@ -323,3 +323,66 @@ spot-check the four rows discussed at length in 1.1-1.4 and Q2's F3-F9).
 register into `_declared`) breaks any existing caller; whether the
 `feat/seam-local-handle` branch's own tests pass on today's main (textual
 mergeability only, not built or run).
+
+
+---
+
+## CORRECTIONS by the controller, 2026-09-23 (verified before planning on them)
+
+**§3.1's reading of the seam branch is a DIFF-DIRECTION ARTIFACT, and acting
+on it would be destructive.** The document says the branch "also deletes ...
+`tests/test_field_names_for.py`, ... `tools/w4b1_census/`, and several
+`implementation_plans/*` docs — consistent with a branch that also carried
+forward W4b-1's own landing/cleanup". It did no such thing. Verified:
+
+    git log feat/seam-local-handle-2026-09-22 --diff-filter=D -- \
+        tests/test_field_names_for.py tools/w4b1_census/     ->  EMPTY
+
+    merge-base(main, branch) = 4f6b7d51  -- BEFORE W4b-1 existed
+    tests/test_field_names_for.py : main=present  branch=absent
+    tools/w4b1_census/plugin.py   : main=present  branch=absent
+
+A `main..branch` diffstat renders **main's additions as deletions**. The
+branch simply predates them; a 3-way merge keeps them, which is exactly why
+`merge-tree` reported no conflicts. Nobody should "restore" anything when
+landing it.
+
+**The mergeability verdict itself stands** — textual only, as the document
+correctly says: not built, not run.
+
+## W4b-2 DECOMPOSITION (controller, 2026-09-23)
+
+The 49 sites plus the flip plus the live `qualify_mangled_goal` bug is not one
+spec. Split, in dependency order:
+
+* **W4b-2a — fix `qualify_mangled_goal`.** One function; §1.4 established that
+  all six call sites funnel through it, so the fix lands in exactly one place
+  and nothing needs threading. Fixes a live bug. **BLOCKED on one operator
+  ruling: the error shape** (see below).
+* **W4b-2b — the era-agnostic binding resolver, then F1 (23) and F2 (15).**
+  38 of the 49 sites, both families mechanical once the resolver exists. The
+  resolver is the W4b-1 shape repeated: one function that maps a module-dict
+  binding to `(functor, arity)` / its row, answering correctly whether the
+  binding is still a `PredicateMeta` class OR already a mangled atom. That is
+  what makes the flip itself a one-line change instead of a 49-site flag day,
+  and it is what W1's "migration, not a flag day" ruling requires.
+* **W4b-2c — the eight hard families** (F3-F10), each needing its own design.
+  F7 (frozen protocol, ~22 out-of-tree implementors) and F6 (needs genuinely
+  new storage) are the two that will eat time; F5 is a coupled pair that must
+  move in ONE commit or not at all; F3 needs a caller census, not a swap.
+* **W4b-2d — the flip itself** (mint handles with the import name) plus piece 3
+  (`feat/seam-local-handle-2026-09-22`, which needs building and running before
+  anyone calls it landable).
+
+**Operator rulings still needed**, in the order they bite:
+1. **The error shape for a mangled goal that does not resolve.** The review
+   argues `existence_error(procedure, Name/Arity)` as a `LogicException` for
+   BOTH cases, per ISO 7.7.7 and Scryer/Trealla, keeping
+   `existence_error(module, ..)` only for an explicit `(":", M, G)`. This
+   becomes a token other lanes key on — the same reason W3's
+   `DispatchTargetError` was ruled by the operator rather than chosen.
+   Blocks W4b-2a only.
+2. **two-out-paths** (`todo/two-out-paths-disagree-about-atom-tagging-2026-09-22.md`).
+   Blocks the parked `--handle(X)` form, NOT W4b-2 proper.
+3. **F8** — whether the cross-copy class-identity diagnostic becomes moot
+   post-flip (migrate vs delete). Deep in W4b-2c; not urgent.
