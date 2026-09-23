@@ -1730,6 +1730,72 @@ def is_declared_predicate(binding, *, arity: int) -> bool:
     return False
 
 
+def is_declared_predicate_name(binding) -> bool:
+    """F2b: True iff *binding* denotes a declared PREDICATE, AT ANY ARITY,
+    era-agnostic.
+
+    The predicate-name-as-atom coercion population -- 12 of F2's original 15
+    F2-family rows (row 20 excluded: it reads ``type()`` of a live term
+    INSTANCE, not a namespace binding, and has no mangled arm to give --
+    see ``implementation_plans/w4b2-f2b-and-hard-families-2026-09-23.md``
+    Q5; rows 30/31 excluded: F1-shaped, they read ``cls._row`` directly and
+    had already migrated to ``resolve_predicate_row`` before F2b started).
+    A bare reference to a predicate in term position denotes the ATOM of its
+    own name -- a bare ``p/3`` denotes the atom ``p`` exactly as a bare
+    ``p/0`` would -- so unlike :func:`is_declared_predicate`, this accessor
+    is deliberately ARITY-BLIND: none of its 12 call sites read or compare
+    an arity on the ``PredicateMeta`` arm today (bare
+    ``isinstance(x, PredicateMeta)``), and forcing an ``arity`` keyword
+    through here would mean either fabricating one (wrong for a predicate
+    declared at an arity other than the guess) or loosening
+    ``is_declared_predicate`` itself back to arity-blind (reopening the
+    typo-masking hole rows 30/31 exist to close).  One function cannot hold
+    both an arity-required-and-EXACT contract and an arity-IRRELEVANT one;
+    this is ``is_declared_predicate``'s own hazard, mirrored -- confirmation
+    it is a second function, not an optional keyword on the first.
+
+    Two cases:
+
+    1. ``binding`` is a ``PredicateMeta`` class -> ``True``, unconditionally
+       (no arity read, matching every one of the 12 sites' bare
+       ``isinstance`` today).
+    2. ``binding`` is a mangled atom naming a loaded Clausal module ->
+       ``db.is_predicate_name(functor)`` at the owner's db -- the
+       arity-free existence scan (Q2: NEVER ``db.arities_for(functor)``,
+       which silently misses a ``mark_predicate_export``-only or
+       ``adopt_row``-only declared predicate; verified by probe, see the
+       method's own docstring).
+    3. Anything else -- the same six hazard-1 shapes
+       ``resolve_predicate_row``/``is_declared_predicate`` refuse (a
+       ``@dataclass`` class, a plain non-mangled string even one that
+       happens to spell something, a mangled atom whose module half is not
+       a loaded Clausal module, ``None``, an arbitrary object) -> ``False``.
+       A bare ``@dataclass`` class never satisfies case 1 (it is not a
+       ``PredicateMeta`` instance) and never satisfies case 2 (it is not a
+       ``str``, so ``is_mangled`` is ``False``) -- there is no established
+       rule that a bare dataclass CLASS reference means the atom of its
+       name, and this accessor never invents one.  That is also why rows
+       43/44's ISO 8.5.1.3(e) atomicity gates
+       (``isinstance(name_val, (PredicateMeta, int, float, bool, bytes))``)
+       are safe to migrate here even though the SHAPE accessor
+       (``field_names_for``) is not: this function is IDENTITY-shaped like
+       the ``isinstance`` it replaces, never SHAPE-shaped like
+       ``field_names_for`` -- it does not widen to accept a dataclass, so
+       ``functor(T, SomeDataclass, 0)`` keeps raising
+       ``type_error(atomic, ...)`` exactly as before.
+    """
+    if isinstance(binding, PredicateMeta):
+        return True
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    if is_mangled(binding):
+        resolved = _resolve_mangled_owner(binding)
+        if resolved is None:
+            return False
+        db, functor = resolved
+        return db.is_predicate_name(functor)
+    return False
+
+
 def field_names_for(value, *, arity=None, db=None, namespace=None):
     """Field names for a declared functor, or None.
 
@@ -2111,4 +2177,5 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "term_field_names", "term_field_names_of_class", "field_names_for",
            "term_field_values", "term_field_dict",
            "make_predicate", "make_atom",
-           "resolve_predicate_row", "is_declared_predicate"]
+           "resolve_predicate_row", "is_declared_predicate",
+           "is_declared_predicate_name"]

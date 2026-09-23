@@ -252,10 +252,10 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     raises for the same mistakes in a clause body -- the same mistake should
     not be a clean error in one position and a mangled term in the other.
     """
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import is_declared_predicate_name
 
     binding = namespace.get(name)
-    if isinstance(binding, PredicateMeta):
+    if is_declared_predicate_name(binding):
         return binding(*args, **kwargs)
 
     from clausal.logic.compiler.terms_to_ast import functor_signature_for  # noqa: PLC0415

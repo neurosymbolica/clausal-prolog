@@ -27,7 +27,7 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import (  # noqa: F401
-    is_term_instance, term_field_names, PredicateMeta,
+    is_term_instance, term_field_names, is_declared_predicate_name,
     resolve_predicate_row,
 )
 from clausal.logic.database import Clause
@@ -184,7 +184,7 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
     # indexable set, forcing a linear scan. Matches the runtime key emitted by
     # :func:`_runtime_arg_key`. Must precede ``is_term_instance`` (False for a
     # class, but kept adjacent for clarity).
-    if isinstance(arg, type) and isinstance(arg, PredicateMeta):
+    if is_declared_predicate_name(arg):
         return (arg.__name__, 0)
     # A term class may unify with values of a FOREIGN type -- date/3's
     # pattern unifies with a real datetime.date. Keying such a term by its
@@ -386,7 +386,7 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
         return (a.functor, len(a.args))
     # PredicateMeta atom: mirror _arg_to_index_key so a runtime atom argument
     # routes to the same bucket as its head key.
-    if isinstance(a, type) and isinstance(a, PredicateMeta):
+    if is_declared_predicate_name(a):
         return (a.__name__, 0)
     # Mirror of the index-transparent branch in _arg_to_index_key.
     if getattr(type(a), "_index_transparent", False):

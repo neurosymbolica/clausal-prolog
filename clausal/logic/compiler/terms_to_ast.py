@@ -43,8 +43,8 @@ from clausal.pythonic_ast.nodes import (
     SetLiteral as _SetLiteral_t,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, is_zero_field_class, is_term_instance,
-    term_field_names, term_field_names_of_class,
+    PredicateMeta, is_declared_predicate_name, is_zero_field_class,
+    is_term_instance, term_field_names, term_field_names_of_class,
 )
 from clausal.logic.atoms import (
     is_atom as _term_is_atom,
@@ -382,7 +382,7 @@ def cell_signature_for_name(
     if resolved is None:
         return None
     binding, leaf, leaf_namespace = resolved
-    if isinstance(binding, PredicateMeta):
+    if is_declared_predicate_name(binding):
         # (W4a: the `_clausal_instances` gate that stood here is gone with the
         # bridge.  It read the flag straight out of `cls.__dict__`, so it kept
         # honouring a class-body assignment after the attribute itself became
@@ -1064,7 +1064,7 @@ def term_to_ast_expr(
             # without requiring a signature to exist.
             _resolved = _resolve_functor_binding(fname, _namespace) if _namespace else None
             _binding = _resolved[0] if _resolved is not None else None
-            if not isinstance(_binding, PredicateMeta):
+            if not is_declared_predicate_name(_binding):
                 if kw_exprs:
                     raise SyntaxError(
                         f"functor {fname!r} has no declared signature: "
@@ -1222,7 +1222,17 @@ def term_to_ast_expr(
 
     # A predicate CLASS (arity ≥ 1 — the zero-arity/atom case returned above)
     # in term position.  Almost always the atom/predicate name clash.
-    if isinstance(term, PredicateMeta):
+    #
+    # F2b: is_declared_predicate_name, not a bare isinstance -- but `term`
+    # can never be a mangled atom here regardless, since the generic
+    # ``isinstance(term, (int, float, str, bytes, complex))`` arm far above
+    # already returns for ANY str (mangled atom included) before this line
+    # is ever reached; that arm's ``ast.Constant(value=term)`` is exactly
+    # what a mangled predicate atom needs (it already denotes itself -- W4
+    # ruling, seam.py). This line's own class arm stays reachable only for
+    # today's-era PredicateMeta class object, so `term.__name__` below is
+    # always safe.
+    if is_declared_predicate_name(term):
         # STAGE 2 (spec 2026-09-18 §4): a predicate referenced BY NAME in
         # argument position is the ATOM of that name -- the str.  The
         # name-clash diagnostic is gone: an atom foo and a predicate foo/N

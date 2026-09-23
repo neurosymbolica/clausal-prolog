@@ -537,6 +537,40 @@ class Database:
             found |= {a for (f, a) in keyed if f == functor}
         return found
 
+    def is_predicate_name(self, functor: str) -> bool:
+        """True iff *functor* is declared PREDICATE-shaped at ANY arity --
+        the arity-free existence twin of :meth:`declared_kind`, for F2b's
+        era-agnostic "is this a predicate reference at all" question
+        (``implementation_plans/w4b2-f2b-and-hard-families-2026-09-23.md``
+        Q2/Q4).
+
+        Neither ``arities_for`` nor ``functors`` is a substitute (verified
+        by probe, not merely asserted): ``arities_for`` scans ``_rows``/
+        ``_clauses``/``_dispatch``/``_lazy_recompile``/``_signatures``/
+        ``_dynamic`` only, and misses BOTH ``_predicate_export`` (a bare
+        ``name/arity`` ``-module``/``-private`` export entry,
+        ``mark_predicate_export``) and ``_adopted`` (an ``-import_from`` row
+        from another database) -- ``arities_for('q')`` answers ``set()`` for
+        a name ``mark_predicate_export``-only declared, and also for one
+        that only reached this database via ``adopt_row``, even though
+        ``declared_kind`` calls both ``"predicate"``.  ``functors()`` fixes
+        the ``_adopted`` half (it already scans it) but NOT
+        ``_predicate_export`` -- it too answers ``False`` for a
+        ``mark_predicate_export``-only name.  This method scans the union
+        ``declared_kind`` itself draws from (``row()``'s own ``known`` test,
+        plus ``_predicate_export``), stripped to functor-only, so the two
+        never disagree about what "known as a predicate" means.
+        Deliberately excludes ``_declared`` -- a fielded export there is
+        DATA, never predicate (see ``declared_kind``).
+        """
+        for keyed in (self._rows, self._adopted, self._predicate_export,
+                      self._clauses, self._dispatch, self._lazy_recompile,
+                      self._signatures, self._dynamic):
+            for (f, _a) in keyed:
+                if f == functor:
+                    return True
+        return False
+
     def functors(self) -> "list[str]":
         """Every predicate NAME this database knows, sorted.
 
