@@ -38,7 +38,7 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
-    term_field_names_of_class, field_names_for,
+    field_names_for, is_declared_predicate,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -1049,14 +1049,14 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
             # not one a row can answer yet.
             if db.row(functor, arity) is not None:
                 continue           # declared here at this arity (its row exists), or adopted by -import_from
-            cls = module_dict.get(functor)
-            if isinstance(cls, PredicateMeta):
-                # P4 prerequisite: reached only for a class with NO row -- a
-                # predicate visible through a plain Python import.  Goes with
-                # the class.
-                fields = term_field_names_of_class(cls)
-                if fields is not None and len(fields) == arity:
-                    continue
+            # P4 prerequisite: reached only for a binding with NO row -- a
+            # predicate visible through a plain Python import (or, post
+            # W4b-2d, a mangled handle bound directly, with no row either).
+            # is_declared_predicate is era-agnostic (W4b-2b) and already
+            # asks the identical question this used to spell out by hand:
+            # a PredicateMeta CLASS at exactly this arity.
+            if is_declared_predicate(module_dict.get(functor), arity=arity):
+                continue
             near = sorted({a for (f, a) in db._clauses if f == functor})
             hint = (f"; predicate {functor} is defined at arity/arities {near}"
                     if near else f"; predicate {functor} is never defined")
@@ -1091,12 +1091,11 @@ def _refuse_untablable_target(
     # ``solve_count_tabled/2`` — all declared, none with a row), so rerouting
     # would replace the accurate "declared but has no clauses" with "never
     # defined".
+    # ``cls`` is kept as the CLASS below (``cls._row``, an F1-shaped read
+    # untouched by this migration -- W4b-2b built the F2 resolver only);
+    # ``is_pred`` itself is the F2 question, era-agnostic now.
     cls = module_dict.get(functor)
-    if isinstance(cls, PredicateMeta):
-        fields = term_field_names_of_class(cls)
-        is_pred = fields is not None and len(fields) == arity
-    else:
-        is_pred = False
+    is_pred = is_declared_predicate(cls, arity=arity)
 
     if functor in specialize_aliases:
         # P3-3 Task 7 retired the reason this refusal used to give -- "-specialize
