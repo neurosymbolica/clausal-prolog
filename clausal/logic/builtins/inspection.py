@@ -7,8 +7,8 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.predicate import (
-    PredicateMeta, is_zero_field_class, is_term_instance, term_field_names,
-    field_names_for,
+    is_declared_predicate_name, is_zero_field_class,
+    is_term_instance, term_field_names, field_names_for,
 )
 # ``predicate.is_zero_field_class`` above is the zero-field-CLASS test;
 # ``atoms.is_atom`` is the TERM test (spec §6.1) and the one the name position
@@ -394,9 +394,13 @@ def _functor__3(term, name, arity, trail, k):
         # ATOMIC.  A list, a dict, a set, a cell or any other compound shape
         # is not, and used to be handed straight back as ``T`` at arity 0 —
         # ``functor(T, [1, 2], 0)`` "succeeded" with a list as the name.
-        # ``PredicateMeta`` stays in: a declared functor class is an atom
-        # value (arity-0 declared atoms are the corpus's schema atoms) and
-        # ``_construct_named`` resolves it for itself.
+        # A declared predicate reference stays in: a declared functor class
+        # (or, era-agnostic per F2b, the mangled atom it becomes at the
+        # later flip) is an atom value (arity-0 declared atoms are the
+        # corpus's schema atoms) and ``_construct_named`` resolves it for
+        # itself.  ``is_declared_predicate_name`` never widens past that --
+        # a bare ``@dataclass`` class still answers False here, so
+        # ``functor(T, SomeDataclass, 0)`` keeps raising below.
         # Fix round 1, item 2: the EMPTY LIST is the reserved atom ``'[]'``,
         # so it is an atomic name — ``functor(T, [], 0)`` gives ``T = []``
         # (Scryer-verified).  ``b""``/``""`` are the same term.  A non-empty
@@ -404,7 +408,8 @@ def _functor__3(term, name, arity, trail, k):
         if not (
             _term_is_atom(name_val)
             or _is_empty_list(name_val)
-            or isinstance(name_val, (PredicateMeta, int, float, bool, bytes))
+            or is_declared_predicate_name(name_val)
+            or isinstance(name_val, (int, float, bool, bytes))
             or name_val is None
         ):
             from clausal.logic.exceptions import LogicException, type_error
@@ -534,7 +539,8 @@ def _univ__2(term, lst, trail, k):
             if not (
                 _term_is_atom(f_val)
                 or _is_empty_list(f_val)
-                or isinstance(f_val, (PredicateMeta, int, float, bool, bytes))
+                or is_declared_predicate_name(f_val)
+                or isinstance(f_val, (int, float, bool, bytes))
                 or f_val is None
             ):
                 from clausal.logic.exceptions import LogicException, type_error
