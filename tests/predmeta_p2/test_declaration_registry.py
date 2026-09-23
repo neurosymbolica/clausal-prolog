@@ -72,6 +72,33 @@ def test_dynamic_is_a_predicate_with_no_declared_fields(tmp_path, monkeypatch):
     assert db.declared_fields("d", 1) is None
 
 
+def test_a_bare_export_entry_is_a_predicate_with_no_declared_fields(
+        tmp_path, monkeypatch):
+    """dynfix 2026-09-23 (todo/dynamic-declarations-are-invisible-to-arm-3-
+    2026-09-22.md).  Parity with ``test_dynamic_is_a_predicate_with_no_
+    declared_fields`` above, for the OTHER spelling the todo names: a bare
+    ``name/arity`` entry in a ``-module``/``-private`` export list (R6b) --
+    ``gv_free/1`` in ``tests/fixtures/gate_vocab.clausal`` is the
+    real-world case.  It synthesizes placeholder field names on its CLASS
+    (mirroring ``-dynamic`` exactly -- see
+    ``term_rewriting._declare_predicate_export``) but, before this fix,
+    registered NOTHING on the Database: ``declared_kind`` answered
+    ``None``, indistinguishable from a name nobody ever declared.  Field
+    names stay unanswerable here too -- same as ``-dynamic`` -- because
+    there genuinely are none anywhere except the class's own synthesized
+    guess."""
+    _m, db = _load(tmp_path, monkeypatch, "p2reg_export3",
+                   "-module(p2reg_export3, [r/2])\n\nq(1),\n")
+    assert db.declared_kind("r", 2) == "predicate"
+    assert db.declared_fields("r", 2) is None
+    assert db.row("r", 2) is None, (
+        "deliberately NOT a row -- a row would be LOCKED at load step 7 "
+        "(nothing marks it -dynamic), refusing exactly the \"an importer "
+        "may legitimately implement it later\" write "
+        "test_mutation_gate.py's gv_free/1 pin needs to stay legal"
+    )
+
+
 def test_a_module_export_declares_too(tmp_path, monkeypatch):
     _m, db = _load(tmp_path, monkeypatch, "p2reg_export",
                    "-module(p2reg_export, [seg(A, B), q(N)])\n\nq(1),\n")
