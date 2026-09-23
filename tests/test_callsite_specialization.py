@@ -364,43 +364,15 @@ class TestStaticCallKey:
         # a bucket key — so all three spellings now decline to specialise.
         assert _static_call_key(ast.List(elts=[], ctx=ast.Load())) is None
 
-    def test_clausal_new_fast_path_call_keys_by_class_name(self):
-        # Phase 0 construction fast path: term_to_ast_expr now emits
-        # Dog._clausal_new(a, b) for saturated PredicateMeta terms instead
-        # of Dog(a=a, b=b). The class name lives in func.value here, NOT
-        # func.attr (which is always the literal string "_clausal_new") —
-        # unlike the module.Dog(...) qualified-call shape right above,
-        # where func.attr IS the class name.
-        # nv
-        node = ast.Call(
-            func=ast.Attribute(
-                value=ast.Name(id="Dog", ctx=ast.Load()),
-                attr="_clausal_new",
-                ctx=ast.Load(),
-            ),
-            args=[ast.Name(id="_v_a", ctx=ast.Load()),
-                  ast.Name(id="_v_b", ctx=ast.Load())],
-            keywords=[],
-        )
-        assert _static_call_key(node) == ("Dog", 2)
-
-    def test_clausal_new_fast_path_distinguishes_classes(self):
-        # Two different fast-pathed classes of the same arity must NOT
-        # collide on a shared ("_clausal_new", n) key.
-        # nv
-        def _fast_call(cls_name):
-            return ast.Call(
-                func=ast.Attribute(
-                    value=ast.Name(id=cls_name, ctx=ast.Load()),
-                    attr="_clausal_new",
-                    ctx=ast.Load(),
-                ),
-                args=[ast.Name(id="_v_a", ctx=ast.Load())],
-                keywords=[],
-            )
-        assert _static_call_key(_fast_call("Dog")) == ("Dog", 1)
-        assert _static_call_key(_fast_call("Cat")) == ("Cat", 1)
-        assert _static_call_key(_fast_call("Dog")) != _static_call_key(_fast_call("Cat"))
+    # The two ``_clausal_new`` fast-path tests that used to sit here
+    # (``test_clausal_new_fast_path_call_keys_by_class_name`` and
+    # ``test_clausal_new_fast_path_distinguishes_classes``) were removed in
+    # W4b, 2026-09-23, along with the call-key special case in arg_index.py
+    # they exercised: term_to_ast_expr no longer ever emits the
+    # ``Cls._clausal_new(...)`` shape (that Phase-0 fast constructor and its
+    # minter are gone since W4a), so ``func.attr == "_clausal_new"`` can no
+    # longer occur here and these hand-built AST nodes tested a shape
+    # nothing in the tree produces any more.
 
 
 # ── Phase 10c: _bucket_key and _joint_bucket_key naming ─────────────────────

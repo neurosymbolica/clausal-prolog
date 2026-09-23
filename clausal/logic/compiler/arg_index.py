@@ -473,18 +473,11 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
             return (bare_name_of(func.id), n_args)
         if isinstance(func, ast.Attribute):
             n_args = len(arg_expr.args) + len(arg_expr.keywords)
-            # DEAD SINCE W4a: the emitter can no longer produce this
-            # attribute (see solve.py's gate rule); retired in W4b.
-            # Cls._clausal_new(...) (Phase 0 construction fast path,
-            # term_to_ast_expr): unlike a qualified mod.Dog(...) call, the
-            # class name is the ATTRIBUTE'S VALUE, not its attr string — the
-            # attr is the literal "_clausal_new" for every fast-pathed class.
-            # Read the class name off ``func.value`` so different classes of
-            # the same arity don't collide on a single ("_clausal_new", n)
-            # key (which would just never match any real index bucket and
-            # silently disable this specialisation).
-            if func.attr == "_clausal_new" and isinstance(func.value, ast.Name):
-                return (func.value.id, n_args)
+            # The ``Cls._clausal_new(...)`` call-key special case that used
+            # to precede this (Phase 0 construction fast path) was retired
+            # in W4b, 2026-09-23: terms_to_ast.py's emitter can no longer
+            # produce that attribute shape (see solve.py's _deref_walk_py),
+            # so ``func.attr`` here is never the literal "_clausal_new".
             return (func.attr, n_args)
     return None
 

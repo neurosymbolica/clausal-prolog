@@ -1000,10 +1000,6 @@ char_atom_from_ucs4(Py_UCS4 c)
 /* Interned "__unify__", set in PyInit__variables before any unify runs. */
 static PyObject *str_dunder_unify = NULL;
 
-/* Interned "_clausal_new", set in PyInit__variables. Phase 0 fast-path gate
- * for do_walk's term-instance arm (KEEP THE THREE WALKERS IN SYNC). */
-static PyObject *str__clausal_new = NULL;
-
 /* Probe *obj* for a ``__unify__`` attribute without paying for an
  * AttributeError on the (overwhelmingly common) miss.  Returns 1 with
  * *hook_out* set to a strong ref, 0 with *hook_out* NULL on a clean miss,
@@ -1720,7 +1716,6 @@ py_deref(PyObject *Py_UNUSED(module), PyObject *arg)
 /* Forward declarations — defined later, used by do_walk's term-instance arm
  * (A01-F008). */
 static int c_is_term_instance(PyObject *obj);
-static PyObject *c_term_field_names(PyObject *obj);
 static PyObject *py_term_field_names(PyObject *module, PyObject *obj);
 
 /*
@@ -1821,65 +1816,22 @@ do_walk(PyObject *term, int depth)
         int ti = c_is_term_instance(term);
         if (ti < 0) return NULL;
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
-            if (!fields && PyErr_Occurred()) return NULL;
-            if (!fields) {
-                fields = py_term_field_names(NULL, term);
-                if (!fields) return NULL;
-            }
+            /* c_term_field_names used to answer for a PredicateMeta
+             * INSTANCE; W4a made that shape impossible and turned it into
+             * an unconditional NULL-without-exception stub, so every call
+             * here fell straight through to this @dataclass route on every
+             * term. Retired in W4b, 2026-09-23 -- call it directly. */
+            PyObject *fields = py_term_field_names(NULL, term);
+            if (!fields) return NULL;
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
 
-            /* Phase 0 fast-path gate (KEEP THE THREE WALKERS IN SYNC —
-             * solve.py's _deref_walk_py comment): cls's OWN dict has
-             * "_clausal_new" as a classmethod object iff PredicateMeta
-             * attached the positional-args fast constructor. Absent for
-             * atoms; also absent for a class with a field literally named
-             * "_clausal_new" (tp_dict then holds a __slots__ member
-             * descriptor under that name instead) — hence the
-             * PyClassMethod_Type check rather than mere name presence. */
-            {
-                PyObject *cls = (PyObject *)Py_TYPE(term);
-                PyObject *d = PyType_GetDict((PyTypeObject *)cls);
-                if (!d) { Py_DECREF(fields); return NULL; }
-                PyObject *fastm = NULL;
-                int has = PyDict_GetItemRef(d, str__clausal_new, &fastm);
-                Py_DECREF(d);
-                if (has < 0) {
-                    Py_DECREF(fields);
-                    return NULL;
-                }
-                if (fastm != NULL &&
-                    PyObject_TypeCheck(fastm, &PyClassMethod_Type)) {
-                    Py_DECREF(fastm);
-                    PyObject *args_tuple = PyTuple_New(n);
-                    if (!args_tuple) { Py_DECREF(fields); return NULL; }
-                    for (Py_ssize_t i = 0; i < n; i++) {
-                        PyObject *fname = PyTuple_GET_ITEM(fields, i);
-                        PyObject *val = PyObject_GetAttr(term, fname);
-                        if (!val) {
-                            Py_DECREF(fields);
-                            Py_DECREF(args_tuple);
-                            return NULL;
-                        }
-                        PyObject *walked = do_walk(val, depth + 1);
-                        Py_DECREF(val);
-                        if (!walked) {
-                            Py_DECREF(fields);
-                            Py_DECREF(args_tuple);
-                            return NULL;
-                        }
-                        PyTuple_SET_ITEM(args_tuple, i, walked);
-                    }
-                    Py_DECREF(fields);
-                    PyObject *bound = PyObject_GetAttr(cls, str__clausal_new);
-                    if (!bound) { Py_DECREF(args_tuple); return NULL; }
-                    PyObject *result = PyObject_Call(bound, args_tuple, NULL);
-                    Py_DECREF(bound);
-                    Py_DECREF(args_tuple);
-                    return result;
-                }
-                Py_XDECREF(fastm);
-            }
+            /* The Phase-0 fast-path gate that used to precede this (calling
+             * a "_clausal_new" positional classmethod when PredicateMeta
+             * had attached one) was retired alongside the above: that
+             * classmethod and its minter are gone since W4a, so the gate
+             * always fell through to the kwargs reconstruction below on
+             * every call -- see solve.py's _deref_walk_py.
+             */
 
             PyObject *kwargs = PyDict_New();
             if (!kwargs) { Py_DECREF(fields); return NULL; }
@@ -2291,21 +2243,6 @@ py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
     }
 }
 
-/* Internal: the fast field-name lookup for a PredicateMeta INSTANCE.
- *
- * W4a (2026-09-22): that instance cannot exist any more, so the arm is gone
- * and this answers NULL-without-exception for everything.  Every caller
- * already handled that answer by falling back to py_term_field_names (the
- * @dataclass route), which is now the only route -- so the fallback is not a
- * fallback any more, and retiring this function along with its seven call
- * sites is W4b's cleanup, kept out of a landing whose claim is that no
- * answer moves. */
-static PyObject *
-c_term_field_names(PyObject *Py_UNUSED(obj))
-{
-    return NULL;  /* no term instance has PredicateMeta fields any more */
-}
-
 /*
  * is_atom(obj) -> bool
  */
@@ -2441,14 +2378,13 @@ c_is_ground(PyObject *term, int depth)
         int ti = c_is_term_instance(term);
         if (ti < 0) return -1;  /* Fix #3 */
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
-            if (!fields && PyErr_Occurred()) return -1;  /* Fix #3 */
-            /* Fix #1: for dataclass instances where c_term_field_names returns
-             * NULL (non-PredicateMeta), fall back to py_term_field_names. */
-            if (!fields) {
-                fields = py_term_field_names(NULL, term);
-                if (!fields) return -1;
-            }
+            /* c_term_field_names used to answer for a PredicateMeta
+             * INSTANCE; W4a made that shape impossible and turned it into
+             * an unconditional NULL-without-exception stub, so every call
+             * here fell straight through to this @dataclass route on every
+             * term. Retired in W4b, 2026-09-23 -- call it directly. */
+            PyObject *fields = py_term_field_names(NULL, term);
+            if (!fields) return -1;
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
             for (Py_ssize_t i = 0; i < n; i++) {
                 PyObject *val = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, i));
@@ -2590,12 +2526,13 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
         int ti = c_is_term_instance(term);
         if (ti < 0) return NULL;
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
-            if (!fields && PyErr_Occurred()) return NULL;
-            if (!fields) {
-                fields = py_term_field_names(NULL, term);
-                if (!fields) return NULL;
-            }
+            /* c_term_field_names used to answer for a PredicateMeta
+             * INSTANCE; W4a made that shape impossible and turned it into
+             * an unconditional NULL-without-exception stub, so every call
+             * here fell straight through to this @dataclass route on every
+             * term. Retired in W4b, 2026-09-23 -- call it directly. */
+            PyObject *fields = py_term_field_names(NULL, term);
+            if (!fields) return NULL;
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
             Py_DECREF(fields);
             return PyLong_FromSsize_t(n);
@@ -2716,12 +2653,13 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
         int ti = c_is_term_instance(term);
         if (ti < 0) return NULL;
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
-            if (!fields && PyErr_Occurred()) return NULL;
-            if (!fields) {
-                fields = py_term_field_names(NULL, term);
-                if (!fields) return NULL;
-            }
+            /* c_term_field_names used to answer for a PredicateMeta
+             * INSTANCE; W4a made that shape impossible and turned it into
+             * an unconditional NULL-without-exception stub, so every call
+             * here fell straight through to this @dataclass route on every
+             * term. Retired in W4b, 2026-09-23 -- call it directly. */
+            PyObject *fields = py_term_field_names(NULL, term);
+            if (!fields) return NULL;
             Py_ssize_t len = PyTuple_GET_SIZE(fields);
             if (n < 1 || n > len) {
                 Py_DECREF(fields);
@@ -2816,12 +2754,13 @@ py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
         int ti = c_is_term_instance(term);
         if (ti < 0) return NULL;
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
-            if (!fields && PyErr_Occurred()) return NULL;
-            if (!fields) {
-                fields = py_term_field_names(NULL, term);
-                if (!fields) return NULL;
-            }
+            /* c_term_field_names used to answer for a PredicateMeta
+             * INSTANCE; W4a made that shape impossible and turned it into
+             * an unconditional NULL-without-exception stub, so every call
+             * here fell straight through to this @dataclass route on every
+             * term. Retired in W4b, 2026-09-23 -- call it directly. */
+            PyObject *fields = py_term_field_names(NULL, term);
+            if (!fields) return NULL;
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
             PyObject *result = PyList_New(n);
             if (!result) { Py_DECREF(fields); return NULL; }
@@ -3116,67 +3055,25 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         int ti = c_is_term_instance(term);
         if (ti < 0) return NULL;
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
-            if (!fields && PyErr_Occurred()) return NULL;
-            if (!fields) {
-                fields = py_term_field_names(NULL, term);
-                if (!fields) return NULL;
-            }
+            /* c_term_field_names used to answer for a PredicateMeta
+             * INSTANCE; W4a made that shape impossible and turned it into
+             * an unconditional NULL-without-exception stub, so every call
+             * here fell straight through to this @dataclass route on every
+             * term. Retired in W4b, 2026-09-23 -- call it directly. */
+            PyObject *fields = py_term_field_names(NULL, term);
+            if (!fields) return NULL;
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
 
-            /* Phase 0 fast-path gate (KEEP THE THREE WALKERS IN SYNC --
-             * solve.py's _deref_walk_py comment; c_copy_term is wired in as
+            /* The Phase-0 fast-path gate that used to precede this (calling
+             * a "_clausal_new" positional classmethod when PredicateMeta
+             * had attached one; c_copy_term is wired in as
              * clausal.logic.builtins.inspection's runtime _copy_term, so it
-             * must decide identically to _copy_term_py's own gate): cls's
-             * OWN dict has "_clausal_new" as a classmethod object iff
-             * PredicateMeta attached the positional-args fast constructor.
-             * Absent for atoms; also absent for a class with a field
-             * literally named "_clausal_new" (tp_dict then holds a
-             * __slots__ member descriptor under that name instead) -- hence
-             * the PyClassMethod_Type check rather than mere name presence. */
-            {
-                PyObject *cls = (PyObject *)Py_TYPE(term);
-                PyObject *d = PyType_GetDict((PyTypeObject *)cls);
-                if (!d) { Py_DECREF(fields); return NULL; }
-                PyObject *fastm = NULL;
-                int has = PyDict_GetItemRef(d, str__clausal_new, &fastm);
-                Py_DECREF(d);
-                if (has < 0) {
-                    Py_DECREF(fields);
-                    return NULL;
-                }
-                if (fastm != NULL &&
-                    PyObject_TypeCheck(fastm, &PyClassMethod_Type)) {
-                    Py_DECREF(fastm);
-                    PyObject *args_tuple = PyTuple_New(n);
-                    if (!args_tuple) { Py_DECREF(fields); return NULL; }
-                    for (Py_ssize_t i = 0; i < n; i++) {
-                        PyObject *fname = PyTuple_GET_ITEM(fields, i);
-                        PyObject *fval = PyObject_GetAttr(term, fname);
-                        if (!fval) {
-                            Py_DECREF(fields);
-                            Py_DECREF(args_tuple);
-                            return NULL;
-                        }
-                        PyObject *copied_val = c_copy_term(fval, var_map, depth + 1);
-                        Py_DECREF(fval);
-                        if (!copied_val) {
-                            Py_DECREF(fields);
-                            Py_DECREF(args_tuple);
-                            return NULL;
-                        }
-                        PyTuple_SET_ITEM(args_tuple, i, copied_val);
-                    }
-                    Py_DECREF(fields);
-                    PyObject *bound = PyObject_GetAttr(cls, str__clausal_new);
-                    if (!bound) { Py_DECREF(args_tuple); return NULL; }
-                    PyObject *result = PyObject_Call(bound, args_tuple, NULL);
-                    Py_DECREF(bound);
-                    Py_DECREF(args_tuple);
-                    return result;
-                }
-                Py_XDECREF(fastm);
-            }
+             * had to decide identically to _copy_term_py's own gate) was
+             * retired in W4b, 2026-09-23: that classmethod and its minter
+             * are gone since W4a, so the gate always fell through to the
+             * kwargs reconstruction below on every call -- see solve.py's
+             * _deref_walk_py.
+             */
 
             PyObject *kwargs = PyDict_New();
             if (!kwargs) { Py_DECREF(fields); return NULL; }
@@ -3422,12 +3319,13 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         int ti = c_is_term_instance(term);
         if (ti < 0) return -1;
         if (ti) {
-            PyObject *fields = c_term_field_names(term);
-            if (!fields && PyErr_Occurred()) return -1;
-            if (!fields) {
-                fields = py_term_field_names(NULL, term);
-                if (!fields) return -1;
-            }
+            /* c_term_field_names used to answer for a PredicateMeta
+             * INSTANCE; W4a made that shape impossible and turned it into
+             * an unconditional NULL-without-exception stub, so every call
+             * here fell straight through to this @dataclass route on every
+             * term. Retired in W4b, 2026-09-23 -- call it directly. */
+            PyObject *fields = py_term_field_names(NULL, term);
+            if (!fields) return -1;
             Py_ssize_t n = PyTuple_GET_SIZE(fields);
             for (Py_ssize_t i = 0; i < n; i++) {
                 PyObject *val = PyObject_GetAttr(term, PyTuple_GET_ITEM(fields, i));
@@ -3807,10 +3705,6 @@ PyInit__variables(void)
         PyUnicode_InternInPlace(&spelling);
         g_ascii_char_atoms[i] = spelling;   /* STAGE 2: a char atom IS the interned 1-char str */
     }
-
-    /* Interned before any walk can run — do_walk's fast-path gate uses it. */
-    str__clausal_new = PyUnicode_InternFromString("_clausal_new");
-    if (!str__clausal_new) return NULL;
 
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) goto error;

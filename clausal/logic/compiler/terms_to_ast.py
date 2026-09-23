@@ -1137,48 +1137,12 @@ def term_to_ast_expr(
                     for name in fields
                 ],
             )
-        if (
-            isinstance(cls, PredicateMeta)
-            and isinstance(vars(cls).get("_clausal_new"), classmethod)
-            and not any(name in ("_position", "position") for name in fields)
-        ):
-            # DEAD SINCE W4a: no class carries the generated constructor any
-            # more, so this gate never matches and the keyword emission below
-            # is the only path.  Retired with the other four gates in W4b --
-            # see the rule in solve.py's _deref_walk_py.
-            #
-            # Saturated, no position field, generated fast constructor
-            # available: emit a positional call to it instead of the
-            # keyword-based slow-path constructor call below.  Gate on
-            # ``vars(cls).get("_clausal_new")`` actually BEING the generated
-            # classmethod, not merely present by that name — a class whose
-            # FIELD is literally named "_clausal_new" also has an entry at
-            # that key (the __slots__ member descriptor; see the attach guard
-            # in predicate.py), and calling that descriptor as a constructor
-            # raises a TypeError at runtime.
-            #
-            # This positional emission is order-dependent on ``fields`` for
-            # whichever class ``cls_name`` resolves to at call time; it is
-            # solve.py's ``_collect_types_from_term`` update-after-module-dict
-            # that keeps query templates resolving to the caller's actual
-            # class rather than a stale one.
-            #
-            # Cross-ref: this gate is DELIBERATELY narrower than the walk/copy
-            # rebuilders' Phase 0 gate (see solve.py's _deref_walk_py) — the
-            # extra ``"_position"``/``"position"`` exclusion above is required
-            # here because the slow path just below drops those fields from
-            # the emitted kwargs entirely, whereas the walkers' slow path
-            # keeps all fields. Do not "unify" the two gates by deleting this
-            # condition.
-            return _call(
-                _attr(cls_name, "_clausal_new"),
-                *[
-                    term_to_ast_expr(
-                        getattr(term, name), var_context, eval_arith=eval_arith,
-                    )
-                    for name in fields
-                ],
-            )
+        # The Phase-0 fast-constructor emission gate (positional
+        # ``cls_name._clausal_new(...)``) that used to precede this keyword
+        # call was retired in W4b, 2026-09-23: the emitter can no longer
+        # produce a class carrying ``_clausal_new`` (see the note in
+        # solve.py's _deref_walk_py), so the gate never matched and the
+        # keyword emission below was the only path actually taken.
         return ast.Call(
             func=_name(cls_name),
             args=[],
