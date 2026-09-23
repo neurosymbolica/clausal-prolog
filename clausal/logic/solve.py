@@ -42,7 +42,9 @@ from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
+from clausal.logic.atoms import (
+    is_atom as _term_is_atom, spelling as _spelling, is_mangled, demangle,
+)
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
@@ -836,14 +838,32 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
         goal for class-instance terms, and its failure is the same ``TypeError``
         it has always raised.
     """
+    _pre_is_cell, _pre_functor = compound_cell_shape(goal)
     goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
     is_cell_goal, functor = compound_cell_shape(goal)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3:
+            _raise_if_dangling_handle_target_missing(
+                _pre_is_cell, _pre_functor, goal, "solve/1")
             return _strip_module_qualification(goal, None)
         from clausal.logic.exceptions import (  # noqa: PLC0415
-            LogicException, existence_error,
+            LogicException, existence_error, dangling_handle_indicator_and_why,
         )
+        if type(functor) is str and is_mangled(functor):
+            # A MANGLED functor that ``qualify_mangled_goal`` above did NOT
+            # convert to a ``(":", M, G)`` cell means its module half is not
+            # a loaded Clausal module (ruling 2026-09-24, see
+            # todo/mangled-goal-culprit-terms-are-malformed-2026-09-23.md):
+            # this is a dangling predicate-handle, not an ordinary
+            # module-less cell goal, and gets the demangled
+            # ``existence_error(procedure, Name/Arity)`` shape -- never the
+            # raw ``\x1f`` spelling, never a Python repr.
+            module_name, name = demangle(functor)
+            indicator, why = dangling_handle_indicator_and_why(
+                module_name, name, len(goal) - 1, loaded=False,
+            )
+            raise LogicException(existence_error(
+                "procedure", indicator, f"solve/1: {why}"))
         raise LogicException(existence_error(
             # The REPR, not the goal (P3-3 Task 6 fix round 1, F4): the live
             # cell holds the caller's Vars, so a ``catch/3`` pattern unifying
@@ -901,13 +921,61 @@ def _strip_module_qualification(goal, module):
 
     Non-qualified goals come back untouched.
     """
+    _pre_is_cell, _pre_functor = compound_cell_shape(goal)
     goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
     is_cell_goal, functor = compound_cell_shape(goal)
     if not (is_cell_goal
             and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
         return goal, module
+    _raise_if_dangling_handle_target_missing(
+        _pre_is_cell, _pre_functor, goal, "solve/1")
     target, inner = resolve_qualified_goal_cell(goal, "solve/1", module)
     return inner, target
+
+
+def _raise_if_dangling_handle_target_missing(
+    pre_is_cell: bool, pre_functor: Any, goal_after_qualify: Any, context: str,
+) -> None:
+    """Raise the ruled dangling-handle ``LogicException`` now, iff
+    *goal_after_qualify* is a ``(":", M, G)`` cell that ``qualify_mangled_goal``
+    just BUILT by demangling a predicate HANDLE, and ``M:G`` names no
+    predicate.
+
+    *pre_is_cell*/*pre_functor* are ``compound_cell_shape`` of the goal
+    BEFORE that ``qualify_mangled_goal`` call -- the only way to tell "this
+    qualification came from a mangled handle" apart from "the caller wrote
+    ``(':', M, G)`` by hand", since both look identical afterwards.  A
+    hand-written qualified goal is untouched here (its ``pre_functor`` is
+    never a mangled atom) and keeps the existing, unrelated
+    undefined-predicate path (a bare ``PredicateNotFoundError`` reached via
+    compiled dispatch) -- only the ruling's own case (a genuine ``-hide``
+    handle whose module loaded but whose predicate does not exist) is
+    pre-empted here, before it can fall through to that generic path, which
+    carries no logic term at all (ruling 2026-09-24, see
+    todo/mangled-goal-culprit-terms-are-malformed-2026-09-23.md).  A no-op
+    (returns without raising) whenever the target predicate DOES exist, or
+    when *pre_functor* was never a mangled handle in the first place.
+    """
+    if not (pre_is_cell and type(pre_functor) is str and is_mangled(pre_functor)):
+        return
+    mod_name, inner = goal_after_qualify[1], goal_after_qualify[2]
+    inner_is_cell, inner_name = compound_cell_shape(inner)
+    name = inner_name if inner_is_cell else inner
+    arity = len(inner) - 1 if inner_is_cell else 0
+    module = resolve_module(mod_name, None, context)
+    if module.db.get_dispatch(name, arity) is not None:
+        return
+    if (module.module_dict or {}).get(name) is not None:
+        return
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, existence_error, dangling_handle_indicator_and_why,
+    )
+    indicator, why = dangling_handle_indicator_and_why(
+        mod_name, name, arity, loaded=True)
+    raise LogicException(existence_error(
+        "procedure", indicator,
+        f"{context}: {why} (reached through a module-qualified predicate "
+        f"handle)"))
 
 
 def _infer_module(goal) -> Module | None:
@@ -993,7 +1061,16 @@ def call(
     """
     # W4: a module-qualified NAME (the mangled handle) is its own module
     # designator -- switch to that module and continue with the bare name.
+    # ``_handle_module_name``/``_handle_name`` remember the DEMANGLED halves
+    # whenever *functor* started out as a handle at all -- whether or not
+    # its module turns out to be loaded -- so a failure below can raise the
+    # dangling-handle shape (ruling 2026-09-24) instead of the ordinary
+    # "module is required"/"not defined in module" KeyErrors, which stay
+    # exactly as they were for a functor that was never a handle.
+    _handle_module_name = _handle_name = None
     if type(functor) is str:
+        if is_mangled(functor):
+            _handle_module_name, _handle_name = demangle(functor)
         _q = qualify_mangled_goal(functor)
         if _q is not functor:
             module = resolve_module(_q[1], module, "call/N")
@@ -1034,6 +1111,24 @@ def call(
         dispatch_fn = module.db.get_dispatch(functor, arity)
 
     if dispatch_fn is None:
+        if _handle_name is not None:
+            # *functor* arrived as a MANGLED predicate handle -- module
+            # never loaded, or loaded but the predicate absent -- and gets
+            # the ruled shape: LogicException(existence_error(procedure,
+            # Name/Arity)), demangled, never the raw handle KeyError below
+            # (which would either bake ``\x1f`` into ``functor!r`` or, once
+            # resolved, still be an uncatchable plain KeyError).
+            from clausal.logic.exceptions import (  # noqa: PLC0415
+                LogicException, existence_error,
+                dangling_handle_indicator_and_why,
+            )
+            from clausal.logic.predicate import _db_for_module_name  # noqa: PLC0415
+            loaded = _db_for_module_name(_handle_module_name) is not None
+            indicator, why = dangling_handle_indicator_and_why(
+                _handle_module_name, _handle_name, arity, loaded,
+            )
+            raise LogicException(existence_error(
+                "procedure", indicator, f"call/N: {why}"))
         if module is None:
             raise KeyError(
                 f"Predicate {functor!r}/{arity}: module is required when functor is a string"

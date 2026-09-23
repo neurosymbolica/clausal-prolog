@@ -305,6 +305,35 @@ def existence_error(obj_type: str, culprit: Any, context: str = "") -> Compound:
     return Compound("error", (inner, context))
 
 
+def dangling_handle_indicator_and_why(
+    module_name: str, name: str, arity: int, loaded: bool,
+) -> tuple[Compound, str]:
+    """The ``Name/Arity`` indicator and situation phrase for a MANGLED
+    predicate-handle atom (``module<US>name``, W4's ``-hide`` spelling) that
+    failed to resolve at a goal-dispatch entry point -- either its owning
+    module was never loaded, or the module loaded but the predicate is not
+    defined in it.
+
+    Ruling 2026-09-24 (``todo/mangled-goal-culprit-terms-are-malformed-
+    2026-09-23.md``): BOTH situations raise ``existence_error(procedure,
+    Name/Arity)`` -- one vocabulary, ``procedure`` not ``module`` -- and are
+    told apart only in the phrase this returns (which the caller folds into
+    its own context string), never in the indicator.  *name* and
+    *module_name* must already be the DEMANGLED halves (the caller's job,
+    via ``atoms.demangle`` -- this function never sees the ``\\x1f``
+    spelling and so cannot leak it): a catchable term must be a clean ground
+    term, and no conforming program can write the mangled spelling anyway,
+    so it must never appear in anything a ``catch/3`` pattern can match.
+    """
+    indicator = Compound("/", (mint(name), arity))
+    if loaded:
+        why = f"{name}/{arity} is not defined in module {module_name!r}"
+    else:
+        why = (f"module {module_name!r} is not loaded, so the predicate "
+               f"handle {name}/{arity} cannot resolve")
+    return indicator, why
+
+
 def string_goal_error(goal: str, extra_arity: int = 0,
                       context: str = "") -> Compound:
     """The error a STRING in goal position raises (Task 15 item 3, ruled

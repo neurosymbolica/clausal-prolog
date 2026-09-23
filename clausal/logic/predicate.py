@@ -1438,13 +1438,21 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
                 return _dispatch_at(_bound, arity)
             from clausal.logic.exceptions import (  # noqa: PLC0415
                 LogicException, existence_error,
+                dangling_handle_indicator_and_why,
             )
-            from clausal.terms import Compound  # noqa: PLC0415
+            # Ruling 2026-09-24 (todo/mangled-goal-culprit-terms-are-
+            # malformed-2026-09-23.md): the culprit is the bare Name/Arity
+            # indicator -- never a module-qualified compound -- with the
+            # module named in the message only, matching the other two
+            # entry points (solve's normalisation, call/N) so a ``catch/3``
+            # pattern against a dangling handle is the same shape wherever
+            # it is written.
+            indicator, why = dangling_handle_indicator_and_why(
+                _mod_name, _name, arity, loaded=True,
+            )
             raise LogicException(existence_error(
-                "procedure",
-                Compound(":", (_mod_name, Compound("/", (_name, arity)))),
-                f"{_mod_name}.{_name}/{arity} is not defined in module "
-                f"{_mod_name!r} (reached through a module-qualified handle)"))
+                "procedure", indicator,
+                f"{why} (reached through a module-qualified handle)"))
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
         # through THE FLIP: a bare atom is the arity-0 CELL, reached here
         # whenever a goal resolves to a NAME that turned out to be data, not
@@ -1460,8 +1468,23 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         # P3-3's qualified-goal design.
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, existence_error,
+            dangling_handle_indicator_and_why,
         )
+        from clausal.logic.atoms import is_mangled, demangle  # noqa: PLC0415
         from clausal.terms import Compound  # noqa: PLC0415
+        if is_mangled(obj):
+            # *obj* IS a predicate handle (``qualify_mangled_goal`` above
+            # left it untouched only because its module half is not a
+            # loaded Clausal module) -- a dangling handle, not the ordinary
+            # "atom resolved via a data reference" case below, and it must
+            # never carry the raw ``\x1f`` spelling into a catchable term
+            # (ruling 2026-09-24, todo/mangled-goal-culprit-terms-are-
+            # malformed-2026-09-23.md).
+            _mod_name, _name = demangle(obj)
+            indicator, why = dangling_handle_indicator_and_why(
+                _mod_name, _name, arity, loaded=False,
+            )
+            raise LogicException(existence_error("procedure", indicator, why))
         name = obj
         indicator = Compound("/", (name, arity))
         raise LogicException(

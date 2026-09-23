@@ -210,10 +210,20 @@ def test_an_explicit_module_argument_is_overridden_by_the_handle(lib, tmp_path):
 
 
 def test_a_missing_predicate_error_names_the_module_in_its_indicator(lib):
+    """Ruling 2026-09-24 (todo/mangled-goal-culprit-terms-are-malformed-
+    2026-09-23.md) supersedes this test's original shape: the culprit is a
+    bare ``Name/Arity`` indicator, never a module-qualified ``':'`` compound
+    -- the module the handle named is reported in the MESSAGE instead, so a
+    ``catch/3`` pattern against a dangling handle is the same shape whether
+    the module never loaded or (this case) loaded but the predicate does
+    not exist in it."""
     from clausal.logic.exceptions import LogicException
     from clausal.logic.predicate import _dispatch_at
     with pytest.raises(LogicException) as info:
         _dispatch_at(mangle(LIB, "nope"), 2)
-    indicator = info.value.term.args[0].args[1]
-    assert indicator.functor == ":" and indicator.args[0] == LIB
-    assert indicator.args[1].functor == "/" and tuple(indicator.args[1].args) == ("nope", 2)
+    inner = info.value.term.args[0]
+    assert inner.functor == "existence_error"
+    obj_type, indicator = inner.args
+    assert obj_type == "procedure"
+    assert indicator.functor == "/" and tuple(indicator.args) == ("nope", 2)
+    assert LIB in info.value.term.args[1], "the module is named in the message"
