@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import (
-    PredicateMeta, is_zero_field_class, is_atom_value, is_term_instance,
-    term_field_names,
+    is_declared_predicate_name, is_zero_field_class, is_atom_value,
+    is_term_instance, term_field_names,
 )
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, is_char_atom as _is_char_atom,
@@ -360,7 +360,7 @@ def _callable__1_factory(db):
             # tuple-data IS and which is likewise not callable.
             yield None
             return
-        if isinstance(x_val, type) and isinstance(x_val, PredicateMeta):
+        if is_declared_predicate_name(x_val):
             yield None
             return
         # THE FLIP (spec §6.3/§6.4) deleted the old ``str`` branch (and its
