@@ -56,7 +56,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
         cell_signature_for_name,
         lowering_scope,
     )
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import is_declared_predicate_name
 
     def dotted(attr: LoadAttr) -> str:
         parts = []
@@ -150,7 +150,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                             f"--: {fname!r} is bound to a predicate handle; a "
                             f"goal cell takes positional arguments only")
                     return (sys.intern(binding), *args)
-                if isinstance(binding, PredicateMeta):
+                if is_declared_predicate_name(binding):
                     if kwargs:
                         raise SyntaxError(
                             f"--: {fname!r} is a predicate; a goal cell takes "
