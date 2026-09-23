@@ -38,7 +38,7 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
-    field_names_for, is_declared_predicate,
+    field_names_for, is_declared_predicate, resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -2042,11 +2042,21 @@ def _process_declarations(module_items: list, module_dict: dict,
                 # came from this one read).  A class with no row cannot have
                 # been given clauses, so the answer is the same and nothing
                 # is minted.  ``_row`` is a plain class attribute -- reading
-                # it is not a facade read.
-                if isinstance(existing, PredicateMeta):
-                    _row = existing._row
-                    if _row is not None and _row.clauses:
-                        continue
+                # it is not a facade read (W4b-2b: resolve_predicate_row is
+                # era-agnostic now, but the same "does not mint" contract
+                # holds -- its class arm is the identical raw ``._row``
+                # read).  NOT gated with is_declared_predicate: this site's
+                # original ``isinstance(existing, PredicateMeta)`` never
+                # compared arity at all (arity-blind by original design --
+                # a same-name class at a different arity than this entry's
+                # own ``field_names`` still took the ``continue`` if it had
+                # clauses), and resolve_predicate_row's class arm preserves
+                # that -- it does not consult ``arity`` either.  The
+                # ``arity=len(field_names)`` argument only matters to the
+                # mangled-atom arm's exact ``db.row`` lookup.
+                _row = resolve_predicate_row(existing, arity=len(field_names))
+                if _row is not None and _row.clauses:
+                    continue
                 # Bound in THIS module's namespace only -- deliberately NOT
                 # through the process-wide ``predicate_builtins`` pool the
                 # bare-atom branch above shares.  That pool is the ATOM
