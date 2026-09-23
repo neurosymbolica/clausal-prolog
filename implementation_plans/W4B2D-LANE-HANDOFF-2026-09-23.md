@@ -75,11 +75,36 @@ installs on the PredicateMeta class (and `db.set_dispatch()`)". Reading it:
 line 2246 calls `db.set_dispatch(functor, arity, fn, lazy_recompile=...)`
 and line 2276 sets `row.dispatch_fn = fn`.
 
-**So it may already write everything the row needs, and the class write may
-be redundant.** If so, rows 53-56 collapse from a design problem to a
-deletion. INFERENCE — I did not verify that the class write has no reader.
-**Check this before designing anything**, because it is the cheapest
-possible outcome and it would remove four of the thirteen.
+**RESOLVED 2026-09-24 by the controller, and the answer is better than the
+lead suggested: THERE IS NO CLASS WRITE AT ALL.**
+
+That docstring is STALE — it describes pre-W2 behaviour. Measured on
+`b9af8bed`:
+
+* `_install`'s `pred_cls` branch writes `row.dispatch_fn` and
+  `row.lazy_recompile`. It writes nothing to the class.
+* `PredicateMeta._get_dispatch` READS the row's backing dicts ("P3-3 Task 2:
+  the state is the Database row's now").
+* A grep for class-attribute dispatch writes (`cls._dispatch*`,
+  `pred_cls._dispatch*`, `__dict__['_dispatch…']`) returns EMPTY.
+
+So `pred_cls` supplies exactly three things in `_install`, each with a known
+fate:
+
+| what it supplies | post-flip |
+|---|---|
+| `through=pred_cls` for the mutation gate (or `pred_cls._mutate(..)` on the `db=None` path) | **the `through=` problem** — identical to rows 28/29 |
+| `pred_cls._bind_row(db, functor, arity)` | **VACUOUS** — there is no class to bind |
+| `pred_cls._state_row()` | becomes `db.row(functor, arity)`; already verified to be the SAME ROW OBJECT |
+
+**Consequence for your sizing:** rows 53-56 are not a separate design problem.
+They reduce to the same `through=` question rows 28/29 pose, plus deleting a
+bind with nothing left to bind. Together with `through=`'s own ~7, that is
+roughly **11 of the 13 class-USING sites turning out to be ONE problem**, not
+three. Solve `through=` and most of this lane falls out.
+
+The `db=None` arm uses the private DETACHED row, which W4b-3 retires anyway —
+do not design for it; check whether it is still reachable when you get there.
 
 ### 3c. `analyze_mi` / `call` / `specialize_mi`
 
