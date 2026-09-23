@@ -491,6 +491,19 @@ class Database:
         # -import_from'd ones.  A declared functor is DATA until a row exists
         # for it (clauses, -dynamic, a directive naming it); see declared_kind.
         self._declared: dict[tuple[str, int], tuple[str, ...]] = {}
+        # dynfix 2026-09-23 (todo/dynamic-declarations-are-invisible-to-arm-3-
+        # 2026-09-22.md): a bare ``name/arity`` entry in a ``-module``/
+        # ``-private`` export list (R6b) -- ``gv_free/1`` in
+        # tests/fixtures/gate_vocab.clausal is the real-world case --
+        # declares an ARITY, never field names, so it cannot go in
+        # ``_declared`` above (that dict's values ARE the field names).
+        # Deliberately NOT a row either: ``compiler_v2``'s load step 7 locks
+        # every row-bearing predicate that isn't marked ``-dynamic``, and
+        # locking this would refuse the exact "an importer may legitimately
+        # implement it later" write ``test_mutation_gate.py`` pins for
+        # ``gv_free``.  ``declared_kind`` is the only reader; see
+        # ``mark_predicate_export``.
+        self._predicate_export: set[tuple[str, int]] = set()
         self._dispatch: dict[tuple[str, int], Callable | None] = {}
         self._lazy_recompile: dict[tuple[str, int], Callable] = {}
         self._dynamic: set[tuple[str, int]] = set()
@@ -1016,14 +1029,32 @@ class Database:
                 found = fields
         return found
 
+    def mark_predicate_export(self, functor: str, arity: int) -> None:
+        """Record a bare ``name/arity`` -module/-private export entry (R6b):
+        *functor*/*arity* is declared PREDICATE-shaped -- callable, may get
+        clauses later, possibly from an IMPORTER rather than this module
+        (``gv_free/1``, ``tests/fixtures/gate_vocab.clausal``) -- with no
+        field names known anywhere.  See the comment on ``_predicate_export``
+        in ``__init__`` for why this is not a row.  Read only by
+        ``declared_kind``; ``declared_fields``/``signature_for`` stay
+        ``None`` for a functor known only here, same as for ``-dynamic``
+        (``mark_dynamic``) -- field names are a separate question neither
+        mechanism answers."""
+        self._predicate_export.add((functor, arity))
+
     def declared_kind(self, functor: str, arity: int) -> str | None:
         """``"predicate"`` when the Database knows a row for the key (clauses,
-        dispatch, ``-dynamic``, an adopted import, or a directive-minted row);
-        ``"data"`` when it is declared and rowless; ``None`` otherwise."""
+        dispatch, ``-dynamic``, an adopted import, or a directive-minted row)
+        OR the key was named by a bare ``name/arity`` export entry
+        (``mark_predicate_export`` -- no row, deliberately, see its
+        docstring); ``"data"`` when it is declared (with field names) and
+        rowless; ``None`` otherwise."""
         if self.row(functor, arity) is not None:
             return "predicate"
         if (functor, arity) in self._declared:
             return "data"
+        if (functor, arity) in self._predicate_export:
+            return "predicate"
         return None
 
     def set_dispatch(

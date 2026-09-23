@@ -1577,12 +1577,25 @@ def _db_for_module_name(module_name: str):
 def field_names_for(value, *, arity=None, db=None, namespace=None):
     """Field names for a declared functor, or None.
 
-    FIRST a declaredness reader, second a shape reader: ``None`` means the
-    value names nothing declared, ``()`` means declared with ZERO fields (the
-    0-arity predicate written ``p()``), and ``len()`` is the arity.  The
-    compiler's dominant use of the signature registry is the presence test
-    ("a declared functor, or an atom being applied as one?"), which never
-    reads a name -- see the spec's premise check.
+    A FIELD-NAMES reader, not a declaredness one (revised 2026-09-23,
+    todo/dynamic-declarations-are-invisible-to-arm-3-2026-09-22.md -- the
+    previous wording here claimed the opposite and was wrong for an
+    arity-only declaration; see below).  ``None`` means no field names are
+    known for *value* -- either because nothing is declared, OR because it
+    IS declared but at an arity with no names anywhere (``-dynamic(f/2)``,
+    or a bare ``f/2`` entry in a ``-module``/``-private`` export list: both
+    register an arity and never field names, on the class's own
+    ``PredicateMeta._fields`` -- synthesized placeholders -- and nowhere
+    else).  ``()`` means declared with ZERO fields (the 0-arity predicate
+    written ``p()``), and ``len()`` is the arity for anything longer.  For
+    "is this declared" -- a question this accessor deliberately does NOT
+    answer, because for an arity-only declaration it has no way to -- ask
+    ``db.declared_kind(functor, arity)`` instead; it already answers
+    ``"predicate"`` for both spellings above (``Database.mark_dynamic`` /
+    ``mark_predicate_export``), independent of whether any field names are
+    known.  The compiler's dominant use of the signature registry is the
+    presence test ("a declared functor, or an atom being applied as one?"),
+    which never reads a name -- see the spec's premise check.
 
     Four arms, in order:
 

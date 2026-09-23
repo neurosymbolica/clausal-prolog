@@ -1188,6 +1188,21 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
                 db.declare_functor(name, tuple(fields))
     for item in module_items:
         if isinstance(item, DirectiveItem):
+            if item.name == "predicate_export":
+                # dynfix 2026-09-23 (todo/dynamic-declarations-are-invisible-
+                # to-arm-3-2026-09-22.md): a bare ``name/arity`` export entry
+                # (R6b, ``term_rewriting._declare_predicate_export``) mints
+                # its class with synthesized field names but, until now,
+                # registered NOTHING on the Database -- ``declared_kind``
+                # answered ``None``, indistinguishable from never declared
+                # at all.  ``mark_predicate_export`` closes that without
+                # minting a row (a row would be LOCKED below at step 7,
+                # refusing the "an importer may legitimately implement it
+                # later" write ``test_mutation_gate.py`` pins for
+                # ``gv_free/1``).
+                for functor, arity in item.specs:
+                    db.mark_predicate_export(functor, arity)
+                continue
             method_name = _directive_methods.get(item.name)
             if method_name is not None:
                 method = getattr(db, method_name)

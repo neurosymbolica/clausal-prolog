@@ -145,6 +145,42 @@ def test_two_arities_exact_read_beats_the_by_name_fallback():
     assert field_names_for("p", db=db) == ("a", "b")
 
 
+def test_dynamic_only_declaration_has_no_field_names_but_IS_declared():
+    """dynfix 2026-09-23 (todo/dynamic-declarations-are-invisible-to-arm-3-
+    2026-09-22.md).  ``field_names_for`` is a field-NAMES reader, not a
+    declaredness one: ``None`` here does not mean "not declared" for an
+    arity-only ``-dynamic`` predicate (``dfact/3`` in
+    tests/test_predicate_arity_mismatch_diagnostic.py:613 is the real-world
+    case) -- it means no field names are known, which is simply true.
+    ``db.declared_kind`` is the accessor for "is this declared", and it
+    already answers correctly here via ``mark_dynamic``'s row."""
+    db = Database()
+    db.mark_dynamic("dfact", 3)
+    assert field_names_for("dfact", arity=3, db=db) is None
+    assert db.declared_kind("dfact", 3) == "predicate"
+
+
+def test_bare_export_entry_has_no_field_names_but_IS_declared():
+    """Same shape, the OTHER spelling the todo names: a bare ``name/arity``
+    entry in a ``-module``/``-private`` export list (``gv_free/1`` in
+    tests/fixtures/gate_vocab.clausal), reached through
+    ``Database.mark_predicate_export``."""
+    db = Database()
+    db.mark_predicate_export("gv_free", 1)
+    assert field_names_for("gv_free", arity=1, db=db) is None
+    assert db.declared_kind("gv_free", 1) == "predicate"
+
+
+def test_field_named_clause_free_declaration_is_unaffected():
+    """Verification point 2: the ``-private([zonkish(X, Y)])`` shape --
+    real field names, no row -- is a DIFFERENT mechanism from the
+    arity-only one above and must not be swept up by this fix."""
+    db = Database()
+    db.declare_functor("zonkish", ("X", "Y"))
+    assert field_names_for("zonkish", arity=2, db=db) == ("X", "Y")
+    assert db.declared_kind("zonkish", 2) == "data"
+
+
 def test_term_field_names_of_class_still_answers_for_its_callers():
     Pt = make_predicate("PtAlias", ["x"])
     assert term_field_names_of_class(Pt) == ("x",)
