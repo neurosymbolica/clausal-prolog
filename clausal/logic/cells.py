@@ -541,26 +541,35 @@ def qualify_mangled_goal(goal: Any) -> Any:
     (``solve``'s goal normalisation, ``call/N``, ``_dispatch_at``).
 
     WHAT COUNTS AS A HANDLE, in one place: a mangled atom whose module half
-    is a LOADED module (a ``sys.modules`` key -- the import name, which for
-    a package-nested module is dotted).  A ``-hide`` data atom carries the
-    BARE declared module name instead, which need not be an import name;
-    one of those reaching a goal position is the pre-existing "atom is not
-    callable" mistake, and it comes back untouched here so the caller's
-    existing atom path reports it, not a new "no such module" error.
+    is a LOADED CLAUSAL module (the import name, which for a package-nested
+    module is dotted) -- checked via
+    ``predicate._db_for_module_name(module_name) is not None``, the same
+    "does this module carry a Clausal ``$module``/``db``" idiom
+    ``testing.py`` and ``compiler_v2.py`` already use.  ``sys.modules``
+    membership alone is NOT enough: it is true of every imported PYTHON
+    module (``json``, ``csv``, ``types``, ...), Clausal or not, and a
+    mangled atom whose module half collides with one of those would
+    wrongly qualify into it (2026-09-23 bug -- see
+    ``todo/qualify-mangled-goal-tests-only-sys-modules-2026-09-23.md``).  A
+    ``-hide`` data atom carries the BARE declared module name instead,
+    which need not be an import name at all; one of those reaching a goal
+    position is the pre-existing "atom is not callable" mistake, and it
+    comes back untouched here so the caller's existing atom path reports
+    it, not a new "no such module" error.
     """
-    import sys  # noqa: PLC0415
     from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    from clausal.logic.predicate import _db_for_module_name  # noqa: PLC0415
 
     if type(goal) is str:
         if is_mangled(goal):
             module_name, name = demangle(goal)
-            if module_name in sys.modules:
+            if _db_for_module_name(module_name) is not None:
                 return (QUALIFIED_GOAL_FUNCTOR, module_name, name)
         return goal
     is_cell, functor = _cell_shape(goal) if isinstance(goal, tuple) else (False, None)
     if is_cell and type(functor) is str and is_mangled(functor):
         module_name, name = demangle(functor)
-        if module_name in sys.modules:
+        if _db_for_module_name(module_name) is not None:
             return (QUALIFIED_GOAL_FUNCTOR, module_name, (name, *goal[1:]))
     return goal
 
