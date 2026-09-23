@@ -578,16 +578,12 @@ class _ClauseReifier:
         return _const_value(pos) if pos is not None else None
 
     def _call(self, node):
-        # VESTIGIAL SINCE W4a (2026-09-22): nothing emits
-        # ``cls._clausal_head(...)`` any more -- the head flip stopped the
-        # transformer spelling it, and W4a made the name a raising tombstone
-        # -- so this normalisation can only meet hand-written source.  Kept
-        # (it costs one isinstance) rather than deleted at landing time;
-        # removing it is W4b's, with the other _clausal_new/_clausal_head
-        # vestiges.
-        if (isinstance(node.func, ast.Attribute) and node.func.attr == "_clausal_head"
-                and isinstance(node.func.value, ast.Name)):
-            node = ast.Call(func=node.func.value, args=node.args, keywords=node.keywords)
+        # The ``cls._clausal_head(...)`` call-node normalisation that used
+        # to precede this was retired in W4b, 2026-09-23: nothing emits that
+        # shape any more -- the head flip stopped the transformer spelling
+        # it, and W4a made the name a raising tombstone (predicate.py) -- so
+        # it could only ever have met hand-written source, and nothing in
+        # the tree writes that source.
         if not isinstance(node.func, ast.Name):
             raise ReifyError(f"cannot reify call: {ast.unparse(node)}")
         # Generated code spells a runtime class ``$``-prefixed (``$Var``,

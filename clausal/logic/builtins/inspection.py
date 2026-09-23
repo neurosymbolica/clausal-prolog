@@ -113,13 +113,9 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         return SegString(new_segments)
     if is_term_instance(term):
         cls = type(term)
-        # Dead since W4a -- see the gate rule in solve.py's _deref_walk_py.
-        fast = vars(cls).get("_clausal_new")
-        if isinstance(fast, classmethod):
-            return cls._clausal_new(*(
-                _copy_term_py(getattr(term, name), var_map)
-                for name in term_field_names(term)
-            ))
+        # The `_clausal_new` Phase-0 fast-constructor gate that used to
+        # precede this was retired in W4b, 2026-09-23 -- see the note in
+        # solve.py's _deref_walk_py.
         return cls(**{
             name: _copy_term_py(getattr(term, name), var_map)
             for name in term_field_names(term)

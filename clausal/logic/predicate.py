@@ -591,6 +591,25 @@ _RETIRED_STATE_WAVES = {
     "_clausal_instances": "W4a of the PredicateMeta retirement, 2026-09-22",
 }
 
+#: W4b-0 (2026-09-23) DECISION, recorded rather than actioned: a class body
+#: CAN still write a namespace key matching one of ``_RETIRED_STATE_NAMES``
+#: (e.g. ``_clausal_instances = True``) and it will sit there inertly.  The
+#: tombstone above is a DATA DESCRIPTOR on the metaclass, and per
+#: ``type.__getattribute__`` a metaclass data descriptor is consulted
+#: WITHOUT EVEN LOOKING at the class's own ``__dict__`` -- so ordinary
+#: attribute access (``cls._clausal_instances``, ``getattr``, ``setattr``)
+#: still hits the tombstone and raises exactly as tested in
+#: test_predrow.py, regardless of what the namespace holds.  Only a raw
+#: ``__dict__``/``vars()`` read (which nothing in the tree does for these
+#: names any more) would ever see the inert value.  Deliberately NOT adding
+#: a refusal in ``__new__`` for this: the one failure mode it would catch
+#: (a class body assigning a retired name, expecting it to do the old
+#: thing) is already caught the moment anything reads it back through the
+#: normal attribute path, so the residual case is inert clutter, not a
+#: silent wrong answer -- and W2 already declined to build this same check
+#: for the other six retired names.  Revisit only if a concrete instance of
+#: the inert-clutter case actually causes confusion.
+
 
 class RetiredStateError(Exception):
     """What a retired facade's tombstone raises, on read and on write.
