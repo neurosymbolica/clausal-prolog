@@ -26,7 +26,8 @@ from clausal.terms import (
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
-    PredicateMeta, is_term_instance, term_field_names,
+    is_term_instance, term_field_names,
+    is_declared_predicate, resolve_predicate_row,
 )
 from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
@@ -189,15 +190,19 @@ class _GlobalsDb:
         # No ``$module``: a hand-built dict names no Database, so the class
         # bound here answers — arity-checked, because a module dict holds one
         # class per NAME and this shim is handed the arity.
+        #
+        # W4b-2b: is_declared_predicate is the era-agnostic arity-exact
+        # identity gate (it composes to the same len(cls._fields) == arity
+        # test this used to spell by hand); resolve_predicate_row is the
+        # era-agnostic row fetch, standing in for the RAW `cls._row` read
+        # (not the `_signature` facade (W2) -- the facade would MINT a
+        # private row for a class that has none, to read a field that is
+        # `None` on a fresh row anyway, so `None` here is the same answer
+        # without the allocation).
         cls = self._globals.get(functor)
-        if not (isinstance(cls, PredicateMeta)
-                and len(cls._fields or ()) == arity):
+        if not is_declared_predicate(cls, arity=arity):
             return None
-        # `cls._row` RAW, not the `_signature` facade (W2).  The facade would
-        # MINT a private row for a class that has none, to read a field that
-        # is `None` on a fresh row anyway -- so `None` here is the same answer
-        # without the allocation.
-        _row = cls._row
+        _row = resolve_predicate_row(cls, arity=arity)
         return _row.signature if _row is not None else None
 
 
@@ -597,13 +602,14 @@ def _inject_resolved_targets(
         any moment, so ``row.invalidate()`` on one can never orphan a baked
         reference — there is none to orphan.
         """
-        if not (
-            arity >= 0
-            and isinstance(obj, PredicateMeta)
-            and arity == obj._arity
-        ):
+        # W4b-2b: is_declared_predicate composes to the same
+        # `arity == obj._arity` test this used to spell by hand
+        # (`obj._arity` is `len(obj._fields)`, identical by construction --
+        # see predicate.py's own note on the two spellings), era-agnostic;
+        # resolve_predicate_row replaces the raw `obj._row` read.
+        if not (arity >= 0 and is_declared_predicate(obj, arity=arity)):
             return
-        row = obj._row
+        row = resolve_predicate_row(obj, arity=arity)
         if row is None or not row.locked:
             return
         dispatch = row.dispatch_fn

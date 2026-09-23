@@ -30,7 +30,10 @@ from clausal.terms import (
     SetTerm,
 )
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names, term_field_names_of_class
+from clausal.logic.predicate import (
+    PredicateMeta, is_term_instance, term_field_names,
+    term_field_names_of_class, resolve_predicate_row,
+)
 from clausal.logic.exceptions import (
     LogicException, type_error, domain_error, existence_error,
     instantiation_error,
@@ -738,12 +741,20 @@ def _make_listing__1(db):
             val = type(val)
 
         if isinstance(val, PredicateMeta):
+            # The branch dispatch (PredicateMeta vs. BuiltinPredicate vs.
+            # the other shapes below) stays a class-specific isinstance --
+            # it decides WHICH shape ``val`` is, not "give me the row",
+            # and only this branch's row fetch is W4b-2b's F1 concern.
             name = val.__name__
             arity = len(term_field_names_of_class(val))
             # *val* is whatever the caller passed: a bare ``make_predicate``
             # class from user Python may be on NO row, and a listing must not
-            # mint one.
-            _row = val._row
+            # mint one.  resolve_predicate_row's class arm is the identical
+            # raw, non-minting ``val._row`` read (era-agnostic now); *arity*
+            # here is the class's OWN field count (just computed above for
+            # the same purpose), not an independent call-site number, but
+            # the class arm does not consult it either way.
+            _row = resolve_predicate_row(val, arity=arity)
             clauses = _row.clauses if _row is not None else []
         elif isinstance(val, BuiltinPredicate):
             name = val._functor

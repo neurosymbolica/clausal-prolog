@@ -26,7 +26,10 @@ from clausal.terms import (
     DictTerm, SetTerm, KWTerm, SegList,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
-from clausal.logic.predicate import is_term_instance, term_field_names, PredicateMeta  # noqa: F401
+from clausal.logic.predicate import (  # noqa: F401
+    is_term_instance, term_field_names, PredicateMeta,
+    resolve_predicate_row,
+)
 from clausal.logic.database import Clause
 
 from ._ast_helpers import _name, _call, _assign  # noqa: F401
@@ -537,15 +540,26 @@ def hint_row(
         if row_of is not None:
             row = row_of(fname, arity)
     if row is None and base_globals is not None:
-        # THE class read this pass still makes -- spelled with an explicit
-        # isinstance so P4 can find its removal site by grep, exactly as the
-        # precedent ``globals_env._maybe_cache_dispatch`` spells it.
-        from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+        # THE class read this pass still makes, now era-agnostic (W4b-2b):
+        # resolve_predicate_row replaces the raw ``isinstance(obj,
+        # PredicateMeta): obj._row`` read (the "P4 can find its removal
+        # site by grep" note is now moot for this site -- the migration IS
+        # the removal, the same precedent ``globals_env._maybe_cache_
+        # dispatch`` already made).  Deliberately NOT gated with
+        # is_declared_predicate first: this docstring's own words trust
+        # "the arity comes from the row" (``cand.key[1] == arity``, kept
+        # exactly as before), not the class's ``_fields`` count -- a
+        # class's row can in principle disagree with its current
+        # ``_fields`` (a rebinding edge case), and gating on ``_fields``
+        # first could reject a case the original row-key check would
+        # still have accepted.  ``resolve_predicate_row``'s class arm is
+        # itself arity-blind (it does not consult ``arity`` either), so
+        # this is the same two-step the original code made: fetch, then
+        # check the ROW's own key.
         obj = base_globals.get(fname)
-        if isinstance(obj, PredicateMeta):
-            cand = obj._row
-            if cand is not None and cand.key[1] == arity:
-                row = cand
+        cand = resolve_predicate_row(obj, arity=arity)
+        if cand is not None and cand.key[1] == arity:
+            row = cand
     if row is None or not row.locked:
         return None
     return row
