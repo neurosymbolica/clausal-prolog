@@ -1574,6 +1574,125 @@ def _db_for_module_name(module_name: str):
     return getattr(mod.__dict__.get("$module"), "db", None)
 
 
+def _resolve_mangled_owner(binding, arity: int):
+    """``(db, functor)`` for a mangled *binding* whose owner module is a
+    LOADED Clausal module, or ``None``.
+
+    Shared plumbing for ``resolve_predicate_row``/``is_declared_predicate``'s
+    mangled-atom arm: demangle, then require a real ``Database`` at the
+    owner.  ``_db_for_module_name(...) is not None`` is the test -- NEVER
+    ``module_name in sys.modules`` alone (``todo/qualify-mangled-goal-
+    tests-only-sys-modules-2026-09-23.md`` records the live bug that check
+    causes: a mangled handle whose module half collides with an unrelated
+    loaded Python module, e.g. ``json``, would otherwise read as resolved).
+    ``arity`` is accepted but unused here -- it is threaded through by both
+    callers for the db read that follows, not consulted by this lookup
+    itself; kept as a parameter (rather than dropped) so both callers pass
+    the same three arguments and a future caller cannot forget it.
+    """
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    module_name, functor = demangle(binding)
+    db = _db_for_module_name(module_name)
+    if db is None:
+        return None
+    return db, functor
+
+
+def resolve_predicate_row(binding, *, arity: int) -> "PredRow | None":
+    """F1: the live ``PredRow`` for a module-dict *binding*, era-agnostic.
+
+    Answers correctly whether *binding* is still a ``PredicateMeta`` CLASS
+    (today) or already a module-qualified MANGLED ATOM (post W4b-2d) --
+    the shape the 23 F1-family call sites need (``._row``, ``.clauses``,
+    ``.dispatch_fn``, ``.locked``, ``_lock()``, or a value handed to
+    ``_install``/``analyze_mi``/a mutation gate's ``through=``), per
+    ``implementation_plans/w4b2-open-questions-2026-09-23.md`` Q2.
+
+    *arity* is REQUIRED and keyword-only.  For the class arm it is not
+    consulted (a ``PredicateMeta`` class already carries its own row, at
+    whatever arity that row was bound at -- matching today's bare
+    ``isinstance`` sites, none of which cross-check arity either); for the
+    mangled-atom arm it is the ONLY source of arity -- never guessed via
+    ``Database.arities_for`` or any other search.  A data atom misused in
+    goal position arrives at a different arity than it was declared at, and
+    the caller's own call site (a clause head, a goal, a directive target)
+    already knows the arity it means, in both eras alike -- see hazard 3 in
+    the W4b-2b brief.
+
+    Three cases:
+
+    1. ``binding`` is a ``PredicateMeta`` class -> ``binding._row`` (may be
+       ``None`` -- unbound; deliberately NOT ``binding._state_row()``,
+       which would MINT a fresh private detached row on the read and make
+       every F1 site that tests ``cls._row is not None`` as a bailout start
+       seeing a row that was never really there).
+    2. ``binding`` is a mangled atom naming a loaded Clausal module's row at
+       exactly *arity* -> that ``PredRow``.
+    3. Anything else -- a ``@dataclass`` class, a plain non-mangled string
+       (even one that happens to spell something -- hazard 1), a mangled
+       atom whose module half is not a loaded Clausal module (unloaded, or
+       a real Python module with no Clausal ``Database``, e.g. ``json``),
+       ``None``, or an arbitrary object -> ``None``.  This function never
+       widens past what W4b-1's own hazard already burned: "could a
+       ``@dataclass`` class ever reach this, and would the True branch be
+       wrong" is answered ``wrong`` for every one of these shapes.
+    """
+    if isinstance(binding, PredicateMeta):
+        return binding._row
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    if is_mangled(binding):
+        resolved = _resolve_mangled_owner(binding, arity)
+        if resolved is None:
+            return None
+        db, functor = resolved
+        return db.row(functor, arity)
+    return None
+
+
+def is_declared_predicate(binding, *, arity: int) -> bool:
+    """F2: True iff *binding* denotes a declared PREDICATE (never data), at
+    exactly *arity*, era-agnostic.
+
+    The predicate-name-as-atom coercion (a bare predicate reference in term
+    position denotes the atom of its own name; a same-shaped data functor
+    must NOT) plus the ``-table``/``-discontiguous``/``-shallow`` directive-
+    target typo guards -- the 15 F2-family rows, per
+    ``implementation_plans/w4b2-open-questions-2026-09-23.md`` Q2.  Same
+    *arity* contract as ``resolve_predicate_row``: required, keyword-only,
+    never guessed.
+
+    Three cases:
+
+    1. ``binding`` is a ``PredicateMeta`` class -> ``True``, unconditionally
+       -- a ``PredicateMeta`` class IS a predicate by construction (today's
+       bare ``isinstance(x, PredicateMeta)``, which the 15 sites use
+       exactly this way, ignoring arity too -- see
+       ``test_kind_predicate_class_ignores_a_mismatched_arity_like_legacy_
+       isinstance``).
+    2. ``binding`` is a mangled atom naming a loaded Clausal module ->
+       ``db.declared_kind(functor, arity) == "predicate"`` at the owner's
+       db.  Exact arity, exact string match against ``declared_kind``'s
+       three answers (``"predicate"``, ``"data"``, ``None``) -- NOT
+       ``!= "data"`` (which the open-questions doc's Q1.2 chose for a
+       DIFFERENT question, "is this a callable handle at all," where an
+       unknown name must still qualify; F2 asks the narrower "is this
+       AFFIRMATIVELY a predicate," where an unknown name must answer
+       ``False``, not fall through as if it might be one).
+    3. Anything else (the same six hazard-1 shapes ``resolve_predicate_row``
+       refuses) -> ``False``.
+    """
+    if isinstance(binding, PredicateMeta):
+        return True
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    if is_mangled(binding):
+        resolved = _resolve_mangled_owner(binding, arity)
+        if resolved is None:
+            return False
+        db, functor = resolved
+        return db.declared_kind(functor, arity) == "predicate"
+    return False
+
+
 def field_names_for(value, *, arity=None, db=None, namespace=None):
     """Field names for a declared functor, or None.
 
@@ -1954,4 +2073,5 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "is_atom_value",
            "term_field_names", "term_field_names_of_class", "field_names_for",
            "term_field_values", "term_field_dict",
-           "make_predicate", "make_atom"]
+           "make_predicate", "make_atom",
+           "resolve_predicate_row", "is_declared_predicate"]
