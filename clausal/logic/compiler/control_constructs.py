@@ -708,13 +708,13 @@ def _lower_catcher(ctx: CompilationContext, catcher: Any) -> ast.expr:
     answer is produced by handing the catcher term to ``term_to_ast_expr``,
     which is literally the function the throw site uses.
     """
-    from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+    from clausal.logic.predicate import is_declared_predicate_name  # noqa: PLC0415
     from .terms_to_ast import cell_signature_for_name  # noqa: PLC0415
     if (isinstance(catcher, Call) and isinstance(catcher.func, LoadName)
             and not catcher.kwargs):
         env = ctx.base_globals or {}
         resolved = env.get(catcher.func.name)
-        if (isinstance(resolved, PredicateMeta)
+        if (is_declared_predicate_name(resolved)
                 or cell_signature_for_name(catcher.func.name) is not None):
             # The throw site builds a term for this name → build the same
             # term here (term_to_ast_expr recurses into nested args too).
