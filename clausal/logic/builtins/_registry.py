@@ -130,7 +130,7 @@ def _trampoline_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | N
     return decorator
 
 
-def _ensure_trampoline_dispatch(goal_val, arity: int | None = None):
+def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
     """Return a trampoline-protocol dispatch function for *goal_val*.
 
     Handles:
@@ -143,12 +143,15 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None):
     ``citation(REF, META)`` in a clause body does.  Callers that do not know
     the count (or whose count is not the callee's) omit it, and ``None`` is
     also what a foreign single-argument implementor gets — see ``_dispatch_at``.
+
+    *db* is the caller's database, the ruling-Q0 hint for a predicate HANDLE
+    (passed to ``is_declared_predicate_name`` and ``_dispatch_at``).
     """
     if hasattr(goal_val, '_get_dispatch'):
         if arity is None:
             return goal_val._get_dispatch()
-        return _dispatch_at(goal_val, arity)
-    if is_declared_predicate_name(goal_val):
+        return _dispatch_at(goal_val, arity, db)
+    if is_declared_predicate_name(goal_val, db=db):
         # W4b-3: a module-qualified predicate HANDLE (what a predicate name
         # is bound to after the flip).  A handle carries no arity of its own,
         # so it cannot be resolved without the caller's count -- refuse
@@ -158,7 +161,7 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None):
             raise TypeError(
                 f"_ensure_trampoline_dispatch: a predicate handle "
                 f"({goal_val!r}) needs the call arity")
-        return _dispatch_at(goal_val, arity)
+        return _dispatch_at(goal_val, arity, db)
     # A Pythonic AST node (Predicate, Lambda, Compound-as-term, …) is
     # ``callable`` — every node gets a field-replacement ``__call__`` from
     # @node_class — but it is NOT a goal dispatch function.  This is reached

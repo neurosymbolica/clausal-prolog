@@ -30,7 +30,7 @@ from clausal.logic.predicate import (
     make_predicate,
     is_term_instance,
     term_field_names,
-    is_declared_predicate_name,
+    is_declared_predicate_name, namespace_db,
     _dispatch_at,
 )
 from clausal.logic.database import Clause, head_key
@@ -1373,6 +1373,7 @@ def _make_solve_goal_predicate(
         # Fallback: try module_dict for user-defined predicates.
         if module_dict:
             pred = module_dict.get(functor)
+            caller_db = namespace_db(module_dict) if pred is not None else None
             # W4b-3 (found by review): after the flip the binding is a
             # module-qualified HANDLE with no ``_get_dispatch``; unaccepted,
             # it fell to "Unknown goal" below and failed silently.  Both
@@ -1382,9 +1383,9 @@ def _make_solve_goal_predicate(
             # ``_get_dispatch()`` and fail with a raw positional TypeError.
             if pred is not None and (
                     hasattr(pred, '_get_dispatch')
-                    or is_declared_predicate_name(pred)):
+                    or is_declared_predicate_name(pred, db=caller_db)):
                 from clausal.logic.trampoline import StepGenerator
-                dispatch_fn = _dispatch_at(pred, len(args))
+                dispatch_fn = _dispatch_at(pred, len(args), caller_db)
                 sg = StepGenerator(dispatch_fn, this_generator, this_generator, this_generator, *args, trail)
                 st = yield (sg, None)
                 while st is not DONE:

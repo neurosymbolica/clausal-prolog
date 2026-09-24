@@ -211,13 +211,15 @@ def _defined_names(mod):
     from clausal.logic.atoms import demangle
     from clausal.logic.predicate import (
         PredicateMeta, field_names_for, is_declared_predicate_name,
+        namespace_db,
     )
 
     entries = []
+    mod_db = namespace_db(vars(mod))
     for name, value in vars(mod).items():
         if not isinstance(name, str) or name.startswith("_") or "$" in name:
             continue
-        if not is_declared_predicate_name(value):
+        if not is_declared_predicate_name(value, db=mod_db):
             continue
         # Equality, never identity, for an atom (spec §2/§5.2): two
         # equal atoms are the same atom whether or not they are the

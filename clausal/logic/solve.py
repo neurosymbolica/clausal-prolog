@@ -1165,18 +1165,18 @@ def call(
         # neither answers does the call refuse (below) -- the same order
         # ``globals_env._inject_resolved_targets`` bakes into a compiled
         # call site.
-        if pred_cls is not None and is_declared_predicate_name(pred_cls) \
+        if pred_cls is not None and is_declared_predicate_name(pred_cls, db=module.db) \
                 and not binding_grants_arity(pred_cls, arity, module.db,
                                              functor):
             other_arity_binding = pred_cls
         elif pred_cls is not None and (
                 hasattr(pred_cls, '_get_dispatch')
-                or is_declared_predicate_name(pred_cls)):
+                or is_declared_predicate_name(pred_cls, db=module.db)):
             # Pass the arity: call("citation", A, B) against citation/3 is the
             # same fault as writing it in a clause body, and gets the same
             # message rather than a TypeError about a missing `trail`.  Via
             # _dispatch_at, because pred_cls need not be a PredicateMeta.
-            dispatch_fn = _dispatch_at(pred_cls, arity)
+            dispatch_fn = _dispatch_at(pred_cls, arity, module.db)
 
     # Name + ARITY ruling, review round: the calling module's OWN predicate
     # at the call arity wins over a same-named builtin (``get_dispatch`` asks

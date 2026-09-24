@@ -527,7 +527,7 @@ def resolve_qualified_goal_cell(
     return module, goal
 
 
-def qualify_mangled_goal(goal: Any) -> Any:
+def qualify_mangled_goal(goal: Any, db: Any = None) -> Any:
     """A goal whose functor is a MANGLED atom (``module<US>name``, the
     ``-hide`` spelling) as the module-qualified goal ``(":", module_name,
     inner)`` the engine already resolves; anything else comes back untouched.
@@ -558,18 +558,22 @@ def qualify_mangled_goal(goal: Any) -> Any:
     it, not a new "no such module" error.
     """
     from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
-    from clausal.logic.predicate import _db_for_module_name  # noqa: PLC0415
+    from clausal.logic.predicate import _owner_db_for_module_name  # noqa: PLC0415
 
+    # *db* (optional) is the CALLER's database, the ruling-Q0 hint: a handle
+    # naming the caller's own module counts as loaded even when the runner
+    # popped it from ``sys.modules``.  A caller that passes it must then
+    # resolve the qualified goal with the same hint (``_dispatch_at`` does).
     if type(goal) is str:
         if is_mangled(goal):
             module_name, name = demangle(goal)
-            if _db_for_module_name(module_name) is not None:
+            if _owner_db_for_module_name(module_name, db) is not None:
                 return (QUALIFIED_GOAL_FUNCTOR, module_name, name)
         return goal
     is_cell, functor = _cell_shape(goal) if isinstance(goal, tuple) else (False, None)
     if is_cell and type(functor) is str and is_mangled(functor):
         module_name, name = demangle(functor)
-        if _db_for_module_name(module_name) is not None:
+        if _owner_db_for_module_name(module_name, db) is not None:
             return (QUALIFIED_GOAL_FUNCTOR, module_name, (name, *goal[1:]))
     return goal
 
