@@ -123,6 +123,56 @@ def test_catch_3_catches_the_iso_term_in_the_importer(pair, goal):
     assert _pi(goal, I) == Compound("/", (mint("pk"), 2))
 
 
+def test_a_dotted_qualified_goal_reaches_the_handle_arm(tmp_path, monkeypatch):
+    """PATH pin for ``owner.pk(3, _)`` in the handle era.
+
+    ``pair``'s handle era flips only the IMPORTER's ``-import_from`` binding,
+    so its ``by_qual`` still reads the OWNER's attribute -- a class, baked
+    into the compiled body at the importer's compile time -- and is refused
+    by ``_dispatch_at``'s CLASS arm (``_refuse_call_at``): an outcome-only
+    pin that never touches the handle arm.  Here the owner's own attribute is
+    the handle (what it becomes after the flip) BEFORE the importer
+    compiles, and the refusal must come from the handle arm
+    (``_refuse_if_known_at_another_arity`` on the owner's Database), still
+    ``error(existence_error(procedure, pk/2), _)`` and caught by catch/3,
+    while the right-arity dotted call keeps answering."""
+    import clausal.logic.predicate as predicate_mod
+    ow = _load(tmp_path, monkeypatch, "aie_dq_ow", """
+        -module(aie_dq_ow, [pk(A)])
+        pk(1),
+    """)
+    O = ow.__dict__["$module"]
+    handle = mangle(O.name, "pk")
+    monkeypatch.setitem(O.module_dict, "pk", handle)
+    imp = _load(tmp_path, monkeypatch, "aie_dq_im", """
+        -module(aie_dq_im, [])
+        -import_module(aie_dq_ow)
+        -private([procedure])
+        by_qual(PI) <- catch(aie_dq_ow.pk(3, _X), error(existence_error(procedure, PI), _), True)
+        ok(X) <- aie_dq_ow.pk(X)
+    """)
+    I = imp.__dict__["$module"]
+    arms = []
+    handle_arm = predicate_mod._refuse_if_known_at_another_arity
+    class_arm = PredicateMeta._refuse_call_at
+
+    def spy_handle(db, functor, arity):
+        arms.append(("handle", functor, arity, db is O.db))
+        return handle_arm(db, functor, arity)
+
+    def spy_class(cls, arity):
+        if cls.__name__ == "pk":
+            arms.append(("class", arity))
+        return class_arm(cls, arity)
+
+    monkeypatch.setattr(predicate_mod, "_refuse_if_known_at_another_arity",
+                        spy_handle)
+    monkeypatch.setattr(PredicateMeta, "_refuse_call_at", spy_class)
+    assert _pi("by_qual", I) == Compound("/", (mint("pk"), 2))
+    assert arms == [("handle", "pk", 2, True)], arms
+    assert _pi("ok", I) == 1
+
+
 @pytest.mark.parametrize("goal", ["local_goal", "local_call"])
 def test_catch_3_catches_the_iso_term_in_the_owner(pair, goal):
     _era, O, _I = pair
