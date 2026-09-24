@@ -28,7 +28,8 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
     is_term_instance, term_field_names,
     is_declared_predicate, resolve_predicate_row,
-    is_declared_predicate_name,
+    is_declared_predicate_name, _refuse_unqualified_other_arity,
+    binding_grants_arity,
 )
 from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
@@ -528,7 +529,56 @@ def _merge_builtin(base_globals: dict, name: str, builtin) -> None:
 # oracle for ``_collect_globals_info``'s combined walk.
 
 
-def _is_call_target(binding, arity: int) -> bool:
+def _unqualified_other_arity_dispatch(binding, db, name: str, arity: int):
+    """The dispatch for an UNQUALIFIED call ``name/arity`` whose name is
+    bound to a predicate that is not this name's predicate at *arity*
+    (``predicate.binding_grants_arity``).  Re-resolves on every call, in the
+    compiling module only: its own row at *arity* (one asserted later
+    answers too), else a builtin under *name* (``Database.get_dispatch``
+    asks both, row first), else ``predicate._refuse_unqualified_other_arity``
+    -- the refusal, never the binding's owner.  Only what cannot go stale is
+    cached (review round 5): a builtin, or a LOCKED row's dispatch; an
+    unlocked row and "nothing answers" re-resolve per call, so this is safe
+    under the ``$disp_`` key.  With no db (a db-less compile) only the builtin
+    is asked.
+    """
+    cached = None
+    cached_is_builtin = False
+
+    def dispatch(*args):
+        nonlocal cached, cached_is_builtin
+        if cached is not None:
+            # Round 6: a cached BUILTIN stands only while this db still has
+            # no row of its own at name/arity -- an assertz after the first
+            # call creates one, and the local row outranks the builtin
+            # (solve.call sees it too).  One row() probe per call.
+            if not (cached_is_builtin and db.row(name, arity) is not None):
+                return cached(*args)
+            cached = None
+        if db is not None:
+            fn = db.get_dispatch(name, arity)      # own row, then builtins
+            row = db.row(name, arity) if fn is not None else None
+            # Review round 5: cache what cannot change under us -- a BUILTIN
+            # (no row of our own answered; re-checked per call, above) or a
+            # LOCKED row's dispatch.  An unlocked (dynamic) row may be
+            # recompiled or retracted, and "nothing answers" may stop being
+            # true, so those re-resolve.
+            if fn is not None and (row is None or row.locked):
+                cached = fn
+                cached_is_builtin = row is None
+        else:
+            bp = get_builtin_predicate(name, arity, None)
+            fn = bp._get_dispatch() if bp is not None else None
+            cached = fn
+            cached_is_builtin = False      # no db: no local row can appear
+        if fn is None:
+            fn = _refuse_unqualified_other_arity(binding, name, arity, db)
+        return fn(*args)
+    dispatch.__qualname__ = f"unqualified_other_arity[{name}/{arity}]"
+    return dispatch
+
+
+def _is_call_target(binding, arity: int, db=None, name=None) -> bool:
     """True when *binding* is what an APPLIED reference at *arity* calls.
 
     W4b-3 ruling (operator, 2026-09-24): a predicate name is name + ARITY.
@@ -540,9 +590,19 @@ def _is_call_target(binding, arity: int) -> bool:
     being a class.  A data reference (*arity* < 0) has no arity to match.
     Every other ``_get_dispatch`` implementor (``BuiltinPredicate``, the
     foreign duck-typed ones) is accepted as before.
+
+    With *db* and *name* (an UNQUALIFIED name in the module being compiled),
+    an IMPORTED binding is the target only at an arity it was imported at
+    (``predicate.binding_grants_arity``, aliased-import ruling 2026-09-24):
+    the owner's other arities are not imported, in either era.  A dotted
+    name passes neither -- it is the qualifier's, owner arities included.
     """
     if is_declared_predicate_name(binding):
-        return arity < 0 or is_declared_predicate(binding, arity=arity)
+        if arity < 0:
+            return True
+        if name is not None:
+            return binding_grants_arity(binding, arity, db, name)
+        return is_declared_predicate(binding, arity=arity)
     return hasattr(binding, "_get_dispatch")
 
 
@@ -574,7 +634,7 @@ def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
     # this very arity IS the target and is never shadowed.
     return (
         (_term_is_atom(binding) or is_declared_predicate_name(binding))
-        and not (arity >= 0 and is_declared_predicate(binding, arity=arity))
+        and not (arity >= 0 and binding_grants_arity(binding, arity, db, name))
         and db is not None
         and arity >= 0
         and db.row(name, arity) is not None
@@ -656,7 +716,9 @@ def _inject_resolved_targets(
         # alike -- only at its own arity (``_is_call_target``); at another
         # arity it falls through to the builtin lookup / ``_atom_shadows_row``
         # / the dotted routing like any non-predicate binding.
-        if existing is not None and _is_call_target(existing, target_arity):
+        if existing is not None and _is_call_target(
+                existing, target_arity, db,
+                None if "." in target_name else target_name):
             if isinstance(existing, BuiltinPredicate):
                 builtin = get_builtin_predicate(target_name, target_arity, db)
                 if builtin is not None and builtin._arity != existing._arity:
@@ -731,6 +793,37 @@ def _inject_resolved_targets(
                 # keeps its object) so the call reports the arity at run
                 # time instead of a NameError.
                 base_globals[target_name] = resolved
+            continue
+        # Name + ARITY ruling (operator, 2026-09-24, with the aliased-import
+        # ruling and review rounds 2-4): an UNQUALIFIED call site at an arity
+        # its PREDICATE binding (class or handle) is not this name's
+        # predicate at (``_is_call_target`` above said no) resolves in THIS
+        # module under THIS name -- this db's own row, then a builtin under
+        # the name, else the arity refusal naming the name; never the
+        # binding's owner.  All of that lives in ONE ``$disp_name_N`` entry
+        # (``_unqualified_other_arity_dispatch``, re-resolving per call),
+        # which the goal emitters prefer over ``$dispatch_at(name, N)``.
+        #
+        # The NAME key is never touched: it keeps the binding, which other
+        # goals of this same clause set use at the binding's own arity and
+        # for TERM CONSTRUCTION (``T = last(1)``).  Replacing it -- with a
+        # ``_DbDispatchAdapter`` (arity-blind ``_get_dispatch``, NameError on
+        # construction) or a merged builtin -- broke those, depending on the
+        # order this loop happened to visit ``(name, 1)`` and ``(name, 2)``
+        # (roborev round 4).  A class's ``_fields`` can be stale
+        # (``PredicateMeta._clause_arity``); the local row answering first
+        # covers that too.  An ATOM binding keeps its builtin-first order.
+        binding = existing
+        if binding is None and globals_:
+            binding = globals_.get(target_name)
+        if (target_arity >= 0 and binding is not None
+                and is_declared_predicate_name(binding)
+                and not _is_call_target(binding, target_arity, db,
+                                        target_name)):
+            base_globals.setdefault(target_name, binding)
+            base_globals[_disp_key(target_name, target_arity)] = (
+                _unqualified_other_arity_dispatch(
+                    binding, db, target_name, target_arity))
             continue
         builtin = get_builtin_predicate(target_name, target_arity, db)
         if builtin is not None:
