@@ -118,6 +118,16 @@ def stale(tmp_path):
         sys.modules.pop(name, None)
 
 
+def _site_dispatch(base_globals, name, arity):
+    """What a compiled call site ``name/arity`` dispatches through, exactly as
+    the goal emitters choose it: the ``$disp_name_N`` entry when the resolver
+    left one, else ``$dispatch_at(base_globals[name], N)``."""
+    from clausal.logic.compiler.globals_env import _disp_key
+    from clausal.logic.predicate import _dispatch_at
+    fn = base_globals.get(_disp_key(name, arity))
+    return fn if fn is not None else _dispatch_at(base_globals[name], arity)
+
+
 def _handle(lm, name):
     """The post-flip binding for *name*, checked to BE that shape."""
     h = mangle(lm.name, name)
@@ -440,7 +450,7 @@ class TestInjectResolvedTargets:
     def test_a_local_predicate_beats_an_owner_binding_at_another_arity(
             self, lm, owner, era):
         from clausal.logic.compiler.globals_env import (
-            _DbDispatchAdapter, _inject_resolved_targets,
+            _disp_key, _inject_resolved_targets,
         )
         from clausal.logic.predicate import _dispatch_at, is_declared_predicate
         from clausal.logic.solve import _drive_trampoline
@@ -453,9 +463,10 @@ class TestInjectResolvedTargets:
         globals_["ping"] = b
         base_globals = dict(globals_)
         _inject_resolved_targets({("ping", 2)}, base_globals, lm.db, globals_)
-        target = base_globals["ping"]
-        assert isinstance(target, _DbDispatchAdapter)
-        fn = _dispatch_at(target, 2)
+        # round 4: the NAME key keeps the binding; the /2 call site gets its
+        # own $disp_ entry, which reaches the local row.
+        assert base_globals["ping"] is b
+        fn = base_globals[_disp_key("ping", 2)]
         assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
 
     @pytest.mark.parametrize("era", ["class", "handle"])
@@ -463,11 +474,7 @@ class TestInjectResolvedTargets:
         """Review round: ``lm`` has its own ``last/2``; the binding is
         ``owner``'s ``last/1``.  The local row wins AHEAD of the builtin
         ``last/2`` -- the same order ``solve.call`` uses at run time."""
-        from clausal.logic.builtins import BuiltinPredicate
-        from clausal.logic.compiler.globals_env import (
-            _DbDispatchAdapter, _inject_resolved_targets,
-        )
-        from clausal.logic.predicate import _dispatch_at
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
         from clausal.logic.solve import _drive_trampoline
         from clausal.logic.variables import Trail
         b = self._owner_binding(owner, "last", era)
@@ -476,12 +483,57 @@ class TestInjectResolvedTargets:
         globals_["last"] = b
         base_globals = dict(globals_)
         _inject_resolved_targets({("last", 2)}, base_globals, lm.db, globals_)
-        target = base_globals["last"]
-        assert not isinstance(target, BuiltinPredicate)
-        assert isinstance(target, _DbDispatchAdapter)
-        fn = _dispatch_at(target, 2)
+        assert base_globals["last"] is b                 # round 4: name kept
+        fn = _site_dispatch(base_globals, "last", 2)
         assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
         assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
+
+    @pytest.mark.parametrize("order", ["1-then-2", "2-then-1"])
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_one_clause_set_using_the_name_at_two_arities_and_as_a_term(
+            self, lm, owner, era, order):
+        """Roborev round 4 (MEDIUM): one clause set with
+
+            p(X) <- last(X)            # the imported last/1 (owner's)
+            q(A, B) <- last(A, B)      # lm's own last/2
+            r(T) <- (T = last(1))      # a last/1 TERM
+
+        shares one globals dict, so the resolver sees ``("last", 1)``,
+        ``("last", 2)`` and the data reference ``("last", -1)`` together.
+        The /2 target used to OVERWRITE the ``last`` key with a
+        ``_DbDispatchAdapter`` -- arity-blind, NameError on construction --
+        so, depending on which target the set yielded first, /1 calls got
+        the /2 dispatch and building ``last(1)`` raised.  The name key must
+        keep the binding in BOTH orders, each call site must reach its own
+        predicate, and the term must still build.  (A file cannot declare
+        this shape -- importing ``last`` and defining ``last/2`` is refused
+        at load -- so the resolver is driven directly, with the order
+        forced.)"""
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        b = self._owner_binding(owner, "last", era)          # owner's last/1
+        assert lm.db.row("last", 2) is not None              # lm's last/2
+        targets = [("last", 1), ("last", 2), ("last", -1)]
+        if order == "2-then-1":
+            targets = [("last", 2), ("last", 1), ("last", -1)]
+        globals_ = dict(lm.module_dict)
+        globals_["last"] = b
+        base_globals = dict(globals_)
+        _inject_resolved_targets(targets, base_globals, lm.db, globals_)
+        assert base_globals["last"] is b
+        # p: last/1 is the owner's fact last(1)
+        f1 = _site_dispatch(base_globals, "last", 1)
+        assert len(list(_drive_trampoline(f1, Trail(), 1))) == 1
+        assert len(list(_drive_trampoline(f1, Trail(), 2))) == 0
+        # q: last/2 is lm's fact last(1, 1), not the builtin
+        f2 = _site_dispatch(base_globals, "last", 2)
+        assert len(list(_drive_trampoline(f2, Trail(), 1, 1))) == 1
+        assert len(list(_drive_trampoline(f2, Trail(), [5], 5))) == 0
+        # r: the term last(1) still builds from the name key (class era: the
+        # class constructs it; handle era: the key is the handle, unchanged)
+        if era == "class":
+            assert base_globals["last"](1) == ("last", 1)
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_a_stale_fields_class_is_not_shadowed_by_a_builtin(
@@ -499,9 +551,8 @@ class TestInjectResolvedTargets:
             globals_["last"] = _handle(stale, "last")
         base_globals = dict(globals_)
         _inject_resolved_targets({("last", 2)}, base_globals, stale.db, globals_)
-        target = base_globals["last"]
-        assert not isinstance(target, BuiltinPredicate)
-        fn = _dispatch_at(target, 2)
+        assert base_globals["last"] is globals_["last"]  # round 4: name kept
+        fn = _site_dispatch(base_globals, "last", 2)
         assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
         assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
 
@@ -517,11 +568,12 @@ class TestInjectResolvedTargets:
         globals_ = {"last": b}                            # no local last/2
         base_globals = dict(globals_)
         _inject_resolved_targets({("last", 2)}, base_globals, owner.db, globals_)
-        bp = base_globals["last"]
-        assert isinstance(bp, BuiltinPredicate)
-        # and it answers as the builtin last/2 does
-        fn = _dispatch_at(bp, 2)
+        # round 4: the name key keeps the binding (never a merged builtin);
+        # the /2 call site answers as the builtin last/2 does
+        assert base_globals["last"] is b
+        fn = _site_dispatch(base_globals, "last", 2)
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 4))) == 0
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_with_nothing_else_to_answer_the_arity_is_reported(

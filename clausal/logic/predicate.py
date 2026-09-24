@@ -1492,7 +1492,7 @@ def binding_grants_arity(binding: Any, arity: int, db: Any, name: str) -> bool:
     owner = _binding_owner_db(binding)
     if owner is None or db is None or owner is db:
         return True
-    adopted = {a for (f, a) in getattr(db, "_adopted", {}) if f == name}
+    adopted = db.adopted_arities(name)      # O(1) per-name index
     return not adopted or arity in adopted
 
 
@@ -1626,6 +1626,20 @@ def localize_goal(db: Any, goal_val: Any) -> Any:
     md = getattr(db, "module_dict", None)
     if not isinstance(md, dict):
         return goal_val
+    key = goal_val if type(goal_val) is str else id(goal_val)
+    # Review round 4 (hot path): a per-db cache of the local name found for
+    # this binding, VERIFIED on every hit against the live module dict (one
+    # dict lookup), so a name rebound or removed since is never trusted -- a
+    # failed check rescans.  Only positive answers are cached: a foreign
+    # binding bound by no plain name (a qualified reference) is rare and
+    # rescanned.  The cached entry is the (stateless) adapter itself, which
+    # holds the binding, so an ``id`` key cannot be reused while cached.
+    cache = db.__dict__.setdefault("_localize_cache", {})
+    hit = cache.get(key)
+    if hit is not None:
+        bound = md.get(hit.name)
+        if bound is goal_val or (type(bound) is str and bound == goal_val):
+            return hit
     if isinstance(goal_val, PredicateMeta):
         names = [k for k, v in md.items() if v is goal_val and "." not in k]
         own = goal_val.__name__
@@ -1637,7 +1651,8 @@ def localize_goal(db: Any, goal_val: Any) -> Any:
     if not names:
         return goal_val
     name = own if own in names else sorted(names)[0]
-    return _UnqualifiedName(db, name, goal_val)
+    adapter = cache[key] = _UnqualifiedName(db, name, goal_val)
+    return adapter
 
 
 def _dispatch_at(obj: Any, arity: int) -> Callable:
@@ -1703,12 +1718,16 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         # only when nothing answers there, so the class era and the handle
         # era agree (the class-era refusal ahead of a live answer was an
         # artefact of the predicate being a class).
-        from clausal.predicate_diagnostics import (  # noqa: PLC0415
-            PredicateArityMismatchError,
-        )
         try:
             obj._refuse_call_at(arity)
-        except PredicateArityMismatchError:
+        except TypeError as refusal:
+            # imported only on the refusal path: this arm is hot (review
+            # round 4 measured the per-call import statement)
+            from clausal.predicate_diagnostics import (  # noqa: PLC0415
+                PredicateArityMismatchError,
+            )
+            if not isinstance(refusal, PredicateArityMismatchError):
+                raise
             fn = _resolve_other_arity_of_class(obj, arity)
             if fn is not None:
                 return fn

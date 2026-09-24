@@ -417,6 +417,59 @@ def test_an_unaliased_import_at_another_arity_resolves_under_its_own_name(
     assert len(list(_call("use1", module=I))) == 1
 
 
+def test_the_localize_cache_is_verified_against_the_live_module_dict(
+        tmp_path, monkeypatch):
+    """Review round 4 (hot path): ``localize_goal`` caches the local name it
+    found per binding, but every hit is checked against the module dict, so
+    a rebinding is seen at once -- never a stale name."""
+    from clausal.logic.predicate import _UnqualifiedName, localize_goal
+    ow = _load(tmp_path, monkeypatch, "f7_lc_ow", """
+        -module(f7_lc_ow, [numlist(A)])
+        numlist(1),
+    """)
+    imp = _load(tmp_path, monkeypatch, "f7_lc_im", """
+        -module(f7_lc_im, [])
+        -import_from(f7_lc_ow, [alias(numlist, nl)])
+    """)
+    I = imp.__dict__["$module"]
+    b = I.module_dict["nl"]
+    first = localize_goal(I.db, b)
+    assert isinstance(first, _UnqualifiedName) and first.name == "nl"
+    assert localize_goal(I.db, b) is first                 # cached, verified
+    monkeypatch.setitem(I.module_dict, "nl", "something_else")
+    monkeypatch.setitem(I.module_dict, "nl2", b)
+    again = localize_goal(I.db, b)
+    assert isinstance(again, _UnqualifiedName) and again.name == "nl2"
+    monkeypatch.delitem(I.module_dict, "nl2")
+    assert localize_goal(I.db, b) is b                     # bound by no name
+    # the adopted-arity index agrees with the adopted rows
+    assert I.db.adopted_arities("nl") == frozenset({1})
+    assert I.db.adopted_arities("numlist") == frozenset()
+    assert ow.__dict__["$module"].db.adopted_arities("numlist") == frozenset()
+
+
+def test_the_localizing_list_builtin_registration_is_reload_safe():
+    """Review round 4 (LOW 2): running the registration again -- what a
+    reload of ``higher_order`` does -- neither raises nor double-wraps."""
+    from clausal.logic.builtins import higher_order as ho
+    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+    before = {k: _DB_BUILTINS[k] for k in ho._GOAL_FIRST_LIST_BUILTINS}
+    ho._register_localizing_list_builtins()                 # nothing to move
+    assert {k: _DB_BUILTINS[k] for k in before} == before
+    # a reload re-registers the stateless function; it is moved again
+    key = ("maplist", 2)
+    impl = before[key](None)                                # db-less = impl
+    _BUILTINS[key] = impl
+    try:
+        ho._register_localizing_list_builtins()
+        assert key not in _BUILTINS
+        assert getattr(_DB_BUILTINS[key], "_localizing", False)
+        assert _DB_BUILTINS[key](None) is impl
+    finally:
+        _BUILTINS.pop(key, None)
+        _DB_BUILTINS[key] = before[key]
+
+
 def test_a_foreign_duck_typed_implementor_is_still_called_bare():
     """The frozen, arity-free protocol: a plain class with no ``PredicateMeta``
     in its MRO, whose whole contract is ``def _get_dispatch(self)``, must

@@ -964,13 +964,24 @@ def _make_localizing_factory(impl):
         _localized.__name__ = impl.__name__
         return _localized
     factory._db_optional = True
+    factory._localizing = True
     return factory
 
 
 def _register_localizing_list_builtins() -> None:
+    """Move each goal-first list builtin from ``_BUILTINS`` to a localizing
+    ``_DB_BUILTINS`` factory.  Idempotent (review round 4): a reload of this
+    module re-runs the ``@_trampoline_builtin`` decorators, which put a fresh
+    stateless entry back in ``_BUILTINS``; that entry is popped again and the
+    factory rebuilt around the NEW function.  A key with no stateless entry
+    whose factory is already a localizing one is left alone."""
     from clausal.logic.builtins._registry import _BUILTINS  # noqa: PLC0415
     for key in _GOAL_FIRST_LIST_BUILTINS:
-        impl = _BUILTINS.pop(key)
+        impl = _BUILTINS.pop(key, None)
+        if impl is None:
+            if getattr(_DB_BUILTINS.get(key), "_localizing", False):
+                continue
+            raise RuntimeError(f"goal-first list builtin {key} is not registered")
         _DB_BUILTINS[key] = _make_localizing_factory(impl)
 
 
