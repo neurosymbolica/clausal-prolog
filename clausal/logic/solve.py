@@ -49,6 +49,7 @@ from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
     is_declared_predicate, is_declared_predicate_name,
+    _refuse_unqualified_other_arity,
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.logic.cells import (
@@ -1150,9 +1151,9 @@ def call(
         # arity (``globals_env._is_call_target``, the compile-time twin of
         # this lookup).  At another arity the call resolves NORMALLY:
         # this module's own db row, then the builtin.  Only when
-        # neither answers is the binding consulted after all (below), and
-        # it then reports the arity -- the same order ``globals_env.
-        # _inject_resolved_targets`` bakes into a compiled call site.
+        # neither answers does the call refuse (below) -- the same order
+        # ``globals_env._inject_resolved_targets`` bakes into a compiled
+        # call site.
         if pred_cls is not None and is_declared_predicate_name(pred_cls) \
                 and not is_declared_predicate(pred_cls, arity=arity):
             other_arity_binding = pred_cls
@@ -1186,11 +1187,16 @@ def call(
     if dispatch_fn is None and module is not None:
         dispatch_fn = module.db.get_dispatch(functor, arity)
 
-    # Name + ARITY ruling: nothing else answered, so the other-arity binding
-    # is the call's last resort -- ``_dispatch_at`` resolves it at this arity
-    # in its own module or raises ``PredicateArityMismatchError``, both eras.
+    # Name + ARITY ruling: nothing in THIS module answered -- not its row, not
+    # a builtin under this name -- so the call refuses, naming the name it
+    # used.  It does NOT resolve the other arity in the binding's owner
+    # (``_dispatch_at`` would): this call is UNQUALIFIED, and an import --
+    # aliased or not -- grants the one arity it was imported at (operator
+    # ruling 2026-09-24, closing the aliased-import leak).  A stale-``_fields``
+    # class whose clauses ARE at this arity is still returned (its target).
     if dispatch_fn is None and other_arity_binding is not None:
-        dispatch_fn = _dispatch_at(other_arity_binding, arity)
+        dispatch_fn = _refuse_unqualified_other_arity(
+            other_arity_binding, functor, arity)
 
     if dispatch_fn is None:
         if _handle_name is not None:

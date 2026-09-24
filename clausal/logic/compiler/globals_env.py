@@ -28,7 +28,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
     is_term_instance, term_field_names,
     is_declared_predicate, resolve_predicate_row,
-    is_declared_predicate_name,
+    is_declared_predicate_name, _refuse_unqualified_other_arity,
 )
 from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
@@ -528,6 +528,25 @@ def _merge_builtin(base_globals: dict, name: str, builtin) -> None:
 # oracle for ``_collect_globals_info``'s combined walk.
 
 
+def _unqualified_other_arity_dispatch(binding, db, name: str, arity: int):
+    """The dispatch for an UNQUALIFIED call ``name/arity`` whose name is
+    bound to a predicate declared at another arity, with nothing answering
+    at compile time.  Re-resolves on every call, in the compiling module
+    only: its own row at *arity* (one asserted later answers), else a
+    builtin under *name*, else ``predicate._refuse_unqualified_other_arity``
+    -- the refusal, never the binding's owner.  Nothing is captured that can
+    go stale, so this is safe under the ``$disp_`` key although no locked row
+    backs it.
+    """
+    def dispatch(*args):
+        fn = db.get_dispatch(name, arity) if db is not None else None
+        if fn is None:
+            fn = _refuse_unqualified_other_arity(binding, name, arity)
+        return fn(*args)
+    dispatch.__qualname__ = f"unqualified_other_arity[{name}/{arity}]"
+    return dispatch
+
+
 def _is_call_target(binding, arity: int) -> bool:
     """True when *binding* is what an APPLIED reference at *arity* calls.
 
@@ -755,6 +774,19 @@ def _inject_resolved_targets(
             obj = globals_[target_name]
             base_globals[target_name] = obj
             _maybe_cache_dispatch(obj, target_name, target_arity)
+            # Operator ruling 2026-09-24 (closing the aliased-import leak): an
+            # UNQUALIFIED call at another arity than its predicate binding's
+            # resolves in THIS module only, under THIS name.  The name key
+            # keeps the binding (it also serves term construction and any
+            # call at the binding's own arity), so the call site at this
+            # arity gets its own ``$disp_`` entry, which the emitter prefers
+            # over ``$dispatch_at(name, N)`` -- and ``_dispatch_at`` would
+            # have resolved the other arity in the binding's OWNER.
+            if (target_arity >= 0 and is_declared_predicate_name(obj)
+                    and not is_declared_predicate(obj, arity=target_arity)):
+                base_globals[_disp_key(target_name, target_arity)] = (
+                    _unqualified_other_arity_dispatch(
+                        obj, db, target_name, target_arity))
         elif db is not None:
             obj = _DbDispatchAdapter(db, target_name, target_arity)
             base_globals[target_name] = obj

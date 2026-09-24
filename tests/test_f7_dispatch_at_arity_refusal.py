@@ -167,55 +167,128 @@ def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
     assert len(list(_drive_trampoline(_dispatch_at(target, 0), Trail()))) == 1
 
 
-def test_an_aliased_import_resolves_the_other_arity_in_the_OWNER_under_the_OWNER_name(
-        tmp_path, monkeypatch):
-    """Review round: pins WHICH module and WHICH name the class-arm fallback
-    resolves in.  ``alim`` does ``-import_from(alow, [alias(numlist, nl)])``;
-    ``alow``'s ``numlist/1`` is bound in ``alim`` as ``nl``.
-
-    * The CLASS (the object ``alim`` binds) resolves ``/2`` in ``alow``,
-      under ``alow``'s name ``numlist`` -- so it reaches the builtin
-      ``numlist/2``.  The OWNER handle ``alow:numlist`` agrees.
-    * The IMPORTER handle ``alim:nl`` does NOT: ``alim`` has no ``nl/2`` row
-      and no builtin is called ``nl``, so it refuses.
-
-    So the two eras agree only if the W4b-2d flip binds an import to the
-    OWNER handle.  Parked for a ruling: todo/aliased-import-other-arity-
-    resolves-in-the-owner-2026-09-24.md.  This test pins today's behaviour
-    so a change to either side is seen."""
+def _bind_imports_as_owner_handles(monkeypatch, owner):
+    """Emulate the handle era for ``-import_from`` (D1: an import binds the
+    OWNER's handle): after ``_process_imports`` runs, every name it bound to
+    one of *owner*'s predicate classes is re-bound to ``mangle(owner, name)``
+    -- dotted key and local (possibly aliased) name alike."""
+    import clausal.logic.compiler_v2 as cv
     from clausal.logic.predicate import PredicateMeta
+    orig = cv._process_imports
+    seen = []
+
+    def flipped(items, module_dict, db=None):
+        orig(items, module_dict, db)
+        for k, v in list(module_dict.items()):
+            if (isinstance(v, PredicateMeta) and v._row is not None
+                    and v._row._db is owner.db):
+                module_dict[k] = mangle(owner.name, v._row._key[0])
+                seen.append(k)
+
+    monkeypatch.setattr(cv, "_process_imports", flipped)
+    return seen
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_an_unqualified_call_at_another_arity_resolves_only_under_the_name_used(
+        tmp_path, monkeypatch, era):
+    """Operator ruling 2026-09-24 (closing the aliased-import leak): an
+    other-arity call resolves in the namespace the caller NAMED, under the
+    name the caller USED.
+
+    ``alim`` does ``-import_from(alow, [alias(numlist, nl)])``; ``alow``
+    defines ``numlist/1``.
+
+    * UNQUALIFIED ``nl(3, L)`` in ``alim``: ``alim`` has no ``nl/2`` and no
+      builtin is called ``nl`` -> ``PredicateArityMismatchError`` naming
+      ``nl``, in compiled code AND through ``solve.call``.  Importing
+      ``numlist/1`` as ``nl`` grants no other arity and no other name.
+      (Before the ruling this test pinned the opposite -- the class-arm
+      fallback answered with ``alow``'s builtin ``numlist/2``.)
+    * QUALIFIED ``alow.numlist(3, L)`` (and the class / owner handle held
+      directly): the qualifier's module under that name -> the builtin
+      ``numlist/2`` answers (F7's reversed pin).
+    * the imported arity ``nl(1)`` is untouched.
+
+    Both eras: the handle era binds the import to the OWNER handle (D1)."""
+    from clausal.logic.predicate import PredicateMeta, is_declared_predicate_name
     from clausal.logic.solve import _drive_trampoline, call as _call
     from clausal.logic.variables import Trail, Var, deref
-    _load(tmp_path, monkeypatch, "f7_alow", """
-        -module(f7_alow, [numlist(A)])
+    ow = _load(tmp_path, monkeypatch, f"f7_alow_{era}", """
+        -module(f7_alow_ERA, [numlist(A)])
         numlist(1),
-    """)
-    imp = _load(tmp_path, monkeypatch, "f7_alim", """
-        -module(f7_alim, [])
-        -import_from(f7_alow, [alias(numlist, nl)])
-    """)
+    """.replace("ERA", era))
+    O = ow.__dict__["$module"]
+    flipped = (_bind_imports_as_owner_handles(monkeypatch, O)
+               if era == "handle" else None)
+    imp = _load(tmp_path, monkeypatch, f"f7_alim_{era}", """
+        -module(f7_alim_ERA, [])
+        -import_from(f7_alow_ERA, [alias(numlist, nl)])
+        use(L) <- nl(3, L)
+        use1 <- nl(1)
+        q(L) <- f7_alow_ERA.numlist(3, L)
+    """.replace("ERA", era))
     I = imp.__dict__["$module"]
-    cls = I.module_dict["nl"]
-    assert isinstance(cls, PredicateMeta)
-    assert cls._row._key == ("numlist", 1)                 # the OWNER's row
-    assert cls._row._db is sys.modules["f7_alow"].__dict__["$module"].db
+    b = I.module_dict["nl"]
+    if era == "class":
+        assert isinstance(b, PredicateMeta) and b._row._key == ("numlist", 1)
+    else:
+        assert "nl" in flipped, "the handle era must really be exercised"
+        assert b == mangle(f"f7_alow_{era}", "numlist")
+        assert is_declared_predicate_name(b)
 
-    def _answers(target):
+    def _sols(goal, *args):
+        return [[deref(a) for a in args if isinstance(a, Var)]
+                for _ in _call(goal, *args, module=I)]
+
+    # unqualified, compiled
+    with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
+        _sols("use", Var())
+    # unqualified, solve.call
+    with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
+        _sols("nl", 3, Var())
+    # the imported arity is untouched
+    assert len(_sols("use1")) == 1
+    assert len(_sols("nl", 1)) == 1
+    assert len(_sols("nl", 2)) == 0
+    # qualified: the qualifier's module, under that name -> builtin numlist/2
+    assert _sols("q", Var()) == [[[1, 2, 3]]]
+    # held directly: the class and the owner handle resolve in the owner
+    for t in (O.module_dict["numlist"], mangle(f"f7_alow_{era}", "numlist")):
         out = Var()
-        return [deref(out) for _ in
-                _drive_trampoline(_dispatch_at(target, 2), Trail(), 3, out)]
+        got = [deref(out) for _ in
+               _drive_trampoline(_dispatch_at(t, 2), Trail(), 3, out)]
+        assert got == [[1, 2, 3]]
 
-    assert _answers(cls) == [[1, 2, 3]]
-    assert _answers(mangle("f7_alow", "numlist")) == [[1, 2, 3]]
-    with pytest.raises(PredicateArityMismatchError, match="nl"):
-        _dispatch_at(mangle("f7_alim", "nl"), 2)
-    # and through solve.call in the importer (class era): the last resort
-    # hands the binding to _dispatch_at, so the owner answers here too.
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_an_unaliased_import_at_another_arity_resolves_under_its_own_name(
+        tmp_path, monkeypatch, era):
+    """The ruling's unaliased check: ``-import_from(alow, [numlist])`` then
+    ``numlist(3, L)`` resolves in the CALLING module under ``numlist`` --
+    where the builtin ``numlist/2`` answers."""
+    from clausal.logic.solve import call as _call
+    from clausal.logic.variables import Var, deref
+    ow = _load(tmp_path, monkeypatch, f"f7_unal_ow_{era}", """
+        -module(f7_unal_ow_ERA, [numlist(A)])
+        numlist(1),
+    """.replace("ERA", era))
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
+    imp = _load(tmp_path, monkeypatch, f"f7_unal_im_{era}", """
+        -module(f7_unal_im_ERA, [])
+        -import_from(f7_unal_ow_ERA, [numlist])
+        use(L) <- numlist(3, L)
+        use1 <- numlist(1)
+    """.replace("ERA", era))
+    I = imp.__dict__["$module"]
+    if era == "handle":
+        assert I.module_dict["numlist"] == mangle(f"f7_unal_ow_{era}", "numlist")
     out = Var()
-    assert [deref(out) for _ in _call("nl", 3, out, module=I)] == [[1, 2, 3]]
-    # the imported arity is untouched in every shape
-    for t in (cls, mangle("f7_alow", "numlist"), mangle("f7_alim", "nl")):
-        assert len(list(_drive_trampoline(_dispatch_at(t, 1), Trail(), 1))) == 1
+    assert [deref(out) for _ in _call("use", out, module=I)] == [[1, 2, 3]]
+    out = Var()
+    assert [deref(out) for _ in _call("numlist", 3, out, module=I)] == [[1, 2, 3]]
+    assert len(list(_call("use1", module=I))) == 1
 
 
 def test_a_foreign_duck_typed_implementor_is_still_called_bare():

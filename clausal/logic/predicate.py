@@ -1452,6 +1452,65 @@ def _resolve_other_arity_of_class(cls: "PredicateMeta", arity: int) -> Callable 
     return row._db.get_dispatch(functor, arity)
 
 
+def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int) -> Callable:
+    """The last resort of an UNQUALIFIED call ``name(...)`` at *arity* whose
+    name is bound to a predicate (class or handle) declared at ANOTHER arity,
+    after the calling module's own row and the builtins under *name* have
+    both declined.  Raises ``PredicateArityMismatchError`` naming *name* --
+    the name the caller USED, which for an aliased import is not the
+    owner's.
+
+    Operator ruling 2026-09-24 (closing the aliased-import leak,
+    ``todo/done/aliased-import-other-arity-resolves-in-the-owner-2026-09-24.md``):
+    an unqualified call resolves in the CALLING module only; a binding
+    grants the one arity it was imported at, never another arity in its
+    owner.  So unlike ``_dispatch_at`` -- which serves a binding reached
+    DIRECTLY or by a qualified/dotted reference and resolves the other arity
+    in the binding's own module -- this never looks the name up in the
+    owner.  Callers (``solve.call`` Phase 5, ``globals_env``'s keep-binding
+    branch) are the two places that know the name was unqualified.
+
+    One exception, not a resolution elsewhere: a ``PredicateMeta`` class
+    whose ``_fields`` are stale while its clause heads ARE at *arity*
+    (``PredicateMeta._clause_arity``) is this call's target after all; its
+    own dispatch is returned, exactly as the class arm would have.
+    """
+    from clausal.predicate_diagnostics import (  # noqa: PLC0415
+        PredicateArityMismatchError, predicate_arity_mismatch,
+    )
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        clauses = row.clauses if row is not None else ()
+        if clauses and all(_head_arity(c.head) == arity for c in clauses):
+            return binding._get_dispatch()        # stale _fields: the target
+        try:
+            defined = binding._clause_arity()
+            if defined is None:
+                defined = binding._declared_arity(arity)
+        except Exception:  # noqa: BLE001 - a message, not a decision
+            defined = None
+        if defined is None:
+            defined = len(getattr(binding, "_fields", ()))
+        site = (getattr(binding, "_registered_at", None)
+                if name == binding.__name__ else None)
+        try:
+            err = predicate_arity_mismatch(name, arity, defined, site=site)
+        except Exception:  # noqa: BLE001 - the fault is still real; state it
+            err = PredicateArityMismatchError(
+                f"{name} takes {defined} arguments, "
+                f"but this call passes {arity}")
+        raise err
+    defined = None
+    from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
+    _q = qualify_mangled_goal(binding) if type(binding) is str else binding
+    if _q is not binding:
+        db = _db_for_module_name(_q[1])
+        if db is not None:
+            others = sorted(a for a in db.arities_for(_q[2]) if a != arity)
+            defined = others[0] if len(others) == 1 else None
+    raise predicate_arity_mismatch(name, arity, defined)
+
+
 def _dispatch_at(obj: Any, arity: int) -> Callable:
     """Resolve *obj*'s dispatch function for a call of *arity* arguments.
 

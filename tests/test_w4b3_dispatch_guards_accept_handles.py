@@ -524,6 +524,16 @@ class TestInjectResolvedTargets:
         assert base_globals["ping"] is b
         with pytest.raises(PredicateArityMismatchError):
             _dispatch_at(b, 2)
+        # Operator ruling 2026-09-24 (the aliased-import leak): this call site
+        # is UNQUALIFIED, so it gets its own ``$disp_`` entry that resolves in
+        # THIS module under THIS name and otherwise refuses -- never the
+        # binding's owner.  The emitter prefers it over $dispatch_at.
+        from clausal.logic.compiler.globals_env import _disp_key
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        fn = base_globals[_disp_key("ping", 2)]
+        with pytest.raises(PredicateArityMismatchError, match="ping"):
+            list(_drive_trampoline(fn, Trail(), 1, 2))
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_a_binding_at_its_own_arity_is_still_accepted(self, lm, owner, era):
