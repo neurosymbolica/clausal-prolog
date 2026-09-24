@@ -201,6 +201,16 @@ def lowering_scope(module_globals: "dict | None"):
         _LOWERING_SCOPE_STACK.pop()
 
 
+def _lowering_db():
+    """The innermost open compile's module DATABASE, or None -- the ruling-Q0
+    ``db=`` hint for the era-agnostic predicate resolvers, read from the
+    namespace's ``$module`` the same way ``functor_signature_for`` does."""
+    namespace = lowering_globals()
+    if namespace is None:
+        return None
+    return getattr(namespace.get("$module"), "db", None)
+
+
 def lowering_globals() -> "dict | None":
     """The namespace the innermost open compile targets, or None.
 
@@ -738,8 +748,8 @@ def term_to_ast_expr(
     # mangled handle (``module\x1fname``), a ``str`` -- so without this arm
     # the generic ``str`` arm below bakes the MANGLED spelling, where today's
     # class arms (``is_zero_field_class`` / ``is_declared_predicate_name``
-    # further down) bake ``term.__name__``.  Gated on
-    # ``is_declared_predicate_name``, NOT ``is_mangled``: a ``-hide`` DATA
+    # further down) bake ``term.__name__``.  ``predicate_binding_name`` is
+    # gated on ``is_declared_predicate_name``, NOT ``is_mangled``: a ``-hide`` DATA
     # atom is mangled too, and its mangled spelling IS its identity (every
     # reference in the owning module compiles to that same spelling), so it
     # must fall through and be baked verbatim.
@@ -756,8 +766,10 @@ def term_to_ast_expr(
     # answer depends on load state -- the same dependency every
     # ``is_declared_predicate_name`` caller has.  See
     # todo/done/self-denoting-predicate-atom-spelling-post-flip-mangled-or-plain-2026-09-24.md.
-    if type(term) is str and is_declared_predicate_name(term):
-        return ast.Constant(value=_mint_atom(predicate_binding_name(term)))
+    if type(term) is str:
+        _pred_name = predicate_binding_name(term, db=_lowering_db())
+        if _pred_name is not None:
+            return ast.Constant(value=_mint_atom(_pred_name))
 
     if isinstance(term, (int, float, str, bytes, complex)):
         return ast.Constant(value=term)

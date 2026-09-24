@@ -442,7 +442,7 @@ def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
 
 
 
-def _templatize_query_goal(goal: Any):
+def _templatize_query_goal(goal: Any, db=None):
     """Parameterize the fully-ground top-level arguments of a predicate-call goal.
 
     Returns ``(template_goal, [(param_var, value), ...])``. Each direct argument
@@ -454,24 +454,26 @@ def _templatize_query_goal(goal: Any):
 
     Composite/control/arithmetic goals are returned unchanged (``params`` empty);
     they keep the value-keyed cache as a correct fallback.
+
+    *db* is the querying module's database, passed to the predicate-binding
+    resolver as the ruling-Q0 hint so a LOCAL handle resolves even when its
+    module has been popped from ``sys.modules``.
     """
-    from clausal.logic.predicate import (
-        PredicateMeta, is_declared_predicate_name, predicate_binding_name,
-    )
+    from clausal.logic.predicate import PredicateMeta, predicate_binding_name
 
     def _ground_value(val):
-        """Return the scalar ground value to parameterize, or None to leave it.
+        """Return the ground value to parameterize, or None to leave it.
 
-        Only plain scalar literals and zero-arity atoms are parameterized: they
-        unify directly with a head literal regardless of mode.  Structural args
+        Only plain scalar literals and predicate bindings (lowered to the PLAIN
+        atom of the predicate's name) are parameterized: they unify directly
+        with a head literal regardless of mode.  Structural args
         (list/dict/compound) are *not* parameterized because the literal-baking
         path rewrites them (e.g. a list literal becomes cons cells) — a raw value
         bound to a Var would not match the rewritten head pattern.  Those keep the
         value-keyed cache fallback.
 
-        A predicate BINDING (a ``PredicateMeta`` class of any arity today, its
-        mangled handle post-flip) is parameterized as the PLAIN atom of its
-        name -- see the first arm below.
+        A predicate binding is a ``PredicateMeta`` class of any arity today,
+        its mangled handle post-flip -- see the first arm below.
         """
         dv = deref(val)
         if is_var(dv):
@@ -485,12 +487,15 @@ def _templatize_query_goal(goal: Any):
         # query can write, and disagreed with ``term_to_ast_expr``'s nested
         # lowering (``__name__``).  An arity>=1 class used to fall to the
         # baking path, which already produced the plain name; parameterizing
-        # it changes nothing but cache reuse.  ``is_declared_predicate_name``,
-        # not ``is_mangled``: a ``-hide`` DATA atom is mangled too and keeps
-        # its spelling (it falls through to the scalar arm) -- including one
-        # whose owner module cannot be resolved, see ``term_to_ast_expr``.
-        if is_declared_predicate_name(dv):
-            return _mint_atom(predicate_binding_name(dv))
+        # it changes nothing but cache reuse.  ``predicate_binding_name`` is
+        # gated on ``is_declared_predicate_name``, not ``is_mangled``: a
+        # ``-hide`` DATA atom is mangled too, answers None, and keeps its
+        # spelling (it falls through to the scalar arm) -- including one whose
+        # owner module cannot be resolved, see ``term_to_ast_expr``.  One
+        # resolver call, with the Q0 ``db`` hint.
+        name = predicate_binding_name(dv, db=db)
+        if name is not None:
+            return _mint_atom(name)
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
             return dv
         # A Python datetime is NOT parameterized. It was (ab0dabcd, 2026-09-02,
@@ -598,7 +603,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     # Parameterize ground top-level args so distinct values reuse one compiled
     # query.  The returned param_pairs are bound to their values (on the trail)
     # by the caller before driving the search.
-    goal, param_pairs = _templatize_query_goal(goal)
+    goal, param_pairs = _templatize_query_goal(goal, getattr(module, "db", None))
 
     # Compute cache key before AST conversion (needs original term).  After
     # templatizing, ground args are Vars, so the key is value-independent.

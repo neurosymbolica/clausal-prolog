@@ -181,3 +181,13 @@ fact `r(b)` where `b/1` is a predicate) evaluates at runtime to the BINDING
 (the class today, the mangled handle post-flip), not the plain atom; a
 zero-arity one (`q(z)`) stores the plain atom. So the self-atom is not yet
 plain on the clause-source side.
+
+Review round 2 (roborev): both arms make ONE resolver call,
+`predicate_binding_name(x, db=...)` (no second `_resolve_mangled_owner`, no
+window between the check and the read), and pass the ruling-Q0 `db=` hint --
+`_ground_value` gets the querying module's db from `_compile_as_query`;
+`term_to_ast_expr` reads the lowering scope's `$module` db. A local handle in
+a module popped from `sys.modules` now lowers plain on both paths (test fails
+if either hint, or the `_compile_as_query` pass-through, is removed). The
+tests resolve every fixture handle through its owner's db, so a peer test
+popping `hide_owner` cannot empty the compared population.
