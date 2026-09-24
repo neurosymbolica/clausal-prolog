@@ -100,8 +100,14 @@ def test_plans_written_on_a_detached_row_survive_the_bind():
 
 def test_a_real_to_real_rebind_leaves_the_targets_plans_alone(tmp_path):
     """The migration is scoped to a DETACHED old row (the ruling): a class
-    moving between two REAL rows must not overwrite the target's plans, which
-    belong to the target Database, not to the class."""
+    on one REAL row must not overwrite another row's plans, which belong to
+    that row's Database, not to the class.
+
+    Since 2026-09-24 an authorized re-bind across databases no longer moves
+    the class at all -- it raises (the vocabulary-implements steal is gone)
+    -- so what is pinned is that the refused move leaves BOTH rows' plans,
+    and the class's binding, exactly as they were."""
+    import pytest
     from clausal.logic.database import Database
 
     a, b = Database(), Database()
@@ -110,8 +116,9 @@ def test_a_real_to_real_rebind_leaves_the_targets_plans_alone(tmp_path):
     cls._state_row().index_plans = {"from-a": {}}
     target = b.row("hue", 1, create=True)
     target.index_plans = {"already-here": {}}
-    cls._bind_row(b, "hue", 1, authorized=True)
-    assert cls._row is target
+    with pytest.raises(RuntimeError, match="never changes its defining module"):
+        cls._bind_row(b, "hue", 1, authorized=True)
+    assert cls._row is a.row("hue", 1)
     assert target.index_plans == {"already-here": {}}
     assert a.row("hue", 1).index_plans == {"from-a": {}}
 

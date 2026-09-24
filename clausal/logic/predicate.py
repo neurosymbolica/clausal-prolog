@@ -894,20 +894,17 @@ class PredicateMeta(type):
         own, and the clauses live under the name the CLAUSE HEADS use.
 
         Re-binding a class that already has a row is legitimate and expected:
-        a clause-free imported declaration getting its clauses downstream, a
-        file re-compiled in one process, a name defined at two arities.  It is
-        also how a shared predicate gets STOLEN, so it is policed: a class
-        already reading another Database's real row is left where it is unless
-        the caller passes *authorized*, which TWO callers do, each from inside
-        a write the mutation gate has just cleared: ``compiler_v2`` step 4's
-        clause install, and ``specialization._install_specialized`` (P3-3
-        Task 7), which makes a ``-specialize`` alias the compiled face of the
-        defining module's row.  The specialization one passes
-        ``through=pred_cls`` to its ``Database.mutate``, so the class's
-        CURRENT row is in that write's blast radius and the policy has already
-        refused the case this guard exists for -- an alias name that resolves
-        to somebody else's predicate -- before the bind is reached.  See the
-        body.
+        a file re-compiled in one process, a name defined at two arities.
+        What it NEVER does is move a class off ANOTHER Database's real row --
+        that is how a shared predicate got STOLEN (the clause-free
+        "vocabulary-implements" idiom, dropped 2026-09-24).  An unauthorized
+        caller (a recompile, a dispatch install) is left where it is,
+        silently, as before.  An *authorized* caller -- each runs inside a
+        write the mutation gate has just cleared: ``compiler_v2`` step 4's
+        clause install, step 4a, and ``specialization._install_specialized``
+        (P3-3 Task 7) -- gets a ``RuntimeError``: the loads that used to
+        reach the move are refused before any write, so reaching it is a
+        broken invariant, not a request.  See the body.
         A REAL old row keeps its own contents (it is the Database's, not the
         class's); the pieces of state that were per-CLASS rather than
         per-key before this task travel with the class so the move stays
@@ -951,8 +948,24 @@ class PredicateMeta(type):
             old_row is not None
             and not old_row.detached
             and old_row.db is not db
-            and not authorized
         ):
+            if authorized:
+                # NO STEAL, EVER (2026-09-24, the vocabulary-implements drop).
+                # An authorized caller used to MOVE the class here -- the
+                # clause-free vocabulary idiom's mechanism -- and where the
+                # owner's row held runtime clauses they vanished from every
+                # caller through the class.  Every load write through an
+                # ``-import_from`` is now refused before step 4 (step 3d,
+                # ``compiler_v2._implements_an_imported_declaration``), so an
+                # authorized caller reaching this is a broken invariant: say
+                # so rather than move another Database's predicate silently.
+                raise RuntimeError(
+                    f"internal: binding {cls.__name__} to "
+                    f"{db.module_name()}'s row {functor}/{arity} would move it "
+                    f"off {old_row.db.module_name()}'s row "
+                    f"{old_row.key[0]}/{old_row.key[1]}; a predicate never "
+                    f"changes its defining module (the load should have been "
+                    f"refused before any write)")
             # POLICED (P3-3 Task 3 fix round 1).  Re-binding is a write that
             # MOVES predicate identity: the class is what a goal resolves
             # through, so re-pointing an ``-import_from``'d class at the
@@ -961,13 +974,8 @@ class PredicateMeta(type):
             # the clauses nobody can reach any more.  A recompile or a
             # dispatch install has no authorship to make that decision with
             # (its ``recompile`` kind is never refused, precisely because it
-            # is meant to change nothing), so it does not get to.  The
-            # authorized re-binds are ``compiler_v2`` step 4's clause install
-            # -- which is what keeps the clause-free vocabulary idiom working
-            # -- and ``specialization._install_specialized``'s alias install
-            # (P3-3 Task 7); both run inside a mutation-gate transaction
-            # already cleared for their author, and the second additionally
-            # names the class in that transaction's ``through=``.
+            # is meant to change nothing), so it does not get to -- and an
+            # authorized caller (above) raises instead of moving it.
             #
             # A class on its private DETACHED row is unbound, not bound
             # elsewhere, so its first real bind is always fine.
@@ -2182,6 +2190,55 @@ def mint_predicate_handle(db, functor: str) -> str:
             f"cannot mint a predicate handle for {functor!r}: its database "
             f"belongs to no module ({module_name})")
     return mangle(module_name, functor)
+
+
+def is_bound_predicate_at(binding, arity: int, db=None) -> bool:
+    """Is *binding* a predicate at *arity*, reading the arity from where the
+    predicate LIVES?
+
+    A ``PredicateMeta`` class bound to a real row answers with that row's
+    arity (``row.key[1]``): a class can be bound at an arity its ``_fields``
+    do not spell (a name re-bound within its database), and the row is what
+    a write or a call reaches.  Everything else -- an unbound class, a
+    detached one, a mangled handle -- is ``is_declared_predicate``.  The
+    ONE arity source for the load channel's "is this the imported
+    predicate?" questions (``compiler_v2._implements_an_imported_declaration``
+    and :func:`is_foreign_class_at_other_arity`), so the two cannot disagree
+    about a class whose fields and row differ (round-7 review).
+    """
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        if row is not None and not row.detached:
+            return row.key[1] == arity
+    return is_declared_predicate(binding, arity=arity, db=db)
+
+
+def is_foreign_class_at_other_arity(binding, db, arity: int) -> bool:
+    """True when *binding* is a ``PredicateMeta`` class already reading
+    ANOTHER Database's real row, at an arity other than *arity*.
+
+    That is an ``-import_from``'d predicate whose name this module ALSO uses
+    at another arity for a predicate of its own (``-import_from(a, [p])``
+    binds a's ``p/1`` class; this file defines ``p/2``).  The ``p/2`` head is
+    this module's own predicate -- its row is this module's, exactly as the
+    handle era resolves it -- so the class must be neither bound to it
+    (``_bind_row`` would move a's predicate) nor handed the ``p/2`` dispatch
+    or index plans (they would land on a's ``p/1`` row), nor put a's row in
+    the write's blast radius (operator ruling 2026-09-24: a local ``p/2``
+    beside an imported ``p/1`` LOADS -- name and arity make a different
+    predicate).  Class era only: a mangled handle has no class to mis-bind,
+    and ``through=`` resolves it at the written arity.
+
+    The arity is the BOUND ROW's (``row.key[1]``), not ``len(_fields)``: a
+    class can be bound at an arity its field names do not spell (a name
+    defined at two arities re-binds it within its database).
+    """
+    if not isinstance(binding, PredicateMeta):
+        return False
+    row = binding._row
+    if row is None or row.detached or db is None or row.db is db:
+        return False
+    return not is_bound_predicate_at(binding, arity)
 
 
 def resolve_predicate_row(binding, *, arity: int,

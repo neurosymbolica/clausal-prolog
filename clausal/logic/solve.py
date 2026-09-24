@@ -679,7 +679,8 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     # so that term_to_ast_expr can reference them in the compiled code.
     extra_globals.update(_collect_types_from_term(goal))
 
-    def _query_body_compiler(clause: Clause, var_context: dict) -> list:
+    def _query_body_compiler(clause: Clause, var_context: dict,
+                             ctx_template=None) -> list:
         # Pre-populate var_context so _preallocate_body_vars skips user Vars
         # and term_to_ast_expr references them by name (→ global) rather than
         # emitting a walrus that creates a new Var().
@@ -691,7 +692,17 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # ``ast.Constant`` and is never re-resolved by name in the callee's
         # namespace, so it cannot land on a same-named predicate there — the
         # by-identity lowering this comment used to describe is deleted.
-        return compile_body_trampoline(clause.body, db, var_context, "trail")
+        # With the compile's own ctx (``accepts_ctx_template`` below): a call
+        # site the target resolution routed through a ``$disp_`` entry -- the
+        # name+arity ruling's other-arity dispatcher for a name bound to an
+        # imported predicate at another arity, or a locked predicate -- is
+        # emitted through it, exactly as in a compiled clause.  Without it
+        # the query emitted ``$dispatch_at(name, N)`` on the BINDING, which
+        # resolves another arity in the binding's owner, not in this module.
+        return compile_body_trampoline(clause.body, db, var_context, "trail",
+                                       ctx=ctx_template)
+
+    _query_body_compiler.accepts_ctx_template = True
 
     dummy_head = Compound("_query", ())
     clause = Clause(head=dummy_head, body=[goal])

@@ -52,15 +52,17 @@ kind(point(X_UNUSED, Y_UNUSED), point),
 --8<-- [end:module_data_functor]
 
 --8<-- [start:module_predicate_export_vocab]
-# vocab.clausal -- declares, defines nothing
--module(vocab, [verdict/2])
+# rules.clausal -- defines verdict/2 AND exports it
+-module(rules, [verdict/2])
+
+verdict(ok, cited),
 --8<-- [end:module_predicate_export_vocab]
 
 --8<-- [start:module_predicate_export_impl]
-# rules.clausal -- supplies the clauses
--import_from(vocab, [verdict])
+# checks.clausal -- uses it, imported from the module that defines it
+-import_from(rules, [verdict])
 
-verdict(ok, cited),
+cited_ok(C) <- verdict(ok, C)
 --8<-- [end:module_predicate_export_impl]
 
 --8<-- [start:private_with_atoms]

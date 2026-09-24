@@ -37,12 +37,11 @@ An entry that has **clauses** in the file is a predicate as before: it keeps its
 `PredicateMeta` class, `call/1` and friends dispatch on it, and nothing about
 using it changes.
 
-#### `name/arity` — a predicate whose clauses live elsewhere
+#### `name/arity` — a predicate export
 
-A declaration-only export is a data functor by default, which is the wrong
-answer for the *vocabulary module* idiom: one module declares the predicate and
-a downstream module supplies its clauses. Say so with the ISO `name/arity`
-spelling, which is what module exports look like in ISO Prolog anyway:
+The ISO `name/arity` spelling exports a **predicate** by name and arity, which
+is what module exports look like in ISO Prolog anyway. The module that exports
+it is the module that defines it, and other modules import it from there:
 
 ```clausal
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_vocab"
@@ -52,11 +51,17 @@ spelling, which is what module exports look like in ISO Prolog anyway:
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_impl"
 ```
 
-`verdict/2` keeps its class, so the importer's clauses attach to the same
-predicate the vocabulary module exported, and the "a second module is
-redefining these clauses" diagnostics keep working. Field names are
-placeholders (`arg_0`, `arg_1`) until a real clause supplies its own, exactly
-as with [`-dynamic`](#-dynamic).
+Field names are placeholders (`arg_0`, `arg_1`) until a real clause supplies
+its own, exactly as with [`-dynamic`](#-dynamic).
+
+!!! warning "No *vocabulary module*: the importer cannot supply the clauses"
+    A module that exports `verdict/2` without defining it does not make
+    `verdict/2` a slot other modules can fill. A module that imports it from
+    there and writes clauses for it is **refused at load**, with a remedy:
+    define `verdict/2` in the module that writes its clauses, export it from
+    that module, and have its users import it from there. (This
+    "vocabulary-implements" idiom was supported until 2026-09-24; a predicate
+    has exactly one defining module.)
 
 Both spellings work in [`-private`](#-private) too.
 

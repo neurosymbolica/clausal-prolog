@@ -22,7 +22,7 @@ from typing import Any
 
 from clausal.atom_diagnostics import truth_literal_hint_lines
 from clausal.logic.database import (
-    Module as LogicModule, Clause, head_key,
+    Module as LogicModule, Clause, head_key, refusal_error,
     WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH,
 )
 from clausal.logic.cells import DECLARED_ATOMS_KEY
@@ -41,7 +41,9 @@ from clausal.logic.predicate import (
     field_names_for, is_declared_predicate, is_declared_predicate_name,
     binding_grants_arity,
     predicate_arities_for, predicate_binding_name,
-    resolve_predicate_row,
+    resolve_predicate_row, _db_for_module_name,
+    is_foreign_class_at_other_arity, module_source_path,
+    is_bound_predicate_at,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -301,18 +303,32 @@ def compile_module(
         # test would hand a tuple to ``_bind_row`` below.
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
+        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
+            # An IMPORTED class at ANOTHER arity (``-import_from(a, [p])``
+            # binds a's ``p/1`` class; this file defines its own ``p/2``).
+            # The head is this module's own predicate -- its row is this
+            # module's, exactly as the handle era resolves it -- so there is
+            # no class to bind here: binding a's class would move it off a's
+            # row (``_bind_row`` raises on that).  Same-arity foreign classes
+            # never get here: step 3d refused them.  Step 5 compiles it with
+            # no class for the same reason (the compiler's own fallback
+            # lookup applies the same test).
+            pred_cls = None
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
-                        pred_cls if pred_cls is not None
-                        else _imported_binding(origins, functor),
+                        _load_through(pred_cls, origins, functor, db, arity),
                         origins, module_name, module_dict):
             logic_module.define_predicate(pred_node)
             if pred_cls is not None:
                 db_clauses = db.clauses_for(functor, arity)
-                # ``authorized``: this is the ONE bind the mutation gate has
-                # just cleared for this author, so it may move a shared class
-                # onto this module's row (the clause-free vocabulary idiom).
-                # Every other bind is policed -- see ``PredicateMeta.
-                # _bind_row``.
+                # GUARANTEE: this bind never moves a predicate off another
+                # module's row.  Step 3d refuses every load write through an
+                # ``-import_from`` of another module's predicate before this
+                # loop runs (``_implements_an_imported_declaration``, after the
+                # gate), so the class here is this module's own or unbound;
+                # and ``authorized`` makes ``PredicateMeta._bind_row`` RAISE,
+                # not steal, if some other route ever hands it a class bound to
+                # another Database's row -- rather than skip the bind silently
+                # and leave the class reading a row these clauses never reach.
                 pred_cls._bind_row(db, functor, arity, authorized=True)
                 # ``_ensure_clauses``, not a plain ``_clauses`` read: a read
                 # mints nothing (P3-3 Task 2 fix round 1), and this IS the
@@ -340,7 +356,9 @@ def compile_module(
             # being declare-then-import-then-define, where the class was a
             # FOREIGN placeholder and this module's own declaration is the
             # right label (implementation_plans/step4-signature-source-
-            # design-2026-09-24.md §3).  First clause wins: a later clause
+            # design-2026-09-24.md §3) -- a shape that is REFUSED at step 3d
+            # since the vocabulary-implements idiom was dropped (2026-09-24),
+            # so it no longer arrives here.  First clause wins: a later clause
             # finds the row already stamped.  A ``define_predicate`` that
             # registered names from a non-cell head got there first too.
             if clause_row.signature is None:
@@ -474,8 +492,7 @@ def compile_module(
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_DISPATCH,
-                        pred_cls if pred_cls is not None
-                        else _imported_binding(origins, functor),
+                        _load_through(pred_cls, origins, functor, db, arity),
                         origins, module_name, module_dict):
             if db.is_shallow(functor, arity):
                 compile_predicate_shallow(
@@ -1023,7 +1040,8 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
         checked.add((functor, arity))
         pred_cls = module_dict.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = _imported_binding(origins, functor)
+            pred_cls = None
+        pred_cls = _load_through(pred_cls, origins, functor, db, arity)
         exc = db.refusal_for(
             functor, arity, author=author, kind=WRITE_LOAD_CLAUSES,
             detail=_LOAD_SITES[WRITE_LOAD_CLAUSES], through=pred_cls,
@@ -1033,12 +1051,195 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
                 exc, functor, arity, pred_cls, origins, module_name,
                 module_dict, db=db,
             )
+        refused = _implements_an_imported_declaration(
+            origins, module_dict, functor, arity, module_name, author)
+        if refused is not None:
+            raise refused
+
+
+def _implements_an_imported_declaration(origins: dict, module_dict: dict,
+                                        functor: str, arity: int,
+                                        module_name: str,
+                                        author: str = "<load>"):
+    """The load error for clauses this module writes against a predicate it
+    ``-import_from``'s from ANOTHER module -- or ``None``.
+
+    A predicate has exactly one defining module, and a LOAD may not add
+    clauses to another module's predicate.  Before 2026-09-24 the gate let
+    such a write through wherever the exporter's row held nothing a load had
+    written, and step 4 then MOVED the shared class off the exporter's row
+    onto this module's (the "vocabulary-implements" idiom, DROPPED by
+    operator ruling --
+    ``todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md``).
+    After the PredicateMeta flip there is no class to move, so it would have
+    stopped answering silently; and where the exporter's row held runtime
+    clauses, the move already lost them silently (round-3 review).
+
+    Asked AFTER the gate (the caller checks ``Database.refusal_for`` first),
+    so a row a load wrote that still holds clauses keeps the existing clobber
+    refusal and its message.  Everything else that reaches here is refused,
+    with a message for the exporter's actual shape:
+
+    * a PYTHON module (not a loaded Clausal module) exporting a predicate
+      class -- ``make_predicate`` or a ``PredicateMeta`` class statement: the
+      class was created in Python, so no Clausal module owns it;
+    * clause-free and never written by a load -- a declaration-only export
+      (NO row post-flip, a private detached row today) or an empty
+      ``-dynamic`` one: the exporter ONLY DECLARES it;
+    * a ``-dynamic`` row holding clauses asserted at RUNTIME (no load
+      source): assert from here instead (it lands on the owner's row), or
+      define a predicate of this module's own;
+    * a row a load wrote, since emptied: the clobber diagnostic, through
+      ``_redefinition_error`` so it reads exactly like the gate's own
+      clobber refusal (gate line included).
+
+    *author* is the load's author, for that gate line.
+
+    Keyed on the binding's ARITY-EXACT predicate, never on class identity:
+    ``is_declared_predicate`` answers for a class today and a mangled handle
+    after the flip, and it is arity-strict in both, so a same-spelling
+    import at ANOTHER arity is not this predicate -- that is a local
+    predicate sharing a name, and it loads.
+
+    Pure and pre-write: step 3d calls it from the dry run, before the write
+    loop touches anything.  Step 4's clause install relies on it: after this
+    pass no load binds another module's predicate to its own row.
+    """
+    origin = origins.get(functor)
+    if origin is None:
+        return None
+    exporter, bound = origin
+    if bound is None or _is_self_import(exporter, module_name, author):
+        return None
+    # ONE arity source with ``is_foreign_class_at_other_arity`` (step 4,
+    # ``_load_through``): the bound ROW's arity for a class on a real row.
+    if not is_bound_predicate_at(bound, arity):
+        return None
+    local = module_dict.get(functor)
+    if (local is not None and local != bound
+            and is_bound_predicate_at(local, arity)):
+        # The canonical spelling is bound to a predicate of THIS module, not
+        # to the import: an aliased ``-import_from(m, [alias(f, G)])`` leaves
+        # ``f`` free, and a local ``f/N`` then keeps its own predicate (the
+        # rule ``Database.adopt_row`` states for rows; pinned by
+        # ``test_a_local_definition_wins_a_clash_with_an_aliased_import``).
+        # The gate resolves the head the same way -- ``module_dict`` first.
+        return None
+    imported_as = [name for name, (mod, b) in origins.items()
+                   if mod == exporter and b == bound and name != functor]
+    imported_as = imported_as[0] if imported_as else None
+    row = resolve_predicate_row(bound, arity=arity)
+    from clausal import import_diagnostics as diag  # noqa: PLC0415
+    if row is not None and row.detached:
+        # A class's PRIVATE detached row is no Clausal row at all: whatever
+        # it holds (a Python-made class asserted into before any bind), no
+        # exporter's Database has this predicate.
+        row = None
+    if row is not None and row.source is not None:
+        # A load wrote this row; its clauses were retracted since (the gate
+        # refuses it outright while it still holds any).  Same text as the
+        # gate's own clobber refusal.
+        owner = row.source[1]
+        gate = refusal_error(
+            functor, arity, author, WRITE_LOAD_CLAUSES,
+            f"it is owned by {owner}; a load may not add clauses to another "
+            f"module's predicate",
+            channel=_LOAD_SITES[WRITE_LOAD_CLAUSES],
+        )
+        return _redefinition_error(gate, functor, arity, bound, origins,
+                                   module_name, module_dict)
+    if row is not None and row.clauses:
+        return SyntaxError(diag.describe_imported_runtime_dynamic_implemented(
+            functor, arity, module_name, exporter, len(row.clauses),
+            imported_as=imported_as,
+        ))
+    python_exporter = _python_module_that_created(bound, row, exporter)
+    if python_exporter is not None:
+        return SyntaxError(diag.describe_imported_python_predicate_implemented(
+            functor, arity, module_name, python_exporter,
+            imported_as=imported_as,
+        ))
+    return SyntaxError(diag.describe_imported_declaration_implemented(
+        functor, arity, module_name, exporter, imported_as=imported_as,
+    ))
+
+
+def _is_self_import(exporter: str, module_name: str, author: str) -> bool:
+    """Is this ``-import_from`` the module importing ITSELF?
+
+    Decided by the identity the gate keys ownership on (``write_refusal``
+    rule 1): the canonical SOURCE PATH, not the name.  One file compiles
+    under two module names in one process (a dotted import and a private
+    ``_clausal_test_*`` name), so the raw ``-import_from`` string can name
+    this very file under its other name.  The exporter is resolved the way
+    the import resolved it (``_resolve_module``); a module that cannot be
+    resolved, or has no source path, is compared by name only.
+    """
+    if exporter == module_name:
+        return True
+    try:
+        mod = _resolve_module(exporter)
+    except ImportError:
+        return False
+    path = module_source_path(mod)
+    return path is not None and path == author
+
+
+def _python_module_that_created(bound, row, exporter: str) -> "str | None":
+    """The name of the PYTHON module an imported predicate class came from,
+    when no Clausal module owns it -- else ``None``.
+
+    Only a predicate with no real Clausal row qualifies (``row`` None or the
+    class's private detached row): a real row means a Clausal module's
+    Database holds the predicate, whoever re-exported the name (the
+    ``clausal/modules/*.py`` alias-module pattern re-exports Clausal
+    predicates from Python).  A class DECLARED by a Clausal module (a
+    clause-free export) carries that module as its ``__module__``, so it is
+    a Clausal declaration, not a Python one.  The exporter is resolved the
+    way the ``-import_from`` resolved it (``_resolve_module``: alias map,
+    then ``clausal.modules.*``, then the raw dotted name), never by the raw
+    string alone.
+    """
+    if row is not None and not row.detached:
+        return None
+    if not isinstance(bound, PredicateMeta):
+        return None
+    if _db_for_module_name(getattr(bound, "__module__", None) or "") is not None:
+        return None
+    try:
+        mod = _resolve_module(exporter)
+    except ImportError:
+        return None
+    name = getattr(mod, "__name__", exporter)
+    if _db_for_module_name(name) is not None:
+        return None
+    return name
 
 
 _LOAD_SITES = {
     WRITE_LOAD_CLAUSES: "compile_module step 4",
     WRITE_LOAD_DISPATCH: "compile_module step 5",
 }
+
+
+def _load_through(pred_cls, origins: dict, functor: str, db, arity: int):
+    """The ``through=`` a load write of ``functor/arity`` hands the gate: the
+    class the name is bound to, else the ``-import_from`` binding -- except
+    an imported CLASS reading another database's row at ANOTHER arity.
+
+    Operator ruling 2026-09-24: a local ``p/2`` beside an imported ``p/1``
+    LOADS, in both eras -- name and arity make a different predicate.  In the
+    handle era ``through=`` resolves the handle at the written arity, so a's
+    ``p/1`` is never in the blast radius; in the class era the shared class
+    carried a's ``p/1`` row in regardless of arity, and the gate refused the
+    write with "may not write p/1 (reached by writing p/2)".  Dropping that
+    class here gives the class era the handle era's answer.
+    """
+    binding = pred_cls if pred_cls is not None else _imported_binding(
+        origins, functor)
+    if is_foreign_class_at_other_arity(binding, db, arity):
+        return None
+    return binding
 
 
 def _imported_binding(origins: dict, functor: str):
