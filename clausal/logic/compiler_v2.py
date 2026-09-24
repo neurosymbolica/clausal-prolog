@@ -211,7 +211,7 @@ def compile_module(
     #    predicate-shaped directives instead.
     _process_declarations(
         module_items, module_dict,
-        _predicate_functor_names(predicate_nodes, module_items),
+        _predicate_functor_names(predicate_nodes, module_items), db=db,
     )
 
     # ── Step 3b: Auto-mint undeclared bare atom references ───────────────
@@ -250,7 +250,7 @@ def compile_module(
     #    channel — and this is what hands the gate the shared class whose row
     #    a write would land on when ``module_dict.get(functor)`` cannot find
     #    it (identity todo instance 3, the aliased import).
-    origins = _import_from_origins(module_items, module_dict)
+    origins = _import_from_origins(module_items, module_dict, db=db)
     author = db.load_author()
 
     # ── Step 3d: ask the gate about EVERY clause this load will write ────
@@ -827,7 +827,8 @@ def _reject_reserved_truth_names(
     raise NameError("\n".join(lines))
 
 
-def _import_from_origins(module_items: list, module_dict: dict) -> dict:
+def _import_from_origins(module_items: list, module_dict: dict,
+                         db=None) -> dict:
     """``{name: (dotted module, bound predicate or None)}`` for every name an
     ``-import_from`` binds in this file.
 
@@ -861,7 +862,7 @@ def _import_from_origins(module_items: list, module_dict: dict) -> dict:
         for name_spec in item.names:
             local = name_spec[1] if isinstance(name_spec, tuple) else name_spec
             bound = module_dict.get(local)
-            own_name = predicate_binding_name(bound)
+            own_name = predicate_binding_name(bound, db=db)
             if own_name is None:
                 bound = None
             origins[local] = (item.module, bound)
@@ -881,7 +882,7 @@ def _belongs_elsewhere(binding, db, arity: int) -> bool:
     a mangled atom after the flip -- where a ``getattr(binding, "_row")``
     would answer ``None`` and quietly call every import local.
     """
-    row = resolve_predicate_row(binding, arity=arity)
+    row = resolve_predicate_row(binding, arity=arity, db=db)
     return row is not None and not row.detached and row.db is not db
 
 
@@ -914,7 +915,7 @@ def _imported_binding_by_canonical_name(origins: dict, db, functor: str,
     none of which is an ``-import_from``.
     """
     bound = _imported_binding(origins, functor)
-    if bound is None or not is_declared_predicate(bound, arity=arity):
+    if bound is None or not is_declared_predicate(bound, arity=arity, db=db):
         return None
     return bound if _belongs_elsewhere(bound, db, arity) else None
 
@@ -987,7 +988,7 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
         if exc is not None:
             raise _redefinition_error(
                 exc, functor, arity, pred_cls, origins, module_name,
-                module_dict,
+                module_dict, db=db,
             )
 
 
@@ -1050,6 +1051,7 @@ def _load_gate(db, functor: str, arity: int, author: str, kind: str,
     except LogicException as exc:
         raise _redefinition_error(
             exc, functor, arity, pred_cls, origins, module_name, module_dict,
+            db=db,
         ) from None
     try:
         yield row
@@ -1062,7 +1064,7 @@ def _load_gate(db, functor: str, arity: int, author: str, kind: str,
 
 def _redefinition_error(exc, functor: str, arity: int, pred_cls,
                         origins: dict, module_name: str,
-                        module_dict: dict) -> SyntaxError:
+                        module_dict: dict, db=None) -> SyntaxError:
     """The load channel's surface exception for a gate refusal."""
     gate_line = str(exc.term.args[1])
     origin = origins.get(functor)
@@ -1079,7 +1081,7 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
     )
     described = describe_imported_predicate_redefinition(
         functor, arity, module_name, exporter_name,
-        resolve_predicate_row(pred_cls, arity=arity),
+        resolve_predicate_row(pred_cls, arity=arity, db=db),
         exporter_module=module_dict.get(exporter_name),
         declared_at=getattr(pred_cls, "_registered_at", None),
     )
@@ -1142,7 +1144,8 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
             # is_declared_predicate is era-agnostic (W4b-2b) and already
             # asks the identical question this used to spell out by hand:
             # a PredicateMeta CLASS at exactly this arity.
-            if is_declared_predicate(module_dict.get(functor), arity=arity):
+            if is_declared_predicate(module_dict.get(functor), arity=arity,
+                                     db=db):
                 continue
             near = sorted({a for (f, a) in db._clauses if f == functor})
             hint = (f"; predicate {functor} is defined at arity/arities {near}"
@@ -1182,7 +1185,7 @@ def _refuse_untablable_target(
     # untouched by this migration -- W4b-2b built the F2 resolver only);
     # ``is_pred`` itself is the F2 question, era-agnostic now.
     cls = module_dict.get(functor)
-    is_pred = is_declared_predicate(cls, arity=arity)
+    is_pred = is_declared_predicate(cls, arity=arity, db=db)
 
     if functor in specialize_aliases:
         # P3-3 Task 7 retired the reason this refusal used to give -- "-specialize
@@ -1359,9 +1362,9 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
                 and isinstance(binding, PredicateMeta) and binding._row is row):
             return binding
         return row
-    if not is_declared_predicate_name(binding):
+    if not is_declared_predicate_name(binding, db=db):
         return None
-    arities = predicate_arities_for(binding)
+    arities = predicate_arities_for(binding, db=db)
     if len(arities) > 1:
         if refuse_ambiguous:
             raise _ambiguous_mi(mi_name, arities)
@@ -1369,7 +1372,8 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
     if isinstance(binding, PredicateMeta):
         return binding
     if arities:
-        return resolve_predicate_row(binding, arity=next(iter(arities)))
+        return resolve_predicate_row(binding, arity=next(iter(arities)),
+                                     db=db)
     return None
 
 
@@ -1473,7 +1477,7 @@ def _run_specialization(
                 f"not found in module dict"
             )
 
-        if is_declared_predicate_name(source_cls):
+        if is_declared_predicate_name(source_cls, db=db):
             # It's a predicate — call it to get the program list.
             # ``is_declared_predicate_name``, not ``is_mangled``: a ``-hide``
             # DATA atom is mangled too, and named as a source it must keep
@@ -2108,7 +2112,8 @@ def _module_constants(module_dict: dict) -> dict:
 
 
 def _process_declarations(module_items: list, module_dict: dict,
-                          predicate_functors: set = frozenset()) -> None:
+                          predicate_functors: set = frozenset(),
+                          db=None) -> None:
     """Process -module and -private declarations: bind declared names.
 
     Two shapes, ONE treatment each post-flip — neither mints a class
@@ -2244,7 +2249,8 @@ def _process_declarations(module_items: list, module_dict: dict,
                 # that -- it does not consult ``arity`` either.  The
                 # ``arity=len(field_names)`` argument only matters to the
                 # mangled-atom arm's exact ``db.row`` lookup.
-                _row = resolve_predicate_row(existing, arity=len(field_names))
+                _row = resolve_predicate_row(existing, arity=len(field_names),
+                                             db=db)
                 if _row is not None and _row.clauses:
                     continue
                 # Bound in THIS module's namespace only -- deliberately NOT

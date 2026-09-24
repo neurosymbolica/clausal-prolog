@@ -189,7 +189,7 @@ def _phrase__2(db, this_generator, _proceed, _fail, _catcher, rule_body, list_ar
     list_val = _text_out(list_val)
 
     if (isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch')) \
-            or is_declared_predicate_name(rule_val):
+            or is_declared_predicate_name(rule_val, db=db):
         # Class reference (0 extra args): phrase(greeting, [hello, world]),
         # or (W4b-3) the module-qualified HANDLE the name is bound to after
         # the flip -- which ``_resolve_nonterminal`` below would refuse.
@@ -242,7 +242,7 @@ def _phrase__3(db, this_generator, _proceed, _fail, _catcher, rule_body, list_ar
     rest_val = deref(rest_arg)
 
     if (isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch')) \
-            or is_declared_predicate_name(rule_val):   # W4b-3: see phrase/2
+            or is_declared_predicate_name(rule_val, db=db):   # W4b-3: see phrase/2
         dispatch = _dispatch_at(rule_val, 2)  # see _DCG_ARITY_NOTE
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, rest_val, trail)
     elif is_term_instance(rule_val):

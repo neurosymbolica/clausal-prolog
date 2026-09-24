@@ -1145,7 +1145,7 @@ def call(
         # either shape.
         if pred_cls is not None and (
                 hasattr(pred_cls, '_get_dispatch')
-                or is_declared_predicate_name(pred_cls)):
+                or is_declared_predicate_name(pred_cls, db=module.db)):
             # Pass the arity: call("citation", A, B) against citation/3 is the
             # same fault as writing it in a clause body, and gets the same
             # message rather than a TypeError about a missing `trail`.  Via

@@ -255,7 +255,8 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     from clausal.logic.predicate import is_declared_predicate_name
 
     binding = namespace.get(name)
-    if is_declared_predicate_name(binding):
+    if is_declared_predicate_name(
+            binding, db=getattr(namespace.get("$module"), "db", None)):
         return binding(*args, **kwargs)
 
     from clausal.logic.compiler.terms_to_ast import functor_signature_for  # noqa: PLC0415

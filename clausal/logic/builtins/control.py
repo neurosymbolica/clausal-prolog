@@ -70,7 +70,7 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     # W4b-3: ``is_declared_predicate_name`` admits the module-qualified
     # HANDLE a predicate name is bound to after the flip.
     if callable(goal_val) or hasattr(goal_val, '_get_dispatch') \
-            or is_declared_predicate_name(goal_val):
+            or is_declared_predicate_name(goal_val, db=db):
         return _ensure_trampoline_dispatch(goal_val, 0), ()
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS and functor != QUALIFIED_GOAL_FUNCTOR:

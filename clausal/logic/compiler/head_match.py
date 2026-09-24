@@ -755,7 +755,9 @@ def head_to_match_pattern(
             # import or a typo, not an OWA-advisory functor -- and must
             # fall through to the existing (loud) dead-pattern path rather
             # than silently match on the whole dotted string.
-            if not is_declared_predicate_name(resolved):
+            if not is_declared_predicate_name(
+                    resolved,
+                    db=getattr((globals_ or {}).get("$module"), "db", None)):
                 if term.kwargs:
                     raise SyntaxError(
                         f"functor {term.func.name!r} has no declared "

@@ -1382,7 +1382,8 @@ def _make_solve_goal_predicate(
             # ``_get_dispatch()`` and fail with a raw positional TypeError.
             if pred is not None and (
                     hasattr(pred, '_get_dispatch')
-                    or is_declared_predicate_name(pred)):
+                    or is_declared_predicate_name(
+                        pred, db=getattr(module_dict.get("$module"), "db", None))):
                 from clausal.logic.trampoline import StepGenerator
                 dispatch_fn = _dispatch_at(pred, len(args))
                 sg = StepGenerator(dispatch_fn, this_generator, this_generator, this_generator, *args, trail)

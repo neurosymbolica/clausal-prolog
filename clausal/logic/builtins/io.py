@@ -836,7 +836,7 @@ def _make_listing__1(db):
             # here is the class's OWN field count (just computed above for
             # the same purpose), not an independent call-site number, but
             # the class arm does not consult it either way.
-            _row = resolve_predicate_row(val, arity=arity)
+            _row = resolve_predicate_row(val, arity=arity, db=db)
             clauses = _row.clauses if _row is not None else []
         elif isinstance(val, BuiltinPredicate):
             name = val._functor

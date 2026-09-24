@@ -401,7 +401,8 @@ def cell_signature_for_name(
     if resolved is None:
         return None
     binding, leaf, leaf_namespace = resolved
-    if is_declared_predicate_name(binding):
+    if is_declared_predicate_name(
+            binding, db=getattr(namespace.get("$module"), "db", None)):
         # (W4a: the `_clausal_instances` gate that stood here is gone with the
         # bridge.  It read the flag straight out of `cls.__dict__`, so it kept
         # honouring a class-body assignment after the attribute itself became
@@ -1115,7 +1116,9 @@ def term_to_ast_expr(
             # without requiring a signature to exist.
             _resolved = _resolve_functor_binding(fname, _namespace) if _namespace else None
             _binding = _resolved[0] if _resolved is not None else None
-            if not is_declared_predicate_name(_binding):
+            if not is_declared_predicate_name(
+                    _binding,
+                    db=getattr((_namespace or {}).get("$module"), "db", None)):
                 if kw_exprs:
                     raise SyntaxError(
                         f"functor {fname!r} has no declared signature: "
