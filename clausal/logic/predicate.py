@@ -1374,6 +1374,52 @@ class PredicateMeta(type):
 # ── Arity-aware dispatch resolution ──────────────────────────────────────────
 
 
+def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) -> None:  # noqa: F821
+    """Raise ``PredicateArityMismatchError`` if *db* knows *functor* as a
+    predicate at some arity OTHER than *arity* -- the handle-dispatch twin
+    of ``PredicateMeta._refuse_call_at``, called BEFORE the caller consults
+    ``Database.get_dispatch``'s builtin-registry fallback (F7, ruled
+    2026-09-24; see the call site in ``_dispatch_at`` for the hazard this
+    ordering avoids).
+
+    ``db.is_predicate_name(functor)`` -- not ``db.arities_for`` -- is the
+    "known at some arity" test: ``arities_for`` scans only ``_signatures``/
+    ``_dynamic``/``_clauses``/``_dispatch``/``_lazy_recompile``/``_rows``
+    and is measurably lossy for a bare ``name/arity`` ``-module``/``-private``
+    export entry (``mark_predicate_export``, no row minted) and for a row
+    this database only ADOPTED via ``-import_from`` -- both of which
+    ``is_predicate_name`` counts (it draws from the same union
+    ``declared_kind`` does).  Using ``arities_for`` here would silently miss
+    exactly the shapes an ``-import_from``'d or ``-module``-exported
+    predicate takes before it has any clauses, and let a wrong-arity call on
+    one of those fall through to the builtin fallback uncaught.
+
+    Declines (returns, no raise) when:
+
+    - *functor* is a known predicate AT ``arity`` itself
+      (``declared_kind(functor, arity) == "predicate"``) -- not a mismatch,
+      whatever ``get_dispatch`` goes on to do (a ``-dynamic`` predicate with
+      no clauses yet compiled is this database's own business, not F7's);
+    - *functor* is not a known predicate at ANY arity in *db* -- a plain
+      builtin call, or a genuinely unknown name, both legitimate to resolve
+      (or fail to resolve) the ordinary way.
+
+    The reported "defined arity" is best-effort: ``arities_for`` (lossy, but
+    fine for a MESSAGE rather than a decision) is asked for the OTHER
+    arities; with exactly one candidate it is named, otherwise the
+    diagnostic degrades to "does not accept N arguments" rather than
+    guessing among several.
+    """
+    if db.declared_kind(functor, arity) == "predicate":
+        return
+    if not db.is_predicate_name(functor):
+        return
+    from clausal.predicate_diagnostics import predicate_arity_mismatch  # noqa: PLC0415
+    others = sorted(a for a in db.arities_for(functor) if a != arity)
+    defined = others[0] if len(others) == 1 else None
+    raise predicate_arity_mismatch(functor, arity, defined)
+
+
 def _dispatch_at(obj: Any, arity: int) -> Callable:
     """Resolve *obj*'s dispatch function for a call of *arity* arguments.
 
@@ -1401,7 +1447,29 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     (``-dynamic``) callees and the runtime meta-call funnels arrive here.
     """
     if isinstance(obj, PredicateMeta):
-        return obj._get_dispatch(arity)
+        # F7 (ruled 2026-09-24): the ARITY-TAKING OVERLOAD of ``_get_dispatch``
+        # is retired from this call site -- measured (full suite, before vs.
+        # after deleting this branch outright) that a bare ``getattr(obj,
+        # "_get_dispatch", None)()`` fallback for a raw ``PredicateMeta``
+        # class is NOT a safe replacement today: ``solve.call``'s "Phase 5"
+        # fast path (``pred_cls = module.module_dict.get(functor); dispatch_fn
+        # = _dispatch_at(pred_cls, arity)``) passes a raw class through here
+        # *by design*, with its own comment stating the point is exactly the
+        # clean ``PredicateArityMismatchError`` this refusal gives instead of
+        # a raw ``TypeError`` from a mismatched positional-argument call.
+        # Deleting this branch outright measured 38 new failures, entirely in
+        # ``test_predicate_arity_mismatch_diagnostic.py`` (higher-order
+        # families, ``call/N``, ``findall``, ``phrase``, imported/declared
+        # arity messages) -- so the refusal moves OUT of ``_get_dispatch``'s
+        # arity parameter and INTO this funnel directly: ``_refuse_call_at``
+        # is a plain ``PredicateMeta`` method, not part of the frozen
+        # duck-typed protocol, so this is not "another `_get_dispatch` with an
+        # arity parameter" -- it is calling the SAME diagnostic
+        # ``_get_dispatch(arity)`` used to reach, from the one place still
+        # holding a raw class rather than a handle.  ``_get_dispatch()``
+        # itself is called bare here, same as every other implementor.
+        obj._refuse_call_at(arity)
+        return obj._get_dispatch()
     if is_chars(obj):
         # THE FLIP (spec §6.4): a ``str`` is a STRING.  The Stage A arm here
         # also accepted a bare ``str`` and built the indicator out of its
@@ -1430,6 +1498,21 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             from clausal.logic.solve import resolve_module  # noqa: PLC0415
             _mod_name, _name = _q[1], _q[2]
             _module = resolve_module(_mod_name, None, "call/N")
+            # F7 (ruled 2026-09-24): the arity check runs BEFORE
+            # ``Database.get_dispatch``'s builtin-registry fallback.
+            # ``get_dispatch`` falls back to a same-named builtin keyed
+            # ``(functor, arity)`` when the handle's own module has no
+            # dispatch entry at THIS arity -- and a user predicate wrong-
+            # arity call is exactly that shape (no entry at the call arity,
+            # an entry at its own).  Without this check first, deleting the
+            # old arity-aware ``PredicateMeta._get_dispatch(arity)`` arm (the
+            # one place that used to refuse before looking anything up)
+            # would let a wrong-arity call on ``foo/2`` SILENTLY resolve to
+            # a builtin ``foo/3`` instead of refusing (measured:
+            # ``numlist/1`` in a module that also has a 2-clause local
+            # definition, called at arity 2, used to silently hand back the
+            # ``numlist/2`` builtin -- see shadow_census.py).
+            _refuse_if_known_at_another_arity(_module.db, _name, arity)
             _fn = _module.db.get_dispatch(_name, arity)
             if _fn is not None:
                 return _fn
