@@ -1237,20 +1237,25 @@ def call(
             # Name/Arity)), demangled, never the raw handle KeyError below
             # (which would either bake ``\x1f`` into ``functor!r`` or, once
             # resolved, still be an uncatchable plain KeyError).
+            #
+            # Ruling 2026-09-25: as ``PredicateNotFoundError`` -- the same
+            # ISO term, and the ``KeyError`` the unqualified miss below is.
             from clausal.logic.exceptions import (  # noqa: PLC0415
-                LogicException, existence_error,
                 dangling_handle_indicator_and_why,
+            )
+            from clausal.predicate_diagnostics import (  # noqa: PLC0415
+                PredicateNotFoundError,
             )
             # A diagnostic: the caller's db is the hint, and an ambiguous
             # owner is "unknown" here (only a dispatch raises it).
             from clausal.logic.predicate import _owner_db_or_none  # noqa: PLC0415
             loaded = _owner_db_or_none(
                 _handle_module_name, getattr(module, "db", None)) is not None
-            indicator, why = dangling_handle_indicator_and_why(
+            _indicator, why = dangling_handle_indicator_and_why(
                 _handle_module_name, _handle_name, arity, loaded,
             )
-            raise LogicException(existence_error(
-                "procedure", indicator, f"call/N: {why}"))
+            raise PredicateNotFoundError(
+                f"call/N: {why}", _handle_name, arity)
         if module is None:
             raise KeyError(
                 f"Predicate {functor!r}/{arity}: module is required when functor is a string"

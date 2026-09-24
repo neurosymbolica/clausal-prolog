@@ -238,8 +238,8 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
         # spelling, ``catch(G, _, R)`` — a ++ class matches a logic ball
         # only when it names LogicException (or a subclass) explicitly --
         # or when the ball is ALSO an instance of that Python class, which a
-        # DUAL-typed engine error is (``PredicateArityMismatchError`` is a
-        # LogicException and a TypeError since 2026-09-25, so ``++TypeError``
+        # DUAL-typed engine error is (``PredicateNotFoundError`` is a
+        # LogicException and a KeyError since 2026-09-25, so ``++KeyError``
         # keeps catching it).  A mere BASE of LogicException (``++Exception``,
         # ``++BaseException``) still never matches a logic ball.
         if isinstance(exc, LogicException) and not issubclass(

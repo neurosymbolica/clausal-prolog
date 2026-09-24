@@ -95,6 +95,7 @@ _CALLER = """
     qualified_whole(E) <- catch(udc_owner_ERA.nosuch(1, 2), E, True)
     qualified_unloaded(PI) <- catch(udc_never_loaded.nosuch(1), error(existence_error(procedure, PI), _), True)
     uncaught() <- ghost(1)
+    qualified_uncaught() <- udc_owner_ERA.nosuch(1)
 """
 
 
@@ -155,17 +156,12 @@ def test_inside_findall(pair):
 
 
 def test_a_plus_plus_key_error_catcher_still_catches_it(pair):
-    """ADD, not replace: ``exceptions._dual_typed_match``.  Only the class
-    era's error was ever a ``KeyError``; the dangling handle has raised a
-    plain ``LogicException`` since 2026-09-24, and still does."""
-    era, _O, I = pair
-    if era == "class":
-        assert _answers("by_key_error", I) == [(mint("caught"),)]
-    else:
-        with pytest.raises(LogicException) as info:
-            _answers("by_key_error", I)
-        assert not isinstance(info.value, KeyError)
-        _assert_iso(info.value.term, "ghost", 1)
+    """ADD, not replace: ``exceptions._dual_typed_match``.  Both eras: the
+    dangling handle raised a plain ``LogicException`` until round 2 of
+    2026-09-25 and is a ``PredicateNotFoundError`` now, the unqualified
+    miss's own type."""
+    _era, _O, I = pair
+    assert _answers("by_key_error", I) == [(mint("caught"),)]
 
 
 def test_plus_plus_exception_never_catches_a_logic_ball(pair):
@@ -175,22 +171,25 @@ def test_plus_plus_exception_never_catches_a_logic_ball(pair):
 
 def test_python_except_still_catches_it(pair):
     era, _O, I = pair
-    with pytest.raises(LogicException) as info:
+    with pytest.raises(KeyError) as info:
         list(call("uncaught", module=I))
     exc = info.value
-    # the class era's error has always been a KeyError, and stays one
-    assert isinstance(exc, KeyError) == (era == "class")
+    # one condition, one Python type, in both eras
+    assert isinstance(exc, PredicateNotFoundError)
+    assert isinstance(exc, LogicException)
     _assert_iso(exc.term, "ghost", 1)
+    text = str(exc)
+    assert "Uncaught logic exception" not in text
+    assert exc.args == (text,)
+    assert exc.term.args[1] == text
     if era == "class":
         # the diagnostic survives verbatim: as str(), and as the context
-        assert isinstance(exc, PredicateNotFoundError)
-        text = str(exc)
         assert text.startswith("Predicate ghost/1 not found")
         assert "udc_caller_class defines:" in text
         assert "-> define ghost/1 in udc_caller_class" in text
-        assert "Uncaught logic exception" not in text
-        assert exc.args == (text,)
-        assert exc.term.args[1] == text
+    else:
+        assert text == ("ghost/1 is not defined in module 'udc_owner_handle' "
+                        "(reached through a module-qualified handle)")
 
 
 def test_the_class_era_message_is_the_context(pair):
@@ -237,7 +236,7 @@ def test_a_qualified_call_resolves_a_predicate_asserted_later(tmp_path, monkeypa
         q(X) <- udc_late_owner.late(X)
     """)
     I = im.__dict__["$module"]
-    with pytest.raises(LogicException) as info:
+    with pytest.raises(PredicateNotFoundError) as info:
         _answers("q", I)
     _assert_iso(info.value.term, "late", 1)
     O = ow.__dict__["$module"]
@@ -250,10 +249,56 @@ def test_the_refusal_for_a_base_that_resolves_to_nothing(tmp_path, monkeypatch):
     same ISO term, the base named in the context."""
     from clausal.logic.compiler.globals_env import _unresolved_qualified_dispatch
     fn = _unresolved_qualified_dispatch("udc_nomod.p", 1, {}, None)
-    with pytest.raises(LogicException) as info:
+    with pytest.raises(PredicateNotFoundError) as info:
         fn(None, None, None, None, 1)
     _assert_iso(info.value.term, "p", 1)
     assert "udc_nomod" in info.value.term.args[1]
+
+
+def test_a_qualified_unknown_call_raises_the_same_python_type(pair):
+    """Round 2 (2026-09-25): the qualified miss is a
+    ``PredicateNotFoundError`` too, whichever route raises it."""
+    _era, _O, I = pair
+    with pytest.raises(PredicateNotFoundError) as info:
+        list(call("qualified_uncaught", module=I))
+    _assert_iso(info.value.term, "nosuch", 1)
+    assert "udc_owner_" in str(info.value)
+
+
+def test_a_base_module_loaded_after_the_caller_compiled_answers(tmp_path, monkeypatch):
+    """roborev round 2: the base is resolved per call, not once at compile
+    time -- a module that is not loaded when the caller compiles (a lazy or
+    circular import) answers once it has loaded."""
+    im = _load(tmp_path, monkeypatch, "udc_lazy_caller", """
+        -module(udc_lazy_caller, [])
+        q(X) <- udc_lazy_owner.p(X)
+    """)
+    I = im.__dict__["$module"]
+    assert "udc_lazy_owner" not in sys.modules
+    with pytest.raises(PredicateNotFoundError) as info:
+        _answers("q", I)
+    _assert_iso(info.value.term, "p", 1)
+    assert "is not loaded" in str(info.value)
+    _load(tmp_path, monkeypatch, "udc_lazy_owner", """
+        -module(udc_lazy_owner, [p(X)])
+        p(5),
+    """)
+    assert _answers("q", I) == [(5,)]
+
+
+def test_a_base_that_is_a_python_module_is_the_same_iso_term(tmp_path, monkeypatch):
+    """A base that resolves to a loaded NON-Clausal object (the ``math``
+    module): same term, the context says it is not a predicate of it."""
+    import math  # noqa: F401 -- the base must be loaded
+    im = _load(tmp_path, monkeypatch, "udc_pybase", """
+        -module(udc_pybase, [])
+        q(E) <- catch(math.nosuch(1), E, True)
+    """)
+    I = im.__dict__["$module"]
+    [(e,)] = _answers("q", I)
+    _assert_iso(e, "nosuch", 1)
+    assert e.args[1] == ("nosuch/1 is not a predicate of 'math' "
+                         "(a module-qualified call math.nosuch/1)")
 
 
 # ── the Python API ───────────────────────────────────────────────────────────

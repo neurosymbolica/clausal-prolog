@@ -600,40 +600,52 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
     Operator ruling 2026-09-25 (Scryer): the call raises
     ``error(existence_error(procedure, name/Arity), Why)`` -- the bare
     indicator, the module named in the message only (ruling 2026-09-24, the
-    shape a dangling predicate handle already raises).  When the base is a
+    shape a dangling predicate handle raises) -- as a
+    ``PredicateNotFoundError``, the same Python type an unqualified unknown
+    call raises.
+
+    The base is resolved on EVERY call, never once at compile time (roborev,
+    round 2): a base module that loads after this clause set compiled (a lazy
+    or circular import) must answer once it has loaded.  When the base is a
     loaded Clausal module the call goes through that module's predicate
-    HANDLE (``predicate._dispatch_at``, W4): it re-resolves per call, so a
-    predicate asserted into the module afterwards answers, and a miss raises
-    the handle route's own existence_error.  Any other base (not loaded, or
-    not a Clausal module) raises the same term directly.
+    HANDLE (``predicate._dispatch_at``, W4), so a predicate asserted into the
+    module afterwards answers too, and a miss raises the handle route's own
+    error.  Any other base (not loaded, or not a Clausal module) raises the
+    same term directly.  This is the refusal path, so the walk costs nothing
+    on a call that resolves.
     """
     parts = dotted.split(".")
     base_path, name = ".".join(parts[:-1]), parts[-1]
-    base = globals_.get(parts[0]) if globals_ else None
-    for part in parts[1:-1]:
+
+    def resolve_base():
+        base = globals_.get(parts[0]) if globals_ else None
+        for part in parts[1:-1]:
+            if base is None:
+                break
+            base = getattr(base, part, None)
         if base is None:
-            break
-        base = getattr(base, part, None)
-    if base is None:
-        base = _sys.modules.get(base_path)
-    module_name = _clausal_module_name_of(base)
+            base = _sys.modules.get(base_path)
+        return base
 
     def dispatch(*args):
-        from clausal.logic.exceptions import (  # noqa: PLC0415
-            LogicException, dangling_handle_indicator_and_why,
-            existence_error,
-        )
+        base = resolve_base()
+        module_name = _clausal_module_name_of(base)
         if module_name is not None:
             from clausal.logic.atoms import mangle  # noqa: PLC0415
             from clausal.logic.predicate import _dispatch_at  # noqa: PLC0415
             return _dispatch_at(mangle(module_name, name), arity, db)(*args)
-        indicator, why = dangling_handle_indicator_and_why(
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            dangling_handle_indicator_and_why,
+        )
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            PredicateNotFoundError,
+        )
+        _indicator, why = dangling_handle_indicator_and_why(
             base_path, name, arity, loaded=False)
         if base is not None:
             why = f"{name}/{arity} is not a predicate of {base_path!r}"
-        raise LogicException(existence_error(
-            "procedure", indicator,
-            f"{why} (a module-qualified call {dotted}/{arity})"))
+        raise PredicateNotFoundError(
+            f"{why} (a module-qualified call {dotted}/{arity})", name, arity)
     dispatch.__qualname__ = f"unresolved_qualified[{dotted}/{arity}]"
     return dispatch
 
