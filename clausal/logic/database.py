@@ -572,6 +572,17 @@ class Database:
         self._adopted: dict[tuple[str, int], PredRow] = {}
         self.module_dict: dict | None = module_dict
 
+    def _home_stores(self) -> tuple:
+        """The containers whose keys make a predicate KNOWN here besides a
+        materialised row: ``row()``'s ``known`` test, and every scan that must
+        agree with it (``owned_keys``, ``arities_for``, ``functors``,
+        ``is_predicate_name``).  One list, so a new store cannot be added to
+        one reader and missed by another -- missing it in ``owned_keys``
+        would silently leave a static predicate unlocked.
+        """
+        return (self._clauses, self._dispatch, self._lazy_recompile,
+                self._signatures, self._dynamic)
+
     def arities_for(self, functor: str) -> "set[int]":
         """Every arity this database knows *functor* at.
 
@@ -582,8 +593,7 @@ class Database:
         consults, so the two agree about what "this database knows it" means.
         """
         found = {a for (f, a) in self._rows if f == functor}
-        for keyed in (self._clauses, self._dispatch, self._lazy_recompile,
-                      self._signatures, self._dynamic):
+        for keyed in self._home_stores():
             found |= {a for (f, a) in keyed if f == functor}
         return found
 
@@ -614,8 +624,7 @@ class Database:
         DATA, never predicate (see ``declared_kind``).
         """
         for keyed in (self._rows, self._adopted, self._predicate_export,
-                      self._clauses, self._dispatch, self._lazy_recompile,
-                      self._signatures, self._dynamic):
+                      *self._home_stores()):
             for (f, _a) in keyed:
                 if f == functor:
                     return True
@@ -639,10 +648,25 @@ class Database:
         """
         found = {f for (f, _a) in self._rows}
         found |= {f for (f, _a) in self._adopted}
-        for keyed in (self._clauses, self._dispatch, self._lazy_recompile,
-                      self._signatures, self._dynamic):
+        for keyed in self._home_stores():
             found |= {f for (f, _a) in keyed}
         return sorted(found)
+
+    def owned_keys(self) -> "set[tuple[str, int]]":
+        """Every ``(functor, arity)`` this database is the HOME of.
+
+        The same containers ``row()``'s own ``known`` test consults, and
+        deliberately NOT ``_adopted``: a row adopted at ``-import_from`` is
+        another database's, and a question asked of it here (``is_dynamic``,
+        say) is answered by the wrong database.  Keyed off the store, never
+        off ``module_dict``, so it answers the same whatever a predicate's
+        module binding looks like -- a class today, a mangled atom after the
+        PredicateMeta retirement flip.
+        """
+        found = set(self._rows)
+        for keyed in self._home_stores():
+            found.update(keyed)
+        return found
 
     def adopt_row(self, local_functor: str, arity: int, row: "PredRow") -> bool:
         """Make ``(local_functor, arity)`` resolve to an existing *row* that
@@ -695,13 +719,7 @@ class Database:
         existing = self._rows.get(key)
         if existing is not None:
             return existing
-        known = (
-            key in self._clauses
-            or key in self._dispatch
-            or key in self._lazy_recompile
-            or key in self._signatures
-            or key in self._dynamic
-        )
+        known = any(key in keyed for keyed in self._home_stores())
         if not known:
             # A row this module ADOPTED at import answers a read -- that is
             # what makes ``db.row(functor, arity)`` a correct answer to "what

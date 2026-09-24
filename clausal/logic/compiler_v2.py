@@ -466,32 +466,7 @@ def compile_module(
     _run_specialization(module_items, predicate_nodes, module_dict, db)
 
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
-    #
-    # ONLY names this Database actually holds a row for.  The walk sees every
-    # value in the module dict, and plenty of them are ``PredicateMeta`` with
-    # ``_fields`` while being no predicate of this Database: declared data
-    # functors (the P4 prerequisite mints a row only for a functor a directive
-    # names as a PREDICATE), the CLP(B) constraint term classes, and a hook
-    # name like ``term_expansion`` that is present but defined elsewhere.
-    #
-    # Locking one of those used to MINT A DETACHED ROW as a side effect --
-    # ``_locked`` was a facade over ``(cls._row or cls._detached_row())`` -- and
-    # then wrote the lock into a private single-predicate Database nobody else
-    # can reach.  So the lock had no enforcement effect: the refusal path is
-    # ``database.write_refusal(row, ...)`` reading ``row.locked`` off the REAL
-    # row, and ``compiler/globals_env.py`` and ``compiler/arg_index.py`` both
-    # already spell the same test as ``row is None or not row.locked``.
-    # Measured over the house suite before narrowing this: 897 detached rows
-    # minted across 157 names, and 31 ``_locked`` reads in the whole suite, of
-    # which the only engine-side readers on a detached class were ``__repr__``
-    # and the instance read-through shim -- neither an enforcement path.
-    for obj in module_dict.values():
-        if isinstance(obj, PredicateMeta) and hasattr(obj, '_fields'):
-            key = (obj.__name__, len(obj._fields))
-            if db.row(*key) is None:
-                continue        # not a predicate of this Database; nothing to lock
-            if not db.is_dynamic(*key):
-                obj._lock()
+    _lock_static_predicates(db)
 
     return logic_module
 
@@ -878,6 +853,48 @@ def _imported_class_by_canonical_name(origins: dict, db, functor: str,
     if bound is None or len(bound._fields or ()) != arity:
         return None
     return bound if _belongs_elsewhere(bound, db) else None
+
+
+def _lock_static_predicates(db) -> int:
+    """Load step 7: lock every static predicate this Database OWNS; return
+    how many rows it locked.
+
+    A locked row is what refuses a runtime ``assertz``/``retract`` on a
+    static procedure (``database.write_refusal`` reads ``row.locked``), so a
+    selector that quietly selects nothing leaves every static predicate
+    mutable with no error anywhere.  That is why the population is
+    ``db.owned_keys()`` and not the module dict.  This loop used to walk
+    ``module_dict.values()`` filtering on ``isinstance(obj, PredicateMeta)``,
+    which selects nothing once a predicate's module binding is a mangled
+    atom (todo/the-lock-loop-stops-selecting-after-the-flip-2026-09-24.md).
+
+    Measured over the house suite (3641 module loads, 2026-09-24) against
+    that walk, the store-keyed population differs in three ways, each a
+    correction:
+
+    * an IMPORTED row is not locked here.  205 imported static rows were
+      already locked by their owner's own step 7; the one that was not is a
+      ``-dynamic`` predicate, which the walk then locked -- asking
+      ``is_dynamic`` of the IMPORTER's database, which never holds the
+      owner's declaration -- so after a module imported it, even the owner's
+      own ``assertz`` was refused.
+    * an owned static row whose name is bound as an ATOM (a name that is
+      also a data atom) is locked; the walk never saw it.
+    * an owned static row is locked even when the class bound under its
+      name carries a different row; the walk locked that other row instead.
+
+    Locking an imported row is its OWNER's job alone.  An owner that never
+    ran this step -- rows built directly in Python rather than loaded
+    through ``compile_module`` -- is no longer locked as a side effect of
+    some module importing it.
+    """
+    locked = 0
+    for key in db.owned_keys():
+        if db.is_dynamic(*key):
+            continue
+        db.row(*key).locked = True
+        locked += 1
+    return locked
 
 
 def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
