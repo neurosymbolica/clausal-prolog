@@ -732,6 +732,19 @@ def _inject_resolved_targets(
                 # time instead of a NameError.
                 base_globals[target_name] = resolved
             continue
+        # Name + ARITY ruling, review round: a PREDICATE binding (class or
+        # handle) at another arity, and this db has its own ``name/arity``
+        # row -- the local predicate wins, AHEAD of a same-named builtin, as
+        # ``solve.call`` does at run time.  A class's ``_fields`` can be
+        # stale (``PredicateMeta._clause_arity``), so the binding may even BE
+        # this row's predicate; either way the row is what the call means.
+        # Narrow on purpose: an ATOM binding keeps its builtin-first order.
+        if (existing is not None and is_declared_predicate_name(existing)
+                and _atom_shadows_row(existing, db, target_name,
+                                      target_arity)):
+            base_globals[target_name] = _DbDispatchAdapter(
+                db, target_name, target_arity)
+            continue
         builtin = get_builtin_predicate(target_name, target_arity, db)
         if builtin is not None:
             _merge_builtin(base_globals, target_name, builtin)

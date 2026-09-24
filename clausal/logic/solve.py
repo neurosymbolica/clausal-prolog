@@ -1149,7 +1149,7 @@ def call(
         # class or handle alike -- is this call's target only at its own
         # arity (``globals_env._is_call_target``, the compile-time twin of
         # this lookup).  At another arity the call resolves NORMALLY:
-        # Phase 6's builtin, then this module's own db row.  Only when
+        # this module's own db row, then the builtin.  Only when
         # neither answers is the binding consulted after all (below), and
         # it then reports the arity -- the same order ``globals_env.
         # _inject_resolved_targets`` bakes into a compiled call site.
@@ -1164,6 +1164,16 @@ def call(
             # message rather than a TypeError about a missing `trail`.  Via
             # _dispatch_at, because pred_cls need not be a PredicateMeta.
             dispatch_fn = _dispatch_at(pred_cls, arity)
+
+    # Name + ARITY ruling, review round: the calling module's OWN predicate
+    # at the call arity wins over a same-named builtin (``get_dispatch`` asks
+    # the row first, the builtin registry only after).  A class's ``_fields``
+    # can be stale (see ``PredicateMeta._clause_arity``), so "declared at
+    # another arity" may be wrong about a class whose clauses ARE at this
+    # arity; asking the local row before Phase 6 keeps that predicate
+    # answering instead of a builtin sharing its name.
+    if other_arity_binding is not None:
+        dispatch_fn = module.db.get_dispatch(functor, arity)
 
     # Phase 6: try builtins before Database fallback.
     if dispatch_fn is None and module is not None:

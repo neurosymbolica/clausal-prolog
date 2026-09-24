@@ -132,39 +132,90 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
 @pytest.mark.parametrize("era", ["class", "handle"])
 def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
         tmp_path, monkeypatch, era):
-    """Name + ARITY ruling: the module's own ``ping/2`` answers a ``ping/2``
-    call made through its ``ping/0`` binding.  Before the ruling the eras
-    DISAGREED here: the handle arm answered (``get_dispatch`` found the row)
-    while the class arm refused off the ``ping/0`` clause heads.
+    """Name + ARITY ruling: a module's ``ping/0`` and its ``ping/2`` are two
+    predicates, and each binding answers each arity.  Before the ruling the
+    eras DISAGREED here: the handle arm answered while the class arm
+    refused.
 
-    One file cannot define both ``ping/0`` and ``ping/2`` (one name, one
-    arity, refused at load), so the ``ping/2`` row is installed on the
-    owner's db with ``set_dispatch``, borrowing a compiled ``ping/2`` from a
-    second module."""
+    The ``ping/2`` row is built by a real runtime ``assertz(ping(1, 2))``.
+    (Not ``-dynamic(ping/2)`` in the file: that plus ``ping <- ...`` crashes
+    at load on main too -- a separate defect the controller is filing.  One
+    file cannot author both ``ping/0`` and ``ping(1, 2)`` either: one name,
+    one arity per file.)  The assertz RE-BINDS the ``ping`` class to the
+    ``ping/2`` row, so the class-era ``ping/0`` call is the one the class-arm
+    fallback has to rescue."""
     from clausal.logic.predicate import PredicateMeta
     from clausal.logic.solve import _drive_trampoline, call as _call
-    from clausal.logic.variables import Trail, Var
+    from clausal.logic.variables import Trail
+    from clausal.terms import Compound
     name = f"f7_ownrow_{era}"
     mod = _load(tmp_path, monkeypatch, name, """
         -module(NAME, [])
         ping <- (1 > 0)
     """.replace("NAME", name))
-    donor = _load(tmp_path, monkeypatch, f"{name}_donor", """
-        -module(NAME_donor, [])
-        ping(1, 2),
-    """.replace("NAME", name))
-    M, D = mod.__dict__["$module"], donor.__dict__["$module"]
-    list(_call("ping", 1, Var(), module=D))              # compile it
-    M.db.set_dispatch("ping", 2, D.db.get_dispatch("ping", 2))
+    M = mod.__dict__["$module"]
+    assert M.db.row("ping", 2) is None
+    assert len(list(_call("assertz", Compound("ping", (1, 2)), module=M))) == 1
+    assert len(M.db.row("ping", 2).clauses) == 1
     cls = M.module_dict["ping"]
     assert isinstance(cls, PredicateMeta) and cls._fields == ()
-    assert cls._row is not None and cls._row._key == ("ping", 0)
     target = cls if era == "class" else mangle(name, "ping")
     fn = _dispatch_at(target, 2)
     assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
     assert len(list(_drive_trampoline(fn, Trail(), 1, 3))) == 0
     # and ping/0 is still ping/0
     assert len(list(_drive_trampoline(_dispatch_at(target, 0), Trail()))) == 1
+
+
+def test_an_aliased_import_resolves_the_other_arity_in_the_OWNER_under_the_OWNER_name(
+        tmp_path, monkeypatch):
+    """Review round: pins WHICH module and WHICH name the class-arm fallback
+    resolves in.  ``alim`` does ``-import_from(alow, [alias(numlist, nl)])``;
+    ``alow``'s ``numlist/1`` is bound in ``alim`` as ``nl``.
+
+    * The CLASS (the object ``alim`` binds) resolves ``/2`` in ``alow``,
+      under ``alow``'s name ``numlist`` -- so it reaches the builtin
+      ``numlist/2``.  The OWNER handle ``alow:numlist`` agrees.
+    * The IMPORTER handle ``alim:nl`` does NOT: ``alim`` has no ``nl/2`` row
+      and no builtin is called ``nl``, so it refuses.
+
+    So the two eras agree only if the W4b-2d flip binds an import to the
+    OWNER handle.  Parked for a ruling: todo/aliased-import-other-arity-
+    resolves-in-the-owner-2026-09-24.md.  This test pins today's behaviour
+    so a change to either side is seen."""
+    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.solve import _drive_trampoline, call as _call
+    from clausal.logic.variables import Trail, Var, deref
+    _load(tmp_path, monkeypatch, "f7_alow", """
+        -module(f7_alow, [numlist(A)])
+        numlist(1),
+    """)
+    imp = _load(tmp_path, monkeypatch, "f7_alim", """
+        -module(f7_alim, [])
+        -import_from(f7_alow, [alias(numlist, nl)])
+    """)
+    I = imp.__dict__["$module"]
+    cls = I.module_dict["nl"]
+    assert isinstance(cls, PredicateMeta)
+    assert cls._row._key == ("numlist", 1)                 # the OWNER's row
+    assert cls._row._db is sys.modules["f7_alow"].__dict__["$module"].db
+
+    def _answers(target):
+        out = Var()
+        return [deref(out) for _ in
+                _drive_trampoline(_dispatch_at(target, 2), Trail(), 3, out)]
+
+    assert _answers(cls) == [[1, 2, 3]]
+    assert _answers(mangle("f7_alow", "numlist")) == [[1, 2, 3]]
+    with pytest.raises(PredicateArityMismatchError, match="nl"):
+        _dispatch_at(mangle("f7_alim", "nl"), 2)
+    # and through solve.call in the importer (class era): the last resort
+    # hands the binding to _dispatch_at, so the owner answers here too.
+    out = Var()
+    assert [deref(out) for _ in _call("nl", 3, out, module=I)] == [[1, 2, 3]]
+    # the imported arity is untouched in every shape
+    for t in (cls, mangle("f7_alow", "numlist"), mangle("f7_alim", "nl")):
+        assert len(list(_drive_trampoline(_dispatch_at(t, 1), Trail(), 1))) == 1
 
 
 def test_a_foreign_duck_typed_implementor_is_still_called_bare():

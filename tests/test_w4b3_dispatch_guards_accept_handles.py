@@ -88,6 +88,36 @@ def owner(tmp_path):
         sys.modules.pop(name, None)
 
 
+_STALE_SRC = """\
+-module({name}, [])
+last <- (1 > 0)
+"""
+
+
+@pytest.fixture
+def stale(tmp_path):
+    """A module whose ``last`` CLASS has STALE ``_fields``: it is authored as
+    ``last/0``, then a real ``assertz(last(1, 1))`` adds a ``last/2`` row and
+    the class is re-bound to it -- ``_fields == ()`` while the row (and its
+    clause heads) are ``last/2``.  ``last/2`` is also a BUILTIN, so a lookup
+    that trusts ``_fields`` hands the module's own predicate to the builtin.
+    (The staleness is what ``PredicateMeta._clause_arity`` exists for.)"""
+    from clausal.terms import Compound
+    name = f"w4b3stale_{next(_counter)}"
+    p = tmp_path / f"{name}.clausal"
+    p.write_text(_STALE_SRC.format(name=name))
+    mod = _load_module(name, str(p))
+    m = mod.__dict__["$module"]
+    try:
+        assert len(list(call("assertz", Compound("last", (1, 1)), module=m))) == 1
+        cls = m.module_dict["last"]
+        assert isinstance(cls, PredicateMeta)
+        assert cls._fields == () and cls._row._key == ("last", 2)   # STALE
+        yield m
+    finally:
+        sys.modules.pop(name, None)
+
+
 def _handle(lm, name):
     """The post-flip binding for *name*, checked to BE that shape."""
     h = mangle(lm.name, name)
@@ -176,6 +206,31 @@ class TestSolveCallPhase5:
         monkeypatch.setitem(lm.module_dict, "ping", b)
         assert len(list(call("ping", 1, 2, module=lm))) == 1
         assert len(list(call("ping", 1, 3, module=lm))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_the_local_row_beats_a_builtin_at_another_arity(
+            self, lm, owner, monkeypatch, era):
+        """Review round: ``lm`` binds ``last`` to ``owner``'s ``last/1`` and
+        has its OWN ``last/2``, which shares the builtin's name and arity.
+        The local predicate answers, not the builtin: ``last([5], 5)`` is
+        false for ``lm``'s one fact ``last(1, 1)``."""
+        b = TestInjectResolvedTargets._owner_binding(owner, "last", era)
+        monkeypatch.setitem(lm.module_dict, "last", b)
+        assert len(list(call("last", 1, 1, module=lm))) == 1
+        assert len(list(call("last", [5], 5, module=lm))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_stale_fields_class_keeps_its_local_predicate(
+            self, stale, monkeypatch, era):
+        """Review round: the ``last`` class says ``/0`` but its clauses are
+        ``/2``.  ``call("last", A, B)`` must reach the module's own ``last/2``,
+        not the builtin ``last/2`` -- both eras (the handle is not stale)."""
+        if era == "handle":
+            monkeypatch.setitem(stale.module_dict, "last",
+                                _handle(stale, "last"))
+        assert len(list(call("last", 1, 1, module=stale))) == 1
+        assert len(list(call("last", [5], 5, module=stale))) == 0
+        assert len(list(call("last", module=stale))) == 1       # last/0
 
     def test_wrong_arity_still_refuses(self, lm, monkeypatch):
         with pytest.raises(PredicateArityMismatchError):
@@ -388,6 +443,53 @@ class TestInjectResolvedTargets:
         assert isinstance(target, _DbDispatchAdapter)
         fn = _dispatch_at(target, 2)
         assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_local_row_beats_a_builtin_at_another_arity(self, lm, owner, era):
+        """Review round: ``lm`` has its own ``last/2``; the binding is
+        ``owner``'s ``last/1``.  The local row wins AHEAD of the builtin
+        ``last/2`` -- the same order ``solve.call`` uses at run time."""
+        from clausal.logic.builtins import BuiltinPredicate
+        from clausal.logic.compiler.globals_env import (
+            _DbDispatchAdapter, _inject_resolved_targets,
+        )
+        from clausal.logic.predicate import _dispatch_at
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        b = self._owner_binding(owner, "last", era)
+        assert lm.db.row("last", 2) is not None
+        globals_ = dict(lm.module_dict)
+        globals_["last"] = b
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("last", 2)}, base_globals, lm.db, globals_)
+        target = base_globals["last"]
+        assert not isinstance(target, BuiltinPredicate)
+        assert isinstance(target, _DbDispatchAdapter)
+        fn = _dispatch_at(target, 2)
+        assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_stale_fields_class_is_not_shadowed_by_a_builtin(
+            self, stale, era):
+        """Review round: compile-time twin of the ``solve.call`` stale test.
+        The class's ``_fields`` say ``/0``, its row is ``/2``; the call site
+        ``last/2`` must compile to the module's own predicate."""
+        from clausal.logic.builtins import BuiltinPredicate
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        from clausal.logic.predicate import _dispatch_at
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        globals_ = dict(stale.module_dict)
+        if era == "handle":
+            globals_["last"] = _handle(stale, "last")
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("last", 2)}, base_globals, stale.db, globals_)
+        target = base_globals["last"]
+        assert not isinstance(target, BuiltinPredicate)
+        fn = _dispatch_at(target, 2)
+        assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_a_builtin_beats_a_binding_at_another_arity(self, lm, owner, era):
