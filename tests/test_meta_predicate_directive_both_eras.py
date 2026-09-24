@@ -454,3 +454,92 @@ def test_phrase_resolves_m_colon_a_nonterminal_class(glib):
     for g in ("greet", (":", f"mgdom_{era}", "greet"), nt,
               (":", f"mgdom_{era}", nt)):
         assert _n(D, "parse_with", g, ["h", "i"]) == 1, g
+
+
+# ── A lambda as a meta-argument (2026-09-25) ───────────────────────────────
+#
+# Found in a trial: an inline lambda handed to a meta-declared argument raised
+# ``NameError: name 'U' is not defined`` (a Python error, not a logic one).
+# Root cause: the lambda-hoisting walk (``control_constructs.
+# _hoist_lambdas_in_term``) did not descend into the ``MetaArg`` marker, so
+# the lambda reached ``term_to_ast_expr`` as a raw ``Lambda`` node and its
+# parameter names were referenced in the CALLER's scope.  A lambda literal is
+# now not wrapped at all (a closure compiled in its defining module, whose
+# body's names resolve there -- Scryer qualifies a yall lambda with its
+# defining module), and the walk hoists inside the marker for a lambda nested
+# in a compound.
+
+_LLIB = """
+    -module(mllib_ERA, [e0(G), e1(G, X), e2(G, X, Y), e3(G, X, Y, Z),
+                        h1(X, G, V), h2(X, G, V), h3(X, G, V), cprobe(M, Q),
+                        decide(B, V)])
+    -meta_predicate(e0(0), e1(1, '?'), e2(2, '?', '?'), e3(3, '?', '?', '?'),
+                    h1('?', 2, '?'), h2('?', 2, '?'), h3('?', 2, '?'),
+                    cprobe(':', '?'))
+    -private([lib_version])
+    e0(G) <- call_goal(G),
+    e1(G, X) <- call_goal(G, X),
+    e2(G, X, Y) <- call_goal(G, X, Y),
+    e3(G, X, Y, Z) <- call_goal(G, X, Y, Z),
+    h1(X, G, V) <- call_goal(G, X, V),
+    h2(X, G, V) <- h1(X, G, V),
+    h3(X, G, V) <- h2(X, G, V),
+    cprobe(M, Q) <- (Q is M),
+    decide(_B, lib_version),
+"""
+
+_LDOM = """
+    -module(mldom_ERA, [])
+    -import_from(mllib_ERA, [e0, e1, e2, e3, h1, h2, h3, cprobe])
+    -private([box(X), seen])
+    decide(B, V) <- (V is B),
+    mark(seen),
+    z0() <- e0((() <- mark(seen))),
+    z1(X) <- e1((A <- (A is 1)), X),
+    z2(Y) <- e2(((A, B) <- eval_(A + 1, B)), 1, Y),
+    z3(Z) <- e3(((A, B, C) <- eval_(A + B, C)), 1, 2, Z),
+    hop1(V) <- (K is 1000, h1(2, ((U, W) <- (eval_(U * K, B), decide(B, W))), V)),
+    hop2(V) <- (K is 1000, h2(2, ((U, W) <- (eval_(U * K, B), decide(B, W))), V)),
+    hop3(V) <- (K is 1000, h3(2, ((U, W) <- (eval_(U * K, B), decide(B, W))), V)),
+    nested(T) <- cprobe(box((A <- (A is 7))), T),
+"""
+
+
+@pytest.fixture(params=["class", "handle"])
+def llib(request, tmp_path, monkeypatch):
+    era = request.param
+    lib = _load(tmp_path, monkeypatch, f"mllib_{era}", _LLIB.replace("ERA", era))
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, lib.__dict__["$module"])
+    dom = _load(tmp_path, monkeypatch, f"mldom_{era}", _LDOM.replace("ERA", era))
+    return era, dom.__dict__["$module"]
+
+
+def test_a_lambda_with_zero_extras(llib):
+    _era, D = llib
+    assert _n(D, "z0") == 1
+
+
+@pytest.mark.parametrize("goal, want", [("z1", 1), ("z2", 2), ("z3", 3)])
+def test_a_lambda_with_one_to_three_extras(llib, goal, want):
+    _era, D = llib
+    assert _one(D, goal) == want
+
+
+@pytest.mark.parametrize("goal", ["hop1", "hop2", "hop3"])
+def test_a_lambda_through_one_to_three_meta_hops_with_a_captured_variable(llib, goal):
+    """K is captured from the enclosing clause; the body's bare ``decide``
+    is the DOMAIN's (the library exports a ``decide`` too, answering
+    ``lib_version``): a lambda resolves in its defining module."""
+    _era, D = llib
+    assert _one(D, goal) == 2000
+
+
+def test_a_lambda_nested_in_a_compound_in_a_colon_position(llib):
+    """The hoisting walk descends into the meta-argument marker: the compound
+    arrives qualified, with a callable closure inside, not a raw node."""
+    era, D = llib
+    q = _one(D, "nested")
+    assert q[:2] == (":", f"mldom_{era}")
+    functor, closure = q[2]
+    assert functor == "box" and callable(closure)
