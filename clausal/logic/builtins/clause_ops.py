@@ -187,20 +187,39 @@ def _is_goal_object(binding: Any) -> bool:
             and not isinstance(binding, (PredicateMeta, MultiArityBuiltin)))
 
 
-def _needs_cell(name: str, arity: int, namespace: dict) -> bool:
-    """True for a call term construction cannot build: a meta-call special
-    form, a name bound to a goal object, or a name bound to NOTHING -- no
-    module binding and no builtin: a procedure not (yet) defined, whose term
-    is still the cell (ISO: ``clause/2`` hands back the body as written)."""
+_MISSING = object()
+
+
+def _needs_cell(name: str, arity: int, namespace: dict, db=None) -> bool:
+    """True for a call term construction cannot build:
+
+    - a meta-call special form (``SPECIAL_FORMS``);
+    - a name bound to NOTHING -- no module binding and no builtin: a
+      procedure not (yet) defined, whose term is still the cell (ISO:
+      ``clause/2`` hands back the body as written).  "Nothing" is a missing
+      key, not a key bound to ``None``;
+    - a name bound to a goal object (``_is_goal_object``);
+    - a name bound to a predicate at ANOTHER arity: construction goes
+      through that binding and refuses the argument count, where the call
+      itself names ``name/arity`` -- a different procedure, spelled as the
+      cell.
+    """
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        binding_grants_arity, is_declared_predicate_name,
+    )
     if (name, arity) in SPECIAL_FORMS:
         return True
-    binding = namespace.get(name)
-    if binding is None:
+    binding = namespace.get(name, _MISSING)
+    if binding is _MISSING:
         return (name, arity) not in _BUILTINS and (name, arity) not in _DB_BUILTINS
-    return _is_goal_object(binding)
+    if _is_goal_object(binding):
+        return True
+    if isinstance(binding, PredicateMeta) or is_declared_predicate_name(binding, db=db):
+        return not binding_grants_arity(binding, arity, db, name)
+    return False
 
 
-def _spell_as_cells(t: Any, namespace: dict) -> Any:
+def _spell_as_cells(t: Any, namespace: dict, db=None) -> Any:
     """*t* with every goal term construction cannot build rewritten to the
     node that lowers to its CELL: ``Call(LoadName('findall'), [T, G, L])``
     becomes ``TupleLiteral(['findall', T, G, L])``, which term construction
@@ -209,23 +228,23 @@ def _spell_as_cells(t: Any, namespace: dict) -> Any:
     object when nothing below it changed."""
     import dataclasses  # noqa: PLC0415
     if type(t) is list:
-        new = [_spell_as_cells(e, namespace) for e in t]
+        new = [_spell_as_cells(e, namespace, db) for e in t]
         return t if all(a is b for a, b in zip(new, t)) else new
     if type(t) is tuple:
-        new = tuple(_spell_as_cells(e, namespace) for e in t)
+        new = tuple(_spell_as_cells(e, namespace, db) for e in t)
         return t if all(a is b for a, b in zip(new, t)) else new
     if not isinstance(t, nodes.Node) or not dataclasses.is_dataclass(t):
         return t
     if (type(t) is nodes.Call and type(t.func) is nodes.LoadName
             and not t.kwargs and _needs_cell(t.func.name, len(t.args),
-                                             namespace)):
+                                             namespace, db)):
         return nodes.TupleLiteral(
-            elements=[t.func.name] + [_spell_as_cells(a, namespace)
+            elements=[t.func.name] + [_spell_as_cells(a, namespace, db)
                                       for a in t.args])
     changed = {}
     for f in dataclasses.fields(t):
         v = getattr(t, f.name)
-        nv = _spell_as_cells(v, namespace)
+        nv = _spell_as_cells(v, namespace, db)
         if nv is not v:
             changed[f.name] = nv
     return dataclasses.replace(t, **changed) if changed else t
@@ -270,19 +289,21 @@ def _as_goal(goals: list) -> Any:
 
 
 class _Built:
-    """The compiled construction of one clause's ``(Head, Body)``.
+    """A compiled construction over one clause's own variables.
 
-    ``fn``/``params``: the query that runs ``body[:hoisted]`` (binding the
-    head's fresh variables to the arguments they replaced) and then
-    ``Out = <body remainder>``; ``None`` when there is nothing to run.
-    ``out``: the Body -- ``Out``, or ``True``.  ``why``: ``None``, or why the
-    body cannot be a term, in which case the query builds the HEAD only.
+    ``direct``: ``(Var, value)`` pairs bound straight onto the private trail
+    -- a hoisted ``Unify`` whose argument is plain data needs no compile.
+    ``fn``/``params``: the query that runs the rest (``None`` when nothing
+    is left): the non-plain hoisted goals, then ``Out = <body remainder>``.
+    ``out``: the Body -- ``Out``, ``True``, or ``None`` for a HEAD-only
+    construction.  ``why``: ``None``, or why the body cannot be a term.
     """
 
-    __slots__ = ("fn", "params", "out", "why")
+    __slots__ = ("direct", "fn", "params", "out", "why")
 
-    def __init__(self, fn, params, out, why):
-        self.fn, self.params, self.out, self.why = fn, params, out, why
+    def __init__(self, direct, fn, params, out, why):
+        self.direct, self.fn, self.params = direct, fn, params
+        self.out, self.why = out, why
 
 
 def _compile(goals: list, home_db):
@@ -300,92 +321,155 @@ def _compile(goals: list, home_db):
 # ``SyntaxError`` -- a lambda argument, say).
 _BUILD_ERRORS = (NameError, TypeError, NotImplementedError, SyntaxError)
 
+_PLAIN = (int, float, str, bool, bytes, type(None))
 
-# id(clause) -> (weakref to it, _Built).  Kept OFF the Clause, so a stored
-# clause never carries a compiled function (nothing that copies or pickles
-# one has to know about it); the weakref drops the entry with the clause.
+
+def _plain(v: Any) -> bool:
+    """Data that is its own term: an atomic value, or a list / tuple of
+    them.  Anything else -- a ``Call`` node, a ``PyThunk``, a Var -- goes
+    through the compiled construction."""
+    if type(v) in _PLAIN:
+        return True
+    if type(v) in (list, tuple):
+        return all(_plain(e) for e in v)
+    return False
+
+
+def _split_lead(lead: list) -> tuple:
+    """``(direct, rest)``: the leading hoisted ``Unify(V, plain)`` goals as
+    pairs, and the goals from the first one that is not."""
+    from clausal.terms import Unify  # noqa: PLC0415
+    direct = []
+    for i, g in enumerate(lead):
+        if type(g) is Unify and is_var(g.left) and _plain(g.right):
+            direct.append((g.left, g.right))
+        else:
+            return tuple(direct), list(lead[i:])
+    return tuple(direct), []
+
+
+# id(clause) -> (weakref to it, {"head": _Built, "full": _Built}).  Kept OFF
+# the Clause, so a stored clause never carries a compiled function (nothing
+# that copies or pickles one has to know about it); the weakref drops the
+# entry with the clause.
 _BUILT_CACHE: dict = {}
 
 
-def _built(clause, home_db, why: "str | None" = None) -> _Built:
-    """The construction for *clause*, compiled once and cached: it
+def _cache_for(clause) -> dict:
+    key = id(clause)
+    entry = _BUILT_CACHE.get(key)
+    if entry is not None and entry[0]() is clause:
+        return entry[1]
+    slot: dict = {}
+    _BUILT_CACHE[key] = (
+        weakref.ref(clause, lambda _r, k=key: _BUILT_CACHE.pop(k, None)), slot)
+    return slot
+
+
+def _head_built(clause, home_db) -> _Built:
+    """The HEAD-only construction: ``body[:hoisted]`` alone -- for a fact
+    table, just the direct pairs, no compile at all."""
+    slot = _cache_for(clause)
+    built = slot.get("head")
+    if built is None:
+        direct, rest = _split_lead(list(clause.body[:clause.hoisted]))
+        fn, params = _compile(rest, home_db)
+        built = slot["head"] = _Built(direct, fn, params, None, None)
+    return built
+
+
+def _full_built(clause, home_db, why: "str | None" = None) -> _Built:
+    """The construction of ``(Head, Body)``, compiled once and cached: it
     mentions only the clause's OWN variables, which never change, so one
-    compile serves every later ``clause/2`` call.  *why* forces the head-only
-    construction (after the full one failed at run time)."""
-    entry = _BUILT_CACHE.get(id(clause))
-    cached = entry[1] if entry is not None and entry[0]() is clause else None
+    compile serves every later ``clause/2`` call.  When the body has no term
+    form this is the head-only construction with *why* set; *why* forces
+    that (after the full one failed at run time)."""
+    slot = _cache_for(clause)
+    cached = slot.get("full")
     if cached is not None and (why is None or cached.why is not None):
         return cached
     from clausal.terms import Unify  # noqa: PLC0415
-    k = clause.hoisted
-    lead = list(clause.body[:k])
-    rest = list(clause.body[k:])
+    rest = list(clause.body[clause.hoisted:])
     if why is None:
         hit = _capturing_thunk(rest)
         if hit is not None:
             why = (f"its body holds the Python expression {hit!r}, which "
                    f"reads the clause's variables and so is not a term")
+    head = _head_built(clause, home_db)
     built = None
     if why is None:
         namespace = getattr(home_db, "module_dict", None) or {}
-        body = _as_goal([_spell_as_cells(g, namespace) for g in rest])
-        out = Var()
-        goals = lead if body is True else lead + [Unify(left=out, right=body)]
-        try:
-            fn, params = _compile(goals, home_db)
-        except _BUILD_ERRORS as exc:
-            why = f"its body cannot be built as a term ({exc})"
+        body = _as_goal([_spell_as_cells(g, namespace, home_db) for g in rest])
+        if body is True:
+            built = _Built(head.direct, head.fn, head.params, True, None)
         else:
-            built = _Built(fn, params, True if body is True else out, None)
+            _, lead = _split_lead(list(clause.body[:clause.hoisted]))
+            out = Var()
+            try:
+                fn, params = _compile(
+                    lead + [Unify(left=out, right=body)], home_db)
+            except _BUILD_ERRORS as exc:
+                why = f"its body cannot be built as a term ({exc})"
+            else:
+                built = _Built(head.direct, fn, params, out, None)
     if built is None:
-        fn, params = _compile(lead, home_db)
-        built = _Built(fn, params, None, why)
-    key = id(clause)
-    _BUILT_CACHE[key] = (
-        weakref.ref(clause, lambda _r, k=key: _BUILT_CACHE.pop(k, None)), built)
+        built = _Built(head.direct, head.fn, head.params, None, why)
+    slot["full"] = built
     return built
 
 
-def _run(built: _Built, head: Any):
-    """``(Head, Body)``, a fresh renaming, from one run of *built*."""
-    from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
+def _on_private_trail(built: _Built, then):
+    """Run *built* on a private trail, call ``then(tmp)`` with its bindings
+    in place, undo, and return what *then* returned.
+
+    The construction binds the STORED clause's variables, so nothing else
+    may see them bound -- a meta-interpreter calls clause/2 again, on the
+    same clause, while an answer is live."""
     from clausal.logic.solve import _drive_trampoline  # noqa: PLC0415
-    if built.fn is None:
-        return _copy_term((head, built.out), {})
-    # The construction binds the STORED clause's variables, so it runs on a
-    # private trail and is undone before anything else can see them -- a
-    # meta-interpreter calls clause/2 again, on the same clause, while this
-    # answer is live.
     tmp = Trail()
     mark = tmp.mark()
     try:
+        for v, value in built.direct:
+            unify(v, value, tmp)          # a fresh head Var: binds
+        if built.fn is None:
+            return then(tmp)
         for pv, value in built.params:
             unify(pv, value, tmp)
         for _ in _drive_trampoline(built.fn, tmp):
-            return _copy_term((head, built.out), {})
+            return then(tmp)
     finally:
         tmp.undo(mark)
     raise AssertionError(       # the goals only bind fresh variables
         f"{_CONTEXT}: building a stored clause failed")
 
 
+def head_matches(clause, home_db, cell) -> bool:
+    """Whether *clause*'s head, hoisted arguments put back, unifies with the
+    query head *cell* -- decided on the private trail, with nothing copied
+    and the body not built.  The filter that keeps ``clause(p(1), B)`` on a
+    large table from building every clause."""
+    head = _as_cell(clause.head)
+    return _on_private_trail(_head_built(clause, home_db),
+                             lambda tmp: bool(unify(cell, head, tmp)))
+
+
 def clause_terms(clause, home_db) -> tuple:
     """``(Head, Body, why)`` for *clause*: the head with its hoisted
     arguments put back and the body remainder as a term, both a FRESH
     renaming.  When the body cannot be a term, Body is ``None`` and *why*
-    says so; the head is still built, so a caller can tell whether the
-    clause is one it was asked about."""
+    says so."""
+    from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
     head = _as_cell(clause.head)
-    built = _built(clause, home_db)
+    built = _full_built(clause, home_db)
     if built.why is None:
         try:
-            h, b = _run(built, head)
+            h, b = _on_private_trail(
+                built, lambda tmp: _copy_term((head, built.out), {}))
             return h, b, None
         except _BUILD_ERRORS as exc:
-            built = _built(clause, home_db,
-                           why=f"its body cannot be built as a term ({exc})")
-    h, _ = _run(built, head)
-    return h, None, built.why
+            built = _full_built(clause, home_db,
+                                why=f"its body cannot be built as a term ({exc})")
+    return None, None, built.why
 
 
 # ── Head resolution ─────────────────────────────────────────────────────────
@@ -461,16 +545,18 @@ def _clause_factory(db):
         # The logical update view (ISO 7.5.4): the clauses as they are NOW;
         # an assertz/retract made while this iterates changes nothing here.
         for clause in list(row.clauses):
+            # Head first, cheaply: the body is built only for a clause the
+            # query selects.
+            if not head_matches(clause, home, cell):
+                continue
             c_head, c_body, why = clause_terms(clause, home)
+            if why is not None:
+                name, arity = row.key
+                raise _private(name, arity, (
+                    f"has a clause whose body has no term form -- {why}"))
             mark = trail.mark()
-            if unify(cell, c_head, trail):
-                if why is not None:
-                    trail.undo(mark)
-                    name, arity = row.key
-                    raise _private(name, arity, (
-                        f"has a clause whose body has no term form -- {why}"))
-                if unify(body, c_body, trail):
-                    yield None
+            if unify(cell, c_head, trail) and unify(body, c_body, trail):
+                yield None
             trail.undo(mark)
 
     return clause__2

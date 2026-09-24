@@ -176,6 +176,7 @@ def _control_heads():
         (nodes.Or(left=("p", X), right=("s", X)), (";", 2)),
         (nodes.IfExpr(test=("p", X), body=True, orelse=True), ("if_", 3)),
         (True, ("true", 0)),                    # both: true/0
+        (False, ("false", 0)),
         ("true", ("true", 0)),
         ("!", ("!", 0)),                        # both: !/0
         ("fail", ("fail", 0)),
@@ -531,3 +532,108 @@ def test_an_imported_dynamic_predicate_reads_the_owner_in_both_eras(
     got = _clause(ulm, ("gd_p", Var()))
     assert [h[1] for h, _ in got] == [1, 42]
     assert all(b is True for _, b in got)
+
+
+# ── round 2: the head filter, arity, late definitions, asserta ──────────────
+
+
+def _count_builds(monkeypatch):
+    from clausal.logic.builtins import clause_ops
+    counts = {"body": 0, "compile": 0}
+    real_terms, real_compile = clause_ops.clause_terms, clause_ops._compile
+
+    def terms(*a, **k):
+        counts["body"] += 1
+        return real_terms(*a, **k)
+
+    def compile_(goals, db):
+        if goals:
+            counts["compile"] += 1
+        return real_compile(goals, db)
+    monkeypatch.setattr(clause_ops, "clause_terms", terms)
+    monkeypatch.setattr(clause_ops, "_compile", compile_)
+    return counts
+
+
+def test_only_the_selected_clause_is_built(lm, monkeypatch):
+    """roborev: ``clause(big(500, V), B)`` over 1000 clauses must build the
+    body of the ONE clause whose head matches, not all 1000; a fact table's
+    head filter needs no compile at all."""
+    from clausal.logic.builtins.database_ops import _normalize_fact_clause
+    # The clause list is filled through the Database door: assertz/1 would
+    # recompile the dispatch after every one (quadratic), and clause/2 reads
+    # the clause list, never the dispatch.
+    for i in range(1000):
+        lm.db.assertz(_normalize_fact_clause(Compound("big", (i, i * 2))))
+    counts = _count_builds(monkeypatch)
+    V = Var()
+    got = _clause(lm, ("big", 500, V))
+    assert got == [(("big", 500, 1000), True)]
+    assert counts == {"body": 1, "compile": 0}, counts
+    # Positive control: an unrestricted query does build every clause.
+    assert len(_clause(lm, ("big", Var(), Var()))) == 1000
+    assert counts["body"] == 1001
+
+
+def test_only_the_selected_rule_is_built(monkeypatch, tmp_path):
+    """The same filter over RULES whose heads carry a hoisted compound: the
+    head-only construction compiles, the body is built once."""
+    name = "clause_2_many_rules"
+    src = ["-module(clause_2_many_rules, [])", "-private([k(A)])",
+           "-dynamic(r/2)", "-allow_singletons", "qq(1),"]
+    src += [f"r(k({i}), Y) <- qq(Y)," for i in range(300)]
+    src[-1] = src[-1].rstrip(",")
+    path = tmp_path / f"{name}.clausal"
+    path.write_text("\n".join(src) + "\n")
+    from clausal.import_hook import _load_module
+    sys.modules.pop(name, None)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            rlm = _load_module(name, str(path)).__dict__["$module"]
+        assert [c.hoisted for c in rlm.db.row("r", 2).clauses[:2]] == [1, 1]
+        counts = _count_builds(monkeypatch)
+        got = _clause(rlm, ("r", ("k", 150), Var()))
+        assert len(got) == 1 and got[0][1][0] == "qq"
+        assert counts["body"] == 1, counts
+    finally:
+        sys.modules.pop(name, None)
+
+
+def test_a_body_call_at_another_arity_is_its_cell(lm):
+    """roborev: the namespace binds ``mp`` to mp/1; a body calling mp/2 names
+    another procedure, and comes back as the cell -- not as a clause with
+    "no term form"."""
+    got = dict((h[1], b) for h, b in _clause(lm, ("ma", Var(), Var())))
+    assert got[1][0] == "mp" and len(got[1]) == 2
+    assert got[2][:2] == ("mp", 1) and len(got[2]) == 3
+
+
+def test_a_body_calling_a_procedure_defined_later(lm):
+    """``late(Y) <- later_def(Y)``: nothing defines later_def at load, so
+    its term is the cell; once assertz defines it, call(B) runs it."""
+    from clausal.logic.solve import call
+    (h, b), = _clause(lm, ("late", Var()))
+    assert b == ("later_def", h[1])
+    next(call("assertz", Compound("later_def", (7,)), module=lm))
+    Y, B = Var(), Var()
+    got = [deref(Y) for _ in call("cl", ("late", Y), B, module=lm)
+           for _ in call("call", B, module=lm)]
+    assert got == [7]
+
+
+def test_a_name_bound_to_none_is_not_an_unbound_name():
+    from clausal.logic.builtins.clause_ops import _needs_cell
+    assert _needs_cell("nothing_here", 1, {}) is True
+    assert _needs_cell("nothing_here", 1, {"nothing_here": None}) is False
+
+
+def test_an_asserta_fact_has_its_hoisted_arguments_put_back(lm):
+    from clausal.logic.solve import call
+    next(call("asserta", Compound("aa_new", (1, "x", Var())), module=lm))
+    next(call("asserta", Compound("aa_new", (2, "y", Var())), module=lm))
+    row = lm.db.row("aa_new", 3)
+    assert [c.hoisted for c in row.clauses] == [2, 2]
+    got = _clause(lm, ("aa_new", Var(), Var(), Var()))
+    assert [(h[1], h[2], b) for h, b in got] == [(2, "y", True), (1, "x", True)]
+    assert is_var(got[0][0][3])

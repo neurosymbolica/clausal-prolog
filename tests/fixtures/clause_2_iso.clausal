@@ -6,6 +6,10 @@
 -dynamic(lu/1)
 -dynamic(none/1)
 -dynamic(sp/2)
+-dynamic(fs/2)
+-dynamic(ma/2)
+-dynamic(late/1)
+-dynamic(big/2)
 -allow_singletons
 
 # Static (locked): clause/2 refuses it with permission_error.
@@ -58,6 +62,14 @@ cl(H, B) <- clause(H, B)
 
 # A body with a Python expression that reads the clause's variables has no
 # term form: clause/2 refuses the clause, but only when the head matches.
--dynamic(fs/2)
 fs(1, Y) <- (Y is f"v{Y}"),
 fs(2, Y) <- p(Y)
+
+# A body call at an arity the name's binding does not have (mp is bound to
+# mp/1): the term is the cell mp(1, Y), not a failed construction.
+mp(1),
+ma(1, Y) <- mp(Y),
+ma(2, Y) <- mp(1, Y)
+
+# A body calling a procedure nothing defines at load time.
+late(Y) <- later_def(Y)
