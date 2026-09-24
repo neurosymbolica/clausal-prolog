@@ -1,8 +1,10 @@
-# Implements a functor imported from a DECLARATION-ONLY module.  The owner has
-# no clauses, so nothing is destroyed — this shape must keep loading.
+# DEFINES and exports impclob_verdict/2.  It used to import the name from the
+# declaration-only impclob_decl_vocab and supply its clauses there -- the
+# "vocabulary-implements" idiom, dropped 2026-09-24.  This is the migration
+# the refusal's remedy names: the definition lives in the implementing
+# module, and users import it from here (impclob_verdict_user.clausal).
 -private([ok, cited])
--module(impclob_implements, [impclob_check(STATUS)])
--import_from(tests.fixtures.impclob_decl_vocab, [impclob_verdict])
+-module(impclob_implements, [impclob_verdict(STATUS, CITATION), impclob_check(STATUS)])
 
 impclob_verdict(ok, cited),
 

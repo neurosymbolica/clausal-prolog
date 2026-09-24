@@ -172,8 +172,10 @@ def test_a_local_definition_takes_over_a_name_that_was_adopted_first():
     Imports are processed at step 0, BEFORE any local clause is compiled, so
     "never displace an existing entry" cannot protect a module that imports a
     name and then defines its own predicate under it -- at plant time there is
-    nothing to displace yet. `tests/fixtures/fnmismatch_use.clausal` is exactly
+    nothing to displace yet. `tests/fixtures/fnmismatch_use.clausal` was exactly
     that module, and its local clause silently stopped producing solutions.
+    (Its load is refused since 2026-09-24 -- the "vocabulary-implements" idiom
+    was dropped -- but the Database rule pinned here stands on its own.)
 
     The rule that makes the ordering irrelevant: a WRITE (`create=True`) always
     lands on a row this database owns.

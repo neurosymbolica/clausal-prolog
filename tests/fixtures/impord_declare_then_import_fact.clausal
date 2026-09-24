@@ -1,11 +1,15 @@
+# clausal: no-collect
 # Declare-then-import where the head is a bodyless FACT
 # (_build_fact_statements, the path the original bug report hit).  The local
 # declaration spells the fields (STATUS, CITATIONS); the import rebinds
 # impord_fverdict to the vocab's class, whose fields are the (arg_0, arg_1)
 # placeholders of its bare `impord_fverdict/2` export.  Emitted positionally,
-# `maybe` lands in slot 0 and `pending` in slot 1.  The local ROW is labelled
-# by this module's declaration, (STATUS, CITATIONS), not by the class
-# (tests/test_step4_row_stamps.py).
+# `maybe` lands in slot 0 and `pending` in slot 1.
+#
+# Since 2026-09-24 the LOAD is refused: impord_fact_vocab only declares
+# impord_fverdict/2, and supplying its clauses downstream (the
+# "vocabulary-implements" idiom) was dropped.  Kept as the fixture that shows
+# the refusal, not a field-name TypeError, is what stops it.
 -private([maybe, pending])
 -module(impord_declare_then_import_fact, [impord_fverdict(STATUS, CITATIONS)])
 -import_from(tests.fixtures.impord_fact_vocab, [impord_fverdict])

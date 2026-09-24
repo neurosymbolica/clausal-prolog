@@ -6,9 +6,14 @@
 # follows rebinds the name to the exporter's directive-minted class, whose
 # fields are ('arg_0', 'arg_1').  The fact below USED to be constructed with
 # the LOCAL field names against the FOREIGN class and raise; heads for an
-# imported functor are now emitted positionally, so it loads.  Kept
-# no-collect only because it is loaded explicitly, twice, by
-# tests/test_functor_import_ordering.py.
+# imported functor are now emitted positionally, so the module body runs.
+#
+# Since 2026-09-24 the LOAD is refused: fnmismatch_schema only declares
+# fnm_verdict/2 (-dynamic, no clauses), and supplying its clauses downstream
+# (the "vocabulary-implements" idiom) was dropped.  Kept no-collect as the
+# fixture showing that refusal -- not a field-name TypeError -- is what stops
+# it (tests/test_functor_import_ordering.py,
+# tests/test_functor_field_name_diagnostic.py).
 -module(fnmismatch_use, [fnm_verdict(STATUS, CITATIONS), fnm_chk(RESULT)])
 -import_from(tests.fixtures.fnmismatch_schema, [fnm_verdict])
 

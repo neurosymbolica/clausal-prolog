@@ -679,7 +679,8 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     # so that term_to_ast_expr can reference them in the compiled code.
     extra_globals.update(_collect_types_from_term(goal))
 
-    def _query_body_compiler(clause: Clause, var_context: dict) -> list:
+    def _query_body_compiler(clause: Clause, var_context: dict,
+                             ctx_template=None) -> list:
         # Pre-populate var_context so _preallocate_body_vars skips user Vars
         # and term_to_ast_expr references them by name (→ global) rather than
         # emitting a walrus that creates a new Var().
@@ -691,7 +692,17 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # ``ast.Constant`` and is never re-resolved by name in the callee's
         # namespace, so it cannot land on a same-named predicate there — the
         # by-identity lowering this comment used to describe is deleted.
-        return compile_body_trampoline(clause.body, db, var_context, "trail")
+        # With the compile's own ctx (``accepts_ctx_template`` below): a call
+        # site the target resolution routed through a ``$disp_`` entry -- the
+        # name+arity ruling's other-arity dispatcher for a name bound to an
+        # imported predicate at another arity, or a locked predicate -- is
+        # emitted through it, exactly as in a compiled clause.  Without it
+        # the query emitted ``$dispatch_at(name, N)`` on the BINDING, which
+        # resolves another arity in the binding's owner, not in this module.
+        return compile_body_trampoline(clause.body, db, var_context, "trail",
+                                       ctx=ctx_template)
+
+    _query_body_compiler.accepts_ctx_template = True
 
     dummy_head = Compound("_query", ())
     clause = Clause(head=dummy_head, body=[goal])
@@ -1154,18 +1165,18 @@ def call(
         # neither answers does the call refuse (below) -- the same order
         # ``globals_env._inject_resolved_targets`` bakes into a compiled
         # call site.
-        if pred_cls is not None and is_declared_predicate_name(pred_cls) \
+        if pred_cls is not None and is_declared_predicate_name(pred_cls, db=module.db) \
                 and not binding_grants_arity(pred_cls, arity, module.db,
                                              functor):
             other_arity_binding = pred_cls
         elif pred_cls is not None and (
                 hasattr(pred_cls, '_get_dispatch')
-                or is_declared_predicate_name(pred_cls)):
+                or is_declared_predicate_name(pred_cls, db=module.db)):
             # Pass the arity: call("citation", A, B) against citation/3 is the
             # same fault as writing it in a clause body, and gets the same
             # message rather than a TypeError about a missing `trail`.  Via
             # _dispatch_at, because pred_cls need not be a PredicateMeta.
-            dispatch_fn = _dispatch_at(pred_cls, arity)
+            dispatch_fn = _dispatch_at(pred_cls, arity, module.db)
 
     # Name + ARITY ruling, review round: the calling module's OWN predicate
     # at the call arity wins over a same-named builtin (``get_dispatch`` asks

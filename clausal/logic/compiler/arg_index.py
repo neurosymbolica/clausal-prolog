@@ -557,7 +557,7 @@ def hint_row(
         # this is the same two-step the original code made: fetch, then
         # check the ROW's own key.
         obj = base_globals.get(fname)
-        cand = resolve_predicate_row(obj, arity=arity)
+        cand = resolve_predicate_row(obj, arity=arity, db=db)
         if cand is not None and cand.key[1] == arity:
             row = cand
     if row is None or not row.locked:
