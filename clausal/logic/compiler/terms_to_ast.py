@@ -48,6 +48,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.atoms import (
     is_atom as _term_is_atom,
+    is_mangled as _is_mangled,
     mint as _mint_atom,
     spelling as _atom_spelling,
 )
@@ -766,7 +767,10 @@ def term_to_ast_expr(
     # answer depends on load state -- the same dependency every
     # ``is_declared_predicate_name`` caller has.  See
     # todo/done/self-denoting-predicate-atom-spelling-post-flip-mangled-or-plain-2026-09-24.md.
-    if type(term) is str:
+    # Only a MANGLED str can be a predicate handle (a class never reaches this
+    # arm), so a plain string -- the common case -- pays one ``in`` test, not
+    # a lowering-scope db lookup.
+    if type(term) is str and _is_mangled(term):
         _pred_name = predicate_binding_name(term, db=_lowering_db())
         if _pred_name is not None:
             return ast.Constant(value=_mint_atom(_pred_name))

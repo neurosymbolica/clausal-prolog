@@ -253,7 +253,63 @@ def test_a_legitimate_unresolvable_hide_atom_round_trips():
     import subprocess
     import sys
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ)
+    # Import THIS tree's clausal, not whatever the ambient path finds first.
+    env["PYTHONPATH"] = root + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    script = f"import sys; sys.path.insert(0, {root!r})\n" + _ALT_KEY_SCRIPT + (
+        f"\nimport clausal, os\n"
+        f"assert os.path.realpath(clausal.__file__).startswith(os.path.realpath({root!r}) + os.sep), clausal.__file__\n")
     out = subprocess.run(
-        [sys.executable, "-c", _ALT_KEY_SCRIPT, _fixture_path("hide_owner.clausal")],
-        cwd=root, capture_output=True, text=True, timeout=120)
-    assert out.returncode == 0 and out.stdout.strip() == "OK", out.stderr[-2000:]
+        [sys.executable, "-c", script, _fixture_path("hide_owner.clausal")],
+        cwd=root, env=env, capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0 and out.stdout.strip() == "OK", (
+        f"rc={out.returncode}\nstdout:\n{out.stdout[-2000:]}\nstderr:\n{out.stderr[-2000:]}")
+
+
+# ── ruling S, extended 2026-09-24: goal-argument use must qualify ─────────
+
+def test_goal_argument_must_be_qualified_to_reach_another_module():
+    """A predicate binding passed as a GOAL argument lowers to its PLAIN
+    atom, which ``call/1`` resolves in the CALLING module; only the
+    qualified form reaches the other module's predicate.  Modules are loaded
+    here (not in a shared fixture) so a peer popping them cannot interfere."""
+    other = _load_module("sa_goal_other", _fixture_path("sa_goal_other.clausal"))
+    caller = _load_module("sa_goal_caller", _fixture_path("sa_goal_caller.clausal"))
+    local = _load_module("sa_goal_caller_local",
+                         _fixture_path("sa_goal_caller_local.clausal"))
+    handle = mint_predicate_handle(_db(other), "z")
+    bindings = (other.z, handle)
+    assert is_zero_field_class(other.z)
+    assert predicate_binding_name(handle, db=_db(other)) == "z"
+
+    def answers(goal, mod):
+        return sum(1 for _ in solve(goal, mod))
+
+    # Positive control: the other module's z IS reachable, qualified.
+    assert answers(("run", (":", "sa_goal_other", "z")), caller) == 1
+    # The caller defines no z: the plain atom -- and so either binding --
+    # finds nothing there.
+    assert answers(("run", "z"), caller) == 0
+    for b in bindings:
+        assert answers(("run", b), caller) == 0, b
+    # A caller WITH its own z (two solutions): the binding resolves to THAT
+    # one, never to sa_goal_other's (one solution).
+    assert answers(("run", "z"), local) == 2
+    for b in bindings:
+        assert answers(("run", b), local) == 2, b
+    assert answers(("run", (":", "sa_goal_other", "z")), local) == 1
+
+
+def test_plain_string_lowering_skips_the_db_lookup(owner, monkeypatch):
+    """Hot path: only a MANGLED str can be a predicate handle, so lowering a
+    plain string must not consult the lowering scope's db at all."""
+    import clausal.logic.compiler.terms_to_ast as t2a
+    calls = []
+    real = t2a._lowering_db
+    monkeypatch.setattr(t2a, "_lowering_db", lambda: calls.append(1) or real())
+    assert _lower("holds", owner).value == "holds"
+    assert _lower("some plain text", owner).value == "some plain text"
+    assert calls == []
+    # Positive control: a mangled str DOES consult it.
+    assert _lower(mint_predicate_handle(_db(owner), "holds"), owner).value == "holds"
+    assert calls == [1]

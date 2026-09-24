@@ -493,6 +493,15 @@ def _templatize_query_goal(goal: Any, db=None):
         # spelling (it falls through to the scalar arm) -- including one whose
         # owner module cannot be resolved, see ``term_to_ast_expr``.  One
         # resolver call, with the Q0 ``db`` hint.
+        #
+        # Ruling S, extended 2026-09-24: goal-argument use must qualify.  This
+        # holds on the query-parameter path too, so a predicate binding passed
+        # as a GOAL argument (``run(other_mod.z)`` with ``run(G) <- call(G)``)
+        # becomes the plain atom ``z`` and is resolved in the CALLING module;
+        # to reach another module's predicate, write it qualified
+        # (``other_mod:z``).  Before this arm, a zero-arity class (and a
+        # handle) reached ``other_mod``'s ``z``; pinned by
+        # ``test_goal_argument_must_be_qualified_to_reach_another_module``.
         name = predicate_binding_name(dv, db=db)
         if name is not None:
             return _mint_atom(name)

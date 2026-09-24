@@ -191,3 +191,15 @@ a module popped from `sys.modules` now lowers plain on both paths (test fails
 if either hint, or the `_compile_as_query` pass-through, is removed). The
 tests resolve every fixture handle through its owner's db, so a peer test
 popping `hide_owner` cannot empty the compared population.
+
+Review round 3 + operator ruling (2026-09-24, option a): ruling S holds on
+the query-parameter path too -- "goal-argument use must qualify". A
+predicate binding passed as a goal argument (`run(other.z)`, `run(G) <-
+call(G)`) lowers to the plain atom and resolves in the CALLING module; the
+qualified `other:z` reaches the other module. Measured behaviour change: on
+main the class and the handle both reached `other`'s z (1 answer); now 0 in
+a caller with no z, and the caller's own z where it has one. Pinned by
+`test_goal_argument_must_be_qualified_to_reach_another_module`. Also: the
+`term_to_ast_expr` arm is gated on `is_mangled` first so plain strings skip
+the db lookup; the subprocess test pins PYTHONPATH/cwd to the tree and
+asserts it imported that tree's clausal.
