@@ -334,6 +334,18 @@ _CHOST = """
 """
 
 
+def _binds_no_predicate(module, name):
+    """The module does not bind *name* to a PREDICATE -- rule (c)'s actual
+    precondition for "mangled".  NOT ``name not in module.__dict__``: every
+    module dict is pre-seeded with the process-wide atom pool
+    (``predicate_builtins``, GLOBAL_ATOMS_DEFAULT rule 1.4), so an atom of
+    that spelling declared by ANY earlier-loaded module is bound here as a
+    plain str (``test_constants::test_distinct_names_do_not_interact``
+    exports the global atom ``other``)."""
+    from clausal.logic.predicate import is_declared_predicate_name
+    return not is_declared_predicate_name(module.__dict__.get(name))
+
+
 def _one(goal, lm):
     from clausal.logic.solve import _deref_walk
     from clausal.logic.variables import Var
@@ -356,7 +368,7 @@ def test_a_handle_not_bound_by_its_plain_name_builds_the_mangled_cell(
     lib = lister("sa_clib", _CLIB)
     host = lister("sa_chost", _CHOST)
     assert (type(lib.__dict__["dfact"]) is str) == (era == "handle")
-    assert "dfact" not in host.__dict__, "the host must not bind the plain name"
+    assert _binds_no_predicate(host, "dfact"), "the host must not bind the plain name"
     lm = _lm(host)
     qualified = mangle("sa_clib", "dfact")
     # Python-held: mangled in both eras (it is a handle in both).
@@ -389,23 +401,31 @@ def test_a_mangled_cell_is_called_and_written_on_its_owner(lister, era_loads, er
 
 
 @pytest.mark.parametrize("era", ERAS)
-def test_the_seam_follows_the_same_rule(lister, era_loads, era):
+@pytest.mark.parametrize("atom_pool_seeded", [False, True])
+def test_the_seam_follows_the_same_rule(lister, era_loads, era, atom_pool_seeded):
     """The ``--`` seam applies the same rule.  The rule is about the
     NAMESPACE, not about how the handle was obtained: a Python-held handle
     to a predicate this module imports by name is PLAIN, and one to a
     predicate it does not import (``other``) is MANGLED."""
     era_loads(era)
+    if atom_pool_seeded:
+        # The full-suite pollution, reproduced: an earlier module exports a
+        # GLOBAL ATOM with the plain name, so every later module dict holds
+        # it (the process-wide atom pool).  That is not a predicate binding.
+        lister("sa_spool", """
+            -module(sa_spool, [sa_s_other])
+        """)
     lister("sa_slib", """
-        -module(sa_slib, [spred(A), other(A)])
+        -module(sa_slib, [spred(A), sa_s_other(A)])
         spred(1),
-        other(1),
+        sa_s_other(1),
     """)
     host = lister("sa_shost", """
         -module(sa_shost, [])
         -import_from(sa_slib, [spred])
         from clausal.logic.atoms import mangle
         held = mangle("sa_slib", "spred")
-        held_other = mangle("sa_slib", "other")
+        held_other = mangle("sa_slib", "sa_s_other")
         via_import = spred
         def build_import():
             return --spred(X)
@@ -420,8 +440,8 @@ def test_the_seam_follows_the_same_rule(lister, era_loads, era):
     assert host.build_import()[0] == "spred"
     assert host.build_alias()[0] == "spred"
     assert host.build_held()[0] == "spred"
-    assert "other" not in host.__dict__
-    assert host.build_held_other()[0] == mangle("sa_slib", "other")
+    assert _binds_no_predicate(host, "sa_s_other")
+    assert host.build_held_other()[0] == mangle("sa_slib", "sa_s_other")
 
 
 def _multi_arity(lister, name):
