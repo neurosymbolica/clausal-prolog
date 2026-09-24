@@ -77,6 +77,7 @@ def test_specialize_route_still_registers_through_register_signature():
     tuple(fields))`` at specialization.py:388.  Fix round 1: verified by
     temporarily commenting out that line -- this test went red; restoring
     it, green again (see task-2-report.md)."""
+    from clausal.logic.database import Module
     from clausal.logic.specialization import analyze_mi, specialize_mi
     from clausal.logic.variables import Var
     import clausal.examples.metainterpreters as mi_mod
@@ -86,15 +87,22 @@ def test_specialize_route_still_registers_through_register_signature():
         [["natnum", 0], []],
         [["natnum", ["s", x]], [["natnum", x]]],
     ]
-    db = Database(module_dict={"__name__": "t_pin_register_signature"})
+    module = Module("t_pin_register_signature",
+                    module_dict={"__name__": "t_pin_register_signature"})
+    db = module.db
     pattern = analyze_mi(mi_mod.solve)
-    pred_cls = specialize_mi(
+    # solve/2 specialized drops PROGRAM and keeps GOALS.  A literal, not the
+    # implementation's own _specialized_fields, so the pin cannot agree with
+    # the code by construction.
+    fields = ("GOALS",)
+    result = specialize_mi(
         pattern, natnum_program, "solve_pin_natnum", db=db,
     )
-    assert db.signature_for("solve_pin_natnum", len(pred_cls._fields)) == (
-        pred_cls._fields)
-    assert field_names_for("solve_pin_natnum", arity=len(pred_cls._fields),
-                            db=db) == pred_cls._fields
+    assert db.row("solve_pin_natnum", len(fields)) is not None
+    assert result._row is db.row("solve_pin_natnum", len(fields))
+    assert db.signature_for("solve_pin_natnum", len(fields)) == fields
+    assert field_names_for("solve_pin_natnum", arity=len(fields),
+                            db=db) == fields
 
 
 def test_a_bare_name_colliding_with_a_builtin_answers_none_not_the_builtin_fields():
