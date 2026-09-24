@@ -112,6 +112,12 @@ def stale(tmp_path):
         assert len(list(call("assertz", Compound("last", (1, 1)), module=m))) == 1
         cls = m.module_dict["last"]
         assert isinstance(cls, PredicateMeta)
+        # The assert no longer MOVES the class (fixed 2026-09-24,
+        # todo/done/zero-field-class-bound-to-another-aritys-row-crashes-call-
+        # 2026-09-24.md), so the stale state is built by hand: the guards
+        # under test must still handle a class whose row disagrees with it.
+        assert cls._row._key == ("last", 0), "the assert moved the class again"
+        cls._bind_row(m.db, "last", 2, authorized=True)
         assert cls._fields == () and cls._row._key == ("last", 2)   # STALE
         yield m
     finally:
