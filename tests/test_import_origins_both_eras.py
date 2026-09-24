@@ -148,3 +148,26 @@ def test_the_load_channel_s_refusal_text_is_the_same_in_both_eras(owner):
     assert strip(texts["class"]) == strip(texts["mangled"])
     assert "the 2 clauses already on impclob_colour" in " ".join(
         texts["mangled"].split())
+
+
+def test_the_load_refusal_fires_through_the_real_gate_in_both_eras(owner):
+    """End to end through ``_refuse_foreign_writes``: an importer that writes
+    a clause for the aliased import is refused by ``Database.refusal_for``
+    with ``through=`` the binding, and says the same thing in both eras.  An
+    unresolved ``through=`` would let the write pass silently."""
+    from types import SimpleNamespace
+    from clausal.logic.compiler_v2 import _refuse_foreign_writes
+    from clausal.terms import Compound
+    node = SimpleNamespace(head=Compound("impclob_colour", ("teal",)))
+    strip = lambda t: "\n".join(l for l in t.splitlines()
+                                if " is declared at " not in l)
+    texts = {}
+    for era, binding in _eras(owner).items():
+        origins = _import_from_origins(_aliased_import(), {"hue": binding})
+        with pytest.raises(SyntaxError) as exc_info:
+            _refuse_foreign_writes(Database(), [node], {_OWNER: owner},
+                                   origins, "/elsewhere/importer.clausal",
+                                   "some_importer")
+        texts[era] = strip(str(exc_info.value))
+    assert texts["class"] == texts["mangled"]
+    assert "may not write impclob_colour/1" in texts["mangled"]

@@ -38,8 +38,8 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
-    field_names_for, is_declared_predicate, is_declared_predicate_name,
-    predicate_binding_name, resolve_predicate_row,
+    field_names_for, is_declared_predicate, predicate_binding_name,
+    resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -383,7 +383,7 @@ def compile_module(
                 # would then bind d/1's class onto d/2's row.
                 cls_row = getattr(pred_cls, "_row", None)
                 if cls_row is not None and cls_row.key[1] == arity:
-                    if _belongs_elsewhere(pred_cls, db):
+                    if _belongs_elsewhere(pred_cls, db, arity):
                         # A ``-dynamic`` declaration for a predicate this
                         # module IMPORTED (P3-3 Task 3 fix round 1).  The
                         # declaration is legitimate — it is how a module says
@@ -836,12 +836,18 @@ def _import_from_origins(module_items: list, module_dict: dict) -> dict:
     return origins
 
 
-def _belongs_elsewhere(pred_cls, db) -> bool:
-    """True when *pred_cls* already reads another Database's real row — i.e.
+def _belongs_elsewhere(binding, db, arity: int) -> bool:
+    """True when *binding* already reads another Database's real row -- i.e.
     it is somebody else's predicate, reached here through an
     ``-import_from``.  A class on its private detached row is unbound, not
-    foreign."""
-    row = getattr(pred_cls, "_row", None)
+    foreign.
+
+    The row comes from ``resolve_predicate_row`` (F1 row 29): the class's
+    ``_row`` today, exactly what this read directly, and the owner's row for
+    a mangled atom after the flip -- where a ``getattr(binding, "_row")``
+    would answer ``None`` and quietly call every import local.
+    """
+    row = resolve_predicate_row(binding, arity=arity)
     return row is not None and not row.detached and row.db is not db
 
 
@@ -860,13 +866,13 @@ def _imported_binding_by_canonical_name(origins: dict, db, functor: str,
 
     * ARITY.  ``origins`` is keyed by name alone, and a name bound at another
       arity is not the predicate this ``-dynamic(f/N)`` declares.
-    * FOREIGNNESS.  A module's own declaration is never rerouted, including
-      the degenerate import-from-self.
+    * FOREIGNNESS.  ``_belongs_elsewhere`` keeps a module's own declaration
+      from ever being rerouted, including the degenerate import-from-self.
 
     Both checks are era-agnostic (F1 row 29): ``is_declared_predicate`` is
-    the class's ``len(_fields) == arity`` today, and ``resolve_predicate_row``
-    is the class's ``_row`` today -- the same two reads this made directly --
-    and each answers for a mangled atom too.
+    the class's ``len(_fields) == arity`` today and ``_belongs_elsewhere``
+    reads the class's ``_row`` through ``resolve_predicate_row`` -- the same
+    two reads this made directly -- and each answers for a mangled atom too.
 
     NOT a scan of ``module_dict.values()`` by ``__name__`` (roborev job 78,
     finding 1): that also matches a class reached by a plain Python import, a
@@ -876,10 +882,7 @@ def _imported_binding_by_canonical_name(origins: dict, db, functor: str,
     bound = _imported_binding(origins, functor)
     if bound is None or not is_declared_predicate(bound, arity=arity):
         return None
-    row = resolve_predicate_row(bound, arity=arity)
-    if row is None or row.detached or row.db is db:
-        return None
-    return bound
+    return bound if _belongs_elsewhere(bound, db, arity) else None
 
 
 def _lock_static_predicates(db) -> int:
