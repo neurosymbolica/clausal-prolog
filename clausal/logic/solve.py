@@ -998,7 +998,10 @@ def raise_if_dangling_handle(
         return
     if (module.module_dict or {}).get(name) is not None:
         return
-    raise dangling_handle_exception(mod_name, name, arity, True, context)
+    # The HANDLE's module half, not slot 1: for an owner reached by the
+    # caller's db or the handle-owner registry slot 1 is a Module object.
+    raise dangling_handle_exception(
+        demangle(handle)[0], name, arity, True, context)
 
 
 def dangling_handle_exception(
@@ -1211,8 +1214,8 @@ def call(
                 LogicException, existence_error,
                 dangling_handle_indicator_and_why,
             )
-            from clausal.logic.predicate import _db_for_module_name  # noqa: PLC0415
-            loaded = _db_for_module_name(_handle_module_name) is not None
+            from clausal.logic.predicate import _owner_db_for_module_name  # noqa: PLC0415
+            loaded = _owner_db_for_module_name(_handle_module_name) is not None
             indicator, why = dangling_handle_indicator_and_why(
                 _handle_module_name, _handle_name, arity, loaded,
             )

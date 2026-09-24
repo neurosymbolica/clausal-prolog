@@ -19,7 +19,7 @@ import textwrap
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
-    is_declared_predicate_name, mint_predicate_handle,
+    _HANDLE_OWNERS, is_declared_predicate_name, mint_predicate_handle,
 )
 
 
@@ -31,10 +31,15 @@ def _load_popped(tmp_path, name, source):
     sys.modules.pop(name, None)
     module = _load_module(name, str(path))
     sys.modules.pop(name, None)
+    # Isolate the HINT: the handle-owner registry (the cross-module
+    # remainder, test_handle_owner_registry.py) would otherwise answer for
+    # the popped module too and make the control below vacuous.
+    _HANDLE_OWNERS.pop(name, None)
     db = module.__dict__["$module"].db
     handle = mint_predicate_handle(db, f"{name}_p")
     assert name not in sys.modules
-    # Control: without the hint the popped owner is unreachable.
+    # Control: without the hint (and the registry) the popped owner is
+    # unreachable.
     assert not is_declared_predicate_name(handle)
     assert is_declared_predicate_name(handle, db=db)
     return module, db, handle

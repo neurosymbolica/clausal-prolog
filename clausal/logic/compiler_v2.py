@@ -521,6 +521,13 @@ def compile_module(
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
     _lock_static_predicates(db)
 
+    # Ruling Q0 (final): record this LOADED database as the owner handles
+    # naming its module resolve to once the ``.clausal`` runner pops it from
+    # ``sys.modules``.  Handle resolution only (weak; see
+    # ``predicate._HANDLE_OWNERS``) -- a user-written ``M:G`` never sees it.
+    from clausal.logic.predicate import register_handle_owner  # noqa: PLC0415
+    register_handle_owner(db)
+
     return logic_module
 
 

@@ -24,7 +24,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import demangle, mangle
 from clausal.logic.database import Database
 from clausal.logic.predicate import (
-    is_declared_predicate, is_declared_predicate_name, make_predicate,
+    _HANDLE_OWNERS, is_declared_predicate, is_declared_predicate_name, make_predicate,
     mint_predicate_handle, predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
@@ -37,6 +37,10 @@ def _load_popped(tmp_path, name, source):
     sys.modules.pop(name, None)
     module = _load_module(name, str(path))
     sys.modules.pop(name, None)
+    # Isolate the caller's-db HINT from the handle-owner registry (the
+    # cross-module remainder, test_handle_owner_registry.py), which would
+    # otherwise answer for the popped module and hide a dropped hint.
+    _HANDLE_OWNERS.pop(name, None)
     return module.__dict__["$module"].db
 
 
@@ -50,7 +54,7 @@ def test_a_local_handle_resolves_in_the_caller_s_db_after_a_pop(tmp_path):
     row = db.row("q0_p", 1)
     assert row is not None and row.clauses, "nothing to resolve: no control"
 
-    # Without the hint: the popped owner is unreachable (the Q0 bug).
+    # Without the hint (registry isolated): the popped owner is unreachable.
     assert resolve_predicate_row(handle, arity=1) is None
     # With the caller's db: every resolver answers.
     assert resolve_predicate_row(handle, arity=1, db=db) is row
@@ -115,6 +119,7 @@ def test_the_class_arm_uses_the_hint_too(tmp_path):
     sys.modules.pop("q0_cls", None)
     module = _load_module("q0_cls", str(path))
     sys.modules.pop("q0_cls", None)
+    _HANDLE_OWNERS.pop("q0_cls", None)      # isolate the hint (see above)
     db = module.__dict__["$module"].db
     cls = module.__dict__["q0_two"]
     assert cls.__module__ == "q0_cls"
