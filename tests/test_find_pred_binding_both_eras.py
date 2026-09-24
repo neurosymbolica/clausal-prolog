@@ -151,8 +151,7 @@ def test_retract_follows_the_handle_to_the_owner(pair, owner_popped):
     _flip(user)
     if owner_popped:
         sys.modules.pop(_OWNER, None)
-    # (listing/_indicator_row is F1 row 60's: its db.row leg finds the
-    # importer's -dynamic twin before _find_pred_cls, in BOTH eras --
-    # todo/listing-an-imported-dynamic-predicate-shows-the-importers-twin-2026-09-24.md)
+    # (listing/_indicator_row, F1 row 60, now resolves through the binding
+    # before the importer's -dynamic twin: tests/test_listing_indicator_both_eras.py)
     next(call("retract", ("gd_p", 7), module=lm), None)
     assert 7 not in _owner_answers(owner), "retract missed the owner's row"

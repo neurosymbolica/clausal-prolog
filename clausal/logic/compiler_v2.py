@@ -45,6 +45,7 @@ from clausal.logic.predicate import (
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
     BareAtomRefs as BareAtomRefsItem,
+    HeadFieldNames as HeadFieldNamesItem,
     Directive as DirectiveItem,
     HideDeclaration as HideDeclItem,
     ImportFromDirective as ImportFromItem,
@@ -128,6 +129,21 @@ def _warn_implicit_atoms_deprecated(module_name: str) -> None:
         ClausalImplicitAtomsDeprecationWarning,
         stacklevel=2,
     )
+
+
+def _head_field_names(module_items) -> dict:
+    """The rewriter's per-functor field names for this load, keyed by NAME.
+
+    Read off the ``HeadFieldNames`` module item (``{}`` when there is none,
+    e.g. a hand-built item list).  This -- not the functor's class -- is where
+    step 4's ``row.signature`` comes from: the class's ``_fields`` was only
+    ever a copy of the same ``EmbedTransformer._seen_functors`` entry, carried
+    on a vehicle that does not survive the PredicateMeta flip.
+    """
+    for item in module_items:
+        if isinstance(item, HeadFieldNamesItem):
+            return item.fields
+    return {}
 
 
 def compile_module(
@@ -259,6 +275,7 @@ def compile_module(
 
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
+    head_fields = _head_field_names(module_items)
     for pred_node in predicate_nodes:
         functor, arity = head_key(pred_node.head)
         key = (functor, arity)
@@ -299,10 +316,6 @@ def compile_module(
                 # sanctioned clause-install site — the slice-assign below has
                 # to land in the Database, not in an unminted per-row list.
                 pred_cls._ensure_clauses()[:] = db_clauses
-                # THE ROW, not the `_signature` facade (W2): bound just above.
-                _sig_row = pred_cls._row
-                if _sig_row.signature is None:
-                    _sig_row.signature = pred_cls._fields
                 pending[key] = pred_cls
             else:
                 pending[key] = None
@@ -313,8 +326,24 @@ def compile_module(
             # owner off the ROW.  ``create=True`` because that never answers
             # an ADOPTED row (another database's): this load owns what it
             # just wrote, never what it imported.
-            record_clause_source(db.row(functor, arity, create=True),
-                                 module_name, module_dict)
+            clause_row = db.row(functor, arity, create=True)
+            record_clause_source(clause_row, module_name, module_dict)
+            # THE SIGNATURE comes from the rewriter's head field names, on
+            # the same row and under the same "whatever the name is bound
+            # to" rule (operator ruling 2026-09-24): it describes the row's
+            # clauses, not the module dict's binding.  It used to be read off
+            # the class (``pred_cls._fields``), which is gone after the
+            # flip; measured parity 2,450/2,457 stamping arrivals, the rest
+            # being declare-then-import-then-define, where the class was a
+            # FOREIGN placeholder and this module's own declaration is the
+            # right label (implementation_plans/step4-signature-source-
+            # design-2026-09-24.md §3).  First clause wins: a later clause
+            # finds the row already stamped.  A ``define_predicate`` that
+            # registered names from a non-cell head got there first too.
+            if clause_row.signature is None:
+                fields = head_fields.get(functor)
+                if fields is not None and len(fields) == arity:
+                    clause_row.signature = tuple(fields)
 
     # ── Step 4a: seed pending from -dynamic specs (A12-F005) ─────────────
     #    A declared-but-clause-less dynamic predicate must still compile to
@@ -409,11 +438,15 @@ def compile_module(
                     # first clause arrives by runtime assertz, so its class
                     # must already be reading the row that assertz appends to.
                     pred_cls._bind_row(db, functor, arity, authorized=True)
-                    # THE ROW (W2): `_bind_row` on the line above guarantees
-                    # it, so there is nothing for `_state_row()` to mint here.
-                    _sig_row = pred_cls._row
-                    if _sig_row.signature is None:
-                        _sig_row.signature = pred_cls._fields
+                    # NO SIGNATURE STAMP HERE (2026-09-24).  This used to copy
+                    # ``pred_cls._fields`` onto the row, and it was dead: since
+                    # option D a clause-less ``-dynamic`` class has no row yet,
+                    # so it never reaches this branch -- 0 arrivals measured
+                    # over the design's 2,735-test sample and again over 2,751
+                    # tests with a probe on this line.  A row that gets its
+                    # first clause later (runtime assertz) is not a step-4
+                    # arrival either way; step 4 above stamps the rows this
+                    # load writes clauses to, from ``HeadFieldNames``.
                     pending[key] = pred_cls
                 else:
                     pending[key] = None

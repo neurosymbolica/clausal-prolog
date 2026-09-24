@@ -78,9 +78,10 @@ Called once per `head <- body` clause as the module executes. Steps:
 
 2. Look up the predicate class from `module_dict` by functor name. If it is a `PredicateMeta` instance:
    - Replace the class's clause list in place (`pred_cls._ensure_clauses()[:] = ...`) with the DB's full clause list (the DB performs normalisation; the class reads the DB row, so it stays in sync).
-   - Set `pred_cls._signature = pred_cls._fields` if not yet set.
 
-3. Record `(functor, arity) → pred_cls` in the pending dict. Compilation is deferred until all clauses have been asserted.
+3. Whatever the name is bound to, stamp the row the clause landed on: its owner (`record_clause_source`) and, if it has no signature yet, the head's field names from the rewriter's `HeadFieldNames` module item (the snapshot of `EmbedTransformer._seen_functors`, first registration wins). The class is not the source of the signature.
+
+4. Record `(functor, arity) → pred_cls` in the pending dict. Compilation is deferred until all clauses have been asserted.
 
 ---
 

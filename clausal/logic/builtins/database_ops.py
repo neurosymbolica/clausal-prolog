@@ -388,16 +388,41 @@ def _home_db(db, binding, functor: str, arity: int) -> "Any":
     on ``gate_dyn_user`` by the F1 review).  Falls back to *db* when there is
     no binding, or when the class is still on its private detached row.
     """
-    from clausal.logic.predicate import resolve_predicate_row  # noqa: PLC0415
     if binding is None:
         return db
+    row = _binding_row(db, binding, functor, arity)
+    return db if row is None else row.db
+
+
+def _binding_row(db, binding, functor: str, arity: int) -> "Any":
+    """The live row *binding* denotes at *arity*, or ``None`` -- the one
+    place the "own row, else the adopted row, detached is nobody's" rule
+    lives (``_home_db`` and ``io._indicator_row`` both read it).
+
+    *functor* is the IMPORTER's spelling of the name -- the local name the
+    goal or indicator used, which for an ``alias(Orig, Local)`` import is
+    ``Local``, not the owner's ``Orig``: adopted rows are keyed by the
+    importer's spelling, and ``_adopted_row_named_by`` checks the handle's
+    atom half against the row's own (owner's) name.
+
+    The row comes from ``resolve_predicate_row`` (the class's ``_row`` today;
+    the owner's row for a handle).  When a HANDLE's own route is lost -- its
+    owner popped from ``sys.modules`` -- the row this database ADOPTED for it
+    at import is the same owner row.  A DETACHED row (a class still on its
+    private row) answers ``None``: it is nobody's predicate.  For a class the
+    row is NOT arity-checked here (``resolve_predicate_row``'s class arm does
+    not consult *arity*); a caller that needs exact arity checks
+    ``row.key[1]``.
+    """
+    from clausal.logic.predicate import resolve_predicate_row  # noqa: PLC0415
+    if binding is None:
+        return None
     row = resolve_predicate_row(binding, arity=arity, db=db)
     if row is None:
-        # Adopted rows are keyed by the IMPORTER's spelling.
         row = _adopted_row_named_by(db, binding, functor, arity)
     if row is None or row.detached:
-        return db
-    return row.db
+        return None
+    return row
 
 
 def _home_globals(db, module_dict: "dict | None", home) -> "dict | None":

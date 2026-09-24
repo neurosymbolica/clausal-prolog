@@ -1,0 +1,9 @@
+# F1 row 60: imports gate_dyn_owner's gd_p under a LOCAL alias and re-declares
+# the alias -dynamic, so this database holds an empty twin under `gd_loc` and
+# ADOPTS the owner's row under the importer's spelling `gd_loc` (the owner's
+# own name is `gd_p`).  See tests/test_listing_indicator_both_eras.py.
+-dynamic(gd_loc/1)
+-module(row60_alias_user, [gd_loc_add(X)])
+-import_from(tests.fixtures.gate_dyn_owner, [alias(gd_p, gd_loc)])
+
+gd_loc_add(X) <- assertz(gd_loc(X))
