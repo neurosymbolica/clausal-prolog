@@ -714,6 +714,41 @@ def describe_imported_declaration_implemented(
     return "\n".join(lines)
 
 
+def describe_imported_runtime_dynamic_implemented(
+    functor, arity, importer, exporter, n_runtime, imported_as=None,
+):
+    """Why a LOAD may not add clauses to an imported ``-dynamic`` predicate
+    that holds clauses asserted at runtime -- and what to write instead.
+
+    Not "only declares": the exporter's row holds *n_runtime* clauses, put
+    there by ``assertz`` rather than by a load.  Letting the load through used
+    to move the shared predicate onto the importer's row, and those runtime
+    clauses then vanished from every caller (round-3 review, 2026-09-24).
+    """
+    spelled = (f"{functor} (imported as {imported_as})"
+               if imported_as else functor)
+    plural = "clause" if n_runtime == 1 else "clauses"
+    lines = [
+        f"{importer} defines clauses for {functor}/{arity}, imported from "
+        f"{exporter}, whose {functor}/{arity} is a -dynamic predicate holding "
+        f"{n_runtime} {plural} asserted at runtime."
+    ]
+    lines.extend(textwrap.wrap(
+        f"A load cannot add clauses to another module's predicate: "
+        f"{functor}/{arity} has exactly one defining module, {exporter}.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    lines.extend(_arrow([
+        f"assert them at runtime instead -- an assertz of {functor}/{arity} "
+        f"from {importer} lands on {exporter}'s row;",
+        f"or define a predicate of {importer}'s own: drop {spelled} from the "
+        f"-import_from({exporter}, [...]) list, define {functor}/{arity} in "
+        f"{importer} and export it from there.",
+    ]))
+    return "\n".join(lines)
+
+
 # ── entry point ──────────────────────────────────────────────────────────────
 
 

@@ -297,21 +297,15 @@ def compile_module(
             logic_module.define_predicate(pred_node)
             if pred_cls is not None:
                 db_clauses = db.clauses_for(functor, arity)
-                # ``authorized``: this is a bind the mutation gate has just
-                # cleared for this author, so it may move a class off another
-                # Database's row onto this module's.  The one user that move
-                # had -- the clause-free "vocabulary-implements" idiom -- is a
-                # load error since 2026-09-24 (step 3d,
-                # ``_implements_an_imported_declaration``), and measured over
-                # the targeted suites plus every in-tree ``.clausal`` file
-                # with an ``-import_from`` (106 files, 1,205 arrivals) no bind
-                # here moves a class off a foreign real row any more.  The
-                # flag is LEFT, not removed: a class reaching ``module_dict``
-                # by a route other than ``-import_from`` is not provably
-                # absent, and without it such a bind would be skipped
-                # silently (clauses on this row, class reading another).  It
-                # goes with the classes at the flip.  Every other bind is
-                # policed -- see ``PredicateMeta._bind_row``.
+                # GUARANTEE: this bind never moves a predicate off another
+                # module's row.  Step 3d refuses every load write through an
+                # ``-import_from`` of another module's predicate before this
+                # loop runs (``_implements_an_imported_declaration``, after the
+                # gate), so the class here is this module's own or unbound;
+                # and ``authorized`` makes ``PredicateMeta._bind_row`` RAISE,
+                # not steal, if some other route ever hands it a class bound to
+                # another Database's row -- rather than skip the bind silently
+                # and leave the class reading a row these clauses never reach.
                 pred_cls._bind_row(db, functor, arity, authorized=True)
                 # ``_ensure_clauses``, not a plain ``_clauses`` read: a read
                 # mints nothing (P3-3 Task 2 fix round 1), and this IS the
@@ -1010,28 +1004,32 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
 def _implements_an_imported_declaration(origins: dict, module_dict: dict,
                                         functor: str, arity: int,
                                         module_name: str):
-    """The load error for clauses written against a predicate this module
-    ``-import_from``'s from a module that only DECLARES it -- or ``None``.
+    """The load error for clauses this module writes against a predicate it
+    ``-import_from``'s from ANOTHER module -- or ``None``.
 
-    The "vocabulary-implements" idiom (module A exports ``p/2`` and writes no
-    clauses for it; module B imports ``p`` and supplies them) is DROPPED
-    (operator ruling 2026-09-24,
+    A predicate has exactly one defining module, and a LOAD may not add
+    clauses to another module's predicate.  Before 2026-09-24 the gate let
+    such a write through wherever the exporter's row held nothing a load had
+    written, and step 4 then MOVED the shared class off the exporter's row
+    onto this module's (the "vocabulary-implements" idiom, DROPPED by
+    operator ruling --
     ``todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md``).
-    It only ever worked because step 4 MOVED the shared class off A's row onto
-    B's; after the PredicateMeta flip there is no class to move, so it would
-    have stopped answering silently.  A predicate has one defining module, and
-    for this shape that module is B: define it there, export it from there.
+    After the PredicateMeta flip there is no class to move, so it would have
+    stopped answering silently; and where the exporter's row held runtime
+    clauses, the move already lost them silently (round-3 review).
 
-    Asked AFTER the gate has permitted the write (the caller checks
-    ``Database.refusal_for`` first), so an import of a predicate the exporter
-    DEFINES keeps the existing clobber refusal and its message.  What reaches
-    here and is refused is a write through an ``-import_from`` of a
-    predicate AT THIS ARITY from another module whose row is CLAUSE-FREE and
-    was never written by a load: a declaration-only export (NO row
-    post-flip, a private detached row today) or an empty ``-dynamic`` one
-    (an unowned row).  That is "imported from a module that does not define
-    it".  An exporter row holding clauses (a ``-dynamic`` filled at runtime)
-    or carrying a load source is left to the gate.
+    Asked AFTER the gate (the caller checks ``Database.refusal_for`` first),
+    so a row a load wrote that still holds clauses keeps the existing clobber
+    refusal and its message.  Everything else that reaches here is refused,
+    with a message for the exporter row's actual shape:
+
+    * clause-free and never written by a load -- a declaration-only export
+      (NO row post-flip, a private detached row today) or an empty
+      ``-dynamic`` one: the exporter ONLY DECLARES it;
+    * a ``-dynamic`` row holding clauses asserted at RUNTIME (no load
+      source): assert from here instead (it lands on the owner's row), or
+      define a predicate of this module's own;
+    * a row a load wrote, since emptied: the clobber diagnostic.
 
     Keyed on the binding's ARITY-EXACT predicate, never on class identity:
     ``is_declared_predicate`` answers for a class today and a mangled handle
@@ -1040,7 +1038,8 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     predicate sharing a name, and it loads.
 
     Pure and pre-write: step 3d calls it from the dry run, before the write
-    loop touches anything.
+    loop touches anything.  Step 4's clause install relies on it: after this
+    pass no load binds another module's predicate to its own row.
     """
     origin = origins.get(functor)
     if origin is None:
@@ -1060,24 +1059,26 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
         # ``test_a_local_definition_wins_a_clash_with_an_aliased_import``).
         # The gate resolves the head the same way -- ``module_dict`` first.
         return None
-    row = resolve_predicate_row(bound, arity=arity)
-    if row is not None and (row.clauses or row.source is not None):
-        # The exporter's predicate is NOT clause-free: a ``-dynamic`` row
-        # filled at runtime (``-initialization(assertz(...))``, a Python
-        # ``assertz``), or a row a load once wrote.  "Only declares" would
-        # be false, and the ruling is about a CLAUSE-FREE vocabulary, so
-        # this refusal stands aside and the gate's policy (which already
-        # permitted the write) decides -- pinned by
-        # ``test_a_dynamic_exporter_holding_runtime_clauses_is_the_gates_call``.
-        return None
     imported_as = [name for name, (mod, b) in origins.items()
                    if mod == exporter and b == bound and name != functor]
-    from clausal.import_diagnostics import (  # noqa: PLC0415
-        describe_imported_declaration_implemented,
-    )
-    return SyntaxError(describe_imported_declaration_implemented(
-        functor, arity, module_name, exporter,
-        imported_as=imported_as[0] if imported_as else None,
+    imported_as = imported_as[0] if imported_as else None
+    row = resolve_predicate_row(bound, arity=arity)
+    from clausal import import_diagnostics as diag  # noqa: PLC0415
+    if row is not None and row.source is not None:
+        # A load wrote this row; its clauses were retracted since (the gate
+        # refuses it outright while it still holds any).
+        return SyntaxError(diag.describe_imported_predicate_redefinition(
+            functor, arity, module_name, exporter, row,
+            exporter_module=module_dict.get(exporter),
+            declared_at=getattr(bound, "_registered_at", None),
+        ))
+    if row is not None and row.clauses:
+        return SyntaxError(diag.describe_imported_runtime_dynamic_implemented(
+            functor, arity, module_name, exporter, len(row.clauses),
+            imported_as=imported_as,
+        ))
+    return SyntaxError(diag.describe_imported_declaration_implemented(
+        functor, arity, module_name, exporter, imported_as=imported_as,
     ))
 
 

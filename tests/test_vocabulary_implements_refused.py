@@ -289,72 +289,141 @@ def test_an_import_from_the_module_itself_is_not_refused(owners):
         ) is not None, era
 
 
-def test_a_dynamic_exporter_holding_runtime_clauses_is_the_gates_call(
-        tmp_path):
-    """The ruling covers a CLAUSE-FREE vocabulary.  A ``-dynamic`` exporter
-    whose row holds clauses asserted at runtime does not "only declare" the
-    predicate, so this refusal must not fire (its message would be false);
-    the gate's existing policy decides.  Today that policy PERMITS the write
-    (rule 3: a row no load owns is free to write), so the load succeeds --
-    pinned here so a change to it is a decision, not an accident."""
-    from clausal.logic.database import Clause
-    schema = _load_fixture("fnmismatch_schema")
+@pytest.fixture
+def private_module():
+    """Load a fixture under a PRIVATE module name (the tests below mutate the
+    owner's rows), and drop every such name afterwards."""
+    loaded = []
+
+    def load(stem: str, name: str):
+        sys.modules.pop(name, None)
+        loaded.append(name)
+        return _load_module(name, _fixture_path(stem))
+
+    yield load
+    for name in loaded:
+        sys.modules.pop(name, None)
+
+
+def _importer(tmp_path, name: str, exporter: str, functor: str, fact: str):
+    path = tmp_path / f"{name}.clausal"
+    path.write_text(textwrap.dedent(f"""\
+        -private([ok, yes])
+        -module({name}, [{name}_chk(R)])
+        -import_from({exporter}, [{functor}])
+
+        {fact},
+
+        {name}_chk(R) <- {functor}(R, C_UNUSED)
+        """))
+    return str(path)
+
+
+def test_a_dynamic_exporter_holding_runtime_clauses_is_refused_and_keeps_them(
+        tmp_path, private_module):
+    """Round-3 review: when the exporter's ``-dynamic`` row holds clauses
+    asserted at RUNTIME, the gate permits the load write (rule 3: no load
+    owns the row), and step 4 used to MOVE the exporter's shared class onto
+    the importer's row -- the runtime clauses stayed behind and vanished
+    from every caller through the class.  A load may not add clauses to
+    another module's predicate: refused, with a message for THIS shape (not
+    "only declares"), and nothing moved."""
+    owner_name = "_vocabdrop_rt_schema"
+    schema = private_module("fnmismatch_schema", owner_name)
     owner_db = schema.__dict__["$module"].db
-    owner_db.assertz(Clause(head=Compound("fnm_verdict", (mint("early"), ())),
-                            body=[]))
+    # A RUNTIME assert (the assertz/1 builtin, in the owner), not a load.
+    assert list(call("assertz", Compound("fnm_verdict", (mint("early"), ())),
+                     module=schema.__dict__["$module"]))
     row = owner_db.row("fnm_verdict", 2)
     assert row.clauses and row.source is None, "not the shape under test"
+    x, y = Var(), Var()
+    assert [walk(deref(x)) for _ in call(schema.fnm_verdict, x, y)] == [
+        mint("early")], "the runtime clause must answer before the load, too"
 
-    # BOTH ERAS at the check itself: a row with clauses stands the refusal
-    # down, while the same import of an EMPTY -dynamic row is refused (the
-    # positive control, ``test_a_dynamic_declaration_is_refused_the_same_way``).
-    for era, binding in {
-            "class": schema.fnm_verdict,
-            "mangled": mangle("tests.fixtures.fnmismatch_schema",
-                              "fnm_verdict")}.items():
+    # BOTH ERAS at the check itself.
+    texts = {}
+    for era, binding in {"class": schema.fnm_verdict,
+                         "mangled": mangle(owner_name, "fnm_verdict")}.items():
         origins = _import_from_origins(
-            [ImportFromDirective(module="tests.fixtures.fnmismatch_schema",
-                                 names=["fnm_verdict"])],
+            [ImportFromDirective(module=owner_name, names=["fnm_verdict"])],
             {"fnm_verdict": binding})
         assert origins["fnm_verdict"][1] is not None, era
-        assert _implements_an_imported_declaration(
+        texts[era] = str(_implements_an_imported_declaration(
             origins, {"fnm_verdict": binding}, "fnm_verdict", 2,
-            "some_implementer") is None, era
+            "some_implementer"))
+    assert texts["class"] == texts["mangled"]
+    flat = _flat(texts["class"])
+    assert ("whose fnm_verdict/2 is a -dynamic predicate holding 1 clause "
+            "asserted at runtime") in flat
+    assert "only declares" not in flat
+    assert "a load cannot add clauses to another module's predicate" in (
+        flat.lower())
+    assert f"lands on {owner_name}'s row" in flat
 
-    path = tmp_path / "vocabdrop_rt_use.clausal"
-    path.write_text(textwrap.dedent("""\
-        -private([ok])
-        -module(vocabdrop_rt_use, [vocabdrop_rt_chk(R)])
-        -import_from(tests.fixtures.fnmismatch_schema, [fnm_verdict])
+    # End to end: refused, and the runtime clause still answers through the
+    # exporter -- the class did not move.
+    cls_row_before = schema.fnm_verdict._row
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_module("_vocabdrop_rt_use", _importer(
+            tmp_path, "_vocabdrop_rt_use", owner_name, "fnm_verdict",
+            "fnm_verdict(ok, [])"))
+    sys.modules.pop("_vocabdrop_rt_use", None)
+    assert "asserted at runtime" in _flat(exc_info.value)
+    assert schema.fnm_verdict._row is cls_row_before
+    x, y = Var(), Var()
+    assert [walk(deref(x)) for _ in call(schema.fnm_verdict, x, y)] == [
+        mint("early")]
 
-        fnm_verdict(ok, []),
 
-        vocabdrop_rt_chk(R) <- fnm_verdict(R, C_UNUSED)
-        """))
-    try:
-        _load_module("vocabdrop_rt_use", str(path))
-    finally:
-        sys.modules.pop("vocabdrop_rt_use", None)
-
-
-def test_an_exporter_row_a_load_wrote_is_the_gates_call_even_when_emptied():
-    """No clauses, but a LOAD SOURCE: the exporter did define the predicate
-    (``gate_alias_owner`` loads ``bo_p(1),`` into a ``-dynamic`` row) and its
-    clauses were retracted since.  Not a declaration-only vocabulary, so not
-    this refusal, in either era."""
-    owner = _load_fixture("gate_alias_owner")
+def test_an_exporter_row_a_load_wrote_and_emptied_keeps_the_clobber_message(
+        tmp_path, private_module):
+    """No clauses left, but a LOAD SOURCE: ``gate_alias_owner`` loads
+    ``bo_p(1),`` into a ``-dynamic`` row, and the clause is retracted.  The
+    gate permits the write (an owned row with nothing on it), so this is
+    refused here -- with the clobber diagnostic, since the exporter did
+    define the predicate."""
+    owner_name = "_vocabdrop_emptied_owner"
+    owner = private_module("gate_alias_owner", owner_name)
     row = owner.__dict__["$module"].db.row("bo_p", 1)
     assert row.source is not None and row.clauses, "not the shape under test"
     del row.ensure_clauses()[:]
     assert not row.clauses
-    for era, binding in {
-            "class": owner.bo_p,
-            "mangled": mangle("tests.fixtures.gate_alias_owner", "bo_p")}.items():
+    texts = {}
+    for era, binding in {"class": owner.bo_p,
+                         "mangled": mangle(owner_name, "bo_p")}.items():
         origins = _import_from_origins(
-            [ImportFromDirective(module="tests.fixtures.gate_alias_owner",
-                                 names=["bo_p"])],
+            [ImportFromDirective(module=owner_name, names=["bo_p"])],
             {"bo_p": binding})
         assert origins["bo_p"][1] is not None, era
-        assert _implements_an_imported_declaration(
-            origins, {"bo_p": binding}, "bo_p", 1, "some_implementer"
-        ) is None, era
+        texts[era] = _implements_an_imported_declaration(
+            origins, {"bo_p": binding}, "bo_p", 1, "some_implementer")
+        assert texts[era] is not None, era
+    strip = lambda t: "\n".join(l for l in str(t).splitlines()
+                                if " is declared at " not in l)
+    assert strip(texts["class"]) == strip(texts["mangled"])
+    first = str(texts["class"]).splitlines()[0]
+    assert first == ("some_implementer defines a clause for bo_p/1, which it "
+                     f"-import_from's from {owner_name}.")
+    assert "only declares" not in str(texts["class"])
+
+
+def test_an_authorized_bind_never_moves_a_predicate_off_another_database():
+    """The steal itself is gone: ``_bind_row(..., authorized=True)`` onto a
+    class already reading ANOTHER Database's real row raises instead of
+    moving it (it used to move -- the idiom's mechanism).  An unauthorized
+    bind still leaves the class where it is, silently, and a first bind off
+    the private detached row is still free."""
+    from clausal.logic.predicate import make_predicate
+    owner_db, other_db = Database(), Database()
+    cls = make_predicate("vocabdrop_steal_probe", ["x"])
+    assert cls._row is None or cls._row.detached
+    cls._bind_row(owner_db, "vocabdrop_steal_probe", 1)       # first bind: free
+    home = cls._row
+    assert home is owner_db.row("vocabdrop_steal_probe", 1)
+
+    with pytest.raises(RuntimeError, match="never changes its defining module"):
+        cls._bind_row(other_db, "vocabdrop_steal_probe", 1, authorized=True)
+    assert cls._row is home
+
+    cls._bind_row(other_db, "vocabdrop_steal_probe", 1)       # policed: no-op
+    assert cls._row is home

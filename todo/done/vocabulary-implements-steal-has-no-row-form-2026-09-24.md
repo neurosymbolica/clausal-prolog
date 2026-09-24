@@ -92,17 +92,30 @@ flip.
 `todo/field-named-export-of-an-imported-dynamic-splits-identity-2026-09-24.md`,
 `todo/too-few-positional-args-pad-with-fresh-vars-2026-09-24.md`.
 
-**Review round (roborev MEDIUM, merged with main a5c4fab8).** The check now
-also requires the exporter's row (resolved through the binding, both eras) to
-hold NO clauses and NO load source. A `-dynamic` exporter filled at runtime,
-or a row a load wrote and later emptied, is not a declaration-only vocabulary:
-the refusal stands aside and the gate's policy decides -- today it PERMITS
-the write (rule 3, unowned / emptied row), pinned by
-`test_a_dynamic_exporter_holding_runtime_clauses_is_the_gates_call` and
-`test_an_exporter_row_a_load_wrote_is_the_gates_call_even_when_emptied`.
-Consequence to know about: on that path step 4's authorized bind still moves
-the exporter's class onto the importer's row in the class era (0 arrivals in
-the in-tree population).
+**Review rounds 2-3 (merged with main a5c4fab8).** Round 2 made the check
+stand aside when the exporter's row held clauses; round 3 showed that let the
+STEAL back in: a `-dynamic` exporter row filled at runtime is unowned, the
+gate permits the load write, and step 4 moved the exporter's class onto the
+importer's row, losing the runtime clauses for every caller. Final rule: a
+load may not add clauses to another module's predicate, whatever its row
+holds. After the gate, every such write is refused at step 3d, with a
+message for the row's shape:
+
+* clause-free, never loaded (declaration-only / empty `-dynamic`):
+  "A only declares p/2" + define-it-in-B remedy;
+* `-dynamic` holding runtime clauses: "whose p/2 is a -dynamic predicate
+  holding N clauses asserted at runtime; a load cannot add clauses to
+  another module's predicate" + assert-at-runtime / own-predicate remedy
+  (`describe_imported_runtime_dynamic_implemented`);
+* a row a load wrote, since emptied: the existing clobber diagnostic.
+
+The steal itself is removed: `PredicateMeta._bind_row(..., authorized=True)`
+onto a class reading another Database's real row now RAISES
+(`RuntimeError`, "a predicate never changes its defining module") instead of
+moving it; an unauthorized bind is still a silent no-op. Re-probed after the
+change: 0 such arrivals over 680 (targeted + specialization suites, the only
+one being the unit test that pins the raise) and 1,205 (every in-tree
+`.clausal` with an `-import_from`).
 
 Signature source: the only allowed step-4 mismatches (`fnm_verdict/2`,
 `impord_fverdict/2`, declare-import-define) are now refused loads, so
