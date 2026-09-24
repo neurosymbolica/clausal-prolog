@@ -156,10 +156,11 @@ changed on review, because each DID change behaviour before the flip:
   also true of a class, so a first arm would send a class with `arity=None` through
   `_dispatch_at(cls, 0)` and its arity refusal), and a handle with no arity raises
   `TypeError` instead of guessing 0.
-- `globals_env.py`: an APPLIED target (arity >= 0) accepts a handle only via
-  `is_declared_predicate(existing, arity=target_arity)`; the arity-blind accept kept a
-  handle naming `name` at another arity for every arity, pre-empting the builtin lookup,
-  `_atom_shadows_row` and the dotted routing.
+- `globals_env.py`: an APPLIED target (arity >= 0) accepts a predicate binding (class
+  or handle) only via `is_declared_predicate(existing, arity=target_arity)`; the
+  arity-blind accept kept a binding naming `name` at another arity for every arity,
+  pre-empting the builtin lookup, `_atom_shadows_row` and the dotted routing (see §7
+  item 9).
 
 ## 7. Silent-selector hazards (the recurring failure mode)
 
@@ -189,8 +190,11 @@ error. All MEASURED except where noted:
    `hasattr(pred, '_get_dispatch')` -> `pred._get_dispatch()`: a handle binding fell to
    "Unknown goal — fail silently" (every residual goal, including one specialized
    predicate calling another, 0 solutions). Converted: the guard also accepts
-   `is_declared_predicate_name(pred)`, and a handle dispatches via
-   `_dispatch_at(pred, len(args))`; the class arm is unchanged.
+   `is_declared_predicate_name(pred)`, and EVERY shape -- class, handle, or another
+   `_get_dispatch` implementor -- dispatches via `_dispatch_at(pred, len(args))`
+   (review round 2), so a wrong-arity residual goal raises
+   `PredicateArityMismatchError` in both eras (the class arm used to fail with a raw
+   positional `TypeError`; the new error is a `TypeError` subclass).
 8. (Found in the same review pass; MEASURED; CONVERTED on the same branch)
    `globals_env._inject_resolved_targets`' DOTTED-name branch has two more copies of
    the #5 guard: the attribute walk (`hasattr(obj, "_get_dispatch")`) and the
@@ -199,3 +203,15 @@ error. All MEASURED except where noted:
    `sys.modules` route resolved NOTHING. Both now also accept
    `is_declared_predicate_name`; the early accept (#5's conversion) was measured not
    to change dotted-name behaviour against the class path, which already took it.
+9. (Operator ruling 2026-09-24, applied on the same branch) A predicate name is
+   name + ARITY. `_inject_resolved_targets` accepts a predicate binding for an APPLIED
+   target -- class and handle alike -- only when it is declared at that arity
+   (`_is_call_target`); at another arity the call resolves normally (builtin lookup,
+   then `_atom_shadows_row`, now widened to predicate bindings declared at another
+   arity, so this db's own row wins). The class-era `PredicateArityMismatchError`
+   there was an artefact of the predicate being a class. When nothing else answers,
+   the binding is kept and the call reports the arity at run time (the dotted
+   `sys.modules` route keeps it too, rather than leaving a run-time NameError).
+   NOT changed by this ruling (still refuse, both eras alike): `solve.call` Phase 5
+   and `_dispatch_at`'s mangled-handle arm (F7's
+   `test_wrong_arity_does_not_silently_resolve_to_a_builtin_at_the_other_arity`).

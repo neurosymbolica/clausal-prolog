@@ -314,28 +314,39 @@ class TestInjectResolvedTargets:
         bg = self._inject(lm, {("key", 2)}, flip)
         assert bg.get(_disp_key("key", 2)) is row.dispatch_fn
 
-    # -- an applied target takes a handle only at ITS arity (review round 2)
+    # -- a predicate name is name + ARITY (operator ruling, 2026-09-24) ------
     #
-    # ``is_declared_predicate_name`` is arity-blind; the early accept runs
-    # before the builtin lookup and ``_atom_shadows_row``, so an arity-blind
-    # accept would keep a handle naming ``name`` at SOME arity for EVERY
-    # arity.  These pin the handle era only: the class arm still accepts any
-    # class (``hasattr(_get_dispatch)``), unchanged -- see the report.
+    # An applied target takes a predicate binding -- class or handle alike --
+    # only at its own arity.  At another arity the call resolves normally (a
+    # builtin, this db's own row); the class-era PredicateArityMismatchError
+    # was an artefact of the predicate being a class.  Only when nothing else
+    # answers is the binding kept, and the call then reports the arity.
 
-    def test_a_local_predicate_beats_an_owner_handle_at_another_arity(
-            self, lm, owner):
+    @staticmethod
+    def _owner_binding(owner, name, era):
+        cls = owner.module_dict[name]
+        assert isinstance(cls, PredicateMeta)
+        if era == "class":
+            return cls
+        h = mangle(owner.name, name)
+        assert is_declared_predicate_name(h)
+        return h
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_local_predicate_beats_an_owner_binding_at_another_arity(
+            self, lm, owner, era):
         from clausal.logic.compiler.globals_env import (
             _DbDispatchAdapter, _inject_resolved_targets,
         )
         from clausal.logic.predicate import _dispatch_at, is_declared_predicate
         from clausal.logic.solve import _drive_trampoline
         from clausal.logic.variables import Trail
-        h = mangle(owner.name, "ping")
-        assert is_declared_predicate(h, arity=0)          # the owner has ping/0
-        assert not is_declared_predicate(h, arity=2)
+        b = self._owner_binding(owner, "ping", era)
+        assert is_declared_predicate(b, arity=0)          # the owner has ping/0
+        assert not is_declared_predicate(b, arity=2)
         assert lm.db.row("ping", 2) is not None           # the local has ping/2
         globals_ = dict(lm.module_dict)
-        globals_["ping"] = h
+        globals_["ping"] = b
         base_globals = dict(globals_)
         _inject_resolved_targets({("ping", 2)}, base_globals, lm.db, globals_)
         target = base_globals["ping"]
@@ -343,44 +354,63 @@ class TestInjectResolvedTargets:
         fn = _dispatch_at(target, 2)
         assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
 
-    def test_a_builtin_beats_a_handle_at_another_arity(self, lm, owner):
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_builtin_beats_a_binding_at_another_arity(self, lm, owner, era):
         from clausal.logic.builtins import BuiltinPredicate
         from clausal.logic.compiler.globals_env import _inject_resolved_targets
-        from clausal.logic.predicate import is_declared_predicate
-        h = mangle(owner.name, "last")
-        assert is_declared_predicate(h, arity=1)          # owner has last/1
-        globals_ = {"last": h}                            # no local last/2
+        from clausal.logic.predicate import _dispatch_at, is_declared_predicate
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        b = self._owner_binding(owner, "last", era)
+        assert is_declared_predicate(b, arity=1)          # owner has last/1
+        globals_ = {"last": b}                            # no local last/2
         base_globals = dict(globals_)
         _inject_resolved_targets({("last", 2)}, base_globals, owner.db, globals_)
         bp = base_globals["last"]
         assert isinstance(bp, BuiltinPredicate)
         # and it answers as the builtin last/2 does
-        from clausal.logic.predicate import _dispatch_at
-        from clausal.logic.solve import _drive_trampoline
-        from clausal.logic.variables import Trail
         fn = _dispatch_at(bp, 2)
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
 
-    def test_a_handle_at_its_own_arity_is_still_accepted(self, lm, owner):
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_with_nothing_else_to_answer_the_arity_is_reported(
+            self, lm, owner, era):
+        """No builtin ping/2 and no ping/2 row in the compiling db: the
+        binding is kept, and the call reports the arity -- both eras."""
         from clausal.logic.compiler.globals_env import _inject_resolved_targets
-        h = mangle(owner.name, "last")
-        globals_ = {"last": h}
+        from clausal.logic.predicate import _dispatch_at
+        b = self._owner_binding(owner, "ping", era)
+        assert owner.db.row("ping", 2) is None
+        globals_ = {"ping": b}
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("ping", 2)}, base_globals, owner.db, globals_)
+        assert base_globals["ping"] is b
+        with pytest.raises(PredicateArityMismatchError):
+            _dispatch_at(b, 2)
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_binding_at_its_own_arity_is_still_accepted(self, lm, owner, era):
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        b = self._owner_binding(owner, "last", era)
+        globals_ = {"last": b}
         base_globals = dict(globals_)
         _inject_resolved_targets({("last", 1)}, base_globals, owner.db, globals_)
-        assert base_globals["last"] is h
+        assert base_globals["last"] is b
 
-    def test_a_data_reference_keeps_a_handle(self, lm, owner):
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_data_reference_keeps_the_binding(self, lm, owner, era):
         from clausal.logic.compiler.globals_env import _inject_resolved_targets
-        h = mangle(owner.name, "ping")
-        globals_ = {"ping": h}
+        b = self._owner_binding(owner, "ping", era)
+        globals_ = {"ping": b}
         base_globals = dict(globals_)
         _inject_resolved_targets({("ping", -1)}, base_globals, lm.db, globals_)
-        assert base_globals["ping"] is h
+        assert base_globals["ping"] is b
 
+    @pytest.mark.parametrize("era", ["class", "handle"])
     def test_dotted_applied_at_another_arity_takes_the_attribute_walk(
-            self, lm, owner):
-        """The dotted key holds a handle at /0; the call is /2; the walk
-        finds the module attribute that IS /2 and bakes its dispatch."""
+            self, lm, owner, era):
+        """The dotted key holds a /0 binding; the call is /2; the walk finds
+        the module attribute that IS /2 and bakes its dispatch."""
         import types
         from clausal.logic.compiler.globals_env import (
             _disp_key, _inject_resolved_targets,
@@ -388,13 +418,37 @@ class TestInjectResolvedTargets:
         list(call("ping", 1, 2, module=lm))   # compile it
         row = lm.db.row("ping", 2)
         assert row.locked and row.dispatch_fn is not None
-        attr = _handle(lm, "ping")
+        attr = lm.module_dict["ping"] if era == "class" else _handle(lm, "ping")
         globals_ = {"X": types.SimpleNamespace(ping=attr),
-                    "X.ping": mangle(owner.name, "ping")}
+                    "X.ping": self._owner_binding(owner, "ping", era)}
         base_globals = dict(globals_)
         _inject_resolved_targets({("X.ping", 2)}, base_globals, lm.db, globals_)
         assert base_globals["X.ping"] is attr
         assert base_globals.get(_disp_key("X.ping", 2)) is row.dispatch_fn
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_dotted_sys_modules_route_at_another_arity(
+            self, lm, owner, monkeypatch, era):
+        """``owner.last`` is last/1; the call is /2.  No builtin is dotted, so
+        nothing else answers: the object is kept (not a NameError at run
+        time), nothing is baked, and the call reports the arity.
+
+        NOT mutation-sensitive, by construction: with an arity-blind accept
+        the same object is kept and ``_maybe_cache_dispatch`` refuses the
+        bake at the wrong arity anyway.  It pins the outcome, both eras."""
+        from clausal.logic.compiler.globals_env import (
+            _disp_key, _inject_resolved_targets,
+        )
+        from clausal.logic.predicate import _dispatch_at
+        b = self._owner_binding(owner, "last", era)
+        monkeypatch.setitem(sys.modules[owner.name].__dict__, "last", b)
+        dotted = f"{owner.name}.last"
+        base_globals: dict = {}
+        _inject_resolved_targets({(dotted, 2)}, base_globals, lm.db, {})
+        assert base_globals[dotted] is b
+        assert _disp_key(dotted, 2) not in base_globals
+        with pytest.raises(PredicateArityMismatchError):
+            _dispatch_at(b, 2)
 
     # -- dotted names (review, 2026-09-24) ---------------------------------
     #
@@ -479,6 +533,20 @@ class TestSpecializerSolveGoal:
         sg = self._dispatcher(lm, era)
         with pytest.raises(PredicateArityMismatchError):
             list(call(sg, ["is_pos", 1, 2]))
+
+    def test_a_non_predicate_implementor_is_dispatched(self, lm):
+        """A ``_get_dispatch`` implementor that is not a ``PredicateMeta``
+        (here a ``BuiltinPredicate``) goes through ``_dispatch_at``'s
+        generic arm, called bare."""
+        from clausal.logic.builtins import get_builtin_predicate
+        from clausal.logic.specialization import _make_solve_goal_predicate
+        bp = get_builtin_predicate("last", 2, lm.db)
+        assert bp is not None and not isinstance(bp, PredicateMeta)
+        md = dict(lm.module_dict)
+        md["my_last"] = bp
+        sg = _make_solve_goal_predicate("SG_w4b3", None, md)
+        assert len(list(call(sg, ["my_last", [4, 5], 5]))) == 1
+        assert len(list(call(sg, ["my_last", [4, 5], 4]))) == 0
 
     def test_a_data_atom_is_still_an_unknown_goal(self, lm):
         from clausal.logic.specialization import _make_solve_goal_predicate
