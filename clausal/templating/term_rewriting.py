@@ -7213,9 +7213,14 @@ class EmbedTransformer(NodeTransformer):
         # settled them (first registration wins).  compile_module step 4
         # stamps ``row.signature`` from this -- the class is no longer the
         # vehicle (todo/done/step4-signature-comes-from-the-class-2026-09-24.md).
-        transformer._module_items.append(HeadFieldNamesItem(fields={
-            name: tuple(fields)
-            for name, fields in transformer._seen_functors.items()}))
+        # Only when there is a functor to name, like BareAtomRefs below: the
+        # consumer (``compiler_v2._head_field_names``) reads an absent item as
+        # ``{}``, so an empty one would say nothing and only add noise to
+        # the item list.
+        if transformer._seen_functors:
+            transformer._module_items.append(HeadFieldNamesItem(fields={
+                name: tuple(fields)
+                for name, fields in transformer._seen_functors.items()}))
         if transformer._bare_atom_refs:
             transformer._module_items.append(
                 BareAtomRefsItem(names=frozenset(transformer._bare_atom_refs))

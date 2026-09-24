@@ -40,6 +40,18 @@ from clausal.logic.variables import Var, deref
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
+@pytest.fixture(autouse=True)
+def _forget_s4rs_modules():
+    """Every ``s4rs_*`` module a test here loads from its ``tmp_path`` is
+    removed from ``sys.modules`` afterwards, so no later test can resolve an
+    import against a module whose file is gone."""
+    before = set(sys.modules)
+    yield
+    for name in [n for n in sys.modules
+                 if n.startswith("s4rs_") and n not in before]:
+        sys.modules.pop(name, None)
+
+
 def _write_module(tmp_path, name: str, source: str):
     path = tmp_path / f"{name}.clausal"
     path.write_text(textwrap.dedent(source).lstrip())
@@ -207,16 +219,16 @@ def test_a_name_bound_to_an_imported_atom_still_gets_its_signature(
     assert _signature_3(lm, "t5b_slot", 2) == ("arg_0", "arg_1")
 
     monkeypatch.syspath_prepend(str(tmp_path))
-    _write_module(tmp_path, "s4rs_vocab", """
-        -module(s4rs_vocab, [s4rs_slot])
+    _write_module(tmp_path, "s4rs_avocab", """
+        -module(s4rs_avocab, [s4rs_aslot])
     """)
-    owned = _write_module(tmp_path, "s4rs_owned", """
-        -import_from(s4rs_vocab, [s4rs_slot])
+    owned = _write_module(tmp_path, "s4rs_aowned", """
+        -import_from(s4rs_avocab, [s4rs_aslot])
 
-        s4rs_slot(7, 1),
+        s4rs_aslot(7, 1),
     """)
-    assert not isinstance(owned.__dict__.get("s4rs_slot"), PredicateMeta)
-    assert owned.__dict__["$module"].db.row("s4rs_slot", 2).signature == (
+    assert not isinstance(owned.__dict__.get("s4rs_aslot"), PredicateMeta)
+    assert owned.__dict__["$module"].db.row("s4rs_aslot", 2).signature == (
         "arg_0", "arg_1")
 
 
@@ -273,14 +285,21 @@ def test_the_signature_survives_a_bytecode_cache_hit(tmp_path):
     """).lstrip())
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+    # A cache that is never written can never be hit: clear the switch
+    # that stops CPython writing it, whatever the calling environment says.
+    env = {k: v for k, v in os.environ.items()
+           if k != "PYTHONDONTWRITEBYTECODE"}
+
     def run():
         out = subprocess.run(
             [sys.executable, "-c", _CACHE_PROBE, str(tmp_path)],
-            cwd=repo, capture_output=True, text=True, timeout=300)
+            cwd=repo, env=env, capture_output=True, text=True, timeout=300)
         assert out.returncode == 0, out.stderr
         return out.stdout.strip().splitlines()[-1]
 
     assert run() == "(True, ('r', 's'))"
+    cached = list((tmp_path / "__pycache__").glob("s4rs_cached.*.pyc"))
+    assert cached, "the first load wrote no bytecode cache file"
     assert run() == "(False, ('r', 's'))"
 
 
