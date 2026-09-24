@@ -2134,6 +2134,27 @@ def mint_predicate_handle(db, functor: str) -> str:
     return mangle(module_name, functor)
 
 
+def is_bound_predicate_at(binding, arity: int, db=None) -> bool:
+    """Is *binding* a predicate at *arity*, reading the arity from where the
+    predicate LIVES?
+
+    A ``PredicateMeta`` class bound to a real row answers with that row's
+    arity (``row.key[1]``): a class can be bound at an arity its ``_fields``
+    do not spell (a name re-bound within its database), and the row is what
+    a write or a call reaches.  Everything else -- an unbound class, a
+    detached one, a mangled handle -- is ``is_declared_predicate``.  The
+    ONE arity source for the load channel's "is this the imported
+    predicate?" questions (``compiler_v2._implements_an_imported_declaration``
+    and :func:`is_foreign_class_at_other_arity`), so the two cannot disagree
+    about a class whose fields and row differ (round-7 review).
+    """
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        if row is not None and not row.detached:
+            return row.key[1] == arity
+    return is_declared_predicate(binding, arity=arity, db=db)
+
+
 def is_foreign_class_at_other_arity(binding, db, arity: int) -> bool:
     """True when *binding* is a ``PredicateMeta`` class already reading
     ANOTHER Database's real row, at an arity other than *arity*.
@@ -2159,7 +2180,7 @@ def is_foreign_class_at_other_arity(binding, db, arity: int) -> bool:
     row = binding._row
     if row is None or row.detached or db is None or row.db is db:
         return False
-    return row.key[1] != arity
+    return not is_bound_predicate_at(binding, arity)
 
 
 def resolve_predicate_row(binding, *, arity: int,

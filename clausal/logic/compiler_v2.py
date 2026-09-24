@@ -43,6 +43,7 @@ from clausal.logic.predicate import (
     predicate_arities_for, predicate_binding_name,
     resolve_predicate_row, _db_for_module_name,
     is_foreign_class_at_other_arity, module_source_path,
+    is_bound_predicate_at,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -1076,11 +1077,13 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     exporter, bound = origin
     if bound is None or _is_self_import(exporter, module_name, author):
         return None
-    if not is_declared_predicate(bound, arity=arity):
+    # ONE arity source with ``is_foreign_class_at_other_arity`` (step 4,
+    # ``_load_through``): the bound ROW's arity for a class on a real row.
+    if not is_bound_predicate_at(bound, arity):
         return None
     local = module_dict.get(functor)
     if (local is not None and local != bound
-            and is_declared_predicate(local, arity=arity)):
+            and is_bound_predicate_at(local, arity)):
         # The canonical spelling is bound to a predicate of THIS module, not
         # to the import: an aliased ``-import_from(m, [alias(f, G)])`` leaves
         # ``f`` free, and a local ``f/N`` then keeps its own predicate (the

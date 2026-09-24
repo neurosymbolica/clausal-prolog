@@ -168,3 +168,26 @@ holding clauses there gets the Python message); the self-import exemption is
 keyed on the canonical source path, like the gate's rule 1
 (`_is_self_import`); `is_foreign_class_at_other_arity` reads the bound row's
 arity, not `len(_fields)`.
+
+**Review round 7 (after main's name+arity merge, cb57e75a).** Root cause of
+the 8 new failures: `solve._compile_as_query` compiled the query body with no
+compile ctx, so the goal emitter never saw the `$disp_name_N` entries the
+target-resolution loop plants -- including the name+arity ruling's
+unqualified other-arity dispatcher -- and emitted `$dispatch_at(name, N)` on
+the name's BINDING (a's `p/1` class), whose class arm resolves another arity
+in the binding's OWNER (a), not the calling module. Clause bodies, `call/N`
+and `solve.call` were already right; only an outside `solve()` of a goal
+term refused B's own `p/2`. Fix: a caller-supplied body compiler that sets
+`accepts_ctx_template` gets the compile's `ctx_template`
+(`compile_predicate_trampoline`), and the query compiler passes it on, so a
+query call site uses the same `$disp_` entries a compiled clause does.
+Lows: ONE arity source -- `is_bound_predicate_at` (the bound row's arity for
+a class on a real row, else `is_declared_predicate`) now answers both the
+pre-pass and `is_foreign_class_at_other_arity`; a class whose `_fields` and
+bound row disagree ends in a user-facing load error, never the internal
+`RuntimeError` (tested end to end at both arities). The other-arity tests
+now reach B's own `p/2` four ways: outside query, `solve.call` by name, a
+body goal inside B, and `call/3` (inside B in the class era; by name from a
+query in both eras -- the handle-era simulation rebinds the name only at
+step 3d, after B's body lowered its `r5p` argument, so an in-body meta-call
+there would mix eras).

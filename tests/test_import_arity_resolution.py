@@ -177,9 +177,22 @@ class TestALocalPredicateAtAnotherArityLoads:
             assert rebound == [use_name], "the handle-era rebinding never ran"
 
         lm = use.__dict__["$module"]
+
+        def answers(gen, a, b):
+            return [(walk(deref(a)), walk(deref(b))) for _ in gen]
+
+        # Every route to the importer's own t5b_kfact/2: an outside query, a
+        # solve.call by name, a body goal inside the importer (t5b_dac_go),
+        # and a meta-call (call/3) by name.
         a, b = Var(), Var()
-        assert [(walk(deref(a)), walk(deref(b)))
-                for _ in solve(("t5b_kfact", a, b), lm)] == [(1, 2)]
+        assert answers(solve(("t5b_kfact", a, b), lm), a, b) == [(1, 2)]
+        a, b = Var(), Var()
+        assert answers(call("t5b_kfact", a, b, module=lm), a, b) == [(1, 2)]
+        a, b = Var(), Var()
+        assert answers(call("t5b_dac_go", a, b, module=lm), a, b) == [(1, 2)]
+        a, b = Var(), Var()
+        assert answers(solve(("call", mint("t5b_kfact"), a, b), lm),
+                       a, b) == [(1, 2)]
         assert lm.db.row("t5b_kfact", 2).db is lm.db
         # The owner's /0: same clause, same owner.
         assert owner_db.row("t5b_kfact", 0).clauses == owner_clauses

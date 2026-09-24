@@ -499,6 +499,44 @@ _OWNERS = {
 }
 
 
+# B's own r5p/2, a body goal calling it, and a META-call of it (call/3).
+_R5_USER_BODY = (
+    "r5p(1, 2),\n\n"
+    "r5chk(X, Y) <- r5p(X, Y)\n\n"
+    "r5meta(X, Y) <- call(r5p, X, Y)\n")
+
+
+def _assert_own_p2_answers_every_way(ulm, era="class"):
+    """Round-7 LOW 2: B's own ``r5p/2`` answers however it is reached -- an
+    outside query (``solve`` of a goal term), ``solve.call`` by NAME in B, a
+    body goal inside B, and a meta-call (``call/3``) inside B.  All four are
+    UNQUALIFIED calls at an arity the name's binding (a's ``r5p/1``) is not
+    at, so all four resolve in B's own row first (name+arity ruling)."""
+    def answers(gen, x, y):
+        return [(walk(deref(x)), walk(deref(y))) for _ in gen]
+
+    x, y = Var(), Var()
+    assert answers(solve(("r5p", x, y), ulm), x, y) == [(1, 2)], "solve"
+    x, y = Var(), Var()
+    assert answers(call("r5p", x, y, module=ulm), x, y) == [(1, 2)], "call"
+    x, y = Var(), Var()
+    assert answers(call("r5chk", x, y, module=ulm), x, y) == [(1, 2)], "body"
+    # A meta-call by NAME from outside (the atom, as a handle-era term
+    # would carry nothing else), in both eras.
+    x, y = Var(), Var()
+    assert answers(solve(("call", mint("r5p"), x, y), ulm), x, y) == [
+        (1, 2)], "call/3 from a query"
+    if era == "class":
+        # The meta-call INSIDE B: its ``r5p`` argument was lowered when B's
+        # body ran, i.e. to the class today.  The handle-era leg rebinds the
+        # name only at step 3d, after that lowering, so this route would mix
+        # eras (a class in the term, a handle in the namespace) -- it is
+        # checked in the class era, where it is faithful.
+        x, y = Var(), Var()
+        assert answers(call("r5meta", x, y, module=ulm), x, y) == [
+            (1, 2)], "call/3 in a body"
+
+
 def _write(tmp_path, name, text):
     path = tmp_path / f"{name}.clausal"
     path.write_text(text)
@@ -555,15 +593,13 @@ def test_a_local_predicate_at_another_arity_than_an_imported_class_loads(
 
     monkeypatch.setattr(cv2, "_refuse_foreign_writes", refuse)
     use = private_module(None, use_name, path=_write(tmp_path, use_name, (
-        f"-module({use_name}, [])\n"
+        f"-module({use_name}, [r5chk(X, Y), r5meta(X, Y)])\n"
         f"-import_from({owner_name}, [r5p])\n\n"
-        "r5p(1, 2),\n")))
+        + _R5_USER_BODY)))
     assert seen == [True], "the name was not bound to a's class at step 4"
 
     ulm = use.__dict__["$module"]
-    x, y = Var(), Var()
-    assert [(walk(deref(x)), walk(deref(y)))
-            for _ in solve(("r5p", x, y), ulm)] == [(1, 2)]
+    _assert_own_p2_answers_every_way(ulm, era)
     assert ulm.db.row("r5p", 2).clauses
     # a's p/1: same row, same answers -- nothing moved, no dispatch landed.
     assert owner.r5p._row is owner_row
@@ -603,13 +639,11 @@ def test_a_plain_exporter_s_loaded_clauses_do_not_stop_another_arity(
 
     monkeypatch.setattr(cv2, "_refuse_foreign_writes", refuse)
     use = private_module(None, use_name, path=_write(tmp_path, use_name, (
-        f"-module({use_name}, [])\n"
+        f"-module({use_name}, [r5chk(X, Y), r5meta(X, Y)])\n"
         f"-import_from({owner_name}, [r5p])\n\n"
-        "r5p(1, 2),\n")))
+        + _R5_USER_BODY)))
     assert seen == [True], "the name was not bound to a's class at step 3d"
-    x, y = Var(), Var()
-    assert [(walk(deref(x)), walk(deref(y))) for _ in solve(
-        ("r5p", x, y), use.__dict__["$module"])] == [(1, 2)]
+    _assert_own_p2_answers_every_way(use.__dict__["$module"], era)
     assert owner.r5p._row is owner_row
     z = Var()
     assert [walk(deref(z)) for _ in call(owner.r5p, z)] == [mint("one")]
@@ -758,3 +792,49 @@ def test_the_other_arity_test_reads_the_bound_rows_arity_not_the_fields():
     assert is_foreign_class_at_other_arity(cls, owner_db, 1) is False
     assert is_foreign_class_at_other_arity(
         make_predicate("vocabdrop_unbound", ["a"]), other_db, 2) is False
+
+
+@pytest.mark.parametrize("b_arity", [1, 2])
+def test_a_class_whose_fields_and_row_disagree_never_hits_the_internal_raise(
+        tmp_path, private_module, b_arity):
+    """Round-7 LOW 1: one arity source.  a exports ``r7q/1`` (a load clause),
+    and a's class -- minted with ONE field -- is then re-bound within a's own
+    database to a's ``r7q/2`` row.  Before, the pre-pass read ``_fields`` (1)
+    and step 4 read the row (2), so B writing ``r7q/2`` slipped past every
+    refusal into step 4's authorized bind and the INTERNAL ``RuntimeError``.
+    Now both read the row, and B's load ends in a user-facing load error at
+    either arity, with nothing of a's moved:
+
+    * ``r7q/2`` -- the class's row: the imported predicate, clause-free and
+      never loaded, so the drop-the-idiom refusal;
+    * ``r7q/1`` -- a's EXPORTED, adopted, load-owned row: the clobber
+      refusal (it is the imported predicate at that arity)."""
+    owner_name = f"_vocabdrop_r7_owner_{b_arity}"
+    use_name = f"_vocabdrop_r7_use_{b_arity}"
+    owner = private_module(None, owner_name, path=_write(
+        tmp_path, owner_name,
+        f"-module({owner_name}, [r7q/1])\n-private([one])\nr7q(one),\n"))
+    olm = owner.__dict__["$module"]
+    cls = owner.r7q
+    cls._bind_row(olm.db, "r7q", 2)                 # same db: allowed
+    # The move carries ``locked``/``source`` over; clear them so a's r7q/2 is
+    # a clause-free row no load owns -- the shape the gate PERMITS, which is
+    # what used to reach step 4's bind.
+    cls._row.locked = False
+    cls._row.source = None
+    assert len(cls._fields) == 1 and cls._row.key == ("r7q", 2)
+    assert cls._row.db is olm.db and not cls._row.clauses
+    fact = "r7q(5, 6)," if b_arity == 2 else "r7q(5),"
+    path = _write(tmp_path, use_name, (
+        f"-module({use_name}, [])\n"
+        f"-import_from({owner_name}, [r7q])\n\n{fact}\n"))
+    with pytest.raises(SyntaxError) as exc_info:     # never RuntimeError
+        private_module(None, use_name, path=path)
+    text = _flat(exc_info.value)
+    if b_arity == 2:
+        assert f"{owner_name} only declares r7q/2" in text
+    else:
+        assert "may not write r7q/1" in text
+    assert cls._row.key == ("r7q", 2) and cls._row.db is olm.db
+    assert not cls._row.clauses
+    assert len(olm.db.row("r7q", 1).clauses) == 1

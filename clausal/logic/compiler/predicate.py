@@ -930,6 +930,19 @@ def _compile_predicate_trampoline_impl(
         body_compiler = _make_body_compiler_trampoline(
             _effective_db, ctx_template=ctx_template,
         )
+    elif getattr(body_compiler, "accepts_ctx_template", False):
+        # A caller-supplied body compiler (``solve._compile_as_query``) that
+        # asks for this compile's ctx: it then sees the SAME
+        # ``locked_dispatch_keys`` the default compiler does, so a call site
+        # the resolution loop routed through a ``$disp_`` entry (a locked
+        # predicate, or the name+arity ruling's unqualified other-arity
+        # dispatcher) uses it instead of ``$dispatch_at`` on the name's
+        # binding.  ``ctx_template`` is filled in place below, before any
+        # clause body is compiled.
+        _custom_body_compiler = body_compiler
+
+        def body_compiler(clause, var_context, _bc=_custom_body_compiler):
+            return _bc(clause, var_context, ctx_template=ctx_template)
 
     # Resolve pred_cls: explicit param > globals_ > auto-detect later.
     if pred_cls is None:
