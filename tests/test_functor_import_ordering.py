@@ -81,7 +81,9 @@ class TestHeadEmission:
             "-import_from(other, [f])\n"
             "f(A, B) <- g(A, B)\n"
         )
-        assert "head=f((A := $Var()), (B := $Var()))" in out
+        # ``$head(<binding>, ...)``: the head is built from the binding
+        # without calling it (W4b-2d task 5) -- still positional.
+        assert "head=$head(f, (A := $Var()), (B := $Var()))" in out
         assert "STATUS=" not in out
         assert "CITATIONS=" not in out
 
@@ -186,7 +188,7 @@ class TestDeclareThenImport:
             "-import_from(other, [f])\n"
             "f(maybe, pending)\n"
         )
-        assert "head=f('maybe', 'pending')" in out
+        assert "head=$head(f, 'maybe', 'pending')" in out
         assert "STATUS=" not in out
 
         _load_fixture("impord_fact_vocab")

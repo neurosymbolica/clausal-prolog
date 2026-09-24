@@ -407,7 +407,9 @@ class TestImportedExpansionRules:
             sys.modules.pop("_exp_imp", None)
 
     def test_imported_te_predicate_nodes_stored(self):
-        """Provider module stores _te_predicate_nodes on term_expansion class."""
+        """Provider module records its TE clauses on its DATABASE, not on the
+        term_expansion class (W4b-2d R6: a class stash is lost silently once
+        an importer's binding is a handle)."""
         # nv
         mod = _load_module(
             "_exp_prov",
@@ -415,8 +417,9 @@ class TestImportedExpansionRules:
         )
         te_cls = mod.__dict__.get("term_expansion")
         assert te_cls is not None
-        assert hasattr(te_cls, "_te_predicate_nodes")
-        assert len(te_cls._te_predicate_nodes) == 1
+        assert not hasattr(te_cls, "_te_predicate_nodes")
+        nodes = mod.__dict__["$module"].db.te_predicate_nodes
+        assert nodes is not None and len(nodes) == 1
 
 
 class TestNewFunctorsFromExpansion:

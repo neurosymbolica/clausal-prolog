@@ -496,7 +496,7 @@ _UNSET = object()  # sentinel: a signature slot no positional/keyword arg filled
 def _cell_arity_error(functor: str, fields: "tuple[str, ...]", n_args: int) -> SyntaxError:
     """Compile-time over-arity error for a cell construction/head reference.
 
-    Mirrors ``clausal.logic.predicate._term_arity_error``'s wording (functor,
+    Mirrors ``clausal.logic.predicate.term_arity_error_for``'s wording (functor,
     declared arity, declared field tuple) — that function builds the RUNTIME
     twin of this same mistake (``PredicateMeta.__call__`` passed too many
     positional arguments); this is the compile-time one, raised while
@@ -513,7 +513,7 @@ def _cell_arity_error(functor: str, fields: "tuple[str, ...]", n_args: int) -> S
 def _cell_field_error(functor: str, fields: "tuple[str, ...]", bad_name: str) -> SyntaxError:
     """Compile-time unknown-field error for a cell construction/head reference.
 
-    Mirrors ``clausal.logic.predicate._term_construction_error``'s wording
+    Mirrors ``clausal.logic.predicate.term_construction_error_for``'s wording
     (functor, declared field tuple, the offending name) — the compile-time
     twin of that function's runtime ``__init__`` ``TypeError`` re-raise.
     """
