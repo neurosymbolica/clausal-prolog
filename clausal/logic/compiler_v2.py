@@ -38,7 +38,8 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
-    field_names_for, is_declared_predicate, predicate_binding_name,
+    field_names_for, is_declared_predicate, is_declared_predicate_name,
+    predicate_binding_name,
     resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import (
@@ -1351,8 +1352,23 @@ def _run_specialization(
                 f"not found in module dict"
             )
 
-        if isinstance(source_cls, PredicateMeta):
+        if is_declared_predicate_name(source_cls):
             # It's a predicate — call it to get the program list.
+            # ``is_declared_predicate_name``, not ``is_mangled``: a ``-hide``
+            # DATA atom is mangled too, and named as a source it must keep
+            # getting the "must be a predicate or list" refusal below, not be
+            # called and fail with an unrelated existence_error (measured on
+            # the first cut of this change).  A mangled PREDICATE atom
+            # (post-flip module_dict binding, F1 re-audit row 34) needs
+            # no separate branch here: ``call()`` already demangles its
+            # own-module handles and resolves the owning module itself (W4
+            # boundary + the 2026-09-24 dangling-handle ruling), the same
+            # infrastructure every other mangled-goal call site already
+            # goes through — so handing it *source_cls* directly, exactly as
+            # the class arm always has, is the whole migration.  Safe today:
+            # ``module_dict`` holds only classes pre-flip, so no input can
+            # reach this widened branch before the flip; this only starts
+            # firing once one can.
             program_var = Var()
             program_data = None
             for _ in call(source_cls, program_var):
