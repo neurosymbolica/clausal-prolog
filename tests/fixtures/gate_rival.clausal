@@ -1,15 +1,16 @@
 # clausal: no-collect
-# Imports BOTH of gate_vocab's exports and defines a clause for each, in the
-# order that matters: the legal one (gv_free is clause-free, so implementing it
-# downstream is the blessed idiom) comes FIRST, the refused one second.  The
-# mutation gate must therefore refuse this load BEFORE writing anything at all
-# -- the property the deleted step-3c pre-pass carried, and the one this
-# fixture exists to pin.
--module(gate_rival, [gate_rival_go(STATUS)])
--import_from(tests.fixtures.gate_vocab, [gv_free, gv_owned])
+# Defines a LEGAL predicate of its own first, then a clause for gate_vocab's
+# gv_owned/1, which already has a clause (refused).  The mutation gate must
+# therefore refuse this load BEFORE writing anything at all -- the property
+# the deleted step-3c pre-pass carried, and the one this fixture exists to
+# pin.  (Until 2026-09-24 the legal first write was an implementation of
+# gate_vocab's clause-free gv_free/1; that "vocabulary-implements" idiom is
+# now itself a load error, so the legal write is a local predicate.)
+-module(gate_rival, [gate_rival_local(STATUS), gate_rival_go(STATUS)])
+-import_from(tests.fixtures.gate_vocab, [gv_owned])
 -private([blue, teal])
 
-gv_free(blue),
+gate_rival_local(blue),
 gv_owned(teal),
 
-gate_rival_go(S) <- gv_free(S)
+gate_rival_go(S) <- gate_rival_local(S)

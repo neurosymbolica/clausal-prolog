@@ -1,11 +1,12 @@
 # clausal: no-collect
-# Final review M-e: the importer imports the owner's DUAL-DECLARED name
-# ``t5b_kfact`` (an atom in the owner's -module list that also carries a /0
-# fact, so it binds to the owner's class) and then writes clauses for
-# ``t5b_kfact/2`` of its own.  The shared class puts the OWNER's ``/0`` row in
-# this write's blast radius, so the load is refused -- and the refusal has to
-# name both keys: the owned ``t5b_kfact/0`` it stopped at, and the
-# ``t5b_kfact/2`` this file actually wrote.
+# The importer imports the owner's DUAL-DECLARED name ``t5b_kfact`` (an atom
+# in the owner's -module list that also carries a /0 fact) and then writes
+# clauses for ``t5b_kfact/2`` of its own.  Final review M-e refused this in
+# the class era (the shared class put the owner's ``/0`` row in the write's
+# blast radius).  Operator ruling 2026-09-24: a local p/2 beside an imported
+# p/1 LOADS in both eras -- name and arity make a different predicate -- so
+# this file now loads, and its t5b_kfact/2 is its own.  Loaded explicitly by
+# tests/test_import_arity_resolution.py.
 -module(t5b_dual_arity_clash, [t5b_dac_go(A, B)])
 -import_from(tests.fixtures.t5b_dual_owner, [t5b_kfact])
 

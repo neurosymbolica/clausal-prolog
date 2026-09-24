@@ -1,0 +1,15 @@
+# clausal: no-collect
+# The DROPPED "vocabulary-implements" idiom (operator ruling 2026-09-24):
+# impclob_verdict/2 is imported from impclob_decl_vocab, which only declares
+# it, and this module supplies its clauses.  The load must be REFUSED, before
+# anything is written -- which is why a legal local predicate comes FIRST: a
+# refusal fired inside the write loop would already have written it.
+-private([ok, cited, early])
+-module(impclob_implements_vocab, [impclob_iv_local(STATUS), impclob_iv_check(STATUS)])
+-import_from(tests.fixtures.impclob_decl_vocab, [impclob_verdict])
+
+impclob_iv_local(early),
+
+impclob_verdict(ok, cited),
+
+impclob_iv_check(S) <- impclob_verdict(S, C_UNUSED)

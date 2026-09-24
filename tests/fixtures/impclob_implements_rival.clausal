@@ -1,11 +1,12 @@
 # clausal: no-collect
-# A SECOND implementer of the same declaration-only vocabulary functor.  If
-# impclob_implements has already been loaded, the clauses on the shared class
-# are ITS work, not impclob_decl_vocab's — the diagnostic must say so rather
-# than crediting them to the (clause-free) vocabulary module.
+# A SECOND implementer of impclob_verdict/2: it imports the predicate from the
+# module that DEFINES it (impclob_implements) and supplies a clause of its own.
+# That would replace impclob_implements' clause for every module that can
+# reach it, so the load is refused -- and the diagnostic must credit the
+# clauses to impclob_implements, not to the declaration-only vocabulary.
 -private([rival, elsewhere])
 -module(impclob_implements_rival, [impclob_rival_check(STATUS)])
--import_from(tests.fixtures.impclob_decl_vocab, [impclob_verdict])
+-import_from(tests.fixtures.impclob_implements, [impclob_verdict])
 
 impclob_verdict(rival, elsewhere),
 
