@@ -58,6 +58,13 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     Task 5, and phrase/2,3 in this sweep.  It is narrowed the same way: a
     control construct and a module-qualified goal are turned away, because
     the shared resolver RAISES for them where time_goal has always failed.
+
+    That narrowing is NOT "time_goal never raises where the resolver does":
+    a dangling predicate HANDLE (a mangled functor whose module never
+    loaded, or whose loaded module lacks the predicate) RAISES here
+    ``existence_error(procedure, Name/Arity)``, exactly as ``call/N`` does
+    (ruling 2 extended, 2026-09-24).  It is a reference that was supposed to
+    resolve, and failing silently is how that mistake stays invisible.
     """
     if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
         return _ensure_trampoline_dispatch(goal_val, 0), ()
