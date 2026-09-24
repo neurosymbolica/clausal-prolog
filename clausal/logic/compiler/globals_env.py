@@ -578,6 +578,78 @@ def _unqualified_other_arity_dispatch(binding, db, name: str, arity: int):
     return dispatch
 
 
+def _clausal_module_name_of(value) -> str | None:
+    """The Clausal ``Module`` name behind *value* (a ``Module`` or an
+    imported ``.clausal`` module object), else None."""
+    from clausal.logic.database import Module  # noqa: PLC0415
+    if isinstance(value, Module):
+        return value.name
+    namespace = getattr(value, "__dict__", None)
+    if isinstance(namespace, dict):
+        for key in ("$module", "__clausal_module__"):
+            mod = namespace.get(key)
+            if isinstance(mod, Module):
+                return mod.name
+    return None
+
+
+def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
+    """The dispatch for a module-qualified call ``m.name(...)`` at *arity*
+    that resolved to nothing when the clause set was compiled.
+
+    Operator ruling 2026-09-25 (Scryer): the call raises
+    ``error(existence_error(procedure, name/Arity), Why)`` -- the bare
+    indicator, the module named in the message only (ruling 2026-09-24, the
+    shape a dangling predicate handle raises) -- as a
+    ``PredicateNotFoundError``, the same Python type an unqualified unknown
+    call raises.
+
+    The base is resolved on EVERY call, never once at compile time (roborev,
+    round 2): a base module that loads after this clause set compiled (a lazy
+    or circular import) must answer once it has loaded.  When the base is a
+    loaded Clausal module the call goes through that module's predicate
+    HANDLE (``predicate._dispatch_at``, W4), so a predicate asserted into the
+    module afterwards answers too, and a miss raises the handle route's own
+    error.  Any other base (not loaded, or not a Clausal module) raises the
+    same term directly.  This is the refusal path, so the walk costs nothing
+    on a call that resolves.
+    """
+    parts = dotted.split(".")
+    base_path, name = ".".join(parts[:-1]), parts[-1]
+
+    def resolve_base():
+        base = globals_.get(parts[0]) if globals_ else None
+        for part in parts[1:-1]:
+            if base is None:
+                break
+            base = getattr(base, part, None)
+        if base is None:
+            base = _sys.modules.get(base_path)
+        return base
+
+    def dispatch(*args):
+        base = resolve_base()
+        module_name = _clausal_module_name_of(base)
+        if module_name is not None:
+            from clausal.logic.atoms import mangle  # noqa: PLC0415
+            from clausal.logic.predicate import _dispatch_at  # noqa: PLC0415
+            return _dispatch_at(mangle(module_name, name), arity, db)(*args)
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            dangling_handle_indicator_and_why,
+        )
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            PredicateNotFoundError,
+        )
+        _indicator, why = dangling_handle_indicator_and_why(
+            base_path, name, arity, loaded=False)
+        if base is not None:
+            why = f"{name}/{arity} is not a predicate of {base_path!r}"
+        raise PredicateNotFoundError(
+            f"{why} (a module-qualified call {dotted}/{arity})", name, arity)
+    dispatch.__qualname__ = f"unresolved_qualified[{dotted}/{arity}]"
+    return dispatch
+
+
 def _is_call_target(binding, arity: int, db=None, name=None) -> bool:
     """True when *binding* is what an APPLIED reference at *arity* calls.
 
@@ -793,6 +865,20 @@ def _inject_resolved_targets(
                 # keeps its object) so the call reports the arity at run
                 # time instead of a NameError.
                 base_globals[target_name] = resolved
+            elif target_arity >= 0 and target_name not in base_globals:
+                # Operator ruling 2026-09-25: a call of an unknown procedure
+                # raises ISO existence_error(procedure, Name/Arity), like
+                # Scryer -- and a module-qualified ``m.nosuch(1)`` is such a
+                # call.  It used to die on CPython's bare ``NameError: name
+                # 'm.nosuch' is not defined`` (the name key was never bound),
+                # which ``catch/3`` could only see transliterated.  The goal
+                # emitters prefer a ``$disp_`` key, so the refusal lives
+                # THERE, per arity; the NAME key stays unbound, so a Python
+                # use of the name (a term construction, an arithmetic call)
+                # still raises exactly the NameError it always did.
+                base_globals[_disp_key(target_name, target_arity)] = (
+                    _unresolved_qualified_dispatch(
+                        target_name, target_arity, globals_, db))
             continue
         # Name + ARITY ruling (operator, 2026-09-24, with the aliased-import
         # ruling and review rounds 2-4): an UNQUALIFIED call site at an arity

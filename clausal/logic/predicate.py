@@ -1992,8 +1992,10 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             if _bound is not None and _bound is not obj:
                 return _dispatch_at(_bound, arity, _hdb)
             from clausal.logic.exceptions import (  # noqa: PLC0415
-                LogicException, existence_error,
                 dangling_handle_indicator_and_why,
+            )
+            from clausal.predicate_diagnostics import (  # noqa: PLC0415
+                PredicateNotFoundError,
             )
             # Ruling 2026-09-24 (todo/mangled-goal-culprit-terms-are-
             # malformed-2026-09-23.md): the culprit is the bare Name/Arity
@@ -2002,12 +2004,16 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             # entry points (solve's normalisation, call/N) so a ``catch/3``
             # pattern against a dangling handle is the same shape wherever
             # it is written.
-            indicator, why = dangling_handle_indicator_and_why(
+            #
+            # Ruling 2026-09-25: raised as ``PredicateNotFoundError`` -- the
+            # SAME ISO term, now also the ``KeyError`` an unqualified unknown
+            # call raises, so one condition has one Python type.
+            _indicator, why = dangling_handle_indicator_and_why(
                 _mod_name, _name, arity, loaded=True,
             )
-            raise LogicException(existence_error(
-                "procedure", indicator,
-                f"{why} (reached through a module-qualified handle)"))
+            raise PredicateNotFoundError(
+                f"{why} (reached through a module-qualified handle)",
+                _name, arity)
         # P3-1 Task 2 fix round (controller ruling, 2026-09-04), carried
         # through THE FLIP: a bare atom is the arity-0 CELL, reached here
         # whenever a goal resolves to a NAME that turned out to be data, not
@@ -2035,11 +2041,16 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             # never carry the raw ``\x1f`` spelling into a catchable term
             # (ruling 2026-09-24, todo/mangled-goal-culprit-terms-are-
             # malformed-2026-09-23.md).
+            # Raised as ``PredicateNotFoundError`` (ruling 2026-09-25): the
+            # same ISO term, and the unqualified unknown call's Python type.
+            from clausal.predicate_diagnostics import (  # noqa: PLC0415
+                PredicateNotFoundError,
+            )
             _mod_name, _name = demangle(obj)
-            indicator, why = dangling_handle_indicator_and_why(
+            _indicator, why = dangling_handle_indicator_and_why(
                 _mod_name, _name, arity, loaded=False,
             )
-            raise LogicException(existence_error("procedure", indicator, why))
+            raise PredicateNotFoundError(why, _name, arity)
         name = obj
         indicator = Compound("/", (name, arity))
         raise LogicException(
