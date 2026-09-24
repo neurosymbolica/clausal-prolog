@@ -51,6 +51,7 @@ from clausal.logic.builtins._registry import (  # noqa: F401
 # Order doesn't matter — all decorators write to the same registry dicts.
 from clausal.logic.builtins import inspection      # noqa: F401
 from clausal.logic.builtins import database_ops    # noqa: F401
+from clausal.logic.builtins import clause_ops      # noqa: F401  (clause/2)
 from clausal.logic.builtins import keyword_ops     # noqa: F401
 from clausal.logic.builtins import constraints     # noqa: F401
 from clausal.logic.builtins import z3_constraints  # noqa: F401
