@@ -61,12 +61,10 @@ def test_a_local_handle_resolves_in_the_caller_s_db_after_a_pop(tmp_path):
     assert predicate_arities_for(handle, db=db) == {1}
 
 
-def test_a_handle_to_another_module_is_not_captured_by_the_caller(
-        tmp_path, monkeypatch):
+def test_a_handle_to_another_module_is_not_captured_by_the_caller(tmp_path):
     """The hint only short-circuits the caller's OWN module: a foreign
     handle still resolves to its owner, even when the caller defines the
     same functor."""
-    monkeypatch.syspath_prepend(str(tmp_path))
     here = _load_popped(tmp_path, "q0_here", "q0_same(1),\n")
     (tmp_path / "q0_there.clausal").write_text("q0_same(2),\n")
     sys.modules.pop("q0_there", None)
@@ -95,3 +93,47 @@ def test_a_handle_is_minted_from_the_database(tmp_path):
 def test_a_database_with_no_module_cannot_mint():
     with pytest.raises(ValueError, match="belongs to no module"):
         mint_predicate_handle(Database(), "q0_orphan")
+
+
+def test_a_local_handle_to_an_undefined_functor_answers_nothing(tmp_path):
+    """The short-circuit does not fall back to sys.modules: a local handle
+    naming nothing here is not a predicate."""
+    db = _load_popped(tmp_path, "q0_undef", "q0_d(1),\n")
+    handle = mangle("q0_undef", "q0_nothing")
+    assert resolve_predicate_row(handle, arity=1, db=db) is None
+    assert not is_declared_predicate(handle, arity=1, db=db)
+    assert not is_declared_predicate_name(handle, db=db)
+    assert predicate_binding_name(handle, db=db) is None
+    assert predicate_arities_for(handle, db=db) == set()
+
+
+def test_the_class_arm_uses_the_hint_too(tmp_path):
+    """A class whose owner was popped: with the hint its owner's defined
+    arities are found, exactly as the mangled arm finds them."""
+    path = tmp_path / "q0_cls.clausal"
+    path.write_text("-dynamic(q0_two/1, q0_two/2)\n\nq0_other(1),\n")
+    sys.modules.pop("q0_cls", None)
+    module = _load_module("q0_cls", str(path))
+    sys.modules.pop("q0_cls", None)
+    db = module.__dict__["$module"].db
+    cls = module.__dict__["q0_two"]
+    assert cls.__module__ == "q0_cls"
+    handle = mint_predicate_handle(db, "q0_two")
+    assert predicate_arities_for(handle, db=db) == {1, 2}
+    assert predicate_arities_for(cls, db=db) == {1, 2}
+    assert predicate_arities_for(cls) == {len(cls._fields)}   # popped, no hint
+
+
+def test_a_string_named_database_does_not_capture_a_loaded_module_s_handle(
+        tmp_path):
+    loaded = _load_popped(tmp_path, "q0_real", "q0_r(1),\n")
+    sys.modules["q0_real"] = type(sys)("q0_real")
+    sys.modules["q0_real"].__dict__["$module"] = type(
+        "LM", (), {"db": loaded})()
+    try:
+        handle = mint_predicate_handle(loaded, "q0_r")
+        impostor = Database("q0_real")      # module_name() == "q0_real"
+        assert resolve_predicate_row(handle, arity=1, db=impostor) \
+            is loaded.row("q0_r", 1)
+    finally:
+        sys.modules.pop("q0_real", None)

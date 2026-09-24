@@ -1706,6 +1706,12 @@ def _resolve_mangled_owner(binding, db=None):
     still resolves through ``sys.modules``; a registry for a popped
     cross-module owner is deferred until a case needs it.
 
+    The hint is ADDITIVE and, when this landed, passed by no production
+    caller: before the flip no predicate binding is a handle, so nothing
+    needs it yet.  Each consumer passes its db as it migrates (F1 rows
+    58/59/60, then the flip) -- tracked in
+    ``todo/q0-db-hint-must-be-wired-at-each-consumer-2026-09-24.md``.
+
     Shared plumbing for ``resolve_predicate_row``/``is_declared_predicate``'s
     mangled-atom arm: demangle, then require a real ``Database`` at the
     owner.  ``_db_for_module_name(...) is not None`` is the test -- NEVER
@@ -1722,7 +1728,11 @@ def _resolve_mangled_owner(binding, db=None):
     """
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     module_name, functor = demangle(binding)
-    if db is not None and module_name == db.module_name():
+    if (db is not None and isinstance(db.module_dict, dict)
+            and module_name == db.module_name()):
+        # Only a database backed by a real module dict: ``Database("x")``
+        # answers its raw string as its name and must not capture handles
+        # meant for a loaded module called "x".
         return db, functor
     owner = _db_for_module_name(module_name)
     if owner is None:
@@ -2007,9 +2017,15 @@ def predicate_arities_for(binding, *, cache: "dict | None" = None,
         if fields is not None:
             found.add(len(fields))
         owner = predicate_owner_module(binding)
-        db = _db_for_module_name(owner) if owner else None
-        if db is not None:
-            defined, _declared = _arity_maps(db, cache)
+        # The caller's db first (Q0), exactly as the mangled arm does, so the
+        # two eras agree under the same hint when the owner was popped.
+        if (db is not None and isinstance(db.module_dict, dict)
+                and owner == db.module_name()):
+            owner_db = db
+        else:
+            owner_db = _db_for_module_name(owner) if owner else None
+        if owner_db is not None:
+            defined, _declared = _arity_maps(owner_db, cache)
             found |= defined.get(binding.__name__, set())
         return found
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
