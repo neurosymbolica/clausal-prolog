@@ -105,6 +105,12 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     can raise, and the silent failure they have always had is preserved.  A
     module-qualified nonterminal is left out on the same ground: it resolved
     to nothing here before, and making it work is a feature, not this sweep.
+
+    One resolver raise is deliberately NOT narrowed away: a dangling
+    predicate HANDLE (a mangled functor whose module never loaded, or whose
+    loaded module lacks the nonterminal) RAISES
+    ``existence_error(procedure, Name/Arity)`` in phrase/2,3 exactly as in
+    ``call/N`` (ruling 2 extended, 2026-09-24).
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(rule_val)

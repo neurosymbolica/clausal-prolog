@@ -838,13 +838,17 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
         goal for class-instance terms, and its failure is the same ``TypeError``
         it has always raised.
     """
-    _pre_is_cell, _pre_functor = compound_cell_shape(goal)
+    _, _pre_functor = compound_cell_shape(goal)
     goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
     is_cell_goal, functor = compound_cell_shape(goal)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3:
-            _raise_if_dangling_handle_target_missing(
-                _pre_is_cell, _pre_functor, goal, "solve/1")
+            # ``_pre_functor`` is ``None`` when the goal was a bare atom
+            # (``compound_cell_shape`` answers ``(False, None)`` for a
+            # non-cell), so a bare ARITY-0 handle is not checked here and
+            # keeps its older path -- a known gap in solve's normalisation,
+            # left as it was; ``call/N`` passes the atom itself.
+            raise_if_dangling_handle(_pre_functor, goal, "solve/1")
             return _strip_module_qualification(goal, None)
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, existence_error,
@@ -918,44 +922,45 @@ def _strip_module_qualification(goal, module):
 
     Non-qualified goals come back untouched.
     """
-    _pre_is_cell, _pre_functor = compound_cell_shape(goal)
+    _, _pre_functor = compound_cell_shape(goal)
     goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
     is_cell_goal, functor = compound_cell_shape(goal)
     if not (is_cell_goal
             and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
         return goal, module
-    _raise_if_dangling_handle_target_missing(
-        _pre_is_cell, _pre_functor, goal, "solve/1")
+    raise_if_dangling_handle(_pre_functor, goal, "solve/1")
     target, inner = resolve_qualified_goal_cell(goal, "solve/1", module)
     return inner, target
 
 
-def _raise_if_dangling_handle_target_missing(
-    pre_is_cell: bool, pre_functor: Any, goal_after_qualify: Any, context: str,
+def raise_if_dangling_handle(
+    handle: Any, qualified_goal: Any, context: str,
 ) -> None:
-    """Raise the ruled dangling-handle ``LogicException`` now, iff
-    *goal_after_qualify* is a ``(":", M, G)`` cell that ``qualify_mangled_goal``
-    just BUILT by demangling a predicate HANDLE, and ``M:G`` names no
-    predicate.
+    """Raise :func:`dangling_handle_exception` iff *qualified_goal* is the
+    ``(":", M, G)`` cell ``qualify_mangled_goal`` just BUILT from the
+    predicate HANDLE *handle*, and ``M:G`` names no predicate in the loaded
+    module ``M``.
 
-    *pre_is_cell*/*pre_functor* are ``compound_cell_shape`` of the goal
-    BEFORE that ``qualify_mangled_goal`` call -- the only way to tell "this
-    qualification came from a mangled handle" apart from "the caller wrote
-    ``(':', M, G)`` by hand", since both look identical afterwards.  A
-    hand-written qualified goal is untouched here (its ``pre_functor`` is
-    never a mangled atom) and keeps the existing, unrelated
-    undefined-predicate path (a bare ``PredicateNotFoundError`` reached via
-    compiled dispatch) -- only the ruling's own case (a genuine ``-hide``
-    handle whose module loaded but whose predicate does not exist) is
-    pre-empted here, before it can fall through to that generic path, which
-    carries no logic term at all (ruling 2026-09-24, see
-    todo/mangled-goal-culprit-terms-are-malformed-2026-09-23.md).  A no-op
-    (returns without raising) whenever the target predicate DOES exist, or
-    when *pre_functor* was never a mangled handle in the first place.
+    Shared by the goal ENTRY points (ruling 2, 2026-09-24): ``solve``'s
+    normalisation and the ``call/N`` builtin make this one check, so they
+    cannot disagree on when a loaded-module handle is dangling or on the
+    term it raises.
+
+    *handle* is the functor of the goal as the caller held it BEFORE
+    ``qualify_mangled_goal``: slot 0 of a cell goal, or -- for an ARITY-0
+    goal, which is a bare atom -- the atom itself.  It is the only way to
+    tell "this qualification came from a mangled handle" apart from "the
+    caller wrote ``(':', M, G)`` by hand", since both look identical
+    afterwards.  Anything that is not a mangled atom (``None``, a
+    hand-written ``':'``, an ordinary name) makes this a no-op, so a
+    hand-written qualified goal keeps its existing, unrelated
+    undefined-predicate path.  A no-op, too, whenever the target predicate
+    DOES exist (a dispatch entry, or a binding in the module namespace).
+    See todo/mangled-goal-culprit-terms-are-malformed-2026-09-23.md.
     """
-    if not (pre_is_cell and type(pre_functor) is str and is_mangled(pre_functor)):
+    if not (type(handle) is str and is_mangled(handle)):
         return
-    mod_name, inner = goal_after_qualify[1], goal_after_qualify[2]
+    mod_name, inner = qualified_goal[1], qualified_goal[2]
     inner_is_cell, inner_name = compound_cell_shape(inner)
     name = inner_name if inner_is_cell else inner
     arity = len(inner) - 1 if inner_is_cell else 0

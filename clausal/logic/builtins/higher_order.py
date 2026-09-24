@@ -64,6 +64,18 @@ _ZERO_ARITY_CONTROL_GOALS = {
 }
 
 
+def _raise_if_unloaded_handle(functor, arity, context):
+    """Ruling 2 (2026-09-24): a MANGLED *functor* that ``qualify_mangled_goal``
+    left unconverted is a handle whose module half is not a loaded Clausal
+    module.  ``solve`` raises for it, so ``call/N`` does too, with the same
+    term (``solve.dangling_handle_exception``).  Called only once nothing in
+    the calling db can answer to the spelling -- see the two call sites."""
+    if is_mangled(functor):
+        from clausal.logic.solve import dangling_handle_exception  # noqa: PLC0415
+        mod_name, name = demangle(functor)
+        raise dangling_handle_exception(mod_name, name, arity, False, context)
+
+
 def _resolve_named_goal(db, goal_val, extra_args, context):
     """Resolve a goal named by a CELL or a bare ATOM to ``(dispatch, args)``.
 
@@ -168,10 +180,10 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # same check ``solve``'s normalisation makes, called the same way,
         # so the two entry points cannot disagree on when or what.  A handle
         # that resolves falls through and, like any goal, may simply fail.
-        from clausal.logic.solve import (  # noqa: PLC0415
-            _raise_if_dangling_handle_target_missing,
-        )
-        _raise_if_dangling_handle_target_missing(True, functor, _q, context)
+        # *functor* is the handle as the caller held it: slot 0 of a cell
+        # goal, or the bare atom itself for an arity-0 ``call(H)``.
+        from clausal.logic.solve import raise_if_dangling_handle  # noqa: PLC0415
+        raise_if_dangling_handle(functor, _q, context)
         return _resolve_named_goal(db, _q, (), context)
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
         # Slots 1 and 2 are the qualification; everything past them is an
@@ -203,27 +215,19 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # ``not call_args`` keeps it to arity 0: ``call("true", X)`` is the
         # ordinary (undefined) goal ``true/1``, as ISO has it.
         return _ZERO_ARITY_CONTROL_GOALS[functor], call_args
-    if db is None:
-        return None
     arity = len(call_args)
+    if db is None:
+        # No db, so nothing can answer to a ``-hide`` spelling: a mangled
+        # functor here is a dangling handle, decided now rather than failed.
+        _raise_if_unloaded_handle(functor, arity, context)
+        return None
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
     if dispatch is None:
-        if is_mangled(functor):
-            # Ruling 2 (2026-09-24): a MANGLED functor that
-            # ``qualify_mangled_goal`` left unconverted is a handle whose
-            # module half is not a loaded Clausal module, and nothing in the
-            # calling db answers to it either -- ``solve`` raises for it, so
-            # ``call/N`` does too, with the same term.  Only AFTER the
-            # lookups: a ``-hide`` atom carries its bare declared module
-            # name, and the calling db may define it under that spelling.
-            from clausal.logic.solve import (  # noqa: PLC0415
-                dangling_handle_exception,
-            )
-            _mod_name, _name = demangle(functor)
-            raise dangling_handle_exception(
-                _mod_name, _name, arity, False, context)
+        # Only AFTER the lookups: a ``-hide`` atom carries its bare declared
+        # module name, and the calling db may define it under that spelling.
+        _raise_if_unloaded_handle(functor, arity, context)
         return None
     return dispatch, call_args
 
