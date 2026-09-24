@@ -275,10 +275,19 @@ def _term_construction_error(
     cls: Any, kwargs: dict, constructed_at: tuple[str, int] | None
 ) -> ClausalTermConstructionError:
     """Build the attributable error for a field-name mismatch on *cls*."""
-    functor = cls.__name__
-    registered = tuple(cls._fields)
+    return term_construction_error_for(
+        cls.__name__, tuple(cls._fields), getattr(cls, "_registered_at", None),
+        kwargs, constructed_at)
+
+
+def term_construction_error_for(
+    functor: str, registered: tuple[str, ...], registered_at: Any,
+    kwargs: dict, constructed_at: tuple[str, int] | None,
+) -> ClausalTermConstructionError:
+    """The attributable field-name-mismatch error, from plain data -- for a
+    builder that has a functor and its fields but no class (the
+    specializer's ``_SpecTarget``, F1 row 35)."""
     supplied = tuple(kwargs)
-    registered_at = getattr(cls, "_registered_at", None)
     message = (
         f"functor {functor}/{len(registered)} was constructed with field names "
         f"{_format_fields(supplied)}\n"

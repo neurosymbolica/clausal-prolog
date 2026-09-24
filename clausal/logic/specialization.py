@@ -518,18 +518,15 @@ class _SpecTarget:
         functor, then each field's value, a fresh ``Var`` where absent.  An
         unknown keyword raises the same attributable
         ``ClausalTermConstructionError`` it raises there, with the
-        registration site when the target knows it (the builder reads only
-        ``__name__``/``_fields``/``_registered_at`` off what it is given)."""
+        registration site when the target knows it."""
         unknown = [k for k in kwargs if k not in self.fields]
         if unknown:
-            from types import SimpleNamespace  # noqa: PLC0415
             from clausal.logic.predicate import (  # noqa: PLC0415
-                _source_site, _term_construction_error,
+                _source_site, term_construction_error_for,
             )
-            raise _term_construction_error(
-                SimpleNamespace(__name__=self.name, _fields=self.fields,
-                                _registered_at=self.registered_at),
-                kwargs, _source_site(1))
+            raise term_construction_error_for(
+                self.name, self.fields, self.registered_at, kwargs,
+                _source_site(1))
         return (self.name, *(kwargs[f] if f in kwargs else Var()
                              for f in self.fields))
 

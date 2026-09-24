@@ -89,7 +89,8 @@ def _per_clause(lines):
 
 
 def _goldens():
-    text = open(os.path.join(_FIXTURES, "spec_target_goldens.txt")).read()
+    with open(os.path.join(_FIXTURES, "spec_target_goldens.txt")) as f:
+        text = f.read()
     body = "\n".join(l for l in text.splitlines() if not l.startswith("#"))
     out = {}
     for block in re.split(r"(?m)^(?===)", body):

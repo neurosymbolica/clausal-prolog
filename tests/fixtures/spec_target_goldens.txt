@@ -1,6 +1,9 @@
 # Canonical clauses the specializer installed on main BEFORE the unfolder
 # took _SpecTarget instead of the class (F1 row 35), variables renamed in
-# order of appearance.  tests/test_spec_target_is_data.py compares against it.
+# order of appearance.  tests/test_spec_target_is_data.py compares against it
+# after renumbering variables PER CLAUSE, so a name shared between two
+# clauses here (V4 in cpd_graph, say) is NOT asserted -- only each clause's
+# own structure is.
 == SolveNatnum/1 fields=('GOALS',)
 ('SolveNatnum', V0) :- [Unify(left=V0, right=[])]
 ('SolveNatnum', [['natnum', 0], StarUnpack(value=V1)]) :- [Call(func=LoadName(name='SolveNatnum'), args=[V1], kwargs=[])]
