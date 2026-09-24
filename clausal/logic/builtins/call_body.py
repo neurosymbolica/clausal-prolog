@@ -49,9 +49,13 @@ and ``("\\+", G)`` -- what a runtime-built ISO term or a .pl import holds --
 run through the same converter.  ``->`` and ``*->`` are refused
 (``iso_control_cell_dispatch``): Clausal is cut-free with no committed choice.
 
-ERRORS (checked against Scryer, 2026-09-25; the operator ruled "follow
-Scryer" the same day).  A non-callable top-level goal (number, non-empty list
-or string, tuple data) is ``type_error(callable, G)``; call/N's extras on a
+ERRORS (checked against ISO first, then Scryer, 2026-09-25).  A
+non-callable top-level goal (number, tuple data, None) is
+``type_error(callable, G)``; a non-empty list or string is the callable
+compound '.'/2, so it names a missing procedure --
+``existence_error(procedure, '.'/2)`` (ISO; Scryer disagrees with itself:
+literal ``call([a])`` agrees, run-time ``G = [a], call(G)`` gives
+type_error); call/N's extras on a
 construct name no procedure: ``call((A, B), X)`` is
 ``existence_error(procedure, ','/3)``.  An unbound goal is
 ``instantiation_error``.  A number in a goal position reached through the
@@ -374,9 +378,12 @@ def body_with_extras_error(goal, n_extra, context):
 
 def is_non_callable_term(t, lists: bool = True) -> bool:
     """True for a term that can never be a goal: a number, ``None``, tuple
-    DATA, and -- with *lists* -- a non-empty list or a string (Scryer's
-    call/1 refuses every non-empty list).  An unbound Var, an atom, a cell
-    and a goal object are not "non-callable": each has its own answer."""
+    DATA, and -- with *lists* -- a non-empty list or a string.  *lists* is a
+    ROUTING flag, not a callability claim: a list is the callable compound
+    '.'/2 (ISO), which the shared resolver answers with existence_error
+    '.'/N; callers that must send a list to that resolver pass True, and
+    phrase (where a list is a DCG terminal) passes False.  An unbound Var,
+    an atom, a cell and a goal object each have their own answer."""
     t = deref(t)
     if is_var(t):
         return False
@@ -457,8 +464,8 @@ class MetaCallGoal:
 
 
 def non_callable_goal_error(goal, context):
-    """``call(42)``, ``call([1, 2])``, ``call("ab")`` (Scryer's call/1 refuses
-    every non-empty list): ``type_error(callable, Goal)``."""
+    """``call(42)``, ``call(None)``, tuple data: ``type_error(callable,
+    Goal)``.  (A list or string is NOT this -- it is existence_error '.'/2.)"""
     from clausal.logic.exceptions import type_error  # noqa: PLC0415
     from clausal.logic.cells import chars_text  # noqa: PLC0415
     if is_chars(goal):

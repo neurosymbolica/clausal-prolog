@@ -191,12 +191,18 @@ class TestCallNOverCells:
         "section 4.2" silent-failure contract is retired.  Scryer answers
         ``call(42)``, ``call(3.5)`` and ``call([1, 2])`` with
         type_error(callable, G), and so does this engine now."""
-        for goal in (42, 3.5, [1, 2]):
+        for goal in (42, 3.5):
             with pytest.raises(LogicException) as exc_info:
                 list(pcall("cg1", goal, module=_lm(mod)))
             inner, _ = _error_term(exc_info.value)
             assert inner.functor == "type_error"
             assert inner.args[0] == mint("callable") and inner.args[1] == goal
+        # FLIPPED again, operator rule 2026-09-25, ISO first: a non-empty list or string is the callable compound '.'/2, so call/1 of one names the missing procedure '.'/2; Scryer disagrees with itself (literal call([a]) -> existence_error, run-time G = [a], call(G) -> type_error): ``[1, 2]`` is existence_error '.'/2.
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("cg1", [1, 2], module=_lm(mod)))
+        inner, _ = _error_term(exc_info.value)
+        assert inner.functor == "existence_error"
+        assert tuple(inner.args[1].args) == (".", 2)
 
     def test_a_tuple_tag_data_cell_goal_is_a_type_error(self, mod):
         """FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): tuple DATA is not a goal, and a

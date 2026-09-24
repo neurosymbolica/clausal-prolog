@@ -130,9 +130,8 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     db was threaded, or when the named predicate does not exist: a name that
     resolves to nothing fails, and a resolvable module does not change it
     (``call(M:nosuch(X))`` fails).  A goal that is not CALLABLE at all (a
-    number, a non-empty list or string, tuple data ...) RAISES
-    ``type_error(callable, Goal)`` since the operator ruling of 2026-09-25
-    (follow Scryer), which retired the translator's "section 4.2" contract
+    number, tuple data, None ...) RAISES ``type_error(callable, Goal)``
+    since the operator ruling of 2026-09-25, which retired the translator's "section 4.2" contract
     that it fail too.  A body term runs (``call_body``); call/N's extras on a
     body term or a control construct name no procedure (existence_error).
 
@@ -181,12 +180,6 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         raise LogicException(string_goal_error("", len(extra_args), "call/N"))
     elif type(goal_val) is str:
         functor, goal_args = goal_val, []   # STAGE 2: an atom is the 0-arity goal of its name
-    elif is_chars(goal_val) and not extra_args:
-        # Operator ruling 2026-09-25 (follow Scryer): ``call("ab")`` is
-        # ``type_error(callable, "ab")`` -- Scryer's call/1 refuses every
-        # non-empty LIST, and a string is one.  With extras the fold makes
-        # it the compound '.'/N+2, which names no procedure (below).
-        raise LogicException(non_callable_goal_error(goal_val, context))
     elif is_chars(goal_val):
         # THE FLIP (spec §6.4): a ``str`` is a STRING, so ``call("foo")`` is
         # not a call to ``foo/0``.  Task 15 item 3 (ISO alignment): the
@@ -198,16 +191,20 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # silent failure is exactly how that mistake stays invisible.
         raise LogicException(
             string_goal_error(chars_text(goal_val), len(extra_args), "call/N"))
-    elif type(goal_val) is list and extra_args:
-        # A non-empty list with extras folds to the compound '.'/N+2
-        # (Scryer: ``call([a], x)`` -> existence_error(procedure, '.'/3)).
+    elif type(goal_val) is list:
+        # A non-empty list is the callable compound '.'/2 (ISO), and no
+        # procedure '.'/N+2 exists: ``call([1, 2])`` -> existence_error(
+        # procedure, '.'/2), ``call([a], x)`` -> '.'/3.  Operator rule
+        # 2026-09-25 (ISO first; Scryer disagrees with itself here -- a
+        # LITERAL ``call([a])`` is existence_error, a RUN-TIME ``G = [a],
+        # call(G)`` type_error), reversing round 2's type_error.  A string
+        # is the same list, answered by ``string_goal_error`` above.
         raise LogicException(folded_existence_error(
             ".", 2 + len(extra_args), context))
     else:
-        # Not a callable term (operator ruling 2026-09-25, follow Scryer,
-        # retiring the translator's "section 4.2" silent-failure contract):
-        # a number, a non-empty list, tuple DATA, a dict ... is
-        # ``type_error(callable, Goal)``.
+        # Not a callable term (operator ruling 2026-09-25, retiring the
+        # translator's "section 4.2" silent-failure contract): a number,
+        # tuple DATA, None, a dict ... is ``type_error(callable, Goal)``.
         raise LogicException(non_callable_goal_error(goal_val, context))
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
     # The goal as the fold leaves it — the term both special routes below are

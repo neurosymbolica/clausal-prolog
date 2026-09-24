@@ -347,7 +347,7 @@ def test_call_n_extras_on_a_construct_name_no_procedure(host, goal, indicator):
 
 
 @pytest.mark.parametrize("goal", [
-    42, 3.5, [1, 2], ("()", 1, 2), (tuple, 1, 2),
+    42, 3.5, ("()", 1, 2), (tuple, 1, 2),
     nodes.Not(operand=1),                      # call(not 1): Not runs call(1)
 ])
 def test_a_non_callable_top_level_goal_is_a_type_error(host, goal):
@@ -360,15 +360,14 @@ def test_a_non_callable_top_level_goal_is_a_type_error(host, goal):
     assert formal.functor == "type_error" and formal.args[0] == "callable"
 
 
-def test_a_string_goal_is_a_type_error_at_call_1(host):
-    """Scryer: ``call("ab")`` -> type_error(callable, [a, b]); with an extra
-    argument the fold names '.'/3 (unchanged)."""
+def test_a_list_or_string_goal_names_the_missing_procedure(host):
+    """FLIPPED from round 2's type_error, operator rule 2026-09-25, ISO first: a non-empty list or string is the callable compound '.'/2, so call/1 of one names the missing procedure '.'/2; Scryer disagrees with itself (literal call([a]) -> existence_error, run-time G = [a], call(G) -> type_error).  ``call([1, 2])`` and
+    ``call("ab")`` -> existence_error(procedure, '.'/2); with an extra
+    argument the fold names '.'/3."""
     from clausal.logic.cells import chars
-    with pytest.raises(LogicException) as info:
-        _answers(host, "call_it", chars("ab"))
-    formal = _formal(_term(info))
-    assert formal.functor == "type_error" and formal.args[1] == ["a", "b"]
-    assert _existence_indicator(host, "call_it2", chars("ab"), "x") == (".", 3)
+    for goal in ([1, 2], chars("ab")):
+        assert _existence_indicator(host, "call_it", goal) == (".", 2)
+        assert _existence_indicator(host, "call_it2", goal, "x") == (".", 3)
 
 
 # ── module qualification, nesting, caching ──────────────────────────────────
