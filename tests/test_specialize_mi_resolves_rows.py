@@ -91,9 +91,26 @@ def test_the_mi_is_found_in_the_module_s_db_whatever_it_is_bound_to(
 
 def test_a_predicate_bound_only_by_a_python_import_is_still_found(mis):
     """No row in this database -- the last-resort binding route."""
-    row = _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
-                                refuse_ambiguous=True)
-    assert row is not None and row is mis.solve._row
+    found = _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
+                                  refuse_ambiguous=True)
+    assert found is mis.solve          # the class itself, until W4b-3
+    assert _meta_interpreter_row(
+        Database(), {"solve": mangle(_MIS, "solve")}, "solve",
+        refuse_ambiguous=True) is mis.solve._row
+
+
+def test_a_python_built_mi_keeps_its_class_fields_and_its_refusal():
+    """A class with fields but no registered signature, and one with no row
+    at all, answer as they did through the class route."""
+    from clausal.logic.predicate import make_predicate
+    cls = make_predicate("pybuilt_mi", ["GOALS", "PROGRAM"])
+    assert cls._row is None
+    found = _meta_interpreter_row(Database(), {"pybuilt_mi": cls},
+                                  "pybuilt_mi", refuse_ambiguous=True)
+    assert found is cls
+    with pytest.raises(CannotSpecialize, match=r"pybuilt_mi: expected at "
+                                               r"least 2 clauses .*got 0"):
+        analyze_mi(found)
 
 
 def _two_arity_db():
@@ -155,7 +172,7 @@ def test_a_declared_mi_with_no_clauses_gets_analyze_mi_s_refusal(
     sys.modules.pop("spec_empty_mi", None)
     (tmp_path / "spec_empty_mi.clausal").write_text(
         "-dynamic(empty_mi/2)\n\n"
-        "prog(P) <- (P is []),\n\n"
+        "prog(P) <- (P is [])\n\n"
         "-specialize(empty_mi, prog, alias=empty_spec)\n")
     try:
         with pytest.raises(CannotSpecialize,
@@ -176,14 +193,24 @@ def test_a_clause_less_row_is_found_in_the_db_without_any_binding():
         analyze_mi(row)
 
 
-def test_the_binding_route_refuses_several_arities_too(mis, monkeypatch):
-    """QA holds on every route, with the same message.  The owner is made to
-    report two arities for the bound name; the database route has none."""
+def test_the_binding_route_refuses_several_arities_too(monkeypatch):
+    """QA holds on every route, with the same message.  A mangled binding's
+    owner is made to report two arities; the database route has none."""
     from clausal.logic import compiler_v2 as cv2
     monkeypatch.setattr(cv2, "predicate_arities_for", lambda b, **k: {2, 3})
+    md = {"solve": mangle(_MIS, "solve")}
     with pytest.raises(RuntimeError,
                        match=r"defined at 2 arities \(solve/2, solve/3\)"):
-        _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
-                              refuse_ambiguous=True)
-    assert _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
+        _meta_interpreter_row(Database(), md, "solve", refuse_ambiguous=True)
+    assert _meta_interpreter_row(Database(), md, "solve",
                                  refuse_ambiguous=False) is None
+
+
+def test_a_second_arity_without_clauses_is_still_ambiguous():
+    """QA across tiers: clauses at one arity and a bare row at another."""
+    db = Database()
+    for n in (1, 2):
+        db.assertz(Clause(head=Compound("tier_mi", (n, n)), body=[]))
+    db.mark_dynamic("tier_mi", 3)
+    with pytest.raises(RuntimeError, match=r"tier_mi/2, tier_mi/3"):
+        _meta_interpreter_row(db, {}, "tier_mi", refuse_ambiguous=True)
