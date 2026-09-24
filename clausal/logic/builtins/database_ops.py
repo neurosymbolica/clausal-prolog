@@ -333,6 +333,14 @@ def _find_pred_cls(functor: str, arity: int,
     # is no predicate.
     if _adopted_row_named_by(db, candidate, functor, arity) is not None:
         return candidate
+    # An ALIASED import: a cell built from ``alias(gd_p, gd_loc)``'s local
+    # name is spelled ``gd_p`` (the owner's), which this module does not bind;
+    # the binding lives under the importer's spelling.  Only when the name is
+    # bound to NOTHING here -- a local ``gd_p`` keeps its own meaning.
+    if candidate is None and db is not None:
+        local = db.adopted_spelling(functor, arity)
+        if local is not None:
+            return _find_pred_cls(local, arity, module_dict)
     return None
 
 
@@ -346,6 +354,11 @@ def _adopted_row_named_by(db, handle, functor: str, arity: int):
     if db is None or not is_mangled(handle):
         return None
     row = db.adopted_row(functor, arity)
+    if row is None:
+        # *functor* may be the OWNER's spelling of an aliased import (a cell
+        # built from the alias); the adopted row is keyed by the local one.
+        local = db.adopted_spelling(functor, arity)
+        row = db.adopted_row(local, arity) if local is not None else None
     if row is None:
         return None
     module_name, name = demangle(handle)

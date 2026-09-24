@@ -161,8 +161,8 @@ def test_an_aliased_import_lists_the_owner(
         aliased, capsys, flipped, owner_popped):
     owner, user = aliased
     lm = user.__dict__["$module"]
-    # Primed through the OWNER: asserting through the alias itself fails
-    # today (todo/assertz-through-an-aliased-import-raises-existence-error-2026-09-24.md).
+    # Primed through the OWNER, so this test does not depend on the alias
+    # write path (tests/test_assert_through_aliased_import_both_eras.py).
     next(call("assertz", ("gd_p", 42), module=owner.__dict__["$module"]), None)
     assert len(owner.__dict__["$module"].db.row("gd_p", 1).clauses) == 2
     twin = lm.db.row("gd_loc", 1)

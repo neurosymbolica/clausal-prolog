@@ -745,6 +745,25 @@ class Database:
         """
         return self._adopted.get((functor, arity))
 
+    def adopted_spelling(self, functor: str, arity: int) -> "str | None":
+        """The IMPORTER's spelling under which this database adopted another
+        database's row whose OWN key is ``(functor, arity)`` -- the ``Local``
+        of an ``alias(functor, Local)`` import -- or ``None``.
+
+        A term built from an aliased import is spelled with the OWNER's name
+        (so the owner's clauses can match it), while ``_adopted`` is keyed by
+        the importer's.  This is the reverse step, for a runtime write handed
+        such a cell.  ``None`` when no adopted row has that key, and when
+        DISTINCT rows do (two owners' same-named predicates, aliased apart):
+        the cell cannot say which one it meant.
+        """
+        found = [(local, row) for (local, a), row in self._adopted.items()
+                 if a == arity and local != functor
+                 and row.key == (functor, arity)]
+        if not found or any(row is not found[0][1] for _l, row in found):
+            return None
+        return found[0][0]
+
     def owns(self, functor: str, arity: int) -> bool:
         """True if this database is the HOME of ``(functor, arity)`` — as
         opposed to merely resolving it through a row it adopted at import.
