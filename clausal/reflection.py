@@ -1403,7 +1403,7 @@ _DIRECTIVE_NAMES = {
 # functor with a local atom declaration.  ``_reify_module_item`` falls
 # through to a generic ``ModuleDirective`` for anything not listed here, so
 # a new worklist item has to be added deliberately.
-_SKIPPED_ITEMS = {"BareAtomRefs", "AtomAppliedAsFunctor"}
+_SKIPPED_ITEMS = {"BareAtomRefs", "AtomAppliedAsFunctor", "HeadFieldNames"}
 
 
 def _plain_data(value):
