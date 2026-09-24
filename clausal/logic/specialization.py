@@ -83,7 +83,8 @@ class MIPattern:
     program_var: Any = None         # PROGRAM variable in recursive clause head
 
 
-def analyze_mi(pred_cls, program_arg: int | None = None) -> MIPattern:
+def analyze_mi(pred_cls: "PredRow | PredicateMeta",
+               program_arg: int | None = None) -> MIPattern:
     """Analyze a meta-interpreter's clauses and return a structured pattern.
 
     Parameters
@@ -92,7 +93,8 @@ def analyze_mi(pred_cls, program_arg: int | None = None) -> MIPattern:
         The MI predicate: its ROW (what the compiler passes, F1 rows 32/33 --
         found in the importing module's own database, so it works whatever
         the module-dict binding looks like), or a ``PredicateMeta`` class
-        (the direct Python API; a thin adapter until W4b-3 deletes classes).
+        (the direct Python API; a thin adapter until W4b-3 deletes classes
+        -- TODO(W4b-3): drop the class arm with ``_meta_interpreter_row``'s).
         From a row the name and arity are its key and the field names its
         registered signature -- measured 2026-09-24 over the house suite to
         equal the class's ``__name__``/``_fields`` in 219 of 219 calls.

@@ -1276,8 +1276,12 @@ def _ambiguous_mi(mi_name: str, arities) -> RuntimeError:
 
 
 def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
-                          refuse_ambiguous: bool):
-    """The ROW of the meta-interpreter a ``-specialize`` names, or ``None``.
+                          refuse_ambiguous: bool
+                          ) -> "PredRow | PredicateMeta | None":
+    """The ROW of the meta-interpreter a ``-specialize`` names, or ``None``
+    -- or, in two class-era arms below, the ``PredicateMeta`` class bound to
+    it.  Its one consumer, ``analyze_mi``, accepts both.  TODO(W4b-3): the
+    class arms go with the class, leaving ``PredRow | None``.
 
     F1 rows 32/33: found in the specializing module's OWN database -- a local
     MI or an ``-import_from``'d one (an adopted row) both answer there -- so
@@ -1381,7 +1385,11 @@ def _preregister_specializations(
             # Ruling QB (2026-09-24): mint the ROW now.  A declared functor
             # with no row is DATA to ``declared_kind``, so between here and
             # step 6b every reference to the target read as data -- today
-            # the class hid that; after the flip nothing would.
+            # the class hid that; after the flip nothing would.  Scope: what
+            # step 1c pre-registers at all, i.e. an IMPORTED MI.  A local
+            # MI's target is not pre-registered (no clauses yet to analyse)
+            # and has no class, row or declaration at step 2 on main either
+            # (probed 2026-09-24), so the flip changes nothing for it.
             db.row(item.new_name, len(fields), create=True)
 
 
