@@ -2235,41 +2235,83 @@ def _report_descent(diag, goal, logic_module, deadline, path,
     return False
 
 
+def _goal_arity(goal) -> "int | None":
+    """How many arguments *goal* passes, or ``None`` when a ``*args`` /
+    ``**kwargs`` splat makes that unknowable before the call runs."""
+    from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
+
+    args = list(getattr(goal, "args", None) or ())
+    kwargs = list(getattr(goal, "kwargs", None) or ())
+    if any(isinstance(a, StarUnpack) for a in args):
+        return None
+    if any(getattr(kw, "name", None) is None for kw in kwargs):
+        return None
+    return len(args) + len(kwargs)
+
+
 def _resolve_predicate(goal, logic_module, caller_path):
-    """``goal.func``'s name → ``(PredicateMeta, defining module, source path)``.
+    """``goal.func``'s name → ``(PredRow, defining module, source path)``.
 
-    Resolution order: the caller's module dict under the exact (possibly
-    dotted) name; the attribute on the imported Python module for a dotted
-    name; the bare last segment in the caller's module dict (imports land
-    there).  A clause body's own names resolve in the module that DEFINED the
-    clause, so the defining module — not the caller's — is returned alongside.
+    Resolved to the ROW, at the goal's own arity, so nothing here depends on
+    what a module-dict binding looks like (F1 row 4: it used to read a
+    ``PredicateMeta`` class's ``_row``/``__module__``, which after the
+    retirement flip would resolve nothing and silently drop the descent
+    section from every failing ``.clausal`` test).
 
-    A predicate defined in the caller's own module keeps *caller_path*:
-    ``load_clausal_module`` pops the test module from ``sys.modules`` after
-    loading, so the ``sys.modules`` route is a dead end exactly there.
+    Resolution order: the caller's own database under the exact (possibly
+    dotted) name -- local predicates and ``-import_from`` adopted rows both
+    answer there; then, for a dotted name, the prefix module's database under
+    the last segment; then the caller's database under the bare last segment.
+    Each candidate is taken only if it has clauses.  A clause body's own
+    names resolve in the module that DEFINED the clause, so the defining
+    module is returned alongside -- read off ``row.db``, never
+    ``sys.modules``: ``load_clausal_module`` pops the test module from
+    ``sys.modules`` after loading, so that route was a dead end for every
+    predicate a test module defines.
     """
-    from clausal.logic.predicate import PredicateMeta
     from clausal.terms import LoadName
 
     func = getattr(goal, "func", None)
     if not isinstance(func, LoadName):
         return None
+    arity = _goal_arity(goal)
+    if arity is None:
+        return None
     name = str(func.name)
-    md = getattr(logic_module, "module_dict", None) or {}
-    candidates = [md.get(name)]
+    db = getattr(logic_module, "db", None)
+    candidates = []
+    if db is not None:
+        candidates.append(db.row(name, arity))
     if "." in name:
         prefix, last = name.rsplit(".", 1)
-        candidates.append(getattr(sys.modules.get(prefix), last, None))
-        candidates.append(md.get(last))
-    for cls in candidates:
-        if (isinstance(cls, PredicateMeta) and cls._row is not None
-                and cls._row.clauses):
-            if cls.__module__ == getattr(logic_module, "name", None):
-                return cls, logic_module, caller_path
-            defining = sys.modules.get(cls.__module__)
-            def_lm = getattr(defining, "__dict__", {}).get("$module") if defining else None
-            src = getattr(defining, "__file__", None) if defining else None
-            return cls, (def_lm or logic_module), src
+        # The prefix module as the CALLER bound it (``-import_module`` puts
+        # the module object in its dict) before ``sys.modules``, which the
+        # runner empties of what it loads.
+        md = getattr(logic_module, "module_dict", None) or {}
+        prefix_mod = md.get(prefix)
+        if not hasattr(prefix_mod, "__dict__"):
+            prefix_mod = sys.modules.get(prefix)
+        prefix_lm = getattr(prefix_mod, "__dict__", {}).get("$module") if prefix_mod else None
+        prefix_db = getattr(prefix_lm, "db", None)
+        if prefix_db is not None:
+            candidates.append(prefix_db.row(last, arity))
+        if db is not None:
+            # The bare last segment in the caller's database -- an
+            # ``-import_from`` of the prefix module lands there -- but ONLY
+            # as the prefix module's own row: a local predicate that merely
+            # shares the bare name is a different predicate.
+            bare = db.row(last, arity)
+            if bare is not None and (bare.db is prefix_db
+                                     or bare.db.module_name() == prefix):
+                candidates.append(bare)
+    for row in candidates:
+        if row is None or row.detached or not row.clauses:
+            continue
+        if db is not None and row.db is db:
+            return row, logic_module, caller_path
+        owner_md = row.db.module_dict if isinstance(row.db.module_dict, dict) else {}
+        def_lm = owner_md.get("$module")
+        return row, (def_lm or logic_module), owner_md.get("__file__")
     return None
 
 
@@ -2323,17 +2365,21 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
     resolved = _resolve_predicate(goal, logic_module, caller_path)
     if resolved is None:
         return [], "none"
-    cls, sub_lm, sub_path = resolved
-    key = (cls.__module__, cls.__name__)
+    row, sub_lm, sub_path = resolved
+    # The row's IDENTITY, not a module-name spelling: two live databases can
+    # carry the same module name (a test module reloaded under its name), and
+    # a row is keyed per database.  ``seen`` lives for one descent, so the
+    # ``id`` cannot be recycled under it.
+    key = (id(row.db), row.key)
     if key in seen:
         return [], "none"
     seen = seen | {key}
-    clauses = list(cls._row.clauses)     # non-None: filtered on it above
+    clauses = list(row.clauses)          # non-empty: filtered on it above
     total = len(clauses)
     if total > DIAG_MAX_DESCENT_CLAUSES:
         notes.append(
             f"descent walked only the first {DIAG_MAX_DESCENT_CLAUSES} of "
-            f"{total} clauses of {cls.__name__}"
+            f"{total} clauses of {row.key[0]}"
         )
         clauses = clauses[:DIAG_MAX_DESCENT_CLAUSES]
     # One group per FINDING (a leaf line + its bindings).  A single clause
@@ -2360,7 +2406,7 @@ def _descend(goal, logic_module, caller_path, deadline, depth, seen, notes):
         elif state == "leaves":
             groups.extend(clause_groups)
     if mismatches == len(clauses) and clauses:
-        return _head_listing(cls, clauses, path=sub_path), "head_listing"
+        return _head_listing(row, clauses, path=sub_path), "head_listing"
     return (groups, "leaves") if groups else ([], "none")
 
 
@@ -2519,10 +2565,10 @@ def _collapsed_findall_feeding(leaf, earlier, logic_module, path, deadline,
     return None
 
 
-def _head_listing(cls, clauses, path) -> list[str]:
+def _head_listing(row, clauses, path) -> list[str]:
     """One ``file:line  <head source>`` line per clause, source-faithful."""
     lines = []
-    label = os.path.basename(str(path)) if path else cls.__module__
+    label = os.path.basename(str(path)) if path else row.db.module_name()
     for clause in clauses:
         text = None
         reified = _reified_clause(path, clause)

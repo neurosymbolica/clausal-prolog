@@ -277,7 +277,10 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # Range shifted 2277-2389 -> 2331-2443 by P2 Task 6 slice A: the reified
     # vocabulary became cells, so this file grew per-function `vfield`/`is_v`
     # imports and three cell guards above the site (mechanical again).
-    AllowEntry("clausal/testing.py", (2331, 2443),
+    # Range shifted 2331-2443 -> 2377-2489 by F1 row 4 (2026-09-24):
+    # ``_goal_arity`` and the row-based ``_resolve_predicate`` above the site
+    # (mechanical again).
+    AllowEntry("clausal/testing.py", (2377, 2489),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -611,7 +614,8 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2413 (2407 before the final fix wave's IMPORTANT 2
+    """clausal/testing.py:2459 (2413 before F1 row 4 added ``_goal_arity``
+    and the row-based ``_resolve_predicate`` above it, 2026-09-24; 2407 before the final fix wave's IMPORTANT 2
     (2026-09-23) added a 6-line comment above the ``field_names_for(declared)``
     call in ``_note_generic_compound_confusion``, now passing ``arity``/``db``;
     2406 before W2 split the row read in ``_resolve_predicate_class`` over two lines; 2399 and 2368 midway through P2 Task 6 slice A; 2345 before it; 2338 before P2's head-cells flip; 2339 before P2 task 2; 2345 before stage 2; 2342 before stage 1 slice 2; 2326 before the P1 fix wave's L4 class-leg
@@ -641,7 +645,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2413
+        v.pattern == "functor_fallback" and v.line == 2459
         for v in testing_violations
     ), testing_violations
 
