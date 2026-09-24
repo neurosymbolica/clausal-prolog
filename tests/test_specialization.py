@@ -36,10 +36,12 @@ def mi_module():
 def spec_module(request):
     """The DEFINING module a specialization is installed into.
 
-    Operator ruling QC (2026-09-24): after P4 the direct ``specialize_mi*``
-    API requires the caller to name where the predicate lives (``db=`` of a
-    ``Module``), returns the row, and the predicate is queried by NAME with
-    ``call(name, ..., module=m)``.  Every specialization here is written into
+    Operator ruling QC (2026-09-24): at W4b-3 the direct ``specialize_mi*``
+    API will require the caller to name where the predicate lives (``db=`` of
+    a ``Module``) and will return the row; the predicate is queried by NAME
+    with ``call(name, ..., module=m)``.  Until W4b-3 it still returns a
+    CLASS (see ``TestSpecializedPredicateIsARow``), which these tests only
+    use where noted.  Every specialization here is written into
     this module's database and inspected through ``_row``; queries are by
     name against this module.
 
@@ -1989,8 +1991,10 @@ class TestCpdSolveCount:
             pattern, _make_natnum_program(), "SCCpd1",
         )
         v = Var()
-        for _ in call("SCCpd1", [["natnum", 0]], v, module=spec_module):
-            assert walk(deref(v)) == 1
+        counts = [walk(deref(v))
+                  for _ in call("SCCpd1", [["natnum", 0]], v, module=spec_module)]
+        assert counts, "natnum(0) has no solution"
+        assert set(counts) == {1}, counts
 
     def test_count_natnum_s_0(self, mi_module, spec_module):
         # nv
@@ -2002,8 +2006,11 @@ class TestCpdSolveCount:
             pattern, _make_natnum_program(), "SCCpd2",
         )
         v = Var()
-        for _ in call("SCCpd2", [["natnum", ["s", 0]]], v, module=spec_module):
-            assert walk(deref(v)) == 2
+        counts = [walk(deref(v)) for _ in call(
+            "SCCpd2", [["natnum", ["s", 0]]], v, module=spec_module,
+        )]
+        assert counts, "natnum(s(0)) has no solution"
+        assert set(counts) == {2}, counts
 
     def test_count_equivalence(self, mi_module, spec_module):
         """CPD counting matches Phase 1 counting for natnum(0..5)."""
@@ -2101,8 +2108,11 @@ class TestCpdFactorial:
         )
         for n, expected in [(0, 1), (1, 1), (3, 6), (5, 120)]:
             r = Var()
-            for _ in call("SolveFactCpd1", [["factorial", n, r]], module=spec_module):
-                assert walk(deref(r)) == expected, f"factorial({n})"
+            results = [walk(deref(r)) for _ in call(
+                "SolveFactCpd1", [["factorial", n, r]], module=spec_module,
+            )]
+            assert results, f"factorial({n}) has no solution"
+            assert set(results) == {expected}, f"factorial({n}): {results}"
 
     def test_factorial_equivalence(self, mi_module, spec_module):
         # nv
