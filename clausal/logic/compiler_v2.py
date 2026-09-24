@@ -2155,6 +2155,12 @@ def _route_other_arity_imported_calls_to_local(
             _walk(body)
 
 
+#: Builtin GOAL names that are ATOMS in term position and so need no
+#: declaration under strict atoms (operator ruling 2026-09-25).  ``true`` and
+#: ``false`` are not here: they fold to ``True``/``False`` in the rewriter.
+BUILTIN_GOAL_ATOMS = frozenset({"fail"})
+
+
 def _process_bare_atom_refs(
     module_items: list,
     module_dict: dict,
@@ -2377,9 +2383,18 @@ def _process_bare_atom_refs(
             if name in builtin_names:
                 # Builtin under any arity — resolved by get_builtin_predicate.
                 continue
-            if effective_strict:
+            if effective_strict and name not in BUILTIN_GOAL_ATOMS:
                 undeclared.append(name)
                 continue
+            # A BUILTIN_GOAL_ATOMS name (``fail``) is accepted here even in
+            # strict mode: a builtin GOAL, like ``true``, needs no
+            # declaration (operator ruling 2026-09-25).  ``true``/``false``
+            # never get here -- they fold to the truth values before this
+            # pass -- but ``fail`` is an ordinary ATOM in term position (ISO),
+            # so it becomes the atom a ``-private([fail])`` would have
+            # declared, and the body compiler lowers it to failure
+            # (``terms_to_goalop``).
+            #
             # Accept the spelling — no class is minted (§1b/R2).  Recorded in
             # ``predicate_builtins`` (the same pool ``$intern_atom`` and
             # ``_process_declarations`` use), which is the strict-atoms

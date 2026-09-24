@@ -24,9 +24,7 @@ from clausal.logic.builtins._registry import (
     _BUILTIN_FIELDS, _builtin, _DB_BUILTINS,
     _trampoline_builtin, _ensure_trampoline_dispatch,
 )
-from clausal.logic.cells import (
-    compound_cell_shape, CELL_GOAL_CONTROL_FUNCTORS, QUALIFIED_GOAL_FUNCTOR,
-)
+from clausal.logic.cells import compound_cell_shape
 
 
 # Register field names for class construction.
@@ -56,17 +54,39 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     The cell arm is why *db* is here at all: a cell has only a name, and the
     only correct place to look a name up is the calling module (R-P2-2,
     module locality) -- the same reason call/N became db-receiving in P3-3
-    Task 5, and phrase/2,3 in this sweep.  It is narrowed the same way: a
-    control construct and a module-qualified goal are turned away, because
-    the shared resolver RAISES for them where time_goal has always failed.
+    Task 5, and phrase/2,3 in this sweep.
 
-    That narrowing is NOT "time_goal never raises where the resolver does":
-    a dangling predicate HANDLE (a mangled functor whose module never
-    loaded, or whose loaded module lacks the predicate) RAISES here
-    ``existence_error(procedure, Name/Arity)``, exactly as ``call/N`` does
-    (ruling 2 extended, 2026-09-24).  It is a reference that was supposed to
-    resolve, and failing silently is how that mistake stays invisible.
+    Every cell goes to the shared resolver, control constructs and
+    module-qualified goals included, and so do body terms and non-callables
+    (operator ruling 2026-09-25, follow Scryer: ``time/1`` is ``call/1``
+    timed).  So ``time_goal((A, B))`` and ``time_goal(M:G)`` RUN, a
+    committed-choice ``->`` cell raises the same refusal call/1 raises,
+    ``time_goal(42)`` is type_error(callable, 42) and ``time_goal(_)`` is
+    instantiation_error -- where time_goal used to FAIL for all of them.  A
+    dangling predicate HANDLE RAISES existence_error as ``call/N`` does
+    (ruling 2 extended, 2026-09-24).  A name that resolves to nothing still
+    fails, as under call/N.
     """
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        is_body_term, is_non_callable_term,
+    )
+    if is_var(goal_val):
+        # Operator ruling 2026-09-25 (follow Scryer): time(_) is
+        # instantiation_error, as call/1 is -- time_goal is call/1 timed.
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, instantiation_error,
+        )
+        raise LogicException(instantiation_error(
+            f"{context}: the goal is unbound"))
+    if is_body_term(goal_val) or is_non_callable_term(goal_val):
+        # A body term runs, and a non-callable raises type_error, exactly as
+        # under call/1 -- the shared resolver decides both.  Checked before
+        # the goal-OBJECT arm: a body node is Python-``callable``.
+        from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+        resolved = _resolve_named_goal(db, goal_val, (), context)
+        if resolved is not None:          # the (dispatch, args) contract
+            return resolved
+        return None, None
     # W4b-3: ``is_declared_predicate_name`` admits the module-qualified
     # HANDLE a predicate name is bound to after the flip.
     if callable(goal_val) or hasattr(goal_val, '_get_dispatch') \
@@ -76,7 +96,7 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
         return _ensure_trampoline_dispatch(
             localize_goal(db, goal_val), 0, db), ()
     is_cell, functor = compound_cell_shape(goal_val)
-    if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS and functor != QUALIFIED_GOAL_FUNCTOR:
+    if is_cell:
         from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
         resolved = _resolve_named_goal(db, goal_val, (), context)
         if resolved is not None:

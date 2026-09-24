@@ -1,0 +1,4 @@
+# The module a qualified body term M:(...) names -- tests/test_call_runs_body_terms.py.
+-module(call_body_terms_other, [p(X)])
+p(10),
+p(20),

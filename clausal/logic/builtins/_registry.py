@@ -162,6 +162,17 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
                 f"_ensure_trampoline_dispatch: a predicate handle "
                 f"({goal_val!r}) needs the call arity")
         return _dispatch_at(goal_val, arity, db)
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        needs_meta_call, MetaCallGoal,
+    )
+    if needs_meta_call(goal_val, db):
+        # Anything that is not already a runnable goal OBJECT -- a cell, a
+        # plain atom, an unbound Var, a body node, a number, a list ... --
+        # runs AS call/N (operator rule 2026-09-25, ISO first: the WG17
+        # prologue defines maplist & co. via call/N), so each element answers
+        # exactly what call/N answers.  Before the Node check below: a body
+        # node is ``call(X > 0, 1)`` -- existence_error (>)/3, as call/N says.
+        return MetaCallGoal(goal_val, db)._get_dispatch()
     # A Pythonic AST node (Predicate, Lambda, Compound-as-term, …) is
     # ``callable`` — every node gets a field-replacement ``__call__`` from
     # @node_class — but it is NOT a goal dispatch function.  This is reached
