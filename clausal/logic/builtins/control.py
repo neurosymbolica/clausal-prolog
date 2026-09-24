@@ -65,7 +65,7 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     (2026-09-25).
 
     That narrowing is NOT "time_goal never raises where the resolver does".
-    Two cases RAISE ``existence_error(procedure, Name/Arity)`` here, exactly
+    Three cases RAISE ``existence_error(procedure, Name/Arity)`` here, exactly
     as ``call/N`` does:
 
     * a dangling predicate HANDLE (a mangled functor whose module never

@@ -91,6 +91,7 @@ _OWNER = """
 
 _IMPORTER = """
     -module(mpm_ERA, [])
+    -hide([secret])
     -import_from(mpu_ERA, [apply_all, apply_all_raw, call_it, parse_with,
                            time_it, collect, qual_probe, colon_probe, data_probe,
                            my_map, last_goal])
@@ -111,6 +112,18 @@ _IMPORTER = """
     pass_through(G, Q) <- qual_probe(G, Q),
     go_map() <- my_map(my_pred, [1, 2, 1]),
     go_last(Q) <- last_goal(my_pred, [1, 2, 3], Q),
+    go_hide(Q) <- qual_probe(secret, Q),
+    go_map_partial() <- maplist(apply_all(my_pred), [[1], [2]]),
+"""
+
+_ALIAS_IMPORTER = """
+    -module(mpa_ERA, [])
+    -import_from(mpu_ERA, [alias(apply_all, aa)])
+    my_pred(1),
+    my_pred(2),
+    go_a() <- aa(my_pred, [1, 2]),
+    go_a_call() <- call(aa, my_pred, [1, 2]),
+    go_a_map() <- maplist(aa(my_pred), [[1], [2]]),
 """
 
 
@@ -123,6 +136,9 @@ def pair(request, tmp_path, monkeypatch):
             if era == "handle" else None)
     im = _load(tmp_path, monkeypatch, f"mpm_{era}", _IMPORTER.replace("ERA", era))
     I = im.__dict__["$module"]
+    al = _load(tmp_path, monkeypatch, f"mpa_{era}",
+               _ALIAS_IMPORTER.replace("ERA", era))
+    I.alias_importer = al.__dict__["$module"]
     if era == "handle":
         assert "apply_all" in seen, "the handle era must really be exercised"
         assert I.module_dict["apply_all"] == mangle(f"mpu_{era}", "apply_all")
@@ -223,3 +239,61 @@ def test_a_recursive_meta_predicate_runs_and_never_nests_the_qualification(pair)
     era, _O, I = pair
     assert _n(I, "go_map") == 1
     assert _one(I, "go_last") == (":", f"mpm_{era}", "my_pred")
+
+
+def test_a_db_less_compile_of_a_rule_with_a_body_call_still_works():
+    """roborev HIGH (2026-09-25): with ``db=None`` the compiler's ``ctx.db`` is
+    ``globals_env._GlobalsDb``, which implements only ``signature_for``; the
+    -meta_predicate lookup in terms_to_goalop called
+    ``db.meta_predicate_specs`` on it and every body call raised
+    ``AttributeError``.  The db-less recipe (``make_predicate``'s hand-built
+    globals) is supported."""
+    from clausal.logic.compiler import compile_predicate_trampoline
+    from clausal.logic.database import Clause
+    from clausal.logic.predicate import make_predicate
+    from clausal.terms import Call, LoadName
+
+    base = make_predicate("mp_dbless_base", ["x"])
+    top = make_predicate("mp_dbless_top", ["x"])
+    x = Var()
+    compile_predicate_trampoline(
+        "mp_dbless_base", 1, [Clause(base(1), [])], pred_cls=base)
+    compile_predicate_trampoline(
+        "mp_dbless_top", 1,
+        [Clause(top(x), [Call(func=LoadName(name="mp_dbless_base"),
+                              args=[x], kwargs=[])])],
+        pred_cls=top, globals_={"mp_dbless_base": base})
+    y = Var()
+    assert [deref(y) for _ in call(top, y)] == [1]
+
+
+@pytest.mark.parametrize("goal", ["go_a", "go_a_call", "go_a_map"])
+def test_a_meta_predicate_imported_under_an_alias_qualifies(pair, goal):
+    """roborev MEDIUM (2026-09-25): under ``alias(apply_all, aa)`` a goal
+    built through the alias carries the OWNER's functor, and call/N's
+    aliased branch looked the declaration up under that spelling -- but the
+    adopted row is keyed by the LOCAL alias, so it missed and never
+    qualified.  Direct call, call/N and maplist."""
+    _era, _O, I = pair
+    A = I.alias_importer
+    assert A.db.meta_predicate_specs("aa", 2) == (1, "?")
+    assert _n(A, goal) == 1
+
+
+def test_a_hide_data_atom_is_qualified_not_taken_for_a_handle(pair):
+    """roborev LOW (2026-09-25): a ``-hide`` DATA atom is mangled like a
+    predicate handle but names no predicate, so it is not "already
+    qualified" -- it is qualified with the caller like any other atom."""
+    era, _O, I = pair
+    secret = mangle(f"mpm_{era}", "secret")
+    assert _one(I, "go_hide") == (":", f"mpm_{era}", secret)
+
+
+def test_a_partial_meta_goal_through_maplist_qualifies_with_the_caller(pair):
+    """``maplist(apply_all(my_pred), [[1], [2]])``.  In the handle era the
+    cell built through the import carries the OWNER's handle in slot 0, and
+    re-entering it as ``M:G`` qualified ``my_pred`` with the owner (found
+    while fixing the roborev MEDIUM, 2026-09-25); the caller's own import is
+    the caller's reference, as in the class era."""
+    _era, _O, I = pair
+    assert _n(I, "go_map_partial") == 1

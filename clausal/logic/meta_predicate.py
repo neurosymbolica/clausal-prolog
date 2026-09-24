@@ -78,11 +78,15 @@ def module_designator(db: Any) -> Any:
 
 def _already_qualified(value: Any) -> bool:
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    from clausal.logic.predicate import is_declared_predicate_name  # noqa: PLC0415
     v = deref(value)
     if type(v) is tuple and len(v) == 3 and v[0] == QUALIFIED:
         return True
-    # A predicate HANDLE names its module inside the atom.
-    return type(v) is str and is_mangled(v)
+    # A predicate HANDLE names its module inside the atom.  A ``-hide`` DATA
+    # atom is mangled the same way but names no predicate: it is qualified
+    # like any other atom.
+    return (type(v) is str and is_mangled(v)
+            and is_declared_predicate_name(v))
 
 
 def qualify(designator: Any, value: Any) -> Any:
@@ -122,7 +126,14 @@ def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
     qualified with the CALLING module (Scryer would qualify ``m:p(G)``'s G
     with ``m``); recorded in the ruling's report.
     """
-    specs = db.meta_predicate_specs(fname, arity)
+    lookup = getattr(db, "meta_predicate_specs", None)
+    if lookup is None:
+        # A db-like SHIM -- ``globals_env._GlobalsDb``, which the db-less
+        # compile path (``compile_predicate(..., db=None)``, the
+        # ``make_predicate`` hand-built-globals recipe) sets as ``ctx.db`` --
+        # implements only ``signature_for`` and records no declarations.
+        return None
+    specs = lookup(fname, arity)
     if specs is not None or "." not in fname:
         return specs
     md = getattr(db, "module_dict", None)

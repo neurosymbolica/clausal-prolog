@@ -201,6 +201,20 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # goal, or the bare atom itself for an arity-0 ``call(H)``.
         from clausal.logic.solve import raise_if_dangling_handle  # noqa: PLC0415
         raise_if_dangling_handle(functor, _q, context)
+        # -meta_predicate (operator ruling 2026-09-25): a handle the CALLING
+        # module binds by a plain name (an import) is that module's own
+        # unqualified reference -- in the handle era a cell built through an
+        # import (``apply_all(my_pred)``) carries the owner's handle in slot
+        # 0.  Its meta-arguments belong to the caller, as the class era's
+        # plain functor gives; qualify them here, before the re-entry would
+        # qualify them with the OWNER (the rule for a written ``M:G``).
+        if call_args and type(functor) is str:
+            _local = localize_goal(db, functor)
+            _lname = getattr(_local, "name", None)
+            if _local is not functor and type(_lname) is str:
+                _qa = _meta_qualified(db, _lname, len(call_args), call_args)
+                if _qa is not call_args:
+                    _q = qualify_mangled_goal((functor, *_qa), db=db)
         return _resolve_named_goal(db, _q, (), context)
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
         # Slots 1 and 2 are the qualification; everything past them is an
@@ -244,8 +258,11 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     # lookup below (round 6 decision) -- see ``predicate.localize_owner_functor``.
     aliased = localize_owner_functor(db, functor, arity)
     if aliased is not None:
+        # *functor* is the OWNER's spelling; the adopted row -- and so the
+        # owner's -meta_predicate declaration -- is keyed by the LOCAL alias,
+        # which the adapter carries.
         return aliased.dispatch_at(arity), _meta_qualified(
-            db, functor, arity, call_args)
+            db, aliased.name, arity, call_args)
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
@@ -1033,8 +1050,9 @@ class _NamedGoal:
     that, handed the builtin's extras, runs the caller's own ``call/N``
     (``_make_call_goal_factory``) with this goal first -- the ISO fold
     (``call(add(1), X, Y)`` is ``add(1, X, Y)``), the namespace and qualified
-    lookups, and the silent failure for a name that resolves to nothing all
-    come from there.  Arity-free on purpose: the extras count is known only
+    lookups, and the ISO ``existence_error(procedure, Name/Arity)`` for a
+    name that resolves to nothing (operator ruling 2, 2026-09-25) all come
+    from there.  Arity-free on purpose: the extras count is known only
     at the call, and ``_dispatch_at`` hands a non-``PredicateMeta`` object to
     its plain ``_get_dispatch()``.
     """
