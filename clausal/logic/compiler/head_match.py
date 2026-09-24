@@ -50,7 +50,7 @@ from .terms_to_ast import (
     term_to_ast_expr,
     _is_star_list, _parse_star_segments, _count_stars,
     _is_opaque_head_literal, headlit_global_key,
-    cell_signature_for_name, _place_signature_slots,
+    construction_signature_for_name, _place_signature_slots,
     _dotted_name_from_loadattr,
     _implicit_functors_active,
 )
@@ -681,12 +681,11 @@ def head_to_match_pattern(
         # dict ``_resolve_loadname`` uses for ``fields``, so the cell branch
         # and the MatchClass fallback beside it cannot disagree about what
         # ``term.func.name`` means.
-        _sig = cell_signature_for_name(term.func.name, globals_)
-        if (_sig is not None and not term.kwargs
-                and 0 < len(term.args) < len(_sig[1])):
-            # Ruling C: the WRITTEN arity (see terms_to_ast's twin).
-            _sig = cell_signature_for_name(
-                term.func.name, globals_, arity=len(term.args))
+        # Ruling C: the WRITTEN arity for a short keyword-free head -- the
+        # same re-ask the construction site makes, from the same helper.
+        _sig = construction_signature_for_name(
+            term.func.name, globals_, n_positional=len(term.args),
+            has_keywords=bool(term.kwargs))
         _owa = _implicit_functors_active(globals_)
         if _sig is None:
             resolved = _resolve_loadname(term.func.name, globals_)

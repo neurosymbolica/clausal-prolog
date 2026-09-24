@@ -44,6 +44,7 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, is_declared_predicate_name, is_zero_field_class,
+    construction_arity_fault,
     namespace_db,
     is_term_instance, predicate_binding_name, term_field_names, term_field_names_of_class,
 )
@@ -445,6 +446,29 @@ def cell_signature_for_name(
     return _functor_spelling(binding, leaf), fields
 
 
+def construction_signature_for_name(
+    name: str, resolve_globals: "dict | None" = None, *,
+    n_positional: int, has_keywords: bool,
+) -> "tuple[str, tuple[str, ...]] | None":
+    """The ``(functor, fields)`` a construction or head pattern WRITTEN with
+    *n_positional* positional arguments is placed against, or None.
+
+    :func:`cell_signature_for_name`, then ruling C (2026-09-24): when the
+    shared decision :func:`~clausal.logic.predicate.construction_arity_fault`
+    calls a keyword-free construction ``"too_few"``, ask again at the
+    WRITTEN arity -- a predicate NAME answers that arity's own slots (the
+    compound at the arity written, as in Scryer), a DATA functor its
+    declaration (which ``_place_signature_slots`` then refuses).  The one
+    home of that re-ask for ``term_to_ast_expr``'s construction site and
+    ``head_match``'s pattern site.
+    """
+    sig = cell_signature_for_name(name, resolve_globals)
+    if (sig is not None and not has_keywords
+            and construction_arity_fault(sig[1], n_positional, ()) == "too_few"):
+        sig = cell_signature_for_name(name, resolve_globals, arity=n_positional)
+    return sig
+
+
 def _functor_spelling(binding: Any, leaf: str) -> str:
     """The functor string slot 0 carries for a name bound to *binding*.
 
@@ -562,14 +586,14 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
     not inspect either beyond placing them.
     """
     n_fields = len(fields)
-    if len(positional) > n_fields:
-        raise _cell_arity_error(functor, fields, len(positional))
-    if positional and len(positional) + len(keywords) < n_fields:
-        # Ruling C (2026-09-24): no silent padding -- too FEW positional
-        # arguments is refused exactly like too many.  (A predicate name at a
-        # shorter arity never reaches here: ``cell_signature_for_name`` gives
-        # it the written arity's own slots.)  Keyword-only construction
-        # (no positional at all) still names the slots it fills.
+    if construction_arity_fault(
+            fields, len(positional), [name for name, _ in keywords]):
+        # Too many positional arguments, or (ruling C, 2026-09-24: no silent
+        # padding) too FEW -- decided by the runtime's own helper, so the
+        # compile-time and runtime refusals cannot drift apart.  (A predicate
+        # name at a shorter arity never reaches here:
+        # ``construction_signature_for_name`` gives it the written arity's
+        # own slots.)  Keyword-only construction still names its slots.
         raise _cell_arity_error(functor, fields, len(positional))
     slots = [_UNSET] * n_fields
     for i, value in enumerate(positional):
@@ -1106,12 +1130,11 @@ def term_to_ast_expr(
         # construction (see ``_place_signature_slots``), so a kwarg/partial
         # reference now builds a cell too instead of falling back to class
         # emission.
-        _sig = cell_signature_for_name(fname)
-        if (_sig is not None and not kw_exprs
-                and 0 < len(arg_exprs) < len(_sig[1])):
-            # Ruling C: ask again at the WRITTEN arity (a predicate name
-            # answers that arity's slots; a data functor its declaration).
-            _sig = cell_signature_for_name(fname, arity=len(arg_exprs))
+        # Ruling C: a short keyword-free construction is re-asked at the
+        # WRITTEN arity (a predicate name answers that arity's slots; a data
+        # functor its declaration) -- see construction_signature_for_name.
+        _sig = construction_signature_for_name(
+            fname, n_positional=len(arg_exprs), has_keywords=bool(kw_exprs))
         _namespace = lowering_globals()
         _owa = _implicit_functors_active(_namespace)
         if _sig is not None:

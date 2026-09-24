@@ -374,6 +374,36 @@ def term_arity_error_for(
     )
 
 
+def construction_arity_fault(fields: tuple[str, ...], n_positional: int,
+                             keyword_names) -> "str | None":
+    """THE too-few/too-many decision for a construction against a registered
+    signature (ruling C, 2026-09-24; operator Q1 2026-09-25: "refuse too
+    few").  Answers ``"too_many"``, ``"too_few"`` or ``None``.
+
+    * more positional arguments than *fields* -> ``"too_many"``;
+    * at least one positional argument, and some slot past them that no
+      name in *keyword_names* fills -> ``"too_few"``: no silent fresh-Var
+      padding;
+    * otherwise ``None`` -- including keyword-only construction (no
+      positional at all), which names the slots it fills.
+
+    Pure data in, nothing raised, so every site shares the DECISION and keeps
+    its own error: :func:`build_term_cell` (runtime: the class call, and a
+    handle's head through :func:`head_cell`) raises
+    :func:`term_arity_error_for`; the compiler's ``_place_signature_slots``
+    (compile time, placing AST nodes) raises a ``SyntaxError``; and the
+    compiler's written-arity re-ask (``construction_signature_for_name``)
+    reads ``"too_few"`` as "a predicate NAME written at a shorter arity".
+    """
+    n_fields = len(fields)
+    if n_positional > n_fields:
+        return "too_many"
+    if 0 < n_positional < n_fields and not all(
+            f in keyword_names for f in fields[n_positional:]):
+        return "too_few"
+    return None
+
+
 def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
                     kwargs: dict, *, origin: Any = None) -> tuple:
     """THE one home of term construction against a registered signature:
@@ -385,11 +415,11 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
     flip) both come here, so the two eras answer the same cell and raise the
     same error for the same (functor, fields, args, kwargs).
 
-    * more positional arguments than fields -> :func:`term_arity_error_for`;
+    * more positional arguments than fields, or FEWER with the rest not all
+      named by keyword (ruling C, 2026-09-24: no silent padding) ->
+      :func:`term_arity_error_for` -- the decision is
+      :func:`construction_arity_fault`, the one the compiler asks too;
     * a keyword naming no field -> :func:`term_construction_error_for`;
-    * FEWER positional arguments than fields, with the rest not all named
-      by keyword -> :func:`term_arity_error_for` too (ruling C, 2026-09-24:
-      no silent padding);
     * a slot neither fills (keyword-only construction) gets a fresh
       ``Var()``.
 
@@ -405,17 +435,11 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
     if args:
         # Positional overflow used to be DROPPED (``if i < len(fields)``),
         # so a call with too many arguments returned a wrong term instead of
-        # raising.  One length check replaces the per-argument comparison.
-        if len(args) > len(fields):
-            raise term_arity_error_for(
-                functor, fields, getattr(origin, "_registered_at", None),
-                len(args), kwargs, _source_site(2))
-        if len(args) < len(fields) and not all(
-                f in kwargs for f in fields[len(args):]):
-            # Ruling C (2026-09-24): too FEW positional arguments is refused
-            # exactly like too many -- no silent fresh-Var padding.  A
-            # registered signature is ONE arity; the compound at another
-            # arity is built by name (``(name, *args)``), not against it.
+        # raising.  Ruling C (2026-09-24) refuses too FEW the same way: a
+        # registered signature is ONE arity; the compound at another arity is
+        # built by name (``(name, *args)``), not against it.  The decision is
+        # :func:`construction_arity_fault`, shared with the compiler.
+        if construction_arity_fault(fields, len(args), kwargs):
             raise term_arity_error_for(
                 functor, fields, getattr(origin, "_registered_at", None),
                 len(args), kwargs, _source_site(2))
@@ -3135,5 +3159,5 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "is_declared_predicate_name", "predicate_arities_for",
            "mint_predicate_handle", "namespace_db",
            "predicate_owner_module",
-           "head_cell", "build_term_cell",
+           "head_cell", "build_term_cell", "construction_arity_fault",
            "AmbiguousArityConstructionError"]
