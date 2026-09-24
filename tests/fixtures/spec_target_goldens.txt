@@ -1,0 +1,33 @@
+# Canonical clauses the specializer installed on main BEFORE the unfolder
+# took _SpecTarget instead of the class (F1 row 35), variables renamed in
+# order of appearance.  tests/test_spec_target_is_data.py compares against it.
+== SolveNatnum/1 fields=('GOALS',)
+('SolveNatnum', V0) :- [Unify(left=V0, right=[])]
+('SolveNatnum', [['natnum', 0], StarUnpack(value=V1)]) :- [Call(func=LoadName(name='SolveNatnum'), args=[V1], kwargs=[])]
+('SolveNatnum', [['natnum', ['s', V2]], StarUnpack(value=V3)]) :- [Call(func=LoadName(name='SolveNatnum'), args=[[['natnum', V2], StarUnpack(value=V3)]], kwargs=[])]
+== solve_factorial/1 fields=('GOALS',)
+('solve_factorial', V0) :- [Unify(left=V0, right=[])]
+('solve_factorial', [['factorial', 0, 1], StarUnpack(value=V1)]) :- [Call(func=LoadName(name='solve_factorial'), args=[V1], kwargs=[])]
+('solve_factorial', [['factorial', V2, V3], StarUnpack(value=V4)]) :- [Call(func=LoadName(name='solve_factorial'), args=[[['gt', V2, 0], ['sub', V2, 1, V5], ['factorial', V5, V6], ['mul', V2, V6, V3], StarUnpack(value=V4)]], kwargs=[])]
+('solve_factorial', [V7, StarUnpack(value=V8)]) :- [Call(func=LoadName(name='_SolveGoal_solve_factorial'), args=[V7], kwargs=[]), Call(func=LoadName(name='solve_factorial'), args=[V8], kwargs=[])]
+== deep_natnum/1 fields=('GOALS',)
+('deep_natnum', V0) :- [Unify(left=V0, right=[])]
+('deep_natnum', [['natnum', 0], StarUnpack(value=V1)]) :- [Call(func=LoadName(name='deep_natnum'), args=[V1], kwargs=[])]
+('deep_natnum', [['natnum', ['s', V2]], StarUnpack(value=V3)]) :- [Call(func=LoadName(name='deep_natnum'), args=[[['natnum', V2], StarUnpack(value=V3)]], kwargs=[])]
+== cpd_graph/1 fields=('GOALS',)
+('cpd_graph', V0) :- [Unify(left=V0, right=[])]
+('cpd_graph', [['edge', 'a', 'b'], StarUnpack(value=V1)]) :- [Call(func=LoadName(name='cpd_graph'), args=[V1], kwargs=[])]
+('cpd_graph', [['edge', 'b', 'c'], StarUnpack(value=V2)]) :- [Call(func=LoadName(name='cpd_graph'), args=[V2], kwargs=[])]
+('cpd_graph', [['edge', 'b', 'd'], StarUnpack(value=V3)]) :- [Call(func=LoadName(name='cpd_graph'), args=[V3], kwargs=[])]
+('cpd_graph', [['path', 'a', 'b'], StarUnpack(value=V4)]) :- [Call(func=LoadName(name='cpd_graph'), args=[V4], kwargs=[])]
+('cpd_graph', [['path', 'b', 'c'], StarUnpack(value=V4)]) :- [Call(func=LoadName(name='cpd_graph'), args=[V4], kwargs=[])]
+('cpd_graph', [['path', 'b', 'd'], StarUnpack(value=V4)]) :- [Call(func=LoadName(name='cpd_graph'), args=[V4], kwargs=[])]
+('cpd_graph', [['path', 'a', V5], StarUnpack(value=V6)]) :- [Call(func=LoadName(name='cpd_graph'), args=[[['edge', 'b', V5], StarUnpack(value=V6)]], kwargs=[])]
+('cpd_graph', [['path', 'a', V7], StarUnpack(value=V6)]) :- [Call(func=LoadName(name='cpd_graph'), args=[[['edge', 'b', V8], ['path', V8, V7], StarUnpack(value=V6)]], kwargs=[])]
+('cpd_graph', [['path', 'b', V9], StarUnpack(value=V6)]) :- [Call(func=LoadName(name='cpd_graph'), args=[[['path', 'c', V9], StarUnpack(value=V6)]], kwargs=[])]
+('cpd_graph', [['path', 'b', V9], StarUnpack(value=V6)]) :- [Call(func=LoadName(name='cpd_graph'), args=[[['path', 'd', V9], StarUnpack(value=V6)]], kwargs=[])]
+== cpd_count_natnum/2 fields=('GOALS', 'COUNT')
+('cpd_count_natnum', V0, V1) :- [Unify(left=V0, right=[]), Unify(left=V1, right=0)]
+('cpd_count_natnum', [['natnum', 0], StarUnpack(value=V2)], V3) :- [Call(func=LoadName(name='cpd_count_natnum'), args=[V2, V4], kwargs=[]), ArithEq(left=V3, right=Add(left=V4, right=1))]
+('cpd_count_natnum', [['natnum', ['s', 0]], StarUnpack(value=V5)], V6) :- [Call(func=LoadName(name='cpd_count_natnum'), args=[V5, V7], kwargs=[]), ArithEq(left=V8, right=Add(left=V7, right=1)), ArithEq(left=V6, right=Add(left=V8, right=1))]
+('cpd_count_natnum', [['natnum', ['s', ['s', V9]]], StarUnpack(value=V5)], V6) :- [Call(func=LoadName(name='cpd_count_natnum'), args=[[['natnum', V9], StarUnpack(value=V5)], V10], kwargs=[]), ArithEq(left=V8, right=Add(left=V10, right=1)), ArithEq(left=V6, right=Add(left=V8, right=1))]

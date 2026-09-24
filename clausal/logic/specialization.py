@@ -511,13 +511,19 @@ class _SpecTarget:
 
     def __call__(self, **kwargs: Any) -> tuple:
         """The cell ``PredicateMeta.__call__`` builds from keywords: the
-        functor, then each field's value, a fresh ``Var`` where absent.
-        An unknown keyword raises, as it does there."""
+        functor, then each field's value, a fresh ``Var`` where absent.  An
+        unknown keyword raises the same attributable
+        ``ClausalTermConstructionError`` it raises there (the builder reads
+        only ``__name__``/``_fields`` off what it is given)."""
         unknown = [k for k in kwargs if k not in self.fields]
         if unknown:
-            raise TypeError(
-                f"{self.name}: unknown field(s) {unknown}; "
-                f"fields are {list(self.fields)}")
+            from types import SimpleNamespace  # noqa: PLC0415
+            from clausal.logic.predicate import (  # noqa: PLC0415
+                _source_site, _term_construction_error,
+            )
+            raise _term_construction_error(
+                SimpleNamespace(__name__=self.name, _fields=self.fields),
+                kwargs, _source_site(1))
         return (self.name, *(kwargs[f] if f in kwargs else Var()
                              for f in self.fields))
 
@@ -2120,14 +2126,10 @@ def _unfold_body_goal(
     if subst is None:
         return None
 
-    # Apply the substitution to the original clause head.
+    # Apply the substitution to the original clause head.  (A branch that
+    # rebuilt a term INSTANCE here went with row 35: a head is a cell since
+    # P2, and it was reached 128 times and taken 0 over the house suite.)
     new_clause_head = _subst(clause.head, subst)
-    # Reconstruct as a proper target instance if needed.
-    if is_term_instance(new_clause_head):
-        field_vals = {}
-        for fname in term_field_names(new_clause_head):
-            field_vals[fname] = getattr(new_clause_head, fname)
-        new_clause_head = target(**field_vals)
 
     # Compute the remaining goal list (after the first goal).
     remaining = goal_list_arg[1:]
