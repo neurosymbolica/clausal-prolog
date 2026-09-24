@@ -236,3 +236,55 @@ def test_a_second_arity_without_clauses_is_still_ambiguous():
     db.mark_dynamic("tier_mi", 3)
     with pytest.raises(RuntimeError, match=r"tier_mi/2, tier_mi/3"):
         _meta_interpreter_row(db, {}, "tier_mi", refuse_ambiguous=True)
+
+
+def test_a_row_without_a_signature_uses_the_bound_class_s_fields(mis):
+    """A Python-built MI: clauses in the db, field names only on the class."""
+    from clausal.logic.predicate import make_predicate
+    db = Database()
+    cls = make_predicate("sigless_mi", list(mis.solve._fields))
+    for clause in mis.solve._row.clauses:
+        assert isinstance(clause.head, tuple)       # a head is a cell (P2)
+        db.assertz(Clause(head=("sigless_mi",) + clause.head[1:],
+                          body=clause.body))
+    cls._bind_row(db, "sigless_mi", 2)
+    assert db.signature_for("sigless_mi", 2) is None
+    found = _meta_interpreter_row(db, {"sigless_mi": cls}, "sigless_mi",
+                                  refuse_ambiguous=True)
+    # The class -- whose _fields analyze_mi reads -- not the signature-less
+    # row, which analyze_mi would refuse for want of field names.
+    assert found is cls and found._row is db.row("sigless_mi", 2)
+    with pytest.raises(CannotSpecialize, match="no field names are registered"):
+        analyze_mi(db.row("sigless_mi", 2))
+
+
+def test_an_aliased_mi_import_specializes(tmp_path, monkeypatch):
+    """``-import_from(m, [alias(solve_count, sc)])``: the row is adopted
+    under the importer's spelling while its key carries the owner's name."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("spec_alias_mi", None)
+    (tmp_path / "spec_alias_mi.clausal").write_text(
+        "-import_from(clausal.examples.metainterpreters, "
+        "[alias(solve_count, sc)])\n\n"
+        "natnum_program(PROGRAM) <- (\n"
+        "    PROGRAM is [\n"
+        "        [[\"natnum\", 0], []],\n"
+        "        [[\"natnum\", [\"s\", X]], [[\"natnum\", X]]]\n"
+        "    ]\n"
+        ")\n\n"
+        "-specialize(sc, natnum_program, alias=sc_natnum)\n")
+    try:
+        module = _load_module("spec_alias_mi",
+                              str(tmp_path / "spec_alias_mi.clausal"))
+        db = module.__dict__["$module"].db
+        row = db.row("sc_natnum", 2)
+        assert row is not None and row.clauses and row.dispatch_fn is not None
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var, deref
+        n = Var()
+        answers = [deref(n) for _ in call("sc_natnum",
+                                          [["natnum", ["s", 0]]], n,
+                                          module=module.__dict__["$module"])]
+        assert answers == [2]
+    finally:
+        sys.modules.pop("spec_alias_mi", None)

@@ -1311,9 +1311,17 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
         if refuse_ambiguous:
             raise _ambiguous_mi(mi_name, rows)
         return None
-    if rows:
-        return next(iter(rows.values()))
     binding = module_dict.get(mi_name)
+    if rows:
+        row = next(iter(rows.values()))
+        # A Python-built MI whose clauses reached this database without a
+        # registered signature: its field names live only on the class
+        # bound to it, which the class route read.  Hand that class over
+        # (W4b-3 removes this arm with the class).
+        if (row.db.signature_for(*row.key) is None
+                and isinstance(binding, PredicateMeta) and binding._row is row):
+            return binding
+        return row
     if not is_declared_predicate_name(binding):
         return None
     arities = predicate_arities_for(binding)
