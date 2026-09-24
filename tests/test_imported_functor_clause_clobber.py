@@ -25,19 +25,25 @@ the first one's clothes.
 
 Why not give the importer its own predicate
 -------------------------------------------
-Because the shared class is load-bearing for the idiom below: a third module
-that imports the *vocabulary* must see the implementer's clauses.  Splitting
-the predicate per module would break that idiom, and
-would mean making dispatch per-module — ``_get_dispatch()`` is a frozen
-duck-typed protocol with implementors outside this tree.
+Because it would mean making dispatch per-module — ``_get_dispatch()`` is a
+frozen duck-typed protocol with implementors outside this tree.
 
-Why the refusal is narrowed to functors that already have clauses
------------------------------------------------------------------
-A corpus sweep (2026-08-25, this repo plus the downstream rulebase corpora
-available on this box) finds the import-and-define shape live in two modules —
-and in both cases the imported name is a
-**clause-free** 0-arity vocabulary atom.  Nothing is destroyed there, so that
-idiom keeps working.  The refusal fires only where clauses exist to lose.
+The clause-free case is refused too — since 2026-09-24
+------------------------------------------------------
+This refusal was once narrowed to functors that already have clauses, so that
+the "vocabulary-implements" idiom (a module declares ``p/2`` and writes no
+clauses; an importer supplies them, and everyone else imports the
+declaration) kept working: nothing is destroyed there.  It only worked
+because the load MOVED the shared class onto the implementer's row, which has
+no form once a predicate binding is a mangled atom, so the operator DROPPED
+the idiom (``todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md``).
+That case is now its own load error with its own remedy (define it in the
+implementing module, export it from there) —
+``tests/test_vocabulary_implements_refused.py`` pins it, and
+``TestDeclarationOnlyExporterIsRefused`` below keeps the fixtures' story.
+The 2026-08-25 corpus sweep's live import-and-define shape — a 0-arity
+vocabulary ATOM with a same-named predicate at another arity — is not this
+idiom and still loads (``impord_atom_then_pred``).
 
 And it must be accurate about ownership
 ---------------------------------------
@@ -61,6 +67,7 @@ from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
+from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref, walk
 from clausal.testing import load_clausal_module
@@ -141,14 +148,19 @@ class TestExporterClausesSurvive:
 class TestTheDiagnosticAttributesClausesCorrectly:
     """``todo/done/imported-clause-refusal-misattributes-ownership.md``.
 
-    A clause-free export implemented downstream leaves the shared class holding
-    the *implementer's* clauses.  A second implementer is still refused — those
-    clauses would be destroyed — but the message must credit the implementer,
-    not the vocabulary module that declared nothing.
+    A second implementer is refused — the first implementer's clauses would be
+    destroyed — and the message must credit the module that WROTE them.
+
+    Until 2026-09-24 the first implementer supplied a clause-free vocabulary
+    export downstream, so "the module that wrote them" and "the module named
+    in the -import_from" differed and this pinned the difference.  That idiom
+    is dropped; ``impclob_implements`` now DEFINES ``impclob_verdict/2`` and the
+    rival imports it from there, which is exactly the migration the new
+    refusal's remedy asks for.  The attribution still has to come from the
+    ROW's source, and the declaration-only vocabulary must not be named.
     """
 
     def test_a_second_implementer_is_refused(self):
-        _load_fixture("impclob_decl_vocab")
         _load_fixture("impclob_implements")
         with pytest.raises(SyntaxError) as exc_info:
             _load_fixture("impclob_implements_rival")
@@ -160,32 +172,56 @@ class TestTheDiagnosticAttributesClausesCorrectly:
         with pytest.raises(SyntaxError) as exc_info:
             _load_fixture("impclob_implements_rival")
         msg = str(exc_info.value)
-        assert "impclob_implements" in msg
-        # It must NOT assert that the vocabulary module defines the clauses.
-        assert "impclob_decl_vocab already defines" not in msg
-        assert "impclob_decl_vocab defines impclob_verdict with" not in msg
+        assert "that 1 clause is tests.fixtures.impclob_implements's own" in msg
+        # It must NOT name the declaration-only vocabulary at all.
+        assert "impclob_decl_vocab" not in msg
+        # And it is the CLOBBER refusal, not the vocabulary-implements one.
+        assert "only declares" not in msg
 
     def test_the_earlier_implementers_clauses_survive_the_refusal(self):
-        _load_fixture("impclob_decl_vocab")
         use = _load_fixture("impclob_implements")
         with pytest.raises(SyntaxError):
             _load_fixture("impclob_implements_rival")
         assert _solutions(use.impclob_check, 1) == [(mint("ok"),)]
 
 
-class TestDeclarationOnlyExporterStillWorks:
-    """The corpus idiom: the exporter declares, the importer implements."""
+class TestDeclarationOnlyExporterIsRefused:
+    """The "vocabulary-implements" idiom, DROPPED 2026-09-24 (operator ruling,
+    ``todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md``).
 
-    def test_implementing_a_clause_free_imported_functor_loads(self):
+    This class used to pin that the idiom LOADS: an importer supplied the
+    clauses of ``impclob_decl_vocab``'s clause-free ``impclob_verdict/2`` and
+    the vocabulary's own name then answered with them.  Now the importer is
+    refused at load with a remedy, and the remedy's shape is what loads: the
+    implementer defines and exports the predicate, users import it from there.
+    """
+
+    def test_implementing_a_clause_free_imported_functor_is_refused(self):
         vocab = _load_fixture("impclob_decl_vocab")
-        use = _load_fixture("impclob_implements")
-        assert use.impclob_verdict is vocab.impclob_verdict
-        assert _solutions(use.impclob_check, 1) == [(mint("ok"),)]
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_fixture("impclob_implements_vocab")
+        msg = " ".join(str(exc_info.value).split())
+        assert ("tests.fixtures.impclob_decl_vocab only declares "
+                "impclob_verdict/2") in msg
+        assert "->" in msg                      # house style: a remedy line
+        assert ("define impclob_verdict/2 in "
+                "tests.fixtures.impclob_implements_vocab and export it") in msg
+        # Nothing reached the vocabulary's predicate: it still has no row in
+        # its own Database, and its binding reads no clauses.
+        assert vocab.__dict__["$module"].db.row("impclob_verdict", 2) is None
+        row = resolve_predicate_row(vocab.impclob_verdict, arity=2)
+        assert row is None or not row.clauses
+
+    def test_the_remedy_loads_and_its_users_see_the_clauses(self):
+        impl = _load_fixture("impclob_implements")
+        user = _load_fixture("impclob_verdict_user")
+        assert _solutions(user.impclob_user_check, 1) == [(mint("ok"),)]
+        assert _solutions(impl.impclob_verdict, 2) == [
+            (mint("ok"), mint("cited"))]
 
     def test_reloading_the_implementer_is_idempotent(self):
         """A module's own clauses must not count as "someone else's" on a
         second load, or a reload would refuse itself."""
-        _load_fixture("impclob_decl_vocab")
         _load_fixture("impclob_implements")
         use = _load_fixture("impclob_implements")  # again
         assert _solutions(use.impclob_check, 1) == [(mint("ok"),)]
@@ -203,7 +239,9 @@ class TestOneFileLoadedTwiceUnderTwoNames:
     """
 
     def test_the_implementer_loads_under_two_different_module_names(self):
-        _load_fixture("impclob_decl_vocab")
+        # Since 2026-09-24 impclob_implements DEFINES impclob_verdict rather
+        # than implementing a vocabulary import, so the two loads share no
+        # predicate; this still pins that neither load refuses the other.
         a = _load_fixture("impclob_implements", as_name="_impclob_probe_a")
         b = _load_fixture("impclob_implements", as_name="_impclob_probe_b")
         assert _solutions(a.impclob_check, 1) == [(mint("ok"),)]

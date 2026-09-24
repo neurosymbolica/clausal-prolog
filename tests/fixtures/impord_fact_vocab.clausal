@@ -1,6 +1,5 @@
-# Owner of impord_fverdict/2, with no clauses of its own — a downstream
-# fixture supplies the only fact, so the pre-existing "a local clause for an
-# imported functor replaces its clause list" behaviour (unchanged by the
-# positional-head fix; verified identical on main) cannot confuse the
-# assertion.
+# Declares impord_fverdict/2 and defines no clauses for it.  A downstream
+# fixture (impord_declare_then_import_fact) supplies a fact for it, which is
+# refused at load since 2026-09-24 (the "vocabulary-implements" idiom was
+# dropped).
 -module(impord_fact_vocab, [impord_fverdict/2])

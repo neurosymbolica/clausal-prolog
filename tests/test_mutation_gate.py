@@ -298,10 +298,15 @@ def test_assertz_records_its_own_author_not_the_loading_module(tmp_path):
 def test_alias_scenario_1_one_file_under_two_module_names_is_not_refused():
     """Ownership is keyed on the canonical SOURCE PATH, not the module name
     (identity todo instance 1): a dotted ``-import_from`` name and
-    ``load_clausal_module``'s ``_clausal_test_*`` name are the same file."""
+    ``load_clausal_module``'s ``_clausal_test_*`` name are the same file.
+
+    Since 2026-09-24 ``impclob_implements`` DEFINES ``impclob_verdict/2``
+    instead of implementing a vocabulary import (that idiom is a load error
+    now), so the two loads no longer share a row; the scenario that made the
+    source key load-bearing was the idiom itself.  Kept as the pin that
+    neither route refuses the other."""
     from clausal.testing import load_clausal_module
 
-    _load_fixture("impclob_decl_vocab")
     a = _load_fixture("impclob_implements", as_name="_gate_probe_a")
     b = load_clausal_module(_fixture_path("impclob_implements"))
     assert _answers(a, "impclob_check") == [mint("ok")]
@@ -320,10 +325,11 @@ def test_alias_scenario_2_an_aliased_import_cannot_clobber_the_exporter():
     assert len(owner.impclob_colour._state_row().clauses) == 2
 
 
-def test_alias_scenario_3_a_second_implementer_of_a_vocabulary_is_refused():
-    """The clause-free vocabulary import stays legal (nothing to destroy); the
-    SECOND implementer is refused, and credited to the first implementer."""
-    _load_fixture("impclob_decl_vocab")
+def test_alias_scenario_3_a_second_implementer_is_refused():
+    """The SECOND implementer is refused, and credited to the first.  (Until
+    2026-09-24 both implemented a clause-free vocabulary import; that idiom
+    is itself refused now, so the first implementer DEFINES the predicate and
+    the rival imports it from there.)"""
     use = _load_fixture("impclob_implements")
     with pytest.raises(SyntaxError) as exc_info:
         _load_fixture("impclob_implements_rival")
@@ -336,35 +342,60 @@ def test_alias_scenario_3_a_second_implementer_of_a_vocabulary_is_refused():
 # ── Fix round 1: the gate's own hygiene ────────────────────────────────────
 
 
-def test_a_refused_load_writes_nothing_at_all():
+def _load_writes_during(monkeypatch, stem: str):
+    """Load fixture *stem* and return ``(exception or None, [(functor, arity)
+    ...])`` for every ``load-clauses`` transaction the load OPENED -- the
+    writes, counted at the one door they all go through."""
+    from clausal.logic.database import WRITE_LOAD_CLAUSES
+    opened = []
+    real = Database.mutate
+
+    def spy(self, functor, arity, *, author, kind, **kw):
+        if kind == WRITE_LOAD_CLAUSES and stem in str(author):
+            opened.append((functor, arity))
+        return real(self, functor, arity, author=author, kind=kind, **kw)
+
+    monkeypatch.setattr(Database, "mutate", spy)
+    try:
+        _load_fixture(stem)
+    except SyntaxError as exc:
+        return exc, opened
+    finally:
+        monkeypatch.setattr(Database, "mutate", real)
+    return None, opened
+
+
+def test_a_refused_load_writes_nothing_at_all(monkeypatch):
     """The property the deleted step-3c pre-pass carried, restored on the gate.
 
     Step 3c ran BEFORE the write loop expressly so that "a refusal that fired
     halfway through the loop would leave the other module with a partly-
     clobbered clause list".  Consulting the gate per predicate INSIDE the loop
-    dropped that: ``gate_rival`` implements ``gv_free`` (legal — clause-free
-    vocabulary) before it redefines ``gv_owned`` (refused), so the exporter's
-    shared ``gv_free`` class was left holding the failed load's clause, with
-    its ``_clauses_source`` naming a module that never finished loading.
+    dropped that: ``gate_rival`` writes a legal predicate (``gate_rival_local``)
+    before it redefines ``gv_owned`` (refused), so the legal write had
+    already landed, attributed to a module that never finished loading.
 
     The gate's policy is pure, so the load now runs it over every key it is
-    about to write BEFORE writing any of them."""
+    about to write BEFORE writing any of them.  Counted at the door itself
+    (``Database.mutate``), with a positive control: the same spy sees the
+    writes of a load that is NOT refused.  (Until 2026-09-24 the legal first
+    write implemented the clause-free ``gv_free`` -- the dropped
+    "vocabulary-implements" idiom, itself a load error now.)"""
     vocab = _load_fixture("gate_vocab")
-    assert len(vocab.gv_free._state_row().clauses) == 0, "the vocabulary starts clause-free"
 
-    with pytest.raises(SyntaxError) as exc_info:
-        _load_fixture("gate_rival")
-    assert "may not write gv_owned/1" in str(exc_info.value)
-
-    assert len(vocab.gv_free._state_row().clauses) == 0, (
-        "the LEGAL earlier write must not have landed either — the refusal "
-        "is for the load, not for one predicate of it"
-    )
-    assert vocab.gv_free._row.source is None, (
-        "and the exporter's class must not be attributed to a module that "
-        "failed to load"
-    )
+    exc, opened = _load_writes_during(monkeypatch, "gate_rival")
+    assert exc is not None
+    assert "may not write gv_owned/1" in str(exc)
+    assert opened == [], (
+        f"the refused load opened {opened} -- the LEGAL earlier write must "
+        f"not have landed either; the refusal is for the load, not for one "
+        f"predicate of it")
     assert len(vocab.gv_owned._state_row().clauses) == 1
+
+    # Positive control: the spy does see a load's writes.
+    exc, opened = _load_writes_during(monkeypatch, "gate_vocab")
+    assert exc is None
+    assert ("gv_owned", 1) in opened, opened
 
 
 def test_a_raise_inside_a_transaction_still_invalidates_and_stamps():

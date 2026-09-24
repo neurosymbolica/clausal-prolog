@@ -894,8 +894,10 @@ class PredicateMeta(type):
         own, and the clauses live under the name the CLAUSE HEADS use.
 
         Re-binding a class that already has a row is legitimate and expected:
-        a clause-free imported declaration getting its clauses downstream, a
-        file re-compiled in one process, a name defined at two arities.  It is
+        a file re-compiled in one process, a name defined at two arities.
+        (A clause-free imported declaration getting its clauses downstream
+        used to be the first example; that idiom is a load error since
+        2026-09-24.)  It is
         also how a shared predicate gets STOLEN, so it is policed: a class
         already reading another Database's real row is left where it is unless
         the caller passes *authorized*, which TWO callers do, each from inside
@@ -963,8 +965,9 @@ class PredicateMeta(type):
             # (its ``recompile`` kind is never refused, precisely because it
             # is meant to change nothing), so it does not get to.  The
             # authorized re-binds are ``compiler_v2`` step 4's clause install
-            # -- which is what keeps the clause-free vocabulary idiom working
-            # -- and ``specialization._install_specialized``'s alias install
+            # -- which kept the clause-free vocabulary idiom working until
+            # that idiom became a load error (2026-09-24) -- and
+            # ``specialization._install_specialized``'s alias install
             # (P3-3 Task 7); both run inside a mutation-gate transaction
             # already cleared for their author, and the second additionally
             # names the class in that transaction's ``through=``.

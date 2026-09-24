@@ -674,6 +674,46 @@ def describe_imported_predicate_redefinition(
     return "\n".join(lines)
 
 
+def describe_imported_declaration_implemented(
+    functor, arity, importer, exporter, imported_as=None,
+):
+    """Why clauses for an ``-import_from``'d predicate the exporter only
+    DECLARES are refused -- and where they go instead.
+
+    The "vocabulary-implements" idiom (the exporter declares, an importer
+    supplies the clauses, everyone else imports the exporter's name) was
+    dropped by operator ruling, 2026-09-24
+    (``todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md``):
+    a predicate has one defining module, and here that is the importer.
+    *imported_as* is the local alias when the ``-import_from`` renamed it.
+    """
+    spelled = (f"{functor} (imported as {imported_as})"
+               if imported_as else functor)
+    lines = [
+        f"{importer} defines clauses for {functor}/{arity}, which it "
+        f"-import_from's from {exporter} -- but {exporter} only declares "
+        f"{functor}/{arity}; it does not define it."
+    ]
+    lines.extend(textwrap.wrap(
+        f"Supplying the clauses for a predicate imported from a module that "
+        f"only declares it is not supported: a predicate has exactly one "
+        f"defining module, and the module that writes its clauses is that "
+        f"module.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    lines.extend(_arrow([
+        f"define {functor}/{arity} in {importer} and export it from "
+        f"{importer}: drop {spelled} from the -import_from({exporter}, "
+        f"[...]) list and add {functor}/{arity} to {importer}'s -module "
+        f"export list;",
+        f"then have the modules that use it import it from {importer}, "
+        f"not from {exporter} (and remove the declaration from {exporter} "
+        f"if nothing else needs it).",
+    ]))
+    return "\n".join(lines)
+
+
 # ── entry point ──────────────────────────────────────────────────────────────
 
 

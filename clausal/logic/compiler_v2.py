@@ -280,11 +280,21 @@ def compile_module(
             logic_module.define_predicate(pred_node)
             if pred_cls is not None:
                 db_clauses = db.clauses_for(functor, arity)
-                # ``authorized``: this is the ONE bind the mutation gate has
-                # just cleared for this author, so it may move a shared class
-                # onto this module's row (the clause-free vocabulary idiom).
-                # Every other bind is policed -- see ``PredicateMeta.
-                # _bind_row``.
+                # ``authorized``: this is a bind the mutation gate has just
+                # cleared for this author, so it may move a class off another
+                # Database's row onto this module's.  The one user that move
+                # had -- the clause-free "vocabulary-implements" idiom -- is a
+                # load error since 2026-09-24 (step 3d,
+                # ``_implements_an_imported_declaration``), and measured over
+                # the targeted suites plus every in-tree ``.clausal`` file
+                # with an ``-import_from`` (106 files, 1,205 arrivals) no bind
+                # here moves a class off a foreign real row any more.  The
+                # flag is LEFT, not removed: a class reaching ``module_dict``
+                # by a route other than ``-import_from`` is not provably
+                # absent, and without it such a bind would be skipped
+                # silently (clauses on this row, class reading another).  It
+                # goes with the classes at the flip.  Every other bind is
+                # policed -- see ``PredicateMeta._bind_row``.
                 pred_cls._bind_row(db, functor, arity, authorized=True)
                 # ``_ensure_clauses``, not a plain ``_clauses`` read: a read
                 # mints nothing (P3-3 Task 2 fix round 1), and this IS the
@@ -956,6 +966,73 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
                 exc, functor, arity, pred_cls, origins, module_name,
                 module_dict,
             )
+        refused = _implements_an_imported_declaration(
+            origins, module_dict, functor, arity, module_name)
+        if refused is not None:
+            raise refused
+
+
+def _implements_an_imported_declaration(origins: dict, module_dict: dict,
+                                        functor: str, arity: int,
+                                        module_name: str):
+    """The load error for clauses written against a predicate this module
+    ``-import_from``'s from a module that only DECLARES it -- or ``None``.
+
+    The "vocabulary-implements" idiom (module A exports ``p/2`` and writes no
+    clauses for it; module B imports ``p`` and supplies them) is DROPPED
+    (operator ruling 2026-09-24,
+    ``todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md``).
+    It only ever worked because step 4 MOVED the shared class off A's row onto
+    B's; after the PredicateMeta flip there is no class to move, so it would
+    have stopped answering silently.  A predicate has one defining module, and
+    for this shape that module is B: define it there, export it from there.
+
+    Asked AFTER the gate has permitted the write (the caller checks
+    ``Database.refusal_for`` first), so an import of a predicate the exporter
+    DEFINES keeps the existing clobber refusal and its message.  What reaches
+    here and is refused is every other write through an ``-import_from``
+    of a predicate AT THIS ARITY from another module: the gate permits a
+    load write only where the row holds nothing a load wrote -- a
+    declaration-only export (NO row post-flip, a private detached row today)
+    or a ``-dynamic`` one (an unowned row) -- and that is exactly "imported
+    from a module that does not define it".
+
+    Keyed on the binding's ARITY-EXACT predicate, never on class identity:
+    ``is_declared_predicate`` answers for a class today and a mangled handle
+    after the flip, and it is arity-strict in both, so a same-spelling
+    import at ANOTHER arity is not this predicate -- that is a local
+    predicate sharing a name, and it loads.
+
+    Pure and pre-write: step 3d calls it from the dry run, before the write
+    loop touches anything.
+    """
+    origin = origins.get(functor)
+    if origin is None:
+        return None
+    exporter, bound = origin
+    if bound is None or exporter == module_name:
+        return None
+    if not is_declared_predicate(bound, arity=arity):
+        return None
+    local = module_dict.get(functor)
+    if (local is not None and local != bound
+            and is_declared_predicate(local, arity=arity)):
+        # The canonical spelling is bound to a predicate of THIS module, not
+        # to the import: an aliased ``-import_from(m, [alias(f, G)])`` leaves
+        # ``f`` free, and a local ``f/N`` then keeps its own predicate (the
+        # rule ``Database.adopt_row`` states for rows; pinned by
+        # ``test_a_local_definition_wins_a_clash_with_an_aliased_import``).
+        # The gate resolves the head the same way -- ``module_dict`` first.
+        return None
+    imported_as = [local for local, (mod, b) in origins.items()
+                   if mod == exporter and b == bound and local != functor]
+    from clausal.import_diagnostics import (  # noqa: PLC0415
+        describe_imported_declaration_implemented,
+    )
+    return SyntaxError(describe_imported_declaration_implemented(
+        functor, arity, module_name, exporter,
+        imported_as=imported_as[0] if imported_as else None,
+    ))
 
 
 _LOAD_SITES = {
