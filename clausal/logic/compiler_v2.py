@@ -39,6 +39,7 @@ from clausal.logic.compiler import (
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
+    binding_grants_arity,
     predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
@@ -241,6 +242,15 @@ def compile_module(
     #    remap and onto the local name BEFORE step 4 compiles the bodies.
     _route_imported_atom_calls_to_local(
         module_items, predicate_nodes, module_dict)
+
+    # ── Step 3b-quater: an imported PREDICATE applied at ANOTHER arity ──
+    #    Operator ruling 2026-09-24 (the aliased-import leak): an
+    #    unqualified call resolves in THIS module under the name the caller
+    #    USED.  The import remap spells ``nl(3, L)`` as the owner's dotted
+    #    key, which would resolve ``/2`` in the OWNER under the OWNER's name;
+    #    re-point such a call site to the local name instead.
+    _route_other_arity_imported_calls_to_local(
+        module_items, predicate_nodes, module_dict, db)
 
     # ── Step 3c: resolve each imported name to the CLASS it bound ────────
     #    Names only, no policy: ``origins`` maps every spelling an
@@ -1771,6 +1781,97 @@ def _route_imported_atom_calls_to_local(
             ):
                 local = reroutes.get((obj.func.name, len(obj.args)))
                 if local is not None:
+                    obj.func = LoadNameNode(
+                        name=local, position=obj.func.position)
+            for child in obj.children():
+                _walk(child)
+        elif isinstance(obj, (list, tuple)):
+            for element in obj:
+                _walk(element)
+
+    for pred_node in predicate_nodes:
+        body = getattr(pred_node, "body", None)
+        if body is not None and body is not True:
+            _walk(body)
+
+
+def _route_other_arity_imported_calls_to_local(
+    module_items: list, predicate_nodes: list, module_dict: dict, db=None,
+) -> None:
+    """Re-point an UNQUALIFIED call to an imported predicate at ANOTHER arity
+    from the import remap's dotted key to the LOCAL name the file used.
+
+    Operator ruling 2026-09-24 (closing the aliased-import leak,
+    ``todo/done/aliased-import-other-arity-resolves-in-the-owner-2026-09-24.md``):
+    importing ``numlist/1`` as ``nl`` grants that one arity under that one
+    name.  ``nl(3, L)`` must resolve in THIS module under ``nl`` -- its own
+    ``nl/2`` row, else a builtin ``nl/2``, else the arity refusal -- never
+    ``alow``'s ``numlist/2``.  ``term_rewriting`` emits every reference to an
+    imported spelling as ``LoadName("alow.numlist")``, and a dotted target
+    is (correctly, for a QUALIFIED reference) resolved in the qualifier's
+    module under that name; so the unqualified call has to leave the dotted
+    key before ``globals_env`` sees it.
+
+    Only the remap's own shape is touched: the FUNC of a body ``Call`` that
+    is a ``LoadName`` of an ``-import_from`` dotted key.  A qualified
+    ``alow.numlist(3, L)`` the author wrote does not compile to that shape
+    (it yields no data-position ``LoadName`` target), so it keeps the
+    qualifier's resolution.  Only arities the imported binding is NOT a
+    predicate at are re-pointed -- the imported arity keeps the dotted key and
+    its ``$disp_`` bake.  "Imported at" is ``predicate.binding_grants_arity``
+    against the importing *db*, the same test in both eras: the owner's OTHER
+    arities (one ``assertz``'d there, say) were not imported, even though a
+    handle's owner would call itself a predicate at them.  Mirrors ``_route_imported_atom_calls_to_local``
+    (the atom twin, P3-3 Task 5b).
+    """
+    spellings: dict[str, set[str]] = {}   # dotted key -> local names
+    owner_names: dict[str, str] = {}
+    for item in module_items:
+        if not isinstance(item, ImportFromItem):
+            continue
+        for name_spec in item.names:
+            if isinstance(name_spec, tuple):
+                orig_name, local_name = name_spec
+            else:
+                orig_name = local_name = name_spec
+            if is_declared_predicate_name(module_dict.get(local_name)):
+                dotted = f"{item.module}.{orig_name}"
+                spellings.setdefault(dotted, set()).add(local_name)
+                owner_names[dotted] = orig_name
+    # Review round 5: one predicate imported under SEVERAL spellings
+    # (``-import_from(alow, [numlist, alias(numlist, nl)])``) shares ONE
+    # dotted key, and the remapped ``LoadName`` does not record which
+    # spelling the author wrote -- so the key is AMBIGUOUS and must not be
+    # re-pointed to whichever spelling the import list named last.  When the
+    # unaliased spelling is among them it is used: the call then resolves
+    # under the owner's own name in THIS module (a builtin under that name
+    # answers ``numlist(3, L)``, as for any unaliased import).  Two or more
+    # ALIASES and no unaliased spelling: not re-pointed at all.  Residual,
+    # documented: in such a module an ALIASED spelling at another arity is
+    # resolved under the unaliased name (or, with no unaliased spelling, in
+    # the owner).  Recording the spelling in the remap is the full fix.
+    reroutes: dict[str, str] = {}
+    for dotted, names in spellings.items():
+        if len(names) == 1:
+            reroutes[dotted] = next(iter(names))
+        elif owner_names[dotted] in names:
+            reroutes[dotted] = owner_names[dotted]
+    if not reroutes:
+        return
+    from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
+        Call as CallNode, LoadName as LoadNameNode, Node as AstNode,
+    )
+
+    def _walk(obj) -> None:
+        if isinstance(obj, AstNode):
+            if (
+                isinstance(obj, CallNode)
+                and isinstance(obj.func, LoadNameNode)
+                and not obj.kwargs
+            ):
+                local = reroutes.get(obj.func.name)
+                if local is not None and not binding_grants_arity(
+                        module_dict.get(local), len(obj.args), db, local):
                     obj.func = LoadNameNode(
                         name=local, position=obj.func.position)
             for child in obj.children():

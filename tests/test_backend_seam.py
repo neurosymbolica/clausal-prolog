@@ -98,7 +98,15 @@ class TestBakeInReadsTheRow:
         cls = _bound_class(db, "Leaf", 1, locked=True, dispatch=_dummy_dispatch)
         base_globals: dict = {}
         _inject_resolved_targets({("Leaf", 2)}, base_globals, db, {"Leaf": cls})
-        assert _disp_key("Leaf", 2) not in base_globals
+        # Operator ruling 2026-09-24 (the aliased-import leak): an UNQUALIFIED
+        # wrong-arity call site now gets its own ``$disp_`` entry -- but never
+        # the class's dispatch.  It re-resolves in this module under this
+        # name and otherwise REFUSES, so the arity check is not jumped.
+        from clausal.predicate_diagnostics import PredicateArityMismatchError
+        baked = base_globals.get(_disp_key("Leaf", 2))
+        assert baked is not None and baked is not _dummy_dispatch
+        with pytest.raises(PredicateArityMismatchError):
+            baked(1, 2, None)
 
     def test_no_disp_key_exists_for_an_unlocked_row_after_a_real_compile(self):
         """The invariant end-to-end: after a representative compile, no

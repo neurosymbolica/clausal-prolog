@@ -11,7 +11,9 @@ from clausal.logic.exceptions import LogicException, string_goal_error
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
-from clausal.logic.predicate import is_declared_predicate_name
+from clausal.logic.predicate import (
+    is_declared_predicate_name, localize_goal, localize_owner_functor,
+)
 
 from clausal.logic.cells import (
     is_chars, chars_text,   # stage 1: the chars carrier
@@ -222,6 +224,13 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # functor here is a dangling handle, decided now rather than failed.
         _raise_if_unloaded_handle(functor, arity, context)
         return None
+    # A cell built through an ALIASED import carries the OWNER's functor
+    # (``dd(N, M)`` is ``("dec", N, M)``); at an arity the alias IMPORTED it
+    # resolves under the alias here.  Every other arity takes the normal
+    # lookup below (round 6 decision) -- see ``predicate.localize_owner_functor``.
+    aliased = localize_owner_functor(db, functor, arity)
+    if aliased is not None:
+        return aliased.dispatch_at(arity), call_args
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
@@ -310,7 +319,17 @@ def _make_call_goal_factory(extra_n: int):
             goal_val = deref(args[0])
             trail = args[extra_n + 1]
             dispatch = None
-            if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
+            # Operator ruling 2026-09-24: an imported predicate reached
+            # through an unqualified name -- its class, or (after the flip)
+            # the owner HANDLE an import binds -- resolves under that name
+            # in the calling module, not in the owner.  A handle the calling
+            # module does not bind by a plain name keeps the qualified route
+            # through ``_resolve_named_goal`` below.
+            localized = localize_goal(db, goal_val)
+            if localized is not goal_val:
+                dispatch = _ensure_trampoline_dispatch(localized, extra_n)
+                call_args = [deref(a) for a in args[1:extra_n + 1]]
+            elif callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
                 # extra_n is exactly what the goal will be called with.
                 dispatch = _ensure_trampoline_dispatch(goal_val, extra_n)
                 call_args = [deref(a) for a in args[1:extra_n + 1]]
@@ -918,6 +937,64 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
         yield (_proceed, None)
     trail.undo(outer_mark)
     yield (_fail, DONE)
+
+
+# ── Goal-taking list builtins become db-receiving (operator ruling 2026-09-24)
+#
+# ``maplist(nl, [3], [L])`` in a module that does ``-import_from(alow,
+# [alias(numlist, nl)])`` hands these builtins alow's numlist/1 binding (class
+# or handle) and nothing else; ``_dispatch_at`` on that binding at arity 2
+# answered alow's builtin numlist/2 -- the aliased-import leak, through a
+# meta-call.  The ruling: a goal reached through an unqualified name resolves
+# under THAT name in the CALLING module.  Only the caller's database can say
+# which name that was, so each of these is re-registered as a db-receiving
+# factory whose product localizes the goal (``predicate.localize_goal``) and
+# then runs the unchanged builtin.  ``_db_optional``: with no db the goal is
+# passed through untouched -- the pre-ruling builtin exactly -- so the db-less
+# paths (``_BUILTIN_CLASSES``, a db-less ``BuiltinPredicate``) keep working;
+# the same arrangement ``call/N``, ``phrase`` and ``time_goal`` already use.
+
+_GOAL_FIRST_LIST_BUILTINS = (
+    ("maplist", 2), ("maplist", 3), ("include", 3), ("exclude", 3),
+    ("foldl", 4), ("take_while", 3), ("drop_while", 3), ("span", 4),
+    ("group_by", 3), ("sort_by", 3), ("max_by", 3), ("min_by", 3),
+    ("filter_map", 3), ("partition", 4), ("tfilter", 3), ("tpartition", 4),
+)
+
+
+def _make_localizing_factory(impl):
+    def factory(db):
+        if db is None:
+            return impl
+
+        def _localized(this_generator, _proceed, _fail, _catcher, goal, *rest):
+            return impl(this_generator, _proceed, _fail, _catcher,
+                        localize_goal(db, deref(goal)), *rest)
+        _localized.__name__ = impl.__name__
+        return _localized
+    factory._db_optional = True
+    factory._localizing = True
+    return factory
+
+
+def _register_localizing_list_builtins() -> None:
+    """Move each goal-first list builtin from ``_BUILTINS`` to a localizing
+    ``_DB_BUILTINS`` factory.  Idempotent (review round 4): a reload of this
+    module re-runs the ``@_trampoline_builtin`` decorators, which put a fresh
+    stateless entry back in ``_BUILTINS``; that entry is popped again and the
+    factory rebuilt around the NEW function.  A key with no stateless entry
+    whose factory is already a localizing one is left alone."""
+    from clausal.logic.builtins._registry import _BUILTINS  # noqa: PLC0415
+    for key in _GOAL_FIRST_LIST_BUILTINS:
+        impl = _BUILTINS.pop(key, None)
+        if impl is None:
+            if getattr(_DB_BUILTINS.get(key), "_localizing", False):
+                continue
+            raise RuntimeError(f"goal-first list builtin {key} is not registered")
+        _DB_BUILTINS[key] = _make_localizing_factory(impl)
+
+
+_register_localizing_list_builtins()
 
 
 def _run_goal_once(dispatch, *args_and_trail):
