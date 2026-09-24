@@ -542,6 +542,17 @@ def compile_module(
     return logic_module
 
 
+_IMPORT_PLACEHOLDER = "_clausal_import_placeholder"
+
+
+def mark_import_placeholder(module: LogicModule) -> LogicModule:
+    """Mark *module* as the import hook's exec-time PLACEHOLDER ``$module``:
+    the one module ``compile_module`` may replace (``_install_real_module``).
+    Returns *module*."""
+    setattr(module, _IMPORT_PLACEHOLDER, True)
+    return module
+
+
 def _install_real_module(module_dict: dict, logic_module: LogicModule) -> None:
     """Make *logic_module* the module ``module_dict`` names, for the WHOLE of
     ``compile_module`` (pre-flip task 4; W4b-2d dry run root cause R1).
@@ -560,11 +571,20 @@ def _install_real_module(module_dict: dict, logic_module: LogicModule) -> None:
 
     Swapping here, before step 0, closes it for every step: the constants the
     body registered are carried across (the one thing the placeholder holds;
-    it has no clauses), then both names point at the real module.  A
-    namespace with no ``$module`` (the direct API) gets nothing installed.
+    it has no clauses), then both names point at the real module.
+
+    Only a module the hook MARKED as its placeholder
+    (``mark_import_placeholder``) is replaced -- never "whatever ``$module``
+    holds".  A second compile into a namespace that already finished loading
+    (the direct API on a loaded module's dict) must not swap the live module,
+    whose db has clauses, for a fresh one; before this function
+    compile_module wrote neither name, so leaving them is today's behaviour.
+    No ``$module`` (the direct API), or an unmarked one: nothing installed.
+    A marker rather than a ``compile_module`` keyword keeps its signature,
+    which tests (and wrappers) monkeypatch positionally.
     """
     placeholder = module_dict.get("$module")
-    if placeholder is None or placeholder is logic_module:
+    if not getattr(placeholder, _IMPORT_PLACEHOLDER, False):
         return
     logic_module.constants.update(getattr(placeholder, "constants", None) or {})
     logic_module.constant_units.update(

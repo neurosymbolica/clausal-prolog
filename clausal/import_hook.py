@@ -215,10 +215,14 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         For .clausal files: re-parse the .clausal source.
         For .pl files: re-translate .pl → .clausal, then parse.
     """
-    from clausal.logic.compiler_v2 import compile_module
+    from clausal.logic.compiler_v2 import (
+        compile_module, mark_import_placeholder)
 
     predicate_nodes = []
-    dummy_logic_module = LogicModule(module.__name__, module_dict=module_dict)
+    # MARKED: compile_module replaces exactly this object as ``$module``
+    # before its first step (compiler_v2._install_real_module).
+    dummy_logic_module = mark_import_placeholder(
+        LogicModule(module.__name__, module_dict=module_dict))
     module_dict["$module"] = dummy_logic_module
     module_dict["$define_predicate"] = (
         lambda pred, lm: predicate_nodes.append(pred)

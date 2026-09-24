@@ -159,3 +159,23 @@ def test_import_module_still_brings_no_term_expansion_rules(tmp_path,
     finally:
         for n in names:
             sys.modules.pop(n, None)
+
+
+def test_a_second_compile_into_a_loaded_namespace_keeps_the_live_module(
+        load_natnum):
+    """Review MEDIUM: only the import hook's PLACEHOLDER is replaced, and it
+    is identified positively (the hook hands it over), never "whatever
+    ``$module`` holds".  A second ``compile_module`` into a namespace that
+    already finished loading must leave the live module under both names --
+    today's behaviour, since compile_module never wrote either name."""
+    from clausal.logic.compiler_v2 import compile_module
+    module = load_natnum()
+    ns = module.__dict__
+    live = ns["$module"]
+    assert live.db.row("natnum_program", 1).clauses   # a live, non-empty db
+    other = compile_module([], [], ns, _NAME)
+    assert other is not live
+    assert ns["$module"] is live
+    assert module.__clausal_module__ is live
+    assert live.db.row("natnum_program", 1).clauses
+
