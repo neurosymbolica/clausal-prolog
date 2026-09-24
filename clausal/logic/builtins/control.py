@@ -40,7 +40,8 @@ _BUILTIN_FIELDS[("when", 2)] = ("condition", "goal")
 
 
 def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
-    """Return (dispatch_fn, args_tuple) for a goal value, or (None, None) on failure.
+    """Return (dispatch_fn, args_tuple) for a goal value, or (None, None) when
+    the goal names nothing -- which time_goal turns into a silent failure.
 
     Handles:
     - callable (Python function / lambda) → no extra args
@@ -60,12 +61,19 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     control construct and a module-qualified goal are turned away, because
     the shared resolver RAISES for them where time_goal has always failed.
 
-    That narrowing is NOT "time_goal never raises where the resolver does":
-    a dangling predicate HANDLE (a mangled functor whose module never
-    loaded, or whose loaded module lacks the predicate) RAISES here
-    ``existence_error(procedure, Name/Arity)``, exactly as ``call/N`` does
-    (ruling 2 extended, 2026-09-24).  It is a reference that was supposed to
-    resolve, and failing silently is how that mistake stays invisible.
+    That narrowing is NOT "time_goal never raises where the resolver does".
+    Two cases RAISE ``existence_error(procedure, Name/Arity)`` here, exactly
+    as ``call/N`` does:
+
+    * a dangling predicate HANDLE (a mangled functor whose module never
+      loaded, or whose loaded module lacks the predicate) -- ruling 2
+      extended, 2026-09-24.  It is a reference that was supposed to
+      resolve, and failing silently is how that mistake stays invisible;
+    * an atom or cell naming a predicate the caller binds only at ANOTHER
+      arity -- ``time_goal(b)`` against ``b/1`` -- as
+      ``PredicateArityMismatchError`` (catchable; ruling Q3, 2026-09-25).
+
+    Only a name bound to no predicate at all still fails.
     """
     # W4b-3: ``is_declared_predicate_name`` admits the module-qualified
     # HANDLE a predicate name is bound to after the flip.
@@ -136,6 +144,11 @@ def _time_goal__1(db, this_generator, _proceed, _fail, _catcher, goal, trail):
     - a Python callable / lambda (no extra args)
     - a PredicateMeta class or BuiltinPredicate (called with no args)
     - a predicate instance, e.g. in_(X_, [1,2,3]) — dispatched with its fields
+    - an atom or cell NAMING a predicate, resolved in the caller
+
+    A goal that names nothing fails.  A named goal the caller defines only at
+    another arity raises ISO ``existence_error(procedure, Name/Arity)``, as
+    does a dangling handle -- see ``_goal_dispatch_and_args``.
     """
     goal_val = deref(goal)
     dispatch, goal_args = _goal_dispatch_and_args(goal_val, db, "time_goal/1")

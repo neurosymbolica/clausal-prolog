@@ -25,7 +25,8 @@ from clausal.terms import LoadName
 
 _SRC = """\
 -module({name}, [z/0, b/1, add/3, q/1, r/1, l/1, g_map/0, g_call/0,
-                 g_fold/1, g_part/2, g_phrase/0, greet/2])
+                 g_fold/1, g_part/2, g_phrase/0, greet/2, tpos/2,
+                 g_tf/1, g_tp/2])
 z <- True,
 b(1),
 add(X, Y, Z) <- (Z == X + Y),
@@ -38,6 +39,10 @@ g_fold(S) <- foldl(add, [1, 2, 3], 0, S),
 g_part(I, E) <- partition(b, [1, 2, 1], I, E),
 greet >> (["h", "i"])
 g_phrase <- phrase(greet, ["h", "i"]),
+tpos(X, T) <- (X > 0, T is True),
+tpos(X, T) <- (X <= 0, T is False),
+g_tf(R) <- tfilter(tpos, [1, -2, 3], R),
+g_tp(I, E) <- tpartition(tpos, [1, -2, 3], I, E),
 """
 
 
@@ -74,6 +79,17 @@ def test_goal_taking_builtins_resolve_the_atom_in_the_caller(mod):
     assert _answers(lm, "g_fold") == [6]
     assert _answers(lm, "g_part", 2) == [([1, 1], [2])]
     assert len(list(call("g_phrase", module=lm))) == 1
+
+
+def test_the_reified_list_builtins_drive_a_named_goal(mod):
+    """tfilter/3 and tpartition/4 ran the goal in a plain inline loop, which
+    cannot drive a ``_NamedGoal`` (it delegates to call/N through a
+    StepGenerator): the delegation step read as a solution with T unbound,
+    and every element was dropped -- ``tfilter(tpos, [1, -2, 3], R)``
+    answered ``R = []`` (2026-09-25; test_09 test_regression_tfilter_user_reified)."""
+    lm = mod.__dict__["$module"]
+    assert _answers(lm, "g_tf") == [[1, 3]]
+    assert _answers(lm, "g_tp", 2) == [([1, 3], [-2])]
 
 
 @pytest.mark.parametrize("flipped", [False, True], ids=["class", "flipped"])
@@ -117,6 +133,67 @@ def test_a_wrong_arity_atom_goal_still_names_the_arity(mod):
     with pytest.raises(PredicateArityMismatchError):
         list(solve(("maplist", "b", [1], Var()), lm))
 
+
+
+
+def _L():
+    return Var()
+
+
+# One row per builtin that resolves a NAMED goal through
+# ``higher_order._resolve_named_goal``: call/N, phrase/2,3, time_goal/1 and
+# every goal-first list builtin (``_GOAL_FIRST_LIST_BUILTINS``).  Each calls
+# a name the caller binds ONLY at another arity (b/1, add/3).
+_WRONG_ARITY_GOALS = [
+    ("call_1_atom", lambda: ("call", "b"), "b", 0),
+    ("call_3_atom", lambda: ("call", "b", 1, 2), "b", 2),
+    ("call_2_cell", lambda: ("call", ("add", 1), 2), "add", 2),
+    ("phrase_2", lambda: ("phrase", "b", ["x"]), "b", 2),
+    ("phrase_3", lambda: ("phrase", ("b", 1), ["x"], _L()), "b", 3),
+    ("time_goal_1_atom", lambda: ("time_goal", "b"), "b", 0),
+    ("time_goal_1_cell", lambda: ("time_goal", ("add", 1)), "add", 1),
+    ("maplist_2", lambda: ("maplist", "add", [1]), "add", 1),
+    ("maplist_3", lambda: ("maplist", "add", [1], _L()), "add", 2),
+    ("include_3", lambda: ("include", "add", [1], _L()), "add", 1),
+    ("exclude_3", lambda: ("exclude", "add", [1], _L()), "add", 1),
+    ("foldl_4", lambda: ("foldl", "b", [1], 0, _L()), "b", 3),
+    ("take_while_3", lambda: ("take_while", "add", [1], _L()), "add", 1),
+    ("drop_while_3", lambda: ("drop_while", "add", [1], _L()), "add", 1),
+    ("span_4", lambda: ("span", "add", [1], _L(), _L()), "add", 1),
+    ("group_by_3", lambda: ("group_by", "add", [1], _L()), "add", 2),
+    ("sort_by_3", lambda: ("sort_by", "add", [1], _L()), "add", 2),
+    ("max_by_3", lambda: ("max_by", "add", [1], _L()), "add", 2),
+    ("min_by_3", lambda: ("min_by", "add", [1], _L()), "add", 2),
+    ("filter_map_3", lambda: ("filter_map", "add", [1], _L()), "add", 2),
+    ("partition_4", lambda: ("partition", "add", [1], _L(), _L()), "add", 1),
+    ("tfilter_3", lambda: ("tfilter", "add", [1], _L()), "add", 2),
+    ("tpartition_4", lambda: ("tpartition", "add", [1], _L(), _L()), "add", 2),
+]
+
+
+@pytest.mark.parametrize("goal, name, arity",
+                         [r[1:] for r in _WRONG_ARITY_GOALS],
+                         ids=[r[0] for r in _WRONG_ARITY_GOALS])
+def test_a_named_goal_at_a_missing_arity_raises_iso_existence_error(
+        mod, goal, name, arity):
+    """Ruling Q3 (2026-09-25, "do what Scryer does"): a NAMED goal (atom or
+    cell) that nothing defines at the called arity, while the caller binds
+    the name to a predicate at another, RAISES
+    ``existence_error(procedure, Name/Arity)`` -- ``_resolve_named_goal``'s
+    other-arity refusal -- rather than failing silently.  Pinned for every
+    builtin sharing that resolver."""
+    from clausal.predicate_diagnostics import PredicateArityMismatchError
+    from clausal.terms import Compound
+    lm = mod.__dict__["$module"]
+    with pytest.raises(PredicateArityMismatchError) as exc:
+        list(solve(goal(), lm))
+    term = exc.value.term
+    assert isinstance(term, Compound) and term.functor == "error", term
+    formal = term.args[0]
+    assert formal.functor == "existence_error" and formal.args[0] == mint("procedure")
+    pi = formal.args[1]
+    assert isinstance(pi, Compound) and pi.functor == "/"
+    assert tuple(pi.args) == (mint(name), arity)
 
 
 def test_listing_a_bare_name_is_not_a_predicate_indicator(mod):

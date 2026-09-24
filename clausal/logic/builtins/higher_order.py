@@ -124,11 +124,22 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
 
     Returns ``None`` — which the caller turns into a silent failure, the
     behaviour every non-callable goal has had — when the goal is not a cell or
-    atom, when no db was threaded, or when the named predicate does not exist.
-    That last case is deliberate: the translator session's pinned §4.2 contract
-    is that a non-callable goal FAILS rather than raising, and a name that
-    resolves to nothing is exactly the same non-goal it was before this task.
-    A resolvable module does not change it: ``call(M:nosuch(X))`` fails.
+    atom, when no db was threaded, or when the calling module binds the name
+    to NO predicate at all.  That last case is deliberate: the translator
+    session's pinned §4.2 contract is that a non-callable goal FAILS rather
+    than raising, and a name that resolves to nothing is exactly the same
+    non-goal it was before this task.  A resolvable module does not change
+    it: ``call(M:nosuch(X))`` fails.
+
+    But a name the calling module DOES bind to a predicate, at another arity
+    only, RAISES: nothing answers at the folded arity, so this is the refusal
+    a body call at that arity gets (``_refuse_unqualified_other_arity``) --
+    ``PredicateArityMismatchError``, whose ``.term`` is ISO
+    ``error(existence_error(procedure, Name/Arity), _)`` and which ``catch/3``
+    catches (ruling Q3, 2026-09-25, "do what Scryer does").  Every caller of
+    this resolver inherits that raise: call/N, phrase/2,3, time_goal/1 and
+    every goal-first list builtin through ``_NamedGoal`` -- pinned per builtin
+    in ``tests/test_bare_predicate_name_in_source_is_the_plain_atom.py``.
 
     The one exception is a MANGLED predicate handle (ruling 2, 2026-09-24):
     it is not a name the caller wrote but a reference that was supposed to
@@ -898,12 +909,15 @@ def _tfilter__3(this_generator, _proceed, _fail, _catcher, goal, lst, filtered, 
     for elem in items:
         t_var = Var()
         mark = trail.mark()
-        # Run the goal inline (simple-mode) to get the truth value
-        # without going through the trampoline yield protocol.
-        t_val = None
-        for _ in _run_goal_once(dispatch, deref(elem), t_var, trail):
-            t_val = deref(t_var)
-            break  # committed choice: take first solution only
+        # Driven through the trampoline like include/3: a goal that DELEGATES
+        # (a ``_NamedGoal`` running the caller's call/N yields a
+        # StepGenerator) cannot be driven by a plain inline loop -- that read
+        # the delegation step as a solution with T unbound, and every element
+        # was dropped.  First solution only (committed choice): the step
+        # generator is never resumed.
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), t_var, trail)
+        _st = yield (sg, None)
+        t_val = deref(t_var) if _st is not DONE else None
         trail.undo(mark)
         if t_val is True:
             kept.append(deref(elem))
@@ -937,10 +951,10 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
     for elem in items:
         t_var = Var()
         mark = trail.mark()
-        t_val = None
-        for _ in _run_goal_once(dispatch, deref(elem), t_var, trail):
-            t_val = deref(t_var)
-            break
+        # Trampoline-driven, first solution only -- see tfilter/3.
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), t_var, trail)
+        _st = yield (sg, None)
+        t_val = deref(t_var) if _st is not DONE else None
         trail.undo(mark)
         if t_val is True:
             yes.append(deref(elem))
@@ -1065,16 +1079,3 @@ def _register_localizing_list_builtins() -> None:
 
 
 _register_localizing_list_builtins()
-
-
-def _run_goal_once(dispatch, *args_and_trail):
-    """Run a trampoline dispatch function and yield for each solution.
-
-    Drives the trampoline mini-loop internally so callers can iterate
-    solutions with a plain ``for _ in _run_goal_once(...):`` loop.
-    """
-    gen = dispatch(None, None, None, None, *args_and_trail)
-    for _parent, value in gen:
-        if value is DONE:
-            return
-        yield value

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
@@ -112,7 +111,11 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     predicate HANDLE (a mangled functor whose module never loaded, or whose
     loaded module lacks the nonterminal) RAISES
     ``existence_error(procedure, Name/Arity)`` in phrase/2,3 exactly as in
-    ``call/N`` (ruling 2 extended, 2026-09-24).
+    ``call/N`` (ruling 2 extended, 2026-09-24).  Nor is the other-arity
+    refusal: a nonterminal name the caller binds only at another arity --
+    ``phrase(b, L)`` against ``b/1`` asks for ``b/2`` -- raises
+    ``PredicateArityMismatchError`` (ISO ``existence_error(procedure, b/2)``,
+    catchable; ruling Q3, 2026-09-25).  A name bound to nothing still fails.
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(rule_val)
