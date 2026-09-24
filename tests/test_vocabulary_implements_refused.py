@@ -36,12 +36,13 @@ from clausal.logic.compiler_v2 import (
     _implements_an_imported_declaration, _import_from_origins,
     _refuse_foreign_writes,
 )
-from clausal.logic.database import Database, WRITE_LOAD_CLAUSES
+from clausal.logic.database import Database
 from clausal.logic.predicate import PredicateMeta, is_declared_predicate
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.pythonic_ast.nodes import ImportFromDirective
 from clausal.terms import Compound
+from tests.load_write_spy_support import record_load_writes
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -56,22 +57,6 @@ def _load_fixture(stem: str, as_name: str | None = None):
 
 def _flat(exc) -> str:
     return " ".join(str(exc).split())
-
-
-def _spy_load_writes(monkeypatch, marker: str) -> list:
-    """Every ``load-clauses`` transaction opened by a load whose author (its
-    source path) contains *marker*, counted at ``Database.mutate`` -- the one
-    door every load write goes through."""
-    opened: list = []
-    real = Database.mutate
-
-    def spy(self, functor, arity, *, author, kind, **kw):
-        if kind == WRITE_LOAD_CLAUSES and marker in str(author):
-            opened.append((functor, arity))
-        return real(self, functor, arity, author=author, kind=kind, **kw)
-
-    monkeypatch.setattr(Database, "mutate", spy)
-    return opened
 
 
 # ── End to end, today's era (class bindings) ─────────────────────────────────
@@ -114,10 +99,10 @@ def test_nothing_is_written_when_it_fires(monkeypatch):
     """``impclob_implements_vocab`` writes a LEGAL local predicate first, so a
     refusal fired inside the write loop would already have written it."""
     _load_fixture("impclob_decl_vocab")
-    opened = _spy_load_writes(monkeypatch, "impclob_implements_vocab")
+    writes = record_load_writes(monkeypatch)
     with pytest.raises(SyntaxError):
         _load_fixture("impclob_implements_vocab")
-    assert opened == [], f"the refused load wrote {opened}"
+    assert writes.by("impclob_implements_vocab") == [], writes.opened
 
 
 def test_positive_control_the_spy_sees_the_same_load_without_the_idiom(
@@ -128,9 +113,10 @@ def test_positive_control_the_spy_sees_the_same_load_without_the_idiom(
     path = tmp_path / "impclob_iv_control.clausal"
     path.write_text(stripped)
     _load_fixture("impclob_decl_vocab")
-    opened = _spy_load_writes(monkeypatch, "impclob_iv_control")
+    writes = record_load_writes(monkeypatch)
     _load_module("impclob_iv_control", str(path))
-    assert ("impclob_iv_local", 1) in opened, opened
+    assert ("impclob_iv_local", 1) in writes.by("impclob_iv_control"), (
+        writes.opened)
 
 
 def test_the_remedy_shape_loads_and_answers():
@@ -301,3 +287,74 @@ def test_an_import_from_the_module_itself_is_not_refused(owners):
         assert _implements_an_imported_declaration(
             origins, {functor: binding}, functor, 2, "some_implementer"
         ) is not None, era
+
+
+def test_a_dynamic_exporter_holding_runtime_clauses_is_the_gates_call(
+        tmp_path):
+    """The ruling covers a CLAUSE-FREE vocabulary.  A ``-dynamic`` exporter
+    whose row holds clauses asserted at runtime does not "only declare" the
+    predicate, so this refusal must not fire (its message would be false);
+    the gate's existing policy decides.  Today that policy PERMITS the write
+    (rule 3: a row no load owns is free to write), so the load succeeds --
+    pinned here so a change to it is a decision, not an accident."""
+    from clausal.logic.database import Clause
+    schema = _load_fixture("fnmismatch_schema")
+    owner_db = schema.__dict__["$module"].db
+    owner_db.assertz(Clause(head=Compound("fnm_verdict", (mint("early"), ())),
+                            body=[]))
+    row = owner_db.row("fnm_verdict", 2)
+    assert row.clauses and row.source is None, "not the shape under test"
+
+    # BOTH ERAS at the check itself: a row with clauses stands the refusal
+    # down, while the same import of an EMPTY -dynamic row is refused (the
+    # positive control, ``test_a_dynamic_declaration_is_refused_the_same_way``).
+    for era, binding in {
+            "class": schema.fnm_verdict,
+            "mangled": mangle("tests.fixtures.fnmismatch_schema",
+                              "fnm_verdict")}.items():
+        origins = _import_from_origins(
+            [ImportFromDirective(module="tests.fixtures.fnmismatch_schema",
+                                 names=["fnm_verdict"])],
+            {"fnm_verdict": binding})
+        assert origins["fnm_verdict"][1] is not None, era
+        assert _implements_an_imported_declaration(
+            origins, {"fnm_verdict": binding}, "fnm_verdict", 2,
+            "some_implementer") is None, era
+
+    path = tmp_path / "vocabdrop_rt_use.clausal"
+    path.write_text(textwrap.dedent("""\
+        -private([ok])
+        -module(vocabdrop_rt_use, [vocabdrop_rt_chk(R)])
+        -import_from(tests.fixtures.fnmismatch_schema, [fnm_verdict])
+
+        fnm_verdict(ok, []),
+
+        vocabdrop_rt_chk(R) <- fnm_verdict(R, C_UNUSED)
+        """))
+    try:
+        _load_module("vocabdrop_rt_use", str(path))
+    finally:
+        sys.modules.pop("vocabdrop_rt_use", None)
+
+
+def test_an_exporter_row_a_load_wrote_is_the_gates_call_even_when_emptied():
+    """No clauses, but a LOAD SOURCE: the exporter did define the predicate
+    (``gate_alias_owner`` loads ``bo_p(1),`` into a ``-dynamic`` row) and its
+    clauses were retracted since.  Not a declaration-only vocabulary, so not
+    this refusal, in either era."""
+    owner = _load_fixture("gate_alias_owner")
+    row = owner.__dict__["$module"].db.row("bo_p", 1)
+    assert row.source is not None and row.clauses, "not the shape under test"
+    del row.ensure_clauses()[:]
+    assert not row.clauses
+    for era, binding in {
+            "class": owner.bo_p,
+            "mangled": mangle("tests.fixtures.gate_alias_owner", "bo_p")}.items():
+        origins = _import_from_origins(
+            [ImportFromDirective(module="tests.fixtures.gate_alias_owner",
+                                 names=["bo_p"])],
+            {"bo_p": binding})
+        assert origins["bo_p"][1] is not None, era
+        assert _implements_an_imported_declaration(
+            origins, {"bo_p": binding}, "bo_p", 1, "some_implementer"
+        ) is None, era

@@ -1025,12 +1025,13 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     Asked AFTER the gate has permitted the write (the caller checks
     ``Database.refusal_for`` first), so an import of a predicate the exporter
     DEFINES keeps the existing clobber refusal and its message.  What reaches
-    here and is refused is every other write through an ``-import_from``
-    of a predicate AT THIS ARITY from another module: the gate permits a
-    load write only where the row holds nothing a load wrote -- a
-    declaration-only export (NO row post-flip, a private detached row today)
-    or a ``-dynamic`` one (an unowned row) -- and that is exactly "imported
-    from a module that does not define it".
+    here and is refused is a write through an ``-import_from`` of a
+    predicate AT THIS ARITY from another module whose row is CLAUSE-FREE and
+    was never written by a load: a declaration-only export (NO row
+    post-flip, a private detached row today) or an empty ``-dynamic`` one
+    (an unowned row).  That is "imported from a module that does not define
+    it".  An exporter row holding clauses (a ``-dynamic`` filled at runtime)
+    or carrying a load source is left to the gate.
 
     Keyed on the binding's ARITY-EXACT predicate, never on class identity:
     ``is_declared_predicate`` answers for a class today and a mangled handle
@@ -1059,8 +1060,18 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
         # ``test_a_local_definition_wins_a_clash_with_an_aliased_import``).
         # The gate resolves the head the same way -- ``module_dict`` first.
         return None
-    imported_as = [local for local, (mod, b) in origins.items()
-                   if mod == exporter and b == bound and local != functor]
+    row = resolve_predicate_row(bound, arity=arity)
+    if row is not None and (row.clauses or row.source is not None):
+        # The exporter's predicate is NOT clause-free: a ``-dynamic`` row
+        # filled at runtime (``-initialization(assertz(...))``, a Python
+        # ``assertz``), or a row a load once wrote.  "Only declares" would
+        # be false, and the ruling is about a CLAUSE-FREE vocabulary, so
+        # this refusal stands aside and the gate's policy (which already
+        # permitted the write) decides -- pinned by
+        # ``test_a_dynamic_exporter_holding_runtime_clauses_is_the_gates_call``.
+        return None
+    imported_as = [name for name, (mod, b) in origins.items()
+                   if mod == exporter and b == bound and name != functor]
     from clausal.import_diagnostics import (  # noqa: PLC0415
         describe_imported_declaration_implemented,
     )

@@ -91,3 +91,23 @@ flip.
 **Found on the way (pre-existing, parked):**
 `todo/field-named-export-of-an-imported-dynamic-splits-identity-2026-09-24.md`,
 `todo/too-few-positional-args-pad-with-fresh-vars-2026-09-24.md`.
+
+**Review round (roborev MEDIUM, merged with main a5c4fab8).** The check now
+also requires the exporter's row (resolved through the binding, both eras) to
+hold NO clauses and NO load source. A `-dynamic` exporter filled at runtime,
+or a row a load wrote and later emptied, is not a declaration-only vocabulary:
+the refusal stands aside and the gate's policy decides -- today it PERMITS
+the write (rule 3, unowned / emptied row), pinned by
+`test_a_dynamic_exporter_holding_runtime_clauses_is_the_gates_call` and
+`test_an_exporter_row_a_load_wrote_is_the_gates_call_even_when_emptied`.
+Consequence to know about: on that path step 4's authorized bind still moves
+the exporter's class onto the importer's row in the class era (0 arrivals in
+the in-tree population).
+
+Signature source: the only allowed step-4 mismatches (`fnm_verdict/2`,
+`impord_fverdict/2`, declare-import-define) are now refused loads, so
+`tools/step4_signature_census/plugin.py`'s ALLOWED set is empty (census over
+the targeted files: N=96, 0 mismatches) and
+`test_step4_row_stamps.py`'s declare-import-define test asserts the refusal --
+no legal shape remains where a step-4 row is bound to a foreign placeholder
+class.

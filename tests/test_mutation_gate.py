@@ -41,6 +41,7 @@ from clausal.logic.predicate import make_predicate
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Compound
+from tests.load_write_spy_support import record_load_writes
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -342,29 +343,6 @@ def test_alias_scenario_3_a_second_implementer_is_refused():
 # ── Fix round 1: the gate's own hygiene ────────────────────────────────────
 
 
-def _load_writes_during(monkeypatch, stem: str):
-    """Load fixture *stem* and return ``(exception or None, [(functor, arity)
-    ...])`` for every ``load-clauses`` transaction the load OPENED -- the
-    writes, counted at the one door they all go through."""
-    from clausal.logic.database import WRITE_LOAD_CLAUSES
-    opened = []
-    real = Database.mutate
-
-    def spy(self, functor, arity, *, author, kind, **kw):
-        if kind == WRITE_LOAD_CLAUSES and stem in str(author):
-            opened.append((functor, arity))
-        return real(self, functor, arity, author=author, kind=kind, **kw)
-
-    monkeypatch.setattr(Database, "mutate", spy)
-    try:
-        _load_fixture(stem)
-    except SyntaxError as exc:
-        return exc, opened
-    finally:
-        monkeypatch.setattr(Database, "mutate", real)
-    return None, opened
-
-
 def test_a_refused_load_writes_nothing_at_all(monkeypatch):
     """The property the deleted step-3c pre-pass carried, restored on the gate.
 
@@ -382,20 +360,20 @@ def test_a_refused_load_writes_nothing_at_all(monkeypatch):
     write implemented the clause-free ``gv_free`` -- the dropped
     "vocabulary-implements" idiom, itself a load error now.)"""
     vocab = _load_fixture("gate_vocab")
+    writes = record_load_writes(monkeypatch)
 
-    exc, opened = _load_writes_during(monkeypatch, "gate_rival")
-    assert exc is not None
-    assert "may not write gv_owned/1" in str(exc)
-    assert opened == [], (
-        f"the refused load opened {opened} -- the LEGAL earlier write must "
-        f"not have landed either; the refusal is for the load, not for one "
-        f"predicate of it")
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_fixture("gate_rival")
+    assert "may not write gv_owned/1" in str(exc_info.value)
+    assert writes.by("gate_rival") == [], (
+        f"the refused load opened {writes.by('gate_rival')} -- the LEGAL "
+        f"earlier write must not have landed either; the refusal is for the "
+        f"load, not for one predicate of it")
     assert len(vocab.gv_owned._state_row().clauses) == 1
 
-    # Positive control: the spy does see a load's writes.
-    exc, opened = _load_writes_during(monkeypatch, "gate_vocab")
-    assert exc is None
-    assert ("gv_owned", 1) in opened, opened
+    # Positive control: the same recorder sees a permitted load's writes.
+    _load_fixture("gate_vocab")
+    assert ("gv_owned", 1) in writes.by("gate_vocab"), writes.opened
 
 
 def test_a_raise_inside_a_transaction_still_invalidates_and_stamps():
