@@ -197,3 +197,50 @@ note it is already stale on row F10, which landed in `ca4e49dd`.
    with reasons. **This is your worklist.**
 5. `implementation_plans/w4b-class-retirement-scope-2026-09-22.md` — where
    W4b-2d sits in the whole retirement.
+
+
+---
+
+# UPDATE 2026-09-24 — `through=` IS DONE, and it may have closed most of this lane
+
+Landed on main `84791531`. `Database._write_rows` no longer reads
+`getattr(through, "_row", None)`. It calls `_resolve_through_row(through,
+arity)`, which discriminates on the INPUT'S SHAPE:
+
+* a `PredicateMeta` class — today's binding — may legitimately yield no row
+  (an unbound class), and stays silent;
+* a **mangled atom** — the post-flip binding — resolves through the owner's
+  db, and may also legitimately yield no row;
+* **anything else raises `TypeError` naming the value**, so the silent
+  drop is gone.
+
+**Consequence for your worklist: the ~11 sites blamed on `through=` and
+`_install` probably need NO EDIT AT ALL.** They pass `pred_cls` today, and
+that keeps working; after the flip they will pass a handle, and that works
+too. The parameter is era-agnostic now, so the call sites are era-agnostic
+for free. The implementer measured nine real call sites needing zero changes.
+
+**So your first task is not design, it is a re-audit:** take the 18 F1
+move-outs in `.superpowers/sdd/w4b2b-resolver-report.md` and, for each, ask
+whether it still needs anything now that `through=` accepts both bindings.
+Expect a large fraction to close with no edit. What is left after that is the
+genuinely class-dependent remainder — `analyze_mi` / `call` / `specialize_mi`,
+which need something *callable* or need class identity, not row state.
+
+**And a correction to §3a of this document.** It said the gate should police
+"user's own record too". Measured on the real fixtures
+(`gate_dyn_owner`/`gate_dyn_user`): the importer's own row is **inert** —
+nothing reads it, nothing writes it; both reads and writes go to the owner's
+row. So the TARGET row is the dead twin and the `through=` row is the live
+one. The old `getattr` line was therefore not "policing one of two" — it was
+policing **only the empty twin** while every clause change happened on a
+record it could not see. That makes the fix more load-bearing than §3a
+implied, not less.
+
+**Also recorded, because it explains why any of this exists:**
+`Database.adopt_row`'s docstring states the design outright — "Never
+displaces an existing entry: a module that imports a name AND defines its own
+predicate under it keeps its own, and the clash is left for the mutation gate
+to police rather than silently resolved here in load order." Two records for
+one name are DELIBERATE, and `through=` is the mechanism that design defers
+to. It is not a workaround for an accident.
