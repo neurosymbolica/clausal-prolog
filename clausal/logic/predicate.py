@@ -1398,10 +1398,11 @@ class PredicateMeta(type):
 def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) -> None:  # noqa: F821
     """Raise ``PredicateArityMismatchError`` if *db* knows *functor* as a
     predicate at some arity OTHER than *arity* -- the handle-dispatch twin
-    of ``PredicateMeta._refuse_call_at``, called BEFORE the caller consults
-    ``Database.get_dispatch``'s builtin-registry fallback (F7, ruled
-    2026-09-24; see the call site in ``_dispatch_at`` for the hazard this
-    ordering avoids).
+    of ``PredicateMeta._refuse_call_at``.  F7 (2026-09-24) first called it
+    BEFORE ``Database.get_dispatch``'s builtin-registry fallback; the name +
+    ARITY ruling (operator, 2026-09-24) moved it AFTER: a same-named builtin
+    at the call arity is the normal answer, and this refusal is for the case
+    where nothing answers (see the call site in ``_dispatch_at``).
 
     ``db.is_predicate_name(functor)`` -- not ``db.arities_for`` -- is the
     "known at some arity" test: ``arities_for`` scans only ``_signatures``/
@@ -1441,6 +1442,333 @@ def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) 
     raise predicate_arity_mismatch(functor, arity, defined)
 
 
+def _resolve_other_arity_of_class(cls: "PredicateMeta", arity: int) -> Callable | None:
+    """The dispatch a call of *arity* arguments reaches when the class *cls*
+    (declared at ANOTHER arity) is not its target, or ``None``.
+
+    Name + ARITY ruling (operator, 2026-09-24).  Resolved in the class's own
+    module -- ``cls._row._db``, the Database a module-qualified handle for
+    this class names -- through ``Database.get_dispatch``: that module's own
+    row at *arity*, else the builtin registry.  Exactly what the handle arm
+    of ``_dispatch_at`` consults at the same arity, so the two eras agree.
+    ``None`` (the caller keeps its refusal) for an unbound class.
+    """
+    row = cls._row
+    if row is None or row._db is None:
+        return None
+    functor = row._key[0]
+    return row._db.get_dispatch(functor, arity)
+
+
+def _binding_owner_db(binding: Any):
+    """The Database that OWNS a predicate *binding* (class or handle), or
+    ``None`` -- a class's row db, a handle's module db."""
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        return row._db if row is not None else None
+    if type(binding) is str:
+        from clausal.logic.atoms import is_mangled, demangle  # noqa: PLC0415
+        if is_mangled(binding):
+            return _db_for_module_name(demangle(binding)[0])
+    return None
+
+
+def binding_grants_arity(binding: Any, arity: int, db: Any, name: str) -> bool:
+    """True when the predicate *binding* -- reached through the UNQUALIFIED
+    name *name* in the module whose Database is *db* -- is that name's
+    predicate at *arity*.  Era-agnostic.
+
+    Operator rulings 2026-09-24 (name + ARITY; the aliased-import leak): a
+    binding is the target only at an arity it is a predicate at
+    (``is_declared_predicate``) AND, when it is IMPORTED (owned by another
+    Database), only at an arity it was imported at: ``-import_from`` plants
+    the exporter's rows under the local name (``compiler_v2.
+    _plant_imported_rows``), so ``db.row(name, arity)`` answers exactly that.
+    The owner's OTHER arities -- a later ``assertz`` there included -- are not
+    imported.  Without this the handle era (whose ``is_declared_predicate``
+    asks the owner's ``declared_kind``) would grant arities the class era
+    (``len(_fields)``) does not.
+
+    The import record is the importing db's ADOPTED rows under *name*
+    (``Database.adopt_row``); a name with none -- a binding placed by hand
+    (a hand-built globals dict, a held handle assigned in Python) rather
+    than by ``-import_from`` -- has no import record to consult and is
+    trusted at every arity it is a predicate at, as before.
+    """
+    if not is_declared_predicate(binding, arity=arity, db=db):
+        return False
+    owner = _binding_owner_db(binding)
+    if owner is None or db is None or owner is db:
+        return True
+    adopted = db.adopted_arities(name)      # O(1) per-name index
+    return not adopted or arity in adopted
+
+
+def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
+                                    db: Any = None) -> Callable:
+    """The last resort of an UNQUALIFIED call ``name(...)`` at *arity* whose
+    name is bound to a predicate (class or handle) that is not its target at
+    *arity*, after the calling module's own row and the builtins under
+    *name* have both declined.  Raises ``PredicateArityMismatchError`` naming
+    *name* -- the name the caller USED, which for an aliased import is not
+    the owner's.
+
+    Operator ruling 2026-09-24 (closing the aliased-import leak,
+    ``todo/done/aliased-import-other-arity-resolves-in-the-owner-2026-09-24.md``):
+    an unqualified call resolves in the CALLING module only; a binding
+    grants the one arity it was imported at, never another arity in its
+    owner.  So unlike ``_dispatch_at`` -- which serves a binding reached
+    DIRECTLY or by a qualified/dotted reference and resolves the other arity
+    in the binding's own module -- this never looks the name up in the
+    owner.  Callers: ``solve.call`` Phase 5, ``globals_env``'s keep-binding
+    branch, and ``_UnqualifiedName`` (the meta-call arm).
+
+    One exception, and only for a class LOCAL to the calling module (its row
+    is in *db*): a class whose ``_fields`` are stale while its clause heads
+    ARE at *arity* (``PredicateMeta._clause_arity``) is this call's target
+    after all, and its dispatch is returned.  An imported class never takes
+    this exception -- its row is the owner's.
+    """
+    from clausal.predicate_diagnostics import (  # noqa: PLC0415
+        PredicateArityMismatchError, predicate_arity_mismatch,
+    )
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        clauses = row.clauses if row is not None else ()
+        if (clauses and db is not None and row._db is db
+                and all(_head_arity(c.head) == arity for c in clauses)):
+            return binding._get_dispatch()        # stale _fields: the target
+        try:
+            defined = binding._clause_arity()
+            if defined is None:
+                defined = binding._declared_arity(arity)
+        except Exception:  # noqa: BLE001 - a message, not a decision
+            defined = None
+        if defined is None:
+            defined = len(getattr(binding, "_fields", ()))
+        site = (getattr(binding, "_registered_at", None)
+                if name == binding.__name__ else None)
+        try:
+            err = predicate_arity_mismatch(name, arity, defined, site=site)
+        except Exception:  # noqa: BLE001 - the fault is still real; state it
+            err = PredicateArityMismatchError(
+                f"{name} takes {defined} arguments, "
+                f"but this call passes {arity}")
+        raise err
+    defined = None
+    from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
+    _q = qualify_mangled_goal(binding) if type(binding) is str else binding
+    if _q is not binding:
+        owner = _db_for_module_name(_q[1])
+        if owner is not None:
+            others = sorted(a for a in owner.arities_for(_q[2]) if a != arity)
+            defined = others[0] if len(others) == 1 else None
+    raise predicate_arity_mismatch(name, arity, defined)
+
+
+class _UnqualifiedName:
+    """A meta-call goal that ARRIVED as an unqualified name of the calling
+    module bound to an IMPORTED predicate (class or handle) -- the adapter
+    ``localize_goal`` hands a meta-predicate (``call/N``, ``maplist`` & co.,
+    ``phrase``, ``time_goal``) in place of the bare binding.
+
+    Operator ruling 2026-09-24 (the aliased-import leak): ``maplist(nl, ...)``
+    in ``alim`` must resolve under ``nl`` in ``alim``, exactly as a direct
+    ``nl(...)`` body call does.  The bare binding cannot say that: it is the
+    OWNER's class or handle, and ``_dispatch_at`` on it answers the owner's
+    other arities (right for a qualified / directly held reference, wrong
+    here).  ``_dispatch_at`` recognises this type and asks ``dispatch_at``.
+    """
+    __slots__ = ("db", "name", "binding")
+
+    def __init__(self, db: Any, name: str, binding: Any) -> None:
+        self.db = db
+        self.name = name
+        self.binding = binding
+
+    def dispatch_at(self, arity: int) -> Callable:
+        if binding_grants_arity(self.binding, arity, self.db, self.name):
+            return _dispatch_at(self.binding, arity)
+        fn = self.db.get_dispatch(self.name, arity)
+        if fn is not None:
+            return fn
+        return _refuse_unqualified_other_arity(
+            self.binding, self.name, arity, self.db)
+
+    def _get_dispatch(self):
+        # The frozen arity-free protocol: only a class knows its own arity.
+        if isinstance(self.binding, PredicateMeta):
+            return self.binding._get_dispatch()
+        raise TypeError(
+            f"{self.name!r}: a predicate handle needs the call arity")
+
+    def __repr__(self) -> str:
+        return f"_UnqualifiedName({self.name!r} -> {self.binding!r})"
+
+
+def _binding_key(binding: Any) -> Any:
+    """A dict key for a predicate binding: a handle by value, a class by id
+    (the index entry holds the class itself, so the id cannot be reused)."""
+    return binding if type(binding) is str else id(binding)
+
+
+def _binding_own_name(binding: Any) -> str:
+    """The OWNER's name of a predicate binding -- the functor a term built
+    through it carries, whatever local spelling bound it."""
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        return row._key[0] if row is not None else binding.__name__
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    return demangle(binding)[1]
+
+
+def _import_index(db: Any, md: dict, force: bool = False):
+    """The calling module's index of FOREIGN predicate bindings under plain
+    names: ``(snapshot, by_binding, by_owner_name, adapters)``.
+
+    Review rounds 4-5 (hot path): ``localize_goal`` and
+    ``localize_owner_functor`` would otherwise scan the whole module dict on
+    every meta-call.  Rebuilt when the dict's ``(id, len)`` snapshot changes
+    (a name added or removed) or on demand (*force*) when a hit fails its
+    verification against the live dict (a same-size rebinding).  Every
+    POSITIVE answer is verified against the live dict before use; a NEGATIVE
+    answer is trusted for as long as the snapshot holds -- the cheap version
+    check -- so a same-size rebinding that newly binds an import under a
+    plain name is picked up at the next size change.
+    """
+    snap = (id(md), len(md))
+    idx = db.__dict__.get("_import_index")
+    if idx is not None and idx[0] == snap and not force:
+        return idx
+    by_binding: dict = {}
+    by_owner: dict = {}
+    for k, v in md.items():
+        if type(k) is not str or "." in k:
+            continue
+        if not (isinstance(v, PredicateMeta)
+                or (type(v) is str and _is_mangled_fast(v))):
+            continue
+        if not is_declared_predicate_name(v):
+            continue
+        owner = _binding_owner_db(v)
+        if owner is None or owner is db:
+            continue
+        by_binding.setdefault(_binding_key(v), []).append((k, v))
+        by_owner.setdefault(_binding_own_name(v), []).append((k, v))
+    idx = (snap, by_binding, by_owner, {})
+    db.__dict__["_import_index"] = idx
+    return idx
+
+
+def _is_mangled_fast(s: str) -> bool:
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    return is_mangled(s)
+
+
+def _live_entries(md: dict, entries) -> list:
+    return [(n, b) for (n, b) in entries
+            if (md.get(n) is b) or (type(b) is str and md.get(n) == b)]
+
+
+def localize_goal(db: Any, goal_val: Any) -> Any:
+    """*goal_val* as a meta-call in the module whose Database is *db*.
+
+    When *goal_val* is a predicate binding (class or handle) that *db* did not
+    define itself but binds under an unqualified name -- an ``-import_from``,
+    aliased or not -- return an ``_UnqualifiedName`` so the call resolves under
+    that name in *db* (operator ruling 2026-09-24).  Anything else --
+    including a binding *db* owns, which resolves in *db* either way, and a
+    binding *db* does not bind by any plain name (a qualified reference) --
+    comes back unchanged.
+
+    The one ambiguity is inherent: a handle string built by a QUALIFIED
+    reference is equal to the owner handle an import binds, so in a module
+    that also imports that predicate it is read as the import.  A qualified
+    meta-call is spelled ``M:G`` and resolved by ``_resolve_named_goal``'s
+    qualified arm, which this does not touch.
+
+    Several plain names for one binding: the owner's own name wins when it is
+    one of them, else the alphabetically first -- deterministic.  Indexed:
+    see ``_import_index`` (positive and negative answers, verified / version
+    checked).
+    """
+    if db is None:
+        return goal_val
+    if not (isinstance(goal_val, PredicateMeta)
+            or (type(goal_val) is str and _is_mangled_fast(goal_val))):
+        return goal_val
+    md = getattr(db, "module_dict", None)
+    if not isinstance(md, dict):
+        return goal_val
+    key = _binding_key(goal_val)
+    for force in (False, True):
+        idx = _import_index(db, md, force)
+        # fast path: the adapter chosen last time, verified (one dict lookup)
+        chosen = idx[3].get(key)
+        if chosen is not None:
+            bound = md.get(chosen.name)
+            if bound is goal_val or (type(bound) is str and bound == goal_val):
+                return chosen
+        entries = idx[1].get(key)
+        if not entries:
+            return goal_val               # negative: trusted while snapshot holds
+        live = _live_entries(md, entries)
+        if live:
+            names = [n for n, _ in live]
+            own = _binding_own_name(goal_val)
+            name = own if own in names else sorted(names)[0]
+            adapter = idx[3][key] = _UnqualifiedName(db, name, goal_val)
+            return adapter
+    return goal_val
+
+
+def localize_owner_functor(db: Any, functor: str, arity: int):
+    """For a named goal (cell or atom) ``functor/arity`` whose functor is NOT
+    bound in the calling module but IS the owner's name of a predicate the
+    module imported under an ALIAS **at this very arity**: the
+    ``_UnqualifiedName`` for that alias, else ``None`` (the normal lookup).
+
+    A term built through an imported binding keeps the OWNER's functor
+    (``dd(N, M)`` with ``alias(dec, dd)`` is ``("dec", N, M)``) -- an alias is
+    a local spelling of ONE predicate, and its terms must unify with the
+    owner's.  The calling module does not bind ``dec``, so without this a
+    goal it built through its own import would fail at the IMPORTED arity.
+
+    Controller decision (round 6, reviewer's option 2, reported to the
+    operator): remap ONLY at the arities the alias imported
+    (``binding_grants_arity``).  At every other arity the goal is just a goal
+    named by the owner's functor, whoever built it -- ``numlist(1, 5, L)``
+    from univ or from another module must reach the builtin ``numlist/3``,
+    as it did before -- so it takes the calling module's normal lookup.
+    Documented consequence: ``call(nl(3), L)`` builds ``("numlist", 3)`` and
+    at arity 2 resolves as ``numlist/2`` in the caller (the builtin answers)
+    -- partial application through an alias behaves like writing the owner's
+    name, because the term IS the owner's term.
+    """
+    if db is None:
+        return None
+    md = getattr(db, "module_dict", None)
+    if not isinstance(md, dict) or functor in md:
+        return None
+    for force in (False, True):
+        idx = _import_index(db, md, force)
+        entries = idx[2].get(functor)
+        if not entries:
+            return None
+        live = [(n, bd) for (n, bd) in _live_entries(md, entries)
+                if binding_grants_arity(bd, arity, db, n)]
+        if live:
+            name, binding = sorted(live, key=lambda e: e[0])[0]
+            key = ("$functor", functor, arity)
+            adapter = idx[3].get(key)
+            if adapter is None or adapter.name != name or adapter.binding is not binding:
+                adapter = idx[3][key] = _UnqualifiedName(db, name, binding)
+            return adapter
+        if _live_entries(md, entries):
+            return None                  # imported, but not at this arity
+    return None
+
+
 def _dispatch_at(obj: Any, arity: int) -> Callable:
     """Resolve *obj*'s dispatch function for a call of *arity* arguments.
 
@@ -1467,6 +1795,10 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     and the goal emitters reference that name directly, so only unlocked
     (``-dynamic``) callees and the runtime meta-call funnels arrive here.
     """
+    if type(obj) is _UnqualifiedName:
+        # Operator ruling 2026-09-24: a meta-call goal that arrived as an
+        # unqualified name resolves under THAT name in the calling module.
+        return obj.dispatch_at(arity)
     if isinstance(obj, PredicateMeta):
         # F7 (ruled 2026-09-24): the ARITY-TAKING OVERLOAD of ``_get_dispatch``
         # is retired from this call site -- measured (full suite, before vs.
@@ -1489,7 +1821,31 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         # ``_get_dispatch(arity)`` used to reach, from the one place still
         # holding a raw class rather than a handle.  ``_get_dispatch()``
         # itself is called bare here, same as every other implementor.
-        obj._refuse_call_at(arity)
+        #
+        # Name + ARITY ruling (operator, 2026-09-24): a predicate name is
+        # name+arity, so a class whose clauses say it is ``p/1`` is simply
+        # not the target of a ``p/2`` call.  Before refusing, ``p/2`` is
+        # resolved the way the handle arm below resolves it -- in the
+        # class's OWN module (``row._db``, the module a handle for this class
+        # would name): that module's row at the call arity, else the builtin
+        # registry (``Database.get_dispatch`` asks both).  The refusal stays
+        # only when nothing answers there, so the class era and the handle
+        # era agree (the class-era refusal ahead of a live answer was an
+        # artefact of the predicate being a class).
+        try:
+            obj._refuse_call_at(arity)
+        except TypeError as refusal:
+            # imported only on the refusal path: this arm is hot (review
+            # round 4 measured the per-call import statement)
+            from clausal.predicate_diagnostics import (  # noqa: PLC0415
+                PredicateArityMismatchError,
+            )
+            if not isinstance(refusal, PredicateArityMismatchError):
+                raise
+            fn = _resolve_other_arity_of_class(obj, arity)
+            if fn is not None:
+                return fn
+            raise
         return obj._get_dispatch()
     if is_chars(obj):
         # THE FLIP (spec §6.4): a ``str`` is a STRING.  The Stage A arm here
@@ -1533,10 +1889,20 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             # ``numlist/1`` in a module that also has a 2-clause local
             # definition, called at arity 2, used to silently hand back the
             # ``numlist/2`` builtin -- see shadow_census.py).
-            _refuse_if_known_at_another_arity(_module.db, _name, arity)
+            #
+            # REVERSED by the name + ARITY ruling (operator, 2026-09-24): a
+            # predicate name is name+arity, so ``numlist/1`` is not the
+            # target of a ``numlist/2`` call and the builtin ``numlist/2``
+            # answering it is the NORMAL resolution, not a silent shadow
+            # (the class-era refusal was an artefact of the predicate being
+            # a class).  ``get_dispatch`` -- this module's row at the call
+            # arity, else the builtin registry -- is therefore asked FIRST;
+            # the refusal stays, after it, for the case where nothing
+            # answers.
             _fn = _module.db.get_dispatch(_name, arity)
             if _fn is not None:
                 return _fn
+            _refuse_if_known_at_another_arity(_module.db, _name, arity)
             _bound = (_module.module_dict or {}).get(_name)
             if _bound is not None and _bound is not obj:
                 return _dispatch_at(_bound, arity)
