@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import contextlib
 import importlib
-import sys
 import warnings
 from typing import Any
 
@@ -42,6 +41,7 @@ from clausal.logic.predicate import (
     field_names_for, is_declared_predicate, is_declared_predicate_name,
     predicate_arities_for, predicate_binding_name,
     resolve_predicate_row, _db_for_module_name,
+    is_foreign_class_at_other_arity,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -290,6 +290,17 @@ def compile_module(
         # an interned atom ``tuple`` and an absent binding — so dropping the
         # test would hand a tuple to ``_bind_row`` below.
         if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
+        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
+            # An IMPORTED class at ANOTHER arity (``-import_from(a, [p])``
+            # binds a's ``p/1`` class; this file defines its own ``p/2``).
+            # The head is this module's own predicate -- its row is this
+            # module's, exactly as the handle era resolves it -- so there is
+            # no class to bind here: binding a's class would move it off a's
+            # row (``_bind_row`` raises on that).  Same-arity foreign classes
+            # never get here: step 3d refused them.  Step 5 compiles it with
+            # no class for the same reason (the compiler's own fallback
+            # lookup applies the same test).
             pred_cls = None
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
                         pred_cls if pred_cls is not None
@@ -1073,13 +1084,6 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     imported_as = imported_as[0] if imported_as else None
     row = resolve_predicate_row(bound, arity=arity)
     from clausal import import_diagnostics as diag  # noqa: PLC0415
-    if (sys.modules.get(exporter) is not None
-            and _db_for_module_name(exporter) is None):
-        # The exporter is loaded and is NOT a Clausal module: a Python module
-        # handing out a predicate class it created itself.
-        return SyntaxError(diag.describe_imported_python_predicate_implemented(
-            functor, arity, module_name, exporter, imported_as=imported_as,
-        ))
     if row is not None and row.source is not None:
         # A load wrote this row; its clauses were retracted since (the gate
         # refuses it outright while it still holds any).  Same text as the
@@ -1098,9 +1102,46 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
             functor, arity, module_name, exporter, len(row.clauses),
             imported_as=imported_as,
         ))
+    python_exporter = _python_module_that_created(bound, row, exporter)
+    if python_exporter is not None:
+        return SyntaxError(diag.describe_imported_python_predicate_implemented(
+            functor, arity, module_name, python_exporter,
+            imported_as=imported_as,
+        ))
     return SyntaxError(diag.describe_imported_declaration_implemented(
         functor, arity, module_name, exporter, imported_as=imported_as,
     ))
+
+
+def _python_module_that_created(bound, row, exporter: str) -> "str | None":
+    """The name of the PYTHON module an imported predicate class came from,
+    when no Clausal module owns it -- else ``None``.
+
+    Only a predicate with no real Clausal row qualifies (``row`` None or the
+    class's private detached row): a real row means a Clausal module's
+    Database holds the predicate, whoever re-exported the name (the
+    ``clausal/modules/*.py`` alias-module pattern re-exports Clausal
+    predicates from Python).  A class DECLARED by a Clausal module (a
+    clause-free export) carries that module as its ``__module__``, so it is
+    a Clausal declaration, not a Python one.  The exporter is resolved the
+    way the ``-import_from`` resolved it (``_resolve_module``: alias map,
+    then ``clausal.modules.*``, then the raw dotted name), never by the raw
+    string alone.
+    """
+    if row is not None and not row.detached:
+        return None
+    if not isinstance(bound, PredicateMeta):
+        return None
+    if _db_for_module_name(getattr(bound, "__module__", None) or "") is not None:
+        return None
+    try:
+        mod = _resolve_module(exporter)
+    except ImportError:
+        return None
+    name = getattr(mod, "__name__", exporter)
+    if _db_for_module_name(name) is not None:
+        return None
+    return name
 
 
 _LOAD_SITES = {

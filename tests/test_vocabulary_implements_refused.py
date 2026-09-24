@@ -38,7 +38,7 @@ from clausal.logic.compiler_v2 import (
 )
 from clausal.logic.database import Database
 from clausal.logic.predicate import PredicateMeta, is_declared_predicate
-from clausal.logic.solve import call
+from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref, walk
 from clausal.pythonic_ast.nodes import ImportFromDirective
 from clausal.terms import Compound
@@ -486,3 +486,184 @@ def test_a_specialize_over_an_imported_mi_still_binds(monkeypatch,
     n = Var()
     assert [walk(deref(n)) for _ in call(
         "solve_count_natnum", [["natnum", ["s", 0]]], n, module=lm)] == [2]
+
+
+# ── An imported class at ANOTHER arity is not bound (round 5) ────────────────
+
+_OWNERS = {
+    # The exporter's p/1 is a -dynamic predicate holding only a RUNTIME clause.
+    "runtime": ("-dynamic(r5p/1)\n-module({name}, [r5p/1])\n", "runtime"),
+    # The exporter's p/1 is -dynamic, written by its LOAD, then emptied.
+    "emptied": ("-dynamic(r5p/1)\n-module({name}, [r5p/1])\n-private([one])\n"
+                "r5p(one),\n", "emptied"),
+}
+
+
+def _write(tmp_path, name, text):
+    path = tmp_path / f"{name}.clausal"
+    path.write_text(text)
+    return str(path)
+
+
+@pytest.mark.parametrize("era", ["class", "mangled"])
+@pytest.mark.parametrize("shape", sorted(_OWNERS))
+def test_a_local_predicate_at_another_arity_than_an_imported_class_loads(
+        tmp_path, monkeypatch, private_module, shape, era):
+    """Round-5 review: B imports a's ``r5p/1`` CLASS and defines its OWN
+    ``r5p/2``.  The pre-pass rightly says "not this predicate" (other arity)
+    and the gate permits (a's row holds nothing a load owns), but step 4 used
+    to bind a's class to B's ``r5p/2`` row -- which now raises -- and step 5
+    would have installed B's dispatch on a's ``r5p/1`` row.  The head is B's
+    own predicate: it loads, B's ``r5p/2`` answers, a's ``r5p/1`` is
+    untouched.  In the handle era the name is bound to a's mangled handle."""
+    import clausal.logic.compiler_v2 as cv2
+    template, kind = _OWNERS[shape]
+    owner_name = f"_vocabdrop_r5_owner_{shape}_{era}"
+    use_name = f"_vocabdrop_r5_use_{shape}_{era}"
+    owner = private_module(None, owner_name, path=_write(
+        tmp_path, owner_name, template.format(name=owner_name)))
+    olm = owner.__dict__["$module"]
+    if kind == "runtime":
+        assert list(call("assertz", Compound("r5p", (7,)), module=olm))
+        expected_owner = [7]
+    else:
+        row = olm.db.row("r5p", 1)
+        assert row.source is not None and row.clauses
+        del row.ensure_clauses()[:]
+        row.invalidate()
+        expected_owner = []
+    owner_row = owner.r5p._row
+    assert owner_row is olm.db.row("r5p", 1)
+
+    # Observed (and, for the handle era, rebound) at step 3d: the imports are
+    # processed inside compile_module, so this is the first point the
+    # module dict holds them, and everything from the pre-pass on reads it.
+    original = cv2._refuse_foreign_writes
+    seen = []
+
+    def refuse(db, predicate_nodes, module_dict, origins, author, module_name):
+        if module_name == use_name:
+            # Population: the name really is bound to a's p/1 CLASS here --
+            # the shape under test -- before any era rebinding.
+            seen.append(module_dict.get("r5p") is owner.r5p)
+            if era == "mangled":
+                handle = mangle(owner_name, "r5p")
+                module_dict["r5p"] = handle
+                origins["r5p"] = (owner_name, handle)
+        return original(db, predicate_nodes, module_dict, origins, author,
+                        module_name)
+
+    monkeypatch.setattr(cv2, "_refuse_foreign_writes", refuse)
+    use = private_module(None, use_name, path=_write(tmp_path, use_name, (
+        f"-module({use_name}, [])\n"
+        f"-import_from({owner_name}, [r5p])\n\n"
+        "r5p(1, 2),\n")))
+    assert seen == [True], "the name was not bound to a's class at step 4"
+
+    ulm = use.__dict__["$module"]
+    x, y = Var(), Var()
+    assert [(walk(deref(x)), walk(deref(y)))
+            for _ in solve(("r5p", x, y), ulm)] == [(1, 2)]
+    assert ulm.db.row("r5p", 2).clauses
+    # a's p/1: same row, same answers -- nothing moved, no dispatch landed.
+    assert owner.r5p._row is owner_row
+    z = Var()
+    assert [walk(deref(z)) for _ in call(owner.r5p, z)] == expected_owner
+
+
+def test_a_plain_exporter_s_loaded_clauses_still_refuse_another_arity(
+        tmp_path, private_module):
+    """The third exporter shape, a STATIC ``r5p/1`` with load clauses: the
+    class era refuses B's ``r5p/2`` through the gate's blast radius (the
+    shared class reads a's owned row) -- the ruled M-e behaviour pinned by
+    ``test_import_arity_resolution::TestBlastRadiusRefusalNamesTheAttemptedKey``.
+    Pinned unchanged here; see
+    todo/imported-class-at-another-arity-blast-radius-is-class-era-only-2026-09-24.md
+    for the handle era, where the same load is not refused."""
+    owner_name, use_name = "_vocabdrop_r5_owner_plain", "_vocabdrop_r5_use_plain"
+    owner = private_module(None, owner_name, path=_write(
+        tmp_path, owner_name,
+        f"-module({owner_name}, [r5p/1])\n-private([one])\nr5p(one),\n"))
+    with pytest.raises(SyntaxError) as exc_info:
+        private_module(None, use_name, path=_write(tmp_path, use_name, (
+            f"-module({use_name}, [r5p/2])\n"
+            f"-import_from({owner_name}, [r5p])\n\n"
+            "r5p(1, 2),\n")))
+    assert "may not write r5p/1 (reached by writing r5p/2)" in str(
+        exc_info.value)
+    z = Var()
+    assert [walk(deref(z)) for _ in call(owner.r5p, z)] == [mint("one")]
+
+
+def test_a_python_alias_module_re_exporting_a_clausal_predicate_is_not_python(
+        tmp_path, monkeypatch, private_module):
+    """Round-5 LOW: the ``clausal/modules/*.py`` pattern -- a Python module
+    re-exporting a CLAUSAL predicate class.  The predicate has a real Clausal
+    row (here a ``-dynamic`` row holding a runtime clause), so the message is
+    the one for that row, never "created in Python module ..."."""
+    owner_name = "_vocabdrop_r5_alias_owner"
+    owner = private_module("fnmismatch_schema", owner_name)
+    assert list(call("assertz", Compound("fnm_verdict", (mint("early"), ())),
+                     module=owner.__dict__["$module"]))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / "vocabdrop_alias_mod.py").write_text(
+        f"from {owner_name} import fnm_verdict  # noqa: F401\n")
+    sys.modules.pop("vocabdrop_alias_mod", None)
+    try:
+        with pytest.raises(SyntaxError) as exc_info:
+            private_module(None, "_vocabdrop_alias_use", path=_importer(
+                tmp_path, "_vocabdrop_alias_use", "vocabdrop_alias_mod",
+                "fnm_verdict", "fnm_verdict(ok, [])"))
+    finally:
+        sys.modules.pop("vocabdrop_alias_mod", None)
+    flat = _flat(exc_info.value)
+    assert "created in Python module" not in flat
+    assert "asserted at runtime" in flat
+
+
+def test_a_python_alias_of_a_clausal_declaration_is_not_python(
+        tmp_path, monkeypatch, private_module):
+    """A Python module re-exporting a class a CLAUSAL module declared (a
+    clause-free export: no real row yet, but the class names its Clausal
+    module) gets the declaration message, not "created in Python module"."""
+    owner_name = "_vocabdrop_r5_alias_decl"
+    private_module("impclob_decl_vocab", owner_name)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / "vocabdrop_alias_decl.py").write_text(
+        f"from {owner_name} import impclob_verdict  # noqa: F401\n")
+    sys.modules.pop("vocabdrop_alias_decl", None)
+    try:
+        with pytest.raises(SyntaxError) as exc_info:
+            private_module(None, "_vocabdrop_alias_decl_use", path=_importer(
+                tmp_path, "_vocabdrop_alias_decl_use", "vocabdrop_alias_decl",
+                "impclob_verdict", "impclob_verdict(ok, yes)"))
+    finally:
+        sys.modules.pop("vocabdrop_alias_decl", None)
+    flat = _flat(exc_info.value)
+    assert "created in Python module" not in flat
+    assert "only declares impclob_verdict/2" in flat
+
+
+def test_a_python_made_class_on_a_real_clausal_row_is_not_python(
+        monkeypatch, private_module):
+    """The row decides first: a class made in Python (``make_predicate``,
+    whose ``__module__`` is not a Clausal module) that is BOUND to a real
+    Clausal row is a Clausal predicate, however it is re-exported."""
+    from clausal.logic.predicate import make_predicate
+    owner = private_module("impclob_decl_vocab", "_vocabdrop_r5_real_row")
+    owner_db = owner.__dict__["$module"].db
+    cls = make_predicate("vocabdrop_mp", ["a", "b"])
+    cls._bind_row(owner_db, "vocabdrop_mp", 2)
+    assert not cls._row.detached and not cls._row.clauses
+    assert cls._row.source is None
+    fake = type(sys)("vocabdrop_py_reexporter")
+    fake.vocabdrop_mp = cls
+    monkeypatch.setitem(sys.modules, "vocabdrop_py_reexporter", fake)
+    origins = _import_from_origins(
+        [ImportFromDirective(module="vocabdrop_py_reexporter",
+                             names=["vocabdrop_mp"])],
+        {"vocabdrop_mp": cls})
+    text = _flat(_implements_an_imported_declaration(
+        origins, {"vocabdrop_mp": cls}, "vocabdrop_mp", 2, "some_implementer"))
+    assert "created in Python module" not in text
+    assert "only declares vocabdrop_mp/2" in text

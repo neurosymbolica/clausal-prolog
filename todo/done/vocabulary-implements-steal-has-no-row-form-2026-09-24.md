@@ -139,3 +139,21 @@ reads like the gate's clobber refusal, gate line included. Three tests that
 drove an AUTHORIZED cross-database rebind (`test_predrow.py` x2,
 `predmeta_p1/test_index_plans_row_home.py`) now pin the raise; the
 locked/source carry-over is pinned on a same-database rebind.
+
+**Review round 5.** (1) An `-import_from`'d CLASS at ANOTHER arity (a's
+`p/1`; B defines its own `p/2`) is no longer bound at step 4 nor picked up by
+the compiler's arity-blind `globals_` fallback (four sites in
+`clausal/logic/compiler/predicate.py`): `is_foreign_class_at_other_arity`
+(predicate.py) says the head is B's own predicate, as the handle era
+resolves it. Before, step 4 hit the new `_bind_row` raise, and step 5 would
+have installed B's `p/2` dispatch on a's `p/1` row. End to end, both eras,
+for a's `p/1` a runtime-filled `-dynamic` and a loaded-then-emptied one: B
+loads, B's `p/2` answers, a's `p/1` is untouched. A STATIC `p/1` with load
+clauses is still refused in the class era by the gate's blast radius (the
+ruled M-e behaviour) but loads in the handle era -- parked as
+`todo/imported-class-at-another-arity-blast-radius-is-class-era-only-2026-09-24.md`.
+(2) The Python-exporter message is taken only when the predicate has no real
+Clausal row, its class was not declared by a Clausal module (`__module__`),
+and the exporter -- resolved the way the import resolved it
+(`_resolve_module`) -- is not a Clausal module; a Python alias module
+re-exporting a Clausal predicate gets that predicate's message.

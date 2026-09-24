@@ -1768,6 +1768,27 @@ def mint_predicate_handle(db, functor: str) -> str:
     return mangle(module_name, functor)
 
 
+def is_foreign_class_at_other_arity(binding, db, arity: int) -> bool:
+    """True when *binding* is a ``PredicateMeta`` class already reading
+    ANOTHER Database's real row, at an arity other than *arity*.
+
+    That is an ``-import_from``'d predicate whose name this module ALSO uses
+    at another arity for a predicate of its own (``-import_from(a, [p])``
+    binds a's ``p/1`` class; this file defines ``p/2``).  The ``p/2`` head is
+    this module's own predicate -- its row is this module's, exactly as the
+    handle era resolves it -- so the class must be neither bound to it
+    (``_bind_row`` would move a's predicate) nor handed the ``p/2`` dispatch
+    or index plans (they would land on a's ``p/1`` row).  Class era only:
+    a mangled handle has no class to mis-bind.
+    """
+    if not isinstance(binding, PredicateMeta):
+        return False
+    row = binding._row
+    if row is None or row.detached or db is None or row.db is db:
+        return False
+    return len(getattr(binding, "_fields", ())) != arity
+
+
 def resolve_predicate_row(binding, *, arity: int,
                           db=None) -> "PredRow | None":
     """F1: the live ``PredRow`` for a module-dict *binding*, era-agnostic.
