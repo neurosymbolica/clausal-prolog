@@ -193,16 +193,38 @@ def test_a_clause_less_row_is_found_in_the_db_without_any_binding():
         analyze_mi(row)
 
 
-def test_the_binding_route_refuses_several_arities_too(monkeypatch):
-    """QA holds on every route, with the same message.  A mangled binding's
-    owner is made to report two arities; the database route has none."""
-    from clausal.logic import compiler_v2 as cv2
-    monkeypatch.setattr(cv2, "predicate_arities_for", lambda b, **k: {2, 3})
-    md = {"solve": mangle(_MIS, "solve")}
+def _two_arity_owner(monkeypatch, name):
+    """A REAL owner: a Database defining ``amb_mi`` at two arities (one
+    ``.clausal`` file cannot), registered under *name* the way a loaded
+    module is, so the owner lookup runs unmocked."""
+    import types
+    from types import SimpleNamespace
+    db = Database({"__name__": name})
+    for n in (1, 2):
+        db.assertz(Clause(head=Compound("amb_mi", (n, n)), body=[]))
+        db.assertz(Clause(head=Compound("amb_mi", (n, n, n)), body=[]))
+    mod = types.ModuleType(name)
+    mod.__dict__["$module"] = SimpleNamespace(db=db)
+    monkeypatch.setitem(sys.modules, name, mod)
+    return db
+
+
+@pytest.mark.parametrize("shape", ["mangled", "class"])
+def test_the_binding_route_refuses_several_arities_too(monkeypatch, shape):
+    """QA holds on every route and for both binding shapes, with the same
+    message, against an owner that really defines two arities."""
+    _two_arity_owner(monkeypatch, "_amb_owner")
+    if shape == "mangled":
+        binding = mangle("_amb_owner", "amb_mi")
+    else:
+        from clausal.logic.predicate import make_predicate
+        binding = make_predicate("amb_mi", ["G", "P"])
+        binding.__module__ = "_amb_owner"
+    md = {"amb_mi": binding}
     with pytest.raises(RuntimeError,
-                       match=r"defined at 2 arities \(solve/2, solve/3\)"):
-        _meta_interpreter_row(Database(), md, "solve", refuse_ambiguous=True)
-    assert _meta_interpreter_row(Database(), md, "solve",
+                       match=r"defined at 2 arities \(amb_mi/2, amb_mi/3\)"):
+        _meta_interpreter_row(Database(), md, "amb_mi", refuse_ambiguous=True)
+    assert _meta_interpreter_row(Database(), md, "amb_mi",
                                  refuse_ambiguous=False) is None
 
 

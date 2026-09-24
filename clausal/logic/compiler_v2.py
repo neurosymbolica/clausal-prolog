@@ -1297,7 +1297,8 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
        "expected at least 2 clauses" refusal (spelled in one place) is what
        the author sees;
     3. failing that, a module-dict binding that denotes a predicate -- one
-       bound by a plain Python import has no row here.  A mangled atom is
+       bound by a plain Python import has no row here -- with the same
+       ambiguity refusal over its owner's arities.  A mangled atom is
        resolved to its owner's row.  A ``PredicateMeta`` class is returned
        AS THE CLASS: ``analyze_mi`` reads its ``_fields`` (a Python-built
        predicate may have no registered signature) and refuses it when it
@@ -1313,16 +1314,17 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
     if rows:
         return next(iter(rows.values()))
     binding = module_dict.get(mi_name)
+    if not is_declared_predicate_name(binding):
+        return None
+    arities = predicate_arities_for(binding)
+    if len(arities) > 1:
+        if refuse_ambiguous:
+            raise _ambiguous_mi(mi_name, arities)
+        return None
     if isinstance(binding, PredicateMeta):
         return binding
-    if is_declared_predicate_name(binding):
-        arities = predicate_arities_for(binding)
-        if len(arities) > 1:
-            if refuse_ambiguous:
-                raise _ambiguous_mi(mi_name, arities)
-            return None
-        if arities:
-            return resolve_predicate_row(binding, arity=next(iter(arities)))
+    if arities:
+        return resolve_predicate_row(binding, arity=next(iter(arities)))
     return None
 
 
