@@ -732,6 +732,19 @@ class Database:
         self._adopted[key] = row
         return True
 
+    def adopted_row(self, functor: str, arity: int) -> "PredRow | None":
+        """The row this database ADOPTED for ``(functor, arity)`` at
+        ``-import_from`` -- another database's -- or ``None``.
+
+        ``row()`` answers an adopted row only when this database knows the
+        key no other way; a module that imports a predicate AND re-declares
+        it (``-dynamic``, say) also has a local row under the same key, which
+        ``row()`` prefers.  A write resolved through the import still belongs
+        on the owner's row, so the resolver that has lost the binding's own
+        route (an owner popped from ``sys.modules``) asks for it here.
+        """
+        return self._adopted.get((functor, arity))
+
     def owns(self, functor: str, arity: int) -> bool:
         """True if this database is the HOME of ``(functor, arity)`` — as
         opposed to merely resolving it through a row it adopted at import.
