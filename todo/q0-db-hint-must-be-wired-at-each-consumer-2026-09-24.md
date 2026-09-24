@@ -142,3 +142,11 @@ scope.
   expected: solve.call's other-arity gate (M8; the dispatch gate after it is
   hinted and reaches the same resolution), `_belongs_elsewhere` (M14) and
   `_imported_binding_by_canonical_name` (M13).
+
+## Round 3 review (landed with these open, 2026-09-24)
+- solve.py:1122 -- `call(handle, ..., module=lm)` with the functor itself a handle goes
+  through `qualify_mangled_goal(functor)` / `resolve_module` WITHOUT the hint (only the
+  alias route is tested).
+- predicate.py `_UnqualifiedName.dispatch_at`: `return _dispatch_at(self.binding, arity)`
+  -- pass `db=self.db` (it already feeds binding_grants_arity).
+- specialization.py:1383-1389 computes `namespace_db(module_dict)` twice per call.
