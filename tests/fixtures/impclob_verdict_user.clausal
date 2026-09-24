@@ -1,0 +1,7 @@
+# The other half of the refusal's remedy: a module that USES impclob_verdict/2
+# imports it from the module that defines it (impclob_implements), not from
+# the declaration-only vocabulary.
+-module(impclob_verdict_user, [impclob_user_check(STATUS)])
+-import_from(tests.fixtures.impclob_implements, [impclob_verdict])
+
+impclob_user_check(S) <- impclob_verdict(S, C_UNUSED)

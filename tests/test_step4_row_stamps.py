@@ -237,25 +237,32 @@ def test_a_name_bound_to_an_imported_atom_still_gets_its_signature(
     ("impord_fact_vocab", "impord_declare_then_import_fact",
      "impord_fverdict"),
 ])
-def test_declare_then_import_then_define_is_labelled_by_the_declaration(
+def test_declare_then_import_then_define_is_refused_so_it_stamps_nothing(
         schema, use, functor):
-    """The disagreements the class source had.  The module declares
-    ``f(STATUS, CITATIONS)``, imports ``f`` (rebinding the name to the
-    exporter's class, whose fields are unseated ``arg_i`` placeholders) and
-    then defines it locally.  The row is THIS module's, so this module's own
-    declaration labels it -- the class used to stamp the foreign
-    placeholders (design §3)."""
-    _load_module(f"tests.fixtures.{schema}",
-                 os.path.join(FIXTURES, f"{schema}.clausal"))
-    module = _load_module(f"tests.fixtures.{use}",
-                          os.path.join(FIXTURES, f"{use}.clausal"))
-    db = module.__dict__["$module"].db
-    assert getattr(module.__dict__[functor], "_fields", None) == (
-        "arg_0", "arg_1"), "the fixture no longer binds the foreign class"
-    assert db.row(functor, 2).clauses
-    assert db.row(functor, 2).signature == ("STATUS", "CITATIONS")
-    assert db.declared_fields(functor, 2) == ("STATUS", "CITATIONS")
-    assert db.signature_for(functor, 2) == ("STATUS", "CITATIONS")
+    """The only disagreements the class source had (design §3): the module
+    declares ``f(STATUS, CITATIONS)``, imports ``f`` from a module that only
+    DECLARES it (the class carries unseated ``arg_i`` placeholders), then
+    defines it.  That shape is the dropped "vocabulary-implements" idiom
+    (operator ruling 2026-09-24,
+    todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md), so
+    it is now refused at step 3d, before step 4 stamps anything.
+
+    This used to pin that the row is labelled by the declaration, not the
+    class.  No legal shape remains where a step-4 row is bound to a FOREIGN
+    placeholder class: every clause write through an ``-import_from`` is now
+    refused (the clobber refusal or this one).  What stays pinned: the load
+    is refused with THAT refusal, and the exporter's row is not stamped with
+    the importer's names -- the declaration never leaks onto the owner."""
+    owner = _load_module(f"tests.fixtures.{schema}",
+                         os.path.join(FIXTURES, f"{schema}.clausal"))
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_module(f"tests.fixtures.{use}",
+                     os.path.join(FIXTURES, f"{use}.clausal"))
+    assert f"only declares {functor}/2" in " ".join(str(exc_info.value).split())
+    owner_row = owner.__dict__["$module"].db.row(functor, 2)
+    if owner_row is not None:
+        assert not owner_row.clauses
+        assert owner_row.signature != ("STATUS", "CITATIONS")
 
 
 _CACHE_PROBE = """
