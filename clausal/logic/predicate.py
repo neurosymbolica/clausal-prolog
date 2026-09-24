@@ -1778,15 +1778,22 @@ def is_foreign_class_at_other_arity(binding, db, arity: int) -> bool:
     this module's own predicate -- its row is this module's, exactly as the
     handle era resolves it -- so the class must be neither bound to it
     (``_bind_row`` would move a's predicate) nor handed the ``p/2`` dispatch
-    or index plans (they would land on a's ``p/1`` row).  Class era only:
-    a mangled handle has no class to mis-bind.
+    or index plans (they would land on a's ``p/1`` row), nor put a's row in
+    the write's blast radius (operator ruling 2026-09-24: a local ``p/2``
+    beside an imported ``p/1`` LOADS -- name and arity make a different
+    predicate).  Class era only: a mangled handle has no class to mis-bind,
+    and ``through=`` resolves it at the written arity.
+
+    The arity is the BOUND ROW's (``row.key[1]``), not ``len(_fields)``: a
+    class can be bound at an arity its field names do not spell (a name
+    defined at two arities re-binds it within its database).
     """
     if not isinstance(binding, PredicateMeta):
         return False
     row = binding._row
     if row is None or row.detached or db is None or row.db is db:
         return False
-    return len(getattr(binding, "_fields", ())) != arity
+    return row.key[1] != arity
 
 
 def resolve_predicate_row(binding, *, arity: int,

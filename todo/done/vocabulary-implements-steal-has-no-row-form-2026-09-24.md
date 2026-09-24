@@ -157,3 +157,14 @@ Clausal row, its class was not declared by a Clausal module (`__module__`),
 and the exporter -- resolved the way the import resolved it
 (`_resolve_module`) -- is not a Clausal module; a Python alias module
 re-exporting a Clausal predicate gets that predicate's message.
+
+**Review round 6.** The parked era question was RULED (operator,
+2026-09-24): a local `p/2` beside an imported `p/1` loads in both eras; the
+class era now drops such a class from the load's blast radius
+(`_load_through`) -- see
+`todo/done/imported-class-at-another-arity-blast-radius-is-class-era-only-2026-09-24.md`.
+Lows: a class's DETACHED row counts as no Clausal row (a Python-made class
+holding clauses there gets the Python message); the self-import exemption is
+keyed on the canonical source path, like the gate's rule 1
+(`_is_self_import`); `is_foreign_class_at_other_arity` reads the bound row's
+arity, not `len(_fields)`.
