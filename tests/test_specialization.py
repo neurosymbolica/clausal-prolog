@@ -1692,148 +1692,223 @@ class TestConjunctionMemoTable:
 class TestCpdSolveNatnum:
     """CPD on vanilla solve/2 with natnum program."""
 
-    def test_more_clauses_than_shallow(self, mi_module):
+    def test_more_clauses_than_shallow(self, mi_module, spec_module):
         # nv
         pattern = analyze_mi(mi_module.solve)
-        shallow = specialize_mi(pattern, _make_natnum_program(), "SolveSh1")
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd1")
-        assert len(cpd._state_row().clauses) >= len(shallow._state_row().clauses)
+        specialize_mi(
+            pattern, _make_natnum_program(), "SolveSh1",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SolveCpd1",
+            db=spec_module.db,
+        )
+        cpd_clauses = len(_row(spec_module, "SolveCpd1", 1).clauses)
+        shallow_clauses = len(_row(spec_module, "SolveSh1", 1).clauses)
+        assert cpd_clauses >= shallow_clauses
 
-    def test_natnum_0(self, mi_module):
-        # nv
-        from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd2")
-        assert sum(1 for _ in call(cpd, [["natnum", 0]])) == 1
-
-    def test_natnum_s_0(self, mi_module):
-        # nv
-        from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd3")
-        assert sum(1 for _ in call(cpd, [["natnum", ["s", 0]]])) == 1
-
-    def test_natnum_s_s_s_0(self, mi_module):
+    def test_natnum_0(self, mi_module, spec_module):
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd4")
-        assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", ["s", 0]]]]])) == 1
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SolveCpd2",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SolveCpd2", [["natnum", 0]], module=spec_module,
+        )) == 1
 
-    def test_equivalence_natnum(self, mi_module):
+    def test_natnum_s_0(self, mi_module, spec_module):
+        # nv
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.solve)
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SolveCpd3",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SolveCpd3", [["natnum", ["s", 0]]], module=spec_module,
+        )) == 1
+
+    def test_natnum_s_s_s_0(self, mi_module, spec_module):
+        # nv
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.solve)
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SolveCpd4",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SolveCpd4", [["natnum", ["s", ["s", ["s", 0]]]]], module=spec_module,
+        )) == 1
+
+    def test_equivalence_natnum(self, mi_module, spec_module):
         """CPD produces same results as Phase 1 for various natnum inputs."""
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        shallow = specialize_mi(pattern, _make_natnum_program(), "SolveSh5")
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SolveCpd5")
+        specialize_mi(
+            pattern, _make_natnum_program(), "SolveSh5",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SolveCpd5",
+            db=spec_module.db,
+        )
         for n in range(6):
             term = 0
             for _ in range(n):
                 term = ["s", term]
             goal = [["natnum", term]]
-            s = sum(1 for _ in call(shallow, goal))
-            c = sum(1 for _ in call(cpd, goal))
+            s = sum(1 for _ in call("SolveSh5", goal, module=spec_module))
+            c = sum(1 for _ in call("SolveCpd5", goal, module=spec_module))
             assert s == c, f"natnum({n}): shallow={s}, cpd={c}"
 
 
 class TestCpdSolveGraph:
     """CPD on vanilla solve/2 with graph program."""
 
-    def test_more_clauses_than_shallow(self, mi_module):
+    def test_more_clauses_than_shallow(self, mi_module, spec_module):
         # nv
         pattern = analyze_mi(mi_module.solve)
-        shallow = specialize_mi(pattern, _make_graph_program(), "SolveGSh1")
-        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd1")
-        assert len(cpd._state_row().clauses) > len(shallow._state_row().clauses)
+        specialize_mi(
+            pattern, _make_graph_program(), "SolveGSh1",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveGCpd1",
+            db=spec_module.db,
+        )
+        cpd_clauses = len(_row(spec_module, "SolveGCpd1", 1).clauses)
+        shallow_clauses = len(_row(spec_module, "SolveGSh1", 1).clauses)
+        assert cpd_clauses > shallow_clauses
 
-    def test_path_a_b(self, mi_module):
-        # nv
-        from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd2")
-        assert sum(1 for _ in call(cpd, [["path", "a", "b"]])) == 1
-
-    def test_path_a_c(self, mi_module):
-        # nv
-        from clausal.logic.solve import call
-        pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd3")
-        assert sum(1 for _ in call(cpd, [["path", "a", "c"]])) == 1
-
-    def test_path_a_d(self, mi_module):
+    def test_path_a_b(self, mi_module, spec_module):
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd4")
-        assert sum(1 for _ in call(cpd, [["path", "a", "d"]])) == 1
+        specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveGCpd2",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SolveGCpd2", [["path", "a", "b"]], module=spec_module,
+        )) == 1
 
-    def test_edge_a_b(self, mi_module):
+    def test_path_a_c(self, mi_module, spec_module):
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd5")
-        assert sum(1 for _ in call(cpd, [["edge", "a", "b"]])) == 1
+        specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveGCpd3",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SolveGCpd3", [["path", "a", "c"]], module=spec_module,
+        )) == 1
 
-    def test_equivalence_graph(self, mi_module):
+    def test_path_a_d(self, mi_module, spec_module):
+        # nv
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.solve)
+        specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveGCpd4",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SolveGCpd4", [["path", "a", "d"]], module=spec_module,
+        )) == 1
+
+    def test_edge_a_b(self, mi_module, spec_module):
+        # nv
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.solve)
+        specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveGCpd5",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SolveGCpd5", [["edge", "a", "b"]], module=spec_module,
+        )) == 1
+
+    def test_equivalence_graph(self, mi_module, spec_module):
         """CPD produces same results as Phase 1 for all graph queries."""
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        shallow = specialize_mi(pattern, _make_graph_program(), "SolveGSh6")
-        cpd = specialize_mi_cpd(pattern, _make_graph_program(), "SolveGCpd6")
+        specialize_mi(
+            pattern, _make_graph_program(), "SolveGSh6",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveGCpd6",
+            db=spec_module.db,
+        )
         queries = [
             [["edge", "a", "b"]], [["edge", "b", "c"]], [["edge", "b", "d"]],
             [["path", "a", "b"]], [["path", "a", "c"]], [["path", "a", "d"]],
             [["path", "b", "c"]], [["path", "b", "d"]],
         ]
         for q in queries:
-            s = sum(1 for _ in call(shallow, q))
-            c = sum(1 for _ in call(cpd, q))
+            s = sum(1 for _ in call("SolveGSh6", q, module=spec_module))
+            c = sum(1 for _ in call("SolveGCpd6", q, module=spec_module))
             assert s == c, f"{q}: shallow={s}, cpd={c}"
 
 
 class TestCpdSolveCount:
     """CPD on solve_count/3 with natnum — tests post-match chaining."""
 
-    def test_count_natnum_0(self, mi_module):
+    def test_count_natnum_0(self, mi_module, spec_module):
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve_count)
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd1")
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SCCpd1",
+            db=spec_module.db,
+        )
         v = Var()
-        for _ in call(cpd, [["natnum", 0]], v):
+        for _ in call("SCCpd1", [["natnum", 0]], v, module=spec_module):
             assert walk(deref(v)) == 1
 
-    def test_count_natnum_s_0(self, mi_module):
+    def test_count_natnum_s_0(self, mi_module, spec_module):
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve_count)
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd2")
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SCCpd2",
+            db=spec_module.db,
+        )
         v = Var()
-        for _ in call(cpd, [["natnum", ["s", 0]]], v):
+        for _ in call("SCCpd2", [["natnum", ["s", 0]]], v, module=spec_module):
             assert walk(deref(v)) == 2
 
-    def test_count_equivalence(self, mi_module):
+    def test_count_equivalence(self, mi_module, spec_module):
         """CPD counting matches Phase 1 counting for natnum(0..5)."""
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve_count)
-        shallow = specialize_mi(pattern, _make_natnum_program(), "SCSh3")
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SCCpd3")
+        specialize_mi(
+            pattern, _make_natnum_program(), "SCSh3",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SCCpd3",
+            db=spec_module.db,
+        )
         for n in range(6):
             term = 0
             for _ in range(n):
                 term = ["s", term]
             vs, vc = Var(), Var()
             sv = None
-            for _ in call(shallow, [["natnum", term]], vs):
+            for _ in call("SCSh3", [["natnum", term]], vs, module=spec_module):
                 sv = walk(deref(vs))
             cv = None
-            for _ in call(cpd, [["natnum", term]], vc):
+            for _ in call("SCCpd3", [["natnum", term]], vc, module=spec_module):
                 cv = walk(deref(vc))
             assert sv == cv, f"natnum({n}): shallow={sv}, cpd={cv}"
 
@@ -1841,65 +1916,94 @@ class TestCpdSolveCount:
 class TestCpdSolveLimit:
     """CPD on solve_limit/3 — tests pre-match chaining."""
 
-    def test_limit_passes(self, mi_module):
+    def test_limit_passes(self, mi_module, spec_module):
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve_limit)
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd1")
-        assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", 0]]]], 10)) == 1
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SLCpd1",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SLCpd1", [["natnum", ["s", ["s", 0]]]], 10, module=spec_module,
+        )) == 1
 
-    def test_limit_fails(self, mi_module):
+    def test_limit_fails(self, mi_module, spec_module):
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve_limit)
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd2")
-        assert sum(1 for _ in call(cpd, [["natnum", ["s", ["s", ["s", 0]]]]], 2)) == 0
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SLCpd2",
+            db=spec_module.db,
+        )
+        assert sum(1 for _ in call(
+            "SLCpd2", [["natnum", ["s", ["s", ["s", 0]]]]], 2, module=spec_module,
+        )) == 0
 
-    def test_limit_equivalence(self, mi_module):
+    def test_limit_equivalence(self, mi_module, spec_module):
         """CPD limit behavior matches Phase 1 for various depths and limits."""
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve_limit)
-        shallow = specialize_mi(pattern, _make_natnum_program(), "SLSh3")
-        cpd = specialize_mi_cpd(pattern, _make_natnum_program(), "SLCpd3")
+        specialize_mi(
+            pattern, _make_natnum_program(), "SLSh3",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SLCpd3",
+            db=spec_module.db,
+        )
         for depth in range(5):
             term = 0
             for _ in range(depth):
                 term = ["s", term]
             for limit in range(7):
-                s = sum(1 for _ in call(shallow, [["natnum", term]], limit))
-                c = sum(1 for _ in call(cpd, [["natnum", term]], limit))
+                s = sum(1 for _ in call(
+                    "SLSh3", [["natnum", term]], limit, module=spec_module,
+                ))
+                c = sum(1 for _ in call(
+                    "SLCpd3", [["natnum", term]], limit, module=spec_module,
+                ))
                 assert s == c, f"natnum({depth}) limit={limit}: {s} vs {c}"
 
 
 class TestCpdFactorial:
     """CPD with factorial program (has residual goals: gt, sub, mul)."""
 
-    def test_factorial_results(self, mi_module):
+    def test_factorial_results(self, mi_module, spec_module):
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(pattern, _make_factorial_program(), "SolveFactCpd1")
+        specialize_mi_cpd(
+            pattern, _make_factorial_program(), "SolveFactCpd1",
+            db=spec_module.db,
+        )
         for n, expected in [(0, 1), (1, 1), (3, 6), (5, 120)]:
             r = Var()
-            for _ in call(cpd, [["factorial", n, r]]):
+            for _ in call("SolveFactCpd1", [["factorial", n, r]], module=spec_module):
                 assert walk(deref(r)) == expected, f"factorial({n})"
 
-    def test_factorial_equivalence(self, mi_module):
+    def test_factorial_equivalence(self, mi_module, spec_module):
         # nv
         from clausal.logic.variables import Var, deref, walk
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        shallow = specialize_mi(pattern, _make_factorial_program(), "SolveFactSh2")
-        cpd = specialize_mi_cpd(pattern, _make_factorial_program(), "SolveFactCpd2")
+        specialize_mi(
+            pattern, _make_factorial_program(), "SolveFactSh2",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_factorial_program(), "SolveFactCpd2",
+            db=spec_module.db,
+        )
         for n in [0, 1, 2, 3, 4, 5]:
             rs, rc = Var(), Var()
             sv = None
-            for _ in call(shallow, [["factorial", n, rs]]):
+            for _ in call("SolveFactSh2", [["factorial", n, rs]], module=spec_module):
                 sv = walk(deref(rs))
             cv = None
-            for _ in call(cpd, [["factorial", n, rc]]):
+            for _ in call("SolveFactCpd2", [["factorial", n, rc]], module=spec_module):
                 cv = walk(deref(rc))
             assert sv == cv, f"factorial({n}): shallow={sv}, cpd={cv}"
 
@@ -1907,52 +2011,62 @@ class TestCpdFactorial:
 class TestCpdEvenOdd:
     """CPD with even/odd program (has residual goals: gte, sub)."""
 
-    def test_even_equivalence(self, mi_module):
+    def test_even_equivalence(self, mi_module, spec_module):
         # nv
         from clausal.logic.solve import call
         pattern = analyze_mi(mi_module.solve)
-        shallow = specialize_mi(pattern, _make_even_odd_program(), "SolveEvSh1")
-        cpd = specialize_mi_cpd(pattern, _make_even_odd_program(), "SolveEvCpd1")
+        specialize_mi(
+            pattern, _make_even_odd_program(), "SolveEvSh1",
+            db=spec_module.db,
+        )
+        specialize_mi_cpd(
+            pattern, _make_even_odd_program(), "SolveEvCpd1",
+            db=spec_module.db,
+        )
         for n in range(10):
-            s = sum(1 for _ in call(shallow, [["even", n]]))
-            c = sum(1 for _ in call(cpd, [["even", n]]))
+            s = sum(1 for _ in call("SolveEvSh1", [["even", n]], module=spec_module))
+            c = sum(1 for _ in call("SolveEvCpd1", [["even", n]], module=spec_module))
             assert s == c, f"even({n}): shallow={s}, cpd={c}"
 
 
 class TestCpdTermination:
     """Tests that CPD terminates on recursive programs."""
 
-    def test_natnum_terminates(self, mi_module):
+    def test_natnum_terminates(self, mi_module, spec_module):
         # nv
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(
-            pattern, _make_natnum_program(), "SolveTerm1", max_depth=20,
+        specialize_mi_cpd(
+            pattern, _make_natnum_program(), "SolveTerm1",
+            max_depth=20, db=spec_module.db,
         )
-        assert len(cpd._state_row().clauses) > 0
+        assert len(_row(spec_module, "SolveTerm1", 1).clauses) > 0
 
-    def test_graph_terminates(self, mi_module):
+    def test_graph_terminates(self, mi_module, spec_module):
         # nv
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(
-            pattern, _make_graph_program(), "SolveTerm2", max_depth=20,
+        specialize_mi_cpd(
+            pattern, _make_graph_program(), "SolveTerm2",
+            max_depth=20, db=spec_module.db,
         )
-        assert len(cpd._state_row().clauses) > 0
+        assert len(_row(spec_module, "SolveTerm2", 1).clauses) > 0
 
-    def test_factorial_terminates(self, mi_module):
+    def test_factorial_terminates(self, mi_module, spec_module):
         # nv
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(
-            pattern, _make_factorial_program(), "SolveTerm3", max_depth=20,
+        specialize_mi_cpd(
+            pattern, _make_factorial_program(), "SolveTerm3",
+            max_depth=20, db=spec_module.db,
         )
-        assert len(cpd._state_row().clauses) > 0
+        assert len(_row(spec_module, "SolveTerm3", 1).clauses) > 0
 
-    def test_even_terminates(self, mi_module):
+    def test_even_terminates(self, mi_module, spec_module):
         # nv
         pattern = analyze_mi(mi_module.solve)
-        cpd = specialize_mi_cpd(
-            pattern, _make_even_odd_program(), "SolveTerm4", max_depth=20,
+        specialize_mi_cpd(
+            pattern, _make_even_odd_program(), "SolveTerm4",
+            max_depth=20, db=spec_module.db,
         )
-        assert len(cpd._state_row().clauses) > 0
+        assert len(_row(spec_module, "SolveTerm4", 1).clauses) > 0
 
 
 # ── P3-3 Task 7: the specialized predicate is a Database ROW ─────────────────
