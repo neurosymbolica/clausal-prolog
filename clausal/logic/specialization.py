@@ -465,18 +465,19 @@ def specialize_mi(
     fields = _specialized_fields(pattern)
     if pred_cls is None:
         pred_cls = make_predicate(new_name, fields)
+    target = _SpecTarget.of(pred_cls)
 
     # Detect whether the object program has residual goals (builtins/external).
     known_functors = _known_functors(object_program)
     has_residual = _has_residual_goals(object_program, known_functors)
 
-    clauses = _unfold(pattern, object_program, pred_cls)
+    clauses = _unfold(pattern, object_program, target)
 
     # If residual goals exist, add a catch-all clause that dispatches
     # unknown goals through _SolveGoal.
     solve_goal_name = f"_SolveGoal_{new_name}"
     if has_residual:
-        catchall = _make_residual_clause(pattern, pred_cls, solve_goal_name)
+        catchall = _make_residual_clause(pattern, target, solve_goal_name)
         clauses.append(catchall)
 
     # Install as a row in the defining module's database, through the gate.
@@ -486,6 +487,48 @@ def specialize_mi(
         solve_goal_name=solve_goal_name if has_residual else None,
         goal_map=goal_map,
     )
+
+
+@dataclasses.dataclass(frozen=True)
+class _SpecTarget:
+    """The specialized predicate AS DATA: its name and field names, and the
+    one thing the unfolder does with them -- build its head/goal cells.
+
+    F1 row 35 (the "data half"): the unfolder used to take the
+    ``PredicateMeta`` class and use it only as data -- ``pred_cls(**kw)`` for
+    a cell, ``__name__`` for a self-reference, ``_fields`` for positions.
+    None of that needs a class, and after the retirement flip there is none
+    to pass.  Today it is built from the class in hand (``of``), so every
+    cell is byte-identical to what the class produced; the install half
+    (``_install_specialized``) still takes the class until the flip.
+    """
+    name: str
+    fields: tuple[str, ...]
+    # Where the predicate was declared, for the construction error's
+    # "registered by" line; a class carries it, a bare target may not.
+    registered_at: Any = dataclasses.field(default=None, compare=False)
+
+    @classmethod
+    def of(cls, pred_cls: PredicateMeta) -> "_SpecTarget":
+        return cls(pred_cls.__name__, tuple(pred_cls._fields),
+                   getattr(pred_cls, "_registered_at", None))
+
+    def __call__(self, **kwargs: Any) -> tuple:
+        """The cell ``PredicateMeta.__call__`` builds from keywords: the
+        functor, then each field's value, a fresh ``Var`` where absent.  An
+        unknown keyword raises the same attributable
+        ``ClausalTermConstructionError`` it raises there, with the
+        registration site when the target knows it."""
+        unknown = [k for k in kwargs if k not in self.fields]
+        if unknown:
+            from clausal.logic.predicate import (  # noqa: PLC0415
+                _source_site, term_construction_error_for,
+            )
+            raise term_construction_error_for(
+                self.name, self.fields, self.registered_at, kwargs,
+                _source_site(1))
+        return (self.name, *(kwargs[f] if f in kwargs else Var()
+                             for f in self.fields))
 
 
 def _specialized_fields(pattern: MIPattern) -> list[str]:
@@ -504,29 +547,29 @@ def _specialized_fields(pattern: MIPattern) -> list[str]:
 def _unfold(
     pattern: MIPattern,
     object_program: list,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
 ) -> list[Clause]:
     """Core unfolding: produce specialized clauses from MI pattern + object program."""
     clauses = []
 
     # ── Base clause ────────────────────────────────────────────────────────
-    base = _make_base_clause(pattern, pred_cls)
+    base = _make_base_clause(pattern, target)
     clauses.append(base)
 
     # ── One clause per object clause ───────────────────────────────────────
     if pattern.recursive_call_style == "tail":
         for obj_clause in object_program:
-            clause = _unfold_tail(pattern, obj_clause, pred_cls)
+            clause = _unfold_tail(pattern, obj_clause, target)
             clauses.append(clause)
     elif pattern.recursive_call_style == "split":
         for obj_clause in object_program:
-            clause = _unfold_split(pattern, obj_clause, pred_cls)
+            clause = _unfold_split(pattern, obj_clause, target)
             clauses.append(clause)
 
     return clauses
 
 
-def _make_base_clause(pattern: MIPattern, pred_cls: PredicateMeta) -> Clause:
+def _make_base_clause(pattern: MIPattern, target: "_SpecTarget") -> Clause:
     """Create the base clause for the specialized predicate.
 
     Original: MI([], _PROGRAM, ...extra_base_values)
@@ -546,7 +589,7 @@ def _make_base_clause(pattern: MIPattern, pred_cls: PredicateMeta) -> Clause:
         val = _head_arg(orig_head, orig_fields, i)   # P2: a head is a cell
         new_field_values[fname] = _copy_term(val, var_map)
 
-    new_head = pred_cls(**new_field_values)
+    new_head = target(**new_field_values)
 
     # Copy base clause body, substituting away any program-arg references.
     new_body = []
@@ -559,7 +602,7 @@ def _make_base_clause(pattern: MIPattern, pred_cls: PredicateMeta) -> Clause:
 def _unfold_tail(
     pattern: MIPattern,
     obj_clause: list,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
 ) -> Clause:
     """Unfold one object clause for the tail-recursive MI pattern.
 
@@ -619,7 +662,7 @@ def _unfold_tail(
     for fname, var in extra_field_vars.items():
         head_fields[fname] = var
 
-    new_head = pred_cls(**head_fields)
+    new_head = target(**head_fields)
 
     # Build the specialized clause body.
     new_body = []
@@ -654,7 +697,7 @@ def _unfold_tail(
 
     # Build recursive call with substituted extra args.
     rec_extra_args = _subst_recursive_call_extra_args(
-        rec_call, pattern, mi_var_map, pred_cls, new_goal_arg,
+        rec_call, pattern, mi_var_map, target, new_goal_arg,
     )
     new_body.append(rec_extra_args)
 
@@ -668,7 +711,7 @@ def _unfold_tail(
 def _unfold_split(
     pattern: MIPattern,
     obj_clause: list,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
 ) -> Clause:
     """Unfold one object clause for the split (non-tail-recursive) MI pattern.
 
@@ -726,7 +769,7 @@ def _unfold_split(
     for fname, val in extra_field_vars.items():
         head_fields[fname] = val
 
-    new_head = pred_cls(**head_fields)
+    new_head = target(**head_fields)
 
     # Build body.
     new_body = []
@@ -749,7 +792,7 @@ def _unfold_split(
             new_goal_arg = _subst(orig_goal_arg_val, mi_var_map)
 
         rec_clause = _subst_recursive_call_extra_args(
-            rec_call, pattern, mi_var_map, pred_cls, new_goal_arg,
+            rec_call, pattern, mi_var_map, target, new_goal_arg,
         )
         new_body.append(rec_clause)
 
@@ -999,7 +1042,7 @@ def _subst_recursive_call_extra_args(
     rec_call: Call,
     pattern: MIPattern,
     mi_var_map: dict,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     new_goal_arg: Any,
 ) -> Call:
     """Build a substituted recursive call to the specialized predicate.
@@ -1008,7 +1051,7 @@ def _subst_recursive_call_extra_args(
     new_goal_arg, and substitutes extra args.
     """
     orig_fields = pattern.fields
-    new_fields = pred_cls._fields
+    new_fields = target.fields
 
     # Build the args list for the new Call, in field order.
     new_args = []
@@ -1024,7 +1067,7 @@ def _subst_recursive_call_extra_args(
             new_args.append(_subst(orig_val, mi_var_map))
         new_field_idx += 1
 
-    return Call(func=LoadName(name=pred_cls.__name__), args=new_args, kwargs=[])
+    return Call(func=LoadName(name=target.name), args=new_args, kwargs=[])
 
 
 # ── Phase 3: Residual goal support ────────────────────────────────────────────
@@ -1053,7 +1096,7 @@ def _has_residual_goals(object_program: list, known_functors: set[str]) -> bool:
 
 def _make_residual_clause(
     pattern: MIPattern,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     solve_goal_name: str,
 ) -> Clause:
     """Create a catch-all clause that dispatches unrecognized goals via _SolveGoal.
@@ -1099,7 +1142,7 @@ def _make_residual_clause(
     head_fields[goal_field] = [fresh_goal, StarUnpack(value=fresh_goals)]
     for fname, var in extra_field_vars.items():
         head_fields[fname] = var
-    new_head = pred_cls(**head_fields)
+    new_head = target(**head_fields)
 
     # Build body.
     new_body = []
@@ -1124,7 +1167,7 @@ def _make_residual_clause(
     rc_body = rc.body
     rec_call = rc_body[pattern.recursive_call_indices[0]]
     rec_extra_call = _subst_recursive_call_extra_args(
-        rec_call, pattern, mi_var_map, pred_cls, fresh_goals,
+        rec_call, pattern, mi_var_map, target, fresh_goals,
     )
     new_body.append(rec_extra_call)
 
@@ -1515,6 +1558,7 @@ def specialize_mi_deep(
     fields = _specialized_fields(pattern)
     if pred_cls is None:
         pred_cls = make_predicate(new_name, fields)
+    target = _SpecTarget.of(pred_cls)
 
     known_functors = _known_functors(object_program)
     has_residual = _has_residual_goals(object_program, known_functors)
@@ -1527,7 +1571,7 @@ def specialize_mi_deep(
 
     # Perform depth-bounded unfolding.
     clauses = _unfold_deep(
-        pattern, object_program, pred_cls,
+        pattern, object_program, target,
         obj_index, known_functors, memo,
         ancestors=[], depth=0, max_depth=max_depth,
     )
@@ -1535,7 +1579,7 @@ def specialize_mi_deep(
     # Residual clause if needed.
     solve_goal_name = f"_SolveGoal_{new_name}"
     if has_residual:
-        catchall = _make_residual_clause(pattern, pred_cls, solve_goal_name)
+        catchall = _make_residual_clause(pattern, target, solve_goal_name)
         clauses.append(catchall)
 
     # Install as a row in the defining module's database, through the gate.
@@ -1563,7 +1607,7 @@ def _build_object_index(object_program: list) -> dict[str, list]:
 def _unfold_deep(
     pattern: MIPattern,
     object_program: list,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     obj_index: dict[str, list],
     known_functors: set[str],
     memo: MemoTable,
@@ -1582,7 +1626,7 @@ def _unfold_deep(
     branch (the goal is left as a recursive call).
     """
     # Base unfolding — same as Phase 1.
-    clauses = _unfold(pattern, object_program, pred_cls)
+    clauses = _unfold(pattern, object_program, target)
 
     if depth >= max_depth:
         return clauses
@@ -1591,7 +1635,7 @@ def _unfold_deep(
     deepened_clauses = []
     for clause in clauses:
         deepened = _deepen_clause(
-            clause, pattern, pred_cls, obj_index, known_functors,
+            clause, pattern, target, obj_index, known_functors,
             memo, ancestors, depth, max_depth,
         )
         deepened_clauses.append(deepened)
@@ -1602,7 +1646,7 @@ def _unfold_deep(
 def _deepen_clause(
     clause: Clause,
     pattern: MIPattern,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     obj_index: dict[str, list],
     known_functors: set[str],
     memo: MemoTable,
@@ -1626,7 +1670,7 @@ def _deepen_clause(
     changed = False
     for goal in clause.body:
         inlined = _try_inline_goal(
-            goal, pattern, pred_cls, obj_index, known_functors,
+            goal, pattern, target, obj_index, known_functors,
             memo, ancestors, depth, max_depth,
         )
         if inlined is not None:
@@ -1643,7 +1687,7 @@ def _deepen_clause(
 def _try_inline_goal(
     goal,
     pattern: MIPattern,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     obj_index: dict[str, list],
     known_functors: set[str],
     memo: MemoTable,
@@ -1662,12 +1706,12 @@ def _try_inline_goal(
         return None
     if not isinstance(goal.func, LoadName):
         return None
-    if goal.func.name != pred_cls.__name__:
+    if goal.func.name != target.name:
         return None
 
     # This is a recursive call to the specialized predicate.
     # Check if the goal-list arg starts with a known functor.
-    spec_fields = pred_cls._fields
+    spec_fields = target.fields
     goal_field_idx = None
     for i, fname in enumerate(spec_fields):
         if fname == pattern.fields[pattern.goal_arg]:
@@ -1707,7 +1751,7 @@ def _try_inline_goal(
         return None
 
     # Register this pattern.
-    memo.register(first_goal, pred_cls.__name__)
+    memo.register(first_goal, target.name)
 
     # Inline: match first_goal against object clauses for this functor.
     matching_clauses = obj_index.get(functor, [])
@@ -1783,7 +1827,7 @@ def _try_inline_goal(
         rec_args = [_subst(a, subst_map) for a in goal.args]
         rec_args[goal_field_idx] = remaining_goal_list
         result.append(Call(
-            func=LoadName(name=pred_cls.__name__),
+            func=LoadName(name=target.name),
             args=rec_args,
             kwargs=goal.kwargs if hasattr(goal, 'kwargs') else [],
         ))
@@ -1793,7 +1837,7 @@ def _try_inline_goal(
     final_result = []
     for g in result:
         deeper = _try_inline_goal(
-            g, pattern, pred_cls, obj_index, known_functors,
+            g, pattern, target, obj_index, known_functors,
             memo, new_ancestors, depth + 1, max_depth,
         )
         if deeper is not None:
@@ -1853,25 +1897,26 @@ def specialize_mi_cpd(
     fields = _specialized_fields(pattern)
     if pred_cls is None:
         pred_cls = make_predicate(new_name, fields)
+    target = _SpecTarget.of(pred_cls)
 
     known_functors = _known_functors(object_program)
     has_residual = _has_residual_goals(object_program, known_functors)
     obj_index = _build_object_index(object_program)
 
     # Phase 1: shallow unfold.
-    clauses = _unfold(pattern, object_program, pred_cls)
+    clauses = _unfold(pattern, object_program, target)
 
     # Phase 5: deforestation pass.
     conj_memo = ConjunctionMemoTable()
     deforested = _deforest_pass(
-        clauses, pattern, pred_cls, obj_index, known_functors,
+        clauses, pattern, target, obj_index, known_functors,
         conj_memo, max_depth,
     )
 
     # Residual clause if needed.
     solve_goal_name = f"_SolveGoal_{new_name}"
     if has_residual:
-        catchall = _make_residual_clause(pattern, pred_cls, solve_goal_name)
+        catchall = _make_residual_clause(pattern, target, solve_goal_name)
         deforested.append(catchall)
 
     # Install as a row in the defining module's database, through the gate.
@@ -1925,7 +1970,7 @@ class ConjunctionMemoTable:
 def _deforest_pass(
     clauses: list[Clause],
     pattern: MIPattern,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     obj_index: dict[str, list],
     known_functors: set[str],
     conj_memo: ConjunctionMemoTable,
@@ -1940,7 +1985,7 @@ def _deforest_pass(
     result = []
     for clause in clauses:
         deforested = _deforest_clause(
-            clause, pattern, pred_cls, obj_index, known_functors,
+            clause, pattern, target, obj_index, known_functors,
             conj_memo, ancestors=[], depth=0, max_depth=max_depth,
         )
         result.extend(deforested)
@@ -1950,7 +1995,7 @@ def _deforest_pass(
 def _deforest_clause(
     clause: Clause,
     pattern: MIPattern,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     obj_index: dict[str, list],
     known_functors: set[str],
     conj_memo: ConjunctionMemoTable,
@@ -1960,7 +2005,7 @@ def _deforest_clause(
 ) -> list[Clause]:
     """Deforest a single clause.
 
-    Looks for body goals that are recursive calls to pred_cls with a
+    Looks for body goals that are recursive calls to target with a
     constructed goal-list.  For the first such goal found, unfolds the
     first element of the goal-list against all matching object clauses,
     producing one output clause per match.
@@ -1976,11 +2021,11 @@ def _deforest_clause(
             continue
         if not isinstance(goal.func, LoadName):
             continue
-        if goal.func.name != pred_cls.__name__:
+        if goal.func.name != target.name:
             continue
 
         # This is a recursive call to the specialized predicate.
-        goal_list_arg = _get_goal_list_arg(goal, pattern, pred_cls)
+        goal_list_arg = _get_goal_list_arg(goal, pattern, target)
         if goal_list_arg is None:
             continue
         if not isinstance(goal_list_arg, list) or not goal_list_arg:
@@ -2015,7 +2060,7 @@ def _deforest_clause(
         for obj_clause in matching:
             unfolded = _unfold_body_goal(
                 clause, i, goal, goal_list_arg, first_goal, obj_clause,
-                pattern, pred_cls, obj_index, known_functors,
+                pattern, target, obj_index, known_functors,
                 conj_memo, ancestors + [first_goal], depth + 1, max_depth,
             )
             if unfolded is not None:
@@ -2032,10 +2077,10 @@ def _deforest_clause(
 def _get_goal_list_arg(
     goal: Call,
     pattern: MIPattern,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
 ) -> Any:
     """Extract the goal-list argument from a recursive call."""
-    spec_fields = pred_cls._fields
+    spec_fields = target.fields
     orig_fields = pattern.fields
     goal_field_name = orig_fields[pattern.goal_arg]
 
@@ -2054,7 +2099,7 @@ def _unfold_body_goal(
     first_goal: list,
     obj_clause: list,
     pattern: MIPattern,
-    pred_cls: PredicateMeta,
+    target: "_SpecTarget",
     obj_index: dict[str, list],
     known_functors: set[str],
     conj_memo: ConjunctionMemoTable,
@@ -2084,14 +2129,10 @@ def _unfold_body_goal(
     if subst is None:
         return None
 
-    # Apply the substitution to the original clause head.
+    # Apply the substitution to the original clause head.  (A branch that
+    # rebuilt a term INSTANCE here went with row 35: a head is a cell since
+    # P2, and it was reached 128 times and taken 0 over the house suite.)
     new_clause_head = _subst(clause.head, subst)
-    # Reconstruct as a proper pred_cls instance if needed.
-    if is_term_instance(new_clause_head):
-        field_vals = {}
-        for fname in term_field_names(new_clause_head):
-            field_vals[fname] = getattr(new_clause_head, fname)
-        new_clause_head = pred_cls(**field_vals)
 
     # Compute the remaining goal list (after the first goal).
     remaining = goal_list_arg[1:]
@@ -2109,7 +2150,7 @@ def _unfold_body_goal(
             new_goal_list = remaining
 
     # Build new body: replace the recursive call at goal_idx.
-    goal_field_idx = _get_goal_field_idx(pattern, pred_cls)
+    goal_field_idx = _get_goal_field_idx(pattern, target)
 
     # A03-F009: splice the inlined step's extra-arg (count/limit) goals as a
     # SINGLE telescoping link per deforestation level. The per-step goals come
@@ -2135,7 +2176,7 @@ def _unfold_body_goal(
     )
 
     if needs_chain:
-        spec_fields = pred_cls._fields
+        spec_fields = target.fields
         orig_fields = pattern.fields
         orig_name_to_idx = {fn: i for i, fn in enumerate(orig_fields)}
         rec_call_pat = pattern.recursive_clause.body[
@@ -2206,16 +2247,16 @@ def _unfold_body_goal(
 
     # Recursively try to deforest further.
     return _deforest_clause(
-        new_clause, pattern, pred_cls, obj_index, known_functors,
+        new_clause, pattern, target, obj_index, known_functors,
         conj_memo, ancestors, depth, max_depth,
     )
 
 
-def _get_goal_field_idx(pattern: MIPattern, pred_cls: PredicateMeta) -> int | None:
+def _get_goal_field_idx(pattern: MIPattern, target: "_SpecTarget") -> int | None:
     """Get the index of the goal-list field in the specialized predicate."""
     orig_fields = pattern.fields
     goal_field_name = orig_fields[pattern.goal_arg]
-    for i, fname in enumerate(pred_cls._fields):
+    for i, fname in enumerate(target.fields):
         if fname == goal_field_name:
             return i
     return None
