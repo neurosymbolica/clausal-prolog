@@ -139,6 +139,10 @@ def analyze_mi(pred_cls: "PredRow | PredicateMeta",
             raise CannotSpecialize(
                 f"{name}/{arity}: no field names are registered for it, so "
                 f"its program argument cannot be identified")
+        if len(fields) != arity:
+            raise CannotSpecialize(
+                f"{name}/{arity}: its registered field names {tuple(fields)} "
+                f"do not match its arity")
     arity = len(fields)
 
     # ── Identify the program argument ──────────────────────────────────────

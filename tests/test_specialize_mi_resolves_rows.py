@@ -288,3 +288,12 @@ def test_an_aliased_mi_import_specializes(tmp_path, monkeypatch):
         assert answers == [2]
     finally:
         sys.modules.pop("spec_alias_mi", None)
+
+
+def test_a_signature_that_disagrees_with_the_row_s_arity_is_refused():
+    db = Database()
+    for n in (1, 2):
+        db.assertz(Clause(head=("bad_sig_mi", n, n), body=[]))
+    db._signatures[("bad_sig_mi", 2)] = ("A", "B", "C")
+    with pytest.raises(CannotSpecialize, match="do not match its arity"):
+        analyze_mi(db.row("bad_sig_mi", 2))
