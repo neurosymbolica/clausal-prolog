@@ -558,23 +558,35 @@ def qualify_mangled_goal(goal: Any, db: Any = None) -> Any:
     it, not a new "no such module" error.
     """
     from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
-    from clausal.logic.predicate import _owner_db_for_module_name  # noqa: PLC0415
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        _owner_db_for_module_name, handle_designator,
+    )
 
     # *db* (optional) is the CALLER's database, the ruling-Q0 hint: a handle
     # naming the caller's own module counts as loaded even when the runner
-    # popped it from ``sys.modules``.  A caller that passes it must then
-    # resolve the qualified goal with the same hint (``_dispatch_at`` does).
+    # popped it from ``sys.modules``.  The owner is found by the HANDLE-ONLY
+    # rule (``_owner_db_for_module_name``: caller's db, by identity,
+    # ``sys.modules``, then the handle-owner registry for a popped
+    # cross-module owner).  The designator is the dotted name whenever
+    # ``sys.modules`` resolves it to that same owner (unchanged pure data);
+    # otherwise it is the owner's Module OBJECT (``handle_designator``), so
+    # ``resolve_module`` -- the user-designator path, lookup-only in
+    # ``sys.modules`` -- is never asked to resolve a popped name.
     if type(goal) is str:
         if is_mangled(goal):
             module_name, name = demangle(goal)
-            if _owner_db_for_module_name(module_name, db) is not None:
-                return (QUALIFIED_GOAL_FUNCTOR, module_name, name)
+            owner = _owner_db_for_module_name(module_name, db)
+            if owner is not None:
+                return (QUALIFIED_GOAL_FUNCTOR,
+                        handle_designator(module_name, owner), name)
         return goal
     is_cell, functor = _cell_shape(goal) if isinstance(goal, tuple) else (False, None)
     if is_cell and type(functor) is str and is_mangled(functor):
         module_name, name = demangle(functor)
-        if _owner_db_for_module_name(module_name, db) is not None:
-            return (QUALIFIED_GOAL_FUNCTOR, module_name, (name, *goal[1:]))
+        owner = _owner_db_for_module_name(module_name, db)
+        if owner is not None:
+            return (QUALIFIED_GOAL_FUNCTOR,
+                    handle_designator(module_name, owner), (name, *goal[1:]))
     return goal
 
 

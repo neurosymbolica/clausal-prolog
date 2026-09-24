@@ -591,6 +591,12 @@ class Database:
         # local name was imported at.  Maintained by ``adopt_row``, the only
         # writer of ``_adopted``; read by ``adopted_arities``.
         self._adopted_arities: dict[str, frozenset[int]] = {}
+        # Ruling Q0 (2026-09-24): owner module NAME -> the distinct owner
+        # Databases ``adopt_row`` adopted a row from -- the caller's own
+        # record, BY IDENTITY, of which database a handle naming that module
+        # meant.  Read by ``adopted_owner_dbs``; ``adopt_row`` is the only
+        # writer.
+        self._adopted_owners: dict[str, list] = {}
         self.module_dict: dict | None = module_dict
 
     def _home_stores(self) -> tuple:
@@ -753,7 +759,21 @@ class Database:
         self._adopted[key] = row
         self._adopted_arities[local_functor] = (
             self._adopted_arities.get(local_functor, frozenset()) | {arity})
+        owner = row._db
+        if owner is not None:
+            owners = self._adopted_owners.setdefault(owner.module_name(), [])
+            if not any(o is owner for o in owners):
+                owners.append(owner)
         return True
+
+    def adopted_owner_dbs(self, module_name: str) -> list:
+        """The distinct databases this database adopted a row FROM whose
+        module is *module_name* -- by identity, so a handle naming that
+        module resolves to the database this module actually imported even
+        when another module has since been loaded under the same name
+        (ruling Q0, ``predicate._owner_db_for_module_name`` step 2).  Empty
+        when nothing was imported from a module of that name."""
+        return list(self._adopted_owners.get(module_name, ()))
 
     def adopted_arities(self, functor: str) -> frozenset:
         """The arities ``-import_from`` adopted a row for under the local name

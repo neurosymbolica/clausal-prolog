@@ -1517,16 +1517,21 @@ def _resolve_other_arity_of_class(cls: "PredicateMeta", arity: int) -> Callable 
     return row._db.get_dispatch(functor, arity)
 
 
-def _binding_owner_db(binding: Any):
+def _binding_owner_db(binding: Any, db: Any = None):
     """The Database that OWNS a predicate *binding* (class or handle), or
-    ``None`` -- a class's row db, a handle's module db."""
+    ``None`` -- a class's row db, a handle's module db.  *db* is the caller's
+    (ruling Q0): it resolves a handle to a popped owner, locally or by
+    identity through the caller's imports.  A question, not a dispatch, so
+    an ambiguous owner answers ``None`` (``_owner_db_or_none``)."""
     if isinstance(binding, PredicateMeta):
         row = binding._row
         return row._db if row is not None else None
     if type(binding) is str:
         from clausal.logic.atoms import is_mangled, demangle  # noqa: PLC0415
         if is_mangled(binding):
-            return _db_for_module_name(demangle(binding)[0])
+            # A handle: resolved as a handle (registry included), never as
+            # a user-written module name.
+            return _owner_db_or_none(demangle(binding)[0], db)
     return None
 
 
@@ -1554,7 +1559,7 @@ def binding_grants_arity(binding: Any, arity: int, db: Any, name: str) -> bool:
     """
     if not is_declared_predicate(binding, arity=arity, db=db):
         return False
-    owner = _binding_owner_db(binding)
+    owner = _binding_owner_db(binding, db)
     if owner is None or db is None or owner is db:
         return True
     adopted = db.adopted_arities(name)      # O(1) per-name index
@@ -1614,17 +1619,19 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
         raise err
     defined = None
     site = None
-    from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
-    _q = qualify_mangled_goal(binding) if type(binding) is str else binding
-    if _q is not binding:
-        owner = _db_for_module_name(_q[1])
+    # A diagnostic: the handle's owner (with the caller's db as the Q0
+    # hint) only sharpens the message, so an ambiguous owner is "unknown".
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    if type(binding) is str and is_mangled(binding):
+        _mod_name, _bare = demangle(binding)
+        owner = _owner_db_or_none(_mod_name, db)
         if owner is not None:
-            others = sorted(a for a in owner.arities_for(_q[2]) if a != arity)
+            others = sorted(a for a in owner.arities_for(_bare) if a != arity)
             defined = others[0] if len(others) == 1 else None
             # The class arm's "defined at" line, from the ROW (W4b-2d R6):
             # only under the owner's own name, as there.
-            if name == _q[2]:
-                site = _row_declared_at(owner, _q[2], defined)
+            if name == _bare:
+                site = _row_declared_at(owner, _bare, defined)
     raise predicate_arity_mismatch(name, arity, defined, site=site)
 
 
@@ -1650,7 +1657,9 @@ class _UnqualifiedName:
 
     def dispatch_at(self, arity: int) -> Callable:
         if binding_grants_arity(self.binding, arity, self.db, self.name):
-            return _dispatch_at(self.binding, arity)
+            # Q0 (round-3 review): the calling db is the hint here too --
+            # the same one ``binding_grants_arity`` was just given.
+            return _dispatch_at(self.binding, arity, db=self.db)
         fn = self.db.get_dispatch(self.name, arity)
         if fn is not None:
             return fn
@@ -1710,9 +1719,9 @@ def _import_index(db: Any, md: dict, force: bool = False):
         if not (isinstance(v, PredicateMeta)
                 or (type(v) is str and _is_mangled_fast(v))):
             continue
-        if not is_declared_predicate_name(v):
+        if not is_declared_predicate_name(v, db=db):
             continue
-        owner = _binding_owner_db(v)
+        owner = _binding_owner_db(v, db)
         if owner is None or owner is db:
             continue
         by_binding.setdefault(_binding_key(v), []).append((k, v))
@@ -1939,16 +1948,18 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             # which is where an ``-import_from``'d predicate is reachable --
             # it lives on the EXPORTER's row, and following the binding is
             # what ``call/N`` does too, so the two paths agree.
-            from clausal.logic.solve import resolve_module  # noqa: PLC0415
-            _mod_name, _name = _q[1], _q[2]
-            _hint = _hint_db(db)
-            if _hint is not None and _mod_name == _hint.module_name():
-                # Q0: the caller's own module, answered from the caller's db
-                # -- resolve_module would look in sys.modules and miss it.
-                _hdb, _hmd = _hint, _hint.module_dict
-            else:
-                _module = resolve_module(_mod_name, None, "call/N")
-                _hdb, _hmd = _module.db, _module.module_dict
+            #
+            # Ruling Q0 (final): the OWNER is found by the handle-only rule
+            # (``_owner_db_for_module_name``: the caller's db, then by
+            # identity, then ``sys.modules``, then the handle-owner
+            # registry) -- never by ``resolve_module``, which answers a name
+            # a user WROTE and so must miss an owner the ``.clausal`` runner
+            # popped from ``sys.modules``.
+            from clausal.logic.atoms import demangle  # noqa: PLC0415
+            _mod_name, _name = demangle(obj)
+            _hdb = _owner_db_for_module_name(_mod_name, db)
+            _hmd = _hdb.module_dict if isinstance(
+                getattr(_hdb, "module_dict", None), dict) else None
             # F7 (ruled 2026-09-24): the arity check runs BEFORE
             # ``Database.get_dispatch``'s builtin-registry fallback.
             # ``get_dispatch`` falls back to a same-named builtin keyed
@@ -2179,16 +2190,209 @@ def _hint_db(db):
     return db
 
 
-def _owner_db_for_module_name(module_name: str, db=None):
-    """The Database that owns *module_name*'s predicates: the caller's own
-    *db* when it IS that module (ruling Q0 -- the ``.clausal`` runner pops
-    loaded modules from ``sys.modules``), else the loaded module's, else
-    ``None``.  One home for the local-first rule, shared by the resolvers,
+def _owner_db_for_module_name(module_name: str, db=None, *,
+                              question: bool = False):
+    """The Database that owns the predicates a HANDLE whose module half is
+    *module_name* names, or ``None``.  HANDLE RESOLUTION ONLY -- never call
+    this for a module name a user WROTE (``M:G``, an import): those go
+    through ``solve.resolve_module``, which is lookup-only in
+    ``sys.modules`` and must stay so (``test_resolution_never_imports``).
+
+    Ruling Q0 (operator, final, 2026-09-24), in order:
+
+    1. the caller's own *db* when it IS that module -- the ``.clausal``
+       runner pops loaded modules from ``sys.modules``;
+    2. BY IDENTITY, the owner database the caller ADOPTED a row from under
+       that module name at ``-import_from`` (``Database.adopted_owner_dbs``)
+       -- the one database this caller actually imported, even when the name
+       has since been reused;
+    3. the module ``sys.modules`` holds under that name (today's rule);
+    4. only then the handle-owner REGISTRY (``_registered_handle_owner``):
+       the cross-module remainder, an owner popped from ``sys.modules``.
+
+    Raises ``AmbiguousHandleOwnerError`` when step 2 or step 4 finds more
+    than one live database under the name -- a handle's spelling cannot say
+    which one it meant, and answering with either would be silently wrong.
+    Only a DISPATCH calls this directly; a question (resolver, predicate
+    test, diagnostic) calls ``_owner_db_or_none``, where ambiguity is
+    "unknown" (*question* -- see ``_registered_handle_owner``).
+
+    One home for the rule, shared by the resolvers,
     ``cells.qualify_mangled_goal`` and ``_dispatch_at``'s handle arm."""
     hint = _hint_db(db)
-    if hint is not None and module_name == hint.module_name():
-        return hint
-    return _db_for_module_name(module_name)
+    if hint is not None:
+        if module_name == hint.module_name():
+            return hint
+        adopted_owner_dbs = getattr(hint, "adopted_owner_dbs", None)
+        adopted = adopted_owner_dbs(module_name) if adopted_owner_dbs else ()
+        if len(adopted) == 1:
+            return adopted[0]
+        if len(adopted) > 1:
+            raise AmbiguousHandleOwnerError(module_name, len(adopted),
+                                            "imported by the calling module")
+    found = _db_for_module_name(module_name)
+    if found is not None:
+        return found
+    return _registered_handle_owner(module_name, question=question)
+
+
+def _owner_db_or_none(module_name: str, db=None):
+    """``_owner_db_for_module_name`` for a QUESTION (a predicate test, a
+    resolver, a diagnostic): an ambiguous owner is "unknown" -- ``None`` --
+    instead of a raise.  Policy: only an actual DISPATCH of a handle
+    (``cells.qualify_mangled_goal``, ``_dispatch_at``'s handle arm) raises
+    ``AmbiguousHandleOwnerError``; a question about a handle never does."""
+    try:
+        return _owner_db_for_module_name(module_name, db, question=True)
+    except AmbiguousHandleOwnerError:
+        return None
+
+
+class AmbiguousHandleOwnerError(LookupError):
+    """A predicate handle's module half names more than one LIVE database
+    and nothing about the call site says which (ruling Q0, the name-reuse
+    case: measured 24 of 579 ``load_clausal_module`` calls reused a module
+    name while an earlier module under it was still alive).  Raised rather
+    than answering with either one: a handle resolved into the wrong
+    module's database runs the wrong clauses and says nothing."""
+
+    def __init__(self, module_name: str, count: int, where: str):
+        self.module_name = module_name
+        self.count = count
+        super().__init__(
+            f"predicate handle names module {module_name!r}, which {count} "
+            f"live databases answer to ({where}); a handle cannot say which "
+            f"one it means, so it is refused rather than resolved into "
+            f"either")
+
+
+# The handle-owner REGISTRY (ruling Q0, the cross-module remainder):
+# module name -> weak references to the Databases LOADED under that name.
+# Consulted by ``_owner_db_for_module_name`` ONLY, after the caller's db and
+# ``sys.modules`` -- never by ``solve.resolve_module`` (a user-written
+# ``M:G``) or by import-by-name, so a popped module never becomes reachable
+# by a name a user writes.  Filled by ``compile_module`` at the end of every
+# load (``register_handle_owner``).  Weak: a dropped module leaves no entry
+# (the reference callback prunes it, and an emptied name is deleted).
+_HANDLE_OWNERS: "dict[str, list]" = {}
+
+# module name -> the registry weakrefs (the ref OBJECTS, compared by
+# identity) that were ALL still live right after ``_registered_handle_owner``
+# ran the collector for that name.  A QUESTION about the same set skips the
+# collection: a program that keeps asking about a truly ambiguous name pays
+# one collection, not one per lookup.  A DISPATCH never consults it -- it
+# is about to raise, the exceptional case, so it always collects first and
+# its answer never depends on when the collector last ran.  Holding the
+# ref objects (never the databases) keeps their identities from being
+# reused; any change to the name's registrations -- a new load, or a reap,
+# which also drops this entry -- gives a different set, and the next
+# question collects again.  At most one entry per registered name.
+_AMBIGUOUS_AFTER_COLLECT: "dict[str, tuple]" = {}
+
+
+def _reap_handle_owner(module_name: str, ref) -> None:
+    _AMBIGUOUS_AFTER_COLLECT.pop(module_name, None)
+    refs = _HANDLE_OWNERS.get(module_name)
+    if refs is None:
+        return
+    try:
+        refs.remove(ref)
+    except ValueError:
+        pass
+    if not refs:
+        _HANDLE_OWNERS.pop(module_name, None)
+
+
+def register_handle_owner(db) -> None:
+    """Record *db* as a live owner for handles naming its module.  A db that
+    names no module (``_hint_db`` refuses it, or ``<anonymous>``/
+    ``<detached>``) owns no handle and is not recorded.  Idempotent."""
+    import weakref  # noqa: PLC0415
+    if _hint_db(db) is None:
+        return
+    module_name = db.module_name()
+    if module_name in ("<anonymous>", "<detached>"):
+        return
+    refs = _HANDLE_OWNERS.setdefault(module_name, [])
+    if any(r() is db for r in refs):
+        return
+    refs.append(weakref.ref(
+        db, lambda ref, _n=module_name: _reap_handle_owner(_n, ref)))
+
+
+def _live_handle_owners(module_name: str) -> list:
+    # A SNAPSHOT: a collection during the walk runs ``_reap_handle_owner``,
+    # which removes from the live list -- iterating it directly could skip a
+    # live entry and report a truly ambiguous name as having one owner.
+    return [d for d in (r() for r in tuple(_HANDLE_OWNERS.get(module_name, ())))
+            if d is not None]
+
+
+def _same_refs(remembered, refs) -> bool:
+    return (remembered is not None and refs is not None
+            and len(remembered) == len(refs)
+            and all(a is b for a, b in zip(remembered, refs)))
+
+
+def _registered_handle_owner(module_name: str, *, question: bool = False):
+    """The ONE live database registered under *module_name*, ``None`` when
+    there is none, ``AmbiguousHandleOwnerError`` when more than one is live.
+
+    A module dropped by the runner is often still reachable only through a
+    reference CYCLE (module dict -> ``$module`` -> db -> module dict), so a
+    weak reference to it outlives the module until the cycle collector runs.
+    Before calling a name ambiguous the collector is run once: only an owner
+    something still REALLY holds counts.  Off the hot path -- reached only
+    for a handle whose owner is neither the caller nor in ``sys.modules``,
+    and the collection only when two candidates are left.  A *question*
+    (answered ``None`` on ambiguity) collects at most once per candidate set
+    (``_AMBIGUOUS_AFTER_COLLECT``), so an owner dropped into a cycle after
+    its set was found ambiguous is seen by questions at the next natural
+    collection (or dispatch); a DISPATCH collects every time before it
+    raises, so it resolves to a survivor regardless of collector timing."""
+    live = _live_handle_owners(module_name)
+    if len(live) > 1 and not (question and _same_refs(
+            _AMBIGUOUS_AFTER_COLLECT.get(module_name),
+            _HANDLE_OWNERS.get(module_name))):
+        import gc  # noqa: PLC0415
+        del live
+        gc.collect()
+        live = _live_handle_owners(module_name)
+        if len(live) > 1:
+            _AMBIGUOUS_AFTER_COLLECT[module_name] = tuple(
+                _HANDLE_OWNERS.get(module_name, ()))
+    if not live:
+        return None
+    if len(live) == 1:
+        return live[0]
+    raise AmbiguousHandleOwnerError(
+        module_name, len(live),
+        "loaded under that name, none of them in sys.modules")
+
+
+def handle_designator(module_name: str, owner):
+    """The module designator a qualified goal built from a handle carries:
+    the dotted NAME when ``sys.modules`` resolves it to *owner* (the pure-
+    data spelling ``resolve_module`` looks up), else the owner's Module
+    OBJECT -- so a handle whose owner was found by the caller's db, by
+    identity or by the registry reaches ``resolve_module``'s object arm and
+    never asks it to resolve a popped name (which it must not)."""
+    if _db_for_module_name(module_name) is owner:
+        return module_name
+    md = owner.module_dict
+    logic_module = md.get("$module") if isinstance(md, dict) else None
+    if logic_module is not None and getattr(logic_module, "db", None) is owner:
+        return logic_module
+    # No real ``$module`` for this db: synthesise ONE Module per owner and
+    # keep it on the db, so the designator is stable -- the query cache keys
+    # on ``id(module)``, and a fresh wrapper per call would miss every time
+    # and could reuse a freed wrapper's id for a different db.
+    cached = owner.__dict__.get("_handle_module")
+    if cached is None or cached.db is not owner:
+        from clausal.logic.database import Module  # noqa: PLC0415
+        cached = Module(module_name, db=owner, module_dict=md)
+        owner.__dict__["_handle_module"] = cached
+    return cached
 
 
 def _resolve_mangled_owner(binding, db=None):
@@ -2201,8 +2405,9 @@ def _resolve_mangled_owner(binding, db=None):
     ``sys.modules`` -- which the ``.clausal`` test runner empties of every
     module it loads (measured: the owner was absent from ``sys.modules`` in
     43 of 46 descents, all of them local).  A handle naming another module
-    still resolves through ``sys.modules``; a registry for a popped
-    cross-module owner is deferred until a case needs it.
+    resolves by identity through the caller's imports, then
+    ``sys.modules``, then the handle-owner registry (the popped
+    cross-module remainder) -- see ``_owner_db_for_module_name``.
 
     The hint is ADDITIVE and, when this landed, passed by no production
     caller: before the flip no predicate binding is a handle, so nothing
@@ -2228,7 +2433,11 @@ def _resolve_mangled_owner(binding, db=None):
     module_name, functor = demangle(binding)
     # Local first (``_owner_db_for_module_name``); a hint that is not a real
     # module database (``_hint_db``) is no hint.
-    owner = _owner_db_for_module_name(module_name, db)
+    # The resolvers built on this answer QUESTIONS (is it declared, which
+    # row, which arities) -- an ambiguous owner is "unknown" there, never a
+    # raise; only an actual dispatch raises (``qualify_mangled_goal``,
+    # ``_dispatch_at``).
+    owner = _owner_db_or_none(module_name, db)
     if owner is None:
         return None
     return owner, functor
@@ -2692,7 +2901,7 @@ def predicate_arities_for(binding, *, cache: "dict | None" = None,
         owner = predicate_owner_module(binding)
         # The caller's db first (Q0), exactly as the mangled arm does, so the
         # two eras agree under the same hint when the owner was popped.
-        owner_db = _owner_db_for_module_name(owner, db) if owner else None
+        owner_db = _owner_db_or_none(owner, db) if owner else None
         if owner_db is not None:
             defined, _declared = _arity_maps(owner_db, cache)
             found |= defined.get(binding.__name__, set())
@@ -2795,7 +3004,11 @@ def _field_names_for_name(name, arity, db, namespace):
         # never the caller's -- a name declared in both answers for the
         # wrong one -- and never fall through past this branch either.
         module_name, bare_name = demangle(name)
-        owner_db = _db_for_module_name(module_name)
+        # Ruling Q0: honour the caller's *db* (a handle naming the caller's
+        # own, possibly popped, module resolves there), then the handle-only
+        # owner rule -- the caller's db is the HINT here, never a fallback
+        # for a handle naming another module.
+        owner_db = _owner_db_or_none(module_name, db)
         if owner_db is None:
             return None
         # A handle replaces the class, so it answers what the class's
