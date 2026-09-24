@@ -1693,9 +1693,24 @@ def _db_for_module_name(module_name: str):
     return getattr(mod.__dict__.get("$module"), "db", None)
 
 
-def _resolve_mangled_owner(binding):
+def _resolve_mangled_owner(binding, db=None):
     """``(db, functor)`` for a mangled *binding* whose owner module is a
     LOADED Clausal module, or ``None``.
+
+    *db*, when given, is the CALLER's own database, and it is asked first
+    (ruling Q0, 2026-09-24): if the handle's module half is ``db``'s own
+    module name the handle is local and resolves there, without touching
+    ``sys.modules`` -- which the ``.clausal`` test runner empties of every
+    module it loads (measured: the owner was absent from ``sys.modules`` in
+    43 of 46 descents, all of them local).  A handle naming another module
+    still resolves through ``sys.modules``; a registry for a popped
+    cross-module owner is deferred until a case needs it.
+
+    The hint is ADDITIVE and, when this landed, passed by no production
+    caller: before the flip no predicate binding is a handle, so nothing
+    needs it yet.  Each consumer passes its db as it migrates (F1 rows
+    58/59/60, then the flip) -- tracked in
+    ``todo/q0-db-hint-must-be-wired-at-each-consumer-2026-09-24.md``.
 
     Shared plumbing for ``resolve_predicate_row``/``is_declared_predicate``'s
     mangled-atom arm: demangle, then require a real ``Database`` at the
@@ -1713,13 +1728,40 @@ def _resolve_mangled_owner(binding):
     """
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     module_name, functor = demangle(binding)
-    db = _db_for_module_name(module_name)
-    if db is None:
+    if (db is not None and isinstance(db.module_dict, dict)
+            and module_name == db.module_name()):
+        # Only a database backed by a real module dict: ``Database("x")``
+        # answers its raw string as its name and must not capture handles
+        # meant for a loaded module called "x".
+        return db, functor
+    owner = _db_for_module_name(module_name)
+    if owner is None:
         return None
-    return db, functor
+    return owner, functor
 
 
-def resolve_predicate_row(binding, *, arity: int) -> "PredRow | None":
+def mint_predicate_handle(db, functor: str) -> str:
+    """The module-qualified handle for *functor* as a predicate of *db*
+    (ruling X3, 2026-09-24): ``mangle(db.module_name(), functor)``.
+
+    Minted from the DATABASE, never from a class's ``__module__``: a
+    ``make_predicate`` class carries the MINTER's module
+    (``clausal.logic.predicate`` for 14 of 15 measured ``-specialize``
+    targets), and a handle naming a module with no Database resolves to
+    nothing, silently.  A database with no module name cannot own a handle,
+    so it is refused rather than minted into one nothing will resolve.
+    """
+    from clausal.logic.atoms import mangle  # noqa: PLC0415
+    module_name = db.module_name()
+    if module_name in ("<anonymous>", "<detached>"):
+        raise ValueError(
+            f"cannot mint a predicate handle for {functor!r}: its database "
+            f"belongs to no module ({module_name})")
+    return mangle(module_name, functor)
+
+
+def resolve_predicate_row(binding, *, arity: int,
+                          db=None) -> "PredRow | None":
     """F1: the live ``PredRow`` for a module-dict *binding*, era-agnostic.
 
     Answers correctly whether *binding* is still a ``PredicateMeta`` CLASS
@@ -1762,7 +1804,7 @@ def resolve_predicate_row(binding, *, arity: int) -> "PredRow | None":
         return binding._row
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
-        resolved = _resolve_mangled_owner(binding)
+        resolved = _resolve_mangled_owner(binding, db)
         if resolved is None:
             return None
         db, functor = resolved
@@ -1770,7 +1812,7 @@ def resolve_predicate_row(binding, *, arity: int) -> "PredRow | None":
     return None
 
 
-def is_declared_predicate(binding, *, arity: int) -> bool:
+def is_declared_predicate(binding, *, arity: int, db=None) -> bool:
     """F2: True iff *binding* denotes a declared PREDICATE (never data), at
     exactly *arity*, era-agnostic.
 
@@ -1818,7 +1860,7 @@ def is_declared_predicate(binding, *, arity: int) -> bool:
         return len(getattr(binding, "_fields", ())) == arity
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
-        resolved = _resolve_mangled_owner(binding)
+        resolved = _resolve_mangled_owner(binding, db)
         if resolved is None:
             return False
         db, functor = resolved
@@ -1826,7 +1868,7 @@ def is_declared_predicate(binding, *, arity: int) -> bool:
     return False
 
 
-def predicate_binding_name(binding) -> "str | None":
+def predicate_binding_name(binding, *, db=None) -> "str | None":
     """F1 rows 27/29: the predicate's OWN name for a module-dict *binding*,
     era-agnostic -- or ``None`` when *binding* is not a declared predicate.
 
@@ -1840,7 +1882,7 @@ def predicate_binding_name(binding) -> "str | None":
     plain string and a mangled atom naming an unloaded module all answer
     ``None`` rather than a name.
     """
-    if not is_declared_predicate_name(binding):
+    if not is_declared_predicate_name(binding, db=db):
         return None
     if isinstance(binding, PredicateMeta):
         return binding.__name__
@@ -1848,7 +1890,7 @@ def predicate_binding_name(binding) -> "str | None":
     return demangle(binding)[1]
 
 
-def is_declared_predicate_name(binding) -> bool:
+def is_declared_predicate_name(binding, *, db=None) -> bool:
     """F2b: True iff *binding* denotes a declared PREDICATE, AT ANY ARITY,
     era-agnostic.
 
@@ -1906,7 +1948,7 @@ def is_declared_predicate_name(binding) -> bool:
         return True
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
-        resolved = _resolve_mangled_owner(binding)
+        resolved = _resolve_mangled_owner(binding, db)
         if resolved is None:
             return False
         db, functor = resolved
@@ -1933,7 +1975,8 @@ def predicate_owner_module(binding) -> "str | None":
     return None
 
 
-def predicate_arities_for(binding, *, cache: "dict | None" = None) -> "set[int]":
+def predicate_arities_for(binding, *, cache: "dict | None" = None,
+                          db=None) -> "set[int]":
     """F4 (ruling 3): the SET of arities *binding* is a DEFINED predicate
     at, era-agnostic; the EMPTY set means "not a predicate" -- the role
     ``None`` played for the single-arity reader this replaces
@@ -1974,14 +2017,20 @@ def predicate_arities_for(binding, *, cache: "dict | None" = None) -> "set[int]"
         if fields is not None:
             found.add(len(fields))
         owner = predicate_owner_module(binding)
-        db = _db_for_module_name(owner) if owner else None
-        if db is not None:
-            defined, _declared = _arity_maps(db, cache)
+        # The caller's db first (Q0), exactly as the mangled arm does, so the
+        # two eras agree under the same hint when the owner was popped.
+        if (db is not None and isinstance(db.module_dict, dict)
+                and owner == db.module_name()):
+            owner_db = db
+        else:
+            owner_db = _db_for_module_name(owner) if owner else None
+        if owner_db is not None:
+            defined, _declared = _arity_maps(owner_db, cache)
             found |= defined.get(binding.__name__, set())
         return found
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
-        resolved = _resolve_mangled_owner(binding)
+        resolved = _resolve_mangled_owner(binding, db)
         if resolved is None:
             return set()
         db, functor = resolved
@@ -2383,4 +2432,5 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "make_predicate", "make_atom",
            "resolve_predicate_row", "is_declared_predicate",
            "is_declared_predicate_name", "predicate_arities_for",
+           "mint_predicate_handle",
            "predicate_owner_module"]
