@@ -211,10 +211,11 @@ def _defined_names(mod):
     from clausal.logic.atoms import demangle
     from clausal.logic.predicate import (
         PredicateMeta, field_names_for, is_declared_predicate_name,
+        namespace_db,
     )
 
     entries = []
-    mod_db = getattr(vars(mod).get("$module"), "db", None)
+    mod_db = namespace_db(vars(mod))
     for name, value in vars(mod).items():
         if not isinstance(name, str) or name.startswith("_") or "$" in name:
             continue

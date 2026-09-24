@@ -77,8 +77,8 @@ scope.
 | builtins/io `_listing__1` class arm | `db` | no-op (inside `isinstance(val, PredicateMeta)`) |
 | builtins/io `_is_predicate_handle`, database_ops `_find_pred_cls`/`_canonical_functor`/`_binding_row` | already wired | — |
 | globals_env `_is_call_target` (new kw, 3 callers), `_atom_shadows_row`, `_maybe_cache_dispatch`, dotted-name fallback | `_inject_resolved_targets`' `db` | yes (M4/M6) |
-| arg_index `hint_row` | `db` if it is a real Database (not the `_GlobalsDb` shim, which has no `module_dict`) | yes (M5) |
-| control_constructs `_lower_catcher` | `ctx.db` (the same shim guard) | no |
+| arg_index `hint_row` | `db` (the `_GlobalsDb` shim is tolerated by `predicate._hint_db`: no `module_dict` = no hint) | yes (M5; L1 for the tolerance) |
+| control_constructs `_lower_catcher` | `ctx.db` | no |
 | terms_to_ast `cell_signature_for_name`, OWA gate (~1118) | the lookup namespace's `$module` db | yes (M7) |
 | terms_to_ast `term_to_ast_expr` self-atom arm | already wired (`_lowering_db()`) | — |
 | head_match OWA gate (~758) | `globals_`' `$module` db | no |
@@ -89,17 +89,15 @@ scope.
 
 ### Left without a hint (reason)
 
-- **No Database reaches these runtime builtins:** higher_order `_is_goal`,
-  _registry `_ensure_trampoline_dispatch`, inspection `functor/3` and `=../2`,
-  type_checks `callable/1`. Post-flip each one needs to receive a db, or a
-  db-receiving registration.
-- **Downstream of wired gates, not one of the five resolvers:**
-  `predicate._dispatch_at` → `cells.qualify_mangled_goal` resolves a handle
-  only through `sys.modules`. solve.call, time_goal/1, phrase/2,3 and
-  `_solve_goal_dispatch` now pass a local handle of a popped module to
-  `_dispatch_at`, which then cannot resolve it. That dispatch funnel needs the
-  same hint before the flip. `_ensure_trampoline_dispatch` repeats the ungated
-  check itself.
+- **No Database reaches these runtime builtins:** higher_order `_is_goal`
+  and the 18 list/higher-order builtins that call
+  `_ensure_trampoline_dispatch` without a db (maplist, foldl, ...),
+  inspection `functor/3` and `=../2`, type_checks `callable/1`. Post-flip
+  each one needs to receive a db, or a db-receiving registration.
+  `_ensure_trampoline_dispatch` itself now takes `db=` (time_goal passes it).
+- `predicate._import_index` (`is_declared_predicate_name(v)`): an IMPORT
+  index; a local handle is dropped right after (`owner is db`), so no hint
+  is needed.
 - **A handle cannot reach these sites:** a `str` arm comes first, or the body
   reads `__name__`. That covers terms_to_ast `_is_opaque_head_literal` and
   `_dictterm_key` (~1284), head_match head-literal (~870), seam `build`
@@ -116,3 +114,31 @@ scope.
   `field_names_for(value)` without its `db=`. The `cell_signature_for_name`
   predicate arm reads `term_field_names_of_class(binding)`, which answers None
   for a handle.
+
+### Round 2 (roborev on the branch, 2026-09-24)
+
+- **The dispatch funnel, done.** `_dispatch_at(obj, arity, db=None)` and
+  `cells.qualify_mangled_goal(goal, db=None)` take the hint.
+  `_dispatch_at`'s handle arm resolves a handle naming the caller's own
+  module in the caller's db instead of `resolve_module` (sys.modules).
+  Threaded from solve.call Phase 5 (`module.db`), phrase/2,3,
+  time_goal/1 (via `_ensure_trampoline_dispatch(..., db)`) and
+  `_solve_goal_dispatch`. There is one home for the local-first rule:
+  `predicate._owner_db_for_module_name`. Tests run call/phrase/time_goal
+  END TO END on a popped module's handle. Mutation R1-R9 (dropping the hint
+  at each call, gate and funnel) fails them.
+- `predicate._hint_db`: a db without a real `module_dict` dict is no hint,
+  so callers pass the `_GlobalsDb` shim unguarded (L1).
+- `predicate.namespace_db(ns)`: the one reader of `ns["$module"].db`. The
+  six hint sites, `_lowering_db` and `_db_for_module_name` all use it, and its
+  docstring records the placeholder trap. **The flip fix belongs there.**
+- Load channel at compile_module's real point:
+  `test_load_channel_hint_at_compile_module_s_own_point` spies step 3c. The
+  predicate is export-declared with no row yet. The no-hint route and the
+  placeholder db both miss the handle; compile_module's local db resolves
+  it. The other load-channel tests run after the load, against the finished
+  db, and test the helper's wiring, not the load-time state.
+- These mutations give the same answer with or without the hint, as
+  expected: solve.call's other-arity gate (M8; the dispatch gate after it is
+  hinted and reaches the same resolution), `_belongs_elsewhere` (M14) and
+  `_imported_binding_by_canonical_name` (M13).

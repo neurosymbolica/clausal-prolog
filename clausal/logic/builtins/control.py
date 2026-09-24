@@ -73,7 +73,8 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
             or is_declared_predicate_name(goal_val, db=db):
         # Operator ruling 2026-09-24: an imported predicate reached through
         # an unqualified name resolves under that name in the calling module.
-        return _ensure_trampoline_dispatch(localize_goal(db, goal_val), 0), ()
+        return _ensure_trampoline_dispatch(
+            localize_goal(db, goal_val), 0, db), ()
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS and functor != QUALIFIED_GOAL_FUNCTOR:
         from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415

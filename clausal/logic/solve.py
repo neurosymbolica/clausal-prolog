@@ -1165,7 +1165,7 @@ def call(
             # same fault as writing it in a clause body, and gets the same
             # message rather than a TypeError about a missing `trail`.  Via
             # _dispatch_at, because pred_cls need not be a PredicateMeta.
-            dispatch_fn = _dispatch_at(pred_cls, arity)
+            dispatch_fn = _dispatch_at(pred_cls, arity, module.db)
 
     # Name + ARITY ruling, review round: the calling module's OWN predicate
     # at the call arity wins over a same-named builtin (``get_dispatch`` asks

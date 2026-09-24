@@ -70,6 +70,51 @@ def test_load_channel_meta_interpreter_binding_resolves_locally(tmp_path):
                                  refuse_ambiguous=True) is row
 
 
+def test_load_channel_hint_at_compile_module_s_own_point(tmp_path,
+                                                        monkeypatch):
+    """LOW 3: the tests above run the load-channel helpers AFTER the load,
+    against the finished db.  This one runs ``_import_from_origins`` where
+    ``compile_module`` really calls it -- step 3c, BEFORE step 4 writes a
+    clause -- with the local ``db`` compile_module threads.  There the
+    predicate is known only as a DECLARATION (the ``-module`` export), there
+    is no row yet, and ``$module`` is still the placeholder: the no-hint
+    route (``sys.modules`` -> placeholder) and the placeholder db both miss
+    the handle; only compile_module's own db resolves it.  Covers the
+    export-declared case; a predicate with neither export nor directive is
+    unknown to the db at step 3c in any era."""
+    import clausal.logic.compiler_v2 as cv
+    from clausal.logic.compiler_v2 import ImportFromItem
+    name = "q0c_real"
+    path = tmp_path / f"{name}.clausal"
+    path.write_text(f"-module({name}, [{name}_p/1])\n{name}_p(1),\n")
+    orig = cv._import_from_origins
+    seen = {}
+
+    def spy(items, md, db=None):
+        handle = mint_predicate_handle(db, f"{name}_p")
+        seen["placeholder"] = md["$module"].db is not db
+        seen["row"] = db.row(f"{name}_p", 1)
+        seen["no_hint"] = is_declared_predicate_name(handle)
+        seen["placeholder_hint"] = is_declared_predicate_name(
+            handle, db=md["$module"].db)
+        md[f"{name}_alias"] = handle
+        extra = ImportFromItem(module="elsewhere", names=[f"{name}_alias"])
+        seen["origins"] = orig([*items, extra], md, db=db)
+        del md[f"{name}_alias"]
+        return orig(items, md, db=db)
+    monkeypatch.setattr(cv, "_import_from_origins", spy)
+    sys.modules.pop(name, None)
+    try:
+        _load_module(name, str(path))
+    finally:
+        sys.modules.pop(name, None)
+    assert seen["placeholder"] and seen["row"] is None
+    assert not seen["no_hint"] and not seen["placeholder_hint"]
+    handle = seen["origins"][f"{name}_alias"][1]
+    assert handle is not None
+    assert seen["origins"][f"{name}_p"] == ("elsewhere", handle)
+
+
 # ── mutation gate (Database._write_rows, through=) ───────────────────────────
 
 
@@ -135,56 +180,72 @@ def test_compile_time_cell_signature_lets_a_predicate_binding_win(tmp_path):
 
 
 # ── runtime call funnels (solve.call, time_goal, phrase) ─────────────────────
+#
+# End to end: the gate accepts the popped module's local handle AND
+# ``_dispatch_at``'s handle arm resolves it in the caller's db (Q0) -- before
+# the hint reached ``_dispatch_at``/``qualify_mangled_goal`` the gate let the
+# handle through and the call then failed, since ``resolve_module`` looks
+# only in ``sys.modules``.
+
+_RT_SRC = """\
+-module({name}, [])
+{name}_p(1, 10),
+{name}_p(2, 20),
+greeting >> (["hi"])
+go <- (1 > 0)
+"""
 
 
-def test_runtime_call_phase5_routes_a_local_handle(tmp_path, monkeypatch):
-    import clausal.logic.solve as solve_mod
-    module, db, handle = _load_popped(tmp_path, "q0c_call", "q0c_call_p(1),\n")
-    seen = []
-
-    def _spy(obj, arity):
-        seen.append((obj, arity))
-        return db.get_dispatch("q0c_call_p", 1)
-    monkeypatch.setattr(solve_mod, "_dispatch_at", _spy)
-    module.__dict__["q0c_call_alias"] = handle
-    # Drive only Phase 5's gate: it must hand the handle to _dispatch_at.
-    try:
-        next(solve_mod.call("q0c_call_alias", 1,
-                            module=module.__dict__["$module"]), None)
-    except Exception:  # noqa: BLE001 — only the routing is under test
-        pass
-    assert (handle, 1) in seen
+def _popped_runtime(tmp_path, name):
+    module, db, handle = _load_popped(tmp_path, name, _RT_SRC.format(name=name))
+    lm = module.__dict__["$module"]
+    greeting = mint_predicate_handle(db, "greeting")
+    go = mint_predicate_handle(db, "go")
+    # Control: no hint, no resolution -- the handles are unreachable.
+    assert not is_declared_predicate_name(greeting)
+    assert not is_declared_predicate_name(go)
+    return lm, handle, greeting, go
 
 
-def test_runtime_time_goal_gate_routes_a_local_handle(tmp_path, monkeypatch):
-    import clausal.logic.builtins.control as control
-    _module, db, handle = _load_popped(tmp_path, "q0c_tg", "q0c_tg_p(1),\n")
-    sentinel = object()
-    monkeypatch.setattr(control, "_ensure_trampoline_dispatch",
-                        lambda goal, arity: sentinel)
-    assert control._goal_dispatch_and_args(handle, db=db) == (sentinel, ())
+def test_runtime_call_phase5_runs_a_popped_local_handle(tmp_path):
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    lm, handle, _greeting, _go = _popped_runtime(tmp_path, "q0c_rtc")
+    lm.module_dict["q0c_rtc_alias"] = handle
+    x, y = Var(), Var()
+    got = [(deref(x), deref(y))
+           for _ in call("q0c_rtc_alias", x, y, module=lm)]
+    assert got == [(1, 10), (2, 20)]
 
 
-def test_runtime_phrase_gate_routes_a_local_handle(tmp_path, monkeypatch):
-    import clausal.logic.builtins.dcg as dcg
-    _module, db, handle = _load_popped(tmp_path, "q0c_ph", "q0c_ph_p(1),\n")
-    seen = []
+def test_runtime_phrase_runs_a_popped_local_handle(tmp_path):
+    from clausal.logic.atoms import mint
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    lm, _handle, greeting, _go = _popped_runtime(tmp_path, "q0c_rtp")
+    assert len(list(call("phrase", greeting, [mint("hi")], module=lm))) == 1
+    assert list(call("phrase", greeting, [mint("bye")], module=lm)) == []
+    rest = Var()
+    got = [deref(rest) for _ in call(
+        "phrase", greeting, [mint("hi"), mint("x")], rest, module=lm)]
+    assert got == [[mint("x")]]
 
-    class _Stop(Exception):
-        pass
 
-    def _spy(obj, arity):
-        seen.append((obj, arity))
-        raise _Stop
-    monkeypatch.setattr(dcg, "_dispatch_at", _spy)
-    for fn, args in ((dcg._phrase__2, (handle, [])),
-                     (dcg._phrase__3, (handle, [], []))):
-        try:
-            gen = fn(db, None, None, None, None, *args, None)
-            next(iter(gen))
-        except _Stop:
-            pass
-    assert seen == [(handle, 2), (handle, 2)]
+def test_runtime_time_goal_runs_a_popped_local_handle(tmp_path, capsys):
+    from clausal.logic.solve import call
+    lm, _handle, _greeting, go = _popped_runtime(tmp_path, "q0c_rtt")
+    assert len(list(call("time_goal", go, module=lm))) == 1
+    capsys.readouterr()   # time_goal's timing line
+
+
+def test_dispatch_at_resolves_a_popped_local_handle_only_with_the_hint(
+        tmp_path):
+    from clausal.logic.cells import qualify_mangled_goal
+    from clausal.logic.predicate import _dispatch_at
+    lm, handle, _greeting, _go = _popped_runtime(tmp_path, "q0c_rtd")
+    assert qualify_mangled_goal(handle) is handle          # unreachable
+    assert qualify_mangled_goal(handle, db=lm.db) is not handle
+    assert _dispatch_at(handle, 2, lm.db) is lm.db.get_dispatch("q0c_rtd_p", 2)
 
 
 # ── diagnostics (import_diagnostics, predicate_diagnostics) ──────────────────
@@ -213,3 +274,16 @@ def test_a_same_named_placeholder_db_captures_the_handle_and_answers_nothing(
     placeholder = Database(module.__dict__)
     assert placeholder.module_name() == db.module_name()
     assert not is_declared_predicate_name(handle, db=placeholder)
+
+
+def test_a_db_like_shim_is_no_hint_not_a_crash(tmp_path):
+    """The tolerance lives in the resolvers (``_hint_db``), so a caller holding
+    the compile-time ``_GlobalsDb`` shim (no ``module_dict``) passes it
+    unguarded."""
+    from clausal.logic.compiler.globals_env import _GlobalsDb
+    from clausal.logic.predicate import resolve_predicate_row
+    _module, db, handle = _load_popped(tmp_path, "q0c_shim", "q0c_shim_p(1),\n")
+    shim = _GlobalsDb({})
+    assert not hasattr(shim, "module_dict")
+    assert resolve_predicate_row(handle, arity=1, db=shim) is None
+    assert not is_declared_predicate_name(handle, db=shim)

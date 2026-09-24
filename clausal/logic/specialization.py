@@ -30,7 +30,7 @@ from clausal.logic.predicate import (
     make_predicate,
     is_term_instance,
     term_field_names,
-    is_declared_predicate_name,
+    is_declared_predicate_name, namespace_db,
     _dispatch_at,
 )
 from clausal.logic.database import Clause, head_key
@@ -1383,9 +1383,10 @@ def _make_solve_goal_predicate(
             if pred is not None and (
                     hasattr(pred, '_get_dispatch')
                     or is_declared_predicate_name(
-                        pred, db=getattr(module_dict.get("$module"), "db", None))):
+                        pred, db=namespace_db(module_dict))):
                 from clausal.logic.trampoline import StepGenerator
-                dispatch_fn = _dispatch_at(pred, len(args))
+                dispatch_fn = _dispatch_at(pred, len(args),
+                                           namespace_db(module_dict))
                 sg = StepGenerator(dispatch_fn, this_generator, this_generator, this_generator, *args, trail)
                 st = yield (sg, None)
                 while st is not DONE:

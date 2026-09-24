@@ -714,9 +714,7 @@ def _lower_catcher(ctx: CompilationContext, catcher: Any) -> ast.expr:
             and not catcher.kwargs):
         env = ctx.base_globals or {}
         resolved = env.get(catcher.func.name)
-        if (is_declared_predicate_name(
-                resolved,
-                db=ctx.db if hasattr(ctx.db, "module_dict") else None)
+        if (is_declared_predicate_name(resolved, db=ctx.db)
                 or cell_signature_for_name(catcher.func.name) is not None):
             # The throw site builds a term for this name → build the same
             # term here (term_to_ast_expr recurses into nested args too).

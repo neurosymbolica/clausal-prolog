@@ -44,6 +44,7 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, is_declared_predicate_name, is_zero_field_class,
+    namespace_db,
     is_term_instance, predicate_binding_name, term_field_names, term_field_names_of_class,
 )
 from clausal.logic.atoms import (
@@ -209,7 +210,7 @@ def _lowering_db():
     namespace = lowering_globals()
     if namespace is None:
         return None
-    return getattr(namespace.get("$module"), "db", None)
+    return namespace_db(namespace)
 
 
 def lowering_globals() -> "dict | None":
@@ -402,7 +403,7 @@ def cell_signature_for_name(
         return None
     binding, leaf, leaf_namespace = resolved
     if is_declared_predicate_name(
-            binding, db=getattr(namespace.get("$module"), "db", None)):
+            binding, db=namespace_db(namespace)):
         # (W4a: the `_clausal_instances` gate that stood here is gone with the
         # bridge.  It read the flag straight out of `cls.__dict__`, so it kept
         # honouring a class-body assignment after the attribute itself became
@@ -1118,7 +1119,7 @@ def term_to_ast_expr(
             _binding = _resolved[0] if _resolved is not None else None
             if not is_declared_predicate_name(
                     _binding,
-                    db=getattr((_namespace or {}).get("$module"), "db", None)):
+                    db=namespace_db(_namespace)):
                 if kw_exprs:
                     raise SyntaxError(
                         f"functor {fname!r} has no declared signature: "
