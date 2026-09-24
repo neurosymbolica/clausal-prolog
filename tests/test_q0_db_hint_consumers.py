@@ -19,7 +19,7 @@ import textwrap
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
-    is_declared_predicate_name, mint_predicate_handle,
+    _HANDLE_OWNERS, is_declared_predicate_name, mint_predicate_handle,
 )
 
 
@@ -31,10 +31,15 @@ def _load_popped(tmp_path, name, source):
     sys.modules.pop(name, None)
     module = _load_module(name, str(path))
     sys.modules.pop(name, None)
+    # Isolate the HINT: the handle-owner registry (the cross-module
+    # remainder, test_handle_owner_registry.py) would otherwise answer for
+    # the popped module too and make the control below vacuous.
+    _HANDLE_OWNERS.pop(name, None)
     db = module.__dict__["$module"].db
     handle = mint_predicate_handle(db, f"{name}_p")
     assert name not in sys.modules
-    # Control: without the hint the popped owner is unreachable.
+    # Control: without the hint (and the registry) the popped owner is
+    # unreachable.
     assert not is_declared_predicate_name(handle)
     assert is_declared_predicate_name(handle, db=db)
     return module, db, handle
@@ -220,6 +225,41 @@ def test_runtime_call_phase5_runs_a_popped_local_handle(tmp_path):
     got = [(deref(x), deref(y))
            for _ in call("q0c_rtc_alias", x, y, module=lm)]
     assert got == [(1, 10), (2, 20)]
+
+
+def test_runtime_call_with_a_handle_functor_passes_the_module_s_db(tmp_path):
+    """Round-3 review: ``call(handle, ..., module=lm)`` with the FUNCTOR
+    itself a handle (not an alias bound to one) qualifies it with the
+    calling module's db as the hint -- for a ``Module`` and for the
+    imported module object alike."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    lm, handle, _greeting, _go = _popped_runtime(tmp_path, "q0c_rth")
+    module = sys.modules.get("q0c_rth")
+    assert module is None
+    for designator in (lm, _popped_module(lm)):
+        x, y = Var(), Var()
+        got = [(deref(x), deref(y))
+               for _ in call(handle, x, y, module=designator)]
+        assert got == [(1, 10), (2, 20)]
+
+
+def _popped_module(lm):
+    """A stand-in for the imported module object: carries
+    ``__clausal_module__`` as a real one does."""
+    import types
+    mod = types.ModuleType(lm.name)
+    mod.__clausal_module__ = lm
+    return mod
+
+
+def test_unqualified_name_dispatch_passes_its_db(tmp_path):
+    """Round-3 review: ``_UnqualifiedName.dispatch_at`` hands its db to
+    ``_dispatch_at`` -- the db it already feeds ``binding_grants_arity``."""
+    from clausal.logic.predicate import _UnqualifiedName
+    lm, handle, _greeting, _go = _popped_runtime(tmp_path, "q0c_rtu")
+    adapter = _UnqualifiedName(lm.db, "q0c_rtu_p", handle)
+    assert adapter.dispatch_at(2) is lm.db.get_dispatch("q0c_rtu_p", 2)
 
 
 def test_runtime_phrase_runs_a_popped_local_handle(tmp_path):

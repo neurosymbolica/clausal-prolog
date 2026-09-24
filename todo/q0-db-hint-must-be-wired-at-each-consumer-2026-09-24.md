@@ -107,7 +107,8 @@ scope.
   class fallback runs only when no `$module` is present.
 - **The population is foreign:** predicate_diagnostics `_imported_entries` and
   `_defines` look at other modules. The hint only short-circuits the caller's
-  OWN module. A popped cross-module owner registry is deferred per Q0.
+  OWN module. (The popped cross-module owner is now answered by the
+  handle-owner registry -- see "Q0 remainder" below.)
 - **Post-flip defects outside Q0, found on the way:**
   `constants.constant_functor_term` calls `binding(*args)`, and a handle str is
   not callable. `import_diagnostics._defined_names` calls
@@ -144,9 +145,71 @@ scope.
   `_imported_binding_by_canonical_name` (M13).
 
 ## Round 3 review (landed with these open, 2026-09-24)
-- solve.py:1122 -- `call(handle, ..., module=lm)` with the functor itself a handle goes
+- ~~solve.py:1122 -- `call(handle, ..., module=lm)` with the functor itself a handle goes
   through `qualify_mangled_goal(functor)` / `resolve_module` WITHOUT the hint (only the
-  alias route is tested).
-- predicate.py `_UnqualifiedName.dispatch_at`: `return _dispatch_at(self.binding, arity)`
-  -- pass `db=self.db` (it already feeds binding_grants_arity).
+  alias route is tested).~~ **CLOSED** (branch fix/q0-runtime-registry-2026-09-24):
+  `solve.call` passes the calling module's db (a `Module`, or an imported module's
+  `__clausal_module__`); test
+  `test_runtime_call_with_a_handle_functor_passes_the_module_s_db` (both designator
+  shapes), mutation-checked.
+- ~~predicate.py `_UnqualifiedName.dispatch_at`: `return _dispatch_at(self.binding, arity)`
+  -- pass `db=self.db` (it already feeds binding_grants_arity).~~ **CLOSED** (same
+  branch): passes `db=self.db`; test `test_unqualified_name_dispatch_passes_its_db`,
+  mutation-checked.
 - specialization.py:1383-1389 computes `namespace_db(module_dict)` twice per call.
+
+## Q0 remainder: the handle-owner registry (branch fix/q0-runtime-registry-2026-09-24)
+
+Ruling Q0 (final): the caller's db first; a registry ONLY for the cross-module
+remainder. `predicate._owner_db_for_module_name` is the HANDLE-ONLY rule:
+caller's db -> by identity, the owner the caller adopted a row from
+(`Database.adopted_owner_dbs`) -> `sys.modules` -> the weak registry
+`_HANDLE_OWNERS` (filled by `compile_module`). `resolve_module` (a user-written
+`M:G`, `module=`) is untouched: `qualify_mangled_goal` carries the owner's Module
+OBJECT when `sys.modules` cannot answer the name (`handle_designator`). Name reuse
+with two live owners raises `AmbiguousHandleOwnerError` (after one gc pass).
+`_field_names_for_name` honours its `db`. Tests: `tests/test_handle_owner_registry.py`.
+The hint tests here pop the registry entry so their no-hint controls stay
+meaningful.
+
+
+### Registry review round (gate on 88435899 + roborev job 133)
+
+- **The 7 gate failures, root cause.** Six (`test_find_pred_binding_both_eras`
+  assert/call_n `[True-True]`, retract `[True]`, `test_listing_indicator_both_eras`
+  3 x `[flipped-popped]`) were ONE site: `binding_grants_arity` ->
+  `_binding_owner_db` called the handle lookup WITHOUT the caller's db.  In the
+  full run an earlier file had left a `tests.fixtures.gate_dyn_owner` module
+  alive under that name, so the registry saw two live owners and RAISED
+  `AmbiguousHandleOwnerError` from a predicate test.  Reproduced in isolation by
+  holding one such module (`import tests.fixtures.gate_dyn_owner`, then pop)
+  before running the two files: 6 failed, and 34 passed after the fix.  The
+  seventh (`test_popped_module_local_handle_lowers_plain_only_with_the_db_hint`)
+  was a no-hint control that the registry now answers; it isolates the
+  registry the same way the other hint tests do.  So none of the sites that
+  passed the hint was regressed.
+- **Policy: only a DISPATCH raises on ambiguity.** `cells.qualify_mangled_goal`
+  and `_dispatch_at`'s handle arm raise.  Every QUESTION (the resolvers via
+  `_resolve_mangled_owner`, `_binding_owner_db`, `predicate_arities_for`'s class
+  arm, `_field_names_for_name`, `_refuse_unqualified_other_arity`'s message,
+  `solve.call`'s dangling diagnostic) goes through `predicate._owner_db_or_none`,
+  where ambiguity means "unknown".
+- **Hints threaded:** `_binding_owner_db(binding, db)` from `binding_grants_arity`
+  and `_import_index` (which also passes `db` to `is_declared_predicate_name`);
+  `solve._term_to_goal(term, db)` (the compiling module, and the target module
+  for a qualified inner goal); `_strip_module_qualification` (`module.db`);
+  `_refuse_unqualified_other_arity` (`db`); the dangling diagnostic in `call`
+  (`module.db`).  `_module_for_moduleless_solve` has no calling module, so it
+  stays without a hint.
+- **Lows:** `_live_handle_owners` iterates over a snapshot, because a weakref
+  callback during the walk mutates the list; `handle_designator` keeps ONE
+  synthesised Module per owner db (`db._handle_module`), because the query cache
+  keys on `id(module)`.
+- **PARKED design question (roborev Medium):** `AmbiguousHandleOwnerError` is a
+  plain `LookupError`, not a `LogicException`, so `catch/3` cannot see it.  I
+  kept it deliberately: after the policy above it reaches only an actual
+  dispatch in the name-reuse state, which is an engine or runner state fault
+  rather than a program error.  If it should be catchable, which ISO term?
+  (`existence_error` is wrong, since the procedure exists twice; perhaps
+  `system_error(ambiguous_handle_owner(M))`, following the units_mismatch
+  precedent.)

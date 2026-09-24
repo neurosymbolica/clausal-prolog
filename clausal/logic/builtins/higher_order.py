@@ -177,7 +177,7 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     # W4: a MANGLED functor (the module-qualified handle) is the qualified
     # goal ``M:G`` spelled inside one atom.  Normalise and re-enter: the
     # ``:``/2 arm below resolves it exactly as it resolves an explicit one.
-    _q = qualify_mangled_goal(folded)
+    _q = qualify_mangled_goal(folded, db=db)   # Q0: the calling db is the hint
     if _q is not folded:
         # Ruling 2 (2026-09-24): a handle whose module LOADED but which names
         # no predicate there RAISES, with the term ``solve`` raises -- the

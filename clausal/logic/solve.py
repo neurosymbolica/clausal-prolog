@@ -175,7 +175,7 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
             end_drive_episode()
 
 
-def _term_to_goal(term: Any) -> Any:
+def _term_to_goal(term: Any, db: Any = None) -> Any:
     """Convert a runtime term instance to a simple_ast goal node.
 
     When the user writes ``solve(greeting(N := Var()))``, ``greeting(N)``
@@ -203,7 +203,9 @@ def _term_to_goal(term: Any) -> Any:
 
     Simple_ast nodes and other goal forms pass through unchanged.
     """
-    term = qualify_mangled_goal(term)      # W4: a mangled functor is a qualified goal
+    # W4: a mangled functor is a qualified goal.  *db* is the compiling
+    # module's (ruling Q0 hint), so a handle naming it resolves when popped.
+    term = qualify_mangled_goal(term, db)
     from clausal.logic.predicate import PredicateMeta
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
@@ -241,7 +243,7 @@ def _term_to_goal(term: Any) -> Any:
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
             _module, inner = resolve_qualified_goal_cell(term, "solve/1")
-            return _term_to_goal(inner)
+            return _term_to_goal(inner, getattr(_module, "db", None))
         refuse_control_construct_cell(term, functor, "solve/1")
         return AstCall(
             func=LoadName(name=functor), args=list(term[1:]), kwargs=[],
@@ -623,7 +625,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     goal_thunks: list = []
     cache_key = _goal_cache_key(goal, module, goal_thunks)
 
-    goal = _term_to_goal(goal)
+    goal = _term_to_goal(goal, getattr(module, "db", None))
     from clausal.logic.compiler import compile_predicate_trampoline
     from clausal.logic.compiler.goal_trampoline import compile_body_trampoline
     from clausal.logic.compiler._vars import _collect_vars, _var_python_name
@@ -879,7 +881,10 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
         it has always raised.
     """
     _, _pre_functor = compound_cell_shape(goal)
-    goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
+    # W4: a mangled functor names its module.  No hint: a module-less solve
+    # has no calling module (the handle rule's sys.modules and registry
+    # steps still answer).
+    goal = qualify_mangled_goal(goal)
     is_cell_goal, functor = compound_cell_shape(goal)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3:
@@ -963,7 +968,9 @@ def _strip_module_qualification(goal, module):
     Non-qualified goals come back untouched.
     """
     _, _pre_functor = compound_cell_shape(goal)
-    goal = qualify_mangled_goal(goal)      # W4: a mangled functor names its module
+    # W4: a mangled functor names its module; *module* (the resolved caller)
+    # is the ruling-Q0 hint.
+    goal = qualify_mangled_goal(goal, getattr(module, "db", None))
     is_cell_goal, functor = compound_cell_shape(goal)
     if not (is_cell_goal
             and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
@@ -1009,7 +1016,10 @@ def raise_if_dangling_handle(
         return
     if (module.module_dict or {}).get(name) is not None:
         return
-    raise dangling_handle_exception(mod_name, name, arity, True, context)
+    # The HANDLE's module half, not slot 1: for an owner reached by the
+    # caller's db or the handle-owner registry slot 1 is a Module object.
+    raise dangling_handle_exception(
+        demangle(handle)[0], name, arity, True, context)
 
 
 def dangling_handle_exception(
@@ -1130,7 +1140,14 @@ def call(
     if type(functor) is str:
         if is_mangled(functor):
             _handle_module_name, _handle_name = demangle(functor)
-        _q = qualify_mangled_goal(functor)
+        # Q0 (round-3 review): the calling module's db is the hint, so a
+        # handle naming ``module`` itself resolves there even when the
+        # ``.clausal`` runner popped it from ``sys.modules``.  Only a real
+        # Clausal module carries one (a Module, or an imported module's
+        # ``__clausal_module__``); a designator string is resolved below.
+        _cm = module if isinstance(module, Module) else getattr(
+            module, "__clausal_module__", None)
+        _q = qualify_mangled_goal(functor, db=getattr(_cm, "db", None))
         if _q is not functor:
             module = resolve_module(_q[1], module, "call/N")
             functor = _q[2]
@@ -1222,8 +1239,11 @@ def call(
                 LogicException, existence_error,
                 dangling_handle_indicator_and_why,
             )
-            from clausal.logic.predicate import _db_for_module_name  # noqa: PLC0415
-            loaded = _db_for_module_name(_handle_module_name) is not None
+            # A diagnostic: the caller's db is the hint, and an ambiguous
+            # owner is "unknown" here (only a dispatch raises it).
+            from clausal.logic.predicate import _owner_db_or_none  # noqa: PLC0415
+            loaded = _owner_db_or_none(
+                _handle_module_name, getattr(module, "db", None)) is not None
             indicator, why = dangling_handle_indicator_and_why(
                 _handle_module_name, _handle_name, arity, loaded,
             )
