@@ -265,13 +265,14 @@ def _namespace_dispatch(db, functor, arity):
     not answer) then ``_home_db``, which is the row a shared class actually
     reads.  The row is keyed on the CLASS's name, not on the local spelling —
     an ``-import_from`` alias binds the exporter's class under a different
-    name — so the home lookup uses ``pred_cls.__name__``.
+    name — so the home lookup uses the predicate's own name
+    (``_canonical_functor``, era-agnostic).
 
     Returns ``None`` (→ silent failure, unchanged) when the name is not in the
     namespace at that arity.
     """
     from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
-        _find_pred_cls, _home_db,
+        _canonical_functor, _find_pred_cls, _home_db,
     )
     module_dict = getattr(db, "module_dict", None)
     if module_dict is None:
@@ -279,10 +280,11 @@ def _namespace_dispatch(db, functor, arity):
     pred_cls = _find_pred_cls(functor, arity, module_dict)
     if pred_cls is None:
         return None
-    home = _home_db(db, pred_cls)
-    if home is db and pred_cls.__name__ == functor:
+    home = _home_db(db, pred_cls, functor, arity)
+    canonical = _canonical_functor(db, pred_cls, functor)
+    if home is db and canonical == functor:
         return None  # the lookup that already came back empty
-    return home.get_dispatch(pred_cls.__name__, arity)
+    return home.get_dispatch(canonical, arity)
 
 
 def _make_call_goal_factory(extra_n: int):

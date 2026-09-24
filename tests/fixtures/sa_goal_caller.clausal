@@ -1,0 +1,5 @@
+# tests/test_self_denoting_predicate_atom_plain.py: calls a goal argument;
+# defines no z of its own.
+-module(sa_goal_caller, [run/1])
+
+run(G) <- call(G),

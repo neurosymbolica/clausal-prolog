@@ -1,0 +1,4 @@
+# tests/test_self_denoting_predicate_atom_plain.py: the module that OWNS z/0.
+-module(sa_goal_other, [z/0])
+
+z <- True,

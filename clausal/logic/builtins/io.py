@@ -665,7 +665,7 @@ def _indicator_row(db, name, arity, pred_cls):
     if row is not None:
         return row
     from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
-        _find_pred_cls, _home_db,
+        _canonical_functor, _find_pred_cls, _home_db,
     )
     module_dict = getattr(db, "module_dict", None)
     if module_dict is None:
@@ -673,7 +673,8 @@ def _indicator_row(db, name, arity, pred_cls):
     found = _find_pred_cls(name, arity, module_dict)
     if found is None:
         return None
-    return _home_db(db, found).row(found.__name__, arity, create=False)
+    return _home_db(db, found, name, arity).row(
+        _canonical_functor(db, found, name), arity, create=False)
 
 
 @_db_builtin("listing", 1, fields=("pred",))

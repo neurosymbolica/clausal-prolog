@@ -127,3 +127,79 @@ of these three sites (a query argument for `_ground_value`, a
 `term_to_ast_expr`), and diff the resulting atom's spelling against the
 same predicate's plain declared name. That answers the policy question by
 observation instead of by design debate.
+
+## Resolved (2026-09-24, branch fix/w4b-self-atom-plain-2026-09-24)
+
+Operator ruling: the self-denoting atom in data position stays PLAIN
+("the default in Prolog is global, but be cognizant of directive hide/1").
+Discriminator is `is_declared_predicate_name`, never `is_mangled`: a
+`-hide` DATA atom is mangled too, and its mangled spelling is its identity.
+
+- `term_to_ast_expr`: CHANGED. New arm ahead of the generic `str` arm --
+  a `str` binding that `is_declared_predicate_name` accepts bakes
+  `mint(predicate_binding_name(term))`; a `-hide` atom falls through and is
+  baked verbatim.
+- `_templatize_query_goal` / `_ground_value`: CHANGED. Evidence: its scalar
+  arm intercepts every `str` BEFORE `term_to_ast_expr` is reached, so a
+  top-level mangled predicate argument would bind the mangled spelling on
+  the parameterized path while the unparameterized path bakes the plain one
+  (the fix above would be bypassed). Review round (roborev MEDIUM): ONE arm,
+  ahead of the scalar arm, `if is_declared_predicate_name(dv): return
+  mint(predicate_binding_name(dv))`, for BOTH eras; the old zero-field
+  CLASS arm (which bound the class object itself) is gone. Measured before
+  changing it: across 68 targeted test files (2626 tests) the class arm
+  fired ONCE, in `tests/test_f3_is_zero_field_class_callers.py`'s pin of
+  the pre-ruling behaviour (updated). And the class it returned was
+  useless: a `.clausal` fact `q(z)` (z/0 a predicate) stores the plain str
+  `'z'`, so `solve(("q", m.z), m)` answered 0 with the class, 1 with the
+  plain atom (now 1 in both eras).
+- `_is_ground_py`: NO CHANGE. Answers a bool, never a spelling; `True` for
+  both eras and for a `-hide` atom -- the ruling has nothing to act on.
+- `head_key` (database.py): not reopened, per the note above.
+
+- A mangled str whose owner module does NOT resolve (roborev LOW): kept
+  VERBATIM in both sites, not refused. It cannot be told apart from a
+  `-hide` DATA atom, and an unresolvable `-hide` atom is legitimate: a
+  module loaded under a `sys.modules` key other than its `-module` name
+  mints `hide_owner\x1fhide_secret`, `_resolve_mangled_owner` answers None,
+  and the atom round-trips into a query today. The cost, documented at the
+  `term_to_ast_expr` arm: a predicate handle whose owner is not loaded keeps
+  its mangled spelling (load-state dependent, like every
+  `is_declared_predicate_name` caller).
+
+Tests: `tests/test_self_denoting_predicate_atom_plain.py` (fixtures
+`hide_owner.clausal` loaded as `hide_owner`, new `self_atom_zero.clausal`
+for a zero-arity predicate; a subprocess test for the alt-key `-hide`
+round-trip). Mutations: reverting both sites, restoring the class arm,
+swapping the gate to `is_mangled`, and refusing an unresolvable mangled
+str each fail tests.
+
+Not in scope, observed while probing (filed as
+`todo/bare-predicate-name-in-clause-source-is-the-binding-not-the-atom-2026-09-24.md`):
+a bare ARITY>=1 predicate name written in a `.clausal` clause (e.g. the
+fact `r(b)` where `b/1` is a predicate) evaluates at runtime to the BINDING
+(the class today, the mangled handle post-flip), not the plain atom; a
+zero-arity one (`q(z)`) stores the plain atom. So the self-atom is not yet
+plain on the clause-source side.
+
+Review round 2 (roborev): both arms make ONE resolver call,
+`predicate_binding_name(x, db=...)` (no second `_resolve_mangled_owner`, no
+window between the check and the read), and pass the ruling-Q0 `db=` hint --
+`_ground_value` gets the querying module's db from `_compile_as_query`;
+`term_to_ast_expr` reads the lowering scope's `$module` db. A local handle in
+a module popped from `sys.modules` now lowers plain on both paths (test fails
+if either hint, or the `_compile_as_query` pass-through, is removed). The
+tests resolve every fixture handle through its owner's db, so a peer test
+popping `hide_owner` cannot empty the compared population.
+
+Review round 3 + operator ruling (2026-09-24, option a): ruling S holds on
+the query-parameter path too -- "goal-argument use must qualify". A
+predicate binding passed as a goal argument (`run(other.z)`, `run(G) <-
+call(G)`) lowers to the plain atom and resolves in the CALLING module; the
+qualified `other:z` reaches the other module. Measured behaviour change: on
+main the class and the handle both reached `other`'s z (1 answer); now 0 in
+a caller with no z, and the caller's own z where it has one. Pinned by
+`test_goal_argument_must_be_qualified_to_reach_another_module`. Also: the
+`term_to_ast_expr` arm is gated on `is_mangled` first so plain strings skip
+the db lookup; the subprocess test pins PYTHONPATH/cwd to the tree and
+asserts it imported that tree's clausal.

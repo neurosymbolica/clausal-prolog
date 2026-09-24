@@ -846,6 +846,26 @@ def _build_predicate_trampoline_funcdef(
     return func_def
 
 
+def _plan_row_for(pred_cls, db, functor: str, arity: int):
+    """The row the compile's index plans are written to.
+
+    A ``PredicateMeta`` class answers the row it currently faces, exactly as
+    before (its private detached row on a ``db=None`` compile).  A predicate
+    HANDLE (F1 rows 58/59 hand one to the runtime recompile after an
+    ``assertz`` through an import) has no class-side row: its plans belong
+    on the row the dispatch is installed on, ``db.row(functor, arity)`` in
+    the database being compiled into -- the same row ``_install``'s handle
+    arm writes.  A handle never arrives without a database.
+    """
+    if pred_cls is None:
+        return None
+    if isinstance(pred_cls, PredicateMeta):
+        return pred_cls._state_row()
+    if db is not None:
+        return db.row(functor, arity, create=True)
+    return None
+
+
 def _compile_predicate_trampoline_impl(
     functor: str,
     arity: int,
@@ -1380,7 +1400,7 @@ def _compile_predicate_trampoline_impl(
             # the documented default of every compile entrypoint -- or one
             # that binds only in ``_install`` afterwards, which carries the
             # plans across; see ``PredicateMeta._bind_row``).
-            _plan_row = pred_cls._state_row() if pred_cls is not None else None
+            _plan_row = _plan_row_for(pred_cls, db, functor, arity)
             if _plan_row is not None and _is_tabled:
                 _plan_row.index_plans = {}
                 _plan_row.index_plans_joint = {}
@@ -1423,8 +1443,8 @@ def _compile_predicate_trampoline_impl(
             # Phase 10a: no indexing — clear any stale plan dicts from a
             # previous compilation (e.g. after retract reduced clause count
             # below the indexing threshold).
-            if pred_cls is not None:
-                _plan_row = pred_cls._state_row()
+            _plan_row = _plan_row_for(pred_cls, db, functor, arity)
+            if _plan_row is not None:
                 _plan_row.index_plans = {}
                 _plan_row.index_plans_joint = {}
                 _plan_row.index_plans_hierarchical = {}

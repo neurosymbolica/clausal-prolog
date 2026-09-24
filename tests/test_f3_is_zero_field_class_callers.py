@@ -26,9 +26,11 @@ substitution the brief describes.
 Verdict for each (see the todo this suite backs,
 ``todo/self-denoting-predicate-atom-spelling-post-flip-mangled-or-plain-2026-09-24.md``):
 
-  - ``_ground_value``/``_templatize_query_goal``: CONFIRMED harmless -- the
-    resolved value passes through verbatim in both eras (a class object
-    today, a mangled atom string post-flip); no code change.
+  - ``_ground_value``/``_templatize_query_goal``: SUPERSEDED by the
+    2026-09-24 ruling -- a predicate binding (class, or mangled handle whose
+    owner resolves) is parameterized as its PLAIN name.  The mangled str
+    probed below names an UNLOADED module, so it is still passed through
+    verbatim (deliberately: see ``term_to_ast_expr``'s comment).
   - ``_is_ground_py``: CONFIRMED harmless -- both eras answer ``True``; no
     code change.
   - ``term_to_ast_expr``: the brief's narrow claim ("no exception, falls
@@ -37,10 +39,9 @@ Verdict for each (see the todo this suite backs,
     ``ast.Constant`` literal do not carry the *same spelling* (today mints
     the class's plain ``__name__``; post-flip the generic str branch bakes
     the full mangled string verbatim, undemangled). Whether that is a bug
-    depends on an undecided design question (parked in the todo above),
-    not on anything present in today's code -- so no code change is made
-    here either, but the DIVERGENCE itself is pinned by this test so a
-    future change to either branch is caught.
+    depended on a design question since RULED (2026-09-24: plain) and
+    implemented for a mangled handle whose owner resolves; the probe below
+    names an UNLOADED module, which keeps its mangled spelling on purpose.
 """
 from __future__ import annotations
 
@@ -75,13 +76,17 @@ def test_is_zero_field_class_true_for_the_class_it_replaces():
 # ── _ground_value (via _templatize_query_goal): verbatim pass-through ──────
 
 class TestGroundValuePassesThroughVerbatimInBothEras:
-    def test_class_field_is_parameterized_with_the_class_itself(self):
+    def test_class_field_is_parameterized_with_its_plain_name(self):
+        """Superseded pin (operator ruling 2026-09-24, see
+        tests/test_self_denoting_predicate_atom_plain.py): a predicate
+        binding is parameterized as the PLAIN atom of its name, not as the
+        class object itself."""
         P0 = make_predicate("F3ProbeZeroArityB", [])
         Goal = make_predicate("F3ProbeGoalB", ["a"])
         _, params = _templatize_query_goal(Goal(a=P0))
         assert len(params) == 1
         _var, value = params[0]
-        assert value is P0
+        assert value == "F3ProbeZeroArityB" and type(value) is str
 
     def test_mangled_atom_field_is_parameterized_with_the_string_itself(self):
         mangled = _mangled_self_atom()
