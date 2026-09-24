@@ -97,3 +97,33 @@ handle) in `tests/test_f7_dispatch_at_arity_refusal.py`.
 - **LOW 2.** `_refuse_unqualified_other_arity`'s stale-`_fields` exception
   applies only to a class whose row is in the CALLING db.
 - **LOW 3.** Stale comments and these notes brought in line.
+
+## Review rounds 4-5 (same day)
+
+- **Name key never overwritten (round 4).** Every unqualified other-arity call
+  site of a predicate binding gets its own `$disp_name_N` entry; the name key
+  keeps the binding (its own arity, term construction).
+- **One predicate under two spellings (round 5).** The import remap does not
+  record which spelling produced a `LoadName`, so a dotted key shared by
+  `numlist` and `alias(numlist, nl)` is ambiguous: it is re-pointed to the
+  UNALIASED spelling whatever the list order (two aliases and no unaliased
+  spelling: not re-pointed).  RESIDUAL: in such a module `nl(3, L)` resolves
+  under `numlist`.  Full fix = record the spelling in the remap
+  (term_rewriting + `_process_imports` + `_local_call_reroutes` keys).
+- **Partial application (round 5).** A term built through an imported binding
+  keeps the OWNER's functor (`nl(3)` is `("numlist", 3)`, both eras) -- an
+  alias is a local spelling of one predicate, and its terms must unify with
+  the owner's.  So `call(nl(3), L)` maps an owner functor the calling module
+  does not bind back to the alias that built it
+  (`predicate.localize_owner_functor`) and resolves under that name.  This
+  also makes aliased partial application at the IMPORTED arity work: before
+  it failed silently (`call(dd(N, M))` with `alias(dec, dd)`).
+  `_find_pred_cls` asks `binding_grants_arity`, so an owner arity added
+  later is not reachable through a cell goal either.
+- **Caching (rounds 4-5).** `_import_index` (per db, keyed on the module
+  dict's `(id, len)` snapshot) answers `localize_goal` and
+  `localize_owner_functor`; positives are verified against the live dict,
+  negatives trusted until the size changes (documented limit: a same-size
+  rebinding that newly binds an import is seen at the next size change).
+  The `$disp_` entry caches a builtin or a LOCKED row's dispatch;
+  unlocked rows and "nothing answers" re-resolve per call.

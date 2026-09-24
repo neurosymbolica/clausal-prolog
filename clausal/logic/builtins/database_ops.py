@@ -319,12 +319,16 @@ def _find_pred_cls(functor: str, arity: int,
     name from ``predicate_binding_name`` and the write target from
     ``_home_db`` -- neither reads the class.
     """
-    from clausal.logic.predicate import is_declared_predicate  # noqa: PLC0415
+    from clausal.logic.predicate import binding_grants_arity  # noqa: PLC0415
     if module_dict is None:
         return None
     db = getattr(module_dict.get("$module"), "db", None)
     candidate = module_dict.get(functor)
-    if is_declared_predicate(candidate, arity=arity, db=db):
+    # Review round 5: ``binding_grants_arity``, not ``is_declared_predicate``
+    # -- an IMPORTED binding is this name's predicate only at an arity it was
+    # imported at (the adopted rows); an owner arity added later (assertz) is
+    # not reachable through the importer's name, in either era.
+    if binding_grants_arity(candidate, arity, db, functor):
         return candidate
     # A HANDLE whose own route is lost (its owner popped from sys.modules)
     # still names the predicate this module IMPORTED when this database

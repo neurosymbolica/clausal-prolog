@@ -576,6 +576,55 @@ class TestInjectResolvedTargets:
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 4))) == 0
 
     @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_the_other_arity_entry_caches_only_what_cannot_go_stale(
+            self, lm, owner, monkeypatch, era):
+        """Review round 5 (LOW 1): the ``$disp_`` entry resolves once and
+        keeps the answer when it is a BUILTIN or a LOCKED row; an UNLOCKED
+        row re-resolves on every call (it may be recompiled or retracted)."""
+        from clausal.logic.compiler.globals_env import (
+            _disp_key, _inject_resolved_targets,
+        )
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        b = self._owner_binding(owner, "last", era)
+
+        def entry(db):
+            globals_ = {"last": b}
+            bg = dict(globals_)
+            _inject_resolved_targets({("last", 2)}, bg, db, globals_)
+            return bg[_disp_key("last", 2)]
+
+        def counting(db):
+            calls = []
+            real = db.get_dispatch
+            monkeypatch.setattr(db, "get_dispatch",
+                                lambda f, a: calls.append((f, a)) or real(f, a))
+            return calls
+
+        # a builtin (owner has no last/2 row): resolved once
+        fn = entry(owner.db)
+        calls = counting(owner.db)
+        for _ in range(3):
+            assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert calls == [("last", 2)]
+        # lm's own last/2, LOCKED: resolved once
+        row = lm.db.row("last", 2)
+        list(call("last", 1, 1, module=lm))            # compile + lock it
+        assert row.locked
+        fn = entry(lm.db)
+        calls = counting(lm.db)
+        for _ in range(3):
+            assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert calls == [("last", 2)]
+        # the same row UNLOCKED: re-resolved every call
+        monkeypatch.setattr(row, "locked", False)
+        fn = entry(lm.db)
+        calls.clear()
+        for _ in range(3):
+            assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert calls == [("last", 2)] * 3
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
     def test_with_nothing_else_to_answer_the_arity_is_reported(
             self, lm, owner, era):
         """No builtin ping/2 and no ping/2 row in the compiling db: the

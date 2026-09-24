@@ -536,16 +536,31 @@ def _unqualified_other_arity_dispatch(binding, db, name: str, arity: int):
     compiling module only: its own row at *arity* (one asserted later
     answers too), else a builtin under *name* (``Database.get_dispatch``
     asks both, row first), else ``predicate._refuse_unqualified_other_arity``
-    -- the refusal, never the binding's owner.  Nothing is captured that can
-    go stale, so this is safe under the ``$disp_`` key although no locked row
-    backs it.  With no db (a db-less compile) only the builtin is asked.
+    -- the refusal, never the binding's owner.  Only what cannot go stale is
+    cached (review round 5): a builtin, or a LOCKED row's dispatch; an
+    unlocked row and "nothing answers" re-resolve per call, so this is safe
+    under the ``$disp_`` key.  With no db (a db-less compile) only the builtin
+    is asked.
     """
+    cached = None
+
     def dispatch(*args):
+        nonlocal cached
+        if cached is not None:
+            return cached(*args)
         if db is not None:
             fn = db.get_dispatch(name, arity)      # own row, then builtins
+            row = db.row(name, arity) if fn is not None else None
+            # Review round 5: cache what cannot change under us -- a BUILTIN
+            # (no row of our own answered) or a LOCKED row's dispatch.  An
+            # unlocked (dynamic) row may be recompiled or retracted, and
+            # "nothing answers" may stop being true, so those re-resolve.
+            if fn is not None and (row is None or row.locked):
+                cached = fn
         else:
             bp = get_builtin_predicate(name, arity, None)
             fn = bp._get_dispatch() if bp is not None else None
+            cached = fn
         if fn is None:
             fn = _refuse_unqualified_other_arity(binding, name, arity, db)
         return fn(*args)

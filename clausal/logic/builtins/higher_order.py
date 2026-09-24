@@ -11,7 +11,9 @@ from clausal.logic.exceptions import LogicException, string_goal_error
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
-from clausal.logic.predicate import is_declared_predicate_name, localize_goal
+from clausal.logic.predicate import (
+    is_declared_predicate_name, localize_goal, localize_owner_functor,
+)
 
 from clausal.logic.cells import (
     is_chars, chars_text,   # stage 1: the chars carrier
@@ -222,6 +224,14 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # functor here is a dangling handle, decided now rather than failed.
         _raise_if_unloaded_handle(functor, arity, context)
         return None
+    # Review round 5 (operator ruling 2026-09-24): a cell built through an
+    # ALIASED import carries the OWNER's functor (``nl(3)`` is
+    # ``("numlist", 3)``); resolve it under the alias that built it, in this
+    # module, never as the owner's name here (where a builtin ``numlist/2``
+    # would answer).  See ``predicate.localize_owner_functor``.
+    aliased = localize_owner_functor(db, functor)
+    if aliased is not None:
+        return aliased.dispatch_at(arity), call_args
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)

@@ -1824,7 +1824,8 @@ def _route_other_arity_imported_calls_to_local(
     handle's owner would call itself a predicate at them.  Mirrors ``_route_imported_atom_calls_to_local``
     (the atom twin, P3-3 Task 5b).
     """
-    reroutes: dict[str, str] = {}      # dotted key -> local name
+    spellings: dict[str, set[str]] = {}   # dotted key -> local names
+    owner_names: dict[str, str] = {}
     for item in module_items:
         if not isinstance(item, ImportFromItem):
             continue
@@ -1834,7 +1835,27 @@ def _route_other_arity_imported_calls_to_local(
             else:
                 orig_name = local_name = name_spec
             if is_declared_predicate_name(module_dict.get(local_name)):
-                reroutes[f"{item.module}.{orig_name}"] = local_name
+                dotted = f"{item.module}.{orig_name}"
+                spellings.setdefault(dotted, set()).add(local_name)
+                owner_names[dotted] = orig_name
+    # Review round 5: one predicate imported under SEVERAL spellings
+    # (``-import_from(alow, [numlist, alias(numlist, nl)])``) shares ONE
+    # dotted key, and the remapped ``LoadName`` does not record which
+    # spelling the author wrote -- so the key is AMBIGUOUS and must not be
+    # re-pointed to whichever spelling the import list named last.  When the
+    # unaliased spelling is among them it is used: the call then resolves
+    # under the owner's own name in THIS module (a builtin under that name
+    # answers ``numlist(3, L)``, as for any unaliased import).  Two or more
+    # ALIASES and no unaliased spelling: not re-pointed at all.  Residual,
+    # documented: in such a module an ALIASED spelling at another arity is
+    # resolved under the unaliased name (or, with no unaliased spelling, in
+    # the owner).  Recording the spelling in the remap is the full fix.
+    reroutes: dict[str, str] = {}
+    for dotted, names in spellings.items():
+        if len(names) == 1:
+            reroutes[dotted] = next(iter(names))
+        elif owner_names[dotted] in names:
+            reroutes[dotted] = owner_names[dotted]
     if not reroutes:
         return
     from clausal.pythonic_ast.nodes import (  # noqa: PLC0415

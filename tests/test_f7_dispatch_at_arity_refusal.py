@@ -419,9 +419,12 @@ def test_an_unaliased_import_at_another_arity_resolves_under_its_own_name(
 
 def test_the_localize_cache_is_verified_against_the_live_module_dict(
         tmp_path, monkeypatch):
-    """Review round 4 (hot path): ``localize_goal`` caches the local name it
-    found per binding, but every hit is checked against the module dict, so
-    a rebinding is seen at once -- never a stale name."""
+    """Review rounds 4-5 (hot path): ``localize_goal`` answers from an index
+    of the module's foreign predicate bindings.  Every POSITIVE hit is
+    checked against the live module dict, so a rebinding is seen at once --
+    never a stale name.  A NEGATIVE answer is trusted while the dict's
+    (id, len) snapshot holds -- the documented limit: a same-size rebinding
+    that newly binds an import is seen at the next size change."""
     from clausal.logic.predicate import _UnqualifiedName, localize_goal
     ow = _load(tmp_path, monkeypatch, "f7_lc_ow", """
         -module(f7_lc_ow, [numlist(A)])
@@ -436,16 +439,153 @@ def test_the_localize_cache_is_verified_against_the_live_module_dict(
     first = localize_goal(I.db, b)
     assert isinstance(first, _UnqualifiedName) and first.name == "nl"
     assert localize_goal(I.db, b) is first                 # cached, verified
+    # a SAME-SIZE rebinding (no (id, len) change): the cached positive is
+    # verified against the live dict and not trusted
+    monkeypatch.setitem(I.module_dict, "nl", "not_the_binding")
+    assert localize_goal(I.db, b) is b
+    # ... and the documented LIMIT of negative caching: rebinding it back at
+    # the same size is not seen until the dict's size next changes
+    monkeypatch.setitem(I.module_dict, "nl", b)
+    assert localize_goal(I.db, b) is b
+    monkeypatch.setitem(I.module_dict, "$bump", None)
+    assert localize_goal(I.db, b).name == "nl"
+    monkeypatch.delitem(I.module_dict, "$bump")
     monkeypatch.setitem(I.module_dict, "nl", "something_else")
     monkeypatch.setitem(I.module_dict, "nl2", b)
     again = localize_goal(I.db, b)
     assert isinstance(again, _UnqualifiedName) and again.name == "nl2"
     monkeypatch.delitem(I.module_dict, "nl2")
     assert localize_goal(I.db, b) is b                     # bound by no name
+    # Review round 5 (LOW 2): that NEGATIVE answer is cached -- the index is
+    # not rebuilt while the module dict's (id, len) snapshot holds ...
+    idx = I.db.__dict__["_import_index"]
+    assert localize_goal(I.db, b) is b
+    assert I.db.__dict__["_import_index"] is idx
+    # ... and a size change evicts it
+    monkeypatch.setitem(I.module_dict, "nl3", b)
+    third = localize_goal(I.db, b)
+    assert isinstance(third, _UnqualifiedName) and third.name == "nl3"
+    assert I.db.__dict__["_import_index"] is not idx
     # the adopted-arity index agrees with the adopted rows
     assert I.db.adopted_arities("nl") == frozenset({1})
     assert I.db.adopted_arities("numlist") == frozenset()
     assert ow.__dict__["$module"].db.adopted_arities("numlist") == frozenset()
+
+
+@pytest.mark.parametrize("order", ["unaliased_first", "alias_first"])
+def test_one_predicate_imported_under_two_spellings(tmp_path, monkeypatch, order):
+    """Review round 5 (MEDIUM 1): ``-import_from(alow, [numlist, alias(numlist,
+    nl)])`` gives both spellings ONE dotted key, and the remap does not record
+    which one the author wrote.  The ambiguous key is re-pointed to the
+    UNALIASED spelling whatever the list order -- so ``numlist(3, L)``
+    resolves under ``numlist`` here and the builtin ``numlist/2`` answers
+    (it used to refuse as ``nl`` when the alias came last).  Both imported
+    arities still answer.
+
+    RESIDUAL, pinned so a fix is seen: the ALIASED spelling at another arity,
+    ``nl(3, L)``, is resolved under ``numlist`` too (it answers ``numlist/2``)
+    -- in a module that also binds ``numlist`` itself.  Recording the
+    spelling in the import remap is the full fix."""
+    from clausal.logic.solve import call as _call
+    from clausal.logic.variables import Var, deref
+    _load(tmp_path, monkeypatch, f"f7_two_ow_{order}", """
+        -module(f7_two_ow_ORD, [numlist(A)])
+        numlist(1),
+    """.replace("ORD", order.replace("-", "_")))
+    names = ("numlist, alias(numlist, nl)" if order == "unaliased_first"
+             else "alias(numlist, nl), numlist")
+    imp = _load(tmp_path, monkeypatch, f"f7_two_im_{order}", """
+        -module(f7_two_im_ORD, [])
+        -import_from(f7_two_ow_ORD, [NAMES])
+        u(L) <- numlist(3, L)
+        v(L) <- nl(3, L)
+        w <- nl(1)
+        x <- numlist(1)
+    """.replace("ORD", order.replace("-", "_")).replace("NAMES", names))
+    I = imp.__dict__["$module"]
+
+    def sols(g, n):
+        vs = [Var() for _ in range(n)]
+        return [[deref(v) for v in vs] for _ in _call(g, *vs, module=I)]
+
+    assert sols("u", 1) == [[[1, 2, 3]]]
+    assert sols("w", 0) == [[]]
+    assert sols("x", 0) == [[]]
+    assert sols("v", 1) == [[[1, 2, 3]]]          # RESIDUAL, see docstring
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_partial_application_through_an_alias_resolves_under_the_alias(
+        tmp_path, monkeypatch, era):
+    """Review round 5 (MEDIUM 2).  ``nl(3)`` is built by the imported binding,
+    so the TERM carries the OWNER's functor -- ``("numlist", 3)`` -- in both
+    eras (pinned below: an alias is a local spelling of one predicate, and
+    terms built through it must unify with the owner's).  ``call(nl(3), L)``
+    folds to ``numlist(3, L)``; the calling module does not bind
+    ``numlist``, so the owner functor is mapped back to the alias that built
+    it (``localize_owner_functor``) and the call resolves under ``nl`` here:
+    nothing answers ``nl/2`` -> the refusal, not the builtin ``numlist/2``.
+    ``maplist`` takes no cell goals at all (it fails, as it always has for a
+    cell) -- pinned so that it cannot start leaking silently.  The imported
+    arity through a cell, ``call(nl, 1)`` / ``call(nl(1))``, still answers."""
+    from clausal.logic.solve import call as _call
+    from clausal.logic.variables import Var, deref
+    ow = _load(tmp_path, monkeypatch, f"f7_pa_ow_{era}", """
+        -module(f7_pa_ow_ERA, [numlist(A)])
+        numlist(1),
+    """.replace("ERA", era))
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
+    imp = _load(tmp_path, monkeypatch, f"f7_pa_im_{era}", """
+        -module(f7_pa_im_ERA, [])
+        -import_from(f7_pa_ow_ERA, [alias(numlist, nl)])
+        m(L) <- call(nl(3), L)
+        mm(L) <- maplist(nl(3), [L])
+        t(T) <- (T is nl(3))
+        one <- call(nl(1))
+    """.replace("ERA", era))
+    I = imp.__dict__["$module"]
+    t = Var()
+    assert [deref(t) for _ in _call("t", t, module=I)] == [("numlist", 3)]
+    with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
+        list(_call("m", Var(), module=I))
+    assert list(_call("mm", Var(), module=I)) == []
+    assert len(list(_call("one", module=I))) == 1
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
+        tmp_path, monkeypatch, era):
+    """Review round 5 (MEDIUM 2, second half): ``_namespace_dispatch`` found
+    the binding through ``_find_pred_cls``'s ``is_declared_predicate``, which
+    in the handle era asks the OWNER -- so ``pk/2`` asserted in the owner
+    after ``pk/1`` was imported answered ``call(pk(3), X)`` in the importer.
+    ``_find_pred_cls`` now asks ``binding_grants_arity`` (imported at that
+    arity?), in both eras: the cell goal fails, as an unresolvable named
+    goal always has."""
+    from clausal.logic.solve import call as _call
+    from clausal.logic.variables import Var
+    from clausal.terms import Compound
+    ow = _load(tmp_path, monkeypatch, f"f7_pk_ow_{era}", """
+        -module(f7_pk_ow_ERA, [pk(A)])
+        pk(1),
+    """.replace("ERA", era))
+    O = ow.__dict__["$module"]
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, O)
+    imp = _load(tmp_path, monkeypatch, f"f7_pk_im_{era}", """
+        -module(f7_pk_im_ERA, [])
+        -import_from(f7_pk_ow_ERA, [pk])
+        c(X) <- call(pk(3), X)
+        one <- call(pk(1))
+    """.replace("ERA", era))
+    I = imp.__dict__["$module"]
+    assert len(list(_call("assertz", Compound("pk", (3, "own")), module=O))) == 1
+    assert O.db.row("pk", 2) is not None
+    assert list(_call("c", Var(), module=I)) == []
+    assert len(list(_call("one", module=I))) == 1
+    # the owner itself sees its new arity
+    assert len(list(_call("pk", 3, "own", module=O))) == 1
 
 
 def test_the_localizing_list_builtin_registration_is_reload_safe():

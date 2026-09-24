@@ -1487,7 +1487,7 @@ def binding_grants_arity(binding: Any, arity: int, db: Any, name: str) -> bool:
     than by ``-import_from`` -- has no import record to consult and is
     trusted at every arity it is a predicate at, as before.
     """
-    if not is_declared_predicate(binding, arity=arity):
+    if not is_declared_predicate(binding, arity=arity, db=db):
         return False
     owner = _binding_owner_db(binding)
     if owner is None or db is None or owner is db:
@@ -1598,6 +1598,70 @@ class _UnqualifiedName:
         return f"_UnqualifiedName({self.name!r} -> {self.binding!r})"
 
 
+def _binding_key(binding: Any) -> Any:
+    """A dict key for a predicate binding: a handle by value, a class by id
+    (the index entry holds the class itself, so the id cannot be reused)."""
+    return binding if type(binding) is str else id(binding)
+
+
+def _binding_own_name(binding: Any) -> str:
+    """The OWNER's name of a predicate binding -- the functor a term built
+    through it carries, whatever local spelling bound it."""
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        return row._key[0] if row is not None else binding.__name__
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    return demangle(binding)[1]
+
+
+def _import_index(db: Any, md: dict, force: bool = False):
+    """The calling module's index of FOREIGN predicate bindings under plain
+    names: ``(snapshot, by_binding, by_owner_name, adapters)``.
+
+    Review rounds 4-5 (hot path): ``localize_goal`` and
+    ``localize_owner_functor`` would otherwise scan the whole module dict on
+    every meta-call.  Rebuilt when the dict's ``(id, len)`` snapshot changes
+    (a name added or removed) or on demand (*force*) when a hit fails its
+    verification against the live dict (a same-size rebinding).  Every
+    POSITIVE answer is verified against the live dict before use; a NEGATIVE
+    answer is trusted for as long as the snapshot holds -- the cheap version
+    check -- so a same-size rebinding that newly binds an import under a
+    plain name is picked up at the next size change.
+    """
+    snap = (id(md), len(md))
+    idx = db.__dict__.get("_import_index")
+    if idx is not None and idx[0] == snap and not force:
+        return idx
+    by_binding: dict = {}
+    by_owner: dict = {}
+    for k, v in md.items():
+        if type(k) is not str or "." in k:
+            continue
+        if not (isinstance(v, PredicateMeta)
+                or (type(v) is str and _is_mangled_fast(v))):
+            continue
+        if not is_declared_predicate_name(v):
+            continue
+        owner = _binding_owner_db(v)
+        if owner is None or owner is db:
+            continue
+        by_binding.setdefault(_binding_key(v), []).append((k, v))
+        by_owner.setdefault(_binding_own_name(v), []).append((k, v))
+    idx = (snap, by_binding, by_owner, {})
+    db.__dict__["_import_index"] = idx
+    return idx
+
+
+def _is_mangled_fast(s: str) -> bool:
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    return is_mangled(s)
+
+
+def _live_entries(md: dict, entries) -> list:
+    return [(n, b) for (n, b) in entries
+            if (md.get(n) is b) or (type(b) is str and md.get(n) == b)]
+
+
 def localize_goal(db: Any, goal_val: Any) -> Any:
     """*goal_val* as a meta-call in the module whose Database is *db*.
 
@@ -1616,43 +1680,77 @@ def localize_goal(db: Any, goal_val: Any) -> Any:
     qualified arm, which this does not touch.
 
     Several plain names for one binding: the owner's own name wins when it is
-    one of them, else the alphabetically first -- deterministic.
+    one of them, else the alphabetically first -- deterministic.  Indexed:
+    see ``_import_index`` (positive and negative answers, verified / version
+    checked).
     """
-    if db is None or not is_declared_predicate_name(goal_val):
+    if db is None:
         return goal_val
-    owner = _binding_owner_db(goal_val)
-    if owner is None or owner is db:
+    if not (isinstance(goal_val, PredicateMeta)
+            or (type(goal_val) is str and _is_mangled_fast(goal_val))):
         return goal_val
     md = getattr(db, "module_dict", None)
     if not isinstance(md, dict):
         return goal_val
-    key = goal_val if type(goal_val) is str else id(goal_val)
-    # Review round 4 (hot path): a per-db cache of the local name found for
-    # this binding, VERIFIED on every hit against the live module dict (one
-    # dict lookup), so a name rebound or removed since is never trusted -- a
-    # failed check rescans.  Only positive answers are cached: a foreign
-    # binding bound by no plain name (a qualified reference) is rare and
-    # rescanned.  The cached entry is the (stateless) adapter itself, which
-    # holds the binding, so an ``id`` key cannot be reused while cached.
-    cache = db.__dict__.setdefault("_localize_cache", {})
-    hit = cache.get(key)
-    if hit is not None:
-        bound = md.get(hit.name)
-        if bound is goal_val or (type(bound) is str and bound == goal_val):
-            return hit
-    if isinstance(goal_val, PredicateMeta):
-        names = [k for k, v in md.items() if v is goal_val and "." not in k]
-        own = goal_val.__name__
-    else:
-        names = [k for k, v in md.items()
-                 if type(v) is str and v == goal_val and "." not in k]
-        from clausal.logic.atoms import demangle  # noqa: PLC0415
-        own = demangle(goal_val)[1]
-    if not names:
-        return goal_val
-    name = own if own in names else sorted(names)[0]
-    adapter = cache[key] = _UnqualifiedName(db, name, goal_val)
-    return adapter
+    key = _binding_key(goal_val)
+    for force in (False, True):
+        idx = _import_index(db, md, force)
+        # fast path: the adapter chosen last time, verified (one dict lookup)
+        chosen = idx[3].get(key)
+        if chosen is not None:
+            bound = md.get(chosen.name)
+            if bound is goal_val or (type(bound) is str and bound == goal_val):
+                return chosen
+        entries = idx[1].get(key)
+        if not entries:
+            return goal_val               # negative: trusted while snapshot holds
+        live = _live_entries(md, entries)
+        if live:
+            names = [n for n, _ in live]
+            own = _binding_own_name(goal_val)
+            name = own if own in names else sorted(names)[0]
+            adapter = idx[3][key] = _UnqualifiedName(db, name, goal_val)
+            return adapter
+    return goal_val
+
+
+def localize_owner_functor(db: Any, functor: str):
+    """For a named goal (cell or atom) whose functor *functor* is NOT bound
+    in the calling module but IS the owner's name of a predicate the module
+    imported under an ALIAS: the ``_UnqualifiedName`` for that alias, else
+    ``None``.
+
+    Review round 5 (partial application): ``nl(3)`` in a module that did
+    ``-import_from(alow, [alias(numlist, nl)])`` is built by the imported
+    binding, so the TERM carries the owner's functor -- ``("numlist", 3)`` --
+    as every term built through that binding does (an alias is a local
+    spelling of ONE predicate, and its terms must unify with the owner's).
+    ``call(nl(3), L)`` then folds to ``numlist(3, L)``, which the calling
+    module would resolve to the builtin ``numlist/2``: the aliased-import leak
+    again.  Mapping the owner functor back to the local spelling that built it
+    resolves the call under the name used, as the ruling requires.  A functor
+    the module binds itself (a local predicate, an unaliased import) is left
+    to the normal path.
+    """
+    if db is None:
+        return None
+    md = getattr(db, "module_dict", None)
+    if not isinstance(md, dict) or functor in md:
+        return None
+    for force in (False, True):
+        idx = _import_index(db, md, force)
+        entries = idx[2].get(functor)
+        if not entries:
+            return None
+        live = _live_entries(md, entries)
+        if live:
+            name, binding = sorted(live, key=lambda e: e[0])[0]
+            key = ("$functor", functor)
+            adapter = idx[3].get(key)
+            if adapter is None or adapter.name != name or adapter.binding is not binding:
+                adapter = idx[3][key] = _UnqualifiedName(db, name, binding)
+            return adapter
+    return None
 
 
 def _dispatch_at(obj: Any, arity: int) -> Callable:
