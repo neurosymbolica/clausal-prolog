@@ -25,7 +25,7 @@ from clausal.logic.atoms import mangle
 from clausal.logic.compiler_v2 import _meta_interpreter_row
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import PredicateMeta
-from clausal.logic.specialization import analyze_mi
+from clausal.logic.specialization import CannotSpecialize, analyze_mi
 from clausal.terms import Compound
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -52,14 +52,27 @@ def test_analyze_mi_reads_a_row_exactly_as_it_reads_the_class(mis, mi):
     assert _pattern_shape(analyze_mi(cls._row)) == _pattern_shape(analyze_mi(cls))
 
 
-def _specializing_module():
-    sys.modules.pop("tests.fixtures.specialize_natnum", None)
-    return _load_module("tests.fixtures.specialize_natnum",
-                        os.path.join(FIXTURES, "specialize_natnum.clausal"))
+# A PRIVATE module name: loading the fixture under its dotted
+# ``tests.fixtures.`` name leaves a ``sys.modules`` entry with no parent
+# package attribute, which breaks a later plain ``import`` of it elsewhere.
+_SPEC = "_rows3233_specialize_natnum"
 
 
-def test_the_mi_is_found_in_the_module_s_db_whatever_it_is_bound_to(mis):
-    module = _specializing_module()
+@pytest.fixture
+def fresh_spec_module():
+    """Load the fixture afresh under a private name; drop it afterwards."""
+    sys.modules.pop(_SPEC, None)
+
+    def load():
+        return _load_module(_SPEC, os.path.join(FIXTURES,
+                                                "specialize_natnum.clausal"))
+    yield load
+    sys.modules.pop(_SPEC, None)
+
+
+def test_the_mi_is_found_in_the_module_s_db_whatever_it_is_bound_to(
+        mis, fresh_spec_module):
+    module = fresh_spec_module()
     db = module.__dict__["$module"].db
     md = dict(module.__dict__)
     assert isinstance(md["solve_count"], PredicateMeta)
@@ -100,16 +113,53 @@ def test_an_mi_defined_at_several_arities_is_refused_listing_them():
 
 
 def test_the_specialized_target_is_a_predicate_from_pre_registration(
-        monkeypatch):
-    """Ruling QB: observed at step 2, the step right after pre-registration."""
+        monkeypatch, fresh_spec_module):
+    """Ruling QB: observed at step 2, the step right after pre-registration
+    -- and the row minted there is the one the specialization is installed
+    on, not a stale twin beside it."""
     seen = {}
     real = compiler_v2._process_directives
 
-    def spy(module_items, db, module_dict):
+    def spy(*args, **kwargs):
+        db = args[1] if len(args) > 1 else kwargs["db"]
         seen["kind"] = db.declared_kind("solve_count_natnum", 2)
-        return real(module_items, db, module_dict)
+        seen["row"] = db.row("solve_count_natnum", 2)
+        return real(*args, **kwargs)
 
     monkeypatch.setattr(compiler_v2, "_process_directives", spy)
-    _specializing_module()
+    module = fresh_spec_module()
     assert seen, "step 2 never ran"
     assert seen["kind"] == "predicate"
+
+    db = module.__dict__["$module"].db
+    row = db.row("solve_count_natnum", 2)
+    assert row is seen["row"], "the installed row is not the pre-minted one"
+    assert row.clauses and row.dispatch_fn is not None
+    assert module.__dict__["solve_count_natnum"]._row is row
+
+
+def test_a_row_with_clauses_but_no_field_names_is_refused():
+    db = Database()
+    for n in (1, 2):
+        db.assertz(Clause(head=Compound("nosig_mi", (n,)), body=[]))
+    assert db.signature_for("nosig_mi", 1) is None
+    with pytest.raises(CannotSpecialize, match="no field names are registered"):
+        analyze_mi(db.row("nosig_mi", 1))
+
+
+def test_a_declared_mi_with_no_clauses_gets_analyze_mi_s_refusal(
+        tmp_path, monkeypatch):
+    """A clause-less ``-dynamic`` MI: the refusal comes from analyze_mi,
+    whose message is the one place it is spelled."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("spec_empty_mi", None)
+    (tmp_path / "spec_empty_mi.clausal").write_text(
+        "-dynamic(empty_mi/2)\n\n"
+        "prog(P) <- (P is []),\n\n"
+        "-specialize(empty_mi, prog, alias=empty_spec)\n")
+    try:
+        with pytest.raises(CannotSpecialize,
+                           match=r"empty_mi: expected at least 2 clauses .*got 0"):
+            _load_module("spec_empty_mi", str(tmp_path / "spec_empty_mi.clausal"))
+    finally:
+        sys.modules.pop("spec_empty_mi", None)

@@ -119,6 +119,17 @@ def analyze_mi(pred_cls, program_arg: int | None = None) -> MIPattern:
     else:
         name, arity = pred_cls.key
         clauses = pred_cls.clauses
+        fields = None
+
+    # Before the field names are needed: a clause-less or one-clause MI is
+    # refused with THIS message whichever shape it arrived in (the compiler
+    # hands a clause-less declared row here rather than spelling it again).
+    if len(clauses) < 2:
+        raise CannotSpecialize(
+            f"{name}: expected at least 2 clauses (base + recursive), "
+            f"got {len(clauses)}"
+        )
+    if fields is None:
         # The OWNER's signature: an imported MI's row is adopted, and its
         # field names are registered where it is defined, not here.
         fields = pred_cls.db.signature_for(name, arity)
@@ -127,12 +138,6 @@ def analyze_mi(pred_cls, program_arg: int | None = None) -> MIPattern:
                 f"{name}/{arity}: no field names are registered for it, so "
                 f"its program argument cannot be identified")
     arity = len(fields)
-
-    if len(clauses) < 2:
-        raise CannotSpecialize(
-            f"{name}: expected at least 2 clauses (base + recursive), "
-            f"got {len(clauses)}"
-        )
 
     # ── Identify the program argument ──────────────────────────────────────
     if program_arg is None:

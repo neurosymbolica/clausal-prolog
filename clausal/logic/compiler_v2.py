@@ -1281,7 +1281,10 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
     silently picked one; no measured case was ambiguous).  If the database
     has none, a module-dict binding that denotes a predicate at exactly one
     arity is resolved era-agnostically as a last resort -- a predicate bound
-    by a plain Python import has no row here.
+    by a plain Python import has no row here.  That route can answer a row
+    with NO clauses (a clause-less ``-dynamic`` MI), deliberately: the caller
+    hands it to ``analyze_mi``, whose "expected at least 2 clauses" refusal
+    is the one the class route gave, spelled in one place.
     """
     candidates = sorted(
         a for a in db.predicate_arities(mi_name)
@@ -1372,13 +1375,6 @@ def _run_specialization(
 
         mi_row = _meta_interpreter_row(db, module_dict, item.mi_name,
                                        refuse_ambiguous=True)
-        if mi_row is None and db.is_predicate_name(item.mi_name):
-            # A predicate of that name, but no clauses: the refusal the
-            # class route gave, from analyze_mi, unchanged.
-            from clausal.logic.specialization import CannotSpecialize  # noqa: PLC0415
-            raise CannotSpecialize(
-                f"{item.mi_name}: expected at least 2 clauses (base + "
-                f"recursive), got 0")
         if mi_row is None:
             # P1 (spec 2026-09-17 §2.4): the diagnostic enumerates the
             # DATABASE's predicates — every container ``row()`` consults,
